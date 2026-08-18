@@ -1,7 +1,8 @@
 name: DCO
 
-# Separate from ci.yml on purpose. That workflow runs on tags only, because a
-# contributor can run its suite locally before opening a PR. This check is the
+# Separate from release-matrix.yml on purpose. That workflow runs on tags
+# only, because a contributor can run its suite locally before opening a PR.
+# This check is the
 # opposite case: it gates the one thing review cannot reliably eyeball and the
 # contributor cannot re-run for us — every commit carrying the sign-off that
 # CONTRIBUTING.md turns into agreement with the CLA. Without the CLA the

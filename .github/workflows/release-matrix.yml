@@ -46,13 +46,11 @@ jobs:
       - run: pip install -r ../backend/requirements.txt
       - run: npm run lint
       - run: npm run format:check
-      - run: npm test -- --run
+      - run: npm run test:coverage
       # This job checks out only the public repository; the enterprise half is
       # a separate private repo, gitignored here. Stand in for it before
       # building, so the build below proves it *ignores* an enterprise
-      # registry rather than passing by its absence. See ci.yml for the full
-      # rationale — kept here too because publish-release/docker-publish gate
-      # on this job (via release-readiness), not on ci.yml.
+      # registry rather than passing by its absence.
       - name: Stand in for the private enterprise repository
         run: |
           set -euo pipefail
@@ -97,7 +95,7 @@ jobs:
           python-version: "3.14"
       - run: pip install -r backend/requirements-dev.txt
       - run: ruff check backend
-      - run: pytest backend/tests
+      - run: pytest --cov=backend --cov-report=term-missing backend/tests
 
   # ── Backlog item 32: Docker build + smoke test (one leg per native arch;
   #    no QEMU emulation here — these hosted runners are native x64/arm64) ──
