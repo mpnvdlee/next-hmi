@@ -1,0 +1,77 @@
+.cfg-tree-toggle {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--cfg-radius);
+  color: var(--cfg-text-muted);
+  user-select: none;
+  font-size: var(--cfg-text-xs);
+  transition:
+    color var(--cfg-motion-fast) var(--cfg-ease-standard),
+    background var(--cfg-motion-fast) var(--cfg-ease-standard),
+    transform var(--cfg-motion-fast) var(--cfg-ease-standard);
+}
+
+.cfg-tree-toggle:hover {
+  color: var(--cfg-text);
+  background: color-mix(in srgb, var(--cfg-surface-dark) 64%, var(--cfg-surface));
+}
+
+.cfg-tree-toggle:focus-visible {
+  outline: var(--cfg-focus-outline);
+  outline-offset: var(--cfg-focus-offset);
+}
+
+.cfg-tree-toggle__arrow {
+  display: inline-block;
+  transition: transform var(--cfg-motion-fast) var(--cfg-ease-standard);
+  transform: rotate(0deg);
+}
+
+.cfg-tree-toggle__arrow--open {
+  transform: rotate(90deg);
+}
+
+.cfg-tree-row-action {
+  width: var(--cfg-space-5);
+  height: var(--cfg-space-5);
+  border-radius: var(--cfg-radius);
+  color: var(--cfg-text-muted);
+  opacity: 0;
+  transition:
+    opacity var(--cfg-motion-fast) var(--cfg-ease-standard),
+    color var(--cfg-motion-fast) var(--cfg-ease-standard),
+    background var(--cfg-motion-fast) var(--cfg-ease-standard);
+}
+
+.cfg-tree-item:hover .cfg-tree-row-action,
+.cfg-tree-row-action:focus-visible {
+  opacity: 1;
+}
+
+.cfg-tree-row-action:hover {
+  color: var(--cfg-accent);
+  background: color-mix(in srgb, var(--cfg-selected-bg) 72%, var(--cfg-surface));
+}
+
+/* Severity dot for a tree row (see `TreeDiagnosticDot`). Sits in the row's
+   trailing slot ahead of the hover-revealed action buttons, and keeps its
+   width there so those buttons don't shift when a mark appears. */
+.cfg-tree-item__diag {
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  /* Pulls back against the row's flex gap so the dot reads as attached to the
+     name it marks rather than as a separate trailing column. */
+  margin: 0 var(--cfg-space-1) 0 calc(var(--cfg-space-1) * -0.3);
+  border-radius: 50%;
+}
+
+/* Same hues the header diagnostics list marks its rows with, so a mark in the
+   tree and a finding in the top bar read as the same severity. */
+.cfg-tree-item__diag--error {
+  background: var(--cfg-danger);
+}
+
+.cfg-tree-item__diag--warning {
+  background: var(--cfg-warning-strong);
+}

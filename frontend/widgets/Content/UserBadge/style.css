@@ -1,0 +1,55 @@
+/* `min-width: 0` is not repeated on the root: the global `.hmi-component`
+   already resolves it from `--self-min-width`, defaulting to 0, and a rule here
+   would override the author's configured minimum instead of falling back to it. */
+.hmi-user-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--hmi-space-md);
+  padding: var(--hmi-space-md);
+  background: var(--hmi-surface-3);
+  border-radius: var(--hmi-radius-sm);
+  cursor: default;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.hmi-user-badge__avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--hmi-radius-full);
+  background: linear-gradient(145deg, var(--hmi-accent), var(--hmi-accent-ink));
+  color: var(--hmi-accent-on);
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-heading-weight);
+  line-height: 1;
+}
+
+.hmi-user-badge__text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Inherits color and font-family from `.hmi-component` on the root. */
+.hmi-user-badge__username {
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-heading-weight);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hmi-user-badge__groups {
+  color: var(--hmi-text-muted);
+  font-size: var(--hmi-type-caption-size);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

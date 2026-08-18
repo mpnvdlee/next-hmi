@@ -1,0 +1,414 @@
+/* ── Asset picker drawer ───────────────────────────────────────── */
+.cfg-asset-picker-overlay {
+  z-index: 10000;
+  backdrop-filter: blur(2px);
+}
+
+.cfg-asset-picker-dialog {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--cfg-surface) 96%, var(--cfg-bg)) 0%,
+    var(--cfg-surface) 46%
+  );
+}
+
+.cfg-asset-picker-header {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+/* ── Tabs ── */
+.cfg-asset-picker-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-1);
+  padding: var(--cfg-space-2) var(--cfg-space-4);
+  background: var(--cfg-bg);
+  flex-shrink: 0;
+}
+
+.cfg-asset-picker-tab {
+  min-height: 24px;
+  padding: 0.1rem 0.65rem;
+  font-size: var(--cfg-text-base);
+  font-family: var(--cfg-font);
+  color: var(--cfg-text-muted);
+  background: var(--cfg-surface);
+  border: 1px solid var(--cfg-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    color var(--cfg-motion-fast) var(--cfg-ease-standard),
+    background var(--cfg-motion-fast) var(--cfg-ease-standard),
+    border-color var(--cfg-motion-fast) var(--cfg-ease-standard);
+}
+
+.cfg-asset-picker-tab:hover {
+  color: var(--cfg-text);
+  background: var(--cfg-surface-dark);
+  border-color: color-mix(in srgb, var(--cfg-accent) 45%, var(--cfg-border));
+}
+
+.cfg-asset-picker-tab--active {
+  color: var(--cfg-accent);
+  background: var(--cfg-accent-soft);
+  border-color: var(--cfg-accent);
+}
+
+.cfg-asset-picker-count {
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-muted);
+  white-space: nowrap;
+}
+
+/* ── Grid wrapper ── */
+.cfg-asset-picker-grid-wrap {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--cfg-space-3) var(--cfg-space-4) var(--cfg-space-4);
+  min-height: 0;
+}
+
+.cfg-asset-picker-empty {
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text-muted);
+  text-align: center;
+  padding: var(--cfg-space-8) 0;
+  margin: 0;
+}
+
+.cfg-asset-picker-error {
+  color: var(--cfg-danger-strong);
+}
+
+.cfg-asset-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2.5rem, 1fr));
+  gap: var(--cfg-space-2);
+}
+
+/* ── Folder breadcrumb ── */
+.cfg-asset-picker-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  margin-bottom: var(--cfg-space-3);
+  font-size: var(--cfg-text-xs);
+}
+
+.cfg-asset-picker-breadcrumb__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.cfg-asset-picker-breadcrumb__sep {
+  color: var(--cfg-text-muted);
+  flex-shrink: 0;
+}
+
+.cfg-asset-picker-breadcrumb__crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.4rem;
+  border: none;
+  background: none;
+  border-radius: var(--cfg-radius);
+  color: var(--cfg-text-muted);
+  cursor: pointer;
+  font-size: var(--cfg-text-xs);
+  font-family: var(--cfg-font);
+}
+
+.cfg-asset-picker-breadcrumb__crumb:hover:not(:disabled) {
+  color: var(--cfg-text);
+  background: color-mix(in srgb, var(--cfg-accent) 12%, var(--cfg-surface));
+}
+
+.cfg-asset-picker-breadcrumb__crumb--current {
+  color: var(--cfg-text);
+  font-weight: var(--cfg-fw-bold);
+  cursor: default;
+}
+
+/* ── Folder row: its own grid above a divider, then the file grid below ── */
+.cfg-asset-picker-folder-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));
+  gap: var(--cfg-space-2);
+  margin-bottom: var(--cfg-space-3);
+}
+
+.cfg-asset-picker-folder-row--images {
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+}
+
+.cfg-asset-picker-divider {
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--cfg-border) 85%, var(--cfg-surface));
+  margin: 0 0 var(--cfg-space-3);
+}
+
+/* ── Folder tile (Explorer-style) ── */
+.cfg-asset-picker-folder-btn {
+  color: var(--cfg-text-muted);
+}
+
+.cfg-asset-picker-folder-btn:hover {
+  color: var(--cfg-accent);
+}
+
+/* Icon-grid variant: wider than the small icon buttons so the name has room
+   to wrap onto two lines instead of being clipped — Explorer-style. */
+.cfg-asset-picker-folder-btn--icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.2rem;
+  width: 100%;
+  min-height: 3.8rem;
+  padding: var(--cfg-space-2) 0.25rem;
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface);
+  border: 1px solid color-mix(in srgb, var(--cfg-border) 84%, var(--cfg-surface));
+  cursor: pointer;
+  font-size: 0.65rem;
+  line-height: 1.15;
+  text-align: center;
+  transition:
+    background var(--cfg-motion-fast) var(--cfg-ease-standard),
+    border-color var(--cfg-motion-fast) var(--cfg-ease-standard);
+}
+
+.cfg-asset-picker-folder-btn--icon:hover {
+  background: color-mix(in srgb, var(--cfg-accent) 12%, var(--cfg-surface));
+  border-color: color-mix(in srgb, var(--cfg-accent) 42%, var(--cfg-border));
+}
+
+.cfg-asset-picker-folder-btn__name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+/* ── Icon button ── */
+.cfg-asset-picker-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface);
+  border: 1px solid color-mix(in srgb, var(--cfg-border) 84%, var(--cfg-surface));
+  cursor: pointer;
+  color: var(--cfg-text);
+  transition:
+    background var(--cfg-motion-fast) var(--cfg-ease-standard),
+    border-color var(--cfg-motion-fast) var(--cfg-ease-standard),
+    transform var(--cfg-motion-fast) var(--cfg-ease-standard);
+}
+
+.cfg-asset-picker-icon-btn:hover {
+  background: color-mix(in srgb, var(--cfg-accent) 12%, var(--cfg-surface));
+  border-color: color-mix(in srgb, var(--cfg-accent) 42%, var(--cfg-border));
+  transform: translateY(-1px);
+}
+
+.cfg-asset-picker-icon-btn--selected {
+  background: color-mix(in srgb, var(--cfg-accent) 20%, var(--cfg-surface));
+  border-color: var(--cfg-accent);
+  outline: 2px solid var(--cfg-accent);
+  outline-offset: 1px;
+}
+
+.cfg-asset-picker-icon-btn img {
+  object-fit: contain;
+}
+
+/* ── Image thumbnail button (re-used in ImageSourcePicker) ── */
+.cfg-asset-picker-img-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--cfg-space-1);
+  padding: var(--cfg-space-2);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface);
+  border: 1px solid var(--cfg-border);
+  cursor: pointer;
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-text-xs);
+  text-align: center;
+  overflow: hidden;
+  transition:
+    background 0.1s,
+    border-color 0.1s;
+  min-height: 5.5rem;
+}
+
+.cfg-asset-picker-img-btn:hover {
+  background: color-mix(in srgb, var(--cfg-accent) 12%, var(--cfg-surface));
+  border-color: var(--cfg-accent);
+}
+
+.cfg-asset-picker-img-btn--selected {
+  background: color-mix(in srgb, var(--cfg-accent) 20%, var(--cfg-surface));
+  border-color: var(--cfg-accent);
+  outline: 2px solid var(--cfg-accent);
+  outline-offset: 1px;
+}
+
+.cfg-asset-picker-img-btn img {
+  max-width: 100%;
+  max-height: 4rem;
+  object-fit: contain;
+  flex: 1;
+}
+
+.cfg-asset-picker-img-btn__name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+/* Image grid uses larger cells, sized by the picker's thumbnail-size slider. */
+.cfg-asset-picker-grid--images {
+  grid-template-columns: repeat(auto-fill, minmax(var(--cfg-asset-tile, 6.5rem), 1fr));
+  gap: var(--cfg-space-2);
+}
+
+.cfg-asset-picker-sized .cfg-asset-picker-folder-row--images {
+  grid-template-columns: repeat(auto-fill, minmax(var(--cfg-asset-tile, 6.5rem), 1fr));
+}
+
+.cfg-asset-picker-sized .cfg-asset-picker-img-btn {
+  min-height: calc(var(--cfg-asset-tile, 6.5rem) * 0.85);
+}
+
+.cfg-asset-picker-sized .cfg-asset-picker-img-btn img {
+  max-height: calc(var(--cfg-asset-tile, 6.5rem) * 0.62);
+}
+
+/* Thumbnail-size slider. Track fill is driven by --cfg-zoom-fill (set by the
+   picker) because Chromium has no ::-moz-range-progress equivalent. */
+.cfg-asset-picker-zoom {
+  --cfg-zoom-track: 3px;
+  --cfg-zoom-thumb: 11px;
+
+  width: 5rem;
+  height: var(--cfg-zoom-thumb);
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.cfg-asset-picker-zoom::-webkit-slider-runnable-track {
+  height: var(--cfg-zoom-track);
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--cfg-accent) var(--cfg-zoom-fill, 50%),
+    color-mix(in srgb, var(--cfg-border) 80%, var(--cfg-surface)) var(--cfg-zoom-fill, 50%)
+  );
+}
+
+.cfg-asset-picker-zoom::-moz-range-track {
+  height: var(--cfg-zoom-track);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cfg-border) 80%, var(--cfg-surface));
+}
+
+.cfg-asset-picker-zoom::-moz-range-progress {
+  height: var(--cfg-zoom-track);
+  border-radius: 999px;
+  background: var(--cfg-accent);
+}
+
+.cfg-asset-picker-zoom::-webkit-slider-thumb {
+  width: var(--cfg-zoom-thumb);
+  height: var(--cfg-zoom-thumb);
+  margin-top: calc((var(--cfg-zoom-track) - var(--cfg-zoom-thumb)) / 2);
+  border: 2px solid var(--cfg-accent);
+  border-radius: 50%;
+  background: var(--cfg-surface);
+  appearance: none;
+  -webkit-appearance: none;
+  transition:
+    transform var(--cfg-motion-fast) var(--cfg-ease-standard),
+    box-shadow var(--cfg-motion-fast) var(--cfg-ease-standard);
+}
+
+.cfg-asset-picker-zoom::-moz-range-thumb {
+  width: var(--cfg-zoom-thumb);
+  height: var(--cfg-zoom-thumb);
+  box-sizing: border-box;
+  border: 2px solid var(--cfg-accent);
+  border-radius: 50%;
+  background: var(--cfg-surface);
+  transition:
+    transform var(--cfg-motion-fast) var(--cfg-ease-standard),
+    box-shadow var(--cfg-motion-fast) var(--cfg-ease-standard);
+}
+
+.cfg-asset-picker-zoom:hover::-webkit-slider-thumb {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 4px var(--cfg-accent-soft);
+}
+
+.cfg-asset-picker-zoom:hover::-moz-range-thumb {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 4px var(--cfg-accent-soft);
+}
+
+.cfg-asset-picker-zoom:active::-webkit-slider-thumb {
+  background: var(--cfg-accent);
+}
+
+.cfg-asset-picker-zoom:active::-moz-range-thumb {
+  background: var(--cfg-accent);
+}
+
+/* ── Footer selection preview (inside the shared .cfg-picker-footer) ── */
+.cfg-asset-picker-selection {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfg-asset-picker-selection img {
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.cfg-asset-picker-selection--empty {
+  color: var(--cfg-text-muted);
+  font-style: italic;
+}
+
+.cfg-asset-picker-zoom:focus-visible,
+.cfg-asset-picker-tab:focus-visible,
+.cfg-asset-picker-icon-btn:focus-visible,
+.cfg-asset-picker-img-btn:focus-visible {
+  outline: var(--cfg-focus-outline);
+  outline-offset: var(--cfg-focus-offset);
+}

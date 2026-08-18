@@ -1,0 +1,639 @@
+name: Release readiness matrix
+
+# Required-platform validation for a public release (maintenance backlog item
+# 38). Every job below is either a real check or an intentionally failing
+# placeholder for backlog work that has not landed yet — a placeholder must
+# never be turned into `if: false` or otherwise skipped, since a required job
+# that goes quiet is exactly the silent-skip failure mode this workflow exists
+# to prevent. Replace a placeholder's body with real build/smoke logic when
+# its backlog item lands; nothing else in this file should need to change.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  # ── Real checks: existing suites, no follow-up work required ──────────────
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      # One unambiguous needle for "did enterprise code reach the bundle?".
+      # It exists only inside the stand-in registry written below, so the scan
+      # does not depend on a hand-maintained list of today's enterprise UI
+      # strings — a list that silently stops covering the next module.
+      ENTERPRISE_MARKER: enterprise-only-string-that-must-never-ship-9f13c7
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      # `npm run build` compiles the built-in (stdlib) widgets first via the
+      # backend's Python widget compiler (imports tree_sitter); esbuild, its
+      # other prerequisite, arrives with `npm ci`.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - run: npm ci
+      - run: pip install -r ../backend/requirements.txt
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run test:coverage
+      # This job checks out only the public repository; the enterprise half is
+      # a separate private repo, gitignored here. Stand in for it before
+      # building, so the build below proves it *ignores* an enterprise
+      # registry rather than passing by its absence.
+      - name: Stand in for the private enterprise repository
+        run: |
+          set -euo pipefail
+          if [ -e ../enterprise ]; then
+            echo "::error::enterprise/ already exists in this workspace — refusing to overwrite a real checkout."
+            exit 1
+          fi
+          mkdir -p ../enterprise/frontend
+          {
+            cat src/enterprise/registry.ts
+            printf '\nObject.assign(globalThis, { __nexthmiEnterpriseMarker: %s })\n' "'$ENTERPRISE_MARKER'"
+          } > ../enterprise/frontend/registry.ts
+      - run: npm run build
+      # Backlog item 22: hard-fails on the per-chunk size budget, on the named
+      # route budgets, and on the per-widget/tree caps over the esbuild-built
+      # dist/stdlib-js/ modules.
+      - run: npm run check:bundle-budget
+      # The load-bearing rule of the two-edition split: an AGPL build attached
+      # to a public release must carry no proprietary code. The ee build is
+      # the positive control — proves the scan can see enterprise code at all.
+      - name: Assert the public bundle carries no enterprise code
+        run: |
+          set -euo pipefail
+          NEXTHMI_EDITION=ee npx vite build --outDir dist-ee
+          if ! grep -rqF "$ENTERPRISE_MARKER" dist-ee; then
+            echo "::error::Positive control failed — the ee bundle does not carry the marker, so this check could not have detected a leak."
+            exit 1
+          fi
+          if grep -rlF "$ENTERPRISE_MARKER" dist; then
+            echo "::error::Enterprise code reached the open-source bundle."
+            exit 1
+          fi
+          rm -rf dist-ee ../enterprise
+          echo "Public bundle is clean, and the scan is proven able to see enterprise code."
+
+  backend-python-3-14:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - run: pip install -r backend/requirements-dev.txt
+      - run: ruff check backend
+      - run: pytest --cov=backend --cov-report=term-missing backend/tests
+
+  # ── Backlog item 32: Docker build + smoke test (one leg per native arch;
+  #    no QEMU emulation here — these hosted runners are native x64/arm64) ──
+
+  docker-linux-x64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build image
+        run: docker build -t nexthmi:ci .
+      - name: Empty-volume first boot
+        run: |
+          mkdir -p "$RUNNER_TEMP/project-data"
+          docker run -d --name nexthmi-smoke -p 18000:8000 -v "$RUNNER_TEMP/project-data:/data" nexthmi:ci
+      - name: Wait for manager to answer
+        run: |
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:18000/ || true)
+            [ "$code" = "200" ] && exit 0
+            sleep 1
+          done
+          echo "::error::manager never answered 200 on published port" && exit 1
+      - name: Seed created under mounted volume
+        run: test -f "$RUNNER_TEMP/project-data/projects.json" && test -d "$RUNNER_TEMP/project-data/Default-Project"
+      - name: Graceful stop (SIGTERM)
+        run: docker stop -t 10 nexthmi-smoke
+      - name: Restart against the same volume — no re-seed/duplication
+        run: |
+          docker start nexthmi-smoke
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:18000/ || true)
+            [ "$code" = "200" ] && break
+            sleep 1
+          done
+          [ "$code" = "200" ] || { echo "::error::manager did not come back up after restart" && exit 1; }
+          test "$(ls "$RUNNER_TEMP/project-data" | grep -c '^Default-Project$')" = "1"
+      - name: Cleanup
+        if: always()
+        run: docker rm -f nexthmi-smoke || true
+      # On any v* tag, save the smoke-tested image as a run artifact. Tag it
+      # per-arch first so the two saves stay distinct when loaded together (a
+      # bare nexthmi:ci would collide on the second load). RCs run this too, so
+      # a dry run fully exercises build+save+upload; only the GHCR push itself
+      # (docker-publish) is final-tag-only, mirroring the portable binaries.
+      - name: Save smoke-tested image for publish
+        if: github.ref_type == 'tag'
+        run: |
+          docker tag nexthmi:ci nexthmi:amd64
+          docker save nexthmi:amd64 | gzip > "$RUNNER_TEMP/nexthmi-amd64.tar.gz"
+      - name: Upload image tarball
+        if: github.ref_type == 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: docker-image-amd64
+          path: ${{ runner.temp }}/nexthmi-amd64.tar.gz
+          if-no-files-found: error
+
+  docker-linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build image
+        run: docker build -t nexthmi:ci .
+      - name: Empty-volume first boot
+        run: |
+          mkdir -p "$RUNNER_TEMP/project-data"
+          docker run -d --name nexthmi-smoke -p 18000:8000 -v "$RUNNER_TEMP/project-data:/data" nexthmi:ci
+      - name: Wait for manager to answer
+        run: |
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:18000/ || true)
+            [ "$code" = "200" ] && exit 0
+            sleep 1
+          done
+          echo "::error::manager never answered 200 on published port" && exit 1
+      - name: Seed created under mounted volume
+        run: test -f "$RUNNER_TEMP/project-data/projects.json" && test -d "$RUNNER_TEMP/project-data/Default-Project"
+      - name: Graceful stop (SIGTERM)
+        run: docker stop -t 10 nexthmi-smoke
+      - name: Restart against the same volume — no re-seed/duplication
+        run: |
+          docker start nexthmi-smoke
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:18000/ || true)
+            [ "$code" = "200" ] && break
+            sleep 1
+          done
+          [ "$code" = "200" ] || { echo "::error::manager did not come back up after restart" && exit 1; }
+          test "$(ls "$RUNNER_TEMP/project-data" | grep -c '^Default-Project$')" = "1"
+      - name: Cleanup
+        if: always()
+        run: docker rm -f nexthmi-smoke || true
+      - name: Save smoke-tested image for publish
+        if: github.ref_type == 'tag'
+        run: |
+          docker tag nexthmi:ci nexthmi:arm64
+          docker save nexthmi:arm64 | gzip > "$RUNNER_TEMP/nexthmi-arm64.tar.gz"
+      - name: Upload image tarball
+        if: github.ref_type == 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: docker-image-arm64
+          path: ${{ runner.temp }}/nexthmi-arm64.tar.gz
+          if-no-files-found: error
+
+  # Not yet covered by either job above (both single-project, root-user
+  # images): multiple simultaneously running child projects behind one
+  # manager container, and file-ownership behavior under a non-root
+  # container user — the latter needs a Dockerfile change, not just a test.
+
+  # ── Backlog item 33 (macOS leg): portable macOS arm64 build + smoke test ──
+
+  macos-arm64-portable:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt pyinstaller
+      - run: npm install -g esbuild
+      - name: Resolve build version from tag
+        # A v* tag stamps the real version into the bundle (version.txt) and
+        # into the zip's filename; any other trigger (dispatch, non-v tag)
+        # stays "ci-smoke". The smoke steps below glob the zip and reference
+        # the *folder* inside it, whose name stays version-independent.
+        run: |
+          case "$GITHUB_REF_TYPE:$GITHUB_REF_NAME" in
+            tag:v*) echo "NEXTHMI_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV" ;;
+            *)      echo "NEXTHMI_VERSION=ci-smoke" >> "$GITHUB_ENV" ;;
+          esac
+      - name: Build portable artifact
+        run: ./build/build-binary.sh
+      # Uploads the zip, not the folder, so a run-artifact download is a zip
+      # inside GitHub's own artifact zip. That second layer is deliberate:
+      # upload-artifact normalizes every file to 0644, which would strip +x
+      # from `nexthmi`, `nexthmi.command` and `_internal/esbuild` and leave the
+      # download unrunnable on macOS. Release assets are unaffected — the
+      # publish job downloads the artifact (extracting GitHub's layer) and
+      # attaches this zip directly, so a Release download has one layer.
+      - name: Upload portable artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: nexthmi-macos-arm64
+          path: dist/nexthmi-macos-arm64-*.zip
+          if-no-files-found: error
+      - name: Unzip artifact
+        run: |
+          mkdir -p "$RUNNER_TEMP/portable"
+          unzip -q dist/nexthmi-macos-arm64-*.zip -d "$RUNNER_TEMP/portable"
+      - name: Bundled esbuild runs standalone (no Node/npm on PATH)
+        run: |
+          env -i PATH="/usr/bin:/bin" \
+            "$RUNNER_TEMP/portable/nexthmi-macos-arm64/_internal/esbuild" --version
+      - name: First run — empty runtime home, manager startup
+        run: |
+          RUNTIME_HOME="$RUNNER_TEMP/runtime-home"
+          echo "RUNTIME_HOME=$RUNTIME_HOME" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/portable/nexthmi-macos-arm64/nexthmi" &
+          echo $! > "$RUNNER_TEMP/nexthmi.pid"
+        env:
+          NEXTHMI_DATA_DIR: ${{ runner.temp }}/runtime-home
+          NEXTHMI_PORT: "18100"
+      - name: Wait for manager to answer
+        run: |
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18100/ || true)
+            [ "$code" = "200" ] && exit 0
+            sleep 1
+          done
+          echo "::error::manager never answered 200" && exit 1
+      - name: Seed created under runtime home
+        run: test -f "$RUNTIME_HOME/projects.json" && test -d "$RUNTIME_HOME/Default-Project"
+      - name: Graceful shutdown (SIGTERM)
+        run: |
+          PID=$(cat "$RUNNER_TEMP/nexthmi.pid")
+          kill -TERM "$PID"
+          for i in $(seq 1 20); do kill -0 "$PID" 2>/dev/null || exit 0; sleep 0.2; done
+          echo "::error::process did not exit after SIGTERM" && exit 1
+      - name: Restart against the same runtime home
+        run: |
+          "$RUNNER_TEMP/portable/nexthmi-macos-arm64/nexthmi" &
+          echo $! > "$RUNNER_TEMP/nexthmi.pid"
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18100/ || true)
+            [ "$code" = "200" ] && exit 0
+            sleep 1
+          done
+          echo "::error::manager did not come back up after restart" && exit 1
+        env:
+          NEXTHMI_DATA_DIR: ${{ runner.temp }}/runtime-home
+          NEXTHMI_PORT: "18100"
+      - name: Cleanup
+        if: always()
+        run: |
+          PID=$(cat "$RUNNER_TEMP/nexthmi.pid" 2>/dev/null || true)
+          [ -n "$PID" ] && kill -TERM "$PID" 2>/dev/null || true
+
+  # Not yet covered: nexthmi.command double-click launch (only the nexthmi
+  # binary was run directly), a real (non-adhoc) Gatekeeper quarantine
+  # prompt (a CI-built artifact never picks up com.apple.quarantine the way
+  # a browser download would), and notarization/antivirus behavior.
+
+  windows-x64-portable:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt pyinstaller
+      - run: npm install -g esbuild
+      - name: Resolve build version from tag
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -like 'v*') {
+            "NEXTHMI_VERSION=$($env:GITHUB_REF_NAME.Substring(1))" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          } else {
+            "NEXTHMI_VERSION=ci-smoke" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          }
+      - name: Build portable artifact
+        run: .\build\build-binary.ps1
+      # Zip rather than folder, for the same reason as the macOS leg above.
+      - name: Upload portable artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: nexthmi-windows-x64
+          path: dist\nexthmi-windows-x64-*.zip
+          if-no-files-found: error
+      - name: Unzip artifact
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\portable" | Out-Null
+          $zip = Get-ChildItem -Path dist -Filter 'nexthmi-windows-x64-*.zip' | Select-Object -First 1
+          Expand-Archive -Path $zip.FullName -DestinationPath "$env:RUNNER_TEMP\portable" -Force
+      - name: Bundled esbuild runs standalone (no Node/npm on PATH)
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:SystemRoot\System32"
+          & "$env:RUNNER_TEMP\portable\nexthmi-windows-x64\_internal\esbuild.exe" --version
+      - name: First run — empty runtime home, manager startup
+        shell: pwsh
+        run: |
+          $runtimeHome = "$env:RUNNER_TEMP\runtime-home"
+          "RUNTIME_HOME=$runtimeHome" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $p = Start-Process -FilePath "$env:RUNNER_TEMP\portable\nexthmi-windows-x64\nexthmi.exe" -PassThru
+          $p.Id | Out-File -FilePath "$env:RUNNER_TEMP\nexthmi.pid" -Encoding ascii
+        env:
+          NEXTHMI_DATA_DIR: ${{ runner.temp }}\runtime-home
+          NEXTHMI_PORT: "18100"
+      - name: Wait for manager to answer
+        shell: pwsh
+        run: |
+          foreach ($i in 1..30) {
+            try {
+              $r = Invoke-WebRequest -UseBasicParsing -Uri http://127.0.0.1:18100/ -TimeoutSec 5
+              if ($r.StatusCode -eq 200) { exit 0 }
+            } catch { }
+            Start-Sleep -Seconds 1
+          }
+          Write-Host "::error::manager never answered 200 on published port"
+          exit 1
+      - name: Seed created under runtime home
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "$env:RUNTIME_HOME\projects.json")) { Write-Host "::error::projects.json missing"; exit 1 }
+          if (-not (Test-Path "$env:RUNTIME_HOME\Default-Project")) { Write-Host "::error::Default-Project missing"; exit 1 }
+      - name: Stop the manager
+        shell: pwsh
+        run: |
+          # Windows has no SIGTERM; forceful Stop-Process here. Graceful
+          # console-signal shutdown is not yet asserted (see the note below).
+          $managerPid = Get-Content "$env:RUNNER_TEMP\nexthmi.pid"
+          Stop-Process -Id $managerPid -Force -ErrorAction SilentlyContinue
+      - name: Restart against the same runtime home — no re-seed
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "$env:RUNNER_TEMP\portable\nexthmi-windows-x64\nexthmi.exe" -PassThru
+          $p.Id | Out-File -FilePath "$env:RUNNER_TEMP\nexthmi.pid" -Encoding ascii
+          foreach ($i in 1..30) {
+            try {
+              $r = Invoke-WebRequest -UseBasicParsing -Uri http://127.0.0.1:18100/ -TimeoutSec 5
+              if ($r.StatusCode -eq 200) { exit 0 }
+            } catch { }
+            Start-Sleep -Seconds 1
+          }
+          Write-Host "::error::manager did not come back up after restart"
+          exit 1
+        env:
+          NEXTHMI_DATA_DIR: ${{ runner.temp }}\runtime-home
+          NEXTHMI_PORT: "18100"
+      - name: Cleanup
+        if: always()
+        shell: pwsh
+        run: |
+          $managerPid = Get-Content "$env:RUNNER_TEMP\nexthmi.pid" -ErrorAction SilentlyContinue
+          if ($managerPid) { Stop-Process -Id $managerPid -Force -ErrorAction SilentlyContinue }
+
+  # Not yet covered on the Windows leg: graceful console-signal shutdown
+  # (CTRL_CLOSE/CTRL_BREAK — only a forceful Stop-Process is exercised above),
+  # long-path (>260 char) runtime homes, a real SmartScreen/MOTW quarantine
+  # prompt (a CI-built artifact never picks up the mark-of-the-web a browser
+  # download would), and runtime widget compilation through the bundled esbuild.
+
+  # ── Website documentation bundle ──────────────────────────────────────────
+  # The portable zips already carry their own rendered copy (build-binary.sh
+  # calls render-docs.py), so this job exists for the *website* tree that
+  # next-hmi.com/docs serves: it proves the tree builds, and carries it as a
+  # downloadable artifact for inspection.
+  #
+  # It is **not** the publishing path, and its artifact must not be uploaded
+  # over the live /docs. The published site is an `ee` render — it carries the
+  # enterprise guide pages — and `enterprise/` is not in this repository, so
+  # everything built here is necessarily `oss` and two live pages short.
+  # Publishing runs from a maintainer checkout that has the enterprise tree
+  # cloned in; see docs/dev/operations/release.md, and the edition guard in
+  # build/publish-docs.py that refuses the downgrade.
+  #
+  # The tree is additive by design. It carries this release's `v<version>/`
+  # directory, a copy of it at the root as "latest", and a `versions.json` built
+  # from the repository's released tags — so uploading it over the live site
+  # leaves every previously published version directory untouched while the
+  # picker immediately starts offering the new one.
+  docs-site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # versions.json is derived from the tag list, which a shallow clone
+          # would not have.
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - run: pip install -r backend/requirements-dev.txt
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=0.0.0-dev" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Render the versioned site tree
+        run: |
+          python build/publish-docs.py site "${{ steps.version.outputs.value }}" /docs --from-git-tags
+      - name: Render the offline copy the release zips ship
+        run: |
+          python build/render-docs.py offline "${{ steps.version.outputs.value }}"
+      - name: Sanity-check the output
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.value }}"
+          test -f site/versions.json
+          test -d "site/v$version"
+          test -f "site/v$version/index.html"
+          # A candidate must not carry a root copy: the root is what becomes
+          # /docs/ on upload, so building one is the accident to prevent.
+          case "$version" in
+            *-*)
+              if [ -f site/index.html ]; then
+                echo "::error::a release candidate produced a latest copy"
+                exit 1
+              fi
+              ;;
+            *)
+              test -f site/index.html
+              ;;
+          esac
+          # A dev doc reaching the guide is the regression this split exists to
+          # prevent — see docs/INDEX.md.
+          if ls site/v"$version"/*.html | grep -Ee '(backend|rest-api|websocket|dependency-policy)\.html'; then
+            echo "::error::developer documentation leaked into the user guide"
+            exit 1
+          fi
+          # The offline bundle must load nothing from another host: it opens on
+          # a shop-floor panel with no network. Prose hyperlinks are fine and
+          # deliberately not matched; only `src=` and `<link>` cause a fetch.
+          if grep -Eoh 'src="https?://[^"]*"|<link[^>]+href="https?://[^"]*"' offline/*.html; then
+            echo "::error::the offline guide loads a resource from an external host"
+            exit 1
+          fi
+          # The website render is the same HTML plus the site's faces, which are
+          # fetched from Google Fonts on purpose (WEBFONTS in render-docs.py).
+          # Any *other* host is the regression — typically an asset that only
+          # resolves from the machine that wrote the page.
+          if grep -Eoh 'src="https?://[^"]*"|<link[^>]+href="https?://[^"]*"' site/v"$version"/*.html \
+             | grep -Ev 'https://fonts\.(googleapis|gstatic)\.com'; then
+            echo "::error::rendered docs load a resource from an unexpected external host"
+            exit 1
+          fi
+      - name: Package
+        run: |
+          cd site
+          zip -qr "$RUNNER_TEMP/nexthmi-docs-oss-${{ steps.version.outputs.value }}.zip" .
+      # Named for what it is, so nobody reaches for it at publishing time: an
+      # oss render, one edition short of the live site.
+      - name: Upload documentation site
+        uses: actions/upload-artifact@v7
+        with:
+          name: docs-site-oss
+          path: ${{ runner.temp }}/nexthmi-docs-oss-${{ steps.version.outputs.value }}.zip
+          if-no-files-found: error
+
+  # ── Gate: a missing, skipped, or failed required job fails the release ────
+
+  release-readiness:
+    if: always()
+    needs:
+      - frontend
+      - backend-python-3-14
+      - docker-linux-x64
+      - docker-linux-arm64
+      - macos-arm64-portable
+      - windows-x64-portable
+      - docs-site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check every required platform job passed
+        run: |
+          echo '${{ toJSON(needs) }}' > needs.json
+          python3 - <<'PY'
+          import json, sys
+          needs = json.load(open("needs.json"))
+          failed = {k: v["result"] for k, v in needs.items() if v["result"] != "success"}
+          if failed:
+              print("Required platform jobs did not pass:", file=sys.stderr)
+              for name, result in failed.items():
+                  print(f"  - {name}: {result}", file=sys.stderr)
+              sys.exit(1)
+          print("All required platform jobs passed.")
+          PY
+
+  # ── Publish: on any v* tag that passes the full matrix, attach the built
+  #    binaries to a GitHub Release ──────────────────────────────────────────
+  # RC / pre-release tags (any SemVer tag with a hyphen, e.g. v1.0.0-rc.6)
+  # publish too, marked `--prerelease` so they never get picked up as the
+  # repo's "Latest" release — only a bare vX.Y.Z can become Latest. Either way
+  # the artifacts land on the repo's Releases page, downloadable without
+  # digging through a run's artifacts.
+  #
+  # `needs: release-readiness` (no `if: always()`) is the gate: this job runs
+  # only when every required platform job passed, so a red matrix can never
+  # ship a Release. The portable zips come from the macOS/Windows jobs'
+  # artifacts; the Docker image is published separately by docker-publish
+  # below, still final-tag-only (an RC pushed as `latest` on GHCR would be
+  # wrong). `contents: write` is scoped to this job alone; the workflow
+  # default stays read-only.
+  publish-release:
+    needs: release-readiness
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # Only the portable zips belong in the Release — not the docs-site-oss
+      # bundle or the docker-image-* tarballs (those feed docker-publish
+      # below, not end users).
+      - name: Download built artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: nexthmi-*
+          path: artifacts
+          merge-multiple: true
+      - name: Create or update the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          ls -l artifacts
+          prerelease_flag=()
+          case "$tag" in
+            *-*) prerelease_flag=(--prerelease) ;;
+          esac
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" artifacts/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" artifacts/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "NEXT HMI ${tag#v}" \
+              --generate-notes \
+              "${prerelease_flag[@]}"
+          fi
+
+  # ── Publish: on a FINAL v* tag, assemble the smoke-tested per-arch images
+  #    into a multi-arch GHCR image ─────────────────────────────────────────
+  # Gated exactly like publish-release (needs release-readiness, no
+  # `if: always()`), so a red matrix never publishes an image. The inputs are
+  # the exact tarballs the docker-linux-* jobs built and smoke-tested — loaded
+  # here (an arm64 image loads and pushes fine on an amd64 host; it is never
+  # run), pushed under arch-suffixed tags, then stitched into a manifest list
+  # tagged <version> + latest with no QEMU. Because the per-arch images only
+  # travel as run artifacts, nothing reaches the registry until this post-gate
+  # job runs. `packages: write` is scoped here; the workflow default stays
+  # read-only. Note: while the repository is private the pushed package is
+  # private too (counts against the small free package quota); it becomes
+  # public and free when the repository is made public.
+  docker-publish:
+    needs: release-readiness
+    if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download image tarballs
+        uses: actions/download-artifact@v8
+        with:
+          path: images
+          merge-multiple: true
+      - name: Log in to GHCR
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Push per-arch images and multi-arch manifest
+        run: |
+          set -euo pipefail
+          # GHCR requires a lowercase path; github.repository is already
+          # lowercase but normalize defensively.
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          version="${GITHUB_REF_NAME#v}"
+          docker load -i images/nexthmi-amd64.tar.gz
+          docker load -i images/nexthmi-arm64.tar.gz
+          docker tag nexthmi:amd64 "$image:$version-amd64"
+          docker tag nexthmi:arm64 "$image:$version-arm64"
+          docker push "$image:$version-amd64"
+          docker push "$image:$version-arm64"
+          # Stitch the two arch-specific images into one manifest list, tagged
+          # both with the version and latest. buildx reads them back from the
+          # registry — each carries its own platform from the native build.
+          docker buildx imagetools create \
+            -t "$image:$version" \
+            -t "$image:latest" \
+            "$image:$version-amd64" \
+            "$image:$version-arm64"
+          echo "Published $image:$version (+ latest) for linux/amd64 + linux/arm64."

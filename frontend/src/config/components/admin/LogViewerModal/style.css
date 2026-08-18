@@ -1,0 +1,73 @@
+.cfg-log-viewer {
+  display: flex;
+  flex-direction: column;
+  width: min(960px, 90vw);
+  height: min(720px, 80vh);
+  max-width: 90vw;
+  max-height: 90vh;
+}
+
+.cfg-log-viewer__heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-1);
+  min-width: 0;
+  flex: 1;
+}
+
+.cfg-log-viewer__title {
+  margin: 0;
+  font-size: var(--cfg-text-lg);
+  font-weight: var(--cfg-fw-bold);
+  color: var(--cfg-text);
+}
+
+.cfg-log-viewer__path {
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfg-log-viewer__body {
+  flex: 1;
+  margin: 0;
+  padding: var(--cfg-space-4);
+  overflow: auto;
+  background: var(--cfg-bg);
+  border-top: 1px solid var(--cfg-border);
+  border-bottom: 1px solid var(--cfg-border);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--cfg-text-xs);
+  line-height: 1.45;
+  color: var(--cfg-text);
+  white-space: pre;
+  tab-size: 4;
+}
+
+.cfg-log-viewer__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cfg-space-3);
+  padding: var(--cfg-space-4);
+}
+
+.cfg-log-viewer__counter {
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-muted);
+}
+
+.cfg-log-viewer__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+}
+
+.cfg-log-viewer__actions a.cfg-btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}

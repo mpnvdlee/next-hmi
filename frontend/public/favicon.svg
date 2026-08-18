@@ -1,0 +1,16 @@
+<!-- Tab icon. Same mark as the LogoMark component — a solid tile carrying the
+     four-quadrant grid. Tile and squares invert for dark tab bars so the shape
+     never sinks into the chrome; the indigo shifts to stay legible on each. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" fill="none">
+  <style>
+    .tile{fill:#17160f}.mark{fill:#faf9f6}.acc{fill:#7b72ee}
+    @media(prefers-color-scheme:dark){.tile{fill:#faf9f6}.mark{fill:#17160f}.acc{fill:#4f46e5}}
+  </style>
+  <rect class="tile" width="48" height="48" rx="11"/>
+  <g class="mark">
+    <rect x="26" y="8" width="14" height="14" rx="3.5"/>
+    <rect x="8" y="26" width="14" height="14" rx="3.5"/>
+  </g>
+  <path class="acc" d="M14.42 8 22 15 14.42 22 8 22 15.58 15 8 8Z"/>
+  <rect class="acc" x="26" y="26" width="14" height="14" rx="3.5"/>
+</svg>

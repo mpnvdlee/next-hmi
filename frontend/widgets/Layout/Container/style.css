@@ -1,0 +1,78 @@
+.hmi-container {
+  /* Layout barrier — the Container is the only widget that both consumes these
+     custom properties and hands them down, so it must reset every one it reads.
+     Custom properties inherit and `containerLayoutStyle()` emits only the
+     fields the author actually set, so without this a container nested in a
+     `column` parent would inherit `column` and ignore its own `row` default —
+     the default the layout panel advertises. `initial` on a custom property is
+     the guaranteed-invalid value, so each `var()` below falls back to its
+     documented default; this container's own inline style still wins, because
+     inline declarations beat this rule.
+     The `--self-*` half repeats the `.hmi-component` barrier in hmi.css, which
+     does not reach here — the Container root carries `.hmi-container` instead.
+     Every var consumed below must be listed; layoutUtils.test.ts guards that. */
+  --container-direction: initial;
+  --container-gap: initial;
+  --container-wrap: initial;
+  --container-align: initial;
+  --container-justify: initial;
+  --container-radius: initial;
+  --container-bg: initial;
+  --container-border: initial;
+  --container-shadow: initial;
+  --self-basis: initial;
+  --self-grow: initial;
+  --self-shrink: initial;
+  --self-align: initial;
+  --self-min-width: initial;
+  --self-max-width: initial;
+  --self-min-height: initial;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-sm);
+  padding: var(--hmi-space-sm);
+  /* Theme-driven defaults; a per-instance layout value (inline style /
+     --container-radius) overrides. Switching theme re-skins these. */
+  margin: var(--hmi-space-sm);
+  background: var(--container-bg, transparent);
+  border: var(--container-border, none);
+  box-shadow: var(--container-shadow, none);
+  border-radius: var(--container-radius, var(--hmi-radius));
+  flex-basis: var(--self-basis, auto);
+  flex-grow: var(--self-grow, 0);
+  flex-shrink: var(--self-shrink, 1);
+  align-self: var(--self-align, auto);
+  min-width: var(--self-min-width, 0);
+  max-width: var(--self-max-width, none);
+  min-height: var(--self-min-height, 0);
+}
+
+.hmi-container__content {
+  /* Fill the container's box when it has a definite height/width (a sidebar
+     root, say), so a StretchSpacer child has room to push against. With an
+     auto-sized container there is no free space and this changes nothing. */
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: var(--container-direction, row);
+  gap: var(--container-gap, var(--hmi-space-sm));
+  flex-wrap: var(--container-wrap, nowrap);
+  align-items: var(--container-align, stretch);
+  justify-content: var(--container-justify, flex-start);
+}
+
+.hmi-container__title {
+  width: 100%;
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  letter-spacing: var(--hmi-type-label-tracking);
+  text-transform: var(--hmi-type-label-transform);
+  color: var(--hmi-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  user-select: none;
+}

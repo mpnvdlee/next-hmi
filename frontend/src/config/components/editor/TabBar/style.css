@@ -1,0 +1,151 @@
+.editor-tabbar {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-1);
+  padding: 0 var(--cfg-space-3) var(--cfg-space-1);
+  background: var(--cfg-bg);
+  flex-shrink: 0;
+  min-height: 0;
+  position: relative;
+}
+
+.editor-tabbar__scroll {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-1);
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+  flex: 1;
+  min-width: 0;
+}
+
+.editor-tabbar__scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-tabbar--empty {
+  min-height: 32px;
+}
+
+.editor-tabbar__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  min-height: 24px;
+  padding: 0.1rem 0.15rem 0.1rem 0.45rem;
+  border: 1px solid var(--cfg-border);
+  border-radius: 999px;
+  background: var(--cfg-surface);
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-text-base);
+  font-family: var(--cfg-font);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  max-width: 160px;
+  min-width: 0;
+}
+
+.editor-tabbar__tab:hover {
+  border-color: color-mix(in srgb, var(--cfg-accent) 45%, var(--cfg-border));
+  background: var(--cfg-surface-dark);
+  color: var(--cfg-text);
+}
+
+.editor-tabbar__tab--active {
+  border-color: var(--cfg-accent);
+  background: var(--cfg-accent-soft);
+  color: var(--cfg-accent);
+}
+
+/* Ephemeral preview tab — replaced by the next preview unless pinned (double-click). */
+.editor-tabbar__tab--preview {
+  border-color: var(--cfg-accent);
+  border-style: dotted;
+  border-width: 2px;
+  padding: calc(0.1rem - 1px) calc(0.15rem - 1px) calc(0.1rem - 1px) calc(0.45rem - 1px);
+}
+
+.editor-tabbar__tab--preview .editor-tabbar__tab-label {
+  font-style: italic;
+}
+
+.editor-tabbar__tab-icon {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+
+.editor-tabbar__tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.editor-tabbar__tab .editor-tabbar__tab-close {
+  width: 20px;
+  height: 20px;
+  font-size: 18px;
+}
+
+.editor-tabbar__overflow-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--cfg-border);
+  border-radius: 999px;
+  background: var(--cfg-surface);
+  color: var(--cfg-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 1rem;
+  font-family: var(--cfg-font);
+}
+
+.editor-tabbar__overflow-btn:hover {
+  border-color: color-mix(in srgb, var(--cfg-accent) 45%, var(--cfg-border));
+  background: var(--cfg-surface-dark);
+  color: var(--cfg-text);
+}
+
+.editor-tabbar__overflow-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--cfg-space-1));
+  z-index: 100;
+  background: var(--cfg-surface);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  box-shadow: var(--cfg-shadow-md);
+  max-height: 300px;
+  overflow-y: auto;
+  min-width: 180px;
+}
+
+.editor-tabbar__overflow-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.35rem 0.6rem;
+  border: none;
+  background: transparent;
+  color: var(--cfg-text);
+  font-size: var(--cfg-text-base);
+  font-family: var(--cfg-font);
+  cursor: pointer;
+  text-align: left;
+}
+
+.editor-tabbar__overflow-item:hover {
+  background: var(--cfg-bg-hover);
+}
+
+.editor-tabbar__overflow-item--active {
+  color: var(--cfg-accent);
+  background: var(--cfg-accent-soft);
+}

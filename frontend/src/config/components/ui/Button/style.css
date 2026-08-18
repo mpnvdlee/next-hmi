@@ -1,0 +1,117 @@
+/* ── Buttons ───────────────────────────────────────────────── */
+.cfg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cfg-btn-gap);
+  height: var(--cfg-btn-height);
+  padding: 0 var(--cfg-btn-padding-x);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text);
+  background: var(--cfg-surface);
+  cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    color 0.12s;
+}
+
+.cfg-btn:hover {
+  background: var(--cfg-surface-dark);
+  border-color: var(--cfg-accent);
+}
+
+.cfg-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Primary — solid accent fill */
+.cfg-btn--primary {
+  background: var(--cfg-accent);
+  color: var(--cfg-surface);
+  border-color: var(--cfg-accent);
+}
+
+.cfg-btn--primary:hover {
+  background: var(--cfg-accent-hover);
+  border-color: var(--cfg-accent-hover);
+}
+
+/* Danger — red text, light red hover bg */
+.cfg-btn--danger {
+  color: var(--cfg-danger);
+  border-color: color-mix(in srgb, var(--cfg-danger) 45%, var(--cfg-surface));
+}
+
+.cfg-btn--danger:hover {
+  background: color-mix(in srgb, var(--cfg-danger) 10%, var(--cfg-surface));
+}
+
+.cfg-btn--success {
+  color: var(--cfg-success);
+  border-color: var(--cfg-success);
+}
+
+.cfg-btn--success:hover {
+  background: color-mix(in srgb, var(--cfg-success) 10%, var(--cfg-surface));
+}
+
+.cfg-btn--neutral {
+  color: var(--cfg-text-muted);
+  border-color: var(--cfg-border);
+}
+
+.cfg-btn--neutral:hover {
+  background: var(--cfg-surface-dark);
+}
+
+.cfg-btn--accent {
+  color: var(--cfg-accent);
+  border-color: var(--cfg-accent);
+}
+
+.cfg-btn--accent:hover {
+  background: var(--cfg-selected-bg);
+}
+
+/* Ghost — muted text, subtle border */
+.cfg-btn--ghost {
+  background: none;
+  color: var(--cfg-text-muted);
+  border-color: var(--cfg-border);
+}
+
+.cfg-btn--ghost:hover {
+  color: var(--cfg-text);
+  background: var(--cfg-surface-dark);
+}
+
+/* Icon — compact, no padding, for icon-only buttons */
+.cfg-btn--icon {
+  padding: 0 var(--cfg-btn-padding-x-icon);
+  border: none;
+  background: none;
+  color: var(--cfg-text-muted);
+}
+
+.cfg-btn--icon:hover {
+  color: var(--cfg-text);
+  background: var(--cfg-surface-dark);
+}
+
+/* Small size */
+.cfg-btn--sm {
+  height: var(--cfg-btn-height-sm);
+  padding: 0 var(--cfg-btn-padding-x-sm);
+  font-size: 0.75rem;
+}
+
+/* Full width */
+.cfg-btn--full {
+  width: 100%;
+}

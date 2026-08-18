@@ -1,0 +1,101 @@
+/* The three overrides land as custom properties so the component file stays
+   free of inline style values: unset ones fall back to the typography combo.
+   Chained with the global `.hmi-component`, which sets its own color and
+   font-family — the two-class selector wins on specificity rather than on
+   stylesheet order, which a runtime-injected sheet cannot rely on. */
+.hmi-component.hmi-label {
+  margin: 0;
+  min-width: 0;
+  color: var(--hmi-label-color, var(--hmi-text));
+  font-size: var(--hmi-label-size, var(--hmi-label-combo-size));
+  font-weight: var(--hmi-label-weight, var(--hmi-label-combo-weight));
+}
+
+/* ── Typography combos ─────────────────────────────────────────────────── */
+.hmi-component.hmi-label--type-heading {
+  --hmi-label-combo-size: var(--hmi-type-heading-size);
+  --hmi-label-combo-weight: var(--hmi-type-heading-weight);
+
+  font-family: var(--hmi-type-heading-font);
+  letter-spacing: var(--hmi-type-heading-tracking);
+  text-transform: var(--hmi-type-heading-transform);
+}
+
+.hmi-component.hmi-label--type-subheading {
+  --hmi-label-combo-size: var(--hmi-type-subheading-size);
+  --hmi-label-combo-weight: var(--hmi-type-subheading-weight);
+
+  font-family: var(--hmi-type-subheading-font);
+  letter-spacing: var(--hmi-type-subheading-tracking);
+  text-transform: var(--hmi-type-subheading-transform);
+}
+
+.hmi-component.hmi-label--type-body {
+  --hmi-label-combo-size: var(--hmi-type-body-size);
+  --hmi-label-combo-weight: var(--hmi-type-body-weight);
+
+  font-family: var(--hmi-type-body-font);
+  letter-spacing: var(--hmi-type-body-tracking);
+  text-transform: var(--hmi-type-body-transform);
+}
+
+.hmi-component.hmi-label--type-caption {
+  --hmi-label-combo-size: var(--hmi-type-caption-size);
+  --hmi-label-combo-weight: var(--hmi-type-caption-weight);
+
+  font-family: var(--hmi-type-caption-font);
+  letter-spacing: var(--hmi-type-caption-tracking);
+  text-transform: var(--hmi-type-caption-transform);
+}
+
+.hmi-component.hmi-label--type-code {
+  --hmi-label-combo-size: var(--hmi-type-code-size);
+  --hmi-label-combo-weight: var(--hmi-type-code-weight);
+
+  font-family: var(--hmi-type-code-font);
+  letter-spacing: var(--hmi-type-code-tracking);
+  text-transform: var(--hmi-type-code-transform);
+}
+
+.hmi-component.hmi-label--type-value {
+  --hmi-label-combo-size: var(--hmi-type-value-size);
+  --hmi-label-combo-weight: var(--hmi-type-value-weight);
+
+  font-family: var(--hmi-type-value-font);
+  letter-spacing: var(--hmi-type-value-tracking);
+  text-transform: var(--hmi-type-value-transform);
+}
+
+.hmi-component.hmi-label--type-label {
+  --hmi-label-combo-size: var(--hmi-type-label-size);
+  --hmi-label-combo-weight: var(--hmi-type-label-weight);
+
+  font-family: var(--hmi-type-label-font);
+  letter-spacing: var(--hmi-type-label-tracking);
+  text-transform: var(--hmi-type-label-transform);
+}
+
+/* ── Alignment ─────────────────────────────────────────────────────────── */
+.hmi-label--align-left {
+  text-align: left;
+}
+
+.hmi-label--align-center {
+  text-align: center;
+}
+
+.hmi-label--align-right {
+  text-align: right;
+}
+
+/* ── Wrap / overflow ───────────────────────────────────────────────────── */
+.hmi-label--wrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.hmi-label--truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

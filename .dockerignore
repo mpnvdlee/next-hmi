@@ -1,0 +1,26 @@
+# Keep the build context lean. Anything generated, vendored, or transient
+# stays out — Stage 1/2 produce their own copies of what they need.
+
+.git/
+.gitignore
+.venv/
+venv/
+
+frontend/node_modules/
+frontend/dist/
+backend/widget-build/
+backend/__pycache__/
+**/__pycache__/
+**/*.pyc
+
+user-workspace/
+
+dist/
+build/binary-out/
+
+**/*.log
+.DS_Store
+.idea/
+.vscode/
+
+docs/

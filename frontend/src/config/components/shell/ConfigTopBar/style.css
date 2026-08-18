@@ -1,0 +1,143 @@
+.cfg-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  padding: 0 0.75rem 0 1rem;
+  background: var(--cfg-surface);
+  border-bottom: 1px solid var(--cfg-border);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.cfg-header__left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.cfg-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Matches the save-warnings pill (SaveWarningsPill/style.css) so the two
+   low-emphasis status chips read as one family. */
+.cfg-header__unsaved {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  margin-left: 0.25rem;
+  border-radius: var(--cfg-radius);
+  border: 0;
+  background: color-mix(in srgb, var(--cfg-warning) 10%, var(--cfg-surface));
+  color: var(--cfg-warning-fg, var(--cfg-warning));
+  user-select: none;
+}
+
+.cfg-header__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface);
+  color: var(--cfg-text);
+  font-size: 1rem;
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
+}
+
+.cfg-header__btn:hover:not(:disabled) {
+  background: var(--cfg-surface-dark);
+  border-color: var(--cfg-accent);
+}
+
+.cfg-header__btn:active:not(:disabled) {
+  background: color-mix(in srgb, var(--cfg-accent) 14%, var(--cfg-surface));
+}
+
+.cfg-header__btn:focus-visible {
+  outline: var(--cfg-focus-outline);
+  outline-offset: var(--cfg-focus-offset);
+}
+
+.cfg-header__btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.cfg-header__save-btn {
+  height: 28px;
+  padding: 0 0.9rem;
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface);
+  color: var(--cfg-text);
+  font-size: var(--cfg-font-size-base);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    color 0.12s;
+}
+
+.cfg-header__save-btn:hover:not(:disabled) {
+  background: var(--cfg-surface-dark);
+  border-color: var(--cfg-accent);
+}
+
+.cfg-header__save-btn:active:not(:disabled) {
+  background: color-mix(in srgb, var(--cfg-accent) 14%, var(--cfg-surface));
+}
+
+.cfg-header__save-btn--dirty {
+  background: var(--cfg-accent);
+  border-color: var(--cfg-accent);
+  color: var(--cfg-surface);
+}
+
+.cfg-header__save-btn--dirty:hover:not(:disabled) {
+  background: var(--cfg-accent-hover);
+  border-color: var(--cfg-accent-hover);
+}
+
+.cfg-header__save-btn--dirty:active:not(:disabled) {
+  background: color-mix(in srgb, var(--cfg-accent-hover) 90%, black);
+  border-color: color-mix(in srgb, var(--cfg-accent-hover) 90%, black);
+}
+
+.cfg-header__save-btn:focus-visible {
+  outline: var(--cfg-focus-outline);
+  outline-offset: var(--cfg-focus-offset);
+}
+
+.cfg-header__save-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1024px) {
+  .cfg-header {
+    height: auto;
+    min-height: 40px;
+    padding: var(--cfg-space-2) var(--cfg-space-3);
+    gap: var(--cfg-space-2);
+    flex-wrap: wrap;
+  }
+
+  .cfg-header__actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+}

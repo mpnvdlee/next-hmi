@@ -1,0 +1,28 @@
+/* Signed-out notice for a project document (runtime or editor).
+ *
+ * Mirrors `.cfg-modal-overlay` from config.css rather than importing it: this
+ * renders over the operator runtime too, which carries none of the config
+ * component rules. Only the token layer and the shared modal card come in —
+ * same trade-off as BootSplash. */
+@import '@config/styles/config.tokens.css';
+@import '@config/components/ui/NameInputModal/style.css';
+
+.session-expired {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--cfg-space-6);
+  background: var(--cfg-overlay-bg);
+  font-family: var(--cfg-font);
+  font-size: var(--cfg-font-size-base);
+}
+
+/* `.name-modal` sets only a min-width, so a one-paragraph message stretches the
+   card to the viewport. Capped at the same 32rem the min-width uses, which is
+   what every other modal settles at. */
+.session-expired__dialog {
+  max-width: min(32rem, 100%);
+}

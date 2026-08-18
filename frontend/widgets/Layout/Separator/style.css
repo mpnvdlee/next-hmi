@@ -1,0 +1,27 @@
+/* A separator spans its container and never collapses, so it overrides the
+   self-layout defaults `.hmi-component` supplies (align-self, flex-shrink,
+   min-width/min-height). Chaining the two classes wins that on specificity
+   rather than on stylesheet order, which a runtime-injected sheet cannot
+   rely on. */
+.hmi-component.hmi-separator {
+  align-self: stretch;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border-radius: var(--hmi-radius-full);
+  background: var(--hmi-separator-color, var(--hmi-border));
+}
+
+.hmi-component.hmi-separator--horizontal {
+  width: 100%;
+  min-width: 1em;
+  height: var(--hmi-separator-thickness, 1px);
+  margin-left: var(--hmi-separator-inset, 0);
+  margin-right: var(--hmi-separator-inset, 0);
+}
+
+.hmi-component.hmi-separator--vertical {
+  min-height: 1em;
+  width: var(--hmi-separator-thickness, 1px);
+  margin-top: var(--hmi-separator-inset, 0);
+  margin-bottom: var(--hmi-separator-inset, 0);
+}

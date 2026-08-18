@@ -1,0 +1,193 @@
+.cfg-save-warnings {
+  position: relative;
+  display: inline-flex;
+  margin-left: 0.25rem;
+}
+
+.cfg-save-warnings__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--cfg-radius);
+  border: 0;
+  background: color-mix(in srgb, var(--cfg-warning) 10%, var(--cfg-surface));
+  color: var(--cfg-warning-fg, var(--cfg-warning));
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.cfg-save-warnings__pill:hover {
+  background: color-mix(in srgb, var(--cfg-warning) 18%, var(--cfg-surface));
+}
+
+/* No warnings — a quiet, always-present affordance rather than a hidden pill. */
+.cfg-save-warnings__pill--muted {
+  background: color-mix(in srgb, var(--cfg-text-muted) 6%, var(--cfg-surface));
+  color: var(--cfg-text-muted);
+}
+
+.cfg-save-warnings__pill--muted:hover {
+  background: color-mix(in srgb, var(--cfg-text-muted) 10%, var(--cfg-surface));
+}
+
+/* At least one error-severity diagnostic — outranks the default warning amber. */
+.cfg-save-warnings__pill--error {
+  background: color-mix(in srgb, var(--cfg-danger) 12%, var(--cfg-surface));
+  color: var(--cfg-danger);
+}
+
+.cfg-save-warnings__pill--error:hover {
+  background: color-mix(in srgb, var(--cfg-danger) 20%, var(--cfg-surface));
+}
+
+/* Unsaved edits: the sweep behind these counts predates them everywhere but
+   the panel being edited, so the pill reads dimmer than a settled verdict. */
+.cfg-save-warnings__pill--stale {
+  opacity: 0.72;
+}
+
+.cfg-save-warnings__pill--stale:hover {
+  opacity: 1;
+}
+
+.cfg-save-warnings__stale-note {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--cfg-border);
+  background: color-mix(in srgb, var(--cfg-warning) 8%, var(--cfg-surface));
+  font-size: 0.72rem;
+  color: var(--cfg-text-muted);
+}
+
+.cfg-save-warnings__pill:focus-visible {
+  outline: var(--cfg-focus-outline);
+  outline-offset: var(--cfg-focus-offset);
+}
+
+.cfg-save-warnings__panel {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  z-index: 50;
+  min-width: 22rem;
+  max-width: 32rem;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--cfg-surface);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  box-shadow: var(--cfg-shadow-lg, 0 8px 24px rgb(0 0 0 / 0.18));
+  color: var(--cfg-text);
+}
+
+.cfg-save-warnings__panel-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--cfg-border);
+  font-size: 0.85rem;
+}
+
+.cfg-save-warnings__panel-header > strong {
+  margin-right: auto;
+}
+
+.cfg-save-warnings__panel-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.cfg-save-warnings__empty {
+  margin: 0;
+  padding: 0.8rem 0.75rem;
+  font-size: 0.78rem;
+  color: var(--cfg-text-muted);
+}
+
+.cfg-save-warnings__list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0;
+}
+
+.cfg-save-warnings__item-row + .cfg-save-warnings__item-row {
+  border-top: 1px solid color-mix(in srgb, var(--cfg-border) 50%, transparent);
+}
+
+.cfg-save-warnings__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.cfg-save-warnings__item:hover {
+  background: color-mix(in srgb, var(--cfg-warning) 10%, var(--cfg-surface));
+}
+
+.cfg-save-warnings__item:focus-visible {
+  outline: var(--cfg-focus-outline);
+  outline-offset: calc(var(--cfg-focus-offset) * -1);
+}
+
+/* Severity-colored left edge so error vs warning rows scan at a glance. */
+.cfg-save-warnings__item--error {
+  box-shadow: inset 3px 0 0 var(--cfg-error-border-strong);
+}
+
+.cfg-save-warnings__item--warning {
+  box-shadow: inset 3px 0 0 var(--cfg-warning-strong);
+}
+
+.cfg-save-warnings__item--error:hover {
+  background: color-mix(in srgb, var(--cfg-danger) 10%, var(--cfg-surface));
+}
+
+.cfg-save-warnings__message {
+  color: var(--cfg-text);
+}
+
+.cfg-save-warnings__location {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--cfg-text-muted);
+}
+
+.cfg-save-warnings__location-label {
+  opacity: 0.7;
+}
+
+.cfg-save-warnings__page {
+  color: var(--cfg-text);
+  font-weight: 500;
+}
+
+.cfg-save-warnings__sep {
+  opacity: 0.5;
+}
+
+.cfg-save-warnings__path {
+  font-family: var(--cfg-font-mono, monospace);
+  font-size: 0.7rem;
+  word-break: break-word;
+}

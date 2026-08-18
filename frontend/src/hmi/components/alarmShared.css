@@ -1,0 +1,191 @@
+/* Shared structural styles for the alarm surfaces — both list widgets, the
+   popup and the detail dialog.
+
+   A plain global sheet, not a CSS module: the two list widgets are stdlib
+   widgets, compiled outside the app bundle, so they cannot `composes:` from
+   here. Modifier classes (`--quiet`, `--flush`, …) are therefore carried
+   *alongside* their base class on the element rather than folded into it.
+
+   Severity travels as one custom property, `--hmi-alarm-level`: a level class
+   sets it and everything downstream — stripe, row tint, hover tint, dot —
+   reads it, so a severity is declared once per surface instead of once per
+   part. `--hmi-alarm-row-tint` is the knob for how strongly a row is washed
+   with that colour; `info` turns it off. */
+
+/* ── Outer shell ── */
+.hmi-alarm-surface {
+  display: flex;
+  flex-direction: column;
+  background: var(--hmi-surface);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius);
+  overflow: hidden;
+}
+
+/* Dropped in when the widget sits inside a card that already draws the frame —
+   otherwise the two borders sit 1px apart and the rows square off the card's
+   rounded corner. */
+.hmi-alarm-surface--flush {
+  border: none;
+  background: transparent;
+  /* The radius stays: `.hmi-alarm-surface` clips to it, which is what keeps a row's tinted
+     background from squaring off the host card's rounded corner. */
+}
+
+/* ── Header base (no justify-content — each consumer adds its own) ── */
+.hmi-alarm-header {
+  display: flex;
+  align-items: center;
+  gap: var(--hmi-space-sm);
+  padding: var(--hmi-space-sm) var(--hmi-space-md);
+  border-bottom: 1px solid var(--hmi-border);
+  background: var(--hmi-surface-2);
+}
+
+/* The band is chrome, not a page title — the theme's label type is what the
+   rest of the runtime uses for that (kickers, the ack buttons, RESOLUTIONS). */
+.hmi-alarm-header__title {
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  letter-spacing: var(--hmi-type-label-tracking);
+  text-transform: var(--hmi-type-label-transform);
+  color: var(--hmi-text-2);
+}
+
+/* ── Scrollable body ── */
+.hmi-alarm-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* ── Severity ──
+   Set on a row, a toast or a dot; read by every severity-driven declaration
+   below. */
+.hmi-alarm-level--error {
+  --hmi-alarm-level: var(--hmi-fault);
+}
+
+.hmi-alarm-level--warning {
+  --hmi-alarm-level: var(--hmi-warn);
+}
+
+/* Info is the ambient level — colour the stripe and the dot, but leave the row
+   background alone so a long list stays readable. */
+.hmi-alarm-level--info {
+  --hmi-alarm-level: var(--hmi-info);
+  --hmi-alarm-row-tint: 0%;
+}
+
+/* ── Row base (no cursor/transition — clickable lists add those locally) ── */
+.hmi-alarm-row {
+  display: flex;
+  align-items: center;
+  gap: var(--hmi-space-sm);
+  padding: var(--hmi-space-sm) var(--hmi-space-md);
+  border-bottom: 1px solid var(--hmi-border);
+  border-left: var(--hmi-alarm-stripe) solid var(--hmi-alarm-level, transparent);
+  background: color-mix(
+    in oklch,
+    var(--hmi-alarm-level, var(--hmi-surface)) var(--hmi-alarm-row-tint, 8%),
+    var(--hmi-surface)
+  );
+}
+
+.hmi-alarm-row:last-child {
+  border-bottom: none;
+}
+
+/* ── Level indicator dot — the pill primitive's dot, tinted by the level ──
+   Carried alongside `hmi-pill__dot` on the element (see `levelDotClass`)
+   rather than composed into it: this is a plain stylesheet, so there is no
+   `composes` to inherit the primitive's shape. */
+.hmi-alarm-dot {
+  color: var(--hmi-alarm-level, var(--hmi-text-3));
+}
+
+/* ── Row content ── */
+.hmi-alarm-row__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.hmi-alarm-row__title {
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-subheading-weight);
+  color: var(--hmi-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hmi-alarm-row__meta {
+  font-family: var(--hmi-type-code-font);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--hmi-type-caption-size);
+  color: var(--hmi-text-3);
+}
+
+/* ── Buttons ──
+   Two weights on the theme's label type: `buttonQuiet` for the per-row ACK —
+   one lands on every unacknowledged row, so a filled button there out-shouts
+   the alarm text — and `buttonPrimary` for the single confirming action in a
+   footer or the detail dialog. */
+.hmi-alarm-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--hmi-space-sm);
+  padding: var(--hmi-space-sm) var(--hmi-space-md);
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  letter-spacing: var(--hmi-type-label-tracking);
+  text-transform: var(--hmi-type-label-transform);
+  line-height: 1;
+  border: 1px solid transparent;
+  border-radius: var(--hmi-radius-sm);
+  cursor: pointer;
+  transition:
+    background var(--hmi-motion-fast) ease,
+    border-color var(--hmi-motion-fast) ease,
+    color var(--hmi-motion-fast) ease;
+}
+
+.hmi-alarm-btn:focus-visible {
+  outline: var(--hmi-accent-outline);
+  outline-offset: var(--hmi-accent-outline-offset);
+}
+
+.hmi-alarm-btn--quiet {
+  border-color: var(--hmi-border);
+  background: var(--hmi-surface);
+  color: var(--hmi-text-2);
+}
+
+.hmi-alarm-btn--quiet:hover {
+  border-color: var(--hmi-accent);
+  background: var(--hmi-accent-soft);
+  color: var(--hmi-accent-ink);
+}
+
+.hmi-alarm-btn--primary {
+  padding: var(--hmi-space-sm) var(--hmi-space-lg);
+  border-color: var(--hmi-accent);
+  background: var(--hmi-accent);
+  color: var(--hmi-accent-on);
+}
+
+.hmi-alarm-btn--primary:hover {
+  filter: brightness(1.08);
+}
+
+/* ── Empty state ── */
+.hmi-alarm-empty {
+  padding: var(--hmi-space-lg);
+  text-align: center;
+  color: var(--hmi-text-muted);
+  font-size: var(--hmi-type-caption-size);
+}

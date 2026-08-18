@@ -1,0 +1,187 @@
+/* Config token mapping layer.
+   Palette: NEXT HMI Redesign (claude.ai/design) — F+ design system.
+   Single deep-indigo accent, cool neutral surfaces, mode-color tokens for
+   the property-panel source-mode badges. */
+:root {
+  --cfg-bg: #fbfbfc;
+  --cfg-surface: #ffffff;
+  --cfg-surface-dark: #f6f7f9;
+  --cfg-surface-raised: var(--cfg-surface-dark);
+  --cfg-accent: #4f46e5;
+  --cfg-accent-hover: #4338ca;
+  --cfg-accent-soft: #eef2ff;
+  --cfg-text: #0f1722;
+  --cfg-text-muted: #475467;
+  --cfg-text-3: #8a93a3;
+  --cfg-fg: var(--cfg-text);
+  --cfg-fg-muted: var(--cfg-text-muted);
+  --cfg-border: #e4e7ec;
+  --cfg-line-strong: #d0d5dd;
+  --cfg-bg-secondary: var(--cfg-surface);
+  --cfg-bg-hover: var(--cfg-surface-dark);
+  --cfg-selected-bg: #eef2ff;
+  --cfg-selected-text: var(--cfg-accent);
+
+  /* Property-source colors (drives the small source badge in the property panel).
+     One token per property source so each is visually distinguishable at a glance. */
+  --cfg-source-static: #64748b;
+  --cfg-source-var: #4f46e5;
+  --cfg-source-loc: #e11d48;
+  --cfg-source-urlParam: #2563eb;
+  --cfg-source-pageIsActive: #059669;
+  --cfg-source-if: #7c3aed;
+  --cfg-source-compare: #9333ea;
+  --cfg-source-switch: #c026d3;
+  --cfg-source-random: #d97706;
+  --cfg-source-user: #0ea5e9;
+  --cfg-source-userGroups: #0369a1;
+  --cfg-source-device: #0284c7;
+  --cfg-source-time: #65a30d;
+  --cfg-source-widgetProp: #0d9488;
+  --cfg-source-languages: #db2777;
+  --cfg-source-stringExpr: #a855f7;
+  --cfg-source-alarmCount: #dc2626;
+  --cfg-source-recipe: #0d9488;
+  --cfg-source-recipeList: #0f766e;
+  --cfg-source-componentProp: #0891b2;
+  --cfg-source-page: #0891ad;
+  --cfg-source-viewport: #6366f1;
+  --cfg-source-result: #ea580c;
+  /* Not a source — a multi-selection whose widgets disagree on theirs. */
+  --cfg-source-mixed: #94a3b8;
+  --cfg-danger: var(--color-danger);
+  --cfg-success: var(--color-success);
+  --cfg-warning: #d8b26e;
+  --cfg-warning-strong: #f59e0b;
+  --cfg-white: #fff;
+  --cfg-black: #000;
+  --cfg-on-accent: var(--cfg-white);
+
+  --cfg-overlay-bg: rgba(0, 0, 0, 0.35);
+  --cfg-swatch-border: rgba(0, 0, 0, 0.15);
+  --cfg-surface-dark-soft: rgba(0, 0, 0, 0.06);
+  --cfg-surface-dark-strong: rgba(0, 0, 0, 0.08);
+
+  --cfg-toggle-plain: #8b5cf6;
+  --cfg-status-idle: #e0e0e0;
+  --cfg-status-connected: #22c55e;
+  --cfg-status-static: #6b7280;
+
+  --cfg-info-hover-bg: #f5f8ff;
+  --cfg-info-active-bg: #cdefff;
+  --cfg-info-active-border: #7cc6ee;
+  --cfg-info-active-fg: #1a3a55;
+
+  --cfg-danger-bg: #fee2e2;
+  --cfg-danger-fg: #dc2626;
+  --cfg-danger-bg-soft: #fef2f2;
+  --cfg-danger-border-soft: #fca5a5;
+  --cfg-danger-panel-bg: #fff5f5;
+  --cfg-danger-panel-border: #fecaca;
+  --cfg-danger-strong: #e53e3e;
+
+  --cfg-success-fg: #1f9e58;
+  --cfg-success-bg-soft: #f0fdf4;
+
+  --cfg-warning-border: #eab308;
+  --cfg-warning-bg: #fff9e8;
+  --cfg-warning-fg: #6b4f00;
+  --cfg-error-border-strong: #ef4444;
+  --cfg-error-bg-soft: #fff0f0;
+  --cfg-error-fg-strong: #7f1d1d;
+
+  /* Preview aliases (config can render HMI preview without hard dependency) */
+  --cfg-preview-accent: var(--hmi-accent, var(--cfg-accent));
+  --cfg-preview-text: var(--hmi-text, var(--cfg-text));
+  --cfg-preview-text-muted: var(--hmi-text-muted, var(--cfg-text-muted));
+  --cfg-preview-font: var(--hmi-type-body-font, var(--cfg-font));
+  --cfg-preview-font-size-base: var(--hmi-type-body-size, var(--cfg-font-size-base));
+
+  --cfg-preview-indicator-bg: var(--hmi-indicator-bg, #000);
+  --cfg-preview-indicator-fg: var(--hmi-indicator-fg, var(--cfg-white));
+  --cfg-preview-indicator-shadow: var(--hmi-indicator-shadow, 0 1px 4px rgba(0, 0, 0, 0.4));
+  --cfg-preview-indicator-pill-border: var(--hmi-indicator-pill-border, var(--cfg-danger-strong));
+  --cfg-preview-indicator-drag-shadow: var(--hmi-modal-shadow, var(--cfg-shadow-lg));
+
+  --cfg-space-1: var(--space-1);
+  --cfg-space-2: var(--space-2);
+  --cfg-space-3: var(--space-3);
+  --cfg-space-4: var(--space-4);
+  --cfg-space-5: var(--space-5);
+  --cfg-space-6: var(--space-6);
+  /* Horizontal inset shared by config page headers and their content. */
+  --cfg-page-gutter: var(--cfg-space-3);
+  --cfg-space-7: var(--space-7);
+  --cfg-space-8: var(--space-8);
+
+  --cfg-font: var(--font-body);
+  --cfg-font-mono: var(--font-mono);
+  --cfg-text-xs: var(--text-xs);
+  --cfg-text-sm: var(--text-sm);
+  --cfg-text-base: 0.8125rem;
+  --cfg-text-lg: var(--text-base);
+  --cfg-text-xl: var(--text-lg);
+  --cfg-fw-normal: 400;
+  --cfg-fw-medium: 500;
+  --cfg-fw-bold: 600;
+  --cfg-font-size-base: 13px;
+  --cfg-radius: var(--radius-sm);
+  /* FieldGroup (property-panel form-field primitive) — sandbox-matched sizing,
+     kept separate from --cfg-radius so it doesn't ripple into inputs/buttons. */
+  --cfg-field-group-radius: var(--radius-lg);
+  --cfg-field-group-badge-size: var(--cfg-btn-height-sm);
+  --cfg-field-group-action-size: 24px;
+  --cfg-shadow-sm: var(--shadow-sm);
+  --cfg-shadow-md: var(--shadow-md);
+  --cfg-shadow-lg: var(--shadow-lg);
+  --cfg-motion-fast: var(--motion-fast);
+  --cfg-motion-base: var(--motion-base);
+  --cfg-motion-slow: var(--motion-slow);
+  --cfg-ease-standard: ease;
+  --cfg-body-gutter: 0.85rem;
+  --cfg-focus-outline: 2px solid var(--cfg-accent);
+  --cfg-focus-offset: 1px;
+
+  /* Control sizing (Config density: compact) */
+  --cfg-btn-height: 28px;
+  --cfg-btn-height-sm: 26px;
+  --cfg-btn-padding-x: 0.8rem;
+  --cfg-btn-padding-x-sm: 0.6rem;
+  --cfg-btn-padding-x-icon: 0.45rem;
+  --cfg-btn-gap: 0.35rem;
+  --cfg-input-height: 28px;
+  --cfg-header-control-height: 30px;
+  --cfg-page-header-min-height: calc(
+    var(--cfg-header-control-height) + var(--cfg-page-gutter) + var(--cfg-page-gutter)
+  );
+  --cfg-input-padding-y: 0.4rem;
+  --cfg-input-padding-x: 0.6rem;
+  --cfg-input-gap: 0.25rem;
+  --cfg-select-height: 28px;
+  --cfg-select-padding-y: var(--select-padding-y);
+  --cfg-select-padding-x: var(--select-padding-x);
+  --cfg-check-size: var(--control-check-size-sm);
+
+  /* Common component sizing */
+  --cfg-icon-btn-sm-size: 18px;
+  --cfg-modal-radius: 8px;
+  --cfg-page-title-size: 1.2rem;
+  --cfg-toggle-size: 24px;
+  --cfg-toggle-font-size: 10px;
+  --cfg-tag-gap: 0.3rem;
+  --cfg-tag-padding-y: 0.15rem;
+  --cfg-tag-padding-x: 0.4rem;
+  --cfg-tag-radius: 3px;
+  --cfg-tag-font-size: 0.7rem;
+  --cfg-status-dot-size: 7px;
+  --cfg-hint-font-size: 0.72rem;
+  --cfg-btn-group-gap: 2px;
+  --cfg-preview-area-outline: 2px dashed var(--cfg-preview-accent);
+  --cfg-preview-area-outline-offset: -2px;
+  --cfg-preview-empty-hint-size: 0.8rem;
+
+  /* "Nothing" checkerboard backdrop behind editor canvases — a light,
+     low-contrast transparency pattern. See .cfg-checkerboard-bg in config.css. */
+  --cfg-checker-size: 20px;
+  --cfg-checker-color: color-mix(in srgb, var(--cfg-border) 30%, var(--cfg-surface));
+}

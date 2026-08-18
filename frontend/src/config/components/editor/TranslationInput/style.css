@@ -1,0 +1,173 @@
+/* ── Translation Input ─────────────────────────────────────── */
+.editor-prop-translation {
+  width: 100%;
+}
+
+.editor-prop-translation__row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.editor-prop-translation__search-wrapper {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.editor-prop-translation__tag {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Visual chrome (surface/border/shadow/option styling) comes from the shared
+   .cfg-select-popup classes; only positioning + sizing are overridden here. */
+.editor-prop-translation__dropdown {
+  margin: 0;
+  max-height: 300px;
+  z-index: 1000;
+}
+
+.editor-prop-translation__dropdown .cfg-select-popup__option {
+  align-items: stretch;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  height: auto;
+  min-height: var(--cfg-input-height);
+  padding-block: var(--cfg-space-1);
+}
+
+.editor-prop-translation__option-key,
+.editor-prop-translation__option-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-prop-translation__option-key {
+  color: var(--cfg-text);
+}
+
+.editor-prop-translation__option-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--cfg-space-2);
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-text-xs);
+  font-weight: 400;
+}
+
+.editor-prop-translation__option-value {
+  display: inline-flex;
+  gap: 3px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.editor-prop-translation__option-language {
+  flex-shrink: 0;
+  color: var(--cfg-text-3);
+  text-transform: uppercase;
+}
+
+.editor-prop-translation__add {
+  color: var(--cfg-accent);
+}
+
+.editor-prop-translation__add.cfg-select-popup__option--active,
+.editor-prop-translation__add:hover {
+  background: var(--cfg-accent-soft);
+}
+
+.editor-prop-translation__empty {
+  padding: 1rem 0.5rem;
+  text-align: center;
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-font-size-base);
+}
+
+/* ── Edit-translations button ───────────────────────────────── */
+.editor-prop-translation__edit-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: transparent;
+  color: var(--cfg-text-muted);
+  cursor: pointer;
+  transition:
+    color var(--cfg-motion-fast),
+    border-color var(--cfg-motion-fast),
+    background var(--cfg-motion-fast);
+}
+
+.editor-prop-translation__edit-btn:hover:not(:disabled) {
+  color: var(--cfg-accent);
+  border-color: var(--cfg-accent);
+  background: var(--cfg-selected-bg);
+}
+
+/* ── Edit-translations popover ──────────────────────────────── */
+.editor-prop-translation__values {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  gap: var(--cfg-space-1);
+  /* The extra left padding holds the hanging language-code column. */
+  padding: var(--cfg-space-2) var(--cfg-space-2) var(--cfg-space-2)
+    calc(2.75rem + var(--cfg-space-2));
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface);
+  box-shadow: var(--cfg-shadow-lg);
+  font-family: var(--cfg-font);
+}
+
+.editor-prop-translation__values-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.editor-prop-translation__values-row > .cfg-prop-input {
+  width: 100%;
+}
+
+/* Language codes hang outside the popover so the inputs line up with the
+   property field the popover is anchored to. */
+.editor-prop-translation__values-lang {
+  position: absolute;
+  right: calc(100% + var(--cfg-space-2));
+  text-align: right;
+  color: var(--cfg-text-3);
+  font-size: var(--cfg-text-xs);
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.editor-prop-translation__values-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--cfg-space-2);
+  margin-top: var(--cfg-space-1);
+}
+
+.editor-prop-translation__values-key {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-text-xs);
+}

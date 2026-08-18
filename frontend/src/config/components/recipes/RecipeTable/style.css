@@ -1,0 +1,221 @@
+/* Recipe tables — the base grid is the shared `cfg-table` / `cfg-th` / `cfg-td`
+   set in config.css; only column sizing and the cells that carry a control of
+   their own live here. */
+
+/* The workspace content column has no gap of its own, so the header card, the
+   description field and the table would otherwise sit flush against each other. */
+.cfg-recipe-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-3);
+  flex: 1;
+  min-height: 0;
+}
+
+.cfg-recipe-table {
+  table-layout: fixed;
+}
+
+.cfg-recipe-th--label {
+  width: 30%;
+}
+
+.cfg-recipe-th--type {
+  width: 7rem;
+}
+
+.cfg-recipe-th--move {
+  width: 3.5rem;
+  padding: 0 0.25rem;
+}
+
+.cfg-recipe-th--live {
+  width: 10rem;
+}
+
+/* A value list wraps and grows the row, so the shared single-line cell rules
+   have to stand down for that row only. */
+.cfg-recipe-row--array .cfg-td {
+  overflow: visible;
+  white-space: normal;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.cfg-recipe-label-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.cfg-recipe-label-cell .cfg-prop-input {
+  min-width: 0;
+}
+
+.cfg-recipe-warn {
+  flex-shrink: 0;
+  color: var(--cfg-warning);
+  font-size: var(--cfg-text-sm);
+  cursor: help;
+}
+
+.cfg-recipe-row--unbound .cfg-recipe-var-path {
+  color: var(--cfg-text-muted);
+  font-style: italic;
+}
+
+/* The whole variable cell is the rebind affordance — a path is read, never
+   typed, so a bare button reads truer than an input that rejects typing. */
+.cfg-recipe-var-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  /* Hugs its path so the edit glyph stays beside the value it changes, rather
+     than drifting to the far edge of a wide column. */
+  max-width: 100%;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: var(--cfg-radius);
+  background: none;
+  color: var(--cfg-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.1s,
+    background 0.1s;
+}
+
+.cfg-recipe-var-btn:hover {
+  border-color: var(--cfg-border);
+  background: var(--cfg-surface-dark);
+}
+
+.cfg-recipe-var-path {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--cfg-font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfg-recipe-var-btn svg {
+  flex-shrink: 0;
+  color: var(--cfg-text-muted);
+}
+
+.cfg-recipe-td--type {
+  color: var(--cfg-text-muted);
+  font-family: var(--cfg-font-mono);
+  font-size: var(--cfg-text-sm);
+}
+
+.cfg-recipe-td--move {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  padding: 0 0.25rem;
+}
+
+.cfg-recipe-td--move .cfg-row-action-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.cfg-recipe-td--move .cfg-row-action-btn:disabled:hover {
+  background: none;
+  color: var(--cfg-text-muted);
+}
+
+.cfg-recipe-td--actions {
+  text-align: center;
+  padding: 0 0.25rem;
+}
+
+/* Type/dataset counts and the dataset id line under the panel header. */
+.cfg-recipe-subline {
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-text-sm);
+}
+
+/* The stored id, stated beside the name the operator actually reads. */
+.cfg-recipe-header-id {
+  margin-left: var(--cfg-space-2);
+  color: var(--cfg-text-muted);
+  font-family: var(--cfg-font-mono);
+  font-size: var(--cfg-text-sm);
+  font-weight: 400;
+}
+
+/* Header strip and description in one card — no rule between them, they are
+   one block of dataset metadata rather than two stacked sections. */
+.cfg-recipe-header-card {
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.cfg-recipe-header-card .cfg-panel-header {
+  border-bottom: none;
+  padding-bottom: 4px;
+}
+
+/* Controls that act on the table below, not on the selected thing above. */
+.cfg-recipe-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+/* A value control sized to its column would run the width of the page; cap it
+   at a comfortable reading measure and let the cell keep the slack. */
+.cfg-recipe-table--values .cfg-td .cfg-prop-input {
+  max-width: 24rem;
+}
+
+/* Free text, so it stays a labelled field rather than a table row — sharing
+   the header strip's padding, below its rule. */
+.cfg-recipe-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-3);
+  padding: 10px 14px;
+}
+
+.cfg-recipe-meta .cfg-prop-input {
+  max-width: 32rem;
+}
+
+.cfg-recipe-meta__label {
+  flex-shrink: 0;
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-text-sm);
+}
+
+/* The "Unsaved" / "Save failed" note sits in the header's action row, where the
+   shared hint's bottom margin would push the buttons off-centre. */
+.cfg-recipe-hint {
+  margin: 0;
+}
+
+.cfg-array-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.cfg-array-grid__row {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.cfg-array-grid__row .cfg-prop-input {
+  width: 5rem;
+}

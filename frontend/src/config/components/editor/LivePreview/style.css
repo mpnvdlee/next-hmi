@@ -1,0 +1,157 @@
+/* .editor-preview — Center panel for editor */
+.editor-preview {
+  background: var(--cfg-bg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Editor preview panel ───────────────────────────────────── */
+.editor-preview-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.editor-preview-toolbar__label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cfg-text-muted);
+  white-space: nowrap;
+}
+
+.editor-preview-toolbar__seg {
+  display: inline-flex;
+  border: 1px solid var(--cfg-border);
+  border-radius: 7px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--cfg-surface-dark) 72%, var(--cfg-surface));
+}
+
+.editor-preview-toolbar__seg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 0.45rem;
+  border: none;
+  background: transparent;
+  color: var(--cfg-text-muted);
+  cursor: pointer;
+  line-height: 0;
+}
+
+.editor-preview-toolbar__seg-btn + .editor-preview-toolbar__seg-btn {
+  border-left: 1px solid var(--cfg-border);
+}
+
+.editor-preview-toolbar__seg-btn:hover {
+  background: var(--cfg-accent-soft);
+  color: var(--cfg-text);
+}
+
+.editor-preview-toolbar__seg-btn--active {
+  background: var(--cfg-accent);
+  color: var(--cfg-on-accent);
+}
+
+.editor-preview-toolbar__seg-btn--active:hover {
+  background: var(--cfg-accent-hover);
+  color: var(--cfg-on-accent);
+}
+
+.editor-preview-toolbar__seg-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.editor-preview-toolbar__scale-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.6rem;
+  padding: 0 0.25rem;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--cfg-text);
+  border-left: 1px solid var(--cfg-border);
+  border-right: 1px solid var(--cfg-border);
+}
+
+.editor-preview-toolbar__scale-input {
+  width: 1.8rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  padding: 0;
+}
+
+.editor-preview-toolbar__scale-input:focus {
+  outline: none;
+}
+
+.editor-preview-scroller {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--cfg-space-1) var(--cfg-page-gutter) var(--cfg-space-4);
+  scroll-behavior: smooth;
+  /* Stay pannable (wheel/trackpad) when zoomed past the panel size, but never
+     paint a scrollbar: a visible bar reserves layout space, which shrinks the
+     content box, which can overflow the *other* axis too and trigger a second
+     bar — a feedback loop that shows up even in Fit mode, which is sized to
+     fill this box exactly with no scrolling needed. */
+  scrollbar-width: none;
+}
+
+.editor-preview-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-preview-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  box-shadow: var(--cfg-shadow-lg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* Dialog preview: no device frame — the modal card provides its own chrome
+   directly on the checkerboard backdrop. */
+.editor-preview-wrapper--frameless {
+  box-shadow: none;
+  border-radius: 0;
+}
+
+/* Fit-to-screen: wrapper stretches to fill the scroller */
+.editor-preview-wrapper--fit {
+  width: 100%;
+  align-self: stretch;
+}
+
+/* Fixed viewport (Laptop / Tablet / Phone): size wrapper to preset dimensions */
+.editor-preview-wrapper:not(.editor-preview-wrapper--fit) {
+  width: var(--preview-w);
+  height: var(--preview-h);
+  flex-shrink: 0;
+}
+
+/* The iframe fills its wrapper. No border. */
+.editor-preview-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}

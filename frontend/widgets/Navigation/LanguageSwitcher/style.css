@@ -1,0 +1,22 @@
+.hmi-language-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hmi-space-snug);
+}
+
+.hmi-language-switcher__label {
+  color: var(--hmi-text-muted);
+  font-size: var(--hmi-type-caption-size);
+  white-space: nowrap;
+}
+
+.hmi-language-switcher__select {
+  min-width: 86px;
+  height: var(--hmi-select-height);
+  background: var(--hmi-surface-raised);
+  color: var(--hmi-text);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius);
+  padding: var(--hmi-select-padding-y) var(--hmi-select-padding-x);
+  font-size: var(--hmi-type-caption-size);
+}

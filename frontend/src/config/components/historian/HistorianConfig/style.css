@@ -1,0 +1,30 @@
+/* Historian configuration — config UI component styles.
+   All tokens come from config.tokens.css (--cfg-*); blocks reuse the shared
+   AdminSection card (cfg-admin-section) and cfg-prop-input / cfg-font-mono
+   primitives from config.css. */
+
+.cfg-historian-status-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--cfg-space-1) var(--cfg-space-4);
+  font-size: var(--cfg-text-sm);
+}
+
+.cfg-historian-label {
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-text-sm);
+}
+
+.cfg-historian-value {
+  font-size: var(--cfg-text-sm);
+  font-weight: var(--cfg-fw-medium);
+}
+
+.cfg-historian-var-key--disabled {
+  opacity: 0.5;
+}
+
+.cfg-historian-var-meta {
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-muted);
+}

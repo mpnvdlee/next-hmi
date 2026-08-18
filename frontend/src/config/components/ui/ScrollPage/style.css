@@ -1,0 +1,17 @@
+.cfg-scroll-page {
+  gap: var(--cfg-space-6);
+  padding: 0 var(--cfg-page-gutter) var(--cfg-space-4);
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  background: var(--cfg-bg);
+  scrollbar-gutter: stable;
+}
+
+.cfg-scroll-page > .cfg-card,
+.cfg-scroll-page > .cfg-panel,
+.cfg-scroll-page > section {
+  background: color-mix(in srgb, var(--cfg-surface) 94%, var(--cfg-bg));
+  border-radius: calc(var(--cfg-radius) + 1px);
+}

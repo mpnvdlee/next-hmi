@@ -1,0 +1,101 @@
+.directory-browser {
+  width: min(560px, 90vw);
+}
+
+.directory-browser__breadcrumb {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  font-family: var(--cfg-font-mono);
+  font-size: var(--cfg-text-sm);
+  padding: var(--cfg-space-2) var(--cfg-space-3);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius-sm);
+  background: color-mix(in srgb, var(--cfg-surface-dark) 35%, var(--cfg-surface));
+}
+
+.directory-browser__crumb-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  white-space: nowrap;
+}
+
+.directory-browser__crumb {
+  background: none;
+  border: none;
+  color: var(--cfg-accent);
+  cursor: pointer;
+  padding: 0 2px;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.directory-browser__crumb:disabled {
+  color: var(--cfg-text);
+  cursor: default;
+}
+
+.directory-browser__crumb-sep {
+  color: var(--cfg-text-muted);
+  flex: none;
+}
+
+.directory-browser__list {
+  display: flex;
+  flex-direction: column;
+  height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius-sm);
+  padding: var(--cfg-space-1);
+}
+
+.directory-browser__entry {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+  flex: none;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: var(--cfg-radius-sm);
+  padding: var(--cfg-space-1) var(--cfg-space-2);
+  font-size: var(--cfg-text-sm);
+  line-height: 1.4;
+  color: var(--cfg-text);
+  cursor: pointer;
+}
+
+.directory-browser__entry svg {
+  flex: none;
+  color: var(--cfg-text-muted);
+}
+
+.directory-browser__entry span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.directory-browser__entry:hover {
+  background: color-mix(in srgb, var(--cfg-surface-dark) 45%, var(--cfg-surface));
+}
+
+.directory-browser__entry--up {
+  color: var(--cfg-text-muted);
+  border-bottom: 1px solid var(--cfg-border);
+  border-radius: 0;
+  margin-bottom: var(--cfg-space-1);
+  padding-bottom: var(--cfg-space-2);
+}
+
+.directory-browser__empty {
+  padding: var(--cfg-space-3);
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text-muted);
+  font-style: italic;
+}

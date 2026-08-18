@@ -1,0 +1,12 @@
+/* ── UsersPropertiesPanel — fills the right panel column via ConfigLayout ── */
+
+/* Outer wrapper: mirrors .cfg-ds-props container semantics */
+.cfg-ds-props {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--cfg-surface);
+  min-height: 0;
+}

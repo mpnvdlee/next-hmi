@@ -1,0 +1,84 @@
+.cfg-admin-subscription-list {
+  gap: var(--cfg-space-3);
+}
+
+.cfg-admin-subscription-card {
+  padding: 0.85rem var(--cfg-space-4);
+}
+
+.cfg-admin-subscription-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+  margin-bottom: 0.35rem;
+}
+
+.cfg-admin-subscription-card__name {
+  font-size: var(--cfg-text-lg);
+  font-weight: var(--cfg-fw-bold);
+  color: var(--cfg-text);
+  flex: 1;
+}
+
+.cfg-admin-subscription-card__count {
+  font-size: 0.78rem;
+  color: var(--cfg-text-muted);
+  margin: 0 0 var(--cfg-space-2);
+}
+
+.cfg-admin-subscription-card__paths {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.cfg-admin-subscription-card__path {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.45rem;
+  background: var(--cfg-surface-dark);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  font-size: 0.72rem;
+  color: var(--cfg-text);
+}
+
+.cfg-admin-subscription-card__path-icon {
+  flex: none;
+  opacity: 0.7;
+}
+
+.cfg-admin-subscription-card__empty {
+  font-size: 0.8rem;
+  color: var(--cfg-text-muted);
+}
+
+.cfg-admin-subscription-card__path--priority {
+  background: var(--cfg-accent-soft);
+  border-color: var(--cfg-accent);
+  color: var(--cfg-accent);
+}
+
+.cfg-admin-subscription-card__bg-section {
+  margin-top: var(--cfg-space-2);
+}
+
+.cfg-admin-subscription-card__bg-toggle {
+  background: none;
+  border: none;
+  padding: 0.2rem 0;
+  font-size: 0.78rem;
+  color: var(--cfg-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-bottom: 0.3rem;
+}
+
+.cfg-admin-subscription-card__bg-toggle:hover {
+  color: var(--cfg-text);
+}

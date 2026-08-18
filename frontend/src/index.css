@@ -1,0 +1,42 @@
+/* Base reset — all visual theming is in hmi.css and editor.css */
+@import url('/fonts/fonts.css');
+
+@import './shared/styles/foundation.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: var(--font-body);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: inherit;
+}
+
+/* Config surfaces, the live preview, and the live HMI runtime all provide
+   their own pan/scroll and scaling controls, so the browser's own
+   zoom-on-scroll and elastic overscroll/swipe navigation must not also fire
+   underneath them (see useDisableBrowserZoom for the wheel/keyboard side). */
+html,
+body {
+  overscroll-behavior: none;
+  touch-action: pan-x pan-y;
+}
+
+button,
+input,
+optgroup,
+select,
+textarea {
+  font: inherit;
+}

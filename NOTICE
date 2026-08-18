@@ -1,0 +1,25 @@
+NEXT HMI
+Copyright (c) Mark van der Lee
+
+Licensed under the GNU Affero General Public License v3.0 (full text in
+LICENSE; which licence covers which artifact, in LICENSING.md). A separate
+commercial licence is available for redistributors and OEMs (COMMERCIAL.md).
+
+No third-party source is vendored into this tree. Dependency versions are
+pinned in backend/requirements.txt and frontend/package.json; policy is in
+docs/dev/operations/dependency-policy.md.
+
+Two backend runtime dependencies are LGPL and stay separately replaceable
+rather than statically combined:
+
+  asyncua   — LGPL-3.0-or-later  (OPC-UA client)
+  zeroconf  — LGPL-2.1-or-later  (LAN peer discovery)
+
+Licence texts: build/lgpl/LICENSE-LGPL-3.0.txt, build/lgpl/LICENSE-GPL-3.0.txt
+(the base LGPL-3.0 extends), build/lgpl/LICENSE-LGPL-2.1.txt. Binary
+distributions ship both as loose, replaceable package directories under lgpl/;
+see COMMERCIAL.md for the replaceability statement and written offer for
+source.
+
+All other backend dependencies are MIT, BSD-3-Clause, or Apache-2.0; frontend
+dependencies are MIT throughout.

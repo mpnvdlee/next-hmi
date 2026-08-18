@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "mcpEnabled": false,
+  "pages": [
+    {
+      "id": "home",
+      "type": "page"
+    }
+  ]
+}

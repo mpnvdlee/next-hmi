@@ -1,0 +1,36 @@
+.hmi-led-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--hmi-space-sm);
+  padding: var(--hmi-space-sm) var(--hmi-space-md);
+}
+
+.hmi-led-indicator__dot {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--hmi-border);
+  transition:
+    background var(--hmi-motion-base) ease,
+    box-shadow var(--hmi-motion-base) ease;
+}
+
+.hmi-led-indicator--on .hmi-led-indicator__dot {
+  background: var(--hmi-ok);
+  box-shadow: 0 0 6px var(--hmi-ok);
+}
+
+.hmi-led-indicator--off .hmi-led-indicator__dot {
+  background: var(--hmi-border);
+  box-shadow: none;
+}
+
+.hmi-led-indicator__label {
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  color: var(--hmi-text-muted);
+  text-transform: var(--hmi-type-label-transform);
+  letter-spacing: var(--hmi-type-label-tracking);
+}

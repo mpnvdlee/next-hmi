@@ -1,0 +1,115 @@
+.hmi-numeric-stepper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-input-gap);
+}
+
+.hmi-numeric-stepper__label {
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  color: var(--hmi-text-muted);
+  text-transform: var(--hmi-type-label-transform);
+  letter-spacing: var(--hmi-type-label-tracking);
+}
+
+.hmi-numeric-stepper__row {
+  display: flex;
+  align-items: stretch;
+  min-height: var(--hmi-select-height);
+  overflow: hidden;
+  background: var(--hmi-surface);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius);
+  transition: border-color var(--hmi-motion-fast) ease;
+}
+
+.hmi-numeric-stepper__row:focus-within {
+  border-color: var(--hmi-accent);
+}
+
+.hmi-numeric-stepper__btn {
+  flex: 0 0 auto;
+  width: var(--hmi-select-height);
+  padding: 0;
+  background: var(--hmi-surface-2);
+  color: var(--hmi-text-2);
+  border: 0;
+  border-radius: 0;
+  font-family: var(--hmi-type-body-font);
+  font-size: var(--hmi-type-subheading-size);
+  font-weight: var(--hmi-type-subheading-weight);
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background var(--hmi-motion-fast) ease,
+    color var(--hmi-motion-fast) ease,
+    opacity var(--hmi-motion-fast) ease;
+  user-select: none;
+}
+
+.hmi-numeric-stepper__btn:hover:not(:disabled) {
+  background: var(--hmi-accent-soft);
+  color: var(--hmi-accent);
+}
+
+.hmi-numeric-stepper__btn:active:not(:disabled) {
+  background: var(--hmi-accent);
+  color: var(--hmi-accent-on);
+}
+
+.hmi-numeric-stepper__btn:focus-visible,
+.hmi-numeric-stepper__display:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: var(--hmi-accent-outline);
+  outline-offset: -2px;
+}
+
+.hmi-numeric-stepper__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.hmi-numeric-stepper__display {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--hmi-space-sm);
+  min-width: 0;
+  padding: 0 var(--hmi-space-md);
+  background: var(--hmi-surface);
+  color: inherit;
+  border: 0;
+  border-inline: 1px solid var(--hmi-border);
+  border-radius: 0;
+  cursor: pointer;
+  transition: background var(--hmi-motion-fast) ease;
+}
+
+.hmi-numeric-stepper__display:hover:not(:disabled) {
+  background: var(--hmi-surface-2);
+}
+
+.hmi-numeric-stepper__value {
+  font-family: var(--hmi-type-body-font);
+  font-size: var(--hmi-type-body-size);
+  font-weight: var(--hmi-type-subheading-weight);
+  font-variant-numeric: tabular-nums;
+  color: var(--hmi-text);
+}
+
+.hmi-numeric-stepper__value--invalid {
+  color: var(--hmi-fault);
+}
+
+.hmi-numeric-stepper__unit {
+  font-size: var(--hmi-type-caption-size);
+  color: var(--hmi-text-muted);
+}
+
+.hmi-numeric-stepper--disabled .hmi-numeric-stepper__display {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

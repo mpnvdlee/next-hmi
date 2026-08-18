@@ -1,0 +1,28 @@
+/* ── Stated (non-editable) value ─────────────────────────────────────────────
+   Sits at the same height as the input it stands in for, so a row of mixed
+   editable and stated fields keeps one baseline — but carries no border or
+   surface, because a box that cannot be typed into reads as a broken field. */
+.cfg-readonly-value {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--cfg-input-height);
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text-muted);
+  cursor: default;
+}
+
+.cfg-readonly-value--mono {
+  font-family: var(--cfg-font-mono);
+}
+
+/* Long enough to wrap (a filesystem path): a tinted block, and the full-strength
+   text colour — at this size it is the section's subject, not an aside. */
+.cfg-readonly-value--block {
+  display: block;
+  padding: var(--cfg-space-2) var(--cfg-space-3);
+  border-radius: var(--cfg-radius-sm);
+  background: color-mix(in srgb, var(--cfg-surface-dark) 55%, var(--cfg-surface));
+  color: var(--cfg-text);
+  font-size: var(--cfg-text-sm);
+  word-break: break-all;
+}

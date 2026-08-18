@@ -1,0 +1,19 @@
+/* The runtime/preview document itself must never scroll: `.hmi-root` is sized
+   to exactly the viewport and `.hmi-main` owns all real content scrolling.
+   Without this, a document scrollbar is self-sustaining — `.hmi-root` is
+   `width: 100vw`, and `vw` units *include* the scrollbar's width, so once a bar
+   appears the client area shrinks below 100vw and the resulting overflow keeps
+   the bar alive. Hiding the chrome alone can't break that loop; the document
+   has to be unscrollable. This file is imported only by HmiView and
+   PreviewView, so the config shell — which deliberately keeps persistent
+   scrollbars — is unaffected. */
+html,
+body {
+  overflow: hidden;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+}

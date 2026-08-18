@@ -1,0 +1,46 @@
+/* Chained with the global `.hmi-component`, which sets its own border, radius,
+   color and font-family — the two-class selector wins on specificity rather
+   than on stylesheet order, which a runtime-injected sheet cannot rely on. */
+.hmi-component.hmi-page-title {
+  display: flex;
+  align-items: center;
+  gap: var(--hmi-space-md);
+  box-sizing: border-box;
+  margin: 0;
+  padding: var(--hmi-space-sm) var(--hmi-space-md);
+  border: none;
+  border-bottom: 1px solid var(--hmi-border);
+  border-radius: 0;
+  color: var(--hmi-text);
+  font-family: var(--hmi-type-body-font);
+}
+
+.hmi-page-title__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  line-height: 0;
+  color: var(--hmi-text-muted);
+}
+
+.hmi-page-title__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-sm);
+  min-width: 0;
+}
+
+.hmi-page-title__title {
+  margin: 0;
+  font-size: calc(var(--hmi-type-heading-size) * 1.4);
+  font-weight: var(--hmi-type-heading-weight);
+  line-height: 1.15;
+  letter-spacing: var(--hmi-type-heading-tracking);
+  text-wrap: balance;
+}
+
+.hmi-page-title__subtitle {
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-body-weight);
+  line-height: 1.3;
+  color: var(--hmi-text-muted);
+}

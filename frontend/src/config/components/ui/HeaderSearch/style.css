@@ -1,0 +1,10 @@
+.cfg-header-search {
+  width: clamp(12rem, 24vw, 17rem);
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+/* Fills its flex row instead of holding a toolbar's fixed width. */
+.cfg-header-search--fill {
+  flex: 1;
+}

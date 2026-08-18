@@ -1,0 +1,393 @@
+/* ── FieldGroup — form-field metaphor primitive ──────────────────
+   [label above] / one bordered box containing [badge?][content][actions],
+   plus — when a tier-3 field is expanded — a nested body below it, divided
+   by a border-top line instead of its own separate box. Nesting repeats
+   identically at every depth (no chevron, no border-left guide line). */
+
+.cfg-field-group {
+  --cfg-field-group-gap: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-field-group-gap);
+  margin-bottom: var(--cfg-space-2);
+}
+
+/* A flat list of boxed rows — the historian's tracked variables, a recipe
+   type's parameters. The list owns the rhythm, so each row gives up the
+   properties-panel bottom margin, which is far too airy at list density. */
+.cfg-field-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-1);
+}
+
+.cfg-field-list > .cfg-field-group {
+  margin-bottom: 0;
+}
+
+/* Title row: the label, plus the add control of a field that owns a list
+   (`headerActions` / `FieldHeaderActions`) — same shape as the action list's
+   `cfg-editor-actions__title-row` and the component-property section header. */
+.cfg-field-group__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cfg-space-2);
+}
+
+.cfg-field-group__label {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--cfg-text-base);
+  font-weight: var(--cfg-fw-bold);
+  color: var(--cfg-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cfg-field-group__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-1);
+}
+
+.cfg-field-group__header-actions:empty {
+  display: none;
+}
+
+/* Negative block margins cancel the column gap on both sides, so the copy sits
+   flush between its label and the field box. */
+.cfg-field-group__desc {
+  font-size: var(--cfg-hint-font-size);
+  line-height: 1.35;
+  color: var(--cfg-text-muted);
+  margin-block: calc(var(--cfg-field-group-gap) * -1);
+}
+
+.cfg-field-group__box {
+  overflow: hidden;
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-field-group-radius);
+  background: var(--cfg-surface);
+  transition:
+    border-color var(--cfg-motion-fast) var(--cfg-ease-standard),
+    background var(--cfg-motion-fast) var(--cfg-ease-standard);
+}
+
+.cfg-field-group__row {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 0;
+  min-height: var(--cfg-field-group-badge-size);
+  padding: 0;
+  cursor: pointer;
+}
+
+/* `block` stacks the CONTENT vertically (e.g. a checkbox list, an item-editor
+   list) — the row itself stays a row, so badge/actions still sit left/right
+   spanning the full height, same as every other field's box. */
+
+.cfg-field-group--selected > .cfg-field-group__box {
+  border-color: var(--cfg-accent);
+  background: var(--cfg-surface);
+  box-shadow: 0 0 0 3px var(--cfg-accent-soft);
+}
+
+.cfg-field-group--selected > .cfg-field-group__header > .cfg-field-group__label {
+  color: var(--cfg-accent);
+}
+
+.cfg-field-group__badge {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  width: var(--cfg-field-group-badge-size);
+  border-right: 1px solid var(--cfg-border);
+}
+
+.cfg-field-group__badge-cap {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  color: var(--option-color, var(--cfg-source-static));
+  background: color-mix(in srgb, currentColor 14%, var(--cfg-surface));
+}
+
+.cfg-field-group__badge-cap:hover {
+  background: color-mix(in srgb, currentColor 22%, var(--cfg-surface));
+}
+
+/* Property-source/action-type glyphs render larger here than in the compact
+   source-pill trigger/popup (still 11×11 there) — this is the one spot sized
+   to match the property-panel design sandbox's badge glyphs. */
+.cfg-field-group__badge-cap svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* An unresolved binding/value: the badge already shows the corner dot; the
+   value text itself also reads red with a dotted underline so the error is
+   visible at a glance whether the field is a leaf path or a collapsed summary. */
+.cfg-field-group--invalid .cfg-field-group__preview-text,
+.cfg-field-group--invalid .cfg-var-field__text {
+  color: var(--cfg-danger);
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+.cfg-field-group__badge--invalid::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cfg-error-border-strong);
+  border: 1px solid var(--cfg-surface);
+}
+
+/* Warning-severity counterpart of --invalid above: a required sub-field left
+   empty/unset (e.g. an `$if` with no condition yet) — same dot + dotted
+   underline treatment, orange instead of red. */
+.cfg-field-group--warning .cfg-field-group__preview-text,
+.cfg-field-group--warning .cfg-var-field__text {
+  color: var(--cfg-warning-strong);
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+.cfg-field-group__badge--warning::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cfg-warning-strong);
+  border: 1px solid var(--cfg-surface);
+}
+
+.cfg-field-group__content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-input-gap);
+  padding: 2px var(--cfg-space-2);
+}
+
+.cfg-field-group--tier1 .cfg-field-group__content {
+  cursor: text;
+}
+
+.cfg-field-group__row--block > .cfg-field-group__content {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--cfg-space-2);
+}
+
+.cfg-field-group__content .cfg-prop-input,
+.cfg-field-group__content .cfg-select {
+  width: 100%;
+}
+
+/* Tier-1/2 controls sit inside the row's own bordered box (see
+   .cfg-field-group__row above) — strip their own border/radius/background so
+   a leaf input or button-group doesn't draw a second box inside the first. */
+.cfg-field-group__content .cfg-prop-input {
+  height: auto;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 3px 0;
+}
+
+/* The field box already shows the selection accent (border + soft ring). A
+   focused inner input must not draw its own second outline/border on top —
+   that reads as an ugly double border. The box is the single focus surface. */
+.cfg-field-group__content .cfg-prop-input:focus,
+.cfg-field-group__content .cfg-prop-input:focus-visible {
+  outline: none;
+  border-color: transparent;
+}
+
+/* $var path editor / PickerField (icon, image, $widgetProp, …) — same
+   box-in-box issue: drop its own border/radius/background, keep the
+   internal action-button divider. */
+.cfg-field-group__content .cfg-var-field {
+  height: auto;
+  min-height: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* A block-stacked content area (e.g. a picker row plus a warning line below
+   it) puts `.cfg-var-field` alongside a sibling instead of alone — the plain
+   `min-height: 100%` above then resolves against the column's own indefinite
+   auto height and inflates past the box (clipped invisibly by its
+   `overflow: hidden`). Block context: size to content instead. */
+.cfg-field-group__row--block .cfg-var-field {
+  min-height: auto;
+}
+
+/* Select trigger + color picker — same box-in-box fix: strip their own
+   border/radius/background/height so they render flush inside the field box
+   instead of drawing a second pill. */
+.cfg-field-group__content .cfg-select,
+.cfg-field-group__content .cfg-color-picker {
+  height: auto;
+  align-self: stretch;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* Left-align every control's value text to the same inset as a plain
+   `.cfg-prop-input` (which sits flush at the content's own padding). The var
+   path/value inputs and the Select trigger each carry their own left padding
+   for standalone use — drop it here so string, variable, picker and select
+   fields all start their text at the same x. Right padding stays for the
+   action-divider / chevron gap. */
+.cfg-field-group__content .cfg-var-field__text,
+.cfg-field-group__content .cfg-select {
+  padding-left: 0;
+}
+
+/* A select's chevron is that row's trailing affordance, so it gets the actions
+   column's geometry — equal width, own divider, full row height — instead of
+   floating inside the value box at its own inset. The select's right padding
+   goes with it: the slot supplies the spacing now. */
+.cfg-field-group__content .cfg-select {
+  padding-right: 0;
+  gap: 0;
+}
+
+/* The chevron slot has to land on exactly the same edges as the actions column
+   next door, and that column sits *outside* the content column's own padding.
+   So a row whose control is a select gives that padding up on the trailing side
+   and vertically, and the source-editor wrapper in between stretches, so the
+   slot's divider runs the full row height the way the actions column's do. The
+   row's `min-height` still sets the height either way.
+
+   How deep the select sits varies by field: a plain one (e.g. a shell region's
+   "Default state") is a direct child, a source-capable one is inside the source
+   editor's static slot, and one with a resolvable default adds the unset-hint
+   affix row on top of that. Match on the select at any depth rather than
+   enumerating the shapes, or the ones that don't match keep the padding and the
+   chevron lands an inset short of the actions column above and below it.
+
+   The unset-hint suffix is the exception: it sits *after* the select, so the
+   select is no longer what the row ends with and the content keeps its trailing
+   inset (see the chevron rule below). */
+.cfg-field-group__content:has(.cfg-select):not(:has(.cfg-unset-hint)) {
+  padding-right: 0;
+  padding-block: 0;
+}
+
+/* Those same wrappers are structural only — left as plain flex items they size
+   to the select's own content height, so its divider stops short of the
+   full-height one in the actions column next door. */
+.cfg-field-group__content .cfg-property-source-editor__static:has(.cfg-select),
+.cfg-field-group__content .cfg-unset-hint-row:has(> .cfg-select) {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+}
+
+.cfg-field-group__content .cfg-select__chevron-slot {
+  align-self: stretch;
+  width: var(--cfg-field-group-action-size);
+  border-left: 1px solid var(--cfg-border);
+}
+
+/* Followed by the `· default` suffix, the chevron is mid-row rather than at its
+   edge — a divider there would cut the value off from its own fallback text, so
+   it stays a plain inline glyph until the value is set. */
+.cfg-field-group__content .cfg-unset-hint-row:has(> .cfg-unset-hint) .cfg-select__chevron-slot {
+  width: auto;
+  border-left: none;
+}
+
+.cfg-field-group__actions {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  flex-shrink: 0;
+  border-left: 1px solid var(--cfg-border);
+}
+
+/* Always rendered as the portal host for descendant leaf-editor buttons; when
+   no buttons land in it (plain static field, unbound picker) collapse it so no
+   empty bordered column shows. */
+.cfg-field-group__actions:empty {
+  display: none;
+}
+
+.cfg-field-group__actions > * + * {
+  border-left: 1px solid var(--cfg-border);
+}
+
+/* Tier-3 nesting — same box as the header row, divided by a border-top line
+   instead of a second floating box. Repeats identically at every depth. */
+.cfg-field-group__nest {
+  padding: var(--cfg-space-2) var(--cfg-space-2) var(--cfg-space-2) var(--cfg-space-3);
+  border-top: 1px solid var(--cfg-border);
+  background: var(--cfg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+}
+
+/* Tier-3 collapsed one-line recursive summary (Phase 0's `propertyValuePreview`,
+   Fix 2's `previewNodes` for the colored `.kw` keyword spans). Full-width
+   wrapping sentence, not a truncated right-aligned snippet. */
+/* The trailing `__actions` column is a flex sibling with no background of its
+   own, so anything the summary can't break (a variable path like
+   `Machine:Measurement/RunNumber`, a twenty-action list) used to run straight
+   underneath the chevron/drawer/remove buttons. Break inside those tokens and
+   clamp the block so a long summary grows a few lines and then stops. */
+.cfg-field-group__preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.cfg-field-group__preview-swatch {
+  display: inline-block;
+  vertical-align: middle;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--cfg-swatch-border);
+  margin-right: 4px;
+}
+
+.cfg-field-group__preview-text {
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text);
+  white-space: normal;
+  text-align: left;
+}
+
+.cfg-field-group__preview .kw {
+  font-weight: 700;
+  color: var(--option-color, inherit);
+}

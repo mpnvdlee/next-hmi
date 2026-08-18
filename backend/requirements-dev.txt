@@ -1,0 +1,9 @@
+-r requirements.txt
+pytest
+pytest-asyncio
+pytest-cov
+ruff
+pip-audit
+# Build-time only: build/render-docs.py turns the repo's Markdown into the
+# static HTML docs shipped in the portable zips. Never imported at runtime.
+markdown-it-py

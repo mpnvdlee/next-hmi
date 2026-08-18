@@ -1,0 +1,372 @@
+/* Navigation sizing constants — not theme-driven */
+:root {
+  --hmi-nav-width: 200px;
+  --hmi-nav-width-collapsed: 48px;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-tight);
+  width: 100%;
+  background: transparent;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex-shrink: 0;
+  transition: width 0.2s ease;
+}
+
+/* Standalone fallback sidebar (rendered as the region's direct child when the
+   project defines no left sidebar) — there it owns its width and edge. As a
+   widget it fills the slot the author sized instead. */
+[data-region] > .nav {
+  width: var(--hmi-nav-width);
+  background: var(--hmi-surface);
+  border-right: 1px solid var(--hmi-border);
+}
+
+[data-region] > .nav.navCollapsed {
+  width: var(--hmi-nav-width-collapsed);
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 36px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--hmi-border);
+  color: var(--hmi-text-muted);
+  cursor: pointer;
+  font-size: var(--hmi-type-subheading-size);
+  flex-shrink: 0;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+
+.toggle:hover {
+  background: var(--hmi-surface-3);
+  color: var(--hmi-text);
+}
+
+.toggle:active {
+  background: var(--hmi-accent-soft);
+}
+
+.toggle:focus-visible,
+.link:focus-visible,
+.expandToggle:focus-visible {
+  outline: 2px solid var(--hmi-accent);
+  outline-offset: -2px;
+}
+
+.link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--hmi-space-md);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--hmi-space-md);
+  border: none;
+  border-radius: var(--hmi-radius-sm);
+  background: none;
+  color: var(--hmi-text-2);
+  text-decoration: none;
+  text-align: left;
+  font-size: var(--hmi-type-body-size);
+  font-weight: var(--hmi-type-subheading-weight);
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--hmi-motion-fast) ease,
+    color var(--hmi-motion-fast) ease;
+}
+
+.groupRow {
+  display: flex;
+  align-items: stretch;
+}
+
+.groupRow .link {
+  flex: 1;
+}
+
+.expandToggle {
+  width: 28px;
+  border: none;
+  border-left: 1px solid var(--hmi-border);
+  background: none;
+  color: var(--hmi-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+
+.expandToggle:hover {
+  background: var(--hmi-surface-3);
+  color: var(--hmi-text);
+}
+
+.expandToggle:active {
+  background: var(--hmi-accent-soft);
+}
+
+.childLink {
+  --hmi-menu-depth-indent: 1;
+  padding-left: calc(var(--hmi-space-md) + (var(--hmi-menu-depth-indent) * var(--hmi-space-lg)));
+}
+
+.childLink[data-depth='1'] {
+  --hmi-menu-depth-indent: 1;
+}
+
+.childLink[data-depth='2'] {
+  --hmi-menu-depth-indent: 2;
+}
+
+.childLink[data-depth='3'] {
+  --hmi-menu-depth-indent: 3;
+}
+
+.childLink[data-depth='4'] {
+  --hmi-menu-depth-indent: 4;
+}
+
+.childLink[data-depth='5'] {
+  --hmi-menu-depth-indent: 5;
+}
+
+.navCollapsed .link {
+  justify-content: center;
+  padding: var(--hmi-space-md) 0;
+}
+
+.navCollapsed .expandToggle,
+.navCollapsed .sectionHeader {
+  display: none;
+}
+
+.link:hover {
+  background: var(--hmi-surface-3);
+  color: var(--hmi-text);
+}
+
+.link:active {
+  background: var(--hmi-accent-soft);
+}
+
+.linkActive {
+  color: var(--hmi-accent-ink);
+  background: var(--hmi-accent-soft);
+}
+
+/* Left-border variant: a bar inset from the pill's rounded corners rather than
+   a border, which would square the row off. */
+.linkActive::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: var(--hmi-space-md);
+  bottom: var(--hmi-space-md);
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--hmi-accent);
+}
+
+.linkActive:hover {
+  background: var(--hmi-accent-soft);
+  color: var(--hmi-accent-ink);
+}
+
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 21px;
+  height: 21px;
+  color: currentcolor;
+  flex-shrink: 0;
+}
+
+/* The `first-letter` icon strategy has no glyph to lean on, so the initial
+   keeps the tile treatment. */
+.iconLetter {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--hmi-radius-sm);
+  background: var(--hmi-surface-3);
+  color: var(--hmi-text-2);
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-heading-weight);
+  transition:
+    background var(--hmi-motion-fast) ease,
+    color var(--hmi-motion-fast) ease;
+}
+
+.linkActive .iconLetter {
+  background: var(--hmi-accent);
+  color: var(--hmi-accent-on);
+}
+
+.title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+  opacity: 1;
+  transition:
+    max-width 0.2s ease,
+    opacity 0.15s ease;
+  flex: 1;
+}
+
+.navCollapsed .title {
+  max-width: 0;
+  opacity: 0;
+}
+
+/* ── Active style variants ─────────────────────────────────────────────── */
+.linkActiveBg {
+  background: var(--hmi-accent-soft);
+}
+
+.linkActiveUnderline {
+  background: transparent;
+  box-shadow: inset 0 -2px 0 0 var(--hmi-accent);
+}
+
+.linkActiveBg::before,
+.linkActiveUnderline::before {
+  display: none;
+}
+
+/* ── Horizontal orientation (top-bar layout) ───────────────────────────── */
+.navHorizontal {
+  flex-direction: row;
+  width: 100%;
+  height: auto;
+  align-items: stretch;
+  border-right: none;
+  border-bottom: 1px solid var(--hmi-border);
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.navHorizontal .link {
+  width: auto;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  min-height: 36px;
+  padding: var(--hmi-space-sm) var(--hmi-space-lg);
+}
+
+.navHorizontal .linkActive {
+  border-bottom-color: var(--hmi-accent);
+}
+
+.navHorizontal .linkActive::before,
+.flyout .linkActive::before {
+  display: none;
+}
+
+.navHorizontal .groupRow {
+  align-items: center;
+}
+
+.navHorizontal .expandToggle {
+  border-left: none;
+}
+
+/* ── Search box ────────────────────────────────────────────────────────── */
+.search {
+  margin: var(--hmi-space-snug) var(--hmi-space-sm) var(--hmi-space-tight);
+  height: 28px;
+  padding: 0 var(--hmi-space-sm);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius-sm);
+  background: var(--hmi-surface-2);
+  color: var(--hmi-text);
+  font-size: var(--hmi-type-caption-size);
+}
+
+.search:focus {
+  outline: none;
+  border-color: var(--hmi-accent);
+}
+
+/* ── Manual-mode item types ────────────────────────────────────────────── */
+.divider {
+  height: 1px;
+  margin: var(--hmi-space-snug) var(--hmi-space-md);
+  background: var(--hmi-border);
+}
+
+.sectionHeader {
+  padding: var(--hmi-space-md) var(--hmi-space-md) var(--hmi-space-snug);
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  color: var(--hmi-text-4);
+  text-transform: var(--hmi-type-label-transform);
+  letter-spacing: var(--hmi-type-label-tracking);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* ── Flyout submenu panel ──────────────────────────────────────────────── */
+.flyout {
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: var(--hmi-space-tight) 0;
+  background: var(--hmi-surface);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius);
+  box-shadow: var(--hmi-modal-shadow);
+  z-index: var(--hmi-z-popup);
+}
+
+.flyout .link {
+  border-radius: 0;
+}
+
+/* ── Footer slot (renders at the bottom of the menu) ───────────────────── */
+.footerSlot {
+  margin-top: auto;
+  padding: var(--hmi-space-sm) var(--hmi-space-sm) var(--hmi-space-md);
+  border-top: 1px solid var(--hmi-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-snug);
+}
+
+@media (max-width: 1024px) {
+  [data-region] > .nav {
+    width: 176px;
+  }
+}
+
+@media (max-width: 768px) {
+  [data-region] > .nav {
+    width: 100%;
+    max-height: 220px;
+    border-right: none;
+    border-bottom: 1px solid var(--hmi-border);
+  }
+
+  [data-region] > .nav.navCollapsed {
+    width: 100%;
+    max-height: 42px;
+    overflow: hidden;
+  }
+
+  .toggle {
+    height: 42px;
+  }
+}

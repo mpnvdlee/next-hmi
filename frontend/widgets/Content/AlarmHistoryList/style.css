@@ -1,0 +1,18 @@
+/* Only what this widget adds on top of the shared alarm vocabulary in
+   src/hmi/styles — see the note in ../AlarmListManaged/style.css. */
+
+/* Same label type as the ACK buttons on the active list — one row of history is
+   read as a status, not as prose. */
+.hmi-alarm-history__ack {
+  flex-shrink: 0;
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  letter-spacing: var(--hmi-type-label-tracking);
+  text-transform: var(--hmi-type-label-transform);
+  color: var(--hmi-text-3);
+}
+
+.hmi-alarm-history__ack--acked {
+  color: var(--hmi-ok);
+}

@@ -1,0 +1,47 @@
+/* Chained with the global `.hmi-component`, which sets its own colour — the
+   two-class selector wins on specificity rather than on stylesheet order,
+   which a runtime-injected sheet cannot rely on. */
+.hmi-component.hmi-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  padding: var(--hmi-space-sm);
+  border: 1px solid color-mix(in srgb, var(--hmi-border) 84%, var(--hmi-surface));
+  border-radius: var(--hmi-radius);
+  background: var(--hmi-surface);
+  color: var(--hmi-text);
+  transition: border-color var(--hmi-motion-fast) ease;
+}
+
+.hmi-icon:hover {
+  border-color: color-mix(in srgb, var(--hmi-accent) 45%, var(--hmi-border));
+}
+
+.hmi-icon.hmi-icon--bare {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.hmi-icon.hmi-icon--bare:hover {
+  border-color: transparent;
+}
+
+.hmi-icon__svg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.hmi-icon__svg svg,
+.hmi-icon__svg path,
+.hmi-icon__svg rect,
+.hmi-icon__svg circle,
+.hmi-icon__svg ellipse,
+.hmi-icon__svg polygon,
+.hmi-icon__svg polyline,
+.hmi-icon__svg line {
+  fill: currentColor;
+}

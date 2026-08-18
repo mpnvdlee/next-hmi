@@ -1,0 +1,47 @@
+.cfg-items-input {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-1);
+}
+
+.cfg-items-input__empty {
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text-muted);
+  padding: var(--cfg-space-1) 0;
+}
+
+.cfg-items-input__row {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-1);
+}
+
+.cfg-items-input__reorder {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.cfg-items-input__reorder-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--cfg-text-muted);
+  font-size: 0.6rem;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.cfg-items-input__reorder-btn:hover:not(:disabled) {
+  color: var(--cfg-accent);
+}
+
+.cfg-items-input__reorder-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.cfg-items-input__field {
+  flex: 1;
+  min-width: 0;
+}
