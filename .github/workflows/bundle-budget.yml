@@ -1,39 +1,11 @@
 name: Bundle budget
 
-# The one check that a contributor cannot be relied on to catch locally.
-#
-# Everything else in CI fails the same way on a laptop as it does on a runner,
-# which is why the rest of the suite only runs at tag time, in
-# release-matrix.yml. Bundle size does not: it fails on aggregate
-# creep, not on a single change. Each PR adds a kilobyte to a shared chunk and
-# looks fine in isolation; the budget breaks several PRs later, in whichever
-# one happens to cross the line. Nobody runs `check:bundle-budget` before
-# opening a PR because nothing they did looks like it grew the bundle.
-#
-# That is not hypothetical. The editor route crossed its budget on 2026-08-12
-# and was found on 2026-08-16 — four days and eight merges later — only because
-# someone built the frontend by hand while investigating something else. Until
-# then the budget ran on `v*` tags only (release-matrix.yml), so the first
-# report would have been a failing release.
-#
-# Kept separate from release-matrix.yml on purpose: this needs one job, not
-# the full backend + frontend + enterprise-purity matrix, and the paths
-# filter below means it stays quiet for changes that cannot move a byte of
-# the bundle. (release-matrix.yml's frontend job re-runs the budget check at
-# tag time too — belt and suspenders, see the postmortem above.)
+# Manual-only. No PR or push trigger — all automatic CI runs only at tag time,
+# in release-matrix.yml, which re-runs this same budget check as part of its
+# frontend job. This file exists as an on-demand tool: run it by hand
+# (workflow_dispatch) to check the current bundle size without cutting a tag.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "frontend/**"
-      # `npm run build` shells into the Python widget compiler to build the
-      # stdlib widgets, and their compiled modules are themselves budgeted.
-      - "backend/services/widget_compiler.py"
-      - "backend/core/stdlib_manifest.py"
-      - "backend/requirements.txt"
-      - ".github/workflows/bundle-budget.yml"
 
 permissions:
   contents: read
