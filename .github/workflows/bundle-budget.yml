@@ -23,8 +23,10 @@ name: Bundle budget
 # tag time too — belt and suspenders, see the postmortem above.)
 on:
   workflow_dispatch:
-  pull_request:
-    paths: &budget-paths
+  push:
+    branches:
+      - main
+    paths:
       - "frontend/**"
       # `npm run build` shells into the Python widget compiler to build the
       # stdlib widgets, and their compiled modules are themselves budgeted.
@@ -32,10 +34,6 @@ on:
       - "backend/core/stdlib_manifest.py"
       - "backend/requirements.txt"
       - ".github/workflows/bundle-budget.yml"
-  push:
-    branches:
-      - main
-    paths: *budget-paths
 
 permissions:
   contents: read
