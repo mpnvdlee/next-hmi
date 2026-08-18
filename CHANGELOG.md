@@ -7,10 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 While the project is pre-1.0, minor versions may include breaking changes; these
 are always called out under a **Changed** or **Removed** heading.
 
-## [Unreleased]
+## [0.0.1-rc1] - 2026-08-18
 
-Targeted as **1.0.0** — the first public release. Everything below ships in the
-initial open-source build. At tag time this heading becomes `[1.0.0] - <date>`.
+Release candidate toward **1.0.0** — the first public release. Everything
+below ships in the initial open-source build.
 
 ### Added
 
