@@ -20,9 +20,8 @@ then upload. Re-running for a version that already exists replaces that copy,
 which is what you want after fixing a typo in a shipped guide.
 
 A release candidate (any version with a hyphen) gets its ``v<version>/``
-directory and a manifest entry, but **no root copy** — uploading its tree
-therefore cannot replace the published guide. Same rule the release workflow
-uses to decide which tags create a Release.
+directory and a manifest entry exactly like a final release, including the
+root copy — there is no version gate on what may serve as the latest guide.
 
 Only the website gets this treatment. The docs inside a release zip are rendered
 by ``render-docs.py`` alone and describe exactly the executable they ship beside
@@ -133,24 +132,7 @@ def write_manifest(
             reverse=True,
         )
     base = base_url.rstrip("/") or "/"
-    entries: list[dict[str, object]] = []
-    if is_prerelease(latest):
-        # A candidate is not the latest anything. Whatever final release is
-        # already on the site keeps that title; the candidate is reachable only
-        # at its own path.
-        newest_final = archived[0].lstrip("v") if archived else None
-        if newest_final:
-            entries.append({"version": newest_final, "path": base, "latest": True})
-        entries.append(
-            {
-                "version": latest,
-                "path": f"{base}/v{latest}",
-                "latest": False,
-                "prerelease": True,
-            }
-        )
-    else:
-        entries.append({"version": latest, "path": base, "latest": True})
+    entries: list[dict[str, object]] = [{"version": latest, "path": base, "latest": True}]
 
     for name in archived:
         version = name.lstrip("v")
@@ -218,50 +200,41 @@ def main(argv: list[str]) -> int:
     archive_dir = site_dir / f"v{version}"
     render(archive_dir, version, base_url, archived=True)
 
-    dropped: list[str] = []
-    if is_prerelease(version):
-        # No root copy. A candidate's tree must be structurally incapable of
-        # replacing the published guide — the whole point of uploading a tree is
-        # that its root becomes /docs/, so the only safe way to say "not this
-        # one" is to not build that root. The rest of the path still runs, so CI
-        # exercises render, manifest, and both guards.
-        print(f"[docs] {version} is a candidate — no latest copy written")
-    else:
-        # The latest copy is rendered separately rather than copied, so a future
-        # change to how "latest" is presented does not need the archive rebuilt.
-        # It is rendered *before* anything published is removed, so the two page
-        # sets can be compared while both still exist.
-        staging = site_dir / ".latest"
-        if staging.exists():
-            shutil.rmtree(staging)
-        render(staging, version, base_url, archived=False)
-        dropped = dropped_pages(site_dir, staging)
-        if dropped and not allow_dropped:
-            shutil.rmtree(staging)
-            print(
-                "[docs] this render is missing pages the site already publishes: "
-                + ", ".join(dropped),
-                file=sys.stderr,
-            )
-            print(
-                "[docs] usually an edition mismatch — the site is an ee tree and "
-                "this checkout has no enterprise/ to render from. Re-run with "
-                "NEXTHMI_EDITION=ee from a checkout that has it, or pass "
-                "--allow-dropped-pages if the pages are meant to go.",
-                file=sys.stderr,
-            )
-            return 1
-        for child in site_dir.iterdir():
-            if child == staging:
-                continue
-            if child.is_file():
-                child.unlink()
-            elif not child.name.startswith("v"):
-                shutil.rmtree(child)
-        for child in staging.iterdir():
-            shutil.move(str(child), site_dir / child.name)
+    # The latest copy is rendered separately rather than copied, so a future
+    # change to how "latest" is presented does not need the archive rebuilt.
+    # It is rendered *before* anything published is removed, so the two page
+    # sets can be compared while both still exist.
+    staging = site_dir / ".latest"
+    if staging.exists():
         shutil.rmtree(staging)
-        write_sitemap(site_dir, base_url)
+    render(staging, version, base_url, archived=False)
+    dropped = dropped_pages(site_dir, staging)
+    if dropped and not allow_dropped:
+        shutil.rmtree(staging)
+        print(
+            "[docs] this render is missing pages the site already publishes: "
+            + ", ".join(dropped),
+            file=sys.stderr,
+        )
+        print(
+            "[docs] usually an edition mismatch — the site is an ee tree and "
+            "this checkout has no enterprise/ to render from. Re-run with "
+            "NEXTHMI_EDITION=ee from a checkout that has it, or pass "
+            "--allow-dropped-pages if the pages are meant to go.",
+            file=sys.stderr,
+        )
+        return 1
+    for child in site_dir.iterdir():
+        if child == staging:
+            continue
+        if child.is_file():
+            child.unlink()
+        elif not child.name.startswith("v"):
+            shutil.rmtree(child)
+    for child in staging.iterdir():
+        shutil.move(str(child), site_dir / child.name)
+    shutil.rmtree(staging)
+    write_sitemap(site_dir, base_url)
 
     entries = write_manifest(site_dir, version, base_url, from_git=from_git)
     print(f"[docs] published {version} → {site_dir}")
