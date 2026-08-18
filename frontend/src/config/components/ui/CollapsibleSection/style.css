@@ -1,0 +1,40 @@
+.cfg-section__header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 0 0 6px;
+  margin: 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.cfg-section__header .cfg-section__title {
+  padding: 0;
+}
+
+.cfg-section__header:hover .cfg-section__title {
+  color: var(--cfg-accent);
+}
+
+.cfg-section__arrow {
+  display: inline-block;
+  flex-shrink: 0;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--cfg-text-muted);
+  transform: rotate(0deg);
+  transition: transform var(--cfg-motion-fast) var(--cfg-ease-standard);
+}
+
+.cfg-section__arrow--open {
+  transform: rotate(90deg);
+}
+
+.cfg-section__header:hover .cfg-section__arrow {
+  color: var(--cfg-text);
+}

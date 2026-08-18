@@ -1,0 +1,99 @@
+/* The two layouts differ in density, not in role, so the reading keeps the one
+   `value` typography combo and scales it — which leaves a theme free to change
+   the KPI face in one place. */
+.hmi-stat-tile {
+  --hmi-stat-tile-num-scale: 0.8;
+}
+
+.hmi-stat-tile--row {
+  display: flex;
+  align-items: center;
+  gap: var(--hmi-space-md);
+  padding: var(--hmi-space-md) var(--hmi-space-lg);
+}
+
+.hmi-stat-tile--stacked {
+  --hmi-stat-tile-num-scale: 1.15;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-snug);
+  padding: var(--hmi-space-lg) calc(var(--hmi-space-lg) * 1.25);
+}
+
+.hmi-stat-tile__icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--hmi-radius-lg);
+  background: var(--hmi-accent-soft);
+  color: var(--hmi-accent-ink);
+}
+
+.hmi-stat-tile__icon--neutral {
+  background: var(--hmi-surface-2);
+  color: var(--hmi-text-muted);
+}
+
+.hmi-stat-tile__icon--ok {
+  background: var(--hmi-ok-soft);
+  color: var(--hmi-ok);
+}
+
+.hmi-stat-tile__icon--warn {
+  background: var(--hmi-warn-soft);
+  color: var(--hmi-warn);
+}
+
+.hmi-stat-tile__info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-hair);
+  min-width: 0;
+}
+
+.hmi-stat-tile__label {
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  letter-spacing: var(--hmi-type-label-tracking);
+  text-transform: var(--hmi-type-label-transform);
+  color: var(--hmi-text-muted);
+  white-space: nowrap;
+}
+
+.hmi-stat-tile__val {
+  display: flex;
+  align-items: baseline;
+  gap: var(--hmi-space-snug);
+}
+
+.hmi-stat-tile__num {
+  font-family: var(--hmi-type-value-font);
+  font-size: calc(var(--hmi-type-value-size) * var(--hmi-stat-tile-num-scale));
+  font-weight: var(--hmi-type-value-weight);
+  letter-spacing: var(--hmi-type-value-tracking);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.hmi-stat-tile__num--accent {
+  color: var(--hmi-accent);
+}
+
+.hmi-stat-tile__num--ok {
+  color: var(--hmi-ok);
+}
+
+.hmi-stat-tile__num--warn {
+  color: var(--hmi-warn);
+}
+
+.hmi-stat-tile__unit {
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-subheading-weight);
+  color: var(--hmi-text-muted);
+  white-space: nowrap;
+}

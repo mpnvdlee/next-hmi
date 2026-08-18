@@ -1,0 +1,48 @@
+/* name-modal* classes are shared with ConfirmModal */
+
+.name-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-4);
+  min-width: min(32rem, calc(100vw - (var(--cfg-space-6) * 2)));
+  max-width: 100%;
+  padding: var(--cfg-space-6);
+  border: 1px solid color-mix(in srgb, var(--cfg-border) 75%, var(--cfg-accent));
+  border-radius: calc(var(--cfg-radius) + 2px);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--cfg-accent) 4%, var(--cfg-surface)) 0%,
+    var(--cfg-surface) 45%
+  );
+  box-shadow: var(--cfg-shadow-lg);
+}
+
+.name-modal__title {
+  margin: 0;
+  font-size: var(--cfg-text-lg);
+  font-weight: var(--cfg-fw-bold);
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+  color: var(--cfg-text);
+}
+
+.name-modal__message {
+  margin: 0;
+  padding: var(--cfg-space-3) var(--cfg-space-4);
+  border: 1px solid color-mix(in srgb, var(--cfg-border) 80%, var(--cfg-accent));
+  border-radius: var(--cfg-radius);
+  background: color-mix(in srgb, var(--cfg-surface-dark) 45%, var(--cfg-surface));
+  font-size: var(--cfg-text-base);
+  line-height: 1.5;
+  color: var(--cfg-text);
+}
+
+.name-modal__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--cfg-space-2);
+  margin-top: var(--cfg-space-1);
+  padding-top: var(--cfg-space-3);
+  border-top: 1px solid color-mix(in srgb, var(--cfg-border) 88%, var(--cfg-surface));
+}

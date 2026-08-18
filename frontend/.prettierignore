@@ -1,0 +1,5 @@
+# Build artifacts. Rewritten by `npm run build:stdlib` on every dev start and
+# build, so formatting them just flip-flops the working tree.
+src/generated/
+public/stdlib-js/
+dist/

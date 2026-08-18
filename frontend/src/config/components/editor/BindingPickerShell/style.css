@@ -1,0 +1,408 @@
+/* ── Variable / property binding picker drawer ──────────────── */
+.editor-binding-overlay {
+  z-index: 10000;
+}
+
+.editor-binding-header {
+  position: relative;
+  gap: var(--cfg-space-3);
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.editor-binding-header .cfg-modal-close {
+  flex: none;
+}
+
+.editor-binding-header .cfg-picker-drawer-header__info {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-4);
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.editor-binding-header__sub {
+  font-size: 0.8rem;
+  color: var(--cfg-text-muted);
+}
+
+/* ── 3-column body grid ── */
+.editor-binding-body {
+  display: grid;
+  grid-template-columns: 4fr 2fr;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Single-var wrapper: stacks mid + right + actions vertically inside col 2 */
+.editor-binding-col2 {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--cfg-border);
+}
+
+.editor-binding-left {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--cfg-border);
+}
+
+.editor-binding-showall {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  color: var(--cfg-text-muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.editor-binding-showall input[type='checkbox'] {
+  cursor: pointer;
+  accent-color: var(--cfg-accent);
+}
+
+.editor-binding-list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.editor-binding-folder__loading {
+  font-size: 0.75rem;
+  color: var(--cfg-text-muted);
+  margin-left: 0.25rem;
+  animation: binding-pulse 1s ease-in-out infinite;
+}
+
+@keyframes binding-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ── Unified row for all tree entries (datasource / folder / variable) ── */
+.editor-binding-item {
+  padding-left: var(--row-indent, 0);
+  padding-top: 0.25rem;
+  padding-right: var(--cfg-space-2);
+  padding-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  box-sizing: border-box;
+  width: 100%;
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--cfg-radius);
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text);
+  overflow: hidden;
+}
+
+.editor-binding-item:hover {
+  background: var(--cfg-surface-dark);
+}
+
+.editor-binding-item--selected {
+  background: var(--cfg-selected-bg);
+}
+
+/* Datasource header accent */
+.editor-binding-item--ds {
+  font-weight: 500;
+  color: var(--cfg-accent);
+}
+
+/* Selectable folder (struct binding target) — slightly brighter than nav folder */
+.editor-binding-item--selectable {
+  color: var(--cfg-text);
+}
+
+/* Expand/collapse toggle — same width in every row for alignment */
+.editor-binding-item__toggle {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  color: var(--cfg-text-muted);
+}
+
+/* Toggle that is also a clickable button (expandable rows) */
+.editor-binding-item__toggle--btn {
+  color: var(--cfg-text-muted);
+}
+
+.editor-binding-item__toggle--btn:hover {
+  color: var(--cfg-text);
+}
+
+/* Name — takes remaining space, truncates with ellipsis */
+.editor-binding-item__name {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Trailing meta (node_id / type label) */
+.editor-binding-item__meta {
+  font-size: 0.72rem;
+  color: var(--cfg-text-muted);
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  max-width: 35%;
+}
+
+/* Prop-key in component-prop rows — non-uppercase, non-truncated cap */
+.editor-binding-item__propkey {
+  font-size: 0.7rem;
+  color: var(--cfg-text-muted);
+  flex-shrink: 0;
+}
+
+/* The key reads as part of the label, so it sits directly after it and the
+   gap that pushes type/access to the right edge opens up after the pair. */
+.editor-binding-item--component-prop .editor-binding-item__name {
+  flex: 0 1 auto;
+}
+
+.editor-binding-item--component-prop .editor-binding-item__propkey {
+  margin-right: auto;
+}
+
+.editor-binding-empty {
+  padding: var(--cfg-space-6);
+  text-align: center;
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-font-size-base);
+}
+
+/* ── Column 2: selected variable preview ── */
+.editor-binding-mid {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: var(--cfg-space-3) var(--cfg-space-4);
+  gap: var(--cfg-space-3);
+  border-right: 1px solid var(--cfg-border);
+  /* In stacked (col2) layout: take available space but not more than needed */
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.editor-binding-mid__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cfg-text-muted);
+  flex-shrink: 0;
+}
+
+.editor-binding-characteristics {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  align-content: flex-start;
+}
+
+.editor-binding-char-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+  padding: 0.25rem 0;
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text);
+}
+
+.editor-binding-char-row--folder {
+  font-weight: 500;
+  color: var(--cfg-text-muted);
+  padding-top: 0.4rem;
+}
+
+.editor-binding-char-row__name {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.editor-binding-char-row__type {
+  font-size: 0.72rem;
+  font-weight: var(--cfg-fw-normal);
+  color: var(--cfg-text-muted);
+  flex-shrink: 0;
+}
+
+.editor-binding-req-row .editor-binding-char-row__type {
+  flex: 1;
+  text-align: right;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.editor-binding-folder-path {
+  white-space: normal;
+  word-break: break-all;
+  flex-shrink: 1;
+}
+
+.editor-binding-char-row__match-slot {
+  flex-shrink: 0;
+  width: 1rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--cfg-success);
+  font-weight: 700;
+}
+
+.editor-binding-char-row__match-slot--mismatch {
+  color: var(--cfg-danger);
+}
+
+.editor-binding-char-row--unused {
+  opacity: 0.4;
+}
+
+.editor-binding-char-empty {
+  padding: var(--cfg-space-4);
+  text-align: center;
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-font-size-base);
+}
+
+/* ── Column 3: requirements ── */
+.editor-binding-right {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: var(--cfg-space-3) var(--cfg-space-4);
+  gap: var(--cfg-space-3);
+}
+
+/* In stacked (single-var) mode: shrink to content */
+.editor-binding-right--stacked {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--cfg-border);
+  border-right: none;
+}
+
+.editor-binding-right__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cfg-text-muted);
+  flex-shrink: 0;
+}
+
+.editor-binding-requirements {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+/* Both preview trees — the requirement and the selected variable — indent by
+   nesting container rather than a per-row `--row-indent`: the container's
+   border then draws one continuous guide line per level, and compounds at any
+   depth without per-depth arithmetic. */
+.editor-binding-req-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+  padding: 0.25rem 0;
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text);
+}
+
+.editor-binding-req-row__name {
+  flex: 0 0 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text);
+}
+
+.editor-binding-req-row--parent {
+  font-weight: 500;
+  color: var(--cfg-text);
+}
+
+.editor-binding-req-row--folder {
+  font-weight: 500;
+  color: var(--cfg-text-muted);
+  padding-top: 0.3rem;
+}
+
+.editor-binding-children-group,
+.editor-binding-tree-children {
+  --binding-tree-indent: 0.85rem;
+  margin-left: 0.3rem;
+  padding-left: var(--binding-tree-indent);
+  border-left: 1px solid var(--cfg-border);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Elbow from a level's line to each row it holds — the `> div >` selectors
+   catch a folder row, which every tree wraps together with its own children. */
+.editor-binding-children-group > .editor-binding-req-row::before,
+.editor-binding-children-group > .editor-binding-char-row::before,
+.editor-binding-children-group > div > .editor-binding-req-row::before,
+.editor-binding-children-group > div > .editor-binding-char-row::before,
+.editor-binding-tree-children > .editor-binding-req-row::before,
+.editor-binding-tree-children > .editor-binding-char-row::before,
+.editor-binding-tree-children > div > .editor-binding-req-row::before,
+.editor-binding-tree-children > div > .editor-binding-char-row::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: calc(var(--binding-tree-indent) * -1);
+  width: calc(var(--binding-tree-indent) - 0.3rem);
+  border-top: 1px solid var(--cfg-border);
+}
+
+/* The line ends at the last row's elbow instead of running on past it — the
+   container cannot stop early, so the last child paints over the tail. */
+.editor-binding-children-group > .editor-binding-req-row:last-child::after,
+.editor-binding-children-group > .editor-binding-char-row:last-child::after,
+.editor-binding-tree-children > .editor-binding-req-row:last-child::after,
+.editor-binding-tree-children > .editor-binding-char-row:last-child::after {
+  content: '';
+  position: absolute;
+  top: calc(50% + 1px);
+  bottom: -0.25rem;
+  left: calc(var(--binding-tree-indent) * -1 - 1px);
+  width: 1px;
+  background: var(--cfg-surface);
+}
+
+/* ── Component-property breadcrumb path ───────────────────────────────────── */
+
+.cfg-component-prop-path__prefix,
+.cfg-component-prop-path__suffix {
+  color: var(--cfg-text-muted);
+  font-weight: 400;
+}

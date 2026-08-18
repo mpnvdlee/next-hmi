@@ -1,0 +1,194 @@
+/* ── Component render error (error boundary fallback) ──────── */
+.hmi-widget-error {
+  /* Self-layout barrier — this fallback stands in for a widget root but does
+     not carry `.hmi-component`, so it needs its own reset. See hmi.css. */
+  --self-basis: initial;
+  --self-grow: initial;
+  --self-shrink: initial;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 0.75rem;
+  border: 1px dashed var(--hmi-warn);
+  border-radius: var(--hmi-radius);
+  color: var(--hmi-warn);
+  font-size: var(--hmi-type-caption-size);
+  font-family: var(--hmi-type-body-font);
+  opacity: 0.9;
+  cursor: help;
+  flex-basis: var(--self-basis, auto);
+  flex-grow: var(--self-grow, 0);
+  flex-shrink: var(--self-shrink, 1);
+}
+
+/* ── Unknown component fallback ──────────────────────────────── */
+.hmi-unknown-widget {
+  padding: 0.4rem 0.6rem;
+  border: 1px dashed var(--hmi-fault);
+  border-radius: var(--hmi-radius);
+  color: var(--hmi-fault);
+  font-size: var(--hmi-type-caption-size);
+  font-family: var(--hmi-type-body-font);
+  opacity: 0.8;
+}
+
+/* ── Preview node — wraps every component in preview mode ───── */
+.hmi-preview-node {
+  display: contents;
+}
+
+/* Disable interactive chart elements in preview so clicks select the component */
+.hmi-preview-node .recharts-wrapper {
+  pointer-events: none;
+}
+
+/* Events inside a nested iframe do not bubble to PreviewView's document-level
+ * config-mode guard. Make embedded pages transparent to pointer hit-testing so
+ * the click reaches the WebFrame widget instead (and selects it in the editor).
+ */
+.hmi-root--config-mode .hmi-preview-node iframe {
+  pointer-events: none;
+}
+
+/* Negative offset draws the ring inside the widget so it isn't clipped when
+ * the widget sits flush against a scrolling ancestor (e.g. .hmi-page__content). */
+.hmi-preview-node--selected > *,
+.hmi-preview-node--selected[data-widget-type^='$component:'] > .hmi-preview-node > * {
+  outline: 2px solid var(--hmi-editor-selection) !important;
+  outline-offset: -2px;
+  /* Leave a little breathing room from the scrollport edges when the tree
+   * selection scrolls an off-screen widget into view (block: 'nearest'). */
+  scroll-margin-block: calc(var(--hmi-space-lg) * 3);
+}
+
+/* ── Binding-unavailable overlay ─────────────────────────────────────────────
+ * Shown over any component whose VariableBinding is not present in the live
+ * variable store after the initial snapshot (disabled, PLC node missing, etc.)
+ */
+.hmi-binding-wrapper {
+  /* flex/grid sizing set inline; only need overflow clipping here */
+  overflow: hidden;
+}
+
+/* Base overlay — layout only */
+.hmi-binding-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  border-radius: var(--hmi-radius);
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Variable disabled (in snapshot but not present) — solid red */
+.hmi-binding-overlay--disabled {
+  background: var(--hmi-binding-disabled-bg);
+  border: 2px solid var(--hmi-binding-disabled-border);
+}
+
+/* OPC UA / backend disconnected — dashed amber */
+.hmi-binding-overlay--disconnected {
+  background: var(--hmi-binding-disconnected-bg);
+  border: 2px dashed var(--hmi-binding-disconnected-border);
+}
+
+/* Shared icon base */
+.hmi-binding-overlay__icon {
+  display: block;
+  width: 2rem;
+  height: 2rem;
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Disabled icon: red × */
+.hmi-binding-overlay--disabled .hmi-binding-overlay__icon::before,
+.hmi-binding-overlay--disabled .hmi-binding-overlay__icon::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1.75rem;
+  height: 0.2rem;
+  background: var(--hmi-binding-disabled-icon);
+  border-radius: 2px;
+}
+
+.hmi-binding-overlay--disabled .hmi-binding-overlay__icon::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.hmi-binding-overlay--disabled .hmi-binding-overlay__icon::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+/* Disconnected icon: WiFi-off symbol (SVG background) */
+.hmi-binding-overlay--disconnected .hmi-binding-overlay__icon {
+  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23eab308" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20" stroke-width="3"/><line x1="2" y1="2" x2="22" y2="22" stroke-width="2.5"/></svg>');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.85;
+}
+
+.hmi-binding-overlay--disconnected .hmi-binding-overlay__icon::before,
+.hmi-binding-overlay--disconnected .hmi-binding-overlay__icon::after {
+  content: none;
+}
+
+/* ── Lock wrapper (non-interactable components) ────────────────────────────── */
+.hmi-lock-wrapper {
+  position: relative;
+}
+
+/* Dim the locked component itself, never the overlay — dimming the wrapper
+   dimmed the denied-press marker along with it. */
+.hmi-lock-wrapper > :not(.hmi-lock-overlay) {
+  opacity: 0.55;
+  filter: grayscale(20%);
+}
+
+.hmi-lock-overlay {
+  position: absolute;
+  inset: 0;
+  cursor: not-allowed;
+  z-index: 10;
+}
+
+/* ── Lock-denied flash icon ────────────────────────────────────────────────── */
+.hmi-lock-flash {
+  position: absolute;
+  pointer-events: none;
+  width: 1.6rem;
+  height: 1.6rem;
+  transform: translate(-50%, -50%);
+  background: var(--hmi-accent);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: hmi-lock-fade 0.7s ease-out forwards;
+}
+
+.hmi-lock-flash::after {
+  content: '⊘';
+  font-size: var(--hmi-type-body-size);
+  color: var(--hmi-white);
+  line-height: 1;
+}
+
+@keyframes hmi-lock-fade {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -80%) scale(1.35);
+  }
+}

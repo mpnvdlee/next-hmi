@@ -1,0 +1,14 @@
+.cfg-admin-runtime-home-card__desc {
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-text-sm);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.cfg-admin-runtime-home-card__desc code {
+  font-family: var(--cfg-font-mono);
+  font-size: 0.95em;
+  background: color-mix(in srgb, var(--cfg-surface-dark) 55%, var(--cfg-surface));
+  padding: 0 var(--cfg-space-1);
+  border-radius: var(--cfg-radius-sm);
+}

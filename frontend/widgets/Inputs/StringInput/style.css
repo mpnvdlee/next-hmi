@@ -1,0 +1,72 @@
+.hmi-string-input {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-input-gap);
+}
+
+.hmi-string-input__label {
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  color: var(--hmi-text-muted);
+  text-transform: var(--hmi-type-label-transform);
+  letter-spacing: var(--hmi-type-label-tracking);
+}
+
+.hmi-string-input__input-row {
+  display: flex;
+  align-items: center;
+  height: var(--hmi-select-height);
+  box-sizing: border-box;
+  background: var(--hmi-surface);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius);
+  overflow: hidden;
+}
+
+.hmi-string-input__input-row:focus-within {
+  outline: var(--hmi-accent-outline);
+  outline-offset: 1px;
+}
+
+.hmi-string-input__input {
+  flex: 1;
+  min-width: 0;
+  padding: 0 var(--hmi-input-padding-x);
+  background: transparent;
+  color: var(--hmi-text);
+  border: none;
+  outline: none;
+  font-family: var(--hmi-type-body-font);
+  font-size: var(--hmi-type-body-size);
+}
+
+.hmi-string-input__eye-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 var(--hmi-input-padding-x);
+  background: transparent;
+  color: var(--hmi-text-muted);
+  border: none;
+  border-left: 1px solid var(--hmi-border);
+  font-size: var(--hmi-type-subheading-size);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.hmi-string-input__eye-btn:hover {
+  color: var(--hmi-text);
+}
+
+.hmi-string-input__eye-icon {
+  display: flex;
+}
+
+.hmi-string-input--disabled .hmi-string-input__input,
+.hmi-string-input--disabled .hmi-string-input__eye-btn {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}

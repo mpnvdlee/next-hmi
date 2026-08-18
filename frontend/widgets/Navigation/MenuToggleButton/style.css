@@ -1,0 +1,45 @@
+/* Chained with the global `.hmi-component`, which sets its own color and
+   font-family — the two-class selector wins on specificity rather than on
+   stylesheet order, which a runtime-injected sheet cannot rely on. */
+.hmi-component.hmi-menu-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--hmi-radius);
+  background: transparent;
+  color: var(--hmi-text);
+  cursor: pointer;
+  transition:
+    background var(--hmi-motion-fast) ease,
+    border-color var(--hmi-motion-fast) ease;
+}
+
+.hmi-component.hmi-menu-toggle:hover {
+  background: var(--hmi-surface-2);
+  border-color: var(--hmi-border);
+}
+
+.hmi-component.hmi-menu-toggle:focus-visible {
+  outline: var(--hmi-accent-outline);
+  outline-offset: var(--hmi-accent-outline-offset);
+}
+
+.hmi-menu-toggle__glyph {
+  font-size: var(--hmi-type-subheading-size);
+  line-height: 1;
+}
+
+.hmi-menu-toggle__svg {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+}
+
+.hmi-menu-toggle__svg svg {
+  width: 100%;
+  height: 100%;
+}

@@ -1,0 +1,7 @@
+.remove-project-modal__checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text);
+}

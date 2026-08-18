@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "jsx": "preserve",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    // Vendor libraries are optional, author-installed dev dependencies — never
+    // bundled into the app or a project's runtime (widgets load them from
+    // <project>/external-libraries/ via a browser import map instead). These
+    // map the bare specifiers real example widgets use to the matching type
+    // packages already installed under frontend/node_modules for other
+    // frontend tooling, so this smoke check gets real types instead of a
+    // catch-all `declare module` (backlog item 21).
+    "paths": {
+      "three": ["./frontend/node_modules/@types/three/index.d.ts"],
+      "uplot": ["./frontend/node_modules/uplot/dist/uPlot.d.ts"]
+    }
+  },
+  "include": [
+    "frontend/custom-widgets-sdk.d.ts",
+    "project-testbench/custom-widgets/**/index.tsx"
+  ],
+  "exclude": [
+    "project-testbench/custom-widgets/**/index.js",
+    "project-testbench/custom-widgets/**/node_modules/**"
+  ]
+}

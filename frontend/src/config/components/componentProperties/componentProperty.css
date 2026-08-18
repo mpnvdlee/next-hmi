@@ -1,0 +1,158 @@
+/* Component-property authoring styles — uses --cfg-* design tokens.
+ * Consumed by ComponentPropertiesEditor, PropertyModal, StructSchemaModal. */
+
+/* ── Section header: title + add control on one row (mirrors the action
+      list's `cfg-editor-actions__title-row`) ─────────────────────────────── */
+
+.cfg-component-props__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cfg-space-2);
+  padding-bottom: 6px;
+}
+
+.cfg-component-props__title-row .cfg-section__title {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+
+/* ── Component-property rows (schema editor) ──────────────────────────────────── */
+
+/* A stated row carries the label of a `PropRow` and the vertical rhythm of the
+   field boxes it sits between, but no box of its own. */
+.cfg-component-prop-stated-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: var(--cfg-space-2);
+}
+
+/* Key and type are stated rather than edited, and read at the same size and
+   rhythm as the editable fields around them. */
+.cfg-component-prop-stated {
+  padding: 3px 0;
+  line-height: 1.25;
+  color: var(--cfg-text-muted);
+}
+
+.cfg-component-prop-row__schema-btn {
+  align-self: flex-start;
+}
+
+.cfg-component-prop-empty {
+  padding: 4px 0;
+}
+
+/* ── Property dialog body / validation messages ───────────────────────────── */
+
+.property-dialog__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--cfg-space-3) var(--cfg-space-4);
+}
+
+.property-dialog__error {
+  display: block;
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-danger);
+  margin-top: 0.2rem;
+}
+
+.property-dialog__hint {
+  display: block;
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-muted);
+  margin-top: 0.2rem;
+  line-height: 1.4;
+}
+
+/* ── Struct schema popup ──────────────────────────────────────────────────── */
+
+.struct-schema-popup__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cfg-space-2);
+}
+
+/* Explanation + "add" share the row directly under the header, both flush with
+   the table below them. */
+.struct-schema-popup__toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cfg-space-4);
+  padding: var(--cfg-space-3) var(--cfg-space-4);
+}
+
+.struct-schema-popup__add.cfg-select {
+  width: auto;
+  flex-shrink: 0;
+  height: auto;
+  padding: 3px var(--cfg-space-2);
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-accent);
+  border-color: var(--cfg-accent);
+  background: var(--cfg-surface);
+}
+
+.struct-schema-popup__add.cfg-select:hover:not(:disabled) {
+  background: var(--cfg-selected-bg);
+}
+
+.struct-schema-popup__add .cfg-select__chevron {
+  width: 8px;
+  height: 8px;
+  color: var(--cfg-accent);
+}
+
+.struct-schema-popup__hint {
+  margin: 0;
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-muted);
+  line-height: 1.5;
+}
+
+.struct-schema-table {
+  flex: 1;
+  margin: 0 var(--cfg-space-4) var(--cfg-space-3);
+  overflow: auto;
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  min-height: 84px;
+}
+
+/* Columns: Name | Data Type | Write | × */
+.struct-schema-table.cfg-vtable {
+  --vt-cols: 1fr 130px 92px 48px;
+}
+
+.struct-schema-table__array-badge {
+  font-size: 0.7rem;
+  color: var(--cfg-text-muted);
+  margin-left: 0.3rem;
+}
+
+/* ── Struct schema summary (read-only preview in row body) ────────────────────
+   Rendered by the binding picker's own `RequiredFieldsTree` and styled entirely
+   from BindingPickerShell, so a struct reads the same here as it does in the
+   picker's Required panel. Only the container needs saying. */
+
+.cfg-component-prop-struct-tree {
+  width: 100%;
+  min-width: 0;
+}
+
+/* A row that has not been named yet — the placeholder word stands in for a
+   value the author still owes, so it reads as absent rather than as content. */
+.struct-schema-row__unnamed {
+  opacity: 0.4;
+}
+
+/* The kind column's label for a folder row. */
+.struct-schema-row__kind {
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-text-xs);
+}

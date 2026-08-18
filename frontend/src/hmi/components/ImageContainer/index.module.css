@@ -1,0 +1,154 @@
+/* ImageContainer — JS-driven layout swap between
+ *   expanded  (image with absolutely-positioned children overlaid)
+ *   collapsed (image on top + flex column of [marker] [child] rows below)
+ *
+ * Collapse trigger: ResizeObserver in the component compares host width to the
+ * `collapseBelow` property. The `.hostCollapsed` modifier flips the layout.
+ */
+
+.host {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.canvas {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.imageStage {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--hmi-radius);
+  background: color-mix(in srgb, var(--hmi-surface) 86%, var(--hmi-bg));
+  flex-shrink: 0;
+}
+
+.img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  user-select: none;
+  object-fit: contain;
+}
+
+.img[data-fit='cover'] {
+  object-fit: cover;
+}
+.img[data-fit='fill'] {
+  object-fit: fill;
+}
+.img[data-fit='none'] {
+  object-fit: none;
+}
+.img[data-fit='scale-down'] {
+  object-fit: scale-down;
+}
+
+/* ── Markers on image (collapsed mode only) ──────────────────────────────── */
+
+.markerLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+}
+
+.imgMarker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  height: 26px;
+  padding: 0 var(--hmi-space-md);
+  border-radius: var(--hmi-radius-full);
+  background: var(--hmi-indicator-bg);
+  color: var(--hmi-indicator-fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-heading-weight);
+  user-select: none;
+  z-index: 2;
+  box-shadow: var(--hmi-indicator-shadow);
+  white-space: nowrap;
+  min-width: 26px;
+}
+
+/* ── Slot wrapper around each child widget ────────────────────────────────
+ * Expanded mode: absolutely placed at (x, y) over the image stage.
+ * Collapsed mode: static flex row [marker-inline] [child-body] below image.
+ */
+
+.slots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.slot {
+  position: absolute;
+  left: var(--hmi-imgctn-x, 50%);
+  top: var(--hmi-imgctn-y, 50%);
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.markerInline {
+  /* Hidden in expanded mode — only used in the stacked list. */
+  display: none;
+}
+
+.childBody {
+  display: contents;
+}
+
+/* ── Collapsed mode ──────────────────────────────────────────────────────── */
+
+.hostCollapsed .markerLayer {
+  display: block;
+}
+
+.hostCollapsed .slots {
+  position: static;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-md);
+  padding-top: var(--hmi-space-md);
+}
+
+.hostCollapsed .slot {
+  position: static;
+  transform: none;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--hmi-space-md);
+}
+
+.hostCollapsed .markerInline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  min-width: 22px;
+  padding: 0 var(--hmi-space-sm);
+  border-radius: var(--hmi-radius-full);
+  background: var(--hmi-indicator-bg);
+  color: var(--hmi-indicator-fg);
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-heading-weight);
+  user-select: none;
+  box-shadow: var(--hmi-indicator-shadow);
+  flex-shrink: 0;
+}
+
+.hostCollapsed .childBody {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+}

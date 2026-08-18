@@ -1,0 +1,307 @@
+[
+  {
+    "name": "int32 minimum",
+    "dataType": "Int32",
+    "value": -2147483648,
+    "ok": true,
+    "output": -2147483648
+  },
+  {
+    "name": "int32 maximum",
+    "dataType": "Int32",
+    "value": 2147483647,
+    "ok": true,
+    "output": 2147483647
+  },
+  {
+    "name": "int32 overflow",
+    "dataType": "Int32",
+    "value": 2147483648,
+    "ok": false,
+    "reason": "integer_out_of_range"
+  },
+  {
+    "name": "uint64 maximum decimal string",
+    "dataType": "UInt64",
+    "value": "18446744073709551615",
+    "ok": true,
+    "output": "18446744073709551615"
+  },
+  {
+    "name": "uint64 overflow",
+    "dataType": "UInt64",
+    "value": "18446744073709551616",
+    "ok": false,
+    "reason": "integer_out_of_range"
+  },
+  {
+    "name": "fractional integer is lossy",
+    "dataType": "Integer",
+    "value": 1.5,
+    "ok": false,
+    "reason": "lossy_conversion"
+  },
+  { "name": "finite double", "dataType": "Double", "value": "3.5", "ok": true, "output": 3.5 },
+  {
+    "name": "non-finite float",
+    "dataType": "Float",
+    "value": "Infinity",
+    "ok": false,
+    "reason": "invalid_float"
+  },
+  { "name": "float32 exact", "dataType": "Float", "value": 3.5, "ok": true, "output": 3.5 },
+  {
+    "name": "float32 rounding rejected",
+    "dataType": "Float",
+    "value": 0.1,
+    "ok": false,
+    "reason": "lossy_conversion"
+  },
+  {
+    "name": "float32 overflow",
+    "dataType": "Single",
+    "value": "3.5e38",
+    "ok": false,
+    "reason": "float_out_of_range"
+  },
+  {
+    "name": "numeric underscore rejected",
+    "dataType": "Double",
+    "value": "1_0",
+    "ok": false,
+    "reason": "invalid_float"
+  },
+  {
+    "name": "hex numeric rejected",
+    "dataType": "Double",
+    "value": "0x10",
+    "ok": false,
+    "reason": "invalid_float"
+  },
+  { "name": "boolean true alias", "dataType": "Bool", "value": "yes", "ok": true, "output": true },
+  {
+    "name": "boolean accepts numeric zero",
+    "dataType": "Boolean",
+    "value": 0.0,
+    "ok": true,
+    "output": false
+  },
+  {
+    "name": "ambiguous boolean",
+    "dataType": "Boolean",
+    "value": "maybe",
+    "ok": false,
+    "reason": "invalid_boolean"
+  },
+  { "name": "string from number", "dataType": "String", "value": 42, "ok": true, "output": "42" },
+  {
+    "name": "string normalizes integral float",
+    "dataType": "String",
+    "value": 1.0,
+    "ok": true,
+    "output": "1"
+  },
+  {
+    "name": "string normalizes negative zero",
+    "dataType": "String",
+    "value": -0.0,
+    "ok": true,
+    "output": "0"
+  },
+  {
+    "name": "string exponent upper threshold",
+    "dataType": "String",
+    "value": 1e21,
+    "ok": true,
+    "output": "1e+21"
+  },
+  {
+    "name": "string exponent lower threshold",
+    "dataType": "String",
+    "value": 1e-7,
+    "ok": true,
+    "output": "1e-7"
+  },
+  {
+    "name": "bytestring requires string",
+    "dataType": "ByteString",
+    "value": 42,
+    "ok": false,
+    "reason": "unknown_type"
+  },
+  {
+    "name": "datetime UTC",
+    "dataType": "DateTime",
+    "value": "2026-06-15T12:00:00Z",
+    "ok": true,
+    "output": "2026-06-15T12:00:00Z"
+  },
+  {
+    "name": "datetime rejects date only",
+    "dataType": "DateTime",
+    "value": "2026-06-15",
+    "ok": false,
+    "reason": "invalid_temporal"
+  },
+  {
+    "name": "valid leap date",
+    "dataType": "Date",
+    "value": "2028-02-29",
+    "ok": true,
+    "output": "2028-02-29"
+  },
+  {
+    "name": "invalid date",
+    "dataType": "Date",
+    "value": "2026-02-29",
+    "ok": false,
+    "reason": "invalid_temporal"
+  },
+  {
+    "name": "compact date rejected",
+    "dataType": "Date",
+    "value": "20260615",
+    "ok": false,
+    "reason": "invalid_temporal"
+  },
+  {
+    "name": "week date rejected",
+    "dataType": "Date",
+    "value": "2026-W25-1",
+    "ok": false,
+    "reason": "invalid_temporal"
+  },
+  {
+    "name": "valid time",
+    "dataType": "Time",
+    "value": "23:59:59.123",
+    "ok": true,
+    "output": "23:59:59.123"
+  },
+  {
+    "name": "invalid time",
+    "dataType": "Time",
+    "value": "24:00:00",
+    "ok": false,
+    "reason": "invalid_temporal"
+  },
+  {
+    "name": "end-of-day hour rejected in time",
+    "dataType": "Time",
+    "value": "24:00",
+    "ok": false,
+    "reason": "invalid_temporal"
+  },
+  {
+    "name": "end-of-day hour rejected in datetime",
+    "dataType": "DateTime",
+    "value": "2026-06-15T24:00:00",
+    "ok": false,
+    "reason": "invalid_temporal"
+  },
+  { "name": "duration seconds", "dataType": "Duration", "value": 1.25, "ok": true, "output": 1.25 },
+  {
+    "name": "scalar array",
+    "dataType": "UInt8",
+    "isArray": true,
+    "arrayLength": 3,
+    "value": [0, 127, 255],
+    "ok": true,
+    "output": [0, 127, 255]
+  },
+  {
+    "name": "nested scalar array rejected",
+    "dataType": "Int16",
+    "isArray": true,
+    "value": [[1]],
+    "ok": false,
+    "reason": "scalar_required"
+  },
+  {
+    "name": "zero array length is dynamic",
+    "dataType": "Int16",
+    "isArray": true,
+    "arrayLength": 0,
+    "value": [],
+    "ok": true,
+    "output": []
+  },
+  {
+    "name": "negative array length is dynamic",
+    "dataType": "Int16",
+    "isArray": true,
+    "arrayLength": -5,
+    "value": [1, 2],
+    "ok": true,
+    "output": [1, 2]
+  },
+  {
+    "name": "decimal unsupported",
+    "dataType": "Decimal",
+    "value": 1,
+    "ok": false,
+    "reason": "unknown_type"
+  },
+  {
+    "name": "array element overflow",
+    "dataType": "UInt8",
+    "isArray": true,
+    "arrayLength": 2,
+    "value": [0, 256],
+    "ok": false,
+    "reason": "integer_out_of_range"
+  },
+  {
+    "name": "fixed array length mismatch",
+    "dataType": "Int16",
+    "isArray": true,
+    "arrayLength": 2,
+    "value": [1],
+    "ok": false,
+    "reason": "array_length_mismatch"
+  },
+  {
+    "name": "array target requires array",
+    "dataType": "Int16",
+    "isArray": true,
+    "value": 1,
+    "ok": false,
+    "reason": "array_required"
+  },
+  {
+    "name": "scalar target rejects array",
+    "dataType": "Int16",
+    "value": [1],
+    "ok": false,
+    "reason": "scalar_required"
+  },
+  {
+    "name": "null rejected",
+    "dataType": "String",
+    "value": null,
+    "ok": false,
+    "reason": "null_not_allowed"
+  },
+  {
+    "name": "unknown raw type rejected",
+    "dataType": "LocalizedText",
+    "value": "x",
+    "ok": false,
+    "reason": "unknown_type"
+  },
+  {
+    "name": "struct payload rejected",
+    "dataType": "struct",
+    "value": { "Speed": 1 },
+    "ok": false,
+    "reason": "unknown_type"
+  },
+  {
+    "name": "struct array payload rejected",
+    "dataType": "Motor",
+    "isArray": true,
+    "value": [{ "Speed": 1 }],
+    "ok": false,
+    "reason": "unknown_type"
+  }
+]

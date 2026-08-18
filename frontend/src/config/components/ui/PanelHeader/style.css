@@ -1,0 +1,81 @@
+/* ── Panel header (F+ FpHeader) ──────────────────────────────
+   Default: vertical (kind above name). With `--with-icon`: horizontal
+   (32×32 icon box + text column with name above kind). */
+.cfg-panel-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--cfg-border);
+  background: var(--cfg-surface);
+  flex-shrink: 0;
+}
+
+.cfg-panel-header--with-icon {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+/* With actions the text column and the buttons share one row. */
+.cfg-panel-header--with-actions {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--cfg-space-3);
+}
+
+/* In a center-column page the header is a card among cards, so it takes the
+   AdminSection border instead of the panel strip's single bottom rule. */
+.cfg-panel-header--card {
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+}
+
+.cfg-panel-header__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--cfg-surface-dark);
+  border: 1px solid var(--cfg-border);
+  display: grid;
+  place-items: center;
+  color: var(--cfg-text-muted);
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.cfg-panel-header__text {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cfg-panel-header__type {
+  font-size: 10.5px;
+  color: var(--cfg-text-3);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.cfg-panel-header__name {
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.1;
+  color: var(--cfg-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A header carrying only a kind (Settings, Global Events) promotes it to the
+   heading style instead of leaving it as a tiny grey label — which is why
+   `PanelHeader` keeps a nameless kind out of the `__text` wrapper. */
+.cfg-panel-header:not(.cfg-panel-header--with-icon) > .cfg-panel-header__type:only-child {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cfg-text);
+}
+
+/* In icon-mode the name is rendered before the kind via DOM order — no swap. */

@@ -1,0 +1,56 @@
+.region {
+  display: flex;
+  flex-direction: column;
+  background: var(--hmi-region-bg, var(--hmi-surface));
+  /* No `transition: width` — sidebars are sized via JS observer that mirrors
+     the inner content (e.g. NavigationMenu) frame by frame. A CSS width
+     transition on top of that would restart on every observer tick and lag
+     behind the menu's own transition. */
+  transition: height 0.2s ease;
+}
+
+.region-leftSidebar,
+.region-rightSidebar {
+  align-self: stretch;
+  /* Don't stretch inner content to the slot's cross-axis width — let the
+   * content (e.g. NavigationMenu) drive width when expandedSize is 'auto'. */
+  align-items: flex-start;
+}
+
+.region-header,
+.region-footer {
+  width: 100%;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.region-header {
+  z-index: 1;
+}
+
+.overlay {
+  /* Position values are inlined per-region from JS (left / right / top / bottom). */
+  /* The wrapping element is fixed via inline style. */
+  border: 1px solid var(--hmi-border);
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 129;
+  background: var(--hmi-overlay-bg);
+  cursor: pointer;
+  animation: shell-backdrop-fade 0.18s ease;
+}
+
+@keyframes shell-backdrop-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

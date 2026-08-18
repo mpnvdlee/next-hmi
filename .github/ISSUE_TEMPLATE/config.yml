@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/mpnvdlee/next-hmi/security/advisories/new
+    about: Report vulnerabilities privately — never in a public issue. See SECURITY.md.
+  - name: Question or discussion
+    url: https://github.com/mpnvdlee/next-hmi/discussions
+    about: Ask usage questions and share ideas here rather than opening an issue.
+  - name: Commercial / enterprise licensing
+    url: https://next-hmi.com/license/commercial
+    about: Redistribution, OEM, and enterprise-module licensing. See COMMERCIAL.md.

@@ -1,0 +1,489 @@
+/* ── Virtual table (DatasourceVariableTable) ────────────────── */
+
+.cfg-vtable-header {
+  display: grid;
+  grid-template-columns: var(--vt-cols, 44px 1fr 1fr 100px 90px);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--cfg-surface);
+  border-bottom: 1px solid var(--cfg-border);
+  font-family: var(--cfg-font);
+  align-items: center;
+}
+
+/* Individual header cells don't need their own sticky — row is sticky */
+.cfg-vtable-header .cfg-th {
+  position: static;
+  border-bottom: none;
+}
+
+.cfg-vtable-header .cfg-vtable-cell--check {
+  text-align: center;
+  padding: 0;
+}
+
+.cfg-vtable-row {
+  display: grid;
+  grid-template-columns: var(--vt-cols, 44px 1fr 1fr 100px 90px);
+  align-items: center;
+  /* height is set inline by the virtualizer (estimateSize: 29 = 28 content + 1px border) */
+  min-height: 28px;
+  border-bottom: 1px solid var(--cfg-border);
+  box-sizing: border-box;
+}
+
+.cfg-vtable-row:hover {
+  background: color-mix(in srgb, var(--cfg-surface-dark) 64%, var(--cfg-surface));
+}
+
+.cfg-vtable-cell {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 0 var(--cfg-space-3);
+  font-family: var(--cfg-font);
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text-muted);
+}
+
+.cfg-vtable-cell--check {
+  justify-content: center;
+  padding: 0;
+}
+
+.cfg-vtable-cell--flush {
+  padding: 0;
+}
+
+/* Tree-row indentation: depth is computed in JS (treePaddingLeft /
+   treePaddingLeftWithOffset) and passed in as the --row-indent custom
+   property so no raw inline style values are needed here. */
+.cfg-var-name-cell,
+.cfg-vtable-cell > .cfg-var-inline-name,
+.cfg-vtable-cell--array-element-name {
+  padding-left: var(--row-indent, calc(0.75rem + 18px + 0.2rem));
+}
+
+.cfg-vtable-cell--actions {
+  justify-content: center;
+  padding: 0 var(--cfg-space-1);
+}
+
+/* Enabled row: non-check cells get bright text */
+.cfg-row--enabled .cfg-vtable-cell:not(.cfg-vtable-cell--check) {
+  color: var(--cfg-text);
+}
+
+/* Stale row: variable present in config but no longer on the OPC-UA server.
+   Subscriptions are skipped; the row is dimmed and italicized so the user can
+   see at a glance the binding won't produce values. Doubled-class selector
+   raises specificity so stale wins over .cfg-row--enabled regardless of order. */
+.cfg-row.cfg-row--stale .cfg-vtable-cell:not(.cfg-vtable-cell--check) {
+  color: var(--cfg-text-muted);
+  font-style: italic;
+}
+.cfg-row.cfg-row--stale .cfg-vtable-cell--check input {
+  opacity: 0.5;
+}
+
+/* Folder rows use the same row metrics as variable rows. */
+.cfg-var-folder-row .cfg-vtable-cell:not(.cfg-vtable-cell--check) {
+  color: var(--cfg-text);
+}
+
+.cfg-var-folder-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  margin: 0;
+  padding-left: var(--row-indent, 0.75rem);
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cfg-var-folder-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  flex-shrink: 0;
+  color: var(--cfg-text-muted);
+}
+
+.cfg-var-folder-count {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-muted);
+}
+
+.cfg-var-delete-btn {
+  font-size: 0.875rem;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: var(--cfg-fg-muted);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 var(--cfg-space-1);
+  opacity: 0.5;
+  transition:
+    opacity var(--cfg-motion-fast),
+    color var(--cfg-motion-fast);
+}
+
+.cfg-var-delete-btn:hover {
+  opacity: 1;
+  color: var(--cfg-danger);
+}
+
+/* ── Collapse/expand-all button group ───────────────────────── */
+.cfg-var-collapse-group {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  overflow: hidden;
+}
+
+.cfg-var-collapse-btn {
+  border-radius: 0;
+}
+
+.cfg-var-collapse-btn + .cfg-var-collapse-btn {
+  border-left: 1px solid var(--cfg-border);
+}
+
+.cfg-var-collapse-icon {
+  width: 13px;
+  height: 13px;
+  background: currentColor;
+  display: inline-block;
+}
+
+.cfg-var-collapse-icon--collapse {
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M7.41 18.59 8.83 20 12 16.83 15.17 20 16.59 18.59 12 14zM16.59 5.41 15.17 4 12 7.17 8.83 4 7.41 5.41 12 10z'/></svg>")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M7.41 18.59 8.83 20 12 16.83 15.17 20 16.59 18.59 12 14zM16.59 5.41 15.17 4 12 7.17 8.83 4 7.41 5.41 12 10z'/></svg>")
+    center / contain no-repeat;
+}
+
+.cfg-var-collapse-icon--expand {
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 5.83 15.17 9 16.59 7.59 12 3 7.41 7.59 8.83 9zM12 18.17 8.83 15 7.41 16.41 12 21 16.59 16.41 15.17 15z'/></svg>")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 5.83 15.17 9 16.59 7.59 12 3 7.41 7.59 8.83 9zM12 18.17 8.83 15 7.41 16.41 12 21 16.59 16.41 15.17 15z'/></svg>")
+    center / contain no-repeat;
+}
+
+/* ── Inline edit name ───────────────────────────────────────── */
+.cfg-var-inline-name {
+  cursor: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfg-var-inline-name-input {
+  width: 100%;
+  min-width: 0;
+  background: var(--cfg-surface-dark);
+  border: 1px solid var(--cfg-accent);
+  border-radius: var(--cfg-radius-sm, 3px);
+  color: var(--cfg-text);
+  font: inherit;
+  padding: 0 var(--cfg-space-1);
+  outline: none;
+}
+
+.cfg-var-type-edit {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2, 0.4rem);
+  min-width: 0;
+}
+
+/* ── Dual remote/local type (OPC-UA client) ─────────────────── */
+.cfg-var-type-dual {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--cfg-space-2, 0.4rem);
+  min-width: 0;
+}
+
+.cfg-var-type-local {
+  color: var(--cfg-text);
+  flex: 0 0 auto;
+}
+
+.cfg-var-type-remote {
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Numeric range (Min / Max) ──────────────────────────────── */
+.cfg-vtable-cell--range {
+  padding: 0 var(--cfg-space-1);
+  justify-content: flex-end;
+  font-family: var(--cfg-font-mono);
+  font-size: 0.7rem;
+}
+
+.cfg-var-range-input {
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--cfg-radius-sm, 3px);
+  color: inherit;
+  font-family: var(--cfg-font-mono);
+  font-size: 0.7rem;
+  text-align: right;
+  padding: 0 var(--cfg-space-1);
+  outline: none;
+}
+
+.cfg-vtable-row:hover .cfg-var-range-input {
+  border-color: var(--cfg-border);
+}
+
+.cfg-var-range-input:focus {
+  background: var(--cfg-surface-dark);
+  border-color: var(--cfg-accent);
+}
+
+.cfg-var-range-input::placeholder {
+  color: var(--cfg-text-muted);
+  opacity: 0.4;
+}
+
+/* A refused bound (not a number, or min above max) stays on screen flagged
+   rather than reverting — the tree keeps the last valid pair either way. */
+.cfg-var-range-input--invalid,
+.cfg-vtable-row:hover .cfg-var-range-input--invalid,
+.cfg-var-range-input--invalid:focus {
+  border-color: var(--cfg-danger);
+  color: var(--cfg-danger-fg);
+}
+
+/* ── Write value input ──────────────────────────────────────── */
+.cfg-vtable-cell--live {
+  gap: var(--cfg-space-2);
+}
+
+.cfg-vtable-cell--writable {
+  cursor: pointer;
+}
+
+.cfg-vtable-cell--writable:hover {
+  background: color-mix(in srgb, var(--cfg-surface-dark) 80%, var(--cfg-surface));
+}
+
+.cfg-var-write-input {
+  flex: 0 0 auto;
+  width: 5rem;
+  background: var(--cfg-surface-dark);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius-sm, 3px);
+  color: var(--cfg-text);
+  font-family: var(--cfg-font-mono);
+  font-size: 0.7rem;
+  padding: 0 var(--cfg-space-1);
+  outline: none;
+}
+
+.cfg-var-write-input:focus {
+  border-color: var(--cfg-accent);
+}
+
+.cfg-var-write-input::placeholder {
+  color: var(--cfg-text-muted);
+  opacity: 0.6;
+}
+
+/* ── Browse diff review banner ───────────────────────────────── */
+
+.cfg-browse-diff {
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface);
+  margin-bottom: 0.75rem;
+  font-family: var(--cfg-font);
+  font-size: var(--cfg-font-size-base);
+  flex-shrink: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.cfg-browse-diff__header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--cfg-border);
+  position: sticky;
+  top: 0;
+  background: var(--cfg-surface);
+  z-index: 1;
+}
+
+.cfg-browse-diff__title {
+  font-weight: 600;
+}
+
+.cfg-browse-diff__summary {
+  color: var(--cfg-text-muted);
+  flex: 1;
+}
+
+.cfg-browse-diff__actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.cfg-browse-diff__group {
+  border-bottom: 1px solid var(--cfg-border);
+}
+
+.cfg-browse-diff__group:last-child {
+  border-bottom: none;
+}
+
+.cfg-browse-diff__group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.75rem;
+  background: color-mix(in srgb, var(--cfg-surface-dark) 40%, var(--cfg-surface));
+}
+
+.cfg-browse-diff__group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  color: var(--cfg-text);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+.cfg-browse-diff__group-caret {
+  display: inline-block;
+  width: 0.8rem;
+  color: var(--cfg-text-muted);
+}
+
+.cfg-browse-diff__group-count {
+  color: var(--cfg-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cfg-browse-diff__group-selectall {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--cfg-text-muted);
+  cursor: pointer;
+}
+
+.cfg-browse-diff__rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.cfg-browse-diff__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem 0.25rem 1.5rem;
+  cursor: pointer;
+  border-bottom: 1px solid color-mix(in srgb, var(--cfg-border) 50%, transparent);
+}
+
+.cfg-browse-diff__row:last-child {
+  border-bottom: none;
+}
+
+.cfg-browse-diff__row:hover {
+  background: color-mix(in srgb, var(--cfg-surface-dark) 30%, var(--cfg-surface));
+}
+
+.cfg-browse-diff__path {
+  flex: 1;
+  font-family: var(--cfg-mono-font, monospace);
+  color: var(--cfg-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfg-browse-diff__path--removed {
+  text-decoration: line-through;
+  color: var(--cfg-text-muted);
+}
+
+.cfg-browse-diff__group--added .cfg-browse-diff__path {
+  color: var(--cfg-success-fg);
+}
+
+.cfg-browse-diff__group--removed .cfg-browse-diff__group-header {
+  background: color-mix(in srgb, var(--cfg-danger-bg-soft) 50%, var(--cfg-surface));
+}
+
+.cfg-browse-diff__group--added .cfg-browse-diff__group-header {
+  background: color-mix(in srgb, var(--cfg-success-bg-soft) 50%, var(--cfg-surface));
+}
+
+.cfg-browse-diff__meta {
+  color: var(--cfg-text-muted);
+  font-size: 0.85em;
+}
+
+.cfg-browse-diff__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.cfg-browse-diff__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--cfg-border);
+  border-radius: 999px;
+  background: var(--cfg-surface-dark);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+.cfg-browse-diff__chip-label {
+  color: var(--cfg-text-muted);
+  font-weight: 500;
+}
+
+.cfg-browse-diff__chip-before {
+  color: var(--cfg-text-muted);
+  text-decoration: line-through;
+}
+
+.cfg-browse-diff__chip-arrow {
+  color: var(--cfg-text-muted);
+}
+
+.cfg-browse-diff__chip-after {
+  color: var(--cfg-text);
+}

@@ -1,0 +1,306 @@
+.ds-wizard {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: min(34rem, calc(100vw - (var(--cfg-space-6) * 2)));
+  max-width: 100%;
+  padding: 0;
+}
+
+.ds-wizard .cfg-modal-header {
+  padding: var(--cfg-space-4) var(--cfg-space-5);
+}
+
+.ds-wizard__title {
+  margin: 0;
+  font-size: var(--cfg-text-lg);
+  font-weight: var(--cfg-fw-bold);
+  color: var(--cfg-text);
+}
+
+/* ── Step indicator ─────────────────────────────────────────────────────── */
+.ds-wizard__steps {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+  margin: 0;
+  padding: var(--cfg-space-3) var(--cfg-space-5);
+  list-style: none;
+  border-bottom: 1px solid var(--cfg-border);
+}
+
+.ds-wizard__step {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text-muted);
+}
+
+.ds-wizard__step:not(:last-child)::after {
+  content: '';
+  width: var(--cfg-space-5);
+  height: 1px;
+  margin-left: var(--cfg-space-2);
+  background: var(--cfg-border);
+}
+
+.ds-wizard__step-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  border: 1px solid var(--cfg-border);
+  background: var(--cfg-surface);
+  font-size: var(--cfg-text-xs);
+  font-weight: var(--cfg-fw-bold);
+}
+
+.ds-wizard__step--active {
+  color: var(--cfg-text);
+  font-weight: var(--cfg-fw-medium);
+}
+
+.ds-wizard__step--active .ds-wizard__step-dot {
+  border-color: var(--cfg-accent);
+  background: var(--cfg-accent);
+  color: var(--cfg-on-accent);
+}
+
+.ds-wizard__step--done .ds-wizard__step-dot {
+  border-color: var(--cfg-accent);
+  color: var(--cfg-accent);
+}
+
+/* ── Body ───────────────────────────────────────────────────────────────── */
+.ds-wizard__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-4);
+  padding: var(--cfg-space-5);
+  min-height: 9rem;
+}
+
+.ds-wizard__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+}
+
+.ds-wizard__field-label {
+  font-size: var(--cfg-text-sm);
+  font-weight: var(--cfg-fw-medium);
+  color: var(--cfg-text);
+}
+
+.ds-wizard__hint {
+  margin: 0;
+  font-size: var(--cfg-text-sm);
+  line-height: 1.5;
+  color: var(--cfg-text-muted);
+}
+
+.ds-wizard__error {
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-danger-fg);
+}
+
+.ds-wizard__link {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--cfg-accent);
+  font-size: var(--cfg-text-sm);
+  cursor: pointer;
+}
+
+.ds-wizard__link:hover {
+  color: var(--cfg-accent-hover);
+  text-decoration: underline;
+}
+
+.ds-wizard__link:disabled {
+  color: var(--cfg-text-3);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+/* ── Discovery ──────────────────────────────────────────────────────────── */
+.ds-wizard__discovery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+}
+
+.ds-wizard__discover-row {
+  display: flex;
+  gap: var(--cfg-space-2);
+}
+
+.ds-wizard__discover-row .cfg-prop-input {
+  flex: 1;
+}
+
+.ds-wizard__discover-error {
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-danger-fg);
+}
+
+.ds-wizard__endpoints {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+  max-height: 13rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ds-wizard__endpoint {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-1);
+  width: 100%;
+  padding: var(--cfg-space-2) var(--cfg-space-3);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ds-wizard__endpoint:hover {
+  background: var(--cfg-bg-hover);
+}
+
+.ds-wizard__endpoint--selected {
+  border-color: var(--cfg-accent);
+  background: var(--cfg-selected-bg);
+}
+
+.ds-wizard__endpoint-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cfg-space-2);
+}
+
+.ds-wizard__badge {
+  padding: 0 var(--cfg-space-2);
+  border-radius: var(--cfg-radius);
+  font-size: var(--cfg-text-xs);
+  font-weight: var(--cfg-fw-medium);
+  line-height: 1.5;
+}
+
+.ds-wizard__badge--open {
+  background: var(--cfg-success-bg-soft);
+  color: var(--cfg-success-fg);
+}
+
+.ds-wizard__badge--secure {
+  background: var(--cfg-accent-soft);
+  color: var(--cfg-accent);
+}
+
+.ds-wizard__token {
+  padding: 0 var(--cfg-space-2);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-muted);
+}
+
+.ds-wizard__endpoint-server {
+  font-size: var(--cfg-text-sm);
+  font-weight: var(--cfg-fw-medium);
+  color: var(--cfg-text);
+}
+
+.ds-wizard__endpoint-url {
+  font-family: var(--cfg-font-mono, monospace);
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-muted);
+  word-break: break-all;
+}
+
+.ds-wizard__endpoint-note {
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-3);
+}
+
+/* ── Sign-in / sync ─────────────────────────────────────────────────────── */
+.ds-wizard__sync-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cfg-space-3);
+}
+
+/* ── Connection test ────────────────────────────────────────────────────── */
+.ds-wizard__test {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-3);
+  flex-wrap: wrap;
+}
+
+.ds-wizard__test-result {
+  font-size: var(--cfg-text-sm);
+}
+
+.ds-wizard__test-result--ok {
+  color: var(--cfg-success-fg);
+}
+
+.ds-wizard__test-result--fail {
+  color: var(--cfg-danger-fg);
+}
+
+/* ── Success ────────────────────────────────────────────────────────────── */
+.ds-wizard__success {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--cfg-space-3);
+  margin: 0;
+  font-size: var(--cfg-text-base);
+  line-height: 1.5;
+  color: var(--cfg-text);
+}
+
+.ds-wizard__success-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--cfg-success-bg-soft);
+  color: var(--cfg-success-fg);
+  font-weight: var(--cfg-fw-bold);
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────────── */
+.ds-wizard__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cfg-space-2);
+  padding: var(--cfg-space-3) var(--cfg-space-5);
+  border-top: 1px solid var(--cfg-border);
+}
+
+.ds-wizard__footer--end {
+  justify-content: flex-end;
+}
+
+.ds-wizard__footer-right {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+}

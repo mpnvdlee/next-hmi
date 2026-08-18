@@ -1,0 +1,47 @@
+/* TrendChart (Historian feature) — HMI runtime widget styles.
+   All color/spacing tokens come from the host theme (--hmi-*). */
+
+/* Chained with .hmi-component: this rule re-states `color`, which the base
+   class also sets, and a runtime-injected sheet cannot rely on order. */
+.hmi-component.hmi-trend-chart {
+  width: 100%;
+  height: 300px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: var(--hmi-space-md);
+  border-radius: var(--hmi-radius);
+  background: var(--hmi-surface);
+  color: var(--hmi-text);
+}
+
+.hmi-trend-chart__placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--hmi-text-muted);
+  font-size: var(--hmi-type-caption-size);
+}
+
+.hmi-trend-chart__controls {
+  display: flex;
+  gap: var(--hmi-space-tight);
+  flex-wrap: wrap;
+  margin-bottom: var(--hmi-space-sm);
+}
+
+.hmi-trend-chart__range {
+  all: unset;
+  font-size: var(--hmi-type-caption-size);
+  padding: var(--hmi-space-hair) var(--hmi-space-sm);
+  border-radius: var(--hmi-radius-sm);
+  cursor: pointer;
+  color: var(--hmi-text-muted);
+  background: transparent;
+}
+
+.hmi-trend-chart__range--active {
+  color: var(--hmi-accent);
+  background: var(--hmi-accent-soft);
+}

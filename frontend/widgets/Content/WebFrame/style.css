@@ -1,0 +1,125 @@
+/* Chained with the global `.hmi-component`, which sets font-family and resolves
+   min-height from the author's `--self-min-height`. The two-class selector wins
+   on specificity rather than on stylesheet order, which a runtime-injected
+   sheet cannot rely on; `var(--self-min-height, …)` keeps the configured
+   minimum in charge and supplies 200px only as its fallback. */
+.hmi-component.hmi-webframe {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--hmi-webframe-bg, var(--hmi-bg));
+  min-height: var(--self-min-height, 200px);
+}
+
+.hmi-webframe--border-subtle {
+  border: 1px solid var(--hmi-border);
+}
+
+.hmi-webframe--border-strong {
+  border: 2px solid var(--hmi-text-muted);
+}
+
+.hmi-webframe--radius-sm {
+  border-radius: var(--hmi-radius-sm);
+}
+
+.hmi-webframe--radius-md {
+  border-radius: var(--hmi-radius);
+}
+
+.hmi-webframe--radius-lg {
+  border-radius: var(--hmi-radius-lg);
+}
+
+.hmi-webframe__header {
+  display: flex;
+  align-items: center;
+  gap: var(--hmi-space-sm);
+  padding: var(--hmi-space-sm) var(--hmi-space-md);
+  background: var(--hmi-surface);
+  border-bottom: 1px solid var(--hmi-border);
+  flex-shrink: 0;
+}
+
+/* Inherits its color from `.hmi-component` on the root. */
+.hmi-webframe__title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-subheading-weight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hmi-webframe__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--hmi-space-sm);
+  flex-shrink: 0;
+}
+
+.hmi-webframe__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--hmi-space-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--hmi-radius-sm);
+  color: var(--hmi-text-muted);
+  font-size: var(--hmi-type-body-size);
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background var(--hmi-motion-fast),
+    color var(--hmi-motion-fast);
+}
+
+.hmi-webframe__btn:hover {
+  background: var(--hmi-surface-raised);
+  color: var(--hmi-text);
+}
+
+.hmi-webframe__body {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.hmi-webframe__iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.hmi-webframe__loading,
+.hmi-webframe__error,
+.hmi-webframe__placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--hmi-space-sm);
+  color: var(--hmi-text-muted);
+  font-size: var(--hmi-type-caption-size);
+  background: var(--hmi-webframe-bg, var(--hmi-bg));
+  pointer-events: none;
+}
+
+.hmi-webframe__error {
+  pointer-events: auto;
+}
+
+.hmi-webframe__error a {
+  color: var(--hmi-accent);
+  font-size: var(--hmi-type-caption-size);
+  text-decoration: underline;
+}

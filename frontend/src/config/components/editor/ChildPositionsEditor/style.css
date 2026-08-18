@@ -1,0 +1,152 @@
+/* ChildPositionsEditor — editor-specific styles only.
+ * Sidebar/list/row chrome lives in ../markerEditor.css.
+ */
+
+.cfg-childpos-summary {
+  margin-left: var(--cfg-space-2);
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text-muted);
+}
+
+.cfg-childpos-modal {
+  width: min(94vw, 80rem);
+  height: min(90vh, 56rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.cfg-childpos-body {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: var(--cfg-space-4);
+  padding: var(--cfg-space-4);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cfg-childpos-canvas {
+  position: relative;
+  overflow: hidden;
+  background: var(--cfg-bg);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cfg-childpos-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+}
+
+.cfg-childpos-noimage {
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text-muted);
+  text-align: center;
+  padding: var(--cfg-space-4);
+}
+
+/* Each slot wraps a live preview of a child plus a draggable overlay grip. */
+.cfg-childpos-slot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  z-index: 2;
+  outline: 1px dashed transparent;
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.cfg-childpos-slot--selected {
+  outline-color: var(--cfg-accent, var(--cfg-border));
+}
+
+.cfg-childpos-slot--dragging {
+  cursor: grabbing;
+  z-index: 3;
+}
+
+/* Block pointer events on the rendered child so dragging works on the slot. */
+.cfg-childpos-preview {
+  pointer-events: none;
+}
+
+.cfg-childpos-marker {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  background: var(--cfg-preview-indicator-bg);
+  color: var(--cfg-preview-indicator-fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: var(--cfg-preview-indicator-shadow);
+  user-select: none;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.cfg-childpos-marker--sm {
+  position: static;
+  top: auto;
+  right: auto;
+  height: 22px;
+  min-width: 22px;
+  padding: 0 7px;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.cfg-childpos-row__type {
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* Column widths in the list head — first label, then width input */
+.cfg-childpos-list__head .cfg-marker-col-label:nth-child(1) {
+  width: 56px;
+}
+
+.cfg-childpos-list__head .cfg-marker-col-label:nth-child(2) {
+  width: 64px;
+}
+
+.cfg-childpos-label-input {
+  width: 56px !important;
+  text-align: center;
+}
+
+.cfg-childpos-width-input {
+  width: 64px !important;
+  text-align: center;
+}
+
+.cfg-childpos-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--cfg-space-2);
+  padding: var(--cfg-space-3) var(--cfg-space-4);
+  border-top: 1px solid var(--cfg-border);
+  flex-shrink: 0;
+}

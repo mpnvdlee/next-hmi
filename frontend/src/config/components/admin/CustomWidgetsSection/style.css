@@ -1,0 +1,65 @@
+.cfg-admin-component-table__name {
+  font-weight: var(--cfg-fw-bold);
+  color: var(--cfg-text);
+}
+
+.cfg-admin-component-table__timestamp {
+  font-variant-numeric: tabular-nums;
+  color: var(--cfg-text-muted);
+}
+
+.cfg-admin-component-table__actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cfg-admin-errors {
+  gap: var(--cfg-space-2);
+}
+
+.cfg-admin-error-detail {
+  border: 1px solid color-mix(in srgb, var(--cfg-danger) 35%, var(--cfg-surface));
+  border-radius: var(--cfg-radius);
+  background: color-mix(in srgb, var(--cfg-danger) 6%, var(--cfg-surface));
+  overflow: hidden;
+}
+
+.cfg-admin-error-detail__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+  cursor: pointer;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.82rem;
+  font-weight: var(--cfg-fw-bold);
+  color: var(--cfg-danger);
+}
+
+.cfg-admin-error-detail__pre {
+  margin: 0;
+  padding: 0.9rem;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  color: color-mix(in srgb, var(--cfg-danger) 85%, var(--cfg-text));
+  background: color-mix(in srgb, var(--cfg-danger) 3%, var(--cfg-surface));
+  border-top: 1px solid color-mix(in srgb, var(--cfg-danger) 30%, var(--cfg-surface));
+}
+
+.cfg-admin-error-detail__token-hint {
+  margin: 0;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.76rem;
+  color: var(--cfg-text-muted);
+  border-top: 1px solid color-mix(in srgb, var(--cfg-danger) 18%, var(--cfg-surface));
+}
+
+.cfg-admin-error-detail__token-hint a {
+  color: var(--cfg-accent);
+}
+
+.cfg-admin-error-detail__token-hint code {
+  background: var(--cfg-surface-dark);
+  border-radius: 3px;
+  padding: 0.05rem 0.3rem;
+}

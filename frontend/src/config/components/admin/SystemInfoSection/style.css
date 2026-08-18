@@ -1,0 +1,21 @@
+.cfg-admin-info-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: var(--cfg-space-4) var(--cfg-space-5);
+  font-size: var(--cfg-text-base);
+}
+
+.cfg-admin-info-grid__label {
+  color: var(--cfg-text-muted);
+  font-weight: var(--cfg-fw-medium);
+  word-break: break-word;
+  padding-top: var(--cfg-space-1);
+}
+
+.cfg-admin-info-grid__value {
+  color: var(--cfg-text);
+  font-variant-numeric: tabular-nums;
+  padding-top: var(--cfg-space-1);
+  word-break: break-all;
+  line-height: 1.5;
+}

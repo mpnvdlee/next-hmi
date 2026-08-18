@@ -1,0 +1,216 @@
+/* ── Color palette picker ───────────────────────────────── */
+.cfg-color-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+/* The trigger (swatch + label) renders through the shared `withUnsetHint`
+   wrapper (`.cfg-prop-affix`), which is a plain flex item by default — give it
+   the row-filling behavior `.cfg-color-picker__label` used to provide directly,
+   and keep this component's own swatch↔label gap instead of the shared row's. */
+.cfg-color-picker > .cfg-prop-affix {
+  flex: 1;
+  min-width: 0;
+  gap: 0.4rem;
+}
+
+/* Trigger label — sized to its own text (not `flex: 1`) so the "· default"
+   hint sibling sits directly after it instead of being pushed to the far
+   edge of the row; `min-width: 0` still lets it shrink for the ellipsis
+   below when the row itself is too narrow. */
+.cfg-color-picker__label {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text-muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cfg-color-picker__label--has-value {
+  color: var(--cfg-text);
+}
+
+/* Floating popup — fixed so the field box's `overflow: hidden` can't clip it.
+   Coords are set inline from the trigger's viewport rect. */
+.cfg-color-picker__popup {
+  position: fixed;
+  z-index: 200;
+  background: var(--cfg-surface);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  box-shadow: var(--cfg-shadow-md);
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 220px;
+}
+
+/* Header row — sits in normal flow above the scrollable list, so the close
+   button never overlaps scrolled content (it used to float `position:
+   absolute` directly on top of the list). */
+.cfg-color-picker__popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0.4rem 0.35rem;
+  border-bottom: 1px solid var(--cfg-border);
+}
+
+.cfg-color-picker__popup-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--cfg-text-muted);
+}
+
+/* Group headings ("Theme colors" / "Suggested colors") — separates the two
+   scrollable groups from each other. */
+.cfg-color-picker__group-label {
+  padding: 0.2rem 0.4rem 0.15rem;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--cfg-text-muted);
+}
+
+.cfg-color-picker__group-label--divided {
+  margin-top: 0.3rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--cfg-border);
+}
+
+/* Vertical list of named color options (Theme tokens + suggested colors) —
+   the only scrollable zone; the Default and Custom rows are pinned outside
+   it so every color type keeps its own clearly bounded slot. */
+.cfg-color-picker__options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--cfg-border);
+}
+
+.cfg-color-picker__option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.2rem 0.35rem;
+  border: none;
+  background: none;
+  border-radius: var(--cfg-radius);
+  cursor: pointer;
+  text-align: left;
+}
+
+.cfg-color-picker__option:hover {
+  background: var(--cfg-surface-dark);
+}
+
+.cfg-color-picker__option--selected {
+  background: var(--cfg-accent-soft, var(--cfg-surface-dark));
+}
+
+.cfg-color-picker__option-name {
+  flex: 1;
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cfg-color-picker__option-hex {
+  flex-shrink: 0;
+  font-family: var(--cfg-font-mono, monospace);
+  font-size: 0.72rem;
+  color: var(--cfg-text-muted);
+}
+
+/* Swatches inside an option row are decorative — the row handles interaction. */
+.cfg-color-picker__option .cfg-color-picker__swatch {
+  cursor: pointer;
+}
+
+.cfg-color-picker__option .cfg-color-picker__swatch:hover {
+  transform: none;
+  outline-color: var(--cfg-border);
+}
+
+.cfg-color-picker__swatch {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  outline: 1px solid var(--cfg-border);
+  transition:
+    transform 0.1s,
+    outline-color 0.1s;
+}
+
+.cfg-color-picker__swatch:hover {
+  transform: scale(1.2);
+  outline-color: var(--cfg-accent);
+}
+
+.cfg-color-picker__swatch--selected {
+  border-color: var(--cfg-accent);
+  outline-color: var(--cfg-accent);
+  transform: scale(1.15);
+}
+
+.cfg-color-picker__swatch--default {
+  background-image:
+    linear-gradient(45deg, var(--cfg-border) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--cfg-border) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--cfg-border) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--cfg-border) 75%);
+  background-size: 8px 8px;
+  background-position:
+    0 0,
+    0 4px,
+    4px -4px,
+    -4px 0;
+  background-color: var(--cfg-surface);
+}
+
+.cfg-color-picker__custom-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--cfg-border);
+}
+
+.cfg-color-picker__custom-row .cfg-color-picker__option {
+  flex: 1;
+  min-width: 0;
+}
+
+.cfg-color-picker__input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cfg-color-picker__close {
+  flex-shrink: 0;
+}

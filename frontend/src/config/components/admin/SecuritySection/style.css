@@ -1,0 +1,6 @@
+.cfg-security-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-5);
+  max-width: 360px;
+}

@@ -1,0 +1,32 @@
+/* A real flex box rather than `display: contents`, so the definition can size
+   the slot the way it sizes any other child (a card body with `grow: 1`, say)
+   and the supplied widget still lays out normally inside it. */
+.slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-sm);
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Editor-only. The label plus this padding is what stops the shell around an
+   unfilled slot collapsing to a hairline, which is the whole reason it is drawn. */
+.empty {
+  align-items: center;
+  justify-content: center;
+  padding: var(--hmi-space-lg);
+  border: 1px dashed var(--hmi-border);
+  border-radius: var(--hmi-radius);
+  background: var(--hmi-surface-raised);
+}
+
+.emptyLabel {
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  letter-spacing: var(--hmi-type-label-tracking);
+  text-transform: var(--hmi-type-label-transform);
+  color: var(--hmi-text-muted);
+  pointer-events: none;
+  user-select: none;
+}

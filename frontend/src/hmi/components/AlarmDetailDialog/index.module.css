@@ -1,0 +1,196 @@
+/* The card, its header and its title are the runtime's shared modal classes
+   (hmi.css), so an alarm's detail reads like every other HMI dialog. Only
+   the alarm-specific body parts are declared here. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  /* Above the toast band: this dialog is opened *from* an alarm popup. */
+  z-index: var(--hmi-z-alarm-dialog);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--hmi-overlay-bg);
+  animation: fadeIn var(--hmi-motion-fast) ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.dialog {
+  composes: hmi-modal from global;
+}
+
+/* Only the runtime's floating copy is sized — the alarm editor renders the same
+   card inline, where it takes the width of its preview column. */
+.dialogFloating {
+  width: min(480px, 90vw);
+}
+
+.dialogHeader {
+  composes: hmi-modal__header from global;
+}
+
+/* Soft-tinted severity pill, the same status language as the runtime's other
+   pills — not a filled block, which reads as a second button in the header. */
+.levelBadge {
+  composes: hmi-pill from global;
+  font-family: var(--hmi-type-label-font);
+  letter-spacing: var(--hmi-type-label-tracking);
+  text-transform: var(--hmi-type-label-transform);
+}
+
+.levelError {
+  background: var(--hmi-fault-soft);
+  color: var(--hmi-fault);
+}
+
+.levelWarning {
+  background: var(--hmi-warn-soft);
+  color: var(--hmi-warn);
+}
+
+.levelInfo {
+  background: var(--hmi-info-soft);
+  color: var(--hmi-info-ink);
+}
+
+.dialogTitle {
+  composes: hmi-modal__title from global;
+}
+
+/* The shared modal title ellipsizes; an alarm's title is the alarm, so it wraps
+   and the header grows instead. Written as a descendant selector so it outranks
+   the global rule on specificity rather than on stylesheet order. */
+.dialog .dialogTitle {
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+
+.code {
+  flex-shrink: 0;
+  font-family: var(--hmi-type-code-font);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--hmi-type-caption-size);
+  color: var(--hmi-text-3);
+}
+
+.dialogBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--hmi-space-md) var(--hmi-space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-md);
+}
+
+.dialogBodyTwoCol {
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.imageCol {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.infoCol {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-md);
+}
+
+.image {
+  width: 100%;
+  height: auto;
+  max-height: 220px;
+  object-fit: contain;
+  border-radius: var(--hmi-radius-sm);
+  border: 1px solid var(--hmi-border);
+}
+
+.description {
+  font-size: var(--hmi-type-caption-size);
+  color: var(--hmi-text);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* Stand-in shown by the alarm editor when a definition has no description yet. */
+.descriptionEmpty {
+  composes: description;
+  color: var(--hmi-text-3);
+  font-style: italic;
+}
+
+/* Timestamps are mono/tabular everywhere else in the alarm surfaces. */
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-sm);
+  font-family: var(--hmi-type-code-font);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--hmi-type-caption-size);
+  color: var(--hmi-text-3);
+}
+
+/* A hairline above the timestamps whenever there is content to separate them
+   from — an alarm with neither description nor resolutions would otherwise get
+   a rule with nothing above it. */
+.meta:not(:first-child) {
+  padding-top: var(--hmi-space-sm);
+  border-top: 1px solid var(--hmi-border);
+}
+
+.resolutions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-sm);
+}
+
+.resolutionsTitle {
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  color: var(--hmi-text-3);
+  text-transform: var(--hmi-type-label-transform);
+  letter-spacing: var(--hmi-type-label-tracking);
+}
+
+.resolutionItem {
+  font-size: var(--hmi-type-caption-size);
+  color: var(--hmi-text);
+}
+
+.dialogFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--hmi-space-sm);
+  padding: var(--hmi-space-md) var(--hmi-space-lg);
+  border-top: 1px solid var(--hmi-border);
+  background: var(--hmi-surface-2);
+}
+
+.ackBtn {
+  composes: hmi-alarm-btn hmi-alarm-btn--primary from global;
+}
+
+/* The alarm editor renders this card as a preview: same paint, no affordances. */
+.ackBtn:disabled,
+.ackBtn:disabled:hover {
+  opacity: 0.5;
+  cursor: default;
+  filter: none;
+}

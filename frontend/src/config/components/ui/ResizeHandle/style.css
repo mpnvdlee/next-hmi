@@ -1,0 +1,70 @@
+/* ── Resize handle ─────────────────────────────────────────── */
+.cfg-resize-handle {
+  position: relative;
+  width: 3px;
+  min-height: 100%;
+  cursor: col-resize;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--cfg-border) 45%, var(--cfg-surface)) 0%,
+    color-mix(in srgb, var(--cfg-border) 65%, var(--cfg-surface)) 50%,
+    color-mix(in srgb, var(--cfg-border) 45%, var(--cfg-surface)) 100%
+  );
+  flex-shrink: 0;
+  touch-action: none;
+  transition:
+    background var(--cfg-motion-fast) var(--cfg-ease-standard),
+    box-shadow var(--cfg-motion-fast) var(--cfg-ease-standard);
+}
+
+.cfg-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc((var(--cfg-space-4) - 3px) / -2);
+  width: var(--cfg-space-4);
+  cursor: col-resize;
+}
+
+.cfg-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: var(--cfg-space-6);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cfg-text-muted) 25%, transparent);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.cfg-resize-handle:hover,
+.cfg-resize-handle:focus-visible,
+.cfg-resize-handle:active {
+  background: color-mix(in srgb, var(--cfg-accent) 30%, var(--cfg-border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--cfg-accent) 15%, transparent);
+}
+
+.cfg-resize-handle:hover::after,
+.cfg-resize-handle:focus-visible::after,
+.cfg-resize-handle:active::after {
+  background: color-mix(in srgb, var(--cfg-accent) 65%, var(--cfg-text));
+}
+
+.cfg-resize-handle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cfg-accent) 55%, transparent);
+}
+
+/* While a drag is live the cursor must not flicker over other elements, and no
+   iframe (live preview) may claim the pointer or show a text selection. */
+body.cfg-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.cfg-resizing iframe {
+  pointer-events: none;
+}

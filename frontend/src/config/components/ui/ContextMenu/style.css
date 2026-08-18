@@ -1,0 +1,124 @@
+.cfg-context-menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 160px;
+  background: var(--cfg-surface);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  box-shadow: var(--cfg-shadow-md);
+  padding: var(--cfg-space-1) 0;
+}
+
+.cfg-context-menu__item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 0.5rem;
+  padding: 0.45rem 0.9rem;
+  text-align: left;
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cfg-context-menu__item:hover {
+  background: var(--cfg-surface-dark);
+}
+
+/* Placeholder row shown when a menu has nothing to offer for this target —
+   reads as a state, not a command, so it never highlights on hover. */
+.cfg-context-menu__item--empty {
+  color: var(--cfg-text-muted);
+  font-style: italic;
+  cursor: default;
+}
+
+.cfg-context-menu__item--empty:hover {
+  background: none;
+}
+
+.cfg-context-menu__item--danger {
+  color: var(--cfg-danger);
+}
+
+.cfg-context-menu__item--danger:hover {
+  background: color-mix(in srgb, var(--cfg-danger) 14%, var(--cfg-surface));
+}
+
+.cfg-context-menu__separator {
+  height: 1px;
+  margin: 0.25rem 0;
+  background: var(--cfg-border);
+}
+
+.cfg-context-menu__sub-wrapper {
+  position: relative;
+}
+
+.cfg-context-menu__item--has-sub {
+  padding-right: 1.5rem;
+}
+
+.cfg-context-menu__sub-arrow {
+  margin-left: auto;
+  font-size: 0.6rem;
+  opacity: 0.6;
+}
+
+.cfg-context-submenu {
+  position: absolute;
+  min-width: 180px;
+  background: var(--cfg-surface);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  box-shadow: var(--cfg-shadow-sm);
+  z-index: 10000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--cfg-motion-fast);
+}
+
+.cfg-context-submenu::before,
+.cfg-context-submenu::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 8px;
+  height: 100%;
+}
+
+.cfg-context-submenu::before {
+  right: 100%;
+}
+
+.cfg-context-submenu::after {
+  left: 100%;
+}
+
+.cfg-context-submenu--open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.cfg-context-menu__item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.cfg-context-menu__label {
+  padding: 0.4rem 0.9rem 0.2rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--cfg-text-muted, color-mix(in srgb, var(--cfg-text) 50%, transparent));
+  pointer-events: none;
+  user-select: none;
+}

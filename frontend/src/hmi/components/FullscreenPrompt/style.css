@@ -1,0 +1,86 @@
+.fullscreen-prompt-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: var(--hmi-overlay-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fullscreen-prompt-modal {
+  width: 400px;
+  max-width: 90vw;
+  background: var(--hmi-surface);
+  color: var(--hmi-text);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius);
+  box-shadow: var(--hmi-modal-shadow);
+  font-family: var(--hmi-type-body-font);
+}
+
+.fullscreen-prompt-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hmi-space-md);
+  padding: var(--hmi-space-lg);
+  border-bottom: 1px solid var(--hmi-border);
+}
+
+.fullscreen-prompt-modal__title {
+  font-size: var(--hmi-type-subheading-size);
+  font-weight: var(--hmi-type-heading-weight);
+  color: var(--hmi-text);
+}
+
+.fullscreen-prompt-modal__body {
+  padding: var(--hmi-space-lg) var(--hmi-space-lg);
+}
+
+.fullscreen-prompt-modal__description {
+  margin: 0;
+  font-size: var(--hmi-type-body-size);
+  color: var(--hmi-text-muted);
+  line-height: 1.5;
+}
+
+.fullscreen-prompt-modal__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--hmi-space-sm);
+  padding: var(--hmi-space-md) var(--hmi-space-lg);
+  border-top: 1px solid var(--hmi-border);
+}
+
+.fullscreen-prompt-modal__btn {
+  padding: var(--hmi-space-sm) var(--hmi-space-lg);
+  border-radius: var(--hmi-radius);
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-subheading-weight);
+  cursor: pointer;
+  border: 1px solid var(--hmi-border);
+  font-family: inherit;
+  transition:
+    background var(--hmi-motion-fast) ease,
+    filter var(--hmi-motion-fast) ease;
+}
+
+.fullscreen-prompt-modal__btn--cancel {
+  background: var(--hmi-surface);
+  color: var(--hmi-text);
+}
+
+.fullscreen-prompt-modal__btn--cancel:hover {
+  background: var(--hmi-surface-2);
+}
+
+.fullscreen-prompt-modal__btn--ok {
+  background: var(--hmi-accent);
+  color: var(--hmi-accent-on);
+  border-color: var(--hmi-accent);
+}
+
+.fullscreen-prompt-modal__btn--ok:hover {
+  filter: brightness(1.08);
+}

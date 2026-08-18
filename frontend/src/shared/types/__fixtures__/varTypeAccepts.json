@@ -1,0 +1,117 @@
+[
+  {
+    "name": "scalar Float matches Float slot",
+    "varType": { "kind": "scalar", "base": "Float", "array": false },
+    "acceptTokens": ["float"],
+    "expected": true
+  },
+  {
+    "name": "scalar Float does not match Integer slot",
+    "varType": { "kind": "scalar", "base": "Float", "array": false },
+    "acceptTokens": ["integer"],
+    "expected": false
+  },
+  {
+    "name": "scalar array matches array-suffixed slot",
+    "varType": { "kind": "scalar", "base": "Integer", "array": true, "length": 4 },
+    "acceptTokens": ["integer[]"],
+    "expected": true
+  },
+  {
+    "name": "scalar array does not match non-array slot",
+    "varType": { "kind": "scalar", "base": "Integer", "array": true, "length": 4 },
+    "acceptTokens": ["integer"],
+    "expected": false
+  },
+  {
+    "name": "multi-token slot accepts second alternative",
+    "varType": { "kind": "scalar", "base": "String", "array": false },
+    "acceptTokens": ["float", "string"],
+    "expected": true
+  },
+  {
+    "name": "case-insensitive base token",
+    "varType": { "kind": "scalar", "base": "Boolean", "array": false },
+    "acceptTokens": ["BOOLEAN"],
+    "expected": true
+  },
+  {
+    "name": "struct matches bare struct token",
+    "varType": {
+      "kind": "struct",
+      "name": "Motor",
+      "array": false,
+      "fields": ["Speed", "Running"]
+    },
+    "acceptTokens": ["Motor"],
+    "expected": true
+  },
+  {
+    "name": "struct array matches struct-array token",
+    "varType": { "kind": "struct", "name": "Motor", "array": true, "fields": ["Speed"] },
+    "acceptTokens": ["Motor[]"],
+    "expected": true
+  },
+  {
+    "name": "struct array does not match non-array struct token",
+    "varType": { "kind": "struct", "name": "Motor", "array": true, "fields": ["Speed"] },
+    "acceptTokens": ["Motor"],
+    "expected": false
+  },
+  {
+    "name": "scalar does not match struct token",
+    "varType": { "kind": "scalar", "base": "Integer", "array": false },
+    "acceptTokens": ["Motor"],
+    "expected": false
+  },
+  {
+    "name": "struct does not match scalar token",
+    "varType": { "kind": "struct", "name": "Motor", "array": false, "fields": ["Speed"] },
+    "acceptTokens": ["integer"],
+    "expected": false
+  },
+  {
+    "name": "struct with required fields present",
+    "varType": {
+      "kind": "struct",
+      "name": "Motor",
+      "array": false,
+      "fields": ["Speed", "Running", "Temperature"]
+    },
+    "acceptTokens": ["Motor"],
+    "requiredFields": ["Speed", "Running"],
+    "expected": true
+  },
+  {
+    "name": "struct missing a required field",
+    "varType": { "kind": "struct", "name": "Motor", "array": false, "fields": ["Speed"] },
+    "acceptTokens": ["Motor"],
+    "requiredFields": ["Speed", "Running"],
+    "expected": false
+  },
+  {
+    "name": "struct required fields with object-form entries",
+    "varType": {
+      "kind": "struct",
+      "name": "Motor",
+      "array": false,
+      "fields": ["Speed", "Running"]
+    },
+    "acceptTokens": ["Motor"],
+    "requiredFields": [{ "name": "Speed", "write": true }, "Running"],
+    "expected": true
+  },
+  {
+    "name": "empty struct (no field metadata) still accepted despite required fields",
+    "varType": { "kind": "struct", "name": "Motor", "array": true, "fields": [] },
+    "acceptTokens": ["Motor[]"],
+    "requiredFields": ["Speed"],
+    "expected": true
+  },
+  {
+    "name": "unknown base token falls back to struct-kind (no scalar match)",
+    "varType": { "kind": "scalar", "base": "Integer", "array": false },
+    "acceptTokens": ["NotARealType"],
+    "expected": false
+  }
+]

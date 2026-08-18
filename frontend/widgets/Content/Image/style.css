@@ -1,0 +1,77 @@
+.hmi-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: fit-content;
+  border-radius: var(--hmi-radius);
+  overflow: hidden;
+  transition: transform var(--hmi-motion-fast) ease;
+}
+
+.hmi-image:hover {
+  transform: translateY(-1px);
+}
+
+.hmi-image__img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Chained with the global `.hmi-component`, which sets its own colour — the
+   two-class selector wins on specificity rather than on stylesheet order,
+   which a runtime-injected sheet cannot rely on. */
+.hmi-component.hmi-image--empty {
+  border: 1px dashed color-mix(in srgb, var(--hmi-border) 75%, var(--hmi-surface));
+  color: var(--hmi-text-muted);
+  font-size: var(--hmi-type-caption-size);
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--hmi-surface-raised) 70%, var(--hmi-surface)) 0,
+    color-mix(in srgb, var(--hmi-surface-raised) 70%, var(--hmi-surface)) 0.4rem,
+    color-mix(in srgb, var(--hmi-surface) 82%, var(--hmi-bg)) 0.4rem,
+    color-mix(in srgb, var(--hmi-surface) 82%, var(--hmi-bg)) 0.8rem
+  );
+}
+
+.hmi-image__placeholder {
+  padding: var(--hmi-space-sm) var(--hmi-space-md);
+  border-radius: var(--hmi-radius);
+  background: color-mix(in srgb, var(--hmi-surface) 86%, var(--hmi-bg));
+  pointer-events: none;
+}
+
+.hmi-image__indicator {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  height: 26px;
+  padding: 0 var(--hmi-space-md);
+  border-radius: var(--hmi-radius-full);
+  background: var(--hmi-indicator-bg);
+  color: var(--hmi-indicator-fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-heading-weight);
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+  box-shadow: var(--hmi-indicator-shadow);
+  white-space: nowrap;
+  min-width: 26px;
+}
+
+.hmi-image__indicator-pill {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px dashed var(--hmi-indicator-pill-border);
+  background: transparent;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+  aspect-ratio: 1;
+  /* width set inline as % of container */
+}

@@ -1,0 +1,16 @@
+/* Section-level add control (see `AddButton`) — accent outline, small enough to
+   sit on a section title row without pushing its height. */
+.cfg-add-btn {
+  flex-shrink: 0;
+  padding: 3px var(--cfg-space-2);
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-accent);
+  background: var(--cfg-surface);
+  border: 1px solid var(--cfg-accent);
+  border-radius: var(--cfg-radius);
+  cursor: pointer;
+}
+
+.cfg-add-btn:hover {
+  background: var(--cfg-selected-bg);
+}

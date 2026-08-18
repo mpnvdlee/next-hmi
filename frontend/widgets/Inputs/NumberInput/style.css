@@ -1,0 +1,63 @@
+.hmi-number-input {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-input-gap);
+}
+
+.hmi-number-input__label {
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  color: var(--hmi-text-muted);
+  text-transform: var(--hmi-type-label-transform);
+  letter-spacing: var(--hmi-type-label-tracking);
+}
+
+.hmi-number-input__row {
+  display: flex;
+}
+
+.hmi-number-input__input-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--hmi-space-sm);
+  flex: 1;
+  min-width: 0;
+}
+
+.hmi-number-input__field {
+  flex: 1;
+  min-width: 0;
+  height: var(--hmi-select-height);
+  box-sizing: border-box;
+  padding: 0 var(--hmi-input-padding-x);
+  background: var(--hmi-bg);
+  color: var(--hmi-text);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius);
+  font-family: var(--hmi-type-body-font);
+  font-size: var(--hmi-type-body-size);
+  font-variant-numeric: tabular-nums;
+  transition: border-color var(--hmi-motion-fast) ease;
+}
+
+.hmi-number-input__field:focus {
+  outline: none;
+  border-color: var(--hmi-accent);
+}
+
+.hmi-number-input__field--invalid {
+  color: var(--hmi-fault);
+  border-color: var(--hmi-fault);
+}
+
+.hmi-number-input__unit {
+  font-size: var(--hmi-type-caption-size);
+  color: var(--hmi-text-muted);
+  white-space: nowrap;
+}
+
+.hmi-number-input--disabled .hmi-number-input__field {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

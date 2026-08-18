@@ -1,0 +1,880 @@
+@import './hmi.tokens.css';
+@import './hmi-primitives.css';
+
+/* Wrapper that hosts the HMI layout + position:fixed overlays (toasts, alerts,
+ * alarm popups). When `--hmi-scale` is set, the root zooms by that factor and
+ * inverts the viewport sizes so the zoomed layout still fills the viewport at
+ * any scale (no empty space below at scale < 1, no oversize gutters at scale
+ * > 1). */
+.hmi-root {
+  zoom: var(--hmi-scale, 1);
+  width: calc(100vw / var(--hmi-scale, 1));
+  height: calc(100vh / var(--hmi-scale, 1));
+  background: var(--hmi-bg);
+}
+
+/* HMI surfaces stay scrollable (wheel/touch) but never paint scrollbar chrome:
+   an operator panel is a fixed design, and a bar appearing only at some
+   viewport/scale combinations shifts the layout it appears in. Scoped to
+   .hmi-root so the config UI — which deliberately keeps persistent visible
+   scrollbars (config.css) — is unaffected. The project setting
+   `shell.showScrollbars` adds .hmi-root--scrollbars to opt back into the
+   browser's native bars; the rules are written as :not() so opting in restores
+   the untouched browser default rather than a re-styled approximation. */
+.hmi-root:not(.hmi-root--scrollbars),
+.hmi-root:not(.hmi-root--scrollbars) * {
+  scrollbar-width: none;
+}
+
+.hmi-root:not(.hmi-root--scrollbars)::-webkit-scrollbar,
+.hmi-root:not(.hmi-root--scrollbars) *::-webkit-scrollbar {
+  display: none;
+}
+
+/* Opted in: force a slim, always-visible bar rather than leaving the platform
+   default, which on macOS is an overlay scrollbar that fades out when idle —
+   invisible exactly when the operator needs the "there is more below" hint.
+   Same trick as the config shell (config.css): `scrollbar-width` stays
+   undeclared on this branch, because once it is set Chrome takes the standard
+   path and ignores these ::-webkit rules. */
+.hmi-root--scrollbars::-webkit-scrollbar,
+.hmi-root--scrollbars *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.hmi-root--scrollbars::-webkit-scrollbar-track,
+.hmi-root--scrollbars *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hmi-root--scrollbars::-webkit-scrollbar-thumb,
+.hmi-root--scrollbars *::-webkit-scrollbar-thumb {
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 5px;
+  background-color: var(--hmi-text-4);
+}
+
+.hmi-root--scrollbars::-webkit-scrollbar-thumb:hover,
+.hmi-root--scrollbars *::-webkit-scrollbar-thumb:hover {
+  background-color: var(--hmi-text-3);
+}
+
+.hmi-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--hmi-bg);
+  color: var(--hmi-text);
+  font-family: var(--hmi-type-body-font);
+  font-size: var(--hmi-type-body-size);
+}
+
+/* When at least one sidebar is set to full-height, switch the outer layout to
+   a row so the sidebar(s) flank the header/main/footer column. */
+.hmi-layout--row {
+  flex-direction: row;
+}
+
+/* Wrapper around the header/body/footer column. Behaves like the original
+   .hmi-layout column when no sidebar is full-height, and as a flex child that
+   shares the row with full-height sidebars otherwise. */
+.hmi-layout__column {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.hmi-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .hmi-body {
+    flex-direction: column;
+  }
+}
+
+.hmi-main {
+  position: relative;
+  flex: 1;
+  padding: var(--hmi-main-padding, 0);
+  background: var(--hmi-main-bg, white);
+  overflow: auto;
+}
+
+/* Spinner overlay shown while a page switch is in flight (HmiView drives the
+   page from a deferred id). Opaque so the outgoing heavy page is hidden while it
+   tears down in the background. The fade-in delay keeps quick switches from
+   flashing a spinner; the sticky child keeps the spinner in view if the outgoing
+   page was scrolled. */
+.hmi-page-pending {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: var(--hmi-main-bg, white);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  opacity: 0;
+  animation: hmi-page-pending-in 1ms linear 120ms forwards;
+}
+
+.hmi-page-pending > * {
+  position: sticky;
+  top: 0;
+}
+
+@keyframes hmi-page-pending-in {
+  to {
+    opacity: 1;
+  }
+}
+
+/* Single page layout. When showHeader/showFooter are off, the header/footer
+   blocks aren't rendered and the content section fills the viewport. When
+   either toggle is on, .hmi-main becomes a flex column so the header/footer
+   stay pinned while the content region scrolls. */
+.hmi-main:has(.hmi-page__header),
+.hmi-main:has(.hmi-page__footer) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.hmi-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-lg);
+}
+
+.hmi-page:has(> .hmi-page__header),
+.hmi-page:has(> .hmi-page__footer) {
+  gap: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.hmi-page__header,
+.hmi-page__footer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.hmi-page:has(> .hmi-page__header) > .hmi-page__content,
+.hmi-page:has(> .hmi-page__footer) > .hmi-page__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-lg);
+}
+
+/* Pin direct children of header/content/footer to their declared sizes so a
+   tall widget overflows the content region (which scrolls) instead of being
+   shrunk by the flex column. Specificity bumped via the parent class to win
+   over `.hmi-component { flex-shrink: var(--self-shrink, 1) }` and the
+   container's own `flex-shrink: var(--self-shrink, 1)`.
+   The `> .hmi-preview-node > …` paths cover the editor preview, where
+   WidgetRenderer wraps each widget in a `display: contents` node — the
+   actual flex item there is the inner `.hmi-component` / `.hmi-container`. */
+.hmi-page__header > .hmi-component,
+.hmi-page__header > .hmi-container,
+.hmi-page__header > .hmi-preview-node > .hmi-component,
+.hmi-page__header > .hmi-preview-node > .hmi-container,
+.hmi-page__content > .hmi-component,
+.hmi-page__content > .hmi-container,
+.hmi-page__content > .hmi-preview-node > .hmi-component,
+.hmi-page__content > .hmi-preview-node > .hmi-container,
+.hmi-page__footer > .hmi-component,
+.hmi-page__footer > .hmi-container,
+.hmi-page__footer > .hmi-preview-node > .hmi-component,
+.hmi-page__footer > .hmi-preview-node > .hmi-container {
+  flex-shrink: 0;
+}
+
+/* Off-screen windowing: let the browser skip layout/paint for top-level page
+   widgets that are scrolled out of view. Scoped to direct children of the
+   scrolling content region and to the live runtime only (the `.hmi-preview-node`
+   editor wrapper is excluded so authoring hit-testing/selection stays exact).
+   `contain-intrinsic-size: auto <fallback>` makes the browser remember each
+   widget's real size after first render, so the scrollbar stays stable. */
+.hmi-page__content > .hmi-component,
+.hmi-page__content > .hmi-container {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 48px;
+}
+
+/* React-level windowing (WindowedContent): on heavy pages each top-level widget
+   is wrapped in `.hmi-window-item`, which takes over the direct-child role — so
+   it must carry the same flex-pin + content-visibility behaviour as the widgets
+   above. Off-screen items are unmounted and held open at their remembered height
+   (`--hmi-window-item-h`) so the scrollbar doesn't jump. */
+.hmi-page__content > .hmi-window-item {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 48px;
+}
+
+.hmi-page__content > .hmi-window-item[data-windowed='off'] {
+  height: var(--hmi-window-item-h, 64px);
+}
+
+/* Page-group shell — header/footer that wrap whichever sub-page is active.
+   Same flex-pin pattern as the page layout so the active sub-page scrolls in
+   the middle while the group's chrome stays fixed. */
+.hmi-main:has(.hmi-page-group-shell) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.hmi-page-group-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Marker wrapper for chromeless page-groups — keeps `data-page-group-id` in
+   the DOM without imposing a layout context on its children. */
+.hmi-page-group-mark {
+  display: contents;
+}
+
+.hmi-page-group-shell__header,
+.hmi-page-group-shell__footer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-sm);
+}
+
+.hmi-page-group-shell__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.hmi-page-group-shell__header > .hmi-component,
+.hmi-page-group-shell__header > .hmi-container,
+.hmi-page-group-shell__header > .hmi-preview-node > .hmi-component,
+.hmi-page-group-shell__header > .hmi-preview-node > .hmi-container,
+.hmi-page-group-shell__footer > .hmi-component,
+.hmi-page-group-shell__footer > .hmi-container,
+.hmi-page-group-shell__footer > .hmi-preview-node > .hmi-component,
+.hmi-page-group-shell__footer > .hmi-preview-node > .hmi-container {
+  flex-shrink: 0;
+}
+
+/* ── Misc ────────────────────────────────────────────────────── */
+.hmi-no-page {
+  color: var(--hmi-text-muted);
+}
+
+/* Recharts elements are focusable by default. Suppress the browser focus
+   ring only inside opted-in containers (e.g. plugin chart widgets that
+   render Recharts) so we don't strip focus indicators app-wide. Add
+   .hmi-plot-surface to a wrapper around any recharts element. */
+.hmi-plot-surface .recharts-wrapper,
+.hmi-plot-surface .recharts-wrapper *,
+.hmi-plot-surface .recharts-surface {
+  outline: none !important;
+}
+
+/* ── Component base ─────────────────────────────────────────── */
+/* No background/border/radius here — widgets opt into chrome. */
+.hmi-component {
+  color: var(--hmi-text);
+  font-family: var(--hmi-type-body-font);
+
+  /* Self-layout barrier. Custom properties INHERIT, and `selfLayoutStyle()`
+     only emits the fields the author actually set — so without this reset a
+     widget inside a container with `grow: 1` would inherit that grow and
+     silently ignore its own (unset) default of 0. `initial` on a custom
+     property is the guaranteed-invalid value, which makes each `var()` below
+     fall back to its documented default; the widget's own inline style still
+     wins, because inline declarations beat this rule.
+     Every `--self-*` consumed anywhere must be listed here — see the
+     completeness guard in layoutUtils.test.ts. */
+  --self-basis: initial;
+  --self-grow: initial;
+  --self-shrink: initial;
+  --self-align: initial;
+  --self-min-width: initial;
+  --self-max-width: initial;
+  --self-min-height: initial;
+
+  /* Dynamic layout values consumed from CSS custom properties set by components */
+  flex-basis: var(--self-basis, auto);
+  flex-grow: var(--self-grow, 0);
+  flex-shrink: var(--self-shrink, 1);
+  align-self: var(--self-align, auto);
+  min-width: var(--self-min-width, 0);
+  max-width: var(--self-max-width, none);
+  min-height: var(--self-min-height, 0);
+}
+
+.hmi-page-group--selected {
+  outline: 2px solid var(--hmi-editor-selection);
+  outline-offset: var(--hmi-accent-outline-offset);
+  border-radius: var(--hmi-radius);
+}
+
+/* ── Virtual Input Panels ─────────────────────────────────────────────────── */
+.hmi-virtual-input__dock {
+  position: fixed;
+  z-index: 120;
+}
+
+.hmi-virtual-input__dock--center {
+  left: 50%;
+  bottom: var(--hmi-virtual-dock-offset);
+  transform: translateX(-50%);
+  width: var(--hmi-virtual-dock-width);
+}
+
+.hmi-virtual-input__dock--bottom-right {
+  right: var(--hmi-virtual-dock-offset);
+  bottom: var(--hmi-virtual-dock-offset);
+}
+
+.hmi-virtual-input__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-virtual-panel-gap);
+  padding: var(--hmi-virtual-panel-padding);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius-lg);
+  background: var(--hmi-surface);
+  color: var(--hmi-text);
+  box-shadow: var(--hmi-shadow);
+  font-family: var(--hmi-type-body-font);
+  font-size: var(--hmi-type-body-size);
+  font-weight: var(--hmi-type-body-weight);
+}
+
+.hmi-virtual-input__panel--compact {
+  width: var(--hmi-virtual-dock-width-compact);
+  gap: var(--hmi-virtual-panel-gap-compact);
+  padding: var(--hmi-virtual-panel-padding-compact);
+}
+
+.hmi-virtual-input__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hmi-virtual-input__title {
+  font-family: var(--hmi-type-caption-font);
+  font-size: var(--hmi-virtual-title-size);
+  font-weight: var(--hmi-type-caption-weight);
+  color: var(--hmi-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hmi-virtual-input__close {
+  margin-left: auto;
+}
+
+.hmi-virtual-input__value {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.3rem;
+  font-family: var(--hmi-type-value-font);
+  font-size: var(--hmi-type-value-size);
+  font-weight: var(--hmi-type-value-weight);
+  font-variant-numeric: tabular-nums;
+  color: var(--hmi-text);
+}
+
+.hmi-virtual-input__value-unit {
+  font-family: var(--hmi-type-caption-font);
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-caption-weight);
+  color: var(--hmi-text-muted);
+}
+
+.hmi-virtual-input__value--keyboard {
+  justify-content: flex-start;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.hmi-virtual-input__value--invalid {
+  color: var(--hmi-fault);
+}
+
+.hmi-virtual-input__range {
+  text-align: center;
+  font-family: var(--hmi-type-caption-font);
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-caption-weight);
+  color: var(--hmi-text-muted);
+}
+
+.hmi-virtual-input__row {
+  display: grid;
+  gap: var(--hmi-virtual-panel-gap);
+}
+
+.hmi-virtual-input__row--keyboard {
+  grid-template-columns: repeat(60, minmax(0, 1fr));
+}
+
+.hmi-virtual-input__row--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.hmi-virtual-input__panel--compact .hmi-virtual-input__row {
+  gap: var(--hmi-virtual-panel-gap-compact);
+}
+
+.hmi-virtual-input__key {
+  padding: var(--hmi-virtual-key-padding-y) var(--hmi-virtual-key-padding-x);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius);
+  background: var(--hmi-surface-raised);
+  color: var(--hmi-text);
+  font-family: var(--hmi-type-body-font);
+  font-size: var(--hmi-type-body-size);
+  font-weight: var(--hmi-type-body-weight);
+  cursor: pointer;
+  box-shadow: var(--hmi-shadow);
+  transition:
+    background var(--hmi-motion-fast) ease,
+    border-color var(--hmi-motion-fast) ease,
+    color var(--hmi-motion-fast) ease;
+}
+
+.hmi-virtual-input__panel--keyboard .hmi-virtual-input__key {
+  min-width: 0;
+  padding-inline: var(--hmi-virtual-key-padding-x-compact);
+}
+
+.hmi-virtual-input__key--size-1 {
+  grid-column: span 4;
+}
+
+.hmi-virtual-input__key--size-1-5 {
+  grid-column: span 6;
+}
+
+.hmi-virtual-input__key--size-1-75 {
+  grid-column: span 7;
+}
+
+.hmi-virtual-input__key--size-2 {
+  grid-column: span 8;
+}
+
+.hmi-virtual-input__key--size-2-25 {
+  grid-column: span 9;
+}
+
+.hmi-virtual-input__key--size-2-75 {
+  grid-column: span 11;
+}
+
+.hmi-virtual-input__key--size-3 {
+  grid-column: span 12;
+}
+
+.hmi-virtual-input__key--size-12 {
+  grid-column: span 48;
+}
+
+.hmi-virtual-input__key--modifier {
+  font-family: var(--hmi-type-caption-font);
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-caption-weight);
+}
+
+.hmi-virtual-input__key--pressed {
+  border-color: var(--hmi-accent);
+  background: var(--hmi-accent-soft);
+  color: var(--hmi-accent-ink);
+}
+
+.hmi-virtual-input__key-legends {
+  display: grid;
+  line-height: 1;
+}
+
+.hmi-virtual-input__key-legend {
+  color: var(--hmi-text-muted);
+  font-family: var(--hmi-type-caption-font);
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-caption-weight);
+}
+
+.hmi-virtual-input__key-legend--active {
+  color: var(--hmi-text);
+  font-weight: var(--hmi-type-body-weight);
+}
+
+.hmi-virtual-input__key:hover {
+  background: var(--hmi-accent-soft);
+  border-color: var(--hmi-accent);
+}
+
+.hmi-virtual-input__key:focus-visible {
+  outline: var(--hmi-accent-outline);
+  outline-offset: var(--hmi-accent-outline-offset);
+}
+
+.hmi-virtual-input__key--accent {
+  background: var(--hmi-accent);
+  border-color: var(--hmi-accent);
+  color: var(--hmi-accent-on);
+}
+
+.hmi-virtual-input__key--accent:hover {
+  background: var(--hmi-accent-ink);
+  border-color: var(--hmi-accent-ink);
+}
+
+.hmi-virtual-input__panel--compact .hmi-virtual-input__key {
+  padding: var(--hmi-virtual-key-padding-y-compact) var(--hmi-virtual-key-padding-x-compact);
+  font-size: var(--hmi-virtual-key-font-size-compact);
+}
+
+.hmi-virtual-input__panel--compact .hmi-virtual-input__row--actions .hmi-virtual-input__key {
+  font-size: var(--hmi-virtual-key-font-size-actions-compact);
+}
+
+@media (max-width: 820px) {
+  .hmi-virtual-input__dock--center {
+    bottom: var(--hmi-virtual-dock-offset-mobile);
+    width: var(--hmi-virtual-dock-width-mobile);
+  }
+
+  .hmi-virtual-input__dock--bottom-right {
+    right: var(--hmi-virtual-dock-offset-mobile);
+    bottom: var(--hmi-virtual-dock-offset-mobile);
+  }
+
+  .hmi-virtual-input__panel {
+    padding: var(--hmi-virtual-panel-padding-mobile);
+    gap: var(--hmi-virtual-panel-gap-mobile);
+  }
+
+  .hmi-virtual-input__row {
+    gap: var(--hmi-virtual-row-gap-mobile);
+  }
+
+  .hmi-virtual-input__key {
+    padding: var(--hmi-virtual-key-padding-y-mobile) var(--hmi-virtual-key-padding-x-compact);
+    font-size: var(--hmi-virtual-key-font-size-compact);
+  }
+
+  .hmi-virtual-input__panel--keyboard .hmi-virtual-input__key {
+    padding-inline: 0;
+  }
+
+  .hmi-virtual-input__panel--compact {
+    width: var(--hmi-virtual-dock-width-compact-mobile);
+    padding: var(--hmi-virtual-panel-padding-compact-mobile);
+    gap: var(--hmi-virtual-panel-gap-compact);
+  }
+
+  .hmi-virtual-input__panel--compact .hmi-virtual-input__row {
+    gap: var(--hmi-virtual-panel-gap-compact);
+  }
+
+  .hmi-virtual-input__panel--compact .hmi-virtual-input__key {
+    padding: var(--hmi-virtual-key-padding-y-compact-mobile)
+      var(--hmi-virtual-key-padding-x-compact-mobile);
+    font-size: var(--hmi-virtual-key-font-size-compact-mobile);
+  }
+}
+
+/* ── Modals: backdrop, card, header, the alert dialog, placement/size ─────────
+   Component classes, so they live with the rest of the runtime's components —
+   hmi-view.css owns only the rules that make the runtime *document* behave. The
+   config shell renders the same cards in its previews and imports hmi.css only. */
+
+/* Modal backdrop — covers the full viewport, shown when a dialog is open */
+.hmi-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--hmi-overlay-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--hmi-z-modal);
+}
+
+/* Anchored (popover) panels can opt out of the dimmed backdrop while the
+   backdrop still catches click-outside-to-close. */
+.hmi-modal-backdrop--transparent {
+  background: transparent;
+}
+
+.hmi-modal-stack {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--hmi-space-lg);
+  padding: var(--hmi-space-lg);
+  width: 100%;
+  max-height: 100%;
+  overflow: auto;
+}
+
+/* Modal card */
+.hmi-modal {
+  background: var(--hmi-surface);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius-lg);
+  box-shadow: var(--hmi-modal-shadow);
+  min-width: 280px;
+  max-width: 90vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Modal header bar (title + optional close button) */
+.hmi-modal__header {
+  display: flex;
+  align-items: center;
+  padding: var(--hmi-space-md) var(--hmi-space-lg);
+  border-bottom: 1px solid var(--hmi-border);
+  gap: var(--hmi-space-sm);
+  flex-shrink: 0;
+}
+
+.hmi-modal__title {
+  flex: 1;
+  font-family: var(--hmi-type-subheading-font);
+  font-size: var(--hmi-type-subheading-size);
+  font-weight: var(--hmi-type-subheading-weight);
+  color: var(--hmi-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hmi-modal__close {
+  margin-left: auto;
+}
+
+/* Scrollable content area */
+.hmi-modal__content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hmi-space-sm);
+  padding: var(--hmi-space-lg);
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* ── Alert modal (AlertModal) ── */
+
+.hmi-alert-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--hmi-overlay-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--hmi-z-alert); /* above regular dialogs / overlays */
+}
+
+.hmi-alert-modal {
+  width: 400px;
+  max-width: 90vw;
+}
+
+.hmi-alert-modal__body {
+  padding: var(--hmi-space-lg) var(--hmi-space-lg);
+}
+
+.hmi-alert-modal__description {
+  margin: 0;
+  font-size: var(--hmi-type-body-size);
+  color: var(--hmi-text-muted);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.hmi-alert-modal__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--hmi-space-sm);
+  padding: var(--hmi-space-md) var(--hmi-space-lg);
+  border-top: 1px solid var(--hmi-border);
+}
+
+.hmi-alert-modal__btn {
+  padding: var(--hmi-space-sm) var(--hmi-space-lg);
+  border-radius: var(--hmi-radius);
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-subheading-weight);
+  cursor: pointer;
+  border: 1px solid var(--hmi-border);
+  transition: background var(--hmi-motion-fast);
+}
+
+.hmi-alert-modal__btn--cancel {
+  background: var(--hmi-surface);
+  color: var(--hmi-text);
+}
+
+.hmi-alert-modal__btn--cancel:hover {
+  background: var(--hmi-border);
+}
+
+.hmi-alert-modal__btn--ok {
+  background: var(--hmi-accent);
+  color: var(--hmi-accent-on);
+  border-color: var(--hmi-accent);
+}
+
+.hmi-alert-modal__btn--ok:hover {
+  filter: brightness(1.1);
+}
+
+/* ── Page overlay placement + size modifiers ──────────────────── */
+
+/* Overlays are positioned absolutely within the backdrop rather than
+   flowing inside the .hmi-modal-stack flex container. */
+.hmi-modal--overlay {
+  position: absolute;
+}
+
+/* ── Placement ─────────────────────────────────────────────────── */
+.hmi-modal--placement-center {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* --hmi-modal-stack-offset nudges a second card sharing the same edge away
+   from the first (see stackOffsetStyle in ModalStack.tsx) so they don't
+   render pixel-for-pixel on top of one another. */
+.hmi-modal--placement-top {
+  top: var(--hmi-modal-stack-offset, 0px);
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 0 0 var(--hmi-radius-lg) var(--hmi-radius-lg);
+}
+
+.hmi-modal--placement-bottom {
+  bottom: var(--hmi-modal-stack-offset, 0px);
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: var(--hmi-radius-lg) var(--hmi-radius-lg) 0 0;
+}
+
+.hmi-modal--placement-left {
+  top: 0;
+  bottom: 0;
+  left: var(--hmi-modal-stack-offset, 0px);
+  border-radius: 0 var(--hmi-radius-lg) var(--hmi-radius-lg) 0;
+  max-height: 100%;
+}
+
+.hmi-modal--placement-right {
+  top: 0;
+  bottom: 0;
+  right: var(--hmi-modal-stack-offset, 0px);
+  border-radius: var(--hmi-radius-lg) 0 0 var(--hmi-radius-lg);
+  max-height: 100%;
+}
+
+/* ── Size — center placement ───────────────────────────────────── */
+.hmi-modal--placement-center.hmi-modal--size-small {
+  width: 420px;
+  max-height: 480px;
+}
+
+.hmi-modal--placement-center.hmi-modal--size-medium {
+  width: 700px;
+  max-height: 620px;
+}
+
+.hmi-modal--placement-center.hmi-modal--size-fullscreen {
+  width: calc(100% - 2rem);
+  height: calc(100% - 2rem);
+  max-width: calc(100% - 2rem);
+  max-height: calc(100% - 2rem);
+}
+
+/* size=fixed uses inline width/height styles; no CSS overrides needed */
+
+/* ── Size — top / bottom (controls height, width matches center) ── */
+.hmi-modal--placement-top.hmi-modal--size-small,
+.hmi-modal--placement-bottom.hmi-modal--size-small {
+  width: 420px;
+  max-height: 240px;
+}
+
+.hmi-modal--placement-top.hmi-modal--size-medium,
+.hmi-modal--placement-bottom.hmi-modal--size-medium {
+  width: 700px;
+  max-height: 45vh;
+}
+
+.hmi-modal--placement-top.hmi-modal--size-fullscreen,
+.hmi-modal--placement-bottom.hmi-modal--size-fullscreen {
+  left: 0;
+  right: 0;
+  transform: none;
+  max-width: 100%;
+  max-height: calc(100% - 1rem);
+}
+
+/* ── Size — left / right (controls width) ──────────────────────── */
+.hmi-modal--placement-left.hmi-modal--size-small,
+.hmi-modal--placement-right.hmi-modal--size-small {
+  width: 280px;
+}
+
+.hmi-modal--placement-left.hmi-modal--size-medium,
+.hmi-modal--placement-right.hmi-modal--size-medium {
+  width: 420px;
+}
+
+.hmi-modal--placement-left.hmi-modal--size-fullscreen,
+.hmi-modal--placement-right.hmi-modal--size-fullscreen {
+  width: calc(100% - 1rem);
+  max-height: 100%;
+}
+
+/* ── Anchored (popover) placement — position set inline from trigger rect ── */
+.hmi-modal--anchored {
+  position: fixed;
+  transform: none;
+  max-height: 80vh;
+}
+
+.hmi-modal--anchored.hmi-modal--size-small {
+  width: 280px;
+}
+
+.hmi-modal--anchored.hmi-modal--size-medium {
+  width: 420px;
+}

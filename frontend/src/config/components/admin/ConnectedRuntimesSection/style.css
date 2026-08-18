@@ -1,0 +1,9 @@
+.cfg-runtimes-table__scope {
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-muted);
+}
+
+.cfg-runtimes-table__time {
+  color: var(--cfg-text-muted);
+  white-space: nowrap;
+}

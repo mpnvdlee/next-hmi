@@ -1,0 +1,54 @@
+/* Chained with the global `.hmi-component`, which sets its own min-width from
+   `--self-min-width` — the two-class selector wins on specificity rather than
+   on stylesheet order, which a runtime-injected sheet cannot rely on. */
+.hmi-component.hmi-gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--hmi-space-hair);
+  padding: var(--hmi-space-md) var(--hmi-space-sm) var(--hmi-space-sm);
+  min-width: 150px;
+}
+
+.hmi-gauge__label {
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  letter-spacing: var(--hmi-type-label-tracking);
+  text-transform: var(--hmi-type-label-transform);
+  color: var(--hmi-text-muted);
+}
+
+.hmi-gauge__dial {
+  display: block;
+  width: 140px;
+  height: 100px;
+}
+
+.hmi-gauge__track,
+.hmi-gauge__fill {
+  fill: none;
+  stroke-width: 18;
+}
+
+.hmi-gauge__track {
+  stroke: var(--hmi-border);
+}
+
+.hmi-gauge__fill {
+  stroke: var(--hmi-accent);
+  transition: d var(--hmi-motion-base) ease-out;
+}
+
+.hmi-gauge__value {
+  font-family: var(--hmi-type-value-font);
+  font-size: var(--hmi-type-value-size);
+  font-weight: var(--hmi-type-value-weight);
+  font-variant-numeric: tabular-nums;
+}
+
+.hmi-gauge__unit {
+  margin-left: var(--hmi-space-tight);
+  font-size: var(--hmi-type-caption-size);
+  color: var(--hmi-text-muted);
+}

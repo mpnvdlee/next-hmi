@@ -1,0 +1,58 @@
+name: Bug report
+description: Report something that isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please **do not** file security vulnerabilities here —
+        follow [SECURITY.md](../blob/main/.github/SECURITY.md) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, and what happened instead?
+      placeholder: Steps to reproduce, expected vs. actual behaviour.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: NEXT HMI version
+      description: Release tag, or the commit hash if running from source.
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How is it installed?
+      options:
+        - Docker
+        - Portable binary (macOS)
+        - Portable binary (Windows)
+        - From source
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: e.g. Ubuntu 24.04, macOS 15, Windows 11
+    validations:
+      required: true
+  - type: input
+    id: plc
+    attributes:
+      label: PLC / OPC-UA server vendor
+      description: If the issue involves a live connection.
+      placeholder: e.g. Beckhoff TwinCAT, Siemens, KEPServerEX, open62541
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste any relevant log output. Redact secrets.
+      render: shell
+    validations:
+      required: false

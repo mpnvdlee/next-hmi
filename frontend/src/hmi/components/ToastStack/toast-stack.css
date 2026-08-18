@@ -1,0 +1,103 @@
+/* ── Toast stack ──────────────────────────────────────────────── */
+
+.hmi-toast-stack {
+  position: fixed;
+  top: var(--hmi-space-lg);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--hmi-z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-sm);
+  max-width: 420px;
+  width: calc(100vw - var(--hmi-space-lg) * 2);
+  pointer-events: none;
+  align-items: center;
+}
+
+.hmi-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--hmi-space-sm);
+  padding: var(--hmi-space-md) var(--hmi-space-lg);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius);
+  box-shadow: var(--hmi-toast-shadow);
+  font-size: var(--hmi-type-body-size);
+  font-weight: var(--hmi-type-body-weight);
+  line-height: 1.4;
+  pointer-events: all;
+  width: 100%;
+  animation: hmi-toast-in var(--hmi-motion-base) ease both;
+}
+
+@keyframes hmi-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Severity variants */
+.hmi-toast--info {
+  background: color-mix(in oklch, var(--hmi-surface) 95%, var(--hmi-info));
+  border-color: color-mix(in srgb, var(--hmi-info) 45%, var(--hmi-border));
+  color: var(--hmi-text);
+}
+
+.hmi-toast--info .hmi-toast__icon {
+  color: var(--hmi-info);
+}
+
+.hmi-toast--warning {
+  background: color-mix(in oklch, var(--hmi-surface) 94%, var(--hmi-warn));
+  border-color: var(--hmi-warn);
+  color: var(--hmi-text);
+}
+
+.hmi-toast--warning .hmi-toast__icon {
+  color: var(--hmi-warn);
+}
+
+.hmi-toast--error {
+  background: color-mix(in oklch, var(--hmi-surface) 95%, var(--hmi-fault));
+  border-color: var(--hmi-fault);
+  color: var(--hmi-text);
+}
+
+.hmi-toast--error .hmi-toast__icon {
+  color: var(--hmi-fault);
+}
+
+.hmi-toast__icon {
+  flex-shrink: 0;
+  font-size: var(--hmi-type-caption-size);
+  line-height: 1.4;
+  margin-top: 0.15em;
+  opacity: 0.9;
+}
+
+.hmi-toast--warning .hmi-toast__icon,
+.hmi-toast--error .hmi-toast__icon {
+  font-size: var(--hmi-type-caption-size);
+}
+
+.hmi-toast__message {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.hmi-toast__close {
+  margin: calc(var(--hmi-space-sm) * -0.5) calc(var(--hmi-space-sm) * -0.5) 0 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hmi-toast {
+    animation: none;
+  }
+}
