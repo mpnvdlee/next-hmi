@@ -1,0 +1,129 @@
+.hmi-dropdown {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-input-gap);
+}
+
+.hmi-dropdown__label {
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  color: var(--hmi-text-muted);
+  text-transform: var(--hmi-type-label-transform);
+  letter-spacing: var(--hmi-type-label-tracking);
+}
+
+.hmi-dropdown__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--hmi-space-sm);
+  width: 100%;
+  height: var(--hmi-select-height);
+  box-sizing: border-box;
+  padding: 0 var(--hmi-input-padding-x);
+  background: var(--hmi-surface);
+  color: var(--hmi-text);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius);
+  font-family: var(--hmi-type-body-font);
+  font-size: var(--hmi-type-body-size);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--hmi-motion-base);
+}
+
+.hmi-dropdown__trigger:hover:not(:disabled) {
+  border-color: var(--hmi-border-strong);
+}
+
+.hmi-dropdown__trigger:focus-visible {
+  outline: var(--hmi-accent-outline);
+  outline-offset: 1px;
+}
+
+.hmi-dropdown__trigger--open {
+  border-color: var(--hmi-accent);
+}
+
+.hmi-dropdown__trigger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.hmi-dropdown__value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hmi-dropdown__value--placeholder {
+  color: var(--hmi-text-muted);
+}
+
+.hmi-dropdown__chevron {
+  flex: none;
+  color: var(--hmi-text-muted);
+  transition: transform var(--hmi-motion-fast);
+}
+
+.hmi-dropdown__trigger--open .hmi-dropdown__chevron {
+  transform: rotate(180deg);
+}
+
+/* Portaled to document.body, so it inherits neither `.hmi-component` nor the
+   widget tree's typography — every visual property is restated here. Its
+   position is measured per instance from the trigger and arrives as the
+   --hmi-dropdown-popup-* custom properties the widget sets. */
+.hmi-dropdown__popup {
+  position: fixed;
+  left: var(--hmi-dropdown-popup-left, 0);
+  z-index: var(--hmi-z-popup);
+  box-sizing: border-box;
+  width: max-content;
+  min-width: var(--hmi-dropdown-popup-min-width, 0);
+  max-width: calc(100vw - 16px);
+  max-height: var(--hmi-dropdown-popup-max-height, 320px);
+  overflow-y: auto;
+  padding: var(--hmi-space-sm);
+  background: var(--hmi-surface);
+  color: var(--hmi-text);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius);
+  box-shadow: var(--hmi-shadow);
+  font-family: var(--hmi-type-body-font);
+  font-size: var(--hmi-type-body-size);
+}
+
+.hmi-dropdown__popup--below {
+  top: var(--hmi-dropdown-popup-top, 0);
+}
+
+.hmi-dropdown__popup--above {
+  bottom: var(--hmi-dropdown-popup-bottom, 0);
+}
+
+.hmi-dropdown__option {
+  display: flex;
+  align-items: center;
+  height: var(--hmi-select-height);
+  box-sizing: border-box;
+  padding: 0 var(--hmi-space-sm);
+  overflow: hidden;
+  color: var(--hmi-text);
+  border-radius: var(--hmi-radius);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.hmi-dropdown__option--active {
+  background: var(--hmi-accent-soft);
+}
+
+.hmi-dropdown__option--selected {
+  color: var(--hmi-accent);
+  font-weight: var(--hmi-type-subheading-weight);
+}

@@ -1,0 +1,37 @@
+LGPL components in this NEXT HMI distribution
+=============================================
+
+This build depends on two libraries licensed under the GNU Lesser General
+Public License. They are used unmodified:
+
+  asyncua   OPC-UA client            LGPL-3.0-or-later
+  zeroconf  LAN peer discovery       LGPL-2.1-or-later
+
+Replaceability
+--------------
+Both libraries ship in this folder ("lgpl/") as loose, replaceable package
+directories rather than frozen inside the executable. You may substitute your
+own build of either package by replacing its directory here; the application
+adds this folder to its module search path at startup. This satisfies the
+LGPL's requirement that the LGPL-covered component remain replaceable in a
+combined work.
+
+Licence texts (in this folder)
+------------------------------
+  LICENSE-LGPL-3.0.txt   LGPL v3 (asyncua)   — an addendum to LICENSE-GPL-3.0.txt
+  LICENSE-GPL-3.0.txt    GPL v3 base that LGPL v3 extends
+  LICENSE-LGPL-2.1.txt   LGPL v2.1 (zeroconf)
+
+Written offer for corresponding source
+---------------------------------------
+The complete corresponding source for these libraries is published by their
+maintainers and is available at:
+
+  asyncua   https://github.com/FreeOpcUa/opcua-asyncio
+            https://pypi.org/project/asyncua/
+  zeroconf  https://github.com/python-zeroconf/python-zeroconf
+            https://pypi.org/project/zeroconf/
+
+The package directories in this "lgpl/" folder are themselves the complete
+corresponding source for the exact versions in this build. On request we will
+also provide them directly; contact licensing@next-hmi.com.

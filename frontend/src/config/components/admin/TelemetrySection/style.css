@@ -1,0 +1,39 @@
+.cfg-admin-telemetry__toggle {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+  border: 0;
+  padding: 0;
+  margin: 0;
+  align-self: flex-start;
+}
+
+.cfg-admin-telemetry__legend {
+  font-size: var(--cfg-text-sm);
+  font-weight: var(--cfg-fw-medium);
+  color: var(--cfg-text-muted);
+  padding: 0;
+}
+
+.cfg-admin-telemetry__id {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cfg-space-3);
+  flex-wrap: wrap;
+  font-size: var(--cfg-text-sm);
+}
+
+.cfg-admin-telemetry__id-label {
+  color: var(--cfg-text-muted);
+  font-weight: var(--cfg-fw-medium);
+}
+
+.cfg-admin-telemetry__id-value,
+.cfg-admin-telemetry__code {
+  font-family: var(--cfg-font-mono);
+  font-size: 0.95em;
+  background: color-mix(in srgb, var(--cfg-surface-dark) 55%, var(--cfg-surface));
+  padding: 0 var(--cfg-space-1);
+  border-radius: var(--cfg-radius-sm);
+  word-break: break-all;
+}

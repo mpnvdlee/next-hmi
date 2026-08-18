@@ -1,0 +1,49 @@
+/* Chained with the global `.hmi-component`, which sets its own color and
+   font-family — the two-class selector wins on specificity rather than on
+   stylesheet order, which a runtime-injected sheet cannot rely on. */
+.hmi-component.hmi-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hmi-space-sm);
+  font-size: var(--hmi-type-caption-size);
+  color: var(--hmi-text-muted);
+  font-family: var(--hmi-type-body-font);
+}
+
+.hmi-breadcrumb__segment {
+  white-space: nowrap;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+
+.hmi-breadcrumb__segment--link {
+  cursor: pointer;
+  color: var(--hmi-text-muted);
+  transition: color var(--hmi-motion-fast) ease;
+}
+
+.hmi-breadcrumb__segment--link:hover {
+  color: var(--hmi-accent);
+  text-decoration: underline;
+}
+
+.hmi-breadcrumb__segment--current {
+  color: var(--hmi-text);
+  font-weight: var(--hmi-type-subheading-weight);
+}
+
+.hmi-breadcrumb__icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: var(--hmi-space-sm);
+  vertical-align: middle;
+}
+
+.hmi-breadcrumb__separator {
+  color: var(--hmi-text-muted);
+  opacity: 0.6;
+  user-select: none;
+}

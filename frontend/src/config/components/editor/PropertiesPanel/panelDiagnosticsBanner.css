@@ -1,0 +1,53 @@
+.cfg-panel-diagnostics {
+  margin: var(--cfg-space-2);
+  padding: var(--cfg-space-2) var(--cfg-space-3);
+  border: 1px solid var(--cfg-warning-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-warning-bg);
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text);
+}
+
+.cfg-panel-diagnostics--error {
+  border-color: var(--cfg-danger-panel-border);
+  background: var(--cfg-danger-panel-bg);
+}
+
+.cfg-panel-diagnostics__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-1);
+}
+
+.cfg-panel-diagnostics__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cfg-space-2);
+  line-height: 1.4;
+}
+
+.cfg-panel-diagnostics__dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  /* Same desaturation as the tree marks — see TreeAffordances/style.css. */
+  background: color-mix(in srgb, var(--cfg-error-border-strong) 68%, var(--cfg-text-muted));
+}
+
+.cfg-panel-diagnostics__dot--warning {
+  background: var(--cfg-warning-strong);
+}
+
+/* Where the finding sits, when it names something more specific than the
+   artifact itself — muted so the message stays the thing being read. */
+.cfg-panel-diagnostics__where {
+  display: block;
+  font-family: var(--cfg-font-mono, monospace);
+  font-size: 0.7rem;
+  color: var(--cfg-text-muted);
+  word-break: break-word;
+}

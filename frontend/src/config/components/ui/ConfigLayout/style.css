@@ -1,0 +1,57 @@
+/* ── Three-column config layout ────────────────────────────── */
+.cfg-layout {
+  display: grid;
+  grid-template-columns: var(--cfg-left-panel-w, 260px) auto 1fr;
+  height: 100%;
+  overflow: hidden;
+  background: var(--cfg-bg);
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text);
+  min-width: 0;
+}
+
+.cfg-layout--with-right {
+  grid-template-columns:
+    var(--cfg-left-panel-w, 260px) auto 1fr auto
+    var(--cfg-right-panel-w, 340px);
+}
+
+.cfg-sidebar {
+  background: var(--cfg-surface);
+  border-right: 1px solid var(--cfg-border);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.cfg-center {
+  background: var(--cfg-bg);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.cfg-props-panel {
+  position: relative;
+  background: var(--cfg-surface);
+  border-left: 1px solid var(--cfg-border);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cfg-props-panel__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+@media (max-width: 1024px) {
+  .cfg-layout {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .cfg-layout {
+    grid-auto-flow: row;
+  }
+}

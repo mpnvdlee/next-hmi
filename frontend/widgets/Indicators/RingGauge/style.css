@@ -1,0 +1,57 @@
+/* The diameter, the hole and the swept angle arrive as custom properties, which
+   keeps the conic gradient here rather than as a literal inline style value.
+   Chained with the global `.hmi-component`, which sets its own flex-shrink and
+   min-width — the two-class selector wins on specificity rather than on
+   stylesheet order, which a runtime-injected sheet cannot rely on. */
+.hmi-component.hmi-ring-gauge {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: var(--hmi-ring-gauge-size, 132px);
+  height: var(--hmi-ring-gauge-size, 132px);
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--hmi-ring-gauge-color, var(--hmi-accent)) var(--hmi-ring-gauge-sweep, 0deg),
+    var(--hmi-border) 0
+  );
+}
+
+.hmi-ring-gauge__hole {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--hmi-space-tight);
+  width: var(--hmi-ring-gauge-hole, 96px);
+  height: var(--hmi-ring-gauge-hole, 96px);
+  border-radius: 50%;
+  background: var(--hmi-surface);
+}
+
+.hmi-ring-gauge__value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--hmi-space-hair);
+  font-family: var(--hmi-type-value-font);
+  /* The diameter is authored, the readout is themed — so at the small end of
+     the size range the value combo would spill out of the hole. Cap it against
+     the hole and the theme keeps the type at every diameter it is given. */
+  font-size: min(var(--hmi-type-value-size), calc(var(--hmi-ring-gauge-hole, 96px) * 0.3));
+  font-weight: var(--hmi-type-value-weight);
+  letter-spacing: var(--hmi-type-value-tracking);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.hmi-ring-gauge__unit {
+  font-family: var(--hmi-type-body-font);
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-body-weight);
+  color: var(--hmi-text-muted);
+}
+
+.hmi-ring-gauge__caption {
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-subheading-weight);
+  color: var(--hmi-text-muted);
+}

@@ -1,0 +1,70 @@
+.button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+/* Rendered inert inside a preview of a surface that carries a close control. */
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.hmi {
+  border-radius: var(--hmi-radius-sm, 4px);
+  color: var(--hmi-text-muted, #667085);
+}
+
+.hmi:hover {
+  color: var(--hmi-text, #101828);
+  background: var(--hmi-surface-raised, #f2f4f7);
+}
+
+.hmi:focus-visible {
+  outline: var(--hmi-accent-outline, 2px solid var(--hmi-accent, #0a84ff));
+  outline-offset: var(--hmi-accent-outline-offset, 2px);
+}
+
+.config {
+  border-radius: var(--cfg-radius);
+  color: var(--cfg-text-muted);
+}
+
+.config:hover {
+  color: var(--cfg-text);
+  background: var(--cfg-surface-dark);
+}
+
+.config:focus-visible {
+  outline: var(--cfg-focus-outline);
+  outline-offset: var(--cfg-focus-offset);
+}
+
+.inverse {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.inverse:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.inverse:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}

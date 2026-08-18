@@ -1,0 +1,1783 @@
+{
+  "Content/AlarmHistoryList": {
+    "description": "The rolling log of past alarm events.",
+    "icon": {
+      "type": "builtin",
+      "name": "clock-counter-clockwise"
+    },
+    "schema": {
+      "title": {
+        "label": "Title",
+        "defaultValue": "Alarm History"
+      },
+      "maxRows": {
+        "label": "Max rows",
+        "defaultValue": 100,
+        "min": 10,
+        "max": 1000,
+        "step": 10
+      },
+      "filterLevel": {
+        "format": "select",
+        "label": "Filter level",
+        "defaultValue": "",
+        "options": [
+          {
+            "label": "All",
+            "value": ""
+          },
+          {
+            "label": "Error",
+            "value": "error"
+          },
+          {
+            "label": "Warning",
+            "value": "warning"
+          },
+          {
+            "label": "Info",
+            "value": "info"
+          }
+        ]
+      },
+      "chrome": {
+        "format": "show",
+        "label": "Own frame",
+        "defaultValue": true,
+        "description": "Turn off when the widget sits inside a card that already draws a frame."
+      }
+    }
+  },
+  "Content/AlarmListManaged": {
+    "description": "Live active alarms, filterable by level, with acknowledgement.",
+    "icon": {
+      "type": "builtin",
+      "name": "warning"
+    },
+    "schema": {
+      "title": {
+        "label": "Title",
+        "defaultValue": "Alarms"
+      },
+      "filterLevel": {
+        "format": "select",
+        "label": "Filter level",
+        "defaultValue": "",
+        "options": [
+          {
+            "label": "All",
+            "value": ""
+          },
+          {
+            "label": "Error",
+            "value": "error"
+          },
+          {
+            "label": "Warning",
+            "value": "warning"
+          },
+          {
+            "label": "Info",
+            "value": "info"
+          }
+        ]
+      },
+      "chrome": {
+        "format": "show",
+        "label": "Own frame",
+        "defaultValue": true,
+        "description": "Turn off when the widget sits inside a card that already draws a frame."
+      }
+    }
+  },
+  "Content/Button": {
+    "description": "Runs actions and can bind a writable boolean struct (bVisible / bEnabled / bValue).",
+    "icon": {
+      "type": "builtin",
+      "name": "cursor-click"
+    },
+    "schema": {
+      "label": {
+        "label": "Label",
+        "defaultValue": "Button",
+        "group": "Content"
+      },
+      "iconName": {
+        "label": "Icon",
+        "group": "Content"
+      },
+      "color": {
+        "label": "Color",
+        "defaultToken": "--hmi-accent",
+        "group": "Appearance"
+      },
+      "variant": {
+        "format": "select",
+        "label": "Style",
+        "group": "Appearance",
+        "defaultValue": "solid",
+        "options": [
+          {
+            "label": "Solid",
+            "value": "solid"
+          },
+          {
+            "label": "Outline",
+            "value": "outline"
+          }
+        ]
+      },
+      "variable": {
+        "label": "Variable",
+        "description": "Optional struct driving the button from the PLC: bVisible and bEnabled gate it, bValue is written on press."
+      },
+      "actions": {
+        "label": "Actions"
+      }
+    }
+  },
+  "Content/Clock": {
+    "description": "A live clock, formatted with the same patterns as the $time source.",
+    "icon": {
+      "type": "builtin",
+      "name": "clock"
+    },
+    "schema": {
+      "format": {
+        "label": "Format",
+        "group": "Content",
+        "defaultValue": "HH:mm:ss",
+        "placeholder": "HH:mm:ss or YYYY-MM-DD HH:mm",
+        "description": "Pattern built from YYYY, MM, DD, HH, mm and ss — or ISO for the full ISO string."
+      },
+      "timezone": {
+        "label": "Time zone",
+        "group": "Content",
+        "placeholder": "Browser time zone (empty) or e.g. UTC"
+      },
+      "value": {
+        "label": "Value override",
+        "group": "Data",
+        "description": "Shown instead of the clock whenever it resolves to a non-empty string."
+      }
+    }
+  },
+  "Content/Icon": {
+    "description": "A themeable Phosphor icon at any size and colour.",
+    "icon": {
+      "type": "builtin",
+      "name": "star"
+    },
+    "schema": {
+      "iconName": {
+        "label": "Icon"
+      },
+      "size": {
+        "label": "Size (px)",
+        "defaultValue": 24,
+        "min": 8,
+        "max": 512,
+        "step": 1
+      },
+      "color": {
+        "label": "Color",
+        "defaultToken": "--hmi-text"
+      },
+      "chrome": {
+        "format": "show",
+        "label": "Chip background",
+        "defaultValue": true
+      }
+    }
+  },
+  "Content/Image": {
+    "description": "Shows an asset with a fit mode and optional data-driven indicators.",
+    "icon": {
+      "type": "builtin",
+      "name": "image-square"
+    },
+    "schema": {
+      "src": {
+        "label": "Image"
+      },
+      "alt": {
+        "label": "Alt text"
+      },
+      "fit": {
+        "format": "select",
+        "label": "Fit",
+        "defaultValue": "contain",
+        "options": [
+          {
+            "label": "Contain",
+            "value": "contain"
+          },
+          {
+            "label": "Cover",
+            "value": "cover"
+          },
+          {
+            "label": "Fill",
+            "value": "fill"
+          },
+          {
+            "label": "None",
+            "value": "none"
+          },
+          {
+            "label": "Scale down",
+            "value": "scale-down"
+          }
+        ]
+      },
+      "indicators": {
+        "label": "Indicators"
+      }
+    }
+  },
+  "Content/Label": {
+    "description": "Text in one of the theme typography combos, with translation support.",
+    "icon": {
+      "type": "builtin",
+      "name": "text-t"
+    },
+    "schema": {
+      "text": {
+        "label": "Text",
+        "group": "Content"
+      },
+      "typography": {
+        "format": "select",
+        "label": "Typography",
+        "group": "Appearance",
+        "defaultValue": "body",
+        "options": [
+          {
+            "label": "Heading",
+            "value": "heading"
+          },
+          {
+            "label": "Subheading",
+            "value": "subheading"
+          },
+          {
+            "label": "Body",
+            "value": "body"
+          },
+          {
+            "label": "Caption",
+            "value": "caption"
+          },
+          {
+            "label": "Code",
+            "value": "code"
+          },
+          {
+            "label": "Value",
+            "value": "value"
+          },
+          {
+            "label": "Label",
+            "value": "label"
+          }
+        ]
+      },
+      "color": {
+        "label": "Color",
+        "defaultToken": "--hmi-text",
+        "group": "Appearance"
+      },
+      "align": {
+        "format": "select",
+        "label": "Align",
+        "group": "Appearance",
+        "defaultValue": "left",
+        "options": [
+          {
+            "label": "Left",
+            "value": "left"
+          },
+          {
+            "label": "Center",
+            "value": "center"
+          },
+          {
+            "label": "Right",
+            "value": "right"
+          }
+        ]
+      },
+      "wrap": {
+        "format": "select",
+        "label": "Overflow",
+        "group": "Appearance",
+        "defaultValue": "wrap",
+        "options": [
+          {
+            "label": "Wrap",
+            "value": "wrap"
+          },
+          {
+            "label": "Truncate",
+            "value": "truncate"
+          }
+        ]
+      },
+      "size": {
+        "label": "Size override",
+        "group": "Appearance",
+        "description": "One-off font size for the rare case the typography combos do not cover."
+      },
+      "weight": {
+        "label": "Weight override",
+        "min": 100,
+        "max": 900,
+        "step": 100,
+        "group": "Appearance"
+      }
+    }
+  },
+  "Content/LogoTitle": {
+    "description": "A logo image paired with a title and an optional subtitle.",
+    "icon": {
+      "type": "builtin",
+      "name": "image-square"
+    },
+    "schema": {
+      "logoUrl": {
+        "label": "Logo image",
+        "group": "Content"
+      },
+      "title": {
+        "label": "Title",
+        "group": "Content",
+        "defaultValue": "NEXT HMI"
+      },
+      "subtitle": {
+        "label": "Subtitle",
+        "group": "Content"
+      }
+    }
+  },
+  "Content/PageTitle": {
+    "description": "The current page's title and icon, or your own override text.",
+    "icon": {
+      "type": "builtin",
+      "name": "text-t"
+    },
+    "schema": {
+      "text": {
+        "label": "Text",
+        "group": "Content",
+        "placeholder": "(defaults to current page title)"
+      },
+      "subtitle": {
+        "label": "Subtitle",
+        "group": "Content"
+      },
+      "iconName": {
+        "label": "Icon",
+        "group": "Content",
+        "placeholder": "(defaults to current page icon)"
+      }
+    }
+  },
+  "Content/StatusPill": {
+    "description": "A tone-colored status pill, with an optional second line and pulsing dot.",
+    "icon": {
+      "type": "builtin",
+      "name": "activity"
+    },
+    "schema": {
+      "text": {
+        "label": "Text",
+        "group": "Content"
+      },
+      "subText": {
+        "label": "Sub text",
+        "group": "Content",
+        "description": "Optional second line under the text."
+      },
+      "tone": {
+        "format": "select",
+        "label": "Tone",
+        "group": "Appearance",
+        "defaultValue": "neutral",
+        "options": [
+          {
+            "label": "Accent",
+            "value": "accent"
+          },
+          {
+            "label": "Neutral",
+            "value": "neutral"
+          },
+          {
+            "label": "OK",
+            "value": "ok"
+          },
+          {
+            "label": "Warning",
+            "value": "warn"
+          },
+          {
+            "label": "Fault",
+            "value": "fault"
+          }
+        ]
+      },
+      "pulse": {
+        "format": "onoff",
+        "label": "Pulse",
+        "group": "Appearance",
+        "defaultValue": false
+      },
+      "iconName": {
+        "label": "Icon",
+        "group": "Appearance",
+        "description": "Shown when the dot is not pulsing."
+      }
+    }
+  },
+  "Content/TrendChart": {
+    "description": "Plots recorded tag history over selectable time ranges, or buffers live values with no historian.",
+    "icon": {
+      "type": "builtin",
+      "name": "chart-line"
+    },
+    "schema": {
+      "source": {
+        "format": "select",
+        "label": "Data source",
+        "group": "Data",
+        "description": "Recorded queries the historian for stored samples. Live buffers values as they arrive over the connection — no historian needed — and starts empty on every page entry.",
+        "defaultValue": "history",
+        "options": [
+          {
+            "value": "history",
+            "label": "Recorded history"
+          },
+          {
+            "value": "live",
+            "label": "Live buffer"
+          }
+        ]
+      },
+      "variables": {
+        "label": "Variables",
+        "group": "Data",
+        "description": "Comma-separated variable paths, e.g. testserver:Motor1/Speed, testserver:Motor1/Temperature."
+      },
+      "timeRange": {
+        "format": "select",
+        "label": "Default time range",
+        "group": "Data",
+        "defaultValue": "1h",
+        "visibleWhen": {
+          "property": "source",
+          "notEquals": "live"
+        },
+        "options": [
+          {
+            "value": "1m",
+            "label": "1 min"
+          },
+          {
+            "value": "5m",
+            "label": "5 min"
+          },
+          {
+            "value": "15m",
+            "label": "15 min"
+          },
+          {
+            "value": "30m",
+            "label": "30 min"
+          },
+          {
+            "value": "1h",
+            "label": "1 hour"
+          },
+          {
+            "value": "8h",
+            "label": "8 hours"
+          },
+          {
+            "value": "24h",
+            "label": "24 hours"
+          },
+          {
+            "value": "7d",
+            "label": "7 days"
+          },
+          {
+            "value": "30d",
+            "label": "30 days"
+          }
+        ]
+      },
+      "refreshInterval": {
+        "label": "Refresh interval (s)",
+        "group": "Data",
+        "description": "How often the chart re-queries history. 0 disables polling.",
+        "defaultValue": 10,
+        "min": 0,
+        "max": 3600,
+        "step": 1,
+        "visibleWhen": {
+          "property": "source",
+          "notEquals": "live"
+        }
+      },
+      "liveWindow": {
+        "label": "Live window (s)",
+        "group": "Data",
+        "description": "How much recent history the buffer keeps. 0 keeps whatever fits the sample cap.",
+        "defaultValue": 300,
+        "min": 0,
+        "max": 86400,
+        "step": 10,
+        "visibleWhen": {
+          "property": "source",
+          "equals": "live"
+        }
+      },
+      "liveMaxSamples": {
+        "label": "Max samples per variable",
+        "group": "Data",
+        "description": "Hard cap on buffered points. The oldest are dropped first.",
+        "defaultValue": 300,
+        "min": 10,
+        "max": 5000,
+        "step": 10,
+        "visibleWhen": {
+          "property": "source",
+          "equals": "live"
+        }
+      },
+      "showControls": {
+        "format": "show",
+        "label": "Show zoom buttons",
+        "group": "Appearance",
+        "defaultValue": false,
+        "visibleWhen": {
+          "property": "source",
+          "notEquals": "live"
+        }
+      },
+      "seriesColors": {
+        "label": "Line colors",
+        "group": "Appearance",
+        "description": "Comma-separated colours, one per series. Left empty, the theme series palette is used."
+      }
+    }
+  },
+  "Content/UserBadge": {
+    "description": "Shows the currently signed-in user as an initialled badge.",
+    "icon": {
+      "type": "builtin",
+      "name": "user"
+    },
+    "schema": {
+      "usernameText": {
+        "label": "Username text",
+        "group": "Content",
+        "description": "Overrides the signed-in username."
+      },
+      "groupsText": {
+        "label": "Groups text",
+        "group": "Content",
+        "description": "Overrides the signed-in user's group list."
+      },
+      "actions": {
+        "label": "On Press",
+        "group": "Actions"
+      }
+    }
+  },
+  "Content/WebFrame": {
+    "description": "Embeds an external web page in an iframe.",
+    "icon": {
+      "type": "builtin",
+      "name": "browsers"
+    },
+    "schema": {
+      "url": {
+        "label": "URL",
+        "group": "Content"
+      },
+      "title": {
+        "label": "Title",
+        "group": "Content"
+      },
+      "showHeader": {
+        "label": "Show header bar",
+        "group": "Appearance",
+        "defaultValue": false
+      },
+      "showReloadButton": {
+        "label": "Show reload button",
+        "group": "Appearance",
+        "defaultValue": true,
+        "visibleWhen": {
+          "property": "showHeader",
+          "equals": true
+        }
+      },
+      "showOpenInNewTab": {
+        "label": "Show open-in-new-tab button",
+        "group": "Appearance",
+        "defaultValue": true,
+        "visibleWhen": {
+          "property": "showHeader",
+          "equals": true
+        }
+      },
+      "showLoadingState": {
+        "label": "Show loading overlay",
+        "group": "Appearance",
+        "defaultValue": true
+      },
+      "showErrorFallback": {
+        "label": "Show error fallback",
+        "group": "Appearance",
+        "defaultValue": true
+      },
+      "borderStyle": {
+        "format": "select",
+        "label": "Border",
+        "group": "Appearance",
+        "defaultValue": "none",
+        "options": [
+          {
+            "label": "None",
+            "value": "none"
+          },
+          {
+            "label": "Subtle",
+            "value": "subtle"
+          },
+          {
+            "label": "Strong",
+            "value": "strong"
+          }
+        ]
+      },
+      "cornerRadius": {
+        "format": "select",
+        "label": "Corner radius",
+        "group": "Appearance",
+        "defaultValue": "none",
+        "options": [
+          {
+            "label": "None",
+            "value": "none"
+          },
+          {
+            "label": "Small",
+            "value": "sm"
+          },
+          {
+            "label": "Medium",
+            "value": "md"
+          },
+          {
+            "label": "Large",
+            "value": "lg"
+          }
+        ]
+      },
+      "backgroundColor": {
+        "label": "Background color",
+        "group": "Appearance",
+        "defaultToken": "--hmi-bg"
+      },
+      "loading": {
+        "format": "select",
+        "label": "Loading",
+        "group": "Behaviour",
+        "defaultValue": "eager",
+        "options": [
+          {
+            "label": "Eager",
+            "value": "eager"
+          },
+          {
+            "label": "Lazy",
+            "value": "lazy"
+          }
+        ]
+      },
+      "referrerPolicy": {
+        "format": "select",
+        "label": "Referrer policy",
+        "group": "Behaviour",
+        "defaultValue": "strict-origin-when-cross-origin",
+        "options": [
+          {
+            "label": "No referrer",
+            "value": "no-referrer"
+          },
+          {
+            "label": "No referrer when downgrade",
+            "value": "no-referrer-when-downgrade"
+          },
+          {
+            "label": "Origin",
+            "value": "origin"
+          },
+          {
+            "label": "Origin when cross-origin",
+            "value": "origin-when-cross-origin"
+          },
+          {
+            "label": "Same origin",
+            "value": "same-origin"
+          },
+          {
+            "label": "Strict origin",
+            "value": "strict-origin"
+          },
+          {
+            "label": "Strict origin when cross-origin",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "label": "Unsafe URL",
+            "value": "unsafe-url"
+          }
+        ]
+      },
+      "scrolling": {
+        "format": "select",
+        "label": "Scrolling",
+        "group": "Behaviour",
+        "defaultValue": "auto",
+        "options": [
+          {
+            "label": "Auto",
+            "value": "auto"
+          },
+          {
+            "label": "Yes",
+            "value": "yes"
+          },
+          {
+            "label": "No",
+            "value": "no"
+          }
+        ]
+      },
+      "reloadInterval": {
+        "label": "Reload interval (seconds)",
+        "group": "Behaviour",
+        "min": 0,
+        "step": 1,
+        "defaultValue": 0,
+        "description": "Zero disables the timer."
+      },
+      "reloadTrigger": {
+        "label": "Reload trigger variable",
+        "group": "Behaviour",
+        "description": "Reloads the page whenever this value changes."
+      },
+      "enableSandbox": {
+        "label": "Enable sandbox",
+        "group": "Sandbox",
+        "defaultValue": true
+      },
+      "allowScripts": {
+        "label": "Allow scripts",
+        "group": "Sandbox",
+        "defaultValue": false,
+        "visibleWhen": {
+          "property": "enableSandbox",
+          "notEquals": false
+        }
+      },
+      "allowSameOrigin": {
+        "label": "Allow same-origin",
+        "group": "Sandbox",
+        "defaultValue": false,
+        "visibleWhen": {
+          "property": "enableSandbox",
+          "notEquals": false
+        }
+      },
+      "allowForms": {
+        "label": "Allow forms",
+        "group": "Sandbox",
+        "defaultValue": false,
+        "visibleWhen": {
+          "property": "enableSandbox",
+          "notEquals": false
+        }
+      },
+      "allowPopups": {
+        "label": "Allow popups",
+        "group": "Sandbox",
+        "defaultValue": false,
+        "visibleWhen": {
+          "property": "enableSandbox",
+          "notEquals": false
+        }
+      },
+      "allowPopupsToEscapeSandbox": {
+        "label": "Allow popups to escape sandbox",
+        "group": "Sandbox",
+        "defaultValue": false,
+        "visibleWhen": {
+          "property": "enableSandbox",
+          "notEquals": false
+        }
+      },
+      "allowModals": {
+        "label": "Allow modals",
+        "group": "Sandbox",
+        "defaultValue": false,
+        "visibleWhen": {
+          "property": "enableSandbox",
+          "notEquals": false
+        }
+      },
+      "allowDownloads": {
+        "label": "Allow downloads",
+        "group": "Sandbox",
+        "defaultValue": false,
+        "visibleWhen": {
+          "property": "enableSandbox",
+          "notEquals": false
+        }
+      },
+      "allowTopNavigation": {
+        "label": "Allow top navigation",
+        "group": "Sandbox",
+        "defaultValue": false,
+        "visibleWhen": {
+          "property": "enableSandbox",
+          "notEquals": false
+        }
+      },
+      "allowPointerLock": {
+        "label": "Allow pointer lock",
+        "group": "Sandbox",
+        "defaultValue": false,
+        "visibleWhen": {
+          "property": "enableSandbox",
+          "notEquals": false
+        }
+      },
+      "allowOrientationLock": {
+        "label": "Allow orientation lock",
+        "group": "Sandbox",
+        "defaultValue": false,
+        "visibleWhen": {
+          "property": "enableSandbox",
+          "notEquals": false
+        }
+      },
+      "allowPresentation": {
+        "label": "Allow presentation",
+        "group": "Sandbox",
+        "defaultValue": false,
+        "visibleWhen": {
+          "property": "enableSandbox",
+          "notEquals": false
+        }
+      },
+      "allowFullscreen": {
+        "label": "Allow fullscreen",
+        "group": "Permissions",
+        "defaultValue": false
+      },
+      "allowCamera": {
+        "label": "Allow camera",
+        "group": "Permissions",
+        "defaultValue": false
+      },
+      "allowMicrophone": {
+        "label": "Allow microphone",
+        "group": "Permissions",
+        "defaultValue": false
+      },
+      "allowGeolocation": {
+        "label": "Allow geolocation",
+        "group": "Permissions",
+        "defaultValue": false
+      },
+      "allowAutoplay": {
+        "label": "Allow autoplay",
+        "group": "Permissions",
+        "defaultValue": false
+      },
+      "allowClipboardRead": {
+        "label": "Allow clipboard read",
+        "group": "Permissions",
+        "defaultValue": false
+      },
+      "allowClipboardWrite": {
+        "label": "Allow clipboard write",
+        "group": "Permissions",
+        "defaultValue": false
+      },
+      "allowPayment": {
+        "label": "Allow payment",
+        "group": "Permissions",
+        "defaultValue": false
+      },
+      "customAllow": {
+        "label": "Custom allow",
+        "group": "Permissions",
+        "placeholder": "e.g. speaker *; display-capture *"
+      },
+      "allowedOrigins": {
+        "label": "Allowed inbound origins",
+        "group": "Data",
+        "description": "Comma-separated origins, or * for any. Left empty, every inbound message is ignored."
+      },
+      "inboundVariable": {
+        "label": "Inbound variable (write target)",
+        "group": "Data",
+        "write": true
+      },
+      "outboundVariable": {
+        "label": "Outbound variable",
+        "group": "Data"
+      },
+      "outboundOrigin": {
+        "label": "Outbound target origin",
+        "group": "Data",
+        "defaultValue": "*"
+      },
+      "onLoad": {
+        "label": "On Load",
+        "group": "Actions",
+        "event": "onLoad"
+      },
+      "onError": {
+        "label": "On Error",
+        "group": "Actions",
+        "event": "onError"
+      },
+      "onMessage": {
+        "label": "On Message",
+        "group": "Actions",
+        "event": "onMessage"
+      }
+    }
+  },
+  "Indicators/Gauge": {
+    "description": "A round analog gauge with min/max and a value binding.",
+    "icon": {
+      "type": "builtin",
+      "name": "gauge"
+    },
+    "schema": {
+      "variable": {
+        "label": "Value",
+        "group": "Data"
+      },
+      "min": {
+        "label": "Min value",
+        "group": "Data",
+        "step": 1,
+        "defaultValue": 0
+      },
+      "max": {
+        "label": "Max value",
+        "group": "Data",
+        "step": 1,
+        "defaultValue": 100
+      },
+      "label": {
+        "label": "Label",
+        "group": "Content"
+      },
+      "unit": {
+        "label": "Unit",
+        "group": "Content"
+      }
+    }
+  },
+  "Indicators/LedIndicator": {
+    "description": "A status light that changes colour with a boolean.",
+    "icon": {
+      "type": "builtin",
+      "name": "broadcast"
+    },
+    "schema": {
+      "variable": {
+        "label": "Value",
+        "group": "Data"
+      },
+      "label": {
+        "label": "Label",
+        "group": "Content"
+      }
+    }
+  },
+  "Indicators/ProgressBar": {
+    "description": "A horizontal bar showing a percentage or progress value.",
+    "icon": {
+      "type": "builtin",
+      "name": "chart-bar"
+    },
+    "schema": {
+      "variable": {
+        "label": "Value",
+        "group": "Data"
+      },
+      "min": {
+        "label": "Min value",
+        "group": "Data",
+        "step": 1,
+        "defaultValue": 0
+      },
+      "max": {
+        "label": "Max value",
+        "group": "Data",
+        "step": 1,
+        "defaultValue": 100
+      },
+      "label": {
+        "label": "Label",
+        "group": "Content"
+      },
+      "unit": {
+        "label": "Unit",
+        "group": "Content"
+      },
+      "decimals": {
+        "label": "Decimal places",
+        "group": "Appearance",
+        "min": 0,
+        "max": 6,
+        "step": 1,
+        "defaultValue": 0
+      },
+      "showValue": {
+        "label": "Show value",
+        "group": "Appearance",
+        "defaultValue": false
+      },
+      "showPercent": {
+        "label": "Show percent",
+        "group": "Appearance",
+        "defaultValue": true
+      },
+      "color": {
+        "label": "Fill color",
+        "group": "Appearance",
+        "defaultToken": "--hmi-accent"
+      },
+      "barHeight": {
+        "label": "Bar height (px)",
+        "group": "Appearance",
+        "min": 2,
+        "max": 40,
+        "step": 1
+      },
+      "dense": {
+        "label": "Dense",
+        "group": "Appearance",
+        "description": "Drops the padding and the minimum width, for a bar inside a tight row.",
+        "defaultValue": false
+      }
+    }
+  },
+  "Indicators/RingGauge": {
+    "description": "A donut ring showing a value as a share of its range, with the reading in the hole.",
+    "icon": {
+      "type": "builtin",
+      "name": "arrows-clockwise"
+    },
+    "schema": {
+      "value": {
+        "label": "Value",
+        "group": "Data"
+      },
+      "min": {
+        "label": "Min value",
+        "group": "Data",
+        "step": 1,
+        "defaultValue": 0
+      },
+      "max": {
+        "label": "Max value",
+        "group": "Data",
+        "step": 1,
+        "defaultValue": 100
+      },
+      "unit": {
+        "label": "Unit",
+        "group": "Content",
+        "defaultValue": "%"
+      },
+      "caption": {
+        "label": "Caption",
+        "group": "Content"
+      },
+      "decimals": {
+        "label": "Decimal places",
+        "group": "Appearance",
+        "min": 0,
+        "max": 3,
+        "step": 1,
+        "defaultValue": 1
+      },
+      "size": {
+        "label": "Diameter (px)",
+        "group": "Appearance",
+        "min": 72,
+        "max": 320,
+        "step": 4,
+        "defaultValue": 132
+      },
+      "thickness": {
+        "label": "Ring thickness (px)",
+        "group": "Appearance",
+        "min": 4,
+        "max": 48,
+        "step": 1,
+        "defaultValue": 18
+      },
+      "color": {
+        "label": "Ring color",
+        "group": "Appearance",
+        "defaultToken": "--hmi-accent"
+      }
+    }
+  },
+  "Indicators/StatTile": {
+    "description": "KPI tile: label, value and unit, with a tinted icon in row mode.",
+    "icon": {
+      "type": "builtin",
+      "name": "trend-up"
+    },
+    "schema": {
+      "label": {
+        "label": "Label",
+        "group": "Content"
+      },
+      "value": {
+        "label": "Value",
+        "group": "Content"
+      },
+      "unit": {
+        "label": "Unit",
+        "group": "Content"
+      },
+      "icon": {
+        "label": "Icon",
+        "group": "Appearance",
+        "description": "Shown in a tinted square beside the reading, in row layout only."
+      },
+      "tone": {
+        "format": "select",
+        "label": "Tone",
+        "group": "Appearance",
+        "defaultValue": "accent",
+        "options": [
+          {
+            "label": "Accent",
+            "value": "accent"
+          },
+          {
+            "label": "Neutral",
+            "value": "neutral"
+          },
+          {
+            "label": "OK",
+            "value": "ok"
+          },
+          {
+            "label": "Warning",
+            "value": "warn"
+          }
+        ]
+      },
+      "size": {
+        "format": "select",
+        "label": "Size",
+        "group": "Appearance",
+        "defaultValue": "row",
+        "options": [
+          {
+            "label": "Row (icon left)",
+            "value": "row"
+          },
+          {
+            "label": "Stacked (large)",
+            "value": "stacked"
+          }
+        ]
+      }
+    }
+  },
+  "Indicators/Trend": {
+    "description": "A live sparkline of one variable with its current reading — buffered in the page, no historian.",
+    "icon": {
+      "type": "builtin",
+      "name": "chart-line"
+    },
+    "schema": {
+      "variable": {
+        "label": "Value",
+        "group": "Data"
+      },
+      "historyLength": {
+        "label": "History length (samples)",
+        "description": "How many of the most recent samples the line keeps.",
+        "group": "Data",
+        "min": 10,
+        "max": 500,
+        "step": 10,
+        "defaultValue": 60
+      },
+      "label": {
+        "label": "Label",
+        "group": "Content"
+      },
+      "unit": {
+        "label": "Unit",
+        "group": "Content"
+      },
+      "decimals": {
+        "label": "Decimal places",
+        "group": "Appearance",
+        "min": 0,
+        "max": 6,
+        "step": 1,
+        "defaultValue": 1
+      },
+      "color": {
+        "label": "Line color",
+        "defaultToken": "--hmi-accent",
+        "group": "Appearance"
+      }
+    }
+  },
+  "Indicators/ValueDisplay": {
+    "description": "Displays a numeric value with a label and unit.",
+    "icon": {
+      "type": "builtin",
+      "name": "thermometer"
+    },
+    "schema": {
+      "variable": {
+        "label": "Value",
+        "group": "Data"
+      },
+      "label": {
+        "label": "Label",
+        "group": "Content"
+      },
+      "unit": {
+        "label": "Unit",
+        "group": "Content"
+      },
+      "decimals": {
+        "label": "Decimal places",
+        "group": "Appearance",
+        "min": 0,
+        "max": 6,
+        "step": 1,
+        "defaultValue": 1
+      }
+    }
+  },
+  "Inputs/ButtonRow": {
+    "description": "A row of mutually-exclusive buttons — pick 1 of N. Writes the chosen option to a bound variable, or tracks selection locally and fires On Change.",
+    "icon": {
+      "type": "builtin",
+      "name": "columns"
+    },
+    "exportedProperties": [
+      {
+        "key": "selectedValue",
+        "label": "Selected value",
+        "type": "string"
+      }
+    ],
+    "schema": {
+      "label": {
+        "label": "Label",
+        "group": "Content"
+      },
+      "options": {
+        "label": "Options",
+        "group": "Content"
+      },
+      "variable": {
+        "label": "Value",
+        "group": "Data",
+        "write": true
+      },
+      "selectedValue": {
+        "label": "Selected value",
+        "description": "Initial selection when no Value variable is bound.",
+        "group": "Data"
+      },
+      "disabled": {
+        "label": "Disabled",
+        "group": "Appearance"
+      },
+      "onChange": {
+        "label": "On Change",
+        "event": "onChange"
+      }
+    }
+  },
+  "Inputs/Dropdown": {
+    "description": "Pick one option from a list. Publishes the selection for sibling widgets to read and fires On Change.",
+    "icon": {
+      "type": "builtin",
+      "name": "list"
+    },
+    "exportedProperties": [
+      {
+        "key": "selectedValue",
+        "label": "Selected Value",
+        "type": "string"
+      }
+    ],
+    "schema": {
+      "label": {
+        "label": "Label",
+        "group": "Content"
+      },
+      "options": {
+        "label": "Options",
+        "group": "Content"
+      },
+      "selectedValue": {
+        "label": "Selected value",
+        "description": "Initial selection; also re-selects when the bound value changes.",
+        "group": "Data"
+      },
+      "disabled": {
+        "label": "Disabled",
+        "group": "Appearance"
+      },
+      "onChange": {
+        "label": "On Change",
+        "event": "onChange"
+      }
+    }
+  },
+  "Inputs/NumberInput": {
+    "description": "A numeric entry field that writes a number to a variable.",
+    "icon": {
+      "type": "builtin",
+      "name": "sliders-horizontal"
+    },
+    "schema": {
+      "label": {
+        "label": "Label",
+        "group": "Content"
+      },
+      "unit": {
+        "label": "Unit",
+        "group": "Content"
+      },
+      "min": {
+        "label": "Min value",
+        "group": "Data"
+      },
+      "max": {
+        "label": "Max value",
+        "group": "Data"
+      },
+      "variable": {
+        "label": "Variable",
+        "group": "Data",
+        "description": "Struct driving the field from the PLC: bVisible and bEnabled gate it, fValue is shown and written."
+      },
+      "showRangeOnNumpad": {
+        "label": "Show range on numpad",
+        "group": "Appearance",
+        "defaultValue": true
+      }
+    }
+  },
+  "Inputs/NumericStepper": {
+    "description": "Increment / decrement a numeric variable with + / − buttons.",
+    "icon": {
+      "type": "builtin",
+      "name": "arrows-left-right"
+    },
+    "schema": {
+      "label": {
+        "label": "Label",
+        "group": "Content"
+      },
+      "unit": {
+        "label": "Unit",
+        "group": "Content"
+      },
+      "variable": {
+        "label": "Value",
+        "group": "Data"
+      },
+      "step": {
+        "label": "Step",
+        "group": "Data",
+        "step": 0.1,
+        "defaultValue": 1
+      },
+      "min": {
+        "label": "Min value",
+        "group": "Data"
+      },
+      "max": {
+        "label": "Max value",
+        "group": "Data"
+      },
+      "decimals": {
+        "label": "Decimal places",
+        "group": "Appearance",
+        "min": 0,
+        "max": 6,
+        "step": 1,
+        "defaultValue": 0
+      },
+      "showRangeOnNumpad": {
+        "label": "Show range on numpad",
+        "group": "Appearance",
+        "defaultValue": true
+      }
+    }
+  },
+  "Inputs/StringInput": {
+    "description": "A text field whose typed value is published for sibling widgets to read.",
+    "icon": {
+      "type": "builtin",
+      "name": "text-t"
+    },
+    "exportedProperties": [
+      {
+        "key": "value",
+        "label": "Input Value",
+        "type": "string"
+      }
+    ],
+    "schema": {
+      "label": {
+        "label": "Label",
+        "group": "Content"
+      },
+      "placeholder": {
+        "label": "Placeholder",
+        "group": "Content"
+      },
+      "isPassword": {
+        "label": "Password field",
+        "group": "Appearance"
+      },
+      "disabled": {
+        "label": "Disabled",
+        "group": "Appearance"
+      }
+    }
+  },
+  "Inputs/Switch": {
+    "description": "A toggle that writes a boolean on/off to a variable.",
+    "icon": {
+      "type": "builtin",
+      "name": "check-circle"
+    },
+    "schema": {
+      "label": {
+        "label": "Label",
+        "group": "Content"
+      },
+      "labelPosition": {
+        "format": "select",
+        "label": "Label position",
+        "group": "Appearance",
+        "defaultValue": "inline",
+        "options": [
+          {
+            "label": "Beside the switch",
+            "value": "inline"
+          },
+          {
+            "label": "Above the switch",
+            "value": "above"
+          }
+        ]
+      },
+      "variable": {
+        "label": "Value",
+        "group": "Data"
+      },
+      "color": {
+        "label": "On color",
+        "description": "Replaces the theme accent while the switch is on.",
+        "defaultToken": "--hmi-accent",
+        "group": "Appearance"
+      }
+    }
+  },
+  "Layout/Container": {
+    "description": "Groups and lays out child widgets in a row or column. Hosts other widgets.",
+    "icon": {
+      "type": "builtin",
+      "name": "stack"
+    },
+    "schema": {
+      "title": {
+        "label": "Title",
+        "group": "Content"
+      },
+      "showWhenEmpty": {
+        "format": "show",
+        "label": "Show when empty",
+        "group": "Content",
+        "defaultValue": false,
+        "description": "Keep the frame and background even when every child is hidden, instead of collapsing away."
+      },
+      "background": {
+        "label": "Background",
+        "group": "Appearance"
+      },
+      "border": {
+        "label": "Border",
+        "defaultValue": "none",
+        "description": "Any CSS border shorthand, e.g. 1px solid var(--hmi-border).",
+        "group": "Appearance"
+      },
+      "shadow": {
+        "label": "Shadow",
+        "defaultValue": "none",
+        "description": "Any CSS box-shadow, e.g. var(--hmi-shadow).",
+        "group": "Appearance"
+      }
+    }
+  },
+  "Layout/FixedSpacer": {
+    "description": "A precise pixel gap between widgets.",
+    "icon": {
+      "type": "builtin",
+      "name": "arrows-in-line-horizontal"
+    },
+    "schema": {
+      "size": {
+        "label": "Size (px)",
+        "defaultValue": 8,
+        "min": 0,
+        "max": 512,
+        "step": 1
+      }
+    }
+  },
+  "Layout/Separator": {
+    "description": "A thin divider line between widgets.",
+    "icon": {
+      "type": "builtin",
+      "name": "columns"
+    },
+    "schema": {
+      "orientation": {
+        "format": "select",
+        "label": "Orientation",
+        "display": "button-text",
+        "defaultValue": "horizontal",
+        "options": [
+          {
+            "label": "Horizontal",
+            "value": "horizontal"
+          },
+          {
+            "label": "Vertical",
+            "value": "vertical"
+          }
+        ]
+      },
+      "thickness": {
+        "label": "Thickness (px)",
+        "min": 1,
+        "step": 1,
+        "defaultValue": 1
+      },
+      "color": {
+        "label": "Color",
+        "defaultToken": "--hmi-border"
+      },
+      "inset": {
+        "label": "Inset (px)",
+        "min": 0,
+        "step": 1,
+        "defaultValue": 0
+      }
+    }
+  },
+  "Layout/StretchSpacer": {
+    "description": "Flexible gap that pushes neighbours apart, by ratio or percent.",
+    "icon": {
+      "type": "builtin",
+      "name": "arrows-out-line-horizontal"
+    },
+    "schema": {
+      "mode": {
+        "format": "select",
+        "label": "Mode",
+        "defaultValue": "ratio",
+        "options": [
+          {
+            "label": "Ratio",
+            "value": "ratio"
+          },
+          {
+            "label": "Percent",
+            "value": "percent"
+          }
+        ]
+      },
+      "ratio": {
+        "label": "Ratio",
+        "defaultValue": 1,
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "visibleWhen": {
+          "property": "mode",
+          "notEquals": "percent"
+        }
+      },
+      "percent": {
+        "label": "Percent (%)",
+        "defaultValue": 50,
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "visibleWhen": {
+          "property": "mode",
+          "equals": "percent"
+        }
+      }
+    }
+  },
+  "Navigation/Breadcrumb": {
+    "description": "The trail of pages to where you are, with optional home icon.",
+    "icon": {
+      "type": "builtin",
+      "name": "path"
+    },
+    "schema": {
+      "separator": {
+        "label": "Separator",
+        "defaultValue": " / ",
+        "placeholder": " / "
+      },
+      "showHomeIcon": {
+        "format": "show",
+        "label": "Show home icon",
+        "defaultValue": false
+      },
+      "homeLabel": {
+        "label": "Home label",
+        "defaultValue": "Home",
+        "placeholder": "Home"
+      },
+      "homePageId": {
+        "format": "page",
+        "label": "Home page",
+        "description": "Page the home icon links to. Leave empty to hide the home segment.",
+        "placeholder": "(no home segment)"
+      }
+    }
+  },
+  "Navigation/LanguageSwitcher": {
+    "description": "Lets operators change the interface language.",
+    "icon": {
+      "type": "builtin",
+      "name": "translate"
+    },
+    "schema": {
+      "label": {
+        "label": "Label",
+        "defaultValue": "Language"
+      }
+    }
+  },
+  "Navigation/MenuToggleButton": {
+    "description": "Collapses or expands a bound menu state; swaps icon per state.",
+    "icon": {
+      "type": "builtin",
+      "name": "list"
+    },
+    "schema": {
+      "bound": {
+        "format": "onoff",
+        "label": "Bound state",
+        "description": "The state this button toggles — bind it to the same value the menu reads.",
+        "defaultValue": false
+      },
+      "iconCollapsed": {
+        "label": "Icon (collapsed)",
+        "defaultValue": "☰"
+      },
+      "iconExpanded": {
+        "label": "Icon (expanded)",
+        "defaultValue": "×"
+      },
+      "ariaLabel": {
+        "label": "Aria label",
+        "defaultValue": "Toggle menu"
+      },
+      "actions": {
+        "label": "Actions"
+      }
+    }
+  },
+  "Navigation/PageNavigator": {
+    "description": "Previous / next controls stepping through a page group.",
+    "icon": {
+      "type": "builtin",
+      "name": "arrows-left-right"
+    },
+    "schema": {
+      "groupId": {
+        "label": "Target group",
+        "placeholder": "(nearest ancestor)"
+      }
+    }
+  },
+  "Navigation/TabBar": {
+    "description": "Switches between the sibling pages of a group as tabs.",
+    "icon": {
+      "type": "builtin",
+      "name": "browsers"
+    },
+    "schema": {
+      "groupId": {
+        "label": "Target group",
+        "placeholder": "(nearest ancestor)"
+      },
+      "variant": {
+        "format": "select",
+        "label": "Style",
+        "group": "Appearance",
+        "defaultValue": "underline",
+        "options": [
+          {
+            "label": "Underline",
+            "value": "underline"
+          },
+          {
+            "label": "Pill",
+            "value": "pill"
+          }
+        ]
+      },
+      "showIcons": {
+        "format": "onoff",
+        "label": "Show icons",
+        "group": "Appearance",
+        "defaultValue": false,
+        "description": "Shows each page's own icon beside its title."
+      }
+    }
+  }
+}

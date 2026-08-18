@@ -1,0 +1,45 @@
+{
+  /* Type checking for the product stdlib widgets.
+   *
+   * A separate project on purpose. custom-widgets-sdk.d.ts declares the SDK as
+   * ambient *globals* (React, useState, useEvalContext, …), which collide with
+   * the real imports the moment app source is in the same program — that is why
+   * the main tsconfig deliberately leaves the .d.ts out of `include`. Here there
+   * is no app source, so nothing collides and the widgets get checked against
+   * the very declarations a project author writes against.
+   *
+   * Run by `npm run build` (and directly: npx tsc -p tsconfig.stdlib.json). */
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+
+    /* Classic runtime: sources carry `@jsxRuntime classic` and the compiler
+     * emits React.createElement, resolved from the ambient React global. */
+    "jsx": "react",
+    "types": [],
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  /* Widget sources only. testSdk.ts and widgetModuleLoader.ts import real app
+   * modules, which would drag the app into a program whose globals are the
+   * ambient SDK — the collision this separate project exists to avoid — so they
+   * live in tsconfig.json's `include` instead.
+   *
+   * The `*.test.tsx` files beside the widgets fit in neither project and are
+   * type-checked by neither: a test imports both its widget's source (ambient
+   * SDK globals) and real app modules (@types/react), and those two cannot
+   * share a program in either direction. Adding the tests here breaks the app
+   * modules they pull in; adding them to tsconfig.json breaks every widget
+   * source they pull in. They are covered by eslint and by actually running
+   * under vitest. */
+  "include": ["widgets/**/index.tsx", "custom-widgets-sdk.d.ts"]
+}

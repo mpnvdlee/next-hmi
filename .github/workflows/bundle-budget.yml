@@ -1,0 +1,96 @@
+name: Bundle budget
+
+# The one check that a contributor cannot be relied on to catch locally.
+#
+# Everything else in CI fails the same way on a laptop as it does on a runner,
+# which is why ci.yml is tag-only. Bundle size does not: it fails on aggregate
+# creep, not on a single change. Each PR adds a kilobyte to a shared chunk and
+# looks fine in isolation; the budget breaks several PRs later, in whichever
+# one happens to cross the line. Nobody runs `check:bundle-budget` before
+# opening a PR because nothing they did looks like it grew the bundle.
+#
+# That is not hypothetical. The editor route crossed its budget on 2026-08-12
+# and was found on 2026-08-16 — four days and eight merges later — only because
+# someone built the frontend by hand while investigating something else. Until
+# then the budget ran on `v*` tags only (release-matrix.yml), so the first
+# report would have been a failing release.
+#
+# Kept separate from ci.yml on purpose: this needs one job, not the full
+# backend + frontend + enterprise-purity matrix, and the paths filter below
+# means it stays quiet for changes that cannot move a byte of the bundle.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: &budget-paths
+      - "frontend/**"
+      # `npm run build` shells into the Python widget compiler to build the
+      # stdlib widgets, and their compiled modules are themselves budgeted.
+      - "backend/services/widget_compiler.py"
+      - "backend/core/stdlib_manifest.py"
+      - "backend/requirements.txt"
+      - ".github/workflows/bundle-budget.yml"
+  push:
+    branches:
+      - main
+    paths: *budget-paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bundle-budget-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  budget:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # `npm run build` compiles the built-in (stdlib) widgets first, and that
+      # step shells out to the backend's widget compiler — a Python module that
+      # imports tree_sitter. esbuild, its other prerequisite, arrives with
+      # `npm ci`.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+      - name: Install dependencies
+        run: npm ci
+      - name: Install the widget compiler's Python dependencies
+        run: pip install -r ../backend/requirements.txt
+      - name: Build
+        run: npm run build
+      # Free rider on the build above: it already ran `build:stdlib`, which
+      # rewrites both halves of the baked stdlib manifest from frontend/widgets/.
+      # Those are tracked artifacts, so a clean tree here is the proof that
+      # whoever last edited a widget also committed the regenerated JSON.
+      #
+      # `stdlibManifest.test.ts` makes the same assertion locally and does it
+      # better — it names the widget that drifted. This step exists for the two
+      # cases that test cannot cover: it skips itself on a checkout without the
+      # widget compiler installed, and no test can see whether the generated
+      # files are committed at all. `--untracked-files=all` is what catches the
+      # second one; a plain `git diff` on a never-added file passes vacuously.
+      - name: Assert the baked stdlib manifest matches the widget sources
+        run: |
+          set -euo pipefail
+          drift="$(git status --porcelain --untracked-files=all -- src/generated)"
+          if [ -n "$drift" ]; then
+            echo "::error::src/generated/ does not match what frontend/widgets/ compiles to. Run \`npm run build:stdlib\` and commit both halves of the manifest."
+            echo "$drift"
+            git --no-pager diff -- src/generated
+            exit 1
+          fi
+      # Hard-fails on the per-chunk size budget, the named route budgets, and
+      # the per-widget/whole-tree caps over the esbuild-built dist/stdlib-js/
+      # modules.
+      - name: Check bundle budget
+        run: npm run check:bundle-budget

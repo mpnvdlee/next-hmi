@@ -1,0 +1,45 @@
+/* Only what this widget adds on top of the shared alarm vocabulary in
+   src/hmi/styles — `hmi-alarm-surface`, `-header`, `-row`, `-btn`, `-empty`
+   all come from there, and ship with the app bundle because the detail dialog
+   and the toast use them too. */
+
+.hmi-alarm-list__header {
+  justify-content: space-between;
+}
+
+/* The unacknowledged count is a status readout, so it wears the runtime's pill
+   primitive — same shape the shell's status chips use — with mono digits. */
+.hmi-pill.hmi-alarm-list__badge {
+  font-family: var(--hmi-type-code-font);
+  font-variant-numeric: tabular-nums;
+  background: var(--hmi-fault-soft);
+  color: var(--hmi-fault);
+}
+
+.hmi-pill.hmi-alarm-list__badge--zero {
+  background: var(--hmi-ok-soft);
+  color: var(--hmi-ok);
+}
+
+.hmi-alarm-list__row {
+  cursor: pointer;
+  transition: background var(--hmi-motion-fast) ease;
+}
+
+/* Hover deepens the row's own severity tint rather than replacing it with a
+   neutral grey, so the level stays readable while pointing at a row. */
+.hmi-alarm-list__row:hover {
+  background: color-mix(in oklch, var(--hmi-alarm-level, var(--hmi-text)) 16%, var(--hmi-surface));
+}
+
+.hmi-alarm-list__row--acked {
+  opacity: 0.6;
+}
+
+.hmi-alarm-list__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--hmi-space-sm) var(--hmi-space-md);
+  border-top: 1px solid var(--hmi-border);
+  background: var(--hmi-surface-2);
+}

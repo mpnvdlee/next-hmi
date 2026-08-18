@@ -1,0 +1,35 @@
+.config-updated-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  background: var(--cfg-surface);
+  color: var(--cfg-text);
+  border-bottom: 1px solid var(--cfg-border);
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.config-updated-banner__msg {
+  flex: 1;
+}
+
+.config-updated-banner__btn {
+  background: var(--cfg-surface);
+  color: var(--cfg-text);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+}
+
+.config-updated-banner__btn:hover {
+  border-color: var(--cfg-accent, var(--cfg-text));
+}
+
+.config-updated-banner__btn--primary {
+  background: var(--cfg-accent, var(--cfg-text));
+  color: var(--cfg-surface);
+  border-color: transparent;
+}

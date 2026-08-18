@@ -1,0 +1,7 @@
+/* Color and font-family come from the global `.hmi-component` on the root, so
+   nothing here overrides them and no rule needs to be chained with it. */
+.hmi-clock {
+  font-size: var(--hmi-type-body-size);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

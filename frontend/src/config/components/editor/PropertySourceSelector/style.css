@@ -1,0 +1,157 @@
+/* ── Mode pill wrapper ──────────────────────────────────────── */
+.cfg-source-pill-wrapper {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+/* Compact trigger (`compact` prop) fills a FieldGroup badge slot instead of
+   rendering as its own free-standing pill — see ui/FieldGroup/style.css's
+   .cfg-field-group__badge-cap for the shared cap chrome. */
+.cfg-source-pill-wrapper:has(> .cfg-field-group__badge-cap) {
+  width: 100%;
+  height: 100%;
+}
+
+/* Trigger button — abbr badge + label, mode-coloured. */
+.cfg-source-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 7px 0 5px;
+  border: 1px solid var(--cfg-border);
+  border-radius: 11px;
+  background: var(--cfg-surface);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--option-color, var(--cfg-source-static));
+  white-space: nowrap;
+  transition:
+    border-color 0.12s,
+    background 0.12s;
+}
+
+.cfg-source-pill:hover {
+  border-color: var(--cfg-line-strong);
+  background: color-mix(in srgb, currentColor 6%, var(--cfg-surface));
+}
+
+.cfg-source-pill--single {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Abbr — small filled badge in the mode color, sits to the left of the label. */
+.cfg-source-pill__abbr {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, currentColor 18%, var(--cfg-surface));
+  color: currentColor;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.cfg-source-pill__label {
+  display: inline;
+  line-height: 1;
+}
+
+.cfg-source-pill__arrow {
+  display: block;
+  opacity: 0.7;
+  margin-left: 1px;
+  flex: none;
+}
+
+/* Popup */
+.cfg-source-pill__popup {
+  position: fixed;
+  z-index: 9999;
+  background: var(--cfg-surface);
+  border: 1px solid var(--cfg-border);
+  border-radius: 8px;
+  box-shadow: var(--cfg-shadow-md);
+  min-width: 200px;
+  padding: 3px 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Popup option — same abbr-badge + label pair, but with the mode color shown
+   on the badge regardless of selection. The hovered/active row tints to match. */
+.cfg-source-pill__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text);
+  transition: background 0.1s;
+}
+
+/* Each option receives its source color through --option-color. */
+.cfg-source-pill__option .cfg-source-pill__abbr {
+  background: color-mix(
+    in srgb,
+    var(--option-color, var(--cfg-source-static)) 18%,
+    var(--cfg-surface)
+  );
+  color: var(--option-color, var(--cfg-source-static));
+}
+
+.cfg-source-pill__option:hover {
+  background: color-mix(
+    in srgb,
+    var(--option-color, var(--cfg-source-static)) 8%,
+    var(--cfg-surface)
+  );
+}
+
+.cfg-source-pill__option--active {
+  background: color-mix(
+    in srgb,
+    var(--option-color, var(--cfg-source-static)) 14%,
+    var(--cfg-surface)
+  );
+  color: var(--option-color, var(--cfg-text));
+  font-weight: 600;
+}
+
+.cfg-source-pill__option-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.cfg-source-pill__browse {
+  --option-color: var(--cfg-accent);
+  margin-bottom: 3px;
+  border-bottom: 1px solid var(--cfg-border);
+}
+
+.cfg-property-source-badge {
+  color: var(--option-color, var(--cfg-source-static));
+}
+
+.cfg-property-source-card__key {
+  margin-left: 7px;
+  color: var(--cfg-text-muted);
+  font-family: var(--cfg-font-mono, monospace);
+  font-size: 10px;
+  font-weight: 400;
+}

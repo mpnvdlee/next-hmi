@@ -1,0 +1,2530 @@
+[
+  {
+    "artifactId": "popup1",
+    "artifactKind": "dialog",
+    "breadcrumb": "Button \u203a variable",
+    "code": "componentprop-empty",
+    "fieldPath": [
+      "variable"
+    ],
+    "message": "property name is empty",
+    "nested": false,
+    "propKey": "variable",
+    "severity": "warning",
+    "sourcePath": "/widgets/0/properties/variable",
+    "widgetId": "button-24"
+  },
+  {
+    "artifactId": "page",
+    "artifactKind": "page",
+    "breadcrumb": "Container \u203a title",
+    "code": "var-unknown",
+    "fieldPath": [
+      "title",
+      "$if",
+      "condition",
+      "$compare",
+      "left"
+    ],
+    "message": "unknown datasource 'MyPLC'",
+    "nested": true,
+    "propKey": "title",
+    "severity": "error",
+    "sourcePath": "/sections/content/1/properties/title/$if/condition/$compare/left",
+    "widgetId": "container-2"
+  },
+  {
+    "artifactId": "page",
+    "artifactKind": "page",
+    "breadcrumb": "Container \u203a Button \u203a iconName",
+    "code": "icon-unknown",
+    "fieldPath": [
+      "iconName"
+    ],
+    "message": "unknown built-in icon 'sidebar-simples'",
+    "nested": false,
+    "propKey": "iconName",
+    "severity": "error",
+    "sourcePath": "/sections/content/2/children/3/properties/iconName",
+    "widgetId": "button-2"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test22 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/1/properties/sensor",
+    "widgetId": "test2"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/10/properties/sensor",
+    "widgetId": "test2-10"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/100/properties/sensor",
+    "widgetId": "test2-100"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/101/properties/sensor",
+    "widgetId": "test2-101"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/102/properties/sensor",
+    "widgetId": "test2-102"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/103/properties/sensor",
+    "widgetId": "test2-103"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/104/properties/sensor",
+    "widgetId": "test2-104"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/105/properties/sensor",
+    "widgetId": "test2-105"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/106/properties/sensor",
+    "widgetId": "test2-106"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/107/properties/sensor",
+    "widgetId": "test2-107"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/108/properties/sensor",
+    "widgetId": "test2-108"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/109/properties/sensor",
+    "widgetId": "test2-109"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/11/properties/sensor",
+    "widgetId": "test2-11"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/110/properties/sensor",
+    "widgetId": "test2-110"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/111/properties/sensor",
+    "widgetId": "test2-111"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/112/properties/sensor",
+    "widgetId": "test2-112"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/113/properties/sensor",
+    "widgetId": "test2-113"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/114/properties/sensor",
+    "widgetId": "test2-114"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/115/properties/sensor",
+    "widgetId": "test2-115"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/116/properties/sensor",
+    "widgetId": "test2-116"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/117/properties/sensor",
+    "widgetId": "test2-117"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/118/properties/sensor",
+    "widgetId": "test2-118"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/119/properties/sensor",
+    "widgetId": "test2-119"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/12/properties/sensor",
+    "widgetId": "test2-12"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/120/properties/sensor",
+    "widgetId": "test2-120"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/121/properties/sensor",
+    "widgetId": "test2-121"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/122/properties/sensor",
+    "widgetId": "test2-122"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/123/properties/sensor",
+    "widgetId": "test2-123"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/124/properties/sensor",
+    "widgetId": "test2-124"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/125/properties/sensor",
+    "widgetId": "test2-125"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/126/properties/sensor",
+    "widgetId": "test2-126"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/127/properties/sensor",
+    "widgetId": "test2-127"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/128/properties/sensor",
+    "widgetId": "test2-128"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/129/properties/sensor",
+    "widgetId": "test2-129"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/13/properties/sensor",
+    "widgetId": "test2-13"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/130/properties/sensor",
+    "widgetId": "test2-130"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/131/properties/sensor",
+    "widgetId": "test2-131"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/132/properties/sensor",
+    "widgetId": "test2-132"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/133/properties/sensor",
+    "widgetId": "test2-133"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/134/properties/sensor",
+    "widgetId": "test2-134"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/135/properties/sensor",
+    "widgetId": "test2-135"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/136/properties/sensor",
+    "widgetId": "test2-136"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/137/properties/sensor",
+    "widgetId": "test2-137"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/138/properties/sensor",
+    "widgetId": "test2-138"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/139/properties/sensor",
+    "widgetId": "test2-139"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/14/properties/sensor",
+    "widgetId": "test2-14"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/140/properties/sensor",
+    "widgetId": "test2-140"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/141/properties/sensor",
+    "widgetId": "test2-141"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/142/properties/sensor",
+    "widgetId": "test2-142"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/143/properties/sensor",
+    "widgetId": "test2-143"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/144/properties/sensor",
+    "widgetId": "test2-144"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/145/properties/sensor",
+    "widgetId": "test2-145"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/146/properties/sensor",
+    "widgetId": "test2-146"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/147/properties/sensor",
+    "widgetId": "test2-147"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/148/properties/sensor",
+    "widgetId": "test2-148"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/149/properties/sensor",
+    "widgetId": "test2-149"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/15/properties/sensor",
+    "widgetId": "test2-15"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/150/properties/sensor",
+    "widgetId": "test2-150"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/151/properties/sensor",
+    "widgetId": "test2-151"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/152/properties/sensor",
+    "widgetId": "test2-152"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/153/properties/sensor",
+    "widgetId": "test2-153"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/154/properties/sensor",
+    "widgetId": "test2-154"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/155/properties/sensor",
+    "widgetId": "test2-155"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/156/properties/sensor",
+    "widgetId": "test2-156"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/157/properties/sensor",
+    "widgetId": "test2-157"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/158/properties/sensor",
+    "widgetId": "test2-158"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/159/properties/sensor",
+    "widgetId": "test2-159"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/16/properties/sensor",
+    "widgetId": "test2-16"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/160/properties/sensor",
+    "widgetId": "test2-160"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/161/properties/sensor",
+    "widgetId": "test2-161"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/162/properties/sensor",
+    "widgetId": "test2-162"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/163/properties/sensor",
+    "widgetId": "test2-1"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/17/properties/sensor",
+    "widgetId": "test2-17"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/18/properties/sensor",
+    "widgetId": "test2-18"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/19/properties/sensor",
+    "widgetId": "test2-19"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/2/properties/sensor",
+    "widgetId": "test2-2"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/20/properties/sensor",
+    "widgetId": "test2-20"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/21/properties/sensor",
+    "widgetId": "test2-21"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/22/properties/sensor",
+    "widgetId": "test2-22"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/23/properties/sensor",
+    "widgetId": "test2-23"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/24/properties/sensor",
+    "widgetId": "test2-24"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/25/properties/sensor",
+    "widgetId": "test2-25"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/26/properties/sensor",
+    "widgetId": "test2-26"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/27/properties/sensor",
+    "widgetId": "test2-27"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/28/properties/sensor",
+    "widgetId": "test2-28"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/29/properties/sensor",
+    "widgetId": "test2-29"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/3/properties/sensor",
+    "widgetId": "test2-3"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/30/properties/sensor",
+    "widgetId": "test2-30"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/31/properties/sensor",
+    "widgetId": "test2-31"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/32/properties/sensor",
+    "widgetId": "test2-32"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/33/properties/sensor",
+    "widgetId": "test2-33"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/34/properties/sensor",
+    "widgetId": "test2-34"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/35/properties/sensor",
+    "widgetId": "test2-35"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/36/properties/sensor",
+    "widgetId": "test2-36"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/37/properties/sensor",
+    "widgetId": "test2-37"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/38/properties/sensor",
+    "widgetId": "test2-38"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/39/properties/sensor",
+    "widgetId": "test2-39"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/4/properties/sensor",
+    "widgetId": "test2-4"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/40/properties/sensor",
+    "widgetId": "test2-40"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/41/properties/sensor",
+    "widgetId": "test2-41"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/42/properties/sensor",
+    "widgetId": "test2-42"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/43/properties/sensor",
+    "widgetId": "test2-43"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/44/properties/sensor",
+    "widgetId": "test2-44"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/45/properties/sensor",
+    "widgetId": "test2-45"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/46/properties/sensor",
+    "widgetId": "test2-46"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/47/properties/sensor",
+    "widgetId": "test2-47"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/48/properties/sensor",
+    "widgetId": "test2-48"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/49/properties/sensor",
+    "widgetId": "test2-49"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/5/properties/sensor",
+    "widgetId": "test2-5"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/50/properties/sensor",
+    "widgetId": "test2-50"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/51/properties/sensor",
+    "widgetId": "test2-51"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/52/properties/sensor",
+    "widgetId": "test2-52"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/53/properties/sensor",
+    "widgetId": "test2-53"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/54/properties/sensor",
+    "widgetId": "test2-54"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/55/properties/sensor",
+    "widgetId": "test2-55"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/56/properties/sensor",
+    "widgetId": "test2-56"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/57/properties/sensor",
+    "widgetId": "test2-57"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/58/properties/sensor",
+    "widgetId": "test2-58"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/59/properties/sensor",
+    "widgetId": "test2-59"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/6/properties/sensor",
+    "widgetId": "test2-6"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/60/properties/sensor",
+    "widgetId": "test2-60"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/61/properties/sensor",
+    "widgetId": "test2-61"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/62/properties/sensor",
+    "widgetId": "test2-62"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/63/properties/sensor",
+    "widgetId": "test2-63"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/64/properties/sensor",
+    "widgetId": "test2-64"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/65/properties/sensor",
+    "widgetId": "test2-65"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/66/properties/sensor",
+    "widgetId": "test2-66"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/67/properties/sensor",
+    "widgetId": "test2-67"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/68/properties/sensor",
+    "widgetId": "test2-68"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/69/properties/sensor",
+    "widgetId": "test2-69"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/7/properties/sensor",
+    "widgetId": "test2-7"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/70/properties/sensor",
+    "widgetId": "test2-70"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/71/properties/sensor",
+    "widgetId": "test2-71"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/72/properties/sensor",
+    "widgetId": "test2-72"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/73/properties/sensor",
+    "widgetId": "test2-73"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/74/properties/sensor",
+    "widgetId": "test2-74"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/75/properties/sensor",
+    "widgetId": "test2-75"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/76/properties/sensor",
+    "widgetId": "test2-76"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/77/properties/sensor",
+    "widgetId": "test2-77"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/78/properties/sensor",
+    "widgetId": "test2-78"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/79/properties/sensor",
+    "widgetId": "test2-79"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/8/properties/sensor",
+    "widgetId": "test2-8"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/80/properties/sensor",
+    "widgetId": "test2-80"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/81/properties/sensor",
+    "widgetId": "test2-81"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/82/properties/sensor",
+    "widgetId": "test2-82"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/83/properties/sensor",
+    "widgetId": "test2-83"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/84/properties/sensor",
+    "widgetId": "test2-84"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/85/properties/sensor",
+    "widgetId": "test2-85"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/86/properties/sensor",
+    "widgetId": "test2-86"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/87/properties/sensor",
+    "widgetId": "test2-87"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/88/properties/sensor",
+    "widgetId": "test2-88"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/89/properties/sensor",
+    "widgetId": "test2-89"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/9/properties/sensor",
+    "widgetId": "test2-9"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/90/properties/sensor",
+    "widgetId": "test2-90"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/91/properties/sensor",
+    "widgetId": "test2-91"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/92/properties/sensor",
+    "widgetId": "test2-92"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/93/properties/sensor",
+    "widgetId": "test2-93"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/94/properties/sensor",
+    "widgetId": "test2-94"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/95/properties/sensor",
+    "widgetId": "test2-95"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/96/properties/sensor",
+    "widgetId": "test2-96"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/97/properties/sensor",
+    "widgetId": "test2-97"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/98/properties/sensor",
+    "widgetId": "test2-98"
+  },
+  {
+    "artifactId": "testbindingpage",
+    "artifactKind": "page",
+    "breadcrumb": "test2 \u203a sensor",
+    "code": "var-unknown",
+    "fieldPath": [
+      "sensor"
+    ],
+    "message": "unknown variable 'LegacyPLC:StructTest'",
+    "nested": false,
+    "propKey": "sensor",
+    "severity": "error",
+    "sourcePath": "/sections/content/99/properties/sensor",
+    "widgetId": "test2-99"
+  },
+  {
+    "artifactId": "shell",
+    "artifactKind": "shell",
+    "breadcrumb": "Container \u203a StatusIndicator \u203a iconShape",
+    "code": "switch-no-cases",
+    "fieldPath": [
+      "iconShape",
+      "$switch",
+      "cases"
+    ],
+    "message": "no cases defined",
+    "nested": true,
+    "propKey": "iconShape",
+    "severity": "warning",
+    "sourcePath": "/header/5/children/2/properties/iconShape/$switch/cases",
+    "widgetId": "statusindicator"
+  },
+  {
+    "artifactId": "shell",
+    "artifactKind": "shell",
+    "breadcrumb": "Container \u203a StatusIndicator \u203a iconShape",
+    "code": "switch-value-empty",
+    "fieldPath": [
+      "iconShape",
+      "$switch",
+      "value"
+    ],
+    "message": "discriminant value is unset",
+    "nested": true,
+    "propKey": "iconShape",
+    "severity": "warning",
+    "sourcePath": "/header/5/children/2/properties/iconShape/$switch/value",
+    "widgetId": "statusindicator"
+  }
+]

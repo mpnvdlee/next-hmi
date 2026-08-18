@@ -1,0 +1,2326 @@
+@import './config.tokens.css';
+
+/* ── Persistent scrollbars across the config UI ───────────────
+   Scoped to config surfaces (the shell + portaled cards/popups) so the operator
+   runtime — which shares this document — and the preview iframe keep their
+   default scrollbars. Standard `scrollbar-width`/`scrollbar-color` are left
+   unset on purpose: once they're declared Chrome takes the standard path and
+   ignores these ::-webkit rules, falling back to the macOS overlay scrollbar
+   that auto-hides. The ::-webkit rules force a slim, always-visible bar. */
+.cfg-shell ::-webkit-scrollbar,
+.cfg-card::-webkit-scrollbar,
+.cfg-card ::-webkit-scrollbar,
+.cfg-select-popup::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.cfg-shell ::-webkit-scrollbar-track,
+.cfg-card::-webkit-scrollbar-track,
+.cfg-card ::-webkit-scrollbar-track,
+.cfg-select-popup::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.cfg-shell ::-webkit-scrollbar-thumb,
+.cfg-card::-webkit-scrollbar-thumb,
+.cfg-card ::-webkit-scrollbar-thumb,
+.cfg-select-popup::-webkit-scrollbar-thumb {
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 5px;
+  background-color: var(--cfg-text-3);
+}
+
+.cfg-shell ::-webkit-scrollbar-thumb:hover,
+.cfg-card::-webkit-scrollbar-thumb:hover,
+.cfg-card ::-webkit-scrollbar-thumb:hover,
+.cfg-select-popup::-webkit-scrollbar-thumb:hover {
+  background-color: var(--cfg-text-muted);
+}
+
+/* ── Shared config primitives ─────────────────────────────── */
+.cfg-card {
+  background: var(--cfg-surface);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+}
+
+.cfg-flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.cfg-inline-flex-center {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cfg-text-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfg-icon-reset {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--cfg-text-muted);
+  cursor: pointer;
+}
+
+.cfg-icon-btn--sm {
+  width: var(--cfg-icon-btn-sm-size);
+  height: var(--cfg-icon-btn-sm-size);
+}
+
+.cfg-font-mono {
+  font-family: var(--cfg-font-mono, monospace);
+}
+
+.cfg-empty {
+  font-size: var(--cfg-text-lg);
+  color: var(--cfg-text-muted);
+  margin: 0;
+}
+
+.cfg-empty--page {
+  padding: 2rem;
+}
+
+.cfg-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: var(--cfg-overlay-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cfg-modal {
+  background: var(--cfg-surface);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-modal-radius);
+  box-shadow: var(--cfg-shadow-lg);
+}
+
+.cfg-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cfg-space-3);
+  padding: var(--cfg-space-4);
+  border-bottom: 1px solid var(--cfg-border);
+}
+
+.cfg-modal-list {
+  overflow-y: auto;
+}
+
+.cfg-modal-item {
+  padding: var(--cfg-space-2) var(--cfg-space-4);
+  cursor: pointer;
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text);
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+
+.cfg-modal-item:hover {
+  background: var(--cfg-surface-dark);
+}
+
+.cfg-modal-empty {
+  padding: var(--cfg-space-4);
+  text-align: center;
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-font-size-base);
+}
+
+/* ── Picker drawers ─────────────────────────────────────────── */
+
+/* Every picker — bindings, assets, catalogs, property editors — is the same
+   right-anchored drawer. Only the width varies, by how much the body needs. */
+.cfg-picker-drawer-overlay {
+  justify-content: flex-end;
+  align-items: stretch;
+}
+
+.cfg-picker-drawer-overlay--left {
+  justify-content: flex-start;
+}
+
+.cfg-drawer {
+  display: flex;
+  flex-direction: column;
+  width: min(94vw, var(--cfg-drawer-width, 54rem));
+  height: 100%;
+  max-height: none;
+  overflow: hidden;
+  border-width: 0 0 0 1px;
+  border-radius: var(--cfg-modal-radius) 0 0 var(--cfg-modal-radius);
+  animation: cfg-drawer-slide-in-right 0.18s ease;
+}
+
+.cfg-drawer--left {
+  border-width: 0 1px 0 0;
+  border-radius: 0 var(--cfg-modal-radius) var(--cfg-modal-radius) 0;
+  animation-name: cfg-drawer-slide-in-left;
+}
+
+.cfg-drawer--sm {
+  --cfg-drawer-width: 36rem;
+}
+
+.cfg-drawer--md {
+  --cfg-drawer-width: 54rem;
+}
+
+.cfg-drawer--lg {
+  --cfg-drawer-width: 1000px;
+}
+
+/* `context › action` title */
+.cfg-picker-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--cfg-space-2);
+  margin: 0;
+  min-width: 0;
+  font-size: var(--cfg-text-base);
+  font-weight: var(--cfg-fw-bold);
+  color: var(--cfg-text);
+}
+
+.cfg-picker-title__context {
+  font-weight: var(--cfg-fw-normal);
+  color: var(--cfg-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfg-picker-title__sep {
+  color: var(--cfg-text-muted);
+  flex-shrink: 0;
+}
+
+.cfg-picker-title__action {
+  flex-shrink: 0;
+}
+
+/* Shared picker footer: preview … destructive, Cancel, primary */
+.cfg-picker-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+  padding: var(--cfg-space-3) var(--cfg-space-4);
+  border-top: 1px solid color-mix(in srgb, var(--cfg-border) 85%, var(--cfg-surface));
+  flex-shrink: 0;
+}
+
+.cfg-picker-footer__preview {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text);
+}
+
+.cfg-picker-footer .cfg-btn {
+  flex: 0 0 auto;
+}
+
+@keyframes cfg-drawer-slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0.4;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes cfg-drawer-slide-in-left {
+  from {
+    transform: translateX(-100%);
+    opacity: 0.4;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.cfg-selection-drawer__header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--cfg-space-3);
+  padding: var(--cfg-space-3) var(--cfg-space-4);
+  border-bottom: 1px solid var(--cfg-border);
+}
+
+/* Title left, then meta (filter toggles, counts), then the search input pinned
+   to the right edge beside the close button. */
+.cfg-picker-drawer-header__search {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--cfg-space-3);
+  flex: 1;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.cfg-picker-drawer-header__search .cfg-header-search {
+  width: min(100%, 20rem);
+}
+
+/* ── Field drawer — `⤢` escape hatch for one tier-3 field ────── */
+.cfg-field-drawer.cfg-drawer {
+  --cfg-drawer-width: 480px;
+}
+
+/* Confined variant: portaled into the properties sidebar's own drawer slot
+   (ConfigLayout) instead of a page-wide overlay — fills that panel exactly. */
+.cfg-modal-overlay.cfg-field-drawer-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+}
+
+.cfg-field-drawer--confined.cfg-drawer {
+  width: 100%;
+  max-width: 100%;
+  border-left: none;
+  border-radius: 0;
+}
+
+.cfg-field-drawer__header {
+  flex: none;
+  padding: var(--cfg-space-2) var(--cfg-space-3);
+}
+
+.cfg-field-drawer__title {
+  margin: 0;
+  font-size: var(--cfg-text-base);
+  font-weight: 500;
+  color: var(--cfg-text-muted);
+}
+
+.cfg-field-drawer__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--cfg-space-4);
+}
+
+.cfg-selection-drawer__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.cfg-selection-drawer__rail {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+  width: 172px;
+  padding: var(--cfg-space-3);
+  border-right: 1px solid var(--cfg-border);
+  background: var(--cfg-surface-dark);
+  overflow-y: auto;
+}
+
+.cfg-selection-drawer__rail-item {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-text-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.cfg-selection-drawer__rail-item:hover {
+  background: color-mix(in srgb, var(--cfg-accent) 10%, transparent);
+  color: var(--cfg-text);
+}
+
+.cfg-selection-drawer__rail-item--active {
+  background: color-mix(in srgb, var(--cfg-accent) 14%, transparent);
+  color: var(--cfg-accent);
+  font-weight: 600;
+}
+
+.cfg-selection-drawer__scroll {
+  flex: 1;
+  min-width: 0;
+  padding: var(--cfg-space-4);
+  overflow-y: auto;
+}
+
+.cfg-selection-drawer__group {
+  margin-bottom: var(--cfg-space-5);
+  scroll-margin-top: var(--cfg-space-3);
+}
+
+.cfg-selection-drawer__glabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: var(--cfg-text-3);
+  font-family: var(--cfg-font-mono, monospace);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.cfg-selection-drawer__glabel::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--cfg-border);
+}
+
+.cfg-selection-drawer__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--cfg-space-2);
+}
+
+.cfg-selection-card {
+  display: grid;
+  /* Third column holds the optional badge; it collapses to zero without one. */
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 11px;
+  row-gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--cfg-border);
+  border-radius: 10px;
+  background: var(--cfg-surface);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    background 0.12s;
+}
+
+.cfg-selection-card:hover {
+  border-color: var(--cfg-accent);
+  background: color-mix(in srgb, var(--cfg-accent) 5%, var(--cfg-surface));
+}
+
+.cfg-selection-card--selected {
+  border-color: var(--cfg-accent);
+  background: color-mix(in srgb, var(--cfg-accent) 9%, var(--cfg-surface));
+}
+
+.cfg-selection-card:focus-visible {
+  outline: var(--cfg-focus-outline);
+  outline-offset: 1px;
+}
+
+.cfg-selection-card__icon {
+  grid-row: 1 / span 2;
+  align-self: start;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--cfg-surface-dark);
+  color: var(--cfg-text-muted);
+}
+
+.cfg-selection-card__name {
+  align-self: center;
+  color: var(--cfg-text);
+  font-size: var(--cfg-font-size-base);
+  font-weight: 600;
+}
+
+.cfg-selection-card__badge {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: center;
+  padding: 1px 0.4rem;
+  border: 1px solid var(--cfg-border);
+  border-radius: 999px;
+  background: var(--cfg-surface-dark);
+  color: var(--cfg-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.cfg-selection-card__desc {
+  grid-column: 2 / -1;
+  color: var(--cfg-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.cfg-selection-drawer__empty {
+  padding: var(--cfg-space-5);
+  text-align: center;
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-font-size-base);
+}
+
+/* ── Property form controls ────────────────────────────────── */
+.cfg-prop-input {
+  width: 100%;
+  height: var(--cfg-input-height);
+  box-sizing: border-box;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  font-size: var(--cfg-font-size-base);
+  font-family: var(--cfg-font);
+  color: var(--cfg-text);
+  background: var(--cfg-surface);
+}
+
+.cfg-prop-input:focus {
+  outline: var(--cfg-focus-outline);
+  outline-offset: var(--cfg-focus-offset);
+  border-color: var(--cfg-accent);
+}
+
+/* Number inputs render identically to text inputs — drop the native spin
+   buttons so a numeric field is visually indistinguishable from a string one. */
+.cfg-prop-input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.cfg-prop-input[type='number']::-webkit-outer-spin-button,
+.cfg-prop-input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Roomier variant for modals and the standalone forms (manager, wizards) that
+   sit outside a property panel's tight two-column grid. */
+.cfg-prop-input--tall {
+  padding: 0.3rem 0.6rem;
+}
+
+/* Inline-editable table cell: no chrome until the row is hovered or the cell
+   focused, so a dense table does not read as a wall of boxes. */
+.cfg-prop-input--compact {
+  padding: 0.2rem 0.35rem;
+  border-color: transparent;
+  background: transparent;
+  transition:
+    border-color 0.1s,
+    background 0.1s;
+}
+
+.cfg-prop-input--compact:hover {
+  border-color: var(--cfg-border);
+  background: var(--cfg-surface);
+}
+
+.cfg-prop-input--compact:focus {
+  background: var(--cfg-surface);
+}
+
+.cfg-prop-affix {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.cfg-prop-affix__suffix {
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text-muted, var(--cfg-text));
+}
+
+.cfg-length-field {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.cfg-length-field .cfg-prop-input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+
+/* Free-typed slot name with its note below: the field box lays its content out
+   as a row, and the note reads as a caption on the input rather than a second
+   control beside it. */
+.cfg-slot-name-field {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.cfg-slot-name-field .cfg-prop-hint {
+  margin-bottom: 0;
+}
+
+/* px/% unit toggle — clicking cycles through the length units. Portaled into
+   the shared FieldGroup actions column, so it reads as one of the row's
+   trailing buttons (expand/clear/collapse) rather than a control of its own. */
+/* Floors at the icon buttons' width so a short unit ("px") occupies exactly one
+   action slot and the column keeps a single rhythm; longer ones ("rem", "auto")
+   grow from there rather than starting wider than everything else. The class is
+   doubled because the base `.cfg-row-action-btn` rule sets a fixed square width
+   and is declared later in this file — a single-class selector here loses to it
+   and squeezes every unit label into 24px. */
+.cfg-row-action-btn.cfg-row-action-btn--unit {
+  width: max-content;
+  min-width: var(--cfg-field-group-action-size);
+  padding: 0 var(--cfg-space-1);
+  font-family: var(--cfg-font);
+  font-size: var(--cfg-font-size-base);
+  font-weight: 400;
+}
+
+/* No literal magnitude yet to express a unit of (unset, themed/plain default) —
+   greyed out until a value is typed. */
+.cfg-row-action-btn--unit.is-disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Unset hint ("· default" / "· default(...)") reads as an inline suffix on the
+   value, not a trailing note pinned to the row's far edge — the control keeps
+   its own content width instead of stretching to fill the row. */
+.cfg-unset-hint-row .cfg-prop-input,
+.cfg-unset-hint-row .cfg-length-field {
+  flex: none;
+  min-width: 0;
+  width: auto;
+}
+
+/* A dropdown has no placeholder to hug, so it cannot size to its content the
+   way the inputs above do — instead it gives up width first (its own value
+   text already ellipsises), which leaves the suffix its full width in a
+   narrow panel. */
+.cfg-unset-hint-row .cfg-select {
+  flex: 0 1 auto;
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
+}
+
+/* The fallback value sits in the placeholder at the control's own size — it
+   stands in for the value, so it must not shrink; only the `· default` suffix
+   after it steps down (see `.cfg-unset-hint`). Sizing to content is what keeps
+   that suffix directly behind the value instead of at a fixed column: no
+   min-width, or short defaults ("0") would pad out to a common width and the
+   suffixes would line up again. */
+.cfg-prop-input--hint::placeholder {
+  color: var(--cfg-text-muted);
+  opacity: 1;
+}
+
+/* "not set" names a state instead of standing in for a value, so it steps down
+   to the same size and colour as the `· default` suffix. */
+.cfg-prop-input--no-value::placeholder {
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-muted);
+  opacity: 1;
+}
+
+/* `flex: none` / `min-width: 0` already come from `.cfg-unset-hint-row
+   .cfg-prop-input` above — every `--hint` control is one of those. */
+.cfg-field-group__content .cfg-unset-hint-row .cfg-prop-input--hint {
+  /* `ch` is the width of "0" — exact for numeric defaults, a slight over-estimate
+     for narrower letters ("auto"). Browsers with `field-sizing` measure the
+     placeholder for real; see the @supports below. */
+  width: calc(var(--cfg-hint-len, 4) * 1ch);
+  max-width: 100%;
+}
+
+@supports (field-sizing: content) {
+  .cfg-field-group__content .cfg-unset-hint-row .cfg-prop-input--hint {
+    field-sizing: content;
+    width: auto;
+  }
+}
+
+/* The suffix continues the value rather than being a separate control, so the
+   affix row's inter-control gap is far too wide here — one word-space is what
+   reads as "directly behind". */
+.cfg-unset-hint-row {
+  gap: 0.3em;
+}
+
+/* Holds its width — the control beside it is the one that gives way (it hugs
+   its placeholder, or shrinks and ellipsises its own text). The clipping here
+   is the last line of defence: without it an oversized suffix overflows the
+   content column and paints straight over the row's trailing buttons. */
+.cfg-unset-hint {
+  flex: none;
+  min-width: 0;
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Form controls: one consistent height across the whole config UI ──────────
+   Scoped to config roots (.cfg-shell for routed views, .cfg-card for portaled
+   popups) so it never touches the HMI/project runtime. Kept at low specificity
+   via :where() so component styles can still override when they need to.
+   Single-line inputs/selects get a fixed height; textareas keep it as a floor
+   so they can still grow.                                                      */
+.cfg-shell
+  :where(
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='file']),
+    select
+  ),
+.cfg-card
+  :where(
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='file']),
+    select
+  ) {
+  height: var(--cfg-input-height);
+  box-sizing: border-box;
+}
+
+.cfg-shell :where(textarea),
+.cfg-card :where(textarea) {
+  min-height: var(--cfg-input-height);
+  box-sizing: border-box;
+}
+
+.cfg-toggle-mode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--cfg-toggle-size);
+  height: var(--cfg-toggle-size);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface);
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-toggle-font-size);
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cfg-toggle-mode:hover {
+  background: var(--cfg-surface-dark);
+}
+
+.cfg-toggle-mode--plain {
+  color: var(--cfg-toggle-plain);
+}
+
+.cfg-toggle-mode--accent {
+  color: var(--cfg-accent);
+}
+
+.cfg-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cfg-tag-gap);
+  padding: var(--cfg-tag-padding-y) var(--cfg-tag-padding-x);
+  border-radius: var(--cfg-tag-radius);
+  background: var(--cfg-surface-dark);
+  border: 1px solid var(--cfg-border);
+  font-size: var(--cfg-tag-font-size);
+  color: var(--cfg-text);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cfg-tag:hover {
+  background: var(--cfg-border);
+}
+
+.cfg-status-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: var(--cfg-status-dot-size);
+  height: var(--cfg-status-dot-size);
+  border-radius: 50%;
+  background: var(--cfg-status-idle);
+  vertical-align: middle;
+}
+
+.cfg-status-dot--connected {
+  background: var(--cfg-status-connected);
+}
+
+.cfg-status-dot--static {
+  background: var(--cfg-status-static);
+}
+
+.cfg-status-dot--error {
+  background: var(--cfg-danger);
+}
+
+/* ── Groups checkbox list (permissions picker) ─────────────── */
+.cfg-groups-checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.25rem 0;
+}
+
+.cfg-groups-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.cfg-groups-checkbox input[type='checkbox'] {
+  accent-color: var(--cfg-accent);
+  width: var(--cfg-check-size);
+  height: var(--cfg-check-size);
+  cursor: pointer;
+}
+
+/* Muted id annotation, pushed to the row's trailing edge — shown on the users
+   page, where groups are authored by id and the label alone is ambiguous. */
+.cfg-groups-checkbox__id {
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-muted);
+  margin-left: auto;
+}
+
+/* A `<p>` carries UA margins, and there is no global paragraph reset — so the
+   spacing below a hint belongs on this rule rather than on whichever panel
+   stylesheet happens to be loaded (it used to live in the users panel's, which
+   made hint spacing depend on having visited that page). */
+.cfg-prop-hint {
+  font-size: var(--cfg-hint-font-size);
+  color: var(--cfg-text-muted);
+  font-style: italic;
+  margin: 0 0 var(--cfg-space-2);
+}
+
+.cfg-result-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+  width: 100%;
+}
+
+/* ── Segmented pill row — enum/boolean property fields rendered as a row of
+   pill buttons (Direction, Wrap, Visible, Align self, …). Content-hugging,
+   own border/radius per pill, wraps to a second line if the option set is
+   wide (e.g. Justify content). */
+.cfg-seg-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.cfg-seg-btn {
+  flex: none;
+  height: 24px;
+  padding: 0 var(--cfg-space-2);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  font-size: var(--cfg-text-sm);
+  font-weight: 600;
+  font-family: var(--cfg-font);
+  color: var(--cfg-text-muted);
+  background: var(--cfg-surface);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.1s,
+    border-color 0.1s,
+    color 0.1s;
+}
+
+.cfg-seg-btn:hover {
+  background: var(--cfg-surface-dark);
+  color: var(--cfg-text);
+}
+
+.cfg-seg-btn--active {
+  border-color: var(--cfg-accent);
+  background: var(--cfg-accent-soft);
+  color: var(--cfg-accent);
+}
+
+/* Unset field: the option the schema/theme default resolves to keeps a solid
+   border (it's the one in effect) while every other option dims to a dotted
+   border, so the eye lands on the active default. The `default`/`theme` word
+   itself renders inside this same button via `.cfg-seg-btn__tag`. */
+.cfg-seg-btn--default {
+  border-color: var(--cfg-border-strong, var(--cfg-text-muted));
+  color: var(--cfg-text);
+}
+
+/* A `button-icon` option's glyph — kept upright when the surrounding option
+   label is rendered from an entity/emoji that browsers italicise. */
+.cfg-seg-btn__icon {
+  font-style: normal;
+}
+
+.cfg-seg-btn__tag {
+  margin-left: 0.35rem;
+  font-size: 0.6rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  opacity: 0.7;
+}
+
+/* Style alone carries the distinction — the border keeps `.cfg-seg-btn`'s 1px
+   so every option in the group draws the same weight, and only the dots set
+   the non-default ones apart from the default's solid border. */
+.cfg-seg-btn--alt {
+  border-style: dotted;
+}
+
+/* Panel header: see `components/ui/PanelHeader`, the only thing that renders it. */
+
+/* ── Section group (F+ FpSection: plain bold label, no collapse) ── */
+.cfg-section {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--cfg-border);
+}
+
+.cfg-section:last-child {
+  border-bottom: none;
+}
+
+.cfg-section__title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--cfg-text-muted);
+  padding: 0 0 6px;
+}
+
+/* "Nothing here yet" line inside a section body. */
+.cfg-section__empty {
+  display: block;
+  padding: 4px 12px;
+}
+
+.cfg-section--header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.85rem;
+}
+
+.cfg-section--header .cfg-section__title {
+  padding: 0;
+}
+
+/* ── Panel empty state ─────────────────────────────────────── */
+.cfg-panel-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1.5rem;
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-font-size-base);
+}
+
+/* ── Tree sidebar ──────────────────────────────────────────── */
+.cfg-tree {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── Tree search ───────────────────────────────────────────── */
+.cfg-tree__searchbar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+  padding: 5px 8px;
+  background: linear-gradient(
+    180deg,
+    var(--cfg-surface),
+    color-mix(in srgb, var(--cfg-surface) 88%, var(--cfg-surface-dark))
+  );
+  border-bottom: 1px solid var(--cfg-border);
+  position: relative;
+  z-index: 1;
+}
+
+.cfg-tree__search-field {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  box-sizing: border-box;
+  padding: 0 0.4rem 0 0.6rem;
+  border: 1px solid var(--cfg-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--cfg-surface-dark) 72%, var(--cfg-surface));
+  color: var(--cfg-text-muted);
+}
+
+.cfg-tree__search-field:hover {
+  border-color: color-mix(in srgb, var(--cfg-accent) 32%, var(--cfg-border));
+  background: var(--cfg-surface);
+}
+
+.cfg-tree__search-field:focus-within {
+  border-color: var(--cfg-accent);
+  background: var(--cfg-surface);
+}
+
+.cfg-tree__search-icon {
+  flex: none;
+  color: var(--cfg-text-3);
+}
+
+.cfg-tree__search-field:focus-within .cfg-tree__search-icon {
+  color: var(--cfg-accent);
+}
+
+.cfg-tree__search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--cfg-text);
+  font-size: var(--cfg-text-base);
+  line-height: 1.4;
+  outline: none;
+}
+
+.cfg-tree__search-input::placeholder {
+  color: var(--cfg-text-muted);
+  opacity: 0.78;
+}
+
+.cfg-tree__search-shortcut {
+  min-width: 18px;
+  padding: 1px 4px;
+  border: 1px solid color-mix(in srgb, var(--cfg-border) 85%, var(--cfg-text-3));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--cfg-surface) 75%, var(--cfg-surface-dark));
+  color: var(--cfg-text-3);
+  font-family: var(--cfg-font-mono, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.cfg-tree__search-clear {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-right: -0.1rem;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cfg-text-muted);
+  cursor: pointer;
+}
+
+.cfg-tree__search-clear:hover {
+  background: var(--cfg-accent-soft);
+  color: var(--cfg-accent);
+}
+
+.cfg-tree__search-clear:focus-visible {
+  outline: var(--cfg-focus-outline);
+  outline-offset: 1px;
+}
+
+/* Sized to the `/` hint chip inside the field, so the two read as one pair. */
+.cfg-tree__searchbar-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--cfg-border) 85%, var(--cfg-text-3));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--cfg-surface) 75%, var(--cfg-surface-dark));
+  color: var(--cfg-text-muted);
+  cursor: pointer;
+}
+
+.cfg-tree__searchbar-btn:hover {
+  border-color: color-mix(in srgb, var(--cfg-accent) 32%, var(--cfg-border));
+  background: var(--cfg-surface);
+  color: var(--cfg-accent);
+}
+
+.cfg-tree__searchbar-btn:focus-visible {
+  outline: var(--cfg-focus-outline);
+  outline-offset: 1px;
+}
+
+/* the custom .cfg-tree__search-clear button already handles clearing */
+.cfg-tree__search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  display: none;
+}
+
+.cfg-tree__scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  padding: 0.25rem 0;
+}
+
+/* ── Tree items ────────────────────────────────────────────── */
+.cfg-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 26px 0.3rem 0.5rem;
+  padding-left: calc(var(--tree-depth, 0) * 16px + 16px);
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--cfg-radius);
+  color: var(--cfg-text);
+  white-space: nowrap;
+  overflow: hidden;
+  font-size: var(--cfg-font-size-base);
+  position: relative;
+}
+
+.cfg-tree-item:hover {
+  background: var(--cfg-surface-dark);
+}
+
+.cfg-tree-item--selected {
+  background: var(--cfg-selected-bg);
+  color: var(--cfg-text);
+}
+
+/* Section/group root row — bold */
+.cfg-tree-item--group {
+  font-weight: 600;
+}
+
+/* Action button (+ add) — absolutely positioned so it doesn't shift the count badge */
+.cfg-tree-item__row-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--cfg-radius);
+  background: none;
+  color: var(--cfg-text-muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition:
+    opacity 0.1s,
+    background 0.1s,
+    color 0.1s;
+}
+
+.cfg-tree-item:hover .cfg-tree-item__row-btn {
+  opacity: 1;
+}
+
+.cfg-tree-item__row-btn:hover {
+  background: var(--cfg-selected-bg);
+  color: var(--cfg-accent);
+}
+
+.cfg-tree-item__toggle-slot {
+  align-self: stretch;
+  margin-block: -0.3rem;
+  width: 16px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cfg-tree-item__icon {
+  flex-shrink: 0;
+  font-style: normal;
+  font-size: 0.7rem;
+  opacity: 0.65;
+  width: 12px;
+  text-align: center;
+}
+
+.cfg-tree-item__icon--svg {
+  width: 14px;
+  height: 14px;
+}
+
+.cfg-tree-item__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.cfg-tree-search-match {
+  padding: 0 1px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--cfg-accent) 16%, transparent);
+  color: inherit;
+}
+
+.cfg-tree-item--selected .cfg-tree-search-match {
+  background: color-mix(in srgb, var(--cfg-accent) 22%, transparent);
+}
+
+/* ── Data table ────────────────────────────────────────────── */
+.cfg-table-wrap {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--cfg-surface);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+}
+
+.cfg-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.cfg-th {
+  position: sticky;
+  top: 0;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-size: var(--cfg-text-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--cfg-text-muted);
+  background: var(--cfg-surface);
+  border-bottom: 1px solid var(--cfg-border);
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.cfg-th--actions {
+  width: 2rem;
+  text-align: center;
+  padding: 0 0.25rem;
+}
+
+.cfg-row {
+  border-bottom: 1px solid var(--cfg-border);
+  transition: background 0.1s;
+  height: 2rem;
+}
+
+.cfg-row:last-child {
+  border-bottom: none;
+}
+
+.cfg-row:hover {
+  background: var(--cfg-surface-dark);
+}
+
+.cfg-row--enabled .cfg-td {
+  color: var(--cfg-text);
+}
+
+.cfg-td {
+  padding: 0 0.75rem;
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text-muted);
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Table-cell input with a highlighted ghost copy behind it (ui/HighlightedInput). */
+.cfg-highlight-input {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  border-radius: var(--cfg-radius);
+}
+
+.cfg-highlight-input__text {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  padding: calc(0.2rem + 1px) calc(0.35rem + 1px);
+  color: transparent;
+  font-family: var(--cfg-font);
+  font-size: var(--cfg-font-size-base);
+  line-height: normal;
+  white-space: pre;
+  pointer-events: none;
+}
+
+.cfg-highlight-input__text-content {
+  display: block;
+  width: max-content;
+  transform: translateX(calc(-1 * var(--highlight-scroll, 0px)));
+}
+
+.cfg-highlight-input__text .cfg-search-match {
+  padding-inline: 0;
+  color: transparent;
+}
+
+.cfg-highlight-input__input {
+  position: relative;
+  z-index: 2;
+  display: block;
+}
+
+.cfg-highlight-input__input,
+.cfg-highlight-input__input:focus {
+  background: transparent;
+}
+
+/* The header toggle that turns a table's Live column on, and the value it then
+   shows — shared by the datasource variable table and the recipe tables. */
+.cfg-var-live-btn {
+  font-size: 0.7rem;
+}
+
+.cfg-var-live-btn--active {
+  background: var(--cfg-selected-bg);
+  border-color: var(--cfg-accent);
+  color: var(--cfg-accent);
+}
+
+/* A variable's current value off the live pipeline — the datasource table and
+   the recipe tables state the same three cases (see ui/LiveValue). */
+.cfg-var-live-value {
+  color: var(--cfg-text);
+  font-size: 0.7rem;
+  font-family: var(--cfg-font-mono);
+}
+
+.cfg-var-live-value--unavailable {
+  color: var(--cfg-text-muted);
+  font-style: italic;
+}
+
+.cfg-var-live-value--empty {
+  color: var(--cfg-text-muted);
+  font-style: italic;
+  font-size: 0.7rem;
+}
+
+.cfg-modal-close:focus-visible,
+.cfg-modal-item:focus-visible,
+.cfg-prop-input:focus-visible,
+.cfg-tree-item__row-btn:focus-visible,
+.cfg-delete-btn:focus-visible,
+.cfg-seg-btn:focus-visible,
+.cfg-toggle-mode:focus-visible,
+.cfg-icon-reset:focus-visible,
+.cfg-row-action-btn:focus-visible,
+.cfg-operator-row__btn:focus-visible {
+  outline: var(--cfg-focus-outline);
+  outline-offset: var(--cfg-focus-offset);
+}
+
+/* ── Delete button (table row actions) ─────────────────────── */
+.cfg-delete-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--cfg-radius);
+  background: none;
+  color: var(--cfg-text-muted);
+  font-size: 16px;
+  line-height: 24px;
+  cursor: pointer;
+}
+
+.cfg-delete-btn:hover {
+  background: var(--cfg-danger-bg);
+  color: var(--cfg-danger-fg);
+}
+
+/* ── Empty table state ─────────────────────────────────────── */
+.cfg-table-empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--cfg-text-muted);
+  font-style: italic;
+}
+
+/* ── Access badges ─────────────────────────────────────────── */
+.cfg-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.25rem;
+  padding: 1px 0.4rem;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.cfg-badge--ok {
+  background: color-mix(in srgb, var(--cfg-success) 16%, var(--cfg-surface));
+  border: 1px solid color-mix(in srgb, var(--cfg-success) 40%, var(--cfg-border));
+  color: color-mix(in srgb, var(--cfg-success) 76%, var(--cfg-text));
+}
+
+.cfg-badge--error {
+  background: color-mix(in srgb, var(--cfg-danger) 16%, var(--cfg-surface));
+  border: 1px solid color-mix(in srgb, var(--cfg-danger) 40%, var(--cfg-border));
+  color: color-mix(in srgb, var(--cfg-danger) 76%, var(--cfg-text));
+}
+
+.cfg-badge--ro {
+  background: color-mix(in srgb, var(--cfg-success) 16%, var(--cfg-surface));
+  border: 1px solid color-mix(in srgb, var(--cfg-success) 40%, var(--cfg-border));
+  color: color-mix(in srgb, var(--cfg-success) 76%, var(--cfg-text));
+}
+
+.cfg-badge--rw {
+  background: color-mix(in srgb, var(--cfg-danger) 16%, var(--cfg-surface));
+  border: 1px solid color-mix(in srgb, var(--cfg-danger) 40%, var(--cfg-border));
+  color: color-mix(in srgb, var(--cfg-danger) 76%, var(--cfg-text));
+}
+
+.cfg-badge--unknown {
+  background: var(--cfg-surface-dark);
+  border: 1px solid var(--cfg-border);
+  color: var(--cfg-text-muted);
+}
+
+/* ── Checkbox ──────────────────────────────────────────────── */
+.cfg-check {
+  accent-color: var(--cfg-accent);
+  width: var(--cfg-check-size);
+  height: var(--cfg-check-size);
+  cursor: pointer;
+}
+
+/* Operator segment control row */
+.cfg-operator-row {
+  display: flex;
+  gap: 2px;
+  width: 100%;
+}
+
+/* Static value editor inside a value-source-capable field (icon, image, color,
+   text, …). Stretches to fill the row so its trailing action buttons sit flush
+   against the box's right edge, matching the $var field's action rail. */
+.cfg-property-source-editor__static {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: var(--cfg-space-3);
+}
+
+/* $stringExpr body — grid of template field + hint + wildcard cards. Mirrors
+   cfg-property-source-editor__static's grid + right gutter without the static wrapper.
+
+   The single column is `minmax(0, 1fr)`, not the implicit `auto`: a wildcard card
+   bound to a variable carries a `white-space: nowrap` path, whose min-content width
+   is the whole path string. An `auto` track never sizes below its items' min-content,
+   so that one card widened the track past the field box and every sibling stretched
+   with it — template input and hint text included — until the box's `overflow: hidden`
+   cut them off mid-word. Capping the track makes the path ellipsize instead, which is
+   what `.cfg-var-field__path` is already styled for. */
+.cfg-string-expr {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--cfg-space-3);
+}
+
+.cfg-string-expr__template {
+  padding-right: var(--cfg-body-gutter);
+}
+
+/* $http body — same grid as $stringExpr, same track cap for the same reason. */
+.cfg-http-source {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--cfg-space-3);
+}
+
+.cfg-http-body {
+  resize: vertical;
+  font-family: var(--cfg-font-mono);
+}
+
+.cfg-property-source-editor__static .cfg-prop-input {
+  border-color: color-mix(in srgb, var(--cfg-border) 86%, var(--cfg-surface));
+  background: color-mix(in srgb, var(--cfg-surface) 95%, var(--cfg-bg));
+}
+
+.cfg-operator-row__btn {
+  flex: 1;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--cfg-border);
+  border-radius: 5px;
+  font-size: 0.8rem;
+  font-family: var(--cfg-font);
+  color: var(--cfg-text);
+  background: var(--cfg-surface);
+  cursor: pointer;
+  transition:
+    background 0.1s,
+    border-color 0.1s,
+    color 0.1s;
+  white-space: nowrap;
+}
+
+.cfg-operator-row__btn:hover {
+  border-color: var(--cfg-accent);
+  background: var(--cfg-info-hover-bg);
+}
+
+.cfg-operator-row__btn--active {
+  background: var(--cfg-info-active-bg);
+  border-color: var(--cfg-info-active-border);
+  color: var(--cfg-info-active-fg);
+  font-weight: 700;
+}
+
+/* Fixed width whether or not the name resolves, so the input's text edge does
+   not shift while the user types an icon name. Prefix to the `.cfg-var-field`
+   box (see `ui/PathInputField`), emitted by `utils/AssetStaticFields`. */
+.cfg-icon-field__glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  color: var(--cfg-text-muted);
+}
+
+/* ── Row / field action button (× clear, × remove, ✎ pick, ⤢ drawer) ──────────
+   ONE shared affordance for every inline action glyph across the config
+   property surfaces, so they all read identically: muted glyph, subtle grey
+   hover — no accent, no danger. Default is a fixed 24px square (table / list
+   rows); the `--stretch` modifier fills a FieldGroup / var-field action slot
+   (auto height, flush divider). */
+.cfg-row-action-btn {
+  flex-shrink: 0;
+  width: var(--cfg-field-group-action-size);
+  height: var(--cfg-field-group-action-size);
+  padding: 0;
+  border: none;
+  border-radius: var(--cfg-radius);
+  background: none;
+  color: var(--cfg-text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.1s,
+    color 0.1s;
+}
+
+.cfg-row-action-btn:hover {
+  background: var(--cfg-surface-dark);
+  color: var(--cfg-text);
+}
+
+.cfg-row-action-btn--stretch {
+  align-self: stretch;
+  height: auto;
+  border-radius: 0;
+}
+
+.cfg-row-action-btn--chevron svg {
+  transition: transform var(--cfg-motion-fast) var(--cfg-ease-standard);
+}
+
+.cfg-row-action-btn--chevron.is-open svg {
+  transform: rotate(90deg);
+}
+
+/* Switch/case list — a list section (see `.cfg-editor-actions`) whose entries
+   are collapsible FieldGroup rows, so the list itself carries no chrome. The
+   NavigationMenu manual item list is the same shape. */
+.cfg-switch-cases,
+.cfg-menu-items {
+  margin-bottom: var(--cfg-space-2);
+}
+
+.cfg-switch-cases > .cfg-field-group,
+.cfg-menu-items > .cfg-field-group {
+  margin-bottom: 0;
+}
+
+.cfg-switch-empty,
+.cfg-menu-items__empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-text-sm);
+  font-style: italic;
+}
+
+/* The item-type menu names six variants ("Section Header" is the longest) while
+   its trigger is a compact "Add". A portaled popup takes the trigger's width,
+   so it needs its own floor — content-sized, not a pixel guess — or every name
+   ellipsizes. `min-width` wins over the width the popup sets inline. */
+.cfg-menu-items__add-popup {
+  min-width: max-content;
+}
+
+/* The variant keyword keeps its tint once a row expands. `KindLabel` renders
+   the bare text span, outside the `.cfg-field-group__preview` wrapper that
+   carries the collapsed summary's `.kw` rule — scoped here so no other row
+   kind (switch cases, action rows, alarm resolutions) changes appearance. */
+.cfg-menu-items .cfg-field-group__preview-text > .kw {
+  font-weight: 700;
+  color: var(--option-color, inherit);
+}
+
+/* Actions editor */
+.cfg-editor-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cfg-editor-actions__header {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--cfg-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Title + "add action" on one row — the add control sits behind the title. */
+.cfg-editor-actions__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cfg-space-2);
+}
+
+.cfg-editor-actions__title-row .cfg-field-group__label,
+.cfg-editor-actions__title-row .cfg-section__title {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+
+.cfg-editor-actions__add.cfg-select {
+  width: auto;
+  align-self: flex-start;
+  height: auto;
+  padding: 3px var(--cfg-space-2);
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-accent);
+  border-color: var(--cfg-accent);
+  background: var(--cfg-surface);
+}
+
+.cfg-editor-actions__add .cfg-select__chevron {
+  width: 8px;
+  height: 8px;
+}
+
+.cfg-editor-actions__add.cfg-select:hover:not(:disabled) {
+  background: var(--cfg-selected-bg);
+}
+
+.cfg-editor-actions__add .cfg-select__chevron {
+  color: var(--cfg-accent);
+}
+
+/* ── Error banner ──────────────────────────────────────────── */
+.cfg-error-banner {
+  color: var(--cfg-danger-fg);
+  background: var(--cfg-danger-bg-soft);
+  border: 1px solid var(--cfg-danger-border-soft);
+  border-radius: var(--cfg-radius);
+  padding: 0.45rem 0.75rem;
+  font-size: var(--cfg-font-size-base);
+  margin-bottom: 0.75rem;
+  flex-shrink: 0;
+}
+
+.cfg-ds-props__error {
+  color: var(--cfg-danger-fg);
+  background: var(--cfg-danger-bg-soft);
+  border: 1px solid var(--cfg-danger-border-soft);
+  border-radius: var(--cfg-radius);
+  padding: 0.45rem 0.75rem;
+  font-size: var(--cfg-font-size-base);
+  margin: 0.5rem 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cfg-tree-item__row-btn,
+  .cfg-row,
+  .cfg-prop-input--compact {
+    transition: none;
+  }
+}
+
+/* ── Tree item count badge ─────────────────────────────────── */
+.cfg-tree-item__count {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: var(--cfg-text-muted);
+  background: var(--cfg-surface-dark, var(--cfg-surface-dark-soft));
+  border-radius: 3px;
+  padding: 0 4px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+/* ── Tree section empty hint ──────────────────────────────── */
+.cfg-tree-section-empty {
+  padding: 0.3rem 0.75rem 0.3rem 2.25rem;
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text-muted);
+  font-style: italic;
+  user-select: none;
+}
+
+.cfg-tree-section-empty[style*='--tree-depth'] {
+  padding-left: calc(var(--tree-depth, 0) * 16px + 16px);
+}
+
+/* ── Tree item — template section variant ──────────────────── */
+.cfg-tree-item--section {
+  color: var(--cfg-text-muted);
+  cursor: default;
+}
+
+.cfg-tree-item--section:hover {
+  background: transparent;
+}
+
+.cfg-tree-item--section-over,
+.cfg-tree-section-empty--over {
+  background: var(--cfg-selected-bg);
+  outline: 1px dashed var(--cfg-accent);
+  outline-offset: -1px;
+}
+
+/* ── Tree item — drop edge (drop above/below rather than inside) ── */
+.cfg-tree-item--drop-top,
+.cfg-tree-item--drop-bottom {
+  position: relative;
+}
+
+.cfg-tree-item--drop-top::after,
+.cfg-tree-item--drop-bottom::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--cfg-accent);
+  pointer-events: none;
+}
+
+.cfg-tree-item--drop-top::after {
+  top: 0;
+}
+
+.cfg-tree-item--drop-bottom::after {
+  bottom: 0;
+}
+
+/* ── Tree item — waiting to be moved by the next paste ────── */
+.cfg-tree-item--cut {
+  opacity: 0.45;
+}
+
+/* ── Tree item — page/group variant ───────────────────────── */
+.cfg-tree-item--page {
+  font-weight: 600;
+}
+
+.cfg-tree-item--page.cfg-tree-item--selected {
+  color: var(--cfg-text);
+}
+
+/* ── Tree item drag handle ─────────────────────────────────── */
+.cfg-tree-item__handle {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  cursor: grab;
+  color: transparent;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.cfg-tree-item__handle:hover {
+  color: var(--cfg-text-muted);
+}
+
+.cfg-tree-item__handle:active {
+  cursor: grabbing;
+}
+
+/* ── Tree item inline rename input ────────────────────────── */
+.cfg-tree-item__rename-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.1rem 0.3rem;
+  border: 1px solid var(--cfg-accent);
+  border-radius: 2px;
+  font-size: var(--cfg-font-size-base);
+  font-family: var(--cfg-font);
+  color: var(--cfg-text);
+  background: var(--cfg-surface);
+}
+
+/* ── Theme Editor View ────────────────────────────────────────── */
+
+.cfg-theme-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-4);
+}
+
+.cfg-theme-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-4);
+}
+
+.cfg-theme-notice {
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface);
+  color: var(--cfg-text);
+  padding: var(--cfg-space-3) var(--cfg-space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cfg-space-3);
+}
+
+.cfg-theme-notice--error {
+  border-color: var(--cfg-error-border-strong);
+  background: var(--cfg-error-bg-soft);
+  color: var(--cfg-error-fg-strong);
+}
+
+/* Shared section header: title on the left, action button(s) on the right.
+   Used by the admin sections (AdminSection) and the theme editor sections. */
+.cfg-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cfg-space-3);
+}
+
+.cfg-section-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+}
+
+/* Shared admin data table — used by Connected Runtimes and Custom Widgets. */
+.cfg-admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--cfg-text-base);
+  color: var(--cfg-text);
+}
+
+.cfg-admin-table th {
+  text-align: left;
+  padding: var(--cfg-space-2) var(--cfg-space-3);
+  font-weight: var(--cfg-fw-medium);
+  color: var(--cfg-text-muted);
+  border-bottom: 1px solid var(--cfg-border);
+  white-space: nowrap;
+}
+
+.cfg-admin-table td {
+  padding: var(--cfg-space-2) var(--cfg-space-3);
+  border-bottom: 1px solid var(--cfg-border);
+  vertical-align: middle;
+}
+
+.cfg-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--cfg-space-4);
+}
+
+/* One-line guidance under each section title. */
+.cfg-theme-hint {
+  margin: 0 0 var(--cfg-space-4);
+  font-size: var(--cfg-hint-font-size);
+  color: var(--cfg-text-muted);
+  max-width: 70ch;
+}
+
+.cfg-theme-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+}
+
+.cfg-theme-input-group--wide {
+  grid-column: 1 / -1;
+}
+
+.cfg-theme-label {
+  font-size: var(--cfg-text-base);
+  font-weight: var(--cfg-fw-bold);
+  color: var(--cfg-text);
+}
+
+.cfg-theme-color-input {
+  width: 100%;
+  height: var(--cfg-input-height);
+  box-sizing: border-box;
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  cursor: pointer;
+}
+
+/* ── Length field (number stepper + unit select) ─────────────── */
+.cfg-theme-length {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.cfg-theme-length .cfg-prop-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The magnitude half of a theme length: the unit dropdown beside it carries the
+   rest of the row, so the number never needs to be full width. */
+.cfg-theme-length__num {
+  max-width: 100px;
+}
+
+/* ── Per-color WCAG contrast badges ─────────────────────────── */
+.cfg-theme-contrast-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cfg-space-1);
+  margin-top: var(--cfg-space-1);
+}
+
+.cfg-theme-contrast {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--cfg-radius);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+}
+
+.cfg-theme-contrast--aaa {
+  background: color-mix(in srgb, var(--cfg-success-fg) 14%, var(--cfg-surface));
+  color: var(--cfg-success-fg);
+  border-color: color-mix(in srgb, var(--cfg-success-fg) 30%, transparent);
+}
+
+.cfg-theme-contrast--aa {
+  background: color-mix(in srgb, var(--cfg-text-muted) 12%, var(--cfg-surface));
+  color: var(--cfg-text);
+  border-color: color-mix(in srgb, var(--cfg-text-muted) 30%, transparent);
+}
+
+.cfg-theme-contrast--fail {
+  background: color-mix(in srgb, var(--cfg-error-fg-strong) 14%, var(--cfg-surface));
+  color: var(--cfg-error-fg-strong);
+  border-color: color-mix(in srgb, var(--cfg-error-fg-strong) 35%, transparent);
+}
+
+/* ── Typography combos (live specimen + inline inputs) ───────────────────────
+   Each combo renders its specimen with the live --hmi-type-* vars (edits apply
+   them to :root, so the specimen restyles as the operator types) next to its
+   font / size / weight inputs — the setting and its preview appear once. */
+.cfg-theme-combos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-3);
+}
+
+.cfg-theme-combo {
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface);
+  padding: var(--cfg-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-3);
+}
+
+.cfg-theme-combo__specimen {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--cfg-space-3);
+  padding: var(--cfg-space-3);
+  border-radius: var(--cfg-radius);
+  background: var(--hmi-bg);
+  color: var(--hmi-text);
+  overflow: hidden;
+}
+
+.cfg-theme-combo__specimen > .cfg-theme-pv-type {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfg-theme-combo__name {
+  flex: none;
+  font-size: var(--cfg-text-base);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--hmi-text-muted);
+}
+
+.cfg-theme-combo__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--cfg-space-3);
+  align-items: end;
+}
+
+/* The font input spans the full width of its grid cell (not the section grid). */
+.cfg-theme-combo__fields .cfg-theme-input-group--wide {
+  grid-column: auto;
+}
+
+/* Specimen text styling — driven entirely by the live combo css vars. */
+.cfg-theme-pv-type--heading {
+  font-family: var(--hmi-type-heading-font);
+  font-size: var(--hmi-type-heading-size);
+  font-weight: var(--hmi-type-heading-weight);
+  letter-spacing: var(--hmi-type-heading-tracking);
+  text-transform: var(--hmi-type-heading-transform);
+}
+
+.cfg-theme-pv-type--subheading {
+  font-family: var(--hmi-type-subheading-font);
+  font-size: var(--hmi-type-subheading-size);
+  font-weight: var(--hmi-type-subheading-weight);
+  letter-spacing: var(--hmi-type-subheading-tracking);
+  text-transform: var(--hmi-type-subheading-transform);
+}
+
+.cfg-theme-pv-type--body {
+  font-family: var(--hmi-type-body-font);
+  font-size: var(--hmi-type-body-size);
+  font-weight: var(--hmi-type-body-weight);
+  letter-spacing: var(--hmi-type-body-tracking);
+  text-transform: var(--hmi-type-body-transform);
+}
+
+.cfg-theme-pv-type--caption {
+  font-family: var(--hmi-type-caption-font);
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-caption-weight);
+  letter-spacing: var(--hmi-type-caption-tracking);
+  text-transform: var(--hmi-type-caption-transform);
+  color: var(--hmi-text-muted);
+}
+
+.cfg-theme-pv-type--code {
+  font-family: var(--hmi-type-code-font);
+  font-size: var(--hmi-type-code-size);
+  font-weight: var(--hmi-type-code-weight);
+  letter-spacing: var(--hmi-type-code-tracking);
+  text-transform: var(--hmi-type-code-transform);
+}
+
+.cfg-theme-pv-type--value {
+  font-family: var(--hmi-type-value-font);
+  font-size: var(--hmi-type-value-size);
+  font-weight: var(--hmi-type-value-weight);
+  letter-spacing: var(--hmi-type-value-tracking);
+  text-transform: var(--hmi-type-value-transform);
+}
+
+.cfg-theme-pv-type--label {
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  letter-spacing: var(--hmi-type-label-tracking);
+  text-transform: var(--hmi-type-label-transform);
+  color: var(--hmi-text-muted);
+}
+
+/* ── Spacing / radius / shadow metrics (inline shape preview) ─────────────────
+   Each field draws the metric it controls (a bar, a rounded square, a shadowed
+   tile) at the live value, so the input and its effect appear once together. */
+.cfg-theme-metric-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-5);
+}
+
+.cfg-theme-metric-group h4 {
+  margin: 0 0 var(--cfg-space-3);
+  font-size: var(--cfg-text-base);
+  font-weight: 600;
+  color: var(--cfg-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cfg-theme-metric-rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--cfg-space-4);
+}
+
+.cfg-theme-metric {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+}
+
+.cfg-theme-metric--shadow {
+  grid-column: 1 / -1;
+}
+
+.cfg-theme-metric__row {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-3);
+}
+
+.cfg-theme-metric__row .cfg-prop-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.cfg-theme-metric__shape {
+  flex: none;
+  background: var(--hmi-accent);
+}
+
+.cfg-theme-metric__shape--space {
+  width: var(--cfg-pv);
+  height: 28px;
+  border-radius: 2px;
+}
+
+.cfg-theme-metric__shape--radius {
+  width: 36px;
+  height: 36px;
+  background: var(--hmi-surface);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--cfg-pv);
+}
+
+.cfg-theme-metric__shape--shadow {
+  width: 72px;
+  height: 36px;
+  background: var(--hmi-surface);
+  border-radius: var(--hmi-radius);
+  box-shadow: var(--cfg-pv);
+}
+
+/* ── HMI preview canvas (config/PreviewView) ─────────────────── */
+
+/* Editor selection ring on header/footer areas */
+.hmi-area--focus {
+  outline: var(--cfg-preview-area-outline);
+  outline-offset: var(--cfg-preview-area-outline-offset);
+}
+
+.hmi-area--empty-hint {
+  color: var(--cfg-preview-text-muted);
+  font-size: var(--cfg-preview-empty-hint-size);
+  font-style: italic;
+}
+
+/* "Nothing" checkerboard backdrop for visual-editor canvases — a light,
+   low-contrast transparency pattern (like the empty canvas behind artwork in
+   SVG editors), reused behind every editor preview surface. Tile size/color
+   come from --cfg-checker-size / --cfg-checker-color in config.tokens.css. */
+.cfg-checkerboard-bg {
+  background-image:
+    linear-gradient(45deg, var(--cfg-checker-color) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--cfg-checker-color) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--cfg-checker-color) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--cfg-checker-color) 75%);
+  background-size: var(--cfg-checker-size) var(--cfg-checker-size);
+  background-position:
+    0 0,
+    0 calc(var(--cfg-checker-size) / 2),
+    calc(var(--cfg-checker-size) / 2) calc(var(--cfg-checker-size) / -2),
+    calc(var(--cfg-checker-size) / -2) 0;
+  background-color: var(--cfg-surface);
+}
+
+/* Give any scrollable checkerboard surface an opaque scrollbar track/thumb —
+   otherwise the pattern paints through the native scrollbar gutter and the
+   track reads as a broken/half-rendered checker instead of plain chrome.
+   Deliberately omits scrollbar-color/scrollbar-width (see the note at the
+   top of this file) so these ::-webkit rules keep taking effect. */
+.cfg-checkerboard-bg::-webkit-scrollbar-track {
+  background: var(--cfg-surface);
+}
+
+.cfg-checkerboard-bg::-webkit-scrollbar-thumb {
+  background: var(--cfg-line-strong);
+  border-radius: var(--cfg-radius);
+  border: 3px solid var(--cfg-surface);
+}
+
+/* Dialog preview: modal card centered, no dark backdrop */
+.hmi-dialog-preview {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cfg-preview-text);
+  font-family: var(--cfg-preview-font);
+  font-size: var(--cfg-preview-font-size-base);
+}
+
+/* Settings panel — HMI scale slider row */
+.cfg-settings-scale {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-3);
+  width: 100%;
+}
+
+.cfg-settings-scale__slider {
+  flex: 1;
+  accent-color: var(--cfg-accent);
+  cursor: pointer;
+}
+
+/* Outranks the generic `__content .cfg-prop-input { width: 100% }` rule (same
+   specificity, later stylesheet), which would otherwise let the number box eat
+   the whole row and squeeze the slider to its intrinsic width. */
+.cfg-field-group__content .cfg-settings-scale .cfg-settings-scale__input {
+  width: 3.5rem;
+  flex: 0 0 auto;
+}
+
+/* ── Alarm notification preview (AlarmsView centre panel) ─────────────────────
+   The cards themselves are the runtime's own components (AlarmToastCard,
+   AlarmDetailCard) rendered inert, so the preview cannot drift from what an
+   operator sees. Only the surrounding panel chrome is styled here. */
+.cfg-alarm-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-6);
+  height: 100%;
+  overflow-y: auto;
+
+  /* A toast and a dialog float over page content in the runtime, and carry the
+     elevation that job needs. Inside a static panel that shadow has nothing to
+     lift off — it just smudges the section label above the card and the panel
+     edge beside it — so the preview borrows the cards and softens their two
+     elevation tokens. Overriding the custom properties keeps the cards' own CSS
+     untouched. */
+  --hmi-toast-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  --hmi-modal-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Inset far enough that even the softened shadow lands clear of the panel's
+   edges and its scrollbar gutter. */
+.cfg-alarm-preview__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-3);
+  padding: 0 var(--cfg-space-3);
+}
+
+.cfg-alarm-preview__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--cfg-text-muted);
+}
+
+/* The runtime docks its alarm toasts in a 420px column and opens the detail
+   dialog at 480px — preview both at their real width rather than stretched to
+   whatever the panel happens to be. */
+.cfg-alarm-preview__toast {
+  max-width: 420px;
+}
+
+.cfg-alarm-preview__dialog {
+  max-width: 480px;
+}
+
+.cfg-alarm-preview__note {
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-muted);
+}
+
+/* ── Alarm resolutions list (AlarmsView properties panel) ─────────────────────
+   Built from the action-list shell, minus the per-row trailing margin: a field
+   group carries one so consecutive *properties* breathe, but these rows are
+   entries in one list, and margin + list gap together read as a paragraph
+   break between them. */
+.cfg-alarm-resolutions .cfg-field-group {
+  margin-bottom: 0;
+}

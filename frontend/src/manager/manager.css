@@ -1,0 +1,89 @@
+/* Manager dashboard — reuses the config UI primitives (config.css tokens, the
+   projects-page / project-row / project-form styles, Button, ModalShell). Only
+   manager-specific pieces live here: the auth/loading screens, instance status
+   pills, and the device-license list. */
+
+.mgr-center {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cfg-bg);
+  color: var(--cfg-text);
+  padding: var(--cfg-space-6);
+}
+
+/* ── auth ─────────────────────────────────────────────────── */
+.mgr-auth-card__subtitle {
+  margin: 0;
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text-muted);
+}
+
+/* ── instance status pill ─────────────────────────────────── */
+.mgr-status {
+  display: inline-block;
+  padding: 2px var(--cfg-space-2);
+  border-radius: 999px;
+  font-size: var(--cfg-text-xs, 0.7rem);
+  font-weight: var(--cfg-fw-medium);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mgr-status--running {
+  background: var(--cfg-success-bg-soft);
+  color: var(--cfg-success-fg);
+}
+
+.mgr-status--starting {
+  background: var(--cfg-accent-soft);
+  color: var(--cfg-accent);
+}
+
+.mgr-status--crashed {
+  background: var(--cfg-danger-bg);
+  color: var(--cfg-danger-fg);
+}
+
+.mgr-status--stopped {
+  background: var(--cfg-surface-dark);
+  color: var(--cfg-text-muted);
+}
+
+.mgr-status__error {
+  font-size: var(--cfg-text-xs, var(--cfg-text-sm));
+  color: var(--cfg-danger-fg);
+  max-width: 280px;
+}
+
+.project-row__toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1rem;
+  margin-top: 0.35rem;
+}
+
+.projects-page__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mgr-mcp-toggle,
+.mgr-default-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: var(--cfg-text-xs, var(--cfg-text-sm));
+  color: var(--cfg-text-muted);
+  cursor: pointer;
+  width: fit-content;
+  accent-color: var(--cfg-accent);
+}
+
+.mgr-mcp-toggle input:disabled,
+.mgr-default-toggle input:disabled {
+  cursor: not-allowed;
+}

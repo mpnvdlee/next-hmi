@@ -1,0 +1,146 @@
+/* Config-styled select trigger + popup. Self-contained so it matches every
+   config surface regardless of CSS import order; width modifiers only. */
+
+.cfg-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cfg-space-2);
+  width: 100%;
+  height: var(--cfg-input-height);
+  box-sizing: border-box;
+  padding: 0 var(--cfg-space-3);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface);
+  color: var(--cfg-text);
+  font-family: var(--cfg-font);
+  font-size: var(--cfg-font-size-base);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 200ms;
+}
+
+.cfg-select:hover:not(:disabled) {
+  border-color: var(--cfg-text-3);
+}
+
+.cfg-select:focus-visible {
+  outline: var(--cfg-focus-outline);
+  outline-offset: var(--cfg-focus-offset);
+  border-color: var(--cfg-accent);
+}
+
+.cfg-select--open {
+  border-color: var(--cfg-accent);
+}
+
+.cfg-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cfg-select__value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfg-select__placeholder {
+  color: var(--cfg-text-3);
+}
+
+.cfg-select__chevron-slot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cfg-text-muted);
+}
+
+.cfg-select__chevron {
+  flex: none;
+  transition: transform 150ms;
+}
+
+.cfg-select--open .cfg-select__chevron {
+  transform: rotate(180deg);
+}
+
+/* Width modifiers (replace the old per-field native-select classes) */
+.cfg-select--auto {
+  width: auto;
+}
+
+/* Borderless inline variant for dense table cells — border/fill on hover/open */
+.cfg-select--ghost {
+  width: auto;
+  max-width: 100%;
+  padding: 0 var(--cfg-space-1);
+  background: transparent;
+  border-color: transparent;
+}
+
+.cfg-select--ghost:hover:not(:disabled),
+.cfg-select--ghost.cfg-select--open {
+  background: var(--cfg-surface-dark);
+  border-color: var(--cfg-border);
+}
+
+/* ── Portaled option list ─────────────────────────────────────── */
+.cfg-select-popup {
+  /* Portaled to <body>, so it must outrank the modal overlay (10000) it may be
+     opened from. */
+  z-index: 10010;
+  /* `scroll` (not `auto`) so the gutter is always reserved, and styling the
+     webkit scrollbar below forces a persistent classic scrollbar instead of the
+     macOS overlay one that hides until you scroll. */
+  overflow-y: scroll;
+  padding: var(--cfg-space-1);
+  background: var(--cfg-surface);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  box-shadow: var(--cfg-shadow-lg);
+  font-family: var(--cfg-font);
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text);
+  /* Scrollbar appearance comes from the shared config rule in config.css. */
+}
+
+.cfg-select-popup__option {
+  display: flex;
+  align-items: center;
+  height: var(--cfg-input-height);
+  padding: 0 var(--cfg-space-2);
+  border-radius: var(--cfg-radius);
+  color: var(--cfg-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.cfg-select-popup__option--active {
+  background: var(--cfg-accent-soft);
+}
+
+.cfg-select-popup__option--selected {
+  color: var(--cfg-accent);
+  font-weight: 600;
+}
+
+.cfg-select-popup__option--disabled {
+  color: var(--cfg-text-3);
+  cursor: not-allowed;
+}
+
+.cfg-select-popup__group {
+  padding: var(--cfg-space-2) var(--cfg-space-2) var(--cfg-space-1);
+  font-size: var(--cfg-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cfg-text-muted);
+}

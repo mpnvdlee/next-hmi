@@ -1,0 +1,109 @@
+.cfg-trans-table {
+  table-layout: fixed;
+}
+
+.cfg-trans-th--lang {
+  min-width: 160px;
+}
+
+.cfg-trans-td--actions {
+  text-align: center;
+}
+
+.cfg-trans-table .cfg-td {
+  padding: 0 0.4rem;
+}
+
+.cfg-trans-key-text {
+  display: block;
+  width: 100%;
+  padding: 0.25rem 0.35rem;
+  color: var(--cfg-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cfg-trans-highlight-input {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  border-radius: var(--cfg-radius);
+}
+
+.cfg-trans-highlight-input:hover,
+.cfg-trans-highlight-input:focus-within {
+  background: var(--cfg-surface);
+}
+
+.cfg-trans-highlight-input__text {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  padding: calc(0.2rem + 1px) calc(0.35rem + 1px);
+  color: transparent;
+  font-family: var(--cfg-font);
+  font-size: var(--cfg-font-size-base);
+  line-height: normal;
+  white-space: pre;
+  pointer-events: none;
+}
+
+.cfg-trans-highlight-input__text-content {
+  display: block;
+  width: max-content;
+}
+
+.cfg-trans-highlight-input__text .cfg-search-match {
+  padding-inline: 0;
+  color: transparent;
+}
+
+.cfg-trans-highlight-input__input {
+  position: relative;
+  z-index: 2;
+  display: block;
+}
+
+.cfg-trans-highlight-input__input,
+.cfg-trans-highlight-input__input:hover,
+.cfg-trans-highlight-input__input:focus {
+  background: transparent;
+}
+
+.cfg-trans-add-error {
+  margin: 0.5rem 0.5rem 0;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--cfg-danger) 30%, var(--cfg-surface));
+  border-radius: var(--cfg-radius);
+  background: color-mix(in srgb, var(--cfg-danger) 10%, var(--cfg-surface));
+  color: var(--cfg-danger);
+  font-size: 0.75rem;
+}
+
+.cfg-trans-lang-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cfg-trans-lang-header__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cfg-trans-lang-remove {
+  flex-shrink: 0;
+  border-radius: 3px;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.cfg-trans-lang-remove:hover {
+  background: color-mix(in srgb, var(--cfg-danger) 14%, var(--cfg-surface));
+  color: var(--cfg-danger);
+}

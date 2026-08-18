@@ -1,0 +1,12 @@
+/* ── App loading states ──────────────────────────────────────────────────────
+ * Used by App.tsx before HMI routes are loaded. Imported directly from App.tsx
+ * so these styles are available in the initial bundle. */
+
+/* Boot-loading gate: shown while custom components are being fetched */
+.hmi-boot-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: var(--hmi-bg);
+}

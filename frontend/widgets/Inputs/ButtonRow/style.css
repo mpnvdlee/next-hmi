@@ -1,0 +1,83 @@
+.hmi-button-row {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--hmi-input-gap);
+}
+
+.hmi-button-row__label {
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  color: var(--hmi-text-muted);
+  text-transform: var(--hmi-type-label-transform);
+  letter-spacing: var(--hmi-type-label-tracking);
+}
+
+.hmi-button-row__items {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.hmi-button-row--disabled {
+  opacity: 0.5;
+}
+
+.hmi-button-row__item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--hmi-select-height);
+  box-sizing: border-box;
+  /* Collapse the shared border between neighbours — geometry, not spacing. */
+  margin-left: -1px;
+  padding: 0 var(--hmi-space-md);
+  background: var(--hmi-surface);
+  color: var(--hmi-text-muted);
+  border: 1px solid var(--hmi-border);
+  border-radius: 0;
+  font-family: var(--hmi-type-body-font);
+  font-size: var(--hmi-type-body-size);
+  font-weight: var(--hmi-type-body-weight);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--hmi-motion-base),
+    border-color var(--hmi-motion-base),
+    color var(--hmi-motion-base);
+}
+
+.hmi-button-row__item:first-child {
+  margin-left: 0;
+  border-top-left-radius: var(--hmi-radius);
+  border-bottom-left-radius: var(--hmi-radius);
+}
+
+.hmi-button-row__item:last-child {
+  border-top-right-radius: var(--hmi-radius);
+  border-bottom-right-radius: var(--hmi-radius);
+}
+
+.hmi-button-row__item:hover:not(:disabled):not(.hmi-button-row__item--active) {
+  color: var(--hmi-text);
+  border-color: var(--hmi-border-strong);
+  z-index: 1;
+}
+
+.hmi-button-row__item:focus-visible {
+  outline: var(--hmi-accent-outline);
+  outline-offset: -2px;
+  z-index: 2;
+}
+
+.hmi-button-row__item--active {
+  background: var(--hmi-accent);
+  color: var(--hmi-accent-on);
+  border-color: var(--hmi-accent);
+  z-index: 1;
+}
+
+.hmi-button-row__item:disabled {
+  cursor: not-allowed;
+}

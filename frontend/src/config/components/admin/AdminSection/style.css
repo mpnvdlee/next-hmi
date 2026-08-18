@@ -1,0 +1,30 @@
+.cfg-admin-section {
+  gap: var(--cfg-space-4);
+  padding: var(--cfg-space-5);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface);
+}
+
+.cfg-admin-section__title {
+  margin: 0;
+  font-size: var(--cfg-text-lg);
+  font-weight: var(--cfg-fw-bold);
+  color: var(--cfg-text);
+}
+
+.cfg-admin-section__desc {
+  font-size: var(--cfg-hint-font-size);
+  color: var(--cfg-text-muted);
+  line-height: 1.5;
+  margin: 0;
+  max-width: 48ch;
+}
+
+.cfg-admin-section__desc code {
+  font-family: var(--cfg-font-mono);
+  font-size: 0.95em;
+  background: color-mix(in srgb, var(--cfg-surface-dark) 55%, var(--cfg-surface));
+  padding: 0 var(--cfg-space-1);
+  border-radius: var(--cfg-radius-sm);
+}

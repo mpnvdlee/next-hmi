@@ -1,0 +1,88 @@
+/* Chained with the global `.hmi-component`, which sets its own color and
+   font-family — the two-class selector wins on specificity rather than on
+   stylesheet order, which a runtime-injected sheet cannot rely on. */
+.hmi-component.hmi-status-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--hmi-space-snug);
+  box-sizing: border-box;
+  padding: var(--hmi-space-snug) var(--hmi-space-lg);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius-full);
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-subheading-weight);
+  white-space: nowrap;
+}
+
+.hmi-status-pill__icon {
+  display: inline-flex;
+  line-height: 0;
+}
+
+.hmi-status-pill__label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+
+.hmi-status-pill__text {
+  min-width: 0;
+}
+
+/* Tone owns the pill's `color`, so the second line separates itself by weight
+   and alpha rather than by a muted text token that would fight the tone. */
+.hmi-status-pill__subtext {
+  min-width: 0;
+  font-weight: var(--hmi-type-body-weight);
+  opacity: 0.72;
+}
+
+.hmi-status-pill__dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: hmi-status-pill-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes hmi-status-pill-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.35;
+    transform: scale(0.7);
+  }
+}
+
+.hmi-component.hmi-status-pill--accent {
+  background: var(--hmi-accent-soft);
+  color: var(--hmi-accent-ink);
+}
+
+.hmi-component.hmi-status-pill--neutral {
+  background: var(--hmi-surface-2);
+  color: var(--hmi-text-muted);
+}
+
+.hmi-component.hmi-status-pill--ok {
+  background: var(--hmi-ok-soft);
+  color: var(--hmi-ok);
+}
+
+.hmi-component.hmi-status-pill--warn {
+  background: var(--hmi-warn-soft);
+  color: var(--hmi-warn);
+}
+
+.hmi-component.hmi-status-pill--fault {
+  background: var(--hmi-fault-soft);
+  color: var(--hmi-fault);
+}

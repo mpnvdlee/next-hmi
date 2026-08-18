@@ -1,0 +1,10 @@
+.cfg-search-highlight {
+  display: inline;
+}
+
+.cfg-search-match {
+  padding: 0;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--cfg-accent) 18%, transparent);
+  color: inherit;
+}

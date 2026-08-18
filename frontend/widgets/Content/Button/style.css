@@ -1,0 +1,92 @@
+/* Padding and gap ride the theme spacing scale — the button is the most-placed
+   widget, so a theme that changes density has to reach it. The icon box and the
+   minimum height stay literal: both are touch-target geometry, and a theme that
+   tightens spacing must not shrink the tap area below 44px. */
+:root {
+  --hmi-btn-gap: var(--hmi-space-sm);
+  --hmi-btn-padding-y: var(--hmi-space-sm);
+  --hmi-btn-padding-x: var(--hmi-space-lg);
+  --hmi-btn-icon-size: 18px;
+  --hmi-btn-min-height: 44px;
+}
+
+/* Chained with the global `.hmi-component`, which sets its own color and
+   font-family — the two-class selector wins on specificity rather than on
+   stylesheet order, which a runtime-injected sheet cannot rely on. */
+.hmi-component.hmi-button {
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.hmi-button__btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--hmi-btn-gap);
+  min-height: var(--hmi-btn-min-height);
+  padding: var(--hmi-btn-padding-y) var(--hmi-btn-padding-x);
+  background: var(--hmi-accent);
+  color: var(--hmi-accent-on);
+  border: 1px solid var(--hmi-accent);
+  border-radius: var(--hmi-radius);
+  font-size: var(--hmi-type-body-size);
+  font-weight: var(--hmi-type-subheading-weight);
+  letter-spacing: var(--hmi-type-body-tracking);
+  cursor: pointer;
+  transition:
+    background var(--hmi-motion-fast) ease,
+    border-color var(--hmi-motion-fast) ease,
+    transform 80ms ease,
+    opacity 0.15s;
+}
+
+.hmi-button__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.hmi-button__icon-svg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  width: var(--hmi-btn-icon-size);
+  height: var(--hmi-btn-icon-size);
+}
+
+.hmi-button__label {
+  min-width: 0;
+}
+
+.hmi-button__btn:hover:not(:disabled) {
+  background: var(--hmi-accent-ink);
+  border-color: var(--hmi-accent-ink);
+}
+
+.hmi-button__btn:active:not(:disabled) {
+  transform: translateY(1px);
+  opacity: 0.92;
+}
+
+.hmi-button__btn--outline {
+  background: transparent;
+  color: var(--hmi-accent);
+}
+
+.hmi-button__btn--outline:hover:not(:disabled) {
+  background: color-mix(in oklch, currentColor 12%, transparent);
+  border-color: currentColor;
+}
+
+.hmi-button--disabled .hmi-button__btn {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

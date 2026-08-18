@@ -1,0 +1,146 @@
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-left: -0.25rem;
+  min-width: 0;
+}
+
+.app-brand__brand {
+  display: inline-flex;
+  align-items: center;
+  /* The mark is drawn edge-to-edge in its viewBox, so the lockup needs real
+     gap here rather than relying on padding baked into the artwork. */
+  gap: 0.45rem;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.app-brand__nav {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.app-brand__title {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--cfg-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.app-brand__title-sep {
+  margin: 0 0.5rem;
+  color: var(--cfg-border);
+  font-weight: 400;
+}
+
+.app-brand__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem 0.35rem;
+  border: none;
+  border-radius: var(--cfg-radius);
+  background: none;
+  color: var(--cfg-text);
+  cursor: pointer;
+  user-select: none;
+  min-width: 0;
+  transition: background 0.12s;
+}
+
+.app-brand__btn:hover {
+  background: color-mix(in srgb, var(--cfg-text) 3.5%, transparent);
+}
+
+.app-brand__btn:focus-visible {
+  outline: var(--cfg-focus-outline);
+  outline-offset: var(--cfg-focus-offset);
+}
+
+.app-brand__logo {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.app-brand__name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  /* Real space between the words so the accessible name reads "NEXT HMI";
+     pulled back to the tighter optical gap the wordmark is drawn with. */
+  word-spacing: -0.12em;
+}
+
+.app-brand__name-next {
+  color: #4f46e5;
+}
+
+.app-brand__caret {
+  width: 12px;
+  height: 12px;
+  stroke: var(--cfg-text-muted, var(--cfg-text));
+  opacity: 0.7;
+}
+
+.app-brand__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 160px;
+  padding: 0.25rem;
+  background: var(--cfg-surface);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  box-shadow: var(--cfg-shadow-md);
+  z-index: 100;
+}
+
+.app-brand__menu-divider {
+  height: 1px;
+  margin: 0.25rem 0;
+  background: var(--cfg-border);
+}
+
+.app-brand__placeholder {
+  display: block;
+  padding: 0.45rem 0.6rem;
+  color: var(--cfg-text-muted, var(--cfg-text));
+  font-size: var(--cfg-font-size-base);
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.app-brand__item {
+  display: block;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--cfg-radius);
+  color: var(--cfg-text);
+  font-size: var(--cfg-font-size-base);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background 0.1s,
+    color 0.1s;
+}
+
+.app-brand__item:hover {
+  background: var(--cfg-surface-dark);
+}
+
+.app-brand__item--active {
+  color: var(--cfg-accent);
+}
+
+.app-brand__item:focus-visible {
+  outline: var(--cfg-focus-outline);
+  outline-offset: var(--cfg-focus-offset);
+}

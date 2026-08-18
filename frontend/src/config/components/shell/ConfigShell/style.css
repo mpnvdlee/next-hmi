@@ -1,0 +1,105 @@
+/* ── Config shell (header + sidebar + content) ─────────────── */
+.cfg-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  font-size: var(--cfg-font-size-base);
+  color: var(--cfg-text);
+  background: var(--cfg-bg);
+}
+
+.cfg-shell__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cfg-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 56px;
+  padding-top: 0.75rem;
+  gap: 0.35rem;
+  background: var(--cfg-surface);
+  border-right: 1px solid var(--cfg-border);
+  flex-shrink: 0;
+}
+
+.cfg-nav__link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--cfg-text-muted);
+  font-size: 1.4rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+
+.cfg-nav__link:hover {
+  background: var(--cfg-surface-dark);
+  color: var(--cfg-text);
+}
+
+.cfg-nav__link:active {
+  background: color-mix(in srgb, var(--cfg-accent) 14%, var(--cfg-surface));
+}
+
+.cfg-nav__link:focus-visible {
+  outline: var(--cfg-focus-outline);
+  outline-offset: var(--cfg-focus-offset);
+}
+
+.cfg-nav__link--active {
+  background: var(--cfg-selected-bg);
+  color: var(--cfg-selected-text);
+}
+
+.cfg-shell__content {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+  .cfg-nav {
+    width: 50px;
+    padding-top: var(--cfg-space-2);
+  }
+
+  .cfg-nav__link {
+    width: 36px;
+    height: 36px;
+    font-size: 1.2rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .cfg-shell__body {
+    flex-direction: column;
+  }
+
+  .cfg-nav {
+    flex-direction: row;
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--cfg-border);
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding: var(--cfg-space-2);
+  }
+
+  .cfg-shell__content {
+    min-height: 0;
+  }
+}

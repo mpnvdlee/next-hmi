@@ -1,0 +1,74 @@
+.hmi-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hmi-space-sm);
+  height: var(--hmi-select-height);
+  box-sizing: border-box;
+}
+
+.hmi-switch.hmi-switch--above {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--hmi-input-gap);
+  height: auto;
+}
+
+.hmi-switch__label {
+  font-size: var(--hmi-type-body-size);
+  user-select: none;
+}
+
+.hmi-switch--above .hmi-switch__label {
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  color: var(--hmi-text-muted);
+  text-transform: var(--hmi-type-label-transform);
+  letter-spacing: var(--hmi-type-label-tracking);
+}
+
+.hmi-switch__track {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: calc(var(--hmi-select-height) * 1.75);
+  height: var(--hmi-select-height);
+  box-sizing: border-box;
+  padding: 0;
+  background: var(--hmi-border);
+  border: none;
+  border-radius: var(--hmi-radius-full);
+  cursor: pointer;
+  transition: background var(--hmi-motion-base) ease;
+}
+
+.hmi-switch__track:focus-visible {
+  outline: var(--hmi-accent-outline);
+  outline-offset: 2px;
+}
+
+.hmi-switch__track--on {
+  background: var(--hmi-accent);
+}
+
+.hmi-switch--disabled .hmi-switch__track {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.hmi-switch__thumb {
+  position: absolute;
+  left: 4px;
+  width: calc(var(--hmi-select-height) - 8px);
+  height: calc(var(--hmi-select-height) - 8px);
+  border-radius: 50%;
+  background: var(--hmi-white);
+  box-shadow: var(--hmi-shadow);
+  transition: left var(--hmi-motion-base) ease;
+  pointer-events: none;
+}
+
+.hmi-switch__track--on .hmi-switch__thumb {
+  left: calc(var(--hmi-select-height) * 0.75 + 4px);
+}

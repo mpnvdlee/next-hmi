@@ -1,0 +1,172 @@
+/* HMI token mapping layer.
+ *
+ * Editable theme primaries (--hmi-bg, --hmi-surface, --hmi-text, font sizes,
+ * spacing, radii, shadows, motion, etc.) are NOT declared here. They are
+ * applied as inline styles on :root by applyThemeTokens() — at module load
+ * (with defaults from themeDefaults.json) and again on /api/theme load.
+ * The single source of truth lives in:
+ *
+ *   frontend/src/shared/themeDefaults.json   ← values
+ *   frontend/src/shared/utils/themeTokens.ts ← registry + applier
+ *   backend/models/theme.py                  ← Pydantic schema (reads JSON)
+ *
+ * This file holds only:
+ *   1. Derived secondary tokens (recompute from primaries via color-mix)
+ *   2. Structural / non-editable tokens (overlay, indicator, virtual panels)
+ *   3. Aliases referenced by component CSS but not surfaced in the editor
+ *
+ * Dark mode is a regular named theme (see the Themes editor), applied through
+ * the same applyThemeTokens() path — there is no `data-theme` override here.
+ */
+
+:root {
+  --hmi-white: #fff;
+
+  /* ── Derived secondary tokens (CSS-only). Recompute when primaries change. */
+  --hmi-surface-2: color-mix(in oklch, var(--hmi-surface) 92%, var(--hmi-bg));
+  --hmi-surface-3: color-mix(in oklch, var(--hmi-bg) 80%, var(--hmi-text) 5%);
+  --hmi-text-2: color-mix(in oklch, var(--hmi-text) 75%, var(--hmi-text-muted));
+  --hmi-text-3: var(--hmi-text-muted);
+  --hmi-text-4: color-mix(in oklch, var(--hmi-text-muted) 70%, var(--hmi-bg));
+  --hmi-border-strong: color-mix(in oklch, var(--hmi-border) 55%, var(--hmi-text));
+
+  /* ── Sub-step spacing ────────────────────────────────────────────────────
+     Below --hmi-space-sm. Widgets need gaps this fine for optically-joined
+     pairs — a value and its unit, a dot and its label — where a full step
+     would read as two separate items. They were literal px, which froze them
+     out of the scale; as fractions they track a theme that changes density. */
+  --hmi-space-hair: calc(var(--hmi-space-sm) * 0.25);
+  --hmi-space-tight: calc(var(--hmi-space-sm) * 0.5);
+  --hmi-space-snug: calc(var(--hmi-space-sm) * 0.75);
+  --hmi-accent-soft: color-mix(in oklch, var(--hmi-accent) 12%, var(--hmi-surface));
+  --hmi-accent-ink: color-mix(in oklch, var(--hmi-accent) 80%, black);
+  --hmi-accent-on: var(--hmi-white);
+  --hmi-ok-soft: color-mix(in oklch, var(--hmi-ok) 14%, var(--hmi-surface));
+  /* The informational counterpart of ok/warn/fault. Fixed rather than editable:
+     it completes the status scale, and hanging it off the theme accent makes an
+     info alarm change hue with the branding — green in a teal theme, red in a
+     warm one — so it stops reading as "information" at a glance. */
+  --hmi-info: #0a84ff;
+  --hmi-info-soft: color-mix(in oklch, var(--hmi-info) 12%, var(--hmi-surface));
+  --hmi-info-ink: color-mix(in oklch, var(--hmi-info) 80%, black);
+  --hmi-warn-soft: color-mix(in oklch, var(--hmi-warn) 16%, var(--hmi-surface));
+  --hmi-fault-soft: color-mix(in oklch, var(--hmi-fault) 14%, var(--hmi-surface));
+
+  /* ── Chart series palette ────────────────────────────────────────────────
+     Eight categorical hues for multi-trace plots, in draw order. Fixed for
+     the same reason as --hmi-info: a series colour carries identity, not
+     status, so the set has to stay mutually distinguishable. Deriving it
+     from the theme accent would pull every trace towards one hue and make
+     an eight-tag trend unreadable. A widget still lets the author override
+     per-instance. */
+  --hmi-series-1: #2563eb;
+  --hmi-series-2: #dc2626;
+  --hmi-series-3: #16a34a;
+  --hmi-series-4: #d97706;
+  --hmi-series-5: #7c3aed;
+  --hmi-series-6: #0891b2;
+  --hmi-series-7: #be185d;
+  --hmi-series-8: #65a30d;
+
+  /* ── Structural overlays / shadows / indicators (not editable) ─────────── */
+  --hmi-overlay-bg: rgba(0, 0, 0, 0.6);
+  --hmi-modal-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+
+  /* A toast floats over whatever the page happens to be showing, so its
+     elevation is structural like the modal's — the editable `--hmi-shadow` is
+     tuned for cards sitting *in* a surface and a theme is free to set it to
+     almost nothing, which leaves a notification with no edge at all. */
+  --hmi-toast-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+
+  /* ── Layering scale ────────────────────────────────────────────────────
+     Every full-screen runtime overlay reads its z-index from here, so the
+     stacking order is one list rather than a set of numbers spread over the
+     component CSS. An alarm's detail dialog opens *from* an alarm toast, so it
+     has to sit above the toast band. */
+  --hmi-z-modal: 100;
+  /* A widget's own popup — a dropdown list, a nav flyout — escapes its
+     scroll container but still belongs to the page, so it sits just above
+     the modal layer and below anything the runtime raises over the page. */
+  --hmi-z-popup: 130;
+  --hmi-z-alert: 200;
+  --hmi-z-toast: 300;
+  --hmi-z-alarm-dialog: 400;
+
+  /* Width of the severity stripe down the left edge of an alarm row or toast. */
+  --hmi-alarm-stripe: 3px;
+
+  --hmi-indicator-bg: #000;
+  --hmi-indicator-fg: var(--hmi-white);
+  --hmi-indicator-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  --hmi-indicator-pill-border: #e53e3e;
+
+  --hmi-binding-disabled-bg: rgba(220, 38, 38, 0.12);
+  --hmi-binding-disabled-border: rgba(220, 38, 38, 0.65);
+  --hmi-binding-disabled-icon: rgba(220, 38, 38, 0.85);
+  --hmi-binding-disconnected-bg: rgba(234, 179, 8, 0.1);
+  --hmi-binding-disconnected-border: rgba(234, 179, 8, 0.7);
+  /* ── Common outlines / borders ─────────────────────────────────────────── */
+  --hmi-accent-outline: 2px solid var(--hmi-accent);
+  --hmi-accent-outline-offset: 2px;
+
+  /* Editor/develop accent (matches the app logo) used for selection boxes in
+     the editor preview — independent of the operator's HMI theme accent. */
+  --hmi-editor-selection: #4f46e5;
+  --hmi-tab-indicator-width: 2px;
+
+  /* ── Aliases referenced by component CSS but not editable ──────────────── */
+  --hmi-radius-full: 9999px;
+
+  /* Motion durations are no longer editable — static so transitions still animate. */
+  --hmi-motion-fast: 120ms;
+  --hmi-motion-base: 180ms;
+  --hmi-motion-slow: 260ms;
+
+  /* ── Top bar sizing ────────────────────────────────────────────────────── */
+  --hmi-topbar-height: 56px;
+
+  /* ── Input / select control sizing ───────────────────────────────────────
+     Derived from the spacing scale rather than authored in rem, so a theme
+     that tightens or loosens spacing carries the input controls with it. The
+     ratios reproduce the previous literals at the default --hmi-space-sm.
+     Only the select's height stays structural — it is a hit target, not
+     padding, and shrinking it with the spacing scale would break touch use. */
+  --hmi-input-padding-y: calc(var(--hmi-space-sm) * 0.75);
+  --hmi-input-padding-x: calc(var(--hmi-space-sm) * 1.25);
+  --hmi-input-gap: calc(var(--hmi-space-sm) * 0.5);
+  --hmi-select-height: 32px;
+  --hmi-select-padding-y: calc(var(--hmi-space-sm) * 0.5);
+  --hmi-select-padding-x: var(--hmi-space-sm);
+
+  /* ── Virtual input panel sizing ──────────────────────────────────────────
+     Layout dimensions stay structural, while visual spacing and type are
+     aliases of editable theme tokens so keyboards follow the active theme. */
+  --hmi-virtual-dock-offset: 14px;
+  --hmi-virtual-dock-width: min(760px, calc(100vw - 24px));
+  --hmi-virtual-dock-offset-mobile: 8px;
+  --hmi-virtual-dock-width-mobile: calc(100vw - 12px);
+  --hmi-virtual-dock-width-compact: 188px;
+  --hmi-virtual-dock-width-compact-mobile: min(188px, calc(100vw - 16px));
+
+  --hmi-virtual-panel-gap: var(--hmi-space-sm);
+  --hmi-virtual-panel-padding: var(--hmi-space-md);
+  --hmi-virtual-panel-gap-compact: var(--hmi-space-sm);
+  --hmi-virtual-panel-padding-compact: var(--hmi-space-sm);
+
+  --hmi-virtual-key-padding-y: var(--hmi-space-sm);
+  --hmi-virtual-key-padding-x: var(--hmi-space-md);
+  --hmi-virtual-key-padding-y-compact: var(--hmi-space-sm);
+  --hmi-virtual-key-padding-x-compact: var(--hmi-space-sm);
+  --hmi-virtual-key-padding-y-mobile: var(--hmi-space-sm);
+  --hmi-virtual-key-padding-y-compact-mobile: var(--hmi-space-sm);
+  --hmi-virtual-key-padding-x-compact-mobile: var(--hmi-space-sm);
+  --hmi-virtual-key-font-size-compact: var(--hmi-type-body-size);
+  --hmi-virtual-key-font-size-actions-compact: var(--hmi-type-caption-size);
+  --hmi-virtual-key-font-size-compact-mobile: var(--hmi-type-body-size);
+
+  --hmi-virtual-title-size: var(--hmi-type-caption-size);
+  --hmi-virtual-row-gap-mobile: var(--hmi-space-sm);
+  --hmi-virtual-panel-padding-mobile: var(--hmi-space-sm);
+  --hmi-virtual-panel-padding-compact-mobile: var(--hmi-space-sm);
+  --hmi-virtual-panel-gap-mobile: var(--hmi-space-sm);
+}

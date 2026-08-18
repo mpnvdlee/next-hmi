@@ -1,0 +1,42 @@
+/* `min-width: 0` is not repeated on the root: the global `.hmi-component`
+   already resolves it from `--self-min-width`, defaulting to 0, and a rule here
+   would override the author's configured minimum instead of falling back to it. */
+.hmi-logo-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hmi-space-sm);
+}
+
+.hmi-logo-title__logo {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--hmi-radius);
+  object-fit: contain;
+}
+
+.hmi-logo-title__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Both lines inherit color and font-family from `.hmi-component` on the root;
+   only the subtitle dims away from it. */
+.hmi-logo-title__title {
+  font-size: var(--hmi-type-subheading-size);
+  font-weight: var(--hmi-type-heading-weight);
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hmi-logo-title__subtitle {
+  color: var(--hmi-text-muted);
+  font-size: var(--hmi-type-caption-size);
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

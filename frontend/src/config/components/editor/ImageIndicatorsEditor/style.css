@@ -1,0 +1,157 @@
+/* ImageIndicatorsEditor — editor-specific styles only.
+ * Sidebar/list/row chrome lives in ../markerEditor.css.
+ * Modal/button/input chrome comes from config.css and ItemsInput/style.css.
+ */
+
+/* Wider modal to fit two-column layout */
+.cfg-ind-modal {
+  width: min(92vw, 72rem);
+  height: min(88vh, 52rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Two-column body */
+.cfg-ind-modal-body {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: var(--cfg-space-4);
+  padding: var(--cfg-space-4);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Left: image canvas */
+.cfg-ind-image-area {
+  position: relative;
+  overflow: hidden;
+  background: var(--cfg-bg);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cfg-ind-image-area img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+}
+
+.cfg-ind-no-image {
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text-muted);
+  text-align: center;
+  padding: var(--cfg-space-4);
+}
+
+/* Draggable indicator circle (editor) — black filled */
+.cfg-ind-circle {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  background: var(--cfg-preview-indicator-bg);
+  color: var(--cfg-preview-indicator-fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: grab;
+  user-select: none;
+  z-index: 2;
+  box-shadow: var(--cfg-preview-indicator-shadow);
+  touch-action: none;
+  white-space: nowrap;
+  min-width: 26px;
+}
+
+.cfg-ind-circle--dragging {
+  cursor: grabbing;
+  box-shadow: var(--cfg-preview-indicator-drag-shadow);
+}
+
+.cfg-ind-circle--selected:not(.cfg-ind-circle--sm) {
+  outline: 1px dashed var(--cfg-accent, var(--cfg-border));
+  outline-offset: 3px;
+}
+
+/* Small decorative circle in sidebar rows — not draggable */
+.cfg-ind-circle--sm {
+  position: static;
+  transform: none;
+  height: 22px;
+  padding: 0 7px;
+  min-width: 22px;
+  font-size: 10px;
+  flex-shrink: 0;
+  cursor: default;
+  touch-action: auto;
+  border-radius: 9999px;
+}
+
+/* Draggable red dashed circle (editor) — width/height set inline */
+.cfg-ind-pill {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px dashed var(--cfg-preview-indicator-pill-border);
+  background: transparent;
+  cursor: grab;
+  user-select: none;
+  z-index: 2;
+  touch-action: none;
+  aspect-ratio: 1;
+}
+
+.cfg-ind-pill--dragging {
+  cursor: grabbing;
+}
+
+.cfg-ind-pill--selected {
+  border-style: solid;
+  border-color: var(--cfg-accent, var(--cfg-preview-indicator-pill-border));
+}
+
+/* Column widths in the list head */
+.cfg-ind-col-label--label {
+  width: 72px;
+}
+
+.cfg-ind-col-label--size {
+  width: 52px;
+}
+
+.cfg-ind-col-spacer {
+  width: 22px;
+}
+
+/* Per-row input widths */
+.cfg-ind-label-input {
+  width: 72px !important;
+  text-align: center;
+}
+
+.cfg-ind-size-input {
+  width: 52px !important;
+  text-align: center;
+}
+
+/* Footer */
+.cfg-ind-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--cfg-space-2);
+  padding: var(--cfg-space-3) var(--cfg-space-4);
+  border-top: 1px solid var(--cfg-border);
+  flex-shrink: 0;
+}

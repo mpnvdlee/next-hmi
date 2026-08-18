@@ -1,0 +1,90 @@
+/* The card itself is styled by the shared `hmi-toast` classes (see
+ * ../ToastStack/toast-stack.css) so alarm notifications and action toasts read
+ * as one system. Only the placement and the alarm-specific parts live here. */
+
+.overlay {
+  position: fixed;
+  top: var(--hmi-space-lg);
+  right: var(--hmi-space-lg);
+  z-index: var(--hmi-z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-sm);
+  width: min(420px, calc(100vw - var(--hmi-space-lg) * 2));
+  pointer-events: none;
+}
+
+.popup {
+  cursor: pointer;
+  align-items: center;
+  animation-name: slideIn;
+}
+
+/* The shared toast pulls its icon and close button up toward the first text
+   line, because a toast message can wrap to any height. An alarm card is always
+   the same two lines, so both sit on the row's centre line instead. */
+.popup :global(.hmi-toast__icon) {
+  margin-top: 0;
+}
+
+.popup :global(.hmi-toast__close) {
+  margin: 0;
+}
+
+/* Alarm toasts dock to the right edge, so they slide in from it rather than
+   down from the top like the centered toast stack. */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.popupContent {
+  flex: 1;
+  min-width: 0;
+}
+
+/* A table row is a fixed-height scannable line, so it ellipsizes — a toast is
+   the whole message and has room to grow, so it wraps instead. An operator must
+   be able to read what fired without opening anything. */
+.popupTitle {
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-subheading-weight);
+  color: var(--hmi-text);
+  overflow-wrap: anywhere;
+}
+
+.popupMeta {
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  letter-spacing: var(--hmi-type-label-tracking);
+  text-transform: var(--hmi-type-label-transform);
+  color: var(--hmi-text-3);
+}
+
+.ackBtn {
+  composes: hmi-alarm-btn hmi-alarm-btn--quiet from global;
+}
+
+/* The alarm editor renders this card as a preview: same paint, no affordances. */
+.popupInert {
+  cursor: default;
+  animation: none;
+}
+
+.popupInert .ackBtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.popupInert .ackBtn:disabled:hover {
+  border-color: var(--hmi-border);
+  background: var(--hmi-surface);
+  color: var(--hmi-text-2);
+}

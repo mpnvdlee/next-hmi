@@ -1,0 +1,49 @@
+/* Chained with the global `.hmi-component`, which sets its own min-width from
+   `--self-min-width` — the two-class selector wins on specificity rather than
+   on stylesheet order, which a runtime-injected sheet cannot rely on. */
+.hmi-component.hmi-trend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-input-gap);
+  padding: var(--hmi-space-sm) 0;
+  min-width: 160px;
+}
+
+.hmi-trend__label {
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  letter-spacing: var(--hmi-type-label-tracking);
+  text-transform: var(--hmi-type-label-transform);
+  color: var(--hmi-text-muted);
+}
+
+/* The chart fills whatever height the layout gives the widget, so a taller
+   cell draws a taller line rather than leaving a band of dead space under a
+   fixed-height plot. The floor keeps a sparkline readable with no height set. */
+.hmi-trend__chart {
+  flex: 1;
+  min-height: 64px;
+}
+
+.hmi-trend__readout {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--hmi-space-sm);
+}
+
+.hmi-trend__value {
+  font-family: var(--hmi-type-value-font);
+  font-size: var(--hmi-type-subheading-size);
+  font-weight: var(--hmi-type-value-weight);
+  letter-spacing: var(--hmi-type-value-tracking);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--hmi-text);
+}
+
+.hmi-trend__unit {
+  font-size: var(--hmi-type-caption-size);
+  color: var(--hmi-text-muted);
+}

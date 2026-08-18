@@ -1,0 +1,2194 @@
+[
+  {
+    "category": "Layout & structure",
+    "widgets": [
+      {
+        "type": "ComponentSlot",
+        "name": "Component Slot",
+        "description": "Marks where content the caller supplies is rendered. Put one in a reusable component and instances of it gain a named slot — in the widget tree, and in the properties panel when a \"Widget slot\" property names it.",
+        "props": [
+          {
+            "key": "slot",
+            "label": "Slot name",
+            "type": "slot"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "ImageContainer",
+        "name": "Image Container",
+        "description": "Places children at absolute spots over a background image. Collapses below a set width.",
+        "props": [
+          {
+            "key": "src",
+            "label": "Image",
+            "type": "image",
+            "group": "Image"
+          },
+          {
+            "key": "alt",
+            "label": "Alt text",
+            "type": "String",
+            "group": "Image"
+          },
+          {
+            "key": "fit",
+            "label": "Fit",
+            "type": "String",
+            "group": "Image",
+            "defaultValue": "contain"
+          },
+          {
+            "key": "collapseBelow",
+            "label": "Collapse below (px)",
+            "type": "Integer",
+            "group": "Responsive",
+            "defaultValue": 0
+          },
+          {
+            "key": "childPositions",
+            "label": "Child placement",
+            "type": "child-positions",
+            "group": "Children"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "Container",
+        "name": "Container",
+        "description": "Groups and lays out child widgets in a row or column. Hosts other widgets.",
+        "props": [
+          {
+            "key": "title",
+            "label": "Title",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "showWhenEmpty",
+            "label": "Show when empty",
+            "type": "Boolean",
+            "group": "Content",
+            "defaultValue": false
+          },
+          {
+            "key": "background",
+            "label": "Background",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "border",
+            "label": "Border",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "none"
+          },
+          {
+            "key": "shadow",
+            "label": "Shadow",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "none"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "FixedSpacer",
+        "name": "Fixed Spacer",
+        "description": "A precise pixel gap between widgets.",
+        "props": [
+          {
+            "key": "size",
+            "label": "Size (px)",
+            "type": "Integer",
+            "defaultValue": 8
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "Separator",
+        "name": "Separator",
+        "description": "A thin divider line between widgets.",
+        "props": [
+          {
+            "key": "orientation",
+            "label": "Orientation",
+            "type": "String",
+            "defaultValue": "horizontal"
+          },
+          {
+            "key": "thickness",
+            "label": "Thickness (px)",
+            "type": "Integer",
+            "defaultValue": 1
+          },
+          {
+            "key": "color",
+            "label": "Color",
+            "type": "color"
+          },
+          {
+            "key": "inset",
+            "label": "Inset (px)",
+            "type": "Integer",
+            "defaultValue": 0
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "StretchSpacer",
+        "name": "Stretch Spacer",
+        "description": "Flexible gap that pushes neighbours apart, by ratio or percent.",
+        "props": [
+          {
+            "key": "mode",
+            "label": "Mode",
+            "type": "String",
+            "defaultValue": "ratio"
+          },
+          {
+            "key": "ratio",
+            "label": "Ratio",
+            "type": "Integer",
+            "defaultValue": 1
+          },
+          {
+            "key": "percent",
+            "label": "Percent (%)",
+            "type": "Integer",
+            "defaultValue": 50
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "Content & controls",
+    "widgets": [
+      {
+        "type": "AlarmHistoryList",
+        "name": "Alarm History",
+        "description": "The rolling log of past alarm events.",
+        "props": [
+          {
+            "key": "title",
+            "label": "Title",
+            "type": "String",
+            "defaultValue": "Alarm History"
+          },
+          {
+            "key": "maxRows",
+            "label": "Max rows",
+            "type": "Integer",
+            "defaultValue": 100
+          },
+          {
+            "key": "filterLevel",
+            "label": "Filter level",
+            "type": "String",
+            "defaultValue": ""
+          },
+          {
+            "key": "chrome",
+            "label": "Own frame",
+            "type": "Boolean",
+            "defaultValue": true
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "AlarmListManaged",
+        "name": "Alarm List",
+        "description": "Live active alarms, filterable by level, with acknowledgement.",
+        "props": [
+          {
+            "key": "title",
+            "label": "Title",
+            "type": "String",
+            "defaultValue": "Alarms"
+          },
+          {
+            "key": "filterLevel",
+            "label": "Filter level",
+            "type": "String",
+            "defaultValue": ""
+          },
+          {
+            "key": "chrome",
+            "label": "Own frame",
+            "type": "Boolean",
+            "defaultValue": true
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "Button",
+        "name": "Button",
+        "description": "Runs actions and can bind a writable boolean struct (bVisible / bEnabled / bValue).",
+        "props": [
+          {
+            "key": "label",
+            "label": "Label",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "Button"
+          },
+          {
+            "key": "iconName",
+            "label": "Icon",
+            "type": "icon",
+            "group": "Content"
+          },
+          {
+            "key": "color",
+            "label": "Color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "variant",
+            "label": "Style",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "solid"
+          },
+          {
+            "key": "variable",
+            "label": "Variable",
+            "type": "struct"
+          },
+          {
+            "key": "actions",
+            "label": "Actions",
+            "type": "actions"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "Clock",
+        "name": "Clock",
+        "description": "A live clock, formatted with the same patterns as the $time source.",
+        "props": [
+          {
+            "key": "format",
+            "label": "Format",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "HH:mm:ss"
+          },
+          {
+            "key": "timezone",
+            "label": "Time zone",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "value",
+            "label": "Value override",
+            "type": "String",
+            "group": "Data"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "Icon",
+        "name": "Icon",
+        "description": "A themeable Phosphor icon at any size and colour.",
+        "props": [
+          {
+            "key": "iconName",
+            "label": "Icon",
+            "type": "icon"
+          },
+          {
+            "key": "size",
+            "label": "Size (px)",
+            "type": "Integer",
+            "defaultValue": 24
+          },
+          {
+            "key": "color",
+            "label": "Color",
+            "type": "color"
+          },
+          {
+            "key": "chrome",
+            "label": "Chip background",
+            "type": "Boolean",
+            "defaultValue": true
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "Image",
+        "name": "Image",
+        "description": "Shows an asset with a fit mode and optional data-driven indicators.",
+        "props": [
+          {
+            "key": "src",
+            "label": "Image",
+            "type": "image"
+          },
+          {
+            "key": "alt",
+            "label": "Alt text",
+            "type": "String"
+          },
+          {
+            "key": "fit",
+            "label": "Fit",
+            "type": "String",
+            "defaultValue": "contain"
+          },
+          {
+            "key": "indicators",
+            "label": "Indicators",
+            "type": "image-indicators"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "Label",
+        "name": "Label",
+        "description": "Text in one of the theme typography combos, with translation support.",
+        "props": [
+          {
+            "key": "text",
+            "label": "Text",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "typography",
+            "label": "Typography",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "body"
+          },
+          {
+            "key": "color",
+            "label": "Color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "align",
+            "label": "Align",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "left"
+          },
+          {
+            "key": "wrap",
+            "label": "Overflow",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "wrap"
+          },
+          {
+            "key": "size",
+            "label": "Size override",
+            "type": "String",
+            "group": "Appearance"
+          },
+          {
+            "key": "weight",
+            "label": "Weight override",
+            "type": "Integer",
+            "group": "Appearance"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "LogoTitle",
+        "name": "Logo Title",
+        "description": "A logo image paired with a title and an optional subtitle.",
+        "props": [
+          {
+            "key": "logoUrl",
+            "label": "Logo image",
+            "type": "image",
+            "group": "Content"
+          },
+          {
+            "key": "title",
+            "label": "Title",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "NEXT HMI"
+          },
+          {
+            "key": "subtitle",
+            "label": "Subtitle",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "PageTitle",
+        "name": "Page Title",
+        "description": "The current page's title and icon, or your own override text.",
+        "props": [
+          {
+            "key": "text",
+            "label": "Text",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "subtitle",
+            "label": "Subtitle",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "iconName",
+            "label": "Icon",
+            "type": "icon",
+            "group": "Content"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "StatusPill",
+        "name": "Status Pill",
+        "description": "A tone-colored status pill, with an optional second line and pulsing dot.",
+        "props": [
+          {
+            "key": "text",
+            "label": "Text",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "subText",
+            "label": "Sub text",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "tone",
+            "label": "Tone",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "neutral"
+          },
+          {
+            "key": "pulse",
+            "label": "Pulse",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": false
+          },
+          {
+            "key": "iconName",
+            "label": "Icon",
+            "type": "icon",
+            "group": "Appearance"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "TrendChart",
+        "name": "Trend Chart",
+        "description": "Plots recorded tag history over selectable time ranges, or buffers live values with no historian.",
+        "props": [
+          {
+            "key": "source",
+            "label": "Data source",
+            "type": "String",
+            "group": "Data",
+            "defaultValue": "history"
+          },
+          {
+            "key": "variables",
+            "label": "Variables",
+            "type": "String",
+            "group": "Data"
+          },
+          {
+            "key": "timeRange",
+            "label": "Default time range",
+            "type": "String",
+            "group": "Data",
+            "defaultValue": "1h"
+          },
+          {
+            "key": "refreshInterval",
+            "label": "Refresh interval (s)",
+            "type": "Integer",
+            "group": "Data",
+            "defaultValue": 10
+          },
+          {
+            "key": "liveWindow",
+            "label": "Live window (s)",
+            "type": "Integer",
+            "group": "Data",
+            "defaultValue": 300
+          },
+          {
+            "key": "liveMaxSamples",
+            "label": "Max samples per variable",
+            "type": "Integer",
+            "group": "Data",
+            "defaultValue": 300
+          },
+          {
+            "key": "showControls",
+            "label": "Show zoom buttons",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": false
+          },
+          {
+            "key": "seriesColors",
+            "label": "Line colors",
+            "type": "String",
+            "group": "Appearance"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "UserBadge",
+        "name": "User Badge",
+        "description": "Shows the currently signed-in user as an initialled badge.",
+        "props": [
+          {
+            "key": "usernameText",
+            "label": "Username text",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "groupsText",
+            "label": "Groups text",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "actions",
+            "label": "On Press",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "WebFrame",
+        "name": "Web Frame",
+        "description": "Embeds an external web page in an iframe.",
+        "props": [
+          {
+            "key": "url",
+            "label": "URL",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "title",
+            "label": "Title",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "showHeader",
+            "label": "Show header bar",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": false
+          },
+          {
+            "key": "showReloadButton",
+            "label": "Show reload button",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": true
+          },
+          {
+            "key": "showOpenInNewTab",
+            "label": "Show open-in-new-tab button",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": true
+          },
+          {
+            "key": "showLoadingState",
+            "label": "Show loading overlay",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": true
+          },
+          {
+            "key": "showErrorFallback",
+            "label": "Show error fallback",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": true
+          },
+          {
+            "key": "borderStyle",
+            "label": "Border",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "none"
+          },
+          {
+            "key": "cornerRadius",
+            "label": "Corner radius",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "none"
+          },
+          {
+            "key": "backgroundColor",
+            "label": "Background color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "loading",
+            "label": "Loading",
+            "type": "String",
+            "group": "Behaviour",
+            "defaultValue": "eager"
+          },
+          {
+            "key": "referrerPolicy",
+            "label": "Referrer policy",
+            "type": "String",
+            "group": "Behaviour",
+            "defaultValue": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "scrolling",
+            "label": "Scrolling",
+            "type": "String",
+            "group": "Behaviour",
+            "defaultValue": "auto"
+          },
+          {
+            "key": "reloadInterval",
+            "label": "Reload interval (seconds)",
+            "type": "Integer",
+            "group": "Behaviour",
+            "defaultValue": 0
+          },
+          {
+            "key": "reloadTrigger",
+            "label": "Reload trigger variable",
+            "type": "String",
+            "group": "Behaviour"
+          },
+          {
+            "key": "enableSandbox",
+            "label": "Enable sandbox",
+            "type": "Boolean",
+            "group": "Sandbox",
+            "defaultValue": true
+          },
+          {
+            "key": "allowScripts",
+            "label": "Allow scripts",
+            "type": "Boolean",
+            "group": "Sandbox",
+            "defaultValue": false
+          },
+          {
+            "key": "allowSameOrigin",
+            "label": "Allow same-origin",
+            "type": "Boolean",
+            "group": "Sandbox",
+            "defaultValue": false
+          },
+          {
+            "key": "allowForms",
+            "label": "Allow forms",
+            "type": "Boolean",
+            "group": "Sandbox",
+            "defaultValue": false
+          },
+          {
+            "key": "allowPopups",
+            "label": "Allow popups",
+            "type": "Boolean",
+            "group": "Sandbox",
+            "defaultValue": false
+          },
+          {
+            "key": "allowPopupsToEscapeSandbox",
+            "label": "Allow popups to escape sandbox",
+            "type": "Boolean",
+            "group": "Sandbox",
+            "defaultValue": false
+          },
+          {
+            "key": "allowModals",
+            "label": "Allow modals",
+            "type": "Boolean",
+            "group": "Sandbox",
+            "defaultValue": false
+          },
+          {
+            "key": "allowDownloads",
+            "label": "Allow downloads",
+            "type": "Boolean",
+            "group": "Sandbox",
+            "defaultValue": false
+          },
+          {
+            "key": "allowTopNavigation",
+            "label": "Allow top navigation",
+            "type": "Boolean",
+            "group": "Sandbox",
+            "defaultValue": false
+          },
+          {
+            "key": "allowPointerLock",
+            "label": "Allow pointer lock",
+            "type": "Boolean",
+            "group": "Sandbox",
+            "defaultValue": false
+          },
+          {
+            "key": "allowOrientationLock",
+            "label": "Allow orientation lock",
+            "type": "Boolean",
+            "group": "Sandbox",
+            "defaultValue": false
+          },
+          {
+            "key": "allowPresentation",
+            "label": "Allow presentation",
+            "type": "Boolean",
+            "group": "Sandbox",
+            "defaultValue": false
+          },
+          {
+            "key": "allowFullscreen",
+            "label": "Allow fullscreen",
+            "type": "Boolean",
+            "group": "Permissions",
+            "defaultValue": false
+          },
+          {
+            "key": "allowCamera",
+            "label": "Allow camera",
+            "type": "Boolean",
+            "group": "Permissions",
+            "defaultValue": false
+          },
+          {
+            "key": "allowMicrophone",
+            "label": "Allow microphone",
+            "type": "Boolean",
+            "group": "Permissions",
+            "defaultValue": false
+          },
+          {
+            "key": "allowGeolocation",
+            "label": "Allow geolocation",
+            "type": "Boolean",
+            "group": "Permissions",
+            "defaultValue": false
+          },
+          {
+            "key": "allowAutoplay",
+            "label": "Allow autoplay",
+            "type": "Boolean",
+            "group": "Permissions",
+            "defaultValue": false
+          },
+          {
+            "key": "allowClipboardRead",
+            "label": "Allow clipboard read",
+            "type": "Boolean",
+            "group": "Permissions",
+            "defaultValue": false
+          },
+          {
+            "key": "allowClipboardWrite",
+            "label": "Allow clipboard write",
+            "type": "Boolean",
+            "group": "Permissions",
+            "defaultValue": false
+          },
+          {
+            "key": "allowPayment",
+            "label": "Allow payment",
+            "type": "Boolean",
+            "group": "Permissions",
+            "defaultValue": false
+          },
+          {
+            "key": "customAllow",
+            "label": "Custom allow",
+            "type": "String",
+            "group": "Permissions"
+          },
+          {
+            "key": "allowedOrigins",
+            "label": "Allowed inbound origins",
+            "type": "String",
+            "group": "Data"
+          },
+          {
+            "key": "inboundVariable",
+            "label": "Inbound variable (write target)",
+            "type": "String",
+            "group": "Data"
+          },
+          {
+            "key": "outboundVariable",
+            "label": "Outbound variable",
+            "type": "String",
+            "group": "Data"
+          },
+          {
+            "key": "outboundOrigin",
+            "label": "Outbound target origin",
+            "type": "String",
+            "group": "Data",
+            "defaultValue": "*"
+          },
+          {
+            "key": "onLoad",
+            "label": "On Load",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "onError",
+            "label": "On Error",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "onMessage",
+            "label": "On Message",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "Inputs",
+    "widgets": [
+      {
+        "type": "ButtonRow",
+        "name": "Button Row",
+        "description": "A row of mutually-exclusive buttons — pick 1 of N. Writes the chosen option to a bound variable, or tracks selection locally and fires On Change.",
+        "props": [
+          {
+            "key": "label",
+            "label": "Label",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "options",
+            "label": "Options",
+            "type": "option-list | String[] | Integer[]",
+            "group": "Content"
+          },
+          {
+            "key": "variable",
+            "label": "Value",
+            "type": "String | Integer | Float",
+            "group": "Data"
+          },
+          {
+            "key": "selectedValue",
+            "label": "Selected value",
+            "type": "String",
+            "group": "Data"
+          },
+          {
+            "key": "disabled",
+            "label": "Disabled",
+            "type": "Boolean",
+            "group": "Appearance"
+          },
+          {
+            "key": "onChange",
+            "label": "On Change",
+            "type": "actions"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "Dropdown",
+        "name": "Dropdown",
+        "description": "Pick one option from a list. Publishes the selection for sibling widgets to read and fires On Change.",
+        "props": [
+          {
+            "key": "label",
+            "label": "Label",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "options",
+            "label": "Options",
+            "type": "option-list | String[] | Integer[]",
+            "group": "Content"
+          },
+          {
+            "key": "selectedValue",
+            "label": "Selected value",
+            "type": "String",
+            "group": "Data"
+          },
+          {
+            "key": "disabled",
+            "label": "Disabled",
+            "type": "Boolean",
+            "group": "Appearance"
+          },
+          {
+            "key": "onChange",
+            "label": "On Change",
+            "type": "actions"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "NumberInput",
+        "name": "Number Input",
+        "description": "A numeric entry field that writes a number to a variable.",
+        "props": [
+          {
+            "key": "label",
+            "label": "Label",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "unit",
+            "label": "Unit",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "min",
+            "label": "Min value",
+            "type": "Float",
+            "group": "Data"
+          },
+          {
+            "key": "max",
+            "label": "Max value",
+            "type": "Float",
+            "group": "Data"
+          },
+          {
+            "key": "variable",
+            "label": "Variable",
+            "type": "struct",
+            "group": "Data"
+          },
+          {
+            "key": "showRangeOnNumpad",
+            "label": "Show range on numpad",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": true
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "NumericStepper",
+        "name": "Numeric Stepper",
+        "description": "Increment / decrement a numeric variable with + / − buttons.",
+        "props": [
+          {
+            "key": "label",
+            "label": "Label",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "unit",
+            "label": "Unit",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "variable",
+            "label": "Value",
+            "type": "Float | Integer",
+            "group": "Data"
+          },
+          {
+            "key": "step",
+            "label": "Step",
+            "type": "Float",
+            "group": "Data",
+            "defaultValue": 1
+          },
+          {
+            "key": "min",
+            "label": "Min value",
+            "type": "Float",
+            "group": "Data"
+          },
+          {
+            "key": "max",
+            "label": "Max value",
+            "type": "Float",
+            "group": "Data"
+          },
+          {
+            "key": "decimals",
+            "label": "Decimal places",
+            "type": "Integer",
+            "group": "Appearance",
+            "defaultValue": 0
+          },
+          {
+            "key": "showRangeOnNumpad",
+            "label": "Show range on numpad",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": true
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "StringInput",
+        "name": "String Input",
+        "description": "A text field whose typed value is published for sibling widgets to read.",
+        "props": [
+          {
+            "key": "label",
+            "label": "Label",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "placeholder",
+            "label": "Placeholder",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "isPassword",
+            "label": "Password field",
+            "type": "Boolean",
+            "group": "Appearance"
+          },
+          {
+            "key": "disabled",
+            "label": "Disabled",
+            "type": "Boolean",
+            "group": "Appearance"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "Switch",
+        "name": "Switch",
+        "description": "A toggle that writes a boolean on/off to a variable.",
+        "props": [
+          {
+            "key": "label",
+            "label": "Label",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "labelPosition",
+            "label": "Label position",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "inline"
+          },
+          {
+            "key": "variable",
+            "label": "Value",
+            "type": "Boolean",
+            "group": "Data"
+          },
+          {
+            "key": "color",
+            "label": "On color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "Indicators",
+    "widgets": [
+      {
+        "type": "Gauge",
+        "name": "Gauge",
+        "description": "A round analog gauge with min/max and a value binding.",
+        "props": [
+          {
+            "key": "variable",
+            "label": "Value",
+            "type": "Float",
+            "group": "Data"
+          },
+          {
+            "key": "min",
+            "label": "Min value",
+            "type": "Float",
+            "group": "Data",
+            "defaultValue": 0
+          },
+          {
+            "key": "max",
+            "label": "Max value",
+            "type": "Float",
+            "group": "Data",
+            "defaultValue": 100
+          },
+          {
+            "key": "label",
+            "label": "Label",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "unit",
+            "label": "Unit",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "LedIndicator",
+        "name": "LED Indicator",
+        "description": "A status light that changes colour with a boolean.",
+        "props": [
+          {
+            "key": "variable",
+            "label": "Value",
+            "type": "Boolean",
+            "group": "Data"
+          },
+          {
+            "key": "label",
+            "label": "Label",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "ProgressBar",
+        "name": "Progress Bar",
+        "description": "A horizontal bar showing a percentage or progress value.",
+        "props": [
+          {
+            "key": "variable",
+            "label": "Value",
+            "type": "Float | Integer",
+            "group": "Data"
+          },
+          {
+            "key": "min",
+            "label": "Min value",
+            "type": "Float",
+            "group": "Data",
+            "defaultValue": 0
+          },
+          {
+            "key": "max",
+            "label": "Max value",
+            "type": "Float",
+            "group": "Data",
+            "defaultValue": 100
+          },
+          {
+            "key": "label",
+            "label": "Label",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "unit",
+            "label": "Unit",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "decimals",
+            "label": "Decimal places",
+            "type": "Integer",
+            "group": "Appearance",
+            "defaultValue": 0
+          },
+          {
+            "key": "showValue",
+            "label": "Show value",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": false
+          },
+          {
+            "key": "showPercent",
+            "label": "Show percent",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": true
+          },
+          {
+            "key": "color",
+            "label": "Fill color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "barHeight",
+            "label": "Bar height (px)",
+            "type": "Integer",
+            "group": "Appearance"
+          },
+          {
+            "key": "dense",
+            "label": "Dense",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": false
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "RingGauge",
+        "name": "Ring Gauge",
+        "description": "A donut ring showing a value as a share of its range, with the reading in the hole.",
+        "props": [
+          {
+            "key": "value",
+            "label": "Value",
+            "type": "Float | Integer",
+            "group": "Data"
+          },
+          {
+            "key": "min",
+            "label": "Min value",
+            "type": "Float",
+            "group": "Data",
+            "defaultValue": 0
+          },
+          {
+            "key": "max",
+            "label": "Max value",
+            "type": "Float",
+            "group": "Data",
+            "defaultValue": 100
+          },
+          {
+            "key": "unit",
+            "label": "Unit",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "%"
+          },
+          {
+            "key": "caption",
+            "label": "Caption",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "decimals",
+            "label": "Decimal places",
+            "type": "Integer",
+            "group": "Appearance",
+            "defaultValue": 1
+          },
+          {
+            "key": "size",
+            "label": "Diameter (px)",
+            "type": "Integer",
+            "group": "Appearance",
+            "defaultValue": 132
+          },
+          {
+            "key": "thickness",
+            "label": "Ring thickness (px)",
+            "type": "Integer",
+            "group": "Appearance",
+            "defaultValue": 18
+          },
+          {
+            "key": "color",
+            "label": "Ring color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "StatTile",
+        "name": "Stat Tile",
+        "description": "KPI tile: label, value and unit, with a tinted icon in row mode.",
+        "props": [
+          {
+            "key": "label",
+            "label": "Label",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "value",
+            "label": "Value",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "unit",
+            "label": "Unit",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "icon",
+            "label": "Icon",
+            "type": "icon",
+            "group": "Appearance"
+          },
+          {
+            "key": "tone",
+            "label": "Tone",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "accent"
+          },
+          {
+            "key": "size",
+            "label": "Size",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "row"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "Trend",
+        "name": "Trend",
+        "description": "A live sparkline of one variable with its current reading — buffered in the page, no historian.",
+        "props": [
+          {
+            "key": "variable",
+            "label": "Value",
+            "type": "Float",
+            "group": "Data"
+          },
+          {
+            "key": "historyLength",
+            "label": "History length (samples)",
+            "type": "Integer",
+            "group": "Data",
+            "defaultValue": 60
+          },
+          {
+            "key": "label",
+            "label": "Label",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "unit",
+            "label": "Unit",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "decimals",
+            "label": "Decimal places",
+            "type": "Integer",
+            "group": "Appearance",
+            "defaultValue": 1
+          },
+          {
+            "key": "color",
+            "label": "Line color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "ValueDisplay",
+        "name": "Value Display",
+        "description": "Displays a numeric value with a label and unit.",
+        "props": [
+          {
+            "key": "variable",
+            "label": "Value",
+            "type": "Float | Integer | Boolean",
+            "group": "Data"
+          },
+          {
+            "key": "label",
+            "label": "Label",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "unit",
+            "label": "Unit",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "decimals",
+            "label": "Decimal places",
+            "type": "Integer",
+            "group": "Appearance",
+            "defaultValue": 1
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "Navigation",
+    "widgets": [
+      {
+        "type": "NavigationMenu",
+        "name": "Navigation Menu",
+        "description": "Sidebar or top-bar menu mirroring the page tree, with rich display options.",
+        "props": [
+          {
+            "key": "mode",
+            "label": "Mode",
+            "type": "String",
+            "group": "Source",
+            "defaultValue": "auto"
+          },
+          {
+            "key": "items",
+            "label": "Items",
+            "type": "menu-items",
+            "group": "Source"
+          },
+          {
+            "key": "orientation",
+            "label": "Orientation",
+            "type": "String",
+            "group": "Layout",
+            "defaultValue": "vertical"
+          },
+          {
+            "key": "display",
+            "label": "Display",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "icon-label"
+          },
+          {
+            "key": "hierarchy",
+            "label": "Hierarchy",
+            "type": "String",
+            "group": "Source",
+            "defaultValue": "tree"
+          },
+          {
+            "key": "submenuMode",
+            "label": "Submenu mode",
+            "type": "String",
+            "group": "Layout",
+            "defaultValue": "auto"
+          },
+          {
+            "key": "iconStrategy",
+            "label": "Icon strategy",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "first-letter"
+          },
+          {
+            "key": "activeStyle",
+            "label": "Active style",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "left-border"
+          },
+          {
+            "key": "groupExpansion",
+            "label": "Group expansion",
+            "type": "String",
+            "group": "Behaviour",
+            "defaultValue": "auto"
+          },
+          {
+            "key": "showSearch",
+            "label": "Show search",
+            "type": "Boolean",
+            "group": "Behaviour",
+            "defaultValue": false
+          },
+          {
+            "key": "collapsed",
+            "label": "Collapsed",
+            "type": "Boolean",
+            "group": "Layout",
+            "defaultValue": false
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "Breadcrumb",
+        "name": "Breadcrumb",
+        "description": "The trail of pages to where you are, with optional home icon.",
+        "props": [
+          {
+            "key": "separator",
+            "label": "Separator",
+            "type": "String",
+            "defaultValue": " / "
+          },
+          {
+            "key": "showHomeIcon",
+            "label": "Show home icon",
+            "type": "Boolean",
+            "defaultValue": false
+          },
+          {
+            "key": "homeLabel",
+            "label": "Home label",
+            "type": "String",
+            "defaultValue": "Home"
+          },
+          {
+            "key": "homePageId",
+            "label": "Home page",
+            "type": "String"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "LanguageSwitcher",
+        "name": "Language Switcher",
+        "description": "Lets operators change the interface language.",
+        "props": [
+          {
+            "key": "label",
+            "label": "Label",
+            "type": "String",
+            "defaultValue": "Language"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "MenuToggleButton",
+        "name": "Menu Toggle",
+        "description": "Collapses or expands a bound menu state; swaps icon per state.",
+        "props": [
+          {
+            "key": "bound",
+            "label": "Bound state",
+            "type": "Boolean",
+            "defaultValue": false
+          },
+          {
+            "key": "iconCollapsed",
+            "label": "Icon (collapsed)",
+            "type": "icon",
+            "defaultValue": "☰"
+          },
+          {
+            "key": "iconExpanded",
+            "label": "Icon (expanded)",
+            "type": "icon",
+            "defaultValue": "×"
+          },
+          {
+            "key": "ariaLabel",
+            "label": "Aria label",
+            "type": "String",
+            "defaultValue": "Toggle menu"
+          },
+          {
+            "key": "actions",
+            "label": "Actions",
+            "type": "actions"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "PageNavigator",
+        "name": "Page Navigator",
+        "description": "Previous / next controls stepping through a page group.",
+        "props": [
+          {
+            "key": "groupId",
+            "label": "Target group",
+            "type": "page-group"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "TabBar",
+        "name": "Tab Bar",
+        "description": "Switches between the sibling pages of a group as tabs.",
+        "props": [
+          {
+            "key": "groupId",
+            "label": "Target group",
+            "type": "page-group"
+          },
+          {
+            "key": "variant",
+            "label": "Style",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "underline"
+          },
+          {
+            "key": "showIcons",
+            "label": "Show icons",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": false
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      }
+    ]
+  }
+]

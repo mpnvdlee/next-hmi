@@ -1,0 +1,69 @@
+/* The track height and the fill's width and colour arrive as custom properties
+   so the component file stays free of literal inline style values.
+   Chained with the global `.hmi-component`, which sets its own min-width from
+   `--self-min-width` — the two-class selector wins on specificity rather than
+   on stylesheet order, which a runtime-injected sheet cannot rely on. */
+.hmi-component.hmi-progress-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-sm);
+  padding: var(--hmi-space-sm) var(--hmi-space-md);
+  min-width: 120px;
+}
+
+.hmi-component.hmi-progress-bar--dense {
+  gap: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.hmi-progress-bar__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--hmi-space-sm);
+}
+
+.hmi-progress-bar__label {
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  letter-spacing: var(--hmi-type-label-tracking);
+  text-transform: var(--hmi-type-label-transform);
+  color: var(--hmi-text-muted);
+}
+
+.hmi-progress-bar__readout {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--hmi-space-sm);
+  font-size: var(--hmi-type-body-size);
+  font-variant-numeric: tabular-nums;
+  color: var(--hmi-text);
+}
+
+.hmi-progress-bar__value {
+  font-weight: var(--hmi-type-subheading-weight);
+}
+
+.hmi-progress-bar__unit,
+.hmi-progress-bar__percent {
+  font-size: var(--hmi-type-caption-size);
+  color: var(--hmi-text-muted);
+}
+
+.hmi-progress-bar__track {
+  position: relative;
+  height: var(--hmi-progress-bar-height, 8px);
+  border-radius: var(--hmi-radius-full);
+  background: var(--hmi-border);
+  overflow: hidden;
+}
+
+.hmi-progress-bar__fill {
+  width: var(--hmi-progress-bar-fill, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--hmi-progress-bar-color, var(--hmi-accent));
+  transition: width var(--hmi-motion-base) ease-out;
+}

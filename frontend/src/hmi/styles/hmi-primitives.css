@@ -1,0 +1,125 @@
+/* HMI primitive utility classes — pill, kicker, readout, live-dot, bar.
+ * Available globally inside the runtime so built-in components and user
+ * widgets can opt in. Theme-driven via --hmi-* tokens; no hardcoded colors. */
+
+/* ── Status pill ─────────────────────────────────────────────── */
+.hmi-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hmi-space-sm);
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--hmi-radius-full);
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-heading-weight);
+  line-height: 1;
+}
+
+.hmi-pill__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in oklch, currentColor 22%, transparent);
+  flex-shrink: 0;
+}
+
+.hmi-pill--ok {
+  background: var(--hmi-ok-soft);
+  color: var(--hmi-ok);
+}
+.hmi-pill--warn {
+  background: var(--hmi-warn-soft);
+  color: var(--hmi-warn);
+}
+.hmi-pill--fault {
+  background: var(--hmi-fault-soft);
+  color: var(--hmi-fault);
+}
+.hmi-pill--idle {
+  background: var(--hmi-surface-3);
+  color: var(--hmi-text-3);
+}
+.hmi-pill--accent {
+  background: var(--hmi-accent-soft);
+  color: var(--hmi-accent-ink);
+}
+
+/* ── Live indicator dot (pulses when active) ─────────────────── */
+@keyframes hmi-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.hmi-live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hmi-ok);
+  animation: hmi-pulse 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.hmi-live-dot--warn {
+  background: var(--hmi-warn);
+}
+.hmi-live-dot--fault {
+  background: var(--hmi-fault);
+}
+.hmi-live-dot--idle {
+  background: var(--hmi-text-4);
+  animation: none;
+}
+
+/* ── Kicker label (uppercase eyebrow) ────────────────────────── */
+.hmi-kicker {
+  font-size: 11px;
+  font-weight: var(--hmi-type-heading-weight);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hmi-text-3);
+}
+
+/* ── Numeric readout (mono, tabular) ─────────────────────────── */
+.hmi-readout {
+  font-family: var(--hmi-type-code-font);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings:
+    'tnum' 1,
+    'zero' 1;
+  font-weight: var(--hmi-type-heading-weight);
+  letter-spacing: -0.01em;
+}
+
+/* ── Linear bar ──────────────────────────────────────────────── */
+.hmi-bar {
+  height: 6px;
+  background: var(--hmi-surface-3);
+  border-radius: var(--hmi-radius-full);
+  overflow: hidden;
+  position: relative;
+}
+
+.hmi-bar__fill {
+  height: 100%;
+  width: 0;
+  background: var(--hmi-accent);
+  border-radius: inherit;
+  transition: width 600ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.hmi-bar__fill--ok {
+  background: var(--hmi-ok);
+}
+.hmi-bar__fill--warn {
+  background: var(--hmi-warn);
+}
+.hmi-bar__fill--fault {
+  background: var(--hmi-fault);
+}

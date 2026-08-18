@@ -1,0 +1,129 @@
+.cfg-admin-https__hint code {
+  font-family: var(--cfg-font-mono);
+  font-size: 0.95em;
+  background: color-mix(in srgb, var(--cfg-surface-dark) 55%, var(--cfg-surface));
+  padding: 0 var(--cfg-space-1);
+  border-radius: var(--cfg-radius-sm);
+}
+
+.cfg-admin-https__switch {
+  display: inline-flex;
+  align-self: flex-start;
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius-sm);
+  overflow: hidden;
+}
+
+.cfg-admin-https__choice {
+  font: inherit;
+  font-size: var(--cfg-text-sm);
+  font-weight: 600;
+  color: var(--cfg-text-muted);
+  background: transparent;
+  border: 0;
+  padding: var(--cfg-space-2) var(--cfg-space-4);
+  cursor: pointer;
+}
+
+.cfg-admin-https__choice:disabled {
+  cursor: default;
+}
+
+.cfg-admin-https__choice--active {
+  color: var(--cfg-success);
+  background: color-mix(in srgb, var(--cfg-success) 15%, transparent);
+}
+
+.cfg-admin-https__modes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.cfg-admin-https__legend {
+  font-size: var(--cfg-text-sm);
+  font-weight: 600;
+  color: var(--cfg-text);
+  padding: 0 0 var(--cfg-space-2);
+}
+
+/* One prose block below the segmented choice rather than a hint per option —
+   the two hints are several lines each and only the selected one is useful. */
+.cfg-admin-https__mode-hint {
+  margin: 0;
+  font-size: var(--cfg-hint-font-size);
+  color: var(--cfg-text-muted);
+  line-height: 1.45;
+}
+
+.cfg-admin-https__upload {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+  align-items: flex-start;
+  padding: var(--cfg-space-3);
+  background: color-mix(in srgb, var(--cfg-surface-dark) 55%, var(--cfg-surface));
+  border-radius: var(--cfg-radius-sm);
+}
+
+.cfg-admin-https__file {
+  display: flex;
+  gap: var(--cfg-space-2);
+  align-items: center;
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text);
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.cfg-admin-https__hint {
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-hint-font-size);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.cfg-admin-https__hint--warn {
+  color: var(--cfg-warning);
+}
+
+.cfg-admin-https__hint--expired,
+.cfg-admin-https__expiry--expired {
+  color: var(--cfg-danger);
+}
+
+.cfg-admin-https__expiry--soon {
+  color: var(--cfg-warning);
+}
+
+.cfg-admin-https__cert {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+  align-items: flex-start;
+  padding: var(--cfg-space-3);
+  background: color-mix(in srgb, var(--cfg-surface-dark) 55%, var(--cfg-surface));
+  border-radius: var(--cfg-radius-sm);
+}
+
+.cfg-admin-https__cert-row {
+  display: flex;
+  gap: var(--cfg-space-2);
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text);
+  max-width: 100%;
+}
+
+.cfg-admin-https__cert-label {
+  color: var(--cfg-text-muted);
+  min-width: 6rem;
+}
+
+.cfg-admin-https__fingerprint {
+  font-family: var(--cfg-font-mono);
+  font-size: var(--cfg-text-xs);
+  word-break: break-all;
+}

@@ -1,0 +1,77 @@
+.hmi-tab-bar {
+  border: none;
+  background: transparent;
+  padding: 0;
+  border-bottom: 1px solid var(--hmi-border);
+}
+
+.hmi-tab-bar__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hmi-space-lg);
+}
+
+.hmi-tab-bar__tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--hmi-space-sm);
+  padding: var(--hmi-space-sm) var(--hmi-space-md) calc(var(--hmi-space-sm) + var(--hmi-tab-indicator-width));
+  border: none;
+  border-bottom: var(--hmi-tab-indicator-width) solid transparent;
+  background: transparent;
+  color: var(--hmi-text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: var(--hmi-type-subheading-weight);
+  border-radius: var(--hmi-radius-sm) var(--hmi-radius-sm) 0 0;
+  transition:
+    color var(--hmi-motion-fast) ease,
+    background var(--hmi-motion-fast) ease,
+    border-color var(--hmi-motion-fast) ease;
+}
+
+.hmi-tab-bar__icon {
+  display: inline-flex;
+  line-height: 0;
+}
+
+.hmi-tab-bar__tab:hover {
+  color: var(--hmi-text);
+  background: var(--hmi-surface-3);
+}
+
+.hmi-tab-bar__tab--active {
+  border-bottom-color: var(--hmi-accent);
+  color: var(--hmi-text);
+}
+
+/* Pill variant — declared after the underline rules it replaces, so the two
+   single-class selectors resolve by order inside this one stylesheet. */
+.hmi-tab-bar--pill {
+  border-bottom: none;
+}
+
+.hmi-tab-bar--pill .hmi-tab-bar__tabs {
+  gap: var(--hmi-space-sm);
+}
+
+.hmi-tab-bar--pill .hmi-tab-bar__tab {
+  padding: var(--hmi-space-sm) var(--hmi-space-lg);
+  border-bottom: none;
+  border-radius: var(--hmi-radius-full);
+  background: var(--hmi-surface-2);
+}
+
+.hmi-tab-bar--pill .hmi-tab-bar__tab:hover {
+  color: var(--hmi-text);
+  background: var(--hmi-surface-3);
+}
+
+/* The `:hover` rule above outranks a plain modifier class, so the active pill
+   has to restate itself hovered or it loses its accent under the cursor. */
+.hmi-tab-bar--pill .hmi-tab-bar__tab--active,
+.hmi-tab-bar--pill .hmi-tab-bar__tab--active:hover {
+  background: var(--hmi-accent);
+  color: var(--hmi-accent-on);
+}
