@@ -16,7 +16,8 @@
   align-items: center;
   justify-content: center;
   gap: var(--hmi-space-sm);
-  padding: var(--hmi-space-sm) var(--hmi-space-md) calc(var(--hmi-space-sm) + var(--hmi-tab-indicator-width));
+  padding: var(--hmi-space-sm) var(--hmi-space-md)
+    calc(var(--hmi-space-sm) + var(--hmi-tab-indicator-width));
   border: none;
   border-bottom: var(--hmi-tab-indicator-width) solid transparent;
   background: transparent;

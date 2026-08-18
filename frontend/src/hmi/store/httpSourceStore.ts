@@ -147,4 +147,3 @@ function scheduleNext(key: string, spec: HttpRequestSpec): void {
     }, spec.refreshMs),
   );
 }
-
