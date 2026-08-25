@@ -19,6 +19,10 @@ Run it against a checkout of the published site (``promotion-website/docs``),
 then upload. Re-running for a version that already exists replaces that copy,
 which is what you want after fixing a typo in a shipped guide.
 
+Set ``NEXTHMI_DOCS_ANALYTICS_TAG_FILE`` to a file holding an HTML snippet and
+every published page carries it — that is how the site counts page views. Leave
+it unset and the guide is published without any. See ``ANALYTICS_TAG_ENV``.
+
 A release candidate (any version with a hyphen) gets its ``v<version>/``
 directory and a manifest entry exactly like a final release, including the
 root copy — there is no version gate on what may serve as the latest guide.
@@ -32,6 +36,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -44,6 +49,14 @@ RENDERER = BUILD_DIR / "render-docs.py"
 # published host says it here. Everything else the renderer emits — canonical
 # URLs included — stays root-relative and host-agnostic.
 SITE_ORIGIN = "https://next-hmi.com"
+
+# Path to an HTML snippet the published pages carry in their ``<head>`` —
+# whatever the site counts page views with. Read from the environment rather
+# than named here because this file is public: a path baked into it would make
+# every fork that publishes a guide report its readers to the account of
+# whoever wrote the tag. Unset means no analytics, which is the right default
+# for anyone who is not the person publishing next-hmi.com.
+ANALYTICS_TAG_ENV = "NEXTHMI_DOCS_ANALYTICS_TAG_FILE"
 
 
 def version_sort_key(name: str) -> tuple[int, ...]:
@@ -74,6 +87,11 @@ def render(out_dir: Path, version: str, base_url: str, *, archived: bool) -> Non
         "--canonical-base",
         base or "/",
     ]
+    # Archived copies get the tag too: which version a reader lands on is the
+    # question the numbers are worth having for.
+    tag_file = os.environ.get(ANALYTICS_TAG_ENV, "").strip()
+    if tag_file:
+        command += ["--analytics-tag-file", tag_file]
     if archived:
         command.append("--archived")
     result = subprocess.run(command, check=False)

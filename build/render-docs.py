@@ -19,6 +19,13 @@ should point at the live one instead of competing with it. ``publish-docs.py``
 passes all three; a bare ``--web`` render keeps the defaults, which is what you
 want for a local look.
 
+``--analytics-tag-file`` names a file holding an HTML snippet to place in every
+page's ``<head>`` — whatever the site publishing this guide counts page views
+with. It is deliberately a path and not a built-in tag: this renderer is public,
+so a hard-coded one would make every fork of this repository publish a guide
+that reports its readers to somebody else's analytics account. Nothing is
+emitted without it, and nothing is emitted in an offline render at all.
+
 Only the user guide is rendered. ``docs/dev/`` is read on GitHub, where it
 already lives at the URLs people link — a second HTML copy of it has no reader,
 and shipping it behind the editor's Help button is what put ``rest-api.md`` in
@@ -494,6 +501,7 @@ def render(
     versions_url: str = DEFAULT_VERSIONS_URL,
     canonical_base: str = "",
     archived: bool = False,
+    analytics: str = "",
 ) -> int:
     sources = sources_for(current_edition)
     present = [(src, section) for src, section in sources if (REPO_ROOT / src).is_file()]
@@ -588,6 +596,7 @@ def render(
                 description=page_description(body),
                 canonical=canonical_url(canonical_base, page) if not offline else "",
                 archived=archived,
+                analytics=analytics,
             ),
             encoding="utf-8",
         )
@@ -1044,6 +1053,7 @@ def _document(
     description: str = "",
     canonical: str = "",
     archived: bool = False,
+    analytics: str = "",
 ) -> str:
     # An offline panel has no internet; a link that cannot work is worse than
     # no link at all.
@@ -1058,6 +1068,13 @@ def _document(
     # the system stack, so an offline bundle loses the typography and nothing
     # else — it must not ask a shop-floor panel for a font it cannot fetch.
     webfonts = "" if offline else WEBFONTS
+
+    # Whatever the publishing site counts page views with, supplied by whoever
+    # runs the build rather than baked in here — see --analytics-tag-file. Gated
+    # on `offline` with everything else that touches the network: the bundle in
+    # a release zip is opened off a filesystem on a shop-floor panel that has no
+    # internet, and a panel must never phone anywhere.
+    analytics_tag = "" if offline else analytics
 
     # Offline docs describe exactly the executable they shipped beside, so the
     # version is a fact, not a choice. On the website it is a choice: older
@@ -1102,6 +1119,7 @@ def _document(
         # page, and the page must render before it arrives.
         f'<script defer src="search-index.js{search_query}"></script>'
         f'<link rel="icon" type="image/svg+xml" href="{FAVICON_SVG}">'
+        f"{analytics_tag}"
         "</head><body>"
         '<header class="topbar"><div class="topbar-inner">'
         f'<button class="icon-btn" id="nav-toggle" aria-label="Open navigation">{TOPBAR_NAV_ICON}</button>'
@@ -1134,10 +1152,11 @@ def main(argv: list[str]) -> int:
     versions_url = DEFAULT_VERSIONS_URL
     canonical_base = ""
     archived = False
+    analytics = ""
     rest = argv[1:]
     while rest:
         arg = rest.pop(0)
-        if arg in ("--edition", "--versions-url", "--canonical-base"):
+        if arg in ("--edition", "--versions-url", "--canonical-base", "--analytics-tag-file"):
             if not rest:
                 print(f"{arg} needs a value", file=sys.stderr)
                 return 2
@@ -1146,6 +1165,12 @@ def main(argv: list[str]) -> int:
                 override_edition = value.strip().lower()
             elif arg == "--versions-url":
                 versions_url = value
+            elif arg == "--analytics-tag-file":
+                tag_file = Path(value)
+                if not tag_file.is_file():
+                    print(f"--analytics-tag-file: no such file: {value}", file=sys.stderr)
+                    return 2
+                analytics = tag_file.read_text(encoding="utf-8").strip()
             else:
                 canonical_base = value
         elif arg == "--web":
@@ -1168,6 +1193,7 @@ def main(argv: list[str]) -> int:
         versions_url=versions_url,
         canonical_base=canonical_base,
         archived=archived,
+        analytics=analytics,
     )
 
 
