@@ -75,6 +75,9 @@ There is no portable Linux build; on Linux, use Docker.
 Full install reference — runtime home, HTTPS, environment variables, upgrades:
 [`docs/user/install.md`](docs/user/install.md).
 
+Want to hear when a new version ships? [Subscribe to release
+announcements](https://next-hmi.com/#updates) — or just watch this repository.
+
 ---
 
 ## What it looks like
