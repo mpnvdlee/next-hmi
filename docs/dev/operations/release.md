@@ -166,6 +166,18 @@ After verifying every artifact:
    rendered by `render-docs.py` alone and show a fixed version label,
    because they describe exactly the executable they ship beside.
 
+   Set `NEXTHMI_DOCS_ANALYTICS_TAG_FILE` to a file holding an HTML snippet and
+   every published page carries it in its `<head>` — the latest copy and every
+   archived version. The tag is not in this repository, and not because it is a
+   secret: a hard-coded one would make every fork that publishes a guide report
+   its readers to somebody else's analytics account. Whoever publishes the site
+   supplies it; unset, the guide publishes without one.
+
+   Only `--web` renders ever carry it. The docs inside a release zip, and the
+   same tree served at `/help`, get nothing — gated on `offline` alongside the
+   webfonts and the version picker, because a shop-floor panel has no internet
+   and must never phone anywhere.
+
 ## Known frictions
 
 - Code signing / notarization is out of scope. Operators see the
