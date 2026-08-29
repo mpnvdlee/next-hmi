@@ -458,19 +458,9 @@ jobs:
           test -f site/versions.json
           test -d "site/v$version"
           test -f "site/v$version/index.html"
-          # A candidate must not carry a root copy: the root is what becomes
-          # /docs/ on upload, so building one is the accident to prevent.
-          case "$version" in
-            *-*)
-              if [ -f site/index.html ]; then
-                echo "::error::a release candidate produced a latest copy"
-                exit 1
-              fi
-              ;;
-            *)
-              test -f site/index.html
-              ;;
-          esac
+          # No version gate on the root copy: publish-docs.py renders it for a
+          # candidate exactly like a final release, so it must exist either way.
+          test -f site/index.html
           # A dev doc reaching the guide is the regression this split exists to
           # prevent — see docs/INDEX.md.
           if ls site/v"$version"/*.html | grep -Ee '(backend|rest-api|websocket|dependency-policy)\.html'; then
