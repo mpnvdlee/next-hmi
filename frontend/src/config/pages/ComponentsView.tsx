@@ -21,6 +21,7 @@ import type { ComponentDefinition } from '@shared/types/componentTypes';
 import type { WidgetConfig, LayoutConfig } from '@shared/types/config';
 import { collectWidgetIds, deepCloneComponent } from '@shared/store/configStoreHelpers';
 import { detectCopyPasteKey, type SelectionModifiers } from '@shared/utils/domEvent';
+import { clipboardWriteError } from '@shared/utils/clipboard';
 import { isContainerHostType } from '@hmi/registry/widgetRegistry';
 import {
   makeComponentOfType,
@@ -150,7 +151,7 @@ export default function ComponentsView() {
         await navigator.clipboard.writeText(JSON.stringify(component, null, 2));
         pasteToast('info', `Copied ${component.name}`);
       } catch {
-        pasteToast('error', 'Clipboard write blocked');
+        pasteToast('error', clipboardWriteError());
       }
     },
     [effectiveComponents],

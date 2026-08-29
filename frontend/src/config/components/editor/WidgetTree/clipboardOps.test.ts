@@ -15,6 +15,9 @@ function stubClipboard() {
 
 beforeEach(() => {
   useHmiStore.setState({ pendingToasts: [] });
+  // One test below removes the clipboard entirely; re-stub it every time so the
+  // removal cannot leak into whatever runs next.
+  stubClipboard();
 });
 
 describe('copyTreeNode', () => {
@@ -41,6 +44,19 @@ describe('copyTreeNode', () => {
     expect(useHmiStore.getState().pendingToasts[0]).toMatchObject({
       severity: 'error',
       message: 'Clipboard write blocked',
+    });
+  });
+
+  it('names the secure-context requirement when there is no clipboard at all', async () => {
+    // A plain-HTTP LAN install has no `navigator.clipboard`, so "blocked" would
+    // point the operator at a permission prompt that cannot fix it.
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+
+    await copyTreeNode({ kind: 'dialog', node: { id: 'd1', title: 'D', widgets: [] } });
+
+    expect(useHmiStore.getState().pendingToasts[0]).toMatchObject({
+      severity: 'error',
+      message: 'Clipboard needs HTTPS or localhost',
     });
   });
 });

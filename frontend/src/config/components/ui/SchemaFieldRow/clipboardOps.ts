@@ -6,6 +6,7 @@ import {
 } from '@hmi/utils/propertySourceRules';
 import { isPropertySourceKey } from '@hmi/utils/propertySourceRegistry';
 import { primaryType } from '@shared/utils/valueTypes';
+import { clipboardReadError, clipboardWriteError } from '@shared/utils/clipboard';
 import { randomUuid } from '@shared/utils/id';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { hasPropertySourceKey, isRecord } from '@shared/types/propertyValueGuards';
@@ -58,7 +59,7 @@ export async function copyPropertyValue(value: unknown, label: string): Promise<
     await navigator.clipboard.writeText(json);
     toast('info', `Copied ${label}`);
   } catch {
-    toast('error', 'Clipboard write blocked');
+    toast('error', clipboardWriteError());
   }
 }
 
@@ -71,7 +72,7 @@ export async function pastePropertyValue(
   try {
     text = await navigator.clipboard.readText();
   } catch {
-    toast('error', 'Clipboard read blocked');
+    toast('error', clipboardReadError());
     return;
   }
 
@@ -117,7 +118,7 @@ export async function pasteActionValue(
   try {
     text = await navigator.clipboard.readText();
   } catch {
-    toast('error', 'Clipboard read blocked');
+    toast('error', clipboardReadError());
     return;
   }
 
