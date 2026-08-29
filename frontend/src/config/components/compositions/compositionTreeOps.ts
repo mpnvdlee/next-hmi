@@ -11,6 +11,7 @@
 import type { ComponentDefinition } from '@shared/types/componentTypes';
 import type { WidgetConfig } from '@shared/types/config';
 import { isRecord } from '@shared/types/propertyValueGuards';
+import { clipboardReadError } from '@shared/utils/clipboard';
 import { collectWidgetIds, deepCloneComponent } from '@shared/store/configStoreHelpers';
 import { verbActsOnSelection } from '@config/store/domains/selectionScope';
 import { mapAllComponents, removeComponentById } from '../editor/WidgetTree/treeUtils';
@@ -367,7 +368,7 @@ export async function readCompositionClipboard(): Promise<CompositionClipboard |
   try {
     text = await navigator.clipboard.readText();
   } catch {
-    pasteToast('error', 'Clipboard read blocked');
+    pasteToast('error', clipboardReadError());
     return null;
   }
   let parsed: unknown;

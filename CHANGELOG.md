@@ -17,6 +17,12 @@ are always called out under a **Changed** or **Removed** heading.
   the default Docker setup) threw on first render and left a white page. ID
   generation now falls back to `crypto.getRandomValues` where `randomUUID` is
   absent. ([#3](https://github.com/mpnvdlee/next-hmi/issues/3))
+- **Clipboard errors name the real cause.** `navigator.clipboard` is
+  secure-context-only too, so on a plain-HTTP install the editor's copy and
+  paste reported "Clipboard write blocked" — which reads as a permission the
+  operator could grant, and none of them can. Those toasts now say the
+  clipboard needs HTTPS or localhost when the API is absent entirely, and keep
+  "blocked" for a genuine denial.
 
 ## [0.0.1-rc1] - 2026-08-18
 
