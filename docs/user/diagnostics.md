@@ -58,6 +58,8 @@ Two findings are specific to reusable components:
 
 **A write is rejected.** The reason code tells you which layer refused: `permission_denied` (the signed-in user's groups are outside the variable's allowed set — see [Users](users.md#enforcement-and-where-it-really-happens)), `opcua_unreachable`, `write_failed`, `invalid_value`, `bad_path`. Attach an `onFailed` handler with a **Show Toast** of `{ $result: "reason" }` and the panel tells the operator directly — see [Actions](actions.md#async-actions-and-result).
 
+**Copy and paste in the editor say the clipboard needs HTTPS.** `navigator.clipboard` is one of the browser APIs that exist only in a secure context — HTTPS, or `localhost`. Reaching the installation at a plain-HTTP LAN address (`http://192.168.1.10:8000`) removes it outright, so no permission prompt can restore it; serve the installation over [HTTPS](install.md#https) instead, or open it on the host at `localhost`. The full rule and what else it touches is in [What plain HTTP costs the browser](install.md#what-plain-http-costs-the-browser). On builds up to and including `0.0.1-rc1`, the same rule blanked the HMI Live View entirely — upgrade if you are seeing a white page there.
+
 **A custom widget doesn't appear, or renders the old version.** Check its status in **Custom Widgets** and hit **Recompile**. A widget whose source imports React or an app helper will not build — the SDK globals are the only allowed route.
 
 **Nothing on the page reacts after editing files on disk.** The editor and runtime react to saves made *through* the app. If you edited a page, component or datasource file directly on disk, restart the backend so it re-reads them.

@@ -214,6 +214,32 @@ configuring; the SPA already switches its WebSocket to `wss://` whenever the
 page itself was loaded over `https://`. One certificate therefore covers the
 dashboard, every project's HMI, and every project's editor.
 
+### What plain HTTP costs the browser
+
+Encryption is not the only thing at stake. Browsers gate a set of APIs behind a
+*secure context* — HTTPS, or `localhost` / `127.0.0.1`, and nothing else. A page
+served over plain HTTP to a LAN address (`http://192.168.1.10:8000`) is not a
+secure context, so those APIs are absent rather than merely restricted, and no
+permission the operator grants can hand them back.
+
+The reasoning is that plain HTTP has no integrity. Anyone on the path — a
+compromised router, another device on the same LAN, a transparent proxy — can
+rewrite the page in flight, and the browser cannot tell injected script from the
+application's own. Granting such a page the clipboard would grant it to whoever
+sits on the network, so the browser withholds it from every HTTP page rather
+than asking.
+
+In NEXT HMI this costs the editor's clipboard: **Copy** and **Paste** on
+widgets, property values and component definitions report that the clipboard
+needs HTTPS or localhost, and stay unavailable until the page is served over
+one. Nothing else depends on it — the runtime, bindings, alarms, and the editor
+itself all work over plain HTTP.
+
+What decides this is the address in the browser's URL bar, not where the server
+runs. Opening a Docker install at `http://localhost:8000` on the host machine is
+a secure context; opening the same container at `http://192.168.1.10:8000` from
+a laptop is not.
+
 ### Ports
 
 Enabling HTTPS moves the app to a second port and leaves the first one
@@ -379,6 +405,11 @@ registered but remains stopped. Choose **Set operator password** on that project
 then start and open its HMI or editor. If the browser or container stops before
 that save succeeds, setup remains incomplete and is offered again after restart;
 the password is not partially installed.
+
+Reaching the container from another machine works the same way, with one
+exception: `http://192.168.1.10:8000` is not a secure context, so the browser
+withholds the editor's clipboard there. See [What plain HTTP costs the
+browser](#what-plain-http-costs-the-browser).
 
 Using compose:
 
