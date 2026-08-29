@@ -1,5 +1,5 @@
 import { useHmiStore } from '@hmi/store/hmiStore';
-import { takeSlugId } from '@shared/utils/id';
+import { randomUuid, takeSlugId } from '@shared/utils/id';
 import { deepCloneComponent } from '@shared/store/configStoreHelpers';
 import { CONTENT_SECTION_ID } from '@shared/utils/pageContent';
 import type {
@@ -34,7 +34,7 @@ const MULTI_VERSION = 1;
 
 function toast(severity: 'info' | 'error', message: string): void {
   useHmiStore.getState().showToast({
-    id: crypto.randomUUID(),
+    id: randomUuid(),
     message,
     severity,
     discard: 'auto',

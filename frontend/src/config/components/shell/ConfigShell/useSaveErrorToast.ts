@@ -2,10 +2,11 @@ import { useEffect } from 'react';
 import { useProjectStore } from '@shared/store/projectStore';
 import { useUsersDomainStore } from '@config/store/domains/usersDomainStore';
 import { useHmiStore } from '@hmi/store/hmiStore';
+import { randomUuid } from '@shared/utils/id';
 
 function raise(message: string) {
   useHmiStore.getState().showToast({
-    id: crypto.randomUUID(),
+    id: randomUuid(),
     message,
     // `manual` — a failed save leaves the project dirty and nothing else on
     // screen says why, so the reason must survive until it has been read.
