@@ -1,5 +1,6 @@
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { randomUuid, takeSlugId } from '@shared/utils/id';
+import { clipboardReadError, clipboardWriteError } from '@shared/utils/clipboard';
 import { deepCloneComponent } from '@shared/store/configStoreHelpers';
 import { CONTENT_SECTION_ID } from '@shared/utils/pageContent';
 import type {
@@ -72,7 +73,7 @@ export async function copyTreeNode(
     await navigator.clipboard.writeText(json);
     toast('info', `${mode === 'cut' ? 'Cut' : 'Copied'} ${describe(entry)}`);
   } catch {
-    toast('error', 'Clipboard write blocked');
+    toast('error', clipboardWriteError());
   }
 }
 
@@ -123,7 +124,7 @@ export async function readTreeNodeFromClipboard(): Promise<ClipboardEntry | null
   try {
     text = await navigator.clipboard.readText();
   } catch {
-    toast('error', 'Clipboard read blocked');
+    toast('error', clipboardReadError());
     return null;
   }
   let parsed: unknown;
