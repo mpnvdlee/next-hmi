@@ -10,6 +10,7 @@ import { sendWsMessage } from '../hooks/useWebSocket';
 import { useVariableStore } from '../store/variableStore';
 import { resolveMainStyle, resolvePageContext } from '@shared/utils/pageTree';
 import { getPageChildren } from '@shared/utils/pageContent';
+import { randomUuid } from '@shared/utils/id';
 import { HmiScopeContext } from '../context/HmiScopeContext';
 import { useResolvedDialogs, useResolvedPageOverlays } from '../hooks/useOpenOverlays';
 import NavigationMenu from '../components/NavigationMenu';
@@ -41,7 +42,7 @@ export default function HmiView() {
   // Created once on first mount; remounted instances get a new key.
   const hmiKeyRef = useRef<string | null>(null);
   if (hmiKeyRef.current === null) {
-    hmiKeyRef.current = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+    hmiKeyRef.current = randomUuid().replace(/-/g, '').slice(0, 12);
   }
   const scope = `runtime:${hmiKeyRef.current}`;
 

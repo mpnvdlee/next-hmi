@@ -7,6 +7,7 @@ import { sendWsMessage } from '@hmi/hooks/useWebSocket';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { useThemeRuntimeStore } from '@hmi/store/themeRuntimeStore';
 import { useTranslationStore } from '@shared/store/translationStore';
+import { randomUuid } from '@shared/utils/id';
 import { beginAsyncAction } from '@hmi/utils/actionDispatcher';
 
 interface ActionContext {
@@ -177,7 +178,7 @@ export function executeWidgetActions(
       const cancelText = String(evaluatePropertyValue(action.cancelText, evalCtx) ?? 'Cancel');
       const okText = String(evaluatePropertyValue(action.okText, evalCtx) ?? 'OK');
       useHmiStore.getState().showAlert({
-        id: crypto.randomUUID(),
+        id: randomUuid(),
         title,
         description,
         cancelText,
@@ -195,7 +196,7 @@ export function executeWidgetActions(
     if (action.type === 'showToast') {
       const message = String(evaluatePropertyValue(action.message, evalCtx) ?? '');
       useHmiStore.getState().showToast({
-        id: crypto.randomUUID(),
+        id: randomUuid(),
         message,
         severity: action.severity,
         discard: action.discard,

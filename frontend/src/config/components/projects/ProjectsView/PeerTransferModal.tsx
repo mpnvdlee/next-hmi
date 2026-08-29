@@ -10,6 +10,7 @@ import {
   useProjectsStore,
 } from '@config/store/projectsStore';
 import { basename } from '@shared/utils/paths';
+import { randomUuid } from '@shared/utils/id';
 
 interface Props {
   direction: 'push' | 'pull';
@@ -78,8 +79,8 @@ export default function PeerTransferModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [transfer, setTransfer] = useState<TransferStatus | null>(null);
-  const [transferId] = useState(() => `${isPull ? 'pull' : 'tx'}-${window.crypto.randomUUID()}`);
-  const [copyDestinationId] = useState(() => window.crypto.randomUUID());
+  const [transferId] = useState(() => `${isPull ? 'pull' : 'tx'}-${randomUuid()}`);
+  const [copyDestinationId] = useState(() => randomUuid());
 
   const pullSource = useMemo(
     () => remoteProjects.find((project) => project.id === pullSourceId),
