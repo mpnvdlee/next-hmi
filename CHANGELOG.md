@@ -7,27 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 While the project is pre-1.0, minor versions may include breaking changes; these
 are always called out under a **Changed** or **Removed** heading.
 
-## [Unreleased]
+## [0.0.1] - 2026-08-29
 
-### Fixed
-
-- **Blank Live View on a plain-HTTP install.** The runtime called
-  `crypto.randomUUID()`, which browsers expose only in a secure context, so
-  reaching the app over plain HTTP on a LAN address (`http://192.168.1.10:8000`,
-  the default Docker setup) threw on first render and left a white page. ID
-  generation now falls back to `crypto.getRandomValues` where `randomUUID` is
-  absent. ([#3](https://github.com/mpnvdlee/next-hmi/issues/3))
-- **Clipboard errors name the real cause.** `navigator.clipboard` is
-  secure-context-only too, so on a plain-HTTP install the editor's copy and
-  paste reported "Clipboard write blocked" — which reads as a permission the
-  operator could grant, and none of them can. Those toasts now say the
-  clipboard needs HTTPS or localhost when the API is absent entirely, and keep
-  "blocked" for a genuine denial.
-
-## [0.0.1-rc1] - 2026-08-18
-
-Release candidate toward **1.0.0** — the first public release. Everything
-below ships in the initial open-source build.
+The first public release.
 
 ### Added
 
@@ -74,6 +56,21 @@ below ships in the initial open-source build.
   the WebSocket protocol, theming, custom widgets, the REST API, peer transfer,
   MCP, deployment, and a threat model.
 
+### Fixed
+
+- **Blank Live View on a plain-HTTP install.** The runtime called
+  `crypto.randomUUID()`, which browsers expose only in a secure context, so
+  reaching the app over plain HTTP on a LAN address (`http://192.168.1.10:8000`,
+  the default Docker setup) threw on first render and left a white page. ID
+  generation now falls back to `crypto.getRandomValues` where `randomUUID` is
+  absent. ([#3](https://github.com/mpnvdlee/next-hmi/issues/3))
+- **Clipboard errors name the real cause.** `navigator.clipboard` is
+  secure-context-only too, so on a plain-HTTP install the editor's copy and
+  paste reported "Clipboard write blocked" — which reads as a permission the
+  operator could grant, and none of them can. Those toasts now say the
+  clipboard needs HTTPS or localhost when the API is absent entirely, and keep
+  "blocked" for a genuine denial.
+
 ### Security
 
 - No CORS middleware ships by design; the runtime is same-origin and intended to
@@ -93,4 +90,4 @@ below ships in the initial open-source build.
   shipped loose (replaceable) in binary builds, with the LGPL texts and a
   written source offer bundled alongside.
 
-[Unreleased]: https://github.com/mpnvdlee/next-hmi/commits/main
+[0.0.1]: https://github.com/mpnvdlee/next-hmi/releases/tag/v0.0.1
