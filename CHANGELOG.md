@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 While the project is pre-1.0, minor versions may include breaking changes; these
 are always called out under a **Changed** or **Removed** heading.
 
+## [Unreleased]
+
+### Fixed
+
+- **Blank Live View on a plain-HTTP install.** The runtime called
+  `crypto.randomUUID()`, which browsers expose only in a secure context, so
+  reaching the app over plain HTTP on a LAN address (`http://192.168.1.10:8000`,
+  the default Docker setup) threw on first render and left a white page. ID
+  generation now falls back to `crypto.getRandomValues` where `randomUUID` is
+  absent. ([#3](https://github.com/mpnvdlee/next-hmi/issues/3))
+
 ## [0.0.1-rc1] - 2026-08-18
 
 Release candidate toward **1.0.0** — the first public release. Everything

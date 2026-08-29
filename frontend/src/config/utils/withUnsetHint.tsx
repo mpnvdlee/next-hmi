@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { ClearIcon } from '@config/components/ui/actionIcons';
 import { FieldActions } from '@config/components/ui/FieldGroup';
+import { randomUuid } from '@shared/utils/id';
 
 /**
  * Wraps a scalar control with the unset→default hint: muted resolved-default
@@ -42,7 +43,7 @@ export function withUnsetHint(
             onClick={() => {
               onChange(undefined);
               useHmiStore.getState().showToast({
-                id: crypto.randomUUID(),
+                id: randomUuid(),
                 message: `Reverted to ${display.suffix}`,
                 severity: 'info',
                 discard: 'auto',

@@ -6,6 +6,7 @@ import {
 } from '@hmi/utils/propertySourceRules';
 import { isPropertySourceKey } from '@hmi/utils/propertySourceRegistry';
 import { primaryType } from '@shared/utils/valueTypes';
+import { randomUuid } from '@shared/utils/id';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { hasPropertySourceKey, isRecord } from '@shared/types/propertyValueGuards';
 import { getPropertySource } from '@config/components/editor/propertyValueUtils';
@@ -13,7 +14,7 @@ import { ACTION_TYPES } from '@config/components/editor/PropertiesPanel/actionsP
 
 function toast(severity: 'info' | 'error', message: string): void {
   useHmiStore.getState().showToast({
-    id: crypto.randomUUID(),
+    id: randomUuid(),
     message,
     severity,
     discard: 'auto',
