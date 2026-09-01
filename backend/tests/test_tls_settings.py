@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import ssl
 import stat
+import sys
 from pathlib import Path
 
 import launcher
@@ -42,8 +43,11 @@ def test_generated_certificate_is_usable_and_private(home: Path) -> None:
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(str(pair.certfile), str(pair.keyfile))
 
-    mode = stat.S_IMODE(pair.keyfile.stat().st_mode)
-    assert mode == 0o600, oct(mode)
+    if sys.platform != "win32":
+        # os.chmod on Windows can't restrict to owner-only; see
+        # core/tls_settings.py's documented weaker guarantee for this gap.
+        mode = stat.S_IMODE(pair.keyfile.stat().st_mode)
+        assert mode == 0o600, oct(mode)
 
 
 def test_generated_certificate_covers_localhost(home: Path) -> None:
@@ -280,6 +284,8 @@ def test_custom_certificate_is_stored_and_served(tmp_path: Path, home: Path) -> 
 
 
 def test_custom_key_is_not_world_readable(tmp_path: Path, home: Path) -> None:
+    if sys.platform == "win32":
+        pytest.skip("POSIX mode bits not enforced by os.chmod on Windows")
     cert_pem, key_pem = _external_pair(tmp_path)
     tls_settings.install_custom(cert_pem, key_pem)
     mode = stat.S_IMODE(tls_settings.paths(mode="custom").keyfile.stat().st_mode)
@@ -297,9 +303,19 @@ def test_mismatched_key_is_rejected(tmp_path: Path, home: Path) -> None:
 @pytest.mark.parametrize(
     "cert,key,expected",
     [
-        (b"", b"key", "empty"),
-        (b"not pem at all", b"also not pem", "not PEM"),
-        (b"-----BEGIN CERTIFICATE-----\n" + b"x" * 70_000, b"-----BEGIN KEY-----", "larger than"),
+        pytest.param(b"", b"key", "empty", id="empty"),
+        pytest.param(b"not pem at all", b"also not pem", "not PEM", id="not-pem"),
+        pytest.param(
+            b"-----BEGIN CERTIFICATE-----\n" + b"x" * 70_000,
+            b"-----BEGIN KEY-----",
+            "larger than",
+            # Without an explicit id, pytest builds the node id from the raw
+            # 70KB param value. pytest stores that id in the
+            # PYTEST_CURRENT_TEST env var, and on Windows os.environ enforces
+            # a 32767-char limit (there is none on POSIX) — so the default id
+            # crashes setup/teardown there.
+            id="cert-larger-than-key",
+        ),
     ],
 )
 def test_unusable_uploads_are_refused(cert: bytes, key: bytes, expected: str, home: Path) -> None:

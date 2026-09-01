@@ -435,6 +435,37 @@ def _fake_child_command(script: Path, marker: Path, *, ignore_sigterm=False, cra
     return build
 
 
+def _pid_alive(pid: int) -> bool:
+    """Portable liveness check.
+
+    ``os.kill(pid, 0)`` is the standard POSIX no-op-signal idiom for "does
+    this pid exist", but signal 0 isn't meaningful to Windows' emulation of
+    os.kill (it maps to CTRL_C_EVENT there) — it raises OSError instead of
+    either succeeding or raising ProcessLookupError.
+    """
+    if sys.platform == "win32":
+        import ctypes
+
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return False
+        try:
+            exit_code = ctypes.c_ulong()
+            ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+            return exit_code.value == STILL_ACTIVE
+        finally:
+            ctypes.windll.kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 def _wait_until(predicate, *, timeout: float = 6.0, interval: float = 0.05) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -457,13 +488,12 @@ def test_real_subprocess_passes_health_and_stop_sends_sigterm(
     snap = sup.start(project_id)
     assert snap["status"] == "running"
     pid = snap["pid"]
-    assert pid and os.kill(pid, 0) is None  # really alive
+    assert pid and _pid_alive(pid)  # really alive
 
     stopped = sup.stop(project_id)
     assert stopped["status"] == "stopped"
     assert sup.is_fully_stopped(project_id)
-    with pytest.raises(ProcessLookupError):
-        os.kill(pid, 0)
+    assert not _pid_alive(pid)  # really dead
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="SIGTERM is not ignorable on Windows")

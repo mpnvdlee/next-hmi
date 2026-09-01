@@ -14,9 +14,13 @@ def _fields() -> BannerFields:
 
 
 def test_runtime_banner_shows_the_workspace_path_and_url() -> None:
-    out = render_banner("runtime", _fields())
+    fields = _fields()
+    out = render_banner("runtime", fields)
     assert "Runtime home" in out
-    assert "/srv/nexthmi-home" in out
+    # str(Path(...)) renders with the OS-native separator (backslashes on
+    # Windows), so compare against the same rendering rather than a
+    # hardcoded POSIX literal.
+    assert str(fields.runtime_home) in out
     assert "http://127.0.0.1:8000" in out
     assert "v1.0.0" in out
 

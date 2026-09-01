@@ -369,7 +369,10 @@ def test_runtime_home_uses_env_var(monkeypatch, tmp_path: Path) -> None:
 def test_runtime_home_uses_bootstrap_when_no_env(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.delenv("NEXTHMI_DATA_DIR", raising=False)
     boot = tmp_path / "runtime.json"
-    boot.write_text('{"dataDir": "' + str(tmp_path / "from-boot") + '"}')
+    # json.dumps, not string concatenation: a raw Windows path embeds
+    # backslashes that aren't valid JSON escapes (e.g. \U from \Users),
+    # which would make the file unparseable there.
+    boot.write_text(json.dumps({"dataDir": str(tmp_path / "from-boot")}))
 
     from core import bootstrap
 

@@ -155,8 +155,13 @@ def _acquire_file_lock(handle: BinaryIO) -> None:
     if os.name == "nt":
         import msvcrt
 
-        handle.seek(0)
-        if handle.read(1) == b"":
+        # Windows locking is mandatory, not advisory: a concurrent holder of
+        # byte 0's exclusive lock makes a plain read() of it raise
+        # PermissionError instead of blocking. Check emptiness via seek/tell
+        # (position-only, never touches the locked byte) so a losing racer
+        # doesn't crash — it just skips the redundant write and waits below.
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
             handle.seek(0)
             handle.write(b"\0")
             handle.flush()
