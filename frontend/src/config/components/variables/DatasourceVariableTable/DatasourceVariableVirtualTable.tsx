@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from 'react';
 import type { RefObject } from 'react';
 import type { DatasourceType, VariableEntry } from '@shared/types/datasource';
 import { FolderRowCells, VariableRowCells, ArrayElementRowCells } from './rowRenderers';
+import { SHOW_RANGE_COLUMNS } from './useDatasourceTableRows';
 import type { RowItem } from '@config/components/ui/datasourceTreeHelpers';
 import VirtualTreeRows from '@config/components/shared/VirtualTreeRows';
 import type { VirtualizerRenderLike } from './virtualizerTypes';
@@ -162,8 +163,12 @@ export default function DatasourceVariableVirtualTable({ state, actions }: Props
           <div className="cfg-th">Display Name</div>
           <div className="cfg-th">Data Type</div>
           <div className="cfg-th">Access</div>
-          <div className="cfg-th">Min</div>
-          <div className="cfg-th">Max</div>
+          {SHOW_RANGE_COLUMNS && (
+            <>
+              <div className="cfg-th">Min</div>
+              <div className="cfg-th">Max</div>
+            </>
+          )}
           {showLive && <div className="cfg-th">Value</div>}
           {isEditable && <div className="cfg-th cfg-th--actions" />}
         </div>
@@ -194,6 +199,7 @@ export default function DatasourceVariableVirtualTable({ state, actions }: Props
                 collapsed={collapsed}
                 showLive={showLive}
                 isEditable={rowEditable}
+                showRange={SHOW_RANGE_COLUMNS}
                 onToggleFolder={onToggleFolder}
                 onSetFolderEnabled={onSetFolderEnabled}
                 onRemoveNode={onRemoveNode}
@@ -209,6 +215,7 @@ export default function DatasourceVariableVirtualTable({ state, actions }: Props
                 dsType={dsType}
                 showLive={showLive}
                 isEditable={rowEditable}
+                showRange={SHOW_RANGE_COLUMNS}
               />
             ) : (
               <VariableRowCells
@@ -220,6 +227,7 @@ export default function DatasourceVariableVirtualTable({ state, actions }: Props
                 showLive={showLive}
                 isEditable={rowEditable}
                 rangeEditable={!isInNonFirstElement(item.path)}
+                showRange={SHOW_RANGE_COLUMNS}
                 liveValues={liveValues}
                 collapsed={collapsed}
                 onToggleArray={onToggleFolder}
