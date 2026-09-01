@@ -17,7 +17,6 @@ import {
   LS_THEME_SAVED,
 } from '@shared/utils/themeTokens';
 import { useDocumentChrome } from '@shared/hooks/useDocumentChrome';
-import { useDisableBrowserZoom } from '@shared/hooks/useDisableBrowserZoom';
 import { registerActionRunner } from '@hmi/utils/actionDispatcher';
 import { executeWidgetActions } from '@hmi/utils/widgetActions';
 import Spinner, { PageSpinner } from '@shared/components/Spinner';
@@ -94,7 +93,6 @@ export default function AppInner() {
   // Placing it here (inside BrowserRouter) keeps it alive across all routes.
   useWebSocket();
   useDocumentChrome();
-  useDisableBrowserZoom();
 
   // Cache client device info once per session for the $device expression source.
   useEffect(() => {

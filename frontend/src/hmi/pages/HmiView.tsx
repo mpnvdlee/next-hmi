@@ -4,6 +4,7 @@ import { useDeferredValue, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useConfig, usePage, usePages } from '@shared/hooks/useConfig';
 import { useTranslations } from '@shared/hooks/useTranslations';
+import { useDisableBrowserZoom } from '@shared/hooks/useDisableBrowserZoom';
 import { useConfigStore } from '@shared/store/configStore';
 import { useHmiStore } from '../store/hmiStore';
 import { sendWsMessage } from '../hooks/useWebSocket';
@@ -34,6 +35,7 @@ import { useGlobalEvents } from '../hooks/useGlobalEvents';
 export default function HmiView() {
   useConfig();
   useTranslations();
+  useDisableBrowserZoom();
 
   // Theme loading and cross-tab theme-save sync are owned by AppInner, which
   // starts them before any view mounts.

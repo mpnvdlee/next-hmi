@@ -262,26 +262,6 @@ export default function LivePreview({ pageId }: { pageId: string }) {
     setScaleInput(String(scalePct));
   }, [scalePct]);
 
-  // Repurpose the browser's own zoom shortcuts (which useDisableBrowserZoom
-  // blocks from reaching native page zoom) to drive this scaling control instead.
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      if (e.key === '+' || e.key === '=') {
-        e.preventDefault();
-        adjustScale('in');
-      } else if (e.key === '-') {
-        e.preventDefault();
-        adjustScale('out');
-      } else if (e.key === '0') {
-        e.preventDefault();
-        adjustScale('reset');
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [adjustScale]);
-
   // Tracks the scroller's content-box size so a zoomed-out Fit view can be
   // sized in real pixels (see wrapperStyle below) instead of a CSS percentage —
   // percentage heights inside a zoomed flex child resolve unreliably across

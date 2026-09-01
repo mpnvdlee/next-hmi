@@ -34,6 +34,7 @@ import type { CSSWithVars } from '@shared/types/style';
 import { useParams, useNavigate } from 'react-router-dom';
 import { usePage, usePages } from '@shared/hooks/useConfig';
 import { useTranslations } from '@shared/hooks/useTranslations';
+import { useDisableBrowserZoom } from '@shared/hooks/useDisableBrowserZoom';
 import { useConfigStore } from '@shared/store/configStore';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { useComponentStore } from '@shared/store/componentStore';
@@ -95,6 +96,7 @@ export default function PreviewView() {
   // Do NOT call useConfig() here — it would race with postMessage and
   // overwrite in-memory changes with stale backend data.
   useTranslations();
+  useDisableBrowserZoom();
   const navigate = useNavigate();
 
   const { pageId: areaId } = useParams<{ pageId: string }>();
