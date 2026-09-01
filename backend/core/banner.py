@@ -100,7 +100,7 @@ def _render_logo() -> str:
 
 # ── Field rendering ──────────────────────────────────────────────────────────
 
-_LABEL_WIDTH = 14  # widest label + 2 spaces ("Runtime home")
+_LABEL_WIDTH = 18  # widest label + 2 spaces ("Default project")
 
 
 def _row(label: str, value: str) -> str:
@@ -148,10 +148,13 @@ def render_banner(mode: Literal["runtime", "dev"], fields: BannerFields) -> str:
         out.append(_row("Backend", _url(fields.open_url)))
         if fields.frontend_url:
             out.append(_row("Frontend", _url(fields.frontend_url)))
+            out.append(_row("Projects", _url(f"{fields.frontend_url}/projects")))
     else:
-        # Runtime: just the click-here URL. The bind address (e.g. 0.0.0.0:8000)
-        # isn't a clickable URL, so it added noise without value.
-        out.append(_row("Open", _url(fields.open_url)))
+        # Runtime: the running default project, plus the manager's project
+        # list (same origin, /projects) to reach the others. The bind address
+        # (e.g. 0.0.0.0:8000) isn't a clickable URL, so it's left out.
+        out.append(_row("Default project", _url(fields.open_url)))
+        out.append(_row("Projects", _url(f"{fields.open_url}/projects")))
 
     out.append("")
     out.append(_muted("  Press Ctrl-C to stop."))

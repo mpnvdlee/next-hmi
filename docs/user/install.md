@@ -473,9 +473,11 @@ Existing volumes retain their current project credentials unchanged.
 
 A terminal window opens, prints the banner, and stays in the foreground:
 
-The banner shows the version, runtime-home path, browser URL, and log path.
+The banner shows the version, the runtime-home path, the default project's
+URL, and a link to the manager's project list (`/projects`) for reaching the
+others.
 
-Open the printed URL in any browser. Portable installs bind to loopback by
+Open either printed URL in any browser. Portable installs bind to loopback by
 default; set `NEXTHMI_HOST=0.0.0.0` explicitly when LAN access is intended.
 
 On the first launch, set the device-admin password, then choose **Set operator

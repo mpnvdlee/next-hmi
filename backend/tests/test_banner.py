@@ -25,10 +25,23 @@ def test_runtime_banner_shows_the_workspace_path_and_url() -> None:
     assert "v1.0.0" in out
 
 
+def test_runtime_banner_shows_default_project_and_projects_link() -> None:
+    out = render_banner("runtime", _fields())
+    assert "Default project" in out
+    assert "Projects" in out
+    assert "http://127.0.0.1:8000/projects" in out
+
+
 def test_dev_banner_shows_both_urls() -> None:
     out = render_banner("dev", _fields())
     assert "http://127.0.0.1:8000" in out
     assert "http://localhost:5173" in out
+
+
+def test_dev_banner_shows_projects_link_off_the_frontend_url() -> None:
+    out = render_banner("dev", _fields())
+    assert "Projects" in out
+    assert "http://localhost:5173/projects" in out
 
 
 def test_banner_never_prints_a_log_path() -> None:
