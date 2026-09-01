@@ -105,6 +105,41 @@ class CertUploadResult(BaseModel):
     path: str
 
 
+class CertGenerateBody(BaseModel):
+    """Body for POST /api/datasources/certs/generate."""
+
+    name: str = "client"
+    common_name: str = ""
+    validity_days: int = Field(default=3650, ge=1, le=36500)
+
+
+class CertGenerateResult(BaseModel):
+    """Body for POST /api/datasources/certs/generate — the generated pair's paths."""
+
+    client_certificate: str
+    client_private_key: str
+
+
+class CertInfo(BaseModel):
+    """Body for GET /api/datasources/certs/info — a stored certificate's validity.
+
+    ``readable`` is false when the path holds no certificate this process can
+    parse (missing file, a private key, a typo'd path); every other field is
+    then unset and the editor shows the lifecycle as unknown.
+    """
+
+    readable: bool
+    subject: str = ""
+    fingerprint: str = ""
+    issuedAt: str = ""
+    expiresAt: str = ""
+    expiresInDays: int = 0
+    expired: bool = False
+    expiring: bool = False
+    selfSigned: bool = False
+    names: list[str] = Field(default_factory=list)
+
+
 # ── Path helpers ──────────────────────────────────────────────────────────────
 
 def build_var_key(datasource: str, path: str) -> str:

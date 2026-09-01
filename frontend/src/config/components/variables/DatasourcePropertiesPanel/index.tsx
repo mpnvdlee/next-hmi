@@ -16,6 +16,7 @@ import PropertiesEmpty from '@config/components/ui/PropertiesEmpty';
 import PropRow from '@config/components/ui/PropRow';
 import BoolButtonGroup from '@config/components/ui/BoolButtonGroup';
 import Select from '@config/components/ui/Select';
+import CertificateControls from '../CertificateControls';
 import type {
   DatasourceConfig,
   OpcuaClientSettings,
@@ -58,6 +59,9 @@ export default function DatasourcePropertiesPanel({
 
   const [settingsDraft, setSettingsDraft] = useState<Record<string, unknown> | null>(null);
   const [dirty, setDirty] = useState(false);
+  // Suppress a stale error while a user-triggered connect/disconnect is in
+  // flight — the old message is meaningless once the engine has been swapped.
+  const [connBusy, setConnBusy] = useState(false);
   const draftRef = useRef<DatasourceConfig | null>(null);
   const dirtyRef = useRef(dirty);
   const configName = config?.name ?? null;
@@ -119,6 +123,7 @@ export default function DatasourcePropertiesPanel({
   }
 
   const settings = draft.settings;
+  const effectiveError = connBusy ? null : statusError;
 
   return (
     <div className="cfg-ds-props">
@@ -126,38 +131,39 @@ export default function DatasourcePropertiesPanel({
         kind={config.type}
         name={config.name}
         status={
-          <span className="cfg-ds-props__status">
-            <span
-              className={`cfg-status-dot${
-                config.type === 'static'
-                  ? ' cfg-status-dot--static'
+          <>
+            <span className="cfg-ds-props__status">
+              <span
+                className={`cfg-status-dot${
+                  config.type === 'static'
+                    ? ' cfg-status-dot--static'
+                    : connected
+                      ? ' cfg-status-dot--connected'
+                      : effectiveError
+                        ? ' cfg-status-dot--error'
+                        : ''
+                }`}
+              />
+              {config.type === 'static'
+                ? 'Static (always available)'
+                : config.type === 'opcua-test-server'
+                  ? connected
+                    ? 'Running'
+                    : effectiveError
+                      ? 'Failed to start'
+                      : 'Stopped'
                   : connected
-                    ? ' cfg-status-dot--connected'
-                    : statusError
-                      ? ' cfg-status-dot--error'
-                      : ''
-              }`}
-            />
-            {config.type === 'static'
-              ? 'Static (always available)'
-              : config.type === 'opcua-test-server'
-                ? connected
-                  ? 'Running'
-                  : statusError
-                    ? 'Failed to start'
-                    : 'Stopped'
-                : connected
-                  ? 'Connected'
-                  : 'Disconnected'}
-          </span>
+                    ? 'Connected'
+                    : 'Disconnected'}
+            </span>
+            {!connected && effectiveError && (
+              <span className="cfg-ds-props__error" role="alert">
+                {effectiveError}
+              </span>
+            )}
+          </>
         }
       />
-
-      {!connected && statusError && (
-        <div className="cfg-ds-props__error" role="alert">
-          {statusError}
-        </div>
-      )}
 
       {/* Controls — above settings */}
       {config.type === 'opcua-test-server' && (
@@ -174,7 +180,12 @@ export default function DatasourcePropertiesPanel({
       {config.type === 'opcua-client' && (
         <div className="cfg-section">
           <div className="cfg-section__title">Control</div>
-          <ReconnectButton dsName={config.name} onStatusChange={onStatusChange} />
+          <ConnectionButtons
+            dsName={config.name}
+            connected={connected}
+            onBusyChange={setConnBusy}
+            onStatusChange={onStatusChange}
+          />
         </div>
       )}
 
@@ -184,7 +195,7 @@ export default function DatasourcePropertiesPanel({
           <div className="cfg-section__title">Settings</div>
 
           {config.type === 'opcua-client' && isOpcuaClientSettings(settings) && (
-            <OpcuaClientFields settings={settings} onChange={updateSetting} />
+            <OpcuaClientFields dsName={config.name} settings={settings} onChange={updateSetting} />
           )}
 
           {config.type === 'opcua-test-server' && isTestServerSettings(settings) && (
@@ -199,9 +210,11 @@ export default function DatasourcePropertiesPanel({
 // ── Sub-forms ────────────────────────────────────────────────────────────────
 
 function OpcuaClientFields({
+  dsName,
   settings,
   onChange,
 }: {
+  dsName: string;
   settings: OpcuaClientSettings;
   onChange: (key: string, value: unknown) => void;
 }) {
@@ -256,6 +269,16 @@ function OpcuaClientFields({
           <option value="Sign">Sign</option>
         </Select>
       </PropRow>
+      <CertificateControls
+        baseName={dsName}
+        path={settings.client_certificate ?? ''}
+        disabled={!secureEnabled}
+        onGenerated={(paths) => {
+          onChange('client_certificate', paths.client_certificate);
+          onChange('client_private_key', paths.client_private_key);
+          onChange('client_private_key_password', '');
+        }}
+      />
       <PropRow label="Client Certificate">
         <input
           className="cfg-prop-input"
@@ -374,6 +397,18 @@ function OpcuaClientFields({
   );
 }
 
+// Secured policy/mode combos the test server can expose, mirroring the
+// OPC-UA client's "Security Policy" dropdown so every policy an engineer can
+// pick for a real connection can also be exercised locally.
+const TEST_SERVER_SECURE_ENDPOINTS = [
+  'Basic256Sha256/Sign',
+  'Basic256Sha256/SignAndEncrypt',
+  'Aes128Sha256RsaOaep/Sign',
+  'Aes128Sha256RsaOaep/SignAndEncrypt',
+  'Aes256Sha256RsaPss/Sign',
+  'Aes256Sha256RsaPss/SignAndEncrypt',
+];
+
 function TestServerFields({
   settings,
   onChange,
@@ -381,6 +416,15 @@ function TestServerFields({
   settings: TestServerSettings;
   onChange: (key: string, value: unknown) => void;
 }) {
+  const securityPolicies = settings.security_policies ?? [];
+
+  function toggleEndpoint(entry: string, enabled: boolean) {
+    const next = enabled
+      ? [...securityPolicies, entry]
+      : securityPolicies.filter((e) => e !== entry);
+    onChange('security_policies', next);
+  }
+
   return (
     <>
       <PropRow label="Port">
@@ -400,6 +444,24 @@ function TestServerFields({
           value={settings.endpoint_path ?? '/nexthmi/test/'}
           onChange={(e) => onChange('endpoint_path', e.target.value)}
         />
+      </PropRow>
+      <PropRow
+        label="Security Endpoints"
+        description="NoSecurity is always available. Enable extra endpoints to test how the connection wizard discovers and negotiates a secured policy."
+        block
+      >
+        <div className="cfg-groups-checkboxes">
+          {TEST_SERVER_SECURE_ENDPOINTS.map((entry) => (
+            <label key={entry} className="cfg-groups-checkbox">
+              <input
+                type="checkbox"
+                checked={securityPolicies.includes(entry)}
+                onChange={(e) => toggleEndpoint(entry, e.target.checked)}
+              />
+              {entry.replace('/', ' · ')}
+            </label>
+          ))}
+        </div>
       </PropRow>
     </>
   );
@@ -476,41 +538,72 @@ function LifecycleButtons({
   );
 }
 
-function ReconnectButton({
+function ConnectionButtons({
   dsName,
+  connected,
+  onBusyChange,
   onStatusChange,
 }: {
   dsName: string;
+  connected: boolean;
+  onBusyChange: (value: boolean) => void;
   onStatusChange?: () => void;
 }) {
-  const [busy, setBusy] = useState(false);
+  // Which action is in flight, not the live `connected` prop, decides which
+  // button shows — disconnect resolves fast enough that the immediate
+  // onStatusChange() below can flip `connected` to false mid-click, which
+  // would otherwise swap the branch to "Connect" while still busy.
+  const [activeAction, setActiveAction] = useState<'start' | 'stop' | null>(null);
 
-  async function reconnect() {
-    setBusy(true);
+  async function run(action: 'start' | 'stop') {
+    setActiveAction(action);
+    onBusyChange(true);
     try {
-      await apiJson(`/api/datasources/${encodeURIComponent(dsName)}/restart`, { method: 'POST' });
+      await apiJson(`/api/datasources/${encodeURIComponent(dsName)}/${action}`, {
+        method: 'POST',
+      });
+      // The endpoint already swapped in a fresh engine (or tore it down) with
+      // no stale error — refresh now so it doesn't linger for the full delay.
+      onStatusChange?.();
       setTimeout(() => {
         onStatusChange?.();
-        setBusy(false);
+        onBusyChange(false);
+        setActiveAction(null);
       }, 2000);
     } catch (e) {
-      console.error('[DatasourcePropertiesPanel] reconnect failed:', e);
-      setBusy(false);
+      console.error(`[DatasourcePropertiesPanel] ${action} failed:`, e);
+      onBusyChange(false);
+      setActiveAction(null);
     }
   }
 
+  const showDisconnect = activeAction ? activeAction === 'stop' : connected;
+
   return (
     <div className="cfg-ds-props__btn-group">
-      <Button
-        variant="accent"
-        size="sm"
-        type="button"
-        className="cfg-ds-props__action-btn"
-        disabled={busy}
-        onClick={reconnect}
-      >
-        {busy ? 'Reconnecting…' : 'Reconnect'}
-      </Button>
+      {!showDisconnect ? (
+        <Button
+          variant="success"
+          size="sm"
+          type="button"
+          className="cfg-ds-props__action-btn"
+          disabled={activeAction !== null}
+          onClick={() => run('start')}
+        >
+          {activeAction === 'start' ? 'Connecting…' : 'Connect'}
+        </Button>
+      ) : (
+        <Button
+          variant="danger"
+          size="sm"
+          type="button"
+          className="cfg-ds-props__action-btn"
+          disabled={activeAction !== null}
+          onClick={() => run('stop')}
+        >
+          {activeAction === 'stop' ? 'Disconnecting…' : 'Disconnect'}
+        </Button>
+      )}
     </div>
   );
 }

@@ -11,11 +11,15 @@ import contextlib
 import datetime
 import logging
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from asyncua import Client, ua
 from asyncua.common.node import Node
+from asyncua.crypto import security_policies
+from asyncua.crypto.uacrypto import CertProperties
+from core.cert_info import log_expiry_warning
 from core.number_utils import get_config_float
 from core.storage import active_project_root
 from models.datasource import build_var_key, is_present_on_server, is_subscribable
@@ -38,19 +42,50 @@ def _resolve_security_path(raw_path: str) -> str:
     return str((active_project_root() / raw_path).resolve())
 
 
-def _ensure_client_certificate(cert_path: str, key_path: str) -> None:
-    """Generate a self-signed OPC-UA client certificate pair if it is missing.
+def _ensure_client_certificate(
+    cert_path: str, key_path: str, *, common_name: str = "webhmi-opc-client",
+) -> None:
+    """Generate a self-signed OPC-UA certificate pair if it is missing.
 
     The dev/test project ships datasource configs that request a secured
-    policy, so the client certificate pair is generated on first connect
-    rather than committed — no private key lives in the repository. A
-    deployment pointing a secured datasource at a real server should replace
-    the generated pair with a server-trusted certificate of its own.
+    policy, so the certificate pair is generated on first connect rather than
+    committed — no private key lives in the repository. A deployment pointing
+    a secured datasource at a real server should replace the generated pair
+    with a server-trusted certificate of its own.
+
+    ``common_name`` defaults to the client identity but is overridden by the
+    OPC-UA test server, which reuses this generator for its own server-role
+    certificate.
     """
     cert = Path(cert_path)
     key = Path(key_path)
     if cert.exists() and key.exists():
         return
+    generate_self_signed_client_certificate(cert_path, key_path, common_name=common_name)
+
+
+def generate_self_signed_client_certificate(
+    cert_path: str,
+    key_path: str,
+    *,
+    common_name: str = "webhmi-opc-client",
+    validity_days: int = 3650,
+    cert_encoding: str = "pem",
+) -> None:
+    """Write a fresh self-signed OPC-UA certificate + private key pair.
+
+    Unconditional — overwrites whatever is at ``cert_path`` / ``key_path``.
+    Shared by the connect-time auto-generate fallback above, the wizard's
+    "Generate certificate" action, and the test server's server-certificate
+    generation, so all three produce the same kind of pair by default.
+
+    ``cert_encoding`` selects the certificate's own encoding ("pem" or
+    "der") — the wizard's generator uses "der" to match the format an
+    imported OPC-UA cert store (e.g. UaExpert/Optix) uses. The private key is
+    always written as PEM regardless, matching what asyncua/cryptography
+    expect for a key file.
+    """
+    cert = Path(cert_path)
 
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes, serialization
@@ -62,7 +97,7 @@ def _ensure_client_certificate(cert_path: str, key_path: str) -> None:
         [
             x509.NameAttribute(NameOID.COUNTRY_NAME, "DE"),
             x509.NameAttribute(NameOID.ORGANIZATION_NAME, "WebHMI"),
-            x509.NameAttribute(NameOID.COMMON_NAME, "webhmi-opc-client"),
+            x509.NameAttribute(NameOID.COMMON_NAME, common_name),
         ]
     )
     now = datetime.datetime.now(datetime.UTC)
@@ -73,7 +108,7 @@ def _ensure_client_certificate(cert_path: str, key_path: str) -> None:
         .public_key(private_key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - datetime.timedelta(minutes=5))
-        .not_valid_after(now + datetime.timedelta(days=3650))
+        .not_valid_after(now + datetime.timedelta(days=validity_days))
         .add_extension(x509.SubjectAlternativeName([x509.DNSName("localhost")]), critical=False)
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
         .sign(private_key, hashes.SHA256())
@@ -92,12 +127,40 @@ def _ensure_client_certificate(cert_path: str, key_path: str) -> None:
     finally:
         os.close(descriptor)
     os.chmod(key_path, 0o600)
-    cert.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
+    cert_encoding_value = serialization.Encoding.DER if cert_encoding == "der" else serialization.Encoding.PEM
+    cert.write_bytes(certificate.public_bytes(cert_encoding_value))
     logger.info("opcua: generated self-signed client certificate at %s", cert_path)
 
 
-def _build_security_string(config: dict) -> str | None:
-    """Build the asyncua ``set_security_string`` argument from settings.
+@dataclass(frozen=True)
+class SecuritySettings:
+    """A datasource's secure-channel settings with cert paths resolved."""
+
+    policy: str
+    mode: str
+    certificate: str
+    private_key: str
+    private_key_password: str
+    server_certificate: str
+
+
+def _pem_or_der(path: str) -> str:
+    """Whether a cert/key file holds PEM text or raw DER bytes.
+
+    Decided by content, not by filename: asyncua infers the format from the
+    file extension, so an operator-supplied PEM key named ``client.key`` would
+    be handed to the DER parser and fail with an opaque ASN.1 tag error.
+    """
+    try:
+        with open(path, "rb") as handle:
+            head = handle.read(64)
+    except OSError as exc:
+        raise RuntimeError(f"OPC security file could not be read: {path} ({exc})") from exc
+    return "pem" if b"-----BEGIN" in head else "der"
+
+
+def _resolve_security_settings(config: dict) -> SecuritySettings | None:
+    """Normalize a datasource's security settings, resolving cert/key paths.
 
     Returns ``None`` for ``NoSecurity`` (no secure channel). Raises when a
     secured policy is requested without a client certificate + key.
@@ -131,13 +194,58 @@ def _build_security_string(config: dict) -> str | None:
     key = _resolve_security_path(key_path)
     if not key_password:
         _ensure_client_certificate(cert, key)
-    if key_password:
-        key = f"{key}::{key_password}"
 
-    sec_parts = [security_policy, security_mode, cert, key]
-    if server_cert_path:
-        sec_parts.append(_resolve_security_path(server_cert_path))
-    return ",".join(sec_parts)
+    return SecuritySettings(
+        policy=security_policy,
+        mode=security_mode,
+        certificate=cert,
+        private_key=key,
+        private_key_password=key_password,
+        server_certificate=_resolve_security_path(server_cert_path) if server_cert_path else "",
+    )
+
+
+async def apply_client_security(client: Client, config: dict) -> bool:
+    """Put a client into secure-channel mode from datasource settings.
+
+    Returns ``False`` when the datasource runs unsecured. Bypasses asyncua's
+    ``set_security_string`` so each file's format comes from its bytes rather
+    than its extension — see :func:`_pem_or_der`.
+    """
+    settings = _resolve_security_settings(config)
+    if settings is None:
+        return False
+
+    log_expiry_warning(Path(settings.certificate), "opcua client")
+    if settings.server_certificate:
+        log_expiry_warning(Path(settings.server_certificate), "opcua server")
+
+    policy_class = getattr(security_policies, f"SecurityPolicy{settings.policy}", None)
+    if policy_class is None:
+        raise RuntimeError(f"Unsupported OPC-UA security policy: {settings.policy}")
+    mode = getattr(ua.MessageSecurityMode, settings.mode, None)
+    if mode is None:
+        raise RuntimeError(f"Unsupported OPC-UA security mode: {settings.mode}")
+
+    await client.set_security(
+        policy_class,
+        CertProperties(settings.certificate, extension=_pem_or_der(settings.certificate)),
+        CertProperties(
+            settings.private_key,
+            extension=_pem_or_der(settings.private_key),
+            password=settings.private_key_password or None,
+        ),
+        server_certificate=(
+            CertProperties(
+                settings.server_certificate,
+                extension=_pem_or_der(settings.server_certificate),
+            )
+            if settings.server_certificate
+            else None
+        ),
+        mode=mode,
+    )
+    return True
 
 
 # ── Discovery + connection probe (throwaway clients, pool-independent) ────────
@@ -249,9 +357,7 @@ async def probe_connection(settings: dict, *, timeout_s: float = 5.0) -> dict:
     timeout = float(settings.get("connect_timeout_s", timeout_s) or timeout_s)
     client = Client(url, timeout=timeout)
     try:
-        sec = _build_security_string(settings)
-        if sec:
-            await client.set_security_string(sec)
+        await apply_client_security(client, settings)
         if username:
             client.set_user(username)
             client.set_password(password)
@@ -401,6 +507,7 @@ class DatasourceOpcuaEngine:
         self.datasource_name = datasource_name
         self._client: Client | None = None
         self._connected = False
+        self._error: str | None = None
         self._reconnect_task: asyncio.Task | None = None
         self._shutdown = False
         # In-flight close, so a status-change-triggered close and the
@@ -449,6 +556,11 @@ class DatasourceOpcuaEngine:
     @property
     def connected(self) -> bool:
         return self._connected
+
+    @property
+    def error(self) -> str | None:
+        """Reason the last connect attempt failed, or ``None`` while healthy."""
+        return self._error
 
     def set_datasource_manager(self, dm: Any) -> None:
         self._datasource_manager = dm
@@ -639,6 +751,7 @@ class DatasourceOpcuaEngine:
                 try:
                     await self._do_connect()
                 except Exception as exc:
+                    self._error = _short_probe_error(exc)
                     logger.warning(
                         "OPC-UA connect failed for %s: %s", self.datasource_name, exc
                     )
@@ -665,9 +778,7 @@ class DatasourceOpcuaEngine:
         password = self._config.get("password", "")
         client = Client(url)
 
-        security_string = _build_security_string(self._config)
-        if security_string:
-            await client.set_security_string(security_string)
+        await apply_client_security(client, self._config)
 
         if username:
             client.set_user(username)
@@ -676,6 +787,7 @@ class DatasourceOpcuaEngine:
         await asyncio.wait_for(client.connect(), timeout=connect_timeout_s)
         self._client = client
         self._connected = True
+        self._error = None
         logger.info("OPC-UA connected: %s → %s", self.datasource_name, url)
         if self._status_callback is not None:
             await self._status_callback(self.datasource_name, True)

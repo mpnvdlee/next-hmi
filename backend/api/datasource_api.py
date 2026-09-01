@@ -1,7 +1,9 @@
 """REST API for datasource management (CRUD + browse)."""
 
+from pathlib import Path
 from typing import Any, Literal, TypedDict
 
+from core.cert_info import describe_certificate
 from core.exceptions import DatasourceNotFoundError, DatasourceValidationError
 from core.project_packer import safe_filename
 from core.storage import active_certs_dir, write_bytes_atomic
@@ -9,6 +11,9 @@ from core.value_types import simplify_variable_tree
 from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from models.datasource import (
+    CertGenerateBody,
+    CertGenerateResult,
+    CertInfo,
     CertUploadResult,
     DatasourceUpsertBody,
     DiscoverBody,
@@ -16,7 +21,11 @@ from models.datasource import (
     TestConnectionBody,
     TestConnectionResult,
 )
-from opcua.client_pool import discover_endpoints, probe_connection
+from opcua.client_pool import (
+    discover_endpoints,
+    generate_self_signed_client_certificate,
+    probe_connection,
+)
 from services import users_manager, write_service
 from services.datasource_manager import (
     DatasourceEntry,
@@ -161,6 +170,7 @@ def _apply_connection_status(items: list[DatasourceSummary]) -> list[DatasourceS
             engine = pool.get(item["name"])
             if engine is not None:
                 item["connected"] = engine.connected
+                item["error"] = engine.error
     return items
 
 
@@ -175,6 +185,9 @@ async def _run_datasource_action(name: str, entry: Any, action: DatasourceAction
 
     if entry.ds_type == "opcua-client":
         pool = _require_opcua_pool()
+        if action == "start":
+            await pool.start(name, entry.config.get("settings", {}))
+            return {"status": "connected"}
         await pool.restart(name, entry.config.get("settings", {}))
         return {"status": "reconnecting"}
 
@@ -225,6 +238,55 @@ async def upload_datasource_certificate(file: UploadFile = File(...)) -> CertUpl
     data = await file.read()
     write_bytes_atomic(target, data)
     return CertUploadResult(path=f"certs/{filename}")
+
+
+@router.post("/certs/generate")
+async def generate_datasource_certificate(body: CertGenerateBody) -> CertGenerateResult:
+    """Generate a self-signed client certificate + private key pair.
+
+    Convenience for the wizard's secure-connection step and the properties
+    panel: an engineer who doesn't already have a PKI-issued client cert can
+    get a working pair with one click instead of producing files out-of-band
+    and uploading them. Uses the same self-signed generator the live engine
+    falls back to on first connect. Always writes to the same base-name path —
+    a repeat click on the same datasource regenerates (overwrites) its pair
+    rather than accumulating ``-N`` siblings.
+
+    The certificate itself is written as DER (the encoding an imported OPC-UA
+    PKI store — UaExpert, Optix, … — uses); the private key stays PEM.
+    """
+    base = _sanitize_cert_filename(body.name or "client")
+    certs_dir = active_certs_dir()
+    certs_dir.mkdir(parents=True, exist_ok=True)
+    cert_path = certs_dir / f"{base}-cert.der"
+    key_path = certs_dir / f"{base}-key.pem"
+    generate_self_signed_client_certificate(
+        str(cert_path),
+        str(key_path),
+        common_name=body.common_name.strip() or "webhmi-opc-client",
+        validity_days=body.validity_days,
+        cert_encoding="der",
+    )
+    return CertGenerateResult(
+        client_certificate=f"certs/{cert_path.name}",
+        client_private_key=f"certs/{key_path.name}",
+    )
+
+
+@router.get("/certs/info")
+async def read_datasource_certificate_info(path: str) -> CertInfo:
+    """Validity of a stored certificate, for the editor's lifecycle display.
+
+    ``path`` is the project-relative ``certs/<filename>`` a datasource stores.
+    A path that is not readable as a certificate answers ``readable: false``
+    rather than an error — the field is free text an engineer types, and a typo
+    there is not a server fault.
+    """
+    filename = _sanitize_cert_filename(Path(path).name)
+    described = describe_certificate(active_certs_dir() / filename)
+    if described is None:
+        return CertInfo(readable=False)
+    return CertInfo(readable=True, **described)
 
 
 @router.post("/write")
@@ -385,20 +447,24 @@ async def browse_datasource(name: str) -> Any:
 
 @router.post("/{name}/start")
 async def start_datasource(name: str) -> dict[str, str]:
-    """Start a test server or reconnect an OPC-UA client."""
+    """Start a test server or connect an OPC-UA client."""
     entry = _require_datasource(name)
     return await _run_datasource_action(name, entry, "start")
 
 
 @router.post("/{name}/stop")
 async def stop_datasource(name: str) -> dict[str, str]:
-    """Stop a test server (and its paired client)."""
+    """Stop a test server (and its paired client) or disconnect an OPC-UA client."""
     entry = _require_datasource(name)
-    if entry.ds_type != "opcua-test-server":
-        raise DatasourceValidationError("Only test servers can be stopped")
-    ts_pool = _require_test_server_pool()
-    await ts_pool.stop(name)
-    return {"status": "stopped"}
+    if entry.ds_type == "opcua-test-server":
+        ts_pool = _require_test_server_pool()
+        await ts_pool.stop(name)
+        return {"status": "stopped"}
+    if entry.ds_type == "opcua-client":
+        pool = _require_opcua_pool()
+        await pool.stop(name)
+        return {"status": "disconnected"}
+    raise DatasourceValidationError("Only OPC-UA datasources can be stopped")
 
 
 @router.post("/{name}/restart")

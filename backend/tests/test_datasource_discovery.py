@@ -4,14 +4,16 @@ These exercise ``discover_endpoints`` / ``probe_connection`` against a real
 NoSecurity ``asyncua`` server bound to an ephemeral port.
 """
 import socket
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
 from asyncua import Server, ua
 from opcua.client_pool import (
-    _build_security_string,
     _ensure_client_certificate,
+    _pem_or_der,
+    _resolve_security_settings,
     discover_endpoints,
     probe_connection,
 )
@@ -103,7 +105,7 @@ def test_security_paths_are_resolved_relative_to_project_root(monkeypatch, tmp_p
     datasource stores."""
     monkeypatch.setattr("opcua.client_pool.active_project_root", lambda: tmp_path)
 
-    security = _build_security_string(
+    security = _resolve_security_settings(
         {
             "security_policy": "Basic256Sha256",
             "security_mode": "SignAndEncrypt",
@@ -113,15 +115,12 @@ def test_security_paths_are_resolved_relative_to_project_root(monkeypatch, tmp_p
         }
     )
 
-    assert security == ",".join(
-        [
-            "Basic256Sha256",
-            "SignAndEncrypt",
-            str((tmp_path / "certs/client.pem").resolve()),
-            str((tmp_path / "certs/client-key.pem").resolve()),
-            str((tmp_path / "certs/server.pem").resolve()),
-        ]
-    )
+    assert security is not None
+    assert security.policy == "Basic256Sha256"
+    assert security.mode == "SignAndEncrypt"
+    assert security.certificate == str((tmp_path / "certs/client.pem").resolve())
+    assert security.private_key == str((tmp_path / "certs/client-key.pem").resolve())
+    assert security.server_certificate == str((tmp_path / "certs/server.pem").resolve())
 
 
 def test_ensure_client_certificate_generates_missing_pair(tmp_path: Path):
@@ -136,8 +135,10 @@ def test_ensure_client_certificate_generates_missing_pair(tmp_path: Path):
     _ensure_client_certificate(str(cert), str(key))
 
     assert cert.exists() and key.exists()
-    # Key is written owner-read/write only.
-    assert (key.stat().st_mode & 0o777) == 0o600
+    if sys.platform != "win32":
+        # os.chmod on Windows can't restrict to owner-only; see
+        # core/tls_settings.py's documented weaker guarantee for this gap.
+        assert (key.stat().st_mode & 0o777) == 0o600
     loaded = x509.load_pem_x509_certificate(cert.read_bytes())
     assert "CN=webhmi-opc-client" in loaded.subject.rfc4514_string()
     assert not loaded.extensions.get_extension_for_class(
@@ -156,14 +157,33 @@ def test_ensure_client_certificate_is_idempotent(tmp_path: Path):
     assert (cert.read_bytes(), key.read_bytes()) == first
 
 
-def test_build_security_string_skips_generation_when_key_password_set(
+def test_generate_self_signed_client_certificate_overwrites_each_call(tmp_path: Path):
+    """Unconditional, unlike ``_ensure_client_certificate`` — the wizard's
+    "Generate certificate" action calls this fresh on every click."""
+    from opcua.client_pool import generate_self_signed_client_certificate
+
+    cert = tmp_path / "certs" / "client.pem"
+    key = tmp_path / "certs" / "client-key.pem"
+    generate_self_signed_client_certificate(str(cert), str(key))
+    first = (cert.read_bytes(), key.read_bytes())
+
+    generate_self_signed_client_certificate(str(cert), str(key))
+
+    assert (cert.read_bytes(), key.read_bytes()) != first
+    if sys.platform != "win32":
+        # os.chmod on Windows can't restrict to owner-only; see
+        # core/tls_settings.py's documented weaker guarantee for this gap.
+        assert (key.stat().st_mode & 0o777) == 0o600
+
+
+def test_resolve_security_settings_skips_generation_when_key_password_set(
     monkeypatch, tmp_path: Path
 ):
     """A configured key password means the operator supplies their own
     encrypted key — never silently generate over it."""
     monkeypatch.setattr("opcua.client_pool.active_project_root", lambda: tmp_path)
 
-    _build_security_string(
+    _resolve_security_settings(
         {
             "security_policy": "Basic256Sha256",
             "security_mode": "SignAndEncrypt",
@@ -174,3 +194,18 @@ def test_build_security_string_skips_generation_when_key_password_set(
     )
 
     assert not (tmp_path / "certs" / "client-key.pem").exists()
+
+
+def test_pem_format_is_detected_from_content_not_extension(tmp_path: Path):
+    """An operator's PEM key named ``client.key`` must not be parsed as DER —
+    asyncua decides on the extension, which fails with an opaque ASN.1 error."""
+    cert = tmp_path / "client-cert.pem"
+    key = tmp_path / "client.key"
+    _ensure_client_certificate(str(cert), str(key))
+
+    assert _pem_or_der(str(key)) == "pem"
+    assert _pem_or_der(str(cert)) == "pem"
+
+    der = tmp_path / "client.der"
+    der.write_bytes(b"\x30\x82\x01\x0a")
+    assert _pem_or_der(str(der)) == "der"

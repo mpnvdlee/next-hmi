@@ -77,6 +77,99 @@ async def test_start_all_does_not_abort_on_conflict(fake_server):
     assert instance.error
 
 
+# ── Security endpoints (`security_policies` setting) ────────────────────────
+
+
+def test_resolve_security_policies_defaults_to_no_security_only():
+    assert test_server_module._resolve_security_policies(None) == [
+        ua.SecurityPolicyType.NoSecurity,
+    ]
+    assert test_server_module._resolve_security_policies([]) == [
+        ua.SecurityPolicyType.NoSecurity,
+    ]
+
+
+def test_resolve_security_policies_adds_valid_entries_and_ignores_bad_ones():
+    policies = test_server_module._resolve_security_policies([
+        "Basic256Sha256/Sign",
+        "Aes256Sha256RsaPss/SignAndEncrypt",
+        "Basic256Sha256/Sign",  # duplicate, kept once
+        "Unsupported/Sign",  # unsupported policy name
+        "Basic256Sha256/Whatever",  # unsupported mode
+        "malformed",  # no "/"
+    ])
+    assert policies == [
+        ua.SecurityPolicyType.NoSecurity,
+        ua.SecurityPolicyType.Basic256Sha256_Sign,
+        ua.SecurityPolicyType.Aes256Sha256RsaPss_SignAndEncrypt,
+    ]
+
+
+class _FakeSecureServer(_FakeServer):
+    """A `_FakeServer` whose start() succeeds and records security setup."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.security_policy: list[Any] = []
+        self.certificate_path: str | None = None
+        self.private_key_path: str | None = None
+
+    def set_security_policy(self, policy) -> None:
+        self.security_policy = policy
+
+    async def load_certificate(self, path: str) -> None:
+        self.certificate_path = path
+
+    async def load_private_key(self, path: str) -> None:
+        self.private_key_path = path
+
+    async def start(self) -> None:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_start_with_no_secured_policies_skips_certificate_loading(monkeypatch):
+    monkeypatch.setattr(test_server_module, "Server", _FakeSecureServer)
+    instance = ServerInstance("ts-plain")
+    await instance.start(_CONFIG)
+    try:
+        server = instance._server
+        assert server.security_policy == [ua.SecurityPolicyType.NoSecurity]
+        assert server.certificate_path is None
+        assert server.private_key_path is None
+    finally:
+        await instance.stop()
+
+
+@pytest.mark.asyncio
+async def test_start_with_secured_policy_loads_a_generated_certificate(monkeypatch, tmp_path):
+    monkeypatch.setattr(test_server_module, "Server", _FakeSecureServer)
+    monkeypatch.setattr(test_server_module, "active_certs_dir", lambda: tmp_path)
+    config = {
+        "name": "ts-secure",
+        "type": "opcua-test-server",
+        "settings": {
+            "port": 4857,
+            "security_policies": ["Basic256Sha256/SignAndEncrypt"],
+        },
+        "variables": [],
+    }
+    instance = ServerInstance("ts-secure")
+    await instance.start(config)
+    try:
+        server = instance._server
+        assert server.security_policy == [
+            ua.SecurityPolicyType.NoSecurity,
+            ua.SecurityPolicyType.Basic256Sha256_SignAndEncrypt,
+        ]
+        assert server.certificate_path == str(tmp_path / "test-server-ts-secure-cert.pem")
+        assert server.private_key_path == str(tmp_path / "test-server-ts-secure-key.pem")
+        assert (tmp_path / "test-server-ts-secure-cert.pem").exists()
+        assert (tmp_path / "test-server-ts-secure-key.pem").exists()
+    finally:
+        await instance.stop()
+
+
 # ── _populate_nodes array encoding (§2.6 / D-ARRAY.3) ───────────────────────
 
 
