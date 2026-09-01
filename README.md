@@ -176,7 +176,7 @@ cd frontend && npm install && cd ..
 python start-dev.py       # backend :8000, Vite with HMR :5173
 ```
 
-Stop with `python start-dev.py --stop` or Ctrl-C. Tests and linters:
+Stop with Ctrl-C. Tests and linters:
 `pytest backend/tests`, `ruff check backend`, and `npm test` / `npm run lint` /
 `npm run build` from `frontend/`.
 
