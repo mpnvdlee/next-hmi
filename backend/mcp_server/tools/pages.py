@@ -33,27 +33,19 @@ from ._common import (
     raise_if_findings,
 )
 
-# Container-host widget types — mirrors frontend's CONTAINER_HOST_TYPES.
-# Widgets of these types render as flex/grid containers and need a
-# ``children`` array even when empty so the UI tree drop-targets work.
-#
-# Only the types compiled into the bundle are listed. Everything registered
-# from a manifest — the stdlib's Container, and any project widget — declares
-# it with ``export const hostsChildren = true`` instead, which is what
-# ``_hosts_children`` below reads.
-_CONTAINER_HOST_TYPES = frozenset({"ImageContainer"})
-
 
 def _hosts_children(widget_type: str) -> bool:
-    """Whether nodes of this type carry a ``children`` array.
+    """Whether nodes of this type carry a ``children`` array — they render as
+    containers and need the array even when empty, so the UI tree has a drop
+    target. Mirrors ``isContainerHostType`` on the frontend.
 
-    A project widget wins over a same-named stdlib one, mirroring the frontend
-    registry's shadowing order. ``load_widget_manifest`` overlays the shipped
-    stdlib onto ``builtin``, so hosting still resolves in a runtime home that
-    has never compiled.
+    Every widget declares it with ``export const hostsChildren = true``. A
+    project widget wins over a same-named built-in one, mirroring the frontend
+    registry's shadowing order.
+    ``load_widget_manifest`` overlays the shipped built-in widgets onto
+    ``builtin``, so hosting still resolves in a runtime home that has never
+    compiled.
     """
-    if widget_type in _CONTAINER_HOST_TYPES:
-        return True
     manifest = load_widget_manifest()
     custom = manifest.get("custom")
     if isinstance(custom, dict):

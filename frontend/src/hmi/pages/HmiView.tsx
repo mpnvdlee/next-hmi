@@ -13,8 +13,8 @@ import { getPageChildren } from '@shared/utils/pageContent';
 import { randomUuid } from '@shared/utils/id';
 import { HmiScopeContext } from '../context/HmiScopeContext';
 import { useResolvedDialogs, useResolvedPageOverlays } from '../hooks/useOpenOverlays';
-import NavigationMenu from '../components/NavigationMenu';
 import { renderRegionChildren } from '../components/renderRegion';
+import FallbackNavigationMenu from '../components/FallbackNavigationMenu';
 import ShellRegion from '../components/ShellRegion';
 import { useSidebarFullHeight } from '../components/ShellRegion/useSidebarFullHeight';
 import PageGroupPageView from '../components/PageGroupPageView';
@@ -163,7 +163,7 @@ export default function HmiView() {
 
   const headerContent = renderRegionChildren(header);
   const footerContent = renderRegionChildren(footer);
-  const leftSidebarContent = renderRegionChildren(leftSidebar, <NavigationMenu />);
+  const leftSidebarContent = renderRegionChildren(leftSidebar, <FallbackNavigationMenu />);
   const rightSidebarContent = renderRegionChildren(rightSidebar);
 
   const {

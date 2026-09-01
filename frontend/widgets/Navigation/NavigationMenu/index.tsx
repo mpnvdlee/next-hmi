@@ -1,37 +1,127 @@
-import { Fragment, Suspense, useEffect, useMemo, useState } from 'react';
-import type { JSX } from 'react';
-import { createPortal } from 'react-dom';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { useConfigStore } from '@shared/store/configStore';
-import type {
-  HmiWidgetProps,
-  IconValue,
-  MenuItemConfig,
-  OverlayPlacement,
-  PageConfig,
-  PageGroupConfig,
-  PageNode,
-  PageTitle,
-} from '@shared/types/config';
-import {
-  filterByRole,
-  filterHidden,
-  isPageGroup,
-  resolvePageContext,
-  resolvePageTitle,
-  sortPagesByOrder,
-} from '@shared/utils/pageTree';
-import { useAnchoredStyle } from '@shared/hooks/useAnchoredStyle';
-import { useHmiStore } from '../../store/hmiStore';
-import { useHmiScope } from '../../context/HmiScopeContext';
-import { useReactiveEval } from '@hmi/hooks/useReactiveEval';
-import { executeWidgetActions } from '@hmi/utils/widgetActions';
-import { getPropString, getPropBoolean, usePropBoolean } from '../layoutUtils';
-import { getBuiltinIconComponent, isBuiltinIconId } from '@shared/utils/phosphorIcons';
-import WidgetRenderer from '../WidgetRenderer';
-import type { WidgetConfig } from '@shared/types/config';
-import styles from './index.module.css';
-import { matchesSearchWords } from '@shared/utils/search';
+/* @jsxRuntime classic */
+export const schema = {
+  mode: {
+    type: 'String' as const,
+    format: 'select' as const,
+    label: 'Mode',
+    group: 'Source',
+    defaultValue: 'auto',
+    options: [
+      { label: 'Auto (mirror page tree)', value: 'auto' },
+      { label: 'Manual (item list)', value: 'manual' },
+    ],
+  },
+  items: {
+    type: 'menu-items' as const,
+    label: 'Items',
+    group: 'Source',
+    description: 'The entries the menu shows, in order. Manual mode only.',
+    visibleWhen: { property: 'mode', equals: 'manual' },
+  },
+  orientation: {
+    type: 'String' as const,
+    format: 'select' as const,
+    label: 'Orientation',
+    group: 'Layout',
+    defaultValue: 'vertical',
+    options: [
+      { label: 'Vertical (sidebar)', value: 'vertical' },
+      { label: 'Horizontal (top-bar)', value: 'horizontal' },
+    ],
+  },
+  display: {
+    type: 'String' as const,
+    format: 'select' as const,
+    label: 'Display',
+    group: 'Appearance',
+    defaultValue: 'icon-label',
+    options: [
+      { label: 'Icon + label', value: 'icon-label' },
+      { label: 'Icon only', value: 'icon-only' },
+      { label: 'Label only', value: 'label-only' },
+    ],
+  },
+  hierarchy: {
+    type: 'String' as const,
+    format: 'select' as const,
+    label: 'Hierarchy',
+    group: 'Source',
+    defaultValue: 'tree',
+    options: [
+      { label: 'Tree (groups expandable)', value: 'tree' },
+      { label: 'Flat (all groups flattened)', value: 'flat' },
+    ],
+  },
+  submenuMode: {
+    type: 'String' as const,
+    format: 'select' as const,
+    label: 'Submenu mode',
+    group: 'Layout',
+    defaultValue: 'auto',
+    options: [
+      { label: 'Auto', value: 'auto' },
+      { label: 'Flyout (overlay)', value: 'flyout' },
+      { label: 'Inline-expand (push siblings)', value: 'inline-expand' },
+    ],
+  },
+  iconStrategy: {
+    type: 'String' as const,
+    format: 'select' as const,
+    label: 'Icon strategy',
+    group: 'Appearance',
+    defaultValue: 'first-letter',
+    options: [
+      { label: 'Configured icon', value: 'configured' },
+      { label: 'First letter', value: 'first-letter' },
+      { label: 'None', value: 'none' },
+    ],
+  },
+  activeStyle: {
+    type: 'String' as const,
+    format: 'select' as const,
+    label: 'Active style',
+    group: 'Appearance',
+    defaultValue: 'left-border',
+    options: [
+      { label: 'Left border', value: 'left-border' },
+      { label: 'Background', value: 'background' },
+      { label: 'Underline', value: 'underline' },
+    ],
+  },
+  groupExpansion: {
+    type: 'String' as const,
+    format: 'select' as const,
+    label: 'Group expansion',
+    group: 'Behaviour',
+    defaultValue: 'auto',
+    options: [
+      { label: 'Auto (expand active branch)', value: 'auto' },
+      { label: 'All expanded', value: 'all-expanded' },
+      { label: 'All collapsed', value: 'all-collapsed' },
+      { label: 'Remember (persist per browser)', value: 'remember' },
+    ],
+  },
+  showSearch: {
+    type: 'Boolean' as const,
+    format: 'show' as const,
+    label: 'Show search',
+    defaultValue: false,
+    group: 'Behaviour',
+  },
+  collapsed: {
+    type: 'Boolean' as const,
+    format: 'collapse' as const,
+    label: 'Collapsed',
+    group: 'Layout',
+    defaultValue: false,
+  },
+};
+
+export const displayName = 'Navigation Menu';
+export const category = 'Navigation';
+export const description =
+  'Sidebar or top-bar menu mirroring the page tree, with rich display options.';
+export const icon = { type: 'builtin', name: 'sidebar-simple' } as const;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -44,19 +134,50 @@ type ActiveStyle = 'left-border' | 'background' | 'underline';
 type Mode = 'auto' | 'manual';
 type GroupExpansion = 'auto' | 'all-expanded' | 'all-collapsed' | 'remember';
 
+/** The `menu-items` property shape, as its editor writes it. Mirrors
+ *  MenuItemConfig in @shared/types/config. */
+type MenuItem =
+  | { type: 'page-link'; pageId: string; label?: string; icon?: { $static: IconValue } }
+  | {
+      type: 'external-link';
+      url: string;
+      target?: '_self' | '_blank';
+      label: string;
+      icon?: { $static: IconValue };
+    }
+  | { type: 'action'; actions: unknown[]; label: string; icon?: { $static: IconValue } }
+  | { type: 'divider' }
+  | { type: 'section-header'; label: string }
+  | { type: 'submenu'; label: string; icon?: { $static: IconValue }; items: MenuItem[] };
+
 const REMEMBER_STORAGE_PREFIX = 'nexthmi.navmenu.expanded.';
 
 type ExpansionMap = Record<string, boolean>;
 
 interface FlyoutState {
   parentId: string;
-  rect: DOMRect;
+  rect: AnchorRect;
 }
 
-const EMPTY_GROUPS: readonly string[] = [];
-const EMPTY_MENU_ITEMS: MenuItemConfig[] = [];
+const EMPTY_MENU_ITEMS: MenuItem[] = [];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function isPageGroup(node: PageNode): node is PageGroupConfig {
+  return (node as PageGroupConfig).type === 'page-group';
+}
+
+/** Match every whitespace-separated query word against one combined value, in
+ *  any order. Render-time twin of matchesSearchWords in @shared/utils/search. */
+function matchesSearchWords(query: string, searchable: (string | undefined)[]): boolean {
+  const words = query.trim().toLowerCase().split(/\s+/u).filter(Boolean);
+  if (words.length === 0) return true;
+  const haystack = searchable
+    .filter((value) => typeof value === 'string')
+    .join(' ')
+    .toLowerCase();
+  return words.every((word) => haystack.includes(word));
+}
 
 function pageGroupContains(group: PageGroupConfig, id: string): boolean {
   for (const child of group.children) {
@@ -66,14 +187,34 @@ function pageGroupContains(group: PageGroupConfig, id: string): boolean {
   return false;
 }
 
-function applyMetadataFilters<T extends PageNode>(nodes: T[], userGroups: readonly string[]): T[] {
-  return sortPagesByOrder(filterByRole(filterHidden(nodes), userGroups as string[]));
+/**
+ * Hidden / role-gated / order rules for one level of the tree.
+ *
+ * `useVisiblePages()` applies exactly this to the top level, but the shared
+ * helpers behind it are deliberately shallow — every call site filters the level
+ * it is about to iterate — so a menu that renders nested levels reapplies them
+ * here. Same rules, and `userGroups` must come from `useCurrentUserGroups()`
+ * for the same reason: it is the group source `useVisiblePages()` itself uses,
+ * so the two levels of one menu cannot disagree about who is looking.
+ */
+function applyMetadataFilters<T extends PageNode>(nodes: T[], userGroups: string[]): T[] {
+  const groups = new Set(userGroups);
+  return nodes
+    .filter((node) => node.hidden !== true)
+    .filter((node) => !node.role || node.role.length === 0 || node.role.some((g) => groups.has(g)))
+    .map((node, idx) => ({ node, idx }))
+    .sort((a, b) => {
+      const oa = typeof a.node.order === 'number' ? a.node.order : Number.POSITIVE_INFINITY;
+      const ob = typeof b.node.order === 'number' ? b.node.order : Number.POSITIVE_INFINITY;
+      return oa !== ob ? oa - ob : a.idx - b.idx;
+    })
+    .map((entry) => entry.node);
 }
 
 // Flat-mode flattening: page-groups inflate to their immediate page children;
 // nested page-groups only inflate when `showChildPagesInMenu`.
-function flattenForFlat<T extends PageNode>(nodes: T[]): PageConfig[] {
-  const out: PageConfig[] = [];
+function flattenForFlat(nodes: PageNode[]): PageNode[] {
+  const out: PageNode[] = [];
   for (const node of nodes) {
     if (!isPageGroup(node)) {
       out.push(node);
@@ -106,13 +247,9 @@ function filterPagesBySearch(nodes: PageNode[], query: string, ancestorPath = ''
   return filtered;
 }
 
-function filterManualItems(
-  items: MenuItemConfig[],
-  query: string,
-  ancestorPath = '',
-): MenuItemConfig[] {
+function filterManualItems(items: MenuItem[], query: string, ancestorPath = ''): MenuItem[] {
   if (!query.trim()) return items;
-  const filtered: MenuItemConfig[] = [];
+  const filtered: MenuItem[] = [];
   for (const item of items) {
     if (item.type === 'divider') continue;
     const label = item.type === 'page-link' ? (item.label ?? item.pageId) : item.label;
@@ -143,20 +280,34 @@ function resolveIconLabel(
   return resolvePageTitle(node.title).trim().slice(0, 1).toUpperCase() || '?';
 }
 
+function findGroupById(nodes: PageNode[], id: string): PageGroupConfig | null {
+  for (const node of nodes) {
+    if (!isPageGroup(node)) continue;
+    if (node.id === id) return node;
+    const nested = findGroupById(node.children, id);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function staticIconToString(icon?: { $static: IconValue }): string | undefined {
+  if (!icon) return undefined;
+  const w = icon.$static;
+  if (!w) return undefined;
+  if (w.type === 'builtin') return w.name;
+  return w.path;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
-  // Menu properties evaluate `$var` / `$time` at render. As the fallback sidebar
-  // the menu renders outside WidgetRenderer, so subscribe here or those values
-  // freeze (evalCtx is stable across ticks); when placed as a widget the extra
-  // subscription is harmless.
-  const evalCtx = useReactiveEval(properties);
-  const pages = useConfigStore((s) => s.pages);
-  const location = useLocation();
-  const navigate = useNavigate();
+  const evalCtx = useEvalContext();
+  const visiblePages = useVisiblePages();
+  const activePage = useActivePage();
+  const navigateToPage = useNavigateToPage();
   const scope = useHmiScope();
-  const currentUser = useHmiStore((s) => s.currentUsersByScope[scope]);
-  const userGroups = currentUser?.groups ?? EMPTY_GROUPS;
+  const userGroups = useCurrentUserGroups() as string[];
+  const activePageId = activePage.pageId;
 
   // Schema-driven props with defaults that preserve today's behaviour.
   const mode = getPropString(properties, 'mode', 'auto', evalCtx) as Mode;
@@ -184,12 +335,10 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
     evalCtx,
   ) as GroupExpansion;
 
-  // Optional bottom slot — accepts a single WidgetConfig (authored via JSON).
+  // Optional bottom slot — accepts a single widget node (authored via JSON).
   const footerSlot = properties?.footerSlot as WidgetConfig | null | undefined;
   const isFooterSlotComponent =
-    footerSlot &&
-    typeof footerSlot === 'object' &&
-    typeof (footerSlot as WidgetConfig).type === 'string';
+    footerSlot && typeof footerSlot === 'object' && typeof footerSlot.type === 'string';
 
   // External `collapsed` binding takes precedence over local toggle.
   const externalCollapsed = usePropBoolean(properties, 'collapsed', false);
@@ -221,23 +370,12 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
     }
   }, [groupExpansion, expandedGroups]);
 
-  const routeBase = location.pathname.startsWith('/preview/') ? '/preview' : '/pages';
-  const currentId = location.pathname.startsWith(`${routeBase}/`)
-    ? location.pathname.slice(`${routeBase}/`.length)
-    : undefined;
-  const currentContext = resolvePageContext(pages, currentId);
-  const activePageId =
-    currentContext.requestedNode && !isPageGroup(currentContext.requestedNode)
-      ? currentContext.requestedNode.id
-      : (currentContext.page?.id ?? null);
+  const filteredPages = useMemo(
+    () => filterPagesBySearch(visiblePages, search),
+    [visiblePages, search],
+  );
 
-  const visiblePages = useMemo(() => applyMetadataFilters(pages, userGroups), [pages, userGroups]);
-
-  const filteredPages = useMemo(() => {
-    return filterPagesBySearch(visiblePages, search);
-  }, [visiblePages, search]);
-
-  const renderedNodes = useMemo<PageNode[]>(
+  const renderedNodes = useMemo(
     () => (hierarchy === 'flat' ? flattenForFlat(filteredPages) : filteredPages),
     [hierarchy, filteredPages],
   );
@@ -251,7 +389,7 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
       : submenuMode;
 
   // Items array for manual mode.
-  const manualItems = (properties?.items as MenuItemConfig[] | undefined) ?? EMPTY_MENU_ITEMS;
+  const manualItems = (properties?.items as MenuItem[] | undefined) ?? EMPTY_MENU_ITEMS;
   const filteredManualItems = useMemo(
     () => filterManualItems(manualItems, search),
     [manualItems, search],
@@ -272,7 +410,7 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
   }
 
   function toggleGroupInline(group: PageGroupConfig) {
-    setExpandedGroups((prev) => {
+    setExpandedGroups((prev: ExpansionMap) => {
       const cur = typeof prev[group.id] === 'boolean' ? prev[group.id] : isGroupExpanded(group);
       return { ...prev, [group.id]: !cur };
     });
@@ -291,12 +429,12 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
     if (!isActive) return '';
     switch (activeStyle) {
       case 'background':
-        return ` ${styles.linkActive} ${styles.linkActiveBg}`;
+        return ' hmi-navmenu__link--active hmi-navmenu__link--active-bg';
       case 'underline':
-        return ` ${styles.linkActive} ${styles.linkActiveUnderline}`;
+        return ' hmi-navmenu__link--active hmi-navmenu__link--active-underline';
       case 'left-border':
       default:
-        return ` ${styles.linkActive}`;
+        return ' hmi-navmenu__link--active';
     }
   }
 
@@ -305,7 +443,7 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
     // Navigate urgently so the menu highlight updates immediately; HmiView
     // renders the page from a deferred id, keeping the heavy switch low-priority
     // and interruptible (see HmiView's useDeferredValue).
-    navigate(`${routeBase}/${id}`);
+    navigateToPage(id);
     setFlyout(null);
   }
 
@@ -317,19 +455,19 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
       const IconComp = getBuiltinIconComponent(label);
       if (IconComp)
         return (
-          <span className={styles.icon}>
-            <Suspense fallback={null}>
+          <span className="hmi-navmenu__icon">
+            <React.Suspense fallback={null}>
               <IconComp size={21} weight="regular" />
-            </Suspense>
+            </React.Suspense>
           </span>
         );
     }
-    return <span className={`${styles.icon} ${styles.iconLetter}`}>{label}</span>;
+    return <span className="hmi-navmenu__icon hmi-navmenu__icon--letter">{label}</span>;
   }
 
   function renderLabel(label: string): JSX.Element | null {
     if (display === 'icon-only') return null;
-    return <span className={styles.title}>{label}</span>;
+    return <span className="hmi-navmenu__title">{label}</span>;
   }
 
   /**
@@ -371,11 +509,11 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
     );
   }
 
-  function renderPageRow(page: PageConfig, depth: number): JSX.Element {
+  function renderPageRow(page: PageNode, depth: number): JSX.Element {
     const isActive = activePageId === page.id;
     return renderNavButton({
       key: page.id,
-      className: `${styles.link} ${styles.childLink}${activeClass(isActive)}`,
+      className: `hmi-navmenu__link hmi-navmenu__link--child${activeClass(isActive)}`,
       title: collapsed ? resolvePageTitle(page.title) : undefined,
       dataDepth: depth,
       dataActive: isActive,
@@ -391,10 +529,10 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
     const expanded = isGroupExpanded(group);
 
     return (
-      <Fragment key={group.id}>
-        <div className={styles.groupRow}>
+      <React.Fragment key={group.id}>
+        <div className="hmi-navmenu__group-row">
           {renderNavButton({
-            className: `${styles.link}${depth > 0 ? ` ${styles.childLink}` : ''}${activeClass(isActive)}`,
+            className: `hmi-navmenu__link${depth > 0 ? ' hmi-navmenu__link--child' : ''}${activeClass(isActive)}`,
             title: collapsed ? resolvePageTitle(group.title) : undefined,
             dataDepth: depth > 0 ? depth : undefined,
             dataActive: isActive,
@@ -404,8 +542,8 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
 
           <button
             type="button"
-            className={styles.expandToggle}
-            onClick={(e) => {
+            className="hmi-navmenu__expand"
+            onClick={(e: { currentTarget: HTMLElement }) => {
               if (effectiveSubmenuMode === 'flyout') {
                 openFlyout(group, e.currentTarget.parentElement as HTMLElement);
               } else {
@@ -424,7 +562,7 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
           applyMetadataFilters(group.children, userGroups).map((child) =>
             isPageGroup(child) ? renderGroupRow(child, depth + 1) : renderPageRow(child, depth + 1),
           )}
-      </Fragment>
+      </React.Fragment>
     );
   }
 
@@ -434,20 +572,21 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
         return renderGroupRow(node, 0);
       }
       const groupIsActive =
-        (activePageId !== null && pageGroupContains(node, activePageId)) || currentId === node.id;
+        (activePageId !== null && pageGroupContains(node, activePageId)) ||
+        activePage.requestedId === node.id;
       return renderNavButton({
         key: node.id,
-        className: `${styles.link}${activeClass(groupIsActive)}`,
+        className: `hmi-navmenu__link${activeClass(groupIsActive)}`,
         title: collapsed ? resolvePageTitle(node.title) : undefined,
         dataActive: groupIsActive,
         onClick: () => navigateTo(node.id),
         node,
       });
     }
-    const pageIsActive = activePageId === node.id && currentContext.pageGroups.length === 0;
+    const pageIsActive = activePageId === node.id && activePage.groupIds.length === 0;
     return renderNavButton({
       key: node.id,
-      className: `${styles.link}${activeClass(pageIsActive)}`,
+      className: `hmi-navmenu__link${activeClass(pageIsActive)}`,
       title: collapsed ? resolvePageTitle(node.title) : undefined,
       dataActive: pageIsActive,
       onClick: () => navigateTo(node.id),
@@ -456,13 +595,13 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
   }
 
   // ── Manual-mode rendering ───────────────────────────────────────────────────
-  function renderManualItem(item: MenuItemConfig, idx: number, depth: number): JSX.Element | null {
+  function renderManualItem(item: MenuItem, idx: number, depth: number): JSX.Element | null {
     if (item.type === 'divider') {
-      return <div key={`d-${idx}`} className={styles.divider} role="separator" />;
+      return <div key={`d-${idx}`} className="hmi-navmenu__divider" role="separator" />;
     }
     if (item.type === 'section-header') {
       return (
-        <div key={`s-${idx}`} className={styles.sectionHeader}>
+        <div key={`s-${idx}`} className="hmi-navmenu__section">
           {item.label}
         </div>
       );
@@ -472,7 +611,7 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
       const node = { title: item.label ?? item.pageId, icon: staticIconToString(item.icon) };
       return renderNavButton({
         key: `p-${item.pageId}-${idx}`,
-        className: `${styles.link}${activeClass(isActive)}`,
+        className: `hmi-navmenu__link${activeClass(isActive)}`,
         dataDepth: depth,
         onClick: () => navigateTo(item.pageId),
         node,
@@ -482,7 +621,7 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
       return (
         <a
           key={`e-${idx}`}
-          className={styles.link}
+          className="hmi-navmenu__link"
           href={item.url}
           target={item.target ?? '_self'}
           rel={item.target === '_blank' ? 'noopener noreferrer' : undefined}
@@ -497,9 +636,13 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
         <button
           key={`a-${idx}`}
           type="button"
-          className={styles.link}
-          onClick={(e) =>
-            executeWidgetActions(item.actions, { scope, evalCtx, anchorEl: e.currentTarget })
+          className="hmi-navmenu__link"
+          onClick={(e: { currentTarget: HTMLElement }) =>
+            executeWidgetActions(item.actions as never, {
+              scope,
+              evalCtx,
+              anchorEl: e.currentTarget,
+            })
           }
         >
           {renderIcon({ title: item.label, icon: staticIconToString(item.icon) })}
@@ -509,32 +652,30 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
     }
     if (item.type === 'submenu') {
       const expanded = search.trim() ? true : expandedGroups[`manual-${idx}`] === true;
+      const toggle = () =>
+        setExpandedGroups((prev: ExpansionMap) => ({ ...prev, [`manual-${idx}`]: !expanded }));
       return (
-        <Fragment key={`sm-${idx}`}>
-          <div className={styles.groupRow}>
+        <React.Fragment key={`sm-${idx}`}>
+          <div className="hmi-navmenu__group-row">
             <button
               type="button"
-              className={`${styles.link}${depth > 0 ? ` ${styles.childLink}` : ''}`}
-              onClick={() =>
-                setExpandedGroups((prev) => ({ ...prev, [`manual-${idx}`]: !expanded }))
-              }
+              className={`hmi-navmenu__link${depth > 0 ? ' hmi-navmenu__link--child' : ''}`}
+              onClick={toggle}
             >
               {renderIcon({ title: item.label, icon: staticIconToString(item.icon) })}
               {renderLabel(item.label)}
             </button>
             <button
               type="button"
-              className={styles.expandToggle}
-              onClick={() =>
-                setExpandedGroups((prev) => ({ ...prev, [`manual-${idx}`]: !expanded }))
-              }
+              className="hmi-navmenu__expand"
+              onClick={toggle}
               aria-label={expanded ? 'Collapse section' : 'Expand section'}
             >
               {expanded ? '▾' : '▸'}
             </button>
           </div>
           {expanded && item.items.map((sub, i) => renderManualItem(sub, i, depth + 1))}
-        </Fragment>
+        </React.Fragment>
       );
     }
     return null;
@@ -542,9 +683,9 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
 
   // ── Layout / orientation classes ────────────────────────────────────────────
   const navClassName = [
-    styles.nav,
-    orientation === 'horizontal' ? styles.navHorizontal : '',
-    collapsed ? styles.navCollapsed : '',
+    'hmi-navmenu',
+    orientation === 'horizontal' ? 'hmi-navmenu--horizontal' : '',
+    collapsed ? 'hmi-navmenu--collapsed' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -553,8 +694,8 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
     <nav className={navClassName}>
       {orientation === 'vertical' && !hasExternalCollapsed && (
         <button
-          className={styles.toggle}
-          onClick={() => setLocalCollapsed((c) => !c)}
+          className="hmi-navmenu__toggle"
+          onClick={() => setLocalCollapsed((c: boolean) => !c)}
           title={collapsed ? 'Expand menu' : 'Collapse menu'}
         >
           {collapsed ? '»' : '«'}
@@ -564,10 +705,10 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
       {showSearch && !collapsed && (
         <input
           type="search"
-          className={styles.search}
+          className="hmi-navmenu__search"
           placeholder="Search…"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e: { target: HTMLInputElement }) => setSearch(e.target.value)}
         />
       )}
 
@@ -576,9 +717,7 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
         : renderedNodes.map((node) => renderTopLevelNode(node))}
 
       {isFooterSlotComponent && (
-        <div className={styles.footerSlot}>
-          <WidgetRenderer node={footerSlot as WidgetConfig} />
-        </div>
+        <div className="hmi-navmenu__footer">{renderWidget(footerSlot as WidgetConfig)}</div>
       )}
 
       {/* Flyout panel */}
@@ -605,10 +744,10 @@ function FlyoutPanel({
   onDismiss,
   children,
 }: {
-  rect: DOMRect;
+  rect: AnchorRect;
   orientation: Orientation;
   onDismiss: () => void;
-  children: React.ReactNode;
+  children?: unknown;
 }) {
   // Anchor: vertical → right of the parent button; horizontal → below it.
   const placement: OverlayPlacement =
@@ -635,29 +774,9 @@ function FlyoutPanel({
   }, [ref, onDismiss]);
 
   return createPortal(
-    <div ref={ref} className={styles.flyout} style={style}>
+    <div ref={ref} className="hmi-navmenu__flyout" style={style}>
       {children}
     </div>,
     document.body,
   );
-}
-
-// ── Misc helpers ──────────────────────────────────────────────────────────────
-
-function findGroupById(nodes: PageNode[], id: string): PageGroupConfig | null {
-  for (const node of nodes) {
-    if (!isPageGroup(node)) continue;
-    if (node.id === id) return node;
-    const nested = findGroupById(node.children, id);
-    if (nested) return nested;
-  }
-  return null;
-}
-
-function staticIconToString(icon?: { $static: IconValue }): string | undefined {
-  if (!icon) return undefined;
-  const w = icon.$static;
-  if (!w) return undefined;
-  if (w.type === 'builtin') return w.name;
-  return w.path;
 }

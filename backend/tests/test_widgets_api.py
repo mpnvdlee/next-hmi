@@ -154,11 +154,12 @@ def test_recompile_rejects_encoded_path_and_url_aliases(widgets_client, encoded_
 @pytest.fixture()
 def uncompiled_client(monkeypatch, tmp_path):
     """The widgets router over a runtime home that has never compiled: an empty
-    build dir with no ``widget-schemas.json``, and a stubbed stdlib catalog.
+    build dir with no ``widget-schemas.json``, and a stubbed built-in-widgets
+    catalog.
 
-    The manifest cache and both stdlib readers are module-level in
+    The manifest cache and both built-in-widgets readers are module-level in
     ``core.validation.structure``, so a test that leaves them alone reads
-    whatever the last stdlib build wrote into this checkout.
+    whatever the last built-in-widgets build wrote into this checkout.
     """
     import api.widgets_api as widgets_api
     import core.validation.structure as structure
@@ -166,7 +167,7 @@ def uncompiled_client(monkeypatch, tmp_path):
 
     build = tmp_path / "widget-build"
     build.mkdir()
-    stdlib: dict = {
+    builtin_widgets: dict = {
         "Container": {"name": "Container", "category": "Layout", "hostsChildren": True},
         "Button": {"name": "Button", "category": "Inputs", "schema": {}},
     }
@@ -177,17 +178,17 @@ def uncompiled_client(monkeypatch, tmp_path):
         monkeypatch.setattr(mod, "WIDGET_BUILD_DIR", build, raising=False)
     monkeypatch.setattr(structure, "WIDGET_SCHEMAS_PATH", build / "widget-schemas.json")
     monkeypatch.setattr(structure, "_manifest_cache", None)
-    monkeypatch.setattr(structure, "stdlib_catalog", lambda: ((1, 1), stdlib))
+    monkeypatch.setattr(structure, "builtin_widgets_catalog", lambda: ((1, 1), builtin_widgets))
 
     app = FastAPI()
     register_exception_handlers(app)
     app.include_router(widgets_api.router)
     with TestClient(app) as client:
-        yield client, stdlib
+        yield client, builtin_widgets
 
 
-def test_widget_schemas_serves_stdlib_before_anything_is_compiled(uncompiled_client):
-    """Stdlib widgets ship with the product, so a fresh runtime home that has
+def test_widget_schemas_serves_builtin_widgets_before_anything_is_compiled(uncompiled_client):
+    """Built-in widgets ship with the product, so a fresh runtime home that has
     never run the compiler must still answer with them — a 404 here left every
     built-in unregistered until someone compiled a project widget."""
     client, _ = uncompiled_client
@@ -202,10 +203,10 @@ def test_widget_schemas_serves_stdlib_before_anything_is_compiled(uncompiled_cli
 
 
 def test_widget_schemas_404s_when_neither_map_has_anything(uncompiled_client):
-    """Nothing compiled *and* no stdlib build is the one genuinely unbuilt
-    case, and it keeps the endpoint's 404."""
-    client, stdlib = uncompiled_client
-    stdlib.clear()
+    """Nothing compiled *and* no built-in-widgets build is the one genuinely
+    unbuilt case, and it keeps the endpoint's 404."""
+    client, builtin_widgets = uncompiled_client
+    builtin_widgets.clear()
 
     resp = client.get("/api/widget-schemas")
 

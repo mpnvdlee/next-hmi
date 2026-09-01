@@ -29,12 +29,13 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  /* `src`, plus the two helpers beside the stdlib widgets that import app
+  /* `src`, plus the two helpers beside the built-in widgets that import app
    * modules and nothing else — they are app code that happens to live under
    * widgets/. The widget *sources* cannot join them: they are written against
    * the ambient SDK globals in custom-widgets-sdk.d.ts, whose `React` and `JSX`
    * declarations shadow @types/react's for every file in the same program. That
-   * is what tsconfig.stdlib.json is for; see the note on its `include`. */
+   * is what tsconfig.builtin-widgets.json is for; see the note on its
+   * `include`. */
   "include": ["src", "widgets/testSdk.ts", "widgets/widgetModuleLoader.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

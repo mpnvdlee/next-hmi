@@ -1,4 +1,4 @@
-import { groupChildrenBySlot } from '@hmi/components/ComponentSlot/slotKey';
+import { groupChildrenBySlot } from '@shared/utils/componentSlots';
 import { hasSlotSections, isContainerHostType, widgetSlots } from '@hmi/registry/widgetRegistry';
 import {
   EDITOR_NODE_IDS,

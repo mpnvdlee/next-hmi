@@ -8,7 +8,7 @@ export default defineConfig({
     alias: {
       // Listed before '@shared', which Vite would otherwise match first.
       // The real loader does `import(url)` against a served path; jsdom has no
-      // server to answer it, so tests get the version that resolves a stdlib
+      // server to answer it, so tests get the version that resolves a built-in
       // URL to the widget's TSX source. Aliasing here rather than exporting a
       // setter keeps the test seam out of the shipped bundle: nothing in src/
       // can swap the loader, and no test has to remember to install one.

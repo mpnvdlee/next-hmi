@@ -3,18 +3,21 @@
 #
 # Four stages, because the SPA build has a Python step in the middle of it:
 #
-#   node-deps      node:20-slim — the npm tree plus the native esbuild binary.
-#   stdlib-build   python-base + that esbuild — runs the backend's widget
-#                  compiler over frontend/widgets/, producing the
-#                  built-in widget modules the SPA serves from /stdlib-js/.
-#   frontend-build node-deps + the compiled stdlib — the Vite/tsc build.
-#   runtime        python-base — no Node — carrying only the built artifacts
-#                  plus the FastAPI backend.
+#   node-deps            node:20-slim — the npm tree plus the native esbuild
+#                        binary.
+#   builtin-widgets-build python-base + that esbuild — runs the backend's
+#                        widget compiler over frontend/widgets/, producing
+#                        the built-in widget modules the SPA serves from
+#                        /builtin-widgets-js/.
+#   frontend-build       node-deps + the compiled built-in widgets — the
+#                        Vite/tsc build.
+#   runtime              python-base — no Node — carrying only the built
+#                        artifacts plus the FastAPI backend.
 #
 # The split exists because `npm run build` shells out to Python (see
-# frontend/scripts/build-stdlib.mjs) and node:20-slim has no interpreter. The
-# node stage runs `build:app`, which is `build` minus that shell-out, against
-# the artifacts stage 2 already produced.
+# frontend/scripts/build-builtin-widgets.mjs) and node:20-slim has no
+# interpreter. The node stage runs `build:app`, which is `build` minus that
+# shell-out, against the artifacts stage 2 already produced.
 
 # ── Stage 1 — npm tree + esbuild binary ────────────────────────────────────
 FROM node:20-slim AS node-deps
@@ -23,17 +26,17 @@ WORKDIR /src
 COPY frontend/package*.json frontend/
 RUN cd frontend && npm ci
 
-# Vendor the esbuild binary used twice downstream: by stdlib-build to compile
-# the built-in widgets, and by the runtime stage as the transformer for
-# user-authored custom widgets. esbuild ships per-platform native binaries via
-# npm; ``npm install -g esbuild`` drops the launcher at /usr/local/bin/esbuild
-# on node:20-slim (npm's global bin == /usr/local/bin).
+# Vendor the esbuild binary used twice downstream: by builtin-widgets-build to
+# compile the built-in widgets, and by the runtime stage as the transformer
+# for user-authored custom widgets. esbuild ships per-platform native binaries
+# via npm; ``npm install -g esbuild`` drops the launcher at
+# /usr/local/bin/esbuild on node:20-slim (npm's global bin == /usr/local/bin).
 RUN npm install -g esbuild
 
 
 # ── Shared Python base — interpreter + backend dependencies ────────────────
-# Both the stdlib compile and the runtime need the same installed backend deps
-# (the compiler imports tree_sitter), so they install once here.
+# Both the built-in-widgets compile and the runtime need the same installed
+# backend deps (the compiler imports tree_sitter), so they install once here.
 FROM python:3.14-slim AS python-base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -50,30 +53,32 @@ COPY backend/requirements.txt backend/
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
 
-# ── Stage 2 — compile the stdlib widgets ───────────────────────────────────
-FROM python-base AS stdlib-build
+# ── Stage 2 — compile the built-in widgets ─────────────────────────────────
+FROM python-base AS builtin-widgets-build
 # Layout mirrors a checkout (/src/backend + /src/frontend) because the compiler
-# resolves widgetRegistry.tsx relative to its own file, one level above backend/.
+# resolves the widget sources it compiles relative to the repo root it derives
+# from its own file, one level above backend/.
 # NEXTHMI_DATA_DIR keeps runtime-home resolution inside the build container
 # rather than falling through to ~/Documents/NextHMI.
 ENV PYTHONPATH=/src/backend \
     ESBUILD_BINARY_PATH=/usr/local/bin/esbuild \
-    NEXTHMI_DATA_DIR=/tmp/stdlib-runtime
+    NEXTHMI_DATA_DIR=/tmp/builtin-widgets-runtime
 WORKDIR /src
 
 COPY --from=node-deps /usr/local/bin/esbuild /usr/local/bin/esbuild
 COPY backend/ backend/
 COPY frontend/ frontend/
 
-# public/stdlib-js and .stdlib-build are gitignored but not dockerignored, so a
-# developer's local compile can ride along in the build context. Drop it first —
-# this compile is the only thing that may write those trees.
-RUN rm -rf frontend/public/stdlib-js frontend/.stdlib-build \
+# public/builtin-widgets-js and .builtin-widgets-build are gitignored but not
+# dockerignored, so a developer's local compile can ride along in the build
+# context. Drop it first — this compile is the only thing that may write
+# those trees.
+RUN rm -rf frontend/public/builtin-widgets-js frontend/.builtin-widgets-build \
   && python -m services.widget_compiler --once \
        --src-dir /src/frontend/widgets \
-       --out-dir /src/frontend/.stdlib-build \
-       --manifest /src/frontend/src/generated/stdlibManifest.json \
-       --publish-dir /src/frontend/public/stdlib-js
+       --out-dir /src/frontend/.builtin-widgets-build \
+       --manifest /src/frontend/src/generated/builtinWidgetsManifest.json \
+       --publish-dir /src/frontend/public/builtin-widgets-js
 
 
 # ── Stage 3 — build SPA bundle ─────────────────────────────────────────────
@@ -81,18 +86,20 @@ FROM node-deps AS frontend-build
 
 COPY frontend/ frontend/
 # Same stale-context reason as above; the COPYs below are the only source of
-# the served stdlib modules and of the manifest the SPA imports statically.
-# Both manifest halves have to come from this compile: the runtime half feeds
-# widgetRegistry.tsx and the editor half feeds stdlibEditorMetadata.ts, so
-# taking one from the compile and the other from a possibly stale build context
-# ships a properties panel whose labels and defaults disagree with the schemas.
-RUN rm -rf frontend/public/stdlib-js frontend/.stdlib-build
-COPY --from=stdlib-build /src/frontend/public/stdlib-js frontend/public/stdlib-js
-COPY --from=stdlib-build /src/frontend/src/generated/stdlibManifest.json frontend/src/generated/stdlibManifest.json
-COPY --from=stdlib-build /src/frontend/src/generated/stdlibManifest.editor.json frontend/src/generated/stdlibManifest.editor.json
+# the served built-in widget modules and of the manifest the SPA imports
+# statically. Both manifest halves have to come from this compile: the
+# runtime half feeds widgetRegistry.tsx and the editor half feeds
+# builtinWidgetsEditorMetadata.ts, so taking one from the compile and the
+# other from a possibly stale build context ships a properties panel whose
+# labels and defaults disagree with the schemas.
+RUN rm -rf frontend/public/builtin-widgets-js frontend/.builtin-widgets-build
+COPY --from=builtin-widgets-build /src/frontend/public/builtin-widgets-js frontend/public/builtin-widgets-js
+COPY --from=builtin-widgets-build /src/frontend/src/generated/builtinWidgetsManifest.json frontend/src/generated/builtinWidgetsManifest.json
+COPY --from=builtin-widgets-build /src/frontend/src/generated/builtinWidgetsManifest.editor.json frontend/src/generated/builtinWidgetsManifest.editor.json
 
-# `build:app` rather than `build`: this stage has no Python, and the stdlib
-# compile that `build` would run first has already happened in stdlib-build.
+# `build:app` rather than `build`: this stage has no Python, and the
+# built-in-widgets compile that `build` would run first has already happened
+# in builtin-widgets-build.
 RUN cd frontend && npm run build:app
 
 

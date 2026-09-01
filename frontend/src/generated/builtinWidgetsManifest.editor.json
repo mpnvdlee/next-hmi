@@ -1519,6 +1519,20 @@
       }
     }
   },
+  "Layout/ComponentSlot": {
+    "description": "Marks where content the caller supplies is rendered. Put one in a reusable component and instances of it gain a named slot — in the widget tree, and in the properties panel when a \"Widget slot\" property names it.",
+    "icon": {
+      "type": "builtin",
+      "name": "frame-corners"
+    },
+    "schema": {
+      "slot": {
+        "label": "Slot name",
+        "placeholder": "content",
+        "description": "Names this slot — pick one of the component’s \"Widget slot\" properties. Instances get that property as a row in their properties panel, and the widgets put there render here."
+      }
+    }
+  },
   "Layout/Container": {
     "description": "Groups and lays out child widgets in a row or column. Hosts other widgets.",
     "icon": {
@@ -1568,6 +1582,64 @@
         "min": 0,
         "max": 512,
         "step": 1
+      }
+    }
+  },
+  "Layout/ImageContainer": {
+    "description": "Places children at absolute spots over a background image. Collapses below a set width.",
+    "icon": {
+      "type": "builtin",
+      "name": "frame-corners"
+    },
+    "schema": {
+      "src": {
+        "label": "Image",
+        "group": "Image"
+      },
+      "alt": {
+        "label": "Alt text",
+        "group": "Image"
+      },
+      "fit": {
+        "format": "select",
+        "label": "Fit",
+        "group": "Image",
+        "defaultValue": "contain",
+        "options": [
+          {
+            "label": "Contain",
+            "value": "contain"
+          },
+          {
+            "label": "Cover",
+            "value": "cover"
+          },
+          {
+            "label": "Fill",
+            "value": "fill"
+          },
+          {
+            "label": "None",
+            "value": "none"
+          },
+          {
+            "label": "Scale down",
+            "value": "scale-down"
+          }
+        ]
+      },
+      "collapseBelow": {
+        "label": "Collapse below (px)",
+        "group": "Responsive",
+        "description": "Below this width the image drops out and children stack in normal flow. 0 never collapses.",
+        "defaultValue": 0,
+        "min": 0,
+        "max": 4096,
+        "step": 1
+      },
+      "childPositions": {
+        "label": "Child placement",
+        "group": "Children"
       }
     }
   },
@@ -1728,6 +1800,188 @@
       },
       "actions": {
         "label": "Actions"
+      }
+    }
+  },
+  "Navigation/NavigationMenu": {
+    "description": "Sidebar or top-bar menu mirroring the page tree, with rich display options.",
+    "icon": {
+      "type": "builtin",
+      "name": "sidebar-simple"
+    },
+    "schema": {
+      "mode": {
+        "format": "select",
+        "label": "Mode",
+        "group": "Source",
+        "defaultValue": "auto",
+        "options": [
+          {
+            "label": "Auto (mirror page tree)",
+            "value": "auto"
+          },
+          {
+            "label": "Manual (item list)",
+            "value": "manual"
+          }
+        ]
+      },
+      "items": {
+        "label": "Items",
+        "group": "Source",
+        "description": "The entries the menu shows, in order. Manual mode only.",
+        "visibleWhen": {
+          "property": "mode",
+          "equals": "manual"
+        }
+      },
+      "orientation": {
+        "format": "select",
+        "label": "Orientation",
+        "group": "Layout",
+        "defaultValue": "vertical",
+        "options": [
+          {
+            "label": "Vertical (sidebar)",
+            "value": "vertical"
+          },
+          {
+            "label": "Horizontal (top-bar)",
+            "value": "horizontal"
+          }
+        ]
+      },
+      "display": {
+        "format": "select",
+        "label": "Display",
+        "group": "Appearance",
+        "defaultValue": "icon-label",
+        "options": [
+          {
+            "label": "Icon + label",
+            "value": "icon-label"
+          },
+          {
+            "label": "Icon only",
+            "value": "icon-only"
+          },
+          {
+            "label": "Label only",
+            "value": "label-only"
+          }
+        ]
+      },
+      "hierarchy": {
+        "format": "select",
+        "label": "Hierarchy",
+        "group": "Source",
+        "defaultValue": "tree",
+        "options": [
+          {
+            "label": "Tree (groups expandable)",
+            "value": "tree"
+          },
+          {
+            "label": "Flat (all groups flattened)",
+            "value": "flat"
+          }
+        ]
+      },
+      "submenuMode": {
+        "format": "select",
+        "label": "Submenu mode",
+        "group": "Layout",
+        "defaultValue": "auto",
+        "options": [
+          {
+            "label": "Auto",
+            "value": "auto"
+          },
+          {
+            "label": "Flyout (overlay)",
+            "value": "flyout"
+          },
+          {
+            "label": "Inline-expand (push siblings)",
+            "value": "inline-expand"
+          }
+        ]
+      },
+      "iconStrategy": {
+        "format": "select",
+        "label": "Icon strategy",
+        "group": "Appearance",
+        "defaultValue": "first-letter",
+        "options": [
+          {
+            "label": "Configured icon",
+            "value": "configured"
+          },
+          {
+            "label": "First letter",
+            "value": "first-letter"
+          },
+          {
+            "label": "None",
+            "value": "none"
+          }
+        ]
+      },
+      "activeStyle": {
+        "format": "select",
+        "label": "Active style",
+        "group": "Appearance",
+        "defaultValue": "left-border",
+        "options": [
+          {
+            "label": "Left border",
+            "value": "left-border"
+          },
+          {
+            "label": "Background",
+            "value": "background"
+          },
+          {
+            "label": "Underline",
+            "value": "underline"
+          }
+        ]
+      },
+      "groupExpansion": {
+        "format": "select",
+        "label": "Group expansion",
+        "group": "Behaviour",
+        "defaultValue": "auto",
+        "options": [
+          {
+            "label": "Auto (expand active branch)",
+            "value": "auto"
+          },
+          {
+            "label": "All expanded",
+            "value": "all-expanded"
+          },
+          {
+            "label": "All collapsed",
+            "value": "all-collapsed"
+          },
+          {
+            "label": "Remember (persist per browser)",
+            "value": "remember"
+          }
+        ]
+      },
+      "showSearch": {
+        "format": "show",
+        "label": "Show search",
+        "defaultValue": false,
+        "group": "Behaviour"
+      },
+      "collapsed": {
+        "format": "collapse",
+        "label": "Collapsed",
+        "group": "Layout",
+        "defaultValue": false
       }
     }
   },

@@ -8,8 +8,8 @@ import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
   {
-    // Compiled output, not source: esbuild artifacts from `npm run build:stdlib`.
-    ignores: ['dist', '.stdlib-build', 'public/stdlib-js'],
+    // Compiled output, not source: esbuild artifacts from `npm run build:builtin-widgets`.
+    ignores: ['dist', '.builtin-widgets-build', 'public/builtin-widgets-js'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -85,9 +85,10 @@ export default tseslint.config(
     },
   },
   {
-    // Product stdlib widgets are authored against the custom-widget contract:
-    // every helper is an ambient global from window.__nextHMI__ (declared in
-    // custom-widgets-sdk.d.ts and type-checked by tsconfig.stdlib.json), and the
+    // The product's built-in widgets are authored against the custom-widget
+    // contract: every helper is an ambient global from window.__nextHMI__
+    // (declared in custom-widgets-sdk.d.ts and type-checked by
+    // tsconfig.builtin-widgets.json), and the
     // `schema` / `description` / `icon` / `category` exports beside the default
     // export are required metadata, not accidental non-component exports.
     files: ['widgets/**/*.tsx'],

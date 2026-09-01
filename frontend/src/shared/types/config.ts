@@ -688,7 +688,9 @@ export interface HmiWidgetProps {
   layout?: LayoutConfig;
   children?: ReactNode;
   /** Raw child configs for container-style widgets that need per-child metadata
-   *  (e.g. id-keyed positions). Built-in only; not surfaced in the custom-widget SDK. */
+   *  (e.g. id-keyed positions). Passed to any type that hosts children; a widget
+   *  places them with the SDK's `renderWidget`. Prefer `children`, which arrives
+   *  already rendered. */
   childConfigs?: WidgetConfig[];
 }
 

@@ -1,10 +1,17 @@
-/* Navigation sizing constants — not theme-driven */
+/* Navigation sizing constants — not theme-driven. Read only by the rules in
+   this sheet, so they travel with it. */
 :root {
   --hmi-nav-width: 200px;
   --hmi-nav-width-collapsed: 48px;
 }
 
-.nav {
+/* Single class, unlike the other built-in widgets' host rules: this widget's
+   root is the `<nav>` and does not carry `.hmi-component`, so there is nothing
+   to chain to. It therefore also gets no `--self-*` reset and honours no
+   `selfLayoutStyle()` — the menu sizes itself from the rules below and from
+   the region it sits in. Deliberate: giving it the base class would change
+   how an authored menu sizes. */
+.hmi-navmenu {
   display: flex;
   flex-direction: column;
   gap: var(--hmi-space-tight);
@@ -19,17 +26,17 @@
 /* Standalone fallback sidebar (rendered as the region's direct child when the
    project defines no left sidebar) — there it owns its width and edge. As a
    widget it fills the slot the author sized instead. */
-[data-region] > .nav {
+[data-region] > .hmi-navmenu {
   width: var(--hmi-nav-width);
   background: var(--hmi-surface);
   border-right: 1px solid var(--hmi-border);
 }
 
-[data-region] > .nav.navCollapsed {
+[data-region] > .hmi-navmenu.hmi-navmenu--collapsed {
   width: var(--hmi-nav-width-collapsed);
 }
 
-.toggle {
+.hmi-navmenu__toggle {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -47,23 +54,23 @@
     color 0.12s;
 }
 
-.toggle:hover {
+.hmi-navmenu__toggle:hover {
   background: var(--hmi-surface-3);
   color: var(--hmi-text);
 }
 
-.toggle:active {
+.hmi-navmenu__toggle:active {
   background: var(--hmi-accent-soft);
 }
 
-.toggle:focus-visible,
-.link:focus-visible,
-.expandToggle:focus-visible {
+.hmi-navmenu__toggle:focus-visible,
+.hmi-navmenu__link:focus-visible,
+.hmi-navmenu__expand:focus-visible {
   outline: 2px solid var(--hmi-accent);
   outline-offset: -2px;
 }
 
-.link {
+.hmi-navmenu__link {
   position: relative;
   display: flex;
   align-items: center;
@@ -87,16 +94,16 @@
     color var(--hmi-motion-fast) ease;
 }
 
-.groupRow {
+.hmi-navmenu__group-row {
   display: flex;
   align-items: stretch;
 }
 
-.groupRow .link {
+.hmi-navmenu__group-row .hmi-navmenu__link {
   flex: 1;
 }
 
-.expandToggle {
+.hmi-navmenu__expand {
   width: 28px;
   border: none;
   border-left: 1px solid var(--hmi-border);
@@ -109,67 +116,67 @@
     color 0.12s;
 }
 
-.expandToggle:hover {
+.hmi-navmenu__expand:hover {
   background: var(--hmi-surface-3);
   color: var(--hmi-text);
 }
 
-.expandToggle:active {
+.hmi-navmenu__expand:active {
   background: var(--hmi-accent-soft);
 }
 
-.childLink {
+.hmi-navmenu__link--child {
   --hmi-menu-depth-indent: 1;
   padding-left: calc(var(--hmi-space-md) + (var(--hmi-menu-depth-indent) * var(--hmi-space-lg)));
 }
 
-.childLink[data-depth='1'] {
+.hmi-navmenu__link--child[data-depth='1'] {
   --hmi-menu-depth-indent: 1;
 }
 
-.childLink[data-depth='2'] {
+.hmi-navmenu__link--child[data-depth='2'] {
   --hmi-menu-depth-indent: 2;
 }
 
-.childLink[data-depth='3'] {
+.hmi-navmenu__link--child[data-depth='3'] {
   --hmi-menu-depth-indent: 3;
 }
 
-.childLink[data-depth='4'] {
+.hmi-navmenu__link--child[data-depth='4'] {
   --hmi-menu-depth-indent: 4;
 }
 
-.childLink[data-depth='5'] {
+.hmi-navmenu__link--child[data-depth='5'] {
   --hmi-menu-depth-indent: 5;
 }
 
-.navCollapsed .link {
+.hmi-navmenu--collapsed .hmi-navmenu__link {
   justify-content: center;
   padding: var(--hmi-space-md) 0;
 }
 
-.navCollapsed .expandToggle,
-.navCollapsed .sectionHeader {
+.hmi-navmenu--collapsed .hmi-navmenu__expand,
+.hmi-navmenu--collapsed .hmi-navmenu__section {
   display: none;
 }
 
-.link:hover {
+.hmi-navmenu__link:hover {
   background: var(--hmi-surface-3);
   color: var(--hmi-text);
 }
 
-.link:active {
+.hmi-navmenu__link:active {
   background: var(--hmi-accent-soft);
 }
 
-.linkActive {
+.hmi-navmenu__link--active {
   color: var(--hmi-accent-ink);
   background: var(--hmi-accent-soft);
 }
 
 /* Left-border variant: a bar inset from the pill's rounded corners rather than
    a border, which would square the row off. */
-.linkActive::before {
+.hmi-navmenu__link--active::before {
   content: '';
   position: absolute;
   left: 0;
@@ -180,12 +187,12 @@
   background: var(--hmi-accent);
 }
 
-.linkActive:hover {
+.hmi-navmenu__link--active:hover {
   background: var(--hmi-accent-soft);
   color: var(--hmi-accent-ink);
 }
 
-.icon {
+.hmi-navmenu__icon {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -197,7 +204,7 @@
 
 /* The `first-letter` icon strategy has no glyph to lean on, so the initial
    keeps the tile treatment. */
-.iconLetter {
+.hmi-navmenu__icon--letter {
   width: 24px;
   height: 24px;
   border-radius: var(--hmi-radius-sm);
@@ -210,12 +217,12 @@
     color var(--hmi-motion-fast) ease;
 }
 
-.linkActive .iconLetter {
+.hmi-navmenu__link--active .hmi-navmenu__icon--letter {
   background: var(--hmi-accent);
   color: var(--hmi-accent-on);
 }
 
-.title {
+.hmi-navmenu__title {
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 200px;
@@ -226,28 +233,28 @@
   flex: 1;
 }
 
-.navCollapsed .title {
+.hmi-navmenu--collapsed .hmi-navmenu__title {
   max-width: 0;
   opacity: 0;
 }
 
 /* ── Active style variants ─────────────────────────────────────────────── */
-.linkActiveBg {
+.hmi-navmenu__link--active-bg {
   background: var(--hmi-accent-soft);
 }
 
-.linkActiveUnderline {
+.hmi-navmenu__link--active-underline {
   background: transparent;
   box-shadow: inset 0 -2px 0 0 var(--hmi-accent);
 }
 
-.linkActiveBg::before,
-.linkActiveUnderline::before {
+.hmi-navmenu__link--active-bg::before,
+.hmi-navmenu__link--active-underline::before {
   display: none;
 }
 
 /* ── Horizontal orientation (top-bar layout) ───────────────────────────── */
-.navHorizontal {
+.hmi-navmenu--horizontal {
   flex-direction: row;
   width: 100%;
   height: auto;
@@ -258,7 +265,7 @@
   overflow-y: visible;
 }
 
-.navHorizontal .link {
+.hmi-navmenu--horizontal .hmi-navmenu__link {
   width: auto;
   border-bottom: 3px solid transparent;
   border-radius: 0;
@@ -266,25 +273,25 @@
   padding: var(--hmi-space-sm) var(--hmi-space-lg);
 }
 
-.navHorizontal .linkActive {
+.hmi-navmenu--horizontal .hmi-navmenu__link--active {
   border-bottom-color: var(--hmi-accent);
 }
 
-.navHorizontal .linkActive::before,
-.flyout .linkActive::before {
+.hmi-navmenu--horizontal .hmi-navmenu__link--active::before,
+.hmi-navmenu__flyout .hmi-navmenu__link--active::before {
   display: none;
 }
 
-.navHorizontal .groupRow {
+.hmi-navmenu--horizontal .hmi-navmenu__group-row {
   align-items: center;
 }
 
-.navHorizontal .expandToggle {
+.hmi-navmenu--horizontal .hmi-navmenu__expand {
   border-left: none;
 }
 
 /* ── Search box ────────────────────────────────────────────────────────── */
-.search {
+.hmi-navmenu__search {
   margin: var(--hmi-space-snug) var(--hmi-space-sm) var(--hmi-space-tight);
   height: 28px;
   padding: 0 var(--hmi-space-sm);
@@ -295,19 +302,19 @@
   font-size: var(--hmi-type-caption-size);
 }
 
-.search:focus {
+.hmi-navmenu__search:focus {
   outline: none;
   border-color: var(--hmi-accent);
 }
 
 /* ── Manual-mode item types ────────────────────────────────────────────── */
-.divider {
+.hmi-navmenu__divider {
   height: 1px;
   margin: var(--hmi-space-snug) var(--hmi-space-md);
   background: var(--hmi-border);
 }
 
-.sectionHeader {
+.hmi-navmenu__section {
   padding: var(--hmi-space-md) var(--hmi-space-md) var(--hmi-space-snug);
   font-family: var(--hmi-type-label-font);
   font-size: var(--hmi-type-label-size);
@@ -320,7 +327,7 @@
 }
 
 /* ── Flyout submenu panel ──────────────────────────────────────────────── */
-.flyout {
+.hmi-navmenu__flyout {
   display: flex;
   flex-direction: column;
   min-width: 180px;
@@ -332,12 +339,12 @@
   z-index: var(--hmi-z-popup);
 }
 
-.flyout .link {
+.hmi-navmenu__flyout .hmi-navmenu__link {
   border-radius: 0;
 }
 
 /* ── Footer slot (renders at the bottom of the menu) ───────────────────── */
-.footerSlot {
+.hmi-navmenu__footer {
   margin-top: auto;
   padding: var(--hmi-space-sm) var(--hmi-space-sm) var(--hmi-space-md);
   border-top: 1px solid var(--hmi-border);
@@ -347,26 +354,26 @@
 }
 
 @media (max-width: 1024px) {
-  [data-region] > .nav {
+  [data-region] > .hmi-navmenu {
     width: 176px;
   }
 }
 
 @media (max-width: 768px) {
-  [data-region] > .nav {
+  [data-region] > .hmi-navmenu {
     width: 100%;
     max-height: 220px;
     border-right: none;
     border-bottom: 1px solid var(--hmi-border);
   }
 
-  [data-region] > .nav.navCollapsed {
+  [data-region] > .hmi-navmenu.hmi-navmenu--collapsed {
     width: 100%;
     max-height: 42px;
     overflow: hidden;
   }
 
-  .toggle {
+  .hmi-navmenu__toggle {
     height: 42px;
   }
 }

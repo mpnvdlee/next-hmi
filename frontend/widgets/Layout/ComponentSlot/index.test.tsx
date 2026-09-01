@@ -1,12 +1,12 @@
-// Renders real stdlib widgets (Label); bind the SDK and resolve their modules.
-import '../../../../widgets/testSdk';
+// Renders real built-in widgets (Label); bind the SDK and resolve their modules.
+import '../../testSdk';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { WidgetConfig } from '@shared/types/config';
 import { PreviewContext } from '@shared/context/PreviewContext';
-import { ComponentSlotContext } from '../../context/ComponentSlotContext';
+import { ComponentSlotContext } from '@hmi/context/ComponentSlotContext';
+import { slotKeyOf } from '@shared/utils/componentSlots';
 import ComponentSlot from './index';
-import { collectSlotKeys, groupChildrenBySlot } from './slotKey';
 
 function renderSlot(
   properties: Record<string, unknown>,
@@ -28,7 +28,7 @@ function label(id: string, text: string): WidgetConfig {
 describe('ComponentSlot', () => {
   it('renders the widgets the caller put in its slot', async () => {
     renderSlot({ slot: 'body' }, { body: [label('a', 'First'), label('b', 'Second')] });
-    // Label is a stdlib widget: its module is lazy, so the first render suspends.
+    // Label is a built-in widget: its module is lazy, so the first render suspends.
     expect(await screen.findByText('First')).toBeInTheDocument();
     expect(screen.getByText('Second')).toBeInTheDocument();
   });
@@ -52,6 +52,19 @@ describe('ComponentSlot', () => {
     }
   });
 
+  // The widget's own slotKeyOf is a render-time twin of the shared one (a
+  // widget module carries no app imports — see index.tsx) — pin it against the
+  // shared implementation's own verdict so the two can't quietly diverge.
+  it('resolves the slot name exactly as the shared slotKeyOf would', () => {
+    const cases: unknown[] = ['body', '  header  ', '', '   ', undefined, 42];
+    for (const raw of cases) {
+      const key = slotKeyOf(raw);
+      const { unmount } = renderSlot({ slot: raw }, { [key]: [label('a', 'Content')] });
+      expect(screen.getByText('Content')).toBeInTheDocument();
+      unmount();
+    }
+  });
+
   it('outlines an unfilled slot in the editor preview only', () => {
     // Without it a definition being authored has nothing to show and the shell
     // around the slot collapses; on a real HMI an unfilled slot is just absent.
@@ -65,63 +78,5 @@ describe('ComponentSlot', () => {
       </MemoryRouter>,
     );
     expect(container.textContent).toBe('Body');
-  });
-});
-
-describe('collectSlotKeys', () => {
-  it('collects slot names in tree order, at any depth, deduped', () => {
-    const definition: WidgetConfig[] = [
-      { id: 's1', type: 'ComponentSlot', name: '', properties: { slot: 'header' } },
-      {
-        id: 'box',
-        type: 'Container',
-        name: '',
-        children: [
-          { id: 's2', type: 'ComponentSlot', name: '', properties: { slot: 'body' } },
-          { id: 's3', type: 'ComponentSlot', name: '', properties: { slot: 'header' } },
-          { id: 's4', type: 'ComponentSlot', name: '' },
-        ],
-      },
-    ];
-    expect(collectSlotKeys(definition)).toEqual(['header', 'body', 'content']);
-  });
-
-  it('is empty for a definition with no slots', () => {
-    expect(collectSlotKeys([{ id: 'a', type: 'Label', name: '' }])).toEqual([]);
-  });
-});
-
-describe('groupChildrenBySlot', () => {
-  const slots = ['header', 'body'];
-
-  it('groups by tag and keeps every slot present', () => {
-    const grouped = groupChildrenBySlot(
-      [
-        { ...label('a', 'A'), slot: 'body' },
-        { ...label('b', 'B'), slot: 'header' },
-      ],
-      slots,
-    );
-    expect(grouped.header.map((c) => c.id)).toEqual(['b']);
-    expect(grouped.body.map((c) => c.id)).toEqual(['a']);
-  });
-
-  it('sends untagged and stale-tagged children to the first slot', () => {
-    // A definition that drops a slot must not make the content vanish.
-    const grouped = groupChildrenBySlot(
-      [label('a', 'A'), { ...label('b', 'B'), slot: 'gone' }],
-      slots,
-    );
-    expect(grouped.header.map((c) => c.id)).toEqual(['a', 'b']);
-    expect(grouped.body).toEqual([]);
-  });
-
-  it('drops everything when the definition declares no slots', () => {
-    expect(groupChildrenBySlot([label('a', 'A')], [])).toEqual({});
-  });
-
-  it('treats a tag naming a prototype member as stale, not as a slot', () => {
-    const grouped = groupChildrenBySlot([{ ...label('a', 'A'), slot: 'toString' }], slots);
-    expect(grouped.header.map((c) => c.id)).toEqual(['a']);
   });
 });

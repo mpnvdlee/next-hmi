@@ -16,7 +16,7 @@ import {
   SHELL_AREA_LABELS,
 } from '@shared/constants/editorSentinels';
 import { hasSlotSections, widgetSlots } from '@hmi/registry/widgetRegistry';
-import { resolveChildSlot, slotTargetLabel } from '@hmi/components/ComponentSlot/slotKey';
+import { resolveChildSlot, slotTargetLabel } from '@shared/utils/componentSlots';
 import {
   regionForShellSectionId,
   shellSectionIdForRegion,

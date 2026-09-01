@@ -1,8 +1,8 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 // The palette-icon guard below enumerates entries that *have* an icon, and a
-// stdlib widget only gets one once the manifest's editor half is applied.
+// built-in widget only gets one once the manifest's editor half is applied.
 // Without this the suite would still pass — with 34 fewer cases.
-import './stdlibEditorMetadata';
+import './builtinWidgetsEditorMetadata';
 import { BUILTIN_ICON_IDS } from '@shared/config/iconAllowlist';
 import type { IconValue } from '@shared/types/config';
 import {

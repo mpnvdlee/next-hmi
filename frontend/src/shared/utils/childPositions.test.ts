@@ -7,7 +7,7 @@ import {
   indexPositions,
   pruneOrphanPositions,
   resolveMarkerLabel,
-} from './positions';
+} from './childPositions';
 import type { ChildPosition, WidgetConfig } from '@shared/types/config';
 
 const child = (id: string): WidgetConfig => ({

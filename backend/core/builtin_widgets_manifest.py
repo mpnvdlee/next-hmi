@@ -1,16 +1,16 @@
-"""Reader for the baked stdlib-widget manifest.
+"""Reader for the baked built-in-widgets manifest.
 
-The product's standard-library widgets are compiled on the build machine (see
-``services.widget_compiler.generate_stdlib_manifest``) and their catalog rows
-ship with the frontend. As far as validation and the MCP tools are concerned
-those widgets *are* built-ins — they simply live outside ``widgetRegistry.tsx``
-now — so ``core.validation.structure.load_widget_manifest`` overlays them onto
-the manifest's ``builtin`` map.
+The product's built-in widgets are compiled on the build machine (see
+``services.widget_compiler.generate_builtin_widgets_manifest``) and their catalog
+rows ship with the frontend. As far as validation and the MCP tools are
+concerned those widgets *are* the built-ins, so
+``core.validation.structure.load_widget_manifest`` overlays them onto the
+manifest's ``builtin`` map, which the extractor always writes empty.
 
 The manifest ships as a *pair* of files: a runtime half every frontend route
 imports statically, and an editor half only the editor's chunk pulls in (see
-``generate_stdlib_manifest``). Validation needs whole schemas, so this reader
-always merges the two back together — a caller here never sees the split.
+``generate_builtin_widgets_manifest``). Validation needs whole schemas, so this
+reader always merges the two back together — a caller here never sees the split.
 
 This lives in ``core`` rather than beside the compiler that writes it because
 ``core`` must never import ``services``, and every reader of the merged manifest
@@ -29,20 +29,20 @@ from core.storage import repo_root
 logger = logging.getLogger(__name__)
 
 
-def stdlib_manifest_path() -> Path | None:
-    """Locate the baked stdlib manifest, or None when there is none to read.
+def builtin_widgets_manifest_path() -> Path | None:
+    """Locate the baked built-in-widgets manifest, or None when there is none to read.
 
     Two shapes, both handled here so this works from a checkout and from a
     packaged runtime: the frontend source tree holds it under ``src/generated/``
-    (the app imports it statically from there), and ``publish_stdlib_assets``
+    (the app imports it statically from there), and ``publish_builtin_widgets_assets``
     copies it next to the served modules for a build that ships only ``dist/``.
     """
     dist = os.environ.get("NEXTHMI_FRONTEND_DIST")
     if dist:
-        published = Path(dist).resolve() / "stdlib-js" / "manifest.json"
+        published = Path(dist).resolve() / "builtin-widgets-js" / "manifest.json"
         if published.is_file():
             return published
-    generated = repo_root() / "frontend" / "src" / "generated" / "stdlibManifest.json"
+    generated = repo_root() / "frontend" / "src" / "generated" / "builtinWidgetsManifest.json"
     return generated if generated.is_file() else None
 
 
@@ -50,7 +50,7 @@ def editor_manifest_path(manifest_path: Path) -> Path:
     """The editor half's path, derived from the runtime half's.
 
     One rule shared by the writer and every reader, so the pair travels together
-    from a checkout (``stdlibManifest.json`` / ``stdlibManifest.editor.json``)
+    from a checkout (``builtinWidgetsManifest.json`` / ``builtinWidgetsManifest.editor.json``)
     into a packaged runtime (``manifest.json`` / ``manifest.editor.json``)
     without a second CLI flag or a second resolver to keep in step.
     """
@@ -76,13 +76,13 @@ def _catalog_state() -> tuple[Path | None, CatalogVersion]:
     stat per candidate location, so they are derived together rather than
     re-derived by each caller.
     """
-    path = stdlib_manifest_path()
+    path = builtin_widgets_manifest_path()
     if path is None:
         return None, _NO_CATALOG
     return path, (_mtime_ns(path), _mtime_ns(editor_manifest_path(path)))
 
 
-def stdlib_catalog_version() -> CatalogVersion:
+def builtin_widgets_catalog_version() -> CatalogVersion:
     """Cache key for the manifest's current contents: both halves' mtimes.
 
     Both halves count — they are written by the same build but land as two
@@ -103,7 +103,7 @@ def stdlib_catalog_version() -> CatalogVersion:
 _catalog_cache: tuple[CatalogVersion, dict[str, dict[str, Any]]] | None = None
 
 
-def stdlib_catalog() -> tuple[CatalogVersion, dict[str, dict[str, Any]]]:
+def builtin_widgets_catalog() -> tuple[CatalogVersion, dict[str, dict[str, Any]]]:
     """The cached catalog together with the version it was read at.
 
     Both in one call because ``load_widget_manifest`` keys its own cache on the
@@ -119,16 +119,16 @@ def stdlib_catalog() -> tuple[CatalogVersion, dict[str, dict[str, Any]]]:
     return version, entries
 
 
-def stdlib_catalog_entries() -> dict[str, dict[str, Any]]:
-    """Stdlib widgets in the manifest's ``builtin`` shape, keyed by widget type.
+def builtin_widgets_catalog_entries() -> dict[str, dict[str, Any]]:
+    """Built-in widgets in the manifest's ``builtin`` shape, keyed by widget type.
 
     Mtime-cached like every other generated-file reader in
     ``core/validation/structure.py``. A packaged runtime never rewrites the
-    manifest, but a dev checkout does — ``npm run dev`` runs ``build:stdlib``
+    manifest, but a dev checkout does — ``npm run dev`` runs ``build:builtin-widgets``
     while the backend is already up — so a read-once cache would pin whatever
     (possibly empty) catalog existed at first call until restart.
     """
-    return stdlib_catalog()[1]
+    return builtin_widgets_catalog()[1]
 
 
 def _load(path: Path) -> Any:
@@ -137,7 +137,7 @@ def _load(path: Path) -> Any:
     except FileNotFoundError:
         return None
     except (OSError, ValueError) as err:
-        logger.warning("Could not read the stdlib manifest at %s: %s", path, err)
+        logger.warning("Could not read the built-in widgets manifest at %s: %s", path, err)
         return None
 
 

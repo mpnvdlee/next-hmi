@@ -4,19 +4,19 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, lstatSync, rmSync }
 import type { Dirent } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import manifest from '../../generated/stdlibManifest.json';
-import editorManifest from '../../generated/stdlibManifest.editor.json';
+import manifest from '../../generated/builtinWidgetsManifest.json';
+import editorManifest from '../../generated/builtinWidgetsManifest.editor.json';
 import { widgetRegistry } from './widgetRegistry';
-import './stdlibEditorMetadata';
-import type { CustomWidgetManifestEntry, StdlibEditorEntry } from '@shared/types/widgetSchema';
+import './builtinWidgetsEditorMetadata';
+import type { CustomWidgetManifestEntry, BuiltinWidgetEditorEntry } from '@shared/types/widgetSchema';
 
 /**
- * Drift guard for the baked stdlib manifest.
+ * Drift guard for the baked built-in-widgets manifest.
  *
- * `npm run build:stdlib` regenerates it (and both `dev` and `build` run that
- * first), so drift heals locally the moment anyone builds. What this test
- * catches is a *committed* stale manifest: sources edited under widgets/
- * without the regenerated JSON alongside them.
+ * `npm run build:builtin-widgets` regenerates it (and both `dev` and `build`
+ * run that first), so drift heals locally the moment anyone builds. What this
+ * test catches is a *committed* stale manifest: sources edited under
+ * widgets/ without the regenerated JSON alongside them.
  *
  * Two assertions do that. The cheap one compares the key set against a mirror
  * of the backend's `find_entries`, and runs everywhere. The whole-content one
@@ -31,12 +31,12 @@ import type { CustomWidgetManifestEntry, StdlibEditorEntry } from '@shared/types
  * whole point of the split), and the two must recombine into the whole schema
  * the properties panel expects.
  */
-const STDLIB_ROOT = resolve(__dirname, '../../../widgets');
+const BUILTIN_WIDGETS_ROOT = resolve(__dirname, '../../../widgets');
 
-// The manifest is written by the backend compiler (`build:stdlib` shells out to
-// `services.widget_compiler`), so discovery here must reject exactly what
-// `find_entries` rejects. A folder the compiler skips but this test counts would
-// report a stale manifest that regenerating can never fix.
+// The manifest is written by the backend compiler (`build:builtin-widgets`
+// shells out to `services.widget_compiler`), so discovery here must reject
+// exactly what `find_entries` rejects. A folder the compiler skips but this
+// test counts would report a stale manifest that regenerating can never fix.
 const WIDGET_SEGMENT_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 const WINDOWS_RESERVED_SEGMENTS = new Set([
   'CON',
@@ -105,9 +105,10 @@ function excludeCasefoldCollisions(keys: string[]): string[] {
 const REPO_ROOT = resolve(__dirname, '../../../..');
 const BACKEND_DIR = join(REPO_ROOT, 'backend');
 
-/** The interpreter `scripts/build-stdlib.mjs` picks, chosen the same way and
- *  for the same reasons: the repo venv unless the caller points elsewhere, and
- *  `.exe` because a Windows venv has no extensionless `python`. */
+/** The interpreter `scripts/build-builtin-widgets.mjs` picks, chosen the same
+ *  way and for the same reasons: the repo venv unless the caller points
+ *  elsewhere, and `.exe` because a Windows venv has no extensionless
+ *  `python`. */
 function pythonCommand(): string {
   if (process.env.NEXTHMI_PYTHON) return process.env.NEXTHMI_PYTHON;
   const venv =
@@ -121,9 +122,9 @@ const PYTHON = pythonCommand();
 
 /** Whether this machine can run the compiler at all. A checkout with Node but
  *  no Python — or with Python but without `backend/requirements.txt` installed
- *  — cannot run `npm run build:stdlib` either, so it cannot have produced the
- *  drift this test looks for; skipping there beats failing on a missing
- *  interpreter. */
+ *  — cannot run `npm run build:builtin-widgets` either, so it cannot have
+ *  produced the drift this test looks for; skipping there beats failing on a
+ *  missing interpreter. */
 function compilerRunnable(): boolean {
   const probe = spawnSync(PYTHON, ['-c', 'import services.widget_compiler'], {
     cwd: BACKEND_DIR,
@@ -134,12 +135,12 @@ function compilerRunnable(): boolean {
 }
 
 /** Both halves as the sources would produce them right now, via the same CLI
- *  `build:stdlib` shells into. The build root is scratch, so this reads the
- *  widget sources and writes nothing the working tree or the served
- *  `public/stdlib-js/` can see — a green run must never be a run that quietly
- *  healed the drift it was asked to detect. */
+ *  `build:builtin-widgets` shells into. The build root is scratch, so this
+ *  reads the widget sources and writes nothing the working tree or the served
+ *  `public/builtin-widgets-js/` can see — a green run must never be a run that
+ *  quietly healed the drift it was asked to detect. */
 function regenerate(scratch: string): { runtime: unknown; editor: unknown } {
-  const manifestPath = join(scratch, 'stdlibManifest.json');
+  const manifestPath = join(scratch, 'builtinWidgetsManifest.json');
   const result = spawnSync(
     PYTHON,
     [
@@ -147,7 +148,7 @@ function regenerate(scratch: string): { runtime: unknown; editor: unknown } {
       'services.widget_compiler',
       '--once',
       '--src-dir',
-      STDLIB_ROOT,
+      BUILTIN_WIDGETS_ROOT,
       '--out-dir',
       join(scratch, 'build'),
       '--manifest',
@@ -158,20 +159,20 @@ function regenerate(scratch: string): { runtime: unknown; editor: unknown } {
   expect(result.status, `widget compiler failed:\n${result.stderr ?? result.error}`).toBe(0);
   return {
     runtime: JSON.parse(readFileSync(manifestPath, 'utf-8')),
-    editor: JSON.parse(readFileSync(join(scratch, 'stdlibManifest.editor.json'), 'utf-8')),
+    editor: JSON.parse(readFileSync(join(scratch, 'builtinWidgetsManifest.editor.json'), 'utf-8')),
   };
 }
 
 const rows = manifest as unknown as CustomWidgetManifestEntry[];
-const editorRows = editorManifest as unknown as Record<string, StdlibEditorEntry>;
+const editorRows = editorManifest as unknown as Record<string, BuiltinWidgetEditorEntry>;
 
 /** Everything the runtime half is allowed to carry per schema field —
  *  `bindingValidation.ts` reads exactly these two. */
 const RUNTIME_FIELD_KEYS = new Set(['type', 'requiredFields']);
 
-describe('stdlib manifest', () => {
+describe('builtin widgets manifest', () => {
   it('lists exactly the widgets on disk', () => {
-    expect(rows.map((row) => row.key).sort()).toEqual(discoverKeys(STDLIB_ROOT));
+    expect(rows.map((row) => row.key).sort()).toEqual(discoverKeys(BUILTIN_WIDGETS_ROOT));
   });
 
   // The key set above only notices a widget appearing or disappearing. This
@@ -181,10 +182,11 @@ describe('stdlib manifest', () => {
   // same manifest and so agrees with a stale one.
   it('matches what the widget sources produce today', (ctx) => {
     if (!compilerRunnable()) ctx.skip(`no runnable widget compiler at ${PYTHON}`);
-    const scratch = mkdtempSync(join(tmpdir(), 'stdlib-manifest-'));
+    const scratch = mkdtempSync(join(tmpdir(), 'builtin-widgets-manifest-'));
     try {
       const fresh = regenerate(scratch);
-      const stale = 'stale baked manifest — run `npm run build:stdlib` and commit both halves';
+      const stale =
+        'stale baked manifest — run `npm run build:builtin-widgets` and commit both halves';
       expect(rows, stale).toEqual(fresh.runtime);
       expect(editorRows, stale).toEqual(fresh.editor);
     } finally {
@@ -199,7 +201,7 @@ describe('stdlib manifest', () => {
 
   it('carries the catalog metadata the registry registers from', () => {
     for (const row of rows) {
-      expect(row.origin, `${row.key} origin`).toBe('stdlib');
+      expect(row.origin, `${row.key} origin`).toBe('builtin');
       expect(row.name, `${row.key} name`).toBeTruthy();
       expect(row.category, `${row.key} category`).toBeTruthy();
       expect(row.schemaError ?? null, `${row.key} schemaError`).toBeNull();
@@ -210,7 +212,7 @@ describe('stdlib manifest', () => {
   });
 });
 
-describe('stdlib manifest split', () => {
+describe('builtin widgets manifest split', () => {
   it('keeps editor-only weight out of the runtime half', () => {
     for (const row of rows) {
       expect(row.description ?? null, `${row.key} description`).toBeNull();

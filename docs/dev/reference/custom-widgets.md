@@ -77,12 +77,12 @@ The compiler lives in `backend/services/widget_compiler.py` and runs in both dev
 - Recompiles individual files on `add` / `change` events via `watchfiles`; emits a `widget_updated` message over the `/ws` WebSocket so the running app re-imports without a full reload.
 - Writes the compiled `index.js` to `<runtime_home>/.widget-build/<Name>/index.js` (or `…/<Group>/<Name>/index.js`).
 - Tracks success/error by canonical widget identity in `<runtime_home>/.widget-build/.build-status.json`. The version-2 file is `{ "version": 2, "widgets": { "<Group>/<Name>": { ... } } }`; `/api/widgets` surfaces each matching entry as `buildOk`, `buildError`, and `buildTs`.
-- Regenerates `<runtime_home>/.widget-build/widget-schemas.json` — the catalog manifest built from the built-in registry plus every custom widget's `schema`, `exportedProperties`, `category`, `description` and `icon`, extracted from the source with tree-sitter (`backend/services/widget_schemas.py`).
+- Regenerates `<runtime_home>/.widget-build/widget-schemas.json` — the catalog manifest built from every custom widget's `schema`, `exportedProperties`, `category`, `description` and `icon`, extracted from the source with tree-sitter (`backend/services/widget_schemas.py`). The product's own widgets are not in it: they ship as the baked built-in-widgets manifest instead.
 
 A failed compile leaves the previous `index.js` in place, which is deliberate
 for a project widget: a broken edit keeps the last good module serving to the
-live HMI instead of blanking the operator's screen. The stdlib half does not
-get that latitude — `publish_stdlib_assets` reads `.build-status.json` from
+live HMI instead of blanking the operator's screen. The built-in half does not
+get that latitude — `publish_builtin_widgets_assets` reads `.build-status.json` from
 disk and skips any widget whose row is not `ok`, so a broken build never
 publishes yesterday's artifact under a source that no longer matches it. One
 broken widget does not stop the rest of the tree publishing, and the run still
@@ -215,8 +215,9 @@ Non-hook variants (safe in event handlers, action callbacks, utilities — accep
 - `useUsersData()` → `Array<{ id, username }>` — used by `option-list` fields with `$user / field: 'userList'`.
 - `useUserGroupsData()` → `Array<{ id, label }>` — all configured groups, used by `option-list` fields with `$user / field: 'groups'`.
 - `useLanguagesData()` → `Array<{ code }>` — used by `option-list` fields with `$languages`.
-- `useLanguageSelection()` → `{ activeLanguage, setActiveLanguage }` — the active interface language and the setter that changes it. The other half of `useLanguagesData`, for shipping your own language picker; calling the setter re-runs every `$loc` source in the app. The stdlib `Language Switcher` is the two combined.
+- `useLanguageSelection()` → `{ activeLanguage, setActiveLanguage }` — the active interface language and the setter that changes it. The other half of `useLanguagesData`, for shipping your own language picker; calling the setter re-runs every `$loc` source in the app. The built-in `Language Switcher` is the two combined.
 - `useVisiblePages()` → `PageNode[]` — the currently visible page index tree (respects `hidden` and role filters).
+- `useCurrentUserGroups()` → `readonly string[]` — group ids of the signed-in user, `[]` when nobody is. The group source behind `useVisiblePages`' role filter — use it, not `useEvalContext().resolveUserGroups()`, to reapply that filter at a nested level of the page tree: the eval context answers `['guest']` for an anonymous viewer, which would list pages the top level hides.
 
 ### Recipes
 
@@ -231,7 +232,7 @@ To list saved recipes in a widget, bind a `record-list` property to the
 ### Alarms
 
 Active alarms and their counts are pushed over the WebSocket; acknowledgement
-and history go over REST. The stdlib `Alarm List` and `Alarm History` widgets
+and history go over REST. The built-in `Alarm List` and `Alarm History` widgets
 (`frontend/widgets/Content/AlarmListManaged`, `…/AlarmHistoryList`) are the
 worked examples.
 
@@ -272,8 +273,55 @@ SDK hook: fetch `/api/alarms/history` with `apiJson`, as `Alarm History` does.
 
 - `usePageGroup(groupId?)` — returns the active `PageGroupStackEntry` (`{ group, activePage, onNavigate }`) for the given group, or the innermost group when `groupId` is omitted; `null` when no group is in scope.
 - `usePageTitle(title)` — resolves a `PageTitle` (`string | { $static } | { $loc }`) to a plain string, subscribing to translation-store changes so locale switches re-render.
-- `resolvePageTitle(title)` — the non-hook form of the same resolution, for titles you resolve where a hook can't be called: inside a `.map()` over `group.children`, a comparator, an event handler. It reads the same translations but subscribes to nothing, so a component whose labels come only from this will keep the language it mounted with. Call `usePageTitle` once in the same component (or on the page title) when the labels have to follow a locale switch. The stdlib `Tab Bar` uses it per child; `NavigationMenu` does the same for its tree.
-- `useNavigateToPage()` — returns a `(pageId: string) => void` that navigates to `/pages/<pageId>`.
+- `resolvePageTitle(title)` — the non-hook form of the same resolution, for titles you resolve where a hook can't be called: inside a `.map()` over `group.children`, a comparator, an event handler. It reads the same translations but subscribes to nothing, so a component whose labels come only from this will keep the language it mounted with. Call `usePageTitle` once in the same component (or on the page title) when the labels have to follow a locale switch. The built-in `Tab Bar` uses it per child; `NavigationMenu` does the same for its tree.
+- `useNavigateToPage()` — returns a `(pageId: string) => void` that navigates to `/pages/<pageId>`, or to `/preview/<pageId>` inside the editor's preview pane.
+- `useActivePage()` → `{ requestedId, pageId, groupIds }` — where the runtime currently is in the page tree, for a widget that marks an active entry. `requestedId` is the id in the URL and may name a *group*; `pageId` is the page actually on screen after a group resolves to its child; `groupIds` is the trail of groups above it, outermost first, empty for a top-level page. Resolved against the whole tree, hidden and role-gated pages included — a page the menu will not list can still be the one on screen, and reporting nothing for it would unmark every ancestor. The built-in `Navigation Menu` drives all three of its active states off this.
+
+### Composition
+
+Most widgets that hold other widgets need nothing from this section: declare
+`hostsChildren = true` and the renderer hands the children over in the
+`children` prop, already rendered, for CSS to lay out (the built-in `Container`
+does exactly that). Reach for the primitives below only when the widget has to
+decide *where* each node goes, or to render a node that is not its own child.
+
+- `childConfigs` — a prop, not a global: this widget's own child nodes,
+  unrendered, populated for any type that declares `hostsChildren`. Each is a
+  `WidgetConfig` (`id`, `type`, `name`, `properties`, `layout`, `children`,
+  `slot`), so per-child metadata keyed by id — a saved position, say — resolves.
+  Prefer `children` when order is all you need; those are already rendered and
+  cheaper.
+- `renderWidget(node)` — renders one such node. Pass it a `WidgetConfig` from
+  `childConfigs`, from a `widgets`-typed property, or from `useComponentSlot`.
+  The node goes through the normal renderer, so it keeps its own visibility gate,
+  binding overlay and error boundary.
+- `useComponentSlot(slot)` → `WidgetConfig[]` — the widgets a *caller* placed in
+  the named slot of the component instance being rendered. `[]` outside an
+  instance, or for a slot nobody filled.
+- `renderSlotWidgets(nodes)` — renders those, keeping them in the caller's
+  editing scope so the editor selects them where they were authored rather than
+  resolving out to the instance. Use it instead of mapping `renderWidget` over
+  slot content.
+- `useIsPreview()` → `boolean` — `true` inside the editor's preview pane, `false`
+  in the operator runtime. For an authoring-only affordance: `ComponentSlot`
+  outlines an unfilled slot with it, so the author can see the hole they are
+  filling while an operator sees nothing.
+- `useAnchoredStyle(rect, placement)` → `[ref, style]` — positions a panel
+  against a trigger's `AnchorRect`: renders at the raw offset, then clamps itself
+  into the viewport once measured. Attach the ref and the style to the same
+  element, and pass `null` when the panel is not anchored. `Navigation Menu`
+  positions its flyout submenu with it.
+
+Worked examples, all three built-in widgets: `Navigation Menu`
+(`renderWidget` for its footer slot, `useActivePage`, `useAnchoredStyle`),
+`Image Container` (`childConfigs` + `renderWidget`, one child per saved
+position) and `Component Slot` (`useComponentSlot` + `renderSlotWidgets` +
+`useIsPreview`).
+
+A widget that re-enters the renderer can, in principle, render itself: nothing
+stops a node whose subtree names its own type, and the recursion is yours to
+bound. The editor's tree cannot place such a cycle, so this only arrives through
+hand-edited JSON or a `widgets` property wired to an ancestor.
 
 ### Actions and other helpers
 
@@ -282,18 +330,18 @@ SDK hook: fetch `/api/alarms/history` with `apiJson`, as `Alarm History` does.
 - `containerLayoutStyle(layout)` — the `--container-*` half of the same layout, for a widget that declares `hostsChildren` and places its children itself. Pair it with a stylesheet resetting every `--container-*` it reads to `initial` — see the `hostsChildren` note under [Schema](#schema).
 - `widgetColorStyle(color)` — converts a hex / theme-token / `var(--…)` color string into a `style` object that sets the element's `backgroundColor`. Returns `{}` when the color is unset, so the element falls through to its CSS theme token (e.g. `background: var(--hmi-accent)`) and re-skins with the theme.
 - `useCssVar(name, fallback)` — reads a CSS custom property from the document root, subscribing to theme changes.
-- `withBase(path)` — prefixes a root-relative app path with the instance base, so the URL still resolves when the project is proxied under `/runtime/<slug>/` or `/editor/<slug>/`. Idempotent, and a no-op at the root base. Apply it to any URL you hand to `fetch`, an `<img src>` or an `<a href>` — the stdlib `Trend Chart` wraps its `/api/historian/query` fetch in it.
-- `apiJson(url, options?)` → `Promise<T | undefined>` — the JSON API client: applies `withBase`, sets the JSON content type and serialises `options.body`, returns the parsed body, and throws on any non-2xx. `options` is `{ method?, body?, signal? }`. A `204 No Content` resolves `undefined`, which is why the declared type is `T | undefined` and not `T` — guard or default it (`?? []`) as the stdlib `Alarm History` widget does around its `/api/alarms/history` poll.
+- `withBase(path)` — prefixes a root-relative app path with the instance base, so the URL still resolves when the project is proxied under `/runtime/<slug>/` or `/editor/<slug>/`. Idempotent, and a no-op at the root base. Apply it to any URL you hand to `fetch`, an `<img src>` or an `<a href>` — the built-in `Trend Chart` wraps its `/api/historian/query` fetch in it.
+- `apiJson(url, options?)` → `Promise<T | undefined>` — the JSON API client: applies `withBase`, sets the JSON content type and serialises `options.body`, returns the parsed body, and throws on any non-2xx. `options` is `{ method?, body?, signal? }`. A `204 No Content` resolves `undefined`, which is why the declared type is `T | undefined` and not `T` — guard or default it (`?? []`) as the built-in `Alarm History` widget does around its `/api/alarms/history` poll.
 - `isApiError(value)` — narrows a caught value to `ApiError`: `message` is the backend's `detail` (or `HTTP <status>`), plus `status` and the body's `code` when it carried one. Use it rather than reading `status` off whatever you caught — a request that never reached the backend rejects with a plain `TypeError`, which carries neither field.
 
 ### Icons
 
 An `icon` property holds either a built-in id or a workspace SVG path, so a
-widget that renders one branches on both pairs below — as the stdlib `Icon`,
+widget that renders one branches on both pairs below — as the built-in `Icon`,
 `Button` and `Menu Toggle` widgets do.
 
 - `isBuiltinIconId(value)` — `true` if the string is a built-in Phosphor icon id (allowlisted).
-- `getBuiltinIconComponent(iconId)` — returns the `PhosphorIconComponent` for that id, or `null`. It is not a plain component: the icon set is fetched on first render, so rendering one outside a `React.Suspense` boundary throws a promise instead of drawing anything. Wrap the tag — `<React.Suspense fallback={null}><IconComp size={20} weight="regular" /></React.Suspense>` — as every stdlib widget that draws an icon does.
+- `getBuiltinIconComponent(iconId)` — returns the `PhosphorIconComponent` for that id, or `null`. It is not a plain component: the icon set is fetched on first render, so rendering one outside a `React.Suspense` boundary throws a promise instead of drawing anything. Wrap the tag — `<React.Suspense fallback={null}><IconComp size={20} weight="regular" /></React.Suspense>` — as every built-in widget that draws an icon does.
 - `isCustomIconAssetPath(value)` — `true` if the string points at a workspace SVG (`/assets/icons/…`) instead. Base-prefix aware, so it still matches under a proxied `/runtime/<slug>/` mount.
 - `useInlineSvg(url)` → `string` — fetches that SVG and returns its markup *rewritten for tinting*: every hardcoded `fill` / `stroke` / `color` attribute is stripped and `currentColor` forced, so the icon inherits the CSS `color` of its parent instead of shipping its own. That is a one-way trip — a multi-colour asset comes back monochrome and stroke-drawn artwork comes back unstroked, so fetch the file yourself (through `withBase`) when it has to keep its own palette. Returns `''` for a null/empty url, while the fetch is in flight, and when the fetch fails; the three are indistinguishable, so treat `''` as "nothing to draw" rather than as a loading state. Render the result with `dangerouslySetInnerHTML` — the markup comes from the project's own asset folder, which is already a trusted, editor-writable surface.
 
@@ -649,7 +697,7 @@ Optional sibling exports:
 
 - `exportedProperties: ExportedProperty[]` — declares which runtime values this component publishes for sibling components to consume via `$widgetProp`. Extracted into the schema manifest like `schema`, so the editor's `$widgetProp` picker lists them without loading the module; it must be an array of objects each with a non-empty `key`, or the widget lands in the manifest with a `schemaError`.
 - `displayName: string` — the label shown in the palette, the widget tree and the properties panel header. The folder name stays the widget *type* that page files reference; export this when that type reads badly as a label, since a folder name cannot carry spaces (`StretchSpacer` → `Stretch Spacer`). Defaults to the folder name.
-- `hostsChildren: boolean` — declares that nodes of this type carry a `children` array. The editor then treats the widget as a container (drop target, collapse toggle, tree recursion, move target) and the renderer hands the already-rendered children in as the component's `children` prop. Read them with `React.Children`, and place them with `containerLayoutStyle(layout)` — pair that with a stylesheet resetting every `--container-*` it reads to `initial`, or a nested host inherits its parent's direction and gap. The stdlib `Container` is the worked example.
+- `hostsChildren: boolean` — declares that nodes of this type carry a `children` array. The editor then treats the widget as a container (drop target, collapse toggle, tree recursion, move target) and the renderer hands the already-rendered children in as the component's `children` prop. Read them with `React.Children`, and place them with `containerLayoutStyle(layout)` — pair that with a stylesheet resetting every `--container-*` it reads to `initial`, or a nested host inherits its parent's direction and gap. The built-in `Container` is the worked example.
 - `category: string` — the card category. Defaults to the widget's source folder, or `Other` for a flat widget.
 - `description: string` — a one-line summary shown on the widget's card in the editor's widget selector (the drawer opened via **Add Widget/Component…** on the tree context menu).
 - `icon: IconValue` — a structured built-in or custom icon, using the same value produced by the editor's icon picker. A built-in icon is `{ type: 'builtin', name: '<allowlist-id>' }`; a workspace SVG is `{ type: 'custom', path: 'icons/<file>.svg' }`. When omitted, custom widgets fall back to a generic puzzle-piece icon.

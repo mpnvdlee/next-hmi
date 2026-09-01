@@ -1,13 +1,18 @@
-// The TabBar rendered inside a page-group header band is a stdlib widget — a
-// lazy module with no source jsdom can fetch without this shim.
-import '../../../../widgets/testSdk';
+// Renders the widget directly, as its own module does at runtime: bind the SDK
+// globals it references as free identifiers. The TabBar inside a page-group
+// header band is another built-in widget, and resolves through the same shim.
+import '../../testSdk';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useConfigStore } from '@shared/store/configStore';
+import { useHmiStore } from '@hmi/store/hmiStore';
 import type { PageConfig, PageNode, WidgetConfig } from '@shared/types/config';
+import { PreviewContext } from '@shared/context/PreviewContext';
+import { matchesSearchWords } from '@shared/utils/search';
+import { filterHidden, filterByRole, sortPagesByOrder } from '@shared/utils/pageTree';
 import NavigationMenu from './index';
-import PageGroupPageView from '../PageGroupPageView';
+import PageGroupPageView from '@hmi/components/PageGroupPageView';
 
 function mkPage(id: string, title: string, widgets: WidgetConfig[] = []): PageConfig {
   return { id, type: 'page', title, sections: { content: widgets } };
@@ -22,6 +27,8 @@ describe('NavigationMenu routing', () => {
       dialogs: [],
       loaded: true,
     });
+    // Signed out: role gating counts an anonymous viewer as a member of nothing.
+    useHmiStore.setState({ currentUsersByScope: {} });
   });
 
   it('navigates between runtime pages', async () => {
@@ -53,9 +60,11 @@ describe('NavigationMenu routing', () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={['/preview/page-1']}>
-        <Routes>
-          <Route path="/preview/:id" element={<RuntimeShell routeBase="/preview" />} />
-        </Routes>
+        <PreviewContext.Provider value={true}>
+          <Routes>
+            <Route path="/preview/:id" element={<RuntimeShell routeBase="/preview" />} />
+          </Routes>
+        </PreviewContext.Provider>
       </MemoryRouter>,
     );
 
@@ -187,6 +196,56 @@ describe('NavigationMenu routing', () => {
 
     await user.click(screen.getByTestId('group-toggle-group-2'));
     expect(screen.getByRole('button', { name: /Child 2/i })).toBeInTheDocument();
+  });
+
+  it('gates a nested role-restricted page by the same groups as the top level', async () => {
+    // Regression: the nested levels once resolved the viewer's groups through
+    // `useEvalContext().resolveUserGroups()`, which answers ['guest'] for an
+    // anonymous viewer so a `$userGroups` gate naming `guest` matches. Page
+    // `role` gating counts an anonymous viewer as a member of nothing, and the
+    // top level (via `useVisiblePages`) always did — so one menu listed a nested
+    // page gated on `guest` while hiding an identically gated top-level one.
+    useConfigStore.setState({
+      pages: [
+        { ...mkPage('top-guest', 'Top Guest'), role: ['guest'] },
+        {
+          id: 'group-1',
+          type: 'page-group',
+          title: 'Group 1',
+          showChildPagesInMenu: true,
+          children: [
+            mkPage('child-open', 'Child Open'),
+            { ...mkPage('child-guest', 'Child Guest'), role: ['guest'] },
+          ],
+        },
+      ] satisfies PageNode[],
+    });
+
+    const shell = (
+      <MemoryRouter initialEntries={['/pages/child-open']}>
+        <Routes>
+          <Route path="/pages/:id" element={<RuntimeShell routeBase="/pages" />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const anonymous = render(shell);
+    expect(screen.getByRole('button', { name: /Child Open/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Top Guest/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Child Guest/i })).toBeNull();
+    anonymous.unmount();
+
+    // And the gate still opens for a real member, at both levels.
+    useHmiStore.setState({
+      currentUsersByScope: {
+        'runtime:preview': { username: 'op', groups: ['guest'], groupLabels: {} },
+      },
+    });
+    render(shell);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Top Guest/i })).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: /Child Guest/i })).toBeInTheDocument();
   });
 
   it("renders the outer group's header widgets when on a page inside a nested group", () => {
@@ -408,6 +467,79 @@ describe('NavigationMenu routing', () => {
 
     expect(screen.getByRole('button', { name: /Motor Overview/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Pressure Overview/i })).toBeNull();
+  });
+
+  // The widget's matchesSearchWords is a render-time twin of the shared one
+  // (module-private, so it can't just be imported and compared directly) —
+  // pin it against the shared implementation's own verdict instead of a
+  // hand-picked expectation, so the two can't quietly diverge.
+  it('filters search results exactly as the shared matchesSearchWords would', async () => {
+    useConfigStore.setState({
+      pages: [
+        mkPage('motor-overview', 'MOTOR Overview'),
+        mkPage('pressure-overview', 'Pressure Overview'),
+      ],
+    });
+
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/pages/motor-overview']}>
+        <NavigationMenu properties={{ showSearch: true }} />
+      </MemoryRouter>,
+    );
+
+    const input = screen.getByRole('searchbox');
+    const probes = ['  overview   motor  ', 'OVERVIEW pressure', 'motor pressure', 'zzz'];
+    for (const query of probes) {
+      await user.clear(input);
+      await user.type(input, query);
+
+      const wantMotor = matchesSearchWords(query, ['MOTOR Overview']);
+      const wantPressure = matchesSearchWords(query, ['Pressure Overview']);
+      expect(!!screen.queryByRole('button', { name: /Motor Overview/i })).toBe(wantMotor);
+      expect(!!screen.queryByRole('button', { name: /Pressure Overview/i })).toBe(wantPressure);
+    }
+  });
+
+  // The widget's own applyMetadataFilters is a render-time twin of composing
+  // filterHidden + filterByRole + sortPagesByOrder from @shared/utils/pageTree
+  // (a widget module carries no app imports) — pin the rendered children
+  // against what composing the shared functions would produce, so the two
+  // can't quietly diverge.
+  it("filters and orders a group's children exactly as the shared pageTree helpers would", () => {
+    const children: PageNode[] = [
+      { ...mkPage('page-a', 'Alpha'), order: 2 },
+      { ...mkPage('page-b', 'Beta'), hidden: true },
+      { ...mkPage('page-c', 'Charlie'), role: ['ops'] },
+      { ...mkPage('page-d', 'Delta'), order: 1 },
+    ];
+    useConfigStore.setState({
+      pages: [
+        {
+          id: 'group-1',
+          type: 'page-group',
+          title: 'Group 1',
+          showChildPagesInMenu: true,
+          children,
+        },
+      ] satisfies PageNode[],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/pages/group-1']}>
+        <NavigationMenu properties={{ groupExpansion: 'all-expanded', iconStrategy: 'none' }} />
+      </MemoryRouter>,
+    );
+
+    const expected = sortPagesByOrder(filterByRole(filterHidden(children), [])).map(
+      (n) => n.title as string,
+    );
+    const rendered = screen
+      .getAllByRole('button')
+      .map((btn) => btn.textContent)
+      .filter((text): text is string => !!text && children.some((c) => c.title === text));
+
+    expect(rendered).toEqual(expected);
   });
 });
 

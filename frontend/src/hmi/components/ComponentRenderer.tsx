@@ -6,7 +6,7 @@ import { InputScopeContext } from '../context/InputScopeContext';
 import { ComponentSlotContext } from '../context/ComponentSlotContext';
 import { DefinitionScopeContext } from '../context/DefinitionScopeContext';
 import { PreviewContext } from '@shared/context/PreviewContext';
-import { collectSlotKeys, groupChildrenBySlot } from './ComponentSlot/slotKey';
+import { collectSlotKeys, groupChildrenBySlot } from '@shared/utils/componentSlots';
 import { SELF_LAYOUT_KEYS } from './layoutUtils';
 import WidgetRenderer from './WidgetRenderer';
 

@@ -318,7 +318,7 @@ export default defineConfig({
       // A project instance's backend content is reached through the manager's
       // reverse proxy under its prefix; the SPA routes (/runtime/<slug>/ and
       // /runtime/<slug>/pages/…) are NOT matched here, so Vite serves them with HMR.
-      '^/(runtime|editor)/[^/]+/(api|assets|widgets|widget-js|stdlib-js|external-libraries|plugins)(/|$)':
+      '^/(runtime|editor)/[^/]+/(api|assets|widgets|widget-js|builtin-widgets-js|external-libraries|plugins)(/|$)':
         backendProxy,
       '^/(runtime|editor)/[^/]+/ws$': {
         target: backendWsOrigin,

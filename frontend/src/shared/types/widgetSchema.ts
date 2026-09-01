@@ -119,8 +119,8 @@ export interface CustomWidgetManifestEntry {
   schemaError?: string | null;
   /** Where the compiled module is served from. Absent (or 'project') means the
    *  live project's custom-widgets/, compiled on load and fetched from
-   *  /widget-js/. 'stdlib' means a product widget compiled at build time and
-   *  fetched from /stdlib-js/. */
+   *  /widget-js/. 'builtin' means a product widget compiled at build time and
+   *  fetched from /builtin-widgets-js/. */
   origin?: WidgetOrigin | null;
   /** Declared by `export const hostsChildren = true`: nodes of this type carry
    *  a `children` array and the editor treats them as containers — drop target,
@@ -129,26 +129,26 @@ export interface CustomWidgetManifestEntry {
   hostsChildren?: boolean | null;
   /** Whether the compiled module references the Recharts SDK global. Only
    *  those modules need it populated before import, so the chart library stays
-   *  out of first paint on pages that have no chart. Baked by the stdlib build;
-   *  absent for project widgets, which conservatively always wait. */
+   *  out of first paint on pages that have no chart. Baked by the built-in-widgets
+   *  build; absent for project widgets, which conservatively always wait. */
   usesRecharts?: boolean | null;
 }
 
-export type WidgetOrigin = 'project' | 'stdlib';
+export type WidgetOrigin = 'project' | 'builtin';
 
 /**
- * One stdlib widget's editor-only half of the baked manifest, keyed by the
+ * One built-in widget's editor-only half of the baked manifest, keyed by the
  * row's `key`.
  *
  * The compiler writes the manifest as two files (see
- * `generate_stdlib_manifest`): a runtime half every route's static-import
- * closure carries, and this half, imported only from `src/config/` so it lands
- * in the editor's chunk. Both are static imports — an editor surface reads a
- * whole `RegistryEntry` on its first render, an HMI page never fetches these
- * bytes at all. A field absent here simply had nothing beyond `type` /
- * `requiredFields` to say.
+ * `generate_builtin_widgets_manifest`): a runtime half every route's
+ * static-import closure carries, and this half, imported only from
+ * `src/config/` so it lands in the editor's chunk. Both are static imports —
+ * an editor surface reads a whole `RegistryEntry` on its first render, an HMI
+ * page never fetches these bytes at all. A field absent here simply had
+ * nothing beyond `type` / `requiredFields` to say.
  */
-export interface StdlibEditorEntry {
+export interface BuiltinWidgetEditorEntry {
   description?: string | null;
   icon?: unknown;
   exportedProperties?: ExportedProperty[] | null;

@@ -1,4 +1,4 @@
-// Renders real stdlib widgets (Label); bind the SDK and resolve their modules.
+// Renders real built-in widgets (Label); bind the SDK and resolve their modules.
 import '../../../widgets/testSdk';
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';

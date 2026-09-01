@@ -56,9 +56,9 @@ import { getPageChildren } from '@shared/utils/pageContent';
 import type { WidgetConfig } from '@shared/types/config';
 import type { ComponentDefinition } from '@shared/types/componentTypes';
 import type { ThemeConfig } from '@shared/types/theme';
-import NavigationMenu from '@hmi/components/NavigationMenu';
 import WidgetRenderer from '@hmi/components/WidgetRenderer';
 import { renderRegionChildren } from '@hmi/components/renderRegion';
+import FallbackNavigationMenu from '@hmi/components/FallbackNavigationMenu';
 import ShellRegion from '@hmi/components/ShellRegion';
 import { useSidebarFullHeight } from '@hmi/components/ShellRegion/useSidebarFullHeight';
 import PageGroupPageView from '@hmi/components/PageGroupPageView';
@@ -564,7 +564,7 @@ export default function PreviewView() {
     leftSidebar,
     isLeftSidebar,
     'Left sidebar — add components via the tree',
-    <NavigationMenu />,
+    <FallbackNavigationMenu />,
   );
   const rightSidebarContent = renderRegion(
     rightSidebar,
