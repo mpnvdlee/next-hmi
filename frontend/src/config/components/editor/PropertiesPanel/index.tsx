@@ -76,7 +76,7 @@ import { CONTAINER_DEFAULT_TOKENS } from '../../ui/LayoutFields/containerDefault
 import { parseTokenVar, usePanelTokenValues } from '@shared/utils/themeDefaultHint';
 import { WidgetOptionsContext } from '../WidgetOptionsContext';
 import type { ComponentOption } from '../WidgetOptionsContext';
-import { SOURCE_CAPABLE_TYPES } from '@hmi/utils/propertySourceRules';
+import { bindsVariable } from '@hmi/utils/propertySourceRules';
 import { primaryType } from '@shared/utils/valueTypes';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
 import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
@@ -856,8 +856,7 @@ function ComponentPanel({
       value={props[key]}
       onChange={(v) => patchProp(key, v)}
       onOpenPicker={
-        primaryType(schema[key].type).toLowerCase() === 'struct' ||
-        SOURCE_CAPABLE_TYPES.has(primaryType(schema[key].type).toLowerCase())
+        bindsVariable(primaryType(schema[key].type))
           ? // `currentBinding` arrives from whichever slot opened the picker — a
             // nested `$if` branch or `$switch` case names its own binding, which
             // the picker cannot read back off `comp.properties[key]`.
