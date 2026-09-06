@@ -33,7 +33,7 @@
   flex-direction: column;
   align-items: center;
   gap: var(--cfg-space-1);
-  /* Reserved so the panel doesn't jump when branding resolves. */
+  /* Reserved so the panel doesn't jump when ee branding resolves. */
   min-height: 6.5rem;
   justify-content: flex-end;
 }
@@ -96,8 +96,8 @@
 }
 
 .hmi-boot-splash__notice {
-  /* Reserved so the licence line appearing at the end of boot doesn't shift
-     the spinner. Two lines at the small size. */
+  /* Held even in the ee build, where the line is absent, so both editions boot
+     on the same panel geometry. Two lines at the small size. */
   min-height: 3rem;
   margin: 0;
   font-size: var(--cfg-text-sm);

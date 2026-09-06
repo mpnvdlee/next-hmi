@@ -34,13 +34,25 @@ describe('BootSplash', () => {
     expect(screen.getByText(/Loading configuration · 2\/3/)).toBeInTheDocument();
   });
 
-  it('renders no branding while the project config is still loading', () => {
+  it('renders the branding and notice on the first frame, before the config loads', () => {
     setConfig(false);
     render(<BootSplash phase="components" />);
-    expect(wordmark()).toBeNull();
-    expect(screen.queryByText(/AGPL-3\.0/)).not.toBeInTheDocument();
-    // The loading surface itself is still there.
+    expect(wordmark()).toBe('NEXT HMI');
+    expect(screen.getByText(/AGPL-3\.0/)).toBeInTheDocument();
     expect(screen.getByText(/Loading components · 1\/3/)).toBeInTheDocument();
+  });
+
+  it('holds ee branding back until the config loads, so a white label cannot flash the mark', () => {
+    window.__NEXTHMI_EDITION__ = 'ee';
+    setConfig(false);
+    try {
+      render(<BootSplash phase="components" />);
+      expect(wordmark()).toBeNull();
+      expect(document.querySelector('img')).toBeNull();
+      expect(screen.getByText(/Loading components · 1\/3/)).toBeInTheDocument();
+    } finally {
+      delete window.__NEXTHMI_EDITION__;
+    }
   });
 
   it('drops the AGPL notice in the ee build but keeps the branding', () => {
