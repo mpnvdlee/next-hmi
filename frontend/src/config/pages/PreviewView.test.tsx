@@ -118,14 +118,19 @@ describe('PreviewView — outbound protocol', () => {
     expect(postMessage).toHaveBeenCalledWith({ type: 'preview_location', pageId: 'page1' }, ORIGIN);
   });
 
-  it('reports component_clicked with pathIds when a rendered widget is pressed', () => {
+  it('reports component_clicked with pathIds when a rendered widget is pressed', async () => {
     // Config mode disables plain 'click' entirely (previewInteractionGuard
     // swallows it) and reports selection from 'pointerdown' instead — see
     // previewInteractionGuard.ts.
     const postMessage = vi.spyOn(window, 'postMessage');
     const { container } = renderPreview();
-    const wrapper = container.querySelector('[data-widget-id="comp-1"]') as HTMLElement;
-    expect(wrapper).toBeInTheDocument();
+    // The page gate holds its content until the widget's module has landed, so
+    // the first render of a type this suite has not loaded yet is async.
+    const wrapper = await waitFor(() => {
+      const el = container.querySelector('[data-widget-id="comp-1"]');
+      expect(el).toBeInTheDocument();
+      return el as HTMLElement;
+    });
 
     fireEvent.pointerDown(wrapper);
 
@@ -185,13 +190,16 @@ describe('PreviewView — outbound protocol', () => {
 describe('PreviewView — inbound protocol / origin checks', () => {
   beforeEach(() => setupStores([BUTTON_PAGE]));
 
-  it('applies the selection highlight to the matching widget wrapper', () => {
+  it('applies the selection highlight to the matching widget wrapper', async () => {
     const { container } = renderPreview();
     act(() => {
       dispatchFromParent({ type: 'set_selected', ids: ['comp-1'], lead: 'comp-1' });
     });
-    const wrapper = container.querySelector('[data-widget-id="comp-1"]') as HTMLElement;
-    expect(wrapper).toHaveClass('hmi-preview-node--selected');
+    await waitFor(() => {
+      expect(container.querySelector('[data-widget-id="comp-1"]')).toHaveClass(
+        'hmi-preview-node--selected',
+      );
+    });
   });
 
   it('highlights every id of a multi-selection', () => {

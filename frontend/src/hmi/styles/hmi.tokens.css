@@ -105,6 +105,13 @@
   --hmi-binding-disabled-icon: rgba(220, 38, 38, 0.85);
   --hmi-binding-disconnected-bg: rgba(234, 179, 8, 0.1);
   --hmi-binding-disconnected-border: rgba(234, 179, 8, 0.7);
+  --hmi-binding-disconnected-icon: rgba(234, 179, 8, 0.85);
+  /* "No data" wears the same amber as "disconnected" — both say the value is
+     missing, neither says the binding is wrong. Aliased rather than repeated so
+     a retune of the amber can't leave the two variants subtly apart. */
+  --hmi-binding-nodata-bg: var(--hmi-binding-disconnected-bg);
+  --hmi-binding-nodata-border: var(--hmi-binding-disconnected-border);
+  --hmi-binding-nodata-icon: var(--hmi-binding-disconnected-icon);
   /* ── Common outlines / borders ─────────────────────────────────────────── */
   --hmi-accent-outline: 2px solid var(--hmi-accent);
   --hmi-accent-outline-offset: 2px;

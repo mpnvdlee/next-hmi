@@ -63,6 +63,7 @@ import FallbackNavigationMenu from '@hmi/components/FallbackNavigationMenu';
 import ShellRegion from '@hmi/components/ShellRegion';
 import { useSidebarFullHeight } from '@hmi/components/ShellRegion/useSidebarFullHeight';
 import PageGroupPageView from '@hmi/components/PageGroupPageView';
+import { PageDataSettleGate } from '@hmi/components/DataSettleGate';
 import { collectComponentPriorityKeys } from '@hmi/components/layoutUtils';
 import { PreviewContext } from '@shared/context/PreviewContext';
 import { PreviewSelectionContext } from '@hmi/context/PreviewSelectionContext';
@@ -578,75 +579,80 @@ export default function PreviewView() {
     <HmiScopeContext.Provider value="runtime:preview">
       <PreviewContext.Provider value={true}>
         <PreviewSelectionContext.Provider value={previewSelectionSet}>
-          <div className={rootClassName} style={rootStyle}>
-            <div
-              className={`hmi-layout${hasFullHeightSidebar ? ' hmi-layout--row' : ''}`}
-              onClickCapture={handleLayoutClick}
-              ref={layoutRef}
-            >
-              {leftFullHeight && (
-                <ShellRegion
-                  id="leftSidebar"
-                  config={shell.leftSidebar ?? {}}
-                  focused={isLeftSidebar}
-                >
-                  {leftSidebarContent}
-                </ShellRegion>
-              )}
-              <div className="hmi-layout__column">
-                <ShellRegion id="header" config={shell.header ?? {}} focused={isHeader}>
-                  {headerContent}
-                </ShellRegion>
-                <div className="hmi-body">
-                  {!leftFullHeight && (
-                    <ShellRegion
-                      id="leftSidebar"
-                      config={shell.leftSidebar ?? {}}
-                      focused={isLeftSidebar}
-                    >
-                      {leftSidebarContent}
-                    </ShellRegion>
-                  )}
-                  <main className="hmi-main" style={resolveMainStyle(pageGroups, page)}>
-                    {!isShellArea ? (
-                      <PageGroupPageView
-                        pages={pages}
-                        requestedId={areaId}
-                        onNavigate={(pageId, replace) =>
-                          navigate(`/preview/${pageId}`, { replace: replace ?? false })
-                        }
-                        emptyMessage="No page found."
-                      />
-                    ) : null}
-                  </main>
-                  {!rightFullHeight && (
-                    <ShellRegion
-                      id="rightSidebar"
-                      config={shell.rightSidebar ?? {}}
-                      focused={isRightSidebar}
-                    >
-                      {rightSidebarContent}
-                    </ShellRegion>
-                  )}
+          {/* Same settle signal as the runtime: the preview sends its own
+              set_context and gets its own ack, so an editor page also renders
+              before its data. */}
+          <PageDataSettleGate pageId={areaId}>
+            <div className={rootClassName} style={rootStyle}>
+              <div
+                className={`hmi-layout${hasFullHeightSidebar ? ' hmi-layout--row' : ''}`}
+                onClickCapture={handleLayoutClick}
+                ref={layoutRef}
+              >
+                {leftFullHeight && (
+                  <ShellRegion
+                    id="leftSidebar"
+                    config={shell.leftSidebar ?? {}}
+                    focused={isLeftSidebar}
+                  >
+                    {leftSidebarContent}
+                  </ShellRegion>
+                )}
+                <div className="hmi-layout__column">
+                  <ShellRegion id="header" config={shell.header ?? {}} focused={isHeader}>
+                    {headerContent}
+                  </ShellRegion>
+                  <div className="hmi-body">
+                    {!leftFullHeight && (
+                      <ShellRegion
+                        id="leftSidebar"
+                        config={shell.leftSidebar ?? {}}
+                        focused={isLeftSidebar}
+                      >
+                        {leftSidebarContent}
+                      </ShellRegion>
+                    )}
+                    <main className="hmi-main" style={resolveMainStyle(pageGroups, page)}>
+                      {!isShellArea ? (
+                        <PageGroupPageView
+                          pages={pages}
+                          requestedId={areaId}
+                          onNavigate={(pageId, replace) =>
+                            navigate(`/preview/${pageId}`, { replace: replace ?? false })
+                          }
+                          emptyMessage="No page found."
+                        />
+                      ) : null}
+                    </main>
+                    {!rightFullHeight && (
+                      <ShellRegion
+                        id="rightSidebar"
+                        config={shell.rightSidebar ?? {}}
+                        focused={isRightSidebar}
+                      >
+                        {rightSidebarContent}
+                      </ShellRegion>
+                    )}
+                  </div>
+                  <ShellRegion id="footer" config={shell.footer ?? {}} focused={isFooter}>
+                    {footerContent}
+                  </ShellRegion>
                 </div>
-                <ShellRegion id="footer" config={shell.footer ?? {}} focused={isFooter}>
-                  {footerContent}
-                </ShellRegion>
+                {rightFullHeight && (
+                  <ShellRegion
+                    id="rightSidebar"
+                    config={shell.rightSidebar ?? {}}
+                    focused={isRightSidebar}
+                  >
+                    {rightSidebarContent}
+                  </ShellRegion>
+                )}
+                <ModalStack />
               </div>
-              {rightFullHeight && (
-                <ShellRegion
-                  id="rightSidebar"
-                  config={shell.rightSidebar ?? {}}
-                  focused={isRightSidebar}
-                >
-                  {rightSidebarContent}
-                </ShellRegion>
-              )}
-              <ModalStack />
+              <AlertModal scope="runtime:preview" />
+              <HmiToastStack />
             </div>
-            <AlertModal scope="runtime:preview" />
-            <HmiToastStack />
-          </div>
+          </PageDataSettleGate>
         </PreviewSelectionContext.Provider>
       </PreviewContext.Provider>
     </HmiScopeContext.Provider>

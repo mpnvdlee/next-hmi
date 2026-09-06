@@ -1,46 +1,25 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useHmiStore } from '@hmi/store/hmiStore';
-import type { HmiWidgetProps, ShellConfig } from '@shared/types/config';
+import type { ShellConfig } from '@shared/types/config';
 import { useVariableStore } from '@hmi/store/variableStore';
 import WidgetRenderer from './WidgetRenderer';
+import { InputScopeContext } from '../context/InputScopeContext';
 
 vi.mock('../registry/widgetRegistry', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../registry/widgetRegistry')>();
+  const { GateProbe, LabeledProbe, ThrowingWidget } = await import('./__fixtures__/probeWidgets');
   return {
     ...actual,
     widgetRegistry: {
       ...actual.widgetRegistry,
-      // The visibility gate is what's under test, not any particular widget.
-      // A fixture defined here keeps the suite off the real catalog, whose
-      // leaves are built-in widgets: lazy modules jsdom cannot fetch, and whose
-      // test shim can't be imported at module scope without loading the real
-      // registry and defeating this very mock (see setShell below).
-      GateProbe: {
-        name: 'Gate Probe',
-        category: 'Test',
-        component: () => <div className="hmi-gate-probe" />,
-        schema: {},
-      },
-      // Same reasoning, for the overlay tests: they assert WidgetRenderer keeps
-      // the widget interactive//visible underneath, and need something with an
-      // accessible name to point at.
-      LabeledProbe: {
-        name: 'Labeled Probe',
-        category: 'Test',
-        component: ({ properties }: HmiWidgetProps) => (
-          <button type="button">{String(properties?.label ?? '')}</button>
-        ),
-        schema: {},
-      },
-      ThrowingWidget: {
-        name: 'Throwing Widget',
-        category: 'Test',
-        component: () => {
-          throw new Error('boom');
-        },
-        schema: {},
-      },
+      // Fixtures keep the suite off the real catalog, whose leaves are
+      // built-in widgets: lazy modules jsdom cannot fetch, and whose test shim
+      // can't be imported at module scope without loading the real registry
+      // and defeating this very mock (see setShell below).
+      GateProbe,
+      LabeledProbe,
+      ThrowingWidget,
     },
   };
 });
@@ -141,6 +120,71 @@ describe('WidgetRenderer', () => {
       });
 
       expect(container.querySelector('.hmi-binding-overlay--disconnected')).not.toBeNull();
+    });
+
+    it('marks a variable read through an expression, not just a whole-property binding', () => {
+      // The KPI shape: the value is a template and the variable sits in a
+      // wildcard. It is still the number on screen, so a dead datasource has
+      // to mark it.
+      useVariableStore.setState({
+        values: { 'PLC:Tanks/T1Volume': 812 },
+        varMeta: {
+          'PLC:Tanks/T1Volume': { type: { kind: 'scalar', base: 'Float', array: false } },
+        },
+        metadataReceived: true,
+        snapshotReceived: true,
+        wsConnected: true,
+        opcuaConnected: { PLC: false },
+      });
+
+      const { container } = renderNode({
+        id: 'kpi',
+        type: 'LabeledProbe',
+        name: 'KPI',
+        properties: {
+          label: 'Throughput',
+          value: {
+            $stringExpr: {
+              template: '{1}',
+              wildcards: { 1: { $var: { path: 'PLC:Tanks/T1Volume' } } },
+            },
+          },
+        },
+      });
+
+      expect(container.querySelector('.hmi-binding-overlay--disconnected')).not.toBeNull();
+    });
+
+    it('marks a widget bound through a component property', () => {
+      // Inside a component definition the leaf carries `$componentProp`; only
+      // the resolved properties hold the real `$var`.
+      useVariableStore.setState({
+        values: {},
+        varMeta: {},
+        metadataReceived: true,
+        snapshotReceived: true,
+        wsConnected: true,
+        opcuaConnected: {},
+      });
+
+      const { container } = render(
+        <MemoryRouter>
+          <InputScopeContext.Provider
+            value={{ properties: { source: { $var: { path: 'PLC:Missing' } } } }}
+          >
+            <WidgetRenderer
+              node={{
+                id: 'leaf',
+                type: 'LabeledProbe',
+                name: 'Leaf',
+                properties: { label: 'Start', variable: { $componentProp: 'source' } },
+              }}
+            />
+          </InputScopeContext.Provider>
+        </MemoryRouter>,
+      );
+
+      expect(container.querySelector('.hmi-binding-overlay--disabled')).not.toBeNull();
     });
 
     it('renders no overlay when there is no bound variable', () => {

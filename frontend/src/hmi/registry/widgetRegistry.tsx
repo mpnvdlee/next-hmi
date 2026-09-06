@@ -34,7 +34,7 @@ import { wrapComponentWithStylesheet } from '@shared/hooks/useWidgetStylesheet';
 import { getWidgetJsPath } from '@shared/utils/widgetPaths';
 import { loadWidgetModule } from '@shared/utils/widgetModuleLoader';
 import { componentPropertyToSchemaField } from '@shared/types/componentProperty';
-import { useComponentStore } from '@shared/store/componentStore';
+import { useComponentStore, componentChildren } from '@shared/store/componentStore';
 import { apiJson } from '@shared/utils/api';
 import { isIconValue } from '@shared/utils/iconValue';
 import { primaryType } from '@shared/utils/valueTypes';
@@ -57,18 +57,92 @@ import { ensureRecharts } from '@shared/utils/rechartsLoader';
 // a byte on every page.
 import builtinWidgetsManifest from '../../generated/builtinWidgetsManifest.json';
 
+const COMPONENT_TYPE_PREFIX = '$component:';
+
+// What is known about one widget type's module, recorded at registration: the
+// memoised load (the `lazy()` factory and every prefetch share the one import),
+// whether it has resolved — which is what lets a page gate on its widget code
+// having landed instead of revealing an empty shell that fills in afterwards —
+// and whether pulling it drags the chart library in with it.
+//
+// One record per type rather than a map plus two parallel sets: all three
+// answers are properties of the same registration, and a project widget
+// shadowing a built-in must report *its* answers, not the built-in manifest's.
+interface WidgetModuleEntry {
+  load: () => Promise<ComponentType<HmiWidgetProps>>;
+  loaded: boolean;
+  /** Module reads `window.__nextHMI__.Recharts`. Kept out of the boot warm-up. */
+  usesRecharts: boolean;
+}
+const widgetModules = new Map<string, WidgetModuleEntry>();
+
+/** Memoise one module load under `type`, clearing the memo on failure so a
+ *  dropped fetch does not leave the type permanently "not loaded" — every page
+ *  holding it would then sit out the reveal gate's full timeout with no way
+ *  back short of a reload. */
+function registerWidgetModule(
+  type: string,
+  load: () => Promise<ComponentType<HmiWidgetProps>>,
+  usesRecharts = false,
+): void {
+  let pending: Promise<ComponentType<HmiWidgetProps>> | null = null;
+  const record: WidgetModuleEntry = {
+    loaded: false,
+    usesRecharts,
+    load: () =>
+      (pending ??= load().then(
+        (comp) => {
+          record.loaded = true;
+          return comp;
+        },
+        (err) => {
+          pending = null;
+          throw err;
+        },
+      )),
+  };
+  widgetModules.set(type, record);
+}
+
+/** Every `$component:x` instance renders through the one shared chunk, so they
+ *  all resolve to a single record keyed by the bare prefix. */
+function widgetModuleFor(type: string): WidgetModuleEntry | undefined {
+  return widgetModules.get(
+    type.startsWith(COMPONENT_TYPE_PREFIX) ? COMPONENT_TYPE_PREFIX : type,
+  );
+}
+
+/** A type nothing registered has no module to wait for. */
+function moduleLoaded(type: string): boolean {
+  return widgetModuleFor(type)?.loaded ?? true;
+}
+
+registerWidgetModule(COMPONENT_TYPE_PREFIX, async () => {
+  const mod = await import('../components/ComponentRenderer');
+  return mod.default as unknown as ComponentType<HmiWidgetProps>;
+});
+
 // Deferred to break the circular import:
 //   widgetRegistry → ComponentRenderer → WidgetRenderer → widgetRegistry
 // React.lazy handles the Promise correctly and re-renders when ready.
-const LazyComponentRenderer = lazy(
-  () => import('../components/ComponentRenderer'),
-) as ComponentType<HmiWidgetProps & { _widgetId: string }>;
+//
+// Registered in `widgetModules` under the bare `$component:` prefix like
+// any other type, so the prefetch shares the one import and `widgetModulesLoaded`
+// answers for it out of the same set — every `$component:x` instance draws
+// through this one chunk.
+const LazyComponentRenderer = lazy(async () => ({
+  default: await widgetModuleFor(COMPONENT_TYPE_PREFIX)!.load(),
+})) as ComponentType<HmiWidgetProps & { _widgetId: string }>;
 
 // ── Shared schema fragments ───────────────────────────────────────────────────
 
 // Standard visibility gate present on every widget. Both fields are plain
 // booleans, expression-capable — switch either to the `$userGroups` source to
 // gate by user group (empty group list = everyone), or nest `$if` etc.
+//
+// The key set is pinned against `UNIVERSAL_PROPERTY_KEYS` (and through it the
+// backend's copy) by widgetRegistry.test.ts, so a gate property added here
+// reaches every reader of that list rather than only this one.
 export const VISIBILITY_SCHEMA: Record<string, SchemaField> = {
   visible: {
     type: 'Boolean',
@@ -241,14 +315,24 @@ export function registerCustomWidget(entry: CustomWidgetManifestEntry): void {
   // widget, so skip it when the build told us this module never mentions it.
   // Project widgets carry no such flag and keep waiting, as before.
   const needsRecharts = entry.usesRecharts !== false;
-  const LazyComp = lazy(async () => {
-    if (needsRecharts) await ensureRecharts();
-    const mod = await loadWidgetModule(getWidgetJsPath(entry));
-    if (!mod?.default) {
-      throw new Error(`custom widget "${entry.key}" has no default export`);
-    }
-    return { default: mod.default as ComponentType<HmiWidgetProps> };
-  }) as ComponentType<HmiWidgetProps>;
+  // One memoised load per registration, shared by the `lazy()` below and by
+  // `prefetchWidgetModules`. Re-registering (a recompile, with a new buildTs)
+  // mints a fresh one, so the previous build's "already loaded" mark goes with
+  // it — `memoiseModuleLoader` clears it.
+  registerWidgetModule(
+    entry.name,
+    async () => {
+      if (needsRecharts) await ensureRecharts();
+      const mod = await loadWidgetModule(getWidgetJsPath(entry));
+      if (!mod?.default) {
+        throw new Error(`custom widget "${entry.key}" has no default export`);
+      }
+      return mod.default as ComponentType<HmiWidgetProps>;
+    },
+    needsRecharts,
+  );
+  const load = widgetModules.get(entry.name)!.load;
+  const LazyComp = lazy(async () => ({ default: await load() })) as ComponentType<HmiWidgetProps>;
 
   if (entry.hostsChildren) declaredHostTypes.add(entry.name);
   else declaredHostTypes.delete(entry.name);
@@ -258,6 +342,16 @@ export function registerCustomWidget(entry: CustomWidgetManifestEntry): void {
     : LazyComp;
 
   function CustomWidgetEntry(props: HmiWidgetProps) {
+    // Always its own silent boundary, wherever the widget sits. The page gate
+    // (PageGroupPageView) prefetches a page's modules before revealing it, so
+    // this normally never shows; what it covers is every load that starts
+    // *after* the reveal — a widget the prefetch could not see (a component
+    // definition the store had not loaded yet), one whose first load rejected,
+    // one mounted later by a `visible` gate opening or WindowedContent
+    // scrolling it in, and the fresh `lazy` a `widget_updated` recompile mints
+    // under already-mounted instances. Letting any of those escalate to the
+    // content-area boundary would blank the whole page body — header, content
+    // and footer — to redraw one widget.
     return (
       <Suspense fallback={null}>
         <Wrapped {...props} />
@@ -281,6 +375,125 @@ export function registerCustomWidget(entry: CustomWidgetManifestEntry): void {
     description: typeof entry.description === 'string' ? entry.description : undefined,
     icon: isIconValue(entry.icon) ? entry.icon : undefined,
   };
+}
+
+// ── Module prefetch ───────────────────────────────────────────────────────────
+// Every widget type is a `lazy()` that starts its import on first render, so a
+// page revealed the moment its config and variables land still has none of its
+// widget code in memory: it paints as an empty shell and grows as N module
+// round-trips return. The page gate (PageGroupPageView) therefore waits on the
+// modules too, and the boot splash warms the built-ins so later navigations
+// find them already there.
+
+// Memo for the top-level walk. The page gate asks the same question two or
+// three times per visit (a synchronous check, the prefetch, then a re-check on
+// each render until it latches) and the walk descends into every referenced
+// component definition, so the answer is worth keeping.
+//
+// Stamped with both component-store slices, not just the tree: a definition
+// that arrives after the first walk changes what a `$component:` instance
+// draws, and both slices are replaced wholesale on any edit, so an identity
+// check is enough to notice.
+interface TypeWalkMemo {
+  components: unknown;
+  draftComponents: unknown;
+  types: Set<string>;
+}
+const typeWalkMemo = new WeakMap<object, TypeWalkMemo>();
+
+/**
+ * Widget types this tree renders — descending through `children` AND into the
+ * definitions of `$component:` instances, whose widgets live in the component
+ * store rather than on the instance node.
+ */
+export function collectWidgetTypes(
+  roots: WidgetConfig[],
+  out?: Set<string>,
+  seenComponents: Set<string> = new Set(),
+): Set<string> {
+  if (out === undefined) {
+    const store = useComponentStore.getState();
+    const cached = typeWalkMemo.get(roots);
+    if (
+      cached &&
+      cached.components === store.components &&
+      cached.draftComponents === store.draftComponents
+    ) {
+      return cached.types;
+    }
+    const types = walkWidgetTypes(roots, new Set(), seenComponents);
+    typeWalkMemo.set(roots, {
+      components: store.components,
+      draftComponents: store.draftComponents,
+      types,
+    });
+    return types;
+  }
+  return walkWidgetTypes(roots, out, seenComponents);
+}
+
+function walkWidgetTypes(
+  roots: WidgetConfig[],
+  out: Set<string>,
+  seenComponents: Set<string>,
+): Set<string> {
+  for (const node of roots) {
+    if (typeof node.type !== 'string') continue;
+    out.add(node.type);
+    const kids = node.children as WidgetConfig[] | undefined;
+    if (kids) walkWidgetTypes(kids, out, seenComponents);
+    if (node.type.startsWith(COMPONENT_TYPE_PREFIX)) {
+      const name = node.type.slice(COMPONENT_TYPE_PREFIX.length);
+      if (seenComponents.has(name)) continue;
+      seenComponents.add(name);
+      const definition = componentChildren(name);
+      if (definition) walkWidgetTypes(definition, out, seenComponents);
+    }
+  }
+  return out;
+}
+
+/** True when every module this tree needs is in memory — i.e. rendering it now
+ *  suspends nothing. An unregistered type has no module to wait for. */
+export function widgetModulesLoaded(roots: WidgetConfig[]): boolean {
+  for (const type of collectWidgetTypes(roots)) {
+    if (!moduleLoaded(type)) return false;
+  }
+  return true;
+}
+
+/** Start every module this tree needs, resolving once they have all settled. A
+ *  module that fails to load resolves too — the caller is a reveal gate, and a
+ *  broken widget must not hold the page behind a spinner. */
+export function prefetchWidgetModules(roots: WidgetConfig[]): Promise<void> {
+  const pending: Promise<unknown>[] = [];
+  for (const type of collectWidgetTypes(roots)) {
+    const mod = widgetModuleFor(type);
+    if (mod) pending.push(mod.load());
+  }
+  return Promise.allSettled(pending).then(() => undefined);
+}
+
+/**
+ * Warm the product's built-in widget modules — small static files served from
+ * /builtin-widgets-js/ — during the boot splash, so a navigation later in the
+ * session finds them in memory instead of paying a round-trip per type at the
+ * page gate.
+ *
+ * The chart widgets are left out on purpose: their modules pull the chart
+ * library (see `needsRecharts`), which is exactly the cost the lazy registry
+ * exists to keep off a project that never draws a chart. A page holding one
+ * still prefetches it through `prefetchWidgetModules`.
+ */
+export function prefetchBuiltinWidgetModules(): Promise<void> {
+  const pending: Promise<unknown>[] = [widgetModuleFor(COMPONENT_TYPE_PREFIX)!.load()];
+  for (const type of BUILTIN_WIDGET_TYPES) {
+    const mod = widgetModules.get(type);
+    // The registration's own flag, not the manifest's: a project widget may
+    // shadow a built-in name, and it is that module we would be fetching.
+    if (mod && !mod.usesRecharts) pending.push(mod.load());
+  }
+  return Promise.allSettled(pending).then(() => undefined);
 }
 
 /**

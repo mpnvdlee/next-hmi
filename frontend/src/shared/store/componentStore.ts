@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { apiJson, errorMessage } from '@shared/utils/api';
 import type { ComponentDefinition } from '../types/componentTypes';
+import type { WidgetConfig } from '../types/config';
 
 interface ComponentStoreState {
   components: ComponentDefinition[];
@@ -174,6 +175,19 @@ export function selectComponentById(
     byIdCache.set(components, map);
   }
   return map.get(id);
+}
+
+/**
+ * The widgets a `$component:` instance draws, read straight from the store —
+ * an unsaved draft first, so the editor walks what is on screen rather than
+ * what is on disk. Every walker that descends into component definitions (the
+ * page's module prefetch, the editor's force-mount search) resolves them here,
+ * so they cannot disagree about what a component renders.
+ */
+export function componentChildren(name: string): WidgetConfig[] | undefined {
+  const store = useComponentStore.getState();
+  const def = store.draftComponents[name] ?? selectComponentById(store.components, name);
+  return def?.children as WidgetConfig[] | undefined;
 }
 
 export async function saveComponentDrafts(): Promise<void> {

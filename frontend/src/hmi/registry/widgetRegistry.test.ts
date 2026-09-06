@@ -10,12 +10,18 @@ import {
   resolveWidgetMetadata,
   registerCustomWidget,
   registerComponents,
+  collectWidgetTypes,
+  prefetchWidgetModules,
+  widgetModulesLoaded,
   BUILTIN_WIDGET_TYPES,
   VISIBILITY_SCHEMA,
   type CustomWidgetManifestEntry,
 } from './widgetRegistry';
+import { useComponentStore } from '@shared/store/componentStore';
+import type { WidgetConfig } from '@shared/types/config';
 import universalPropertyKeysFixture from '@shared/types/__fixtures__/universalWidgetPropertyKeys.json';
 import type { ComponentDefinition } from '@shared/types/componentTypes';
+import { UNIVERSAL_PROPERTY_KEYS } from '@shared/types/universalWidgetProperties';
 
 function expectAllowlistedBuiltin(icon: IconValue | undefined): void {
   expect(icon?.type).toBe('builtin');
@@ -28,6 +34,14 @@ describe('VISIBILITY_SCHEMA', () => {
     expect(new Set(universalPropertyKeysFixture as string[])).toEqual(
       new Set(Object.keys(VISIBILITY_SCHEMA)),
     );
+  });
+
+  it('matches the runtime list the binding overlay reads', () => {
+    // bindingValidation cannot import this module (registry → ComponentRenderer
+    // → WidgetRenderer → bindingValidation), so it reads UNIVERSAL_PROPERTY_KEYS
+    // instead. A gate property added to only one of the two would leave the
+    // overlay marking a widget that renders correctly.
+    expect(UNIVERSAL_PROPERTY_KEYS).toEqual(new Set(Object.keys(VISIBILITY_SCHEMA)));
   });
 });
 
@@ -162,5 +176,62 @@ describe('registerComponents slot properties', () => {
     );
 
     expect(entry.schema?.body).toEqual({ type: 'widgets', label: 'Body' });
+  });
+});
+
+describe('widget module prefetch', () => {
+  function node(id: string, type: string, children?: WidgetConfig[]): WidgetConfig {
+    return { id, type, name: id, ...(children ? { children } : {}) };
+  }
+
+  afterEach(() => {
+    useComponentStore.setState({ components: [], draftComponents: {} });
+  });
+
+  it('collects nested types, and the widgets a component definition draws', () => {
+    useComponentStore.setState({
+      components: [
+        { id: 'card', name: 'Card', children: [node('inner', 'Gauge')] } as ComponentDefinition,
+      ],
+    });
+
+    const types = collectWidgetTypes([
+      node('a', 'Container', [node('b', 'Label'), node('c', '$component:card')]),
+    ]);
+
+    expect([...types].sort()).toEqual(['$component:card', 'Container', 'Gauge', 'Label'].sort());
+  });
+
+  it('reports a tree unready until its modules land, then ready', async () => {
+    const tree = [node('a', 'Clock')];
+    expect(widgetModulesLoaded(tree)).toBe(false);
+
+    await prefetchWidgetModules(tree);
+
+    expect(widgetModulesLoaded(tree)).toBe(true);
+  });
+
+  it('never waits on a type nothing registered — there is no module to load', () => {
+    expect(widgetModulesLoaded([node('a', '__unregistered_custom_widget__')])).toBe(true);
+  });
+
+  it('re-walks the same tree once a component definition arrives', () => {
+    // The walk is memoised per tree, but the answer depends on the component
+    // store: a page gate that asked before the definitions loaded would
+    // otherwise keep the empty answer and reveal without the module.
+    const tree = [node('a', 'Container', [node('c', '$component:late')])];
+    expect([...collectWidgetTypes(tree)].sort()).toEqual(['$component:late', 'Container']);
+
+    useComponentStore.setState({
+      components: [
+        { id: 'late', name: 'Late', children: [node('inner', 'Gauge')] } as ComponentDefinition,
+      ],
+    });
+
+    expect([...collectWidgetTypes(tree)].sort()).toEqual([
+      '$component:late',
+      'Container',
+      'Gauge',
+    ]);
   });
 });

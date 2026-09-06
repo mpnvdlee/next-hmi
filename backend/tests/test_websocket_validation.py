@@ -80,7 +80,7 @@ def test_handle_set_context_prefetches_uncached_values(monkeypatch) -> None:
     assert ws.messages == [
         {"type": "var_update", "values": {"DS:Cached": 1}},
         {"type": "var_update", "values": {"DS:Fresh": 2}},
-        {"type": "context_ready", "currentPageIds": ["main"]},
+        {"type": "context_ready", "currentPageIds": ["main"], "openDialogIds": []},
     ]
     assert datasource_manager.seeded == {"DS:Fresh": 2}
     assert engine.priority_paths == [{"Cached", "Fresh"}]
@@ -107,7 +107,7 @@ def test_handle_set_context_sends_ready_immediately_when_fully_cached(monkeypatc
 
     assert ws.messages == [
         {"type": "var_update", "values": {"DS:Cached": 1}},
-        {"type": "context_ready", "currentPageIds": ["main"]},
+        {"type": "context_ready", "currentPageIds": ["main"], "openDialogIds": []},
     ]
 
 

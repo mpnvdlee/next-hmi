@@ -27,6 +27,7 @@ import { HmiToastStack } from '../components/ToastStack';
 import AlarmPopup from '../components/AlarmPopup';
 import { FullscreenPrompt } from '../components/FullscreenPrompt';
 import BootSplash from '../components/BootSplash';
+import { PageDataSettleGate } from '../components/DataSettleGate';
 import { markBooted, useBootHold } from '../components/BootSplash/bootHold';
 import { collectComponentPriorityKeys } from '../components/layoutUtils';
 import { ContentSpinner } from '@shared/components/Spinner';
@@ -209,39 +210,46 @@ export default function HmiView() {
     return <BootSplash phase={configLoaded ? 'ready' : 'config'} />;
   }
 
+  // One gate over the whole runtime: the shell regions, the page, and the
+  // dialogs and overlays portalled out of it all read their variables from the
+  // same `set_context`, so they settle together on its ack. Nothing under here
+  // wears a "no data" mark until that lands (or the grace expires) — the page
+  // itself is on screen long before, unblocked by the datasource.
   return (
     <HmiScopeContext.Provider value={scope}>
-      <div className={rootClassName} style={rootStyle}>
-        <div className={`hmi-layout${hasFullHeightSidebar ? ' hmi-layout--row' : ''}`}>
-          {leftFullHeight && leftSidebarRegion}
-          <div className="hmi-layout__column">
-            <ShellRegion id="header" config={headerCfg}>
-              {headerContent}
-            </ShellRegion>
-            <div className="hmi-body">
-              {!leftFullHeight && leftSidebarRegion}
-              <main className="hmi-main" style={mainStyle}>
-                {pageView}
-                {pageSwitching && (
-                  <div className="hmi-page-pending" aria-hidden>
-                    <ContentSpinner />
-                  </div>
-                )}
-              </main>
-              {!rightFullHeight && rightSidebarRegion}
+      <PageDataSettleGate pageId={page?.id}>
+        <div className={rootClassName} style={rootStyle}>
+          <div className={`hmi-layout${hasFullHeightSidebar ? ' hmi-layout--row' : ''}`}>
+            {leftFullHeight && leftSidebarRegion}
+            <div className="hmi-layout__column">
+              <ShellRegion id="header" config={headerCfg}>
+                {headerContent}
+              </ShellRegion>
+              <div className="hmi-body">
+                {!leftFullHeight && leftSidebarRegion}
+                <main className="hmi-main" style={mainStyle}>
+                  {pageView}
+                  {pageSwitching && (
+                    <div className="hmi-page-pending" aria-hidden>
+                      <ContentSpinner />
+                    </div>
+                  )}
+                </main>
+                {!rightFullHeight && rightSidebarRegion}
+              </div>
+              <ShellRegion id="footer" config={footerCfg}>
+                {footerContent}
+              </ShellRegion>
             </div>
-            <ShellRegion id="footer" config={footerCfg}>
-              {footerContent}
-            </ShellRegion>
+            {rightFullHeight && rightSidebarRegion}
+            <ModalStack />
           </div>
-          {rightFullHeight && rightSidebarRegion}
-          <ModalStack />
+          <AlertModal scope={scope} />
+          <HmiToastStack />
+          <AlarmPopup />
+          <FullscreenPrompt />
         </div>
-        <AlertModal scope={scope} />
-        <HmiToastStack />
-        <AlarmPopup />
-        <FullscreenPrompt />
-      </div>
+      </PageDataSettleGate>
     </HmiScopeContext.Provider>
   );
 }

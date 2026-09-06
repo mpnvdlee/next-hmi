@@ -88,12 +88,18 @@ class OpcuaStatusMessage(TypedDict):
 
 class ContextReadyMessage(TypedDict):
     """Server → client: every variable requested by the client's most recent
-    `set_context` (for `currentPageIds`) has now been sent, from cache and/or
-    a fresh OPC-UA read. Lets the client reveal a newly navigated page once
-    its own data has actually arrived, rather than guessing from the
-    connection-lifetime `var_snapshot` flag."""
+    `set_context` (for `currentPageIds` *and* `openDialogIds`) has now been
+    sent, from cache and/or a fresh OPC-UA read. Lets the client reveal a newly
+    navigated page once its own data has actually arrived, rather than guessing
+    from the connection-lifetime `var_snapshot` flag.
+
+    Both id lists are echoed verbatim so a surface can recognise the ack for
+    its own `set_context`: a dialog's variables are requested and read on the
+    same round-trip as the page's, so it gets a real settle signal instead of
+    having to fall back on a timeout."""
     type: str        # "context_ready"
     currentPageIds: list[str]
+    openDialogIds: list[str]
 
 
 class UserIdentityMessage(TypedDict, total=False):

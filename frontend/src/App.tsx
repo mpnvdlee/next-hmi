@@ -2,7 +2,7 @@ import './app-loading.css';
 import { lazy, Suspense } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { PageSpinner } from '@shared/components/Spinner';
-import { getArea, getMode, routerBasename } from '@shared/utils/runtimeBase';
+import { getMode, routerBasename } from '@shared/utils/runtimeBase';
 
 // AppInner (HMI/editor routing, the widget registry, and everything they pull
 // in — including the recharts SDK loader) is lazy so a manager-mode session
@@ -25,7 +25,9 @@ export default function App() {
   }
   return (
     <BrowserRouter basename={routerBasename()}>
-      <Suspense fallback={<PageSpinner variant={getArea() === 'editor' ? 'cfg' : 'hmi'} />}>
+      {/* App palette, like the boundary inside AppInner: what follows this is
+          always the boot splash or the editor shell, never HMI content. */}
+      <Suspense fallback={<PageSpinner variant="cfg" />}>
         <AppInner />
       </Suspense>
     </BrowserRouter>

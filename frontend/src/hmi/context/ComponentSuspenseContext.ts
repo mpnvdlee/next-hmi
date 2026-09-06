@@ -5,13 +5,16 @@ import { createContext, useContext } from 'react';
  * shared ComponentRenderer chunk loads.
  *
  * Default `true`: each instance wraps itself in a silent `fallback={null}`
- * boundary so chrome (header/footer/sidebars), dialogs and page header/footer
- * pop in without flashing a spinner and without escalating to the app-level
- * page spinner.
+ * boundary so chrome (the page-group header/footer/sidebars) and dialogs pop in
+ * without flashing a spinner and without escalating to the app-level page
+ * spinner.
  *
- * Page content sets this to `false` so its component instances skip the inner
- * boundary and let the surrounding content-area spinner handle the load — one
- * spinner over the page body instead of a red placeholder per component.
+ * A page's own sections set this to `false` so their component instances skip
+ * the inner boundary and let the surrounding content-area spinner handle that
+ * one shared chunk — one spinner over the page body instead of a red
+ * placeholder per component. Custom widget modules are not covered by this:
+ * they keep their own boundary everywhere (see `registerCustomWidget`), since
+ * one of them loading late must never blank the page body around it.
  */
 export const ComponentSelfSuspenseContext = createContext(true);
 

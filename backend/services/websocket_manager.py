@@ -546,12 +546,14 @@ class WebSocketManager:
         missing_keys = composite_keys - sent_keys
         if missing_keys:
             task = asyncio.create_task(
-                self._send_uncached_values_then_ready(client_id, missing_keys, current_page_ids)
+                self._send_uncached_values_then_ready(
+                    client_id, missing_keys, current_page_ids, open_dialog_ids
+                )
             )
             self._deferred_tasks.add(task)
             task.add_done_callback(self._deferred_tasks.discard)
         else:
-            await self._send_context_ready(client_id, current_page_ids)
+            await self._send_context_ready(client_id, current_page_ids, open_dialog_ids)
 
     async def _handle_write_field(self, client_id: str, msg: WriteFieldMessage) -> None:
         """Write a value to the PLC via the appropriate OPC-UA pool engine,
@@ -929,25 +931,42 @@ class WebSocketManager:
             return
 
     async def _send_uncached_values_then_ready(
-        self, client_id: str, composite_keys: set[str], current_page_ids: list[str]
+        self,
+        client_id: str,
+        composite_keys: set[str],
+        current_page_ids: list[str],
+        open_dialog_ids: list[str],
     ) -> None:
         """Background continuation of `_handle_set_context`'s fire-and-forget
         OPC-UA prefetch: once the uncached reads land (or fail), tell the
         client this context is ready regardless, so it isn't left waiting
         forever on a page whose variables couldn't be read."""
         await self._send_uncached_values(client_id, composite_keys)
-        await self._send_context_ready(client_id, current_page_ids)
+        await self._send_context_ready(client_id, current_page_ids, open_dialog_ids)
 
-    async def _send_context_ready(self, client_id: str, current_page_ids: list[str]) -> None:
+    async def _send_context_ready(
+        self, client_id: str, current_page_ids: list[str], open_dialog_ids: list[str]
+    ) -> None:
         """Tell the client every variable requested by this set_context has
         been sent (from cache and/or freshly read). The client uses this to
         reveal a newly navigated page once its own data has actually arrived,
-        instead of a session-wide "a snapshot landed at some point" flag."""
+        instead of a session-wide "a snapshot landed at some point" flag.
+
+        Dialog ids are echoed alongside the page ids: their variables were
+        requested on the same round-trip (`_resolve_context_composite_keys`
+        folds both into one key set), so an open dialog can settle on this ack
+        rather than on a timer."""
         ws = self._connections.get(client_id)
         if ws is None:
             return
         try:
-            await ws.send_text(json.dumps({"type": "context_ready", "currentPageIds": current_page_ids}))
+            await ws.send_text(
+                json.dumps({
+                    "type": "context_ready",
+                    "currentPageIds": current_page_ids,
+                    "openDialogIds": open_dialog_ids,
+                })
+            )
         except Exception:
             self._connections.pop(client_id, None)
 
