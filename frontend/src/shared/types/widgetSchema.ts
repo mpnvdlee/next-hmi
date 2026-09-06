@@ -127,6 +127,12 @@ export interface CustomWidgetManifestEntry {
    *  collapse toggle, tree recursion, move target. The component receives the
    *  rendered children as its `children` prop. */
   hostsChildren?: boolean | null;
+  /** Declared by `export const flowsChildren = true`: this type arranges its
+   *  children with flexbox (`containerLayoutProps`), so each of them has a main
+   *  axis to size Hug/Fill/Fixed against. Narrower than `hostsChildren` — an
+   *  `ImageContainer` hosts children but pins them to slots. Read through
+   *  `usesFlexLayout` in `shared/utils/parentFlow.ts`. */
+  flowsChildren?: boolean | null;
   /** Whether the compiled module references the Recharts SDK global. Only
    *  those modules need it populated before import, so the chart library stays
    *  out of first paint on pages that have no chart. Baked by the built-in-widgets

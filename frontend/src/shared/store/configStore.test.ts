@@ -38,7 +38,7 @@ describe('configStore', () => {
                 type: 'Button',
                 name: 'Button 1',
                 properties: { label: 'Start', color: '#111111' },
-                layout: { basis: '10rem', grow: 0 },
+                layout: { width: '10rem', grow: 0 },
               },
             ],
           },
@@ -71,7 +71,7 @@ describe('configStore', () => {
     const component = widgets.find((w) => w.id === 'comp-1');
     expect(component?.name).toBe('Run Button');
     expect(component?.properties).toEqual({ label: 'Run', color: '#111111' });
-    expect(component?.layout).toEqual({ basis: '10rem', grow: 1 });
+    expect(component?.layout).toEqual({ width: '10rem', grow: 1 });
   });
 
   describe('updateComponents', () => {
@@ -153,6 +153,97 @@ describe('configStore', () => {
       useConfigStore.getState().updateComponents([], { properties: { color: '#fff' } });
 
       expect(useConfigStore.getState().pages).toBe(before);
+    });
+  });
+
+  /**
+   * `grow` used to need a store-level sweep to stay clear of a stranded state
+   * whenever a write moved a widget's flow — a `Container`'s own `direction`,
+   * or a reparent. That invariant now lives at the edges instead: the panel's
+   * own mode picker (`sizeModePatch`) decides, from the flow it can see,
+   * whether a stored `grow` still has a row anywhere to show it; the runtime
+   * doesn't decide the axis at all any more — it emits `grow` as the
+   * axis-neutral `--w-grow`/`--h-grow` custom properties `selfLayoutStyle`
+   * writes, and a CSS translation block in `hmi.css` picks whichever one
+   * applies from the flex parent's own `data-flow-direction`. The store
+   * itself just persists whatever layout it is given, flow-unaware — these
+   * tests pin that down.
+   */
+  describe('grow persists across flow changes', () => {
+    /** Fill along Width, Hug along Height: the weight is live under a row
+     *  parent and inert the moment Height becomes the main axis — but nothing
+     *  in the store sweeps it for that any more, so it stays either way. */
+    const filler = () => ({
+      id: 'kid',
+      name: 'kid',
+      type: 'Button',
+      layout: { widthMode: 'fill', heightMode: 'hug', grow: 2 },
+    });
+    const growOfKid = () => {
+      const page = useConfigStore.getState().pages[0];
+      const widgets = page && 'sections' in page ? Object.values(page.sections).flat() : [];
+      const find = (list: typeof widgets): (typeof widgets)[number] | undefined => {
+        for (const widget of list) {
+          if (widget.id === 'kid') return widget;
+          const hit = find(widget.children ?? []);
+          if (hit) return hit;
+        }
+      };
+      return find(widgets)?.layout?.grow;
+    };
+
+    beforeEach(() => {
+      useConfigStore.setState({
+        pages: [
+          {
+            id: 'page-1',
+            type: 'page',
+            title: 'Page 1',
+            sections: {
+              main: [
+                {
+                  id: 'row',
+                  name: 'row',
+                  type: 'Container',
+                  layout: { direction: 'row' },
+                  children: [filler()],
+                },
+                {
+                  id: 'col',
+                  name: 'col',
+                  type: 'Container',
+                  layout: { direction: 'column' },
+                  children: [],
+                },
+              ],
+            },
+          },
+        ],
+        loadedPageIds: new Set(['page-1']),
+        dirtyPageIds: new Set(),
+      });
+    });
+
+    it('keeps a weight the widget still has a row for', () => {
+      expect(growOfKid()).toBe(2);
+    });
+
+    it('is left alone when the parent container flips direction under it', () => {
+      useConfigStore.getState().updateComponent('row', { layout: { direction: 'column' } });
+
+      expect(growOfKid()).toBe(2);
+    });
+
+    it('is left alone when the widget is moved into a container that flows the other way', () => {
+      useConfigStore.getState().moveWidgetTo('kid', { kind: 'container', containerId: 'col' });
+
+      expect(growOfKid()).toBe(2);
+    });
+
+    it('is left alone for a layout write that cannot move a flow', () => {
+      useConfigStore.getState().updateComponent('row', { layout: { gap: '8px' } });
+
+      expect(growOfKid()).toBe(2);
     });
   });
 

@@ -3,35 +3,12 @@ import { getStaticString } from '@config/components/editor/propertyValueUtils';
 import { FieldActions } from '@config/components/ui/FieldGroup';
 import Select from '@config/components/ui/Select';
 import { hintWidthVar, NO_VALUE_LABEL } from './hintStyle';
-
-const CYCLE_UNITS = ['px', '%', 'rem', 'em', 'vh', 'vw', 'auto'] as const;
-
-/** Units that stand alone, with no magnitude to attach — they commit as-is. */
-const KEYWORD_UNITS = ['auto'];
+import { CYCLE_UNITS, KEYWORD_UNITS, parseLength } from './lengthValue';
 
 /** Next unit in the cycle, wrapping around. Empty/unknown starts at `px`. */
 function nextUnit(unit: string, units: readonly string[]): string {
   const i = units.indexOf(unit);
   return units[(i + 1) % units.length];
-}
-
-/**
- * Parse a stored length string ("16px", "auto", "0") into its number/unit parts
- * for the split control.
- *
- * The unit is optional: `"0"` is valid CSS and reaches the style object
- * verbatim, so a magnitude without one has to survive the round trip — matching
- * only `<number><unit>` made those fields render as an empty box beside an
- * active revert button, which reads as a broken row. An unrecognised unit is
- * captured rather than dropped, so editing the magnitude never silently
- * rewrites someone's `ch`/`ex`/`vmin` value.
- */
-function parseLength(raw: string, units: readonly string[]): { num: string; unit: string } {
-  const text = raw.trim();
-  if (text === '') return { num: '', unit: '' };
-  const m = text.match(/^(-?\d*\.?\d+)\s*([a-z%]*)$/i);
-  if (m) return { num: m[1], unit: m[2] };
-  return units.includes(text) ? { num: '', unit: text } : { num: '', unit: '' };
 }
 
 export interface LengthFieldProps {
@@ -49,7 +26,7 @@ export interface LengthFieldProps {
    *  `''` writes an empty string for surfaces whose storage has no unset. */
   emptyCommit?: '' | undefined;
   /** Number-input step. Defaults to `any` while cycling, and to a per-unit step
-   *  (1 for px/%, 0.05 for the rem/em scale) in dropdown mode. */
+   *  (1 for px/%, 0.05 for the rem scale) in dropdown mode. */
   step?: number | 'any';
   /** Placeholder for the magnitude input. `defaultText` supplies one derived
    *  from the resolved fallback when this is omitted. */
@@ -128,7 +105,7 @@ export function LengthField({
   const numberStep = step ?? (cycling ? 'any' : unit === 'px' || unit === '%' ? 1 : 0.05);
   // A keyword unit carries no magnitude, so a typed number cannot attach to it —
   // it reaches the toggle only as an unset field's greyed-out fallback ('auto' on
-  // Basis/Width/Height). Committing it verbatim would drop the digits and leave
+  // Width/Height). Committing it verbatim would drop the digits and leave
   // the row stuck on the keyword, so a magnitude commits under a real unit.
   const magnitudeUnit = KEYWORD_UNITS.includes(unit)
     ? (units.find((u) => !KEYWORD_UNITS.includes(u)) ?? '')

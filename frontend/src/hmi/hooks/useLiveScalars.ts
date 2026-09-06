@@ -1,6 +1,9 @@
 import { useSyncExternalStore } from 'react';
 import { useVariableStore } from '../store/variableStore';
 
+/** No listener registered, so no re-render — the snapshot still reads current. */
+const noSubscribe = (): (() => void) => () => {};
+
 /**
  * Granular subscription to a specific set of scalar variable keys.
  *
@@ -29,7 +32,11 @@ export function useLiveScalars(keys: readonly string[]): string {
     // still change the signature and trigger the re-render.
     return JSON.stringify(keys.map((key) => sigToken(values[key])));
   };
-  return useSyncExternalStore(useVariableStore.subscribe, getSnapshot, getSnapshot);
+  // A caller with no keys can never see a change, so it registers no listener —
+  // this runs on every widget, and a leaf that reads no `$var` would otherwise
+  // still be woken (and re-serialised) on every tick of the variable store.
+  const subscribe = keys.length ? useVariableStore.subscribe : noSubscribe;
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 function sigToken(value: unknown): unknown {

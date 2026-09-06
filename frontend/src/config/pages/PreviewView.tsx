@@ -533,7 +533,15 @@ export default function PreviewView() {
                   <span className="hmi-modal__title">{dialog.title}</span>
                   {dialog.showCloseButton && <CloseButton className="hmi-modal__close" />}
                 </div>
-                <div className="hmi-modal__content">
+                {/* Same `data-flow-*` attributes the runtime's `ModalStack`
+                    sets — without them a previewed dialog's widgets would
+                    fall back to the plain CSS default and the preview would
+                    drift from the real render. */}
+                <div
+                  className="hmi-modal__content"
+                  data-flow-direction="row"
+                  data-flow-align="stretch"
+                >
                   {dialog.widgets.length > 0 ? (
                     dialog.widgets.map((comp) => <WidgetRenderer key={comp.id} node={comp} />)
                   ) : (

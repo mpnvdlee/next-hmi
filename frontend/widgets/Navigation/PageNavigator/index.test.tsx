@@ -77,9 +77,11 @@ describe('PageNavigator', () => {
 
   it('roots itself in an element carrying both the base and widget classes', () => {
     const { container } = renderNavigator({});
-    // `hmi-component` is the self-layout barrier: it is the only consumer of the
-    // `--self-*` properties `selfLayoutStyle()` emits, so without it every
-    // layout field the author sets in the editor is silently inert.
+    // `hmi-component` carries the shared flex-sizing defaults (grow, shrink,
+    // basis, min/max width/height); `selfLayoutStyle()` sets an author's own
+    // values as direct inline properties regardless of class, but a field the
+    // author left unset falls back to the browser's own initial value without
+    // this class rather than the hmi default.
     const root = container.firstElementChild as HTMLElement;
     expect(root.className).toContain('hmi-component');
     expect(root.className).toContain('hmi-page-navigator');

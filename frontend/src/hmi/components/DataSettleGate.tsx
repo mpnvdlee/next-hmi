@@ -5,7 +5,7 @@ import { useVariableStore } from '../store/variableStore';
 /** Fallback for a `done` signal that never comes — the backend is down, the
  *  build is older than `context_ready`, the surface has no ack of its own. Long
  *  enough that a merely slow datasource finishes first and nothing is marked. */
-export const NO_DATA_GRACE_MS = 3000;
+const NO_DATA_GRACE_MS = 3000;
 
 interface DataSettleGateProps {
   /** Identifies the load being waited on — a page id, a dialog id. A new key

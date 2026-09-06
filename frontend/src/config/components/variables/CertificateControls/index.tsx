@@ -29,12 +29,7 @@ export default function CertificateControls({
 
   return (
     <div className="cfg-cert-controls">
-      <Button
-        variant="neutral"
-        size="sm"
-        disabled={disabled}
-        onClick={() => setModal('generate')}
-      >
+      <Button variant="neutral" size="sm" disabled={disabled} onClick={() => setModal('generate')}>
         Generate certificate…
       </Button>
       <Button

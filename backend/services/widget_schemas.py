@@ -25,6 +25,7 @@ SCHEMA_VERSION = 2
 _CUSTOM_EXPORTS = (
     "displayName",
     "hostsChildren",
+    "flowsChildren",
     "category",
     "description",
     "icon",
@@ -377,9 +378,10 @@ def _validate_catalog_entry(entry: dict[str, Any], file: str, key: str) -> None:
     description = entry.get("description")
     if description is not None and not isinstance(description, str):
         raise ExtractionError(f"'{key}.description' must be a string", file)
-    hosts_children = entry.get("hostsChildren")
-    if hosts_children is not None and not isinstance(hosts_children, bool):
-        raise ExtractionError(f"'{key}.hostsChildren' must be a boolean", file)
+    for flag in ("hostsChildren", "flowsChildren"):
+        value = entry.get(flag)
+        if value is not None and not isinstance(value, bool):
+            raise ExtractionError(f"'{key}.{flag}' must be a boolean", file)
     display_name = entry.get("displayName")
     if display_name is not None and (
         not isinstance(display_name, str) or not display_name.strip()

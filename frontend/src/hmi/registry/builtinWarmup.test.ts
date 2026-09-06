@@ -15,9 +15,7 @@ const MANIFEST = builtinWidgetsManifest as unknown as CustomWidgetManifestEntry[
 
 /** A built-in the manifest declares chart-free, so the warm-up would fetch it. */
 function warmedBuiltinName(): string {
-  const entry = MANIFEST.find(
-    (e) => e.usesRecharts === false && BUILTIN_WIDGET_TYPES.has(e.name),
-  );
+  const entry = MANIFEST.find((e) => e.usesRecharts === false && BUILTIN_WIDGET_TYPES.has(e.name));
   if (!entry) throw new Error('no chart-free built-in in the manifest');
   return entry.name;
 }

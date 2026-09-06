@@ -72,6 +72,7 @@ import ComponentPropertiesEditor from '../../componentProperties/ComponentProper
 import { ComponentPropertySchemaContext } from '../PropertySourceEditor/componentPropertySchemaContext';
 
 import { LayoutFields } from '../../ui/LayoutFields';
+import { usesFlexLayout } from '@shared/utils/parentFlow';
 import { CONTAINER_DEFAULT_TOKENS } from '../../ui/LayoutFields/containerDefaultTokens';
 import { parseTokenVar, usePanelTokenValues } from '@shared/utils/themeDefaultHint';
 import { WidgetOptionsContext } from '../WidgetOptionsContext';
@@ -826,7 +827,7 @@ function ComponentPanel({
   const schema = entry?.schema ?? {};
   const schemaKeys = Object.keys(schema);
   const schemaGroups = groupSchemaKeys(schema);
-  const isContainer = comp.type === 'Container';
+  const isContainer = usesFlexLayout(comp.type);
   const layout = comp.layout ?? {};
   const props = comp.properties ?? {};
 

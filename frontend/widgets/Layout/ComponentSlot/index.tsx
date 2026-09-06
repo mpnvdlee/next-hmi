@@ -56,7 +56,12 @@ export default function ComponentSlot({ properties, layout }: HmiWidgetProps) {
   }
 
   return (
-    <div className="hmi-component hmi-slot" style={style}>
+    <div
+      className="hmi-component hmi-slot"
+      style={style}
+      data-flow-direction="column"
+      data-flow-align="stretch"
+    >
       {renderSlotWidgets(widgets)}
     </div>
   );

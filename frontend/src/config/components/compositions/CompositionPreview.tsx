@@ -197,7 +197,18 @@ export default function CompositionPreview({
         onContextMenu={handleContextMenu}
       >
         <div className="widget-preview-wrapper" style={wrapperStyle}>
-          <div ref={canvasRef} className="widget-preview-canvas">
+          {/* `data-flow-*` matches this element's own CSS (`display: flex;
+              flex-direction: column`, default `align-items: stretch`) — it is
+              the actual, direct flex parent of the mapped roots below (every
+              Provider in between renders no DOM node of its own), so the
+              root widgets' Hug/Fill/Fixed resolves against the canvas the
+              same way any other flex host's children do. */}
+          <div
+            ref={canvasRef}
+            className="widget-preview-canvas"
+            data-flow-direction="column"
+            data-flow-align="stretch"
+          >
             <HmiScopeContext.Provider value="runtime:widget-preview">
               <InputScopeContext.Provider value={inputScopeValue}>
                 <PreviewContext.Provider value={true}>

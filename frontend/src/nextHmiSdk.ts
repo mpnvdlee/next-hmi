@@ -25,7 +25,7 @@ import { sendWsMessage } from '@hmi/hooks/useWebSocket';
 import { useHmiScope } from '@hmi/context/HmiScopeContext';
 import {
   selfLayoutStyle,
-  containerLayoutStyle,
+  containerLayoutProps,
   widgetColorStyle,
   getPropString,
   getPropNumber,
@@ -104,7 +104,7 @@ export const nextHmiSdk = {
   sendWsMessage,
   useHmiScope,
   selfLayoutStyle,
-  containerLayoutStyle,
+  containerLayoutProps,
   widgetColorStyle,
   bindingKey,
   parseVarKey,

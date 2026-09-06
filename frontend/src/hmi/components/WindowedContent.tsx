@@ -188,6 +188,11 @@ function WindowItem({ item, children }: { item: WidgetConfig; children: ReactNod
       ref={ref}
       className="hmi-window-item"
       data-windowed={mounted ? 'on' : 'off'}
+      // This item takes over the direct-child flex-item role from
+      // `.hmi-page__content` above `WINDOW_THRESHOLD` — same as
+      // `.hmi-page__content` itself, always column/stretch (its only caller).
+      data-flow-direction="column"
+      data-flow-align="stretch"
       style={mounted ? undefined : placeholderStyle}
     >
       {mounted ? children : null}

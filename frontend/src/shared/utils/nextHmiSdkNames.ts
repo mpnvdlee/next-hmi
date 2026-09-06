@@ -27,7 +27,7 @@
  * "Runtime SDK" section). Bump on any removed/renamed name or incompatible
  * signature/return-shape change; additive-only changes don't need a bump.
  */
-export const SDK_VERSION = 1;
+export const SDK_VERSION = 2;
 
 export const SDK_NAMES = [
   'React',
@@ -42,7 +42,7 @@ export const SDK_NAMES = [
   'sendWsMessage',
   'useHmiScope',
   'selfLayoutStyle',
-  'containerLayoutStyle',
+  'containerLayoutProps',
   'widgetColorStyle',
   'bindingKey',
   'parseVarKey',

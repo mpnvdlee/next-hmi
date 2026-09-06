@@ -6,9 +6,9 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from core.builtin_widgets_manifest import CatalogVersion, builtin_widgets_catalog
 from core.page_index import collect_dialog_ids, collect_dialog_property_keys
 from core.page_index import collect_page_ids as _index_collect_page_ids
-from core.builtin_widgets_manifest import CatalogVersion, builtin_widgets_catalog
 from core.storage import (
     WIDGET_BUILD_DIR,
     active_components_dir,

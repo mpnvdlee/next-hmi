@@ -240,7 +240,9 @@ function renderModalCard({
         <span className="hmi-modal__title">{title}</span>
         {onClose && <CloseButton className="hmi-modal__close" onClick={onClose} />}
       </div>
-      <div className="hmi-modal__content">{children}</div>
+      <div className="hmi-modal__content" data-flow-direction="row" data-flow-align="stretch">
+        {children}
+      </div>
     </ModalCard>
   );
 }

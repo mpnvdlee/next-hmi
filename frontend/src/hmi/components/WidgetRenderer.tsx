@@ -38,7 +38,12 @@ import { useHttpTick } from '../hooks/useHttpTick';
 import { extractVarKeys } from '../utils/extractVarKeys';
 import { usesTime } from '../utils/usesTime';
 import { usesHttp } from '../utils/usesHttp';
-import { layoutHasPropertySource, useResolvedLayout, usePropBoolean } from './layoutUtils';
+import {
+  layoutHasPropertySource,
+  useResolvedLayout,
+  usePropBoolean,
+  selfFlexChildStyle,
+} from './layoutUtils';
 
 // ── Per-component error boundary ──────────────────────────────────────────────
 
@@ -125,19 +130,16 @@ const BINDING_OVERLAY_LABELS: Record<Exclude<BindingStatus, 'ok'>, string> = {
 /**
  * Build a flex-child style for the binding-unavailable wrapper.
  * The wrapper takes over the layout role normally played by .hmi-component,
- * so the component inside isn't a direct flex/grid child of the page.
+ * so the component inside isn't a direct flex/grid child of the page — but the
+ * component itself still renders inside it and still applies its own
+ * `width`/`height` from the same `layout`, so the wrapper takes only the
+ * flex-child fields (`selfFlexChildStyle`), never `width`/`height` — taking
+ * both would size the wrapper and the widget inside it independently, and a
+ * percentage width on the widget would overflow a wrapper sized by the same
+ * percentage of a *different* box (its own parent, not the widget's).
  */
 function wrapperStyle(layout?: LayoutConfig): CSSProperties {
-  return {
-    position: 'relative',
-    flexBasis: layout?.basis,
-    flexGrow: layout?.grow ?? 0,
-    flexShrink: layout?.shrink ?? 1,
-    alignSelf: layout?.alignSelf,
-    minWidth: layout?.minWidth,
-    maxWidth: layout?.maxWidth,
-    minHeight: layout?.minHeight,
-  };
+  return { position: 'relative', ...selfFlexChildStyle(layout) };
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -224,8 +226,11 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
     ? undefined
     : node.children?.map((child) => <WidgetRenderer key={child.id} node={child} />);
 
-  // Build the rendered subtree from a (possibly resolved) layout. Layout values
-  // may carry property sources; they're resolved to plain values before use.
+  // Build the rendered subtree from a layout whose property sources are
+  // already resolved — each widget reads its own `widthMode`/`heightMode`
+  // straight off it, and `hmi.css`'s flow-translation block (fed by
+  // `selfLayoutStyle`) routes them against whichever axis the parent says is
+  // main, off that parent's own `data-flow-direction`/`data-flow-align`.
   const buildContent = (layout: LayoutConfig | undefined): ReactNode => {
     const comp = (
       <Comp

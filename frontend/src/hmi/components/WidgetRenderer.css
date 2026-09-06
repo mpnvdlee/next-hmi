@@ -1,11 +1,9 @@
 /* ── Component render error (error boundary fallback) ──────── */
 .hmi-widget-error {
-  /* Self-layout barrier — this fallback stands in for a widget root but does
-     not carry `.hmi-component`, so it needs its own reset. See hmi.css. */
-  --self-basis: initial;
-  --self-grow: initial;
-  --self-shrink: initial;
-
+  /* Stands in for a widget root but does not carry `.hmi-component` and never
+     receives a `selfLayoutStyle()` — it is a static fallback with nothing to
+     size against, so these are plain values rather than an inline-overridable
+     default. */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -17,9 +15,9 @@
   font-family: var(--hmi-type-body-font);
   opacity: 0.9;
   cursor: help;
-  flex-basis: var(--self-basis, auto);
-  flex-grow: var(--self-grow, 0);
-  flex-shrink: var(--self-shrink, 1);
+  flex-basis: auto;
+  flex-grow: 0;
+  flex-shrink: 1;
 }
 
 /* ── Unknown component fallback ──────────────────────────────── */

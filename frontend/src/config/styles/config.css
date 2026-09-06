@@ -635,7 +635,10 @@
    suffixes would line up again. */
 .cfg-prop-input--hint::placeholder {
   color: var(--cfg-text-muted);
-  opacity: 1;
+  /* Italic alone reads as upright on a lone digit ("1") in most UI fonts — the
+     dip below is what actually reads as "not a committed value" at a glance. */
+  opacity: 0.6;
+  font-style: italic;
 }
 
 /* "not set" names a state instead of standing in for a value, so it steps down
@@ -657,9 +660,16 @@
 }
 
 @supports (field-sizing: content) {
+  /* `field-sizing: content` sizes whichever dimensions are `auto` — not just
+     width. `.cfg-prop-input`'s `height: auto` (FieldGroup/style.css) means a
+     browser implementing this (WebKit, confirmed) also auto-sizes the height
+     to the placeholder's own intrinsic box, which comes out a couple of px
+     taller than the row's fixed rhythm — the row grows only on the unset/
+     hint state. Pin height here so field-sizing only ever touches width. */
   .cfg-field-group__content .cfg-unset-hint-row .cfg-prop-input--hint {
     field-sizing: content;
     width: auto;
+    height: calc(var(--cfg-field-group-badge-size) - 4px);
   }
 }
 
@@ -673,11 +683,18 @@
 /* Holds its width — the control beside it is the one that gives way (it hugs
    its placeholder, or shrinks and ellipsises its own text). The clipping here
    is the last line of defence: without it an oversized suffix overflows the
-   content column and paints straight over the row's trailing buttons. */
+   content column and paints straight over the row's trailing buttons.
+   `line-height: 1` — this is the one element that only exists while a field
+   is unset (an explicit value has no suffix at all), and an unpinned `normal`
+   line-height is font/browser-metric-dependent; if it computes taller here
+   than the row's other children, the row's auto height grows to match, which
+   reads as "the box gets bigger when it falls back to a default." Pinning it
+   to the font size itself makes that impossible regardless of platform. */
 .cfg-unset-hint {
   flex: none;
   min-width: 0;
   font-size: var(--cfg-text-xs);
+  line-height: 1;
   color: var(--cfg-text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -831,9 +848,9 @@
 }
 
 /* ── Segmented pill row — enum/boolean property fields rendered as a row of
-   pill buttons (Direction, Wrap, Visible, Align self, …). Content-hugging,
-   own border/radius per pill, wraps to a second line if the option set is
-   wide (e.g. Justify content). */
+   pill buttons (Direction, Wrap, Visible, Align, …). Content-hugging, own
+   border/radius per pill, wraps to a second line if the option set is wide
+   (e.g. Distribute's five icons on a narrow panel). */
 .cfg-seg-group {
   display: flex;
   flex-wrap: wrap;
@@ -859,6 +876,15 @@
     color 0.1s;
 }
 
+/* An icon option trades horizontal padding for glyph. The Layout panel's glyphs
+   are diagrams that have to be read, not badges, so they render at 20px and the
+   padding gives back the growth on each side — the button keeps the footprint it
+   had at the text-button padding, and its border sits close enough on every side
+   to be the container the arrangement is measured against. */
+.cfg-seg-btn:has(.cfg-seg-btn__icon) {
+  padding: 0 calc(var(--cfg-space-2) - 3.5px);
+}
+
 .cfg-seg-btn:hover {
   background: var(--cfg-surface-dark);
   color: var(--cfg-text);
@@ -880,8 +906,15 @@
 }
 
 /* A `button-icon` option's glyph — kept upright when the surrounding option
-   label is rendered from an entity/emoji that browsers italicise. */
+   label is rendered from an entity/emoji that browsers italicise, and laid out
+   as an *inline* flex box so the `<svg>` inside sits on no text baseline (the
+   Layout panel's glyphs are 20px in a 24px button, and baseline descender space
+   would push them off-centre) while the span itself stays in the button's inline
+   flow — a block here wraps the `default` tag onto a second, clipped line. */
 .cfg-seg-btn__icon {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
   font-style: normal;
 }
 

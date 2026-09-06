@@ -1,11 +1,12 @@
 """Tests for the baseline project-format migration coordinator.
 
-``pm._STEPS`` is empty — the current on-disk shape is the baseline — so the
-first half covers the stamp-only behaviour every project actually gets today.
-The second half registers a synthetic step to keep the staging/backup/swap
-machinery under test until a real step needs it again.
+The first half covers the coordinator itself — version gating, target staging,
+stamping. The second half registers a synthetic step to exercise the
+staging/backup/swap machinery in isolation from whatever the real steps do;
+the 4 -> 5 step's own rules live in ``test_migration_size_modes.py``.
 """
 
+import itertools
 import json
 from pathlib import Path
 
@@ -33,9 +34,12 @@ def project_root(tmp_path: Path) -> Path:
     return root
 
 
-def test_no_steps_are_registered() -> None:
-    """Guards the docstring's claim: an unstamped project is stamped, not rewritten."""
-    assert pm._STEPS == []
+def test_the_step_chain_is_contiguous_and_ends_at_the_current_version() -> None:
+    """The coordinator selects pending steps by `from_version >= current`, which
+    only picks the right ones while the chain has no gaps and no overlaps."""
+    for earlier, later in itertools.pairwise(pm._STEPS):
+        assert earlier.to_version == later.from_version
+    assert pm._STEPS[-1].to_version == pm.PROJECT_FORMAT_VERSION
 
 
 def test_already_current_is_a_no_op(project_root: Path) -> None:
@@ -57,7 +61,9 @@ def test_missing_metadata_raises(project_root: Path) -> None:
         pm.run_baseline_migration(project_root)
 
 
-def test_unstamped_project_is_stamped_without_touching_files(project_root: Path) -> None:
+def test_a_target_no_pending_step_names_is_never_staged(project_root: Path) -> None:
+    """`datasources` is in `_TARGET_PATHS` but named by no step, so it is not
+    backed up, not copied, and not left with a staging directory beside it."""
     _stamp(project_root, 0)
     ds_path = _write_datasource(
         project_root, "DS1", [{"display_name": "Dyn", "data_type": "Float", "is_array": True}]
@@ -69,11 +75,9 @@ def test_unstamped_project_is_stamped_without_touching_files(project_root: Path)
     assert result.already_current is False
     assert result.from_version == 0
     assert result.to_version == pm.PROJECT_FORMAT_VERSION
-    assert result.files_changed == []
-    assert result.backups == {}
+    assert "datasources" not in result.backups
     assert ds_path.read_bytes() == original_bytes
-    # Nothing is staged when no pending step names a target.
-    assert not list(project_root.glob("*.pre-migration-backup-*"))
+    assert not list((project_root / "datasources").glob("*.pre-migration-backup-*"))
     assert not list(project_root.glob("*.migrating-*"))
     assert read_project_metadata(project_root).formatVersion == pm.PROJECT_FORMAT_VERSION
 
@@ -108,12 +112,11 @@ def _register_step(
     monkeypatch.setattr(pm, "PROJECT_FORMAT_VERSION", 1)
 
 
-def _rewrite_ds1(staged, dry_run: bool) -> pm.StepResult:
+def _rewrite_ds1(staged, project_root: Path) -> pm.StepResult:
     path = staged["datasources"] / "DS1.json"
     doc = json.loads(path.read_text())
     doc["migrated"] = True
-    if not dry_run:
-        path.write_text(json.dumps(doc))
+    path.write_text(json.dumps(doc))
     return pm.StepResult(files_changed=["DS1.json"], diagnostics=["synthetic diagnostic"])
 
 
@@ -138,9 +141,12 @@ def test_step_output_is_swapped_in_and_the_backup_is_preserved(
     assert read_project_metadata(project_root).formatVersion == 1
 
 
-def test_dry_run_stages_nothing_and_leaves_files_alone(
+def test_dry_run_runs_the_step_for_real_somewhere_the_project_cannot_see(
     project_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """The step writes unconditionally; only the coordinator knows it is staging
+    into a throwaway copy, so the project keeps its bytes, its backup-free state
+    and its stamp."""
     _stamp(project_root, 0)
     ds_path = _write_datasource(project_root, "DS1", [])
     original_text = ds_path.read_text()
@@ -162,7 +168,7 @@ def test_failure_mid_step_restores_original_and_preserves_backup(
     ds_path = _write_datasource(project_root, "DS1", [])
     original_text = ds_path.read_text()
 
-    def _boom(staged, dry_run: bool) -> pm.StepResult:
+    def _boom(staged, project_root: Path) -> pm.StepResult:
         (staged["datasources"] / "DS1.json").write_text("{}")
         raise pm.MigrationFailedError(project_root, "synthetic", None, "disk full")
 
@@ -184,7 +190,7 @@ def test_unexpected_step_exception_is_wrapped_and_restored(
     ds_path = _write_datasource(project_root, "DS1", [])
     original_text = ds_path.read_text()
 
-    def _raise(staged, dry_run: bool) -> pm.StepResult:
+    def _raise(staged, project_root: Path) -> pm.StepResult:
         raise OSError("disk full")
 
     _register_step(monkeypatch, _raise)
@@ -201,7 +207,7 @@ def test_retry_after_failure_succeeds(project_root: Path, monkeypatch: pytest.Mo
     _stamp(project_root, 0)
     _write_datasource(project_root, "DS1", [])
 
-    _register_step(monkeypatch, lambda staged, dry_run: (_ for _ in ()).throw(OSError("boom")))
+    _register_step(monkeypatch, lambda staged, project_root: (_ for _ in ()).throw(OSError("boom")))
     with pytest.raises(pm.MigrationFailedError):
         pm.run_baseline_migration(project_root)
 
@@ -212,16 +218,15 @@ def test_retry_after_failure_succeeds(project_root: Path, monkeypatch: pytest.Mo
     assert read_project_metadata(project_root).formatVersion == 1
 
 
-def _rewrite_ds1_and_config(staged, dry_run: bool) -> pm.StepResult:
+def _rewrite_ds1_and_config(staged, project_root: Path) -> pm.StepResult:
     ds_path = staged["datasources"] / "DS1.json"
     config_path = staged["config"]
     ds_doc = json.loads(ds_path.read_text())
     ds_doc["migrated"] = True
     config_doc = json.loads(config_path.read_text())
     config_doc["migrated"] = True
-    if not dry_run:
-        ds_path.write_text(json.dumps(ds_doc))
-        config_path.write_text(json.dumps(config_doc))
+    ds_path.write_text(json.dumps(ds_doc))
+    config_path.write_text(json.dumps(config_doc))
     return pm.StepResult(files_changed=["DS1.json", "config.json"])
 
 
@@ -313,7 +318,7 @@ def test_target_that_does_not_exist_is_not_staged(
     project_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _stamp(project_root, 0)
-    _register_step(monkeypatch, lambda staged, dry_run: pm.StepResult())
+    _register_step(monkeypatch, lambda staged, project_root: pm.StepResult())
 
     result = pm.run_baseline_migration(project_root)
 

@@ -10,6 +10,7 @@ import type {
 import { SHELL_REGION_IDS } from '@shared/types/config';
 import { isPageGroup } from '@shared/utils/pageTree';
 import { slugId } from '@shared/utils/id';
+import { mapPreserving } from '@shared/store/configStoreHelpers';
 
 export function makeDefaultPage(taken: Iterable<string> = []): PageConfig {
   return {
@@ -72,12 +73,11 @@ export function mapAllComponents(
   components: WidgetConfig[],
   fn: (c: WidgetConfig) => WidgetConfig,
 ): WidgetConfig[] {
-  return components.map((c) => {
+  return mapPreserving(components, (c) => {
     const updated = fn(c);
-    if (updated.children) {
-      return { ...updated, children: mapAllComponents(updated.children as WidgetConfig[], fn) };
-    }
-    return updated;
+    if (!updated.children) return updated;
+    const children = mapAllComponents(updated.children as WidgetConfig[], fn);
+    return children === updated.children ? updated : { ...updated, children };
   });
 }
 
@@ -98,7 +98,7 @@ export function removeComponentById(components: WidgetConfig[], id: string): Wid
  * region, a dialog, a page section, or a page-group header/footer array.
  */
 export type WidgetParentInfo =
-  | { kind: 'container'; parentId: string; siblings: WidgetConfig[]; index: number }
+  | { kind: 'container'; parent: WidgetConfig; siblings: WidgetConfig[]; index: number }
   | { kind: 'shell-area'; region: ShellRegionId; siblings: WidgetConfig[]; index: number }
   | { kind: 'dialog'; dialogId: string; siblings: WidgetConfig[]; index: number }
   | {
@@ -125,7 +125,18 @@ interface ProjectState {
   dialogs: DialogConfig[];
 }
 
-function findContainerParent(
+/** {@link findContainerParent}'s hit as the `container` variant — the same four
+ *  fields whichever area the walk found it in. */
+function containerInfo(found: { container: WidgetConfig; index: number }): WidgetParentInfo {
+  return {
+    kind: 'container',
+    parent: found.container,
+    siblings: found.container.children ?? [],
+    index: found.index,
+  };
+}
+
+export function findContainerParent(
   widgets: WidgetConfig[],
   id: string,
 ): { container: WidgetConfig; index: number } | null {
@@ -149,14 +160,7 @@ function findInPageNode(node: PageNode, id: string): WidgetParentInfo | null {
         return { kind: 'page-group-chrome', groupId: node.id, area, siblings: arr, index: idx };
       }
       const inContainer = findContainerParent(arr, id);
-      if (inContainer) {
-        return {
-          kind: 'container',
-          parentId: inContainer.container.id,
-          siblings: inContainer.container.children ?? [],
-          index: inContainer.index,
-        };
-      }
+      if (inContainer) return containerInfo(inContainer);
     }
     for (const child of node.children) {
       const r = findInPageNode(child, id);
@@ -177,14 +181,7 @@ function findInPageNode(node: PageNode, id: string): WidgetParentInfo | null {
       };
     }
     const inContainer = findContainerParent(widgets, id);
-    if (inContainer) {
-      return {
-        kind: 'container',
-        parentId: inContainer.container.id,
-        siblings: inContainer.container.children ?? [],
-        index: inContainer.index,
-      };
-    }
+    if (inContainer) return containerInfo(inContainer);
   }
   return null;
 }
@@ -197,14 +194,7 @@ export function findParentInfo(state: ProjectState, id: string): WidgetParentInf
       return { kind: 'shell-area', region, siblings: arr, index: idx };
     }
     const inContainer = findContainerParent(arr, id);
-    if (inContainer) {
-      return {
-        kind: 'container',
-        parentId: inContainer.container.id,
-        siblings: inContainer.container.children ?? [],
-        index: inContainer.index,
-      };
-    }
+    if (inContainer) return containerInfo(inContainer);
   }
   for (const dialog of state.dialogs) {
     const idx = dialog.widgets.findIndex((w) => w.id === id);
@@ -212,14 +202,7 @@ export function findParentInfo(state: ProjectState, id: string): WidgetParentInf
       return { kind: 'dialog', dialogId: dialog.id, siblings: dialog.widgets, index: idx };
     }
     const inContainer = findContainerParent(dialog.widgets, id);
-    if (inContainer) {
-      return {
-        kind: 'container',
-        parentId: inContainer.container.id,
-        siblings: inContainer.container.children ?? [],
-        index: inContainer.index,
-      };
-    }
+    if (inContainer) return containerInfo(inContainer);
   }
   for (const node of state.pages) {
     const r = findInPageNode(node, id);

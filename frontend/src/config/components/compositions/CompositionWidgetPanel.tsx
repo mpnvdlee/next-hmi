@@ -6,6 +6,7 @@ import PropRow from '../ui/PropRow';
 import SchemaFieldRow from '../ui/SchemaFieldRow';
 import { LayoutFields } from '../ui/LayoutFields';
 import { CONTAINER_DEFAULT_TOKENS } from '../ui/LayoutFields/containerDefaultTokens';
+import { usesFlexLayout } from '@shared/utils/parentFlow';
 import WidgetIcon from '../ui/WidgetIcon';
 import type { ComponentPropertySchema } from '@shared/types/componentProperty';
 import { ComponentPropertySchemaContext } from '../editor/PropertySourceEditor/componentPropertySchemaContext';
@@ -27,7 +28,7 @@ export default function CompositionWidgetPanel({ comp, componentProperties, onUp
   const schema = entry?.schema ?? {};
   const schemaKeys = Object.keys(schema);
   const schemaGroups = groupSchemaKeys(schema);
-  const isContainer = comp.type === 'Container';
+  const isContainer = usesFlexLayout(comp.type);
   const layout = comp.layout ?? {};
   const props = comp.properties ?? {};
 

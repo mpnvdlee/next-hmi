@@ -183,7 +183,8 @@ def _read_catalog_entries(path: Path) -> dict[str, dict[str, Any]]:
         for optional in ("description", "icon"):
             if extra.get(optional) is not None:
                 entry[optional] = extra[optional]
-        if row.get("hostsChildren") is not None:
-            entry["hostsChildren"] = row["hostsChildren"]
+        for flag in ("hostsChildren", "flowsChildren"):
+            if row.get(flag) is not None:
+                entry[flag] = row[flag]
         entries[row["name"]] = entry
     return entries

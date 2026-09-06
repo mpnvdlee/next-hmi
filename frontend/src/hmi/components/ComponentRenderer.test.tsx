@@ -11,10 +11,11 @@ import ComponentRenderer from './ComponentRenderer';
 const ROOT_LAYOUT: LayoutConfig = {
   direction: 'column',
   gap: '5px',
-  padding: '14px 22px',
+  paddingTop: '14px',
+  paddingRight: '22px',
+  paddingBottom: '14px',
+  paddingLeft: '22px',
   grow: 1,
-  shrink: 1,
-  basis: '0',
   minWidth: '0',
 };
 
@@ -52,13 +53,15 @@ describe('ComponentRenderer instance sizing', () => {
   });
 
   it("applies the instance's sizing to the definition root", async () => {
-    const { container } = renderInstance({ grow: 0, shrink: 0, basis: '154px' });
+    const { container } = renderInstance({ grow: 0, width: '154px', minWidth: '154px' });
     await waitFor(() => expect(container.querySelector('.hmi-container')).not.toBeNull());
     const root = container.querySelector('.hmi-container') as HTMLElement;
 
-    expect(root.style.getPropertyValue('--self-basis')).toBe('154px');
-    expect(root.style.getPropertyValue('--self-grow')).toBe('0');
-    expect(root.style.getPropertyValue('--self-shrink')).toBe('0');
+    expect(root.style.width).toBe('154px');
+    expect(root.style.flexGrow).toBe('0');
+    // The definition's own `minWidth: '0'` loses to the instance's, rather
+    // than the two merging per key from whichever side set it last.
+    expect(root.style.minWidth).toBe('154px');
   });
 
   it("leaves the definition's own child-layout alone", () => {
@@ -68,26 +71,41 @@ describe('ComponentRenderer instance sizing', () => {
       grow: 0,
       direction: 'row',
       gap: '99px',
-      padding: '99px',
+      paddingTop: '99px',
     } as LayoutConfig);
     const root = container.querySelector('.hmi-container') as HTMLElement;
+    // Padding lives on `.hmi-container__content` (no title on this root), not
+    // on `.hmi-container` itself — see Container/index.tsx.
+    const content = container.querySelector('.hmi-container__content') as HTMLElement;
 
     expect(root.style.getPropertyValue('--container-direction')).toBe('column');
     expect(root.style.getPropertyValue('--container-gap')).toBe('5px');
-    expect(root.style.padding).toBe('14px 22px');
+    // Padding must stay off `.hmi-container` itself: that element also carries
+    // Fill mode's flex-grow/flex-basis, and a border-box element's own padding
+    // sets a floor under `flex-basis: 0` that skews a configured Fill weight.
+    expect(root.style.paddingTop).toBe('');
+    expect(root.style.paddingRight).toBe('');
+    expect(root.style.paddingBottom).toBe('');
+    expect(root.style.paddingLeft).toBe('');
+    expect(content.style.paddingTop).toBe('14px');
+    expect(content.style.paddingRight).toBe('22px');
+    expect(content.style.paddingBottom).toBe('14px');
+    expect(content.style.paddingLeft).toBe('22px');
   });
 
   it('keeps the definition root untouched when the instance has no layout', () => {
     const { container } = renderInstance(undefined);
     const root = container.querySelector('.hmi-container') as HTMLElement;
 
-    expect(root.style.getPropertyValue('--self-grow')).toBe('1');
-    expect(root.style.getPropertyValue('--self-basis')).toBe('0');
+    expect(root.style.flexGrow).toBe('1');
+    // jsdom's CSSOM normalises a unitless zero length to '0px' on a real CSS
+    // property, unlike a custom property, which round-trips whatever it is given.
+    expect(root.style.minWidth).toBe('0px');
   });
 
   it('does not introduce a wrapper element around the definition', () => {
     // A wrapper would re-parent the roots and flip which axis their flex
-    // properties resolve against — a `basis: 0` root collapsing to no height.
+    // properties resolve against — a Fill root collapsing to no height.
     const { container } = renderInstance({ grow: 1 });
     expect(container.firstElementChild?.classList.contains('hmi-container')).toBe(true);
   });

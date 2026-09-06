@@ -159,8 +159,7 @@ function flushPendingVarUpdates(): void {
     else _flushFns.applyBatch.current(values);
   }
   if (wasSnapshot) _flushFns.markSnapshotReceived.current();
-  if (contextReady)
-    _flushFns.setContextReady.current(contextReady.pageIds, contextReady.dialogIds);
+  if (contextReady) _flushFns.setContextReady.current(contextReady.pageIds, contextReady.dialogIds);
 }
 
 function enqueueVarUpdate(

@@ -257,7 +257,9 @@ describe('extractBindingSpecs', () => {
         label: {
           $switch: {
             value: { $var: { path: 'PLC:Mode' } },
-            cases: [{ when: { $var: { path: 'PLC:ManualMode' } }, then: { $var: { path: 'PLC:A' } } }],
+            cases: [
+              { when: { $var: { path: 'PLC:ManualMode' } }, then: { $var: { path: 'PLC:A' } } },
+            ],
             default: { $var: { path: 'PLC:B' } },
           },
         },
@@ -294,7 +296,13 @@ describe('extractBindingSpecs', () => {
       {
         onPress: {
           events: [
-            { params: { value: { $compare: { left: { $var: { path: 'PLC:Cmd' } }, operator: '>', right: 0 } } } },
+            {
+              params: {
+                value: {
+                  $compare: { left: { $var: { path: 'PLC:Cmd' } }, operator: '>', right: 0 },
+                },
+              },
+            },
           ],
         },
       },

@@ -84,8 +84,14 @@ const ROUTE_BUDGETS_GZIP = {
   // set synchronously, so vendor-icons' +41 kB gzip lands in this closure; the
   // recoverable path there is lazifying WidgetIcon/IconSourcePicker. Raised
   // again from 320 kB for React 19's larger vendor-react chunk (~+14 kB
-  // gzip) — no code-side fix available for framework-runtime growth.
-  editor: 325 * 1024,
+  // gzip) — no code-side fix available for framework-runtime growth. Raised
+  // again from 325 kB for the Layout panel's Figma-style controls (~+1.6 kB
+  // gzip: the alignment grid, the spacing box, the composite size rows). This
+  // one *is* feature code, unlike the raises above, and it was taken knowing
+  // the lazification path below was the alternative — the marker modals
+  // (ChildPositionsEditor, ImageIndicatorsEditor) remain the next thing to move
+  // off this closure if the route needs headroom again.
+  editor: 330 * 1024,
   'chart-heavy-hmi': 350 * 1024,
 };
 const ROUTE_ENTRY_POINTS = {

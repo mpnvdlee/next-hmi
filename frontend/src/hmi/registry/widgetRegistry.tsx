@@ -39,35 +39,29 @@ import { apiJson } from '@shared/utils/api';
 import { isIconValue } from '@shared/utils/iconValue';
 import { primaryType } from '@shared/utils/valueTypes';
 import { collectSlotKeys } from '@shared/utils/componentSlots';
+import { setFlowsChildren } from '@shared/utils/parentFlow';
 import { ensureRecharts } from '@shared/utils/rechartsLoader';
-// Product built-in widgets: authored against the same SDK contract as a
-// project's custom widgets, but compiled at build time
-// (`npm run build:builtin-widgets`). The manifest is imported statically
-// rather than fetched so schemas and categories are present at module eval —
-// that is what keeps this registry synchronous and the editor palette
-// populated at first paint. Only the component modules load lazily, from
-// /builtin-widgets-js/.
+// Product built-in widgets: the same SDK contract as a project's custom widgets,
+// compiled at build time (`npm run build:builtin-widgets`). Imported statically
+// rather than fetched, so schemas and categories are present at module eval and
+// only the component modules load lazily from /builtin-widgets-js/.
 //
-// This is the manifest's *runtime* half: the registration fields, plus each
-// schema field's `type` and `requiredFields`, which is all `useBindingStatus`
-// needs to raise the disconnected/disabled overlay. Labels, options, defaults,
-// descriptions and icons live in the `.editor.json` sibling, which only
-// `builtinWidgetsEditorMetadata.ts` imports — from `src/config/`, so an HMI
-// route never carries them. Every route reaches this module, so a byte here is
-// a byte on every page.
+// The manifest's *runtime* half: registration fields plus each schema field's
+// `type` and `requiredFields`, all `useBindingStatus` needs. Labels, options,
+// defaults, descriptions and icons live in the `.editor.json` sibling, imported
+// only from `src/config/`. Every route reaches this module, so a byte here is a
+// byte on every page.
 import builtinWidgetsManifest from '../../generated/builtinWidgetsManifest.json';
 
 const COMPONENT_TYPE_PREFIX = '$component:';
 
 // What is known about one widget type's module, recorded at registration: the
-// memoised load (the `lazy()` factory and every prefetch share the one import),
-// whether it has resolved — which is what lets a page gate on its widget code
-// having landed instead of revealing an empty shell that fills in afterwards —
-// and whether pulling it drags the chart library in with it.
+// memoised load (`lazy()` and every prefetch share the one import), whether it
+// has resolved — what lets a page gate its reveal on widget code having landed —
+// and whether pulling it drags the chart library in.
 //
-// One record per type rather than a map plus two parallel sets: all three
-// answers are properties of the same registration, and a project widget
-// shadowing a built-in must report *its* answers, not the built-in manifest's.
+// One record rather than a map plus two parallel sets: a project widget
+// shadowing a built-in must report *its* answers, not the manifest's.
 interface WidgetModuleEntry {
   load: () => Promise<ComponentType<HmiWidgetProps>>;
   loaded: boolean;
@@ -107,9 +101,7 @@ function registerWidgetModule(
 /** Every `$component:x` instance renders through the one shared chunk, so they
  *  all resolve to a single record keyed by the bare prefix. */
 function widgetModuleFor(type: string): WidgetModuleEntry | undefined {
-  return widgetModules.get(
-    type.startsWith(COMPONENT_TYPE_PREFIX) ? COMPONENT_TYPE_PREFIX : type,
-  );
+  return widgetModules.get(type.startsWith(COMPONENT_TYPE_PREFIX) ? COMPONENT_TYPE_PREFIX : type);
 }
 
 /** A type nothing registered has no module to wait for. */
@@ -336,6 +328,7 @@ export function registerCustomWidget(entry: CustomWidgetManifestEntry): void {
 
   if (entry.hostsChildren) declaredHostTypes.add(entry.name);
   else declaredHostTypes.delete(entry.name);
+  setFlowsChildren(entry.name, entry.flowsChildren === true);
 
   const Wrapped: ComponentType<HmiWidgetProps> = entry.hasStyle
     ? wrapComponentWithStylesheet(LazyComp, entry)

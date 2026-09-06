@@ -6,11 +6,11 @@
 }
 
 /* Single class, unlike the other built-in widgets' host rules: this widget's
-   root is the `<nav>` and does not carry `.hmi-component`, so there is nothing
-   to chain to. It therefore also gets no `--self-*` reset and honours no
-   `selfLayoutStyle()` — the menu sizes itself from the rules below and from
-   the region it sits in. Deliberate: giving it the base class would change
-   how an authored menu sizes. */
+   root is the `<nav>` and does not carry `.hmi-component`, so it gets none of
+   its flex-sizing defaults and honours no `selfLayoutStyle()` — the menu
+   sizes itself from the rules below and from the region it sits in.
+   Deliberate: giving it the base class would change how an authored menu
+   sizes. */
 .hmi-navmenu {
   display: flex;
   flex-direction: column;

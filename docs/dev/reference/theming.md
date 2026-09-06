@@ -583,7 +583,7 @@ Do not duplicate literal indentation formulas in renderers; prefer these helpers
 Runtime components and custom components rely on helpers from `frontend/src/hmi/components/layoutUtils.ts`:
 
 - `selfLayoutStyle(layout)`
-- `containerLayoutStyle(layout)`
+- `containerLayoutProps(layout)`
 - `widgetColorStyle(color)`
 
 These helpers are the supported path for applying layout-related inline styles and optional configured background colors.

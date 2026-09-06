@@ -228,10 +228,6 @@ describe('widget module prefetch', () => {
       ],
     });
 
-    expect([...collectWidgetTypes(tree)].sort()).toEqual([
-      '$component:late',
-      'Container',
-      'Gauge',
-    ]);
+    expect([...collectWidgetTypes(tree)].sort()).toEqual(['$component:late', 'Container', 'Gauge']);
   });
 });

@@ -94,7 +94,6 @@ interface LayoutConfig {
   justify?: string;
 
   // Container — inner spacing
-  padding?: string;
   paddingTop?: string;
   paddingRight?: string;
   paddingBottom?: string;
@@ -105,24 +104,22 @@ interface LayoutConfig {
   radius?: string;
 
   // Self — sizing
+  /** How the widget sizes itself on this axis: 'hug' | 'fill' | 'fixed' (or a
+   *  property source). Spread `selfLayoutStyle(layout)` and it is applied for
+   *  you — no need to read this directly. */
+  widthMode?: string;
+  heightMode?: string;
   width?: string;
   height?: string;
   minWidth?: string;
   maxWidth?: string;
   minHeight?: string;
+  maxHeight?: string;
 
   // Self — flex placement
-  alignSelf?: string;
-  basis?: string;
+  /** Fill weight, authored by the panel when a mode is Fill. A node carrying
+   *  no size mode at all keeps it as a plain `flex-grow`. */
   grow?: number;
-  shrink?: number;
-
-  // Self — spacing
-  margin?: string;
-  marginTop?: string;
-  marginRight?: string;
-  marginBottom?: string;
-  marginLeft?: string;
 }
 
 interface VariableBinding {
@@ -694,8 +691,8 @@ declare function useActivePage(): ActivePage;
 // ── Composition ───────────────────────────────────────────────────────────────
 // For a widget that places other widgets itself. Prefer the `children` prop:
 // the renderer hands those over already rendered, and a widget that only needs
-// them in order (a row, a card, a grid) should declare `hostsChildren` and lay
-// `children` out with CSS. Reach for these when the widget needs to decide
+// them in order (a row, a card, a grid) should declare `hostsChildren` plus
+// `flowsChildren` and lay `children` out with CSS. Reach for these when the widget needs to decide
 // *where* each node goes, or to render a node that is not its own child.
 
 /** Render one widget node — from `childConfigs`, from a `widgets`-typed
@@ -787,13 +784,37 @@ declare function apiJson<T = unknown>(
 declare function selfLayoutStyle(
   layout?: LayoutConfig,
 ): Record<string, string | number> | undefined;
-/** The `--container-*` half of a layout, for a widget that declares
- *  `hostsChildren` and lays its children out itself. Pair it with a stylesheet
- *  that resets every `--container-*` it reads to `initial`, or a nested host
- *  inherits its parent's direction and gap. */
-declare function containerLayoutStyle(
-  layout?: LayoutConfig,
-): Record<string, string | number> | undefined;
+/** The `--container-*` half of a layout, plus the `data-flow-direction`/
+ *  `data-flow-align` attributes that tell each child's own `widthMode`/
+ *  `heightMode` which screen axis is main, for a widget that declares
+ *  `hostsChildren` and lays its children out itself. Declare `flowsChildren`
+ *  alongside it: that is what tells the editor and the runtime those children
+ *  have a main axis, so each gets Hug/Fill/Fixed rows and resolves its size
+ *  modes against this widget rather than an unrelated ancestor. Spread the
+ *  whole returned object onto the element that is actually `display: flex` —
+ *  it must carry `hmi-component` (or `hmi-container`), which is where the
+ *  shared layout barrier resets every `--container-*` and `--w-*`/`--h-*` —
+ *  without it a nested host inherits its parent's direction and gap. A host
+ *  split across two elements can destructure instead: `style` onto the outer,
+ *  class-carrying one, and the two `data-flow-*` fields onto the inner one
+ *  that actually flexes — `--container-*` still reaches the inner element by
+ *  ordinary CSS inheritance from the outer, so only the outer needs the class.
+ *  The built-in `Container` does this (`.hmi-container` / `.hmi-container__content`),
+ *  with one more wrinkle worth copying: it strips `style`'s four padding
+ *  longhands off the outer element before applying it and reapplies them to
+ *  its inner content (and title, if any) instead. The outer is also whatever
+ *  a Fill-mode ancestor gives `flex-grow`/`flex-basis: 0`, and a border-box
+ *  element's own padding sets a floor under that math — a weight-2 Fill child
+ *  stops landing at a clean 2x split next to weight-1 siblings the moment its
+ *  own padding differs from theirs (as it will whenever one sibling picks up
+ *  a padding-free wrapper, e.g. `WidgetRenderer`'s binding/lock overlay). A
+ *  widget with its own padding-bearing children should move that padding down
+ *  a level the same way, past whichever element carries the Fill sizing. */
+declare function containerLayoutProps(layout?: LayoutConfig): {
+  style: Record<string, string | number>;
+  'data-flow-direction': 'row' | 'column';
+  'data-flow-align': string;
+};
 declare function widgetColorStyle(color: string | undefined): Record<string, string>;
 
 declare function bindingKey(binding: VariableBinding | unknown): string;
