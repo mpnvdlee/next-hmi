@@ -18,7 +18,7 @@ This is the panel that answers "why is my tag not updating?" — if the path is 
 
 Every widget found in the project's `custom-widgets/` folder, with its build **Status** (OK / failed / unknown), whether it has CSS, and when it was compiled. **Recompile** one, or **Recompile all** — the route out of a stale build after editing files on disk. A failed build shows the compiler's own error message. See [Building your own widgets](custom-widgets.md).
 
-A third state sits between the two: **No schema**. The widget compiled and renders fine, but its `schema` / `exportedProperties` exports could not be read, so the editor offers no property fields and no exported properties for it. The message underneath says why. Other widgets are unaffected — one unreadable widget no longer costs the rest their schemas.
+A third state sits between the two: **No schema**. The widget compiled and renders fine, but its `schema` / `exportedProperties` exports could not be read, so the editor offers no property fields and no exported properties for it. The message underneath says why. Other widgets are unaffected — an unreadable widget costs only its own schema.
 
 ### Connected Runtimes
 

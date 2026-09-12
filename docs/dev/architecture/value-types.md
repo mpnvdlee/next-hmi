@@ -67,7 +67,7 @@ Two kinds of source, by where their type comes from:
 - **Flexible** — carries whatever type the field needs (shown as `any`). Usable almost anywhere.
 - **Fixed-type** — always produces one specific type. Only valid where the field wants that type. Some of these take an inner `field` selector; once it's pinned, the produced type is fixed (a source whose `field` choices span several types simply appears once per type below).
 
-> **Source availability is decided by the field's *type* alone.** A source is offered wherever its produced type matches the field — there is no per-field allowlist. The old `valueSourceTypes` schema field (which let a widget hand-pick which sources its inputs accept) is **removed**: it duplicated and fought the type system. Drop `valueSourceTypes` from every schema; the field's `type` is the single gate for which sources appear.
+> **Source availability is decided by the field's *type* alone.** A source is offered wherever its produced type matches the field — there is no per-field allowlist, and a schema cannot hand-pick which sources its inputs accept. The field's `type` is the single gate for which sources appear.
 
 ### Flexible sources (fit any field)
 

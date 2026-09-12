@@ -42,15 +42,4 @@ Open the datasource and browse. Each variable is recorded with its real OPC-UA *
 
 OPC-UA's many numeric types collapse to five simple ones at the HMI boundary — every `Int16/UInt32/…` becomes `Integer`, every `Float/Double` becomes `Float` — so a widget field never sees a wire type.
 
-## Give a numeric variable a range
-
-Every numeric row in the variable table — on a PLC connection as much as on a static datasource — has a **Min** and a **Max** cell. Type a bound into either, leave the other blank if only one end is real, and clear a cell to drop the limit again. Both columns stay empty on booleans, strings and dates, where a range means nothing.
-
-The range is a property of the *variable*, so it only has to be set once:
-
-- **Writes are rejected outside it.** A value below **Min** or above **Max** never reaches the controller, and the operator gets a *Value is outside the allowed range* message instead of a silent no-op.
-- **Bound controls inherit it.** Number Input and Numeric Stepper clamp their numpad and their `+`/`−` buttons to the variable's range whenever the widget's own **Min value** / **Max value** fields are left empty — set the range here and every control bound to that variable picks it up.
-
-A **Min** above the **Max** is refused as you type: the cell turns red and nothing is stored until you fix it or press `Esc`. Struct fields get their own range the same way — set it on the field's row inside the folder, not on the folder.
-
 Next: [bind and subscribe →](subscribing.md)

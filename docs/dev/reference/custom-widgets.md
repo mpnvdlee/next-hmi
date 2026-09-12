@@ -186,7 +186,7 @@ The canonical list of names exposed on `window.__nextHMI__` lives in `frontend/s
 - `bindingKey(binding)` — composes a `"datasource:path"` key from a `VariableBinding`.
 - `parseVarKey(key)` — splits `"datasource:path"` back into `{ datasource, path }`.
 - `useWriteVariable(properties, propKey, options?)` — returns `(value, opts?) => void`, the supported way to write a bound variable. See [Writing values](#writing-values).
-- `sendWsMessage(msg)` — sends a raw frame on the shared WebSocket; supports `type: 'write_field'`; the older `'write'` type was removed and is now dropped as an unknown message. For variable writes use `useWriteVariable` instead — it correlates the response, which a hand-built frame does not.
+- `sendWsMessage(msg)` — sends a raw frame on the shared WebSocket; supports `type: 'write_field'`; any other write type is dropped as an unknown message. For variable writes use `useWriteVariable` instead — it correlates the response, which a hand-built frame does not.
 - `useHmiScope()` — returns the active runtime scope id (e.g. `runtime:main`), useful as the `scope` field on `write_field`.
 
 ### Property resolvers
@@ -403,9 +403,8 @@ default) and that manifest's default project, else its only project, else
 ```
 
 If a bare specifier fails with `Failed to resolve module specifier "x"` while
-the file plainly exists, check that line first — it used to be hardcoded to
-`<repo>/project-testbench/`, so a live project anywhere else produced an empty
-map while the backend served `/external-libraries/` perfectly well.
+the file plainly exists, check that line first: an import map built against a
+different project than the one serving `/external-libraries/` comes out empty.
 
 **TypeScript completion** is opt-in. Add a `paths` entry to your project's `tsconfig.json` pointing at the library's `.d.ts` files (typically downloaded alongside the JS bundle).
 
@@ -855,10 +854,8 @@ A minimal component that respects the active theme:
 > The colors, typography and spacing/radius/shadow tokens above are **editable in
 > Config → Theme Editor**. Motion (`--hmi-motion-*`) is a static constant.
 >
-> **The back-compat aliases were removed.** `--hmi-font`, `--hmi-text-sm`,
-> `--hmi-space-3`, `--hmi-shadow-md` and the rest of that set no longer resolve —
-> a widget still using one silently loses the declaration. See the mapping table
-> in [theming.md](theming.md#removed-the-back-compat-aliases).
+> Only the tokens in [theming.md](theming.md#theme-tokens) resolve — a widget
+> using any other `--hmi-*` name silently loses that declaration.
 
 ### Full token reference
 

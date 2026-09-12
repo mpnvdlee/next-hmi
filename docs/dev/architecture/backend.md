@@ -12,7 +12,7 @@ The backend ships **two ASGI apps** built from the same package:
 The single-project app owns:
 
 - persisted files inside the project folder it is pinned to, located via `NEXTHMI_ACTIVE_PROJECT_PATH` — set by the supervisor for a managed instance, or self-pinned at startup by a standalone `uvicorn main:app` process (see **Bootstrap** below)
-- the project lifecycle API surface: list / create / locate / delete / export / import and authenticated manager-to-manager transfer (`make-live` is retired — see below)
+- the project lifecycle API surface: list / create / locate / delete / export / import and authenticated manager-to-manager transfer
 - datasource lifecycle management
 - OPC-UA client and test-server orchestration
 - alarm trigger evaluation and active/history state
@@ -136,17 +136,13 @@ but writes reject them as `unknown_type`: their asyncua wire values require
 binary/UUID/NodeId objects that cannot be safely inferred from an operator
 string. Intentional contract additions are canonical `Integer`, `Date`, `Time`,
 and `Duration` writes plus the aliases `Int`, `Enumeration`, and `TimeSpan`. They are bounded
-by the matrix above; unknown raw types are intentionally no longer passed
-through. Existing valid boolean aliases, numeric strings, primitive-to-String
-conversion, ISO `DateTime`, raw integer types/ranges, exactly representable
-Float32 values, finite Float64 values, and persisted raw type loading remain
-compatible.
+by the matrix above; an unknown raw type is never passed through.
 
-The intentional safety rejections are present nulls, unsafe/lossy integer
+The deliberate safety rejections are present nulls, unsafe/lossy integer
 numbers, rounded or out-of-range Float32 values, malformed/non-finite numeric
 strings, scalar/array shape mismatches, invalid array descriptors, and unknown
-or unsupported raw types. These values previously reached dispatch and could
-be truncated, inferred as the wrong Variant type, or fail only inside asyncua.
+or unsupported raw types — each of which would otherwise be truncated,
+inferred as the wrong Variant type, or fail only inside asyncua.
 
 **Configured range enforcement.** After a numeric value survives the matrix
 above, `write_service.write_value` checks it against the variable's own
@@ -184,7 +180,7 @@ own stable REST/WebSocket reason, `value_out_of_range` (see
   - thread-safe multi-theme persistence singleton + the default-theme pointer
   - methods: `list_ids()`, `list_all()`, `get()`, `save()`, `create()`, `delete()`, `get_default_id()`, `set_default_id()`
   - `save()` re-validates via `validate_theme()` before writing, so a domain-invalid theme is never persisted even though it is already structurally valid `ThemeConfig` by that point
-  - reads/writes `<live-project>/themes/<id>.json`; stores the default id in `config.json`'s `project.defaultTheme`. Seeds `themes/default.json` from defaults on first access if no theme exists yet — a theme file is read as-is, with no legacy shape and no read-time normalization
+  - reads/writes `<live-project>/themes/<id>.json`; stores the default id in `config.json`'s `project.defaultTheme`. Seeds `themes/default.json` from defaults on first access if no theme exists yet — a theme file is read as-is, with no read-time normalization
 - `backend/api/config_api.py`
   - pages, dictionaries, translations, languages, `globalEvents`
 - `backend/api/datasource_api.py`
@@ -202,7 +198,7 @@ own stable REST/WebSocket reason, `value_out_of_range` (see
 - `backend/api/users_api.py`
   - users, groups, and access settings
 - `backend/api/projects_api.py`
-  - list / create / locate / delete / validate-path; export zip; import zip. (`make-live` is removed — the supervisor's running set replaces the single-live model; `delete` now refuses a project that is in the manifest `running` set rather than the old single live project.) No push/pull here — that's `manager_peers_api.py`, manager-only.
+  - list / create / locate / delete / validate-path; export zip; import zip. `delete` refuses a project that is in the manifest `running` set. No push/pull here — that's `manager_peers_api.py`, manager-only.
 - `backend/api/supervisor_api.py` (manager only)
   - `GET /api/manager/running`, `POST /api/manager/projects/{id}/start`, `POST .../stop`, `GET .../status` — drive and report the per-project child processes.
 - `backend/api/manager_auth_api.py` (manager only)
@@ -246,7 +242,7 @@ licence that lapses stops the next start, not a running line.
 The **manager** (`backend/manager.py`) is the ASGI app the launcher runs by default (*manager mode*). It is deliberately lightweight — it never imports a project's datasource/OPC-UA/WebSocket pipeline. Responsibilities:
 
 - **Auth gate** — an HTTP middleware (`_auth_gate`) requires a valid device-admin session cookie for every `/api/*`, `/runtime/*`, and `/editor/*` request, except `/api/manager/auth/*`, bearer-authenticated `/api/manager/peer/*`, and `/api/health`. The SPA shell + bundle stay public so the login screen can render. A rejected request answers `401 {"detail": …, "code": "manager_session_required"}`, except a top-level browser navigation to `/runtime/*` or `/editor/*`, which is redirected (303) to `/?signIn=<original path>` so it lands on the sign-in screen and is returned to its destination afterwards (`safe_sign_in_target` restricts the round-trip to same-origin project paths). The frontend keys its "signed out" overlay off that code — see [Frontend](frontend.md). Auth lives in `core/manager_auth.py`: a PBKDF2-HMAC-SHA256 password digest in `<runtime_home>/.manager-auth.json`, stateless HMAC-signed session tokens (cookie `nexthmi_manager_session`), and an in-memory login throttle (lock after 5 failures for 60 s → HTTP 429 `RateLimitError`).
-- **Reverse proxy** — `GET/POST/... /runtime/{project_id}/{path}` (and the `/editor/{project_id}/...` alias) streams to the matching child over `httpx` (loopback `127.0.0.1:<port>` from `supervisor.port_for`); `/runtime/{id}/ws` / `/editor/{id}/ws` bridges the browser WebSocket to the child's `/ws`. Hop-by-hop headers are dropped and the manager session cookie is stripped before forwarding (children are trusted localhost processes). A request for a project that isn't running returns 503. (The legacy `/p/{id}/` alias was removed outright rather than deprecated for a compatibility period — backlog R24/R51.)
+- **Reverse proxy** — `GET/POST/... /runtime/{project_id}/{path}` (and the `/editor/{project_id}/...` alias) streams to the matching child over `httpx` (loopback `127.0.0.1:<port>` from `supervisor.port_for`); `/runtime/{id}/ws` / `/editor/{id}/ws` bridges the browser WebSocket to the child's `/ws`. Hop-by-hop headers are dropped and the manager session cookie is stripped before forwarding (children are trusted localhost processes). A request for a project that isn't running returns 503.
 - **Routers** — mounts the `manager_auth`, `supervisor`, `projects`, and `manager_peers` routers.
 - **Usage reporting** — `core/telemetry.py` starts a background task in the manager lifespan that POSTs an install-count ping (installation ID, version, edition, platform) at start-up and every 24 h. Best-effort by contract: failures are debug-logged and never retried. Off through `NEXTHMI_TELEMETRY=off` or the Settings switch; see the [Telemetry API](../reference/rest-api.md#telemetry-api).
 - **Manager SPA** — serves the same frontend bundle at the origin root with `mode="manager"` (the dashboard) and base `"/"`; project instances are served their HMI/config app under `/runtime/<slug>/` or `/editor/<slug>/` with `mode="instance"`.
@@ -267,13 +263,14 @@ The **manager** lifespan opens the proxy `httpx` client, runs `project_resume.pr
 In a **project instance** (`backend/main.py`), startup performs these steps:
 
 1. resolve the active project via `NEXTHMI_ACTIVE_PROJECT_PATH` — set by the supervisor when it pinned this instance, or self-pinned by this process after `project_bootstrap.ensure_default_project()` when running standalone (`uvicorn main:app` with no supervisor). In instance mode the default-project bootstrap is skipped (the supervisor already pinned a project; bootstrapping would pollute the shared manifest)
-2. load users; load alarm config + state; load the widget directory
-3. capture the running event loop (so sync handlers can schedule alarm broadcasts)
-4. load datasource JSON files from `<live-project>/datasources/`
-5. start the historian manager (registers its value listener, opens the SQLite db, starts the batch writer + retention loops). Failures are logged but don't abort startup. The historian starts before the broadcast loop so its value listener catches every emit.
-6. start configured test servers
-7. start configured OPC-UA clients
-8. start the WebSocket broadcast loop
+2. bring the project to this build's on-disk format — `project_migrations.run_baseline_migration()`, before anything reads project files (see [Project Format Migration](#project-format-migration))
+3. load users; load alarm config + state; load the widget directory
+4. capture the running event loop (so sync handlers can schedule alarm broadcasts)
+5. load datasource JSON files from `<live-project>/datasources/`
+6. start the historian manager (registers its value listener, opens the SQLite db, starts the batch writer + retention loops). Failures are logged but don't abort startup. The historian starts before the broadcast loop so its value listener catches every emit.
+7. start configured test servers
+8. start configured OPC-UA clients
+9. start the WebSocket broadcast loop
 
 A project instance never starts mDNS peer discovery — that, like every peer-transfer surface, belongs to the manager alone.
 
@@ -284,7 +281,7 @@ conditional mount of its own on top, from the private repository; see
 
 Shutdown cancels the broadcast loop, stops the historian manager (flushes the buffer, closes the db), and stops OPC-UA clients and test servers.
 
-A managed instance is always pinned to a project, so it never hits the "no project" path — nor does a standalone instance, since bootstrap self-pins `NEXTHMI_ACTIVE_PROJECT_PATH` before any request can be served. The resolvers still raise `NoLiveProjectError` (→ 409 `{code: "no_live_project"}`) if a process is ever started with neither the env var set nor bootstrap able to run (e.g. it was cleared after startup); the SPA renders a "no project on this server" card. Project selection and lifecycle now live in the manager dashboard, not an in-app `/projects` route.
+A managed instance is always pinned to a project, so it never hits the "no project" path — nor does a standalone instance, since bootstrap self-pins `NEXTHMI_ACTIVE_PROJECT_PATH` before any request can be served. The resolvers still raise `NoLiveProjectError` (→ 409 `{code: "no_live_project"}`) if a process is ever started with neither the env var set nor bootstrap able to run (e.g. it was cleared after startup); the SPA renders a "no project on this server" card. Project selection and lifecycle live in the manager dashboard; a project instance serves no projects view of its own.
 
 `alarm_manager` is registered as a `datasource_manager` value listener at module load, and its broadcast callback is bridged into the asyncio loop so ack endpoints (called from sync threadpool routes) can still emit `alarm_update` messages. It also publishes its trigger keys via `set_interest_keys("alarms", …)` on every trigger-map rebuild. Only *folder composites* are gated on that registration — leaf keys reach every value listener regardless — so what it covers is a trigger addressing an array element by index (`DS:Motors` with `index: 2`), which reads the array folder's aggregate and would go quiet as soon as no client page bound it.
 
@@ -391,7 +388,7 @@ Mounts are registered at module-import time against the project this instance is
 
 ## Widget Storage
 
-Reusable components are individual JSON files under `active_components_dir()` (the live project's `components/`). A reusable component may use `$componentProp`, but it may not own a `$var` source anywhere below a child widget or a `componentProperties[*].defaultValue`. This rule is recursive through objects, lists, and mixed expression wrappers. Component create/update, build diagnostics, persisted-component reads, and every project archive import/push/pull use the same scanner. Rejections and diagnostics expose the exact escaped RFC 6901 source path ending in `/$var` (for example `/children/0/properties/text/$if/true/$var`); diagnostic `propKey` and `fieldPath` values are unescaped so editor fields containing `/` or `~` still attach correctly. Existing files are scanned before any component metadata migration. Binding-invalid files stay byte-for-byte unchanged, while malformed JSON, invalid UTF-8, unreadable files, and a non-directory `components` path fail closed with a stable `components/<file>.json#/: <reason>` error. The scanner rejects the `components` root, every descendant directory, and every candidate component file when it is a symlink or Windows reparse point. Files are opened no-follow where the platform supports it and checked by pre-open, opened-handle, and post-open identity before reading. Every mutation then uses `core/component_storage.py` rather than ordinary path writes. POSIX retains no-follow root/group directory descriptors and performs temp creation, write, fsync, replace, unlink, mkdir, and recursive removal relative to those descriptors. Windows pins the root and relevant directories with `CreateFileW(OPEN_REPARSE_POINT | BACKUP_SEMANTICS)` while omitting `FILE_SHARE_DELETE`; recursive deletion marks pinned leaf/directory handles with `FileDispositionInfoEx` (safe `FileDispositionInfo` fallback) before closing them. Missing platform primitives fail the operation closed. Metadata migration uses cached scan data, so post-validation root, group, or file swaps cannot redirect reads or writes outside the originally bound component tree. Imported projects are rejected and cleaned up before registration, including push and pull staging. The `project-seed` data here and the `project-testbench` data in the private dev/test repository were both scanned before enforcement and required no component-data changes. Nested reusable components remain prohibited, and names must be unique across all reusable components.
+Reusable components are individual JSON files under `active_components_dir()` (the live project's `components/`). A reusable component may use `$componentProp`, but it may not own a `$var` source anywhere below a child widget or a `componentProperties[*].defaultValue`. This rule is recursive through objects, lists, and mixed expression wrappers. Component create/update, build diagnostics, persisted-component reads, and every project archive import/push/pull use the same scanner. Rejections and diagnostics expose the exact escaped RFC 6901 source path ending in `/$var` (for example `/children/0/properties/text/$if/true/$var`); diagnostic `propKey` and `fieldPath` values are unescaped so editor fields containing `/` or `~` still attach correctly. Existing files are scanned before any component metadata migration. Binding-invalid files stay byte-for-byte unchanged, while malformed JSON, invalid UTF-8, unreadable files, and a non-directory `components` path fail closed with a stable `components/<file>.json#/: <reason>` error. The scanner rejects the `components` root, every descendant directory, and every candidate component file when it is a symlink or Windows reparse point. Files are opened no-follow where the platform supports it and checked by pre-open, opened-handle, and post-open identity before reading. Every mutation then uses `core/component_storage.py` rather than ordinary path writes. POSIX retains no-follow root/group directory descriptors and performs temp creation, write, fsync, replace, unlink, mkdir, and recursive removal relative to those descriptors. Windows pins the root and relevant directories with `CreateFileW(OPEN_REPARSE_POINT | BACKUP_SEMANTICS)` while omitting `FILE_SHARE_DELETE`; recursive deletion marks pinned leaf/directory handles with `FileDispositionInfoEx` (safe `FileDispositionInfo` fallback) before closing them. Missing platform primitives fail the operation closed. Metadata migration uses cached scan data, so post-validation root, group, or file swaps cannot redirect reads or writes outside the originally bound component tree. Imported projects are rejected and cleaned up before registration, including push and pull staging. Nested reusable components are prohibited, and names must be unique across all reusable components.
 
 Two component rules are advisory rather than blocking, both reported by `POST /api/config/validate`:
 
@@ -409,20 +406,56 @@ Errors still 422 with `to_message()` describing the head finding + count. Warnin
 - `GET /api/config/validate` returns advisory and blocking diagnostics for the persisted project. Realtime editor diagnostics use `POST /api/config/validate`; page/config write responses do not embed warning arrays.
 - MCP page-mutation tools (`pages_add_widget`, `pages_set_widget_property`, `pages_set_metadata`, `pages_delete_widget`) include the warnings array on their `applied_response`.
 
-Current downgrades (was 422, now warning): empty `$var.datasource`, empty `$var.path`, unknown datasource, unknown variable. Structural corruption (non-object `$var` payload) stays a hard error. Rationale: the editor produces empty bindings transiently while the user picks a datasource; the registry can grow at runtime (late OPC-UA pools, project imports); the frontend resolver returns null for unresolved bindings.
+Advisory rather than blocking: empty `$var.datasource`, empty `$var.path`, unknown datasource, unknown variable. Structural corruption (non-object `$var` payload) is a hard error. Rationale: the editor produces empty bindings transiently while the user picks a datasource; the registry can grow at runtime (late OPC-UA pools, project imports); the frontend resolver returns null for unresolved bindings.
+
+## Project Format Migration
+
+`core/project_migrations.py` brings a project up to this build's on-disk
+format. `run_baseline_migration()` is the single entry point and is safe on
+every activation — it is a no-op once the project is stamped at
+`PROJECT_FORMAT_VERSION` *and* carries a `minAppVersion` (see
+[data-formats.md](data-formats.md#what-lives-where) for both fields). A
+project stamped newer raises `UnsupportedProjectFormatError`; the supervisor
+turns that into a start refusal naming the version the project needs and the
+version this build is.
+
+The run order is fixed:
+
+1. **Zip the whole project** into `<project>/.backups/`, streamed to a
+   `.partial` sibling and renamed only once complete. A project that cannot be
+   zipped is not migrated — the archive is written first and a failure there
+   aborts with nothing touched.
+2. **Stage** each target a pending step names (`_TARGET_PATHS`: `config.json`,
+   `pages`, `components`, `datasources`, `themes`): the real path is moved
+   aside and a copy of it becomes what steps mutate.
+3. **Run** every pending step against the staged copies.
+4. **Swap** each staged target into place, then stamp `formatVersion` /
+   `minAppVersion` and write `lastMigration`.
+
+A step failure restores the moved-aside originals and raises
+`MigrationFailedError`. The moved-aside copies are internal scaffolding,
+deleted on the success and failure paths alike, so a migrated project root is
+left as clean as it started — the zip from step 1 is the only durable record.
+`main.py`'s lifespan logs the version span, the file count, the backup path and
+every step diagnostic under the `nexthmi.migration` logger.
+
+`_STEPS` currently holds one combined step, 4 → 7 (`core/migration_size_modes.py`
+then `core/migration_padding.py`, against the same staged copy). Adding a step
+and bumping the version is described in the module docstring; the release-time
+half is in [operations/release.md](../operations/release.md#project-format).
 
 ## Project Export Filtering
 
 `core/project_packer.py` excludes generated state from project zips. Two layers:
 
-- `_SKIP_TOPLEVEL` — directories never descended (`widget-build`, `.widget-build`).
+- `_SKIP_TOPLEVEL` — directories never descended (`widget-build`, `.widget-build`, `.backups`). The last holds the pre-migration zips: skipping it keeps one installation's backup history out of every archive, and stops each backup nesting the ones before it.
 - `_HISTORIAN_LOCAL_SUFFIXES` — file suffixes stripped only inside `historian/` (`.db`, `.db-wal`, `.db-shm`, `.sqlite`, `.sqlite-journal`). The Historian `config.json` still ships — receivers need to know which variables to log, what retention to apply — but the on-disk database doesn't.
 
 ## LAN Peer Transfer
 
 See [reference/peer-transfer.md](../reference/peer-transfer.md) — trust
 model, staging/atomic-commit/journaling/reconciliation, collision policies,
-and the Windows weaker-guarantee note all live there now.
+and the Windows weaker-guarantee note all live there.
 
 Export and import (`projects_api.py`) share the same zip code path
 (`core/project_packer.py`) as manager peer transfer. There is no unauthenticated

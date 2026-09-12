@@ -60,7 +60,7 @@ Each icon draws the arrangement it picks, and both rows follow the container's *
 
 Four rows — **Padding top**, **right**, **bottom** and **left** — one per side, each independent. Clear one and it falls back to the theme's own default padding, never to whatever the other three happen to share, so emptying a side can't silently borrow a number from its neighbours.
 
-There is no **Margin**. Spacing between widgets is the parent's job — a container's **Gap** and **Padding** — which is one place to look instead of two that add up. A margin stored by an older project no longer renders at all: space that widget with its parent's gap or padding instead.
+There is no **Margin**. Spacing between widgets is the parent's job — a container's **Gap** and **Padding** — which is one place to look instead of two that add up.
 
 Length fields take any CSS length — `200px`, `100%`, `12rem`, `auto` — so you can mix fixed and proportional freely. Leave a field empty and it inherits: Radius falls back to the theme's `--hmi-radius` rather than to a hardcoded value.
 

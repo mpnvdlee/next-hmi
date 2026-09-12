@@ -104,10 +104,9 @@ leaving a half-initialised socket registered.
   }
   ```
 
-  - `currentPageIds` is the only page-context key read. The older
-    `currentPageId` (single string) and `openOverlayPageIds` (array) were
-    removed, not deprecated — a frame still sending either carries no page
-    context and its bindings are never primed.
+  - `currentPageIds` is the only page-context key read. A frame sending
+    anything else in its place carries no page context, and its bindings are
+    never primed.
   - Hard caps: `currentPageIds` ≤ 2000, `openDialogIds` ≤ 2000, `priorityKeys`
     ≤ 5000. Excess entries are dropped silently.
   - The backend resolves bindings from the runtime pages config (walking nested

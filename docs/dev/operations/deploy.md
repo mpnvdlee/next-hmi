@@ -46,7 +46,7 @@ terminating proxy](../../user/install.md#behind-a-terminating-proxy)).
 ## MCP
 
 MCP is a single **workspace** endpoint hosted by the manager at the origin
-`/mcp` (child instances no longer serve it). One AI client connects there and
+`/mcp` — child instances serve none. One AI client connects there and
 addresses any project by id; see [../reference/mcp.md](../reference/mcp.md) for the tool catalog.
 
 Two independent controls:

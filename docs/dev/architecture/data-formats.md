@@ -12,6 +12,7 @@ A project is a self-contained folder anywhere on disk, registered in the runtime
 
 ```text
 <project>/
+  .backups/               ← pre-migration project zips; installation-local, excluded from exports
   assets/
     icons/
     images/
@@ -101,7 +102,7 @@ Outside any project, the runtime keeps its own state:
   - translation dictionaries
 - `<project>/users.json`
   - users, groups, and access settings. A fresh seed also carries `operatorSetup: { version: 1, required: true }`; authenticated manager setup atomically creates the `admin` operator and changes `required` to `false`
-  - new credentials use the server-managed `passwordHash` object `{ version: 1, algorithm: "pbkdf2-sha256", iterations: 200000, salt: "<hex>", digest: "<hex>" }`, while `password` remains `""`. The separate field makes every string in a legacy `password` field literal plaintext, including values beginning with `$nexthmi$`; valid markerless legacy documents are read without migration or rewriting
+  - credentials live in the server-managed `passwordHash` object `{ version: 1, algorithm: "pbkdf2-sha256", iterations: 200000, salt: "<hex>", digest: "<hex>" }`, while `password` stays `""`. Because hashes have a field of their own, a string in `password` is literal plaintext whatever it looks like, including one beginning with `$nexthmi$`; a valid markerless document is read as-is, never rewritten
   - marker-bearing documents must retain the seed `guest` and `admin` groups and canonical passwordless `guest` user. A completed marker additionally requires the canonical `admin` user, a valid `passwordHash`, and valid group references. Missing, unreadable, corrupt, or invariant-breaking user documents are credential errors and keep the project stopped
   - the editor keeps pending security edits in a separate global frontend draft and writes the complete document atomically only through **Save users**. API reads omit `passwordHash`, redact `password` to `""`, and expose only `passwordSet`; a non-empty password edit creates a new hash, and clients cannot submit `passwordHash`. Generic project Save, snapshots, and Undo/Redo never include it
 - `<project>/custom-widgets/*/`
@@ -114,8 +115,9 @@ Outside any project, the runtime keeps its own state:
   - reserved certificate folder created by the backend
 - `<project>/config.json` → `project`
   - embedded per-project metadata (stable UUID + display name + creation time); created on first registration and round-tripped through pack/unpack so the same folder always resolves to the same manifest entry
-  - `formatVersion` — the project's on-disk schema version (0 = unstamped, predates the field); see `core.project_migrations.PROJECT_FORMAT_VERSION` and the coordinator's module docstring
-  - `lastMigration` — set once a format migration actually runs: `{ fromVersion, toVersion, at, backups }`, where `backups` maps target name to the pre-migration backup path left on disk. Kept in place after later activations, but only read back once, right after an upgrade, to show a one-time notice — the Projects list never displays it permanently
+  - `formatVersion` — the project's on-disk schema version; `0` means unstamped. Below `core.project_migrations.PROJECT_FORMAT_VERSION` the project is migrated before it is served, above it the project is refused. This integer is the only gate
+  - `minAppVersion` — the release that stamped `formatVersion`, written beside it by every writer (`core.project_migrations.stamp_current_format`). Display only, never parsed or compared: it is how a build too old to open a project can still name the version the operator needs, which it could not otherwise know. `null` when the stamping build predates the field — and that absence is a signal in itself, since the number then says where the project landed without saying which code took it there, so the coordinator replays the whole chain and the manager asks for the same upgrade confirmation as on a stale project
+  - `lastMigration` — `{ fromVersion, toVersion, at, backup }`, written only when a migration actually ran. `backup` is the pre-migration zip of the whole project, `<project>/.backups/pre-migration-<stamp>-app-<release>.zip` (`null` on records predating the field). The record stays on disk but is read back only once, right after an upgrade, for a one-time notice — the Projects list never displays it. How the migration runs is in [backend.md](backend.md#project-format-migration)
 - `<project>/historian/`
   - historian runtime state (SQLite database + `config.json`). `config.json` travels with project pushes/pulls/zips; data files matching `*.db`, `*.db-wal`, `*.db-shm`, `*.sqlite`, `*.sqlite-journal` are stripped by `core.project_packer` so they stay installation-local.
 
@@ -312,8 +314,7 @@ the single source of truth shared between backend Pydantic models and the fronte
 registry.
 
 On first access the backend seeds `themes/default.json` from defaults if no
-theme exists yet. A theme file is read as-is — there is no legacy shape and no
-read-time normalization.
+theme exists yet. A theme file is read as-is, with no read-time normalization.
 
 One theme file has three sections:
 
@@ -608,8 +609,7 @@ Backend behavior:
 - additional dictionaries are any other `*.csv` files in the same directory
 - dictionary filenames are derived from the dictionary name
 - dictionary names are validated before file creation
-- the CSV shape is unchanged: existing valid files and project import/export
-  archives need no migration, and CSV replacement is atomic
+- CSV replacement is atomic
 - every dictionary mutation holds the same per-file process-local and OS lock
   across read, validation, and atomic replacement, including REST and MCP
   writers
@@ -654,7 +654,7 @@ Compiled build artifacts are written to `<runtime_home>/.widget-build/` (outside
 - `widget-schemas.json`
   - `{ "version": 2, "builtin": {}, "custom": { "<Name-or-Group/Name>": { … } } }` — the catalog manifest the compiler regenerates from every custom widget's source (`services/widget_schemas.py`, tree-sitter over `index.tsx`). `builtin` is always empty: the product's own widgets ship as the baked built-in-widgets manifest, which `core.validation.structure.load_widget_manifest` overlays onto this half at read time
   - each entry carries `name`, `category`, `description`, `icon`, `schema` and `exportedProperties`; it is what `GET /api/widget-schemas`, `GET /api/widgets`, the MCP tools and backend validation all read
-  - a widget whose exports cannot be reduced to literals gets `schemaError` and an empty `schema` instead of failing the whole run, so one unreadable widget no longer costs every other widget its schema
+  - a widget whose exports cannot be reduced to literals gets `schemaError` and an empty `schema` instead of failing the whole run, so an unreadable widget costs only its own schema
 
 A sibling source folder such as `custom-widgets/_template/` can hold a starter
 template. Folders starting with `_` are ignored by the custom-component listing

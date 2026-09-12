@@ -13,7 +13,7 @@ One endpoint covers the whole installation:
 | HTTP (default) | `http://<manager-host>:8000/mcp/` |
 | [HTTPS](install.md#https) turned on | `https://<manager-host>:8443/mcp/` |
 
-**Either spelling works.** `/mcp/` is the canonical path; a bare `/mcp` is rewritten onto it rather than redirected, because most MCP clients do not follow redirects. On an older build that still redirects, use the trailing slash.
+**Either spelling works.** `/mcp/` is the canonical path; a bare `/mcp` is rewritten onto it rather than redirected, because most MCP clients do not follow redirects.
 
 **Client and manager on the same machine?** Then `<manager-host>` is `127.0.0.1` — the manager binds loopback only unless `NEXTHMI_HOST` says otherwise, so `http://127.0.0.1:8000/mcp/` is the whole endpoint. The `hmi.local` examples further down are for the case where the client sits on another machine.
 
@@ -153,7 +153,7 @@ They are ordinary instructions, not privileged calls — the agent still works t
 | *MCP writes are disabled for project '…'* | The token is fine, the project's **MCP enabled** tick is not. Step 1 above. |
 | *Project '…' not found* while pairing | The `projectId` isn't a registered project id — you probably sent the display name. Step 2 above. |
 | *Too many failed attempts. Try again in Ns.* | Wrong device-admin password on `/pair`; the same lockout that guards the dashboard login. Wait it out. |
-| `404` on `GET`, `405` on `POST`, or a bare `307` | The URL reached the router but not the transport — add the trailing slash (`/mcp/`). Older builds redirect instead of rewriting, and a proxy in front can rewrite the path too. |
+| `404` on `GET`, `405` on `POST`, or a bare `307` | The URL reached the router but not the transport — add the trailing slash (`/mcp/`). A proxy in front can rewrite the path too. |
 | Connection refused on `8443` | HTTPS was never turned on, so nothing listens there. Use the `8000` HTTP endpoint, or enable [HTTPS](install.md#https) first. |
 | Host name doesn't resolve at all | `hmi.local` needs mDNS on the *client* — Bonjour on Windows, `avahi` on Linux. Use the IP address or a `hosts` entry instead. |
 | Client cannot connect at all, no HTTP status | Usually the redirect or the certificate: HTTPS moves the app to `8443`, and a generated self-signed certificate isn't trusted by default. See the endpoint table above. |

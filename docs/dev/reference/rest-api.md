@@ -418,7 +418,7 @@ These endpoints expose what's in the user workspace directly (no `/api` prefix o
   - Returns `[{ key, name, group, hasStyle, hasFonts, buildOk, buildError, buildTs, category, description, icon, schema, exportedProperties, schemaError }]`.
   - `key` is the normalized project-relative widget path (`<Name>` or `<Group>/<Name>`). `buildOk` / `buildError` / `buildTs` come from that key in `<runtime_home>/.widget-build/.build-status.json`.
   - `category`, `description`, `icon`, `schema` and `exportedProperties` are read from the compiled `<runtime_home>/.widget-build/widget-schemas.json` (`null` when the widget has never compiled). They let the client register a widget — schema, drawer card, `$widgetProp` list — without importing its module, which is what makes the modules load lazily on first render instead of all at once at startup.
-  - `schemaError` is set when the widget compiled but the schema extractor could not reduce its exports to literals. The widget still renders; the editor offers no property fields and no `$widgetProp`s for it. Every other widget keeps its schema — one unreadable widget no longer costs the whole manifest.
+  - `schemaError` is set when the widget compiled but the schema extractor could not reduce its exports to literals. The widget still renders; the editor offers no property fields and no `$widgetProp`s for it. Every other widget keeps its schema — one unreadable widget costs only its own.
 - `POST /api/widgets/recompile`
   - Recompiles every custom widget and regenerates the schema manifest. Broadcasts a `widget_updated` event per widget so open browsers reload the module.
   - Returns the refreshed list in the `GET /api/widgets` shape.
@@ -456,8 +456,8 @@ Base prefix: `/api/users`. IDs (user id, group id, username) must match `[A-Za-z
     submitted password is stored in the server-managed `passwordHash` object
     `{ version, algorithm, iterations, salt, digest }`, with `password: ""`.
     Clients may never submit `passwordHash` directly.
-  - Legacy `password` strings remain literal plaintext regardless of their
-    prefix, and the exact credential value is preserved by an unchanged save.
+  - A `password` string is literal plaintext regardless of its prefix, and an
+    unchanged save preserves the exact stored credential value.
   - The canonical `guest` user is required, must keep both id and username
     `guest`, must belong only to the `guest` group, and cannot have credentials.
 - `PUT /api/users/settings`
@@ -684,19 +684,19 @@ These five routes are allow-listed by the auth gate (reachable without a session
 ### Supervisor — `/api/manager`
 
 - `GET /api/manager/running` → `{ instances: [InstanceSnapshot] }`, where `InstanceSnapshot` is `{ id, name, path, basePath, port, pid, status, startedAt, restarts, lastError }` and `status ∈ {"starting","running","stopped","crashed"}`.
-- `POST /api/manager/projects/{id}/start` → starts (or no-ops if already up) the project's child process; returns its snapshot. Body (optional): `{ confirmUpgrade?: bool }`. 202. 409 (`ConflictError`) if the project can't be started — unknown id, missing folder, or its `formatVersion` is behind this build's baseline and `confirmUpgrade` was not set (the manager UI asks first, using the project's `needsUpgrade` from `GET /api/projects`). 409 as well, regardless of `confirmUpgrade`, if the project's `formatVersion` is newer than this build supports.
+- `POST /api/manager/projects/{id}/start` → starts (or no-ops if already up) the project's child process; returns its snapshot. Body (optional): `{ confirmUpgrade?: bool }`. 202. 409 (`ConflictError`) if the project can't be started — unknown id, missing folder, or the project's `needsUpgrade` holds and `confirmUpgrade` was not set (the manager UI asks first, using `needsUpgrade` from `GET /api/projects`). 409 as well, regardless of `confirmUpgrade`, if the project's `formatVersion` is newer than this build supports; the message names the version the project needs and the one this build is.
 - `POST /api/manager/projects/{id}/stop` → stops the child; returns `{ id, status: "stopped" }`. 200.
 - `GET /api/manager/projects/{id}/status` → the instance snapshot, or `{ id, status: "stopped" }` when not running.
 
 ### Project reverse proxy
 
-- `ANY /runtime/{projectId}/{path}` and `WS /runtime/{projectId}/ws` (and the `/editor/{projectId}/...` alias) — the manager streams these to the matching child instance on loopback. A pending fresh-project operator setup redirects the route root to the authenticated manager setup flow and rejects other HTTP/WS traffic until completion. Otherwise, returns `503` when the project is not running and `502` on an upstream error — except for a top-level document navigation (a `GET` whose `Accept` carries `text/html`), which has no child to serve it: a build that ships the frontend bundle answers that with the SPA shell for the project's own base, and the app explains the outage in place (`ProjectUnavailableOverlay`) without losing the URL; a build with no bundle to render falls back to `303` → `/projects?unavailable={id}&reason={why}`. `GET /runtime/{projectId}` (no trailing slash) redirects to `/runtime/{projectId}/`; likewise for `/editor/{projectId}`. These carry the same project-instance API surface documented elsewhere in this file. (The legacy `/p/{projectId}/` alias was removed — backlog R24/R51.)
+- `ANY /runtime/{projectId}/{path}` and `WS /runtime/{projectId}/ws` (and the `/editor/{projectId}/...` alias) — the manager streams these to the matching child instance on loopback. A pending fresh-project operator setup redirects the route root to the authenticated manager setup flow and rejects other HTTP/WS traffic until completion. Otherwise, returns `503` when the project is not running and `502` on an upstream error — except for a top-level document navigation (a `GET` whose `Accept` carries `text/html`), which has no child to serve it: a build that ships the frontend bundle answers that with the SPA shell for the project's own base, and the app explains the outage in place (`ProjectUnavailableOverlay`) without losing the URL; a build with no bundle to render falls back to `303` → `/projects?unavailable={id}&reason={why}`. `GET /runtime/{projectId}` (no trailing slash) redirects to `/runtime/{projectId}/`; likewise for `/editor/{projectId}`. These carry the same project-instance API surface documented elsewhere in this file.
 
 ---
 
 ## Projects API
 
-Base prefix: `/api/projects`. Manages the project list in the runtime-home manifest. Mounted on **both** apps; the manager dashboard is the primary caller (a project instance no longer offers an in-app projects view).
+Base prefix: `/api/projects`. Manages the project list in the runtime-home manifest. Mounted on **both** apps; the manager dashboard is the primary caller — project selection lives there, not inside a project instance.
 
 - `GET /api/projects`
   - Each project includes `operatorSetupRequired`. It is true only for a fresh
@@ -704,8 +704,8 @@ Base prefix: `/api/projects`. Manages the project list in the runtime-home manif
   - `operatorSetupStatus` is `required`, `complete`, or `error`;
     `operatorSetupError` describes missing, unreadable, corrupt, or invalid
     credential state. Error-state projects cannot be started or proxied.
-  - Returns `{ defaultProjectId, defaultProjectsRoot, projects: [{ id, name, path, addedAt, lastOpenedAt, status, isDefault, formatVersion, needsUpgrade, unsupportedFormat, lastMigration }] }`. `status` is computed (`"present"` or `"missing"`), not stored. The running set is authoritative for what's actually live — see `/api/manager/running`.
-  - `formatVersion`/`lastMigration` are read from the project's own `config.json` (see [data-formats.md](../architecture/data-formats.md)) and are `null` when `status` is `"missing"`. `needsUpgrade` is `formatVersion < PROJECT_FORMAT_VERSION`; `unsupportedFormat` is `formatVersion > PROJECT_FORMAT_VERSION` (this build is older than the project). `lastMigration` is `{ fromVersion, toVersion, at, backups }` or `null`.
+  - Returns `{ defaultProjectId, defaultProjectsRoot, projects: [{ id, name, path, addedAt, lastOpenedAt, status, isDefault, formatVersion, minAppVersion, needsUpgrade, unsupportedFormat, lastMigration }] }`. `status` is computed (`"present"` or `"missing"`), not stored. The running set is authoritative for what's actually live — see `/api/manager/running`.
+  - The format fields are read from the project's own `config.json` (see [data-formats.md](../architecture/data-formats.md)) and are `null` when `status` is `"missing"`. `unsupportedFormat` is `formatVersion > PROJECT_FORMAT_VERSION` (this build is older than the project); `needsUpgrade` is `formatVersion < PROJECT_FORMAT_VERSION` **or** `minAppVersion` is `null` (a project with no release stamp is replayed through the chain rather than trusted). `minAppVersion` is the release that stamped the format — display only, for naming the version an operator needs. `lastMigration` is `{ fromVersion, toVersion, at, backup }` or `null`.
 - `POST /api/projects`
   - Body: `{ name, path }`. Validates the destination is empty + writable, seeds from `project-seed/`, writes a fresh `project` metadata block into `config.json`, and appends to the manifest. Returns 409 when the path already carries project metadata.
 - `POST /api/projects/register`
@@ -740,8 +740,6 @@ Manager-only project setup (device-manager authentication required):
     HMI user with the supplied password. A completed setup or an existing
     project without the marker returns `409`, so the operation cannot be
     replayed to replace a credential.
-
-> **Removed:** `POST /api/projects/{id}/make-live`. `make-live` is replaced by the supervisor's start/stop. The manager transfer API below replaces single-live peer push/pull.
 
 ---
 
@@ -820,8 +818,8 @@ stem). The author-chosen *default* theme id is stored in `config.json`'s
 defaults are loaded from `frontend/src/shared/themeDefaults.json`. Runtime theme
 switching is a client-side concern — the backend only tracks the default.
 
-`/api/themes` (plural) is the multi-theme surface. The old singular `/api/theme`
-shim was removed once no caller depended on it.
+`/api/themes` (plural) is the whole theme surface — there is no singular
+`/api/theme` endpoint.
 
 ### List themes
 

@@ -193,7 +193,7 @@ Every property has a **type** (`String`, `Integer`, `Float`, `Boolean`,
 `$recipe`, `$recipeList`, `$page`, `$viewport`, `$result`.
 
 Icons and images are plain `$static` values carrying a structured payload
-(`{ type, name }` / `{ path }`). `$componentProp` (formerly `$inputProp`) reads a
+(`{ type, name }` / `{ path }`). `$componentProp` reads a
 value passed in by the parent component or dialog; `$widgetProp` reads a property
 exported by a sibling component. `$result` exists only inside an async action's
 `onSuccess` / `onFailed` / `onSettled` handlers.
@@ -294,6 +294,23 @@ manager-only. Pydantic models in `backend/models/`. Document it in
 4. Tests under `backend/tests/test_mcp_*.py`; catalog entry in
    [../reference/mcp.md](../reference/mcp.md), user-visible limits in
    `docs/user/mcp.md`.
+
+### Change a project's on-disk format
+
+Any change that makes an existing project file unreadable needs a migration
+step, or projects in the field break silently.
+
+1. Write the step's rewrite rules in their own `backend/core/migration_*.py`
+   module, then append a `MigrationStep` to `_STEPS` in
+   `backend/core/project_migrations.py` and bump `PROJECT_FORMAT_VERSION` to its
+   `to_version`. The coordinator's behaviour is in
+   [../architecture/backend.md](../architecture/backend.md#project-format-migration).
+2. Steps must be re-runnable — a project with no `minAppVersion` is replayed
+   through the whole chain — so each one skips what it has already converted.
+3. Tests under `backend/tests/test_project_migrations.py`; describe the changed
+   file shape in [../architecture/data-formats.md](../architecture/data-formats.md).
+4. The release that ships it must bump `PROJECT_FORMAT_MIN_APP` and move the
+   minor or major — see [release.md](release.md#project-format).
 
 ### Change a WebSocket message
 

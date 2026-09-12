@@ -1,18 +1,17 @@
 # Vendor and Dependency Maintenance Policy
 
-Implements maintenance-backlog item 23 / R55. Covers bundled vendor source
+Covers bundled vendor source
 (files committed directly into this repo) and package-managed dependencies
 (`backend/requirements.txt`, `frontend/package.json`).
 
 ## Vendored files
 
 No third-party source is vendored directly into this public tree. The
-dev/example libraries that used to be committed here — three.js and uPlot,
-both MIT, used only by the example custom widgets — moved with
-`project-testbench/` into a separate private dev/test-project repository, which
-tracks their provenance and checksums there. The trial site's PHPMailer sources
-moved with `promotion-website/` into the private enterprise repository. None are
-part of this AGPL tree.
+dev/example libraries the example custom widgets use — three.js and uPlot, both
+MIT — live with `project-testbench/` in the private dev/test-project
+repository, which tracks their provenance and checksums. The trial site's
+PHPMailer sources live with `promotion-website/` in the private enterprise
+repository. Neither set is part of this AGPL tree.
 
 ## Package-managed dependencies
 
