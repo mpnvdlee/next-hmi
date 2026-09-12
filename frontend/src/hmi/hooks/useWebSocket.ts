@@ -421,7 +421,15 @@ export function useWebSocket(): void {
       };
 
       ws.onclose = () => {
-        if (_ws === ws) _ws = null; // don't clobber a newer instance
+        // A socket a newer one already replaced — the StrictMode remount aborts
+        // the first handshake, and that abort's close event can land after the
+        // replacement has opened. Its death says nothing about the connection
+        // the app is actually on, and marking it down here left every bound
+        // widget under the disconnected overlay for the rest of the page load:
+        // nothing fires `onopen` again, and a healthy socket schedules no
+        // reconnect to clear it.
+        if (_ws !== ws) return;
+        _ws = null;
         setWsConnectedRef.current(false);
         clearOpcuaConnectedRef.current(); // backend is unreachable, OPC-UA state unknown
         // Fail any in-flight action requests — backend responses can no longer
