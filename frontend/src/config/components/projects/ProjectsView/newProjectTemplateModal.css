@@ -1,0 +1,46 @@
+.template-modal {
+  max-width: 46rem;
+}
+
+.template-modal__options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--cfg-space-4);
+}
+
+.template-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+  padding: var(--cfg-space-4);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface);
+  color: var(--cfg-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.template-card:hover,
+.template-card:focus-visible {
+  border-color: var(--cfg-accent);
+}
+
+.template-card__art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface-raised);
+}
+
+.template-card__name {
+  font-weight: 600;
+}
+
+.template-card__note {
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-text-sm);
+}

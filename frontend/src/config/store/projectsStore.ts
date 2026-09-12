@@ -126,7 +126,7 @@ interface ProjectsStore {
   // Mutation actions throw on failure — callers (modals) display the error
   // locally. The store-level `error` is reserved for load failures shown in
   // the page header.
-  createProject(name: string, path: string): Promise<ProjectEntry>;
+  createProject(name: string, path: string, template?: 'empty' | 'example'): Promise<ProjectEntry>;
   registerExisting(path: string, name?: string): Promise<ProjectEntry>;
   locate(id: string, path: string): Promise<ProjectEntry>;
   renameProject(id: string, patch: { name?: string; id?: string }): Promise<ProjectEntry>;
@@ -260,10 +260,10 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
     return apiJson<BrowseDirResponse>(`/api/projects/browse-dir${query}`);
   },
 
-  createProject: async (name: string, path: string) => {
+  createProject: async (name: string, path: string, template: 'empty' | 'example' = 'empty') => {
     const entry = await apiJson<ProjectEntry>('/api/projects', {
       method: 'POST',
-      body: { name, path },
+      body: { name, path, template },
     });
     await get().load();
     return entry;

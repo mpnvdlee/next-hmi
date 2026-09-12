@@ -59,6 +59,12 @@ A project saved by an older build — or by one that predates the file-format st
 Three ways in, all from the dashboard toolbar. Each adds a row to the runtime-home manifest — the files live wherever you point them.
 
 1. **New project — scaffold from the seed.** Click **+ New project**. Enter a **Project name** and a **Parent folder** (type it or **Browse…**); the modal previews the exact folder it will create. Confirm and NEXT HMI copies the seed template into place and registers it.
+
+   **New project** first asks what to start from. **Empty project** gives you one
+   blank page. **NEXT BREW example** gives you a working demo machine — three
+   pages, a static datasource, alarms, recipes, two themes and two languages —
+   which is the fastest way to see how the pieces fit together before building
+   your own.
 2. **Add existing — register a folder on disk.** Click **⊕ Add existing** and give the **Project folder** path, e.g. `/opt/hmi/line-a`. The folder must already hold a `config.json` with a `project` block. Use this after cloning a project from Git or copying a folder onto the machine. The project is registered but not started.
 3. **Import zip — unpack a shared build.** Click **↑ Import zip**, choose the **Zip file** and a **Destination folder**. See [Download & upload](#download--upload-a-project) below.
 

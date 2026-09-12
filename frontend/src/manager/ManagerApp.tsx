@@ -16,6 +16,9 @@ import '@config/components/projects/ProjectsView/projectForm.css';
 import './manager.css';
 import Button from '@config/components/ui/Button';
 import CreateProjectModal from '@config/components/projects/ProjectsView/CreateProjectModal';
+import NewProjectTemplateModal, {
+  type ProjectTemplate,
+} from '@config/components/projects/ProjectsView/NewProjectTemplateModal';
 import AddExistingProjectModal from '@config/components/projects/ProjectsView/AddExistingProjectModal';
 import ImportProjectModal from '@config/components/projects/ProjectsView/ImportProjectModal';
 import RemoveProjectModal from '@config/components/projects/ProjectsView/RemoveProjectModal';
@@ -277,7 +280,8 @@ function unsupportedFormatNote(project: ProjectEntry): string {
 
 type Dialog =
   | { kind: 'none' }
-  | { kind: 'create' }
+  | { kind: 'choose-template' }
+  | { kind: 'create'; template: ProjectTemplate }
   | { kind: 'add-existing' }
   | { kind: 'import' }
   | { kind: 'remove'; entry: ProjectEntry }
@@ -395,7 +399,7 @@ function ProjectsPage() {
               <Button variant="default" onClick={() => setDialog({ kind: 'pull' })}>
                 ⇩ Pull from peer
               </Button>
-              <Button variant="primary" onClick={() => setDialog({ kind: 'create' })}>
+              <Button variant="primary" onClick={() => setDialog({ kind: 'choose-template' })}>
                 + New project
               </Button>
             </div>
@@ -615,9 +619,16 @@ function ProjectsPage() {
         </div>
       </div>
 
+      {dialog.kind === 'choose-template' && (
+        <NewProjectTemplateModal
+          onCancel={closeDialog}
+          onChoose={(template) => setDialog({ kind: 'create', template })}
+        />
+      )}
       {dialog.kind === 'create' && (
         <CreateProjectModal
           defaultRoot={defaultRoot}
+          template={dialog.template}
           onCancel={closeDialog}
           onCreated={(entry) => setDialog({ kind: 'operator-setup', entry })}
         />
