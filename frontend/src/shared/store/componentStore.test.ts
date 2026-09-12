@@ -74,9 +74,21 @@ describe('draft management', () => {
 
     // An undo puts back drafts from another point in time — any tree order
     // resolved against the current ones is stale.
+    useComponentStore.setState({ components: [COMP_A] as ComponentDefinition[] });
     useComponentStore.getState().restoreDrafts({ 'comp-a': withChild });
     expect(rev()).toBe(3);
     expect(useComponentStore.getState().draftComponents).toEqual({ 'comp-a': withChild });
+  });
+
+  it('drops restored drafts whose component no longer exists', () => {
+    // Deleting a component writes straight through to the API, so a step taken
+    // before it still holds a draft for an id nobody can open any more. Putting
+    // that back would make the next save PUT to a component that is gone.
+    useComponentStore.setState({ components: [COMP_A] as ComponentDefinition[] });
+
+    useComponentStore.getState().restoreDrafts({ 'comp-a': COMP_A, 'comp-b': COMP_B });
+
+    expect(useComponentStore.getState().draftComponents).toEqual({ 'comp-a': COMP_A });
   });
 
   it('clearComponentDraft removes only the specified draft', () => {

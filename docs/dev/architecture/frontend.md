@@ -101,6 +101,7 @@ Shared stores:
   - persistence through `saveConfigToBackend()`
 - `frontend/src/shared/store/projectStore.ts`
   - dirty state, save orchestration, undo/redo snapshots
+  - stores outside this module reach the history through `projectActions.ts`, which also owns the one throttle window that folds a burst of per-keystroke writes into a single step, shared by every editor
   - aggregates save callbacks registered by feature modules (for example datasource variable tables)
   - `saveAll()` marks global save failure when any registered callback throws
 - `frontend/src/config/store/domains/usersDomainStore.ts`
@@ -124,6 +125,7 @@ Runtime stores:
   - exported component property values resolved by `$widgetProp`
 - `frontend/src/shared/store/componentStore.ts`
   - reusable component definitions + per-component drafts; the editor uses drafts to render unsaved component edits inside `LivePreview`
+  - every definition edit made in `ComponentsView` is a step on the shared project history: the drafts ride in the generic snapshot, and `restoreDrafts` drops drafts for components deleted since the step was taken. Creating and deleting a component or folder writes straight through to the API and is therefore outside Undo/Redo
 
 Config-domain stores (`frontend/src/config/store/`):
 

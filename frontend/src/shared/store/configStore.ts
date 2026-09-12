@@ -38,7 +38,7 @@ import {
   replacePageSectionWidgets,
 } from '@shared/utils/pageContent';
 import { mapAllComponents } from '@config/components/editor/WidgetTree/treeUtils';
-import { projectMarkDirty, projectSnapshotAndDirty } from './projectActions';
+import { projectSnapshotAndDirty, projectThrottledSnapshotAndDirty } from './projectActions';
 import {
   collectAllIds as _collectAllIds,
   collectMovedWidgets as _collectMovedWidgets,
@@ -88,14 +88,8 @@ function _snapshot() {
 }
 
 /** Throttled snapshot for high-frequency mutations (e.g. updateComponent per keystroke). */
-let _lastThrottledSnapshot = 0;
 function _throttledSnapshot(ms = 500) {
-  const now = Date.now();
-  if (now - _lastThrottledSnapshot > ms) {
-    useProjectStore.getState().pushSnapshot();
-    _lastThrottledSnapshot = now;
-  }
-  projectMarkDirty();
+  projectThrottledSnapshotAndDirty(ms);
 }
 
 /**
