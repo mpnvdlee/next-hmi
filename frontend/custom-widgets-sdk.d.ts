@@ -705,6 +705,10 @@ declare function renderSlotWidgets(nodes: WidgetConfig[]): JSX.Element;
 /** The widgets a caller placed in the named slot of the component instance being
  *  rendered, or `[]` outside an instance / for a slot nobody filled. */
 declare function useComponentSlot(slot: string): WidgetConfig[];
+/** True while rendering inside a component instance somebody placed, false while
+ *  the components editor renders a definition on its own canvas. Pair it with
+ *  `useIsPreview` to keep an authoring affordance out of the page preview. */
+declare function useIsComponentInstance(): boolean;
 /** True inside the editor's preview pane, false in the operator runtime — for an
  *  authoring-only affordance the operator must never see. */
 declare function useIsPreview(): boolean;

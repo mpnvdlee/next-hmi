@@ -108,6 +108,7 @@ export const SDK_NAMES = [
   'renderWidget',
   'renderSlotWidgets',
   'useComponentSlot',
+  'useIsComponentInstance',
   'useIsPreview',
   'useActivePage',
   'useAnchoredStyle',

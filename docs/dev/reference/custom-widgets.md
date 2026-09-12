@@ -303,9 +303,14 @@ decide *where* each node goes, or to render a node that is not its own child.
   resolving out to the instance. Use it instead of mapping `renderWidget` over
   slot content.
 - `useIsPreview()` → `boolean` — `true` inside the editor's preview pane, `false`
-  in the operator runtime. For an authoring-only affordance: `ComponentSlot`
-  outlines an unfilled slot with it, so the author can see the hole they are
-  filling while an operator sees nothing.
+  in the operator runtime. For an authoring-only affordance the operator must
+  never see.
+- `useIsComponentInstance()` → `boolean` — `true` while rendering inside a
+  component instance somebody placed, `false` while the components editor renders
+  a definition on its own canvas. Pair it with `useIsPreview` to keep an
+  affordance on that canvas only: `ComponentSlot` outlines an unfilled slot with
+  the two, so the author can see the hole they are filling while the UI preview
+  and the operator show the page as it really is.
 - `useAnchoredStyle(rect, placement)` → `[ref, style]` — positions a panel
   against a trigger's `AnchorRect`: renders at the raw offset, then clamps itself
   into the viewport once measured. Attach the ref and the style to the same
@@ -316,7 +321,7 @@ Worked examples, all three built-in widgets: `Navigation Menu`
 (`renderWidget` for its footer slot, `useActivePage`, `useAnchoredStyle`),
 `Image Container` (`childConfigs` + `renderWidget`, one child per saved
 position) and `Component Slot` (`useComponentSlot` + `renderSlotWidgets` +
-`useIsPreview`).
+`useIsPreview` + `useIsComponentInstance`).
 
 A widget that re-enters the renderer can, in principle, render itself: nothing
 stops a node whose subtree names its own type, and the recursion is yours to

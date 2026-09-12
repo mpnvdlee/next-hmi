@@ -65,9 +65,10 @@ describe('ComponentSlot', () => {
     }
   });
 
-  it('outlines an unfilled slot in the editor preview only', () => {
+  it('outlines an unfilled slot on the components-editor canvas', () => {
     // Without it a definition being authored has nothing to show and the shell
     // around the slot collapses; on a real HMI an unfilled slot is just absent.
+    // No slot context means no caller, which is that canvas and nowhere else.
     const { container } = render(
       <MemoryRouter>
         <PreviewContext.Provider value={true}>
@@ -78,5 +79,23 @@ describe('ComponentSlot', () => {
       </MemoryRouter>,
     );
     expect(container.textContent).toBe('Body');
+  });
+
+  it('draws no outline for a placed instance, preview or not', () => {
+    // A slot context — even an empty one — means an instance is rendering this
+    // definition, so the editor's UI preview shows what the operator will get.
+    for (const preview of [true, false]) {
+      const { container, unmount } = render(
+        <MemoryRouter>
+          <PreviewContext.Provider value={preview}>
+            <ComponentSlotContext.Provider value={{ body: [] }}>
+              <ComponentSlot properties={{ slot: 'body' }} />
+            </ComponentSlotContext.Provider>
+          </PreviewContext.Provider>
+        </MemoryRouter>,
+      );
+      expect(container).toBeEmptyDOMElement();
+      unmount();
+    }
   });
 });

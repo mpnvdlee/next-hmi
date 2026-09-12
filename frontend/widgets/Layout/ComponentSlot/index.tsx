@@ -35,6 +35,7 @@ function slotKeyOf(raw: unknown): string {
  */
 export default function ComponentSlot({ properties, layout }: HmiWidgetProps) {
   const isPreview = useIsPreview();
+  const isInstance = useIsComponentInstance();
   const slot = slotKeyOf(properties?.slot);
   const widgets = useComponentSlot(slot);
   const style = selfLayoutStyle(layout);
@@ -43,9 +44,10 @@ export default function ComponentSlot({ properties, layout }: HmiWidgetProps) {
     // In the components editor a definition renders with no caller, so every
     // slot is empty and the shell around them collapses to a hairline — the
     // author cannot see or size the hole they are authoring. Draw an outline
-    // there. The operator runtime keeps rendering nothing: an unfilled slot is
-    // absent, not an empty box.
-    if (!isPreview) return null;
+    // there. Nowhere else: a placed instance's unfilled slot is absent on the
+    // page, and the editor's UI preview has to show the page the operator gets,
+    // not the affordance the definition was authored with.
+    if (!isPreview || isInstance) return null;
     return (
       <div className="hmi-component hmi-slot hmi-slot--empty" style={style}>
         <span className="hmi-slot__empty-label">
