@@ -23,8 +23,10 @@ import { executeWidgetActions } from '@hmi/utils/widgetActions';
 import Spinner, { PageSpinner } from '@shared/components/Spinner';
 import BootSplash from '@hmi/components/BootSplash';
 import SessionExpiredOverlay from '@shared/components/SessionExpiredOverlay';
-import { setSessionExpiredHandler } from '@shared/utils/api';
+import ProjectUnavailableOverlay from '@shared/components/ProjectUnavailableOverlay';
+import { setProjectUnavailableHandler, setSessionExpiredHandler } from '@shared/utils/api';
 import { useSessionStore } from '@shared/store/sessionStore';
+import { useProjectAvailabilityStore } from '@shared/store/projectAvailabilityStore';
 import { getArea } from '@shared/utils/runtimeBase';
 
 // Wire the dispatcher → widgetActions runner once at module load. This breaks
@@ -38,6 +40,12 @@ registerActionRunner(executeWidgetActions);
 // app — the manager SPA (which never reaches this module) owns its own login
 // screen. Registered at module scope so the fetches below are already covered.
 setSessionExpiredHandler(() => useSessionStore.getState().markManagerSessionExpired());
+
+// Same seam for the other way a project document ends up with no backend: the
+// manager served this page itself because the instance behind the URL isn't
+// running, so every call 503s. The store confirms the reason with the manager
+// before blocking — a 503 also covers an instance that is merely still starting.
+setProjectUnavailableHandler(() => void useProjectAvailabilityStore.getState().resolve());
 
 // Ask for the project's themes as this module evaluates — the earliest point
 // the app exists at all. The request then flies in parallel with the view
@@ -230,6 +238,7 @@ export default function AppInner() {
           showing it here only reads as a colour flip a moment later. */}
       <Suspense fallback={<PageSpinner variant="cfg" />}>{routes}</Suspense>
       <SessionExpiredOverlay />
+      <ProjectUnavailableOverlay />
     </>
   );
 }

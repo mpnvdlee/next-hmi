@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from collections.abc import Callable
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from urllib.parse import quote
@@ -382,6 +383,14 @@ def _unavailable_reason(project_id: str) -> str | None:
     return "crashed" if status == "crashed" else "stopped"
 
 
+# Set by the SPA block below when this build ships a frontend bundle. A project
+# document whose instance is gone has no child to serve it, so the manager
+# renders the bundle itself and the app explains the outage in place
+# (ProjectUnavailableOverlay). A source checkout has no bundle to render, so the
+# guard falls back to bouncing the navigation to the dashboard.
+_render_instance_shell: Callable[[str], str] | None = None
+
+
 async def _proxy_ws_to_child(websocket: WebSocket, project_id: str) -> None:
     """Bridge a browser WebSocket to the project child's ``/ws``.
 
@@ -479,6 +488,10 @@ async def _proxy_http_to_child(
         raise HTTPException(status_code=404)
     reason = _unavailable_reason(project_id)
     if reason is not None and _is_document_request(request):
+        if _render_instance_shell is not None:
+            return HTMLResponse(
+                _render_instance_shell(forwarded_prefix or f"/runtime/{project_id}/")
+            )
         return RedirectResponse(
             url=f"/projects?unavailable={project_id}&reason={reason}", status_code=303
         )
@@ -602,6 +615,20 @@ if _frontend_dist_env:
             base_path="/",
             mode="manager",
         )
+
+    def _render_instance_index(base_path: str) -> str:
+        # Same bundle, told it is a project document under `base_path`, so the
+        # app boots the instance routes and its own 503s drive the overlay —
+        # rather than the manager dashboard appearing at a project URL.
+        return frontend_serve.render_index_html(
+            _frontend_dist,
+            _frontend_dist / "external-libraries",
+            _frontend_dist / "external-modules.json",
+            base_path=base_path,
+            mode="instance",
+        )
+
+    _render_instance_shell = _render_instance_index
 
     _spa_route_start = len(app.router.routes)
 

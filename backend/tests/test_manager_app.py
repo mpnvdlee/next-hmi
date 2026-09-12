@@ -390,8 +390,11 @@ def test_runtime_editor_aliases_503_when_authed_unknown_project(client: TestClie
 def test_document_navigation_to_unopenable_project_is_sent_back_to_projects(
     client: TestClient, prefix: str
 ) -> None:
-    """A typed/bookmarked ``/runtime/<id>/`` URL for a project that can't be
-    opened lands on the dashboard with a reason, not a raw 503 JSON body."""
+    """Fallback for a build with no frontend bundle to render (a source
+    checkout): a typed/bookmarked ``/runtime/<id>/`` URL for a project that
+    can't be opened lands on the dashboard with a reason, not a raw 503 JSON
+    body. A build that ships the bundle serves the project shell instead and
+    explains the outage in place — see the test below."""
     client.post("/api/manager/auth/setup", json={"password": "secret"})
 
     resp = client.get(
@@ -399,6 +402,61 @@ def test_document_navigation_to_unopenable_project_is_sent_back_to_projects(
     )
     assert resp.status_code == 303
     assert resp.headers["location"] == "/projects?unavailable=ghost&reason=unknown"
+
+
+@pytest.mark.parametrize("prefix", ["runtime", "editor"])
+def test_document_navigation_to_unopenable_project_is_served_the_project_shell(
+    monkeypatch, tmp_path: Path, prefix: str
+) -> None:
+    """With a bundle to render, the manager answers a project document itself
+    rather than bouncing it: there is no child to serve that URL, so the app
+    boots in *instance* mode under the project's own base and says why it is
+    empty (ProjectUnavailableOverlay) without the operator losing the URL."""
+    import importlib
+    import os
+
+    from services import frontend_serve
+
+    home_dir = tmp_path / "runtime-home"
+    home_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(runtime_home, "runtime_home_path", lambda: home_dir)
+    monkeypatch.setenv("NEXTHMI_DATA_DIR", str(home_dir))
+
+    dist = tmp_path / "dist"
+    (dist / "_app").mkdir(parents=True)
+    (dist / "index.html").write_text(
+        '<!doctype html><html><head></head><body><div id="root"></div></body></html>'
+    )
+    frontend_serve.reset_render_cache()
+
+    import manager
+
+    prev = os.environ.get("NEXTHMI_FRONTEND_DIST")
+    os.environ["NEXTHMI_FRONTEND_DIST"] = str(dist)
+    try:
+        manager = importlib.reload(manager)
+        monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
+        monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
+        monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
+        with TestClient(manager.app) as tc:
+            tc.post("/api/manager/auth/setup", json={"password": "secret"})
+            resp = tc.get(
+                f"/{prefix}/ghost/", headers={"accept": "text/html"}, follow_redirects=False
+            )
+            assert resp.status_code == 200
+            assert 'window.__NEXTHMI_MODE__="instance"' in resp.text
+            assert f'window.__NEXTHMI_BASE__="/{prefix}/ghost/"' in resp.text
+
+            # An XHR under the same prefix keeps the machine-readable failure —
+            # that 503 is what drives the overlay.
+            assert tc.get(f"/{prefix}/ghost/api/health").status_code == 503
+    finally:
+        if prev is None:
+            os.environ.pop("NEXTHMI_FRONTEND_DIST", None)
+        else:
+            os.environ["NEXTHMI_FRONTEND_DIST"] = prev
+        frontend_serve.reset_render_cache()
+        importlib.reload(manager)
 
 
 def test_non_document_requests_still_get_the_503(client: TestClient) -> None:

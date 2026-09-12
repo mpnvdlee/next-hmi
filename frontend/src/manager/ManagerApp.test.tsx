@@ -548,6 +548,61 @@ describe('projects dashboard', () => {
   });
 });
 
+describe('unavailable bounce', () => {
+  /** The manager 303s a `/runtime|editor/<id>/` navigation it cannot serve to
+   *  `/projects?unavailable=…`; the dashboard reads that off the real location,
+   *  not the router's, so the tests drive window.history directly. */
+  function landOn(search: string) {
+    window.history.replaceState({}, '', `/projects${search}`);
+    useProjectsStore.setState({ projects: [project()] });
+    renderAt('/projects');
+  }
+
+  afterEach(() => {
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('says why a project could not be opened and clears the query', async () => {
+    landOn('?unavailable=p1&reason=stopped');
+
+    expect(
+      await screen.findByText(/Can't open .p1. — it is not running\. Start it first\./),
+    ).toBeInTheDocument();
+    expect(window.location.search).toBe('');
+  });
+
+  it.each([
+    ['unknown', /no project with that id is registered on this device\./],
+    ['missing', /its project folder is missing\./],
+    ['crashed', /the instance crashed\./],
+  ])('reports the %s reason the manager sent', async (reason, message) => {
+    landOn(`?unavailable=p1&reason=${reason}`);
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+  });
+
+  it('falls back to the stopped wording for a reason it does not know', async () => {
+    landOn('?unavailable=p1&reason=something-new');
+
+    expect(await screen.findByText(/it is not running\. Start it first\./)).toBeInTheDocument();
+  });
+
+  it('says nothing on a plain visit to the dashboard', () => {
+    landOn('');
+
+    expect(screen.queryByText(/Can't open/)).toBeNull();
+  });
+
+  it('dismisses the message', async () => {
+    landOn('?unavailable=p1&reason=stopped');
+    await screen.findByText(/Can't open/);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+    expect(screen.queryByText(/Can't open/)).toBeNull();
+  });
+});
+
 describe('project version / upgrade gate', () => {
   it('opens an upgrade dialog instead of starting a project that needs one', async () => {
     const start = vi.fn().mockResolvedValue(undefined);
