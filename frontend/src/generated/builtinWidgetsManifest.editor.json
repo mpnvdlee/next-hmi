@@ -127,6 +127,12 @@
           }
         ]
       },
+      "radius": {
+        "format": "length",
+        "label": "Radius",
+        "defaultToken": "--hmi-radius",
+        "group": "Appearance"
+      },
       "variable": {
         "label": "Variable",
         "description": "Optional struct driving the button from the PLC: bVisible and bEnabled gate it, bValue is written on press."
@@ -436,6 +442,12 @@
         "label": "Icon",
         "group": "Appearance",
         "description": "Shown when the dot is not pulsing."
+      },
+      "radius": {
+        "format": "length",
+        "label": "Radius",
+        "defaultToken": "--hmi-radius-full",
+        "group": "Appearance"
       }
     }
   },

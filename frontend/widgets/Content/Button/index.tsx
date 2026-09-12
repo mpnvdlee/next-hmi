@@ -19,6 +19,13 @@ export const schema = {
       { label: 'Outline', value: 'outline' },
     ],
   },
+  radius: {
+    type: 'string' as const,
+    format: 'length' as const,
+    label: 'Radius',
+    defaultToken: '--hmi-radius',
+    group: 'Appearance',
+  },
   variable: {
     type: 'struct' as const,
     label: 'Variable',
@@ -52,12 +59,19 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   const iconName = getPropString(properties, 'iconName', '', evalCtx);
   const label = getPropString(properties, 'label', 'Button', evalCtx);
   const variant = getPropString(properties, 'variant', 'solid', evalCtx);
+  const radius = getPropString(properties, 'radius', '', evalCtx);
   const isOutline = variant === 'outline';
   const colorStyle: React.CSSProperties = color
     ? isOutline
       ? { color, borderColor: color }
       : { backgroundColor: color, borderColor: color }
     : {};
+
+  // The radius rides a custom property rather than a literal inline
+  // `borderRadius`: the value is consumed by `.hmi-button__btn` one level down,
+  // and leaving it unset there keeps the themed default in the stylesheet.
+  const style: Record<string, string | number> = { ...selfLayoutStyle(layout) };
+  if (radius) style['--hmi-btn-radius'] = radius;
 
   const IconComp = iconName && isBuiltinIconId(iconName) ? getBuiltinIconComponent(iconName) : null;
   const iconIsCustomAsset = iconName ? isCustomIconAssetPath(iconName) : false;
@@ -78,7 +92,7 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   return (
     <div
       className={`hmi-component hmi-button${!bEnabled ? ' hmi-button--disabled' : ''}`}
-      style={selfLayoutStyle(layout)}
+      style={style}
     >
       <button
         className={`hmi-button__btn${isOutline ? ' hmi-button__btn--outline' : ''}`}

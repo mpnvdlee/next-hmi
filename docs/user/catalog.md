@@ -117,6 +117,7 @@ Runs actions and can bind a writable boolean struct (bVisible / bEnabled / bValu
 | `iconName` | Icon | `icon` |
 | `color` | Color | `color` |
 | `variant` | Style | `String` |
+| `radius` | Radius | `String` |
 | `variable` | Variable | `struct` |
 | `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |
@@ -211,6 +212,7 @@ A tone-colored status pill, with an optional second line and pulsing dot.
 | `tone` | Tone | `String` |
 | `pulse` | Pulse | `Boolean` |
 | `iconName` | Icon | `icon` |
+| `radius` | Radius | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 

@@ -41,6 +41,20 @@ describe('Button', () => {
     expect(screen.getByRole('button', { name: 'Start Motor' })).toBeInTheDocument();
   });
 
+  it('emits the radius override as a custom property, not a literal style', () => {
+    const { container } = renderButton({ label: 'Stop', radius: '2px' });
+    const el = container.firstElementChild as HTMLElement;
+
+    expect(el.style.getPropertyValue('--hmi-btn-radius')).toBe('2px');
+  });
+
+  it('leaves the radius override unset when no radius is configured', () => {
+    const { container } = renderButton({ label: 'Stop' });
+    const el = container.firstElementChild as HTMLElement;
+
+    expect(el.style.getPropertyValue('--hmi-btn-radius')).toBe('');
+  });
+
   it('writes bValue on click when bound to a variable', async () => {
     const user = userEvent.setup();
     renderButton({ label: 'Start', variable: { $var: { path: 'PLC:Motor/Cmd' } } });

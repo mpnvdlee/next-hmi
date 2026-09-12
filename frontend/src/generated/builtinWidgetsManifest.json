@@ -65,7 +65,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "b43ec4eafb43de86",
+    "buildTs": "3d6a1504b06f7775",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -81,6 +81,9 @@
         "type": "color"
       },
       "variant": {
+        "type": "string"
+      },
+      "radius": {
         "type": "string"
       },
       "variable": {
@@ -296,7 +299,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "774e342949b784aa",
+    "buildTs": "6b3e535768880e90",
     "displayName": "Status Pill",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -316,6 +319,9 @@
       },
       "iconName": {
         "type": "icon"
+      },
+      "radius": {
+        "type": "string"
       }
     },
     "schemaError": null

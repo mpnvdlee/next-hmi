@@ -366,6 +366,12 @@
             "defaultValue": "solid"
           },
           {
+            "key": "radius",
+            "label": "Radius",
+            "type": "String",
+            "group": "Appearance"
+          },
+          {
             "key": "variable",
             "label": "Variable",
             "type": "struct"
@@ -696,6 +702,12 @@
             "key": "iconName",
             "label": "Icon",
             "type": "icon",
+            "group": "Appearance"
+          },
+          {
+            "key": "radius",
+            "label": "Radius",
+            "type": "String",
             "group": "Appearance"
           },
           {
