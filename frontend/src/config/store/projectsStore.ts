@@ -43,6 +43,9 @@ export interface ProjectEntry {
   /** Set once this project has actually been migrated; kept around (even
    * after it is no longer the current format) as a pointer to the backup. */
   lastMigration: ProjectMigrationRecord | null;
+  /** When the project's main-page thumbnail was last rasterised, or null if
+   * the project has never been saved and so has no thumbnail yet. */
+  thumbnailUpdatedAt: string | null;
 }
 
 export type PeerScheme = 'http' | 'https';

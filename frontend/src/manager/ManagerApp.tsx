@@ -31,6 +31,7 @@ import SystemInfoSection from '@config/components/admin/SystemInfoSection';
 import RuntimeHomeSection from '@config/components/admin/RuntimeHomeSection';
 import LogsSection from '@config/components/admin/LogsSection';
 import LogViewerModal from '@config/components/admin/LogViewerModal';
+import ProjectThumbnail from './ProjectThumbnail';
 import SecuritySection from '@config/components/admin/SecuritySection';
 import HttpsSection from '@config/components/admin/HttpsSection';
 import TelemetrySection from '@config/components/admin/TelemetrySection';
@@ -445,6 +446,7 @@ function ProjectsPage() {
                       .filter(Boolean)
                       .join(' ')}
                   >
+                    <ProjectThumbnail id={p.id} name={p.name} updatedAt={p.thumbnailUpdatedAt} />
                     <div className="project-row__body">
                       <div className="project-row__title-line">
                         <span className="project-row__name">

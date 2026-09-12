@@ -32,6 +32,11 @@ Browse to the origin root (`http://localhost:8000` by default) and sign in with 
 
 The id is the project's address: it is what appears in `/runtime/<id>/` and `/editor/<id>/`, in the instance log folder, and in the scope of an MCP token. It is derived from the name when the project is created, and it stays put afterwards unless you change it deliberately — see **Rename** below.
 
+Each row shows a picture of that project's main page as it looked the last time
+the project was saved in the editor. A project that has never been saved shows
+a plain placeholder instead. The picture is stored on this installation only —
+it never travels with an export, a zip, or a transfer to another manager.
+
 Each row carries the actions for that project:
 
 | Control | Does |

@@ -24,6 +24,7 @@ function project(overrides: Partial<ProjectEntry> = {}): ProjectEntry {
     needsUpgrade: false,
     unsupportedFormat: false,
     lastMigration: null,
+    thumbnailUpdatedAt: null,
     ...overrides,
   };
 }

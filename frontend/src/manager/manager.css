@@ -87,3 +87,25 @@
 .mgr-default-toggle input:disabled {
   cursor: not-allowed;
 }
+
+.project-thumb {
+  align-self: stretch;
+  height: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface-raised);
+}
+
+.project-thumb--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.project-thumb__initial {
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-text-lg);
+  font-weight: var(--cfg-fw-bold);
+}

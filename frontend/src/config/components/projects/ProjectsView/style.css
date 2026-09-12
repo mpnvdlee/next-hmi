@@ -51,13 +51,14 @@
 
 .project-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: var(--cfg-space-3) var(--cfg-space-4);
   align-items: center;
   padding: var(--cfg-space-4) var(--cfg-space-5);
   border: 1px solid var(--cfg-border);
   border-radius: var(--cfg-radius);
   background: var(--cfg-surface);
+  min-height: 6rem;
 }
 
 .project-row--live {
