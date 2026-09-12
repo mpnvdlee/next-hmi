@@ -1874,7 +1874,7 @@
           {
             "key": "variable",
             "label": "Value",
-            "type": "Float | Integer | Boolean",
+            "type": "Float | Integer",
             "group": "Data"
           },
           {

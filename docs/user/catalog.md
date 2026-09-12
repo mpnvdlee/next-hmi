@@ -487,7 +487,7 @@ Displays a numeric value with a label and unit.
 
 | Property | Label | Type |
 |---|---|---|
-| `variable` | Value | `Float | Integer | Boolean` |
+| `variable` | Value | `Float | Integer` |
 | `label` | Label | `String` |
 | `unit` | Unit | `String` |
 | `decimals` | Decimal places | `Integer` |

@@ -782,7 +782,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "bde4c28db3fee0d0",
+    "buildTs": "87273dca2761463a",
     "displayName": "Value Display",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -791,8 +791,7 @@
       "variable": {
         "type": [
           "float",
-          "integer",
-          "boolean"
+          "integer"
         ]
       },
       "label": {
