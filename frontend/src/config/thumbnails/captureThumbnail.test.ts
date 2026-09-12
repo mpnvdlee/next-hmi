@@ -64,7 +64,10 @@ describe('captureThumbnail', () => {
     // so assert identity directly on the recorded call args instead of
     // routing the element through `toHaveBeenCalledWith`.
     expect(domToBlob).toHaveBeenCalledTimes(1);
-    const [target, screenshotOptions] = vi.mocked(domToBlob).mock.calls[0];
+    const [target, screenshotOptions] = vi.mocked(domToBlob).mock.calls[0] as unknown as [
+      Node,
+      Record<string, unknown>,
+    ];
     expect(target).toBe(hmiLayout);
     expect(screenshotOptions).toEqual({
       width: 1280,
