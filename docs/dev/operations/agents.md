@@ -239,10 +239,10 @@ one it did not receive as a child — uses the SDK's composition primitives
 [Composition](../reference/custom-widgets.md#composition). `NavigationMenu` and
 `ImageContainer` are the worked examples.
 
-The app itself can still render a built-in widget outside the page tree — the
-zero-config sidebar does, via
-`frontend/src/hmi/components/FallbackNavigationMenu.tsx`, which reads the entry
-off the registry rather than importing a module the app does not have.
+Every widget the runtime paints comes from a node in the page tree. Nothing is
+rendered outside it — a widget with no node behind it is one the editor cannot
+select, move or delete, so a project that wants navigation adds a
+`NavigationMenu` to a shell region like any other widget.
 
 ### Add a property source
 

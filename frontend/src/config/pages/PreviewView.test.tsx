@@ -473,3 +473,18 @@ describe('PreviewView — page-group selection highlighting', () => {
     expect(document.querySelector('.hmi-page-group--selected')).toBeNull();
   });
 });
+
+describe('PreviewView — empty shell regions', () => {
+  beforeEach(() => setupStores([BUTTON_PAGE]));
+
+  it('leaves an empty left sidebar out of the layout instead of conjuring a navigation menu', () => {
+    // A new project starts with every shell region empty. Nothing may appear
+    // there that the page tree does not name: a widget with no node behind it
+    // is one the editor cannot select, move or delete. With no content the
+    // region drops out entirely rather than reserving width for a menu.
+    const { container } = renderPreview();
+
+    expect(container.querySelector('[data-region="leftSidebar"]')).toBeNull();
+    expect(container.querySelector('.hmi-navmenu')).toBeNull();
+  });
+});
