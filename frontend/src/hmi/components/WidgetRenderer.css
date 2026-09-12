@@ -69,7 +69,11 @@
   overflow: hidden;
 }
 
-/* Base overlay — layout only */
+/* Base overlay — layout only.
+ * The ring is an `outline` drawn inward, the same construction as the editor
+ * selection ring above, so the two land on the same rect and agree at the
+ * corners. A `border` here carried its own `--hmi-radius`, which rounded the
+ * overlay against a square selection ring. */
 .hmi-binding-overlay {
   position: absolute;
   inset: 0;
@@ -78,7 +82,7 @@
   align-items: center;
   justify-content: center;
   gap: 0.25rem;
-  border-radius: var(--hmi-radius);
+  outline-offset: -2px;
   pointer-events: none;
   z-index: 10;
 }
@@ -86,20 +90,35 @@
 /* Variable disabled (in snapshot but not present) — solid red */
 .hmi-binding-overlay--disabled {
   background: var(--hmi-binding-disabled-bg);
-  border: 2px solid var(--hmi-binding-disabled-border);
+  outline: 2px solid var(--hmi-binding-disabled-border);
 }
 
 /* OPC UA / backend disconnected — dashed amber */
 .hmi-binding-overlay--disconnected {
   background: var(--hmi-binding-disconnected-bg);
-  border: 2px dashed var(--hmi-binding-disconnected-border);
+  outline: 2px dashed var(--hmi-binding-disconnected-border);
 }
 
 /* Binding sound, no value ever delivered — dashed amber, same family as
    disconnected: both mean "no data", neither means "wrong". */
 .hmi-binding-overlay--nodata {
   background: var(--hmi-binding-nodata-bg);
-  border: 2px dashed var(--hmi-binding-nodata-border);
+  outline: 2px dashed var(--hmi-binding-nodata-border);
+}
+
+/* Selected outranks marked. The overlay is a positioned child of the wrapper,
+   so it paints above the wrapper's selection ring and its own ring hid it —
+   the selected widget stopped reading as selected the moment it was marked.
+   When this widget is the selected one the overlay carries the selection ring
+   instead: same rect, so nothing shifts, and the tint and icon still say what
+   is wrong. Scoped with `>` so a marked *child* of a selected container keeps
+   its own ring. */
+.hmi-preview-node--selected > .hmi-binding-wrapper > .hmi-binding-overlay,
+.hmi-preview-node--selected[data-widget-type^='$component:']
+  > .hmi-preview-node
+  > .hmi-binding-wrapper
+  > .hmi-binding-overlay {
+  outline: 2px solid var(--hmi-editor-selection);
 }
 
 /* Shared icon base */
