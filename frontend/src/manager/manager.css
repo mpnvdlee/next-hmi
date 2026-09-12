@@ -88,10 +88,13 @@
   cursor: not-allowed;
 }
 
+/* The row's grid gives this cell a fixed 10rem track; sizing the picture from
+   its own aspect-ratio instead would let the 960px-wide PNG size the `auto`
+   track and swallow the whole row. */
 .project-thumb {
   align-self: stretch;
+  width: 100%;
   height: 100%;
-  aspect-ratio: 16 / 9;
   object-fit: cover;
   border: 1px solid var(--cfg-border);
   border-radius: var(--cfg-radius);
