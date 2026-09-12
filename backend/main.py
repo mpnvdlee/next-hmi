@@ -16,6 +16,7 @@ from api.projects_api import router as projects_router
 from api.recipe_api import router as recipe_router
 from api.system_api import router as system_router
 from api.theme_api import router as theme_router
+from api.thumbnail_api import instance_router as thumbnail_router
 from api.users_api import router as users_router
 from api.widgets_api import router as widgets_router
 from core import project_bootstrap
@@ -280,6 +281,7 @@ app.include_router(projects_router)
 app.include_router(internal_router)
 app.include_router(historian_router)
 app.include_router(http_source_router)
+app.include_router(thumbnail_router)
 
 # Static mounts for live-project content. ``follow_symlink=False`` prevents a
 # symlink in user-controlled content (e.g. ``ln -s / mylib`` inside

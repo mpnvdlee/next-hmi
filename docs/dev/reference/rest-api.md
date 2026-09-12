@@ -744,6 +744,15 @@ Manager-only project setup (device-manager authentication required):
 
 ---
 
+## Thumbnail API
+
+- `POST /api/thumbnail`
+  - Body: a PNG, at most 2 MB. Served by the project instance only.
+  - Stores `<runtime_home>/.thumbnails/<activeProjectId>.png`. The project is the instance's own active project — the request carries no id, so an editor session cannot overwrite another project's thumbnail.
+  - `409` when no project is live on this instance. `422` when the body is not a PNG, exceeds the limit, or the active project's metadata is unreadable. `204` on success.
+
+---
+
 ## Manager peer transfer API
 
 Wire contract only — see [peer-transfer.md](peer-transfer.md) for the trust

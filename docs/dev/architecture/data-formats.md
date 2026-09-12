@@ -52,6 +52,7 @@ Outside any project, the runtime keeps its own state:
   licenses/               ← signed Ed25519 license tokens, one file per license (<id>.key)
   .logs/                  ← rotating application logs
   .widget-build/          ← compiled custom-widget JS (shared across all instances)
+  .thumbnails/            ← per-project main-page screenshots (<projectId>.png), installation-local
   .restart-pending        ← sentinel written by /api/system/restart
   .peer-tokens.json       ← hashed manager peer tokens (no bearer plaintext)
   .peer-transfer-sender.json   ← durable outgoing (push) phases, byte counts, and retry fingerprints (no bearer plaintext)
