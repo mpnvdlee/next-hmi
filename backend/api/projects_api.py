@@ -45,6 +45,8 @@ from fastapi import APIRouter, File, Form, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from api.thumbnail_api import delete_thumbnail, thumbnail_updated_at
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -165,6 +167,7 @@ def _entry_dict(entry: ProjectEntry, *, default_id: str | None = None) -> dict[s
             if metadata is not None and metadata.lastMigration is not None
             else None
         ),
+        "thumbnailUpdatedAt": thumbnail_updated_at(entry.id),
     }
 
 
@@ -779,6 +782,7 @@ def delete(project_id: str, deleteFolder: bool = False) -> dict[str, Any]:
 
         manifest.projects = [p for p in manifest.projects if p.id != entry.id]
         save_manifest(manifest)
+    delete_thumbnail(entry.id)
     logger.info("Removed project '%s' (%s) from manifest", entry.name, entry.id)
     return {"id": entry.id, "deletedFolder": bool(deleteFolder)}
 

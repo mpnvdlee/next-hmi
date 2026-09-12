@@ -936,3 +936,70 @@ def test_import_rejects_malformed_component_without_registration(
     )
     assert not destination.exists()
     assert manifest_mod.load_manifest(home / "projects.json").projects == []
+
+
+def test_project_entry_reports_thumbnail_timestamp(client, home, tmp_path):
+    created = client.post(
+        "/api/projects", json={"name": "T", "path": str(tmp_path / "t")}
+    ).json()
+    listed = client.get("/api/projects").json()
+    entry = next(p for p in listed["projects"] if p["id"] == created["id"])
+    assert entry["thumbnailUpdatedAt"] is None
+
+    shot = home / ".thumbnails" / f"{created['id']}.png"
+    shot.parent.mkdir(parents=True, exist_ok=True)
+    shot.write_bytes(b"\x89PNG\r\n\x1a\n")
+    listed = client.get("/api/projects").json()
+    entry = next(p for p in listed["projects"] if p["id"] == created["id"])
+    assert entry["thumbnailUpdatedAt"] is not None
+
+
+def test_removing_a_project_deletes_its_thumbnail(client, home, tmp_path):
+    created = client.post(
+        "/api/projects", json={"name": "T2", "path": str(tmp_path / "t2")}
+    ).json()
+    shot = home / ".thumbnails" / f"{created['id']}.png"
+    shot.parent.mkdir(parents=True, exist_ok=True)
+    shot.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    client.delete(f"/api/projects/{created['id']}")
+    assert not shot.exists()
+
+
+def test_removing_a_project_with_delete_folder_also_deletes_its_thumbnail(client, home, tmp_path):
+    created = client.post(
+        "/api/projects", json={"name": "T3", "path": str(tmp_path / "t3")}
+    ).json()
+    shot = home / ".thumbnails" / f"{created['id']}.png"
+    shot.parent.mkdir(parents=True, exist_ok=True)
+    shot.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    res = client.delete(f"/api/projects/{created['id']}?deleteFolder=true")
+    assert res.status_code == 200
+    assert not shot.exists()
+
+
+def test_removal_succeeds_even_when_the_thumbnail_cannot_be_deleted(
+    client, home, tmp_path, monkeypatch
+):
+    created = client.post(
+        "/api/projects", json={"name": "T4", "path": str(tmp_path / "t4")}
+    ).json()
+    shot = home / ".thumbnails" / f"{created['id']}.png"
+    shot.parent.mkdir(parents=True, exist_ok=True)
+    shot.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    original_unlink = Path.unlink
+
+    def failing_unlink(self, *args, **kwargs):
+        if self == shot:
+            raise PermissionError("locked")
+        return original_unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", failing_unlink)
+
+    res = client.delete(f"/api/projects/{created['id']}")
+    assert res.status_code == 200
+
+    listed = client.get("/api/projects").json()
+    assert all(p["id"] != created["id"] for p in listed["projects"])

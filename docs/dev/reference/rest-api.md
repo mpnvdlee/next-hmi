@@ -704,7 +704,8 @@ Base prefix: `/api/projects`. Manages the project list in the runtime-home manif
   - `operatorSetupStatus` is `required`, `complete`, or `error`;
     `operatorSetupError` describes missing, unreadable, corrupt, or invalid
     credential state. Error-state projects cannot be started or proxied.
-  - Returns `{ defaultProjectId, defaultProjectsRoot, projects: [{ id, name, path, addedAt, lastOpenedAt, status, isDefault, formatVersion, minAppVersion, needsUpgrade, unsupportedFormat, lastMigration }] }`. `status` is computed (`"present"` or `"missing"`), not stored. The running set is authoritative for what's actually live — see `/api/manager/running`.
+  - Returns `{ defaultProjectId, defaultProjectsRoot, projects: [{ id, name, path, addedAt, lastOpenedAt, status, isDefault, formatVersion, minAppVersion, needsUpgrade, unsupportedFormat, lastMigration, thumbnailUpdatedAt }] }`. `status` is computed (`"present"` or `"missing"`), not stored. The running set is authoritative for what's actually live — see `/api/manager/running`.
+  - `thumbnailUpdatedAt` is the stored thumbnail's mtime as an ISO 8601 string, or `null` when the project has never saved one. See `GET /api/projects/{id}/thumbnail` below.
   - The format fields are read from the project's own `config.json` (see [data-formats.md](../architecture/data-formats.md)) and are `null` when `status` is `"missing"`. `unsupportedFormat` is `formatVersion > PROJECT_FORMAT_VERSION` (this build is older than the project); `needsUpgrade` is `formatVersion < PROJECT_FORMAT_VERSION` **or** `minAppVersion` is `null` (a project with no release stamp is replayed through the chain rather than trusted). `minAppVersion` is the release that stamped the format — display only, for naming the version an operator needs. `lastMigration` is `{ fromVersion, toVersion, at, backup }` or `null`.
 - `POST /api/projects`
   - Body: `{ name, path, template? }`. Validates the destination is empty + writable, seeds from the chosen template, writes a fresh `project` metadata block into `config.json`, and appends to the manifest. Returns 409 when the path already carries project metadata.
@@ -726,6 +727,7 @@ Base prefix: `/api/projects`. Manages the project list in the runtime-home manif
   - Body: `{ path }`. Re-points a missing entry. Rejects (409) if the folder's metadata id doesn't match the manifest entry; rejects (422) if no metadata file is present.
 - `DELETE /api/projects/{id}?deleteFolder=<bool>`
   - Removes the entry. With `deleteFolder=true`, `rmtree`s the folder — but only after confirming `config.json` contains a valid `project` metadata block (defense against wrong-path wipeouts). Refuses (409) to delete a project that is in the manifest `running` set — stop it first.
+  - Also deletes the project's stored thumbnail, if any, regardless of `deleteFolder` — the screenshot lives outside the project folder.
 - `GET /api/projects/{id}/export`
   - Streams the project as a zip with `Content-Disposition: attachment; filename="<slug>.zip"`. 409 if the folder is missing on disk.
 - `POST /api/projects/import`
@@ -750,6 +752,9 @@ Manager-only project setup (device-manager authentication required):
   - Body: a PNG, at most 2 MB. Served by the project instance only.
   - Stores `<runtime_home>/.thumbnails/<activeProjectId>.png`. The project is the instance's own active project — the request carries no id, so an editor session cannot overwrite another project's thumbnail.
   - `409` when no project is live on this instance. `422` when the body is not a PNG, exceeds the limit, or the active project's metadata is unreadable. `204` on success.
+- `GET /api/projects/{id}/thumbnail`
+  - Serves the stored PNG for a project, with `ETag`/`Last-Modified`. Manager app only.
+  - `404` when the project is unknown or has no thumbnail yet.
 
 ---
 

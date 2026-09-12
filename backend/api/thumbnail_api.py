@@ -10,17 +10,20 @@ process values out of an export or a peer push.
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 
 from core import runtime_home
-from core.exceptions import ValidationError
-from core.manifest import read_project_metadata
+from core.exceptions import NotFoundError, ValidationError
+from core.manifest import load_manifest, read_project_metadata
 from core.storage import active_project_root, write_bytes_atomic
 from fastapi import APIRouter, Request, Response
+from fastapi.responses import FileResponse
 
 logger = logging.getLogger(__name__)
 
 instance_router = APIRouter(prefix="/api", tags=["thumbnail"])
+manager_router = APIRouter(prefix="/api/projects", tags=["thumbnail"])
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 MAX_THUMBNAIL_BYTES = 2 * 1024 * 1024
@@ -59,3 +62,39 @@ async def put_thumbnail(request: Request) -> Response:
 
     write_bytes_atomic(thumbnail_path(project_id), body)
     return Response(status_code=204)
+
+
+def _known_project_ids() -> set[str]:
+    return {entry.id for entry in load_manifest().projects}
+
+
+def thumbnail_updated_at(project_id: str) -> str | None:
+    path = thumbnail_path(project_id)
+    if not path.is_file():
+        return None
+    return datetime.fromtimestamp(path.stat().st_mtime, UTC).isoformat()
+
+
+def delete_thumbnail(project_id: str) -> None:
+    """Best-effort: a project's manifest entry is already gone by the time this
+    runs, so a locked file or a read-only mount must not fail the removal."""
+    path = thumbnail_path(project_id)
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        logger.warning("Could not delete thumbnail %s", path)
+
+
+@manager_router.get("/{project_id}/thumbnail")
+def get_thumbnail(project_id: str) -> FileResponse:
+    """Serve a project's stored thumbnail.
+
+    The id is matched against the manifest rather than trusted as a path
+    segment, so a crafted id cannot read a file outside the thumbnail store.
+    """
+    if project_id not in _known_project_ids():
+        raise NotFoundError(f"Unknown project {project_id}")
+    path = thumbnail_path(project_id)
+    if not path.is_file():
+        raise NotFoundError(f"No thumbnail for project {project_id}")
+    return FileResponse(path, media_type="image/png")

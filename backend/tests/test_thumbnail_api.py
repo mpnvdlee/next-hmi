@@ -149,3 +149,33 @@ async def test_aborts_a_streamed_oversized_body_before_buffering_it_all(
     assert res.status_code == 422
     assert pulled["n"] < total_chunks
     assert not (home / ".thumbnails").exists()
+
+
+@pytest.fixture
+def manager_client(monkeypatch, home: Path) -> TestClient:
+    monkeypatch.setattr(thumbnail_api, "_known_project_ids", lambda: {"proj-1"})
+    app = FastAPI()
+    register_exception_handlers(app)
+    app.include_router(thumbnail_api.manager_router)
+    return TestClient(app)
+
+
+def test_reads_back_a_stored_thumbnail(manager_client, home: Path):
+    target = home / ".thumbnails" / "proj-1.png"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(_png_bytes())
+    res = manager_client.get("/api/projects/proj-1/thumbnail")
+    assert res.status_code == 200
+    assert res.content == _png_bytes()
+    assert res.headers["etag"]
+
+
+def test_missing_thumbnail_is_404(manager_client):
+    assert manager_client.get("/api/projects/proj-1/thumbnail").status_code == 404
+
+
+def test_unknown_project_is_404(manager_client, home: Path):
+    target = home / ".thumbnails" / "other.png"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(_png_bytes())
+    assert manager_client.get("/api/projects/other/thumbnail").status_code == 404

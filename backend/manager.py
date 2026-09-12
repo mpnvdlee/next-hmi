@@ -39,6 +39,7 @@ from api.projects_api import router as projects_router
 from api.supervisor_api import router as supervisor_router
 from api.system_api import manager_router as system_router
 from api.telemetry_api import router as telemetry_router
+from api.thumbnail_api import manager_router as thumbnail_manager_router
 from api.tls_api import router as tls_router
 from core import manager_auth, operator_setup, peer_tokens, telemetry, tls_settings
 from core.exceptions import register_exception_handlers
@@ -187,6 +188,7 @@ app.include_router(mcp_tokens_router)
 app.include_router(operator_setup_router)
 app.include_router(supervisor_router)
 app.include_router(projects_router)
+app.include_router(thumbnail_manager_router)
 app.include_router(system_router)
 app.include_router(tls_router)
 app.include_router(telemetry_router)
