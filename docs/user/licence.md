@@ -49,17 +49,19 @@ A custom widget consumes documented runtime globals on `window.__nextHMI__`. Usi
 
 Every load of the operator runtime shows a boot screen with the product logo and the AGPL-3.0 notice, for a minimum of two seconds. That notice is the open-source build's attribution.
 
-The open-source build has no setting for it: the notice is bound to the edition, not to project configuration. White-labelling requires a commercial licence, whose build drops the notice and adds a single **Boot logo** setting (`shell.bootLogo`) that puts your own logo on the boot screen in place of the product mark and name.
+The open-source build has no setting for it: the notice is bound to the edition, not to project configuration. White-labelling requires a commercial licence, which is delivered as the **enterprise build** — that build drops the notice and honours a single **Boot logo** setting (`shell.bootLogo`) that puts your own logo on the boot screen in place of the product mark and name.
 
-That setting is bound to the edition too — the open-source build ignores it, so a white-labelled project opened there shows the product branding again. Nothing verifies a licence at runtime, in either build.
+That setting is bound to the edition too: the open-source build ignores it, so a white-labelled project opened there shows the product branding again.
+
+One consequence worth knowing before you buy. The enterprise build is **activated** — it needs a key, bound to the machine, one per installation. The open-source build is not, contains no licence check of any kind, and never will. So white-labelling means taking on activation, which in practice is a one-time step at commissioning: paste the key, and the panel never asks again. A purchased key has no expiry date, re-issue after a hardware replacement is free, and the check runs only when a project *starts*, never against one already serving screens. See [Licensing](licensing.md) if you are running that build.
 
 ## When you'd want a commercial licence
 
 Three situations, none of which apply to a plant that just runs the thing:
 
-- **You redistribute a modified build** — a machine builder embedding NEXT HMI in shipped equipment, an integrator delivering a modified build to clients, a SaaS vendor hosting one. Priced per shipped unit.
-- **You want to white-label** — replace the boot-screen logo with your own and drop the notice.
-- **You want support, an SLA, or a contractual counterparty** — available to everyone, including AGPL users who never redistribute. It adds a support relationship, never a different binary. Release binaries are currently unsigned; when signing lands it applies to the public release for everyone, not as a paid tier.
+- **You redistribute a modified build** — a machine builder embedding NEXT HMI in shipped equipment, an integrator delivering a modified build to clients, a SaaS vendor hosting one. Priced per installation, once, perpetual; the browser screens on an installation are never counted.
+- **You want to white-label** — replace the boot-screen logo with your own and drop the notice. Same price, same licence, and for many machine builders it is the reason rather than the copyleft.
+- **You want a contractual counterparty, or someone to do the work** — commissioning, migrations, custom widgets, PLC integration. Available to everyone, including AGPL users who never redistribute. It adds a relationship, never a different binary. Note there are no support packages and no response-time commitments: work goes per assignment. Release binaries are currently unsigned; when signing lands it applies to the public release for everyone, not as a paid tier.
 
 How to buy is in [COMMERCIAL.md](../../COMMERCIAL.md).
 
