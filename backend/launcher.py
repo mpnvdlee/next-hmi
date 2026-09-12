@@ -133,6 +133,19 @@ def _read_version() -> str:
     return app_version()
 
 
+def _netstat_port(address: str) -> int | None:
+    """Port out of a ``netstat`` address column, or ``None`` if there is none.
+
+    Splitting on the *last* colon is what separates ``[fe80::8000:1a2b]:139``
+    from a listener on 8000: the hex groups of an IPv6 address spell the same
+    digits as a port, and only the final colon tells the two apart.
+    """
+    _, sep, tail = address.rpartition(":")
+    if not sep or not tail.isdigit():
+        return None
+    return int(tail)
+
+
 def _processes_on_port(port: int) -> list[tuple[int, str]]:
     """Best-effort list of (pid, process_name) LISTENING on *port*.
 
@@ -149,10 +162,22 @@ def _processes_on_port(port: int) -> list[tuple[int, str]]:
             return []
         pids: set[int] = set()
         for line in net.splitlines():
-            if f":{port}" in line and "LISTENING" in line:
-                parts = line.split()
-                with contextlib.suppress(ValueError):
-                    pids.add(int(parts[-1]))
+            # Column-exact, not a substring scan of the whole line: a plain
+            # `":{port}" in line` matches the Foreign Address column too, and
+            # offers the operator an unrelated PID to kill.
+            parts = line.split()
+            if len(parts) < 4 or parts[0].upper() != "TCP" or _netstat_port(parts[1]) != port:
+                continue
+            # A listener's Foreign Address is the wildcard on port 0; every
+            # connected state carries a real peer port. Reading that rather
+            # than the State column keeps this working on a localized Windows,
+            # where the word is LUISTEREN or ABHÖREN — and where a translated
+            # state of two words would shift every column behind it, which is
+            # also why the PID is taken from the end of the row.
+            if _netstat_port(parts[2]) != 0:
+                continue
+            with contextlib.suppress(ValueError):
+                pids.add(int(parts[-1]))
         out: list[tuple[int, str]] = []
         for pid in pids:
             name = "unknown"
@@ -193,26 +218,46 @@ def _processes_on_port(port: int) -> list[tuple[int, str]]:
     return out
 
 
-def _kill_pid(pid: int) -> bool:
+def _kill_pid(pid: int) -> str | None:
+    """Terminate *pid*; ``None`` on success, else the reason it failed.
+
+    The reason is returned rather than swallowed because this runs on an
+    operator's machine with no log to inspect afterwards: "access is denied"
+    (an elevated or other-user process) and "no such process" (a PID that was
+    already gone) need completely different responses, and a bare ``False``
+    makes them indistinguishable on screen.
+    """
     try:
         if sys.platform == "win32":
-            return subprocess.call(
+            done = subprocess.run(
                 ["taskkill", "/F", "/PID", str(pid)],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            ) == 0
+                capture_output=True, text=True,
+            )
+            if done.returncode == 0:
+                return None
+            detail = (done.stderr or done.stdout or "").strip().splitlines()
+            return detail[0] if detail else f"taskkill exited {done.returncode}"
         os.kill(pid, signal.SIGTERM)
-        return True
-    except Exception:
-        return False
+        return None
+    except Exception as exc:
+        return str(exc) or exc.__class__.__name__
 
 
-def _wait_port_free(port: int, deadline_sec: float = 5.0) -> bool:
+def _wait_port_free(host: str, port: int, deadline_sec: float = 5.0) -> bool:
+    """Poll until *port* can actually be bound again, or the deadline passes.
+
+    Bindability is the condition that matters, and it lags the process table:
+    ``taskkill`` returns as soon as the kill is queued, so the listener can be
+    gone from ``netstat`` while the socket is still being torn down. Checking
+    bindability once at that moment reports a successful kill as a failure.
+    """
     end = time.monotonic() + deadline_sec
-    while time.monotonic() < end:
-        if not _processes_on_port(port):
+    while True:
+        if not _processes_on_port(port) and _port_bindable(host, port):
             return True
+        if time.monotonic() >= end:
+            return False
         time.sleep(0.1)
-    return not _processes_on_port(port)
 
 
 def _port_bindable(host: str, port: int) -> bool:
@@ -224,7 +269,13 @@ def _port_bindable(host: str, port: int) -> bool:
     bind_host = host if host else "0.0.0.0"
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            # SO_REUSEADDR means the opposite thing on Windows: rather than
+            # only releasing a lingering TIME_WAIT, it lets this socket bind a
+            # port another socket is *actively* using — which would make the
+            # probe answer "free" for exactly the port conflict it exists to
+            # detect. POSIX still needs it, or a recent shutdown reads as busy.
+            if sys.platform != "win32":
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind((bind_host, port))
         return True
     except OSError:
@@ -273,12 +324,28 @@ def _resolve_port_conflict(host: str, port: int) -> int | None:
         if choice in {"1", "continue"}:
             return port
         if choice in {"2", "kill"}:
-            for pid, _ in occupants:
-                if not _kill_pid(pid):
-                    print(f"  Failed to terminate PID {pid}")
-            if _wait_port_free(port) and _port_bindable(host, port):
+            # Re-scan: the opening listing is stale by now. A second [2] after a
+            # partial kill would otherwise keep firing at PIDs that are already
+            # gone while the process actually holding the port is never touched.
+            occupants = _processes_on_port(port)
+            if not occupants and _port_bindable(host, port):
+                return port
+            for pid, name in occupants:
+                reason = _kill_pid(pid)
+                if reason is not None:
+                    print(f"  Failed to terminate {name} (PID {pid}): {reason}")
+            if _wait_port_free(host, port):
                 return port
             print(f"  Port {port} still in use after kill.")
+            holders = _processes_on_port(port)
+            if holders:
+                for pid, name in holders:
+                    print(f"    - still listening: {name} (PID {pid})")
+            else:
+                # Nothing is listening yet the socket refuses to bind: an OS-level
+                # reservation (Hyper-V/WSL dynamic port range, http.sys) rather
+                # than a process the operator can kill. [3] is the way out.
+                print("    - no process holds it; the port is reserved by the OS.")
             continue
         if choice in {"3", "next"}:
             nxt = _next_free_port(host, port + 1)
