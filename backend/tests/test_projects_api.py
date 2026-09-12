@@ -16,6 +16,7 @@ import pytest
 from api import projects_api, system_api
 from core import manifest as manifest_mod
 from core import mcp_tokens, runtime_home
+from core import project_migrations as pm
 from core.exceptions import register_exception_handlers
 from core.project_packer import pack_project
 from fastapi import FastAPI
@@ -97,6 +98,107 @@ def test_list_marks_missing_and_default(client: TestClient, tmp_path: Path, home
     assert rows[present_id]["isDefault"] is True
     assert rows["ghost"]["status"] == "missing"
     assert rows["ghost"]["isDefault"] is False
+
+
+def test_list_reports_project_version_fields(
+    client: TestClient, tmp_path: Path, home: Path
+) -> None:
+    unstamped_path = tmp_path / "unstamped"
+    unstamped_id = _make_project_folder(unstamped_path, name="Unstamped")
+
+    current_path = tmp_path / "current"
+    current_id = _make_project_folder(current_path, name="Current")
+    manifest_mod.write_project_metadata(
+        current_path,
+        manifest_mod.read_project_metadata(current_path).model_copy(
+            update={
+                "formatVersion": projects_api.PROJECT_FORMAT_VERSION,
+                "minAppVersion": pm.PROJECT_FORMAT_MIN_APP,
+                "lastMigration": manifest_mod.ProjectMigrationRecord(
+                    fromVersion=0,
+                    toVersion=projects_api.PROJECT_FORMAT_VERSION,
+                    at="2026-05-24T10:00:00Z",
+                    backup="/tmp/proj/.backups/pre-migration-20260101T000000Z-app-1.2.3.zip",
+                ),
+            }
+        ),
+    )
+
+    unreleased_path = tmp_path / "unreleased"
+    unreleased_id = _make_project_folder(unreleased_path, name="Unreleased")
+    manifest_mod.write_project_metadata(
+        unreleased_path,
+        manifest_mod.read_project_metadata(unreleased_path).model_copy(
+            update={"formatVersion": projects_api.PROJECT_FORMAT_VERSION}
+        ),
+    )
+
+    newer_path = tmp_path / "newer"
+    newer_id = _make_project_folder(newer_path, name="Newer")
+    manifest_mod.write_project_metadata(
+        newer_path,
+        manifest_mod.read_project_metadata(newer_path).model_copy(
+            update={
+                "formatVersion": projects_api.PROJECT_FORMAT_VERSION + 1,
+                "minAppVersion": "9.9.9",
+            }
+        ),
+    )
+
+    manifest = manifest_mod.ManifestV1(
+        projects=[
+            manifest_mod.ProjectEntry(
+                id=unstamped_id, name="Unstamped", path=str(unstamped_path), addedAt="2026-05-24T10:00:00Z",
+            ),
+            manifest_mod.ProjectEntry(
+                id=current_id, name="Current", path=str(current_path), addedAt="2026-05-24T10:00:00Z",
+            ),
+            manifest_mod.ProjectEntry(
+                id=unreleased_id, name="Unreleased", path=str(unreleased_path), addedAt="2026-05-24T10:00:00Z",
+            ),
+            manifest_mod.ProjectEntry(
+                id=newer_id, name="Newer", path=str(newer_path), addedAt="2026-05-24T10:00:00Z",
+            ),
+            manifest_mod.ProjectEntry(
+                id="ghost", name="Gone", path=str(tmp_path / "does-not-exist"), addedAt="2026-05-24T10:00:00Z",
+            ),
+        ],
+    )
+    manifest_mod.save_manifest(manifest, home / "projects.json")
+
+    rows = {p["id"]: p for p in client.get("/api/projects").json()["projects"]}
+
+    assert rows[unstamped_id]["formatVersion"] == 0
+    assert rows[unstamped_id]["minAppVersion"] is None
+    assert rows[unstamped_id]["needsUpgrade"] is True
+    assert rows[unstamped_id]["unsupportedFormat"] is False
+    assert rows[unstamped_id]["lastMigration"] is None
+
+    assert rows[current_id]["formatVersion"] == projects_api.PROJECT_FORMAT_VERSION
+    assert rows[current_id]["needsUpgrade"] is False
+    assert rows[current_id]["unsupportedFormat"] is False
+    assert rows[current_id]["lastMigration"] == {
+        "fromVersion": 0,
+        "toVersion": projects_api.PROJECT_FORMAT_VERSION,
+        "at": "2026-05-24T10:00:00Z",
+        "backup": "/tmp/proj/.backups/pre-migration-20260101T000000Z-app-1.2.3.zip",
+    }
+
+    # At the current format, but stamped by a build from before the release
+    # field: replayed through the chain rather than trusted.
+    assert rows[unreleased_id]["formatVersion"] == projects_api.PROJECT_FORMAT_VERSION
+    assert rows[unreleased_id]["minAppVersion"] is None
+    assert rows[unreleased_id]["needsUpgrade"] is True
+    assert rows[unreleased_id]["unsupportedFormat"] is False
+
+    assert rows[newer_id]["unsupportedFormat"] is True
+    assert rows[newer_id]["needsUpgrade"] is False
+    assert rows[newer_id]["minAppVersion"] == "9.9.9"
+
+    assert rows["ghost"]["formatVersion"] is None
+    assert rows["ghost"]["minAppVersion"] is None
+    assert rows["ghost"]["needsUpgrade"] is False
+    assert rows["ghost"]["unsupportedFormat"] is False
 
 
 # ── default project ───────────────────────────────────────────────────────────

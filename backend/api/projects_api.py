@@ -33,7 +33,7 @@ from core.manifest import (
     validate_project_id,
     write_project_metadata,
 )
-from core.project_migrations import PROJECT_FORMAT_VERSION
+from core.project_migrations import PROJECT_FORMAT_VERSION, stamp_current_format
 from core.project_packer import (
     UnsafeArchiveError,
     pack_project,
@@ -123,19 +123,43 @@ def _path_status(raw_path: str) -> str:
 
 
 def _entry_dict(entry: ProjectEntry, *, default_id: str | None = None) -> dict[str, Any]:
-    setup_state = operator_setup.state(Path(entry.path).expanduser())
+    path = Path(entry.path).expanduser()
+    setup_state = operator_setup.state(path)
+    status = _path_status(entry.path)
+    metadata = read_project_metadata(path) if status == "present" else None
+    format_version = metadata.formatVersion if metadata is not None else None
+    unsupported = format_version is not None and format_version > PROJECT_FORMAT_VERSION
+    # A project at the current format but carrying no release stamp predates the
+    # stamp, so it is replayed through the chain like a stale one.
+    needs_upgrade = (
+        metadata is not None
+        and not unsupported
+        and (
+            metadata.formatVersion < PROJECT_FORMAT_VERSION
+            or metadata.minAppVersion is None
+        )
+    )
     return {
         "id": entry.id,
         "name": entry.name,
         "path": entry.path,
         "addedAt": entry.addedAt,
         "lastOpenedAt": entry.lastOpenedAt,
-        "status": _path_status(entry.path),
+        "status": status,
         "isDefault": entry.id == default_id,
-        "mcpEnabled": project_mcp_enabled(Path(entry.path).expanduser()),
+        "mcpEnabled": project_mcp_enabled(path),
         "operatorSetupRequired": setup_state.status is operator_setup.SetupStatus.REQUIRED,
         "operatorSetupStatus": setup_state.status.value,
         "operatorSetupError": setup_state.error,
+        "formatVersion": format_version,
+        "minAppVersion": metadata.minAppVersion if metadata is not None else None,
+        "needsUpgrade": needs_upgrade,
+        "unsupportedFormat": unsupported,
+        "lastMigration": (
+            metadata.lastMigration.model_dump(mode="json")
+            if metadata is not None and metadata.lastMigration is not None
+            else None
+        ),
     }
 
 
@@ -632,7 +656,7 @@ def create_project(body: CreateProjectBody) -> dict[str, Any]:
     metadata = ensure_project_metadata(target, name=name)
     # Freshly seeded from project-seed/, which is already canonical, so stamp
     # it here rather than leaving it for the next activation.
-    metadata = metadata.model_copy(update={"formatVersion": PROJECT_FORMAT_VERSION})
+    metadata = stamp_current_format(metadata)
     write_project_metadata(target, metadata)
     with manifest_transaction() as manifest:
         if find_project(manifest, metadata.id) is not None:

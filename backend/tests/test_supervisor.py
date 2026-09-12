@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 from core import manifest as manifest_mod
+from core import project_migrations as pm
 from core import runtime_home, start_guards
 from services import supervisor as supervisor_mod
 
@@ -57,9 +58,28 @@ class _FakeProc:
         self.returncode = -9
 
 
-def _register_project(home: Path, tmp_path: Path, *, name: str = "Plant") -> str:
+def _register_project(
+    home: Path,
+    tmp_path: Path,
+    *,
+    name: str = "Plant",
+    format_version: int | None = None,
+    min_app: str | None = pm.PROJECT_FORMAT_MIN_APP,
+) -> str:
+    """Register a startable project. Fully stamped by default — spawn/health/crash
+    tests aren't exercising the upgrade gate; pass ``format_version`` or
+    ``min_app=None`` to test that."""
     target = tmp_path / name
     metadata = manifest_mod.ensure_project_metadata(target, name=name)
+    metadata = metadata.model_copy(
+        update={
+            "formatVersion": format_version
+            if format_version is not None
+            else supervisor_mod.PROJECT_FORMAT_VERSION,
+            "minAppVersion": min_app,
+        }
+    )
+    manifest_mod.write_project_metadata(target, metadata)
     (target / "users.json").write_text(
         json.dumps({"settings": {}, "groups": [], "users": []}), encoding="utf-8"
     )
@@ -110,7 +130,7 @@ def test_start_and_stop_are_serialized_per_project(home: Path, monkeypatch) -> N
     release = threading.Event()
     order: list[str] = []
 
-    def starting(_project_id: str):
+    def starting(_project_id: str, **_kwargs):
         order.append("start-enter")
         entered.set()
         assert release.wait(5)
@@ -187,6 +207,66 @@ def test_start_rechecks_credentials_before_returning_running_instance(
     (Path(project.path) / "users.json").unlink()
 
     with pytest.raises(ValueError, match=r"users\.json is missing"):
+        sup.start(project_id)
+
+
+def test_start_requires_confirm_upgrade_for_outdated_format(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    project_id = _register_project(home, tmp_path, format_version=0)
+    sup = _make_supervisor(monkeypatch, healthy=True)
+
+    with pytest.raises(ValueError, match="upgraded"):
+        sup.start(project_id)
+
+    snap = sup.start(project_id, confirm_upgrade=True)
+    assert snap["status"] == "running"
+
+
+def test_start_refuses_project_newer_than_this_build(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    project_id = _register_project(
+        home, tmp_path, format_version=supervisor_mod.PROJECT_FORMAT_VERSION + 1, min_app=None
+    )
+    sup = _make_supervisor(monkeypatch, healthy=True)
+
+    with pytest.raises(ValueError, match="requires a newer version"):
+        sup.start(project_id)
+    with pytest.raises(ValueError, match="requires a newer version"):
+        sup.start(project_id, confirm_upgrade=True)
+
+
+def test_start_refuses_a_current_project_carrying_no_release_stamp(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    """Its number says where it landed, not which build took it there."""
+    project_id = _register_project(home, tmp_path, min_app=None)
+    sup = _make_supervisor(monkeypatch, healthy=True)
+
+    with pytest.raises(ValueError, match="needs to be upgraded"):
+        sup.start(project_id)
+    assert sup.start(project_id, confirm_upgrade=True)["status"] == "running"
+
+
+def test_refusal_names_the_version_the_project_was_stamped_with(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    project_id = _register_project(
+        home, tmp_path, format_version=supervisor_mod.PROJECT_FORMAT_VERSION + 1
+    )
+    entry = manifest_mod.find_project(manifest_mod.load_manifest(), project_id)
+    assert entry is not None
+    root = Path(entry.path)
+    manifest_mod.write_project_metadata(
+        root,
+        manifest_mod.read_project_metadata(root).model_copy(
+            update={"minAppVersion": "9.9.9"}
+        ),
+    )
+    sup = _make_supervisor(monkeypatch, healthy=True)
+
+    with pytest.raises(ValueError, match=r"requires NEXT HMI 9\.9\.9 or newer"):
         sup.start(project_id)
 
 

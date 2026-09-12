@@ -266,9 +266,14 @@ def _collect_project(root: Path) -> dict:
     return out
 
 
+# Artefacts an earlier migration may have left in the dev project: the zips the
+# coordinator writes today, and the per-target directories it used to leave.
+_MIGRATION_LEFTOVERS = shutil.ignore_patterns(".backups", "*.pre-swap-*", "*.pre-migration-backup-*")
+
+
 def test_the_step_leaves_every_node_s_effective_geometry_alone(tmp_path: Path) -> None:
     staged = tmp_path / "project"
-    shutil.copytree(PROJECT_TESTBENCH, staged, ignore=shutil.ignore_patterns("*.pre-migration-backup-*"))
+    shutil.copytree(PROJECT_TESTBENCH, staged, ignore=_MIGRATION_LEFTOVERS)
 
     before = _collect_project(staged)
     migrate_size_modes(
@@ -286,7 +291,7 @@ def test_running_the_step_twice_changes_nothing_the_second_time(tmp_path: Path) 
     """Idempotency: the coordinator runs a step once, but a project that has
     already been through it must be left alone if it is ever seen again."""
     staged = tmp_path / "project"
-    shutil.copytree(PROJECT_TESTBENCH, staged, ignore=shutil.ignore_patterns("*.pre-migration-backup-*"))
+    shutil.copytree(PROJECT_TESTBENCH, staged, ignore=_MIGRATION_LEFTOVERS)
     paths = {
         "config": staged / "config.json",
         "pages": staged / "pages",

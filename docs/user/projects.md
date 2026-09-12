@@ -20,6 +20,7 @@ Everything the runtime needs is on disk, in formats you can read and diff. That'
 | `external-libraries/` | Third-party ESM bundles you import from widgets. |
 | `certs/` | Per-project OPC-UA client certificates. |
 | `historian/` | [Historian](historian.md) configuration plus this installation's local sample database. |
+| `.backups/` | A zip of the whole project, taken automatically before a file-format upgrade rewrites anything. Yours to keep or delete — nothing reads them back, and they never travel with an export or a transfer. |
 
 The backend creates any missing folder on startup, and never overwrites this tree on upgrade — it is your state, not the product's.
 
@@ -51,6 +52,8 @@ The set of running projects is remembered, so a restart brings the same ones bac
 > [!NOTE]
 > **A fresh project asks for an operator password first.** Any project copied from the bundled seed shows **Set operator password** instead of Start. Choose the password for that project's `admin` HMI account and the runtime and editor unlock. This is separate from the device-admin password that gates the dashboard itself; the seed ships no reusable operator credential.
 
+A project saved by an older build — or by one that predates the file-format stamp — has to be upgraded before it opens, so **Start** asks first instead of starting right away. Confirming zips the whole project into its `.backups/` folder before changing anything, and a one-time notice on the Projects page names what changed and where that backup landed. Declining leaves the project untouched. A project saved by a *newer* build shows **Requires update** in place of Start, naming the version it needs — update the application to that version or later. The file format only changes in a release whose second number moves, so a patch update (0.4.1 → 0.4.2) never makes a project unopenable elsewhere.
+
 ## How to create a project
 
 Three ways in, all from the dashboard toolbar. Each adds a row to the runtime-home manifest — the files live wherever you point them.
@@ -65,7 +68,7 @@ A project created or imported this way is never made the default automatically �
 
 The zip is the hand-off format: one file that carries the whole project, including its identity, so the other end registers it as the same project rather than a copy.
 
-**Download (export).** **Export** on the project's row streams the folder out as `<name>.nexthmi.zip`. The compiled custom-widget cache (`widget-build/`) is skipped — it is regenerated on the far side — and so are the historian's local database files (`*.db`, `*.sqlite`, and their journals), which are installation-local. Historian *configuration* does travel, so the receiver knows what to log. Symlinks are never followed into the archive.
+**Download (export).** **Export** on the project's row streams the folder out as `<name>.nexthmi.zip`. The compiled custom-widget cache (`widget-build/`) is skipped — it is regenerated on the far side — and so are the historian's local database files (`*.db`, `*.sqlite`, and their journals) and the pre-upgrade zips in `.backups/`, all of which are installation-local. Historian *configuration* does travel, so the receiver knows what to log. Symlinks are never followed into the archive.
 
 **Upload (import).** **↑ Import zip** takes the **Zip file** and a **Destination folder**, unpacks it into a new project folder, and registers it. The archive is hardened on the way in: path traversal and absolute paths are rejected, symlinks are dropped, and the total is capped by `NEXTHMI_MAX_PROJECT_ZIP_MB` (500 MB by default) so an oversize archive is refused before any bytes reach disk.
 

@@ -42,7 +42,7 @@ interface ManagerStore {
   changePassword(currentPassword: string, newPassword: string): Promise<void>;
 
   refreshRunning(): Promise<void>;
-  start(id: string): Promise<void>;
+  start(id: string, opts?: { confirmUpgrade?: boolean }): Promise<void>;
   stop(id: string): Promise<void>;
   setProjectMcp(id: string, enabled: boolean): Promise<void>;
 
@@ -118,8 +118,11 @@ export const useManagerStore = create<ManagerStore>((set, get) => ({
     set({ instances: byId });
   },
 
-  start: async (id: string) => {
-    await apiJson(`/api/manager/projects/${encodeURIComponent(id)}/start`, { method: 'POST' });
+  start: async (id: string, opts?: { confirmUpgrade?: boolean }) => {
+    await apiJson(`/api/manager/projects/${encodeURIComponent(id)}/start`, {
+      method: 'POST',
+      body: opts?.confirmUpgrade ? { confirmUpgrade: true } : undefined,
+    });
     await get().refreshRunning();
   },
 

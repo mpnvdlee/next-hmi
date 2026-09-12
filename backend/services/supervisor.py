@@ -39,11 +39,14 @@ from core import operator_setup, runtime_home, start_guards
 from core.manifest import (
     find_project,
     load_manifest,
+    read_project_metadata,
     remove_running,
     running_entry,
     upsert_running,
     validate_project_id,
 )
+from core.project_migrations import PROJECT_FORMAT_VERSION
+from core.version import app_version
 
 logger = logging.getLogger(__name__)
 
@@ -177,21 +180,24 @@ class Supervisor:
 
     # ── lifecycle ────────────────────────────────────────────────────────────
 
-    def start(self, project_id: str) -> dict[str, Any]:
+    def start(self, project_id: str, *, confirm_upgrade: bool = False) -> dict[str, Any]:
         """Start (or report already-running) the instance for *project_id*.
 
         Spawns the child, waits for it to pass the health check, records it in
         the persisted running set, and returns its status snapshot. Raises
-        ``ValueError`` if the project is unknown or its folder is missing.
+        ``ValueError`` if the project is unknown, its folder is missing, or its
+        on-disk format is behind ``PROJECT_FORMAT_VERSION`` and the caller has
+        not passed ``confirm_upgrade=True`` (the manager UI asks first; a
+        project stamped newer than this build supports is refused outright).
         """
         validate_project_id(project_id)
         refusal = start_guards.refusal(project_id)
         if refusal is not None:
             raise ValueError(refusal)
         with self.project_operation_lock(project_id):
-            return self._start_serialized(project_id)
+            return self._start_serialized(project_id, confirm_upgrade=confirm_upgrade)
 
-    def _start_serialized(self, project_id: str) -> dict[str, Any]:
+    def _start_serialized(self, project_id: str, *, confirm_upgrade: bool = False) -> dict[str, Any]:
         with self._lock:
             manifest = load_manifest()
             entry = find_project(manifest, project_id)
@@ -209,6 +215,30 @@ class Supervisor:
                 raise ValueError(
                     f"Project credentials are unavailable: {setup_state.error}"
                 )
+            metadata = read_project_metadata(project_path)
+            if metadata is not None:
+                if metadata.formatVersion > PROJECT_FORMAT_VERSION:
+                    needed = (
+                        f"NEXT HMI {metadata.minAppVersion} or newer"
+                        if metadata.minAppVersion
+                        else "a newer version of NEXT HMI"
+                    )
+                    raise ValueError(
+                        f"This project requires {needed} to open; this build is "
+                        f"{app_version()}. Update the application before starting it."
+                    )
+                # No release stamp means the project predates the stamp, so its
+                # format number says where it landed without saying which build
+                # took it there — replayed through the chain like a stale one.
+                needs_upgrade = (
+                    metadata.formatVersion < PROJECT_FORMAT_VERSION
+                    or metadata.minAppVersion is None
+                )
+                if needs_upgrade and not confirm_upgrade:
+                    raise ValueError(
+                        "This project needs to be upgraded to this build's file format "
+                        "before it can start. Confirm the upgrade in the Projects page."
+                    )
 
             existing = self._instances.get(project_id)
             if existing is not None and existing.status in ("starting", "running"):  # noqa: SIM102 -- no autofix offered, left as-is per the mechanical-only policy for this family

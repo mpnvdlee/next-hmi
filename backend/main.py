@@ -189,15 +189,15 @@ async def lifespan(app: FastAPI):
     if migration.files_changed or migration.diagnostics:
         # A step that rewrites project files has to say so somewhere the author
         # can find it: the diagnostics name every value it could not express and
-        # every one whose meaning it changed, and the backups it leaves behind
-        # are the only way back.
+        # every one whose meaning it changed, and the backup it leaves behind is
+        # the only way back.
         log = logging.getLogger("nexthmi.migration")
         log.warning(
-            "Project migrated %d -> %d: %d file(s) rewritten. Pre-migration backups: %s",
+            "Project migrated %d -> %d: %d file(s) rewritten. Pre-migration backup: %s",
             migration.from_version,
             migration.to_version,
             len(migration.files_changed),
-            ", ".join(str(path) for path in migration.backups.values()) or "none",
+            migration.backup or "none",
         )
         for note in migration.diagnostics:
             log.warning("Migration note: %s", note)

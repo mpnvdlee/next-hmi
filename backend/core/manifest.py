@@ -524,6 +524,23 @@ def remove_running(project_id: str) -> None:
 # ── per-project metadata (embedded in config.json) ───────────────────────────
 
 
+class ProjectMigrationRecord(BaseModel):
+    """The last time ``run_baseline_migration`` actually rewrote this project.
+
+    ``backup`` is the zip of the whole project taken before anything was
+    touched — see ``core.project_migrations._write_backup_zip``. ``None`` on a
+    record written before this field replaced the per-target ``backups`` map,
+    whose paths no longer exist to point at.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    fromVersion: int
+    toVersion: int
+    at: str
+    backup: str | None = None
+
+
 class ProjectMetadata(BaseModel):
     # Other writers (e.g. theme_manager._set_default_raw's ``defaultTheme``)
     # read-modify-write sibling fields directly into the same ``project``
@@ -538,6 +555,16 @@ class ProjectMetadata(BaseModel):
     # 0 = unstamped (every project predating this field reads as 0). See
     # core.project_migrations.PROJECT_FORMAT_VERSION.
     formatVersion: int = 0
+    # The release that introduced `formatVersion`, stamped beside it so a build
+    # too old to open this project can name the version the operator needs.
+    # None = written by a build predating this field. Display only — the
+    # integer above is what actually gates opening a project.
+    minAppVersion: str | None = None
+    # Set only when a format migration actually ran; left in place afterwards
+    # (never cleared) so the manager can read back what just happened and
+    # show it once, right after the upgrade — not a permanently-displayed
+    # project detail.
+    lastMigration: ProjectMigrationRecord | None = None
 
     _validate_id = field_validator("id")(validate_project_id)
 

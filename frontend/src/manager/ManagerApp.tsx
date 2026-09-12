@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useManagerStore, type InstanceSnapshot } from './managerStore';
 import { useProjectsStore, describeError, type ProjectEntry } from '@config/store/projectsStore';
 import { safeSignInTarget } from '@shared/store/sessionStore';
+import { getVersion } from '@shared/utils/runtimeBase';
 import { useDocumentTitle } from '@shared/hooks/useDocumentTitle';
 import AppTopBarNav from '@shared/components/AppTopBarNav';
 import Spinner from '@shared/components/Spinner';
@@ -20,6 +21,7 @@ import ImportProjectModal from '@config/components/projects/ProjectsView/ImportP
 import RemoveProjectModal from '@config/components/projects/ProjectsView/RemoveProjectModal';
 import RenameProjectModal from '@config/components/projects/ProjectsView/RenameProjectModal';
 import LocateProjectModal from '@config/components/projects/ProjectsView/LocateProjectModal';
+import UpgradeProjectModal from '@config/components/projects/ProjectsView/UpgradeProjectModal';
 import OperatorSetupModal from '@config/components/projects/ProjectsView/OperatorSetupModal';
 import PeerTransferModal from '@config/components/projects/ProjectsView/PeerTransferModal';
 import SystemInfoSection from '@config/components/admin/SystemInfoSection';
@@ -263,6 +265,16 @@ function statusLabel(project: ProjectEntry, inst: InstanceSnapshot | undefined):
   return STATUS_LABELS[inst.status];
 }
 
+/** Why a project stamped by a newer build cannot start here, naming the version
+ * the operator needs. `minAppVersion` is absent on projects stamped before
+ * builds recorded it — then all we can honestly say is "newer". */
+function unsupportedFormatNote(project: ProjectEntry): string {
+  const needed = project.minAppVersion
+    ? `NEXT HMI ${project.minAppVersion} or newer`
+    : 'a newer version of NEXT HMI';
+  return `Needs ${needed} — this machine runs ${getVersion()}.`;
+}
+
 type Dialog =
   | { kind: 'none' }
   | { kind: 'create' }
@@ -273,7 +285,8 @@ type Dialog =
   | { kind: 'locate'; entry: ProjectEntry }
   | { kind: 'transfer'; entry: ProjectEntry }
   | { kind: 'pull' }
-  | { kind: 'operator-setup'; entry: ProjectEntry };
+  | { kind: 'operator-setup'; entry: ProjectEntry }
+  | { kind: 'upgrade'; entry: ProjectEntry };
 
 function ProjectsPage() {
   useDocumentTitle('Projects');
@@ -290,6 +303,10 @@ function ProjectsPage() {
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
+  // One-time notice shown right after a project finishes upgrading — not a
+  // persisted/always-shown row detail, just this page's acknowledgment of
+  // what the confirm-and-upgrade flow just did.
+  const [rowNotice, setRowNotice] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog>({ kind: 'none' });
 
   const runningLocalProjectIds = useMemo(
@@ -385,9 +402,18 @@ function ProjectsPage() {
           </header>
 
           {rowError && (
-            <div className="projects-page__error">
+            <div className="cfg-error-banner projects-page__error">
               <span>{rowError}</span>{' '}
               <Button variant="ghost" size="sm" onClick={() => setRowError(null)}>
+                Dismiss
+              </Button>
+            </div>
+          )}
+
+          {rowNotice && (
+            <div className="cfg-error-banner projects-page__notice">
+              <span>{rowNotice}</span>{' '}
+              <Button variant="ghost" size="sm" onClick={() => setRowNotice(null)}>
                 Dismiss
               </Button>
             </div>
@@ -417,13 +443,15 @@ function ProjectsPage() {
                   >
                     <div className="project-row__body">
                       <div className="project-row__title-line">
-                        <span className="project-row__name">{p.name}</span>
-                        <code
-                          className="project-row__id"
-                          title="Project id — addresses this project in its URLs and in MCP token scopes"
-                        >
-                          {p.id}
-                        </code>
+                        <span className="project-row__name">
+                          {p.name}{' '}
+                          <code
+                            className="project-row__id"
+                            title="Project id — addresses this project in its URLs and in MCP token scopes"
+                          >
+                            [{p.id}]
+                          </code>
+                        </span>
                         <span className={`mgr-status mgr-status--${inst?.status ?? 'stopped'}`}>
                           {statusLabel(p, inst)}
                         </span>
@@ -431,6 +459,9 @@ function ProjectsPage() {
                       <code className="project-row__path">{p.path}</code>
                       {inst?.lastError && (
                         <span className="mgr-status__error">{inst.lastError}</span>
+                      )}
+                      {p.unsupportedFormat && (
+                        <span className="mgr-status__error">{unsupportedFormatNote(p)}</span>
                       )}
                       <div className="project-row__toggles">
                         <label
@@ -448,7 +479,7 @@ function ProjectsPage() {
                             }
                             onChange={() => makeDefault(p)}
                           />
-                          <span>{p.isDefault ? 'Default project' : 'Set as default'}</span>
+                          <span>Set as default</span>
                         </label>
                         <label
                           className="mgr-mcp-toggle"
@@ -500,12 +531,20 @@ function ProjectsPage() {
                             Open editor
                           </Button>
                         </>
+                      ) : p.unsupportedFormat ? (
+                        <Button variant="default" size="sm" disabled>
+                          Requires update
+                        </Button>
                       ) : (
                         <Button
                           variant="default"
                           size="sm"
                           disabled={busyId === p.id || transient || p.status === 'missing'}
-                          onClick={() => act(p.id, start)}
+                          onClick={() =>
+                            p.needsUpgrade
+                              ? setDialog({ kind: 'upgrade', entry: p })
+                              : act(p.id, start)
+                          }
                         >
                           {busyId === p.id ? '…' : 'Start'}
                         </Button>
@@ -613,6 +652,23 @@ function ProjectsPage() {
       )}
       {dialog.kind === 'operator-setup' && (
         <OperatorSetupModal entry={dialog.entry} onCompleted={closeDialog} />
+      )}
+      {dialog.kind === 'upgrade' && (
+        <UpgradeProjectModal
+          entry={dialog.entry}
+          start={start}
+          onCancel={closeDialog}
+          onUpgraded={(migration) => {
+            const name = dialog.entry.name;
+            closeDialog();
+            if (migration) {
+              setRowNotice(
+                `Upgraded "${name}" from v${migration.fromVersion} to v${migration.toVersion}. ` +
+                  `Backup: ${migration.backup ?? 'none'}`,
+              );
+            }
+          }}
+        />
       )}
       {dialog.kind === 'transfer' && (
         <PeerTransferModal

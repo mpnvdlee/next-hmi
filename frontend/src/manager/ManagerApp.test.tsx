@@ -19,6 +19,11 @@ function project(overrides: Partial<ProjectEntry> = {}): ProjectEntry {
     operatorSetupRequired: false,
     operatorSetupStatus: 'complete',
     operatorSetupError: null,
+    formatVersion: null,
+    minAppVersion: null,
+    needsUpgrade: false,
+    unsupportedFormat: false,
+    lastMigration: null,
     ...overrides,
   };
 }
@@ -424,7 +429,7 @@ describe('projects dashboard', () => {
     useProjectsStore.setState({ projects: [project()] });
     renderAt('/projects');
 
-    expect(within(row('Line 1')).getByText('p1')).toBeInTheDocument();
+    expect(within(row('Line 1')).getByText('[p1]')).toBeInTheDocument();
   });
 
   it('blocks Rename until the project is stopped', () => {
@@ -540,6 +545,144 @@ describe('projects dashboard', () => {
     await userEvent.click(within(row('Line 1')).getByRole('checkbox'));
 
     expect(setProjectMcp).toHaveBeenCalledWith('p1', true);
+  });
+});
+
+describe('project version / upgrade gate', () => {
+  it('opens an upgrade dialog instead of starting a project that needs one', async () => {
+    const start = vi.fn().mockResolvedValue(undefined);
+    stubManagerActions({ start });
+    useProjectsStore.setState({
+      projects: [project({ needsUpgrade: true })],
+    });
+    renderAt('/projects');
+
+    await userEvent.click(within(row('Line 1')).getByRole('button', { name: 'Start' }));
+
+    const dialog = within(await openModal());
+    expect(dialog.getByText(/needs to upgrade this project's file format/)).toBeInTheDocument();
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('confirms the upgrade, starts the project, and refreshes the list', async () => {
+    const start = vi.fn().mockResolvedValue(undefined);
+    const load = vi.fn().mockResolvedValue(undefined);
+    stubManagerActions({ start });
+    stubProjectsActions({ load });
+    useProjectsStore.setState({ projects: [project({ needsUpgrade: true })] });
+    renderAt('/projects');
+
+    await userEvent.click(within(row('Line 1')).getByRole('button', { name: 'Start' }));
+    const dialog = within(await openModal());
+    await userEvent.click(dialog.getByRole('button', { name: 'Upgrade & start' }));
+
+    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', { confirmUpgrade: true }));
+    await waitFor(() => expect(load).toHaveBeenCalled());
+    await waitFor(() => expect(modal()).toBeNull());
+  });
+
+  it('cancels out of the upgrade dialog without starting the project', async () => {
+    const start = vi.fn().mockResolvedValue(undefined);
+    stubManagerActions({ start });
+    useProjectsStore.setState({ projects: [project({ needsUpgrade: true })] });
+    renderAt('/projects');
+
+    await userEvent.click(within(row('Line 1')).getByRole('button', { name: 'Start' }));
+    await userEvent.click(within(await openModal()).getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(modal()).toBeNull());
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('blocks starting a project newer than this build supports, naming the version needed', () => {
+    useProjectsStore.setState({
+      projects: [project({ unsupportedFormat: true, minAppVersion: '9.9.9' })],
+    });
+    renderAt('/projects');
+
+    expect(within(row('Line 1')).getByRole('button', { name: 'Requires update' })).toBeDisabled();
+    expect(within(row('Line 1')).getByText(/Needs NEXT HMI 9\.9\.9 or newer/)).toBeInTheDocument();
+  });
+
+  it('falls back to a generic note when the project carries no release stamp', () => {
+    useProjectsStore.setState({
+      projects: [project({ unsupportedFormat: true, minAppVersion: null })],
+    });
+    renderAt('/projects');
+
+    expect(
+      within(row('Line 1')).getByText(/Needs a newer version of NEXT HMI/),
+    ).toBeInTheDocument();
+  });
+
+  it('leaves the row clean when the format is supported', () => {
+    useProjectsStore.setState({ projects: [project({ minAppVersion: '9.9.9' })] });
+    renderAt('/projects');
+
+    expect(within(row('Line 1')).queryByText(/Needs NEXT HMI/)).toBeNull();
+  });
+
+  it('never shows a permanent per-row upgrade note, even for a project with migration history', () => {
+    useProjectsStore.setState({
+      projects: [
+        project({
+          lastMigration: {
+            fromVersion: 5,
+            toVersion: 6,
+            at: '2026-05-24T10:00:00Z',
+            backup: '/projects/line-1/.backups/pre-migration-20260524T100000Z-app-1.2.3.zip',
+          },
+        }),
+      ],
+    });
+    renderAt('/projects');
+
+    expect(screen.queryByText(/Upgraded from v5 to v6/)).toBeNull();
+  });
+
+  it('announces what changed once, right after an upgrade completes, dismissibly', async () => {
+    const start = vi.fn().mockResolvedValue(undefined);
+    // ProjectsPage reloads on mount too — only the reload the upgrade modal
+    // triggers (the second one) should reflect the migrated project.
+    let loadCalls = 0;
+    const load = vi.fn().mockImplementation(async () => {
+      loadCalls += 1;
+      if (loadCalls < 2) return;
+      useProjectsStore.setState({
+        projects: [
+          project({
+            needsUpgrade: false,
+            lastMigration: {
+              fromVersion: 4,
+              toVersion: 7,
+              at: '2026-05-24T10:00:00Z',
+              backup: '/projects/line-1/.backups/pre-migration-20260524T100000Z-app-1.2.3.zip',
+            },
+          }),
+        ],
+      });
+    });
+    stubManagerActions({ start });
+    stubProjectsActions({ load });
+    useProjectsStore.setState({ projects: [project({ needsUpgrade: true })] });
+    renderAt('/projects');
+
+    await userEvent.click(within(row('Line 1')).getByRole('button', { name: 'Start' }));
+    await userEvent.click(
+      within(await openModal()).getByRole('button', { name: 'Upgrade & start' }),
+    );
+
+    const notice = await screen.findByText(/Upgraded "Line 1" from v4 to v7/);
+    expect(notice).toHaveTextContent('/projects/line-1/.backups/pre-migration-20260524T100000Z-app-1.2.3.zip');
+    // Not a per-row detail — it's the page-level notice.
+    expect(row('Line 1')).not.toContainElement(notice);
+
+    await userEvent.click(
+      within(notice.closest('.projects-page__notice')!).getByRole('button', {
+        name: 'Dismiss',
+      }),
+    );
+    expect(screen.queryByText(/Upgraded "Line 1" from v4 to v7/)).toBeNull();
   });
 });
 

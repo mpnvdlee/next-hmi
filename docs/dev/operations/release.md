@@ -15,6 +15,29 @@ Pick a semver-ish tag (`0.x.y`). The version string ends up in:
 The build scripts accept the version via a positional argument
 (`./build/build-binary.sh 0.3.1`) or the `NEXTHMI_VERSION` env var.
 
+### Project format
+
+Before picking the tag, check whether `PROJECT_FORMAT_VERSION`
+(`backend/core/project_migrations.py`) moved since the previous one:
+
+```bash
+git diff $(git describe --tags --abbrev=0)..HEAD -- backend/core/project_migrations.py | grep PROJECT_FORMAT_VERSION
+```
+
+If it did, two things follow — both before tagging:
+
+- The tag must move the **minor or major**, never just the patch. The published
+  contract is that a patch update never makes a project unopenable. Pre-release
+  tags sit outside that rule — `x.y.z-rc*` sorts below `x.y.z`, so the release a
+  candidate line leads up to may carry a format its own rc's did not.
+- Set `PROJECT_FORMAT_MIN_APP` to this release's version. It is stamped into
+  every project this build writes, and is the only way a future operator on an
+  older build learns which version they need. Getting it wrong sends them to a
+  version that cannot open their project.
+
+This is the one release step that cannot be inferred from the code: at merge
+time the release number does not exist yet.
+
 ## Pre-flight
 
 From a clean checkout on the release branch:

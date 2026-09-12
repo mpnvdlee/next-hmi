@@ -2,12 +2,13 @@
 
 The first half covers the coordinator itself — version gating, target staging,
 stamping. The second half registers a synthetic step to exercise the
-staging/backup/swap machinery in isolation from whatever the real steps do;
+staging/swap machinery in isolation from whatever the real steps do;
 the 4 -> 5 step's own rules live in ``test_migration_size_modes.py``.
 """
 
 import itertools
 import json
+import zipfile
 from pathlib import Path
 
 import core.project_migrations as pm
@@ -15,8 +16,13 @@ import pytest
 from core.manifest import ProjectMetadata, read_project_metadata, write_project_metadata
 
 
-def _stamp(project_root: Path, format_version: int) -> None:
-    write_project_metadata(project_root, ProjectMetadata(id="proj", formatVersion=format_version))
+def _stamp(project_root: Path, format_version: int, *, min_app: str | None = None) -> None:
+    """Stamp a format version. ``min_app`` left out means a project from before
+    the release stamp existed — which the coordinator replays rather than skips."""
+    write_project_metadata(
+        project_root,
+        ProjectMetadata(id="proj", formatVersion=format_version, minAppVersion=min_app),
+    )
 
 
 def _write_datasource(project_root: Path, name: str, variables: list) -> Path:
@@ -43,11 +49,12 @@ def test_the_step_chain_is_contiguous_and_ends_at_the_current_version() -> None:
 
 
 def test_already_current_is_a_no_op(project_root: Path) -> None:
-    _stamp(project_root, pm.PROJECT_FORMAT_VERSION)
+    _stamp(project_root, pm.PROJECT_FORMAT_VERSION, min_app=pm.PROJECT_FORMAT_MIN_APP)
     result = pm.run_baseline_migration(project_root)
     assert result.already_current is True
     assert result.files_changed == []
-    assert result.backups == {}
+    assert result.backup is None
+    assert not (project_root / ".backups").exists()
 
 
 def test_rejects_newer_format_version(project_root: Path) -> None:
@@ -75,11 +82,36 @@ def test_a_target_no_pending_step_names_is_never_staged(project_root: Path) -> N
     assert result.already_current is False
     assert result.from_version == 0
     assert result.to_version == pm.PROJECT_FORMAT_VERSION
-    assert "datasources" not in result.backups
     assert ds_path.read_bytes() == original_bytes
-    assert not list((project_root / "datasources").glob("*.pre-migration-backup-*"))
+    assert not list(project_root.glob("datasources.pre-swap-*"))
     assert not list(project_root.glob("*.migrating-*"))
     assert read_project_metadata(project_root).formatVersion == pm.PROJECT_FORMAT_VERSION
+
+
+def test_migration_stamps_the_release_that_introduced_the_format(project_root: Path) -> None:
+    _stamp(project_root, 0)
+    pm.run_baseline_migration(project_root)
+    metadata = read_project_metadata(project_root)
+    assert metadata.formatVersion == pm.PROJECT_FORMAT_VERSION
+    assert metadata.minAppVersion == pm.PROJECT_FORMAT_MIN_APP
+
+
+def test_replays_the_chain_on_a_current_project_with_no_release_stamp(
+    project_root: Path,
+) -> None:
+    """A build from before the stamp may not have run the migration that
+    shipped, so the number alone is not enough to skip on."""
+    _stamp(project_root, pm.PROJECT_FORMAT_VERSION)
+    result = pm.run_baseline_migration(project_root)
+    assert result.already_current is False
+    assert result.from_version == pm.PROJECT_FORMAT_VERSION
+    assert read_project_metadata(project_root).minAppVersion == pm.PROJECT_FORMAT_MIN_APP
+
+
+def test_dry_run_leaves_the_release_stamp_alone(project_root: Path) -> None:
+    _stamp(project_root, 0)
+    pm.run_baseline_migration(project_root, dry_run=True)
+    assert read_project_metadata(project_root).minAppVersion is None
 
 
 def test_dry_run_reports_without_stamping(project_root: Path) -> None:
@@ -120,7 +152,7 @@ def _rewrite_ds1(staged, project_root: Path) -> pm.StepResult:
     return pm.StepResult(files_changed=["DS1.json"], diagnostics=["synthetic diagnostic"])
 
 
-def test_step_output_is_swapped_in_and_the_backup_is_preserved(
+def test_step_output_is_swapped_in_and_the_zip_holds_the_original(
     project_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _stamp(project_root, 0)
@@ -134,11 +166,29 @@ def test_step_output_is_swapped_in_and_the_backup_is_preserved(
     assert result.diagnostics == ["synthetic diagnostic"]
     assert json.loads(ds_path.read_text())["migrated"] is True
 
-    backup = result.backups["datasources"]
-    assert backup.is_dir()
-    assert (backup / "DS1.json").read_bytes() == original_bytes
+    assert result.backup is not None
+    with zipfile.ZipFile(result.backup) as zf:
+        assert zf.read("datasources/DS1.json") == original_bytes
+    # The moved-aside original is scaffolding; the zip is what survives.
+    assert not list(project_root.glob("datasources.pre-swap-*"))
     assert not list(project_root.glob("datasources.migrating-*"))
     assert read_project_metadata(project_root).formatVersion == 1
+
+
+def test_real_migration_records_last_migration(
+    project_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _stamp(project_root, 0)
+    _write_datasource(project_root, "DS1", [])
+    _register_step(monkeypatch, _rewrite_ds1)
+
+    result = pm.run_baseline_migration(project_root)
+
+    metadata = read_project_metadata(project_root)
+    assert metadata.lastMigration is not None
+    assert metadata.lastMigration.fromVersion == 0
+    assert metadata.lastMigration.toVersion == 1
+    assert metadata.lastMigration.backup == str(result.backup)
 
 
 def test_dry_run_runs_the_step_for_real_somewhere_the_project_cannot_see(
@@ -155,13 +205,13 @@ def test_dry_run_runs_the_step_for_real_somewhere_the_project_cannot_see(
     result = pm.run_baseline_migration(project_root, dry_run=True)
 
     assert result.files_changed == ["DS1.json"]
-    assert result.backups == {}
+    assert result.backup is None
     assert ds_path.read_text() == original_text
-    assert not list(project_root.glob("datasources.pre-migration-backup-*"))
+    assert not (project_root / ".backups").exists()
     assert read_project_metadata(project_root).formatVersion == 0
 
 
-def test_failure_mid_step_restores_original_and_preserves_backup(
+def test_failure_mid_step_restores_original_and_keeps_the_zip(
     project_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _stamp(project_root, 0)
@@ -178,7 +228,8 @@ def test_failure_mid_step_restores_original_and_preserves_backup(
         pm.run_baseline_migration(project_root)
 
     assert ds_path.read_text() == original_text
-    assert len(list(project_root.glob("datasources.pre-migration-backup-*"))) == 1
+    assert len(list((project_root / ".backups").glob("pre-migration-*.zip"))) == 1
+    assert not list(project_root.glob("datasources.pre-swap-*"))
     assert not list(project_root.glob("datasources.migrating-*"))
     assert read_project_metadata(project_root).formatVersion == 0
 
@@ -230,7 +281,7 @@ def _rewrite_ds1_and_config(staged, project_root: Path) -> pm.StepResult:
     return pm.StepResult(files_changed=["DS1.json", "config.json"])
 
 
-def test_multi_target_step_swaps_every_target_and_backs_each_up(
+def test_multi_target_step_swaps_every_target_and_the_zip_holds_each_original(
     project_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _stamp(project_root, 0)
@@ -245,13 +296,12 @@ def test_multi_target_step_swaps_every_target_and_backs_each_up(
     assert result.files_changed == ["DS1.json", "config.json"]
     assert json.loads(ds_path.read_text())["migrated"] is True
     assert json.loads(config_path.read_text())["migrated"] is True
-    assert set(result.backups) == {"datasources", "config"}
-    assert (result.backups["datasources"] / "DS1.json").read_bytes() == original_ds
-    assert result.backups["config"].read_bytes() == original_config
+    assert result.backup is not None
+    with zipfile.ZipFile(result.backup) as zf:
+        assert zf.read("datasources/DS1.json") == original_ds
+        assert zf.read("config.json") == original_config
     assert not list(project_root.glob("*.migrating-*"))
-    # Targets no pending step names are never staged, so the untouched ones have
-    # no backup even though _TARGET_PATHS knows about them.
-    assert not list(project_root.glob("pages.pre-migration-backup-*"))
+    assert not list(project_root.glob("*.pre-swap-*"))
     assert read_project_metadata(project_root).formatVersion == 1
 
 
@@ -276,8 +326,8 @@ def test_failure_after_every_target_swapped_restores_all_of_them(
 
     assert ds_path.read_text() == original_ds
     assert config_path.read_text() == original_config
-    assert len(list(project_root.glob("datasources.pre-migration-backup-*"))) == 1
-    assert len(list(project_root.glob("config.json.pre-migration-backup-*"))) == 1
+    assert len(list((project_root / ".backups").glob("pre-migration-*.zip"))) == 1
+    assert not list(project_root.glob("*.pre-swap-*"))
     assert not list(project_root.glob("*.migrating-*"))
     assert read_project_metadata(project_root).formatVersion == 0
 
@@ -322,5 +372,69 @@ def test_target_that_does_not_exist_is_not_staged(
 
     result = pm.run_baseline_migration(project_root)
 
-    assert result.backups == {}
+    assert not list(project_root.glob("*.pre-swap-*"))
+    # Nothing to stage, but the project is still zipped before it is stamped.
+    assert result.backup is not None and result.backup.exists()
     assert read_project_metadata(project_root).formatVersion == 1
+
+
+# ── the pre-migration zip ────────────────────────────────────────────────────
+
+
+def test_the_backup_zip_is_named_for_the_build_that_wrote_it(
+    project_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The format numbers are already in `lastMigration`; the release that did
+    the rewriting is recorded nowhere else."""
+    _stamp(project_root, 0)
+    _write_datasource(project_root, "DS1", [])
+    _register_step(monkeypatch, _rewrite_ds1)
+    monkeypatch.setattr(pm, "app_version", lambda: "1.2.3")
+
+    result = pm.run_baseline_migration(project_root)
+
+    assert result.backup is not None
+    assert result.backup.parent == project_root / ".backups"
+    assert result.backup.name.startswith("pre-migration-")
+    assert result.backup.name.endswith("-app-1.2.3.zip")
+
+
+def test_a_later_migration_does_not_nest_the_earlier_backup(
+    project_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`.backups/` is skipped by the packer, so archives never compound."""
+    _stamp(project_root, 0)
+    _write_datasource(project_root, "DS1", [])
+    _register_step(monkeypatch, _rewrite_ds1)
+    first = pm.run_baseline_migration(project_root)
+
+    _stamp(project_root, 0)
+    second = pm.run_baseline_migration(project_root)
+
+    assert second.backup is not None
+    assert second.backup != first.backup
+    with zipfile.ZipFile(second.backup) as zf:
+        assert [name for name in zf.namelist() if name.startswith(".backups/")] == []
+
+
+def test_a_backup_that_cannot_be_written_aborts_with_nothing_touched(
+    project_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _stamp(project_root, 0)
+    ds_path = _write_datasource(project_root, "DS1", [])
+    original_text = ds_path.read_text()
+    _register_step(monkeypatch, _rewrite_ds1)
+
+    def _boom(project_root: Path, output, progress=None) -> None:
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr(pm, "pack_project", _boom)
+
+    with pytest.raises(pm.MigrationFailedError) as excinfo:
+        pm.run_baseline_migration(project_root)
+    assert excinfo.value.step_name == "pre-migration-backup"
+
+    assert ds_path.read_text() == original_text
+    assert read_project_metadata(project_root).formatVersion == 0
+    # A half-written archive must not be left looking like a usable backup.
+    assert not list((project_root / ".backups").glob("*"))

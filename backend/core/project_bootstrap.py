@@ -26,7 +26,7 @@ from core.manifest import (
     save_manifest,
     write_project_metadata,
 )
-from core.project_migrations import PROJECT_FORMAT_VERSION
+from core.project_migrations import stamp_current_format
 from core.time_utils import iso_now
 
 logger = logging.getLogger(__name__)
@@ -97,7 +97,7 @@ def ensure_default_project() -> ProjectEntry:
         # project-seed/ is already canonical, so stamp it here. A reused
         # pre-existing target (dev's project-testbench/ from a prior boot) is
         # deliberately left unstamped here; main.py's lifespan stamps it.
-        metadata = metadata.model_copy(update={"formatVersion": PROJECT_FORMAT_VERSION})
+        metadata = stamp_current_format(metadata)
         write_project_metadata(target, metadata)
 
     # ``ensure_project_metadata`` reuses the id already written into a target

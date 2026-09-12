@@ -11,7 +11,10 @@ Hardened against zip-bomb size exhaustion (cap via
 absolute-path entries, and symlink members.
 
 ``widget-build/`` is intentionally skipped during pack — the receiver
-rebuilds it from sources after applying the archive.
+rebuilds it from sources after applying the archive. So is ``.backups/``,
+where ``core.project_migrations`` writes its pre-migration zips: those are one
+installation's history of the project rather than part of it, and packing them
+would nest every past backup inside every later one.
 """
 from __future__ import annotations
 
@@ -42,8 +45,12 @@ ProgressCallback = Callable[[int, int], None]
 DEFAULT_MAX_ZIP_MB = 500
 _CHUNK = 64 * 1024
 
+# Where core.project_migrations leaves its pre-migration zips. Defined here
+# because this is the module that has to skip it.
+BACKUPS_SUBDIR = ".backups"
+
 # Folder names skipped during pack — relative to the project root.
-_SKIP_TOPLEVEL = frozenset({"widget-build", ".widget-build"})
+_SKIP_TOPLEVEL = frozenset({"widget-build", ".widget-build", BACKUPS_SUBDIR})
 
 # Historian state files that are installation-local and should not travel with
 # a pushed/exported project. Matched by suffix anywhere under ``historian/``.
@@ -83,7 +90,8 @@ def max_zip_bytes() -> int:
 
 
 def _iter_pack_files(project_root: Path) -> Iterable[Path]:
-    """Walk the project tree, pruning ``widget-build/`` and skipping symlinks."""
+    """Walk the project tree, pruning ``widget-build/`` and ``.backups/``, and
+    skipping symlinks."""
     for root, dirs, files in os.walk(project_root, followlinks=False):
         root_path = Path(root)
         rel_root = root_path.relative_to(project_root)
@@ -110,7 +118,8 @@ def pack_project(
     """Stream the project tree into ``output`` as a zip.
 
     ``ensure_project_metadata`` is called first so a never-registered project
-    still ships with a stable id. Skips ``widget-build/`` and symlinks.
+    still ships with a stable id. Skips ``widget-build/``, ``.backups/`` and
+    symlinks.
     """
     if not project_root.is_dir():
         raise FileNotFoundError(f"Project root does not exist: {project_root}")

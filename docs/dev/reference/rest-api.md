@@ -684,7 +684,7 @@ These five routes are allow-listed by the auth gate (reachable without a session
 ### Supervisor — `/api/manager`
 
 - `GET /api/manager/running` → `{ instances: [InstanceSnapshot] }`, where `InstanceSnapshot` is `{ id, name, path, basePath, port, pid, status, startedAt, restarts, lastError }` and `status ∈ {"starting","running","stopped","crashed"}`.
-- `POST /api/manager/projects/{id}/start` → starts (or no-ops if already up) the project's child process; returns its snapshot. 202. 409 (`ConflictError`) if the project can't be started (e.g. unknown id / missing folder).
+- `POST /api/manager/projects/{id}/start` → starts (or no-ops if already up) the project's child process; returns its snapshot. Body (optional): `{ confirmUpgrade?: bool }`. 202. 409 (`ConflictError`) if the project can't be started — unknown id, missing folder, or its `formatVersion` is behind this build's baseline and `confirmUpgrade` was not set (the manager UI asks first, using the project's `needsUpgrade` from `GET /api/projects`). 409 as well, regardless of `confirmUpgrade`, if the project's `formatVersion` is newer than this build supports.
 - `POST /api/manager/projects/{id}/stop` → stops the child; returns `{ id, status: "stopped" }`. 200.
 - `GET /api/manager/projects/{id}/status` → the instance snapshot, or `{ id, status: "stopped" }` when not running.
 
@@ -704,7 +704,8 @@ Base prefix: `/api/projects`. Manages the project list in the runtime-home manif
   - `operatorSetupStatus` is `required`, `complete`, or `error`;
     `operatorSetupError` describes missing, unreadable, corrupt, or invalid
     credential state. Error-state projects cannot be started or proxied.
-  - Returns `{ defaultProjectId, defaultProjectsRoot, projects: [{ id, name, path, addedAt, lastOpenedAt, status, isDefault }] }`. `status` is computed (`"present"` or `"missing"`), not stored. The running set is authoritative for what's actually live — see `/api/manager/running`.
+  - Returns `{ defaultProjectId, defaultProjectsRoot, projects: [{ id, name, path, addedAt, lastOpenedAt, status, isDefault, formatVersion, needsUpgrade, unsupportedFormat, lastMigration }] }`. `status` is computed (`"present"` or `"missing"`), not stored. The running set is authoritative for what's actually live — see `/api/manager/running`.
+  - `formatVersion`/`lastMigration` are read from the project's own `config.json` (see [data-formats.md](../architecture/data-formats.md)) and are `null` when `status` is `"missing"`. `needsUpgrade` is `formatVersion < PROJECT_FORMAT_VERSION`; `unsupportedFormat` is `formatVersion > PROJECT_FORMAT_VERSION` (this build is older than the project). `lastMigration` is `{ fromVersion, toVersion, at, backups }` or `null`.
 - `POST /api/projects`
   - Body: `{ name, path }`. Validates the destination is empty + writable, seeds from `project-seed/`, writes a fresh `project` metadata block into `config.json`, and appends to the manifest. Returns 409 when the path already carries project metadata.
 - `POST /api/projects/register`

@@ -114,6 +114,8 @@ Outside any project, the runtime keeps its own state:
   - reserved certificate folder created by the backend
 - `<project>/config.json` → `project`
   - embedded per-project metadata (stable UUID + display name + creation time); created on first registration and round-tripped through pack/unpack so the same folder always resolves to the same manifest entry
+  - `formatVersion` — the project's on-disk schema version (0 = unstamped, predates the field); see `core.project_migrations.PROJECT_FORMAT_VERSION` and the coordinator's module docstring
+  - `lastMigration` — set once a format migration actually runs: `{ fromVersion, toVersion, at, backups }`, where `backups` maps target name to the pre-migration backup path left on disk. Kept in place after later activations, but only read back once, right after an upgrade, to show a one-time notice — the Projects list never displays it permanently
 - `<project>/historian/`
   - historian runtime state (SQLite database + `config.json`). `config.json` travels with project pushes/pulls/zips; data files matching `*.db`, `*.db-wal`, `*.db-shm`, `*.sqlite`, `*.sqlite-journal` are stripped by `core.project_packer` so they stay installation-local.
 
