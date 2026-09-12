@@ -1,0 +1,32 @@
+{
+  "settings": {
+    "autoLoginName": "guest",
+    "configAccessGroups": [
+      "admin"
+    ]
+  },
+  "operatorSetup": {
+    "version": 1,
+    "required": true
+  },
+  "groups": [
+    {
+      "id": "guest",
+      "label": "Guests"
+    },
+    {
+      "id": "admin",
+      "label": "Administrators"
+    }
+  ],
+  "users": [
+    {
+      "id": "guest",
+      "username": "guest",
+      "password": "",
+      "groups": [
+        "guest"
+      ]
+    }
+  ]
+}

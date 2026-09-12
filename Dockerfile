@@ -118,6 +118,7 @@ COPY --from=node-deps /usr/local/bin/esbuild /usr/local/bin/esbuild
 # The backend's project_bootstrap looks here on first boot to seed
 # /data/Default-Project/ when /data has no manifest yet.
 COPY project-seed/ /app/project-seed/
+COPY project-example/ /app/project-example/
 
 ENV ESBUILD_BINARY_PATH=/usr/local/bin/esbuild \
     NEXTHMI_DATA_DIR=/data \

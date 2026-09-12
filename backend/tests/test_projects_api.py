@@ -9,6 +9,7 @@ test process.
 from __future__ import annotations
 
 import io
+import json
 import zipfile
 from pathlib import Path
 
@@ -506,6 +507,68 @@ def test_create_refuses_already_registered(client: TestClient, tmp_path: Path) -
     target.rename(second_target)
     resp = client.post("/api/projects", json={"name": "Plant A again", "path": str(second_target)})
     assert resp.status_code == 409, resp.text
+
+
+def test_create_project_defaults_to_empty_template(client, tmp_path):
+    target = tmp_path / "p1"
+    res = client.post("/api/projects", json={"name": "P1", "path": str(target)})
+    assert res.status_code == 201
+    # The seed ships no pages/ content of its own beyond home.
+    assert (target / "config.json").is_file()
+    assert not (target / "pages" / "brew.json").is_file()
+
+
+def test_create_project_from_example_template(client, tmp_path):
+    target = tmp_path / "p2"
+    res = client.post(
+        "/api/projects",
+        json={"name": "P2", "path": str(target), "template": "example"},
+    )
+    assert res.status_code == 201
+    assert (target / "pages" / "brew.json").is_file()
+    assert (target / "datasources" / "Brew.json").is_file()
+
+
+def test_example_template_ships_without_project_metadata():
+    """A template carrying a `project` block would clone its UUID into every
+    project created from it, and the manifest keys projects by that id."""
+    template = projects_api._template_dir("example")
+    assert template is not None, "project-example/ must be bundled"
+    config = json.loads((template / "config.json").read_text(encoding="utf-8"))
+    assert "project" not in config
+
+
+def test_example_template_ships_without_credentials():
+    """A template carrying a real admin passwordHash would clone the same
+    credential into every project made from it, and lock operators out of an
+    account whose plaintext exists nowhere — the same identity-artifact bug
+    the `project` id guard above prevents, but for a secret."""
+    template = projects_api._template_dir("example")
+    assert template is not None, "project-example/ must be bundled"
+    users = json.loads((template / "users.json").read_text(encoding="utf-8"))
+    assert users["operatorSetup"]["required"] is True
+    assert [user["id"] for user in users["users"]] == ["guest"]
+    assert all("passwordHash" not in user for user in users["users"])
+
+
+def test_two_example_projects_get_distinct_ids(client, tmp_path):
+    first = client.post(
+        "/api/projects",
+        json={"name": "A", "path": str(tmp_path / "a"), "template": "example"},
+    ).json()
+    second = client.post(
+        "/api/projects",
+        json={"name": "B", "path": str(tmp_path / "b"), "template": "example"},
+    ).json()
+    assert first["id"] != second["id"]
+
+
+def test_create_project_rejects_unknown_template(client, tmp_path):
+    res = client.post(
+        "/api/projects",
+        json={"name": "X", "path": str(tmp_path / "x"), "template": "nope"},
+    )
+    assert res.status_code == 422
 
 
 # ── locate ───────────────────────────────────────────────────────────────────

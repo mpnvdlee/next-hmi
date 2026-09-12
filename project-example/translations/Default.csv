@@ -1,0 +1,86 @@
+en-EN;nl-NL
+A demo espresso machine, built entirely in the editor.;Een demo-espressomachine, volledig in de editor gebouwd.
+Actions;Acties
+Active alarms;Actieve alarmen
+Alarm history;Alarmhistorie
+Alarms;Alarmen
+Bean hopper;Bonentrechter
+Bench-top espresso;Espresso op de werkbank
+Boiler;Boiler
+Boiler over-temperature;Boiler te heet
+Boiler setpoint;Boiler-instelwaarde
+Boiler temperature;Boilertemperatuur
+Boiler — live;Boiler — live
+Brew;Zetten
+Brew now;Nu zetten
+Brew now confirms with an alert, then writes a variable and reports back with a toast.;Nu zetten vraagt eerst om bevestiging, schrijft dan een variabele en meldt het resultaat met een toast.
+Brewing;Zetten
+Cancel;Annuleren
+Change the boiler temperature on the Machine page to make it move.;Wijzig de boilertemperatuur op de Machine-pagina om hem te laten bewegen.
+Consumables;Verbruiksartikelen
+Consumables & waste;Verbruik & afval
+Could not load;Laden mislukt
+Cups today;Kopjes vandaag
+Dark;Donker
+Data & bindings;Data & koppelingen
+Dose;Dosering
+Drink;Drank
+Drop the water tank below 15 % — a warning joins the list.;Laat de watertank onder 15 % zakken — er verschijnt een waarschuwing.
+Fill the grounds drawer — an info alarm, no popup.;Vul de koffiediklade — een infomelding, zonder pop-up.
+Four definitions — two on value ranges, one low-level, one boolean. Trip them from the Machine page.;Vier definities — twee op waardebereik, één op laag niveau, één booleaans. Activeer ze vanaf de Machine-pagina.
+Grind;Maling
+Grounds drawer full;Koffiediklade vol
+Last shot;Laatste shot
+Light;Licht
+Load;Laden
+Load a different drink on the Brew page — every setpoint moves at once.;Laad een andere drank op de Zetten-pagina — alle instelwaarden verspringen tegelijk.
+Loaded;Geladen
+Machine;Machine
+Machine reset to its opening state.;Machine teruggezet naar de begintoestand.
+Main;Hoofd
+Main power;Hoofdschakelaar
+Monitor;Bewaken
+NEXT BREW;NEXT BREW
+NEXT HMI demo project;NEXT HMI-demoproject
+Next shot;Volgende shot
+No recipe loaded;Geen recept geladen
+Nothing here talks to real hardware. The variables live in a static datasource, so every value starts where the project put it and only moves when you move it. That is the point — open the Machine page and drive it.;Niets hier praat met echte hardware. De variabelen staan in een statische databron, dus elke waarde begint waar het project hem zette en beweegt alleen als jij hem beweegt. Dat is de bedoeling — open de Machine-pagina en bestuur hem.
+Off;Uit
+One static datasource. Every reading is a $var binding, and the status pill and tile tones are computed with $if and $compare.;Eén statische databron. Elke uitlezing is een $var-koppeling en de statuspil en tegelkleuren worden berekend met $if en $compare.
+Pages & shell;Pagina's & omlijsting
+Peek at the alarms;Even naar de alarmen kijken
+Power & grind;Voeding & maling
+Pump pressure;Pompdruk
+Pump pressure high;Pompdruk hoog
+Push the boiler above 96 °C — a red alarm fires and pops up.;Zet de boiler boven 96 °C — een rood alarm gaat af en springt op.
+Ready;Gereed
+Recipe;Recept
+Recipes;Recepten
+Recorded history;Opgenomen historie
+Reset the machine;Machine terugzetten
+Samples land here as you move the setpoints on the Machine page.;Metingen verschijnen hier zodra je de instelwaarden op de Machine-pagina wijzigt.
+Setpoint;Instelwaarde
+Setpoints;Instelwaarden
+Shot stopped.;Shot gestopt.
+Signed in as;Aangemeld als
+Start brewing?;Zetten starten?
+Stop;Stoppen
+Switch the language in the header — every label follows.;Wissel de taal in de koptekst — alle labels volgen.
+The group head will run until you press Stop.;De zetgroep loopt door totdat je op Stoppen drukt.
+Themes & translations;Thema's & vertalingen
+There is no PLC behind this demo — you are the PLC. Everything here drives the Brew and Monitor pages.;Achter deze demo zit geen PLC — jij bent de PLC. Alles hier stuurt de Zetten- en Bewaken-pagina aan.
+Three drinks. Loading one writes six variables at once and verifies them.;Drie dranken. Eén laden schrijft zes variabelen tegelijk en verifieert ze.
+Three pages in a group, plus a header and a footer. This panel is a dialog — for a page overlay, try Peek at the alarms on the Machine page.;Drie pagina's in een groep, plus een koptekst en een voettekst. Dit paneel is een dialoog — voor een pagina-overlay: probeer Even naar de alarmen kijken op de Machine-pagina.
+Today;Vandaag
+Top these up on the Machine page.;Vul deze bij op de Machine-pagina.
+Try this;Probeer dit
+Two themes and two languages, both switched from the header.;Twee thema's en twee talen, beide te wisselen vanuit de koptekst.
+Water tank;Watertank
+Water tank low;Watertank laag
+Welcome to NEXT BREW — open the Machine page and drive it yourself.;Welkom bij NEXT BREW — open de Machine-pagina en bestuur hem zelf.
+Write failed;Schrijven mislukt
+beans;bonen
+buffered in the page;gebufferd in de pagina
+drives the Brew page;stuurt de Zetten-pagina aan
+historian · 24 h retention;historian · 24 u bewaartijd
+target;doel

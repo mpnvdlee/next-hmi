@@ -1,0 +1,162 @@
+{
+  "type": "static",
+  "name": "Brew",
+  "settings": {},
+  "variables": [
+    {
+      "kind": "folder",
+      "name": "Machine",
+      "children": [
+        {
+          "kind": "variable",
+          "display_name": "Power",
+          "data_type": "Boolean",
+          "enabled": true,
+          "writable": true
+        },
+        {
+          "kind": "variable",
+          "display_name": "Brewing",
+          "data_type": "Boolean",
+          "enabled": true,
+          "writable": true
+        }
+      ]
+    },
+    {
+      "kind": "folder",
+      "name": "Boiler",
+      "children": [
+        {
+          "kind": "variable",
+          "display_name": "Temp",
+          "data_type": "Float",
+          "enabled": true,
+          "writable": true,
+          "min": 0,
+          "max": 120
+        },
+        {
+          "kind": "variable",
+          "display_name": "Setpoint",
+          "data_type": "Float",
+          "enabled": true,
+          "writable": true,
+          "min": 80,
+          "max": 100
+        }
+      ]
+    },
+    {
+      "kind": "folder",
+      "name": "Pump",
+      "children": [
+        {
+          "kind": "variable",
+          "display_name": "Pressure",
+          "data_type": "Float",
+          "enabled": true,
+          "writable": true,
+          "min": 0,
+          "max": 12
+        }
+      ]
+    },
+    {
+      "kind": "folder",
+      "name": "Hopper",
+      "children": [
+        {
+          "kind": "variable",
+          "display_name": "BeanLevel",
+          "data_type": "Float",
+          "enabled": true,
+          "writable": true,
+          "min": 0,
+          "max": 100
+        },
+        {
+          "kind": "variable",
+          "display_name": "Dose",
+          "data_type": "Float",
+          "enabled": true,
+          "writable": true,
+          "min": 14,
+          "max": 22
+        },
+        {
+          "kind": "variable",
+          "display_name": "Grind",
+          "data_type": "String",
+          "enabled": true,
+          "writable": true
+        }
+      ]
+    },
+    {
+      "kind": "folder",
+      "name": "Tank",
+      "children": [
+        {
+          "kind": "variable",
+          "display_name": "WaterLevel",
+          "data_type": "Float",
+          "enabled": true,
+          "writable": true,
+          "min": 0,
+          "max": 100
+        }
+      ]
+    },
+    {
+      "kind": "folder",
+      "name": "Waste",
+      "children": [
+        {
+          "kind": "variable",
+          "display_name": "DrawerFull",
+          "data_type": "Boolean",
+          "enabled": true,
+          "writable": true
+        }
+      ]
+    },
+    {
+      "kind": "folder",
+      "name": "Counters",
+      "children": [
+        {
+          "kind": "variable",
+          "display_name": "CupsToday",
+          "data_type": "Int32",
+          "enabled": true,
+          "writable": true,
+          "min": 0,
+          "max": 999
+        },
+        {
+          "kind": "variable",
+          "display_name": "ShotTime",
+          "data_type": "Float",
+          "enabled": true,
+          "writable": true,
+          "min": 0,
+          "max": 60
+        }
+      ]
+    },
+    {
+      "kind": "folder",
+      "name": "Drink",
+      "children": [
+        {
+          "kind": "variable",
+          "display_name": "Name",
+          "data_type": "String",
+          "enabled": true,
+          "writable": true
+        }
+      ]
+    }
+  ]
+}

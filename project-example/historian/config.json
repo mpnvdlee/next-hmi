@@ -1,0 +1,14 @@
+{
+  "variables": {
+    "Brew:Boiler/Temp": {
+      "enabled": true,
+      "minInterval": 1.0,
+      "retention": 86400.0
+    },
+    "Brew:Pump/Pressure": {
+      "enabled": true,
+      "minInterval": 1.0,
+      "retention": 86400.0
+    }
+  }
+}

@@ -1,0 +1,1152 @@
+{
+  "id": "machine",
+  "title": {
+    "$loc": "Machine"
+  },
+  "icon": "sliders-horizontal",
+  "description": "Drive the machine by hand",
+  "showHeader": false,
+  "mainBackground": "var(--hmi-bg)",
+  "sections": {
+    "content": [
+      {
+        "id": "mach-root",
+        "type": "Container",
+        "name": "Page",
+        "properties": {
+          "visible": true,
+          "showWhenEmpty": true,
+          "background": "transparent"
+        },
+        "layout": {
+          "direction": "column",
+          "gap": "18px",
+          "wrap": false,
+          "align": "stretch",
+          "justify": "flex-start",
+          "radius": "0",
+          "width": "100%",
+          "widthMode": "fixed",
+          "heightMode": "hug",
+          "paddingTop": "20px",
+          "paddingRight": "20px",
+          "paddingBottom": "20px",
+          "paddingLeft": "20px"
+        },
+        "children": [
+          {
+            "id": "mach-intro",
+            "type": "Container",
+            "name": "Intro",
+            "properties": {
+              "visible": true,
+              "showWhenEmpty": true,
+              "background": "var(--hmi-surface-raised)",
+              "border": "1px solid var(--hmi-border)"
+            },
+            "layout": {
+              "direction": "row",
+              "gap": "10px",
+              "wrap": false,
+              "align": "center",
+              "justify": "flex-start",
+              "radius": "var(--hmi-radius)",
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "paddingTop": "12px",
+              "paddingRight": "16px",
+              "paddingBottom": "12px",
+              "paddingLeft": "16px"
+            },
+            "children": [
+              {
+                "id": "mach-intro-i",
+                "type": "Icon",
+                "name": "Info",
+                "properties": {
+                  "iconName": {
+                    "$static": {
+                      "type": "builtin",
+                      "name": "info"
+                    }
+                  },
+                  "size": 18,
+                  "color": "var(--hmi-accent)"
+                },
+                "layout": {
+                  "widthMode": "hug",
+                  "heightMode": "hug"
+                }
+              },
+              {
+                "id": "mach-intro-t",
+                "type": "Label",
+                "name": "mach-intro-t",
+                "properties": {
+                  "typography": "body",
+                  "text": {
+                    "$loc": "There is no PLC behind this demo — you are the PLC. Everything here drives the Brew and Monitor pages."
+                  },
+                  "wrap": "wrap"
+                },
+                "layout": {
+                  "grow": 1,
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              }
+            ]
+          },
+          {
+            "id": "mach-row-1",
+            "type": "Container",
+            "name": "Row",
+            "properties": {
+              "visible": true,
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "row",
+              "gap": "18px",
+              "wrap": true,
+              "align": "stretch",
+              "justify": "flex-start",
+              "radius": "0",
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "paddingTop": "0",
+              "paddingRight": "0",
+              "paddingBottom": "0",
+              "paddingLeft": "0"
+            },
+            "children": [
+              {
+                "id": "mach-power",
+                "type": "$component:card",
+                "name": "mach-power",
+                "properties": {
+                  "title": {
+                    "$loc": "Power & grind"
+                  },
+                  "showTitle": true
+                },
+                "layout": {
+                  "grow": 1,
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "minWidth": "300px"
+                },
+                "children": [
+                  {
+                    "id": "mach-power-body",
+                    "type": "Container",
+                    "name": "Body",
+                    "properties": {
+                      "visible": true,
+                      "showWhenEmpty": true,
+                      "background": "transparent"
+                    },
+                    "layout": {
+                      "direction": "column",
+                      "gap": "14px",
+                      "wrap": false,
+                      "align": "stretch",
+                      "justify": "flex-start",
+                      "radius": "0",
+                      "widthMode": "fill",
+                      "heightMode": "hug",
+                      "paddingTop": "8px",
+                      "paddingRight": "18px",
+                      "paddingBottom": "18px",
+                      "paddingLeft": "18px"
+                    },
+                    "children": [
+                      {
+                        "id": "mach-sw-power",
+                        "type": "Switch",
+                        "name": "Main power",
+                        "properties": {
+                          "label": {
+                            "$loc": "Main power"
+                          },
+                          "labelPosition": "left",
+                          "variable": {
+                            "$var": {
+                              "path": "Brew:Machine/Power"
+                            }
+                          },
+                          "color": "var(--hmi-accent)"
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "mach-sw-brewing",
+                        "type": "Switch",
+                        "name": "Brewing",
+                        "properties": {
+                          "label": {
+                            "$loc": "Brewing"
+                          },
+                          "labelPosition": "left",
+                          "variable": {
+                            "$var": {
+                              "path": "Brew:Machine/Brewing"
+                            }
+                          },
+                          "color": "var(--hmi-accent)"
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "mach-power-rule",
+                        "type": "Separator",
+                        "name": "Divider",
+                        "properties": {
+                          "orientation": "horizontal",
+                          "thickness": 1,
+                          "color": "var(--hmi-border)",
+                          "inset": 0
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "mach-grind",
+                        "type": "ButtonRow",
+                        "name": "Grind",
+                        "properties": {
+                          "label": {
+                            "$loc": "Grind"
+                          },
+                          "options": [
+                            {
+                              "label": "Fine",
+                              "value": "fine"
+                            },
+                            {
+                              "label": "Medium",
+                              "value": "medium"
+                            },
+                            {
+                              "label": "Coarse",
+                              "value": "coarse"
+                            }
+                          ],
+                          "variable": {
+                            "$var": {
+                              "path": "Brew:Hopper/Grind"
+                            }
+                          }
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      }
+                    ],
+                    "slot": "body"
+                  }
+                ]
+              },
+              {
+                "id": "mach-setpoints",
+                "type": "$component:card",
+                "name": "mach-setpoints",
+                "properties": {
+                  "title": {
+                    "$loc": "Setpoints"
+                  },
+                  "showTitle": true
+                },
+                "layout": {
+                  "grow": 1,
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "minWidth": "300px"
+                },
+                "children": [
+                  {
+                    "id": "mach-setpoints-note",
+                    "type": "Label",
+                    "name": "mach-setpoints-note",
+                    "properties": {
+                      "typography": "code",
+                      "text": {
+                        "$loc": "drives the Brew page"
+                      },
+                      "color": "var(--hmi-text-muted)"
+                    },
+                    "layout": {
+                      "widthMode": "hug",
+                      "heightMode": "hug"
+                    },
+                    "slot": "action"
+                  },
+                  {
+                    "id": "mach-setpoints-body",
+                    "type": "Container",
+                    "name": "Body",
+                    "properties": {
+                      "visible": true,
+                      "showWhenEmpty": true,
+                      "background": "transparent"
+                    },
+                    "layout": {
+                      "direction": "column",
+                      "gap": "14px",
+                      "wrap": false,
+                      "align": "stretch",
+                      "justify": "flex-start",
+                      "radius": "0",
+                      "widthMode": "fill",
+                      "heightMode": "hug",
+                      "paddingTop": "8px",
+                      "paddingRight": "18px",
+                      "paddingBottom": "18px",
+                      "paddingLeft": "18px"
+                    },
+                    "children": [
+                      {
+                        "id": "mach-st-setpoint",
+                        "type": "NumericStepper",
+                        "name": "Boiler setpoint",
+                        "properties": {
+                          "label": {
+                            "$loc": "Boiler setpoint"
+                          },
+                          "unit": "°C",
+                          "variable": {
+                            "$var": {
+                              "path": "Brew:Boiler/Setpoint"
+                            }
+                          },
+                          "step": 0.5,
+                          "min": 80,
+                          "max": 100,
+                          "decimals": 1,
+                          "showRangeOnNumpad": true
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "mach-st-temp",
+                        "type": "NumericStepper",
+                        "name": "Boiler temperature",
+                        "properties": {
+                          "label": {
+                            "$loc": "Boiler temperature"
+                          },
+                          "unit": "°C",
+                          "variable": {
+                            "$var": {
+                              "path": "Brew:Boiler/Temp"
+                            }
+                          },
+                          "step": 1,
+                          "min": 0,
+                          "max": 120,
+                          "decimals": 1,
+                          "showRangeOnNumpad": true
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "mach-st-press",
+                        "type": "NumericStepper",
+                        "name": "Pump pressure",
+                        "properties": {
+                          "label": {
+                            "$loc": "Pump pressure"
+                          },
+                          "unit": "bar",
+                          "variable": {
+                            "$var": {
+                              "path": "Brew:Pump/Pressure"
+                            }
+                          },
+                          "step": 0.1,
+                          "min": 0,
+                          "max": 12,
+                          "decimals": 1,
+                          "showRangeOnNumpad": true
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "mach-st-dose",
+                        "type": "NumericStepper",
+                        "name": "Dose",
+                        "properties": {
+                          "label": {
+                            "$loc": "Dose"
+                          },
+                          "unit": "g",
+                          "variable": {
+                            "$var": {
+                              "path": "Brew:Hopper/Dose"
+                            }
+                          },
+                          "step": 0.5,
+                          "min": 14,
+                          "max": 22,
+                          "decimals": 1,
+                          "showRangeOnNumpad": true
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      }
+                    ],
+                    "slot": "body"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "mach-row-2",
+            "type": "Container",
+            "name": "Row",
+            "properties": {
+              "visible": true,
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "row",
+              "gap": "18px",
+              "wrap": true,
+              "align": "stretch",
+              "justify": "flex-start",
+              "radius": "0",
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "paddingTop": "0",
+              "paddingRight": "0",
+              "paddingBottom": "0",
+              "paddingLeft": "0"
+            },
+            "children": [
+              {
+                "id": "mach-consumables",
+                "type": "$component:card",
+                "name": "mach-consumables",
+                "properties": {
+                  "title": {
+                    "$loc": "Consumables & waste"
+                  },
+                  "showTitle": true
+                },
+                "layout": {
+                  "grow": 1,
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "minWidth": "300px"
+                },
+                "children": [
+                  {
+                    "id": "mach-consumables-body",
+                    "type": "Container",
+                    "name": "Body",
+                    "properties": {
+                      "visible": true,
+                      "showWhenEmpty": true,
+                      "background": "transparent"
+                    },
+                    "layout": {
+                      "direction": "column",
+                      "gap": "14px",
+                      "wrap": false,
+                      "align": "stretch",
+                      "justify": "flex-start",
+                      "radius": "0",
+                      "widthMode": "fill",
+                      "heightMode": "hug",
+                      "paddingTop": "8px",
+                      "paddingRight": "18px",
+                      "paddingBottom": "18px",
+                      "paddingLeft": "18px"
+                    },
+                    "children": [
+                      {
+                        "id": "mach-st-water",
+                        "type": "NumericStepper",
+                        "name": "Water tank",
+                        "properties": {
+                          "label": {
+                            "$loc": "Water tank"
+                          },
+                          "unit": "%",
+                          "variable": {
+                            "$var": {
+                              "path": "Brew:Tank/WaterLevel"
+                            }
+                          },
+                          "step": 5,
+                          "min": 0,
+                          "max": 100,
+                          "decimals": 0,
+                          "showRangeOnNumpad": true
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "mach-st-beans",
+                        "type": "NumericStepper",
+                        "name": "Bean hopper",
+                        "properties": {
+                          "label": {
+                            "$loc": "Bean hopper"
+                          },
+                          "unit": "%",
+                          "variable": {
+                            "$var": {
+                              "path": "Brew:Hopper/BeanLevel"
+                            }
+                          },
+                          "step": 5,
+                          "min": 0,
+                          "max": 100,
+                          "decimals": 0,
+                          "showRangeOnNumpad": true
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "mach-st-cups",
+                        "type": "NumericStepper",
+                        "name": "Cups today",
+                        "properties": {
+                          "label": {
+                            "$loc": "Cups today"
+                          },
+                          "unit": "",
+                          "variable": {
+                            "$var": {
+                              "path": "Brew:Counters/CupsToday"
+                            }
+                          },
+                          "step": 1,
+                          "min": 0,
+                          "max": 999,
+                          "decimals": 0,
+                          "showRangeOnNumpad": true
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "mach-consumables-rule",
+                        "type": "Separator",
+                        "name": "Divider",
+                        "properties": {
+                          "orientation": "horizontal",
+                          "thickness": 1,
+                          "color": "var(--hmi-border)",
+                          "inset": 0
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "mach-sw-drawer",
+                        "type": "Switch",
+                        "name": "Grounds drawer full",
+                        "properties": {
+                          "label": {
+                            "$loc": "Grounds drawer full"
+                          },
+                          "labelPosition": "left",
+                          "variable": {
+                            "$var": {
+                              "path": "Brew:Waste/DrawerFull"
+                            }
+                          },
+                          "color": "var(--hmi-accent)"
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      }
+                    ],
+                    "slot": "body"
+                  }
+                ]
+              },
+              {
+                "id": "mach-try",
+                "type": "$component:card",
+                "name": "mach-try",
+                "properties": {
+                  "title": {
+                    "$loc": "Try this"
+                  },
+                  "showTitle": true
+                },
+                "layout": {
+                  "grow": 1,
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "minWidth": "300px"
+                },
+                "children": [
+                  {
+                    "id": "mach-try-icon",
+                    "type": "Icon",
+                    "name": "Tip",
+                    "properties": {
+                      "iconName": {
+                        "$static": {
+                          "type": "builtin",
+                          "name": "lightbulb"
+                        }
+                      },
+                      "size": 16,
+                      "color": "var(--hmi-accent)"
+                    },
+                    "layout": {
+                      "widthMode": "hug",
+                      "heightMode": "hug"
+                    },
+                    "slot": "action"
+                  },
+                  {
+                    "id": "mach-try-body",
+                    "type": "Container",
+                    "name": "Body",
+                    "properties": {
+                      "visible": true,
+                      "showWhenEmpty": true,
+                      "background": "transparent"
+                    },
+                    "layout": {
+                      "direction": "column",
+                      "gap": "12px",
+                      "wrap": false,
+                      "align": "stretch",
+                      "justify": "flex-start",
+                      "radius": "0",
+                      "widthMode": "fill",
+                      "heightMode": "hug",
+                      "paddingTop": "8px",
+                      "paddingRight": "18px",
+                      "paddingBottom": "18px",
+                      "paddingLeft": "18px"
+                    },
+                    "children": [
+                      {
+                        "id": "mach-try-1",
+                        "type": "Container",
+                        "name": "Hint",
+                        "properties": {
+                          "visible": true,
+                          "showWhenEmpty": true,
+                          "background": "transparent"
+                        },
+                        "layout": {
+                          "direction": "row",
+                          "gap": "10px",
+                          "wrap": false,
+                          "align": "flex-start",
+                          "justify": "flex-start",
+                          "radius": "0",
+                          "widthMode": "fill",
+                          "heightMode": "hug",
+                          "paddingTop": "0",
+                          "paddingRight": "0",
+                          "paddingBottom": "0",
+                          "paddingLeft": "0"
+                        },
+                        "children": [
+                          {
+                            "id": "mach-try-1-i",
+                            "type": "Icon",
+                            "name": "Bullet",
+                            "properties": {
+                              "iconName": {
+                                "$static": {
+                                  "type": "builtin",
+                                  "name": "caret-right"
+                                }
+                              },
+                              "size": 14,
+                              "color": "var(--hmi-accent)"
+                            },
+                            "layout": {
+                              "widthMode": "hug",
+                              "heightMode": "hug"
+                            }
+                          },
+                          {
+                            "id": "mach-try-1-t",
+                            "type": "Label",
+                            "name": "mach-try-1-t",
+                            "properties": {
+                              "typography": "body",
+                              "text": {
+                                "$loc": "Push the boiler above 96 °C — a red alarm fires and pops up."
+                              },
+                              "wrap": "wrap",
+                              "color": "var(--hmi-text-muted)"
+                            },
+                            "layout": {
+                              "grow": 1,
+                              "widthMode": "fill",
+                              "heightMode": "hug"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "mach-try-2",
+                        "type": "Container",
+                        "name": "Hint",
+                        "properties": {
+                          "visible": true,
+                          "showWhenEmpty": true,
+                          "background": "transparent"
+                        },
+                        "layout": {
+                          "direction": "row",
+                          "gap": "10px",
+                          "wrap": false,
+                          "align": "flex-start",
+                          "justify": "flex-start",
+                          "radius": "0",
+                          "widthMode": "fill",
+                          "heightMode": "hug",
+                          "paddingTop": "0",
+                          "paddingRight": "0",
+                          "paddingBottom": "0",
+                          "paddingLeft": "0"
+                        },
+                        "children": [
+                          {
+                            "id": "mach-try-2-i",
+                            "type": "Icon",
+                            "name": "Bullet",
+                            "properties": {
+                              "iconName": {
+                                "$static": {
+                                  "type": "builtin",
+                                  "name": "caret-right"
+                                }
+                              },
+                              "size": 14,
+                              "color": "var(--hmi-accent)"
+                            },
+                            "layout": {
+                              "widthMode": "hug",
+                              "heightMode": "hug"
+                            }
+                          },
+                          {
+                            "id": "mach-try-2-t",
+                            "type": "Label",
+                            "name": "mach-try-2-t",
+                            "properties": {
+                              "typography": "body",
+                              "text": {
+                                "$loc": "Drop the water tank below 15 % — a warning joins the list."
+                              },
+                              "wrap": "wrap",
+                              "color": "var(--hmi-text-muted)"
+                            },
+                            "layout": {
+                              "grow": 1,
+                              "widthMode": "fill",
+                              "heightMode": "hug"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "mach-try-3",
+                        "type": "Container",
+                        "name": "Hint",
+                        "properties": {
+                          "visible": true,
+                          "showWhenEmpty": true,
+                          "background": "transparent"
+                        },
+                        "layout": {
+                          "direction": "row",
+                          "gap": "10px",
+                          "wrap": false,
+                          "align": "flex-start",
+                          "justify": "flex-start",
+                          "radius": "0",
+                          "widthMode": "fill",
+                          "heightMode": "hug",
+                          "paddingTop": "0",
+                          "paddingRight": "0",
+                          "paddingBottom": "0",
+                          "paddingLeft": "0"
+                        },
+                        "children": [
+                          {
+                            "id": "mach-try-3-i",
+                            "type": "Icon",
+                            "name": "Bullet",
+                            "properties": {
+                              "iconName": {
+                                "$static": {
+                                  "type": "builtin",
+                                  "name": "caret-right"
+                                }
+                              },
+                              "size": 14,
+                              "color": "var(--hmi-accent)"
+                            },
+                            "layout": {
+                              "widthMode": "hug",
+                              "heightMode": "hug"
+                            }
+                          },
+                          {
+                            "id": "mach-try-3-t",
+                            "type": "Label",
+                            "name": "mach-try-3-t",
+                            "properties": {
+                              "typography": "body",
+                              "text": {
+                                "$loc": "Fill the grounds drawer — an info alarm, no popup."
+                              },
+                              "wrap": "wrap",
+                              "color": "var(--hmi-text-muted)"
+                            },
+                            "layout": {
+                              "grow": 1,
+                              "widthMode": "fill",
+                              "heightMode": "hug"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "mach-try-4",
+                        "type": "Container",
+                        "name": "Hint",
+                        "properties": {
+                          "visible": true,
+                          "showWhenEmpty": true,
+                          "background": "transparent"
+                        },
+                        "layout": {
+                          "direction": "row",
+                          "gap": "10px",
+                          "wrap": false,
+                          "align": "flex-start",
+                          "justify": "flex-start",
+                          "radius": "0",
+                          "widthMode": "fill",
+                          "heightMode": "hug",
+                          "paddingTop": "0",
+                          "paddingRight": "0",
+                          "paddingBottom": "0",
+                          "paddingLeft": "0"
+                        },
+                        "children": [
+                          {
+                            "id": "mach-try-4-i",
+                            "type": "Icon",
+                            "name": "Bullet",
+                            "properties": {
+                              "iconName": {
+                                "$static": {
+                                  "type": "builtin",
+                                  "name": "caret-right"
+                                }
+                              },
+                              "size": 14,
+                              "color": "var(--hmi-accent)"
+                            },
+                            "layout": {
+                              "widthMode": "hug",
+                              "heightMode": "hug"
+                            }
+                          },
+                          {
+                            "id": "mach-try-4-t",
+                            "type": "Label",
+                            "name": "mach-try-4-t",
+                            "properties": {
+                              "typography": "body",
+                              "text": {
+                                "$loc": "Load a different drink on the Brew page — every setpoint moves at once."
+                              },
+                              "wrap": "wrap",
+                              "color": "var(--hmi-text-muted)"
+                            },
+                            "layout": {
+                              "grow": 1,
+                              "widthMode": "fill",
+                              "heightMode": "hug"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "mach-try-5",
+                        "type": "Container",
+                        "name": "Hint",
+                        "properties": {
+                          "visible": true,
+                          "showWhenEmpty": true,
+                          "background": "transparent"
+                        },
+                        "layout": {
+                          "direction": "row",
+                          "gap": "10px",
+                          "wrap": false,
+                          "align": "flex-start",
+                          "justify": "flex-start",
+                          "radius": "0",
+                          "widthMode": "fill",
+                          "heightMode": "hug",
+                          "paddingTop": "0",
+                          "paddingRight": "0",
+                          "paddingBottom": "0",
+                          "paddingLeft": "0"
+                        },
+                        "children": [
+                          {
+                            "id": "mach-try-5-i",
+                            "type": "Icon",
+                            "name": "Bullet",
+                            "properties": {
+                              "iconName": {
+                                "$static": {
+                                  "type": "builtin",
+                                  "name": "caret-right"
+                                }
+                              },
+                              "size": 14,
+                              "color": "var(--hmi-accent)"
+                            },
+                            "layout": {
+                              "widthMode": "hug",
+                              "heightMode": "hug"
+                            }
+                          },
+                          {
+                            "id": "mach-try-5-t",
+                            "type": "Label",
+                            "name": "mach-try-5-t",
+                            "properties": {
+                              "typography": "body",
+                              "text": {
+                                "$loc": "Switch the language in the header — every label follows."
+                              },
+                              "wrap": "wrap",
+                              "color": "var(--hmi-text-muted)"
+                            },
+                            "layout": {
+                              "grow": 1,
+                              "widthMode": "fill",
+                              "heightMode": "hug"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "mach-try-rule",
+                        "type": "Separator",
+                        "name": "Divider",
+                        "properties": {
+                          "orientation": "horizontal",
+                          "thickness": 1,
+                          "color": "var(--hmi-border)",
+                          "inset": 0
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "mach-peek",
+                        "type": "Button",
+                        "name": "Peek at Monitor",
+                        "properties": {
+                          "label": {
+                            "$loc": "Peek at the alarms"
+                          },
+                          "iconName": {
+                            "$static": {
+                              "type": "builtin",
+                              "name": "frame-corners"
+                            }
+                          },
+                          "variant": "outline",
+                          "actions": {
+                            "onPress": [
+                              {
+                                "type": "openPageOverlay",
+                                "pageId": "monitor",
+                                "size": "fullscreen",
+                                "placement": "center",
+                                "backdrop": "dim"
+                              }
+                            ]
+                          }
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "mach-reset",
+                        "type": "Button",
+                        "name": "Reset",
+                        "properties": {
+                          "label": {
+                            "$loc": "Reset the machine"
+                          },
+                          "iconName": {
+                            "$static": {
+                              "type": "builtin",
+                              "name": "arrow-counter-clockwise"
+                            }
+                          },
+                          "variant": "outline",
+                          "actions": {
+                            "onPress": [
+                              {
+                                "type": "writeDataVariable",
+                                "datasource": "Brew",
+                                "path": "Machine/Power",
+                                "value": true
+                              },
+                              {
+                                "type": "writeDataVariable",
+                                "datasource": "Brew",
+                                "path": "Machine/Brewing",
+                                "value": false
+                              },
+                              {
+                                "type": "writeDataVariable",
+                                "datasource": "Brew",
+                                "path": "Boiler/Temp",
+                                "value": 92.5
+                              },
+                              {
+                                "type": "writeDataVariable",
+                                "datasource": "Brew",
+                                "path": "Boiler/Setpoint",
+                                "value": 93
+                              },
+                              {
+                                "type": "writeDataVariable",
+                                "datasource": "Brew",
+                                "path": "Pump/Pressure",
+                                "value": 9
+                              },
+                              {
+                                "type": "writeDataVariable",
+                                "datasource": "Brew",
+                                "path": "Hopper/BeanLevel",
+                                "value": 62
+                              },
+                              {
+                                "type": "writeDataVariable",
+                                "datasource": "Brew",
+                                "path": "Hopper/Dose",
+                                "value": 18
+                              },
+                              {
+                                "type": "writeDataVariable",
+                                "datasource": "Brew",
+                                "path": "Hopper/Grind",
+                                "value": "medium"
+                              },
+                              {
+                                "type": "writeDataVariable",
+                                "datasource": "Brew",
+                                "path": "Tank/WaterLevel",
+                                "value": 78
+                              },
+                              {
+                                "type": "writeDataVariable",
+                                "datasource": "Brew",
+                                "path": "Waste/DrawerFull",
+                                "value": false
+                              },
+                              {
+                                "type": "writeDataVariable",
+                                "datasource": "Brew",
+                                "path": "Counters/CupsToday",
+                                "value": 3
+                              },
+                              {
+                                "type": "writeDataVariable",
+                                "datasource": "Brew",
+                                "path": "Counters/ShotTime",
+                                "value": 27.5
+                              },
+                              {
+                                "type": "writeDataVariable",
+                                "datasource": "Brew",
+                                "path": "Drink/Name",
+                                "value": "Espresso"
+                              },
+                              {
+                                "type": "showToast",
+                                "message": {
+                                  "$loc": "Machine reset to its opening state."
+                                },
+                                "severity": "info",
+                                "discard": "auto",
+                                "duration": 4000
+                              }
+                            ]
+                          }
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      }
+                    ],
+                    "slot": "body"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

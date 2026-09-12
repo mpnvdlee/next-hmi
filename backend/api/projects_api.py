@@ -12,7 +12,7 @@ import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from core import mcp_tokens, operator_setup, runtime_home
 from core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -50,7 +50,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 _REPO_ROOT = Path(__file__).parent.parent.parent
-_SEED_DIR_CANDIDATES = (_REPO_ROOT / "project-seed", _REPO_ROOT / "backend" / "project-seed")
+_TEMPLATE_DIR_CANDIDATES: dict[str, tuple[Path, ...]] = {
+    "empty": (_REPO_ROOT / "project-seed", _REPO_ROOT / "backend" / "project-seed"),
+    "example": (_REPO_ROOT / "project-example", _REPO_ROOT / "backend" / "project-example"),
+}
 
 
 # ── request / response models ────────────────────────────────────────────────
@@ -59,6 +62,7 @@ _SEED_DIR_CANDIDATES = (_REPO_ROOT / "project-seed", _REPO_ROOT / "backend" / "p
 class CreateProjectBody(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     path: str = Field(min_length=1)
+    template: Literal["empty", "example"] = "empty"
 
 
 class LocateProjectBody(BaseModel):
@@ -84,24 +88,25 @@ class ValidatePathBody(BaseModel):
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 
-def _seed_dir() -> Path | None:
-    for candidate in _SEED_DIR_CANDIDATES:
+def _template_dir(template: str) -> Path | None:
+    for candidate in _TEMPLATE_DIR_CANDIDATES.get(template, ()):
         if candidate.is_dir():
             return candidate
     return None
 
 
-def _copy_seed_into(target: Path) -> None:
-    seed = _seed_dir()
-    if seed is None:
-        # Empty project — caller is creating from scratch; create the minimal
-        # folder skeleton so ``ensure_active_project_dirs`` has something to
-        # work with when this project becomes live.
+def _copy_template_into(target: Path, template: str) -> None:
+    source = _template_dir(template)
+    if source is None:
+        # Only the empty template may be absent — a build without the bundled
+        # seed still has to be able to create a project.
+        if template != "empty":
+            raise ValidationError(f"Project template '{template}' is not bundled with this build")
         target.mkdir(parents=True, exist_ok=True)
         for sub in ("assets", "certs", "custom-widgets", "external-libraries"):
             (target / sub).mkdir(parents=True, exist_ok=True)
         return
-    for entry in seed.iterdir():
+    for entry in source.iterdir():
         dest = target / entry.name
         if entry.is_dir():
             shutil.copytree(entry, dest, dirs_exist_ok=True)
@@ -626,7 +631,7 @@ def browse_dir(path: str | None = Query(default=None)) -> dict[str, Any]:
 
 @router.post("", status_code=201)
 def create_project(body: CreateProjectBody) -> dict[str, Any]:
-    """Seed a new project folder from ``project-seed/`` and add it to the manifest.
+    """Seed a new project folder from ``body.template`` and add it to the manifest.
 
     The target must not exist OR must be an empty directory. We seed into the
     directory and write a fresh ``project`` metadata block with a UUID into
@@ -649,7 +654,7 @@ def create_project(body: CreateProjectBody) -> dict[str, Any]:
     target.mkdir(parents=True, exist_ok=True)
 
     try:
-        _copy_seed_into(target)
+        _copy_template_into(target, body.template)
     except OSError as exc:
         raise ValidationError(f"Failed to seed project at {target}: {exc}") from exc
 

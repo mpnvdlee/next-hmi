@@ -1,0 +1,1288 @@
+{
+  "id": "brew",
+  "title": {
+    "$loc": "Brew"
+  },
+  "icon": "flask",
+  "description": "Pull a shot and watch the machine respond",
+  "showHeader": false,
+  "mainBackground": "var(--hmi-bg)",
+  "sections": {
+    "content": [
+      {
+        "id": "brew-root",
+        "type": "Container",
+        "name": "Page",
+        "properties": {
+          "visible": true,
+          "showWhenEmpty": true,
+          "background": "transparent"
+        },
+        "layout": {
+          "direction": "column",
+          "gap": "18px",
+          "wrap": false,
+          "align": "stretch",
+          "justify": "flex-start",
+          "radius": "0",
+          "width": "100%",
+          "widthMode": "fixed",
+          "heightMode": "hug",
+          "paddingTop": "20px",
+          "paddingRight": "20px",
+          "paddingBottom": "20px",
+          "paddingLeft": "20px"
+        },
+        "children": [
+          {
+            "id": "brew-row-1",
+            "type": "Container",
+            "name": "Row",
+            "properties": {
+              "visible": true,
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "row",
+              "gap": "18px",
+              "wrap": true,
+              "align": "stretch",
+              "justify": "flex-start",
+              "radius": "0",
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "paddingTop": "0",
+              "paddingRight": "0",
+              "paddingBottom": "0",
+              "paddingLeft": "0"
+            },
+            "children": [
+              {
+                "id": "brew-boiler",
+                "type": "$component:card",
+                "name": "brew-boiler",
+                "properties": {
+                  "title": {
+                    "$loc": "Boiler"
+                  },
+                  "showTitle": true
+                },
+                "layout": {
+                  "grow": 1.3,
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "minWidth": "380px"
+                },
+                "children": [
+                  {
+                    "id": "brew-boiler-target",
+                    "type": "Label",
+                    "name": "brew-boiler-target",
+                    "properties": {
+                      "typography": "code",
+                      "text": {
+                        "$stringExpr": {
+                          "template": "{1} {Round1(2)} °C",
+                          "wildcards": {
+                            "1": {
+                              "$loc": "target"
+                            },
+                            "2": {
+                              "$var": {
+                                "path": "Brew:Boiler/Setpoint"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "color": "var(--hmi-text-muted)"
+                    },
+                    "layout": {
+                      "widthMode": "hug",
+                      "heightMode": "hug"
+                    },
+                    "slot": "action"
+                  },
+                  {
+                    "id": "brew-boiler-body",
+                    "type": "Container",
+                    "name": "Body",
+                    "properties": {
+                      "visible": true,
+                      "showWhenEmpty": true,
+                      "background": "transparent"
+                    },
+                    "layout": {
+                      "direction": "row",
+                      "gap": "22px",
+                      "wrap": false,
+                      "align": "center",
+                      "justify": "flex-start",
+                      "radius": "0",
+                      "widthMode": "fill",
+                      "heightMode": "hug",
+                      "paddingTop": "8px",
+                      "paddingRight": "18px",
+                      "paddingBottom": "18px",
+                      "paddingLeft": "18px"
+                    },
+                    "children": [
+                      {
+                        "id": "brew-ring",
+                        "type": "RingGauge",
+                        "name": "Boiler temperature",
+                        "properties": {
+                          "value": {
+                            "$var": {
+                              "path": "Brew:Boiler/Temp"
+                            }
+                          },
+                          "min": 0,
+                          "max": 120,
+                          "unit": "°C",
+                          "caption": {
+                            "$loc": "Boiler"
+                          },
+                          "decimals": 1,
+                          "size": 152,
+                          "thickness": 16,
+                          "color": "var(--hmi-accent)"
+                        },
+                        "layout": {
+                          "widthMode": "hug",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "brew-boiler-rows",
+                        "type": "Container",
+                        "name": "Readings",
+                        "properties": {
+                          "visible": true,
+                          "showWhenEmpty": true,
+                          "background": "transparent"
+                        },
+                        "layout": {
+                          "direction": "column",
+                          "gap": "15px",
+                          "wrap": false,
+                          "align": "stretch",
+                          "justify": "flex-start",
+                          "radius": "0",
+                          "grow": 1,
+                          "minWidth": "0",
+                          "widthMode": "fill",
+                          "heightMode": "hug",
+                          "paddingTop": "0",
+                          "paddingRight": "0",
+                          "paddingBottom": "0",
+                          "paddingLeft": "0"
+                        },
+                        "children": [
+                          {
+                            "id": "brew-mr-set",
+                            "type": "$component:metric-row",
+                            "name": "Setpoint",
+                            "properties": {
+                              "label": {
+                                "$loc": "Setpoint"
+                              },
+                              "text": {
+                                "$stringExpr": {
+                                  "template": "{Round1(1)} °C",
+                                  "wildcards": {
+                                    "1": {
+                                      "$var": {
+                                        "path": "Brew:Boiler/Setpoint"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "value": {
+                                "$var": {
+                                  "path": "Brew:Boiler/Setpoint"
+                                }
+                              },
+                              "max": 120,
+                              "color": "var(--hmi-ok)"
+                            },
+                            "layout": {
+                              "widthMode": "fill",
+                              "heightMode": "hug"
+                            }
+                          },
+                          {
+                            "id": "brew-mr-press",
+                            "type": "$component:metric-row",
+                            "name": "Pump pressure",
+                            "properties": {
+                              "label": {
+                                "$loc": "Pump pressure"
+                              },
+                              "text": {
+                                "$stringExpr": {
+                                  "template": "{Round1(1)} bar",
+                                  "wildcards": {
+                                    "1": {
+                                      "$var": {
+                                        "path": "Brew:Pump/Pressure"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "value": {
+                                "$var": {
+                                  "path": "Brew:Pump/Pressure"
+                                }
+                              },
+                              "max": 12,
+                              "color": "var(--hmi-accent)"
+                            },
+                            "layout": {
+                              "widthMode": "fill",
+                              "heightMode": "hug"
+                            }
+                          },
+                          {
+                            "id": "brew-mr-dose",
+                            "type": "$component:metric-row",
+                            "name": "Dose",
+                            "properties": {
+                              "label": {
+                                "$loc": "Dose"
+                              },
+                              "text": {
+                                "$stringExpr": {
+                                  "template": "{Round1(1)} g",
+                                  "wildcards": {
+                                    "1": {
+                                      "$var": {
+                                        "path": "Brew:Hopper/Dose"
+                                      }
+                                    }
+                                  }
+                                }
+                              },
+                              "value": {
+                                "$var": {
+                                  "path": "Brew:Hopper/Dose"
+                                }
+                              },
+                              "max": 25,
+                              "color": "var(--hmi-warn)"
+                            },
+                            "layout": {
+                              "widthMode": "fill",
+                              "heightMode": "hug"
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "slot": "body"
+                  }
+                ]
+              },
+              {
+                "id": "brew-shot",
+                "type": "$component:card",
+                "name": "brew-shot",
+                "properties": {
+                  "title": {
+                    "$loc": "Next shot"
+                  },
+                  "showTitle": true
+                },
+                "layout": {
+                  "grow": 1,
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "minWidth": "330px"
+                },
+                "children": [
+                  {
+                    "id": "brew-shot-pill",
+                    "type": "StatusPill",
+                    "name": "State",
+                    "properties": {
+                      "text": {
+                        "$if": {
+                          "condition": {
+                            "$var": {
+                              "path": "Brew:Machine/Brewing"
+                            }
+                          },
+                          "true": {
+                            "$loc": "Brewing"
+                          },
+                          "false": {
+                            "$if": {
+                              "condition": {
+                                "$var": {
+                                  "path": "Brew:Machine/Power"
+                                }
+                              },
+                              "true": {
+                                "$loc": "Ready"
+                              },
+                              "false": {
+                                "$loc": "Off"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "tone": {
+                        "$if": {
+                          "condition": {
+                            "$var": {
+                              "path": "Brew:Machine/Brewing"
+                            }
+                          },
+                          "true": "accent",
+                          "false": {
+                            "$if": {
+                              "condition": {
+                                "$var": {
+                                  "path": "Brew:Machine/Power"
+                                }
+                              },
+                              "true": "ok",
+                              "false": "neutral"
+                            }
+                          }
+                        }
+                      },
+                      "pulse": {
+                        "$var": {
+                          "path": "Brew:Machine/Brewing"
+                        }
+                      },
+                      "radius": "999px"
+                    },
+                    "layout": {
+                      "widthMode": "hug",
+                      "heightMode": "hug"
+                    },
+                    "slot": "action"
+                  },
+                  {
+                    "id": "brew-shot-body",
+                    "type": "Container",
+                    "name": "Body",
+                    "properties": {
+                      "visible": true,
+                      "showWhenEmpty": true,
+                      "background": "transparent"
+                    },
+                    "layout": {
+                      "direction": "column",
+                      "gap": "13px",
+                      "wrap": false,
+                      "align": "stretch",
+                      "justify": "flex-start",
+                      "radius": "0",
+                      "widthMode": "fill",
+                      "heightMode": "hug",
+                      "paddingTop": "8px",
+                      "paddingRight": "18px",
+                      "paddingBottom": "18px",
+                      "paddingLeft": "18px"
+                    },
+                    "children": [
+                      {
+                        "id": "brew-shot-name",
+                        "type": "Label",
+                        "name": "brew-shot-name",
+                        "properties": {
+                          "typography": "value",
+                          "text": {
+                            "$var": {
+                              "path": "Brew:Drink/Name"
+                            }
+                          },
+                          "size": "30px"
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "brew-shot-meta",
+                        "type": "Label",
+                        "name": "brew-shot-meta",
+                        "properties": {
+                          "typography": "code",
+                          "text": {
+                            "$stringExpr": {
+                              "template": "{Round1(1)} °C · {Round1(2)} bar · {Round1(3)} g · {Round(4)} % {5}",
+                              "wildcards": {
+                                "1": {
+                                  "$var": {
+                                    "path": "Brew:Boiler/Temp"
+                                  }
+                                },
+                                "2": {
+                                  "$var": {
+                                    "path": "Brew:Pump/Pressure"
+                                  }
+                                },
+                                "3": {
+                                  "$var": {
+                                    "path": "Brew:Hopper/Dose"
+                                  }
+                                },
+                                "4": {
+                                  "$var": {
+                                    "path": "Brew:Hopper/BeanLevel"
+                                  }
+                                },
+                                "5": {
+                                  "$loc": "beans"
+                                }
+                              }
+                            }
+                          },
+                          "color": "var(--hmi-text-muted)"
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "brew-shot-rule",
+                        "type": "Separator",
+                        "name": "Divider",
+                        "properties": {
+                          "orientation": "horizontal",
+                          "thickness": 1,
+                          "color": "var(--hmi-border)",
+                          "inset": 0
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "brew-shot-pick",
+                        "type": "Container",
+                        "name": "Recipe picker",
+                        "properties": {
+                          "visible": true,
+                          "showWhenEmpty": true,
+                          "background": "transparent"
+                        },
+                        "layout": {
+                          "direction": "row",
+                          "gap": "10px",
+                          "wrap": false,
+                          "align": "flex-end",
+                          "justify": "flex-start",
+                          "radius": "0",
+                          "widthMode": "fill",
+                          "heightMode": "hug",
+                          "paddingTop": "0",
+                          "paddingRight": "0",
+                          "paddingBottom": "0",
+                          "paddingLeft": "0"
+                        },
+                        "children": [
+                          {
+                            "id": "brew-drink",
+                            "type": "Dropdown",
+                            "name": "Drink",
+                            "properties": {
+                              "label": {
+                                "$loc": "Drink"
+                              },
+                              "options": [
+                                {
+                                  "label": "Espresso",
+                                  "value": "espresso"
+                                },
+                                {
+                                  "label": "Lungo",
+                                  "value": "lungo"
+                                },
+                                {
+                                  "label": "Flat White",
+                                  "value": "flat-white"
+                                }
+                              ],
+                              "selectedValue": "espresso"
+                            },
+                            "layout": {
+                              "grow": 1,
+                              "widthMode": "fill",
+                              "heightMode": "hug",
+                              "minWidth": "0"
+                            }
+                          },
+                          {
+                            "id": "brew-load",
+                            "type": "Button",
+                            "name": "Load recipe",
+                            "properties": {
+                              "label": {
+                                "$loc": "Load"
+                              },
+                              "iconName": {
+                                "$static": {
+                                  "type": "builtin",
+                                  "name": "arrow-counter-clockwise"
+                                }
+                              },
+                              "variant": "outline",
+                              "actions": {
+                                "onPress": [
+                                  {
+                                    "type": "recipeLoad",
+                                    "datasetId": {
+                                      "$widgetProp": {
+                                        "componentId": "brew-drink",
+                                        "property": "selectedValue"
+                                      }
+                                    },
+                                    "verify": true,
+                                    "onSuccess": [
+                                      {
+                                        "type": "showToast",
+                                        "message": {
+                                          "$stringExpr": {
+                                            "template": "{1} {2}",
+                                            "wildcards": {
+                                              "1": {
+                                                "$loc": "Loaded"
+                                              },
+                                              "2": {
+                                                "$result": "datasetId"
+                                              }
+                                            }
+                                          }
+                                        },
+                                        "severity": "info",
+                                        "discard": "auto",
+                                        "duration": 4000
+                                      }
+                                    ],
+                                    "onFailed": [
+                                      {
+                                        "type": "showToast",
+                                        "message": {
+                                          "$stringExpr": {
+                                            "template": "{1}: {2}",
+                                            "wildcards": {
+                                              "1": {
+                                                "$loc": "Could not load"
+                                              },
+                                              "2": {
+                                                "$result": "reason"
+                                              }
+                                            }
+                                          }
+                                        },
+                                        "severity": "error",
+                                        "discard": "auto",
+                                        "duration": 4000
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            },
+                            "layout": {
+                              "widthMode": "hug",
+                              "heightMode": "hug"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "brew-shot-run",
+                        "type": "Container",
+                        "name": "Run",
+                        "properties": {
+                          "visible": true,
+                          "showWhenEmpty": true,
+                          "background": "transparent"
+                        },
+                        "layout": {
+                          "direction": "row",
+                          "gap": "10px",
+                          "wrap": false,
+                          "align": "center",
+                          "justify": "flex-start",
+                          "radius": "0",
+                          "widthMode": "fill",
+                          "heightMode": "hug",
+                          "paddingTop": "2px",
+                          "paddingRight": "0",
+                          "paddingBottom": "0",
+                          "paddingLeft": "0"
+                        },
+                        "children": [
+                          {
+                            "id": "brew-start",
+                            "type": "Button",
+                            "name": "Brew now",
+                            "properties": {
+                              "label": {
+                                "$loc": "Brew now"
+                              },
+                              "iconName": {
+                                "$static": {
+                                  "type": "builtin",
+                                  "name": "play"
+                                }
+                              },
+                              "variant": "solid",
+                              "actions": {
+                                "onPress": [
+                                  {
+                                    "type": "showAlert",
+                                    "title": {
+                                      "$loc": "Start brewing?"
+                                    },
+                                    "description": {
+                                      "$loc": "The group head will run until you press Stop."
+                                    },
+                                    "okText": {
+                                      "$loc": "Brew"
+                                    },
+                                    "cancelText": {
+                                      "$loc": "Cancel"
+                                    },
+                                    "dismissible": true,
+                                    "onOk": [
+                                      {
+                                        "type": "writeDataVariable",
+                                        "datasource": "Brew",
+                                        "path": "Machine/Brewing",
+                                        "value": true,
+                                        "onSuccess": [
+                                          {
+                                            "type": "showToast",
+                                            "message": {
+                                              "$stringExpr": {
+                                                "template": "{1} {2}…",
+                                                "wildcards": {
+                                                  "1": {
+                                                    "$loc": "Brewing"
+                                                  },
+                                                  "2": {
+                                                    "$var": {
+                                                      "path": "Brew:Drink/Name"
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            },
+                                            "severity": "info",
+                                            "discard": "auto",
+                                            "duration": 4000
+                                          }
+                                        ],
+                                        "onFailed": [
+                                          {
+                                            "type": "showToast",
+                                            "message": {
+                                              "$stringExpr": {
+                                                "template": "{1}: {2}",
+                                                "wildcards": {
+                                                  "1": {
+                                                    "$loc": "Write failed"
+                                                  },
+                                                  "2": {
+                                                    "$result": "reason"
+                                                  }
+                                                }
+                                              }
+                                            },
+                                            "severity": "error",
+                                            "discard": "auto",
+                                            "duration": 4000
+                                          }
+                                        ]
+                                      }
+                                    ],
+                                    "onCancel": []
+                                  }
+                                ]
+                              }
+                            },
+                            "layout": {
+                              "grow": 1,
+                              "widthMode": "fill",
+                              "heightMode": "hug"
+                            }
+                          },
+                          {
+                            "id": "brew-stop",
+                            "type": "Button",
+                            "name": "Stop",
+                            "properties": {
+                              "label": {
+                                "$loc": "Stop"
+                              },
+                              "iconName": {
+                                "$static": {
+                                  "type": "builtin",
+                                  "name": "stop"
+                                }
+                              },
+                              "variant": "outline",
+                              "actions": {
+                                "onPress": [
+                                  {
+                                    "type": "writeDataVariable",
+                                    "datasource": "Brew",
+                                    "path": "Machine/Brewing",
+                                    "value": false
+                                  },
+                                  {
+                                    "type": "showToast",
+                                    "message": {
+                                      "$loc": "Shot stopped."
+                                    },
+                                    "severity": "info",
+                                    "discard": "auto",
+                                    "duration": 4000
+                                  }
+                                ]
+                              }
+                            },
+                            "layout": {
+                              "widthMode": "hug",
+                              "heightMode": "hug"
+                            }
+                          }
+                        ]
+                      }
+                    ],
+                    "slot": "body"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "brew-today",
+            "type": "$component:card",
+            "name": "brew-today",
+            "properties": {
+              "title": {
+                "$loc": "Today"
+              },
+              "showTitle": true
+            },
+            "layout": {
+              "widthMode": "fill",
+              "heightMode": "hug"
+            },
+            "children": [
+              {
+                "id": "brew-today-body",
+                "type": "Container",
+                "name": "Body",
+                "properties": {
+                  "visible": true,
+                  "showWhenEmpty": true,
+                  "background": "transparent"
+                },
+                "layout": {
+                  "direction": "column",
+                  "gap": "0",
+                  "wrap": false,
+                  "align": "stretch",
+                  "justify": "flex-start",
+                  "radius": "0",
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "paddingTop": "10px",
+                  "paddingRight": "12px",
+                  "paddingBottom": "16px",
+                  "paddingLeft": "12px"
+                },
+                "children": [
+                  {
+                    "id": "brew-tiles",
+                    "type": "Container",
+                    "name": "Row",
+                    "properties": {
+                      "visible": true,
+                      "showWhenEmpty": true,
+                      "background": "transparent"
+                    },
+                    "layout": {
+                      "direction": "row",
+                      "gap": "18px",
+                      "wrap": true,
+                      "align": "stretch",
+                      "justify": "flex-start",
+                      "radius": "0",
+                      "widthMode": "fill",
+                      "heightMode": "hug",
+                      "paddingTop": "0",
+                      "paddingRight": "0",
+                      "paddingBottom": "0",
+                      "paddingLeft": "0"
+                    },
+                    "children": [
+                      {
+                        "id": "brew-t-water",
+                        "type": "StatTile",
+                        "name": "Water tank",
+                        "properties": {
+                          "label": {
+                            "$loc": "Water tank"
+                          },
+                          "value": {
+                            "$stringExpr": {
+                              "template": "{Round(1)}",
+                              "wildcards": {
+                                "1": {
+                                  "$var": {
+                                    "path": "Brew:Tank/WaterLevel"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "unit": "%",
+                          "icon": {
+                            "$static": {
+                              "type": "builtin",
+                              "name": "drop"
+                            }
+                          },
+                          "tone": {
+                            "$if": {
+                              "condition": {
+                                "$compare": {
+                                  "left": {
+                                    "$var": {
+                                      "path": "Brew:Tank/WaterLevel"
+                                    }
+                                  },
+                                  "operator": "<",
+                                  "right": 15
+                                }
+                              },
+                              "true": "warn",
+                              "false": "accent"
+                            }
+                          },
+                          "size": "row"
+                        },
+                        "layout": {
+                          "grow": 1,
+                          "widthMode": "fill",
+                          "heightMode": "hug",
+                          "minWidth": "190px"
+                        }
+                      },
+                      {
+                        "id": "brew-t-beans",
+                        "type": "StatTile",
+                        "name": "Bean hopper",
+                        "properties": {
+                          "label": {
+                            "$loc": "Bean hopper"
+                          },
+                          "value": {
+                            "$stringExpr": {
+                              "template": "{Round(1)}",
+                              "wildcards": {
+                                "1": {
+                                  "$var": {
+                                    "path": "Brew:Hopper/BeanLevel"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "unit": "%",
+                          "icon": {
+                            "$static": {
+                              "type": "builtin",
+                              "name": "package"
+                            }
+                          },
+                          "tone": {
+                            "$if": {
+                              "condition": {
+                                "$compare": {
+                                  "left": {
+                                    "$var": {
+                                      "path": "Brew:Hopper/BeanLevel"
+                                    }
+                                  },
+                                  "operator": "<",
+                                  "right": 20
+                                }
+                              },
+                              "true": "warn",
+                              "false": "accent"
+                            }
+                          },
+                          "size": "row"
+                        },
+                        "layout": {
+                          "grow": 1,
+                          "widthMode": "fill",
+                          "heightMode": "hug",
+                          "minWidth": "190px"
+                        }
+                      },
+                      {
+                        "id": "brew-t-cups",
+                        "type": "StatTile",
+                        "name": "Cups today",
+                        "properties": {
+                          "label": {
+                            "$loc": "Cups today"
+                          },
+                          "value": {
+                            "$stringExpr": {
+                              "template": "{1}",
+                              "wildcards": {
+                                "1": {
+                                  "$var": {
+                                    "path": "Brew:Counters/CupsToday"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "unit": "",
+                          "icon": {
+                            "$static": {
+                              "type": "builtin",
+                              "name": "stack"
+                            }
+                          },
+                          "tone": "ok",
+                          "size": "row"
+                        },
+                        "layout": {
+                          "grow": 1,
+                          "widthMode": "fill",
+                          "heightMode": "hug",
+                          "minWidth": "190px"
+                        }
+                      },
+                      {
+                        "id": "brew-t-shot",
+                        "type": "StatTile",
+                        "name": "Last shot",
+                        "properties": {
+                          "label": {
+                            "$loc": "Last shot"
+                          },
+                          "value": {
+                            "$stringExpr": {
+                              "template": "{Round1(1)}",
+                              "wildcards": {
+                                "1": {
+                                  "$var": {
+                                    "path": "Brew:Counters/ShotTime"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "unit": "s",
+                          "icon": {
+                            "$static": {
+                              "type": "builtin",
+                              "name": "timer"
+                            }
+                          },
+                          "tone": "neutral",
+                          "size": "row"
+                        },
+                        "layout": {
+                          "grow": 1,
+                          "widthMode": "fill",
+                          "heightMode": "hug",
+                          "minWidth": "190px"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "slot": "body"
+              }
+            ]
+          },
+          {
+            "id": "brew-row-3",
+            "type": "Container",
+            "name": "Row",
+            "properties": {
+              "visible": true,
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "row",
+              "gap": "18px",
+              "wrap": true,
+              "align": "stretch",
+              "justify": "flex-start",
+              "radius": "0",
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "paddingTop": "0",
+              "paddingRight": "0",
+              "paddingBottom": "0",
+              "paddingLeft": "0"
+            },
+            "children": [
+              {
+                "id": "brew-trend",
+                "type": "$component:card",
+                "name": "brew-trend",
+                "properties": {
+                  "title": {
+                    "$loc": "Boiler — live"
+                  },
+                  "showTitle": true
+                },
+                "layout": {
+                  "grow": 1.3,
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "minWidth": "380px"
+                },
+                "children": [
+                  {
+                    "id": "brew-trend-note",
+                    "type": "Label",
+                    "name": "brew-trend-note",
+                    "properties": {
+                      "typography": "code",
+                      "text": {
+                        "$loc": "buffered in the page"
+                      },
+                      "color": "var(--hmi-text-muted)"
+                    },
+                    "layout": {
+                      "widthMode": "hug",
+                      "heightMode": "hug"
+                    },
+                    "slot": "action"
+                  },
+                  {
+                    "id": "brew-trend-body",
+                    "type": "Container",
+                    "name": "Body",
+                    "properties": {
+                      "visible": true,
+                      "showWhenEmpty": true,
+                      "background": "transparent"
+                    },
+                    "layout": {
+                      "direction": "column",
+                      "gap": "10px",
+                      "wrap": false,
+                      "align": "stretch",
+                      "justify": "flex-start",
+                      "radius": "0",
+                      "widthMode": "fill",
+                      "heightMode": "hug",
+                      "paddingTop": "8px",
+                      "paddingRight": "18px",
+                      "paddingBottom": "18px",
+                      "paddingLeft": "18px"
+                    },
+                    "children": [
+                      {
+                        "id": "brew-spark",
+                        "type": "Trend",
+                        "name": "Boiler trend",
+                        "properties": {
+                          "variable": {
+                            "$var": {
+                              "path": "Brew:Boiler/Temp"
+                            }
+                          },
+                          "historyLength": 180,
+                          "label": {
+                            "$loc": "Boiler"
+                          },
+                          "unit": "°C",
+                          "decimals": 1,
+                          "color": "var(--hmi-accent)"
+                        },
+                        "layout": {
+                          "width": "100%",
+                          "height": "120px",
+                          "widthMode": "fixed",
+                          "heightMode": "fixed"
+                        }
+                      },
+                      {
+                        "id": "brew-spark-hint",
+                        "type": "Label",
+                        "name": "brew-spark-hint",
+                        "properties": {
+                          "typography": "caption",
+                          "text": {
+                            "$loc": "Change the boiler temperature on the Machine page to make it move."
+                          },
+                          "color": "var(--hmi-text-muted)",
+                          "wrap": "wrap"
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      }
+                    ],
+                    "slot": "body"
+                  }
+                ]
+              },
+              {
+                "id": "brew-levels",
+                "type": "$component:card",
+                "name": "brew-levels",
+                "properties": {
+                  "title": {
+                    "$loc": "Consumables"
+                  },
+                  "showTitle": true
+                },
+                "layout": {
+                  "grow": 1,
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "minWidth": "300px"
+                },
+                "children": [
+                  {
+                    "id": "brew-levels-body",
+                    "type": "Container",
+                    "name": "Body",
+                    "properties": {
+                      "visible": true,
+                      "showWhenEmpty": true,
+                      "background": "transparent"
+                    },
+                    "layout": {
+                      "direction": "column",
+                      "gap": "18px",
+                      "wrap": false,
+                      "align": "stretch",
+                      "justify": "flex-start",
+                      "radius": "0",
+                      "widthMode": "fill",
+                      "heightMode": "hug",
+                      "paddingTop": "8px",
+                      "paddingRight": "18px",
+                      "paddingBottom": "18px",
+                      "paddingLeft": "18px"
+                    },
+                    "children": [
+                      {
+                        "id": "brew-mr-water",
+                        "type": "$component:metric-row",
+                        "name": "Water tank",
+                        "properties": {
+                          "label": {
+                            "$loc": "Water tank"
+                          },
+                          "text": {
+                            "$stringExpr": {
+                              "template": "{Round(1)} %",
+                              "wildcards": {
+                                "1": {
+                                  "$var": {
+                                    "path": "Brew:Tank/WaterLevel"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "value": {
+                            "$var": {
+                              "path": "Brew:Tank/WaterLevel"
+                            }
+                          },
+                          "max": 100,
+                          "color": "var(--hmi-accent)"
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "brew-mr-beans",
+                        "type": "$component:metric-row",
+                        "name": "Bean hopper",
+                        "properties": {
+                          "label": {
+                            "$loc": "Bean hopper"
+                          },
+                          "text": {
+                            "$stringExpr": {
+                              "template": "{Round(1)} %",
+                              "wildcards": {
+                                "1": {
+                                  "$var": {
+                                    "path": "Brew:Hopper/BeanLevel"
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "value": {
+                            "$var": {
+                              "path": "Brew:Hopper/BeanLevel"
+                            }
+                          },
+                          "max": 100,
+                          "color": "var(--hmi-warn)"
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "brew-levels-note",
+                        "type": "Label",
+                        "name": "brew-levels-note",
+                        "properties": {
+                          "typography": "caption",
+                          "text": {
+                            "$loc": "Top these up on the Machine page."
+                          },
+                          "color": "var(--hmi-text-muted)",
+                          "wrap": "wrap"
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      }
+                    ],
+                    "slot": "body"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
