@@ -80,6 +80,26 @@ def test_rejects_an_oversized_body(client, home: Path):
     assert not (home / ".thumbnails").exists()
 
 
+def test_thumbnail_updated_at_returns_none_when_stat_raises(monkeypatch, home: Path):
+    """`_entry_dict` calls this once per project on every `GET /api/projects` —
+    an OSError from a locked handle or a file deleted mid-request must not take
+    down the whole list, just this project's timestamp."""
+    shot = home / ".thumbnails" / "proj-1.png"
+    shot.parent.mkdir(parents=True, exist_ok=True)
+    shot.write_bytes(_png_bytes())
+
+    original_stat = Path.stat
+
+    def failing_stat(self, *args, **kwargs):
+        if self == shot:
+            raise OSError("locked")
+        return original_stat(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", failing_stat)
+
+    assert thumbnail_api.thumbnail_updated_at("proj-1") is None
+
+
 def test_overwrites_the_previous_thumbnail(client, home: Path):
     client.post("/api/thumbnail", content=_png_bytes(4), headers={"Content-Type": "image/png"})
     client.post("/api/thumbnail", content=_png_bytes(8), headers={"Content-Type": "image/png"})

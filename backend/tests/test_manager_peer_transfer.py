@@ -233,6 +233,50 @@ def test_confirmed_replace_backs_up_stopped_project_without_touching_running_set
     assert [entry.id for entry in load_manifest().running] == ["unrelated-running"]
 
 
+def test_confirmed_replace_deletes_the_destinations_stale_thumbnail(
+    monkeypatch,
+    tmp_path: Path,
+):
+    """The destination id is kept on a replace, so its old screenshot would
+    otherwise keep serving the replaced project's main page forever — a
+    receive-only manager never opens the editor to regenerate it."""
+    home, root = _configure_home(monkeypatch, tmp_path)
+    destination = root / "destination"
+    destination.mkdir()
+    write_project_metadata(
+        destination, ProjectMetadata(id="destination-id", name="Old")
+    )
+    manifest = load_manifest()
+    manifest.projects.append(
+        ProjectEntry(
+            id="destination-id",
+            name="Old",
+            path=str(destination),
+            addedAt="2026-01-01T00:00:00Z",
+        )
+    )
+    save_manifest(manifest)
+    stale_thumbnail = home / ".thumbnails" / "destination-id.png"
+    stale_thumbnail.parent.mkdir(parents=True, exist_ok=True)
+    stale_thumbnail.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    archive = _archive(tmp_path)
+    with TestClient(_app()) as client:
+        token = _pair(client)
+        response = _receive(
+            client,
+            token,
+            archive,
+            transferId="tx-replace-thumbnail",
+            destinationProjectId="destination-id",
+            destinationFolder="destination",
+            collisionPolicy="replace",
+            confirmReplace="true",
+        )
+    assert response.status_code == 201
+    assert not stale_thumbnail.exists()
+
+
 def test_replace_requires_confirmation_and_stopped_destination(
     monkeypatch, tmp_path: Path
 ):

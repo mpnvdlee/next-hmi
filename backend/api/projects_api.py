@@ -45,7 +45,7 @@ from fastapi import APIRouter, File, Form, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from api.thumbnail_api import delete_thumbnail, thumbnail_updated_at
+from api.thumbnail_api import delete_thumbnail, thumbnail_path, thumbnail_updated_at
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +213,16 @@ def _move_runtime_state(old_id: str, new_id: str) -> None:
         except OSError:
             logger.warning(
                 "Could not move %s to %s after the project id changed", source, destination,
+            )
+
+    old_thumbnail, new_thumbnail = thumbnail_path(old_id), thumbnail_path(new_id)
+    if old_thumbnail.is_file() and not new_thumbnail.exists():
+        try:
+            old_thumbnail.rename(new_thumbnail)
+        except OSError:
+            logger.warning(
+                "Could not move %s to %s after the project id changed",
+                old_thumbnail, new_thumbnail,
             )
 
 

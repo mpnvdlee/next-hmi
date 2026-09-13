@@ -72,7 +72,11 @@ def thumbnail_updated_at(project_id: str) -> str | None:
     path = thumbnail_path(project_id)
     if not path.is_file():
         return None
-    return datetime.fromtimestamp(path.stat().st_mtime, UTC).isoformat()
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        return None
+    return datetime.fromtimestamp(mtime, UTC).isoformat()
 
 
 def delete_thumbnail(project_id: str) -> None:

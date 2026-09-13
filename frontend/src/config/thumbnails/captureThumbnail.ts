@@ -39,7 +39,7 @@ export async function captureThumbnail({ readyTimeoutMs = 8000 }: Options = {}):
 
     frame = document.createElement('iframe');
     frame.dataset.thumbnailCapture = 'true';
-    frame.src = withBase(`/preview/${mainPage.id}`);
+    frame.src = withBase(`/preview/${encodeURIComponent(mainPage.id)}`);
     // Offscreen rather than display:none — a hidden frame has no layout, and a
     // fixed size keeps framing identical regardless of the author's window,
     // which matters because the shell's $viewport bindings switch layout by
@@ -61,6 +61,9 @@ export async function captureThumbnail({ readyTimeoutMs = 8000 }: Options = {}):
     const blob = await domToBlob(target as HTMLElement, {
       width: CAPTURE_WIDTH,
       height: CAPTURE_HEIGHT,
+      // `* 2` renders at 2x device pixel ratio so the stored PNG stays sharp
+      // on a HiDPI display — the output is THUMBNAIL_WIDTH CSS px wide, not
+      // THUMBNAIL_WIDTH raw pixels.
       scale: (THUMBNAIL_WIDTH / CAPTURE_WIDTH) * 2,
       type: 'image/png',
       backgroundColor: null,

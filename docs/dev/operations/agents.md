@@ -125,6 +125,19 @@ widget schema.
 - `project-seed/` — the clean, customer-facing template, no intentional
   diagnostics. Packaged into binary/Docker builds, used by the launcher on first
   run and by the projects API when creating a fresh project.
+- `project-example/` — the "NEXT BREW" demo template offered alongside
+  `project-seed/` at project creation (`template: "example"`): three pages, a
+  static datasource, alarms, recipes, two themes and two languages.
+
+  A shipped template must carry no identity and no secret: no `project`
+  metadata block (`ensure_project_metadata` reuses an id it finds on disk, so
+  every project made from the template would share one UUID) and no
+  credentials (an `operatorSetup.required: false` with a real `passwordHash`
+  would clone one admin credential into every project and permanently lock the
+  account — `operator_setup.complete()` refuses to re-run and there is no reset
+  endpoint). `test_example_template_ships_without_project_metadata` and
+  `test_example_template_ships_without_credentials` in
+  `backend/tests/test_projects_api.py` guard the shipped files against it.
 - `<runtime_home>/` — per-installation state outside the repo: `projects.json`
   manifest, `.logs/`, `.widget-build/`, `tls/`. Resolution order under
   [hard rules](#hard-rules).

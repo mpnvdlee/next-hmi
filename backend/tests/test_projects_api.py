@@ -301,6 +301,23 @@ def test_rename_moves_instance_logs_and_widget_build(
     ) == "hello"
 
 
+def test_rename_moves_the_thumbnail(client: TestClient, tmp_path: Path, home: Path) -> None:
+    """An id change must carry `.thumbnails/<id>.png` too — otherwise the old
+    id's screenshot is orphaned and a later project reusing that freed id
+    would inherit it (`unique_slug` only excludes ids currently in the
+    manifest, not ones freed by a rename)."""
+    path = tmp_path / "plant-a"
+    project_id = _make_project_folder(path)
+    _single_project_manifest(home, path, project_id)
+    shot = home / ".thumbnails" / f"{project_id}.png"
+    shot.parent.mkdir(parents=True, exist_ok=True)
+    shot.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    assert client.patch(f"/api/projects/{project_id}", json={"id": "plant-b"}).status_code == 200
+    assert not shot.exists()
+    assert (home / ".thumbnails" / "plant-b.png").read_bytes() == b"\x89PNG\r\n\x1a\n"
+
+
 def test_rename_retargets_mcp_tokens(
     client: TestClient, tmp_path: Path, home: Path, monkeypatch,
 ) -> None:
