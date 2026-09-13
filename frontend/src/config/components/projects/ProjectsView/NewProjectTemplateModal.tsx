@@ -12,7 +12,7 @@ interface Props {
 
 export default function NewProjectTemplateModal({ onCancel, onChoose }: Props) {
   return (
-    <ModalShell onClose={onCancel} dialogClassName="template-modal cfg-flex-col">
+    <ModalShell onClose={onCancel} dialogClassName="name-modal template-modal cfg-flex-col">
       <div className="name-modal__title">Start a new project</div>
       <div className="template-modal__options">
         <button
