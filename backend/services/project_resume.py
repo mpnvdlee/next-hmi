@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from core import operator_setup
+from core import users_document
 from core.manifest import (
     RunningEntry,
     manifest_transaction,
@@ -38,12 +38,13 @@ def prepare_running_set() -> None:
     with manifest_transaction() as manifest:
         if manifest.running:
             return
-        setup_state = operator_setup.state(Path(entry.path).expanduser())
-        if setup_state.status is not operator_setup.SetupStatus.COMPLETE:
+        users_state = users_document.state(Path(entry.path).expanduser())
+        if not users_state.valid:
             save_manifest(manifest)
             logger.info(
-                "resume: fresh install — seed project '%s' awaits valid operator credentials",
+                "resume: fresh install — seed project '%s' has an unusable users.json: %s",
                 entry.id,
+                users_state.error,
             )
             return
         manifest.running = [RunningEntry(id=entry.id, port=None, startedAt=iso_now())]

@@ -5,10 +5,6 @@
       "admin"
     ]
   },
-  "operatorSetup": {
-    "version": 1,
-    "required": true
-  },
   "groups": [
     {
       "id": "guest",

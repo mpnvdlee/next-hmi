@@ -63,14 +63,15 @@ lines each. The zip also carries the full guide as an offline HTML site in
 
 There is no portable Linux build; on Linux, use Docker.
 
-### First launch — two passwords, then you are in
+### First launch — one password, then you are in
 
 1. Set the **device-admin password** on the manager dashboard. It gates the
-   installation.
-2. On the seeded project, choose **Set operator password** — that creates the
-   project's own `admin` account for the HMI. Nothing ships with a default
-   operator credential.
-3. **Start** the project, then open its runtime or its editor.
+   whole installation — the dashboard, and every project's runtime and editor.
+2. **Start** the seeded project, then open its runtime or its editor.
+
+A new project carries no accounts of its own beyond the anonymous `guest`, and
+nothing ships with a default credential. Add real users when you want them,
+from the editor's **Users** area.
 
 Full install reference — runtime home, HTTPS, environment variables, upgrades:
 [`docs/user/install.md`](docs/user/install.md).

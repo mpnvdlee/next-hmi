@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 from core import manager_auth, runtime_home
-from core.passwords import is_valid_hash, verify_password
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
@@ -64,9 +63,11 @@ def test_second_setup_rejected(client: TestClient) -> None:
     assert resp.status_code == 409
 
 
-def test_operator_setup_is_manager_authenticated_and_blocks_project_routes(
+def test_fresh_project_is_manager_authenticated_and_opens_with_no_operator_credential(
     client: TestClient, tmp_path: Path
 ) -> None:
+    """The device-admin password is the only gate: a new project ships no
+    operator account and nothing asks for one before it can be opened."""
     target = tmp_path / "Fresh-Project"
     assert client.post(
         "/api/projects", json={"name": "Fresh", "path": str(target)}
@@ -78,41 +79,26 @@ def test_operator_setup_is_manager_authenticated_and_blocks_project_routes(
     )
     assert created.status_code == 201
     project_id = created.json()["id"]
-    assert created.json()["operatorSetupRequired"] is True
-    assert client.post(f"/api/manager/projects/{project_id}/start").status_code == 409
+    assert created.json()["credentialsStatus"] == "ok"
+    assert created.json()["credentialsError"] is None
 
-    for prefix in ("runtime", "editor"):
-        blocked = client.get(f"/{prefix}/{project_id}/", follow_redirects=False)
-        assert blocked.status_code == 303
-        assert blocked.headers["location"] == f"/projects?operatorSetup={project_id}"
+    seeded = json.loads((target / "users.json").read_text(encoding="utf-8"))
+    assert [user["username"] for user in seeded["users"]] == ["guest"]
+    assert all("passwordHash" not in user for user in seeded["users"])
+    assert "operatorSetup" not in seeded
 
-    completed = client.post(
+    gone = client.post(
         f"/api/manager/projects/{project_id}/operator-setup",
         json={"password": "operator-secret"},
     )
-    assert completed.status_code == 200
-    assert completed.json()["operatorSetupRequired"] is False
+    assert gone.status_code == 404
 
-    persisted = json.loads((target / "users.json").read_text(encoding="utf-8"))
-    admin = next(user for user in persisted["users"] if user["username"] == "admin")
-    assert admin["password"] == ""
-    assert is_valid_hash(admin["passwordHash"]) is True
-    assert verify_password(admin, "operator-secret") is True
-    assert persisted["operatorSetup"]["required"] is False
-
-    replay = client.post(
-        f"/api/manager/projects/{project_id}/operator-setup",
-        json={"password": "replacement"},
-    )
-    assert replay.status_code == 409
-    assert next(
-        user
-        for user in json.loads((target / "users.json").read_text(encoding="utf-8"))["users"]
-        if user["username"] == "admin"
-    )["passwordHash"] == admin["passwordHash"]
+    for prefix in ("runtime", "editor"):
+        opened = client.get(f"/{prefix}/{project_id}/", follow_redirects=False)
+        assert "operatorSetup" not in opened.headers.get("location", "")
 
 
-def test_existing_project_without_setup_marker_is_not_rewritten(
+def test_registering_an_existing_project_does_not_rewrite_its_users(
     client: TestClient, tmp_path: Path
 ) -> None:
     client.post("/api/manager/auth/setup", json={"password": "manager-secret"})
@@ -143,12 +129,7 @@ def test_existing_project_without_setup_marker_is_not_rewritten(
 
     registered = client.post("/api/projects/register", json={"path": str(target)})
     assert registered.status_code == 201
-    assert registered.json()["operatorSetupRequired"] is False
-    replay = client.post(
-        f"/api/manager/projects/{registered.json()['id']}/operator-setup",
-        json={"password": "replacement"},
-    )
-    assert replay.status_code == 409
+    assert registered.json()["credentialsStatus"] == "ok"
     assert users_path.read_bytes() == before
 
 
@@ -156,7 +137,7 @@ def test_existing_project_without_setup_marker_is_not_rewritten(
 def test_invalid_project_credentials_fail_closed_on_all_manager_routes(
     client: TestClient, tmp_path: Path, monkeypatch, failure: str
 ) -> None:
-    from core import operator_setup
+    from core import users_document
 
     client.post("/api/manager/auth/setup", json={"password": "manager-secret"})
     target = tmp_path / f"Broken-{failure}"
@@ -170,19 +151,19 @@ def test_invalid_project_credentials_fail_closed_on_all_manager_routes(
     elif failure == "corrupt":
         users_path.write_text("{not-json", encoding="utf-8")
     else:
-        original_read = operator_setup.read_json
+        original_read = users_document.read_json
 
         def deny_project_users(path):
             if Path(path) == users_path:
                 raise PermissionError("denied")
             return original_read(path)
 
-        monkeypatch.setattr(operator_setup, "read_json", deny_project_users)
+        monkeypatch.setattr(users_document, "read_json", deny_project_users)
 
     listed = client.get("/api/projects").json()["projects"]
     project = next(item for item in listed if item["id"] == project_id)
-    assert project["operatorSetupStatus"] == "error"
-    assert project["operatorSetupError"]
+    assert project["credentialsStatus"] == "error"
+    assert project["credentialsError"]
 
     start = client.post(f"/api/manager/projects/{project_id}/start")
     assert start.status_code == 409

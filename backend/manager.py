@@ -34,14 +34,13 @@ from api.manager_peers_api import public_router as public_manager_peers_router
 from api.manager_peers_api import reconcile_transfer_journals
 from api.mcp_auth_api import manager_router as mcp_tokens_router
 from api.mcp_auth_api import public_router as public_mcp_auth_router
-from api.operator_setup_api import router as operator_setup_router
 from api.projects_api import router as projects_router
 from api.supervisor_api import router as supervisor_router
 from api.system_api import manager_router as system_router
 from api.telemetry_api import router as telemetry_router
 from api.thumbnail_api import manager_router as thumbnail_manager_router
 from api.tls_api import router as tls_router
-from core import manager_auth, operator_setup, peer_tokens, telemetry, tls_settings
+from core import manager_auth, peer_tokens, telemetry, tls_settings, users_document
 from core.exceptions import register_exception_handlers
 from core.logging_setup import configure_logging
 from core.manifest import (
@@ -185,7 +184,6 @@ app.include_router(public_manager_peers_router)
 app.include_router(manager_peers_router)
 app.include_router(public_mcp_auth_router)
 app.include_router(mcp_tokens_router)
-app.include_router(operator_setup_router)
 app.include_router(supervisor_router)
 app.include_router(projects_router)
 app.include_router(thumbnail_manager_router)
@@ -300,9 +298,9 @@ def _peer_bearer(request: Request) -> str | None:
     return token if scheme.lower() == "bearer" else None
 
 
-def _operator_setup_state(project_id: str) -> operator_setup.SetupState | None:
+def _users_document_state(project_id: str) -> users_document.DocumentState | None:
     entry = find_project(load_manifest(), project_id)
-    return operator_setup.state(Path(entry.path).expanduser()) if entry is not None else None
+    return users_document.state(Path(entry.path).expanduser()) if entry is not None else None
 
 
 @app.middleware("http")
@@ -402,8 +400,8 @@ async def _proxy_ws_to_child(websocket: WebSocket, project_id: str) -> None:
     if not _has_valid_session(websocket.cookies):
         await websocket.close(code=1008)
         return
-    setup_state = _operator_setup_state(project_id)
-    if setup_state is not None and setup_state.status is not operator_setup.SetupStatus.COMPLETE:
+    users_state = _users_document_state(project_id)
+    if users_state is not None and not users_state.valid:
         await websocket.close(code=1008)
         return
     port = supervisor.port_for(project_id)
@@ -470,17 +468,10 @@ async def _proxy_http_to_child(
     the request came in through) is passed upstream as ``X-Forwarded-Prefix`` so
     the child bakes the right base path into the ``index.html`` it serves.
     """
-    setup_state = _operator_setup_state(project_id)
-    if setup_state is not None and setup_state.status is operator_setup.SetupStatus.REQUIRED:
-        if request.method == "GET" and not path:
-            return RedirectResponse(url=f"/projects?operatorSetup={project_id}", status_code=303)
+    users_state = _users_document_state(project_id)
+    if users_state is not None and not users_state.valid:
         return JSONResponse(
-            {"detail": "Set this project's operator password in the manager before opening it."},
-            status_code=409,
-        )
-    if setup_state is not None and setup_state.status is operator_setup.SetupStatus.ERROR:
-        return JSONResponse(
-            {"detail": f"Project credentials are unavailable: {setup_state.error}."},
+            {"detail": f"Project credentials are unavailable: {users_state.error}."},
             status_code=409,
         )
 
@@ -648,12 +639,7 @@ if _frontend_dist_env:
             if resume is not None:
                 return RedirectResponse(url=resume, status_code=303)
             entry = default_project(load_manifest())
-            if (
-                entry is not None
-                and operator_setup.state(Path(entry.path).expanduser()).status
-                is operator_setup.SetupStatus.COMPLETE
-                and supervisor.port_for(entry.id) is not None
-            ):
+            if entry is not None and supervisor.port_for(entry.id) is not None:
                 return RedirectResponse(url=f"/runtime/{entry.id}/")
         return HTMLResponse(_render_manager_index())
 

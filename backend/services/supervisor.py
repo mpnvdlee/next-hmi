@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-from core import operator_setup, runtime_home, start_guards
+from core import runtime_home, start_guards, users_document
 from core.manifest import (
     find_project,
     load_manifest,
@@ -206,14 +206,10 @@ class Supervisor:
             project_path = Path(entry.path).expanduser()
             if not project_path.is_dir():
                 raise ValueError(f"Project folder is missing at {entry.path}")
-            setup_state = operator_setup.state(project_path)
-            if setup_state.status is operator_setup.SetupStatus.REQUIRED:
+            users_state = users_document.state(project_path)
+            if not users_state.valid:
                 raise ValueError(
-                    "Set this project's operator password in the manager before starting it"
-                )
-            if setup_state.status is operator_setup.SetupStatus.ERROR:
-                raise ValueError(
-                    f"Project credentials are unavailable: {setup_state.error}"
+                    f"Project credentials are unavailable: {users_state.error}"
                 )
             metadata = read_project_metadata(project_path)
             if metadata is not None:
@@ -465,13 +461,11 @@ class Supervisor:
                 instance.last_error = "project folder missing on restart"
                 return
             project_path = Path(entry.path).expanduser()
-            setup_state = operator_setup.state(project_path)
-            if setup_state.status is not operator_setup.SetupStatus.COMPLETE:
+            users_state = users_document.state(project_path)
+            if not users_state.valid:
                 instance.status = "crashed"
                 instance.last_error = (
-                    "operator setup required"
-                    if setup_state.status is operator_setup.SetupStatus.REQUIRED
-                    else f"Project credentials are unavailable: {setup_state.error}"
+                    f"Project credentials are unavailable: {users_state.error}"
                 )
                 return
             self._spawn_locked(instance, project_path, instance.port)

@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from core import operator_setup
+from core import users_document
 from core.exceptions import UserConflictError, UserNotFoundError, UserValidationError
 from core.passwords import hash_password
 from fastapi import APIRouter, Body
@@ -109,10 +109,10 @@ def _normalize_users(
     return normalized
 
 
-def _require_valid_setup_document(document: dict[str, Any]) -> None:
-    setup_state = operator_setup.document_state(document)
-    if setup_state.status is operator_setup.SetupStatus.ERROR:
-        raise UserValidationError(setup_state.error or "users.json is invalid")
+def _require_valid_users_document(document: dict[str, Any]) -> None:
+    users_state = users_document.document_state(document)
+    if not users_state.valid:
+        raise UserValidationError(users_state.error or "users.json is invalid")
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────
@@ -184,9 +184,7 @@ def put_users_document(body: dict = Body(...)) -> dict:
         "groups": normalized_groups,
         "users": normalized_users,
     }
-    if "operatorSetup" in current:
-        document["operatorSetup"] = current["operatorSetup"]
-    _require_valid_setup_document(document)
+    _require_valid_users_document(document)
     users_manager.save(document)
     return _redact_document(document)
 
@@ -212,7 +210,7 @@ def put_settings(body: dict) -> dict:
         raise UserValidationError(f"Unknown groups in configAccessGroups: {unknown}")
 
     doc["settings"] = {"autoLoginName": auto_login, "configAccessGroups": config_groups}
-    _require_valid_setup_document(doc)
+    _require_valid_users_document(doc)
     users_manager.save(doc)
     return doc["settings"]
 
@@ -258,7 +256,7 @@ def put_groups(body: list = Body(...)) -> list:
     doc["groups"] = [
         {"id": g["id"], "label": str(g.get("label", g["id"]))} for g in body
     ]
-    _require_valid_setup_document(doc)
+    _require_valid_users_document(doc)
     users_manager.save(doc)
     return doc["groups"]
 
@@ -276,7 +274,7 @@ def delete_group(group_id: str) -> dict:
         raise UserNotFoundError(f"Group '{group_id}' not found")
 
     doc["groups"] = updated
-    _require_valid_setup_document(doc)
+    _require_valid_users_document(doc)
     users_manager.save(doc)
     return {"deleted": group_id}
 
@@ -299,7 +297,7 @@ def put_users(body: list = Body(...)) -> list:
         if isinstance(group, dict)
     }
     doc["users"] = _normalize_users(body, group_ids, current_by_id)
-    _require_valid_setup_document(doc)
+    _require_valid_users_document(doc)
     users_manager.save(doc)
     return _redact_document(doc)["users"]
 
@@ -326,6 +324,6 @@ def delete_user(user_id: str) -> dict:
         raise UserNotFoundError(f"User '{user_id}' not found")
 
     doc["users"] = updated
-    _require_valid_setup_document(doc)
+    _require_valid_users_document(doc)
     users_manager.save(doc)
     return {"deleted": user_id}

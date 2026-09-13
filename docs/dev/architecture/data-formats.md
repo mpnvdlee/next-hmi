@@ -102,9 +102,9 @@ Outside any project, the runtime keeps its own state:
 - `<project>/translations/*.csv`
   - translation dictionaries
 - `<project>/users.json`
-  - users, groups, and access settings. A fresh seed also carries `operatorSetup: { version: 1, required: true }`; authenticated manager setup atomically creates the `admin` operator and changes `required` to `false`
+  - users, groups, and access settings. A fresh seed carries the anonymous `guest` user and no other account, so a new project ships no credential and nothing gates it
   - credentials live in the server-managed `passwordHash` object `{ version: 1, algorithm: "pbkdf2-sha256", iterations: 200000, salt: "<hex>", digest: "<hex>" }`, while `password` stays `""`. Because hashes have a field of their own, a string in `password` is literal plaintext whatever it looks like, including one beginning with `$nexthmi$`; a valid markerless document is read as-is, never rewritten
-  - marker-bearing documents must retain the seed `guest` and `admin` groups and canonical passwordless `guest` user. A completed marker additionally requires the canonical `admin` user, a valid `passwordHash`, and valid group references. Missing, unreadable, corrupt, or invariant-breaking user documents are credential errors and keep the project stopped
+  - every user id and username must be unique and name only declared groups, as must `settings.configAccessGroups`, and a `passwordHash` may not sit alongside a non-empty `password`. Missing, unreadable, corrupt, or invariant-breaking user documents are credential errors and keep the project stopped (`core/users_document.py`)
   - the editor keeps pending security edits in a separate global frontend draft and writes the complete document atomically only through **Save users**. API reads omit `passwordHash`, redact `password` to `""`, and expose only `passwordSet`; a non-empty password edit creates a new hash, and clients cannot submit `passwordHash`. Generic project Save, snapshots, and Undo/Redo never include it
 - `<project>/custom-widgets/*/`
   - custom component source and optional assets (compiled `index.js` lives in `<runtime_home>/.widget-build/<Name>/`, not here)

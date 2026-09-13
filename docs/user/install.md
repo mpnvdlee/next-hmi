@@ -119,11 +119,11 @@ password) is the operator surface:
 - **First-run setup** — on first launch the dashboard asks you to set a
   device-admin password. It is stored hashed in
   `<runtime_home>/.manager-auth.json` and gates every subsequent visit.
-- **Fresh-project operator setup** — every project copied from the bundled seed
-  is marked **Set operator password**. An authenticated device manager must
-  choose the password for that project's `admin` HMI account before the manager
-  opens its runtime or editor. This project credential is separate from the
-  device-admin password; the seed contains no reusable operator password.
+- **Project credentials** — a project brings its own `users.json` and nothing
+  else gates it: a project copied from the bundled seed holds only the
+  anonymous `guest` user, so it starts and opens with no password of its own.
+  A project whose `users.json` is missing, unreadable or corrupt shows
+  **Credentials unavailable** and will not start until the file is repaired.
 - **Start / Stop** — bring a project up or down. A running project gets
   its own backend instance and becomes reachable at `/runtime/<slug>/`
   (and `/editor/<slug>/`); the set of running projects is remembered and
@@ -206,7 +206,7 @@ To turn it off, either:
 
 The manager serves plain HTTP by default, which is fine while it stays on
 loopback. The moment `NEXTHMI_HOST=0.0.0.0` puts the dashboard on a network,
-the device-admin password, the operator password, and every project edit
+the device-admin password, every operator sign-in, and every project edit
 cross the wire in the clear.
 
 Only the manager terminates TLS. Project children are spawned on loopback and
@@ -402,10 +402,8 @@ docker run --rm -p 8000:8000 -v "$PWD/project-data:/data" nexthmi
 
 Open <http://localhost:8000> and set the device-admin password when the
 manager dashboard prompts. On first boot the bundled seed project is
-registered but remains stopped. Choose **Set operator password** on that project,
-then start and open its HMI or editor. If the browser or container stops before
-that save succeeds, setup remains incomplete and is offered again after restart;
-the password is not partially installed.
+registered and started; open its HMI or editor from the dashboard. The project
+needs no password of its own.
 
 Reaching the container from another machine works the same way, with one
 exception: `http://192.168.1.10:8000` is not a secure context, so the browser
@@ -457,8 +455,8 @@ build.
 
 If you delete `./project-data/` (or point the volume at a fresh
 directory), the manager reseeds from the image's bundled seed project on
-the next start and registers it. A fresh device-admin password
-and a separate operator password for the seeded project are required again.
+the next start and registers it. A fresh device-admin password is required again,
+and the reseeded project starts out with only its `guest` user.
 Existing volumes retain their current project credentials unchanged.
 
 ## Mac / Windows portable binaries
@@ -481,12 +479,10 @@ others.
 Open either printed URL in any browser. Portable installs bind to loopback by
 default; set `NEXTHMI_HOST=0.0.0.0` explicitly when LAN access is intended.
 
-On the first launch, set the device-admin password, then choose **Set operator
-password** on the seeded project. The latter creates that project's `admin` HMI
-account and unlocks its runtime and editor routes. Closing the manager before
-completion leaves the project pending for the next launch. Projects from an
-older install have no pending marker, so upgrades preserve their existing
-users and passwords byte-for-byte.
+On the first launch, set the device-admin password. That is the only credential
+the install asks for: the seeded project holds only its `guest` user and opens
+straight away. Upgrades preserve an existing project's users and passwords
+byte-for-byte.
 
 To stop: focus the terminal window and press Ctrl-C — uvicorn's
 lifespan shutdown runs and the OPC-UA pool closes cleanly.

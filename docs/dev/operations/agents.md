@@ -132,10 +132,10 @@ widget schema.
   A shipped template must carry no identity and no secret: no `project`
   metadata block (`ensure_project_metadata` reuses an id it finds on disk, so
   every project made from the template would share one UUID) and no
-  credentials (an `operatorSetup.required: false` with a real `passwordHash`
-  would clone one admin credential into every project and permanently lock the
-  account — `operator_setup.complete()` refuses to re-run and there is no reset
-  endpoint). `test_example_template_ships_without_project_metadata` and
+  credentials (a real `passwordHash` would clone one admin credential into
+  every project made from the template, and its plaintext exists nowhere). A
+  template ships the anonymous `guest` user and nothing else.
+  `test_example_template_ships_without_project_metadata` and
   `test_example_template_ships_without_credentials` in
   `backend/tests/test_projects_api.py` guard the shipped files against it.
 - `<runtime_home>/` — per-installation state outside the repo: `projects.json`

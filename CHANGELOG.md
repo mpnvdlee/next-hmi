@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 While the project is pre-1.0, minor versions may include breaking changes; these
 are always called out under a **Changed** or **Removed** heading.
 
+## [Unreleased]
+
+### Removed
+
+- **The per-project operator password prompt.** A project copied from the
+  bundled seed used to show **Set operator password** instead of Start, and
+  refused its runtime and editor until a device admin had minted that project's
+  `admin` account. The device-admin password already gates every `/runtime/` and
+  `/editor/` route, so the second credential locked a door that was locked, once
+  per project created. A new project now carries only the anonymous `guest` user
+  and opens as soon as it starts; add real accounts from the editor's **Users**
+  area when you want them. No template has ever shipped a usable credential, and
+  none does now.
+
+### Changed
+
+- **`GET /api/projects` reports credential state as `credentialsStatus` /
+  `credentialsError`** (`ok` or `error`), replacing `operatorSetupRequired`,
+  `operatorSetupStatus` and `operatorSetupError`. A project whose `users.json`
+  is missing, unreadable, corrupt or structurally invalid still shows
+  **Credentials unavailable** and will not start.
+- **`POST /api/manager/projects/{id}/operator-setup` is gone.** Nothing consumes
+  a setup marker, and the `operatorSetup` key is ignored wherever an existing
+  project still carries one — it is dropped the next time users are saved.
+
 ## [0.0.1-rc2] - 2026-08-29
 
 Second release candidate toward **1.0.0**. Fixes only — everything in rc1 still

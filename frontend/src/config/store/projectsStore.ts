@@ -23,11 +23,10 @@ export interface ProjectEntry {
   /** Whether the workspace MCP may write to this project. Controlled from the
    * manager dashboard; the per-project admin page no longer owns this. */
   mcpEnabled: boolean;
-  /** Fresh seeded projects remain inaccessible until the manager creates the
-   * initial admin operator credential. */
-  operatorSetupRequired: boolean;
-  operatorSetupStatus: 'required' | 'complete' | 'error';
-  operatorSetupError: string | null;
+  /** Whether the project's `users.json` is readable and well-formed. A project
+   * whose document is broken cannot be started until it is repaired on disk. */
+  credentialsStatus: 'ok' | 'error';
+  credentialsError: string | null;
   /** The project's on-disk schema version — null when `status` is `missing`. */
   formatVersion: number | null;
   /** The release that stamped `formatVersion`, so a build too old to open this
@@ -123,7 +122,6 @@ interface ProjectsStore {
   load(): Promise<void>;
   loadRuntimeHome(): Promise<void>;
   setDefault(id: string): Promise<void>;
-  setupOperatorPassword(id: string, password: string): Promise<void>;
   validatePath(path: string): Promise<ValidatePathResponse>;
   browseDir(path?: string): Promise<BrowseDirResponse>;
   // Mutation actions throw on failure — callers (modals) display the error
@@ -218,19 +216,6 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
     set({ busyProjectId: id });
     try {
       await apiJson(`/api/projects/${encodeURIComponent(id)}/default`, { method: 'POST' });
-      await get().load();
-    } finally {
-      set({ busyProjectId: null });
-    }
-  },
-
-  setupOperatorPassword: async (id: string, password: string) => {
-    set({ busyProjectId: id });
-    try {
-      await apiJson(`/api/manager/projects/${encodeURIComponent(id)}/operator-setup`, {
-        method: 'POST',
-        body: { password },
-      });
       await get().load();
     } finally {
       set({ busyProjectId: null });

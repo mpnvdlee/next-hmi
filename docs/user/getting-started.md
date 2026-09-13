@@ -27,8 +27,8 @@ $ ./nexthmi.command
 1. **Start the server** — Run one of the commands above. On first launch it creates its **runtime home** — a per-installation folder (default `~/Documents/NextHMI/`, or wherever `NEXTHMI_DATA_DIR` points) that holds the project manifest, logs, and the widget build cache.
 2. **Open the Manager** — Browse to `http://localhost:8000`. The **Manager** lists every project registered on this installation and lets you start, stop, open, transfer and remove them.
 3. **Set the device-admin password** — On a fresh installation the Manager asks you to choose one, and asks for it on every later visit. This gate gets you into the dashboard; it is separate from the per-project operator accounts you define later.
-4. **Unlock the example project** — The install ships with one, seeded from the bundled template. Press **Set operator password** to create that project's `admin` HMI account; until you do, its runtime and editor stay closed.
-5. **Open its editor** — Press **Start**, then **Open editor** to land under `/editor/<project>/` — or read [Managing projects](projects.md) to create your own first.
+4. **Start the example project** — The install ships with one, seeded from the bundled template. It needs no credential of its own: press **Start**.
+5. **Open its editor** — Press **Open editor** to land under `/editor/<project>/` — or read [Managing projects](projects.md) to create your own first.
 
 > [!NOTE]
 > **Three URL areas to know.** `localhost:8000` is the Manager. A running project's operator runtime is under `/runtime/<project>/`, and its editor is under `/editor/<project>/` — with one path per config area beneath it (`/editor/<project>/datasources`, `/editor/<project>/theme`, …).

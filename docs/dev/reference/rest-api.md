@@ -699,11 +699,9 @@ These five routes are allow-listed by the auth gate (reachable without a session
 Base prefix: `/api/projects`. Manages the project list in the runtime-home manifest. Mounted on **both** apps; the manager dashboard is the primary caller — project selection lives there, not inside a project instance.
 
 - `GET /api/projects`
-  - Each project includes `operatorSetupRequired`. It is true only for a fresh
-    seeded project whose initial operator password has not been set.
-  - `operatorSetupStatus` is `required`, `complete`, or `error`;
-    `operatorSetupError` describes missing, unreadable, corrupt, or invalid
-    credential state. Error-state projects cannot be started or proxied.
+  - `credentialsStatus` is `ok` or `error`; `credentialsError` describes a
+    missing, unreadable, corrupt, or structurally invalid `users.json`.
+    Error-state projects cannot be started or proxied.
   - Returns `{ defaultProjectId, defaultProjectsRoot, projects: [{ id, name, path, addedAt, lastOpenedAt, status, isDefault, formatVersion, minAppVersion, needsUpgrade, unsupportedFormat, lastMigration, thumbnailUpdatedAt }] }`. `status` is computed (`"present"` or `"missing"`), not stored. The running set is authoritative for what's actually live — see `/api/manager/running`.
   - `thumbnailUpdatedAt` is the stored thumbnail's mtime as an ISO 8601 string, or `null` when the project has never saved one. See `GET /api/projects/{id}/thumbnail` below.
   - The format fields are read from the project's own `config.json` (see [data-formats.md](../architecture/data-formats.md)) and are `null` when `status` is `"missing"`. `unsupportedFormat` is `formatVersion > PROJECT_FORMAT_VERSION` (this build is older than the project); `needsUpgrade` is `formatVersion < PROJECT_FORMAT_VERSION` **or** `minAppVersion` is `null` (a project with no release stamp is replayed through the chain rather than trusted). `minAppVersion` is the release that stamped the format — display only, for naming the version an operator needs. `lastMigration` is `{ fromVersion, toVersion, at, backup }` or `null`.
@@ -734,15 +732,6 @@ Base prefix: `/api/projects`. Manages the project list in the runtime-home manif
   - Multipart upload: `file` (zip), `destinationPath`, optional `name`. Validates destination, unpacks, adds a manifest entry. `422` on invalid zip, unsafe or symlink archive members, a reusable-component `$var` violation at any nested child/default-value source, or a malformed JSON, invalid UTF-8, unreadable, symlinked, or reparse-point component path. Component errors report `components/<file>.json#/<JSON pointer>`; file-content errors use the root pointer with a stable reason. `409` on id collision with an existing entry. The destination is cleaned up and no manifest entry is added after any validation failure.
 - `GET /api/projects/_runtime-home`
   - Used by the create dialog to suggest the default folder.
-
-Manager-only project setup (device-manager authentication required):
-
-- `POST /api/manager/projects/{id}/operator-setup`
-  - Body: `{ "password": "..." }`.
-  - Consumes a fresh seed's pending marker and atomically creates its `admin`
-    HMI user with the supplied password. A completed setup or an existing
-    project without the marker returns `409`, so the operation cannot be
-    replayed to replace a credential.
 
 ---
 

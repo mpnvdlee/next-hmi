@@ -79,17 +79,16 @@ Hiding a button is presentation. The write itself is checked on the server: a da
 > [!IMPORTANT]
 > Treat `Visible` / `Interactable` as ergonomics, not as security. They keep the wrong control out of the wrong hands on the panel; they do not stop someone who reaches the API. For tags that matter, set `interactableByGroups` on the variable as well, and keep the runtime off untrusted networks — see [HTTPS](install.md#https).
 
-## How this relates to the other two passwords
+## How this relates to the device-admin password
 
-Three separate credentials exist, and mixing them up is the usual confusion:
+Two separate credentials exist, and mixing them up is the usual confusion:
 
 | Credential | Gates | Lives in |
 |---|---|---|
 | **Device-admin password** | The **Manager** dashboard — starting, stopping, importing, transferring projects. | The installation, not any project. |
-| **Operator password** (this project's `admin` user) | Signing in to *this project's* runtime and editor. Set once, on first start of a project copied from the seed. | `users.json` in the project. |
-| **Any other user's password** | Whatever that user's groups allow. | `users.json` in the project. |
+| **A project user's password** | Signing in on *this project's* screens, and whatever that user's groups allow. | `users.json` in the project. |
 
-A project copied from the seed ships **no reusable credential** — the manager asks you to **Set operator password** before it will start, and that creates this project's `admin` user. See [Managing projects](projects.md#the-manager-dashboard).
+A project copied from the seed ships **no accounts at all** beyond the anonymous `guest`, so there is no reusable credential to leak between installs and nothing to type before the project opens. Every real account is one you add here. See [Managing projects](projects.md#the-manager-dashboard).
 
 ## If `users.json` goes bad
 

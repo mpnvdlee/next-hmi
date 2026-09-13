@@ -180,33 +180,6 @@ def test_put_users_document_validation_failure_leaves_file_unchanged(api_client)
     assert load() == before
 
 
-def test_put_users_document_cannot_consume_pending_operator_setup(api_client):
-    pending = load()
-    pending["operatorSetup"] = {"version": 1, "required": True}
-    save(pending)
-    submitted = copy.deepcopy(pending)
-    submitted.pop("operatorSetup")
-
-    resp = api_client.put("/api/users", json=submitted)
-
-    assert resp.status_code == 200
-    assert resp.json()["operatorSetup"] == {"version": 1, "required": True}
-    assert load()["operatorSetup"] == {"version": 1, "required": True}
-
-
-def test_put_users_document_cannot_discard_malformed_operator_setup(api_client):
-    malformed = load()
-    malformed["operatorSetup"] = None
-    save(malformed)
-    submitted = api_client.get("/api/users").json()
-    submitted.pop("operatorSetup")
-
-    resp = api_client.put("/api/users", json=submitted)
-
-    assert resp.status_code == 422
-    assert load() == malformed
-
-
 def test_put_groups_saves_and_returns(api_client):
     new_groups = [
         {"id": "guest", "label": "Guest"},
