@@ -33,12 +33,37 @@ import { useComponentPropStore } from '../store/widgetPropStore';
 import type { RecipeConfig } from '@shared/types/recipe';
 
 describe('selfLayoutStyle', () => {
-  it('returns undefined when no layout is provided', () => {
-    expect(selfLayoutStyle(undefined)).toBeUndefined();
+  // The panel advertises `Hug` as the default on both mode rows (`schemaFor` in
+  // LayoutFields), so a widget that stores no mode has to render exactly as a
+  // literal Hug does — otherwise pressing the button already marked "default"
+  // moves the widget, which is the whole confusion this pair exists to stop.
+  it('renders a missing layout exactly like a literal Hug on both axes', () => {
+    expect(selfLayoutStyle(undefined)).toEqual(
+      selfLayoutStyle({ widthMode: 'hug', heightMode: 'hug' }),
+    );
   });
 
-  it('returns undefined when layout is empty', () => {
-    expect(selfLayoutStyle({})).toBeUndefined();
+  it('renders an empty layout exactly like a literal Hug on both axes', () => {
+    expect(selfLayoutStyle({})).toEqual(selfLayoutStyle({ widthMode: 'hug', heightMode: 'hug' }));
+  });
+
+  it('defaults only the axis that has none of its own', () => {
+    expect(selfLayoutStyle({ widthMode: 'fill' })).toMatchObject({
+      '--w-grow': '1',
+      '--h-shrink': '0',
+      '--h-alignself-stretch': 'flex-start',
+    });
+  });
+
+  // `migration_size_modes.py` leaves a node it cannot read an axis for in the
+  // pre-mode shape, raw keys and all. Defaulting those to Hug would suppress
+  // the very length still sizing them and collapse the node, so the default
+  // stops at the door: they keep rendering off their raw keys until the
+  // migration stamps a real mode on them.
+  it('leaves the pre-size-mode shape alone, raw keys still driving the box', () => {
+    expect(selfLayoutStyle({ height: '210px' })).toEqual({ height: '210px' });
+    expect(selfLayoutStyle({ grow: 1 })).toEqual({ flexGrow: 1 });
+    expect(selfLayoutStyle({ width: '200px' })).toEqual({ width: '200px' });
   });
 
   it('emits direct CSS properties for flex-self sizing fields', () => {
@@ -81,7 +106,9 @@ describe('selfLayoutStyle', () => {
       alignSelf: 'stretch',
     } as LayoutConfig);
 
-    expect(style).toBeUndefined();
+    // Nothing *of their own*: a node carrying only retired keys is sized by
+    // none of them, which is exactly the unset node the Hug default is for.
+    expect(style).toEqual(selfLayoutStyle({ widthMode: 'hug', heightMode: 'hug' }));
   });
 });
 
@@ -107,10 +134,14 @@ describe('selfFlexChildStyle', () => {
     expect(flexChildStyle).toMatchObject({ flexGrow: 1, minWidth: '120px' });
   });
 
-  it('returns undefined when no layout is provided', () => {
-    expect(selfFlexChildStyle(undefined)).toBeUndefined();
+  it('defaults a missing layout to Hug, same as selfLayoutStyle', () => {
+    expect(selfFlexChildStyle(undefined)).toEqual(
+      selfFlexChildStyle({ widthMode: 'hug', heightMode: 'hug' }),
+    );
   });
 
+  // Still the pre-mode shape (no mode on either axis), so it keeps the legacy
+  // path and the wrapper strips the two lengths it must never carry.
   it('returns undefined when the layout has only width/height set', () => {
     expect(selfFlexChildStyle({ width: '50%', height: '80px' })).toBeUndefined();
   });
@@ -265,7 +296,9 @@ describe('selfLayoutStyle — size-mode flow intent', () => {
     const style = selfLayoutStyle({ heightMode: 'fill', grow: 3 });
     expect(style).not.toHaveProperty('--w-grow');
     expect(style).not.toHaveProperty('--w-basis');
-    expect(style).not.toHaveProperty('--w-shrink');
+    // The width axis carries Hug's own shrink-off, not a weight leaked from
+    // the height axis — `--w-grow`/`--w-basis` staying absent is the leak test.
+    expect(style).toMatchObject({ '--w-shrink': '0' });
   });
 
   it('passes a pre-size-mode grow through as plain flexGrow when neither axis has a mode', () => {
@@ -293,20 +326,19 @@ describe('selfLayoutStyle — size-mode flow intent', () => {
 });
 
 describe('containerLayoutProps', () => {
-  it('returns row/stretch data-flow-* and an empty style when no layout is provided', () => {
+  // A flex host is a flex child too, so its own unset axes default to Hug like
+  // any other widget's — `style` carries that, not nothing. What stays empty is
+  // the `--container-*` half: how it arranges its children is still unstated.
+  it('returns row/stretch data-flow-* and the Hug default when no layout is provided', () => {
     expect(containerLayoutProps(undefined)).toEqual({
-      style: {},
+      style: selfLayoutStyle({ widthMode: 'hug', heightMode: 'hug' }),
       'data-flow-direction': 'row',
       'data-flow-align': 'stretch',
     });
   });
 
   it('returns the same row/stretch fallback for an empty layout', () => {
-    expect(containerLayoutProps({})).toEqual({
-      style: {},
-      'data-flow-direction': 'row',
-      'data-flow-align': 'stretch',
-    });
+    expect(containerLayoutProps({})).toEqual(containerLayoutProps(undefined));
   });
 
   it('emits the --container-* vars for the kept fields', () => {

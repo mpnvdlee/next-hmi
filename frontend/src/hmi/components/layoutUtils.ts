@@ -134,6 +134,34 @@ function usesSizeModes(layout: LayoutConfig): boolean {
   );
 }
 
+/**
+ * A node the 4 → 5 size-mode migration never rewrote: no literal mode on either
+ * axis, but a raw `grow`/`width`/`height` still sizing it. That migration
+ * leaves this shape behind wherever it could not read which axis those keys
+ * drove — a component-definition root whose instances sit under different
+ * flows, a container whose `direction` is itself bound, an ImageContainer's
+ * absolutely-placed child.
+ *
+ * The unset-means-Hug default below stops at this door. Hug suppresses an
+ * axis's stored length, so defaulting one of these would drop the very
+ * `width`/`height` still holding the node open and collapse it to its content,
+ * and a raw `grow` would contradict the Hug it was just given. They keep
+ * rendering off their raw keys until `migration_size_modes.py` stamps a real
+ * mode on them.
+ */
+function isPreModeShape(layout: LayoutConfig): boolean {
+  return (
+    !usesSizeModes(layout) &&
+    (layout.grow !== undefined || layout.width !== undefined || layout.height !== undefined)
+  );
+}
+
+/** What an axis with no stored mode renders as. The Layout panel already
+ *  advertises it — `schemaFor` in LayoutFields gives both mode rows
+ *  `defaultValue: 'hug'` — so emitting anything else here makes the button
+ *  already marked "default" move the widget when it is finally pressed. */
+const DEFAULT_SIZE_MODE = 'hug';
+
 /** A literal Hug or Fill owns this axis's length role instead of its own
  *  stored `width`/`height` — same reachability the panel's `sizeModePatch`
  *  clears the length row for. Anything else (Fixed, unset, still bound/mixed)
@@ -144,17 +172,22 @@ function lengthSuppressed(mode: unknown): boolean {
 
 function buildSelfProps(layout: LayoutConfig): CSSWithVars {
   const s: Record<string, unknown> = {};
-  const usesModes = usesSizeModes(layout);
+  const preMode = isPreModeShape(layout);
+  // Resolved once and read by both halves below: the length suppression and the
+  // flow properties have to see the *same* mode, or an axis defaulted to Hug
+  // keeps a length a pressed Hug drops.
+  const widthMode = preMode ? layout.widthMode : (layout.widthMode ?? DEFAULT_SIZE_MODE);
+  const heightMode = preMode ? layout.heightMode : (layout.heightMode ?? DEFAULT_SIZE_MODE);
   for (const [key, cssProp] of SELF_DIRECT_ENTRIES) {
-    if (key === 'width' && lengthSuppressed(layout.widthMode)) continue;
-    if (key === 'height' && lengthSuppressed(layout.heightMode)) continue;
+    if (key === 'width' && lengthSuppressed(widthMode)) continue;
+    if (key === 'height' && lengthSuppressed(heightMode)) continue;
     const value = layout[key];
     if (value !== undefined) s[cssProp] = value;
   }
-  if (usesModes) {
+  if (!preMode) {
     const fillWeight = typeof layout.grow === 'number' ? layout.grow : 1;
-    Object.assign(s, axisFlowProps('w', layout.widthMode, fillWeight));
-    Object.assign(s, axisFlowProps('h', layout.heightMode, fillWeight));
+    Object.assign(s, axisFlowProps('w', widthMode, fillWeight));
+    Object.assign(s, axisFlowProps('h', heightMode, fillWeight));
     // Fill's `flex-basis: 0` opts this axis out of its own content size; with
     // nothing to grow into (a Hug ancestor with no free space) it collapses to
     // zero instead of hugging content, since hmi.css's barrier defaults the min
@@ -162,8 +195,8 @@ function buildSelfProps(layout: LayoutConfig): CSSWithVars {
     // `_write_content_floor` in migration_size_modes.py pins on a node it reads
     // as Fill over a content-sized `grow` — without capping how far real free
     // space still lets it grow. An explicit Min from the panel always wins.
-    if (layout.widthMode === 'fill' && layout.minWidth === undefined) s.minWidth = 'auto';
-    if (layout.heightMode === 'fill' && layout.minHeight === undefined) s.minHeight = 'auto';
+    if (widthMode === 'fill' && layout.minWidth === undefined) s.minWidth = 'auto';
+    if (heightMode === 'fill' && layout.minHeight === undefined) s.minHeight = 'auto';
   } else if (layout.grow !== undefined) {
     s.flexGrow = layout.grow;
   }
@@ -177,10 +210,13 @@ function buildSelfProps(layout: LayoutConfig): CSSWithVars {
  * translation block reads. An unset field is simply absent, and the shared
  * `.hmi-component, .hmi-container` default in hmi.css takes over, same as it
  * always did.
+ *
+ * A *missing* layout is not a special case: `makeComponentOfType` creates every
+ * widget without one, so treating it as anything other than an empty layout
+ * would exempt exactly the nodes the Hug default exists for.
  */
 export function selfLayoutStyle(layout?: LayoutConfig): CSSWithVars | undefined {
-  if (!layout) return undefined;
-  const s = buildSelfProps(layout);
+  const s = buildSelfProps(layout ?? {});
   return Object.keys(s).length ? s : undefined;
 }
 
@@ -197,8 +233,7 @@ export function selfLayoutStyle(layout?: LayoutConfig): CSSWithVars | undefined 
  * that is supposed to mark exactly its bounds.
  */
 export function selfFlexChildStyle(layout?: LayoutConfig): CSSWithVars | undefined {
-  if (!layout) return undefined;
-  const s = buildSelfProps(layout);
+  const s = buildSelfProps(layout ?? {});
   delete s.width;
   delete s.height;
   return Object.keys(s).length ? s : undefined;
@@ -248,16 +283,20 @@ function containerVarValue(key: keyof typeof CONTAINER_VAR_KEYS, value: unknown)
 }
 
 function containerStyle(layout?: LayoutConfig): CSSWithVars {
-  if (!layout) return {};
-  const s: Record<string, unknown> = buildSelfProps(layout);
+  // `layout ?? {}` rather than an early return: a flex host is a flex *child*
+  // too, so it owes the same unset-means-Hug default as every other widget —
+  // see {@link selfLayoutStyle}. Bailing here gave a Container with no layout
+  // key a different size role from one holding an empty layout.
+  const resolved = layout ?? {};
+  const s: Record<string, unknown> = buildSelfProps(resolved);
   for (const [key, cssVar] of CONTAINER_VAR_ENTRIES) {
-    const value = layout[key];
+    const value = resolved[key];
     if (value !== undefined) s[cssVar] = containerVarValue(key, value);
   }
-  if (layout.paddingTop !== undefined) s.paddingTop = layout.paddingTop;
-  if (layout.paddingRight !== undefined) s.paddingRight = layout.paddingRight;
-  if (layout.paddingBottom !== undefined) s.paddingBottom = layout.paddingBottom;
-  if (layout.paddingLeft !== undefined) s.paddingLeft = layout.paddingLeft;
+  if (resolved.paddingTop !== undefined) s.paddingTop = resolved.paddingTop;
+  if (resolved.paddingRight !== undefined) s.paddingRight = resolved.paddingRight;
+  if (resolved.paddingBottom !== undefined) s.paddingBottom = resolved.paddingBottom;
+  if (resolved.paddingLeft !== undefined) s.paddingLeft = resolved.paddingLeft;
   return s as CSSWithVars;
 }
 
