@@ -7,10 +7,11 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useConfigStore } from '@shared/store/configStore';
 import { useHmiStore } from '@hmi/store/hmiStore';
-import type { PageConfig, PageNode, WidgetConfig } from '@shared/types/config';
+import type { LayoutConfig, PageConfig, PageNode, WidgetConfig } from '@shared/types/config';
 import { PreviewContext } from '@shared/context/PreviewContext';
 import { matchesSearchWords } from '@shared/utils/search';
 import { filterHidden, filterByRole, sortPagesByOrder } from '@shared/utils/pageTree';
+import { selfLayoutStyle } from '@hmi/components/layoutUtils';
 import NavigationMenu from './index';
 import PageGroupPageView from '@hmi/components/PageGroupPageView';
 
@@ -540,6 +541,54 @@ describe('NavigationMenu routing', () => {
       .filter((text): text is string => !!text && children.some((c) => c.title === text));
 
     expect(rendered).toEqual(expected);
+  });
+});
+
+describe('NavigationMenu layout', () => {
+  beforeEach(() => {
+    useConfigStore.setState({
+      pages: [],
+      header: [],
+      footer: [],
+      dialogs: [],
+      loaded: true,
+    });
+    useHmiStore.setState({ currentUsersByScope: {} });
+  });
+
+  function renderMenu(layout?: LayoutConfig) {
+    return render(
+      <MemoryRouter>
+        <NavigationMenu properties={{}} layout={layout} />
+      </MemoryRouter>,
+    ).container.firstElementChild as HTMLElement;
+  }
+
+  it('roots itself in a nav carrying both the base and widget classes', () => {
+    // `hmi-component` is what the flow-translation block in hmi.css matches to
+    // treat a widget as a flex item, so a Hug/Fill mode (which travels as
+    // `--w-*` custom properties, not as a length) has something to translate it.
+    const root = renderMenu();
+    expect(root.tagName).toBe('NAV');
+    expect(root.className).toContain('hmi-component');
+    expect(root.className).toContain('hmi-navmenu');
+  });
+
+  it('applies an authored length as inline style, beating its own stylesheet width', () => {
+    const root = renderMenu({ widthMode: 'fixed', width: '320px', maxWidth: '400px' });
+    expect(root.style.width).toBe('320px');
+    expect(root.style.maxWidth).toBe('400px');
+  });
+
+  it('pins no width of its own, so an unset menu sizes like a literal Hug', () => {
+    // The sheet used to carry `width: 100%` (and 200px inside a region), which
+    // outranked whatever the Layout panel said — including the Hug the panel
+    // shows as the default. Nothing here may set a width now; the mode does.
+    const root = renderMenu();
+    expect(root.style.width).toBe('');
+    expect(selfLayoutStyle(undefined)).toEqual(
+      selfLayoutStyle({ widthMode: 'hug', heightMode: 'hug' }),
+    );
   });
 });
 

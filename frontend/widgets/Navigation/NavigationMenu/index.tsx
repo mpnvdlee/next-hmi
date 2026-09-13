@@ -300,7 +300,7 @@ function staticIconToString(icon?: { $static: IconValue }): string | undefined {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
+export default function NavigationMenu({ properties, layout }: HmiWidgetProps = {}) {
   const evalCtx = useEvalContext();
   const visiblePages = useVisiblePages();
   const activePage = useActivePage();
@@ -683,6 +683,7 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
 
   // ── Layout / orientation classes ────────────────────────────────────────────
   const navClassName = [
+    'hmi-component',
     'hmi-navmenu',
     orientation === 'horizontal' ? 'hmi-navmenu--horizontal' : '',
     collapsed ? 'hmi-navmenu--collapsed' : '',
@@ -691,7 +692,7 @@ export default function NavigationMenu({ properties }: HmiWidgetProps = {}) {
     .join(' ');
 
   return (
-    <nav className={navClassName}>
+    <nav className={navClassName} style={selfLayoutStyle(layout)}>
       {orientation === 'vertical' && !hasExternalCollapsed && (
         <button
           className="hmi-navmenu__toggle"
