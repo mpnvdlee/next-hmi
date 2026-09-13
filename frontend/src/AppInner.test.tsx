@@ -1,7 +1,16 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 const loadCustomWidgets = vi.fn(() => Promise.resolve());
 const loadComponents = vi.fn(() => Promise.resolve());
+
+vi.mock('@config/pages/ConfigRoutes', () => ({
+  default: () => <div>config routes</div>,
+}));
+
+vi.mock('@hmi/store/deviceInfoStore', () => ({
+  useDeviceInfoStore: { getState: () => ({ fetch: () => {} }) },
+}));
 
 vi.mock('@hmi/registry/widgetRegistry', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@hmi/registry/widgetRegistry')>();
@@ -22,7 +31,7 @@ vi.mock('@shared/utils/themeTokens', async (importOriginal) => ({
 
 vi.mock('@hmi/hooks/useWebSocket', () => ({ useWebSocket: () => {} }));
 
-const { ComponentsReadyGate } = await import('./AppInner');
+const { ComponentsReadyGate, default: AppInner } = await import('./AppInner');
 
 describe('ComponentsReadyGate', () => {
   it('opens even when the route chunk fails to load', async () => {
@@ -46,5 +55,40 @@ describe('ComponentsReadyGate', () => {
     );
 
     await waitFor(() => expect(screen.getByText('route content')).toBeInTheDocument());
+  });
+});
+
+describe('the /config route in the runtime route map', () => {
+  afterEach(() => {
+    delete window.__NEXTHMI_BASE__;
+  });
+
+  function renderAt(base: string | undefined, path: string) {
+    if (base === undefined) delete window.__NEXTHMI_BASE__;
+    else window.__NEXTHMI_BASE__ = base;
+    return render(
+      <MemoryRouter initialEntries={[path]}>
+        <AppInner />
+      </MemoryRouter>,
+    );
+  }
+
+  it('is mounted everywhere but under a /runtime/<slug>/ base', async () => {
+    // The manager serves /runtime/<slug>/ with no device-admin session, so
+    // mounting the editor there would hand an editor shell to an anonymous
+    // visitor — whose writes the gate refuses anyway.
+    const runtime = renderAt('/runtime/plant-a/', '/config/pages');
+    // Long enough for a matching route's lazy chunk to resolve and paint. The
+    // absence below says nothing without it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(screen.queryByText('config routes')).not.toBeInTheDocument();
+    runtime.unmount();
+
+    // `getArea()` is null at "/" — dev and a bare instance — where
+    // `editorPath()` still emits /config/... and this route is the only way in.
+    renderAt(undefined, '/config/pages');
+    expect(await screen.findByText('config routes')).toBeInTheDocument();
   });
 });

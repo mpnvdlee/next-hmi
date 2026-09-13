@@ -124,6 +124,13 @@ password) is the operator surface:
   anonymous `guest` user, so it starts and opens with no password of its own.
   A project whose `users.json` is missing, unreadable or corrupt shows
   **Credentials unavailable** and will not start until the file is repaired.
+- **What the password does and does not cover** — the device-admin password
+  gates the dashboard and every project's **editor** (`/editor/<slug>/`). A
+  running project's **live screens** (`/runtime/<slug>/`) are open to anyone who
+  can reach the host, deliberately: that is what an operator panel is. Operating
+  is open too, unless a variable carries `interactableByGroups`
+  (see [Users, groups & permissions](users.md)). Put the manager on a trusted
+  network, and use [HTTPS](#https) the moment it leaves loopback.
 - **Start / Stop** — bring a project up or down. A running project gets
   its own backend instance and becomes reachable at `/runtime/<slug>/`
   (and `/editor/<slug>/`); the set of running projects is remembered and

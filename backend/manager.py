@@ -5,7 +5,8 @@ This is the ASGI app the launcher runs in *manager mode* (the default, when no
 project's datasources/OPC-UA/WebSocket pipeline. Instead it:
 
   * serves the manager SPA (project dashboard + device admin) at the origin root,
-  * gates everything behind a device-admin password (see ``core.manager_auth``),
+  * gates everything but the public live view behind a device-admin password
+    (see ``core.manager_auth`` and ``_runtime_public`` below),
   * supervises one child backend process per running project
     (``services.supervisor``), and
   * reverse-proxies ``/runtime/<slug>/*`` and ``/editor/<slug>/*`` (HTTP +
@@ -23,7 +24,7 @@ import os
 from collections.abc import Callable
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 import httpx
 from api.docs_api import bundled_docs_dir
@@ -65,6 +66,8 @@ from mcp_server.write_helpers import drain_inflight_broadcasts
 from services import frontend_serve, project_resume
 from services.supervisor import supervisor
 from starlette.background import BackgroundTask
+from starlette.routing import get_route_path
+from starlette.types import Scope
 from starlette.websockets import WebSocketState
 
 logger = logging.getLogger(__name__)
@@ -238,13 +241,60 @@ _PROXY_PREFIXES = ("runtime", "editor")
 MANAGER_SESSION_REQUIRED = "manager_session_required"
 
 
-def _is_gated(path: str) -> bool:
+# Wildcard in a public-route pattern: exactly one path segment, never more.
+# Prefix matching is deliberately absent — "everything under api/config/" plus a
+# dot segment is what let a crafted URL walk out of the allowlisted subtree and
+# into the datasource passwords.
+_ONE = "*"
+
+# The live view is the product's public face: an operator panel must come up on
+# a wall-mounted browser with no device-admin password. The project child mounts
+# every router on one app and has no auth of its own (``backend/main.py``), so
+# this table *is* the boundary. Deny by default; each entry is exact, or exact
+# with one wildcard segment. Query strings never take part in the match.
+_RUNTIME_PUBLIC_ROUTES: dict[str, tuple[tuple[str, ...], ...]] = {
+    "GET": (
+        ("api", "config", "config"),
+        ("api", "config", "pages", _ONE),
+        ("api", "config", "dictionaries"),
+        ("api", "config", "translations"),
+        ("api", "themes"),
+        ("api", "themes", _ONE),
+        ("api", "default-theme"),
+        ("api", "components"),
+        ("api", "components", "folders"),
+        ("api", "widgets"),
+        ("api", "device", "info"),
+        ("api", "users"),
+        ("api", "alarms", "history"),
+        ("api", "historian", "query"),
+    ),
+    "POST": (
+        ("api", "alarms", "ack", _ONE),
+        ("api", "alarms", "ack-all"),
+        ("api", "recipes", "datasets", _ONE, "download"),
+        ("api", "recipes", "datasets", _ONE, "upload"),
+        ("api", "http-request"),
+    ),
+}
+
+# First sub-path segment of a child route that must stay behind the session even
+# though it is a plain GET outside ``api/``: the child leaves FastAPI's
+# interactive docs enabled (``backend/main.py``), and they enumerate every
+# route on the instance — including the ones this table withholds.
+_RUNTIME_PRIVATE_DOCS = frozenset({"openapi.json", "docs", "redoc"})
+
+_UNSAFE_SEGMENTS = frozenset({"", ".", ".."})
+
+
+def _is_gated(path: str, method: str = "GET", raw_path: str | None = None) -> bool:
     """True for paths that require a manager session.
 
     The SPA shell + bundle stay public so the login screen can render; the data
-    APIs and the project proxy are gated. Auth endpoints are always public.
+    APIs and the editor proxy are gated. Auth endpoints are always public.
     ``/mcp`` is excluded here because it enforces its own session-or-bearer-
     token authentication (``mcp_server.auth``) instead of this cookie gate.
+    ``/runtime/<id>/…`` is gated only for what is not on the public table above.
     """
     if (
         path.startswith("/api/manager/auth")
@@ -257,7 +307,17 @@ def _is_gated(path: str) -> bool:
         return False
     if path.startswith("/api/"):
         return True
-    return _is_proxy_path(path)
+    parts = _proxy_parts(path)
+    if parts is None:
+        return _is_proxy_path(path)
+    prefix, project_id, sub_path = parts
+    if prefix != "runtime":
+        return True
+    if not _is_plain_segment(project_id):
+        return True
+    if not _is_plain_sub_path(sub_path) or not _is_plain_sub_path(_raw_sub_path(raw_path)):
+        return True
+    return not _runtime_public(sub_path, method)
 
 
 def _is_proxy_path(path: str) -> bool:
@@ -265,17 +325,207 @@ def _is_proxy_path(path: str) -> bool:
     return any(path.startswith(f"/{prefix}/") for prefix in _PROXY_PREFIXES)
 
 
+def _proxy_parts(path: str) -> tuple[str, str, str] | None:
+    """``(prefix, project_id, sub_path)`` for a proxy path, else ``None``.
+
+    Split exactly the way the route is declared — ``/{prefix}/{project_id}/{path:path}``
+    — so the gate and the router can never disagree about where the sub-path
+    begins. A regex over the whole URL would: a single ``%2f`` is already a real
+    separator by the time either of them looks at it. A *double*-encoded one is
+    not, and that is what :func:`_is_plain_segment` is for.
+    """
+    parts = path.split("/")
+    if len(parts) < 3 or parts[0] != "" or parts[1] not in _PROXY_PREFIXES or not parts[2]:
+        return None
+    return parts[1], parts[2], "/".join(parts[3:])
+
+
+def _raw_route_path(scope: Scope) -> str | None:
+    """``raw_path`` with ``root_path`` stripped — the still-encoded twin of
+    :func:`starlette.routing.get_route_path`.
+
+    Servers build ``raw_path`` with the mount prefix included (uvicorn does), so
+    it has to come off here or the sub-path window below lines up one segment
+    out from the decoded one.
+    """
+    raw = scope.get("raw_path")
+    if isinstance(raw, bytes):
+        raw = raw.decode("latin-1")
+    if not isinstance(raw, str):
+        return None
+    root_path = scope.get("root_path", "")
+    if root_path and raw.startswith(root_path):
+        raw = raw[len(root_path) :] or "/"
+    return raw
+
+
+def _raw_sub_path(raw_path: str | None) -> str:
+    """The still-percent-encoded sub-path, for the second half of the check.
+
+    ``scope["path"]`` has been decoded by the server; ``scope["raw_path"]`` has
+    not (same hazard the HTTPS redirector notes in ``launcher.py``). Checking
+    both means a dot segment cannot hide behind an extra encoding layer on the
+    way to a decoder that disagrees with this one.
+    """
+    if raw_path is None:
+        return ""
+    parts = raw_path.split("/")
+    return "/".join(parts[3:]) if len(parts) >= 3 else ""
+
+
+def _decoded_forms(segment: str) -> tuple[str, ...]:
+    """*segment* and every form it takes under repeated percent-decoding.
+
+    ``scope["path"]`` has already been decoded once by the server, so a segment
+    still carrying ``%xx`` is one the client encoded twice — and the child's own
+    server decodes it again before routing. ``unquote`` never lengthens a string
+    and only leaves it alone at a fixpoint, so this terminates.
+    """
+    forms = [segment]
+    while (decoded := unquote(forms[-1])) != forms[-1]:
+        forms.append(decoded)
+    return tuple(forms)
+
+
+# Characters a server may trim from a path segment before it routes on it.
+# Everything at or below 0x20 (space, tab, CR, LF, NUL's neighbours) plus DEL.
+_TRIM_CHARS = "".join(chr(code) for code in range(0x21)) + "\x7f"
+
+
+def _route_name(form: str) -> str:
+    """*form* reduced to the name a downstream router may end up matching on.
+
+    A NUL truncates the rest of the segment in any C string API, ``;`` starts a
+    path parameter on a servlet-style stack, a trailing dot is dropped on
+    Windows filesystems, and surrounding whitespace or control characters are
+    trimmed all over. ``api\x00``, ``api;``, ``api.`` and ``api `` are all
+    ``api`` to something downstream.
+    """
+    trimmed = form.split("\x00", 1)[0].split(";", 1)[0].strip(_TRIM_CHARS)
+    return trimmed.rstrip(".").strip(_TRIM_CHARS)
+
+
+def _route_forms(segment: str) -> set[str]:
+    """Every lower-cased form of *segment* the classification below must judge.
+
+    Its decodings, and each of those reduced by :func:`_route_name`. Widening
+    the set can only move a segment *into* the table (and be denied); the
+    hazard runs the other way, where an untrimmed ``api\x00`` falls through to
+    the "plain GET outside api/" branch that serves documents and assets.
+    """
+    forms: set[str] = set()
+    for decoded in _decoded_forms(segment):
+        lowered = decoded.lower()
+        forms.add(lowered)
+        forms.add(_route_name(lowered))
+    return forms
+
+
+def _first_route_segment(segments: list[str]) -> str:
+    """The segment the child would classify the request on.
+
+    Not always ``segments[0]``: ``/runtime/<id>/;/api/datasources`` is
+    ``api/datasources`` to any stack that drops a bare path parameter, so
+    classifying on the ``;`` — which is neither ``api`` nor a docs route — hands
+    out the whole API subtree. A sub-path that is empty all the way down (the
+    live view's own document request) has no such segment and keeps
+    ``segments[0]``.
+    """
+    for segment in segments:
+        if _route_name(_decoded_forms(segment)[-1].lower()):
+            return segment
+    return segments[0]
+
+
+def _is_plain_segment(segment: str) -> bool:
+    """True when *segment* stays one ordinary segment however often it is decoded.
+
+    Rejected: anything that becomes a separator or a dot segment on the way
+    down — ``api%2fdatasources`` is opaque here and two real segments at the
+    child, which is how a crafted URL walked out of the allowlisted subtree.
+    """
+    return not any(
+        form in _UNSAFE_SEGMENTS or "/" in form or "\\" in form
+        for form in _decoded_forms(segment)
+    )
+
+
+def _is_plain_sub_path(sub_path: str) -> bool:
+    """True when *sub_path* is already canonical, so forwarding cannot change it.
+
+    Reject, never normalize: ``httpx`` collapses ``.`` and ``..`` when the proxy
+    rebuilds the upstream URL and forwards every remaining escape verbatim for
+    the child to decode, so only a sub-path that survives both unchanged still
+    means at the child what the allowlist decided here.
+
+    Nothing rejects ``%`` on its own. The path reaching this gate has been
+    decoded once already, so a project asset genuinely named ``50% mix.png``
+    arrives with a literal per-cent sign and must keep working; a literal ``%``
+    and a surviving ``%2f`` are indistinguishable by inspection, which is why
+    the test is what the segment *decodes to* rather than what it contains.
+    """
+    if not sub_path:
+        return True
+    return all(_is_plain_segment(segment) for segment in sub_path.split("/"))
+
+
+def _decoded_path(path: str) -> str:
+    """*path* with every segment decoded to its fixpoint, for a literal compare.
+
+    A double-encoded separator survives ``scope["path"]`` inside a single
+    segment and becomes a real one again at the child, so a string test against
+    the form seen here matches nothing while the child still routes it.
+    """
+    return "/".join(_decoded_forms(segment)[-1] for segment in path.split("/"))
+
+
+def _runtime_public(sub_path: str, method: str) -> bool:
+    """True when ``/runtime/<id>/<sub_path>`` may be served with no session.
+
+    *sub_path* must already have passed :func:`_is_plain_sub_path`.
+    """
+    segments = sub_path.split("/")
+    # HEAD is a GET without the body: a conditional fetch of a public asset or
+    # document must not need a session the GET beside it does not. OPTIONS is
+    # deliberately left gated — the live view is same-origin so it never sends
+    # a preflight, and an anonymous OPTIONS would hand back the child's
+    # ``Allow:`` header for exactly the routes this table withholds.
+    lookup = "GET" if method == "HEAD" else method
+    # Classify the first segment over every form it decodes to, then match the
+    # table case-sensitively against the literal one. ``API/datasources`` is a
+    # child route only on a stack that folds case and ``%2561pi/datasources``
+    # only once the child decodes again; both must land in the table (and be
+    # denied) rather than in the "plain GET outside api/" branch that serves
+    # documents and assets.
+    first_forms = _route_forms(_first_route_segment(segments))
+    if lookup == "GET" and "api" not in first_forms:
+        return first_forms.isdisjoint(_RUNTIME_PRIVATE_DOCS)
+    return any(
+        len(pattern) == len(segments)
+        and all(p in (_ONE, s) for p, s in zip(pattern, segments, strict=True))
+        for pattern in _RUNTIME_PUBLIC_ROUTES.get(lookup, ())
+    )
+
+
 def safe_sign_in_target(raw: str | None) -> str | None:
     """The ``signIn`` destination to resume after sign-in, or ``None``.
 
     Only same-origin project-instance paths are honoured, so a crafted link
-    cannot turn the manager's sign-in round-trip into an open redirect.
+    cannot turn the manager's sign-in round-trip into an open redirect — and
+    only canonical ones, because the browser normalizes the ``Location`` it is
+    handed: ``/runtime/x/../../evil`` is a request for ``/evil``.
     """
     if not raw or not raw.startswith("/"):
         return None
-    if any(char in raw for char in ("\\", "\r", "\n")):
+    if any(char in raw for char in ("\\", "\r", "\n", "\t")):
         return None
-    return raw if _is_proxy_path(raw.split("?", 1)[0]) else None
+    parts = _proxy_parts(raw.split("?", 1)[0])
+    if parts is None:
+        return None
+    _prefix, project_id, sub_path = parts
+    if not _is_plain_segment(project_id) or not _is_plain_sub_path(sub_path):
+        return None
+    return raw
 
 
 def _is_document_request(request: Request) -> bool:
@@ -305,12 +555,18 @@ def _users_document_state(project_id: str) -> users_document.DocumentState | Non
 
 @app.middleware("http")
 async def _auth_gate(request: Request, call_next):
-    if _is_gated(request.url.path) and not _has_valid_session(request.cookies):
+    # ``get_route_path``, not ``request.url.path``: the two differ by the mount
+    # prefix under a ``root_path`` deployment, and a gate reading the longer one
+    # waves every ``/api/…`` and proxy path past as "not gated" while the router
+    # — which routes on the shorter one — still serves it.
+    route_path = get_route_path(request.scope)
+    gated = _is_gated(route_path, request.method, _raw_route_path(request.scope))
+    if gated and not _has_valid_session(request.cookies):
         # A browser opening a project URL must land on the manager's sign-in
         # screen; without this it renders the raw 401 body (or, in dev where
         # Vite serves the SPA routes itself, an app whose every fetch 401s).
         # `signIn` carries the destination so the manager can return to it.
-        if _is_proxy_path(request.url.path) and _is_document_request(request):
+        if _is_proxy_path(route_path) and _is_document_request(request):
             return RedirectResponse(
                 url=f"/?signIn={quote(_full_path(request), safe='')}", status_code=303
             )
@@ -318,7 +574,7 @@ async def _auth_gate(request: Request, call_next):
             {"detail": "Authentication required", "code": MANAGER_SESSION_REQUIRED},
             status_code=401,
         )
-    if request.method == "POST" and request.url.path == "/api/manager/peer/transfers":
+    if request.method == "POST" and route_path == "/api/manager/peer/transfers":
         # Authenticated here, before the route's File()/Form() parameters make
         # FastAPI spool the whole multipart to disk. Checking inside the handler
         # would let any unauthenticated host on the LAN fill the destination's
@@ -391,13 +647,18 @@ def _unavailable_reason(project_id: str) -> str | None:
 _render_instance_shell: Callable[[str], str] | None = None
 
 
-async def _proxy_ws_to_child(websocket: WebSocket, project_id: str) -> None:
+async def _proxy_ws_to_child(
+    websocket: WebSocket, project_id: str, *, require_session: bool
+) -> None:
     """Bridge a browser WebSocket to the project child's ``/ws``.
 
     Shared by the ``/runtime/`` and ``/editor/`` prefixes — the child is one
-    process per project, so both tunnel to the same upstream socket.
+    process per project, so both tunnel to the same upstream socket. Only the
+    editor's socket demands a device-admin session: the live view's socket is
+    the variable pipeline that makes the panel a panel, and it is public for the
+    same reason the rest of ``/runtime/`` is.
     """
-    if not _has_valid_session(websocket.cookies):
+    if require_session and not _has_valid_session(websocket.cookies):
         await websocket.close(code=1008)
         return
     users_state = _users_document_state(project_id)
@@ -477,7 +738,11 @@ async def _proxy_http_to_child(
 
     # The child's loopback reload hook is driven by the manager directly (over
     # the instance port), never through this browser-facing proxy.
-    if path == "api/internal" or path.startswith("api/internal/"):
+    # Compare the decoded form: ``api%2finternal%2freload`` is one opaque
+    # segment here and three real ones at the child, so a literal string test
+    # against what arrived matches nothing the child would not still route.
+    internal_probe = _decoded_path(path)
+    if internal_probe == "api/internal" or internal_probe.startswith("api/internal/"):
         raise HTTPException(status_code=404)
     reason = _unavailable_reason(project_id)
     if reason is not None and _is_document_request(request):
@@ -490,10 +755,17 @@ async def _proxy_http_to_child(
         )
     port = _upstream_port_or_503(project_id)
     assert _proxy_client is not None
-    url = httpx.URL(
-        f"http://127.0.0.1:{port}/{path}",
-        query=request.url.query.encode("utf-8"),
-    )
+    try:
+        url = httpx.URL(
+            f"http://127.0.0.1:{port}/{path}",
+            query=request.url.query.encode("utf-8"),
+        )
+    except httpx.InvalidURL as exc:
+        # A control character the gate let past (a NUL inside a segment, say)
+        # is a malformed request target, not a manager fault. ``InvalidURL`` is
+        # not an ``HTTPError``, so the except below never saw it and it
+        # surfaced as an anonymous 500.
+        raise HTTPException(status_code=400, detail="Invalid request path") from exc
     headers = _forwarded_headers(request)
     if forwarded_prefix is not None:
         headers.append(("x-forwarded-prefix", forwarded_prefix))
@@ -518,6 +790,15 @@ async def _proxy_http_to_child(
 
 
 def _register_proxy_routes(prefix: str) -> None:
+    # The prefix is only knowable at registration time — the endpoint itself
+    # cannot tell which alias routed to it — so the editor/runtime split for the
+    # socket is bound here.
+    require_session = prefix != "runtime"
+
+    @app.websocket(f"/{prefix}/{{project_id}}/ws")
+    async def _proxy_ws(websocket: WebSocket, project_id: str) -> None:
+        await _proxy_ws_to_child(websocket, project_id, require_session=require_session)
+
     @app.api_route(
         f"/{prefix}/{{project_id}}/{{path:path}}", methods=_PROXY_METHODS, include_in_schema=False
     )
@@ -531,7 +812,6 @@ def _register_proxy_routes(prefix: str) -> None:
 
 
 for _prefix in _PROXY_PREFIXES:
-    app.websocket(f"/{_prefix}/{{project_id}}/ws")(_proxy_ws_to_child)
     _register_proxy_routes(_prefix)
 
 
@@ -627,20 +907,26 @@ if _frontend_dist_env:
 
     @app.get("/", include_in_schema=False, response_model=None)
     async def _spa_root(request: Request):
-        # When an authenticated operator hits the origin root and a default
-        # project is up, jump straight to its runtime. Otherwise serve the
-        # manager SPA (login screen / project picker), which client-redirects
-        # once a default is chosen and running.
+        # A device with a default project up answers its origin root with that
+        # project's live view — signed in or not, because the live view is
+        # public. Otherwise serve the manager SPA (login screen / project
+        # picker), which client-redirects once a default is chosen and running.
+        sign_in = request.query_params.get("signIn")
         if _has_valid_session(request.cookies):
             # A `signIn` round-trip that arrives already authenticated (the
             # session was established in another tab) resumes its destination
             # instead of being sent to the default project.
-            resume = safe_sign_in_target(request.query_params.get("signIn"))
+            resume = safe_sign_in_target(sign_in)
             if resume is not None:
                 return RedirectResponse(url=resume, status_code=303)
-            entry = default_project(load_manifest())
-            if entry is not None and supervisor.port_for(entry.id) is not None:
-                return RedirectResponse(url=f"/runtime/{entry.id}/")
+        elif sign_in is not None:
+            # The gate bounced a gated navigation here to sign in. Redirecting
+            # to the default project's runtime instead would drop the round-trip
+            # and the login screen would never appear.
+            return HTMLResponse(_render_manager_index())
+        entry = default_project(load_manifest())
+        if entry is not None and supervisor.port_for(entry.id) is not None:
+            return RedirectResponse(url=f"/runtime/{entry.id}/")
         return HTMLResponse(_render_manager_index())
 
     @app.get("/{path:path}", include_in_schema=False, response_model=None)

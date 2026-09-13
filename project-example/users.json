@@ -1,9 +1,6 @@
 {
   "settings": {
-    "autoLoginName": "guest",
-    "configAccessGroups": [
-      "admin"
-    ]
+    "autoLoginName": "guest"
   },
   "groups": [
     {

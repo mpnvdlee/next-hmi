@@ -15,7 +15,13 @@ A few endpoints raise `fastapi.HTTPException` directly with other status codes �
 
 ## Authentication
 
-The **manager** front door is gated by a single **device-admin password** set on first run. The manager's `_auth_gate` middleware requires a valid session cookie (`nexthmi_manager_session`, a stateless HMAC-signed token) on every `/api/*`, `/runtime/*`, and `/editor/*` request, except `/api/manager/auth/*`, `/api/manager/peer/*`, and `/api/health`. Peer endpoints perform their own bearer-token authentication (only pairing accepts the existing device-admin password). The same cookie authorizes the `/runtime/<slug>/ws` and `/editor/<slug>/ws` proxy. See **Manager API** below for the login/setup endpoints; the password digest lives in `<runtime_home>/.manager-auth.json`.
+The **manager** front door is gated by a single **device-admin password** set on first run. The manager's `_auth_gate` middleware requires a valid session cookie (`nexthmi_manager_session`, a stateless HMAC-signed token) on every `/api/*` and `/editor/*` request, except `/api/manager/auth/*`, `/api/manager/peer/*`, and `/api/health`. Peer endpoints perform their own bearer-token authentication (only pairing accepts the existing device-admin password). See **Manager API** below for the login/setup endpoints; the password digest lives in `<runtime_home>/.manager-auth.json`.
+
+**`/runtime/*` is the exception: a live operator view is public.** A deny-by-default allowlist (`_RUNTIME_PUBLIC_ROUTES` in `manager.py`) names the child routes a running screen needs — the SPA document and its static mounts, a fixed set of config / theme / component / widget / user reads, alarm history, historian queries, the operator-action POSTs (alarm ack, recipe load and save, `$http`), and `/ws`. Everything else under `/runtime/*` still needs the session: every write verb, `api/datasources`, `api/system/*`, `api/projects/*`, `api/internal/*`, `api/health`, and the instance's own `openapi.json` / `docs` / `redoc`. `HEAD` follows `GET`; `OPTIONS` is gated, since an anonymous preflight would otherwise enumerate the withheld routes.
+
+A path segment is refused outright when *any* decoding of it — the original, each intermediate `unquote`, or the fixpoint — contains `/` or `\`, or is empty, `.` or `..`. The gate and the child each decode once, so without that rule a double-encoded separator lets the gate match one route while the child serves another.
+
+`/editor/<slug>/ws` requires the cookie; `/runtime/<slug>/ws` does not.
 
 A **project instance's** own HTTP API and WebSocket are unauthenticated — instances bind `127.0.0.1` and are only reachable through the manager proxy (which strips the manager cookie before forwarding). Running an instance directly (dev / `uvicorn main:app`) exposes it unauthenticated, so bind a trusted interface in that case.
 
@@ -221,7 +227,7 @@ Base prefix: `/api/datasources`. Datasource types supported (`models/datasource.
 - `POST /api/datasources/write`
   - Requires HTTP Basic credentials for a user in the active project's `users.json`; manager-session authentication is not accepted as a substitute for an HMI identity.
   - Body uses the WebSocket write envelope: `{ "datasource": "PLC", "path": "Motor/Speed", "value": 42, "field"?: "name" }`.
-  - Returns `{ "ok": true, "reason": null }` or `{ "ok": false, "reason": "<stable reason>" }`; invalid credentials return HTTP `401`.
+  - Returns `{ "ok": true, "reason": null }` or `{ "ok": false, "reason": "<stable reason>" }`; invalid credentials return HTTP `401`. An account with no password set is invalid credentials like any other — it can never be signed in as. Repeated failures are throttled (`core/user_auth_throttle.py`): five in a row for one username, or a flood across many, answer HTTP `429` until the lockout expires.
   - Uses the same envelope parser, `interactableByGroups` authorization, coercion matrix, and write service as WebSocket `write_field`. Present `null` reaches coercion and returns `invalid_value`; missing or malformed envelope fields return `bad_request`.
 
 ### Connection wizard
@@ -322,6 +328,7 @@ A project defines **dataset types** (independent axes). Each type owns **paramet
 
 - `POST /api/recipes/datasets/{id}/download`
   - Body: `{ "verify"?: bool }`. Writes every parameter's stored value to its variable (continue-on-error). With `verify`, each value is read back and confirmed by exact match. Records the dataset as loaded for its type on success/partial.
+  - Applies the same `interactableByGroups` authorization as WebSocket `recipe_load`: a parameter whose variable the caller may not write becomes a `permission_denied` failure and is not written. This route carries no session, so a plain request writes as the anonymous `guest`; optional HTTP Basic credentials for a user in the active project's `users.json` lift it out of that, and credentials that do not authenticate return HTTP `401` rather than falling back to `guest` — including an account with no password set, which can never be signed in as. Repeated failures answer HTTP `429` on the same throttle as the variable-write route.
   - `404` if the dataset id is unknown. Returns `DownloadResult` `{ result: success|partial|failed, datasetId, written, total, verified, failures: [{ parameterId, reason }] }`.
 - `POST /api/recipes/datasets/{id}/upload`
   - Reads current live values and overwrites the dataset's `values` in place. `404` if unknown. Returns the updated `RecipeConfig`.
@@ -461,8 +468,9 @@ Base prefix: `/api/users`. IDs (user id, group id, username) must match `[A-Za-z
   - The canonical `guest` user is required, must keep both id and username
     `guest`, must belong only to the `guest` group, and cannot have credentials.
 - `PUT /api/users/settings`
-  - Body: `{ "autoLoginName": "guest", "configAccessGroups": ["admin", ...] }`.
-  - `422` if shapes are wrong or if `configAccessGroups` references unknown group IDs.
+  - Body: `{ "autoLoginName": "guest" }`.
+  - `422` if `autoLoginName` is not a string, or if the resulting document would
+    break a users.json invariant. Any other key in the body is dropped.
   - Returns the persisted `settings`.
 - `PUT /api/users/groups`
   - Body: array of `{ id, label? }`. `id` must be valid; `label` defaults to `id`.
@@ -649,9 +657,9 @@ Base prefix: `/api/historian`. Samples live in a SQLite database under the live 
   - Body: `{ "url": string, "method": "GET" | "POST", "headers": { }, "body": string | null }`. `body` is only sent for `POST`.
   - Returns `200` in every case — failures are reported *in the body*, because an unreachable endpoint is a normal runtime state for a bound property:
     `{ "ok": bool, "status": int, "body": any, "error": string | null }`.
-  - `ok: false` with `status: 0` for a non-`http(s)` scheme, a hostless URL, or a transport error; `ok: false` with the upstream status for a non-2xx response or a body over 1 MiB.
-  - Response body is parsed as JSON regardless of `content-type` and falls back to raw text. Timeout is a fixed 10 s and redirects are followed.
-  - This endpoint will call any `http(s)` URL the caller names, and is as reachable as the rest of the unauthenticated instance `/api` surface — keep it behind the same network controls.
+  - `ok: false` with `status: 0` for a non-`http(s)` scheme, a hostless URL, a refused origin, or a transport error; `ok: false` with the upstream status for a non-2xx response or a body over 1 MiB.
+  - Response body is parsed as JSON regardless of `content-type` and falls back to raw text. Timeout is a fixed 10 s. Redirects are walked one hop at a time with the scheme and origin check re-run on **every** hop, capped at 5 (`more than 5 redirects` otherwise), and all caller-supplied headers are dropped once a hop leaves its origin — otherwise a configured host could redirect the proxy into an unconfigured one and carry the project's API key with it.
+  - **Only origins the project itself configures are reachable.** The request's origin (scheme + host + port, default ports normalised, host compared case-insensitively) must match one an `$http` property source in this project names — see [`$http`](../architecture/value-types.md#http-requests-in-depth-http). Anything else is refused with `ok: false`, `status: 0` and `error: "origin '…' is not configured by an $http source in this project"`. Path, query, headers and body are unrestricted.
 
 ---
 

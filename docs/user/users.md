@@ -1,6 +1,6 @@
 # Users, groups & permissions
 
-Who is at the panel decides what they see and what they may change. NEXT HMI answers that with **groups** — a user belongs to one or more, and everything else (a hidden button, a read-only setpoint, access to the editor itself) is a group test. There is no scripting anywhere in this.
+Who is at the panel decides what they see and what they may change. NEXT HMI answers that with **groups** — a user belongs to one or more, and everything else (a hidden button, a read-only setpoint, a refused write) is a group test. There is no scripting anywhere in this.
 
 ## The model in four sentences
 
@@ -23,17 +23,21 @@ All of it lives in `users.json` inside the project folder, with passwords stored
 > [!NOTE]
 > **The password field never shows you the current password.** It reads *(unchanged)* once one is set — the server only stores a hash. Type a new one to replace it; leave it alone and the existing one is kept.
 
-## Settings: auto-login and editor access
+> [!IMPORTANT]
+> **A user with no password set cannot sign in at all.** Nobody can log in as that account — not with a blank password, not with any password — until you give it one. It still works as the **auto-login user**, which is how `guest` (an account that can never have a password) is the identity a panel starts out as. So a half-finished account is never a way in.
+>
+> **Repeated wrong passwords lock that username out for a minute.** Five in a row and even the right password is refused until the minute is up; the operator sees the login action fail with `rate_limited` rather than `invalid_credentials`. Other users are unaffected. A live view is reachable by anyone who can reach the panel, so this is what stands between it and someone guessing at an account all afternoon.
 
-Select **Settings** in the tree for the two project-wide choices:
+## Settings: auto-login
+
+Select **Settings** in the tree for the one project-wide choice:
 
 | Setting | Means |
 |---|---|
 | **Auto-login user** | Who a freshly opened runtime is signed in as before anyone touches it. `guest` is the normal answer; picking a real user makes an unattended panel start out with that user's rights. |
-| **Config access — allowed groups** | Which groups may open the **editor** at all. Defaults to `engineer` and `admin`. Set it to nobody and the editor is closed to everyone. |
 
 > [!IMPORTANT]
-> Config access is the fence around the project itself — anyone inside it can rewrite pages, alarms and users. Keep it to the groups that genuinely engineer the system, and give those users real passwords.
+> **No group opens the editor.** The fence around the project itself is the installation's **device-admin password** — the one that unlocks the Manager dashboard — and nothing in `users.json` widens or narrows it. Whoever has that password can rewrite pages, alarms and users, whichever project user the runtime happens to be signed in as, so keep it to the people who genuinely engineer the system. See [How this relates to the device-admin password](#how-this-relates-to-the-device-admin-password).
 
 ## Sign in and out on a screen
 
@@ -76,6 +80,11 @@ Two more sources read the identity directly, for labels and lists rather than ga
 
 Hiding a button is presentation. The write itself is checked on the server: a datasource variable may carry an **`interactableByGroups`** list, and a write to it from a session outside those groups is refused with `permission_denied` — over the WebSocket and over REST alike. There is no editor field for it yet; set it on the variable entry in the datasource file (or via the datasource API) when a tag must be protected against more than a hidden button.
 
+> [!WARNING]
+> **An empty list means *everyone*, not *nobody*.** `"interactableByGroups": []` reads the same as leaving the key out — the write is allowed. To lock a tag down, name the groups that may write it; there is no spelling that permits nobody at all. Note this reads the opposite way round to the group pickers elsewhere in the editor, where an empty selection means nobody.
+>
+> It also has to sit on the **variable** entry. A list on a folder is silently ignored — the variables inside it stay writable.
+
 > [!IMPORTANT]
 > Treat `Visible` / `Interactable` as ergonomics, not as security. They keep the wrong control out of the wrong hands on the panel; they do not stop someone who reaches the API. For tags that matter, set `interactableByGroups` on the variable as well, and keep the runtime off untrusted networks — see [HTTPS](install.md#https).
 
@@ -85,11 +94,18 @@ Two separate credentials exist, and mixing them up is the usual confusion:
 
 | Credential | Gates | Lives in |
 |---|---|---|
-| **Device-admin password** | The **Manager** dashboard — starting, stopping, importing, transferring projects. | The installation, not any project. |
+| **Device-admin password** | The **Manager** dashboard — starting, stopping, importing, transferring projects — and the **editor** behind it. | The installation, not any project. |
 | **A project user's password** | Signing in on *this project's* screens, and whatever that user's groups allow. | `users.json` in the project. |
+
+Groups decide what a signed-in operator sees and may touch on the screens. They never decide who may edit the project — that is the device-admin password, full stop.
+
+> [!IMPORTANT]
+> **A running project's screens are open — no password at all.** `/runtime/<slug>/` is reachable by anyone who can reach the panel, which is what an HMI is for: an operator walks up and works. The device-admin password guards the editor and the dashboard, not the live view.
+>
+> That means operating is open too — pressing a button, changing a setpoint, writing a tag. To restrict a tag to certain groups, set `interactableByGroups` on the variable (see below); it is the only thing that limits what an operator may write, and it is opt-in per variable. Keep the runtime off untrusted networks — see [HTTPS](install.md#https).
 
 A project copied from the seed ships **no accounts at all** beyond the anonymous `guest`, so there is no reusable credential to leak between installs and nothing to type before the project opens. Every real account is one you add here. See [Managing projects](projects.md#the-manager-dashboard).
 
 ## If `users.json` goes bad
 
-On startup an unreadable or structurally invalid `users.json` is backed up next to itself as `users.json.bak.invalid.<timestamp>` and replaced with the defaults — guest-only, `engineer` + `admin` for config access. You lose the accounts, not the project, and the original file is still there to read.
+On startup an unreadable or structurally invalid `users.json` is backed up next to itself as `users.json.bak.invalid.<timestamp>` and replaced with the defaults — the anonymous `guest` and the four stock groups, no other account. You lose the accounts, not the project, and the original file is still there to read.

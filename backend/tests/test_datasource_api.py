@@ -1,4 +1,5 @@
 """Tests for datasource_api CRUD routes."""
+import json
 import sys
 from pathlib import Path
 
@@ -317,6 +318,81 @@ def test_rest_write_requires_project_user_credentials(ds_client):
     )
     assert response.status_code == 401
     assert response.json()["detail"] == "invalid_credentials"
+
+
+def _restricted_setpoint(manager, groups: list[str]) -> dict:
+    manager.save(
+        "plc1",
+        {
+            "name": "plc1",
+            "type": "static",
+            "variables": [
+                {
+                    "kind": "variable",
+                    "display_name": "Setpoint",
+                    "data_type": "Int16",
+                    "enabled": True,
+                    "interactableByGroups": groups,
+                }
+            ],
+        },
+    )
+    return {"datasource": "plc1", "path": "Setpoint", "value": 42}
+
+
+def _write_project_users(root: Path, *extra: dict) -> None:
+    root.joinpath("users.json").write_text(
+        json.dumps(
+            {
+                "settings": {"autoLoginName": "guest"},
+                "groups": [
+                    {"id": "guest", "label": "Guest"},
+                    {"id": "engineer", "label": "Engineer"},
+                ],
+                "users": [
+                    {"id": "guest", "username": "guest", "password": "", "groups": ["guest"]},
+                    *extra,
+                ],
+            }
+        )
+    )
+
+
+def test_rest_write_refuses_an_account_with_no_password(ds_client, live_project_root: Path):
+    """``interactableByGroups`` is the only per-tag restriction an anonymous
+    operator faces on the public runtime prefix, and ``Basic bGluZWJvc3M6`` —
+    a real username with an empty password — walked straight through it."""
+    client, manager = ds_client
+    payload = _restricted_setpoint(manager, ["engineer"])
+    _write_project_users(
+        live_project_root,
+        {"id": "u-lb", "username": "lineboss", "password": "", "groups": ["engineer", "guest"]},
+    )
+
+    anonymous = client.post("/api/datasources/write", json=payload)
+    assert anonymous.status_code == 401
+
+    response = client.post("/api/datasources/write", json=payload, auth=("lineboss", ""))
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid_credentials"
+
+
+def test_rest_write_throttles_repeated_credential_failures(ds_client, live_project_root: Path):
+    """Nothing counted failures on a route reachable with no session at all,
+    and each attempt costs a 200 000-iteration PBKDF2."""
+    client, manager = ds_client
+    payload = _restricted_setpoint(manager, ["engineer"])
+    _write_project_users(
+        live_project_root,
+        {"id": "u-lb", "username": "lineboss", "password": "", "groups": ["engineer", "guest"]},
+    )
+
+    for _ in range(5):
+        attempt = client.post("/api/datasources/write", json=payload, auth=("lineboss", "guess"))
+        assert attempt.status_code == 401
+
+    locked = client.post("/api/datasources/write", json=payload, auth=("lineboss", "guess"))
+    assert locked.status_code == 429
 
 
 def test_rest_write_shares_envelope_coercion_and_group_permission(ds_client, monkeypatch):

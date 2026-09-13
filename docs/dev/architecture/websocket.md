@@ -78,7 +78,7 @@ leaving a half-initialised socket registered.
 | `recipe_response` | `{ type, requestId, result }` | A correlated `recipe_load` / `recipe_save` succeeded — `result` is the `DownloadResult` (load) or `{ datasetId }` (save). |
 | `recipe_error` | `{ type, requestId, reason }` | A correlated `recipe_load` / `recipe_save` failed. |
 | `user_identity` | `{ type, scope, username, groups, groupLabels }` | After `login`, `logout`, or `request_identity`. |
-| `auth_error` | `{ type, scope, reason }` | Failed `login`. `reason` is currently always `"invalid_credentials"`. |
+| `auth_error` | `{ type, scope, reason }` | Failed `login`. `reason` is `"invalid_credentials"`, or `"rate_limited"` while the credential throttle is holding this username off. |
 | `write_response` | `{ type, requestId, datasource, path }` | A correlated `write_field` succeeded — see [Action result correlation](#action-result-correlation). |
 | `write_error` | `{ type, requestId, datasource, path, reason }` | A correlated `write_field` failed. |
 | `restarting` | `{ type, reason }` | Right before the backend SIGTERMs itself for `POST /api/system/restart`. Clients disconnect and poll `/api/system/info` for the new process. |
@@ -218,7 +218,8 @@ stable contract the frontend `$switch`es on:
 
 | Reason | Meaning |
 | --- | --- |
-| `invalid_credentials` | Login: username/password mismatch |
+| `invalid_credentials` | Login: username/password mismatch — including every account with no password set, which can never be signed in as |
+| `rate_limited`        | Login: too many failed attempts for this username (or across all of them); the right password is refused too until the lockout expires. `users_manager.authenticate` raises `RateLimitError`, which the REST credential routes answer as HTTP `429` |
 | `permission_denied`   | Write: client's group is not in the variable's `interactableByGroups` |
 | `bad_request`         | Write: missing required field in the request payload |
 | `bad_path`            | Write: datasource/path is unknown to the registry |

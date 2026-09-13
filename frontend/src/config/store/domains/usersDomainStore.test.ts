@@ -2,7 +2,7 @@ import { useProjectStore } from '@shared/store/projectStore';
 import { useUsersDomainStore, type UsersDocument } from './usersDomainStore';
 
 const BASE_DOCUMENT: UsersDocument = {
-  settings: { autoLoginName: 'guest', configAccessGroups: ['admin'] },
+  settings: { autoLoginName: 'guest' },
   groups: [
     { id: 'guest', label: 'Guest' },
     { id: 'admin', label: 'Admin' },
@@ -69,11 +69,11 @@ describe('usersDomainStore security drafts', () => {
     expect(useUsersDomainStore.getState().dirty).toBe(true);
   });
 
-  it('keeps settings and memberships valid when deleting a referenced group', () => {
+  it('keeps memberships valid when deleting a referenced group', () => {
     useUsersDomainStore.getState().deleteGroupDraft('admin');
 
     const draft = useUsersDomainStore.getState().draft;
-    expect(draft?.settings.configAccessGroups).toEqual([]);
+    expect(draft?.groups.map((group) => group.id)).toEqual(['guest']);
     expect(draft?.users[1].groups).toEqual(['guest']);
   });
 

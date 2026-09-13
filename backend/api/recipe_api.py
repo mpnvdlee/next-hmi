@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from core.exceptions import RecipeNotFoundError
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from models.recipe import DownloadResult, LoadedDataset, RecipeConfig
 from pydantic import BaseModel, ConfigDict
+from services import users_manager, write_service
+from services.datasource_manager import datasource_manager
 from services.recipe_manager import recipe_manager
 from services.websocket_manager import websocket_manager
 
 router = APIRouter(prefix="/api/recipes", tags=["recipes"])
+_download_credentials = HTTPBasic(auto_error=False)
 
 
 # ── Request / response models ─────────────────────────────────────────────────
@@ -57,11 +63,52 @@ def get_recipe_state() -> RecipeStateResponse:
 # ── Download / upload endpoints ───────────────────────────────────────────────
 
 
+async def _caller_identity(credentials: HTTPBasicCredentials | None) -> Any:
+    """Who this request writes as: a project user, or nobody.
+
+    This route is on the public runtime allowlist and the instance app has no
+    project-user session — the only verified per-user identity it holds is
+    established by ``login`` over the WebSocket and lives per *connection*
+    (``websocket_manager._client_users``), which a separate REST request cannot
+    be tied back to. So a plain request is *anonymous*, and ``None`` is exactly
+    how ``write_service.write_permitted`` reads that: the ``guest`` group, the
+    same standing an unauthenticated WebSocket has. Credentials lift the caller
+    out of it the way they do on ``POST /api/datasources/write`` — and, as
+    there, credentials that do not authenticate are refused rather than quietly
+    downgraded to guest.
+    """
+    if credentials is None:
+        return None
+    authenticated = await users_manager.authenticate(credentials.username, credentials.password)
+    if authenticated is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid_credentials",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    identity, _document = authenticated
+    return identity
+
+
 @router.post("/datasets/{dataset_id}/download", response_model=DownloadResult)
-async def download_dataset(dataset_id: str, body: DownloadRequest | None = None) -> DownloadResult:
-    """Write a dataset's stored values to their variables (continue on error)."""
+async def download_dataset(
+    dataset_id: str,
+    body: DownloadRequest | None = None,
+    credentials: HTTPBasicCredentials | None = Depends(_download_credentials),
+) -> DownloadResult:
+    """Write a dataset's stored values to their variables (continue on error).
+
+    Every parameter passes the same per-variable write ACL the WebSocket
+    ``recipeLoad`` path applies — one that this caller's identity fails becomes a
+    ``permission_denied`` failure in the result and is never written.
+    """
     verify = body.verify if body is not None else False
-    result = await recipe_manager.download(dataset_id, verify=verify)
+    identity = await _caller_identity(credentials)
+    result = await recipe_manager.download(
+        dataset_id,
+        verify=verify,
+        permission_check=write_service.write_permission_gate(identity, datasource_manager),
+    )
     if result is None:
         raise RecipeNotFoundError(f"Dataset '{dataset_id}' not found")
     return result

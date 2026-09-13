@@ -284,10 +284,22 @@ service will not have CORS headers for the HMI's origin. The proxy allows
 failures inside a 200 body (`ok: false`) so an unreachable endpoint reads as a
 normal absent value rather than a broken API call.
 
-> The proxy will call any http(s) URL a caller names, so it is as reachable as
-> the rest of the unauthenticated `/api` surface. Deployments exposing the HMI
-> beyond the plant network should keep it behind the same network controls as
-> every other endpoint.
+> The proxy is not general. It performs a request only when its **origin**
+> (scheme + host + port) is one an `$http` source somewhere in this project
+> names — path, query, headers and body stay free, since the author's templates
+> fill those in. The allowlist is derived from `config.json`, the page files, the
+> components, `alarms.json` and `recipes.json` (`backend/core/http_origins.py` —
+> every document whose property values are validated) and re-derived whenever they
+> change, so it can only be widened by editing the project. Redirects are walked
+> one hop at a time with the same check on each.
+>
+> Only a placeholder in the *scheme, host or port* of an absolute template
+> (`http://{1}/x`, `{1}://h/x`, `http://h:{1}/x`) names no fixed origin; that is an
+> explicit opt-out, and while one exists the project's proxy accepts any http(s)
+> origin. A relative template (`/api/status/{id}`) is **not** an opt-out — it
+> contributes no origin and widens nothing — and a placeholder in the path, query
+> or credentials (`https://{user}:{pass}@h/x`, which still pins `https://h:443`)
+> is irrelevant.
 
 ---
 

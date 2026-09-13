@@ -12,7 +12,7 @@ vi.mock('../components/users/UsersPropertiesPanel', () => ({
 }));
 
 const DOCUMENT: UsersDocument = {
-  settings: { autoLoginName: 'guest', configAccessGroups: ['guest'] },
+  settings: { autoLoginName: 'guest' },
   groups: [
     { id: 'guest', label: 'Guest' },
     { id: 'operators', label: 'Operators' },
@@ -56,16 +56,13 @@ describe('UsersView draft lifetime', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const first = render(<UsersView />);
-    useUsersDomainStore.getState().patchSettingsDraft({
-      autoLoginName: 'guest',
-      configAccessGroups: [],
-    });
+    useUsersDomainStore.getState().patchSettingsDraft({ autoLoginName: 'alice' });
 
     first.unmount();
     const second = render(<UsersView />);
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(useUsersDomainStore.getState().draft?.settings.configAccessGroups).toEqual([]);
+    expect(useUsersDomainStore.getState().draft?.settings.autoLoginName).toBe('alice');
     expect(useUsersDomainStore.getState().dirty).toBe(true);
     second.unmount();
   });

@@ -21,8 +21,34 @@ are always called out under a **Changed** or **Removed** heading.
   area when you want them. No template has ever shipped a usable credential, and
   none does now.
 
+- **The "Config access — allowed groups" setting.** Users → Settings carried a
+  group picker documented as deciding who may open the editor. Nothing ever
+  read it: the editor has always been gated by the device-admin password alone,
+  so the setting promised a fence that did not exist — and the troubleshooting
+  guide sent you to it when the editor would not open. A project in the field
+  that still carries the key keeps opening; the key is ignored, and dropped the
+  next time users are saved.
+
 ### Changed
 
+- **A running project's live screens need no password.** `/runtime/<slug>/` is
+  now reachable without the device-admin session — an operator walks up to the
+  panel and works, which is what an HMI is for. The editor
+  (`/editor/<slug>/`), the dashboard and every manager API stay behind that
+  password, and it remains the only gate: there is no second credential.
+  Under `/runtime/` the manager serves a deny-by-default allowlist of exactly
+  what a live screen needs; every write verb, `api/datasources`,
+  `api/system/*`, `api/projects/*` and the instance's `openapi.json` still
+  require the session. Operating is open too — restrict a tag with
+  `interactableByGroups` on the variable if it should not be.
+- **`$http` may only reach servers the project itself configures.** The
+  outbound proxy behind an `$http` property source used to perform any http(s)
+  URL a caller named. It now refuses any origin that no `$http` source in the
+  project names, and re-runs that check on every redirect hop (capped at five,
+  caller headers dropped cross-origin). The allowlist can only be widened by
+  editing the project, so the device-admin password is what decides which
+  servers are reachable. Configure `http://localhost:9000` as a source and it
+  works; what nobody configured does not.
 - **`GET /api/projects` reports credential state as `credentialsStatus` /
   `credentialsError`** (`ok` or `error`), replacing `operatorSetupRequired`,
   `operatorSetupStatus` and `operatorSetupError`. A project whose `users.json`

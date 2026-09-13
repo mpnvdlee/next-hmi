@@ -16,7 +16,6 @@ export interface UserRecord {
 
 export interface UsersSettings {
   autoLoginName: string;
-  configAccessGroups: string[];
 }
 
 export interface UsersDocument {
@@ -132,10 +131,7 @@ export const useUsersDomainStore = create<UsersDomainState>((set, get) => ({
     });
     set((state) => ({
       draft: {
-        settings: {
-          ...draft.settings,
-          configAccessGroups: draft.settings.configAccessGroups.filter((groupId) => groupId !== id),
-        },
+        ...draft,
         groups: draft.groups.filter((group) => group.id !== id),
         users,
       },

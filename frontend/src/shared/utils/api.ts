@@ -10,7 +10,7 @@
  *   hits the right backend.
  */
 
-import { withBase } from './runtimeBase';
+import { getArea, withBase } from './runtimeBase';
 
 class ApiError extends Error {
   readonly status: number;
@@ -72,7 +72,12 @@ export async function apiErrorFrom(res: Response): Promise<ApiError> {
   } catch {
     // body wasn't JSON — fall through to HTTP code
   }
-  if (res.status === 401 && code === MANAGER_SESSION_REQUIRED) sessionExpiredHandler?.();
+  // A live view is public: it never held a manager session to lose, so this 401
+  // means a call reached past the public runtime surface — not a signed-out
+  // operator. Suppressed here rather than at the call sites because
+  // `nextHmiSdk` hands `apiJson` to custom widgets, which can call any path.
+  if (res.status === 401 && code === MANAGER_SESSION_REQUIRED && getArea() !== 'runtime')
+    sessionExpiredHandler?.();
   if (res.status === 503) projectUnavailableHandler?.();
   return new ApiError(detail ?? `HTTP ${res.status}`, res.status, code);
 }

@@ -64,7 +64,7 @@ Two findings are specific to reusable components:
 
 **Nothing on the page reacts after editing files on disk.** The editor and runtime react to saves made *through* the app. If you edited a page, component or datasource file directly on disk, restart the backend so it re-reads them.
 
-**The editor won't open for a user.** Editor access is a group test — **Users → Settings → Config access**. A user outside those groups gets no editor, by design.
+**The editor won't open.** Editor access is not a group test, and no account in **Users** grants or withholds it. The editor sits behind the installation's **device-admin password** — the same one that unlocks the Manager dashboard — so whoever needs the editor needs that password. See [Users](users.md#how-this-relates-to-the-device-admin-password).
 
 **A save reports a failure.** Saves are per-area, and a failure names the area that refused rather than silently dropping the whole batch. Translations in particular refuse a save that would overwrite someone else's newer edit; reload and re-apply.
 

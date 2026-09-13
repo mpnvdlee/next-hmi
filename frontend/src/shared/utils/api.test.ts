@@ -79,6 +79,36 @@ describe('apiErrorFrom', () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
+  it('leaves the gate 401 alone on a public live view', async () => {
+    // A /runtime/<slug>/ document never held a manager session, so that 401 is
+    // a call reaching past the public runtime surface — any custom widget can
+    // make one through the SDK's `apiJson` — not a signed-out operator. The
+    // overlay would blank a panel that is working.
+    vi.stubGlobal('__NEXTHMI_BASE__', '/runtime/plant-a/');
+    const handler = vi.fn();
+    setSessionExpiredHandler(handler);
+    await apiErrorFrom(jsonResponse(401, { detail: 'x', code: MANAGER_SESSION_REQUIRED }));
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('still signals a lost session on the gate 401 in the editor', async () => {
+    vi.stubGlobal('__NEXTHMI_BASE__', '/editor/plant-a/');
+    const handler = vi.fn();
+    setSessionExpiredHandler(handler);
+    await apiErrorFrom(jsonResponse(401, { detail: 'x', code: MANAGER_SESSION_REQUIRED }));
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it('still signals an absent project backend on a 503 in a live view', async () => {
+    // Only the session overlay is suppressed there — a live view whose child
+    // is down must still explain itself.
+    vi.stubGlobal('__NEXTHMI_BASE__', '/runtime/plant-a/');
+    const handler = vi.fn();
+    setProjectUnavailableHandler(handler);
+    await apiErrorFrom(jsonResponse(503, { detail: 'Project is not running' }));
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
   it('signals an absent project backend on a 503', async () => {
     const handler = vi.fn();
     setProjectUnavailableHandler(handler);

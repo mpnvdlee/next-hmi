@@ -59,11 +59,14 @@ def test_user_in_an_undeclared_group_is_invalid() -> None:
     assert users_document.document_state(document).valid is False
 
 
-def test_config_access_naming_an_undeclared_group_is_invalid() -> None:
+def test_leftover_config_access_setting_is_ignored(tmp_path: Path) -> None:
+    """A project written before the setting was removed must keep opening: the
+    key is dead weight, never a reason to refuse to start."""
     document = _seed_document()
-    document["settings"]["configAccessGroups"] = ["nonexistent"]
+    document["settings"]["configAccessGroups"] = ["admin", "nonexistent"]
 
-    assert users_document.document_state(document).valid is False
+    assert users_document.document_state(document).valid is True
+    assert users_document.is_valid(_write(tmp_path, document)) is True
 
 
 def test_duplicate_group_id_is_invalid() -> None:

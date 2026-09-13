@@ -4,7 +4,7 @@ from typing import Any
 
 from core import users_document
 from core.exceptions import UserConflictError, UserNotFoundError, UserValidationError
-from core.passwords import hash_password
+from core.passwords import has_password, hash_password
 from fastapi import APIRouter, Body
 from services import users_manager
 
@@ -28,7 +28,10 @@ def _redact_document(document: dict[str, Any]) -> dict[str, Any]:
         {
             **{key: value for key, value in user.items() if key != "passwordHash"},
             "password": "",
-            "passwordSet": bool(user.get("password", "")) or "passwordHash" in user,
+            # The same test sign-in makes: an unusable stored hash is not a
+            # password set, or the editor would show a credential nobody can
+            # present as configured.
+            "passwordSet": has_password(user),
         }
         for user in document.get("users", [])
         if isinstance(user, dict)
@@ -153,20 +156,8 @@ def put_users_document(body: dict = Body(...)) -> dict:
         raise UserValidationError("Cannot remove the 'guest' group")
 
     auto_login = settings.get("autoLoginName", "guest")
-    config_groups = settings.get("configAccessGroups", [])
     if not isinstance(auto_login, str):
         raise UserValidationError("autoLoginName must be a string")
-    if not isinstance(config_groups, list) or not all(
-        isinstance(g, str) for g in config_groups
-    ):
-        raise UserValidationError("configAccessGroups must be a list of strings")
-    unknown_config_groups = [
-        group_id for group_id in config_groups if group_id not in seen_group_ids
-    ]
-    if unknown_config_groups:
-        raise UserValidationError(
-            f"Unknown groups in configAccessGroups: {unknown_config_groups}"
-        )
 
     current = users_manager.load()
     current_by_id = {
@@ -177,10 +168,7 @@ def put_users_document(body: dict = Body(...)) -> dict:
     normalized_users = _normalize_users(users, seen_group_ids, current_by_id)
 
     document = {
-        "settings": {
-            "autoLoginName": auto_login,
-            "configAccessGroups": list(config_groups),
-        },
+        "settings": {"autoLoginName": auto_login},
         "groups": normalized_groups,
         "users": normalized_users,
     }
@@ -193,23 +181,12 @@ def put_users_document(body: dict = Body(...)) -> dict:
 def put_settings(body: dict) -> dict:
     """Replace the settings section."""
     auto_login = body.get("autoLoginName", "guest")
-    config_groups = body.get("configAccessGroups", [])
 
     if not isinstance(auto_login, str):
         raise UserValidationError("autoLoginName must be a string")
-    if not isinstance(config_groups, list) or not all(
-        isinstance(g, str) for g in config_groups
-    ):
-        raise UserValidationError("configAccessGroups must be a list of strings")
 
     doc = users_manager.load()
-
-    existing_ids = {g["id"] for g in doc.get("groups", []) if isinstance(g, dict)}
-    unknown = [g for g in config_groups if g not in existing_ids]
-    if unknown:
-        raise UserValidationError(f"Unknown groups in configAccessGroups: {unknown}")
-
-    doc["settings"] = {"autoLoginName": auto_login, "configAccessGroups": config_groups}
+    doc["settings"] = {"autoLoginName": auto_login}
     _require_valid_users_document(doc)
     users_manager.save(doc)
     return doc["settings"]
@@ -234,14 +211,6 @@ def put_groups(body: list = Body(...)) -> list:
         raise UserValidationError("Cannot remove the 'guest' group")
 
     doc = users_manager.load()
-    config_groups = doc.get("settings", {}).get("configAccessGroups", [])
-    unknown_config = [
-        group_id for group_id in config_groups if group_id not in seen_ids
-    ]
-    if unknown_config:
-        raise UserValidationError(
-            f"Groups are still used by config access: {unknown_config}"
-        )
     referenced = sorted(
         {
             group_id

@@ -63,14 +63,6 @@ def document_state(document: Any) -> DocumentState:
             return _invalid()
         group_ids.add(group_id)
 
-    config_groups = document["settings"].get("configAccessGroups", [])
-    if (
-        not isinstance(config_groups, list)
-        or not all(isinstance(group_id, str) for group_id in config_groups)
-        or any(group_id not in group_ids for group_id in config_groups)
-    ):
-        return _invalid()
-
     user_ids: set[str] = set()
     usernames: set[str] = set()
     for user in document["users"]:

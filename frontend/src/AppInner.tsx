@@ -212,9 +212,14 @@ export default function AppInner() {
 
   // The /editor/<slug>/ base picks the editor up-front so its root lands on the
   // editor (not the runtime that the bare "/" route renders). Every other base —
-  // the /runtime/<slug>/ alias and dev "/" — shares the runtime route map; its
-  // extra /config and /preview routes simply never match under a
-  // /runtime/<slug>/ URL.
+  // the /runtime/<slug>/ alias and dev "/" — shares the runtime route map.
+  //
+  // /config is dropped from that map under /runtime/<slug>/ only: the manager
+  // serves that prefix without a device-admin session, so mounting the editor
+  // there would render an editor shell to an anonymous visitor (whose writes the
+  // gate refuses anyway — an editor that cannot save). It must stay for
+  // `getArea() === null`, which is dev "/" and a bare instance, where
+  // `editorPath()` still emits /config/... and it is the only way in.
   const routes =
     getArea() === 'editor' ? (
       <Routes>
@@ -225,7 +230,7 @@ export default function AppInner() {
       <Routes>
         <Route path="/" element={hmiRoute} />
         <Route path="/pages/:id" element={hmiRoute} />
-        <Route path="/config/*" element={<ConfigRoutes />} />
+        {getArea() !== 'runtime' && <Route path="/config/*" element={<ConfigRoutes />} />}
         <Route path="/preview/:pageId" element={previewRoute} />
       </Routes>
     );

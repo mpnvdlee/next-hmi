@@ -14,7 +14,9 @@ import shutil
 from datetime import UTC, datetime
 from typing import Any
 
-from core.passwords import verify_password
+from core import user_auth_throttle
+from core.exceptions import RateLimitError
+from core.passwords import verify_absent_user, verify_password
 from core.storage import active_project_root, read_json, write_json
 from core.validation import is_valid_user_id
 
@@ -27,10 +29,7 @@ def users_path():
 # --- Defaults ---------------------------------------------------------------
 
 _DEFAULT_DOCUMENT: dict[str, Any] = {
-    "settings": {
-        "autoLoginName": "guest",
-        "configAccessGroups": ["engineer", "admin"],
-    },
+    "settings": {"autoLoginName": "guest"},
     "groups": [
         {"id": "guest", "label": "Guest"},
         {"id": "operator", "label": "Operator"},
@@ -94,9 +93,23 @@ def load() -> dict[str, Any]:
 
 
 async def authenticate(username: Any, password: Any) -> tuple[dict[str, Any], dict[str, Any]] | None:
-    """Resolve one project-user identity using the shared password verifier."""
+    """Resolve one project-user identity using the shared password verifier.
+
+    The single funnel every credential path runs through — the WebSocket
+    ``login`` message and the REST Basic routes alike — so the throttle and the
+    constant-cost miss below cover all of them at once.
+
+    Raises ``RateLimitError`` (HTTP 429) while this username, or the whole
+    credential path, is locked out. Returns ``None`` for a credential that does
+    not authenticate, including every account with no password set.
+    """
     if not isinstance(username, str) or not isinstance(password, str):
         return None
+    remaining = user_auth_throttle.lockout_remaining(username)
+    if remaining > 0:
+        raise RateLimitError(
+            f"Too many failed sign-in attempts. Try again in {int(remaining) + 1}s."
+        )
     document = load()
     user = next(
         (
@@ -106,8 +119,18 @@ async def authenticate(username: Any, password: Any) -> tuple[dict[str, Any], di
         ),
         None,
     )
-    if user is None or not await asyncio.to_thread(verify_password, user, password):
+    # A name that misses still pays for a verification. Returning here without
+    # one answered ~50x faster than a wrong password and enumerated the roster
+    # — on a route an anonymous LAN caller can reach.
+    verified = await (
+        asyncio.to_thread(verify_absent_user, password)
+        if user is None
+        else asyncio.to_thread(verify_password, user, password)
+    )
+    if not verified:
+        user_auth_throttle.register_login_failure(username)
         return None
+    user_auth_throttle.register_login_success(username)
     identity = {"username": user["username"], "groups": list(user.get("groups", ["guest"]))}
     return identity, document
 

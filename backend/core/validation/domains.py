@@ -257,14 +257,6 @@ def validate_users(users: Any, ctx: ValidationContext) -> ValidationReport:
     settings = users.get("settings")
     if not isinstance(settings, dict):
         return report
-    _check_groups(
-        settings.get("configAccessGroups"),
-        local,
-        "/settings/configAccessGroups",
-        report,
-        "config access",
-        groups_known=True,
-    )
     auto_login = settings.get("autoLoginName")
     if isinstance(auto_login, str) and auto_login and auto_login not in usernames:
         report.warn(

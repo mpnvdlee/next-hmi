@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from core.http_origins import invalidate_http_origin_cache
 from fastapi import APIRouter
 from models.component import ComponentDefinition
 from pydantic import BaseModel
@@ -40,12 +41,25 @@ def create_folder(body: FolderCreate) -> dict[str, str]:
     return {"status": "ok", "name": name}
 
 
+def _invalidate_runtime_cache() -> None:
+    """Drop caches derived from the component files after any write to them.
+
+    Components hold property values, so they are part of the ``$http`` origin
+    allowlist (``core/http_origins.py``). That cache also keys on mtimes, but a
+    filesystem with 1s granularity can hand back an unchanged fingerprint for an
+    edit made within the same second — and a stale entry keeps an origin the
+    author just deleted reachable from a public endpoint.
+    """
+    invalidate_http_origin_cache()
+
+
 # ``:path`` so nested paths (e.g. "A/B/C") round-trip through the URL; declared
 # before ``/{component_id}`` for the same reason as the routes above.
 @router.delete("/folders/{folder_path:path}")
 def delete_folder(folder_path: str) -> dict[str, str]:
     """Delete a component folder and everything inside it (subfolders and components)."""
     component_manager.delete_folder(folder_path)
+    _invalidate_runtime_cache()
     return {"status": "ok"}
 
 
@@ -58,17 +72,22 @@ def get_component(component_id: str) -> ComponentDefinition:
 @router.post("", response_model=ComponentDefinition)
 def create_component(body: ComponentDefinition) -> ComponentDefinition:
     """Create a reusable component definition."""
-    return component_manager.create(body)
+    created = component_manager.create(body)
+    _invalidate_runtime_cache()
+    return created
 
 
 @router.put("/{component_id}", response_model=ComponentDefinition)
 def update_component(component_id: str, body: ComponentDefinition) -> ComponentDefinition:
     """Replace a reusable component definition."""
-    return component_manager.update(component_id, body)
+    updated = component_manager.update(component_id, body)
+    _invalidate_runtime_cache()
+    return updated
 
 
 @router.delete("/{component_id}")
 def delete_component(component_id: str) -> dict[str, str]:
     """Delete a reusable component definition."""
     component_manager.delete(component_id)
+    _invalidate_runtime_cache()
     return {"status": "ok"}

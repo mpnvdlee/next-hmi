@@ -30,6 +30,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 from core import audit
+from core.exceptions import RateLimitError
 from core.number_utils import get_config_float
 from core.storage import active_config_dir, active_pages_dir, read_json
 from fastapi import WebSocket
@@ -66,6 +67,7 @@ _ARRAY_INDEX_RE = re.compile(r"\[(\d+)\]$")
 # messages. Frontend action-result handlers $switch on these strings, so they
 # are a stable contract — do not rename without a coordinated frontend change.
 REASON_INVALID_CREDENTIALS = "invalid_credentials"
+REASON_RATE_LIMITED = "rate_limited"
 REASON_PERMISSION_DENIED = "permission_denied"
 REASON_BAD_REQUEST = "bad_request"
 
@@ -644,14 +646,14 @@ class WebSocketManager:
         verify = bool(msg.get("verify", False))
         scope = msg.get("scope", "")
 
-        def _permitted(ds_name: str, base_path: str) -> bool:
-            dm = self._datasource_manager
-            entry_data = dm.get_entry(ds_name, base_path) if dm is not None else None
-            return self._check_write_permitted(client_id, scope, entry_data)
-
+        identity = self._client_users.get(client_id, {}).get(scope) if scope else None
         try:
             result = await self._recipe_manager.download(
-                dataset_id, verify=verify, permission_check=_permitted,
+                dataset_id,
+                verify=verify,
+                permission_check=write_service.write_permission_gate(
+                    identity, self._datasource_manager,
+                ),
             )
         except Exception:
             logger.exception("recipe_load failed for dataset %s", dataset_id)
@@ -814,7 +816,18 @@ class WebSocketManager:
         from services import users_manager
         if client_id not in self._connections:
             return
-        authenticated = await users_manager.authenticate(username, password)
+        # This socket is on the public runtime prefix, so the throttle in
+        # ``users_manager.authenticate`` is the only thing metering guesses
+        # here. It reports a lockout by raising; say so rather than letting the
+        # operator read "wrong password" for a minute after the fifth typo.
+        try:
+            authenticated = await users_manager.authenticate(username, password)
+        except RateLimitError:
+            await self._safe_send_json(
+                client_id,
+                build_auth_error(scope, REASON_RATE_LIMITED, request_id=request_id),
+            )
+            return
         if authenticated is None:
             await self._safe_send_json(
                 client_id,
