@@ -205,8 +205,8 @@ own stable REST/WebSocket reason, `value_out_of_range` (see
   - process info, subscription status, restart, runtime home / default projects root
 - `backend/api/users_api.py`
   - users, groups, and access settings
-- `backend/api/projects_api.py`
-  - list / create / locate / delete / validate-path; export zip; import zip. `delete` refuses a project that is in the manifest `running` set. No push/pull here — that's `manager_peers_api.py`, manager-only.
+- `backend/api/projects_api.py` (not on a managed instance)
+  - list / create / locate / delete / validate-path; export zip; import zip. `delete` refuses a project that is in the manifest `running` set. No push/pull here — that's `manager_peers_api.py`, manager-only. Mounted on the manager and on a standalone `uvicorn main:app`; a manager-spawned instance skips it, so the projects API is simply absent from the process that serves a live project.
 - `backend/api/supervisor_api.py` (manager only)
   - `GET /api/manager/running`, `POST /api/manager/projects/{id}/start`, `POST .../stop`, `GET .../status` — drive and report the per-project child processes.
 - `backend/api/manager_auth_api.py` (manager only)

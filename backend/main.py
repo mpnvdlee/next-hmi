@@ -276,7 +276,14 @@ app.include_router(users_router)
 app.include_router(widgets_router)
 app.include_router(theme_router)
 app.include_router(component_router)
-app.include_router(projects_router)
+# Projects are the manager's business: a running instance has no reason to list,
+# create, rename, delete or export the projects beside it, and browse-dir walks
+# the whole host filesystem. Instances bind loopback with no auth of their own,
+# so anything on the box could reach it directly — not serving it is stronger
+# than gating it at the proxy. A standalone ``uvicorn main:app`` has no manager
+# to ask, so there it stays mounted.
+if not _INSTANCE_MODE:
+    app.include_router(projects_router)
 # Loopback-only reload hook the manager calls after a workspace MCP write.
 app.include_router(internal_router)
 app.include_router(historian_router)

@@ -704,7 +704,7 @@ These five routes are allow-listed by the auth gate (reachable without a session
 
 ## Projects API
 
-Base prefix: `/api/projects`. Manages the project list in the runtime-home manifest. Mounted on **both** apps; the manager dashboard is the primary caller — project selection lives there, not inside a project instance.
+Base prefix: `/api/projects`. Manages the project list in the runtime-home manifest. Mounted on the manager app, and on a standalone `uvicorn main:app` that has no manager beside it — but **not** on a manager-spawned project instance: a running project has no reason to list, rename, delete or export the projects around it, and `browse-dir` walks the whole host filesystem. An editor page that needs its own project's name reads it from the manager at the origin root (`managerApiJson`), not through its proxy base.
 
 - `GET /api/projects`
   - `credentialsStatus` is `ok` or `error`; `credentialsError` describes a
