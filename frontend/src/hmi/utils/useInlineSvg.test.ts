@@ -16,7 +16,7 @@ describe('useInlineSvg', () => {
     expect(result.current).toBe('');
   });
 
-  it('fetches the url and strips hardcoded colors, injecting a currentColor style', async () => {
+  it('fetches the url and repoints hardcoded colors at currentColor', async () => {
     vi.stubGlobal(
       'fetch',
       mockFetchOnce(
@@ -26,9 +26,49 @@ describe('useInlineSvg', () => {
     const { result } = renderHook(() => useInlineSvg('/icons/gear.svg'));
 
     await waitFor(() => expect(result.current).not.toBe(''));
-    expect(result.current).not.toContain('fill="#ff0000"');
-    expect(result.current).not.toContain('stroke="#00ff00"');
+    expect(result.current).not.toContain('#ff0000');
+    expect(result.current).not.toContain('#00ff00');
+    expect(result.current).toContain('fill="currentColor"');
+    expect(result.current).toContain('stroke="currentColor"');
+  });
+
+  it('keeps a stroke-outline icon stroked instead of flattening it into a fill', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchOnce(
+        '<svg viewBox="0 0 48 48" fill="none"><path d="M9 17h24" stroke="#112233" stroke-width="3" /></svg>',
+      ),
+    );
+    const { result } = renderHook(() => useInlineSvg('/icons/cup.svg'));
+
+    await waitFor(() => expect(result.current).not.toBe(''));
+    expect(result.current).toContain('fill="none"');
+    expect(result.current).toContain('stroke="currentColor"');
+    expect(result.current).not.toContain('stroke:none');
+    expect(result.current).not.toContain('#112233');
+  });
+
+  it('gives an icon that declares no paint a currentColor fill', async () => {
+    vi.stubGlobal('fetch', mockFetchOnce('<svg viewBox="0 0 10 10"><path d="M0 0" /></svg>'));
+    const { result } = renderHook(() => useInlineSvg('/icons/plain.svg'));
+
+    await waitFor(() => expect(result.current).not.toBe(''));
+    expect(result.current).toContain('fill="currentColor"');
+  });
+
+  it('repoints fill and stroke declared in an inline style attribute', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetchOnce(
+        '<svg viewBox="0 0 10 10"><path style="fill:#ff0000;stroke:none" d="M0 0" /></svg>',
+      ),
+    );
+    const { result } = renderHook(() => useInlineSvg('/icons/styled.svg'));
+
+    await waitFor(() => expect(result.current).not.toBe(''));
     expect(result.current).toContain('fill:currentColor');
+    expect(result.current).toContain('stroke:none');
+    expect(result.current).not.toContain('#ff0000');
   });
 
   it('resolves to an empty string when the fetched text has no <svg> element', async () => {
