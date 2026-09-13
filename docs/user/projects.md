@@ -90,7 +90,7 @@ Because the id travels with the archive, importing a project that is *already* r
 
 ## Push & pull between devices
 
-**Transfer** (on a project row) pushes that project to another manager on the LAN; **⇩ Pull from peer** (in the toolbar) fetches one the other way. Both use the same packing code path as the zip, over the wire.
+**Transfer** (on a project row) pushes that project to another manager on the LAN; **⇩ Pull from peer** (in the toolbar) fetches one the other way. Both use the same packing code path as the zip, over the wire. The editor's top bar carries the same **Transfer** button for the project you have open — save your changes first, since only what is on disk travels.
 
 Pair once with the destination's existing device-admin password; after that a revocable peer token authenticates the transfer. Discovery is by mDNS, and a peer can always be entered manually as `host:port`. The full trust model, collision policy (reject / copy with a new id / replace a stopped project with rollback), and the HTTPS certificate pinning are in [Installing and running](install.md#peer-transfer-over-https).
 

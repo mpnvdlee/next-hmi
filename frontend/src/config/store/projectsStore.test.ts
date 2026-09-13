@@ -283,3 +283,44 @@ describe('describeError', () => {
     expect(describeError('raw string')).toBe('raw string');
   });
 });
+
+// The editor is served under /editor/<slug>/, where the manager proxies every
+// base-prefixed path to the child project instance — which serves no manager
+// API. Peer calls must therefore stay at the origin, where the manager is.
+describe('manager calls from a proxied project instance', () => {
+  afterEach(() => {
+    delete window.__NEXTHMI_BASE__;
+  });
+
+  it('keeps peer pairing, discovery and transfers at the origin under an /editor/<slug>/ base', async () => {
+    window.__NEXTHMI_BASE__ = '/editor/p1/';
+    const calls = stubFetch({
+      'GET /api/manager/peers/discovered': { discovered: [], manual: [] },
+      'POST /api/manager/peer-pair': { token: 'tok' },
+      // No `status` key — stubFetch reads that as an HTTP failure.
+      'POST /api/manager/transfers': { transferId: 'tx-1', phase: 'packing' },
+    });
+
+    await useProjectsStore.getState().loadPeers();
+    await useProjectsStore.getState().pairPeer('10.0.0.4', 8000, 'pw', 'http');
+    await useProjectsStore.getState().beginPeerTransfer({
+      sourceProjectId: 'p1',
+      destinationProjectId: 'p1',
+      destinationFolder: 'Line 1',
+      peerHost: '10.0.0.4',
+      peerPort: 8000,
+      peerScheme: 'http',
+      token: 'tok',
+      collisionPolicy: 'reject',
+      confirmReplace: false,
+      start: false,
+      transferId: 'tx-1',
+    });
+
+    expect(calls.map((c) => c.url)).toEqual([
+      '/api/manager/peers/discovered',
+      '/api/manager/peer-pair',
+      '/api/manager/transfers',
+    ]);
+  });
+});

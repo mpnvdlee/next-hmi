@@ -46,7 +46,13 @@ From the manager dashboard's Projects page:
 - **Pull from peer** (page header) — fetch a project from a peer into this
   manager.
 
-Both open `PeerTransferModal` (`frontend/src/config/components/projects/ProjectsView/PeerTransferModal.tsx`),
+From the editor's top bar:
+
+- **Transfer** — push the open project to a peer. Shown only where a manager
+  serves the editor (`/editor/<slug>/`), and disabled until the project's
+  edits are saved, because the archive is built from what is on disk.
+
+All three open `PeerTransferModal` (`frontend/src/config/components/projects/ProjectsView/PeerTransferModal.tsx`),
 which:
 
 1. Takes a peer host/port (autocompleted from mDNS discovery + manually-added

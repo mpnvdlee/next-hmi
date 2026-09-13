@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { apiErrorFrom, apiJson, isApiError } from '@shared/utils/api';
+import { apiErrorFrom, apiJson, isApiError, managerApiJson } from '@shared/utils/api';
 import { withBase } from '@shared/utils/runtimeBase';
 
 export interface ProjectMigrationRecord {
@@ -331,7 +331,7 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
 
   loadPeers: async () => {
     try {
-      return await apiJson<PeerListResponse>('/api/manager/peers/discovered');
+      return await managerApiJson<PeerListResponse>('/api/manager/peers/discovered');
     } catch (e) {
       console.warn('[projectsStore] loadPeers failed:', e);
       return null;
@@ -339,56 +339,56 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
   },
 
   addManualPeer: async (host: string, port: number, name?: string, scheme: PeerScheme = 'http') => {
-    await apiJson('/api/manager/peers/manual', {
+    await managerApiJson('/api/manager/peers/manual', {
       method: 'POST',
       body: { host, port, name, scheme },
     });
   },
 
   removeManualPeer: async (host: string, port: number) => {
-    await apiJson(`/api/manager/peers/manual?host=${encodeURIComponent(host)}&port=${port}`, {
+    await managerApiJson(`/api/manager/peers/manual?host=${encodeURIComponent(host)}&port=${port}`, {
       method: 'DELETE',
     });
   },
 
   forgetPeerCertificate: async (host: string, port: number) => {
-    await apiJson(`/api/manager/peers/trust?host=${encodeURIComponent(host)}&port=${port}`, {
+    await managerApiJson(`/api/manager/peers/trust?host=${encodeURIComponent(host)}&port=${port}`, {
       method: 'DELETE',
     });
   },
 
   pairPeer: async (host, port, password, scheme: PeerScheme = 'http') =>
-    apiJson<{ token: string; certificateFingerprint?: string }>('/api/manager/peer-pair', {
+    managerApiJson<{ token: string; certificateFingerprint?: string }>('/api/manager/peer-pair', {
       method: 'POST',
       body: { host, port, password, scheme },
     }),
 
   listPeerProjects: async (host, port, token, scheme: PeerScheme = 'http') => {
-    const result = await apiJson<{
+    const result = await managerApiJson<{
       projects: Array<{ id: string; name: string; folder: string; running: boolean }>;
     }>('/api/manager/peer-projects', { method: 'POST', body: { host, port, token, scheme } });
     return result.projects;
   },
 
   beginPeerTransfer: async (args) =>
-    apiJson<PeerTransferStatus>('/api/manager/transfers', { method: 'POST', body: args }),
+    managerApiJson<PeerTransferStatus>('/api/manager/transfers', { method: 'POST', body: args }),
 
   getPeerTransfer: async (transferId) =>
-    apiJson<PeerTransferStatus>(`/api/manager/transfers/${encodeURIComponent(transferId)}`),
+    managerApiJson<PeerTransferStatus>(`/api/manager/transfers/${encodeURIComponent(transferId)}`),
 
   cancelPeerTransfer: async (transferId) =>
-    apiJson<PeerTransferStatus>(`/api/manager/transfers/${encodeURIComponent(transferId)}`, {
+    managerApiJson<PeerTransferStatus>(`/api/manager/transfers/${encodeURIComponent(transferId)}`, {
       method: 'DELETE',
     }),
 
   beginPeerPull: async (args) =>
-    apiJson<PeerTransferStatus>('/api/manager/pulls', { method: 'POST', body: args }),
+    managerApiJson<PeerTransferStatus>('/api/manager/pulls', { method: 'POST', body: args }),
 
   getPeerPull: async (transferId) =>
-    apiJson<PeerTransferStatus>(`/api/manager/pulls/${encodeURIComponent(transferId)}`),
+    managerApiJson<PeerTransferStatus>(`/api/manager/pulls/${encodeURIComponent(transferId)}`),
 
   cancelPeerPull: async (transferId) =>
-    apiJson<PeerTransferStatus>(`/api/manager/pulls/${encodeURIComponent(transferId)}`, {
+    managerApiJson<PeerTransferStatus>(`/api/manager/pulls/${encodeURIComponent(transferId)}`, {
       method: 'DELETE',
     }),
 

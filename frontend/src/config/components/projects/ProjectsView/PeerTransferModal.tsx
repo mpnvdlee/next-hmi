@@ -15,7 +15,7 @@ import { randomUuid } from '@shared/utils/id';
 interface Props {
   direction: 'push' | 'pull';
   /** Push only: the local project being sent. */
-  source?: ProjectEntry;
+  source?: { id: string; name: string };
   /** Pull only: local project ids currently running, so the "replace" picker
    * can disable them without this component depending on manager store. */
   runningLocalProjectIds?: ReadonlySet<string>;
@@ -185,7 +185,7 @@ export default function PeerTransferModal({
     setBusy(true);
     setError(null);
     try {
-      const sourceProjectId = isPull ? pullSourceId : (source as ProjectEntry).id;
+      const sourceProjectId = isPull ? pullSourceId : source!.id;
       const destinationProjectId =
         policy === 'copy'
           ? copyDestinationId
