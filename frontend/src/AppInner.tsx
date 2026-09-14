@@ -60,7 +60,10 @@ void ensureThemeTokens();
  *
  * `splash` opts into the full boot screen (branding, version, progress,
  * attribution). Only the operator runtime gets it — the editor's live-preview
- * iframe keeps the bare spinner.
+ * iframe keeps the bare spinner. Both wear the app palette: the project theme
+ * does not exist until /api/themes lands, and in the preview iframe a Themes
+ * draft repaints it once more after that, so a boot surface drawn from it
+ * changes colour twice on the way up.
  *
  * Exported for its own test: a gate that never opens leaves the boot screen up
  * forever, which is worth pinning without standing up the whole route tree.
@@ -116,7 +119,7 @@ export function ComponentsReadyGate({
       <BootSplash phase="components" />
     ) : (
       <div className="hmi-boot-loading">
-        <Spinner />
+        <Spinner variant="cfg" />
       </div>
     );
   }

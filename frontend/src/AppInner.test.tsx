@@ -56,6 +56,22 @@ describe('ComponentsReadyGate', () => {
 
     await waitFor(() => expect(screen.getByText('route content')).toBeInTheDocument());
   });
+
+  it('holds the bare boot state in the app palette', async () => {
+    // The project accent does not exist until /api/themes lands — and in the
+    // preview iframe a Themes draft can repaint it once more after that. A boot
+    // spinner drawn from it therefore changes colour twice on the way up, under
+    // a fallback that is a third colour again. The splash branch is app-palette
+    // for exactly this reason; the bare branch has to match it.
+    const { container } = render(
+      <ComponentsReadyGate preload={() => new Promise<void>(() => {})}>
+        <div>route content</div>
+      </ComponentsReadyGate>,
+    );
+
+    await waitFor(() => expect(container.querySelector('.app-spinner')).toBeInTheDocument());
+    expect(container.querySelector('.app-spinner')).toHaveClass('app-spinner--cfg');
+  });
 });
 
 describe('the /config route in the runtime route map', () => {
