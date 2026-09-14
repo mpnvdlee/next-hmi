@@ -187,6 +187,27 @@ def _resolve_tls() -> tls_settings.TlsPaths | None:
         return None
 
 
+def _reload_bind_host(host: str) -> str:
+    """*host*, spelled the way uvicorn's ``--reload`` path can actually bind it.
+
+    That path goes through ``Config.bind_socket``, which opens one AF_INET
+    socket unless the host string contains a colon — so the dual-stack empty
+    host binds IPv4 alone and ``http://localhost:8000`` is refused, `localhost`
+    being ``::1`` to a browser. The IPv6 wildcard gets an AF_INET6 socket and
+    POSIX leaves ``IPV6_V6ONLY`` off it, so that one answers both families.
+
+    Windows defaults that option *on*, where the swap would trade one half of
+    localhost for the other, so it keeps the IPv4 bind it already had. A pinned
+    NEXTHMI_HOST is passed through untouched.
+
+    The launcher's non-reload path wants the opposite string and is left alone
+    — see ``core.net.DEFAULT_HOST`` for why the empty host is right there.
+    """
+    if host or IS_WINDOWS:
+        return host
+    return "::"
+
+
 def _spawn_backend(
     python_exe: str, *, quiet: bool, tls: tls_settings.TlsPaths | None, edition: str
 ) -> subprocess.Popen:
@@ -208,7 +229,7 @@ def _spawn_backend(
     module = "manager_enterprise:app" if edition == "ee" else "manager:app"
     backend_cmd = [
         python_exe, "-m", "uvicorn", module, "--reload",
-        "--host", net.resolve_bind_host(), "--port", str(BACKEND_PORT),
+        "--host", _reload_bind_host(net.resolve_bind_host()), "--port", str(BACKEND_PORT),
     ]
     env = dict(os.environ)
     env["NEXTHMI_EDITION"] = edition

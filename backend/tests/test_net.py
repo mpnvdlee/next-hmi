@@ -1,7 +1,9 @@
 """Bind-address resolution and banner URLs (``core.net``)."""
 from __future__ import annotations
 
+import asyncio
 import ipaddress
+import socket
 
 from core import net
 
@@ -29,9 +31,14 @@ class _NoRouteSocket:
 
 
 def test_default_bind_host_is_every_interface(monkeypatch) -> None:
-    """Pin the default deliberately: an install is reachable out of the box."""
+    """Pin the default deliberately: an install is reachable out of the box.
+
+    The empty string rather than ``0.0.0.0``: that one is the *IPv4* wildcard,
+    and `localhost` resolves to ``::1`` first in every browser, so an install
+    bound to it refuses the one URL everyone types.
+    """
     monkeypatch.delenv("NEXTHMI_HOST", raising=False)
-    assert net.resolve_bind_host() == "0.0.0.0"
+    assert net.resolve_bind_host() == ""
 
 
 def test_nexthmi_host_pins_an_install_back_to_loopback(monkeypatch) -> None:
@@ -46,7 +53,50 @@ def test_nexthmi_host_may_name_one_interface(monkeypatch) -> None:
 
 def test_blank_nexthmi_host_falls_back_to_the_default(monkeypatch) -> None:
     monkeypatch.setenv("NEXTHMI_HOST", "   ")
-    assert net.resolve_bind_host() == "0.0.0.0"
+    assert net.resolve_bind_host() == ""
+
+
+def test_default_bind_host_answers_on_both_loopbacks(monkeypatch) -> None:
+    """The regression this default exists for: bind it and dial both families.
+
+    ``0.0.0.0`` binds one AF_INET socket and ``::`` one AF_INET6 socket —
+    asyncio sets ``IPV6_V6ONLY`` on it — so either alone refuses half of
+    `localhost`. Only the empty host makes asyncio bind the pair.
+    """
+    monkeypatch.delenv("NEXTHMI_HOST", raising=False)
+
+    async def exercise() -> list[str]:
+        async def handle(_reader, writer) -> None:
+            writer.close()
+            # Awaited, not fire-and-forget: an accepted transport still
+            # attached to the server when the GC reaches it raises out of
+            # ``__del__`` on 3.14, and pytest pins that on whichever test is
+            # running at the time.
+            await writer.wait_closed()
+
+        server = await asyncio.start_server(
+            handle, host=net.resolve_bind_host(), port=0
+        )
+        reached = []
+        async with server:
+            # Each socket is dialled on its own port: asked for port 0, asyncio
+            # binds the two independently and they land on *different*
+            # ephemeral ports. A real listener names a port and both share it.
+            for sock in server.sockets:
+                address = "127.0.0.1" if sock.family is socket.AF_INET else "::1"
+                port = sock.getsockname()[1]
+                try:
+                    _, writer = await asyncio.wait_for(
+                        asyncio.open_connection(address, port), 5
+                    )
+                except OSError:
+                    continue
+                writer.close()
+                await writer.wait_closed()
+                reached.append(address)
+        return sorted(reached)
+
+    assert asyncio.run(exercise()) == ["127.0.0.1", "::1"]
 
 
 # ── lan_address ──────────────────────────────────────────────────────────────

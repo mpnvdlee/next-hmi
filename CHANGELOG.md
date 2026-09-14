@@ -105,6 +105,21 @@ are always called out under a **Changed** or **Removed** heading.
 
 ### Fixed
 
+- **`http://localhost:8000` answers again.** Binding every interface was
+  spelled `0.0.0.0`, which is the *IPv4* wildcard — one AF_INET socket and
+  nothing on `::1`. Browsers resolve `localhost` to `::1` first, so the one URL
+  everyone types was refused while `127.0.0.1` worked, which reads as a broken
+  install rather than a bind that named a family. The default is the empty host
+  now, the one spelling that binds the AF_INET + AF_INET6 pair; `NEXTHMI_HOST`
+  still pins an install to a single interface, and the Docker image no longer
+  pins itself to IPv4 by setting the old default explicitly. The dev server
+  needed both halves separately: Vite binds dual-stack via `server.host: true`,
+  and `start-dev.py` passes uvicorn `::` because its `--reload` path binds
+  through `Config.bind_socket`, which opens an AF_INET socket unless the host
+  string carries a colon — the opposite spelling from the one the launcher's
+  non-reload path needs. Windows keeps its IPv4 bind there, where `::` would
+  trade one half of localhost for the other.
+
 - **A peer now advertises the address the banner told you to use.** mDNS
   advertised whatever the machine's own name resolved to, which on a stock
   Debian /etc/hosts is `127.0.1.1` and on a host with wired, wifi and a VPN

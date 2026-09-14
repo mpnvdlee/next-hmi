@@ -463,7 +463,7 @@ manual `host:port` entries.
 | `NEXTHMI_WIDGET_BUILD_DIR` | `<runtime_home>/.widget-build` | Compiled custom-widget output. |
 | `NEXTHMI_VALIDATION_SWEEP` | `on` | Set to `off` to skip the startup page-validation sweep. |
 | `NEXTHMI_TELEMETRY` | `on` | Set to `off` to stop the install-count ping and make the Settings switch read-only. See [Usage reporting](#usage-reporting). |
-| `NEXTHMI_HOST` | `0.0.0.0` | Address the manager binds. Every interface by default; set `127.0.0.1` to answer this machine only — a reverse proxy on it, or nothing at all. See [HTTPS](#https). |
+| `NEXTHMI_HOST` | unset | Address the manager binds. Every interface, IPv4 and IPv6, by default; set `127.0.0.1` to answer this machine only — a reverse proxy on it, or nothing at all. Setting `0.0.0.0` binds IPv4 alone, which refuses `http://localhost:8000`. See [HTTPS](#https). |
 | `NEXTHMI_SSL_CERTFILE` / `NEXTHMI_SSL_KEYFILE` | unset | Serve HTTPS from the manager itself, overriding Settings → HTTPS. See [HTTPS](#https). |
 | `NEXTHMI_FORWARDED_ALLOW_IPS` | `127.0.0.1` | Proxy addresses whose `X-Forwarded-*` headers are trusted. |
 | `NEXTHMI_MAX_PROJECT_ZIP_MB` | `500` | Cap for zip uploads (export / import / push / pull). Oversize archives are rejected before any bytes hit disk. |

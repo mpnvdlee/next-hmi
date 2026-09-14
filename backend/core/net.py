@@ -11,17 +11,26 @@ from __future__ import annotations
 import os
 import socket
 
-DEFAULT_HOST = "0.0.0.0"
+# The empty host, not ``0.0.0.0``. asyncio binds one socket per address
+# ``getaddrinfo`` returns, and sets ``IPV6_V6ONLY`` on every AF_INET6 one it
+# opens, so a wildcard that names a family answers on that family alone:
+# ``0.0.0.0`` refuses ``::1`` and ``::`` refuses ``127.0.0.1``. Only the empty
+# host resolves to both, giving the AF_INET + AF_INET6 pair that makes
+# `localhost` — which browsers resolve to ``::1`` first — actually answer.
+DEFAULT_HOST = ""
 LOOPBACK = "127.0.0.1"
 
 # RFC 5737 TEST-NET-1, reserved for documentation and never routed on the
 # public Internet — the probe below can therefore never reach a real host.
 _PROBE_TARGET = ("192.0.2.1", 9)
 
-# The two spellings of "bind everywhere" that can actually arrive here — an
-# unset or blank NEXTHMI_HOST, and the literal wildcard — which are also the
-# two `getsockname()` can report for a socket with no source address. An IPv6
-# wildcard is deliberately absent: nothing in the tree sets it, and
+# The two spellings of "bind everywhere" that can actually arrive here — the
+# default above, and the literal IPv4 wildcard someone may still pin
+# NEXTHMI_HOST to — which are also the two `getsockname()` can report for a
+# socket with no source address. Both mean "every interface" to the callers
+# below, which only ask so they can name a reachable address instead of an
+# unopenable one; the family difference matters to the listener, not to them.
+# An IPv6 wildcard is deliberately absent: nothing in the tree sets it, and
 # ``launcher._port_bindable`` probes with an AF_INET socket, so it would fail
 # there as a phantom port conflict long before reaching this module.
 _WILDCARD_HOSTS = frozenset({"", "0.0.0.0"})
@@ -36,6 +45,9 @@ def resolve_bind_host() -> str:
     whichever interface the request arrived on. What binding wide does cost is
     confidentiality, so turn HTTPS on wherever the network is not trusted.
     ``NEXTHMI_HOST=127.0.0.1`` holds an install on loopback.
+
+    The default is the empty host — the dual-stack wildcard. See DEFAULT_HOST
+    for why naming a family instead would refuse half of `localhost`.
     """
     return os.environ.get("NEXTHMI_HOST", "").strip() or DEFAULT_HOST
 

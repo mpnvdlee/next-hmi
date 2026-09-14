@@ -200,7 +200,11 @@ const devTls =
 // ── Dev bind address ──────────────────────────────────────────────────────────
 // Same resolution as backend/core/net.py: every interface unless NEXTHMI_HOST
 // names one, so the dev server is reachable the way a real install is.
-const devHost = process.env.NEXTHMI_HOST?.trim() || '0.0.0.0';
+// `true`, not '0.0.0.0': Vite maps `true` to an undefined host, which makes
+// node listen on `::` dual-stack, while '0.0.0.0' is the IPv4 wildcard and
+// binds that family alone. Browsers resolve `localhost` to `::1` first, so the
+// literal spelling refuses http://localhost:5173 while 127.0.0.1 still answers.
+const devHost = process.env.NEXTHMI_HOST?.trim() || true;
 
 // Vite answers "Blocked request. This host is not allowed." to any Host header
 // that is neither an IP literal nor a listed name — its DNS-rebinding guard.
