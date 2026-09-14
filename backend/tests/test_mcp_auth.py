@@ -351,12 +351,14 @@ def test_write_scoped_token_still_blocked_by_mcp_disabled(monkeypatch, tmp_path:
     assert list((project_root / "pages").glob("*.json")) == []
 
 
-# ── loopback default ─────────────────────────────────────────────────────────
+# ── bind default ─────────────────────────────────────────────────────────────
 
 
-def test_launcher_defaults_manager_host_to_loopback():
-    """Pin the documented default: NEXTHMI_HOST unset must resolve to
-    loopback, since /mcp auth is defense-in-depth, not a reason to default
-    the whole manager onto the LAN."""
+def test_manager_binds_through_the_shared_resolver():
+    """The manager must take its bind address from ``core.net``, not its own
+    default. What that resolver answers — every interface unless NEXTHMI_HOST
+    says otherwise — is pinned in ``test_net.py``; what matters here is that
+    /mcp's exposure follows it, since ``McpAuthMiddleware`` above authenticates
+    every request whichever interface it arrived on."""
     source = Path(runtime_home.__file__).parent.parent.joinpath("launcher.py").read_text(encoding="utf-8")
-    assert 'os.environ.get("NEXTHMI_HOST", "127.0.0.1")' in source
+    assert "net.resolve_bind_host()" in source

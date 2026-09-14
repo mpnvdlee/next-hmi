@@ -32,6 +32,48 @@ def test_runtime_banner_shows_default_project_and_projects_link() -> None:
     assert "http://127.0.0.1:8000/projects" in out
 
 
+def test_runtime_banner_lists_the_other_addresses_under_the_primary() -> None:
+    out = render_banner(
+        "runtime",
+        BannerFields(
+            runtime_home=Path("/srv/nexthmi-home"),
+            open_url="http://panel-pc:8000",
+            alt_urls=("http://192.168.1.10:8000", "http://127.0.0.1:8000"),
+            version="1.0.0",
+        ),
+    )
+    lines = [line for line in out.splitlines() if ":8000" in line]
+    assert [line.split()[-1] for line in lines[:3]] == [
+        "http://panel-pc:8000",
+        "http://192.168.1.10:8000",
+        "http://127.0.0.1:8000",
+    ]
+    assert "Default project" in lines[0]
+    assert "Projects" in lines[3]
+
+
+def test_dev_banner_lists_the_other_addresses_under_the_frontend() -> None:
+    """The alternates hang off Frontend, the URL a developer opens — and stay
+    between it and the Projects link derived from the same primary."""
+    out = render_banner(
+        "dev",
+        BannerFields(
+            runtime_home=Path("/srv/nexthmi-home"),
+            open_url="http://panel-pc:8000",
+            frontend_url="http://panel-pc:5173",
+            alt_urls=("http://192.168.1.10:5173", "http://127.0.0.1:5173"),
+        ),
+    )
+    rows = [line.split()[-1] for line in out.splitlines() if "://" in line]
+    assert rows == [
+        "http://panel-pc:8000",
+        "http://panel-pc:5173",
+        "http://192.168.1.10:5173",
+        "http://127.0.0.1:5173",
+        "http://panel-pc:5173/projects",
+    ]
+
+
 def test_dev_banner_shows_both_urls() -> None:
     out = render_banner("dev", _fields())
     assert "http://127.0.0.1:8000" in out

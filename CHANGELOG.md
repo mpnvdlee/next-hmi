@@ -31,6 +31,33 @@ are always called out under a **Changed** or **Removed** heading.
 
 ### Changed
 
+- **NEXT HMI is reachable on the network by default.** The manager used to bind
+  `127.0.0.1` and answer nobody but the machine it ran on, so a panel PC that
+  pinged fine was still a refused connection from every other machine until
+  someone found `NEXTHMI_HOST=0.0.0.0` — a variable with no UI and no flag
+  behind it. It now binds every interface, which is what the Docker image has
+  always done, and the startup banner prints the machine's name and its address
+  on the network instead of a loopback URL that only worked where you were
+  already standing. The dev server (`start-dev.py`) binds the same way.
+
+  **This changes an existing install on upgrade.** A deployment that relied on
+  the old default was unreachable from the network and is now reachable from it.
+  On an install that already has a device-admin password, nothing about who may
+  do what changed — that password gates the dashboard and every editor exactly
+  as before, `/mcp` still demands a session cookie or a bearer token, and a
+  running project's live screens were already open to anyone who could reach
+  the host. What changes is who can reach the host, and what that costs on
+  plain HTTP: the device-admin password, every operator sign-in and every MCP
+  token now cross the wire in the clear where they previously never left the
+  machine. Turn on [HTTPS](docs/user/install.md#https) if the network is not
+  one you trust, or set `NEXTHMI_HOST=127.0.0.1` to keep the old behaviour.
+
+  A **first boot with no password set yet** is the one case where reach and
+  authority are the same thing: the first-run page has nothing to authenticate
+  against and accepts whoever arrives first, and the manager advertises itself
+  over mDNS while it waits. Claim a fresh install right after starting it, or
+  start it with `NEXTHMI_HOST=127.0.0.1` until the password is in place.
+
 - **A running project's live screens need no password.** `/runtime/<slug>/` is
   now reachable without the device-admin session — an operator walks up to the
   panel and works, which is what an HMI is for. The editor

@@ -128,6 +128,9 @@ class BannerFields:
     runtime_home: Path
     open_url: str
     version: str = "dev"
+    # The same listener reached by its other addresses, printed under the URL
+    # they belong to: the runtime's project URL, the dev frontend.
+    alt_urls: tuple[str, ...] = ()
     # Dev-mode only.
     frontend_url: str | None = None
 
@@ -148,12 +151,18 @@ def render_banner(mode: Literal["runtime", "dev"], fields: BannerFields) -> str:
         out.append(_row("Backend", _url(fields.open_url)))
         if fields.frontend_url:
             out.append(_row("Frontend", _url(fields.frontend_url)))
+            for alt_url in fields.alt_urls:
+                out.append(_row("", _url(alt_url)))
             out.append(_row("Projects", _url(f"{fields.frontend_url}/projects")))
     else:
         # Runtime: the running default project, plus the manager's project
         # list (same origin, /projects) to reach the others. The bind address
-        # (e.g. 0.0.0.0:8000) isn't a clickable URL, so it's left out.
+        # (e.g. 0.0.0.0:8000) isn't a clickable URL, so it's left out — the
+        # unlabelled rows under it are that same listener spelled the other
+        # ways it can be reached, machine name first and loopback last.
         out.append(_row("Default project", _url(fields.open_url)))
+        for alt_url in fields.alt_urls:
+            out.append(_row("", _url(alt_url)))
         out.append(_row("Projects", _url(f"{fields.open_url}/projects")))
 
     out.append("")

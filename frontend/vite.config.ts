@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { buildImportMap, resolveLiveProjectDir } from './dev-plugins/externalModules';
 
 /// <reference types="vitest/config" />
@@ -196,6 +197,25 @@ const devTls =
       }
     : undefined;
 
+// ── Dev bind address ──────────────────────────────────────────────────────────
+// Same resolution as backend/core/net.py: every interface unless NEXTHMI_HOST
+// names one, so the dev server is reachable the way a real install is.
+const devHost = process.env.NEXTHMI_HOST?.trim() || '0.0.0.0';
+
+// Vite answers "Blocked request. This host is not allowed." to any Host header
+// that is neither an IP literal nor a listed name — its DNS-rebinding guard.
+// start-dev.py's banner leads with the machine *name*, so without this it would
+// point at an address the dev server itself turns away. Allow this machine's own
+// names and nothing further; an IP still comes through on its own.
+// Both names are checked before `.local` is built from them: Vite reads a
+// leading dot as a suffix wildcard, so a `.local` derived from an empty
+// hostname would quietly allow every `*.local` on the network.
+const fullHostname = os.hostname().trim();
+const shortHostname = fullHostname.split('.')[0];
+const devAllowedHosts = shortHostname
+  ? [...new Set([fullHostname, shortHostname, `${shortHostname}.local`])]
+  : [];
+
 const backendOrigin = devTls ? 'https://localhost:8000' : 'http://localhost:8000';
 const backendWsOrigin = devTls ? 'wss://localhost:8000' : 'ws://localhost:8000';
 // The pair is self-signed by default, so the proxy must not verify it.
@@ -303,6 +323,8 @@ export default defineConfig({
     },
   },
   server: {
+    host: devHost,
+    allowedHosts: devAllowedHosts,
     // Vite's forwardConsole pipes every browser console.* into the dev terminal,
     // which buries our own [NEXTHMI] compile/restart logs in noise from user widgets.
     forwardConsole: false,

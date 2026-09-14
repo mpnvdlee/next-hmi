@@ -42,7 +42,7 @@ FRONTEND_PORT = 5173
 # Make `backend/` importable so we can share the banner module with launcher.py.
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
-from core import runtime_home, tls_settings  # noqa: E402
+from core import net, runtime_home, tls_settings  # noqa: E402
 from core.banner import BannerFields, print_banner  # noqa: E402
 
 
@@ -194,12 +194,21 @@ def _spawn_backend(
     # per running project; Vite proxies /p/<id>/* to the manager (see
     # frontend/vite.config.ts). Open the FRONTEND URL — the SPA renders the
     # manager dashboard at the root and proxied project instances under /p/<id>/.
-    # Loopback only: the workspace /mcp endpoint is unauthenticated, so the host
-    # binding is its security boundary (see backend/manager.py mount comment).
+    # Bound exactly as a real install is, so dev behaves like the thing being
+    # built and a tablet on the bench can reach it. The workspace /mcp endpoint
+    # authenticates every request itself — a manager session cookie or an MCP
+    # bearer token, see backend/mcp_server/auth.py — so the binding was never
+    # what protected it.
+    #
+    # Vite is the part that widens: /@fs serves its root — frontend/, including
+    # node_modules — to anyone who can reach :5173, with no authentication.
+    # That root is also the whole of it: everything above and beside it, the
+    # repo root, backend/ and the entire live project tree alike, is refused.
+    # NEXTHMI_HOST=127.0.0.1 pins both servers back to loopback.
     module = "manager_enterprise:app" if edition == "ee" else "manager:app"
     backend_cmd = [
         python_exe, "-m", "uvicorn", module, "--reload",
-        "--host", "127.0.0.1", "--port", str(BACKEND_PORT),
+        "--host", net.resolve_bind_host(), "--port", str(BACKEND_PORT),
     ]
     env = dict(os.environ)
     env["NEXTHMI_EDITION"] = edition
@@ -331,12 +340,19 @@ def start(*, quiet: bool, edition: str) -> None:
     if edition == "ee":
         print("[dev] edition: ee (manager_enterprise:app)", flush=True)
 
+    # Both servers bind the same host, so print them the way the launcher's
+    # banner does — machine name first — instead of a localhost URL that only
+    # works where you are already sitting. The alternates hang off the frontend
+    # because that is the one the developer opens.
+    bind_host = net.resolve_bind_host()
+    frontend_urls = net.display_urls(scheme, bind_host, FRONTEND_PORT)
     print_banner(
         "dev",
         BannerFields(
             runtime_home=runtime_home.runtime_home_path(),
-            open_url=f"{scheme}://localhost:{BACKEND_PORT}",
-            frontend_url=f"{scheme}://localhost:{FRONTEND_PORT}",
+            open_url=net.display_urls(scheme, bind_host, BACKEND_PORT)[0],
+            frontend_url=frontend_urls[0],
+            alt_urls=tuple(frontend_urls[1:]),
         ),
     )
 
@@ -366,7 +382,7 @@ def start(*, quiet: bool, edition: str) -> None:
                     scheme = "https" if tls is not None else "http"
                     print(
                         f"[dev] protocol changed to {scheme} — restarting Vite; "
-                        f"reload {scheme}://localhost:{FRONTEND_PORT}",
+                        f"reload {net.display_urls(scheme, bind_host, FRONTEND_PORT)[0]}",
                         flush=True,
                     )
                     _terminate_frontend(frontend_proc)

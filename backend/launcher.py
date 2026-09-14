@@ -633,18 +633,22 @@ def _load_manager_app():
 
 def _run_manager(data_dir: Path, args: argparse.Namespace) -> int:
     """Manager mode (default) — supervisor + reverse proxy front door."""
+    from core import net
     from core.logging_setup import configure_logging
     configure_logging(verbose=args.verbose)
 
     app = _load_manager_app()
 
-    # Loopback by default. The workspace /mcp endpoint authenticates every
-    # request (manager session or MCP bearer token, see mcp_server.auth), but
-    # without NEXTHMI_SSL_* it's still plain HTTP — binding off-host accepts a
-    # trusted-LAN interception risk rather than a silent one. Set
-    # NEXTHMI_HOST=0.0.0.0 explicitly to reach the manager dashboard from other
-    # machines.
-    host = os.environ.get("NEXTHMI_HOST", "127.0.0.1")
+    # Reachable by default: a panel is opened from the machines around it, and
+    # an install that answered only itself read as broken from every one of
+    # them. Authentication is the boundary — the dashboard, every editor route
+    # and /mcp each demand a credential whichever interface the request came in
+    # on, and none of that changed with the binding. What did change is
+    # confidentiality: without NEXTHMI_SSL_* or Settings → HTTPS this is plain
+    # HTTP, so those credentials cross the wire in the clear. Turn HTTPS on
+    # wherever the network is not trusted. NEXTHMI_HOST=127.0.0.1 pins an
+    # install back to loopback.
+    host = net.resolve_bind_host()
     port = args.port or int(os.environ.get("NEXTHMI_PORT", "8000"))
 
     try:
@@ -719,20 +723,21 @@ def _run_manager(data_dir: Path, args: argparse.Namespace) -> int:
 
     app_port = https_port if split_ports else port
     scheme = "https" if tls else "http"
-    open_host = "127.0.0.1" if host in {"0.0.0.0", ""} else host
-    open_url = f"{scheme}://{open_host}:{app_port}"
+    urls = net.display_urls(scheme, host, app_port)
+    open_url = urls[0]
     print_banner(
         "runtime",
         BannerFields(
             runtime_home=data_dir,
             open_url=open_url,
+            alt_urls=tuple(urls[1:]),
             version=_read_version(),
         ),
     )
     redirector = redirector_thread = None
     if split_ports:
         redirector, redirector_thread = _start_https_redirector(host, port, https_port)
-        print(f"  http://{open_host}:{port} redirects here.")
+        print(f"  {net.display_urls('http', host, port)[0]} redirects here.")
         print()
     if expiry_warning is not None:
         print(f"  {expiry_warning}")

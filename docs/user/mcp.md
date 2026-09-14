@@ -15,7 +15,7 @@ One endpoint covers the whole installation:
 
 **Either spelling works.** `/mcp/` is the canonical path; a bare `/mcp` is rewritten onto it rather than redirected, because most MCP clients do not follow redirects.
 
-**Client and manager on the same machine?** Then `<manager-host>` is `127.0.0.1` — the manager binds loopback only unless `NEXTHMI_HOST` says otherwise, so `http://127.0.0.1:8000/mcp/` is the whole endpoint. The `hmi.local` examples further down are for the case where the client sits on another machine.
+**Client and manager on the same machine?** Then `<manager-host>` is `127.0.0.1` and `http://127.0.0.1:8000/mcp/` is the whole endpoint. From another machine, use the manager's name or address — the manager binds every interface unless `NEXTHMI_HOST` says otherwise, and every request to `/mcp` has to carry a token either way. The `hmi.local` examples further down are for that case.
 
 > [!IMPORTANT]
 > With HTTPS on, port `8000` answers with a `307` redirect rather than the app — and most MCP clients do not follow redirects. Point the client at the HTTPS port directly. See [Ports](install.md#ports). If the certificate is the self-signed one the manager generated, the client must be told to trust it; a client that validates certificates will otherwise refuse to connect.

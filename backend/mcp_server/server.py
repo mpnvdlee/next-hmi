@@ -285,13 +285,14 @@ def prepare_workspace_tools() -> None:
 def mount_workspace_mcp(app: Any) -> None:
     """Mount the multi-project workspace MCP at ``/mcp`` on the manager app.
 
-    Meant for a local AI client over loopback (the default:
-    ``NEXTHMI_HOST=127.0.0.1`` in ``launcher.py``); running it reachable on a
-    trusted LAN is an accepted risk, not a silent default. Every request must
-    authenticate with the manager session cookie or an MCP bearer token (see
-    ``mcp_server.auth`` and ``api.mcp_auth_api``) before it reaches any tool.
-    Per-project ``mcpEnabled`` is an additional gate on top of that — writes
-    are refused when it's off even for an otherwise-authorized caller.
+    Reachable wherever the manager is, which is every interface by default
+    (``core.net.resolve_bind_host``): every request must authenticate with the
+    manager session cookie or an MCP bearer token (see ``mcp_server.auth`` and
+    ``api.mcp_auth_api``) before it reaches any tool, on loopback and off it
+    alike. Per-project ``mcpEnabled`` is an additional gate on top of that —
+    writes are refused when it's off even for an otherwise-authorized caller.
+    Plain HTTP puts the bearer token on the wire in the clear, so an untrusted
+    network wants HTTPS as well.
     """
     prepare_workspace_tools()
     app.mount("/mcp", build_mcp_asgi_app())
