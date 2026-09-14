@@ -1470,6 +1470,34 @@
                 ]
               }
             ]
+          },
+          {
+            "id": "mach-service-hint",
+            "type": "Label",
+            "name": "mach-service-hint",
+            "properties": {
+              "typography": "caption",
+              "text": {
+                "$loc": "Sign in to reveal the Service card — its Visible is bound to $userGroups."
+              },
+              "color": "var(--hmi-text-muted)",
+              "wrap": "wrap",
+              "visible": {
+                "$compare": {
+                  "left": {
+                    "$user": {
+                      "field": "username"
+                    }
+                  },
+                  "operator": "===",
+                  "right": "guest"
+                }
+              }
+            },
+            "layout": {
+              "widthMode": "fill",
+              "heightMode": "hug"
+            }
           }
         ]
       }
