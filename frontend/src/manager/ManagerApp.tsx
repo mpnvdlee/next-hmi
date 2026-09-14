@@ -33,6 +33,7 @@ import LogViewerModal from '@config/components/admin/LogViewerModal';
 import ProjectThumbnail from './ProjectThumbnail';
 import SecuritySection from '@config/components/admin/SecuritySection';
 import HttpsSection from '@config/components/admin/HttpsSection';
+import InsecureConnectionNotice from '@config/components/admin/InsecureConnectionNotice';
 import TelemetrySection from '@config/components/admin/TelemetrySection';
 import { enterpriseAppGates, enterpriseSettingsPanels } from '@enterprise';
 
@@ -207,6 +208,9 @@ function AuthGate({ mode }: { mode: 'needs-setup' | 'needs-login' }) {
         <p className="mgr-auth-card__subtitle">
           {isSetup ? 'Set a device-admin password to secure the manager.' : 'Manager sign-in'}
         </p>
+        {/* The password about to be typed here is the exposure the notice
+            names, so the gate carries it ahead of the field itself. */}
+        <InsecureConnectionNotice />
         <div className="cfg-security-form">
           <label className="project-form__field">
             <span className="project-form__label">Password</span>
@@ -376,6 +380,7 @@ function ProjectsPage() {
     <>
       <div className="projects-page">
         <div className="projects-page__inner">
+          <InsecureConnectionNotice />
           <header className="projects-page__header">
             <div className="projects-page__actions">
               <Button variant="default" onClick={() => setDialog({ kind: 'import' })}>
@@ -712,6 +717,7 @@ function SettingsPage() {
   return (
     <div className="projects-page">
       <div className="projects-page__inner">
+        <InsecureConnectionNotice />
         <SystemInfoSection info={systemInfo} />
         <RuntimeHomeSection status={runtimeHome ? { path: runtimeHome } : null} />
         <LogsSection onOpen={() => setLogsOpen(true)} />

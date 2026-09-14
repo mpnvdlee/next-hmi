@@ -61,6 +61,32 @@ def lan_address() -> str:
     return address if address and address not in _WILDCARD_HOSTS else LOOPBACK
 
 
+def advertised_address() -> str:
+    """The IPv4 address to publish for this runtime — mDNS, and anything else
+    that hands a bare address to another machine.
+
+    Follows the binding rather than the routing table, which is what makes it
+    agree with the banner: a wildcard bind answers on every interface, so the
+    routed address is the useful one to name, but ``NEXTHMI_HOST=127.0.0.1``
+    answers on loopback and nowhere else. Publishing the routed address there
+    would advertise one nothing is listening on, and the peer dialling it gets
+    a connect timeout instead of a refusal. Loopback is advertised as loopback:
+    the connecting side rejects it with a readable error, and the
+    ``NEXTHMI_ALLOW_LOOPBACK_PEERS=1`` path for local testing still works.
+
+    A pin that is not an IPv4 literal — a name, an IPv6 literal — cannot go in
+    an A record at all, so the routed address is the closest honest answer.
+    """
+    host = resolve_bind_host()
+    if host in _WILDCARD_HOSTS:
+        return lan_address()
+    try:
+        socket.inet_aton(host)
+    except OSError:
+        return lan_address()
+    return host
+
+
 def hostname() -> str:
     """This machine's own name, or an empty string when it cannot be read."""
     try:

@@ -220,6 +220,16 @@ watch the network reads it on its way past. Turn HTTPS on unless the network
 is one you trust, or pin the install to `NEXTHMI_HOST=127.0.0.1` and reach it
 some other way.
 
+The dashboard says so itself while that is the case. Open it at an address that
+is neither HTTPS nor `localhost` and a notice stands above the project list, on
+the settings page, and on the sign-in screen, linking to the switch. It follows
+the address in your URL bar rather than where the server runs — the same
+distinction the browser makes in [What plain HTTP costs the
+browser](#what-plain-http-costs-the-browser) below — so reaching a networked
+install from the machine it runs on shows nothing, while reaching it from a
+laptop shows the notice. The operator runtime and the editor stay quiet: it is
+addressed to whoever can act on it.
+
 Only the manager terminates TLS. Project children are spawned on loopback and
 reached over plain HTTP by the in-process proxy, so nothing else needs
 configuring; the SPA already switches its WebSocket to `wss://` whenever the
@@ -293,9 +303,10 @@ moving it would break the port mapping the operator already published.
 1. Pick **HTTPS** on the protocol switch.
 2. Under **Certificate**, keep *Generated for this device* — the manager
    creates a self-signed certificate covering `localhost`, this host's name,
-   and its addresses — or choose *My own certificate* and upload a PEM
-   certificate and unencrypted PEM private key. Mismatched or passphrase-
-   protected keys are rejected at upload, not at the next startup.
+   and its addresses, including the network address the startup banner prints
+   — or choose *My own certificate* and upload a PEM certificate and
+   unencrypted PEM private key. Mismatched or passphrase-protected keys are
+   rejected at upload, not at the next startup.
 3. The manager stops running projects, restarts, and the page reopens itself
    on the new protocol — on port 8443, see [Ports](#ports) above. Projects
    resume on their own.
@@ -307,6 +318,13 @@ are written `0600`.
 A generated certificate is not signed by any authority, so browsers warn once
 per machine until someone accepts it. That warning is the cost of not needing a
 CA; the connection is encrypted either way, which a plain-HTTP one is not.
+
+It also names the addresses the device had when it was generated. If the device
+later answers on a different one — a new DHCP lease, a move to another network
+— the warning comes back for the address URL, and **Regenerate** under
+**Certificate** issues a fresh one for the address it has now. A static address
+or a DHCP reservation avoids the round trip. An already-generated certificate is
+never rewritten on its own.
 
 Upload your own key only over an HTTPS page — the UI warns when the page is on
 HTTP, since the key would otherwise cross the network in the clear. Turn on

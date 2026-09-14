@@ -9,6 +9,24 @@ are always called out under a **Changed** or **Removed** heading.
 
 ## [Unreleased]
 
+### Added
+
+- **The manager dashboard now says when it is serving without HTTPS.** Binding
+  every interface by default made plain HTTP a network exposure rather than a
+  local one, and the switch that fixes it sat in Settings with nothing pointing
+  at it. A notice now stands above the project list, on the settings page, and
+  on the sign-in screen — the one that matters most, since the device-admin
+  password typed into it is part of what crosses the wire in the clear. The
+  browser decides when it appears: a page served over HTTPS, or reached at
+  `localhost` / `127.0.0.1`, is a secure context and sees nothing; the same
+  install opened at `http://192.168.1.10:8000` is not, and gets the notice with
+  a link to **Settings → HTTPS**. It states the exposure instead of acting on
+  it — the same setup is routine on a sealed machine network and wrong on an
+  office LAN, and only the operator knows which one this is — and it cannot be
+  dismissed, because nothing has changed until HTTPS is on. The operator
+  runtime and the editor do not carry it; someone at a wall panel cannot act on
+  it. See [HTTPS](docs/user/install.md#https).
+
 ### Removed
 
 - **The per-project operator password prompt.** A project copied from the
@@ -84,6 +102,26 @@ are always called out under a **Changed** or **Removed** heading.
 - **`POST /api/manager/projects/{id}/operator-setup` is gone.** Nothing consumes
   a setup marker, and the `operatorSetup` key is ignored wherever an existing
   project still carries one — it is dropped the next time users are saved.
+
+### Fixed
+
+- **A peer now advertises the address the banner told you to use.** mDNS
+  advertised whatever the machine's own name resolved to, which on a stock
+  Debian /etc/hosts is `127.0.1.1` and on a host with wired, wifi and a VPN
+  adapter is whichever interface the name happens to point at — not the
+  address the runtime is actually reachable at. A discovered peer could
+  therefore be dialled at an address the runtime never answered on. The
+  advertisement and the startup banner now both start from the bind host, so
+  they cannot disagree: pin `NEXTHMI_HOST` and both follow the pin, leave it
+  unset and both name the address the kernel routes off-box.
+
+- **A generated HTTPS certificate covers the device's network address.** The
+  banner prints an address URL next to the hostname one, but the self-signed
+  certificate only carried that address when the hostname happened to resolve
+  to it — so opening the address URL over HTTPS gave an avoidable certificate
+  warning. New certificates name it. An existing certificate is not rewritten:
+  use **Regenerate** under **Settings → HTTPS → Certificate**, which is also
+  what to do after the device's address changes.
 
 ## [0.0.1-rc2] - 2026-08-29
 

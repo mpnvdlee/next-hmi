@@ -76,6 +76,35 @@ def test_lan_address_rejects_an_unbound_source_address(monkeypatch) -> None:
     assert net.lan_address() == "127.0.0.1"
 
 
+# ── advertised_address ───────────────────────────────────────────────────────
+
+
+def test_advertised_address_is_the_routed_one_on_a_wildcard_bind(monkeypatch) -> None:
+    monkeypatch.delenv("NEXTHMI_HOST", raising=False)
+    monkeypatch.setattr(net, "lan_address", lambda: "192.168.1.10")
+    assert net.advertised_address() == "192.168.1.10"
+
+
+def test_advertised_address_follows_a_pinned_bind_host(monkeypatch) -> None:
+    """A pinned host answers on that interface and nowhere else."""
+    monkeypatch.setenv("NEXTHMI_HOST", "127.0.0.1")
+    monkeypatch.setattr(net, "lan_address", lambda: "192.168.1.10")
+    assert net.advertised_address() == "127.0.0.1"
+
+
+def test_advertised_address_keeps_an_explicit_interface(monkeypatch) -> None:
+    monkeypatch.setenv("NEXTHMI_HOST", "10.0.0.7")
+    monkeypatch.setattr(net, "lan_address", lambda: "192.168.1.10")
+    assert net.advertised_address() == "10.0.0.7"
+
+
+def test_advertised_address_falls_back_for_a_non_ipv4_pin(monkeypatch) -> None:
+    """Only an IPv4 literal can go in the A record this feeds."""
+    monkeypatch.setenv("NEXTHMI_HOST", "panel-pc")
+    monkeypatch.setattr(net, "lan_address", lambda: "192.168.1.10")
+    assert net.advertised_address() == "192.168.1.10"
+
+
 # ── display_urls ─────────────────────────────────────────────────────────────
 
 

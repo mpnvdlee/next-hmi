@@ -9,7 +9,7 @@ from pathlib import Path
 
 import launcher
 import pytest
-from core import runtime_home, tls_settings
+from core import net, runtime_home, tls_settings
 from fastapi.testclient import TestClient
 
 
@@ -55,6 +55,27 @@ def test_generated_certificate_covers_localhost(home: Path) -> None:
     assert "localhost" in described["names"]
     assert "127.0.0.1" in described["names"]
     assert len(described["fingerprint"]) == 64
+
+
+def test_generated_certificate_covers_the_routed_lan_address(
+    home: Path, monkeypatch
+) -> None:
+    """The banner's second URL is an IP; the certificate has to name it."""
+    monkeypatch.setattr(net, "lan_address", lambda: "192.168.1.10")
+    described = tls_settings.generate_self_signed()
+    assert "192.168.1.10" in described["names"]
+    assert "127.0.0.1" in described["names"]
+    assert "localhost" in described["names"]
+
+
+def test_generated_certificate_lists_loopback_once_without_a_route(
+    home: Path, monkeypatch
+) -> None:
+    """A host with no route answers loopback — which is already in the list."""
+    monkeypatch.setattr(net, "lan_address", lambda: "127.0.0.1")
+    described = tls_settings.generate_self_signed()
+    assert described["names"].count("127.0.0.1") == 1
+    assert "localhost" in described["names"]
 
 
 def test_generated_certificate_outlives_the_machine(home: Path) -> None:
