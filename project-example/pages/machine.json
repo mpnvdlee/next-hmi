@@ -333,7 +333,14 @@
                           "min": 80,
                           "max": 100,
                           "decimals": 1,
-                          "showRangeOnNumpad": true
+                          "showRangeOnNumpad": true,
+                          "interactable": {
+                            "$userGroups": {
+                              "groups": [
+                                "admin"
+                              ]
+                            }
+                          }
                         },
                         "layout": {
                           "widthMode": "fill",
@@ -358,7 +365,14 @@
                           "min": 0,
                           "max": 120,
                           "decimals": 1,
-                          "showRangeOnNumpad": true
+                          "showRangeOnNumpad": true,
+                          "interactable": {
+                            "$userGroups": {
+                              "groups": [
+                                "admin"
+                              ]
+                            }
+                          }
                         },
                         "layout": {
                           "widthMode": "fill",
@@ -383,7 +397,14 @@
                           "min": 0,
                           "max": 12,
                           "decimals": 1,
-                          "showRangeOnNumpad": true
+                          "showRangeOnNumpad": true,
+                          "interactable": {
+                            "$userGroups": {
+                              "groups": [
+                                "admin"
+                              ]
+                            }
+                          }
                         },
                         "layout": {
                           "widthMode": "fill",
@@ -408,7 +429,42 @@
                           "min": 14,
                           "max": 22,
                           "decimals": 1,
-                          "showRangeOnNumpad": true
+                          "showRangeOnNumpad": true,
+                          "interactable": {
+                            "$userGroups": {
+                              "groups": [
+                                "admin"
+                              ]
+                            }
+                          }
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "mach-setpoints-hint",
+                        "type": "Label",
+                        "name": "mach-setpoints-hint",
+                        "properties": {
+                          "typography": "caption",
+                          "text": {
+                            "$loc": "Sign in to change these."
+                          },
+                          "color": "var(--hmi-text-muted)",
+                          "wrap": "wrap",
+                          "visible": {
+                            "$compare": {
+                              "left": {
+                                "$user": {
+                                  "field": "username"
+                                }
+                              },
+                              "operator": "===",
+                              "right": "guest"
+                            }
+                          }
                         },
                         "layout": {
                           "widthMode": "fill",
@@ -1137,6 +1193,276 @@
                           "widthMode": "fill",
                           "heightMode": "hug"
                         }
+                      }
+                    ],
+                    "slot": "body"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "mach-row-3",
+            "type": "Container",
+            "name": "Row",
+            "properties": {
+              "visible": {
+                "$userGroups": {
+                  "groups": [
+                    "admin"
+                  ]
+                }
+              },
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "row",
+              "gap": "18px",
+              "wrap": true,
+              "align": "stretch",
+              "justify": "flex-start",
+              "radius": "0",
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "paddingTop": "0",
+              "paddingRight": "0",
+              "paddingBottom": "0",
+              "paddingLeft": "0"
+            },
+            "children": [
+              {
+                "id": "mach-service",
+                "type": "$component:card",
+                "name": "mach-service",
+                "properties": {
+                  "title": {
+                    "$loc": "Service"
+                  },
+                  "showTitle": true
+                },
+                "layout": {
+                  "grow": 1,
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "minWidth": "300px"
+                },
+                "children": [
+                  {
+                    "id": "mach-service-tag",
+                    "type": "Label",
+                    "name": "mach-service-tag",
+                    "properties": {
+                      "typography": "code",
+                      "text": {
+                        "$loc": "admin only"
+                      },
+                      "color": "var(--hmi-text-muted)"
+                    },
+                    "layout": {
+                      "widthMode": "hug",
+                      "heightMode": "hug"
+                    },
+                    "slot": "action"
+                  },
+                  {
+                    "id": "mach-service-body",
+                    "type": "Container",
+                    "name": "Body",
+                    "properties": {
+                      "visible": true,
+                      "showWhenEmpty": true,
+                      "background": "transparent"
+                    },
+                    "layout": {
+                      "direction": "column",
+                      "gap": "14px",
+                      "wrap": false,
+                      "align": "stretch",
+                      "justify": "flex-start",
+                      "radius": "0",
+                      "widthMode": "fill",
+                      "heightMode": "hug",
+                      "paddingTop": "8px",
+                      "paddingRight": "18px",
+                      "paddingBottom": "18px",
+                      "paddingLeft": "18px"
+                    },
+                    "children": [
+                      {
+                        "id": "mach-service-note",
+                        "type": "Label",
+                        "name": "mach-service-note",
+                        "properties": {
+                          "typography": "body",
+                          "wrap": "wrap",
+                          "color": "var(--hmi-text-muted)",
+                          "text": {
+                            "$loc": "This whole card is hidden until someone signs in — Visible is bound to $userGroups, not just Interactable."
+                          }
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "mach-service-btns",
+                        "type": "Container",
+                        "name": "Buttons",
+                        "properties": {
+                          "visible": true,
+                          "showWhenEmpty": true,
+                          "background": "transparent"
+                        },
+                        "layout": {
+                          "direction": "row",
+                          "gap": "12px",
+                          "wrap": true,
+                          "align": "center",
+                          "justify": "flex-start",
+                          "radius": "0",
+                          "widthMode": "fill",
+                          "heightMode": "hug",
+                          "paddingTop": "0",
+                          "paddingRight": "0",
+                          "paddingBottom": "0",
+                          "paddingLeft": "0"
+                        },
+                        "children": [
+                          {
+                            "id": "mach-svc-cups",
+                            "type": "Button",
+                            "name": "Reset day counter",
+                            "properties": {
+                              "label": {
+                                "$loc": "Reset day counter"
+                              },
+                              "iconName": {
+                                "$static": {
+                                  "type": "builtin",
+                                  "name": "arrow-counter-clockwise"
+                                }
+                              },
+                              "variant": "outline",
+                              "actions": {
+                                "onPress": [
+                                  {
+                                    "type": "writeDataVariable",
+                                    "datasource": "Brew",
+                                    "path": "Counters/CupsToday",
+                                    "value": 0
+                                  },
+                                  {
+                                    "type": "showToast",
+                                    "message": {
+                                      "$loc": "Day counter reset."
+                                    },
+                                    "severity": "info",
+                                    "discard": "auto",
+                                    "duration": 4000
+                                  }
+                                ]
+                              }
+                            },
+                            "layout": {
+                              "widthMode": "hug",
+                              "heightMode": "hug"
+                            }
+                          },
+                          {
+                            "id": "mach-svc-drawer",
+                            "type": "Button",
+                            "name": "Empty grounds drawer",
+                            "properties": {
+                              "label": {
+                                "$loc": "Empty grounds drawer"
+                              },
+                              "iconName": {
+                                "$static": {
+                                  "type": "builtin",
+                                  "name": "trash"
+                                }
+                              },
+                              "variant": "outline",
+                              "actions": {
+                                "onPress": [
+                                  {
+                                    "type": "writeDataVariable",
+                                    "datasource": "Brew",
+                                    "path": "Waste/DrawerFull",
+                                    "value": false
+                                  },
+                                  {
+                                    "type": "showToast",
+                                    "message": {
+                                      "$loc": "Grounds drawer emptied."
+                                    },
+                                    "severity": "info",
+                                    "discard": "auto",
+                                    "duration": 4000
+                                  }
+                                ]
+                              }
+                            },
+                            "layout": {
+                              "widthMode": "hug",
+                              "heightMode": "hug"
+                            }
+                          },
+                          {
+                            "id": "mach-svc-defaults",
+                            "type": "Button",
+                            "name": "Factory defaults",
+                            "properties": {
+                              "label": {
+                                "$loc": "Factory defaults"
+                              },
+                              "iconName": {
+                                "$static": {
+                                  "type": "builtin",
+                                  "name": "wrench"
+                                }
+                              },
+                              "variant": "solid",
+                              "actions": {
+                                "onPress": [
+                                  {
+                                    "type": "writeDataVariable",
+                                    "datasource": "Brew",
+                                    "path": "Boiler/Setpoint",
+                                    "value": 93
+                                  },
+                                  {
+                                    "type": "writeDataVariable",
+                                    "datasource": "Brew",
+                                    "path": "Pump/Pressure",
+                                    "value": 9
+                                  },
+                                  {
+                                    "type": "writeDataVariable",
+                                    "datasource": "Brew",
+                                    "path": "Hopper/Dose",
+                                    "value": 18
+                                  },
+                                  {
+                                    "type": "showToast",
+                                    "message": {
+                                      "$loc": "Setpoints restored to factory defaults."
+                                    },
+                                    "severity": "info",
+                                    "discard": "auto",
+                                    "duration": 4000
+                                  }
+                                ]
+                              }
+                            },
+                            "layout": {
+                              "widthMode": "hug",
+                              "heightMode": "hug"
+                            }
+                          }
+                        ]
                       }
                     ],
                     "slot": "body"
