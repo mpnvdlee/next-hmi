@@ -6,6 +6,7 @@ import { safeSignInTarget } from '@shared/store/sessionStore';
 import { getVersion } from '@shared/utils/runtimeBase';
 import { useDocumentTitle } from '@shared/hooks/useDocumentTitle';
 import AppTopBarNav from '@shared/components/AppTopBarNav';
+import LogoMark from '@shared/components/LogoMark';
 import Spinner from '@shared/components/Spinner';
 import '@config/styles/config.css';
 import '@config/components/shell/ConfigTopBar/style.css';
@@ -204,7 +205,10 @@ function AuthGate({ mode }: { mode: 'needs-setup' | 'needs-login' }) {
   return (
     <div className="mgr-center">
       <form className="name-modal" onSubmit={submit}>
-        <h1 className="name-modal__title">NEXT HMI</h1>
+        <div className="mgr-auth-card__brand">
+          <LogoMark className="mgr-auth-card__logo" />
+          <h1 className="name-modal__title">NEXT HMI</h1>
+        </div>
         <p className="mgr-auth-card__subtitle">
           {isSetup ? 'Set a device-admin password to secure the manager.' : 'Manager sign-in'}
         </p>

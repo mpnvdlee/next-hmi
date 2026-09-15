@@ -14,6 +14,20 @@
 }
 
 /* ── auth ─────────────────────────────────────────────────── */
+.mgr-auth-card__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-3);
+}
+
+/* Sized here rather than by the mark: the card is the only surface that shows
+   it at heading scale, between the 28px top bar and the 40px boot splash. */
+.mgr-auth-card__logo {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
 .mgr-auth-card__subtitle {
   margin: 0;
   font-size: var(--cfg-text-sm);
