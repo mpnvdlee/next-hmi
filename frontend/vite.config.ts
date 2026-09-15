@@ -3,7 +3,6 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import fs from 'fs';
-import os from 'os';
 import { buildImportMap, resolveLiveProjectDir } from './dev-plugins/externalModules';
 
 /// <reference types="vitest/config" />
@@ -148,8 +147,8 @@ function externalModulesPlugin(): Plugin {
 // index.html, so we inject them here based on the request path: the manager
 // dashboard at the origin root, a project instance under /runtime/<slug>/ or
 // /editor/<slug>/. This lets the same SPA render the manager at
-// http://localhost:5173/ and a proxied project at
-// http://localhost:5173/runtime/<slug>/ with HMR intact.
+// http://localhost:8000/ and a proxied project at
+// http://localhost:8000/runtime/<slug>/ with HMR intact.
 // Serve-only: at build time there is no request to derive base/mode from, so a
 // baked tag can only ever say base "/" + mode "manager". It also lands *after*
 // the one the backend injects at <head>, so it would win and render every
@@ -184,7 +183,7 @@ function runtimeGlobalsPlugin(): Plugin {
 // start-dev.py resolves the runtime home's certificate pair (the one Settings →
 // HTTPS manages, same call the launcher makes) and passes the paths in, so the
 // resolution order stays in one place instead of being re-derived here. Without
-// it Vite serves plain HTTP and https://localhost:5173 fails the handshake even
+// it Vite serves plain HTTP and https://localhost:8000 fails the handshake even
 // though the device is configured for HTTPS.
 const devTlsCert = process.env.NEXTHMI_DEV_TLS_CERT;
 const devTlsKey = process.env.NEXTHMI_DEV_TLS_KEY;
@@ -203,25 +202,35 @@ const devTls =
 // `true`, not '0.0.0.0': Vite maps `true` to an undefined host, which makes
 // node listen on `::` dual-stack, while '0.0.0.0' is the IPv4 wildcard and
 // binds that family alone. Browsers resolve `localhost` to `::1` first, so the
-// literal spelling refuses http://localhost:5173 while 127.0.0.1 still answers.
+// literal spelling refuses http://localhost:8000 while 127.0.0.1 still answers.
 const devHost = process.env.NEXTHMI_HOST?.trim() || true;
 
 // Vite answers "Blocked request. This host is not allowed." to any Host header
 // that is neither an IP literal nor a listed name — its DNS-rebinding guard.
-// start-dev.py's banner leads with the machine *name*, so without this it would
-// point at an address the dev server itself turns away. Allow this machine's own
-// names and nothing further; an IP still comes through on its own.
-// Both names are checked before `.local` is built from them: Vite reads a
-// leading dot as a suffix wildcard, so a `.local` derived from an empty
-// hostname would quietly allow every `*.local` on the network.
-const fullHostname = os.hostname().trim();
-const shortHostname = fullHostname.split('.')[0];
-const devAllowedHosts = shortHostname
-  ? [...new Set([fullHostname, shortHostname, `${shortHostname}.local`])]
-  : [];
+// A machine with several adapters is reached under more names than it can
+// enumerate: a DNS name per subnet, the mDNS `.local`, whatever a bench tablet
+// carries in its own hosts file. Listing them is a losing game, and the one
+// left out reads as "the dev server is down" from that adapter. `true` accepts
+// any name that resolves here, which is what binding every interface already
+// promised. What it gives up is the guard against a page elsewhere pointing a
+// name it controls at this machine and reading `/@fs` — whose root is a
+// checkout's `frontend/`; `NEXTHMI_HOST=127.0.0.1` pins both servers back to
+// loopback where the network is not one to be on at all.
+const devAllowedHosts = true;
 
-const backendOrigin = devTls ? 'https://localhost:8000' : 'http://localhost:8000';
-const backendWsOrigin = devTls ? 'wss://localhost:8000' : 'ws://localhost:8000';
+// ── Dev ports ─────────────────────────────────────────────────────────────────
+// The app answers on :8000 here exactly as it does in a release install, where
+// the manager serves the built SPA and its API from one origin — so a bookmark,
+// a screenshot or a bug report carries between a checkout and an install. The
+// API server sits next door on :8001 and the proxy below stitches the two back
+// into that one origin. start-dev.py passes both from its own constants; these
+// defaults are for a bare `npm run dev`, and the two must never disagree —
+// a proxy aimed at Vite's own port is a request loop, not an error.
+const devPort = Number(process.env.NEXTHMI_DEV_PORT) || 8000;
+const devApiPort = Number(process.env.NEXTHMI_DEV_API_PORT) || 8001;
+
+const backendOrigin = `${devTls ? 'https' : 'http'}://localhost:${devApiPort}`;
+const backendWsOrigin = `${devTls ? 'wss' : 'ws'}://localhost:${devApiPort}`;
 // The pair is self-signed by default, so the proxy must not verify it.
 const backendProxy = { target: backendOrigin, secure: false };
 
@@ -328,6 +337,10 @@ export default defineConfig({
   },
   server: {
     host: devHost,
+    port: devPort,
+    // Landing on the next free port instead would put the app somewhere the
+    // banner does not name and, worse, somewhere `--stop` does not clear.
+    strictPort: true,
     allowedHosts: devAllowedHosts,
     // Vite's forwardConsole pipes every browser console.* into the dev terminal,
     // which buries our own [NEXTHMI] compile/restart logs in noise from user widgets.
@@ -335,7 +348,7 @@ export default defineConfig({
     https: devTls,
     proxy: {
       // Manager-level APIs (auth, supervisor, projects, admin) live on the
-      // manager backend at :8000.
+      // manager backend next door — see devApiPort.
       '/api': backendProxy,
       '/plugins': backendProxy,
       // Documentation behind the Help button — bundled docs in a packaged

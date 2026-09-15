@@ -49,14 +49,30 @@ are always called out under a **Changed** or **Removed** heading.
 
 ### Changed
 
+- **The dev runner serves the app on `:8000`, the port a release install uses.**
+  `start-dev.py` ran Vite on `:5173` with the API on `:8000`, so every URL a
+  contributor held — a bookmark, a screenshot in an issue, a tablet's
+  home-screen shortcut, the address in a bug report — pointed at a different
+  port depending on whether it came from a checkout or an install, and the two
+  could not be compared without editing the address bar. Vite now owns `:8000`
+  and proxies to the API server next door on `:8001`, which is the same origin
+  split a release install resolves internally. Nothing about the packaged
+  runtime changed; this is the dev workflow catching up to it. A tool of your
+  own that pointed at `:5173` needs repointing, and `python start-dev.py --stop`
+  now frees `:8000`/`:8001` rather than `:8000`/`:5173`.
+
+
 - **NEXT HMI is reachable on the network by default.** The manager used to bind
   `127.0.0.1` and answer nobody but the machine it ran on, so a panel PC that
   pinged fine was still a refused connection from every other machine until
   someone found `NEXTHMI_HOST=0.0.0.0` — a variable with no UI and no flag
   behind it. It now binds every interface, which is what the Docker image has
-  always done, and the startup banner prints the machine's name and its address
-  on the network instead of a loopback URL that only worked where you were
-  already standing. The dev server (`start-dev.py`) binds the same way.
+  always done, and the startup banner prints the addresses to reach it at from
+  elsewhere — this machine's name and its address, under **On the network** —
+  beside the `localhost` rows for the browser sitting in front of it. The dev
+  server (`start-dev.py`) binds the same way, prints the same block, and
+  accepts any host name that resolves to it, so every adapter on a multi-homed
+  dev box reaches it.
 
   **This changes an existing install on upgrade.** A deployment that relied on
   the old default was unreachable from the network and is now reachable from it.
@@ -131,10 +147,9 @@ are always called out under a **Changed** or **Removed** heading.
   unset and both name the address the kernel routes off-box.
 
 - **A generated HTTPS certificate covers the device's network address.** The
-  banner prints an address URL next to the hostname one, but the self-signed
-  certificate only carried that address when the hostname happened to resolve
-  to it — so opening the address URL over HTTPS gave an avoidable certificate
-  warning. New certificates name it. An existing certificate is not rewritten:
+  banner prints that address under **On the network**, but the self-signed
+  certificate only carried it when the hostname happened to resolve to it — so
+  opening it over HTTPS gave an avoidable certificate warning. New certificates name it. An existing certificate is not rewritten:
   use **Regenerate** under **Settings → HTTPS → Certificate**, which is also
   what to do after the device's address changes.
 

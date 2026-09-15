@@ -174,7 +174,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r backend/requirements.txt
 cd frontend && npm install && cd ..
 
-python start-dev.py       # backend :8000, Vite with HMR :5173
+python start-dev.py       # app on :8000 (Vite with HMR), API on :8001
 ```
 
 Stop with Ctrl-C. Tests and linters:

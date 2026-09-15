@@ -303,8 +303,8 @@ moving it would break the port mapping the operator already published.
 1. Pick **HTTPS** on the protocol switch.
 2. Under **Certificate**, keep *Generated for this device* — the manager
    creates a self-signed certificate covering `localhost`, this host's name,
-   and its addresses, including the network address the startup banner prints
-   — or choose *My own certificate* and upload a PEM certificate and
+   and its addresses, including the one it is routed to on the network — or
+   choose *My own certificate* and upload a PEM certificate and
    unencrypted PEM private key. Mismatched or passphrase-protected keys are
    rejected at upload, not at the next startup.
 3. The manager stops running projects, restarts, and the page reopens itself
@@ -502,15 +502,17 @@ Existing volumes retain their current project credentials unchanged.
 
 A terminal window opens, prints the banner, and stays in the foreground:
 
-The banner shows the version, the runtime-home path, the addresses the default
+The banner shows the version, the runtime-home path, the address the default
 project answers on, and a link to the manager's project list (`/projects`) for
 reaching the others.
 
-Open any printed URL in a browser. The banner leads with this machine's name,
-then its address on the network, then loopback — an install binds every
-interface by default, so a browser on another machine reaches it as well.
-Set `NEXTHMI_HOST=127.0.0.1` to keep it to this machine only, and see
-[HTTPS](#https) before putting it on a network you do not control.
+Open the printed URL in a browser. Those rows name `localhost`, for the browser
+on this device. Under **On the network** stand the two addresses another
+machine types instead — this device's name, and its address for a network whose
+name resolution does not carry it — because an install binds every interface by
+default. Set `NEXTHMI_HOST=127.0.0.1` to keep it to this machine only, and the
+network block goes with it: nothing else is answering. See [HTTPS](#https)
+before putting an install on a network you do not control.
 
 On the first launch, set the device-admin password. That is the only credential
 the install asks for: the seeded project holds only its `guest` user and opens

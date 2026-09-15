@@ -104,14 +104,14 @@ describe('HttpsSection', () => {
   });
 
   it('keeps the port when the listener is rebound in place', async () => {
-    // start-dev.py reports neither port: Vite owns :5173 and rebinds it.
-    const replace = stubLocation('http://localhost:5173/config/admin');
+    // start-dev.py reports neither port: Vite owns :8000 and rebinds it.
+    const replace = stubLocation('http://localhost:8000/config/admin');
     renderSection({ httpPort: null, httpsPort: null });
 
     await userEvent.click(screen.getByRole('button', { name: 'HTTPS' }));
 
     await waitFor(() =>
-      expect(replace).toHaveBeenCalledWith('https://localhost:5173/config/admin'),
+      expect(replace).toHaveBeenCalledWith('https://localhost:8000/config/admin'),
     );
   });
 

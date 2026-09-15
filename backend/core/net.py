@@ -19,6 +19,10 @@ import socket
 # `localhost` — which browsers resolve to ``::1`` first — actually answer.
 DEFAULT_HOST = ""
 LOOPBACK = "127.0.0.1"
+# The name, not the literal: it resolves to whichever family answers, and a
+# wildcard bind answers on both. It is also a secure context in every browser,
+# which `127.0.0.1` is too but a LAN address over plain HTTP is not.
+LOCALHOST = "localhost"
 
 # RFC 5737 TEST-NET-1, reserved for documentation and never routed on the
 # public Internet — the probe below can therefore never reach a real host.
@@ -34,6 +38,11 @@ _PROBE_TARGET = ("192.0.2.1", 9)
 # ``launcher._port_bindable`` probes with an AF_INET socket, so it would fail
 # there as a phantom port conflict long before reaching this module.
 _WILDCARD_HOSTS = frozenset({"", "0.0.0.0"})
+
+
+def is_wildcard(host: str) -> bool:
+    """True when *host* means "every interface" rather than one of them."""
+    return host in _WILDCARD_HOSTS
 
 
 def resolve_bind_host() -> str:
@@ -90,7 +99,7 @@ def advertised_address() -> str:
     an A record at all, so the routed address is the closest honest answer.
     """
     host = resolve_bind_host()
-    if host in _WILDCARD_HOSTS:
+    if is_wildcard(host):
         return lan_address()
     try:
         socket.inet_aton(host)
@@ -107,24 +116,44 @@ def hostname() -> str:
         return ""
 
 
-def display_urls(scheme: str, host: str, port: int) -> list[str]:
-    """Addresses to print for a listener on *host*, most useful first.
+def display_url(scheme: str, host: str, port: int) -> str:
+    """The address to open a listener on *host* at, from this machine.
 
     A wildcard bind answers on every interface and ``http://0.0.0.0:8000`` is
-    not a URL a browser can open, so the banner names the ways in instead: the
-    machine name first — it outlives a DHCP lease the address does not — then
-    the routed address for a network with no working name resolution, then
-    loopback for whoever is sitting at the device.
+    not a URL a browser can open, so the banner names ``localhost``: the splash
+    is read on the machine it was printed on, and loopback is where the
+    shortest and most private route in is. ``network_urls`` is what the other
+    machines get.
+
+    A pinned ``NEXTHMI_HOST`` is printed as itself, never as ``localhost``:
+    a pin binds that address alone, so ``127.0.0.1`` leaves ``::1`` unbound and
+    a LAN pin leaves loopback unbound — and ``localhost`` is whichever of those
+    the browser resolves first.
     """
-    if host not in _WILDCARD_HOSTS:
-        return [_url(scheme, host, port)]
-    urls: list[str] = []
-    for candidate in (hostname(), lan_address(), LOOPBACK):
-        if not candidate:
-            continue
-        url = _url(scheme, candidate, port)
-        if url not in urls:
-            urls.append(url)
+    return _url(scheme, LOCALHOST if is_wildcard(host) else host, port)
+
+
+def network_urls(scheme: str, host: str, port: int) -> list[str]:
+    """The same listener as another machine reaches it: this host's name first,
+    then its routed address.
+
+    The name is what survives a DHCP lease; the address is what works where
+    name resolution does not. Both, because which one a given network has is
+    not knowable from here.
+
+    Empty when the bind names one interface — ``display_url`` already printed
+    that address, and it is the only one answering — and empty when the probe
+    finds no route off-box, where "reachable from elsewhere" is not true of
+    any address this machine has.
+    """
+    if not is_wildcard(host):
+        return []
+    address = lan_address()
+    if address == LOOPBACK:
+        return []
+    name = hostname()
+    urls = [_url(scheme, name, port)] if name and name != address else []
+    urls.append(_url(scheme, address, port))
     return urls
 
 

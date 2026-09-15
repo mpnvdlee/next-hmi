@@ -381,7 +381,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 # ── SPA serving (production runtime only) ───────────────────────────────────
 # Mounted iff NEXTHMI_FRONTEND_DIST is set. In dev the env var is unset and
-# Vite serves the SPA on :5173 with /api proxied to the backend — none of the
+# Vite serves the SPA on :8000 with /api proxied to the backend — none of the
 # routes below register. The catch-all is registered LAST so explicit API
 # routes, websocket, and static mounts win on path-prefix collisions.
 

@@ -5,6 +5,7 @@ import asyncio
 import ipaddress
 import socket
 
+import pytest
 from core import net
 
 
@@ -155,38 +156,77 @@ def test_advertised_address_falls_back_for_a_non_ipv4_pin(monkeypatch) -> None:
     assert net.advertised_address() == "192.168.1.10"
 
 
-# ── display_urls ─────────────────────────────────────────────────────────────
+# ── is_wildcard ──────────────────────────────────────────────────────────────
 
 
-def test_display_urls_names_the_ways_into_a_wildcard_bind(monkeypatch) -> None:
+@pytest.mark.parametrize("host", ["", "0.0.0.0"])
+def test_is_wildcard_covers_both_spellings_of_every_interface(host) -> None:
+    assert net.is_wildcard(host)
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "10.0.0.7", "panel-pc", "localhost"])
+def test_is_wildcard_rejects_a_named_interface(host) -> None:
+    assert not net.is_wildcard(host)
+
+
+# ── display_url ──────────────────────────────────────────────────────────────
+
+
+def test_display_url_names_localhost_for_a_wildcard_bind(monkeypatch) -> None:
+    """The splash is read on the machine that printed it."""
     monkeypatch.setattr(net, "hostname", lambda: "panel-pc")
     monkeypatch.setattr(net, "lan_address", lambda: "192.168.1.10")
-    assert net.display_urls("http", "0.0.0.0", 8000) == [
+    assert net.display_url("http", "0.0.0.0", 8000) == "http://localhost:8000"
+
+
+def test_display_url_keeps_an_explicit_bind_as_itself(monkeypatch) -> None:
+    """A pin binds that address alone, and `localhost` is whichever of ::1 and
+    127.0.0.1 the browser tries first — so it is never substituted in."""
+    monkeypatch.setattr(net, "hostname", lambda: "panel-pc")
+    assert net.display_url("https", "127.0.0.1", 8443) == "https://127.0.0.1:8443"
+    assert net.display_url("http", "10.0.0.7", 8000) == "http://10.0.0.7:8000"
+
+
+def test_display_url_brackets_an_ipv6_literal() -> None:
+    assert net.display_url("http", "fd00::1", 8000) == "http://[fd00::1]:8000"
+
+
+# ── network_urls ─────────────────────────────────────────────────────────────
+
+
+def test_network_urls_give_the_name_then_the_address(monkeypatch) -> None:
+    """Both: the name outlives a DHCP lease, the address works where name
+    resolution does not, and which one a network has is not knowable here."""
+    monkeypatch.setattr(net, "hostname", lambda: "panel-pc")
+    monkeypatch.setattr(net, "lan_address", lambda: "192.168.1.10")
+    assert net.network_urls("http", "", 8000) == [
         "http://panel-pc:8000",
         "http://192.168.1.10:8000",
-        "http://127.0.0.1:8000",
     ]
 
 
-def test_display_urls_keeps_an_explicit_bind_as_itself(monkeypatch) -> None:
-    monkeypatch.setattr(net, "hostname", lambda: "panel-pc")
-    assert net.display_urls("https", "127.0.0.1", 8443) == ["https://127.0.0.1:8443"]
-
-
-def test_display_urls_drops_an_unreadable_hostname(monkeypatch) -> None:
+def test_network_urls_drop_an_unreadable_hostname(monkeypatch) -> None:
     monkeypatch.setattr(net, "hostname", lambda: "")
     monkeypatch.setattr(net, "lan_address", lambda: "192.168.1.10")
-    assert net.display_urls("http", "", 8000) == [
-        "http://192.168.1.10:8000",
-        "http://127.0.0.1:8000",
-    ]
+    assert net.network_urls("http", "0.0.0.0", 8000) == ["http://192.168.1.10:8000"]
 
 
-def test_display_urls_never_repeats_an_address(monkeypatch) -> None:
-    monkeypatch.setattr(net, "hostname", lambda: "127.0.0.1")
-    monkeypatch.setattr(net, "lan_address", lambda: "127.0.0.1")
-    assert net.display_urls("http", "0.0.0.0", 8000) == ["http://127.0.0.1:8000"]
+def test_network_urls_never_repeat_an_address(monkeypatch) -> None:
+    monkeypatch.setattr(net, "hostname", lambda: "192.168.1.10")
+    monkeypatch.setattr(net, "lan_address", lambda: "192.168.1.10")
+    assert net.network_urls("http", "", 8000) == ["http://192.168.1.10:8000"]
 
 
-def test_display_urls_brackets_an_ipv6_literal() -> None:
-    assert net.display_urls("http", "fd00::1", 8000) == ["http://[fd00::1]:8000"]
+def test_network_urls_are_empty_with_no_route_off_box(monkeypatch) -> None:
+    """An unplugged NIC: no address here is reachable from elsewhere, so the
+    banner says nothing rather than naming one that is not."""
+    monkeypatch.setattr(net, "hostname", lambda: "panel-pc")
+    monkeypatch.setattr(net, "lan_address", lambda: net.LOOPBACK)
+    assert net.network_urls("http", "", 8000) == []
+
+
+def test_network_urls_are_empty_for_a_pinned_bind(monkeypatch) -> None:
+    """That address is the one display_url printed, and the only one listening."""
+    monkeypatch.setattr(net, "hostname", lambda: "panel-pc")
+    monkeypatch.setattr(net, "lan_address", lambda: "192.168.1.10")
+    assert net.network_urls("http", "10.0.0.7", 8000) == []

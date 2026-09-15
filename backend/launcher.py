@@ -11,8 +11,8 @@ needs to influence those paths has to do so *before* the first import. The
 launcher is the place that runs early enough to do that.
 
 The plain dev workflow (``python start-dev.py``) does **not** go through this
-module — it starts uvicorn directly against ``manager:app`` so Vite-on-:5173
-keeps working unchanged.
+module — it starts uvicorn directly against ``manager:app`` on :8001, behind
+the Vite dev server that owns :8000.
 """
 from __future__ import annotations
 
@@ -723,21 +723,20 @@ def _run_manager(data_dir: Path, args: argparse.Namespace) -> int:
 
     app_port = https_port if split_ports else port
     scheme = "https" if tls else "http"
-    urls = net.display_urls(scheme, host, app_port)
-    open_url = urls[0]
+    open_url = net.display_url(scheme, host, app_port)
     print_banner(
         "runtime",
         BannerFields(
             runtime_home=data_dir,
             open_url=open_url,
-            alt_urls=tuple(urls[1:]),
+            network_urls=(tuple(net.network_urls(scheme, host, app_port)),),
             version=_read_version(),
         ),
     )
     redirector = redirector_thread = None
     if split_ports:
         redirector, redirector_thread = _start_https_redirector(host, port, https_port)
-        print(f"  {net.display_urls('http', host, port)[0]} redirects here.")
+        print(f"  {net.display_url('http', host, port)} redirects here.")
         print()
     if expiry_warning is not None:
         print(f"  {expiry_warning}")

@@ -1,9 +1,12 @@
-"""The dev backend's bind host (``start-dev.py``).
+"""The dev backend's bind host, and the host its banner prints (``start-dev.py``).
 
 ``start-dev.py`` runs uvicorn with ``--reload``, which binds through
 ``Config.bind_socket`` rather than the event loop. That path opens a single
 AF_INET socket unless the host string contains a colon, so it needs the
 opposite spelling from the launcher's — see ``core.net.DEFAULT_HOST``.
+
+What the splash prints is a separate question from what is bound — see
+``core.net.display_url`` and ``core.net.network_urls``.
 """
 from __future__ import annotations
 
