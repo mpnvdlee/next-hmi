@@ -5,6 +5,16 @@ import { MemoryRouter } from 'react-router-dom';
 import { useComponentPropStore } from '@hmi/store/widgetPropStore';
 import StringInput from './index';
 
+// The reveal button's glyph is a code-split Phosphor icon: a `React.lazy` over a
+// dynamic import of the whole 130-icon module. `user.click` runs inside `act`,
+// which waits for that import to resolve — ~2s on an idle machine, and past the
+// 5s test timeout once a full run is competing for the CPU. Nothing here asserts
+// which glyph renders (the Icon widget's own test covers the real loader), so
+// stub the module and stop timing the bundler.
+vi.mock('@shared/utils/phosphorIconComponents', () => ({
+  BUILTIN_ICON_COMPONENTS: { eye: () => <svg />, 'eye-slash': () => <svg /> },
+}));
+
 function renderInput(properties: Record<string, unknown>, id = 'entry') {
   return render(
     <MemoryRouter>
