@@ -93,8 +93,12 @@ function Hold() {
 
 describe('useBootHold', () => {
   beforeEach(() => {
-    resetBootHold();
+    // Fake timers first: resetBootHold stamps the start of the floor, and that
+    // stamp has to come off the clock this test then advances. Reset it under
+    // the real clock and the floor is part-spent before the first assertion,
+    // by however long the suite took to get here.
     vi.useFakeTimers();
+    resetBootHold();
   });
   afterEach(() => {
     resetBootHold();
