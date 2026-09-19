@@ -1,0 +1,277 @@
+{
+  "id": "wiz-2",
+  "title": {
+    "$loc": "Choose your beans"
+  },
+  "description": "Gated: Next stays shut until a bean is picked.",
+  "showHeader": false,
+  "mainBackground": "var(--hmi-bg)",
+  "sections": {
+    "content": [
+      {
+        "id": "wiz-2-root",
+        "type": "Container",
+        "name": "Wizard step",
+        "properties": {
+          "showWhenEmpty": true,
+          "background": "transparent"
+        },
+        "layout": {
+          "direction": "column",
+          "gap": "16px",
+          "wrap": false,
+          "align": "stretch",
+          "justify": "flex-start",
+          "widthMode": "fill",
+          "heightMode": "fixed",
+          "paddingTop": "16px",
+          "paddingRight": "16px",
+          "paddingBottom": "16px",
+          "paddingLeft": "16px",
+          "height": "430px"
+        },
+        "children": [
+          {
+            "id": "wiz-2-card",
+            "type": "$component:card",
+            "name": "Choose your beans",
+            "properties": {
+              "title": {
+                "$loc": "Choose your beans"
+              },
+              "showTitle": false
+            },
+            "layout": {
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "minWidth": "0"
+            },
+            "children": [
+              {
+                "id": "wiz-2-card-body",
+                "type": "Container",
+                "name": "Body",
+                "properties": {
+                  "showWhenEmpty": true,
+                  "background": "transparent"
+                },
+                "layout": {
+                  "direction": "column",
+                  "gap": "12px",
+                  "wrap": false,
+                  "align": "stretch",
+                  "justify": "flex-start",
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "paddingTop": "14px",
+                  "paddingRight": "18px",
+                  "paddingBottom": "18px",
+                  "paddingLeft": "18px"
+                },
+                "children": [
+                  {
+                    "id": "wiz-2-intro",
+                    "type": "Label",
+                    "name": "Intro",
+                    "properties": {
+                      "text": {
+                        "$loc": "Pick the beans for this brew."
+                      },
+                      "typography": "body"
+                    },
+                    "layout": {
+                      "widthMode": "fill",
+                      "heightMode": "hug"
+                    }
+                  },
+                  {
+                    "id": "wiz-2-beans",
+                    "type": "ButtonRow",
+                    "name": "Bean type",
+                    "properties": {
+                      "label": {
+                        "$loc": "Beans"
+                      },
+                      "options": [
+                        {
+                          "label": "Espresso",
+                          "value": "espresso"
+                        },
+                        {
+                          "label": "Filter",
+                          "value": "filter"
+                        },
+                        {
+                          "label": "Decaf",
+                          "value": "decaf"
+                        }
+                      ],
+                      "variable": {
+                        "$var": {
+                          "path": "Brew:Wizard/BeanType"
+                        }
+                      }
+                    },
+                    "layout": {
+                      "widthMode": "fill",
+                      "heightMode": "hug"
+                    }
+                  },
+                  {
+                    "id": "wiz-2-hint",
+                    "type": "Label",
+                    "name": "Hint",
+                    "properties": {
+                      "text": {
+                        "$loc": "Pick your beans to continue."
+                      },
+                      "typography": "caption",
+                      "color": "var(--hmi-warn)",
+                      "visible": {
+                        "$switch": {
+                          "value": {
+                            "$var": {
+                              "path": "Brew:Wizard/BeanType"
+                            }
+                          },
+                          "cases": [
+                            {
+                              "when": "espresso",
+                              "then": false
+                            },
+                            {
+                              "when": "filter",
+                              "then": false
+                            },
+                            {
+                              "when": "decaf",
+                              "then": false
+                            }
+                          ],
+                          "default": true
+                        }
+                      }
+                    },
+                    "layout": {
+                      "widthMode": "fill",
+                      "heightMode": "hug"
+                    }
+                  }
+                ],
+                "slot": "body"
+              }
+            ]
+          },
+          {
+            "id": "wiz-2-push",
+            "type": "StretchSpacer",
+            "name": "Push",
+            "properties": {
+              "mode": "ratio",
+              "ratio": 1
+            },
+            "layout": {
+              "grow": 1,
+              "widthMode": "fill",
+              "heightMode": "fill"
+            }
+          },
+          {
+            "id": "wiz-2-nav",
+            "type": "Container",
+            "name": "Step navigation",
+            "properties": {
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "row",
+              "gap": "10px",
+              "wrap": false,
+              "align": "center",
+              "justify": "flex-start",
+              "widthMode": "fill",
+              "heightMode": "hug"
+            },
+            "children": [
+              {
+                "id": "wiz-2-count",
+                "type": "Label",
+                "name": "Step counter",
+                "properties": {
+                  "text": "2 / 5",
+                  "typography": "caption",
+                  "color": "var(--hmi-text-muted)"
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              },
+              {
+                "id": "wiz-2-nav-sp",
+                "type": "StretchSpacer",
+                "name": "Spacer",
+                "properties": {
+                  "mode": "ratio",
+                  "ratio": 1
+                },
+                "layout": {
+                  "grow": 1,
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "minWidth": "auto"
+                }
+              },
+              {
+                "id": "wiz-2-navigator",
+                "type": "PageNavigator",
+                "name": "Step navigation",
+                "properties": {
+                  "groupId": "brew-wizard",
+                  "previousLabel": {
+                    "$loc": "← Previous"
+                  },
+                  "nextLabel": {
+                    "$loc": "Next →"
+                  },
+                  "showPrevious": true,
+                  "showNext": true,
+                  "prevEnabled": true,
+                  "nextEnabled": {
+                    "$switch": {
+                      "value": {
+                        "$var": {
+                          "path": "Brew:Wizard/BeanType"
+                        }
+                      },
+                      "cases": [
+                        {
+                          "when": "espresso",
+                          "then": true
+                        },
+                        {
+                          "when": "filter",
+                          "then": true
+                        },
+                        {
+                          "when": "decaf",
+                          "then": true
+                        }
+                      ],
+                      "default": false
+                    }
+                  }
+                },
+                "layout": {
+                  "widthMode": "hug",
+                  "heightMode": "hug"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

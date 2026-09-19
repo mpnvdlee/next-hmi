@@ -20,6 +20,21 @@
       "groups": [
         "guest"
       ]
+    },
+    {
+      "id": "brewer",
+      "username": "brewer",
+      "password": "",
+      "passwordHash": {
+        "version": 1,
+        "algorithm": "pbkdf2-sha256",
+        "iterations": 200000,
+        "salt": "54db4baac309d82f58f1286221d7b0c3",
+        "digest": "a7874f84a1ba761aaa808f94f86f34f978cb8842164897ff31a0a7abcaedf6cf"
+      },
+      "groups": [
+        "admin"
+      ]
     }
   ]
 }

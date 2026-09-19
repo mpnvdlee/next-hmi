@@ -157,6 +157,28 @@
           "writable": true
         }
       ]
+    },
+    {
+      "kind": "folder",
+      "name": "Wizard",
+      "children": [
+        {
+          "kind": "variable",
+          "display_name": "BeanType",
+          "data_type": "String",
+          "enabled": true,
+          "writable": true
+        },
+        {
+          "kind": "variable",
+          "display_name": "CupCount",
+          "data_type": "Int32",
+          "enabled": true,
+          "writable": true,
+          "min": 0,
+          "max": 12
+        }
+      ]
     }
   ]
 }

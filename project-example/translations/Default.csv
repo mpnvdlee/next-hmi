@@ -5,6 +5,8 @@ Active alarms;Actieve alarmen
 Alarm history;Alarmhistorie
 Alarms;Alarmen
 Bean hopper;Bonentrechter
+Bean level;Bonenniveau
+Beans;Bonen
 Bench-top espresso;Espresso op de werkbank
 Boiler;Boiler
 Boiler over-temperature;Boiler te heet
@@ -15,27 +17,42 @@ Brew;Zetten
 Brew now;Nu zetten
 Brew now confirms with an alert, then writes a variable and reports back with a toast.;Nu zetten vraagt eerst om bevestiging, schrijft dan een variabele en meldt het resultaat met een toast.
 Brewing;Zetten
+Brewing started.;Zetten gestart.
 Cancel;Annuleren
 Change the boiler temperature on the Machine page to make it move.;Wijzig de boilertemperatuur op de Machine-pagina om hem te laten bewegen.
+Check your levels;Controleer je niveaus
+Choose your beans;Kies je bonen
 Consumables;Verbruiksartikelen
 Consumables & waste;Verbruik & afval
 Could not load;Laden mislukt
+Cups;Kopjes
 Cups today;Kopjes vandaag
 Dark;Donker
 Data & bindings;Data & koppelingen
+Day counter reset.;Dagteller gereset.
+Demo account: brewer / espresso;Demo-account: brewer / espresso
 Dose;Dosering
 Drink;Drank
 Drop the water tank below 15 % — a warning joins the list.;Laat de watertank onder 15 % zakken — er verschijnt een waarschuwing.
+Empty grounds drawer;Koffiediklade legen
+Factory defaults;Fabrieksinstellingen
 Fill the grounds drawer — an info alarm, no popup.;Vul de koffiediklade — een infomelding, zonder pop-up.
+Five steps to a shot. Pick your beans, check the levels, say how many cups, then start the machine.;Vijf stappen naar een shot. Kies je bonen, controleer de niveaus, geef aan hoeveel kopjes en start dan de machine.
 Four definitions — two on value ranges, one low-level, one boolean. Trip them from the Machine page.;Vier definities — twee op waardebereik, één op laag niveau, één booleaans. Activeer ze vanaf de Machine-pagina.
 Grind;Maling
+Grounds drawer emptied.;Koffiediklade geleegd.
 Grounds drawer full;Koffiediklade vol
+Guided brew setup;Begeleide zetinstelling
+Guided setup;Begeleide instelling
+How many cups?;Hoeveel kopjes?
 Last shot;Laatste shot
 Light;Licht
 Load;Laden
 Load a different drink on the Brew page — every setpoint moves at once.;Laad een andere drank op de Zetten-pagina — alle instelwaarden verspringen tegelijk.
 Loaded;Geladen
+Log out;Afmelden
 Machine;Machine
+Machine power;Machinevoeding
 Machine reset to its opening state.;Machine teruggezet naar de begintoestand.
 Main;Hoofd
 Main power;Hoofdschakelaar
@@ -43,12 +60,16 @@ Monitor;Bewaken
 NEXT BREW;NEXT BREW
 NEXT HMI demo project;NEXT HMI-demoproject
 Next shot;Volgende shot
+Next →;Volgende →
 No recipe loaded;Geen recept geladen
 Nothing here talks to real hardware. The variables live in a static datasource, so every value starts where the project put it and only moves when you move it. That is the point — open the Machine page and drive it.;Niets hier praat met echte hardware. De variabelen staan in een statische databron, dus elke waarde begint waar het project hem zette en beweegt alleen als jij hem beweegt. Dat is de bedoeling — open de Machine-pagina en bestuur hem.
 Off;Uit
 One static datasource. Every reading is a $var binding, and the status pill and tile tones are computed with $if and $compare.;Eén statische databron. Elke uitlezing is een $var-koppeling en de statuspil en tegelkleuren worden berekend met $if en $compare.
 Pages & shell;Pagina's & omlijsting
+Password;Wachtwoord
 Peek at the alarms;Even naar de alarmen kijken
+Pick the beans for this brew.;Kies de bonen voor dit zetsel.
+Pick your beans to continue.;Kies je bonen om verder te gaan.
 Power & grind;Voeding & maling
 Pump pressure;Pompdruk
 Pump pressure high;Pompdruk hoog
@@ -57,30 +78,51 @@ Ready;Gereed
 Recipe;Recept
 Recipes;Recepten
 Recorded history;Opgenomen historie
+Reset day counter;Dagteller resetten
 Reset the machine;Machine terugzetten
+Review and start;Controleren en starten
 Samples land here as you move the setpoints on the Machine page.;Metingen verschijnen hier zodra je de instelwaarden op de Machine-pagina wijzigt.
+Service;Onderhoud
+Set at least one cup to continue.;Stel minstens één kopje in om verder te gaan.
+Set how many cups this run should pull.;Stel in hoeveel kopjes deze run moet zetten.
 Setpoint;Instelwaarde
 Setpoints;Instelwaarden
+Setpoints restored to factory defaults.;Instelwaarden teruggezet op fabrieksinstellingen.
 Shot stopped.;Shot gestopt.
+Sign in;Aanmelden
+Sign in to change these.;Meld je aan om deze te wijzigen.
+Sign in to reveal the Service card — its Visible is bound to $userGroups.;Meld je aan om de Onderhoud-kaart te tonen — de Visible is gebonden aan $userGroups.
+Sign-in failed;Aanmelden mislukt
 Signed in as;Aangemeld als
+Signed out.;Afgemeld.
+Start brewing;Zetten starten
 Start brewing?;Zetten starten?
+Starting runs the group head until you press Stop on the Brew page.;Starten laat de zetgroep draaien tot je op de Zetten-pagina op Stop drukt.
+Steps 2 and 4 need an answer before Next opens.;Stap 2 en 4 hebben een antwoord nodig voordat Volgende opengaat.
 Stop;Stoppen
 Switch the language in the header — every label follows.;Wissel de taal in de koptekst — alle labels volgen.
 The group head will run until you press Stop.;De zetgroep loopt door totdat je op Stoppen drukt.
 Themes & translations;Thema's & vertalingen
 There is no PLC behind this demo — you are the PLC. Everything here drives the Brew and Monitor pages.;Achter deze demo zit geen PLC — jij bent de PLC. Alles hier stuurt de Zetten- en Bewaken-pagina aan.
+This whole card is hidden until someone signs in — Visible is bound to $userGroups, not just Interactable.;Deze hele kaart is verborgen tot iemand zich aanmeldt — Visible is gebonden aan $userGroups, niet alleen Interactable.
 Three drinks. Loading one writes six variables at once and verifies them.;Drie dranken. Eén laden schrijft zes variabelen tegelijk en verifieert ze.
 Three pages in a group, plus a header and a footer. This panel is a dialog — for a page overlay, try Peek at the alarms on the Machine page.;Drie pagina's in een groep, plus een koptekst en een voettekst. Dit paneel is een dialoog — voor een pagina-overlay: probeer Even naar de alarmen kijken op de Machine-pagina.
 Today;Vandaag
+Top either up on the Machine page if it is running low.;Vul ze bij op de Machine-pagina als er te weinig is.
 Top these up on the Machine page.;Vul deze bij op de Machine-pagina.
 Try this;Probeer dit
 Two themes and two languages, both switched from the header.;Twee thema's en twee talen, beide te wisselen vanuit de koptekst.
+Unlock the machine settings.;Ontgrendel de machine-instellingen.
+Username;Gebruikersnaam
 Water tank;Watertank
 Water tank low;Watertank laag
+Welcome;Welkom
 Welcome to NEXT BREW — open the Machine page and drive it yourself.;Welkom bij NEXT BREW — open de Machine-pagina en bestuur hem zelf.
 Write failed;Schrijven mislukt
+admin only;alleen admin
 beans;bonen
 buffered in the page;gebufferd in de pagina
 drives the Brew page;stuurt de Zetten-pagina aan
 historian · 24 h retention;historian · 24 u bewaartijd
 target;doel
+← Previous;← Vorige

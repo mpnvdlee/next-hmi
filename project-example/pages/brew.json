@@ -761,6 +761,56 @@
                               "widthMode": "hug",
                               "heightMode": "hug"
                             }
+                          },
+                          {
+                            "id": "brew-wizard-open",
+                            "type": "Button",
+                            "name": "Guided setup",
+                            "properties": {
+                              "label": {
+                                "$loc": "Guided setup"
+                              },
+                              "iconName": {
+                                "$static": {
+                                  "type": "builtin",
+                                  "name": "list"
+                                }
+                              },
+                              "variant": "outline",
+                              "actions": {
+                                "onPress": [
+                                  {
+                                    "type": "writeDataVariable",
+                                    "datasource": "Brew",
+                                    "path": "Wizard/BeanType",
+                                    "value": "",
+                                    "onSuccess": [
+                                      {
+                                        "type": "writeDataVariable",
+                                        "datasource": "Brew",
+                                        "path": "Wizard/CupCount",
+                                        "value": 0,
+                                        "onSuccess": [
+                                          {
+                                            "type": "openPageOverlay",
+                                            "pageId": "wiz-1",
+                                            "size": "medium",
+                                            "placement": "center",
+                                            "backdrop": "dim"
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            },
+                            "layout": {
+                              "widthMode": "fill",
+                              "heightMode": "hug",
+                              "grow": 1,
+                              "minWidth": "0"
+                            }
                           }
                         ]
                       }

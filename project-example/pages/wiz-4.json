@@ -1,0 +1,242 @@
+{
+  "id": "wiz-4",
+  "title": {
+    "$loc": "How many cups?"
+  },
+  "description": "Gated: Next stays shut until the count is above zero.",
+  "showHeader": false,
+  "mainBackground": "var(--hmi-bg)",
+  "sections": {
+    "content": [
+      {
+        "id": "wiz-4-root",
+        "type": "Container",
+        "name": "Wizard step",
+        "properties": {
+          "showWhenEmpty": true,
+          "background": "transparent"
+        },
+        "layout": {
+          "direction": "column",
+          "gap": "16px",
+          "wrap": false,
+          "align": "stretch",
+          "justify": "flex-start",
+          "widthMode": "fill",
+          "heightMode": "fixed",
+          "paddingTop": "16px",
+          "paddingRight": "16px",
+          "paddingBottom": "16px",
+          "paddingLeft": "16px",
+          "height": "430px"
+        },
+        "children": [
+          {
+            "id": "wiz-4-card",
+            "type": "$component:card",
+            "name": "How many cups?",
+            "properties": {
+              "title": {
+                "$loc": "How many cups?"
+              },
+              "showTitle": false
+            },
+            "layout": {
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "minWidth": "0"
+            },
+            "children": [
+              {
+                "id": "wiz-4-card-body",
+                "type": "Container",
+                "name": "Body",
+                "properties": {
+                  "showWhenEmpty": true,
+                  "background": "transparent"
+                },
+                "layout": {
+                  "direction": "column",
+                  "gap": "12px",
+                  "wrap": false,
+                  "align": "stretch",
+                  "justify": "flex-start",
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "paddingTop": "14px",
+                  "paddingRight": "18px",
+                  "paddingBottom": "18px",
+                  "paddingLeft": "18px"
+                },
+                "children": [
+                  {
+                    "id": "wiz-4-intro",
+                    "type": "Label",
+                    "name": "Intro",
+                    "properties": {
+                      "text": {
+                        "$loc": "Set how many cups this run should pull."
+                      },
+                      "typography": "body"
+                    },
+                    "layout": {
+                      "widthMode": "fill",
+                      "heightMode": "hug"
+                    }
+                  },
+                  {
+                    "id": "wiz-4-cups",
+                    "type": "NumericStepper",
+                    "name": "Cups",
+                    "properties": {
+                      "label": {
+                        "$loc": "Cups"
+                      },
+                      "variable": {
+                        "$var": {
+                          "path": "Brew:Wizard/CupCount"
+                        }
+                      },
+                      "step": 1,
+                      "min": 0,
+                      "max": 12,
+                      "decimals": 0,
+                      "showRangeOnNumpad": true
+                    },
+                    "layout": {
+                      "widthMode": "fill",
+                      "heightMode": "hug"
+                    }
+                  },
+                  {
+                    "id": "wiz-4-hint",
+                    "type": "Label",
+                    "name": "Hint",
+                    "properties": {
+                      "text": {
+                        "$loc": "Set at least one cup to continue."
+                      },
+                      "typography": "caption",
+                      "color": "var(--hmi-warn)",
+                      "visible": {
+                        "$compare": {
+                          "left": {
+                            "$var": {
+                              "path": "Brew:Wizard/CupCount"
+                            }
+                          },
+                          "operator": "<=",
+                          "right": 0
+                        }
+                      }
+                    },
+                    "layout": {
+                      "widthMode": "fill",
+                      "heightMode": "hug"
+                    }
+                  }
+                ],
+                "slot": "body"
+              }
+            ]
+          },
+          {
+            "id": "wiz-4-push",
+            "type": "StretchSpacer",
+            "name": "Push",
+            "properties": {
+              "mode": "ratio",
+              "ratio": 1
+            },
+            "layout": {
+              "grow": 1,
+              "widthMode": "fill",
+              "heightMode": "fill"
+            }
+          },
+          {
+            "id": "wiz-4-nav",
+            "type": "Container",
+            "name": "Step navigation",
+            "properties": {
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "row",
+              "gap": "10px",
+              "wrap": false,
+              "align": "center",
+              "justify": "flex-start",
+              "widthMode": "fill",
+              "heightMode": "hug"
+            },
+            "children": [
+              {
+                "id": "wiz-4-count",
+                "type": "Label",
+                "name": "Step counter",
+                "properties": {
+                  "text": "4 / 5",
+                  "typography": "caption",
+                  "color": "var(--hmi-text-muted)"
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              },
+              {
+                "id": "wiz-4-nav-sp",
+                "type": "StretchSpacer",
+                "name": "Spacer",
+                "properties": {
+                  "mode": "ratio",
+                  "ratio": 1
+                },
+                "layout": {
+                  "grow": 1,
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "minWidth": "auto"
+                }
+              },
+              {
+                "id": "wiz-4-navigator",
+                "type": "PageNavigator",
+                "name": "Step navigation",
+                "properties": {
+                  "groupId": "brew-wizard",
+                  "previousLabel": {
+                    "$loc": "← Previous"
+                  },
+                  "nextLabel": {
+                    "$loc": "Next →"
+                  },
+                  "showPrevious": true,
+                  "showNext": true,
+                  "prevEnabled": true,
+                  "nextEnabled": {
+                    "$compare": {
+                      "left": {
+                        "$var": {
+                          "path": "Brew:Wizard/CupCount"
+                        }
+                      },
+                      "operator": ">",
+                      "right": 0
+                    }
+                  }
+                },
+                "layout": {
+                  "widthMode": "hug",
+                  "heightMode": "hug"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

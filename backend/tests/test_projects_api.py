@@ -19,9 +19,13 @@ from core import manifest as manifest_mod
 from core import mcp_tokens, runtime_home
 from core import project_migrations as pm
 from core.exceptions import register_exception_handlers
+from core.passwords import verify_password
 from core.project_packer import pack_project
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+# What project-example's login dialog tells the operator to type.
+DEMO_PASSWORD = "espresso"
 
 
 @pytest.fixture
@@ -567,16 +571,38 @@ def test_example_template_ships_without_project_metadata():
     assert "project" not in config
 
 
-def test_example_template_ships_without_credentials():
-    """A template carrying a real admin passwordHash would clone the same
-    credential into every project made from it, and lock operators out of an
-    account whose plaintext exists nowhere — the same identity-artifact bug
-    the `project` id guard above prevents, but for a secret."""
-    template = projects_api._template_dir("example")
-    assert template is not None, "project-example/ must be bundled"
+def test_seed_template_ships_without_credentials():
+    """The seed is the clean customer-facing template. A passwordHash here
+    would clone the same credential into every project an operator creates,
+    and lock them out of an account whose plaintext exists nowhere — the same
+    identity-artifact bug the `project` id guard above prevents, but for a
+    secret."""
+    template = projects_api._template_dir("empty")
+    assert template is not None, "project-seed/ must be bundled"
     users = json.loads((template / "users.json").read_text(encoding="utf-8"))
     assert [user["id"] for user in users["users"]] == ["guest"]
     assert all("passwordHash" not in user for user in users["users"])
+
+
+def test_example_template_ships_only_the_documented_demo_account():
+    """The example is a demo, so unlike the seed it does ship one login — its
+    sign-in dialog is nothing to look at without an account to use. What must
+    not happen is a credential whose plaintext lives nowhere, so pin the
+    shipped hash to the very password the dialog prints on screen: the two
+    cannot drift apart without this failing."""
+    template = projects_api._template_dir("example")
+    assert template is not None, "project-example/ must be bundled"
+
+    users = json.loads((template / "users.json").read_text(encoding="utf-8"))
+    assert [user["id"] for user in users["users"]] == ["guest", "brewer"]
+    guest, brewer = users["users"]
+    assert "passwordHash" not in guest, "guest can never carry a password"
+    assert verify_password(brewer, DEMO_PASSWORD)
+
+    config = json.loads((template / "config.json").read_text(encoding="utf-8"))
+    assert DEMO_PASSWORD in json.dumps(config), (
+        "the login dialog must print the demo password it ships"
+    )
 
 
 def test_template_lookup_follows_the_install_root(monkeypatch, tmp_path):

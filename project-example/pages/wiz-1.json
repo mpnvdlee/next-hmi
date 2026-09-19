@@ -1,0 +1,290 @@
+{
+  "id": "wiz-1",
+  "title": {
+    "$loc": "Welcome"
+  },
+  "description": "What the next four steps cover.",
+  "showHeader": false,
+  "mainBackground": "var(--hmi-bg)",
+  "sections": {
+    "content": [
+      {
+        "id": "wiz-1-root",
+        "type": "Container",
+        "name": "Wizard step",
+        "properties": {
+          "showWhenEmpty": true,
+          "background": "transparent"
+        },
+        "layout": {
+          "direction": "column",
+          "gap": "16px",
+          "wrap": false,
+          "align": "stretch",
+          "justify": "flex-start",
+          "widthMode": "fill",
+          "heightMode": "fixed",
+          "paddingTop": "16px",
+          "paddingRight": "16px",
+          "paddingBottom": "16px",
+          "paddingLeft": "16px",
+          "height": "430px"
+        },
+        "children": [
+          {
+            "id": "wiz-1-card",
+            "type": "$component:card",
+            "name": "Welcome",
+            "properties": {
+              "title": {
+                "$loc": "Welcome"
+              },
+              "showTitle": false
+            },
+            "layout": {
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "minWidth": "0"
+            },
+            "children": [
+              {
+                "id": "wiz-1-card-body",
+                "type": "Container",
+                "name": "Body",
+                "properties": {
+                  "showWhenEmpty": true,
+                  "background": "transparent"
+                },
+                "layout": {
+                  "direction": "column",
+                  "gap": "12px",
+                  "wrap": false,
+                  "align": "stretch",
+                  "justify": "flex-start",
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "paddingTop": "14px",
+                  "paddingRight": "18px",
+                  "paddingBottom": "18px",
+                  "paddingLeft": "18px"
+                },
+                "children": [
+                  {
+                    "id": "wiz-1-intro",
+                    "type": "Label",
+                    "name": "Intro",
+                    "properties": {
+                      "text": {
+                        "$loc": "Five steps to a shot. Pick your beans, check the levels, say how many cups, then start the machine."
+                      },
+                      "typography": "body"
+                    },
+                    "layout": {
+                      "widthMode": "fill",
+                      "heightMode": "hug"
+                    }
+                  },
+                  {
+                    "id": "wiz-1-note",
+                    "type": "Label",
+                    "name": "Note",
+                    "properties": {
+                      "text": {
+                        "$loc": "Steps 2 and 4 need an answer before Next opens."
+                      },
+                      "typography": "caption",
+                      "color": "var(--hmi-text-muted)"
+                    },
+                    "layout": {
+                      "widthMode": "fill",
+                      "heightMode": "hug"
+                    }
+                  },
+                  {
+                    "id": "wiz-1-sep",
+                    "type": "Separator",
+                    "name": "Separator",
+                    "properties": {},
+                    "layout": {
+                      "widthMode": "fill",
+                      "heightMode": "hug"
+                    }
+                  },
+                  {
+                    "id": "wiz-1-power-row",
+                    "type": "Container",
+                    "name": "Power",
+                    "properties": {
+                      "showWhenEmpty": true,
+                      "background": "transparent"
+                    },
+                    "layout": {
+                      "direction": "row",
+                      "gap": "10px",
+                      "wrap": false,
+                      "align": "center",
+                      "justify": "flex-start",
+                      "widthMode": "fill",
+                      "heightMode": "hug"
+                    },
+                    "children": [
+                      {
+                        "id": "wiz-1-power-lbl",
+                        "type": "Label",
+                        "name": "Power label",
+                        "properties": {
+                          "text": {
+                            "$loc": "Machine power"
+                          },
+                          "typography": "caption"
+                        },
+                        "layout": {
+                          "widthMode": "fill",
+                          "heightMode": "hug"
+                        }
+                      },
+                      {
+                        "id": "wiz-1-power-sp",
+                        "type": "StretchSpacer",
+                        "name": "Spacer",
+                        "properties": {
+                          "mode": "ratio",
+                          "ratio": 1
+                        },
+                        "layout": {
+                          "grow": 1,
+                          "widthMode": "fill",
+                          "heightMode": "hug",
+                          "minWidth": "auto"
+                        }
+                      },
+                      {
+                        "id": "wiz-1-power",
+                        "type": "StatusPill",
+                        "name": "Power",
+                        "properties": {
+                          "text": {
+                            "$if": {
+                              "condition": {
+                                "$var": {
+                                  "path": "Brew:Machine/Power"
+                                }
+                              },
+                              "true": "On",
+                              "false": "Off"
+                            }
+                          },
+                          "tone": {
+                            "$if": {
+                              "condition": {
+                                "$var": {
+                                  "path": "Brew:Machine/Power"
+                                }
+                              },
+                              "true": "ok",
+                              "false": "neutral"
+                            }
+                          }
+                        },
+                        "layout": {
+                          "widthMode": "hug",
+                          "heightMode": "hug"
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "slot": "body"
+              }
+            ]
+          },
+          {
+            "id": "wiz-1-push",
+            "type": "StretchSpacer",
+            "name": "Push",
+            "properties": {
+              "mode": "ratio",
+              "ratio": 1
+            },
+            "layout": {
+              "grow": 1,
+              "widthMode": "fill",
+              "heightMode": "fill"
+            }
+          },
+          {
+            "id": "wiz-1-nav",
+            "type": "Container",
+            "name": "Step navigation",
+            "properties": {
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "row",
+              "gap": "10px",
+              "wrap": false,
+              "align": "center",
+              "justify": "flex-start",
+              "widthMode": "fill",
+              "heightMode": "hug"
+            },
+            "children": [
+              {
+                "id": "wiz-1-count",
+                "type": "Label",
+                "name": "Step counter",
+                "properties": {
+                  "text": "1 / 5",
+                  "typography": "caption",
+                  "color": "var(--hmi-text-muted)"
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              },
+              {
+                "id": "wiz-1-nav-sp",
+                "type": "StretchSpacer",
+                "name": "Spacer",
+                "properties": {
+                  "mode": "ratio",
+                  "ratio": 1
+                },
+                "layout": {
+                  "grow": 1,
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "minWidth": "auto"
+                }
+              },
+              {
+                "id": "wiz-1-navigator",
+                "type": "PageNavigator",
+                "name": "Step navigation",
+                "properties": {
+                  "groupId": "brew-wizard",
+                  "previousLabel": {
+                    "$loc": "← Previous"
+                  },
+                  "nextLabel": {
+                    "$loc": "Next →"
+                  },
+                  "showPrevious": true,
+                  "showNext": true,
+                  "prevEnabled": true,
+                  "nextEnabled": true
+                },
+                "layout": {
+                  "widthMode": "hug",
+                  "heightMode": "hug"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

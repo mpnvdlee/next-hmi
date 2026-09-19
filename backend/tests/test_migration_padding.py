@@ -17,6 +17,7 @@ unresolvable flex keys.
 """
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -348,4 +349,20 @@ def test_the_step_is_idempotent(project: Path):
     result = migrate_padding(_paths(project), project)
 
     assert (project / "pages" / "p.json").read_text() == once
+    assert result.files_changed == []
+
+
+@pytest.mark.parametrize("template", ["project-seed", "project-example"])
+def test_bundled_templates_are_already_in_the_current_format(template: str, tmp_path: Path) -> None:
+    """A new project is stamped current straight from its template, never
+    migrated, so a template this step would still change would ship broken."""
+    source = Path(__file__).resolve().parents[2] / template
+    for name in ("config.json", "pages", "components"):
+        if (source / name).is_dir():
+            shutil.copytree(source / name, tmp_path / name)
+        elif (source / name).exists():
+            shutil.copy2(source / name, tmp_path / name)
+
+    result = migrate_padding(_paths(tmp_path), tmp_path)
+
     assert result.files_changed == []

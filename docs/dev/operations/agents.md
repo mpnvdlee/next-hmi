@@ -129,14 +129,22 @@ widget schema.
   `project-seed/` at project creation (`template: "example"`): three pages, a
   static datasource, alarms, recipes, two themes and two languages.
 
-  A shipped template must carry no identity and no secret: no `project`
-  metadata block (`ensure_project_metadata` reuses an id it finds on disk, so
-  every project made from the template would share one UUID) and no
-  credentials (a real `passwordHash` would clone one admin credential into
-  every project made from the template, and its plaintext exists nowhere). A
-  template ships the anonymous `guest` user and nothing else.
-  `test_example_template_ships_without_project_metadata` and
-  `test_example_template_ships_without_credentials` in
+  A shipped template must carry no identity: no `project` metadata block
+  (`ensure_project_metadata` reuses an id it finds on disk, so every project
+  made from the template would share one UUID).
+
+  Credentials split the two templates. `project-seed/` carries none — it ships
+  the anonymous `guest` and nothing else, so an operator's own projects start
+  with no reusable secret. `project-example/` ships exactly one demo account,
+  `brewer`, because its sign-in dialog demonstrates nothing without a login to
+  use. What must never ship is a hash whose plaintext lives nowhere: that
+  clones a dead account into every project made from the template. The demo
+  account is safe precisely because the dialog prints its password on screen,
+  and the guard pins the shipped hash to that printed password.
+
+  `test_example_template_ships_without_project_metadata`,
+  `test_seed_template_ships_without_credentials` and
+  `test_example_template_ships_only_the_documented_demo_account` in
   `backend/tests/test_projects_api.py` guard the shipped files against it.
 - `<runtime_home>/` — per-installation state outside the repo: `projects.json`
   manifest, `.logs/`, `.widget-build/`, `tls/`. Resolution order under

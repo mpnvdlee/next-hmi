@@ -17,6 +17,7 @@ geometry of every node before and after.
 """
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -1124,3 +1125,19 @@ def test_the_step_reads_the_custom_widgets_folder_from_the_project_not_the_stagi
     page = json.loads((staged / "pages" / "p.json").read_text())
     assert page["sections"]["content"][0]["layout"]["gap"] == "8px"
     assert any("a widget this project owns" in note for note in result.diagnostics)
+
+
+@pytest.mark.parametrize("template", ["project-seed", "project-example"])
+def test_bundled_templates_are_already_in_the_current_format(template: str, tmp_path: Path) -> None:
+    """A new project is stamped current straight from its template, never
+    migrated, so a template this step would still change would ship broken."""
+    source = Path(__file__).resolve().parents[2] / template
+    for name in ("config.json", "pages", "components"):
+        if (source / name).is_dir():
+            shutil.copytree(source / name, tmp_path / name)
+        elif (source / name).exists():
+            shutil.copy2(source / name, tmp_path / name)
+
+    result = migrate_size_modes(_paths(tmp_path), tmp_path)
+
+    assert result.files_changed == []

@@ -22,6 +22,39 @@
         }
       ],
       "showChildPagesInMenu": true
+    },
+    {
+      "id": "brew-wizard",
+      "title": {
+        "$loc": "Guided brew setup"
+      },
+      "icon": "flask",
+      "description": "A five-step run-up to pulling a shot.",
+      "type": "page-group",
+      "hidden": true,
+      "showChildPagesInMenu": false,
+      "children": [
+        {
+          "id": "wiz-1",
+          "type": "page"
+        },
+        {
+          "id": "wiz-2",
+          "type": "page"
+        },
+        {
+          "id": "wiz-3",
+          "type": "page"
+        },
+        {
+          "id": "wiz-4",
+          "type": "page"
+        },
+        {
+          "id": "wiz-5",
+          "type": "page"
+        }
+      ]
     }
   ],
   "header": [
@@ -210,7 +243,10 @@
                     "activeStyle": "underline",
                     "showSearch": false
                   },
-                  "layout": {}
+                  "layout": {
+                    "heightMode": "hug",
+                    "widthMode": "fill"
+                  }
                 }
               ]
             },
@@ -1354,6 +1390,355 @@
           ]
         }
       ]
+    },
+    {
+      "id": "login",
+      "title": "Sign in",
+      "showCloseButton": true,
+      "closeOnBackgroundPress": true,
+      "widgets": [
+        {
+          "id": "login-root",
+          "type": "Container",
+          "name": "Login",
+          "properties": {
+            "visible": true,
+            "showWhenEmpty": true,
+            "background": "transparent"
+          },
+          "layout": {
+            "direction": "column",
+            "gap": "18px",
+            "wrap": false,
+            "align": "stretch",
+            "justify": "flex-start",
+            "radius": "0",
+            "widthMode": "fixed",
+            "heightMode": "hug",
+            "paddingTop": "24px",
+            "paddingRight": "24px",
+            "paddingBottom": "24px",
+            "paddingLeft": "24px",
+            "width": "100%"
+          },
+          "children": [
+            {
+              "id": "login-head",
+              "type": "Container",
+              "name": "Head",
+              "properties": {
+                "visible": true,
+                "showWhenEmpty": true,
+                "background": "transparent"
+              },
+              "layout": {
+                "direction": "row",
+                "gap": "10px",
+                "wrap": false,
+                "align": "center",
+                "justify": "flex-start",
+                "radius": "0",
+                "widthMode": "fill",
+                "heightMode": "hug",
+                "paddingTop": "0",
+                "paddingRight": "0",
+                "paddingBottom": "0",
+                "paddingLeft": "0"
+              },
+              "children": [
+                {
+                  "id": "login-icon",
+                  "type": "Icon",
+                  "name": "Icon",
+                  "properties": {
+                    "iconName": {
+                      "$static": {
+                        "type": "builtin",
+                        "name": "lock"
+                      }
+                    },
+                    "size": 22,
+                    "color": "var(--hmi-accent)",
+                    "chrome": false
+                  },
+                  "layout": {
+                    "widthMode": "hug",
+                    "heightMode": "hug"
+                  }
+                },
+                {
+                  "id": "login-title",
+                  "type": "Container",
+                  "name": "Title",
+                  "properties": {
+                    "visible": true,
+                    "showWhenEmpty": true,
+                    "background": "transparent"
+                  },
+                  "layout": {
+                    "direction": "column",
+                    "gap": "0",
+                    "wrap": false,
+                    "align": "stretch",
+                    "justify": "flex-start",
+                    "radius": "0",
+                    "widthMode": "fill",
+                    "heightMode": "hug",
+                    "paddingTop": "0",
+                    "paddingRight": "0",
+                    "paddingBottom": "0",
+                    "paddingLeft": "0",
+                    "grow": 1
+                  },
+                  "children": [
+                    {
+                      "id": "login-s",
+                      "type": "Label",
+                      "name": "login-s",
+                      "properties": {
+                        "typography": "body",
+                        "text": {
+                          "$loc": "Unlock the machine settings."
+                        },
+                        "wrap": "wrap"
+                      },
+                      "layout": {
+                        "widthMode": "fill",
+                        "heightMode": "hug"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "login-rule-1",
+              "type": "Separator",
+              "name": "Divider",
+              "properties": {
+                "orientation": "horizontal",
+                "thickness": 1,
+                "color": "var(--hmi-border)",
+                "inset": 0
+              },
+              "layout": {
+                "widthMode": "fill",
+                "heightMode": "hug"
+              }
+            },
+            {
+              "id": "login-fields",
+              "type": "Container",
+              "name": "Fields",
+              "properties": {
+                "visible": true,
+                "showWhenEmpty": true,
+                "background": "transparent"
+              },
+              "layout": {
+                "direction": "column",
+                "gap": "14px",
+                "wrap": false,
+                "align": "stretch",
+                "justify": "flex-start",
+                "radius": "0",
+                "widthMode": "fill",
+                "heightMode": "hug",
+                "paddingTop": "0",
+                "paddingRight": "0",
+                "paddingBottom": "0",
+                "paddingLeft": "0"
+              },
+              "children": [
+                {
+                  "id": "login-user",
+                  "type": "Dropdown",
+                  "name": "Username",
+                  "properties": {
+                    "label": {
+                      "$loc": "Username"
+                    },
+                    "options": {
+                      "$user": {
+                        "field": "userList"
+                      }
+                    },
+                    "selectedValue": "brewer"
+                  },
+                  "layout": {
+                    "widthMode": "fill",
+                    "heightMode": "hug"
+                  }
+                },
+                {
+                  "id": "login-pass",
+                  "type": "StringInput",
+                  "name": "Password",
+                  "properties": {
+                    "label": {
+                      "$loc": "Password"
+                    },
+                    "placeholder": "",
+                    "isPassword": true
+                  },
+                  "layout": {
+                    "widthMode": "fill",
+                    "heightMode": "hug"
+                  }
+                },
+                {
+                  "id": "login-hint",
+                  "type": "Label",
+                  "name": "login-hint",
+                  "properties": {
+                    "typography": "caption",
+                    "text": {
+                      "$loc": "Demo account: brewer / espresso"
+                    },
+                    "wrap": "wrap",
+                    "color": "var(--hmi-text-muted)"
+                  },
+                  "layout": {
+                    "widthMode": "fill",
+                    "heightMode": "hug"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "login-rule-2",
+              "type": "Separator",
+              "name": "Divider",
+              "properties": {
+                "orientation": "horizontal",
+                "thickness": 1,
+                "color": "var(--hmi-border)",
+                "inset": 0
+              },
+              "layout": {
+                "widthMode": "fill",
+                "heightMode": "hug"
+              }
+            },
+            {
+              "id": "login-actions",
+              "type": "Container",
+              "name": "Actions",
+              "properties": {
+                "visible": true,
+                "showWhenEmpty": true,
+                "background": "transparent"
+              },
+              "layout": {
+                "direction": "row",
+                "gap": "12px",
+                "wrap": false,
+                "align": "stretch",
+                "justify": "flex-end",
+                "radius": "0",
+                "widthMode": "fill",
+                "heightMode": "hug",
+                "paddingTop": "0",
+                "paddingRight": "0",
+                "paddingBottom": "0",
+                "paddingLeft": "0"
+              },
+              "children": [
+                {
+                  "id": "login-cancel",
+                  "type": "Button",
+                  "name": "Cancel",
+                  "properties": {
+                    "label": {
+                      "$loc": "Cancel"
+                    },
+                    "variant": "outline",
+                    "actions": {
+                      "onPress": [
+                        {
+                          "type": "closeDialog",
+                          "dialogId": "login"
+                        }
+                      ]
+                    }
+                  },
+                  "layout": {
+                    "widthMode": "hug",
+                    "heightMode": "hug"
+                  }
+                },
+                {
+                  "id": "login-submit",
+                  "type": "Button",
+                  "name": "Sign in",
+                  "properties": {
+                    "label": {
+                      "$loc": "Sign in"
+                    },
+                    "iconName": {
+                      "$static": {
+                        "type": "builtin",
+                        "name": "lock"
+                      }
+                    },
+                    "variant": "solid",
+                    "actions": {
+                      "onPress": [
+                        {
+                          "type": "loginUser",
+                          "username": {
+                            "$widgetProp": {
+                              "componentId": "login-user",
+                              "property": "selectedValue"
+                            }
+                          },
+                          "password": {
+                            "$widgetProp": {
+                              "componentId": "login-pass",
+                              "property": "value"
+                            }
+                          },
+                          "onSuccess": [
+                            {
+                              "type": "closeDialog",
+                              "dialogId": "login"
+                            }
+                          ],
+                          "onFailed": [
+                            {
+                              "type": "showToast",
+                              "message": {
+                                "$stringExpr": {
+                                  "template": "{1} ({2})",
+                                  "wildcards": {
+                                    "1": {
+                                      "$loc": "Sign-in failed"
+                                    },
+                                    "2": {
+                                      "$result": "reason"
+                                    }
+                                  }
+                                }
+                              },
+                              "severity": "error",
+                              "discard": "auto",
+                              "duration": 5000
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "layout": {
+                    "widthMode": "hug",
+                    "heightMode": "hug"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ],
   "globalEvents": {
@@ -1471,7 +1856,17 @@
         "duration": 4000
       }
     ],
-    "onUserLoggedOut": []
+    "onUserLoggedOut": [
+      {
+        "type": "showToast",
+        "message": {
+          "$loc": "Signed out."
+        },
+        "severity": "info",
+        "discard": "auto",
+        "duration": 4000
+      }
+    ]
   },
   "mcpEnabled": false
 }
