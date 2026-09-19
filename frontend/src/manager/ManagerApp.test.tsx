@@ -14,6 +14,7 @@ function project(overrides: Partial<ProjectEntry> = {}): ProjectEntry {
     addedAt: '2026-01-01T00:00:00Z',
     lastOpenedAt: null,
     status: 'present',
+    inProjectsRoot: true,
     isDefault: false,
     mcpEnabled: false,
     credentialsStatus: 'ok',

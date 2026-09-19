@@ -29,6 +29,7 @@ function project(overrides: Partial<ProjectEntry> = {}): ProjectEntry {
     addedAt: '2024-01-01T00:00:00Z',
     lastOpenedAt: null,
     status: 'present',
+    inProjectsRoot: true,
     isDefault: false,
     mcpEnabled: false,
     credentialsStatus: 'ok',
@@ -281,5 +282,54 @@ describe('describeError', () => {
 
   it('stringifies non-Error values', () => {
     expect(describeError('raw string')).toBe('raw string');
+  });
+
+  it('maps a failed fetch to something readable, via the shared helper', () => {
+    // A rejected `fetch` (offline, DNS failure, CORS) throws a bare
+    // `TypeError` whose own message — "Failed to fetch" — meant nothing to an
+    // operator until this reused `errorMessage`'s mapping instead of
+    // duplicating it.
+    expect(describeError(new TypeError('Failed to fetch'))).toBe('Server unreachable');
+  });
+});
+
+// The editor is served under /editor/<slug>/, where the manager proxies every
+// base-prefixed path to the child project instance — which serves no manager
+// API. Peer calls must therefore stay at the origin, where the manager is.
+describe('manager calls from a proxied project instance', () => {
+  afterEach(() => {
+    delete window.__NEXTHMI_BASE__;
+  });
+
+  it('keeps peer pairing, discovery and transfers at the origin under an /editor/<slug>/ base', async () => {
+    window.__NEXTHMI_BASE__ = '/editor/p1/';
+    const calls = stubFetch({
+      'GET /api/manager/peers/discovered': { discovered: [], manual: [] },
+      'POST /api/manager/peer-pair': { token: 'tok' },
+      // No `status` key — stubFetch reads that as an HTTP failure.
+      'POST /api/manager/transfers': { transferId: 'tx-1', phase: 'packing' },
+    });
+
+    await useProjectsStore.getState().loadPeers();
+    await useProjectsStore.getState().pairPeer('10.0.0.4', 8000, 'pw', 'http');
+    await useProjectsStore.getState().beginPeerTransfer({
+      sourceProjectId: 'p1',
+      destinationProjectId: 'p1',
+      destinationFolder: 'Line 1',
+      peerHost: '10.0.0.4',
+      peerPort: 8000,
+      peerScheme: 'http',
+      token: 'tok',
+      collisionPolicy: 'reject',
+      confirmReplace: false,
+      start: false,
+      transferId: 'tx-1',
+    });
+
+    expect(calls.map((c) => c.url)).toEqual([
+      '/api/manager/peers/discovered',
+      '/api/manager/peer-pair',
+      '/api/manager/transfers',
+    ]);
   });
 });

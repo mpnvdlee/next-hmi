@@ -44,6 +44,8 @@ from core.manifest import (
     PeerScheme,
     ProjectEntry,
     ProjectMetadata,
+    configured_projects_root,
+    default_projects_root,
     find_project,
     load_manifest,
     manifest_transaction,
@@ -81,6 +83,7 @@ logger = logging.getLogger(__name__)
 
 _HTTP_TIMEOUT = httpx.Timeout(connect=10.0, read=600.0, write=600.0, pool=10.0)
 _TRANSFER_ID = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+_MAX_PEER_DETAIL_CHARS = 400
 _receive_cancellations: dict[str, threading.Event] = {}
 _receipt_lock = threading.RLock()
 _pull_journal_lock = threading.RLock()
@@ -125,13 +128,15 @@ def _require_private_client(request: Request) -> None:
 
 def _root() -> Path:
     manifest = load_manifest()
-    raw = manifest.defaultProjectsRoot
-    root = (
-        Path(raw).expanduser()
-        if raw and raw.strip()
-        else runtime_home.runtime_home_path() / "Projects"
-    )
-    root = root.absolute()
+    # Checked against the configured spelling, not the resolved one below: a
+    # symlink somewhere *above* the root is fine (that's what `resolve()`
+    # exists to see through), but the root itself being a symlink is refused
+    # outright, so a peer transfer can never land through it.
+    if configured_projects_root(manifest).is_symlink():
+        raise ValidationError(
+            "Configured projects root must be a real directory, not a symlink"
+        )
+    root = default_projects_root(manifest)
     root.mkdir(parents=True, exist_ok=True)
     if root.is_symlink() or not root.is_dir():
         raise ValidationError(
@@ -222,7 +227,100 @@ class PeerEndpoint:
         mismatch = await self.certificate_mismatch()
         if mismatch is not None:
             return ConflictError(mismatch)
-        return ConflictError(f"Could not reach peer {self.host}:{self.port}: {exc}")
+        return ConflictError(
+            f"Could not reach peer {self.host}:{self.port} at {self.address}: "
+            f"{_transport_reason(exc)}"
+        )
+
+    async def transfer_failure(self, exc: Exception) -> ConflictError:
+        """The error to raise when a transfer's own request to this peer failed.
+
+        Same classifier as a short request, split on whether the connection was
+        ever established: a connect error is indistinguishable from a failed
+        pairing and gets that wording, while a reset or a read timeout happened
+        on a live connection and must not claim the peer is unreachable.
+        """
+        mismatch = await self.certificate_mismatch()
+        if mismatch is not None:
+            return ConflictError(mismatch)
+        reason = _transport_reason(exc)
+        if isinstance(exc, httpx.ConnectError | httpx.ConnectTimeout):
+            return ConflictError(
+                f"Could not reach peer {self.host}:{self.port} at {self.address}: "
+                f"{reason}"
+            )
+        return ConflictError(
+            f"Lost the connection to peer {self.host}:{self.port} "
+            f"at {self.address}: {reason}"
+        )
+
+
+def _transport_reason(exc: Exception) -> str:
+    """Why a peer request never got an answer, in words an operator can act on.
+
+    Interpolating the exception renders as ``ConnectError('[Errno 61]
+    Connection refused')``, which names the HTTP library and the errno but not
+    the situation the operator has to fix.
+
+    Refused and unreachable are only distinguishable on the synchronous
+    transport. Async httpx connects through anyio, which tries every resolved
+    address and collapses the failures into a bare ``All connection attempts
+    failed`` with no errno anywhere in the exception chain — not on the
+    exception, not on its ``__cause__``, not on httpcore's own wrapper below
+    that. There is no signal left here to ever tell a closed port from no
+    route, so this never claims one and the generic wording covers both.
+    """
+    if isinstance(exc, httpx.TimeoutException):
+        return "the connection timed out"
+    if isinstance(exc, httpx.ConnectError):
+        return "the connection could not be opened"
+    reason = str(exc)
+    # A reset collapsed into a bare ReadError/WriteError mid-upload can carry
+    # no message at all; naming the exception type beats an empty "()".
+    return f"the request failed ({reason or type(exc).__name__})"
+
+
+def _bounded_peer_text(text: str) -> str:
+    """Cap arbitrary peer-sourced text before it reaches the operator's screen.
+
+    Shared by every peer-error path, not just the JSON ``detail`` one below:
+    the peer is merely another host on the LAN, and a broken or hostile one
+    must not be able to push an unbounded string onto this manager's UI
+    whichever shape its answer takes — JSON, plain text, or nothing usable.
+    """
+    text = text.strip()
+    if len(text) <= _MAX_PEER_DETAIL_CHARS:
+        return text
+    return text[:_MAX_PEER_DETAIL_CHARS].rstrip() + "…"
+
+
+def _refusal_detail(payload: Any) -> str | None:
+    """Pull a usable ``detail`` string out of an already-decoded JSON payload.
+
+    ``payload`` is untrusted and may be anything JSON allows — a list, a bare
+    string, ``null`` — not only the ``{"detail": ...}`` shape a well-behaved
+    peer sends, so every step here is a type check before an attribute access.
+    """
+    if not isinstance(payload, dict):
+        return None
+    detail = payload.get("detail")
+    if not isinstance(detail, str) or not detail.strip():
+        return None
+    return _bounded_peer_text(detail)
+
+
+def _peer_refusal(response: httpx.Response) -> str | None:
+    """The peer's own explanation for a 4xx/5xx, when it sent a usable one.
+
+    The peer answers with a sentence the operator can act on — a wrong
+    device-admin password, a pairing lockout and its countdown — and the bare
+    status code discards exactly that.
+    """
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+    return _refusal_detail(payload)
 
 
 async def _peer_endpoint(host: str, port: int, scheme: PeerScheme = "http") -> PeerEndpoint:
@@ -398,12 +496,29 @@ async def pair(body: PairBody, request: Request) -> dict[str, Any]:
 async def peer_projects(request: Request) -> dict[str, Any]:
     _require_peer(request)
     manifest = load_manifest()
+    # A GET must stay read-only. `_root()` is written for the install path —
+    # it creates the root on demand and refuses a symlinked one outright — and
+    # neither belongs in a listing: this can answer `inProjectsRoot` correctly
+    # by resolving the configured root exactly as `_root()` would, without
+    # creating anything or failing over a root nothing here is about to write
+    # through.
+    try:
+        root: Path | None = default_projects_root(manifest)
+    except OSError:
+        root = None
+    # ``folder`` is only a folder *in the projects root* when the project
+    # really lives there — a transfer can never install over one registered
+    # elsewhere on disk, however suggestive its folder name. Only this manager
+    # knows where its own root is, so the clash rule the sender applies has to
+    # be told, not guessed.
     return {
         "projects": [
             {
                 "id": entry.id,
                 "name": entry.name,
                 "folder": Path(entry.path).name,
+                "inProjectsRoot": root is not None
+                and Path(entry.path).expanduser().resolve().parent == root,
                 "running": running_entry(manifest, entry.id) is not None,
             }
             for entry in manifest.projects
@@ -565,7 +680,12 @@ async def pair_remote(body: RemotePairBody) -> dict[str, Any]:
     except httpx.HTTPError as exc:
         raise await peer.unreachable(exc) from exc
     if response.status_code >= 400:
-        raise ConflictError(f"Peer pairing failed: HTTP {response.status_code}")
+        refusal = _peer_refusal(response)
+        raise ConflictError(
+            f"Peer pairing failed: {refusal}"
+            if refusal
+            else f"Peer pairing failed: HTTP {response.status_code}"
+        )
     result = response.json()
     # Surface what was pinned so an operator can compare it with the peer's own
     # fingerprint out of band — the one check TOFU cannot make for them.
@@ -594,7 +714,12 @@ async def list_remote_projects(body: RemoteProjectsBody) -> dict[str, Any]:
     except httpx.HTTPError as exc:
         raise await peer.unreachable(exc) from exc
     if response.status_code >= 400:
-        raise ConflictError(f"Peer project lookup failed: HTTP {response.status_code}")
+        refusal = _peer_refusal(response)
+        raise ConflictError(
+            f"Peer project lookup failed: {refusal}"
+            if refusal
+            else f"Peer project lookup failed: HTTP {response.status_code}"
+        )
     return response.json()
 
 
@@ -609,6 +734,10 @@ class TransferState:
     bytesDone: int = 0
     bytesTotal: int = 0
     message: str | None = None
+    # The phase that was running when the transfer failed. `phase` itself is
+    # overwritten with the terminal outcome, so without this the losing step is
+    # unrecoverable and the client can only guess at it from its last poll.
+    failedPhase: str | None = None
     result: dict[str, Any] | None = None
     task: asyncio.Task[None] | None = None
 
@@ -622,6 +751,7 @@ class TransferState:
             "sourceProjectId": self.sourceProjectId,
             "destinationProjectId": self.destinationProjectId,
             "phase": self.phase,
+            "failedPhase": self.failedPhase,
             "status": self.status,
             "bytesDone": self.bytesDone,
             "bytesTotal": self.bytesTotal,
@@ -1193,6 +1323,10 @@ async def begin_transfer(body: TransferBody) -> dict[str, Any]:
         destinationFolder=body.destinationFolder,
         status="active",
         phase="queued",
+        # A journal write merges into whatever the previous attempt left
+        # behind, so a retry under the same id inherits its `failedPhase`
+        # unless this one clears it.
+        failedPhase=None,
         bytesDone=0,
         bytesTotal=0,
     )
@@ -1266,16 +1400,13 @@ async def _send_transfer(
                         },
                     )
         except httpx.HTTPError as exc:
-            # The peer was reached, so "could not reach" would be wrong here;
-            # only a changed pin earns a rewritten message.
-            mismatch = await peer.certificate_mismatch()
-            if mismatch is not None:
-                raise ConflictError(mismatch) from exc
-            raise
+            # Re-raising unwrapped reaches the operator as httpx's own "All
+            # connection attempts failed", which names neither the peer nor
+            # anything to do about it.
+            raise await peer.transfer_failure(exc) from exc
         if response.status_code >= 400:
-            detail = response.text
-            with suppress(ValueError):
-                detail = response.json().get("detail", detail)
+            refusal = _peer_refusal(response)
+            detail = refusal if refusal is not None else _bounded_peer_text(response.text)
             raise ConflictError(f"Destination rejected transfer: {detail}")
         state.phase = "complete"
         state.status = "complete"
@@ -1296,6 +1427,7 @@ async def _send_transfer(
             not isinstance(exc, asyncio.CancelledError)
             and "cancelled" not in str(exc).lower()
         ):
+            state.failedPhase = state.phase
             state.phase = "error"
             state.status = "error"
             state.message = str(exc)
@@ -1303,6 +1435,7 @@ async def _send_transfer(
                 state.transferId,
                 status="error",
                 phase="error",
+                failedPhase=state.failedPhase,
                 message=state.message,
             )
             # Same reasoning as the generic error path: a failure here says
@@ -1316,6 +1449,7 @@ async def _send_transfer(
             state.transferId,
             status="cancelled",
             phase="cancelled",
+            failedPhase=None,
             message=state.message,
         )
         # Swallowing this would leave the task reporting "completed" to anyone
@@ -1323,6 +1457,7 @@ async def _send_transfer(
         if isinstance(exc, asyncio.CancelledError):
             raise
     except Exception as exc:
+        state.failedPhase = state.phase
         state.phase = "error"
         state.status = "error"
         state.message = str(exc)
@@ -1330,6 +1465,7 @@ async def _send_transfer(
             state.transferId,
             status="error",
             phase="error",
+            failedPhase=state.failedPhase,
             message=state.message,
         )
         # A read timeout or reset after the archive was fully sent says nothing
@@ -1437,6 +1573,7 @@ async def _reconcile_terminal_state_with_receiver(
     result = remote.get("result")
     state.status = "complete"
     state.phase = "complete"
+    state.failedPhase = None
     state.message = "Destination committed before cancellation; reported as complete"
     if isinstance(result, dict):
         state.result = result
@@ -1445,6 +1582,7 @@ async def _reconcile_terminal_state_with_receiver(
         state.transferId,
         status="complete",
         phase="complete",
+        failedPhase=None,
         message=state.message,
         result=state.result,
     )
@@ -1629,11 +1767,35 @@ async def begin_pull(body: PullBody) -> dict[str, Any]:
         startRequested=body.start,
         status="active",
         phase="queued",
+        # Same merge semantics as the sender journal: without this a retry
+        # under the same id keeps the previous attempt's `failedPhase`.
+        failedPhase=None,
         bytesDone=0,
         bytesTotal=0,
     )
     state.task = asyncio.create_task(_run_pull(state, body, target))
     return state.public()
+
+
+_MAX_PEER_ERROR_BODY_BYTES = 64 * 1024
+
+
+async def _bounded_error_body(response: httpx.Response) -> bytes:
+    """Read at most `_MAX_PEER_ERROR_BODY_BYTES` of a streamed error body.
+
+    The happy path streams a multi-gigabyte archive on purpose; an error body
+    from the same peer gets no such trust — this is reached only once the
+    status line already says the request failed, so nothing here needs, or
+    may buffer, more than a short explanation.
+    """
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in response.aiter_bytes(_MAX_PEER_ERROR_BODY_BYTES):
+        chunks.append(chunk)
+        total += len(chunk)
+        if total >= _MAX_PEER_ERROR_BODY_BYTES:
+            break
+    return b"".join(chunks)[:_MAX_PEER_ERROR_BODY_BYTES]
 
 
 async def _run_pull(state: TransferState, body: PullBody, target: Path) -> None:
@@ -1654,9 +1816,15 @@ async def _run_pull(state: TransferState, body: PullBody, target: Path) -> None:
                     headers={**peer.headers, "Authorization": f"Bearer {body.token}"},
                 ) as response:
                     if response.status_code >= 400:
-                        detail = (await response.aread()).decode("utf-8", "replace")
-                        with suppress(ValueError):
-                            detail = json.loads(detail).get("detail", detail)
+                        text = (await _bounded_error_body(response)).decode(
+                            "utf-8", "replace"
+                        )
+                        try:
+                            payload = json.loads(text)
+                        except ValueError:
+                            payload = None
+                        refusal = _refusal_detail(payload)
+                        detail = refusal if refusal is not None else _bounded_peer_text(text)
                         raise ConflictError(f"Peer rejected archive request: {detail}")
                     state.bytesTotal = int(response.headers.get("content-length") or 0)
                     with zip_path.open("wb") as output:
@@ -1675,12 +1843,10 @@ async def _run_pull(state: TransferState, body: PullBody, target: Path) -> None:
                                 )
                                 last_persisted_at = now
         except httpx.HTTPError as exc:
-            # The peer was reached, so "could not reach" would be wrong here;
-            # only a changed pin earns a rewritten message.
-            mismatch = await peer.certificate_mismatch()
-            if mismatch is not None:
-                raise ConflictError(mismatch) from exc
-            raise
+            # Re-raising unwrapped reaches the operator as httpx's own "All
+            # connection attempts failed", which names neither the peer nor
+            # anything to do about it.
+            raise await peer.transfer_failure(exc) from exc
 
         archive_sha256 = await asyncio.to_thread(_file_sha256, zip_path)
         durable = _load_pull_journal()["pulls"].get(state.transferId, {})
@@ -1767,25 +1933,36 @@ async def _run_pull(state: TransferState, body: PullBody, target: Path) -> None:
                     state.transferId,
                     status="cancelled",
                     phase="cancelled",
+                    failedPhase=None,
                     message=state.message,
                 )
         else:
+            state.failedPhase = state.phase
             state.phase = "error"
             state.status = "error"
             state.message = str(exc)
             if not staged:
                 _pull_journal_update(
-                    state.transferId, status="error", phase="error", message=state.message
+                    state.transferId,
+                    status="error",
+                    phase="error",
+                    failedPhase=state.failedPhase,
+                    message=state.message,
                 )
         if isinstance(exc, asyncio.CancelledError):
             raise
     except Exception as exc:
+        state.failedPhase = state.phase
         state.phase = "error"
         state.status = "error"
         state.message = str(exc)
         if not staged:
             _pull_journal_update(
-                state.transferId, status="error", phase="error", message=state.message
+                state.transferId,
+                status="error",
+                phase="error",
+                failedPhase=state.failedPhase,
+                message=state.message,
             )
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -2120,16 +2297,13 @@ async def _stage_and_install(
         if metadata.id != source_project_id:
             raise ValidationError("Archive project id does not match sourceProjectId")
         if collision_policy == "copy":
-            metadata = ProjectMetadata(
-                id=destination_project_id, name=metadata.name, createdAt=iso_now()
-            )
+            metadata = metadata.model_copy(update={
+                "id": destination_project_id,
+                "createdAt": iso_now(),
+            })
             write_project_metadata(stage, metadata)
         elif collision_policy == "replace":
-            metadata = ProjectMetadata(
-                id=destination_project_id,
-                name=metadata.name,
-                createdAt=metadata.createdAt,
-            )
+            metadata = metadata.model_copy(update={"id": destination_project_id})
             write_project_metadata(stage, metadata)
         elif destination_project_id != source_project_id:
             raise ValidationError(

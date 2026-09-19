@@ -26,6 +26,7 @@ import {
 } from '@phosphor-icons/react';
 import { useUsersDomainStore } from '@config/store/domains/usersDomainStore';
 import { useSaveErrorToast } from './useSaveErrorToast';
+import TransferProjectButton from './TransferProjectButton';
 import Button from '@config/components/ui/Button';
 
 interface NavItem {
@@ -202,9 +203,7 @@ export default function ConfigShell() {
         >
           ↗ Live View
         </button>
-        {/* Push-to-peer is deferred: the peers API still assumes a single
-            "live project" per side and needs reworking for the running-set
-            model (manager-to-manager, explicit per-project selection). */}
+        <TransferProjectButton />
       </ConfigTopBar>
 
       <ConfigUpdatedBanner />

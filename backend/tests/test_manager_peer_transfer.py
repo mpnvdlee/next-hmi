@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import socket
 import threading
 import time
 import zipfile
@@ -28,6 +29,7 @@ from core.manifest import (
     save_manifest,
     write_project_metadata,
 )
+from core.project_migrations import PROJECT_FORMAT_VERSION, stamp_current_format
 from core.project_packer import pack_project
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -59,6 +61,31 @@ def _archive(
     source.mkdir()
     write_project_metadata(source, ProjectMetadata(id=project_id, name=name))
     (source / "pages.json").write_text('{"pages": []}', encoding="utf-8")
+    (source / "users.json").write_text('{"users": []}', encoding="utf-8")
+    output = io.BytesIO()
+    pack_project(source, output)
+    return output.getvalue()
+
+
+def _archive_at_current_format(
+    tmp_path: Path, project_id: str = "source-id", name: str = "Source"
+) -> bytes:
+    """Like `_archive`, but stamped at this build's format — the state every
+    real transferred project is actually in, and the one `metadata.model_copy`
+    (3.5) has to preserve rather than reset to the unstamped default."""
+    source = tmp_path / f"format-source-{project_id}"
+    source.mkdir()
+    write_project_metadata(
+        source, stamp_current_format(ProjectMetadata(id=project_id, name=name))
+    )
+    (source / "pages.json").write_text('{"pages": []}', encoding="utf-8")
+    # A real, not merely present, users.json: `supervisor.start`'s credentials
+    # check runs ahead of the format gate, so a structurally invalid document
+    # would fail there and never reach the gate the format-stamp tests exist
+    # to exercise.
+    (source / "users.json").write_text(
+        json.dumps({"settings": {}, "groups": [], "users": []}), encoding="utf-8"
+    )
     output = io.BytesIO()
     pack_project(source, output)
     return output.getvalue()
@@ -410,6 +437,107 @@ def test_start_is_opt_in_and_transfer_id_cannot_escape_staging(
         assert invalid.status_code == 422
 
 
+def test_copy_transfer_keeps_the_source_format_stamp(monkeypatch, tmp_path: Path):
+    """3.5 regression: rebuilding metadata from id/name/createdAt reset
+    formatVersion to 0 and minAppVersion to None, so a copy of an
+    already-current project read as needing an upgrade."""
+    _, root = _configure_home(monkeypatch, tmp_path)
+    archive = _archive_at_current_format(tmp_path)
+    with TestClient(_app()) as client:
+        token = _pair(client)
+        response = _receive(
+            client,
+            token,
+            archive,
+            transferId="tx-copy-format",
+            destinationProjectId="copy-format-id",
+            destinationFolder="copy-format",
+            collisionPolicy="copy",
+        )
+    assert response.status_code == 201, response.text
+    installed = read_project_metadata(root / "copy-format")
+    assert installed is not None
+    assert installed.formatVersion == PROJECT_FORMAT_VERSION
+    assert installed.minAppVersion is not None
+
+
+def test_replace_transfer_keeps_the_source_format_stamp(monkeypatch, tmp_path: Path):
+    """3.5 regression, `replace` side: same rebuild, same reset to unstamped."""
+    _, root = _configure_home(monkeypatch, tmp_path)
+    destination = root / "destination-format"
+    destination.mkdir()
+    write_project_metadata(
+        destination, ProjectMetadata(id="destination-format-id", name="Old")
+    )
+    manifest = load_manifest()
+    manifest.projects.append(
+        ProjectEntry(
+            id="destination-format-id",
+            name="Old",
+            path=str(destination),
+            addedAt="2026-01-01T00:00:00Z",
+        )
+    )
+    save_manifest(manifest)
+    archive = _archive_at_current_format(tmp_path)
+
+    with TestClient(_app()) as client:
+        token = _pair(client)
+        response = _receive(
+            client,
+            token,
+            archive,
+            transferId="tx-replace-format",
+            destinationProjectId="destination-format-id",
+            destinationFolder="destination-format",
+            collisionPolicy="replace",
+            confirmReplace="true",
+        )
+    assert response.status_code == 201, response.text
+    installed = read_project_metadata(destination)
+    assert installed is not None
+    assert installed.formatVersion == PROJECT_FORMAT_VERSION
+    assert installed.minAppVersion is not None
+
+
+def test_copy_transfer_with_start_runs_the_real_upgrade_gate(
+    monkeypatch, tmp_path: Path
+):
+    """3.5 regression, exercised through the actual start path.
+
+    The existing opt-in-start test stubs `supervisor.start` wholesale, which
+    is exactly why this bug shipped unnoticed: the stub never looks at the
+    installed metadata, so it could not have caught formatVersion being reset
+    to 0. Here only the spawn/health-check innards are stubbed — `start`
+    itself, and the upgrade gate inside it, run for real.
+    """
+    _configure_home(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        manager_peers_api.supervisor,
+        "_spawn_locked",
+        lambda instance, project_path, preferred: None,
+    )
+    monkeypatch.setattr(manager_peers_api.supervisor, "_await_health", lambda instance: True)
+    archive = _archive_at_current_format(tmp_path)
+
+    with TestClient(_app()) as client:
+        token = _pair(client)
+        response = _receive(
+            client,
+            token,
+            archive,
+            transferId="tx-copy-start-gate",
+            destinationProjectId="copy-start-gate-id",
+            destinationFolder="copy-start-gate",
+            collisionPolicy="copy",
+            start="true",
+        )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["started"] is True, body
+    assert body["startError"] is None
+
+
 def test_projects_root_symlink_is_never_followed(monkeypatch, tmp_path: Path):
     _, root = _configure_home(monkeypatch, tmp_path)
     archive = _archive(tmp_path)
@@ -425,6 +553,212 @@ def test_projects_root_symlink_is_never_followed(monkeypatch, tmp_path: Path):
         response = _receive(client, _pair(client), archive, transferId="tx-root-link")
     assert response.status_code == 422
     assert (outside / "marker.txt").read_text(encoding="utf-8") == "keep"
+
+
+def test_peer_project_list_says_which_projects_sit_in_the_projects_root(
+    monkeypatch, tmp_path: Path
+):
+    """A folder name alone cannot say whether an install could ever land on it.
+
+    Only this manager knows where its own projects root is, so the sender that
+    has to decide whether an incoming folder clashes — or whether a project can
+    be replaced at all — has to be told rather than left to infer it.
+    """
+    _, root = _configure_home(monkeypatch, tmp_path)
+    inside = root / "landing"
+    inside.mkdir()
+    outside = tmp_path / "elsewhere" / "landing"
+    outside.mkdir(parents=True)
+    manifest = load_manifest()
+    manifest.projects.extend(
+        [
+            ProjectEntry(
+                id="in-root",
+                name="Landing",
+                path=str(inside),
+                addedAt="2026-01-01T00:00:00Z",
+            ),
+            ProjectEntry(
+                id="off-root",
+                name="Landing elsewhere",
+                path=str(outside),
+                addedAt="2026-01-01T00:00:00Z",
+            ),
+        ]
+    )
+    save_manifest(manifest)
+
+    with TestClient(_app()) as client:
+        token = _pair(client)
+        listed = client.get(
+            "/api/manager/peer/projects",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert listed.status_code == 200, listed.text
+    projects = {entry["id"]: entry for entry in listed.json()["projects"]}
+    assert projects["in-root"]["folder"] == projects["off-root"]["folder"] == "landing"
+    assert projects["in-root"]["inProjectsRoot"] is True
+    assert projects["off-root"]["inProjectsRoot"] is False
+
+
+def test_a_tilde_relative_projects_root_still_owns_its_own_projects(
+    monkeypatch, tmp_path: Path
+):
+    """``~/Projects`` is a supported setting, so it has to resolve everywhere.
+
+    Comparing a project's absolute path against the unexpanded string matches
+    nothing, which would report every project as registered outside the root.
+    """
+    home = tmp_path / "runtime"
+    home.mkdir()
+    user = tmp_path / "user"
+    landing = user / "Projects" / "landing"
+    landing.mkdir(parents=True)
+    monkeypatch.setattr(runtime_home, "runtime_home_path", lambda: home)
+    monkeypatch.setenv("HOME", str(user))
+    monkeypatch.setenv("USERPROFILE", str(user))
+    save_manifest(
+        ManifestV1(
+            defaultProjectsRoot="~/Projects",
+            projects=[
+                ProjectEntry(
+                    id="landing",
+                    name="Landing",
+                    path=str(landing),
+                    addedAt="2026-01-01T00:00:00Z",
+                )
+            ],
+        )
+    )
+    manager_auth.set_password("destination-admin")
+
+    with TestClient(_app()) as client:
+        token = _pair(client)
+        listed = client.get(
+            "/api/manager/peer/projects",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["projects"][0]["inProjectsRoot"] is True
+
+
+def _require_symlinks(tmp_path: Path) -> None:
+    """Probe symlink support up front (mirrors `test_component_api.py`).
+
+    `pytest.skip()` from deep inside request handling doesn't unwind cleanly
+    on every platform, so this probes in the test's own frame instead.
+    """
+    target = tmp_path / ".symlink-probe-target"
+    target.touch()
+    probe = tmp_path / ".symlink-probe"
+    try:
+        probe.symlink_to(target)
+    except OSError as exc:
+        pytest.skip(f"symlinks unavailable: {exc}")
+    probe.unlink()
+    target.unlink()
+
+
+def test_project_directly_in_root_is_in_root_through_a_symlinked_ancestor(
+    monkeypatch, tmp_path: Path
+):
+    """3.6 regression: `default_projects_root` returned `.absolute()` while a
+    project's stored path is `.resolve()`d (symlink-free). A symlink anywhere
+    above the root then leaves the root's own path carrying it while the
+    stored, resolved entry path does not, so an in-root project's parent no
+    longer equals the root and the peer-transfer clash check goes dark.
+    """
+    _require_symlinks(tmp_path)
+    real_parent = tmp_path / "realparent"
+    real_parent.mkdir()
+    link_parent = tmp_path / "link"
+    link_parent.symlink_to(real_parent, target_is_directory=True)
+    home = link_parent / "runtime"
+    root = home / "Projects"
+    root.mkdir(parents=True)
+    inside = root / "landing"
+    inside.mkdir()
+    monkeypatch.setattr(runtime_home, "runtime_home_path", lambda: home)
+    save_manifest(
+        ManifestV1(
+            defaultProjectsRoot=str(root),
+            projects=[
+                ProjectEntry(
+                    id="landing",
+                    name="Landing",
+                    # Stored the way `_resolve_path` in `projects_api` stores
+                    # every registered project: symlink-resolved.
+                    path=str(inside.resolve()),
+                    addedAt="2026-01-01T00:00:00Z",
+                )
+            ],
+        )
+    )
+    manager_auth.set_password("destination-admin")
+
+    with TestClient(_app()) as client:
+        token = _pair(client)
+        listed = client.get(
+            "/api/manager/peer/projects",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["projects"][0]["inProjectsRoot"] is True
+
+
+def test_peer_project_listing_never_creates_the_projects_root(
+    monkeypatch, tmp_path: Path
+):
+    """A GET must stay read-only: `_root()` is written for the install path
+    and `mkdir(parents=True)`s the root as a side effect — a listing must
+    never do that just to answer `inProjectsRoot`."""
+    home = tmp_path / "runtime"
+    home.mkdir()
+    root = home / "Projects"  # deliberately never created
+    monkeypatch.setattr(runtime_home, "runtime_home_path", lambda: home)
+    save_manifest(ManifestV1(defaultProjectsRoot=str(root)))
+    manager_auth.set_password("destination-admin")
+
+    with TestClient(_app()) as client:
+        token = _pair(client)
+        listed = client.get(
+            "/api/manager/peer/projects",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["projects"] == []
+    assert not root.exists()
+
+
+def test_peer_project_listing_tolerates_a_symlinked_root(monkeypatch, tmp_path: Path):
+    """`_root()` refuses a symlinked root outright — an install-time guard
+    that has no business failing a read-only listing."""
+    home = tmp_path / "runtime"
+    home.mkdir()
+    outside = tmp_path / "outside-root"
+    outside.mkdir()
+    root = home / "Projects"
+    try:
+        root.symlink_to(outside, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"directory symlinks unavailable: {exc}")
+    monkeypatch.setattr(runtime_home, "runtime_home_path", lambda: home)
+    save_manifest(ManifestV1(defaultProjectsRoot=str(root)))
+    manager_auth.set_password("destination-admin")
+
+    with TestClient(_app()) as client:
+        token = _pair(client)
+        listed = client.get(
+            "/api/manager/peer/projects",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["projects"] == []
 
 
 def test_target_appearance_race_is_preserved(monkeypatch, tmp_path: Path):
@@ -1897,7 +2231,9 @@ def test_pull_transport_failure_keeps_the_transports_own_message(
         status = _wait_for_pull(client, "pull-reset")
 
     assert status["status"] == "error", status
-    assert status["message"] == "peer closed connection without sending a complete body"
+    assert "Could not reach peer" not in status["message"]
+    assert "peer closed connection without sending a complete body" in status["message"]
+    assert status["failedPhase"] == "downloading", status
 
 
 def test_pull_with_unknown_content_length_preserves_downloaded_bytes(
@@ -2188,3 +2524,488 @@ def test_cancel_incoming_without_a_live_event_reports_not_requested(
         )
     assert resp.status_code == 200
     assert resp.json() == {"transferId": "tx-orphaned", "cancelRequested": False}
+
+
+class _FakePeerRefusal:
+    """A peer that answers a pairing/lookup/upload request with an error body."""
+
+    def __init__(self, status_code: int, payload: object) -> None:
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self) -> object:
+        if isinstance(self._payload, Exception):
+            raise self._payload
+        return self._payload
+
+    @property
+    def text(self) -> str:
+        # The upload path's fallback reads this when the body isn't a usable
+        # `{"detail": ...}` object — real httpx buffers a non-streamed
+        # response's body regardless of content type, so this stands in for
+        # that rather than requiring JSON specifically.
+        if isinstance(self._payload, Exception):
+            return str(self._payload)
+        return json.dumps(self._payload)
+
+    async def __aenter__(self) -> _FakePeerRefusal:
+        return self
+
+    async def __aexit__(self, *exc: object) -> bool:
+        return False
+
+    async def post(self, url: str, headers=None, json=None, **_kwargs) -> _FakePeerRefusal:
+        # `**_kwargs` absorbs the upload endpoint's `data=`/`files=`, which a
+        # pairing or lookup POST never sends.
+        return self
+
+    async def get(self, url: str, headers=None) -> _FakePeerRefusal:
+        return self
+
+
+def _patch_refusing_peer(monkeypatch, status_code: int, payload: object) -> None:
+    monkeypatch.setattr(
+        manager_peers_api,
+        "_resolve_private_peer",
+        lambda host, port, scheme="http": manager_peers_api.PeerEndpoint(
+            "http://peer.invalid", {"Host": f"{host}:{port}"}, True, host, port, "10.0.0.4"
+        ),
+    )
+    fake_httpx = SimpleNamespace(**vars(httpx))
+    fake_httpx.AsyncClient = lambda *a, **k: _FakePeerRefusal(status_code, payload)
+    monkeypatch.setattr(manager_peers_api, "httpx", fake_httpx)
+
+
+def test_pairing_surfaces_the_peers_own_refusal(monkeypatch, tmp_path: Path):
+    """The peer's `detail` says what to fix; the status code alone does not."""
+    _configure_home(monkeypatch, tmp_path)
+    _patch_refusing_peer(
+        monkeypatch, 400, {"detail": "Incorrect device-admin password"}
+    )
+
+    with TestClient(_app()) as client:
+        response = client.post(
+            "/api/manager/peer-pair",
+            json={"host": "10.0.0.4", "port": 8000, "password": "wrong"},
+        )
+
+    assert response.status_code == 409, response.text
+    assert "Incorrect device-admin password" in response.json()["detail"]
+
+
+def test_pairing_falls_back_to_the_status_code_without_a_usable_detail(
+    monkeypatch, tmp_path: Path
+):
+    _configure_home(monkeypatch, tmp_path)
+    _patch_refusing_peer(monkeypatch, 502, ValueError("not json"))
+
+    with TestClient(_app()) as client:
+        response = client.post(
+            "/api/manager/peer-pair",
+            json={"host": "10.0.0.4", "port": 8000, "password": "wrong"},
+        )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"] == "Peer pairing failed: HTTP 502"
+
+
+def test_peer_project_lookup_surfaces_the_peers_own_refusal(monkeypatch, tmp_path: Path):
+    _configure_home(monkeypatch, tmp_path)
+    _patch_refusing_peer(
+        monkeypatch, 401, {"detail": "Invalid or revoked peer token"}
+    )
+
+    with TestClient(_app()) as client:
+        response = client.post(
+            "/api/manager/peer-projects",
+            json={"host": "10.0.0.4", "port": 8000, "token": "stale"},
+        )
+
+    assert response.status_code == 409, response.text
+    assert "Invalid or revoked peer token" in response.json()["detail"]
+
+
+def test_a_peers_refusal_cannot_flood_this_managers_screen(monkeypatch, tmp_path: Path):
+    """The peer is another host on the LAN, not a trusted source of UI text."""
+    _configure_home(monkeypatch, tmp_path)
+    _patch_refusing_peer(monkeypatch, 400, {"detail": "nope. " * 4000})
+
+    with TestClient(_app()) as client:
+        response = client.post(
+            "/api/manager/peer-pair",
+            json={"host": "10.0.0.4", "port": 8000, "password": "wrong"},
+        )
+
+    assert response.status_code == 409, response.text
+    detail = response.json()["detail"]
+    assert len(detail) < 600, len(detail)
+    assert detail.endswith("…")
+
+
+@pytest.mark.parametrize(
+    "malformed_payload",
+    [["not", "a", "dict"], "nope"],
+    ids=["list", "bare-string"],
+)
+def test_destination_rejection_survives_a_malformed_peer_body(
+    monkeypatch, tmp_path: Path, malformed_payload
+):
+    """The upload's own 4xx/5xx handling used to call
+    ``response.json().get("detail", ...)`` straight on the parsed body: an
+    ``AttributeError`` for anything but a dict, escaping the
+    ``suppress(ValueError)`` wrapped around it, with the operator seeing
+    ``'list' object has no attribute 'get'``. It must instead fall through to
+    a bounded, readable rendering of whatever the peer actually sent.
+    """
+    transfer_id = f"tx-malformed-{'list' if isinstance(malformed_payload, list) else 'string'}"
+    app, _ = _sender_app_with_project(monkeypatch, tmp_path)
+    _patch_refusing_peer(monkeypatch, 400, malformed_payload)
+
+    with TestClient(app) as client:
+        begun = client.post(
+            "/api/manager/transfers", json=_begin_body(transferId=transfer_id)
+        )
+        assert begun.status_code == 202, begun.text
+        status = _wait_for_transfer(client, transfer_id)
+
+    assert status["status"] == "error", status
+    assert "AttributeError" not in status["message"]
+    assert "has no attribute" not in status["message"]
+    assert status["message"].startswith("Destination rejected transfer:")
+    assert len(status["message"]) < 500
+
+
+@pytest.mark.parametrize(
+    "malformed_body",
+    [b'["not", "a", "dict"]', b'"nope"'],
+    ids=["list", "bare-string"],
+)
+def test_pull_archive_rejection_survives_a_malformed_peer_body(
+    monkeypatch, tmp_path: Path, malformed_body
+):
+    """Same bug, streamed: the archive-rejection path used to ``aread()`` the
+    whole body unbounded and then call ``.get("detail", ...)`` straight on
+    the parsed JSON, with the same ``AttributeError`` for a non-dict body.
+    """
+    transfer_id = (
+        f"pull-malformed-{'list' if malformed_body.startswith(b'[') else 'string'}"
+    )
+    _configure_home(monkeypatch, tmp_path)
+    _patch_peer_download(monkeypatch, malformed_body, status_code=400)
+
+    with TestClient(_app()) as client:
+        begun = client.post(
+            "/api/manager/pulls", json=_pull_body(transferId=transfer_id)
+        )
+        assert begun.status_code == 202, begun.text
+        status = _wait_for_pull(client, transfer_id)
+
+    assert status["status"] == "error", status
+    assert "AttributeError" not in status["message"]
+    assert "has no attribute" not in status["message"]
+    assert status["message"].startswith("Peer rejected archive request:")
+    assert len(status["message"]) < 500
+
+
+def test_upload_reset_with_no_message_is_still_readable(monkeypatch, tmp_path: Path):
+    """A reset collapsed into a bare ``ReadError`` mid-upload used to render
+    literally as ``the request failed ()`` — the one case ``_transport_reason``
+    exists to stop.
+    """
+    app, _ = _sender_app_with_project(monkeypatch, tmp_path)
+    _patch_unreachable_peer(monkeypatch, httpx.ReadError(""))
+
+    with TestClient(app) as client:
+        begun = client.post(
+            "/api/manager/transfers", json=_begin_body(transferId="tx-empty-reason")
+        )
+        assert begun.status_code == 202, begun.text
+        status = _wait_for_transfer(client, "tx-empty-reason")
+
+    assert status["status"] == "error", status
+    assert "the request failed ()" not in status["message"]
+    assert "ReadError" in status["message"]
+    assert len(status["message"]) < 200
+
+
+@pytest.mark.parametrize(
+    ("exc", "expected"),
+    [
+        (httpx.ConnectTimeout("timed out"), "the connection timed out"),
+        (
+            httpx.ConnectError("[Errno 61] Connection refused"),
+            "the connection could not be opened",
+        ),
+        (
+            httpx.ConnectError("[Errno 65] No route to host"),
+            "the connection could not be opened",
+        ),
+        (httpx.ReadError("reset by peer"), "the request failed"),
+    ],
+)
+def test_unreachable_peer_is_described_in_operator_terms(exc, expected):
+    # Every `ConnectError` classifies the same way regardless of what its own
+    # message says: async httpx never hands this backend one whose text names
+    # the cause (see `test_a_genuinely_closed_port_...` below for the real
+    # shape), so nothing here may claim to read a refusal out of one.
+    endpoint = manager_peers_api.PeerEndpoint(
+        "http://peer.invalid", {}, True, "hmi-b", 8000, "10.0.0.4"
+    )
+    error = asyncio.run(endpoint.unreachable(exc))
+    assert expected in str(error)
+    assert "10.0.0.4" in str(error)
+    assert "ConnectError(" not in str(error)
+
+
+def test_a_genuinely_closed_port_is_described_without_claiming_it_is_closed():
+    """The classifier against a real async connect failure, not a built one.
+
+    Every other case here hands ``_transport_reason`` an exception it made
+    itself, which is exactly how the refused branch stayed green while being
+    dead: synchronous httpx raises ``ConnectError('[Errno 61] Connection
+    refused')``, but this backend is async, where anyio tries every resolved
+    address and reports only ``All connection attempts failed`` with no errno
+    left to read. So the wording an operator actually gets has to be provoked
+    by a socket, not asserted against a string the runtime never produces.
+    """
+    probe = socket.socket()
+    probe.bind(("127.0.0.1", 0))
+    closed_port = probe.getsockname()[1]
+    probe.close()
+
+    endpoint = manager_peers_api.PeerEndpoint(
+        "http://peer.invalid", {}, True, "hmi-b", closed_port, "127.0.0.1"
+    )
+
+    async def _classify() -> str:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
+            try:
+                await client.get(f"http://127.0.0.1:{closed_port}/")
+            except httpx.HTTPError as exc:
+                assert isinstance(exc, httpx.ConnectError), exc
+                return str(await endpoint.unreachable(exc))
+        raise AssertionError("connecting to a closed port must fail")
+
+    message = asyncio.run(_classify())
+    assert "the connection could not be opened" in message
+    assert "All connection attempts failed" not in message
+    # The errno is gone on this path, so nothing may promise the port is shut.
+    assert "refused" not in message
+
+
+def test_transfer_failure_only_claims_unreachable_for_a_failed_connect():
+    endpoint = manager_peers_api.PeerEndpoint(
+        "http://peer.invalid", {}, True, "hmi-b", 8000, "10.0.0.4"
+    )
+    # The real anyio shape (see `test_a_genuinely_closed_port_...`), not a
+    # hand-built message that only looks like a refusal.
+    connect_failed = asyncio.run(
+        endpoint.transfer_failure(httpx.ConnectError("All connection attempts failed"))
+    )
+    assert str(connect_failed).startswith("Could not reach peer hmi-b:8000 at 10.0.0.4")
+    assert "the connection could not be opened" in str(connect_failed)
+
+    mid_stream = asyncio.run(
+        endpoint.transfer_failure(httpx.RemoteProtocolError("incomplete body"))
+    )
+    assert "Could not reach peer" not in str(mid_stream)
+    assert str(mid_stream).startswith("Lost the connection to peer hmi-b:8000")
+    assert "incomplete body" in str(mid_stream)
+
+
+class _FakeUnreachablePeer:
+    """Stands in for httpx.AsyncClient when nothing answers on the peer's port.
+
+    Every verb raises, so a transfer's own request fails the same way a pairing
+    request would — which is exactly the case whose message used to reach the
+    operator as httpx's raw "All connection attempts failed".
+    """
+
+    def __init__(self, exc: Exception) -> None:
+        self._exc = exc
+
+    async def __aenter__(self) -> _FakeUnreachablePeer:
+        return self
+
+    async def __aexit__(self, *exc: object) -> bool:
+        return False
+
+    async def post(self, *args, **kwargs):
+        raise self._exc
+
+    async def get(self, *args, **kwargs):
+        raise self._exc
+
+    async def delete(self, *args, **kwargs):
+        raise self._exc
+
+    def stream(self, *args, **kwargs):
+        raise self._exc
+
+
+def _patch_unreachable_peer(monkeypatch, exc: Exception) -> None:
+    monkeypatch.setattr(
+        manager_peers_api,
+        "_resolve_private_peer",
+        lambda host, port, scheme="http": manager_peers_api.PeerEndpoint(
+            "http://peer.invalid", {"Host": f"{host}:{port}"}, True, host, port, "10.0.0.5"
+        ),
+    )
+    fake_httpx = SimpleNamespace(**vars(httpx))
+    fake_httpx.AsyncClient = lambda *a, **k: _FakeUnreachablePeer(exc)
+    monkeypatch.setattr(manager_peers_api, "httpx", fake_httpx)
+
+
+def _wait_for_transfer(
+    client: TestClient, transfer_id: str, *, timeout: float = 10.0
+) -> dict:
+    deadline = time.monotonic() + timeout
+    status: dict = {}
+    while time.monotonic() < deadline:
+        status = client.get(f"/api/manager/transfers/{transfer_id}").json()
+        if status.get("status") != "active":
+            return status
+        time.sleep(0.02)
+    raise AssertionError(f"transfer {transfer_id} did not settle in time: {status}")
+
+
+def test_upload_connection_failure_is_classified_and_names_the_upload_phase(
+    monkeypatch, tmp_path: Path
+):
+    # Packing succeeded; only the upload failed. Reporting the phase the
+    # transfer died in is the sender's job — `phase` itself is overwritten with
+    # the terminal "error".
+    app, _ = _sender_app_with_project(monkeypatch, tmp_path)
+    _patch_unreachable_peer(
+        monkeypatch, httpx.ConnectError("All connection attempts failed")
+    )
+
+    with TestClient(app) as client:
+        begun = client.post(
+            "/api/manager/transfers", json=_begin_body(transferId="tx-unreachable")
+        )
+        assert begun.status_code == 202, begun.text
+        status = _wait_for_transfer(client, "tx-unreachable")
+
+    assert status["status"] == "error", status
+    assert status["failedPhase"] == "uploading", status
+    assert status["message"].startswith("Could not reach peer 10.0.0.5:8000 at 10.0.0.5")
+    assert "the connection was refused" not in status["message"]
+    # httpx's own summary of a failed multi-address connect names no address,
+    # no port and no cause; it adds nothing an operator can act on.
+    assert "All connection attempts failed" not in status["message"]
+    assert "the connection could not be opened" in status["message"]
+
+
+def test_sender_journal_records_the_failed_phase(monkeypatch, tmp_path: Path):
+    app, _ = _sender_app_with_project(monkeypatch, tmp_path)
+    _patch_unreachable_peer(monkeypatch, httpx.ConnectTimeout("timed out"))
+
+    with TestClient(app) as client:
+        client.post("/api/manager/transfers", json=_begin_body(transferId="tx-journal"))
+        _wait_for_transfer(client, "tx-journal")
+
+    journal = json.loads(
+        (runtime_home.runtime_home_path() / ".peer-transfer-sender.json").read_text()
+    )
+    entry = journal["transfers"]["tx-journal"]
+    assert entry["phase"] == "error"
+    assert entry["failedPhase"] == "uploading"
+    assert "the connection timed out" in entry["message"]
+
+
+def test_a_retry_clears_the_failed_phase_the_previous_attempt_recorded(
+    monkeypatch, tmp_path: Path
+):
+    """A journal write merges, so a stale outcome field outlives its attempt.
+
+    Left alone, a restart later serves ``cancelled`` alongside the *previous*
+    attempt's ``failedPhase`` and the operator reads "Cancelled while uploading
+    to peer" about a step this transfer never reached.
+    """
+    app, source = _sender_app_with_project(monkeypatch, tmp_path)
+    _patch_unreachable_peer(monkeypatch, httpx.ConnectTimeout("timed out"))
+
+    def entry() -> dict:
+        journal = json.loads(
+            (runtime_home.runtime_home_path() / ".peer-transfer-sender.json").read_text()
+        )
+        return journal["transfers"]["tx-again"]
+
+    with TestClient(app) as client:
+        client.post("/api/manager/transfers", json=_begin_body(transferId="tx-again"))
+        _wait_for_transfer(client, "tx-again")
+        assert entry()["failedPhase"] == "uploading"
+
+        packing = threading.Event()
+
+        def slow_pack(project, output, progress=None):
+            packing.set()
+            for _ in range(500):
+                if progress is not None:
+                    progress(0, 1)
+                time.sleep(0.02)
+
+        monkeypatch.setattr(manager_peers_api, "pack_project", slow_pack)
+        retried = client.post(
+            "/api/manager/transfers", json=_begin_body(transferId="tx-again")
+        )
+        assert retried.status_code == 202, retried.text
+        assert packing.wait(5.0)
+        assert entry()["failedPhase"] is None
+
+        cancelled = client.delete("/api/manager/transfers/tx-again")
+        assert cancelled.status_code == 200, cancelled.text
+
+    settled = entry()
+    assert settled["status"] == "cancelled"
+    assert settled["failedPhase"] is None
+    assert source.is_dir()
+
+
+def test_pull_connection_failure_reads_like_a_failed_pairing(
+    monkeypatch, tmp_path: Path
+):
+    _configure_home(monkeypatch, tmp_path)
+    # The real anyio shape: no errno, no "refused" anywhere in the message.
+    _patch_unreachable_peer(
+        monkeypatch, httpx.ConnectError("All connection attempts failed")
+    )
+
+    with TestClient(_app()) as client:
+        begun = client.post(
+            "/api/manager/pulls", json=_pull_body(transferId="pull-unreachable")
+        )
+        assert begun.status_code == 202, begun.text
+        status = _wait_for_pull(client, "pull-unreachable")
+
+    assert status["status"] == "error", status
+    assert status["failedPhase"] == "downloading", status
+    assert "Could not reach peer 10.0.0.5:8000 at 10.0.0.5" in status["message"]
+    assert "the connection could not be opened" in status["message"]
+
+
+def test_reject_refuses_a_leftover_folder_no_project_is_registered_under(
+    monkeypatch, tmp_path: Path
+):
+    # Removing a project without deleting its folder leaves an unregistered
+    # directory in the projects root. The reject rule is a filesystem test, so
+    # it refuses here even though no manifest lookup can see the clash — which
+    # is why the modal has to treat the refusal itself as the signal.
+    _, root = _configure_home(monkeypatch, tmp_path)
+    (root / "pulled-copy").mkdir()
+    assert load_manifest().projects == []
+
+    with TestClient(_app()) as client:
+        pulled = client.post("/api/manager/pulls", json=_pull_body())
+        assert pulled.status_code == 409, pulled.text
+        assert "already exists" in pulled.json()["detail"]
+
+        received = _receive(
+            client,
+            _pair(client),
+            _archive(tmp_path),
+            destinationFolder="pulled-copy",
+        )
+    assert received.status_code == 409, received.text
+    assert "already exists" in received.json()["detail"]

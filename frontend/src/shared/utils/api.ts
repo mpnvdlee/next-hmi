@@ -95,18 +95,37 @@ export function errorMessage(err: unknown): string {
   return String(err);
 }
 
-export async function apiJson<T = unknown>(
-  url: string,
-  options?: { method?: string; body?: unknown; signal?: AbortSignal },
-): Promise<T> {
+interface JsonOptions {
+  method?: string;
+  body?: unknown;
+  signal?: AbortSignal;
+}
+
+async function requestJson<T>(url: string, options: JsonOptions | undefined): Promise<T> {
   const { method = 'GET', body, signal } = options ?? {};
   const init: RequestInit = { method, signal };
   if (body !== undefined) {
     init.headers = { 'Content-Type': 'application/json' };
     init.body = JSON.stringify(body);
   }
-  const res = await fetch(withBase(url), init);
+  const res = await fetch(url, init);
   if (!res.ok) throw await apiErrorFrom(res);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+export async function apiJson<T = unknown>(url: string, options?: JsonOptions): Promise<T> {
+  return requestJson<T>(withBase(url), options);
+}
+
+/**
+ * `apiJson` for an endpoint only the manager serves.
+ *
+ * `/api/manager/*` lives on the manager at the origin root. A project instance
+ * proxied under `/runtime/<slug>/` or `/editor/<slug>/` serves no manager API,
+ * so base-prefixing these URLs would route them into the child instance and
+ * 404. The manager session cookie is same-origin, so it rides along either way.
+ */
+export async function managerApiJson<T = unknown>(url: string, options?: JsonOptions): Promise<T> {
+  return requestJson<T>(url, options);
 }

@@ -219,6 +219,40 @@ def test_list_reports_project_version_fields(
     assert rows["ghost"]["unsupportedFormat"] is False
 
 
+def test_list_reports_whether_each_project_sits_in_the_projects_root(
+    client: TestClient, tmp_path: Path, home: Path
+) -> None:
+    """3.6c: the browser used to re-derive this with its own string math
+
+    against `defaultProjectsRoot` (see `peerTransferParams.sitsDirectlyIn`,
+    now removed); the backend already has to compute it correctly for peers,
+    so a local project's own listing gets the same flag instead.
+    """
+    root = tmp_path / "Projects"
+    root.mkdir()
+    inside_path = root / "inside"
+    inside_id = _make_project_folder(inside_path, name="Inside")
+    outside_path = tmp_path / "elsewhere" / "outside"
+    outside_id = _make_project_folder(outside_path, name="Outside")
+    manifest = manifest_mod.ManifestV1(
+        defaultProjectsRoot=str(root),
+        projects=[
+            manifest_mod.ProjectEntry(
+                id=inside_id, name="Inside", path=str(inside_path), addedAt="2026-05-24T10:00:00Z",
+            ),
+            manifest_mod.ProjectEntry(
+                id=outside_id, name="Outside", path=str(outside_path), addedAt="2026-05-24T10:00:00Z",
+            ),
+        ],
+    )
+    manifest_mod.save_manifest(manifest, home / "projects.json")
+
+    body = client.get("/api/projects").json()
+    rows = {p["id"]: p for p in body["projects"]}
+    assert rows[inside_id]["inProjectsRoot"] is True
+    assert rows[outside_id]["inProjectsRoot"] is False
+
+
 # ── default project ───────────────────────────────────────────────────────────
 
 

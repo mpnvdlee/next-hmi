@@ -484,18 +484,15 @@ def default_project(manifest: ManifestV1) -> ProjectEntry | None:
     return find_project(manifest, manifest.defaultProjectId)
 
 
-def default_projects_root(manifest: ManifestV1) -> Path:
-    """Where new and incoming projects land, resolved the one way everyone must.
+def configured_projects_root(manifest: ManifestV1) -> Path:
+    """The projects-root setting exactly as configured, symlinks untouched.
 
     ``defaultProjectsRoot`` is a raw operator string: it may be ``~``-relative,
-    relative to the process CWD, or absent entirely. Every caller that compares
-    a project's path against the root — the peer-transfer install rule, the API
-    that tells the browser what the root is — has to resolve it identically, or
-    a project inside the root reads as outside it.
-
-    Unset, it is the user's Documents folder: a place that already exists and
-    that a non-technical operator can find, rather than a folder the runtime
-    has to conjure up inside its own bookkeeping directory.
+    relative to the process CWD, or absent entirely — this only expands and
+    absolutises it. Callers that must tell "the root itself is a symlink"
+    (refused) apart from "a symlink merely sits somewhere above the root"
+    (fine — see ``default_projects_root``) check ``is_symlink()`` on this
+    value rather than that one.
     """
     raw = manifest.defaultProjectsRoot
     root = (
@@ -504,6 +501,24 @@ def default_projects_root(manifest: ManifestV1) -> Path:
         else bootstrap.platform_documents_dir()
     )
     return root.absolute()
+
+
+def default_projects_root(manifest: ManifestV1) -> Path:
+    """Where new and incoming projects land, resolved the one way everyone must.
+
+    Every caller that compares a project's path against the root — the
+    peer-transfer install rule, the API that tells the browser what the root
+    is — has to resolve it identically, or a project inside the root reads as
+    outside it. A project's own path is stored symlink-resolved (see
+    ``projects_api._resolve_path``), so the root has to be too: an unrelated
+    symlink anywhere above the root would otherwise make every project inside
+    it compare unequal to its own parent.
+
+    Unset, it is the user's Documents folder: a place that already exists and
+    that a non-technical operator can find, rather than a folder the runtime
+    has to conjure up inside its own bookkeeping directory.
+    """
+    return configured_projects_root(manifest).resolve()
 
 
 def drop_auto_seeded_projects_root() -> str | None:

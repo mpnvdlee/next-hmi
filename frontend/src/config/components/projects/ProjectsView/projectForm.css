@@ -80,3 +80,80 @@
 .project-form__status--error {
   color: var(--cfg-danger, crimson);
 }
+
+.project-form__failure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-1);
+}
+
+.project-form__resolve {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-1);
+}
+
+.project-form__choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+  margin-top: var(--cfg-space-1);
+}
+
+.project-form__choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-1);
+  padding: var(--cfg-space-2) var(--cfg-space-3);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: color-mix(in srgb, var(--cfg-surface-dark) 25%, var(--cfg-surface));
+}
+
+.project-form__choice--active {
+  border-color: var(--cfg-accent);
+  background: color-mix(in srgb, var(--cfg-accent) 10%, var(--cfg-surface));
+}
+
+.project-form__choice-head {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+  font-size: var(--cfg-text-sm);
+  font-weight: var(--cfg-fw-medium);
+  color: var(--cfg-text);
+  cursor: pointer;
+}
+
+/* Fixed height so switching option does not shuffle the rest of the form. */
+.project-form__choice-detail {
+  margin: 0;
+  min-height: 2.6em;
+  padding-left: calc(var(--cfg-space-2) + 1rem);
+  font-size: var(--cfg-text-xs, var(--cfg-text-sm));
+  color: var(--cfg-text-muted);
+}
+
+.project-form__choice-extra {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+  padding-left: calc(var(--cfg-space-2) + 1rem);
+}
+
+/* Duplicates `.mgr-mcp-toggle` from manager.css on purpose: this modal is also
+   mounted from the editor, which never loads the manager's stylesheet. */
+.project-form__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: var(--cfg-text-xs, var(--cfg-text-sm));
+  color: var(--cfg-text-muted);
+  cursor: pointer;
+  width: fit-content;
+  accent-color: var(--cfg-accent);
+}
+
+.project-form__toggle input:disabled {
+  cursor: not-allowed;
+}

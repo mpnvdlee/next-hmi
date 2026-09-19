@@ -20,6 +20,7 @@ from core.manifest import (
     ManifestV1,
     ProjectEntry,
     ProjectMetadata,
+    default_projects_root,
     ensure_project_metadata,
     find_project,
     load_manifest,
@@ -139,7 +140,9 @@ def _path_status(raw_path: str) -> str:
     return "present" if path.is_dir() else "missing"
 
 
-def _entry_dict(entry: ProjectEntry, *, default_id: str | None = None) -> dict[str, Any]:
+def _entry_dict(
+    entry: ProjectEntry, *, default_id: str | None = None, root: Path
+) -> dict[str, Any]:
     path = Path(entry.path).expanduser()
     users_state = users_document.state(path)
     status = _path_status(entry.path)
@@ -160,6 +163,14 @@ def _entry_dict(entry: ProjectEntry, *, default_id: str | None = None) -> dict[s
         "id": entry.id,
         "name": entry.name,
         "path": entry.path,
+        # Resolved the same way `path` was stored (see `_resolve_path`), against
+        # a root resolved the same way — see `default_projects_root` — so a
+        # symlink anywhere above the root can't make an in-root project read as
+        # outside it. The peer-transfer modal used to re-derive this itself
+        # from `defaultProjectsRoot` and a project's raw path; this is that
+        # same fact, computed once, correctly, on the side that actually knows
+        # the root.
+        "inProjectsRoot": path.resolve().parent == root,
         "addedAt": entry.addedAt,
         "lastOpenedAt": entry.lastOpenedAt,
         "status": status,
@@ -467,13 +478,21 @@ def _register_imported_project(
 
 @router.get("")
 def list_projects() -> dict[str, Any]:
-    """Manifest entries + computed ``status`` (`present` | `missing`) and ``isDefault``."""
+    """Manifest entries + computed ``status`` (`present` | `missing`) and ``isDefault``.
+
+    ``defaultProjectsRoot`` is the *resolved* root, not the raw manifest string
+    — the same value ``_runtime-home`` reports. The browser compares project
+    paths against it to tell an in-root project from one registered elsewhere,
+    and a ``~``-relative, relative or absent setting would make every project
+    look like it sits outside the root.
+    """
     manifest = load_manifest()
+    root = default_projects_root(manifest)
     return {
         "defaultProjectId": manifest.defaultProjectId,
-        "defaultProjectsRoot": str(default_projects_root(manifest)),
+        "defaultProjectsRoot": str(root),
         "projects": [
-            _entry_dict(entry, default_id=manifest.defaultProjectId)
+            _entry_dict(entry, default_id=manifest.defaultProjectId, root=root)
             for entry in manifest.projects
         ],
     }
@@ -511,7 +530,7 @@ def set_default(project_id: str) -> dict[str, Any]:
         entry = _require_entry(manifest, project_id)
         manifest.defaultProjectId = entry.id
         save_manifest(manifest)
-    return _entry_dict(entry, default_id=entry.id)
+    return _entry_dict(entry, default_id=entry.id, root=default_projects_root(manifest))
 
 
 @router.patch("/{project_id}")
@@ -535,7 +554,9 @@ def update_project(project_id: str, body: UpdateProjectBody) -> dict[str, Any]:
     with manifest_transaction() as manifest:
         entry = _require_entry(manifest, project_id)
         if new_name is None and (new_id is None or new_id == entry.id):
-            return _entry_dict(entry, default_id=manifest.defaultProjectId)
+            return _entry_dict(
+                entry, default_id=manifest.defaultProjectId, root=default_projects_root(manifest)
+            )
         if running_entry(manifest, entry.id) is not None:
             raise ConflictError("Cannot rename a running project. Stop it first.")
 
@@ -580,7 +601,9 @@ def update_project(project_id: str, body: UpdateProjectBody) -> dict[str, Any]:
         write_project_metadata(target, metadata.model_copy(update=updates))
 
     logger.info("Renamed project '%s' to '%s' (%s)", old_id, entry.name, entry.id)
-    return _entry_dict(entry, default_id=manifest.defaultProjectId)
+    return _entry_dict(
+        entry, default_id=manifest.defaultProjectId, root=default_projects_root(manifest)
+    )
 
 
 @router.post("/validate-path")
@@ -719,7 +742,7 @@ def create_project(body: CreateProjectBody) -> dict[str, Any]:
         manifest.projects.append(entry)
         save_manifest(manifest)
     logger.info("Created project '%s' (%s) at %s", name, metadata.id, target)
-    return _entry_dict(entry)
+    return _entry_dict(entry, root=default_projects_root(manifest))
 
 
 @router.post("/register", status_code=201)
@@ -756,7 +779,7 @@ def register_existing_project(body: RegisterProjectBody) -> dict[str, Any]:
         save_manifest(manifest)
     set_project_metadata_name(target, display_name)
     logger.info("Registered existing project '%s' (%s) at %s", display_name, metadata.id, target)
-    return _entry_dict(entry)
+    return _entry_dict(entry, root=default_projects_root(manifest))
 
 
 @router.post("/{project_id}/locate")
@@ -779,7 +802,7 @@ def locate(project_id: str, body: LocateProjectBody) -> dict[str, Any]:
             )
         entry.path = str(target)
         save_manifest(manifest)
-    return _entry_dict(entry)
+    return _entry_dict(entry, root=default_projects_root(manifest))
 
 
 @router.delete("/{project_id}", status_code=200)
@@ -913,4 +936,4 @@ async def import_project(
         ),
     )
     logger.info("Imported project '%s' (%s) at %s", entry.name, metadata.id, target)
-    return _entry_dict(entry)
+    return _entry_dict(entry, root=default_projects_root(_manifest))

@@ -771,7 +771,12 @@ The destination persists only a SHA-256 digest of each random peer token.
 - `POST /api/manager/peer/pair` — public pairing endpoint. Body
   `{ password, name? }`; returns the plaintext token once.
 - `GET /api/manager/peer/projects` — bearer-authenticated project list for
-  explicit destination selection.
+  explicit destination selection. Each entry is
+  `{ id, name, folder, inProjectsRoot, running }`. `inProjectsRoot` is whether
+  that project's folder really is a child of the peer's projects root — the
+  only place a transfer can install — so the caller can tell a folder clash
+  from a same-named project registered elsewhere on the peer's disk. A peer
+  predating the field omits it; treat it as `true`.
 - `POST /api/manager/peer/transfers` — bearer-authenticated multipart receive:
   `file`, `transferId`, `sourceProjectId`, `destinationProjectId`,
   `destinationFolder`, `collisionPolicy`, `confirmReplace`, and `start`.
@@ -790,8 +795,10 @@ The destination persists only a SHA-256 digest of each random peer token.
   cancels it. Same-ID/same-parameter retries are idempotent; different
   parameters or archive bytes return 409. The sender retains the caller's
   stable ID, phase, byte progress, and archive fingerprint across restart but
-  does not persist the bearer token. Connect is bounded to 10 seconds and
-  transfer I/O to 10 minutes.
+  does not persist the bearer token. A failed transfer also reports
+  `failedPhase`, the phase it was running when it failed — `phase` itself holds
+  the terminal outcome. Connect is bounded to 10 seconds and transfer I/O to
+  10 minutes.
 - `POST /api/manager/pulls` — starts an incoming explicit-source transfer with
   HTTP 202: this manager downloads
   `GET /api/manager/peer/projects/{sourceProjectId}/archive` from the paired
