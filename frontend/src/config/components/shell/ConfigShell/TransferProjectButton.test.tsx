@@ -21,7 +21,9 @@ beforeEach(() => {
   window.__NEXTHMI_BASE__ = '/editor/p1/';
   useProjectStore.setState({ dirty: false, saving: false });
   useUsersDomainStore.setState({ dirty: false, saving: false });
-  useProjectsStore.setState({ loadPeers: vi.fn().mockResolvedValue({ discovered: [], manual: [] }) });
+  useProjectsStore.setState({
+    loadPeers: vi.fn().mockResolvedValue({ discovered: [], manual: [] }),
+  });
   fetchMock = stubProjectsEndpoint();
 });
 

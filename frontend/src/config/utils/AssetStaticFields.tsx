@@ -4,18 +4,39 @@ import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { assetName } from '@config/components/editor/assetPickerUtils';
 import { BUILTIN_ICON_COMPONENTS } from '@shared/utils/phosphorIconComponents';
 import { withBase } from '@shared/utils/runtimeBase';
+import { isAbsoluteUrl } from '@shared/utils/imageAsset';
+import { unwrapStatic } from '@config/components/editor/propertyValueUtils';
 
 /** The panel's one word for "the selected widgets disagree". Held here rather
  *  than imported from `renderSchemaField`, which renders these fields — reading
  *  its constant back would close an import cycle. */
 const MIXED_LABEL = 'Mixed';
 
-/** Read the `{ $static: T }` payload from a static value, tolerating bare values. */
+/** Read the `{ $static: T }` payload from a static value; a bare value carries
+ *  no payload for these fields, so it reads as unset. */
 function staticPayload<T>(value: unknown): T | null {
-  if (value && typeof value === 'object' && '$static' in (value as Record<string, unknown>)) {
-    return ((value as Record<string, unknown>).$static as T) ?? null;
-  }
-  return null;
+  if (!value || typeof value !== 'object' || !('$static' in (value as object))) return null;
+  return (unwrapStatic(value) as T) ?? null;
+}
+
+/** The name an icon value goes by in the field — a built-in's name, or a custom
+ *  icon's file name. */
+function iconName(icon: IconValue | null): string {
+  if (!icon) return '';
+  return icon.type === 'builtin' ? icon.name : assetName(icon.path);
+}
+
+/** Placeholder for a field left unset that has a declared default to fall back
+ *  to — the fallback named where a value would be, like every other unset row. */
+function defaultPlaceholder(name: string): string | undefined {
+  return name ? `${name} · default` : undefined;
+}
+
+/** An asset path that names no folder and is not a URL, rooted at `videos/`.
+ *  Anything already rooted or absolute is the author's own spelling. */
+function rootBareVideoPath(text: string): string {
+  if (!text || text.includes('/') || isAbsoluteUrl(text)) return text;
+  return `videos/${text}`;
 }
 
 /**
@@ -51,12 +72,15 @@ export function IconStaticField({
   value,
   onChange,
   label,
+  defaultValue,
   mixed = false,
 }: {
   value: unknown;
   onChange: (v: unknown) => void;
   /** Property name the picker shows before its own action. */
   label?: string;
+  /** The schema's declared default, previewed while the field is unset. */
+  defaultValue?: unknown;
   /** A multi-selection whose widgets hold different icons. The input reads "Mixed"
    *  where its name prompt would be — an empty glyph slot alone is exactly how a
    *  widget with no icon at all looks, and picking one overwrites every selection. */
@@ -64,13 +88,23 @@ export function IconStaticField({
 }) {
   const openPicker = useEditorDomainStore((s) => s.openAssetPicker);
   const icon = staticPayload<IconValue>(value);
-  const committed = icon ? (icon.type === 'builtin' ? icon.name : assetName(icon.path)) : '';
+  const committed = iconName(icon);
+  const fallback = mixed ? null : staticPayload<IconValue>(defaultValue);
+  const fallbackName = iconName(fallback);
 
   return (
     <PathInputField
       value={committed}
-      placeholder={mixed ? MIXED_LABEL : 'Icon name (e.g. gear)'}
-      renderPrefix={(draft) => <IconGlyph icon={icon} name={draft} />}
+      placeholder={
+        mixed ? MIXED_LABEL : (defaultPlaceholder(fallbackName) ?? 'Icon name (e.g. gear)')
+      }
+      renderPrefix={(draft) =>
+        !draft && fallback ? (
+          <IconGlyph icon={fallback} name={fallbackName} />
+        ) : (
+          <IconGlyph icon={icon} name={draft} />
+        )
+      }
       onCommit={(text) => {
         const name = text.trim();
         if (name === committed) return;
@@ -84,92 +118,92 @@ export function IconStaticField({
 }
 
 /**
- * Static editor for `image`-typed fields. Typable for the same reason the icon
- * field is: an image can be a project asset picked from the browser *or* a path
- * the author types (an `images/…` file not yet in the picker, or a remote URL).
+ * Static editor for a path-valued asset field. Typable for the same reason the
+ * icon field is: the value can be a project asset picked from the browser *or*
+ * a path the author types (a file not yet in the picker, or a remote URL).
  * Committing text stores a bare `{ path }`; the `✎` button opens the asset picker.
  */
-export function ImageStaticField({
+function PathAssetStaticField({
+  kind,
+  placeholder,
+  pickTitle,
+  normalize = (text) => text,
   value,
   onChange,
   label,
+  defaultValue,
   mixed = false,
 }: {
+  /** Asset kind the picker browses, and the folder the value belongs to. */
+  kind: 'image' | 'video';
+  placeholder: string;
+  pickTitle: string;
+  /** Applied to committed text before storing — see {@link rootBareVideoPath}. */
+  normalize?: (text: string) => string;
   value: unknown;
   onChange: (v: unknown) => void;
   /** Property name the picker shows before its own action. */
   label?: string;
-  /** A multi-selection whose widgets hold different images — see
+  /** The schema's declared default, previewed while the field is unset. */
+  defaultValue?: unknown;
+  /** A multi-selection whose widgets hold different assets — see
    *  {@link IconStaticField}. */
   mixed?: boolean;
 }) {
   const openPicker = useEditorDomainStore((s) => s.openAssetPicker);
-  const image = staticPayload<ImageValue>(value);
-  const committed = image?.path ?? '';
+  const committed = staticPayload<{ path?: string }>(value)?.path ?? '';
+  const fallbackPath = mixed ? '' : (staticPayload<{ path?: string }>(defaultValue)?.path ?? '');
 
   return (
     <PathInputField
       value={committed}
-      placeholder={mixed ? MIXED_LABEL : 'images/logo.svg or https://…'}
+      placeholder={mixed ? MIXED_LABEL : (defaultPlaceholder(fallbackPath) ?? placeholder)}
       titleFromDraft
       onCommit={(text) => {
-        const path = text.trim();
+        const path = normalize(text.trim());
         if (path === committed) return;
         onChange(path ? { $static: { path } } : undefined);
       }}
-      pickTitle="Pick image"
-      onPick={() => openPicker('image', (val) => onChange({ $static: val }), label)}
+      pickTitle={pickTitle}
+      onPick={() => {
+        // `openAssetPicker` is overloaded per kind, so the literal has to reach
+        // it narrowed rather than as the union this component is keyed on.
+        const apply = (val: ImageValue | VideoValue) => onChange({ $static: val });
+        if (kind === 'video') openPicker('video', apply, label);
+        else openPicker('image', apply, label);
+      }}
       onClear={committed ? () => onChange(undefined) : undefined}
     />
   );
 }
 
-/** An asset path that names no folder and is not a URL, rooted at `videos/`.
- *  Anything already rooted or absolute is the author's own spelling. */
-function rootBareVideoPath(text: string): string {
-  if (!text || text.includes('/') || /^(?:https?:\/\/|data:|blob:)/i.test(text)) return text;
-  return `videos/${text}`;
+type PathAssetFieldProps = Omit<
+  Parameters<typeof PathAssetStaticField>[0],
+  'kind' | 'placeholder' | 'pickTitle' | 'normalize'
+>;
+
+/** Static editor for `image`-typed fields. */
+export function ImageStaticField(props: PathAssetFieldProps) {
+  return (
+    <PathAssetStaticField
+      kind="image"
+      placeholder="images/logo.svg or https://…"
+      pickTitle="Pick image"
+      {...props}
+    />
+  );
 }
 
-/**
- * Static editor for `video`-typed fields — the image field's twin, for the same
- * reason: a video can be a project asset picked from the browser *or* a path the
- * author types (a `videos/…` file not yet in the picker, or a remote URL).
- */
-export function VideoStaticField({
-  value,
-  onChange,
-  label,
-  mixed = false,
-}: {
-  value: unknown;
-  onChange: (v: unknown) => void;
-  /** Property name the picker shows before its own action. */
-  label?: string;
-  /** A multi-selection whose widgets hold different videos — see
-   *  {@link IconStaticField}. */
-  mixed?: boolean;
-}) {
-  const openPicker = useEditorDomainStore((s) => s.openAssetPicker);
-  const video = staticPayload<VideoValue>(value);
-  const committed = video?.path ?? '';
-
+/** Static editor for `video`-typed fields — the image field's twin, with a bare
+ *  filename rooted at `videos/` rather than the resolver's default `images/`. */
+export function VideoStaticField(props: PathAssetFieldProps) {
   return (
-    <PathInputField
-      value={committed}
-      placeholder={mixed ? MIXED_LABEL : 'videos/clip.mp4 or https://…'}
-      titleFromDraft
-      onCommit={(text) => {
-        // A bare filename is resolved against assets/images/ by the shared
-        // asset resolver, which is the wrong folder for this field — root it
-        // here so typing `clip.mp4` means the video of that name.
-        const path = rootBareVideoPath(text.trim());
-        if (path === committed) return;
-        onChange(path ? { $static: { path } } : undefined);
-      }}
+    <PathAssetStaticField
+      kind="video"
+      placeholder="videos/clip.mp4 or https://…"
       pickTitle="Pick video"
-      onPick={() => openPicker('video', (val) => onChange({ $static: val }), label)}
-      onClear={committed ? () => onChange(undefined) : undefined}
+      normalize={rootBareVideoPath}
+      {...props}
     />
   );
 }

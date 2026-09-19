@@ -43,8 +43,17 @@ export interface SchemaField {
   requiredFields?: RequiredFieldEntry[];
   /** When true, variable picker only shows writable variables. */
   write?: boolean;
-  /** For a `format: 'select'` field: the list of options shown in the dropdown */
-  options?: { label: string; value: string | number | boolean; icon?: string }[];
+  /** For a `format: 'select'` field: the list of options shown in the dropdown.
+   *  A `{ $loc }` value makes the option itself a translation, so the dropdown
+   *  offers translated captions without opening the free translation picker.
+   *  `value` is absent on a row still being authored — the options list is
+   *  edited label-first, and an unwritten value does not survive `JSON` — so
+   *  such a row is offered nowhere until it holds something. */
+  options?: {
+    label: string;
+    value?: string | number | boolean | { $loc: string };
+    icon?: string;
+  }[];
   /** For a `format: 'select'` field: display mode for options (auto | dropdown | button-text | button-icon) */
   display?: 'auto' | 'dropdown' | 'button-text' | 'button-icon';
   /** Hint text shown inside an empty input (string, integer/float, icon, image fields) */

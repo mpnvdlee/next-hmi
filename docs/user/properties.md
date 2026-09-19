@@ -122,6 +122,10 @@ A reusable **Component** declares **input properties** the parent fills in. Insi
 
 Each input can carry a **description** (one line shown under the field) and a **default value**, used wherever an instance leaves the property empty — the default is what the component really renders with, not just an editor hint.
 
+An input of type **Select (enum)** gives whoever places the component a fixed list of choices instead of a free field. **Option values** decides what a choice actually hands over: **String**, **Integer**, **Float**, **Boolean** or **Localisable text**. Pick the kind that matches what the component does with it — a size list should pass a real number, a caption list a translation — so the value arrives usable rather than as text that has to be read back as a number. Change the kind later and the option labels stay put while their values clear, since a value written for the old kind means nothing under the new one.
+
+Pages and page groups declare their **input parameters** in the same panel (see [Pages](pages.md)), so the option kinds apply there too.
+
 > [!IMPORTANT]
 > **`$componentProp` has to be the whole value of a property.** Use it directly — a Label's **Text** set to `$componentProp: title` — and it stays live. Bury it inside another source (as one arm of an `$if`, a wildcard of a string expression) or put it on a **Layout** field, and it fills in once and then stops updating. The warnings pill flags this. Do the thinking on the *instance* instead: the instance may bind `$var`, compare, format — then pass the finished value in through a plain `$componentProp`.
 

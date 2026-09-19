@@ -42,7 +42,7 @@ The types above are the *runtime* kinds. A field may also declare an **optional 
 |---|---|---|
 | `String` | `url` | A URL field with validation |
 | `String` | `multiline` | A multi-line text area |
-| `String` | `select` | A dropdown of allowed values |
+| `String` · `Integer` · `Float` · `Boolean` | `select` | A dropdown of allowed values. The base type is whatever the options hold, so a numeric option list accepts numeric sources. A component property declares that with `optionType` (`string` \| `integer` \| `float` \| `boolean` \| `loc`, absent = `string`); `loc` options hold `{ $loc }` values and still resolve to `String` |
 | `String` | `password` | A masked input |
 | `String` | `length` | A CSS size input (`300px`, `50%`, `auto`) |
 | `String` | `direction` | A `row` \| `column` picker |

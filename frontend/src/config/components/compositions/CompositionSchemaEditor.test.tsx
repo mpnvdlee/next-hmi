@@ -29,9 +29,10 @@ describe('CompositionSchemaEditor', () => {
     if (target?.type !== 'icon') throw new Error('Icon picker did not open');
 
     target.onPick({ type: 'custom', path: 'icons/line-meter.svg' });
-    expect(onUpdate).toHaveBeenCalledWith({
-      icon: { type: 'custom', path: 'icons/line-meter.svg' },
-    });
+    expect(onUpdate).toHaveBeenCalledWith(
+      { icon: { type: 'custom', path: 'icons/line-meter.svg' } },
+      'step',
+    );
   });
 
   it('previews a custom icon selection', () => {

@@ -15,8 +15,7 @@ export const ACTION_TYPES = [
     type: 'openPageOverlay' as const,
     label: 'Open Page As Overlay',
     category: 'Screens',
-    description:
-      'Opens a navigable page or page group as a modal on top of the current screen.',
+    description: 'Opens a navigable page or page group as a modal on top of the current screen.',
   },
   {
     type: 'closePageOverlay' as const,

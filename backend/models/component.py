@@ -29,6 +29,9 @@ class ComponentPropertySchema(BaseModel):
     # For select type
     options: list[dict[str, Any]] = Field(default_factory=list)
     display: str | None = None
+    # What the options hold: string | integer | float | boolean | loc. Absent
+    # reads as string, which is what every select stored before the rest existed.
+    optionType: str | None = None
     # For string / number / url
     placeholder: str | None = None
     min: float | None = None

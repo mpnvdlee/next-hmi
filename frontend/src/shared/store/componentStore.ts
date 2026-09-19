@@ -24,7 +24,8 @@ interface ComponentStoreState {
   setComponentDraft: (component: ComponentDefinition, change?: DraftChange) => void;
   clearComponentDraft: (id: string) => void;
   /** Put every draft back as an undo/redo snapshot recorded them — structural by
-   *  definition, since the drafts it restores are from another point in time. */
+   *  definition, since the drafts it restores are from another point in time.
+   *  Drafts for components that have since been deleted are dropped. */
   restoreDrafts: (drafts: Record<string, ComponentDefinition>) => void;
 }
 
@@ -153,7 +154,15 @@ export const useComponentStore = create<ComponentStoreState>((set, get) => ({
     }),
 
   restoreDrafts: (drafts) =>
-    set((s) => ({ draftComponents: drafts, draftStructureRev: s.draftStructureRev + 1 })),
+    set((s) => {
+      // A component deleted since the step was taken has nowhere to put its
+      // draft back — a delete writes straight through to the API and is not part
+      // of the history. Restoring such a draft would make the next save PUT to
+      // an id the backend no longer has.
+      const live = new Set(s.components.map((c) => c.id));
+      const kept = Object.fromEntries(Object.entries(drafts).filter(([id]) => live.has(id)));
+      return { draftComponents: kept, draftStructureRev: s.draftStructureRev + 1 };
+    }),
 }));
 
 /**

@@ -401,7 +401,11 @@ describe('LayoutFields padding', () => {
   it('leaves a bound side bound, and its siblings alone', () => {
     const bound = { $var: { path: 'MyPLC:V' } } as never;
     render(
-      <LayoutFields mode="container" layout={{ paddingTop: bound, paddingLeft: '4px' }} onChange={vi.fn()} />,
+      <LayoutFields
+        mode="container"
+        layout={{ paddingTop: bound, paddingLeft: '4px' }}
+        onChange={vi.fn()}
+      />,
     );
 
     for (const side of SIDES) expect(sideRow(side)).toBeTruthy();
@@ -428,7 +432,7 @@ describe('LayoutFields padding', () => {
   // is a `SchemaFieldRow` now, so binding goes through the standard source pill
   // and lands on that side's own layout key rather than on a stand-in for all
   // four.
-  it('binds one side at a time, against that side\'s own key', () => {
+  it("binds one side at a time, against that side's own key", () => {
     const onChange = vi.fn();
     const bound = { $var: { path: 'MyPLC:Pad' } } as never;
     render(

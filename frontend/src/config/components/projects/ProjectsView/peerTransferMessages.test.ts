@@ -78,8 +78,7 @@ const failures: FailureCase[] = [
     text: 'Peer host must resolve exclusively to private trusted-LAN addresses',
     canResolve: false,
     cause: 'That address is not a trusted-LAN address.',
-    action:
-      'Peer transfer refuses localhost and public addresses. Use the peer’s LAN address.',
+    action: 'Peer transfer refuses localhost and public addresses. Use the peer’s LAN address.',
   },
   {
     name: 'a peer that never answered',
@@ -152,8 +151,7 @@ const failures: FailureCase[] = [
   },
   {
     name: 'a pin mismatch, which keeps both fingerprints the backend named',
-    text:
-      'Certificate for peer 10.0.0.4:8443 changed. Pinned abcd1234abcd1234…, peer now presents ef01ef01ef01ef01….',
+    text: 'Certificate for peer 10.0.0.4:8443 changed. Pinned abcd1234abcd1234…, peer now presents ef01ef01ef01ef01….',
     canResolve: false,
     cause:
       'Certificate for peer 10.0.0.4:8443 changed. Pinned abcd1234abcd1234…, peer now presents ef01ef01ef01ef01….',
@@ -162,8 +160,7 @@ const failures: FailureCase[] = [
   },
   {
     name: 'an expired pin, which is also a certificate sentence',
-    text:
-      'Certificate for peer 10.0.0.4:8443 expired 3 days ago. The peer must renew and reissue a certificate; re-pinning the same expired certificate will not fix this.',
+    text: 'Certificate for peer 10.0.0.4:8443 expired 3 days ago. The peer must renew and reissue a certificate; re-pinning the same expired certificate will not fix this.',
     canResolve: false,
     cause:
       'Certificate for peer 10.0.0.4:8443 expired 3 days ago. The peer must renew and reissue a certificate; re-pinning the same expired certificate will not fix this.',

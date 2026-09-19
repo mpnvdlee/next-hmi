@@ -88,6 +88,17 @@ describe('VariableListInput', () => {
     expect(screen.getByRole('combobox')).toHaveTextContent('Brew:Gone/Tag (not recorded)');
   });
 
+  it('does not call a stored variable unrecorded before the historian config is in hand', () => {
+    useHistorianConfigStore.setState({
+      config: null,
+      load: vi.fn(() => new Promise<void>(() => {})),
+    });
+    renderList('Brew:Boiler/Temp');
+
+    expect(screen.getByRole('combobox')).toHaveTextContent('Brew:Boiler/Temp');
+    expect(screen.getByRole('combobox')).not.toHaveTextContent('(not recorded)');
+  });
+
   it('loads the historian config on demand, and only for a recorded-mode chart', () => {
     const load = vi.fn().mockResolvedValue(undefined);
     useHistorianConfigStore.setState({ config: null, load });

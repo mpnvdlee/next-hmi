@@ -1,10 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {
-  useProjectsStore,
-  type PeerProject,
-  type ProjectEntry,
-} from '@config/store/projectsStore';
+import { useProjectsStore, type PeerProject, type ProjectEntry } from '@config/store/projectsStore';
 import PeerTransferModal from './PeerTransferModal';
 
 function project(overrides: Partial<ProjectEntry> = {}): ProjectEntry {
@@ -160,10 +156,7 @@ interface BeginArgs {
   confirmReplace: boolean;
 }
 
-function stubStore(
-  remoteProjects: PeerProject[],
-  overrides: Record<string, unknown> = {},
-) {
+function stubStore(remoteProjects: PeerProject[], overrides: Record<string, unknown> = {}) {
   const beginPeerTransfer = vi.fn(async (args: BeginArgs) => ({
     transferId: args.transferId,
     phase: 'uploading',
@@ -181,10 +174,7 @@ function stubStore(
   return beginPeerTransfer;
 }
 
-function stubPullStore(
-  remoteProjects: PeerProject[],
-  overrides: Record<string, unknown> = {},
-) {
+function stubPullStore(remoteProjects: PeerProject[], overrides: Record<string, unknown> = {}) {
   const beginPeerPull = vi.fn(async (args: BeginArgs) => ({
     transferId: args.transferId,
     phase: 'downloading',
@@ -208,11 +198,7 @@ async function pairWith(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Pair & continue' }));
 }
 
-async function pick(
-  user: ReturnType<typeof userEvent.setup>,
-  combobox: string,
-  option: RegExp,
-) {
+async function pick(user: ReturnType<typeof userEvent.setup>, combobox: string, option: RegExp) {
   await user.click(await screen.findByRole('combobox', { name: combobox }));
   await user.click(await screen.findByRole('option', { name: option }));
 }
@@ -394,8 +380,7 @@ it('opens the resolutions when the backend refuses a collision the modal could n
       status: 'error' as const,
       bytesDone: 0,
       bytesTotal: 100,
-      message:
-        'Destination rejected transfer: Destination project id or folder already exists',
+      message: 'Destination rejected transfer: Destination project id or folder already exists',
     })),
   });
 
@@ -520,9 +505,7 @@ it('names the local project in the way when it really is in the projects root', 
   await pick(user, 'Source project on peer', /Landing \(landing\)/);
 
   expect(
-    await screen.findByText(
-      'This manager already has "Landing here" in the folder "landing".',
-    ),
+    await screen.findByText('This manager already has "Landing here" in the folder "landing".'),
   ).toBeInTheDocument();
 
   await user.click(screen.getByRole('radio', { name: /separate copy/i }));
@@ -702,8 +685,7 @@ it('mints a new transfer id when the id itself can never succeed again', async (
       status: 'error' as const,
       bytesDone: 0,
       bytesTotal: 100,
-      message:
-        'Source project changed since this transferId was first attempted; use a new id',
+      message: 'Source project changed since this transferId was first attempted; use a new id',
     })),
   });
 
@@ -720,10 +702,7 @@ it('mints a new transfer id when the id itself can never succeed again', async (
   await user.click(await screen.findByRole('button', { name: 'Transfer' }));
 
   await waitFor(
-    () =>
-      expect(
-        screen.getByRole('button', { name: 'Start a new transfer' }),
-      ).toBeInTheDocument(),
+    () => expect(screen.getByRole('button', { name: 'Start a new transfer' })).toBeInTheDocument(),
     { timeout: 3000 },
   );
   expect(
@@ -820,10 +799,9 @@ it('keeps the explanation of a terminal status the durable journal owns', async 
   await pick(user, 'Source project on peer', /Landing \(landing\)/);
   await user.click(await screen.findByRole('button', { name: 'Pull' }));
 
-  await waitFor(
-    () => expect(screen.getByText('Installed, waiting to start')).toBeInTheDocument(),
-    { timeout: 3000 },
-  );
+  await waitFor(() => expect(screen.getByText('Installed, waiting to start')).toBeInTheDocument(), {
+    timeout: 3000,
+  });
   expect(
     screen.getByText('Project did not start: port 8001 is already in use'),
   ).toBeInTheDocument();
@@ -896,9 +874,7 @@ it('will not offer a peer project outside its projects root as a replacement', a
   expect(
     screen.getByText('10.0.0.4 has no project in its projects root to replace.'),
   ).toBeInTheDocument();
-  expect(
-    screen.queryByRole('combobox', { name: 'Destination project' }),
-  ).not.toBeInTheDocument();
+  expect(screen.queryByRole('combobox', { name: 'Destination project' })).not.toBeInTheDocument();
 });
 
 it('moves off a refused folder even when the clash it could see was an id clash', async () => {

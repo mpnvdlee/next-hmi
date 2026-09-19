@@ -729,7 +729,9 @@ describe('project version / upgrade gate', () => {
     );
 
     const notice = await screen.findByText(/Upgraded "Line 1" from v4 to v7/);
-    expect(notice).toHaveTextContent('/projects/line-1/.backups/pre-migration-20260524T100000Z-app-1.2.3.zip');
+    expect(notice).toHaveTextContent(
+      '/projects/line-1/.backups/pre-migration-20260524T100000Z-app-1.2.3.zip',
+    );
     // Not a per-row detail — it's the page-level notice.
     expect(row('Line 1')).not.toContainElement(notice);
 

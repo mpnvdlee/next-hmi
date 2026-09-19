@@ -15,20 +15,12 @@ export default function NewProjectTemplateModal({ onCancel, onChoose }: Props) {
     <ModalShell onClose={onCancel} dialogClassName="name-modal template-modal cfg-flex-col">
       <div className="name-modal__title">Start a new project</div>
       <div className="template-modal__options">
-        <button
-          type="button"
-          className="template-card"
-          onClick={() => onChoose('empty')}
-        >
+        <button type="button" className="template-card" onClick={() => onChoose('empty')}>
           <span className="template-card__art" aria-hidden="true" />
           <span className="template-card__name">Empty project</span>
           <span className="template-card__note">One blank page. Build it your way.</span>
         </button>
-        <button
-          type="button"
-          className="template-card"
-          onClick={() => onChoose('example')}
-        >
+        <button type="button" className="template-card" onClick={() => onChoose('example')}>
           <img className="template-card__art" src={examplePreview} alt="" />
           <span className="template-card__name">NEXT BREW example</span>
           <span className="template-card__note">

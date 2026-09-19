@@ -1,8 +1,9 @@
 /**
  * PropertyModal — modal for adding a new component property to a widget or dialog.
  *
- * Asks for key + type up-front; the rest of the schema is edited inline once
- * the property exists. Keys can subsequently be renamed from the property row.
+ * Asks for key, type and default up-front; the rest of the schema is edited
+ * inline once the property exists. Keys can subsequently be renamed from the
+ * property row.
  */
 
 import './componentProperty.css';
@@ -13,15 +14,20 @@ import PickerFooter from '../ui/PickerFooter';
 import Select from '../ui/Select';
 import PropRow from '../ui/PropRow';
 import BoolButtonGroup from '../ui/BoolButtonGroup';
-import { VALUE_TYPE_OPTIONS } from '@shared/types/componentProperty';
+import {
+  componentPropertyToSchemaField,
+  VALUE_TYPE_OPTIONS,
+  VALUELESS_PROPERTY_TYPES,
+} from '@shared/types/componentProperty';
 import { isScalarType } from '@shared/utils/valueTypes';
+import { renderSchemaField } from '../../utils/renderSchemaField';
 
 interface Props {
   /** Keys already in use — used for uniqueness validation */
   existingKeys: string[];
   /** Name of the component the property is added to. */
   contextName?: string;
-  onConfirm(key: string, label: string, type: string): void;
+  onConfirm(key: string, label: string, type: string, defaultValue?: unknown): void;
   onCancel(): void;
 }
 
@@ -30,6 +36,7 @@ export function PropertyModal({ existingKeys, contextName, onConfirm, onCancel }
   const [label, setLabel] = useState('');
   const [type, setType] = useState<string>('string');
   const [isArray, setIsArray] = useState(false);
+  const [defaultValue, setDefaultValue] = useState<unknown>(undefined);
 
   const keyRef = useRef<HTMLInputElement>(null);
 
@@ -41,11 +48,26 @@ export function PropertyModal({ existingKeys, contextName, onConfirm, onCancel }
   const isDuplicateKey = existingKeys.includes(trimmedKey);
   const canConfirm = trimmedKey.length > 0 && !isDuplicateKey;
   const arrayCapable = isScalarType(type);
+  const finalType = arrayCapable && isArray ? `${type}[]` : type;
+  // A select has no options until its row is expanded, and an array default
+  // would need a list editor — both are set on the row once the property exists.
+  const takesDefault =
+    !VALUELESS_PROPERTY_TYPES.has(type) && type !== 'select' && finalType === type;
+
+  function handleTypeChange(next: string) {
+    setType(next);
+    // A default typed for the old type would be carried onto the new one unread.
+    setDefaultValue(undefined);
+  }
 
   function handleConfirm() {
     if (!canConfirm) return;
-    const finalType = arrayCapable && isArray ? `${type}[]` : type;
-    onConfirm(trimmedKey, label.trim() || trimmedKey, finalType);
+    onConfirm(
+      trimmedKey,
+      label.trim() || trimmedKey,
+      finalType,
+      takesDefault && defaultValue !== '' ? defaultValue : undefined,
+    );
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -89,7 +111,7 @@ export function PropertyModal({ existingKeys, contextName, onConfirm, onCancel }
         </PropRow>
 
         <PropRow label="Type">
-          <Select value={type} onChange={(v) => setType(v)}>
+          <Select value={type} onChange={handleTypeChange}>
             {VALUE_TYPE_OPTIONS.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
@@ -104,6 +126,20 @@ export function PropertyModal({ existingKeys, contextName, onConfirm, onCancel }
             description="Bind an array of this type instead of a single value."
           >
             <BoolButtonGroup value={isArray} onChange={setIsArray} />
+          </PropRow>
+        )}
+
+        {takesDefault && (
+          <PropRow
+            label="Default value"
+            description="Used wherever an instance leaves this property unset."
+            sourceless
+          >
+            {renderSchemaField(
+              componentPropertyToSchemaField({ type, label: label.trim() || trimmedKey }),
+              defaultValue,
+              setDefaultValue,
+            )}
           </PropRow>
         )}
       </div>

@@ -14,6 +14,16 @@ export const category = 'Layout & structure';
 export const description =
   'Marks where content the caller supplies is rendered. Put one in a reusable component and instances of it gain a named slot — in the widget tree, and in the properties panel when a "Widget slot" property names it.';
 export const icon = { type: 'builtin', name: 'frame-corners' } as const;
+/** The widgets a caller supplies land here — via `useComponentSlot`, tagged
+ *  onto the instance rather than this node's own `children` — but they render
+ *  inside the very flex box `flowsChildren` below describes, so the Layout
+ *  panel needs both declarations to give each of them a resolvable main axis. */
+export const hostsChildren = true;
+/** `data-flow-direction="column"` / `data-flow-align="stretch"` below and the
+ *  matching flex column in style.css are the flow this declares — undeclared
+ *  before, which is what left the Layout panel unable to offer Hug/Fill/Fixed
+ *  rows for a slot's own content the way any other flex host's children get. */
+export const flowsChildren = true;
 
 /** Slot name an unnamed ComponentSlot falls back to, and the slot an instance's
  *  untagged children land in. Mirrors DEFAULT_SLOT_KEY in
@@ -35,6 +45,7 @@ function slotKeyOf(raw: unknown): string {
  */
 export default function ComponentSlot({ properties, layout }: HmiWidgetProps) {
   const isPreview = useIsPreview();
+  const isInstance = useIsComponentInstance();
   const slot = slotKeyOf(properties?.slot);
   const widgets = useComponentSlot(slot);
   const style = selfLayoutStyle(layout);
@@ -43,9 +54,10 @@ export default function ComponentSlot({ properties, layout }: HmiWidgetProps) {
     // In the components editor a definition renders with no caller, so every
     // slot is empty and the shell around them collapses to a hairline — the
     // author cannot see or size the hole they are authoring. Draw an outline
-    // there. The operator runtime keeps rendering nothing: an unfilled slot is
-    // absent, not an empty box.
-    if (!isPreview) return null;
+    // there. Nowhere else: a placed instance's unfilled slot is absent on the
+    // page, and the editor's UI preview has to show the page the operator gets,
+    // not the affordance the definition was authored with.
+    if (!isPreview || isInstance) return null;
     return (
       <div className="hmi-component hmi-slot hmi-slot--empty" style={style}>
         <span className="hmi-slot__empty-label">

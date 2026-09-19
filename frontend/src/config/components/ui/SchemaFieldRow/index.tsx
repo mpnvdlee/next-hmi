@@ -10,7 +10,12 @@ import { structVarDefault } from '@hmi/utils/bindingValidation';
 import { SOURCE_CAPABLE_TYPES, bindsVariable } from '@hmi/utils/propertySourceRules';
 import { primaryType, isStructType } from '@shared/utils/valueTypes';
 import { evaluateVisibility } from '../../../utils/visibilityEvaluator';
-import { renderSchemaField } from '../../../utils/renderSchemaField';
+import {
+  hasOptionValue,
+  renderSchemaField,
+  selectOptionKey,
+} from '../../../utils/renderSchemaField';
+import { hasPropertySourceKey, isLocSource } from '@shared/types/propertyValueGuards';
 import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
 import { useContext } from 'react';
@@ -208,10 +213,32 @@ export default function SchemaFieldRow({
   // The row's own union — exported as `bindsVariable` so the panels that decide
   // whether to *offer* the picker ask exactly the question this row answers.
   const hasSourcePill = bindsVariable(fieldType);
+  // A value the schema itself lists as an option is a static pick, whatever it
+  // looks like. Options may hold translations (`{ $loc }`), and reading one as
+  // a property source would swap the restricted dropdown for the free
+  // translation picker — the unrestricted choice the option list exists to
+  // replace. Only the *detected* source changes; the pill still offers the rest.
+  //
+  // `$loc` is the one source an option may legitimately be. Any other source
+  // object stays a real binding even when an option happens to hold the same
+  // shape — the backend takes `options` as free-form dicts, so hand-written or
+  // MCP-written JSON can declare one, and swallowing it would strand the row
+  // without the editor that binding needs.
+  // Keyed once, not once per option: `selectOptionKey` is a `JSON.stringify`
+  // whenever the value is an object, which `{ $loc }` — the case this exists
+  // for — always is.
+  const valueKey = selectOptionKey(effectiveValue);
+  const declaresValueAsOption =
+    (!hasPropertySourceKey(effectiveValue) || isLocSource(effectiveValue)) &&
+    (schema.options ?? []).some(
+      (option) => hasOptionValue(option.value) && selectOptionKey(option.value) === valueKey,
+    );
   const detectedSource = mixed
     ? mixed.source
     : hasSourcePill
-      ? (getPropertySource(effectiveValue) as PropertySource | null)
+      ? declaresValueAsOption
+        ? 'static'
+        : (getPropertySource(effectiveValue) as PropertySource | null)
       : null;
   const currentSource = isSourceCapable ? detectedSource : null;
 
@@ -300,6 +327,11 @@ export default function SchemaFieldRow({
       // from the raw values, where an unbound widget reads as `static` — a source
       // this row does not even offer.
       mixed={isStruct && mixed ? { source: structSource } : mixed}
+      // The row has already decided which source it renders. The pill must
+      // badge and switch against that same decision: picking the source already
+      // in effect is a no-op, while a pill that read the value's shape instead
+      // would treat it as a switch and overwrite the value with a fresh default.
+      source={isStruct ? structSource : (detectedSource ?? undefined)}
       compact
     />
   ) : (

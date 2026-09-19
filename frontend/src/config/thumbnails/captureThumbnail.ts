@@ -48,9 +48,10 @@ export async function captureThumbnail({ readyTimeoutMs = 8000 }: Options = {}):
 
     await waitForPreviewReady(frame, readyTimeoutMs);
 
-    syncAllTo((message) => frame?.contentWindow?.postMessage(message, window.location.origin), [
-      mainPage.id,
-    ]);
+    syncAllTo(
+      (message) => frame?.contentWindow?.postMessage(message, window.location.origin),
+      [mainPage.id],
+    );
     await delay(SETTLE_MS);
 
     const target = frame.contentDocument?.querySelector('.hmi-layout');

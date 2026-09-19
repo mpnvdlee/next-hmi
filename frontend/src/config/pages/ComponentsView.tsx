@@ -15,7 +15,10 @@ import '../components/compositions/composition.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useComponentStore, type DraftChange } from '@shared/store/componentStore';
 import { useComponentEditorStore } from '../store/componentEditorStore';
-import { useProjectStore } from '@shared/store/projectStore';
+import {
+  projectSnapshotAndDirty,
+  projectThrottledSnapshotAndDirty,
+} from '@shared/store/projectActions';
 import { useTranslations } from '@shared/hooks/useTranslations';
 import type { ComponentDefinition } from '@shared/types/componentTypes';
 import type { WidgetConfig, LayoutConfig } from '@shared/types/config';
@@ -94,8 +97,6 @@ export default function ComponentsView() {
   const draftStructureRev = useComponentStore((s) => s.draftStructureRev);
   const setComponentDraft = useComponentStore((s) => s.setComponentDraft);
   const clearComponentDraft = useComponentStore((s) => s.clearComponentDraft);
-
-  const markDirty = useProjectStore((s) => s.markDirty);
 
   const activeComponentId = useComponentEditorStore((s) => s.activeComponentId);
   const selectedId = useComponentEditorStore((s) => s.selectedId);
@@ -208,13 +209,23 @@ export default function ComponentsView() {
 
   /** Every write to the open definition goes through here. `change` defaults to
    *  the structural answer, so only a caller that knows it moved nothing opts out
-   *  of the tree-order walk keyed on it. */
+   *  of the tree-order walk keyed on it. `history` is a separate knob because the
+   *  two do not line up: a per-keystroke write to the definition's own fields is
+   *  structural by that measure but must still fold into one undo step.
+   *
+   *  The step is taken before the draft lands, so it holds the state to go back
+   *  to — the invariant every configStore action follows. */
   const saveComponent = useCallback(
-    (component: ComponentDefinition, change: DraftChange = 'structure') => {
+    (
+      component: ComponentDefinition,
+      change: DraftChange = 'structure',
+      history: 'step' | 'coalesce' = 'step',
+    ) => {
+      if (history === 'coalesce') projectThrottledSnapshotAndDirty();
+      else projectSnapshotAndDirty();
       setComponentDraft(component, change);
-      markDirty();
     },
-    [markDirty, setComponentDraft],
+    [setComponentDraft],
   );
 
   /** Copy, or cut — a cut also records the sources so the next paste moves the
@@ -357,15 +368,23 @@ export default function ComponentsView() {
     }
   }
 
-  function patchActiveComponent(patch: Partial<ComponentDefinition>) {
+  /** The active definition's patch funnel: the schema editor's fields, its icon
+   *  picker, every componentProperties edit, and the preview's width/height.
+   *  Only a per-keystroke write (the text fields, the size inputs) asks to
+   *  coalesce — a discrete op (icon pick, add/delete/type-change) defaults to
+   *  its own step so it can't be swallowed into an unrelated keystroke burst. */
+  function patchActiveComponent(
+    patch: Partial<ComponentDefinition>,
+    history: 'step' | 'coalesce' = 'step',
+  ) {
     if (!activeComponent) return;
     const updated = { ...activeComponent, ...patch };
-    saveComponent(updated);
+    saveComponent(updated, 'structure', history);
   }
 
   /** One pass over the draft for any number of widgets — the properties panel's
-   *  multi write. Definition edits are outside undo either way (see saveComponent),
-   *  so no batching is needed beyond keeping this to a single save. */
+   *  multi write. One save and one coalesced undo step, so editing a
+   *  multi-selection undoes at the same granularity as editing a single widget. */
   function handleUpdateWidgets(
     ids: string[],
     patch: { name?: string; properties?: Record<string, unknown>; layout?: Partial<LayoutConfig> },
@@ -387,7 +406,7 @@ export default function ComponentsView() {
     );
     // Names, properties and layout only — every widget object is replaced, but
     // none of them moves, so the tree order the panel resolved still holds.
-    saveComponent(updated, 'properties');
+    saveComponent(updated, 'properties', 'coalesce');
   }
 
   function handleUpdateWidget(

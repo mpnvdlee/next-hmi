@@ -86,7 +86,7 @@ import { VirtualKeyboard } from '@shared/components/VirtualKeyboard';
 import { VirtualNumpad } from '@shared/components/VirtualNumpad';
 import CloseButton from '@shared/components/CloseButton';
 import { renderWidget, renderSlotWidgets } from '@hmi/components/renderRegion';
-import { useComponentSlot } from '@hmi/context/ComponentSlotContext';
+import { useComponentSlot, useIsComponentInstance } from '@hmi/context/ComponentSlotContext';
 import { useIsPreview } from '@shared/context/PreviewContext';
 import { useActivePage } from '@hmi/hooks/useActivePage';
 import { useAnchoredStyle } from '@shared/hooks/useAnchoredStyle';
@@ -170,6 +170,7 @@ export const nextHmiSdk = {
   renderWidget,
   renderSlotWidgets,
   useComponentSlot,
+  useIsComponentInstance,
   useIsPreview,
   useActivePage,
   useAnchoredStyle,

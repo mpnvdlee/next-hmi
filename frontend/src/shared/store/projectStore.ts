@@ -35,6 +35,10 @@ interface Snapshot {
   translationLanguages: Array<{ code: string }>;
   translations: Record<string, Record<string, string>>;
   draftComponents: Record<string, ComponentDefinition>;
+  /** The saved definitions as of this step, alongside the drafts — a save
+   *  clears drafts, so undoing past one falls through to this list rather than
+   *  to whatever the newest save left behind. */
+  components: ComponentDefinition[];
   /** Per-store extra payloads contributed by registered snapshot extensions. */
   extras: Record<string, unknown>;
 }
@@ -106,8 +110,27 @@ function captureSnapshot(): Snapshot {
     translationLanguages: structuredClone(useTranslationStore.getState().languages),
     translations: structuredClone(useTranslationStore.getState().translations),
     draftComponents: structuredClone(useComponentStore.getState().draftComponents),
+    components: snapshotComponents(),
     extras,
   };
+}
+
+/** The saved component list, cloned once per distinct list.
+ *
+ *  Every write in `componentStore` replaces the array rather than mutating it,
+ *  so two snapshots taken between saves hold the same list — and can share one
+ *  clone. Cloning per snapshot instead would give each of the ~100 retained
+ *  history steps its own deep copy of every definition's widget tree, held for
+ *  the session. Nothing hands the clone out: `restoreSnapshot` copies again
+ *  before writing it back. */
+let clonedComponents: { source: ComponentDefinition[]; clone: ComponentDefinition[] } | null = null;
+
+function snapshotComponents(): ComponentDefinition[] {
+  const source = useComponentStore.getState().components;
+  if (clonedComponents?.source !== source) {
+    clonedComponents = { source, clone: structuredClone(source) };
+  }
+  return clonedComponents.clone;
 }
 
 function restoreSnapshot(snapshot: Snapshot) {
@@ -123,6 +146,16 @@ function restoreSnapshot(snapshot: Snapshot) {
   useTranslationStore.setState({
     languages: structuredClone(snapshot.translationLanguages),
     translations: structuredClone(snapshot.translations),
+  });
+  // A delete writes straight through to the API and is not part of history
+  // (see `restoreDrafts` below), so a snapshot can name a component that no
+  // longer exists — read the live id set before it is overwritten, and drop
+  // any snapshot entry outside it, so a delete stays undoable-proof at the
+  // `components` level too, not just for the draft `restoreDrafts` already
+  // guards.
+  const live = new Set(useComponentStore.getState().components.map((c) => c.id));
+  useComponentStore.setState({
+    components: structuredClone(snapshot.components.filter((c) => live.has(c.id))),
   });
   useComponentStore.getState().restoreDrafts(structuredClone(snapshot.draftComponents));
   for (const [key, ext] of useProjectStore.getState()._snapshotExtensions) {

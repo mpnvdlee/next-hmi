@@ -946,3 +946,69 @@ def test_component_property_description_defaults_to_none():
         children=[],
     )
     assert definition.componentProperties["title"].description is None
+
+
+def test_select_property_option_type_round_trips(widget_client):
+    """A `select` property's options may hold numbers, booleans or translations.
+    The model forbids extra keys, so an undeclared `optionType` would take the
+    whole component down on save rather than dropping one field."""
+    body = {
+        "name": "TypedSelect",
+        "componentProperties": {
+            "size": {
+                "type": "select",
+                "label": "Size",
+                "optionType": "integer",
+                "options": [{"label": "Small", "value": 10}, {"label": "Large", "value": 20}],
+                "defaultValue": 10,
+            },
+            "caption": {
+                "type": "select",
+                "label": "Caption",
+                "optionType": "loc",
+                "options": [{"label": "Running", "value": {"$loc": "status.running"}}],
+            },
+        },
+        "children": [],
+    }
+
+    created = widget_client.post("/api/components", json=body)
+    assert created.status_code == 200
+
+    component_id = created.json()["id"]
+    loaded = widget_client.get(f"/api/components/{component_id}").json()
+    properties = loaded["componentProperties"]
+    assert properties["size"]["optionType"] == "integer"
+    assert properties["size"]["options"] == [
+        {"label": "Small", "value": 10},
+        {"label": "Large", "value": 20},
+    ]
+    assert properties["caption"]["optionType"] == "loc"
+    assert properties["caption"]["options"] == [
+        {"label": "Running", "value": {"$loc": "status.running"}}
+    ]
+
+    persisted = storage.read_json(storage.active_components_dir() / f"{component_id}.json")
+    assert persisted["componentProperties"]["size"]["optionType"] == "integer"
+
+
+def test_select_property_without_an_option_type_stays_absent(widget_client):
+    """Every select written before the other kinds existed carries no
+    `optionType`; reading one back must not invent a value for it."""
+    body = {
+        "name": "PlainSelect",
+        "componentProperties": {
+            "mode": {
+                "type": "select",
+                "label": "Mode",
+                "options": [{"label": "Auto", "value": "auto"}],
+            }
+        },
+        "children": [],
+    }
+
+    created = widget_client.post("/api/components", json=body)
+    assert created.status_code == 200
+
+    loaded = widget_client.get(f"/api/components/{created.json()['id']}").json()
+    assert loaded["componentProperties"]["mode"]["optionType"] is None

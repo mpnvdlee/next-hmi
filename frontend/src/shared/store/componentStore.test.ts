@@ -74,9 +74,21 @@ describe('draft management', () => {
 
     // An undo puts back drafts from another point in time — any tree order
     // resolved against the current ones is stale.
+    useComponentStore.setState({ components: [COMP_A] as ComponentDefinition[] });
     useComponentStore.getState().restoreDrafts({ 'comp-a': withChild });
     expect(rev()).toBe(3);
     expect(useComponentStore.getState().draftComponents).toEqual({ 'comp-a': withChild });
+  });
+
+  it('drops restored drafts whose component no longer exists', () => {
+    // Deleting a component writes straight through to the API, so a step taken
+    // before it still holds a draft for an id nobody can open any more. Putting
+    // that back would make the next save PUT to a component that is gone.
+    useComponentStore.setState({ components: [COMP_A] as ComponentDefinition[] });
+
+    useComponentStore.getState().restoreDrafts({ 'comp-a': COMP_A, 'comp-b': COMP_B });
+
+    expect(useComponentStore.getState().draftComponents).toEqual({ 'comp-a': COMP_A });
   });
 
   it('clearComponentDraft removes only the specified draft', () => {
@@ -287,5 +299,89 @@ describe('registerSave callback', () => {
     await saveCb();
 
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+// ── undo through a save ───────────────────────────────────────────────────────
+
+describe('undo through a save', () => {
+  // Mirrors the fallback the editor reads a definition through: an unsaved
+  // draft first, else whatever the saved list currently holds.
+  function resolveComponent(id: string): ComponentDefinition | undefined {
+    const s = useComponentStore.getState();
+    return s.draftComponents[id] ?? s.components.find((c) => c.id === id);
+  }
+
+  it('undoing past a save does not hand back the newest definition', async () => {
+    const v0 = COMP_A;
+    const v1 = { ...COMP_A, name: 'v1' };
+    const v2 = { ...COMP_A, name: 'v2' };
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => v2 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    useComponentStore.setState({ components: [v0] });
+
+    // Two discrete edits, each opening its own undo step the way `saveComponent`
+    // does for a non-coalesced write.
+    useProjectStore.getState().pushSnapshot();
+    useComponentStore.getState().setComponentDraft(v1);
+
+    useProjectStore.getState().pushSnapshot();
+    useComponentStore.getState().setComponentDraft(v2);
+
+    const saveCb = useProjectStore.getState()._saveCallbacks.get('components')!;
+    await saveCb();
+    expect(useComponentStore.getState().draftComponents).toEqual({});
+    expect(resolveComponent('comp-a')).toEqual(v2);
+
+    useProjectStore.getState().undo();
+    expect(resolveComponent('comp-a')).toEqual(v1);
+
+    useProjectStore.getState().undo();
+    // The snapshot holds drafts only, and a save clears them — so without the
+    // saved list in the snapshot, undo falls through to components[] and
+    // returns the state the user is trying to undo away from.
+    expect(resolveComponent('comp-a')).not.toEqual(v2);
+    expect(resolveComponent('comp-a')).toEqual(v0);
+  });
+
+  it('does not resurrect a component deleted since the snapshot, but still restores a survivor to its older content', async () => {
+    const aV1 = { ...COMP_A, name: 'v1' };
+    const aV2 = { ...COMP_A, name: 'v2' };
+    const bDraft = { ...COMP_B, name: 'B edited' };
+
+    useComponentStore.setState({ components: [aV1, COMP_B] });
+    // B carries a draft at snapshot time, same as `restoreDrafts`'s own
+    // "deleted since the step" scenario — it should not survive either.
+    useComponentStore.getState().setComponentDraft(bDraft);
+
+    useProjectStore.getState().pushSnapshot();
+
+    const fetchMock = vi.fn(async (_url: string, opts?: RequestInit) => {
+      if (opts?.method === 'PUT') return { ok: true, json: async () => aV2 };
+      return { ok: true, json: async () => ({}) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    // A is saved to a newer version...
+    await useComponentStore.getState().updateComponent(aV2);
+    useComponentStore.getState().clearComponentDraft('comp-a');
+    // ...and B is deleted outright, straight through the API — a delete is not
+    // part of history, unlike either of these.
+    await useComponentStore.getState().deleteComponent('comp-b');
+
+    expect(useComponentStore.getState().components).toEqual([aV2]);
+    expect(useComponentStore.getState().draftComponents).toEqual({});
+
+    useProjectStore.getState().undo();
+
+    const state = useComponentStore.getState();
+    // B was deleted after the snapshot was taken — a delete writes straight
+    // through to the API and is outside history, so undo must not bring it,
+    // or its draft, back.
+    expect(state.components.find((c) => c.id === 'comp-b')).toBeUndefined();
+    expect(state.draftComponents['comp-b']).toBeUndefined();
+    // A survives the delete, and its older (pre-save) content comes back.
+    expect(state.components.find((c) => c.id === 'comp-a')).toEqual(aV1);
   });
 });

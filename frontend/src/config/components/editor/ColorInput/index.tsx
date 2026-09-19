@@ -71,11 +71,22 @@ function colorName(value: string): string {
   return hit ? hit.name : formatHex(value);
 }
 
+/** A literal color as the fallback hint states it — "Red · #EF4444", or the bare
+ *  hex when the palette has no name for it. */
+function colorText(value: string): string {
+  const name = colorName(value);
+  const hex = formatHex(value);
+  return name === hex ? hex : `${name} · ${hex}`;
+}
+
 interface ColorInputProps {
   value: unknown;
   onChange: (v: string | undefined) => void;
   /** Theme token (cssVar) an unset value falls back to — shown as the themed default. */
   defaultToken?: string;
+  /** Literal color an unset value falls back to when no theme token is behind
+   *  the field — a component property declared with a hex default, say. */
+  defaultColor?: string;
   /** A multi-selection whose widgets hold different colors. The trigger reads
    *  "Mixed" over an unpainted swatch and offers no revert: there is no single
    *  color to preview, and none of the widgets is following the default. Picking
@@ -87,6 +98,7 @@ export default function ColorInput({
   value,
   onChange,
   defaultToken,
+  defaultColor,
   mixed = false,
 }: ColorInputProps) {
   const colorValue = typeof value === 'string' && value ? value : undefined;
@@ -118,6 +130,14 @@ export default function ColorInput({
     ...(defaultToken ? [defaultToken] : []),
     ...(tokenCssVar ? [tokenCssVar] : []),
   ]);
+
+  // A literal default only counts when it paints something — `transparent` is
+  // what the field already falls back to with no default at all.
+  const literalDefault =
+    !defaultToken && defaultColor && defaultColor.toLowerCase() !== TRANSPARENT
+      ? defaultColor
+      : undefined;
+  const literalDefaultText = literalDefault ? colorText(literalDefault) : undefined;
 
   function select(v: string | undefined) {
     onChange(v);
@@ -152,6 +172,13 @@ export default function ColorInput({
         title: `Follows theme · ${tokenLabel(defaultToken)} (${tokenValues[defaultToken]})`,
       };
     }
+    if (literalDefault) {
+      return {
+        bg: literalDefault,
+        label: colorName(literalDefault),
+        title: `Falls back to ${formatHex(literalDefault)}`,
+      };
+    }
     // No theme token behind the field means it paints nothing of its own — the
     // same result the Transparent option sets explicitly, so it reads as that
     // rather than as an anonymous "Default".
@@ -167,7 +194,7 @@ export default function ColorInput({
         text: `${tokenLabel(defaultToken)} · ${formatHex(tokenValues[defaultToken])}`,
         suffix: 'default',
       }
-    : { text: 'Transparent', suffix: 'default' };
+    : { text: literalDefaultText ?? 'Transparent', suffix: 'default' };
 
   const triggerControl = (
     <>
@@ -238,10 +265,10 @@ export default function ColorInput({
             hex={
               defaultToken
                 ? `${tokenLabel(defaultToken)} · ${formatHex(tokenValues[defaultToken])}`
-                : 'Transparent'
+                : (literalDefaultText ?? 'Transparent')
             }
-            swatch={defaultToken ? tokenVar(defaultToken) : undefined}
-            defaultSwatch={!defaultToken}
+            swatch={defaultToken ? tokenVar(defaultToken) : literalDefault}
+            defaultSwatch={!defaultToken && !literalDefault}
             selected={!mixed && !colorValue}
             onClick={() => select(undefined)}
           />

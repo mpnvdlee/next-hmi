@@ -20,9 +20,23 @@
 // for a file filter. Only forms used in practice need listing; `--flag=value`
 // needs no entry.
 const VALUE_FLAGS = new Set([
-  '--reporter', '--outputFile', '--config', '--project', '--pool', '--environment',
-  '--shard', '--testNamePattern', '-t', '--exclude', '--include', '--retry',
-  '--bail', '--maxWorkers', '--minWorkers', '--maxConcurrency', '--mode',
+  '--reporter',
+  '--outputFile',
+  '--config',
+  '--project',
+  '--pool',
+  '--environment',
+  '--shard',
+  '--testNamePattern',
+  '-t',
+  '--exclude',
+  '--include',
+  '--retry',
+  '--bail',
+  '--maxWorkers',
+  '--minWorkers',
+  '--maxConcurrency',
+  '--mode',
 ]);
 
 // Positional words that select a mode rather than filter files.

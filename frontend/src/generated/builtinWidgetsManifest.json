@@ -1187,10 +1187,10 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "feee20e1bdbf2c4a",
+    "buildTs": "32d52586f2d56b8a",
     "displayName": "Component Slot",
-    "hostsChildren": null,
-    "flowsChildren": null,
+    "hostsChildren": true,
+    "flowsChildren": true,
     "category": "Layout & structure",
     "schema": {
       "slot": {

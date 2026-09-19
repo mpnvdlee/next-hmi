@@ -156,7 +156,12 @@ describe('overlay target pickers offer one root each', () => {
     type: 'page',
     sections: { content: [] },
   } as PageConfig;
-  const page = { id: 'p1', title: 'Machine', type: 'page', sections: { content: [] } } as PageConfig;
+  const page = {
+    id: 'p1',
+    title: 'Machine',
+    type: 'page',
+    sections: { content: [] },
+  } as PageConfig;
   const targets = { dialogs: [dialog], pages: [page] };
 
   /** The custom `Select` portals its listbox, so the options only exist once

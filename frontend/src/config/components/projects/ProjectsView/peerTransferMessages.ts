@@ -69,8 +69,7 @@ export function explainFailure(text: string, canResolve: boolean): FailureExplan
   if (text.includes('must resolve exclusively to private')) {
     return {
       cause: 'That address is not a trusted-LAN address.',
-      action:
-        'Peer transfer refuses localhost and public addresses. Use the peer’s LAN address.',
+      action: 'Peer transfer refuses localhost and public addresses. Use the peer’s LAN address.',
     };
   }
   if (text.includes('Could not reach peer') || text.includes('Lost the connection to peer')) {

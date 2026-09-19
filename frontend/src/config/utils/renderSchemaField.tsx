@@ -3,7 +3,7 @@ import type { SchemaField } from '@shared/types/widgetSchema';
 import ColorInput from '@config/components/editor/ColorInput';
 import Select from '@config/components/ui/Select';
 import PageSelect from '@config/components/ui/PageSelect';
-import { getStaticString } from '@config/components/editor/propertyValueUtils';
+import { getStaticString, unwrapStatic } from '@config/components/editor/propertyValueUtils';
 import { primaryType } from '@shared/utils/valueTypes';
 import { parseTokenVar, resolveTokenValue, tokenLabel } from '@shared/utils/themeDefaultHint';
 import { IconStaticField, ImageStaticField, VideoStaticField } from './AssetStaticFields';
@@ -231,31 +231,57 @@ export function renderSchemaField(
   }
 
   if (type === 'color') {
+    // A component property declares its default as a value, not a token — a
+    // `var(--hmi-*)` one is still themed, anything else a literal color.
+    const defaultToken = schema.defaultToken ?? parseTokenVar(schema.defaultValue) ?? undefined;
+    const defaultColor =
+      !defaultToken && typeof schema.defaultValue === 'string' ? schema.defaultValue : undefined;
     return (
       <ColorInput
         value={value}
         onChange={onChange}
-        defaultToken={schema.defaultToken}
+        defaultToken={defaultToken}
+        defaultColor={defaultColor}
         mixed={mixed}
       />
     );
   }
 
   if (type === 'icon') {
-    return <IconStaticField value={value} onChange={onChange} label={schema.label} mixed={mixed} />;
+    return (
+      <IconStaticField
+        value={value}
+        onChange={onChange}
+        label={schema.label}
+        defaultValue={schema.defaultValue}
+        mixed={mixed}
+      />
+    );
   }
 
   // 'image' static editor — opens the image asset picker.
   if (type === 'image') {
     return (
-      <ImageStaticField value={value} onChange={onChange} label={schema.label} mixed={mixed} />
+      <ImageStaticField
+        value={value}
+        onChange={onChange}
+        label={schema.label}
+        defaultValue={schema.defaultValue}
+        mixed={mixed}
+      />
     );
   }
 
   // 'video' static editor — opens the video asset picker.
   if (type === 'video') {
     return (
-      <VideoStaticField value={value} onChange={onChange} label={schema.label} mixed={mixed} />
+      <VideoStaticField
+        value={value}
+        onChange={onChange}
+        label={schema.label}
+        defaultValue={schema.defaultValue}
+        mixed={mixed}
+      />
     );
   }
 
@@ -290,7 +316,9 @@ function mixedRow(control: React.ReactNode): React.ReactNode {
 
 /** Whether a `select`-format schema renders as a button group rather than a `<Select>` dropdown. */
 function selectUsesButtonGroup(schema: SchemaField): boolean {
-  const options = schema.options ?? [];
+  // Decided by what the control will actually show, so a half-authored row
+  // without an icon cannot flip an icon set back to a dropdown.
+  const options = offerableOptions(schema);
   const display = schema.display ?? 'auto';
   return (
     display === 'button-text' ||
@@ -302,6 +330,40 @@ function selectUsesButtonGroup(schema: SchemaField): boolean {
 /** Short "default" word for the tag rendered inside a button group's default option. */
 function shortDefaultTag(fallback: { text: string; suffix: string } | null): string | undefined {
   return fallback ? 'default' : undefined;
+}
+
+/**
+ * A stable identity for one select option's value, used as its React key, its
+ * `<option value>` and for every comparison against the field's own value.
+ *
+ * An option may hold a translation (`{ $loc }`) as easily as a literal, and
+ * `String()` collapses every one of those to `[object Object]` — one key for
+ * all of them, so the options collide and none can be told apart. Unset stays
+ * `''` so a set offering an empty "—" entry still shows it as the selection.
+ */
+export function selectOptionKey(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return typeof value === 'object' ? JSON.stringify(value) : String(value);
+}
+
+/**
+ * Whether an option row carries a value to offer at all.
+ *
+ * The options list is authored label-first, so a row exists before its value
+ * does — a number cell cleared back to empty, a translation nobody has picked.
+ * Its {@link selectOptionKey} is `''`, which is also an unset field's key: such
+ * a row would read as the current selection of every instance that never set
+ * the property, and two of them would be indistinguishable from each other.
+ * The row stays in the authoring list; it is simply offered nowhere until it
+ * holds something.
+ */
+export function hasOptionValue(value: unknown): boolean {
+  return value !== undefined && value !== null;
+}
+
+/** The options a picker may actually offer — see {@link hasOptionValue}. */
+function offerableOptions(schema: SchemaField): NonNullable<SchemaField['options']> {
+  return (schema.options ?? []).filter((option) => hasOptionValue(option.value));
 }
 
 /**
@@ -320,8 +382,8 @@ function renderSelect(
   defaultTag?: string,
   mixed = false,
 ): React.ReactNode {
-  const options = schema.options ?? [];
-  const currentVal = getStaticString(value);
+  const options = offerableOptions(schema);
+  const currentVal = selectOptionKey(unwrapStatic(value));
 
   // Unset + a real schema default → mark the option the default resolves to
   // and dim the rest, instead of showing it as an explicit selection.
@@ -329,7 +391,7 @@ function renderSelect(
   const defaultText =
     schema.defaultValue === undefined || schema.defaultValue === null
       ? undefined
-      : getStaticString(schema.defaultValue);
+      : selectOptionKey(unwrapStatic(schema.defaultValue));
   const markDefault = !mixed && unset && defaultText !== undefined;
 
   const display = schema.display ?? 'auto';
@@ -341,7 +403,7 @@ function renderSelect(
     const group = (
       <div className="cfg-seg-group">
         {options.map((o) => {
-          const optVal = String(o.value);
+          const optVal = selectOptionKey(o.value);
           const isDefault = markDefault && optVal === defaultText;
           const isAlt = mixed || (markDefault && !isDefault);
           const active = !mixed && !markDefault && optVal === currentVal;
@@ -374,12 +436,12 @@ function renderSelect(
       value={mixed ? MIXED_SELECT_VALUE : currentVal}
       placeholder={mixed ? MIXED_LABEL : undefined}
       onChange={(raw) => {
-        const match = options.find((o) => String(o.value) === raw);
+        const match = options.find((o) => selectOptionKey(o.value) === raw);
         onChange(match ? match.value : raw);
       }}
     >
       {options.map((o) => (
-        <option key={String(o.value)} value={String(o.value)}>
+        <option key={selectOptionKey(o.value)} value={selectOptionKey(o.value)}>
           {o.label}
         </option>
       ))}
@@ -447,5 +509,18 @@ export function resolveDefaultDisplay(
   }
   const raw = schema.defaultValue;
   if (raw === undefined || raw === null || raw === '') return null;
+  // An enum default is named by the option it picks. Its stored value may be a
+  // number or a `{ $loc }`, and `String()` on the latter says `[object Object]`
+  // in the hint's tooltip and in the revert button's title.
+  if (schema.format === 'select') {
+    const unwrapped = unwrapStatic(raw);
+    const key = selectOptionKey(unwrapped);
+    const picked = (schema.options ?? []).find((option) => selectOptionKey(option.value) === key);
+    if (picked) return { text: picked.label, suffix: 'default' };
+    // No option names it, so there is no label to borrow — and `String()` on an
+    // object writes the `[object Object]` this branch exists to keep out of the
+    // hint. A scalar still stringifies; an object has nothing honest to show.
+    if (unwrapped !== null && typeof unwrapped === 'object') return null;
+  }
   return { text: String(raw), suffix: 'default' };
 }

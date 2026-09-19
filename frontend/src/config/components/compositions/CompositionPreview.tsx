@@ -36,7 +36,7 @@ interface CompositionPreviewProps {
   /** A canvas click, with its modifiers. Ctrl/cmd extends the selection; there is
    *  no canvas equivalent of a shift range, so `range` is never set here. */
   onSelect: (id: string | null, mods: SelectionModifiers) => void;
-  onUpdate: (patch: Partial<ComponentDefinition>) => void;
+  onUpdate: (patch: Partial<ComponentDefinition>, history?: 'step' | 'coalesce') => void;
   /** Context-menu verb, dispatched by ComponentsView like the tree's. */
   onAction: (action: string, nodeId: string, kind: NodeKind) => void;
 }
@@ -144,14 +144,16 @@ export default function CompositionPreview({
     '--component-preview-height': `${previewHeight}px`,
   };
 
+  // Dragged via the number input's spinner or typed digit by digit; the
+  // throttle folds a burst of them into at most one undo step per window.
   function updateDimension(dimension: 'width' | 'height', value: string) {
     if (value === '') {
-      onUpdate({ [dimension]: null });
+      onUpdate({ [dimension]: null }, 'coalesce');
       return;
     }
     const parsed = Number(value);
     if (Number.isInteger(parsed) && parsed > 0) {
-      onUpdate({ [dimension]: parsed });
+      onUpdate({ [dimension]: parsed }, 'coalesce');
     }
   }
 

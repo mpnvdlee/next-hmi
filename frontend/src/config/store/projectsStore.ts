@@ -127,12 +127,7 @@ interface PeerTransferStatus {
   // journal and the receiver's own status endpoint produce them. A sender's
   // journal never leaves active/complete/error/cancelled.
   status:
-    | 'active'
-    | 'complete'
-    | 'error'
-    | 'cancelled'
-    | 'applied_pending_start'
-    | 'recovery_required';
+    'active' | 'complete' | 'error' | 'cancelled' | 'applied_pending_start' | 'recovery_required';
   bytesDone: number;
   bytesTotal: number;
   message?: string | null;
@@ -378,9 +373,12 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
   },
 
   removeManualPeer: async (host: string, port: number) => {
-    await managerApiJson(`/api/manager/peers/manual?host=${encodeURIComponent(host)}&port=${port}`, {
-      method: 'DELETE',
-    });
+    await managerApiJson(
+      `/api/manager/peers/manual?host=${encodeURIComponent(host)}&port=${port}`,
+      {
+        method: 'DELETE',
+      },
+    );
   },
 
   forgetPeerCertificate: async (host: string, port: number) => {
@@ -396,10 +394,10 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
     }),
 
   listPeerProjects: async (host, port, token, scheme: PeerScheme = 'http') => {
-    const result = await managerApiJson<{ projects: PeerProject[] }>(
-      '/api/manager/peer-projects',
-      { method: 'POST', body: { host, port, token, scheme } },
-    );
+    const result = await managerApiJson<{ projects: PeerProject[] }>('/api/manager/peer-projects', {
+      method: 'POST',
+      body: { host, port, token, scheme },
+    });
     return result.projects;
   },
 

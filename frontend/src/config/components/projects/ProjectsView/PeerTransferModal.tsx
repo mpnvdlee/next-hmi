@@ -37,12 +37,7 @@ interface TransferStatus {
   /** The phase that was running when it failed; `phase` holds the outcome. */
   failedPhase?: string | null;
   status:
-    | 'active'
-    | 'complete'
-    | 'error'
-    | 'cancelled'
-    | 'applied_pending_start'
-    | 'recovery_required';
+    'active' | 'complete' | 'error' | 'cancelled' | 'applied_pending_start' | 'recovery_required';
   bytesDone: number;
   bytesTotal: number;
   message?: string | null;
@@ -271,8 +266,7 @@ export default function PeerTransferModal({
   const certificateChanged =
     (!!error && error.includes('Certificate for peer')) ||
     (!!transfer?.message && transfer.message.includes('Certificate for peer'));
-  const failureText =
-    error ?? (transfer?.status === 'error' ? (transfer.message ?? null) : null);
+  const failureText = error ?? (transfer?.status === 'error' ? (transfer.message ?? null) : null);
 
   // The backend's folder check is a filesystem test `clash` cannot make, so
   // its refusal is the only evidence that something is in the way. Without
@@ -285,8 +279,7 @@ export default function PeerTransferModal({
   }, [attemptedFolder, failureText]);
 
   const collisionRefused = refusedFolder !== null;
-  const showResolution =
-    clash.kind !== 'none' || policy !== 'reject' || collisionRefused;
+  const showResolution = clash.kind !== 'none' || policy !== 'reject' || collisionRefused;
   const failure = failureText ? explainFailure(failureText, showResolution) : null;
   // A source archive that no longer matches the first attempt can never
   // succeed under the same id, however many times the retry is pressed.
@@ -366,18 +359,11 @@ export default function PeerTransferModal({
       // so an amended retry under the same id is refused with a 409. Unchanged
       // parameters keep the id and resume idempotently; anything else is a new
       // transfer, and a copy needs a destination id that is free too.
-      const amended =
-        mustRestart || (startedParams !== null && !sameParams(params, startedParams));
-      const nextTransferId = amended
-        ? `${isPull ? 'pull' : 'tx'}-${randomUuid()}`
-        : transferId;
+      const amended = mustRestart || (startedParams !== null && !sameParams(params, startedParams));
+      const nextTransferId = amended ? `${isPull ? 'pull' : 'tx'}-${randomUuid()}` : transferId;
       const nextCopyId = amended && policy === 'copy' ? randomUuid() : copyDestinationId;
       const destinationProjectId =
-        policy === 'copy'
-          ? nextCopyId
-          : policy === 'replace'
-            ? replacementId
-            : sourceProjectId;
+        policy === 'copy' ? nextCopyId : policy === 'replace' ? replacementId : sourceProjectId;
       const begin = isPull ? beginPeerPull : beginPeerTransfer;
       // Recorded before the call: a pull is refused by the response itself, a
       // push only later by a polled status, and both have to name this folder.
@@ -416,10 +402,7 @@ export default function PeerTransferModal({
   // Replacement installs into the existing project's own folder, and that
   // folder has to be one in the target's projects root — a project registered
   // anywhere else is one the backend refuses every time.
-  const replaceable = useMemo(
-    () => targets.filter((target) => target.inProjectsRoot),
-    [targets],
-  );
+  const replaceable = useMemo(() => targets.filter((target) => target.inProjectsRoot), [targets]);
   const eligibleReplacements = useMemo(
     () => replaceable.filter((target) => !target.running),
     [replaceable],
@@ -456,8 +439,7 @@ export default function PeerTransferModal({
       ? 'Choose how to install'
       : 'Something is already there';
 
-  const copyNeedsFolder =
-    clash.kind === 'folder' || clash.kind === 'both' || collisionRefused;
+  const copyNeedsFolder = clash.kind === 'folder' || clash.kind === 'both' || collisionRefused;
   const noReplaceTarget = eligibleReplacements.length === 0;
 
   function resolutionDetail(value: CollisionPolicy): string {

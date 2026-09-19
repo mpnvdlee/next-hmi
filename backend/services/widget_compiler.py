@@ -122,6 +122,7 @@ SDK_NAMES: tuple[str, ...] = (
     "renderWidget",
     "renderSlotWidgets",
     "useComponentSlot",
+    "useIsComponentInstance",
     "useIsPreview",
     "useActivePage",
     "useAnchoredStyle",

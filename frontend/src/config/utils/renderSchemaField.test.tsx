@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderSchemaField, resolveDefaultDisplay } from './renderSchemaField';
@@ -382,5 +382,249 @@ describe('renderSchemaField — mixed multi-selection', () => {
     );
     expect(screen.getByRole('spinbutton')).toHaveAttribute('placeholder', 'Mixed');
     expect(screen.queryByText(/· default/)).not.toBeInTheDocument();
+  });
+});
+
+// A component property declares its default as a plain value — there is no
+// `defaultToken` on it — so every one of these reaches the field that way.
+describe('renderSchemaField — defaults declared as a value', () => {
+  it('names a var(--hmi-*) color default as its theme token', () => {
+    const schema: SchemaField = { type: 'color', label: 'Bar', defaultValue: 'var(--hmi-accent)' };
+    render(<>{renderSchemaField(schema, undefined, vi.fn())}</>);
+    expect(screen.getByText('Accent')).toBeInTheDocument();
+    expect(screen.queryByText('Transparent')).not.toBeInTheDocument();
+    expect(screen.getByText('· default')).toHaveClass('cfg-unset-hint');
+  });
+
+  it('names a literal color default instead of reading as transparent', () => {
+    const schema: SchemaField = { type: 'color', label: 'Bar', defaultValue: '#2D9CFF' };
+    render(<>{renderSchemaField(schema, undefined, vi.fn())}</>);
+    expect(screen.getByText('Electric Blue')).toBeInTheDocument();
+    expect(screen.getByTitle('Falls back to #2D9CFF')).toBeInTheDocument();
+  });
+
+  it('previews an icon default in the placeholder while unset', () => {
+    const schema: SchemaField = {
+      type: 'icon',
+      label: 'Icon',
+      defaultValue: { $static: { type: 'builtin', name: 'gear' } },
+    };
+    render(<>{renderSchemaField(schema, undefined, vi.fn())}</>);
+    expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', 'gear · default');
+  });
+
+  it('shows the set icon, not the default, once overridden', () => {
+    const schema: SchemaField = {
+      type: 'icon',
+      label: 'Icon',
+      defaultValue: { $static: { type: 'builtin', name: 'gear' } },
+    };
+    render(
+      <>{renderSchemaField(schema, { $static: { type: 'builtin', name: 'play' } }, vi.fn())}</>,
+    );
+    expect(screen.getByRole('textbox')).toHaveValue('play');
+  });
+
+  it('previews an image default in the placeholder while unset', () => {
+    const schema: SchemaField = {
+      type: 'image',
+      label: 'Image',
+      defaultValue: { $static: { path: 'images/pump.svg' } },
+    };
+    render(<>{renderSchemaField(schema, undefined, vi.fn())}</>);
+    expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', 'images/pump.svg · default');
+  });
+
+  it('previews a video default in the placeholder while unset', () => {
+    const schema: SchemaField = {
+      type: 'video',
+      label: 'Video',
+      defaultValue: { $static: { path: 'videos/intro.mp4' } },
+    };
+    render(<>{renderSchemaField(schema, undefined, vi.fn())}</>);
+    expect(screen.getByRole('textbox')).toHaveAttribute(
+      'placeholder',
+      'videos/intro.mp4 · default',
+    );
+  });
+});
+
+const LOC_SELECT: SchemaField = {
+  type: 'string',
+  format: 'select',
+  label: 'Caption',
+  options: [
+    { label: 'Running', value: { $loc: 'status.running' } },
+    { label: 'Stopped', value: { $loc: 'status.stopped' } },
+  ],
+};
+const INT_SELECT: SchemaField = {
+  type: 'integer',
+  format: 'select',
+  label: 'Size',
+  options: [
+    { label: 'Small', value: 10 },
+    { label: 'Large', value: 20 },
+  ],
+};
+
+// Every option used to be keyed and compared by `String(value)`, which collapses
+// every `{ $loc }` to `[object Object]`: two translations became one option, and
+// the dropdown could never tell which of them was selected.
+describe('renderSchemaField — select options that are not strings', () => {
+  beforeEach(() => {
+    // jsdom doesn't implement scrollIntoView; the popup's active-option effect calls it.
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it('keeps two translated options apart', async () => {
+    render(<>{renderSchemaField(LOC_SELECT, { $loc: 'status.stopped' }, vi.fn())}</>);
+
+    await userEvent.click(screen.getByRole('combobox'));
+
+    const options = screen.getAllByRole('option');
+    expect(options.map((o) => o.textContent)).toEqual(['Running', 'Stopped']);
+    expect(options.map((o) => o.getAttribute('aria-selected'))).toEqual(['false', 'true']);
+  });
+
+  it('writes the picked translation verbatim, not a stringified one', async () => {
+    const onChange = vi.fn();
+    render(<>{renderSchemaField(LOC_SELECT, undefined, onChange)}</>);
+
+    await userEvent.click(screen.getByRole('combobox'));
+    await userEvent.click(screen.getByRole('option', { name: 'Stopped' }));
+
+    expect(onChange).toHaveBeenCalledWith({ $loc: 'status.stopped' });
+  });
+
+  it('shows the stored translation as the selected option', () => {
+    render(<>{renderSchemaField(LOC_SELECT, { $loc: 'status.stopped' }, vi.fn())}</>);
+
+    expect(screen.getByRole('combobox')).toHaveTextContent('Stopped');
+  });
+
+  // Asserting the *first* option would pass against the old `String()` keying
+  // too: every `{ $loc }` collapsed to one key and `Select` picks the first
+  // match. Only the second option tells the two implementations apart.
+  it('reads a translation through a $static wrapper without stringifying it', () => {
+    render(<>{renderSchemaField(LOC_SELECT, { $static: { $loc: 'status.stopped' } }, vi.fn())}</>);
+
+    const trigger = screen.getByRole('combobox');
+    expect(trigger).toHaveTextContent('Stopped');
+    expect(trigger).not.toHaveTextContent('Running');
+  });
+
+  it('writes a numeric option as a number, not as its digits', async () => {
+    const onChange = vi.fn();
+    render(<>{renderSchemaField(INT_SELECT, undefined, onChange)}</>);
+
+    await userEvent.click(screen.getByRole('combobox'));
+    await userEvent.click(screen.getByRole('option', { name: 'Large' }));
+
+    expect(onChange).toHaveBeenCalledWith(20);
+  });
+
+  it('marks a numeric default on a button group by the number it is', () => {
+    const schema: SchemaField = { ...INT_SELECT, display: 'button-text', defaultValue: 20 };
+    render(<>{renderSchemaField(schema, undefined, vi.fn())}</>);
+
+    expect(screen.getByRole('button', { name: 'Large' })).toHaveClass('cfg-seg-btn--default');
+    expect(screen.getByRole('button', { name: 'Small' })).toHaveClass('cfg-seg-btn--alt');
+  });
+});
+
+/** An option row is authored label-first: the value cell is filled in after,
+ *  and a cleared number cell or an unpicked translation leaves the row with no
+ *  value at all. `selectOptionKey` keys that as `''` — the very key an unset
+ *  field carries — so such a row would read as the current selection of every
+ *  instance that never set the property, and two of them would collide with
+ *  each other. The row stays in the authoring list; it just isn't offered. */
+describe('renderSchemaField — half-authored select options', () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  const PARTIAL_INT_SELECT: SchemaField = {
+    type: 'integer',
+    format: 'select',
+    label: 'Size',
+    options: [{ label: 'Small' }, { label: 'Large', value: 20 }],
+  };
+
+  it('does not present a value-less row as the selection of an unset field', async () => {
+    render(<>{renderSchemaField(PARTIAL_INT_SELECT, undefined, vi.fn())}</>);
+
+    expect(screen.getByRole('combobox')).not.toHaveTextContent('Small');
+  });
+
+  it('offers only the rows that carry a value', async () => {
+    render(<>{renderSchemaField(PARTIAL_INT_SELECT, undefined, vi.fn())}</>);
+
+    await userEvent.click(screen.getByRole('combobox'));
+
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Large']);
+  });
+
+  // Two of them key identically, which is the `[object Object]` collision again
+  // — this time on the empty key rather than on the object one.
+  it('offers neither of two unpicked translation rows', async () => {
+    const schema: SchemaField = {
+      ...LOC_SELECT,
+      options: [{ label: 'Running' }, { label: 'Stopped' }],
+    };
+    render(<>{renderSchemaField(schema, undefined, vi.fn())}</>);
+
+    await userEvent.click(screen.getByRole('combobox'));
+
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+  });
+
+  it('keeps a button group free of value-less options too', () => {
+    const schema: SchemaField = { ...PARTIAL_INT_SELECT, display: 'button-text' };
+    render(<>{renderSchemaField(schema, undefined, vi.fn())}</>);
+
+    expect(screen.queryByRole('button', { name: 'Small' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Large' })).toBeInTheDocument();
+  });
+});
+
+/** The hint under an unset field names the value it falls back to. `String()`
+ *  on a translated option writes `[object Object]` into the tooltip and into
+ *  the revert button's title, wherever the component is placed. */
+describe('renderSchemaField — default hint for a non-string option', () => {
+  it('names the default option by its label, not by stringifying its value', () => {
+    const schema: SchemaField = { ...LOC_SELECT, defaultValue: { $loc: 'status.stopped' } };
+
+    expect(resolveDefaultDisplay(schema)).toEqual({ text: 'Stopped', suffix: 'default' });
+  });
+
+  it('puts that label in the unset hint the editor shows', () => {
+    const schema: SchemaField = { ...LOC_SELECT, defaultValue: { $loc: 'status.stopped' } };
+    render(<>{renderSchemaField(schema, undefined, vi.fn())}</>);
+
+    expect(screen.getByTitle('Falls back to Stopped')).toBeInTheDocument();
+  });
+
+  it('offers the revert affordance under the same label once overridden', () => {
+    const schema: SchemaField = { ...LOC_SELECT, defaultValue: { $loc: 'status.stopped' } };
+    render(<>{renderSchemaField(schema, { $loc: 'status.running' }, vi.fn())}</>);
+
+    expect(screen.getByTitle('Revert to default (Stopped)')).toBeInTheDocument();
+  });
+
+  it('still stringifies a plain default that matches no option', () => {
+    const schema: SchemaField = { ...INT_SELECT, defaultValue: 99 };
+
+    expect(resolveDefaultDisplay(schema)).toEqual({ text: '99', suffix: 'default' });
+  });
+
+  it('shows no hint at all for a translated default that matches no option', () => {
+    // `String()` here is the very `[object Object]` this describe block exists
+    // to keep out of the tooltip, and no option lends it a label.
+    const schema: SchemaField = { ...LOC_SELECT, defaultValue: { $loc: 'status.gone' } };
+
+    expect(resolveDefaultDisplay(schema)).toBeNull();
+    render(<>{renderSchemaField(schema, undefined, vi.fn())}</>);
+    expect(screen.queryByTitle(/object Object/)).toBeNull();
   });
 });

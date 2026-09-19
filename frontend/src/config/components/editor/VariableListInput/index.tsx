@@ -158,7 +158,11 @@ export default function VariableListInput({
     const free = (tracked ?? []).filter((key) => !taken.has(key));
     const current = rows[idx];
     if (current && !free.includes(current)) {
-      return [{ key: current, label: `${current} (not recorded)` }, ...free.map(asOption)];
+      // Until the historian config is in hand — or if `load()` failed, which
+      // leaves it null for good — nothing is known about what is recorded, so
+      // the row names itself without a claim it cannot support.
+      const flagged = tracked === null ? current : `${current} (not recorded)`;
+      return [{ key: current, label: flagged }, ...free.map(asOption)];
     }
     return free.map(asOption);
   }

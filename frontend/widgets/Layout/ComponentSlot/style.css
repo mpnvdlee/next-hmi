@@ -13,8 +13,9 @@
   min-height: 0;
 }
 
-/* Editor-only. The label plus this padding is what stops the shell around an
-   unfilled slot collapsing to a hairline, which is the whole reason it is drawn. */
+/* Components-editor only. The label plus this padding is what stops the shell
+   around an unfilled slot collapsing to a hairline, which is the whole reason
+   it is drawn. */
 .hmi-component.hmi-slot--empty {
   align-items: center;
   justify-content: center;

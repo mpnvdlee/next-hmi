@@ -40,6 +40,12 @@ interface PropertySourceSelectorProps {
   compact?: boolean;
   /** Property name the browse drawer shows before its own action. */
   label?: string;
+  /** The source the row is already rendering, when that is not simply what the
+   *  value's shape says — a `select` whose options hold translations stores a
+   *  `{ $loc }` the row reads as a static pick. The pill must agree, or picking
+   *  the source already in effect counts as a switch and overwrites the value
+   *  with a fresh default. Absent, the value's own shape decides, as before. */
+  source?: PropertySource;
   /** A multi-selection that disagrees on this property. `source` is the source
    *  every selected widget still shares — the trigger badges that one — or null
    *  when they disagree on the source too, which badges as "mixed" rather than
@@ -58,6 +64,7 @@ export default function PropertySourceSelector({
   showWhenSingle = false,
   compact = false,
   label,
+  source,
   mixed,
 }: PropertySourceSelectorProps) {
   const [open, setOpen] = useState(false);
@@ -71,7 +78,7 @@ export default function PropertySourceSelector({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const ownerWindow = useOwnerWindow();
 
-  const currentSource = getPropertySource(value);
+  const currentSource = source ?? getPropertySource(value);
   const inputScope = useComponentPropertySchema();
   const resultFields = useResultFields();
 

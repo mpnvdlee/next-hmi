@@ -271,3 +271,141 @@ describe('SchemaFieldRow mixed source badge', () => {
     expect(onChange).toHaveBeenCalledWith('Hello');
   });
 });
+
+/** A `select` whose options are translations stores `{ $loc: … }` as the value.
+ *  Read as a property *source*, that flips the row into the free translation
+ *  picker — which is exactly the unrestricted choice the option list exists to
+ *  replace. A value the schema itself declares is a static pick, not a binding. */
+describe('SchemaFieldRow select options that look like a source', () => {
+  const schema: SchemaField = {
+    type: 'String',
+    format: 'select',
+    label: 'Caption',
+    options: [
+      { label: 'Running', value: { $loc: 'status.running' } },
+      { label: 'Stopped', value: { $loc: 'status.stopped' } },
+    ],
+  };
+
+  it('keeps the restricted dropdown for a value the options declare', () => {
+    render(
+      <SchemaFieldRow
+        schema={schema}
+        value={{ $loc: 'status.running' }}
+        onChange={vi.fn()}
+        propKey="caption"
+      />,
+    );
+
+    expect(screen.getByRole('combobox')).toHaveTextContent('Running');
+    expect(screen.queryByPlaceholderText('Search translations…')).not.toBeInTheDocument();
+  });
+
+  it('still reads a translation the options do not declare as a $loc binding', () => {
+    render(
+      <SchemaFieldRow
+        schema={schema}
+        value={{ $loc: 'status.faulted' }}
+        onChange={vi.fn()}
+        propKey="caption"
+      />,
+    );
+
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  });
+
+  it('leaves a field with no options alone', () => {
+    const plain: SchemaField = { type: 'String', label: 'Text' };
+    render(
+      <SchemaFieldRow
+        schema={plain}
+        value={{ $loc: 'status.running' }}
+        onChange={vi.fn()}
+        propKey="text"
+      />,
+    );
+
+    expect(screen.getByLabelText('Localizable Text')).toBeInTheDocument();
+  });
+
+  // The pill has to agree with the body. Badging `$loc` while the row renders
+  // the dropdown is not merely cosmetic: the popup then marks Localizable Text
+  // as the source in effect, so "Static Value" reads as a change.
+  it('badges the row as static, the way its body reads', () => {
+    render(
+      <SchemaFieldRow
+        schema={schema}
+        value={{ $loc: 'status.running' }}
+        onChange={vi.fn()}
+        propKey="caption"
+      />,
+    );
+
+    expect(screen.getByLabelText('Static Value')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Localizable Text')).not.toBeInTheDocument();
+  });
+
+  // Picking the source the row is already showing must be a no-op. Against a
+  // pill that thinks the source is `$loc` it takes the "switched source" branch
+  // and replaces the author's pick with the schema default.
+  it('keeps the picked option when Static Value is chosen from the pill', async () => {
+    const onChange = vi.fn();
+    render(
+      <SchemaFieldRow
+        schema={schema}
+        value={{ $loc: 'status.running' }}
+        onChange={onChange}
+        propKey="caption"
+      />,
+    );
+
+    await userEvent.click(screen.getByLabelText('Static Value').closest('button')!);
+    await userEvent.click(
+      screen.getByText('Static Value', { selector: '.cfg-source-pill__option-label' }),
+    );
+
+    expect(onChange).toHaveBeenCalledWith({ $loc: 'status.running' });
+  });
+
+  // Only the detected default changes: the pill still offers every source the
+  // field accepts, so a declared option can be replaced by a real binding.
+  it('still offers another source from the pill', async () => {
+    render(
+      <SchemaFieldRow
+        schema={schema}
+        value={{ $loc: 'status.running' }}
+        onChange={vi.fn()}
+        propKey="caption"
+      />,
+    );
+
+    await userEvent.click(screen.getByLabelText('Static Value').closest('button')!);
+
+    expect(
+      screen.getByText('Variable', { selector: '.cfg-source-pill__option-label' }),
+    ).toBeInTheDocument();
+  });
+
+  // Reachable from hand-written or MCP-written JSON, which the backend accepts
+  // as `options: list[dict[str, Any]]`: an option whose value is itself a
+  // source must not swallow that source and strand the row without its editor.
+  it('does not read a real binding as static just because an option matches it', () => {
+    const sourced: SchemaField = {
+      type: 'String',
+      format: 'select',
+      label: 'Caption',
+      options: [{ label: 'Bound', value: { $var: { path: 'DS:caption' } } as never }],
+    };
+    render(
+      <SchemaFieldRow
+        schema={sourced}
+        value={{ $var: { path: 'DS:caption' } }}
+        onChange={vi.fn()}
+        propKey="caption"
+      />,
+    );
+
+    expect(screen.getByLabelText('Variable')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  });
+});
