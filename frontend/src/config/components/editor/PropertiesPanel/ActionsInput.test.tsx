@@ -122,6 +122,63 @@ describe('ActionsInput — full discriminator sweep', () => {
   );
 });
 
+describe('ActionsInput — browse drawer', () => {
+  beforeEach(setupStores);
+
+  beforeAll(() => {
+    class IntersectionObserverStub {
+      observe() {}
+      disconnect() {}
+    }
+    // @ts-expect-error assigning a test stub
+    global.IntersectionObserver = IntersectionObserverStub;
+  });
+
+  it('leads the Add dropdown with a browse row that opens the categorised drawer', async () => {
+    const user = userEvent.setup();
+    render(<Harness onChangeSpy={vi.fn()} />);
+    await user.click(screen.getByRole('combobox'));
+
+    const [first] = screen.getAllByRole('option');
+    expect(first).toHaveAccessibleName('Browse actions…');
+    await user.click(first);
+
+    expect(screen.getByRole('heading', { name: /Add action/ })).toBeInTheDocument();
+    for (const category of ['Screens', 'Machine', 'Session', 'Interface']) {
+      expect(screen.getByRole('button', { name: category })).toBeInTheDocument();
+    }
+  });
+
+  it('adds the action picked in the drawer and closes it', async () => {
+    const onChangeSpy = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onChangeSpy={onChangeSpy} />);
+    await pick(user, screen.getByRole('combobox'), 'Browse actions…');
+    await user.click(screen.getByRole('button', { name: /Show Toast/ }));
+
+    const { dialogs, pages } = useConfigStore.getState();
+    expect(onChangeSpy).toHaveBeenCalledWith({
+      onPress: [makeDefaultAction('showToast', { dialogs, allPages: flattenPages(pages) })],
+    });
+    expect(screen.queryByRole('heading', { name: /Add action/ })).not.toBeInTheDocument();
+  });
+
+  it('adds the top search match when Enter is pressed', async () => {
+    const onChangeSpy = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onChangeSpy={onChangeSpy} />);
+    await pick(user, screen.getByRole('combobox'), 'Browse actions…');
+
+    const search = screen.getByRole('searchbox', { name: 'Search actions' });
+    fireEvent.change(search, { target: { value: 'theme' } });
+    fireEvent.keyDown(search, { key: 'Enter' });
+
+    expect(onChangeSpy).toHaveBeenCalledWith({
+      onPress: [expect.objectContaining({ type: 'setActiveTheme' })],
+    });
+  });
+});
+
 describe('ActionsInput — dialog/page routing', () => {
   beforeEach(setupStores);
 

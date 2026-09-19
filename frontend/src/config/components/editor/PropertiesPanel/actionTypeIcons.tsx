@@ -1,7 +1,7 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import type { ButtonAction } from '@shared/types/config';
 import Icon, { LinkGlyphPaths, GlobeGlyphPaths } from '../../ui/glyphIcon';
-import { ACTION_TYPE_TINT } from './actionsPreview';
+import { actionTypeColorStyle } from './actionsPreview';
 
 /** One hand-authored inline SVG glyph per action type, same visual language as
  *  the property-source badges. See `glyphIcon.tsx`. openDialog/closeDialog/
@@ -108,13 +108,29 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
   ),
 };
 
-export function ActionTypeBadge({ type }: { type: ActionType }) {
+/** 'cap' (default) fills a `FieldGroup` badge slot; 'pill' is the inline chip the
+ *  property-source popup and browse drawer use, and sits beside a visible label
+ *  that already names it. */
+export function ActionTypeBadge({
+  type,
+  variant = 'cap',
+}: {
+  type: ActionType;
+  variant?: 'cap' | 'pill';
+}) {
+  if (variant === 'pill') {
+    return (
+      <span
+        className="cfg-source-pill__abbr cfg-property-source-badge"
+        style={actionTypeColorStyle(type)}
+        aria-hidden="true"
+      >
+        {ACTION_TYPE_ICON[type]}
+      </span>
+    );
+  }
   return (
-    <span
-      className="cfg-field-group__badge-cap"
-      title={type}
-      style={{ '--option-color': `var(--cfg-source-${ACTION_TYPE_TINT[type]})` } as CSSProperties}
-    >
+    <span className="cfg-field-group__badge-cap" title={type} style={actionTypeColorStyle(type)}>
       {ACTION_TYPE_ICON[type]}
     </span>
   );

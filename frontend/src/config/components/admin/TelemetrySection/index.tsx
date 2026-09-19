@@ -52,7 +52,7 @@ export default function TelemetrySection({ status, onLoad, onApply }: Props) {
 
   return (
     <AdminSection title={TITLE}>
-      <p className="cfg-admin-section__desc">
+      <p className="cfg-admin-section__desc cfg-admin-section__desc--wide">
         Reports that this installation started, once at start-up and once a day after that, so we
         can count active installations. It sends the installation ID below, the version and edition,
         the operating system and the Python version — nothing about your projects, variables or
@@ -60,7 +60,7 @@ export default function TelemetrySection({ status, onLoad, onApply }: Props) {
       </p>
 
       {pinned ? (
-        <p className="cfg-admin-section__desc">
+        <p className="cfg-admin-section__desc cfg-admin-section__desc--wide">
           Set outside this UI through{' '}
           <code className="cfg-admin-telemetry__code">NEXTHMI_TELEMETRY</code>, which currently has
           it {status.enabled ? 'on' : 'off'}, so it cannot be changed here.

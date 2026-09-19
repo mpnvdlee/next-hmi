@@ -552,6 +552,11 @@ The source-aware property controls in the editor use these classes:
   drawer's source cards
 - `cfg-property-source-editor__static` — the static sub-editor slot
 
+The action list's **Add** menu and its browse drawer reuse `cfg-source-pill__abbr`,
+`cfg-property-source-badge` and `cfg-property-source-card__key` so the two
+pickers read alike; `cfg-editor-actions__browse` marks the menu's leading
+browse row (`config.css`).
+
 ## Tree UI System
 
 The shared tree styles live in `frontend/src/config/styles/config.css` and are used across config views.

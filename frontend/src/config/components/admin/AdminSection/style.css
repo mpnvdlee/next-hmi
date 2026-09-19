@@ -21,6 +21,10 @@
   max-width: 48ch;
 }
 
+.cfg-admin-section__desc--wide {
+  max-width: none;
+}
+
 .cfg-admin-section__desc code {
   font-family: var(--cfg-font-mono);
   font-size: 0.95em;

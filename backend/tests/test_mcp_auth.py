@@ -354,11 +354,49 @@ def test_write_scoped_token_still_blocked_by_mcp_disabled(monkeypatch, tmp_path:
 # ── bind default ─────────────────────────────────────────────────────────────
 
 
-def test_manager_binds_through_the_shared_resolver():
-    """The manager must take its bind address from ``core.net``, not its own
-    default. What that resolver answers — every interface unless NEXTHMI_HOST
-    says otherwise — is pinned in ``test_net.py``; what matters here is that
-    /mcp's exposure follows it, since ``McpAuthMiddleware`` above authenticates
-    every request whichever interface it arrived on."""
-    source = Path(runtime_home.__file__).parent.parent.joinpath("launcher.py").read_text(encoding="utf-8")
-    assert "net.resolve_bind_host()" in source
+@pytest.mark.parametrize(
+    ("env_host", "expected"),
+    [(None, ""), ("127.0.0.1", "127.0.0.1")],
+)
+def test_manager_binds_through_the_shared_resolver(monkeypatch, tmp_path: Path, env_host, expected):
+    """The manager must bind what ``core.net`` resolves, not a default of its own.
+
+    What that resolver answers — every interface unless NEXTHMI_HOST says
+    otherwise — is pinned in ``test_net.py``; what matters here is that /mcp's
+    exposure follows it, since ``McpAuthMiddleware`` above authenticates every
+    request whichever interface it arrived on. Driven through ``_run_manager``
+    with the listener stubbed out, so the assertion is on the address actually
+    handed to the server rather than on the launcher's source text.
+    """
+    import argparse
+
+    import launcher
+    from api import system_api
+    from core import net, tls_settings
+
+    home = _configure_home(monkeypatch, tmp_path)
+    monkeypatch.setenv("NEXTHMI_DATA_DIR", str(home))
+    monkeypatch.setenv("NEXTHMI_PORT", "8000")
+    monkeypatch.setenv("NEXTHMI_HTTPS_PORT", "8443")
+    for name in ("NEXTHMI_SSL_CERTFILE", "NEXTHMI_SSL_KEYFILE"):
+        monkeypatch.delenv(name, raising=False)
+    if env_host is None:
+        monkeypatch.delenv("NEXTHMI_HOST", raising=False)
+    else:
+        monkeypatch.setenv("NEXTHMI_HOST", env_host)
+
+    served: dict[str, str] = {}
+    monkeypatch.setattr(launcher, "_load_manager_app", lambda: object())
+    monkeypatch.setattr(
+        launcher, "_serve", lambda app, host, port, verbose, **kwargs: served.update(host=host)
+    )
+    monkeypatch.setattr(launcher, "_resolve_port_conflict", lambda host, port: port)
+    monkeypatch.setattr(launcher, "print_banner", lambda *args, **kwargs: None)
+    monkeypatch.setattr(launcher, "_apply_pending_restart", lambda: None)
+    monkeypatch.setattr(system_api, "apply_pending_restart", lambda: None)
+    tls_settings.mark_served(False, None)
+
+    args = argparse.Namespace(verbose=False, port=None, https_port=None)
+    assert launcher._run_manager(home, args) == 0
+
+    assert served["host"] == net.resolve_bind_host() == expected

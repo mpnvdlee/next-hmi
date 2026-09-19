@@ -30,8 +30,7 @@ import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { useConfigStore } from '@shared/store/configStore';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { useComponentStore } from '@shared/store/componentStore';
-import { findPageNodeById, flattenPages, isPageGroup, treeContains } from '@shared/utils/pageTree';
-import { getPageChildren } from '@shared/utils/pageContent';
+import { findPageNodeById, isPageGroup, treeContains } from '@shared/utils/pageTree';
 import { withBase } from '@shared/utils/runtimeBase';
 import {
   EDITOR_NODE_IDS,
@@ -44,6 +43,7 @@ import ConfigWorkspace from '@config/components/ui/ConfigWorkspace';
 import WidgetSelector from '@config/components/ui/WidgetSelector';
 import PreviewContextMenu from './PreviewContextMenu';
 import { resolvePreviewInsertTarget, type PreviewInsertTarget } from './previewInsertTarget';
+import { buildComponentsUpdate, buildPagesUpdate, buildTranslationsUpdate } from './previewSync';
 import { insertComponentInto } from '../WidgetTree/insertComponent';
 import {
   findWidgetEverywhere,
@@ -332,45 +332,17 @@ export default function LivePreview({ pageId }: { pageId: string }) {
       )
         return;
       lastPagesSnapshotRef.current = snapshot;
-
-      const pageContent: Record<string, unknown[]> = {};
-      for (const page of flattenPages(s.pages)) {
-        if (s.loadedPageIds.has(page.id)) {
-          pageContent[page.id] = getPageChildren(page) as unknown[];
-        }
-      }
-      postToPreview({
-        type: 'pages_update',
-        pages: s.pages,
-        header: s.header,
-        footer: s.footer,
-        leftSidebar: s.leftSidebar,
-        rightSidebar: s.rightSidebar,
-        shell: s.shell,
-        dialogs: s.dialogs,
-        globalEvents: s.globalEvents,
-        pageContent,
-      });
+      postToPreview(buildPagesUpdate());
     },
     [postToPreview],
   );
 
   const syncTranslations = useCallback(() => {
-    const s = useTranslationStore.getState();
-    postToPreview({
-      type: 'translations_update',
-      languages: s.languages,
-      translations: s.translations,
-    });
+    postToPreview(buildTranslationsUpdate());
   }, [postToPreview]);
 
   const syncComponents = useCallback(() => {
-    const s = useComponentStore.getState();
-    postToPreview({
-      type: 'components_update',
-      components: s.components,
-      draftComponents: s.draftComponents,
-    });
+    postToPreview(buildComponentsUpdate());
   }, [postToPreview]);
 
   // Send the current selection into the iframe whenever it changes. `lead` is the row

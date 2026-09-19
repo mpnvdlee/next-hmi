@@ -1647,7 +1647,10 @@
    its trigger is a compact "Add". A portaled popup takes the trigger's width,
    so it needs its own floor — content-sized, not a pixel guess — or every name
    ellipsizes. `min-width` wins over the width the popup sets inline. */
-.cfg-menu-items__add-popup {
+/* Both "Add" triggers are sized to the word "Add", and Select sizes its portaled
+   popup from the trigger — so the action/item labels need their own width. */
+.cfg-menu-items__add-popup,
+.cfg-editor-actions__add-popup {
   min-width: max-content;
 }
 
@@ -1712,6 +1715,32 @@
 
 .cfg-editor-actions__add .cfg-select__chevron {
   color: var(--cfg-accent);
+}
+
+/* "Add" is the Select's placeholder, which would otherwise dim it. */
+.cfg-editor-actions__add .cfg-select__placeholder {
+  color: inherit;
+}
+
+/* The Add-action list mirrors the property-source popup: each row tints to its
+   action's color, and the browse row leads behind a rule. */
+.cfg-editor-actions__add-popup .cfg-select-popup__option {
+  gap: 10px;
+}
+
+.cfg-editor-actions__add-popup .cfg-select-popup__option--active {
+  background: color-mix(in srgb, var(--option-color, var(--cfg-accent)) 8%, var(--cfg-surface));
+}
+
+.cfg-editor-actions__add-popup .cfg-editor-actions__browse {
+  --option-color: var(--cfg-accent);
+  margin-bottom: 3px;
+  border-bottom: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius) var(--cfg-radius) 0 0;
+}
+
+.cfg-editor-actions__browse .cfg-source-pill__abbr {
+  color: var(--option-color);
 }
 
 /* ── Banners ───────────────────────────────────────────────── */

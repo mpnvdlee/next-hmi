@@ -21,6 +21,7 @@ interface SelectOption {
   disabled: boolean;
   group?: string;
   style?: CSSProperties;
+  className?: string;
 }
 
 interface SelectProps {
@@ -46,7 +47,14 @@ function nodeText(node: ReactNode): string {
   if (node === null || node === undefined || typeof node === 'boolean') return '';
   if (typeof node === 'string' || typeof node === 'number') return String(node);
   if (Array.isArray(node)) return node.map(nodeText).join('');
-  if (isValidElement(node)) return nodeText((node.props as { children?: ReactNode }).children);
+  if (isValidElement(node)) {
+    const props = node.props as { children?: ReactNode; 'aria-hidden'?: boolean | string };
+    // A decorative mark is not part of the name a reader sees, so it must not
+    // join the typeahead string either — a leading glyph would otherwise be the
+    // only letter that finds the option.
+    if (props['aria-hidden'] === true || props['aria-hidden'] === 'true') return '';
+    return nodeText(props.children);
+  }
   return '';
 }
 
@@ -61,6 +69,7 @@ function parseOptions(children: ReactNode): SelectOption[] {
           children?: ReactNode;
           disabled?: boolean;
           style?: CSSProperties;
+          className?: string;
         };
         const text = nodeText(p.children);
         out.push({
@@ -70,10 +79,15 @@ function parseOptions(children: ReactNode): SelectOption[] {
           disabled: Boolean(p.disabled),
           group,
           style: p.style,
+          className: p.className,
         });
       } else if (child.type === 'optgroup') {
         const p = child.props as { label?: string; children?: ReactNode };
-        walk(p.children, p.label);
+        // The list is flat, so a nested group composes its heading with the one
+        // it sits under — taking the inner label alone would drop the outer
+        // heading for exactly the entries that are nested beneath it.
+        const nested = group && p.label ? `${group} → ${p.label}` : (p.label ?? group);
+        walk(p.children, nested);
       } else {
         const p = child.props as { children?: ReactNode };
         if (p && p.children) walk(p.children, group);
@@ -333,6 +347,7 @@ export default function Select({
                 i === activeIndex && 'cfg-select-popup__option--active',
                 isSelected && 'cfg-select-popup__option--selected',
                 opt.disabled && 'cfg-select-popup__option--disabled',
+                opt.className,
               ]
                 .filter(Boolean)
                 .join(' ');

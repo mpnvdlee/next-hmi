@@ -26,9 +26,17 @@ import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
 import { BreakableToken, Kw, KindLabel, PreviewText } from '../PropertySourceEditor/editors/shared';
 import { propertyValuePreview } from '../propertyValueUtils';
 import { ActionTypeBadge } from './actionTypeIcons';
-import { ACTION_TYPES, ACTION_TYPE_TINT, actionTypeLabel } from './actionsPreview';
+import {
+  ACTION_TYPES,
+  ACTION_TYPE_TINT,
+  actionTypeColorStyle,
+  actionTypeLabel,
+} from './actionsPreview';
 import { getDefaultValueForKind, makeDefaultAction } from './actionMutations';
 import { ACTION_EDITORS, type ActionEditorCtx } from './actionEditors';
+import ActionTypeDrawer from './ActionTypeDrawer';
+
+const BROWSE_ACTIONS = '__browse';
 
 interface Props {
   value: ActionsConfig | undefined;
@@ -72,6 +80,7 @@ export default function ActionsInput({
   const actions =
     (value as Record<string, ButtonAction[] | undefined> | undefined)?.[eventKey] ?? [];
   const [dataTypes, setDataTypes] = useState<Record<string, VariableWriteDescriptor>>({});
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const scope = useContext(PanelScopeContext);
   const setPanelExpanded = usePanelExpansionStore((s) => s.setExpanded);
 
@@ -184,17 +193,28 @@ export default function ActionsInput({
 
   const effectivePathPrefix = pathPrefix ?? [];
 
+  // "Add" is the placeholder, not an option, so the browse row leads the list
+  // the way it leads the property-source popup.
   const addControl = (
     <Select
       className="cfg-editor-actions__add"
+      popupClassName="cfg-editor-actions__add-popup"
       value=""
+      placeholder="Add"
       onChange={(v) => {
-        if (v) addAction(v);
+        if (v === BROWSE_ACTIONS) setDrawerOpen(true);
+        else if (v) addAction(v);
       }}
     >
-      <option value="">Add</option>
+      <option value={BROWSE_ACTIONS} className="cfg-editor-actions__browse">
+        <span className="cfg-source-pill__abbr" aria-hidden="true">
+          ?
+        </span>
+        Browse actions…
+      </option>
       {ACTION_TYPES.map((t) => (
-        <option key={t.type} value={t.type}>
+        <option key={t.type} value={t.type} style={actionTypeColorStyle(t.type)}>
+          <ActionTypeBadge type={t.type} variant="pill" />
           {t.label}
         </option>
       ))}
@@ -230,6 +250,16 @@ export default function ActionsInput({
         />
       ))}
       {headerTitle === undefined && addControl}
+      {drawerOpen && (
+        <ActionTypeDrawer
+          label={headerTitle ?? eventLabel}
+          onClose={() => setDrawerOpen(false)}
+          onSelect={(type) => {
+            addAction(type);
+            setDrawerOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
