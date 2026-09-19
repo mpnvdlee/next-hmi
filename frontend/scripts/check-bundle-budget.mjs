@@ -2,25 +2,25 @@
 // Backlog item 22: route-aware bundle-size budget, enforced in CI.
 //
 // Reads dist/.vite/manifest.json (requires build.manifest: true), dist/_app/*
-// and dist/stdlib-js/* to check three things:
+// and dist/builtin-widgets-js/* to check three things:
 //
 // 1. A hard per-chunk cap (any chunk <=250 kB raw / <=75 kB gzip), with one
 //    named exception: the chart vendor chunk (recharts + d3-*), which is the
 //    documented "chart increment" and gets its own <=200 kB gzip budget.
-// 2. A cap over the built-in (stdlib) widget modules. These are compiled by
-//    esbuild into dist/stdlib-js/<Category>/<Widget>/{index.js,style.css,fonts/},
+// 2. A cap over the built-in widget modules. These are compiled by esbuild
+//    into dist/builtin-widgets-js/<Category>/<Widget>/{index.js,style.css,fonts/},
 //    outside Vite's graph entirely, so check 1 never sees them: every byte of
-//    a stdlib widget would otherwise be unbudgeted. Each widget's own published
-//    files are capped, and so is the whole served tree.
+//    a built-in widget would otherwise be unbudgeted. Each widget's own
+//    published files are capped, and so is the whole served tree.
 // 3. Named route budgets (manager/basic HMI/editor/chart-heavy HMI), computed
 //    by walking each route's *static* import closure in the manifest
 //    (dynamicImports are lazy-loaded-on-demand and correctly excluded) —
 //    unioned across all of a route's entry points where more than one applies.
 //    `chart-heavy-hmi` isn't its own Vite entry point, and TrendChart is a
-//    stdlib widget with no manifest entry to union in, so that route is built
-//    as basic-HMI's closure plus the two things a chart page actually adds:
-//    the recharts chunk `ensureRecharts()` dynamically imports, and
-//    TrendChart's own stdlib module from check 2's tree.
+//    built-in widget with no manifest entry to union in, so that route is
+//    built as basic-HMI's closure plus the two things a chart page actually
+//    adds: the recharts chunk `ensureRecharts()` dynamically imports, and
+//    TrendChart's own built-in module from check 2's tree.
 //
 // All three checks are CI-enforced. `vendor-icons` (all @phosphor-icons/react
 // icons used by the HMI runtime, ~94 kB gzip) used to be a static import of
@@ -40,7 +40,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(__dirname, '..', 'dist');
 const appDir = path.join(distDir, '_app');
-const stdlibDir = path.join(distDir, 'stdlib-js');
+const builtinWidgetsDir = path.join(distDir, 'builtin-widgets-js');
 const manifestPath = path.join(distDir, '.vite', 'manifest.json');
 
 const CHART_CHUNK_PATTERN = /^vendor-charts-/;
@@ -61,16 +61,17 @@ const ICON_CHUNK_GZIP_BUDGET = 100 * 1024;
 
 // Two caps that guard different things. The per-widget cap (every file the
 // widget publishes — index.js, style.css and any fonts/ it ships) is the
-// page-weight guard: a page fetches only the stdlib modules for the widgets it
-// places, so one widget's size is what an operator actually pays for. Hold it tight — a widget that breaches it has grown a dependency or
-// swallowed a responsibility, and that is worth a look regardless of the total.
+// page-weight guard: a page fetches only the built-in modules for the widgets
+// it places, so one widget's size is what an operator actually pays for. Hold
+// it tight — a widget that breaches it has grown a dependency or swallowed a
+// responsibility, and that is worth a look regardless of the total.
 // The tree cap guards the total product surface instead: it is the size of every
 // built-in put together, manifest.json included, and it grows with each widget
-// promoted into the stdlib. Raise it deliberately when the set expands; never
+// promoted to built-in. Raise it deliberately when the set expands; never
 // raise the per-widget cap to make room for the tree.
-const STDLIB_WIDGET_RAW_BUDGET = 32 * 1024;
-const STDLIB_WIDGET_GZIP_BUDGET = 10 * 1024;
-const STDLIB_TREE_GZIP_BUDGET = 96 * 1024;
+const BUILTIN_WIDGET_RAW_BUDGET = 32 * 1024;
+const BUILTIN_WIDGET_GZIP_BUDGET = 10 * 1024;
+const BUILTIN_WIDGETS_TREE_GZIP_BUDGET = 96 * 1024;
 
 const ROUTE_BUDGETS_GZIP = {
   manager: 150 * 1024,
@@ -97,9 +98,10 @@ const ROUTE_ENTRY_POINTS = {
 const ROUTE_EXTRA_CHUNKS = {
   'chart-heavy-hmi': CHART_CHUNK_PATTERN,
 };
-// Routes that additionally load these built-in widget modules from stdlib-js/.
-// Keyed by the widget's directory under dist/stdlib-js/.
-const ROUTE_EXTRA_STDLIB_WIDGETS = {
+// Routes that additionally load these built-in widget modules from
+// builtin-widgets-js/. Keyed by the widget's directory under
+// dist/builtin-widgets-js/.
+const ROUTE_EXTRA_BUILTIN_WIDGETS = {
   'chart-heavy-hmi': ['Content/TrendChart'],
 };
 
@@ -150,18 +152,18 @@ for (const f of jsFiles) {
   }
 }
 
-// ── 2. Built-in (stdlib) widget modules — esbuild output, not in the manifest ─
-// Missing entirely is a build defect, not an empty budget: public/stdlib-js is
-// gitignored, so a dist/ assembled without the compile step ships an app whose
-// every built-in widget 404s. Fail loudly rather than report 0 kB.
-if (!existsSync(stdlibDir)) {
+// ── 2. Built-in widget modules — esbuild output, not in the manifest ───────
+// Missing entirely is a build defect, not an empty budget: public/builtin-widgets-js
+// is gitignored, so a dist/ assembled without the compile step ships an app
+// whose every built-in widget 404s. Fail loudly rather than report 0 kB.
+if (!existsSync(builtinWidgetsDir)) {
   console.error(
-    `[bundle-budget] ${stdlibDir} is missing — the built-in widget modules were never compiled into this dist. Run \`npm run build\` (not \`vite build\` alone).`,
+    `[bundle-budget] ${builtinWidgetsDir} is missing — the built-in widget modules were never compiled into this dist. Run \`npm run build\` (not \`vite build\` alone).`,
   );
   process.exit(1);
 }
 
-function stdlibWidgetDirs(dir = stdlibDir, prefix = '') {
+function builtinWidgetDirs(dir = builtinWidgetsDir, prefix = '') {
   const found = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
@@ -170,7 +172,7 @@ function stdlibWidgetDirs(dir = stdlibDir, prefix = '') {
     // A widget directory is the one holding index.js; anything above it is a
     // category (Content/, Layout/, Navigation/).
     if (existsSync(path.join(child, 'index.js'))) found.push(rel);
-    else found.push(...stdlibWidgetDirs(child, rel));
+    else found.push(...builtinWidgetDirs(child, rel));
   }
   return found;
 }
@@ -179,7 +181,7 @@ function stdlibWidgetDirs(dir = stdlibDir, prefix = '') {
 // widget's `fonts/` across whole, and those bytes are page weight like any other
 // — a page that places the widget fetches the faces its stylesheet names. Sizing
 // the directory entry itself threw EISDIR and took the whole check down.
-function stdlibWidgetSizes(widget) {
+function builtinWidgetSizes(widget) {
   const totals = { raw: 0, gzip: 0 };
   const walk = (dir) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -193,30 +195,30 @@ function stdlibWidgetSizes(widget) {
       totals.gzip += gzip;
     }
   };
-  walk(path.join(stdlibDir, widget));
+  walk(path.join(builtinWidgetsDir, widget));
   return totals;
 }
 
-const stdlibWidgets = stdlibWidgetDirs();
-let stdlibTreeGzip = 0;
-for (const name of readdirSync(stdlibDir).filter((f) => f.endsWith('.json'))) {
-  stdlibTreeGzip += sizesOf(path.join(stdlibDir, name)).gzip;
+const builtinWidgets = builtinWidgetDirs();
+let builtinWidgetsTreeGzip = 0;
+for (const name of readdirSync(builtinWidgetsDir).filter((f) => f.endsWith('.json'))) {
+  builtinWidgetsTreeGzip += sizesOf(path.join(builtinWidgetsDir, name)).gzip;
 }
-for (const widget of stdlibWidgets) {
-  const { raw, gzip } = stdlibWidgetSizes(widget);
-  stdlibTreeGzip += gzip;
-  if (raw > STDLIB_WIDGET_RAW_BUDGET || gzip > STDLIB_WIDGET_GZIP_BUDGET) {
+for (const widget of builtinWidgets) {
+  const { raw, gzip } = builtinWidgetSizes(widget);
+  builtinWidgetsTreeGzip += gzip;
+  if (raw > BUILTIN_WIDGET_RAW_BUDGET || gzip > BUILTIN_WIDGET_GZIP_BUDGET) {
     failures.push(
-      `stdlib-js/${widget}: ${fmtKb(raw)} raw / ${fmtKb(gzip)} gzip exceeds the ${fmtKb(STDLIB_WIDGET_RAW_BUDGET)} raw / ${fmtKb(STDLIB_WIDGET_GZIP_BUDGET)} gzip per-widget budget`,
+      `builtin-widgets-js/${widget}: ${fmtKb(raw)} raw / ${fmtKb(gzip)} gzip exceeds the ${fmtKb(BUILTIN_WIDGET_RAW_BUDGET)} raw / ${fmtKb(BUILTIN_WIDGET_GZIP_BUDGET)} gzip per-widget budget`,
     );
   }
 }
 console.log(
-  `\nBuilt-in widget modules (dist/stdlib-js): ${stdlibWidgets.length} widget(s), ${fmtKb(stdlibTreeGzip)} gzip (budget ${fmtKb(STDLIB_TREE_GZIP_BUDGET)})`,
+  `\nBuilt-in widget modules (dist/builtin-widgets-js): ${builtinWidgets.length} widget(s), ${fmtKb(builtinWidgetsTreeGzip)} gzip (budget ${fmtKb(BUILTIN_WIDGETS_TREE_GZIP_BUDGET)})`,
 );
-if (stdlibTreeGzip > STDLIB_TREE_GZIP_BUDGET) {
+if (builtinWidgetsTreeGzip > BUILTIN_WIDGETS_TREE_GZIP_BUDGET) {
   failures.push(
-    `stdlib-js: ${fmtKb(stdlibTreeGzip)} gzip exceeds the ${fmtKb(STDLIB_TREE_GZIP_BUDGET)} stdlib-tree budget`,
+    `builtin-widgets-js: ${fmtKb(builtinWidgetsTreeGzip)} gzip exceeds the ${fmtKb(BUILTIN_WIDGETS_TREE_GZIP_BUDGET)} built-in-widgets-tree budget`,
   );
 }
 
@@ -258,14 +260,14 @@ for (const [route, entryKeys] of Object.entries(ROUTE_ENTRY_POINTS)) {
       total += sizesOf(path.join(appDir, f)).gzip;
     }
   }
-  for (const widget of ROUTE_EXTRA_STDLIB_WIDGETS[route] ?? []) {
-    if (!stdlibWidgets.includes(widget)) {
+  for (const widget of ROUTE_EXTRA_BUILTIN_WIDGETS[route] ?? []) {
+    if (!builtinWidgets.includes(widget)) {
       failures.push(
-        `${route}: stdlib-js/${widget} is missing from dist — the route total is wrong`,
+        `${route}: builtin-widgets-js/${widget} is missing from dist — the route total is wrong`,
       );
       continue;
     }
-    total += stdlibWidgetSizes(widget).gzip;
+    total += builtinWidgetSizes(widget).gzip;
   }
   const budget = ROUTE_BUDGETS_GZIP[route];
   const status = total <= budget ? 'OK' : 'OVER';
@@ -281,4 +283,4 @@ if (failures.length > 0) {
   for (const f of failures) console.error(`  - ${f}`);
   process.exit(1);
 }
-console.log('\n[bundle-budget] per-chunk, stdlib-widget and named route budgets OK.');
+console.log('\n[bundle-budget] per-chunk, built-in-widget and named route budgets OK.');

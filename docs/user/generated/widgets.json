@@ -29,59 +29,6 @@
         ]
       },
       {
-        "type": "ImageContainer",
-        "name": "Image Container",
-        "description": "Places children at absolute spots over a background image. Collapses below a set width.",
-        "props": [
-          {
-            "key": "src",
-            "label": "Image",
-            "type": "image",
-            "group": "Image"
-          },
-          {
-            "key": "alt",
-            "label": "Alt text",
-            "type": "String",
-            "group": "Image"
-          },
-          {
-            "key": "fit",
-            "label": "Fit",
-            "type": "String",
-            "group": "Image",
-            "defaultValue": "contain"
-          },
-          {
-            "key": "collapseBelow",
-            "label": "Collapse below (px)",
-            "type": "Integer",
-            "group": "Responsive",
-            "defaultValue": 0
-          },
-          {
-            "key": "childPositions",
-            "label": "Child placement",
-            "type": "child-positions",
-            "group": "Children"
-          },
-          {
-            "key": "visible",
-            "label": "Visible",
-            "type": "Boolean",
-            "group": "Visibility",
-            "defaultValue": true
-          },
-          {
-            "key": "interactable",
-            "label": "Interactable",
-            "type": "Boolean",
-            "group": "Visibility",
-            "defaultValue": true
-          }
-        ]
-      },
-      {
         "type": "Container",
         "name": "Container",
         "description": "Groups and lays out child widgets in a row or column. Hosts other widgets.",
@@ -145,6 +92,59 @@
             "label": "Size (px)",
             "type": "Integer",
             "defaultValue": 8
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "ImageContainer",
+        "name": "Image Container",
+        "description": "Places children at absolute spots over a background image. Collapses below a set width.",
+        "props": [
+          {
+            "key": "src",
+            "label": "Image",
+            "type": "image",
+            "group": "Image"
+          },
+          {
+            "key": "alt",
+            "label": "Alt text",
+            "type": "String",
+            "group": "Image"
+          },
+          {
+            "key": "fit",
+            "label": "Fit",
+            "type": "String",
+            "group": "Image",
+            "defaultValue": "contain"
+          },
+          {
+            "key": "collapseBelow",
+            "label": "Collapse below (px)",
+            "type": "Integer",
+            "group": "Responsive",
+            "defaultValue": 0
+          },
+          {
+            "key": "childPositions",
+            "label": "Child placement",
+            "type": "child-positions",
+            "group": "Children"
           },
           {
             "key": "visible",
@@ -1906,103 +1906,6 @@
     "category": "Navigation",
     "widgets": [
       {
-        "type": "NavigationMenu",
-        "name": "Navigation Menu",
-        "description": "Sidebar or top-bar menu mirroring the page tree, with rich display options.",
-        "props": [
-          {
-            "key": "mode",
-            "label": "Mode",
-            "type": "String",
-            "group": "Source",
-            "defaultValue": "auto"
-          },
-          {
-            "key": "items",
-            "label": "Items",
-            "type": "menu-items",
-            "group": "Source"
-          },
-          {
-            "key": "orientation",
-            "label": "Orientation",
-            "type": "String",
-            "group": "Layout",
-            "defaultValue": "vertical"
-          },
-          {
-            "key": "display",
-            "label": "Display",
-            "type": "String",
-            "group": "Appearance",
-            "defaultValue": "icon-label"
-          },
-          {
-            "key": "hierarchy",
-            "label": "Hierarchy",
-            "type": "String",
-            "group": "Source",
-            "defaultValue": "tree"
-          },
-          {
-            "key": "submenuMode",
-            "label": "Submenu mode",
-            "type": "String",
-            "group": "Layout",
-            "defaultValue": "auto"
-          },
-          {
-            "key": "iconStrategy",
-            "label": "Icon strategy",
-            "type": "String",
-            "group": "Appearance",
-            "defaultValue": "first-letter"
-          },
-          {
-            "key": "activeStyle",
-            "label": "Active style",
-            "type": "String",
-            "group": "Appearance",
-            "defaultValue": "left-border"
-          },
-          {
-            "key": "groupExpansion",
-            "label": "Group expansion",
-            "type": "String",
-            "group": "Behaviour",
-            "defaultValue": "auto"
-          },
-          {
-            "key": "showSearch",
-            "label": "Show search",
-            "type": "Boolean",
-            "group": "Behaviour",
-            "defaultValue": false
-          },
-          {
-            "key": "collapsed",
-            "label": "Collapsed",
-            "type": "Boolean",
-            "group": "Layout",
-            "defaultValue": false
-          },
-          {
-            "key": "visible",
-            "label": "Visible",
-            "type": "Boolean",
-            "group": "Visibility",
-            "defaultValue": true
-          },
-          {
-            "key": "interactable",
-            "label": "Interactable",
-            "type": "Boolean",
-            "group": "Visibility",
-            "defaultValue": true
-          }
-        ]
-      },
-      {
         "type": "Breadcrumb",
         "name": "Breadcrumb",
         "description": "The trail of pages to where you are, with optional home icon.",
@@ -2106,6 +2009,103 @@
             "key": "actions",
             "label": "Actions",
             "type": "actions"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "NavigationMenu",
+        "name": "Navigation Menu",
+        "description": "Sidebar or top-bar menu mirroring the page tree, with rich display options.",
+        "props": [
+          {
+            "key": "mode",
+            "label": "Mode",
+            "type": "String",
+            "group": "Source",
+            "defaultValue": "auto"
+          },
+          {
+            "key": "items",
+            "label": "Items",
+            "type": "menu-items",
+            "group": "Source"
+          },
+          {
+            "key": "orientation",
+            "label": "Orientation",
+            "type": "String",
+            "group": "Layout",
+            "defaultValue": "vertical"
+          },
+          {
+            "key": "display",
+            "label": "Display",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "icon-label"
+          },
+          {
+            "key": "hierarchy",
+            "label": "Hierarchy",
+            "type": "String",
+            "group": "Source",
+            "defaultValue": "tree"
+          },
+          {
+            "key": "submenuMode",
+            "label": "Submenu mode",
+            "type": "String",
+            "group": "Layout",
+            "defaultValue": "auto"
+          },
+          {
+            "key": "iconStrategy",
+            "label": "Icon strategy",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "first-letter"
+          },
+          {
+            "key": "activeStyle",
+            "label": "Active style",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "left-border"
+          },
+          {
+            "key": "groupExpansion",
+            "label": "Group expansion",
+            "type": "String",
+            "group": "Behaviour",
+            "defaultValue": "auto"
+          },
+          {
+            "key": "showSearch",
+            "label": "Show search",
+            "type": "Boolean",
+            "group": "Behaviour",
+            "defaultValue": false
+          },
+          {
+            "key": "collapsed",
+            "label": "Collapsed",
+            "type": "Boolean",
+            "group": "Layout",
+            "defaultValue": false
           },
           {
             "key": "visible",

@@ -1,5 +1,5 @@
 {
-  /* Type checking for the product stdlib widgets.
+  /* Type checking for the product's built-in widgets.
    *
    * A separate project on purpose. custom-widgets-sdk.d.ts declares the SDK as
    * ambient *globals* (React, useState, useEvalContext, …), which collide with
@@ -8,7 +8,7 @@
    * is no app source, so nothing collides and the widgets get checked against
    * the very declarations a project author writes against.
    *
-   * Run by `npm run build` (and directly: npx tsc -p tsconfig.stdlib.json). */
+   * Run by `npm run build` (and directly: npx tsc -p tsconfig.builtin-widgets.json). */
   "compilerOptions": {
     "target": "ES2020",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],

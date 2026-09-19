@@ -252,38 +252,31 @@ Backdrop close behavior is stack-aware:
 
 ## Component Registry
 
-Product widgets come in two shapes, both registered in
-`frontend/src/hmi/registry/widgetRegistry.tsx` and indistinguishable to
-`WidgetRenderer`:
+Every product widget is a **built-in** widget: sources under
+`frontend/widgets/`, authored against the same SDK contract as a project's
+custom widgets — same folder shape (`<Group>/<Name>/index.tsx` plus an
+optional `style.css`), same rules, same rulebook in
+[../reference/custom-widgets.md](../reference/custom-widgets.md) — and compiled
+at build time by `npm run build:builtin-widgets`.
 
-**Compiled in** — an object literal in the registry, eagerly imported, type-checked
-by the app's `tsc`. Three, each because it renders other widgets itself and so
-needs the app graph rather than the SDK:
+`frontend/src/hmi/registry/widgetRegistry.tsx` therefore starts empty and is
+filled at runtime: the built-in-widgets manifest at module eval, then a
+project's custom widgets and reusable components on top. A widget that renders
+other widgets itself — `NavigationMenu` (a page-tree menu with a footer slot),
+`ImageContainer` (children placed absolutely over a background image) and
+`ComponentSlot` (the component system's own machinery) — is authored against
+the SDK's [composition primitives](../reference/custom-widgets.md#composition)
+like any other built-in widget. Like any built-in widget it arrives as a lazy
+module, so a shell region holding one paints a beat after the page around it.
 
-- `ImageContainer` — positions children absolutely over a background image
-- `ComponentSlot` — the component system's own machinery
-- `NavigationMenu` — router, config store and `WidgetRenderer`
-
-**Stdlib** — sources under `frontend/widgets/`, authored against the same
-SDK contract as a project's custom widgets — same folder shape
-(`<Group>/<Name>/index.tsx` plus an optional `style.css`), same rules, same
-rulebook in [../reference/custom-widgets.md](../reference/custom-widgets.md) —
-and compiled at build time by `npm run build:stdlib`. Everything else:
-
-- `Container`, `Separator`, `StretchSpacer`, `FixedSpacer`
-- `Button`, `MenuToggleButton`, `LanguageSwitcher`
-- `PageNavigator`, `TabBar`, `Breadcrumb`, `PageTitle`
-- `Icon`, `Image`, `Label`, `StatusPill`, `TrendChart`
-- `AlarmListManaged`, `AlarmHistoryList`
-
-`build:stdlib` runs the backend's own compiler (`services.widget_compiler`) once,
-on the build machine, and ships two artifacts: the per-widget modules under
-`frontend/public/stdlib-js/<key>/` (`index.js`, plus `style.css` and `fonts/`
-when the source has them) and the baked manifest —
-`frontend/src/generated/stdlibManifest.json` plus its `.editor.json` half.
-Compiling here rather than on project load is what lets a deployment without
-esbuild degrade exactly as it always did — a project's own widgets go
-uncompiled while the product's widgets still render.
+`build:builtin-widgets` runs the backend's own compiler
+(`services.widget_compiler`) once, on the build machine, and ships two
+artifacts: the per-widget modules under `frontend/public/builtin-widgets-js/<key>/`
+(`index.js`, plus `style.css` and `fonts/` when the source has them) and the
+baked manifest — `frontend/src/generated/builtinWidgetsManifest.json` plus its
+`.editor.json` half. Compiling here rather than on project load is what lets a
+deployment without esbuild degrade exactly as it always did — a project's own
+widgets go uncompiled while the product's widgets still render.
 
 The baked manifest is tracked, and `npm run dev` and `npm run build` both
 regenerate it first, so its rows carry no wall-clock stamp: each row's `buildTs`
@@ -292,10 +285,10 @@ therefore leaves the file — and `git status` — untouched, while an actual ch
 still mints a new `?t=` value. The runtime endpoint's `buildTs` stays a
 timestamp; that one is a compile *time* the admin panel displays.
 
-A stdlib widget is registered synchronously at module eval from that manifest,
-which the registry imports statically — so schemas and categories are present
-before first render and only the component modules load lazily, from
-`/stdlib-js/`. A project custom widget still shadows either shape
+A built-in widget is registered synchronously at module eval from that
+manifest, which the registry imports statically — so schemas and categories
+are present before first render and only the component modules load lazily,
+from `/builtin-widgets-js/`. A project custom widget still shadows either shape
 (`registerCustomWidget`), so a customer can pin a previous version without a
 product rollback.
 
@@ -304,14 +297,14 @@ every route, so what it imports lands in the shared entry chunk an HMI page
 loads: that half holds the registration fields plus each schema field's `type`
 and `requiredFields` — all `useBindingStatus` needs to raise the
 disconnected/disabled overlay. Labels, options, defaults, `visibleWhen`,
-descriptions and icons go in `stdlibManifest.editor.json`, which only
-`hmi/registry/stdlibEditorMetadata.ts` imports, and which only `src/config/`
-imports in turn — so an operator running an HMI page never fetches them.
-`applyStdlibEditorMetadata` folds that half onto the registry entries at module
-eval, synchronously: the palette and the properties panel still see whole
-entries on their first paint. Backend readers see no split at all —
-`core.stdlib_manifest` merges the pair back before config validation and the MCP
-tools ever look at a schema.
+descriptions and icons go in `builtinWidgetsManifest.editor.json`, which only
+`hmi/registry/builtinWidgetsEditorMetadata.ts` imports, and which only
+`src/config/` imports in turn — so an operator running an HMI page never
+fetches them. `applyBuiltinWidgetsEditorMetadata` folds that half onto the
+registry entries at module eval, synchronously: the palette and the properties
+panel still see whole entries on their first paint. Backend readers see no
+split at all — `core.builtin_widgets_manifest` merges the pair back before
+config validation and the MCP tools ever look at a schema.
 
 Two manifest fields carry what a folder name and a schema cannot: `displayName`
 is the palette/tree label when the type reads badly as one (`StretchSpacer` →
@@ -321,18 +314,21 @@ project widgets on the same terms — `hostsChildren` is what lets a project shi
 its own container, which the product could not do before.
 
 The backend overlays the same manifest onto its `builtin` schema map, so page
-validation and the MCP tools still know a stdlib widget's properties. The
-overlay happens in `core.validation.structure.load_widget_manifest` — the one
-place every consumer reads through — rather than being baked into
-`widget-schemas.json`, so stdlib widgets resolve even in a runtime home that has
-never compiled, and that file keeps describing only what its own compile
-produced. Reading and caching the manifest is `core.stdlib_manifest`; it comes
-from `frontend/src/generated/` in a checkout and from
-`dist/stdlib-js/manifest.json` in a packaged runtime, which has no `src/`.
+validation and the MCP tools know a product widget's properties. The overlay
+happens in `core.validation.structure.load_widget_manifest` — the one place
+every consumer reads through — rather than being baked into
+`widget-schemas.json`, so product widgets resolve even in a runtime home that
+has never compiled, and that file keeps describing only what its own compile
+produced. Reading and caching the manifest is `core.builtin_widgets_manifest`;
+it comes from `frontend/src/generated/` in a checkout and from
+`dist/builtin-widgets-js/manifest.json` in a packaged runtime.
 
-A stale row in `widget-schemas.json` loses to the stdlib on a name clash: the
-runtime home survives product upgrades, so it can still carry a registry entry
-for a widget that has since moved out to the stdlib.
+The `builtin` half `widget-schemas.json` itself carries is therefore always
+empty, and the extractor reads no frontend source: a compile only ever
+describes a project's own widgets. The key survives for the readers that merge
+onto it, and a stale row in it loses to the built-in catalog on a name clash:
+the runtime home survives product upgrades, so it can still carry a row for a
+widget that has since moved.
 
 The rendered catalog with every property is generated from this registry into
 [../../user/catalog.md](../../user/catalog.md) and `docs/user/generated/widgets.json`
@@ -369,7 +365,7 @@ by `collectSlotKeys()` (see [Component slots](#component-slots)). `slots` being
 present (even empty) is what marks an entry as a component instance, which three
 registry helpers read:
 
-- `isContainerHostType(type)` — `ImageContainer`, anything whose manifest row declares `hostsChildren` (the stdlib `Container`, and any project widget that opts in), or any component with at least one slot; these host children in the editor tree
+- `isContainerHostType(type)` — anything whose manifest row declares `hostsChildren` (the built-in `Container` and `ImageContainer`, and any project widget that opts in), or any component with at least one slot; these host children in the editor tree
 - `hasSlotSections(type)` — more than one slot, so the editor addresses each slot separately (tree sections, Move dialog, preview insert target)
 - `placesOwnChildren(type)` — a `$component:` entry; `WidgetRenderer` skips building JSX children for it, because the instance places its children itself, per slot, from `childConfigs`
 
@@ -389,7 +385,7 @@ the instance.
 
 A definition declares a slot by placing a `ComponentSlot` widget anywhere in its
 tree; the widget's `slot` property names it (blank → `content`). Helpers live in
-`frontend/src/hmi/components/ComponentSlot/slotKey.ts` (`slotKeyOf`,
+`frontend/src/shared/utils/componentSlots.ts` (`slotKeyOf`,
 `collectSlotKeys`, `resolveChildSlot`, `groupChildrenBySlot`, `slotLabel`,
 `slotTargetLabel`); the on-disk shape is in
 [data-formats.md](data-formats.md#component-slots). The name comes from a

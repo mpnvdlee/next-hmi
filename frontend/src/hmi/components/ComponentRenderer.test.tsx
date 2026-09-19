@@ -1,4 +1,4 @@
-// Renders real stdlib widgets (Label); bind the SDK and resolve their modules.
+// Renders real built-in widgets (Label); bind the SDK and resolve their modules.
 import '../../../widgets/testSdk';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -133,7 +133,7 @@ describe('ComponentRenderer slots', () => {
       { ...label('w1', 'Body text'), slot: 'body' },
       { ...label('w2', 'Head text'), slot: 'header' },
     ]);
-    // Label is a stdlib widget: its module is lazy, so the first render suspends.
+    // Label is a built-in widget: its module is lazy, so the first render suspends.
     await screen.findByText('Head text');
 
     // One top-level box per slot, in definition order — not authoring order.

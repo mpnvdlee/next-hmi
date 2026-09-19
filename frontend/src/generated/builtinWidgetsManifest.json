@@ -3,7 +3,7 @@
     "key": "Content/AlarmHistoryList",
     "name": "AlarmHistoryList",
     "group": "Content",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -32,7 +32,7 @@
     "key": "Content/AlarmListManaged",
     "name": "AlarmListManaged",
     "group": "Content",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -58,7 +58,7 @@
     "key": "Content/Button",
     "name": "Button",
     "group": "Content",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -108,7 +108,7 @@
     "key": "Content/Clock",
     "name": "Clock",
     "group": "Content",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -134,7 +134,7 @@
     "key": "Content/Icon",
     "name": "Icon",
     "group": "Content",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -163,7 +163,7 @@
     "key": "Content/Image",
     "name": "Image",
     "group": "Content",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -192,7 +192,7 @@
     "key": "Content/Label",
     "name": "Label",
     "group": "Content",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -230,7 +230,7 @@
     "key": "Content/LogoTitle",
     "name": "LogoTitle",
     "group": "Content",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -256,7 +256,7 @@
     "key": "Content/PageTitle",
     "name": "PageTitle",
     "group": "Content",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -282,7 +282,7 @@
     "key": "Content/StatusPill",
     "name": "StatusPill",
     "group": "Content",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -314,7 +314,7 @@
     "key": "Content/TrendChart",
     "name": "TrendChart",
     "group": "Content",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": true,
@@ -355,7 +355,7 @@
     "key": "Content/UserBadge",
     "name": "UserBadge",
     "group": "Content",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -381,7 +381,7 @@
     "key": "Content/WebFrame",
     "name": "WebFrame",
     "group": "Content",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -527,7 +527,7 @@
     "key": "Indicators/Gauge",
     "name": "Gauge",
     "group": "Indicators",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -559,7 +559,7 @@
     "key": "Indicators/LedIndicator",
     "name": "LedIndicator",
     "group": "Indicators",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -582,7 +582,7 @@
     "key": "Indicators/ProgressBar",
     "name": "ProgressBar",
     "group": "Indicators",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -635,7 +635,7 @@
     "key": "Indicators/RingGauge",
     "name": "RingGauge",
     "group": "Indicators",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -682,7 +682,7 @@
     "key": "Indicators/StatTile",
     "name": "StatTile",
     "group": "Indicators",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -717,7 +717,7 @@
     "key": "Indicators/Trend",
     "name": "Trend",
     "group": "Indicators",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": true,
@@ -752,7 +752,7 @@
     "key": "Indicators/ValueDisplay",
     "name": "ValueDisplay",
     "group": "Indicators",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -785,7 +785,7 @@
     "key": "Inputs/ButtonRow",
     "name": "ButtonRow",
     "group": "Inputs",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -828,7 +828,7 @@
     "key": "Inputs/Dropdown",
     "name": "Dropdown",
     "group": "Inputs",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -864,7 +864,7 @@
     "key": "Inputs/NumberInput",
     "name": "NumberInput",
     "group": "Inputs",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -914,7 +914,7 @@
     "key": "Inputs/NumericStepper",
     "name": "NumericStepper",
     "group": "Inputs",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -958,7 +958,7 @@
     "key": "Inputs/StringInput",
     "name": "StringInput",
     "group": "Inputs",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -987,7 +987,7 @@
     "key": "Inputs/Switch",
     "name": "Switch",
     "group": "Inputs",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -1013,10 +1013,30 @@
     "schemaError": null
   },
   {
+    "key": "Layout/ComponentSlot",
+    "name": "ComponentSlot",
+    "group": "Layout",
+    "origin": "builtin",
+    "hasStyle": true,
+    "hasFonts": false,
+    "usesRecharts": false,
+    "buildOk": true,
+    "buildTs": "419eea933d473c8a",
+    "displayName": "Component Slot",
+    "hostsChildren": null,
+    "category": "Layout & structure",
+    "schema": {
+      "slot": {
+        "type": "slot"
+      }
+    },
+    "schemaError": null
+  },
+  {
     "key": "Layout/Container",
     "name": "Container",
     "group": "Layout",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -1048,7 +1068,7 @@
     "key": "Layout/FixedSpacer",
     "name": "FixedSpacer",
     "group": "Layout",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -1065,10 +1085,42 @@
     "schemaError": null
   },
   {
+    "key": "Layout/ImageContainer",
+    "name": "ImageContainer",
+    "group": "Layout",
+    "origin": "builtin",
+    "hasStyle": true,
+    "hasFonts": false,
+    "usesRecharts": false,
+    "buildOk": true,
+    "buildTs": "c56d0a8eca664526",
+    "displayName": "Image Container",
+    "hostsChildren": true,
+    "category": "Layout & structure",
+    "schema": {
+      "src": {
+        "type": "image"
+      },
+      "alt": {
+        "type": "String"
+      },
+      "fit": {
+        "type": "String"
+      },
+      "collapseBelow": {
+        "type": "Integer"
+      },
+      "childPositions": {
+        "type": "child-positions"
+      }
+    },
+    "schemaError": null
+  },
+  {
     "key": "Layout/Separator",
     "name": "Separator",
     "group": "Layout",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -1097,7 +1149,7 @@
     "key": "Layout/StretchSpacer",
     "name": "StretchSpacer",
     "group": "Layout",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -1123,7 +1175,7 @@
     "key": "Navigation/Breadcrumb",
     "name": "Breadcrumb",
     "group": "Navigation",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -1152,7 +1204,7 @@
     "key": "Navigation/LanguageSwitcher",
     "name": "LanguageSwitcher",
     "group": "Navigation",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -1172,7 +1224,7 @@
     "key": "Navigation/MenuToggleButton",
     "name": "MenuToggleButton",
     "group": "Navigation",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -1201,10 +1253,60 @@
     "schemaError": null
   },
   {
+    "key": "Navigation/NavigationMenu",
+    "name": "NavigationMenu",
+    "group": "Navigation",
+    "origin": "builtin",
+    "hasStyle": true,
+    "hasFonts": false,
+    "usesRecharts": false,
+    "buildOk": true,
+    "buildTs": "102770cacdefd255",
+    "displayName": "Navigation Menu",
+    "hostsChildren": null,
+    "category": "Navigation",
+    "schema": {
+      "mode": {
+        "type": "String"
+      },
+      "items": {
+        "type": "menu-items"
+      },
+      "orientation": {
+        "type": "String"
+      },
+      "display": {
+        "type": "String"
+      },
+      "hierarchy": {
+        "type": "String"
+      },
+      "submenuMode": {
+        "type": "String"
+      },
+      "iconStrategy": {
+        "type": "String"
+      },
+      "activeStyle": {
+        "type": "String"
+      },
+      "groupExpansion": {
+        "type": "String"
+      },
+      "showSearch": {
+        "type": "Boolean"
+      },
+      "collapsed": {
+        "type": "Boolean"
+      }
+    },
+    "schemaError": null
+  },
+  {
     "key": "Navigation/PageNavigator",
     "name": "PageNavigator",
     "group": "Navigation",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,
@@ -1224,7 +1326,7 @@
     "key": "Navigation/TabBar",
     "name": "TabBar",
     "group": "Navigation",
-    "origin": "stdlib",
+    "origin": "builtin",
     "hasStyle": true,
     "hasFonts": false,
     "usesRecharts": false,

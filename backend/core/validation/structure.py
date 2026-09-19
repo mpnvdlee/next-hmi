@@ -8,7 +8,7 @@ from typing import Any
 
 from core.page_index import collect_dialog_ids, collect_dialog_property_keys
 from core.page_index import collect_page_ids as _index_collect_page_ids
-from core.stdlib_manifest import CatalogVersion, stdlib_catalog
+from core.builtin_widgets_manifest import CatalogVersion, builtin_widgets_catalog
 from core.storage import (
     WIDGET_BUILD_DIR,
     active_components_dir,
@@ -76,8 +76,9 @@ _ATOMIC_TYPE_CHECKS = {
 # WidgetRenderer reads them straight off `node.properties` before it consults the
 # registry entry, so they are honoured on custom widgets and `$component:`
 # instances too — neither of which carries them in its schema. Mirrors
-# VISIBILITY_SCHEMA in frontend/src/hmi/registry/widgetRegistry.tsx; parity is
-# fixture-tested in test_structure_parity.py.
+# VISIBILITY_SCHEMA in frontend/src/hmi/registry/widgetRegistry.tsx, which the
+# registry merges into every widget; parity is fixture-tested in
+# test_structure_parity.py.
 _UNIVERSAL_PROPERTY_KEYS: frozenset[str] = frozenset({"visible", "interactable"})
 
 _COMPONENT_TYPE_PREFIX = "$component:"
@@ -198,29 +199,29 @@ def load_widget_manifest() -> dict:
     fresh checkouts where Vite hasn't run; validators degrade to type-existence
     checks only.
 
-    Stdlib widgets are overlaid onto ``builtin`` here rather than baked into
+    Built-in widgets are overlaid onto ``builtin`` here rather than baked into
     ``widget-schemas.json`` by the compiler. They ship with the product, so they
     have to be visible even in a runtime home that has never compiled — and
     keeping them out of the file leaves it describing exactly what that compile
     produced.
 
-    Stdlib wins a name clash. The stdlib manifest is built from, and ships with,
-    the running bundle; ``widget-schemas.json`` lives in the runtime home and
-    survives upgrades, so it can still describe a registry entry for a widget
-    that has since moved out to the stdlib. Letting that stale row win would
-    shadow the shipped widget with an older schema.
+    A built-in widget wins a name clash. The built-in-widgets manifest is built
+    from, and ships with, the running bundle; ``widget-schemas.json`` lives in
+    the runtime home and survives upgrades, so it can still describe a registry
+    entry for a widget that has since moved to the built-in catalog. Letting
+    that stale row win would shadow the shipped widget with an older schema.
 
     Cached on both inputs' mtimes — every page-write validation reads this, so
-    the stdlib catalog and its version come back from one call rather than
+    the built-in catalog and its version come back from one call rather than
     re-resolving the manifest path and re-stat'ing both halves per lookup.
     """
     global _manifest_cache
-    stdlib_version, stdlib_entries = stdlib_catalog()
+    builtin_widgets_version, builtin_widgets_entries = builtin_widgets_catalog()
     try:
         mtime = WIDGET_SCHEMAS_PATH.stat().st_mtime_ns
     except FileNotFoundError:
         mtime = 0
-    key = (mtime, stdlib_version)
+    key = (mtime, builtin_widgets_version)
     if _manifest_cache is not None and _manifest_cache[0] == key:
         return _manifest_cache[1]
 
@@ -238,7 +239,7 @@ def load_widget_manifest() -> dict:
         **manifest,
         "builtin": {
             **(builtin if isinstance(builtin, dict) else {}),
-            **stdlib_entries,
+            **builtin_widgets_entries,
         },
     }
     _manifest_cache = (key, merged)
@@ -293,7 +294,7 @@ _ComponentInterfaces = tuple[dict[str, frozenset[str]], dict[str, frozenset[str]
 _component_interface_cache: tuple[frozenset[tuple[str, int]], _ComponentInterfaces] | None = None
 
 # Slot name a ComponentSlot falls back to when its ``slot`` property is blank.
-# Mirrors DEFAULT_SLOT_KEY in frontend/src/hmi/components/ComponentSlot/slotKey.ts.
+# Mirrors DEFAULT_SLOT_KEY in frontend/src/shared/utils/componentSlots.ts.
 _DEFAULT_SLOT_KEY = "content"
 
 

@@ -212,6 +212,35 @@ interface HmiWidgetProps {
   properties?: Record<string, unknown>;
   layout?: LayoutConfig;
   children?: unknown;
+  /** This widget's own child nodes, unrendered — only for a widget that
+   *  declares `hostsChildren`. Take `children` unless you need per-child
+   *  metadata (an id-keyed position, say); those are already rendered and
+   *  cheaper. Place these yourself with `renderWidget`. */
+  childConfigs?: WidgetConfig[];
+}
+
+/** One node of the persisted widget tree, as `childConfigs`, a `widgets`
+ *  property and `useComponentSlot` hand it over. Pass it to `renderWidget`
+ *  rather than reading `type` and rendering it yourself. */
+interface WidgetConfig {
+  id: string;
+  type: string;
+  name: string;
+  layout?: LayoutConfig;
+  properties?: Record<string, unknown>;
+  children?: WidgetConfig[];
+  /** Only meaningful on a child of a component instance: which of the
+   *  definition's slots this widget fills. Absent means the first slot. */
+  slot?: string;
+}
+
+interface AnchorRect {
+  top: number;
+  left: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
 }
 
 type OverlaySize = 'auto' | 'small' | 'medium' | 'fullscreen' | 'fixed';
@@ -639,6 +668,56 @@ declare function usePageTitle(title: PageTitle): string;
 declare function resolvePageTitle(title: PageTitle): string;
 declare function useNavigateToPage(): (pageId: string) => void;
 declare function useVisiblePages(): PageNode[];
+/** Group ids of the signed-in user, `[]` when nobody is. The group source
+ *  behind `useVisiblePages`' role filter — use it, not
+ *  `useEvalContext().resolveUserGroups()`, to reapply that filter to nested
+ *  levels of the page tree: the eval context answers `['guest']` for an
+ *  anonymous viewer, which would list pages the top level hides. */
+declare function useCurrentUserGroups(): readonly string[];
+
+interface ActivePage {
+  /** Page id in the URL. `null` on a route that names none, where the runtime
+   *  falls back to the first page — which `pageId` then reports. May name a
+   *  *group* rather than a page. */
+  requestedId: string | null;
+  /** The page actually on screen, after a group resolves to its active child. */
+  pageId: string | null;
+  /** Ids of the page groups the active page sits inside, outermost first.
+   *  Empty for a top-level page. */
+  groupIds: readonly string[];
+}
+/** Where the runtime currently is in the page tree — for a widget that marks an
+ *  active entry. Resolved against the whole tree, hidden pages included, so an
+ *  unlisted page still marks its ancestors. */
+declare function useActivePage(): ActivePage;
+
+// ── Composition ───────────────────────────────────────────────────────────────
+// For a widget that places other widgets itself. Prefer the `children` prop:
+// the renderer hands those over already rendered, and a widget that only needs
+// them in order (a row, a card, a grid) should declare `hostsChildren` and lay
+// `children` out with CSS. Reach for these when the widget needs to decide
+// *where* each node goes, or to render a node that is not its own child.
+
+/** Render one widget node — from `childConfigs`, from a `widgets`-typed
+ *  property, or from `useComponentSlot`. */
+declare function renderWidget(node: WidgetConfig): JSX.Element;
+/** Render the nodes a caller put in one of this instance's slots. Keeps them in
+ *  the caller's editing scope, so the editor selects them where they were
+ *  authored rather than resolving out to the instance. */
+declare function renderSlotWidgets(nodes: WidgetConfig[]): JSX.Element;
+/** The widgets a caller placed in the named slot of the component instance being
+ *  rendered, or `[]` outside an instance / for a slot nobody filled. */
+declare function useComponentSlot(slot: string): WidgetConfig[];
+/** True inside the editor's preview pane, false in the operator runtime — for an
+ *  authoring-only affordance the operator must never see. */
+declare function useIsPreview(): boolean;
+/** Position a panel against a trigger's anchor rect: renders at the raw offset,
+ *  then clamps itself into the viewport once measured. Attach the ref to the
+ *  panel and the style to the same element. Pass `null` when unanchored. */
+declare function useAnchoredStyle(
+  rect: AnchorRect | null | undefined,
+  placement: OverlayPlacement | null | undefined,
+): [{ current: HTMLDivElement | null }, Record<string, string | number>];
 
 interface PhosphorIconProps {
   size?: number | string;
@@ -650,7 +729,7 @@ interface PhosphorIconProps {
  * A built-in icon — not a plain component. It is a `React.lazy` wrapper: the
  * icon set is fetched on first render, so rendering one *outside* a
  * `React.Suspense` boundary throws a promise instead of drawing anything.
- * Every use looks like the stdlib widgets' (`Icon`, `Button`, `Tab Bar`, …):
+ * Every use looks like the built-in widgets' (`Icon`, `Button`, `Tab Bar`, …):
  *
  *     <React.Suspense fallback={null}>
  *       <IconComp size={20} weight="regular" />

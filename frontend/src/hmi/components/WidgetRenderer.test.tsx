@@ -13,7 +13,7 @@ vi.mock('../registry/widgetRegistry', async (importOriginal) => {
       ...actual.widgetRegistry,
       // The visibility gate is what's under test, not any particular widget.
       // A fixture defined here keeps the suite off the real catalog, whose
-      // leaves are stdlib widgets: lazy modules jsdom cannot fetch, and whose
+      // leaves are built-in widgets: lazy modules jsdom cannot fetch, and whose
       // test shim can't be imported at module scope without loading the real
       // registry and defeating this very mock (see setShell below).
       GateProbe: {

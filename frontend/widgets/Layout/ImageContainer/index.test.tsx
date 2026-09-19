@@ -1,6 +1,7 @@
-// The child fixture is a Container — a stdlib widget now, so a lazy module
-// with no source jsdom can fetch without this shim.
-import '../../../../widgets/testSdk';
+// Rendered through the registry, like a page renders it: both this widget and
+// its Container children are lazy built-in modules, so the SDK has to be bound
+// and the first paint of every assertion below is asynchronous.
+import '../../testSdk';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useTranslationStore } from '@shared/store/translationStore';
@@ -8,7 +9,8 @@ import { useComponentPropStore } from '@hmi/store/widgetPropStore';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { useVariableStore } from '@hmi/store/variableStore';
 import type { WidgetConfig } from '@shared/types/config';
-import WidgetRenderer from '../WidgetRenderer';
+import { autoMarkerLabel, clamp01, resolveMarkerLabel } from '@shared/utils/childPositions';
+import WidgetRenderer from '@hmi/components/WidgetRenderer';
 
 function childOf(overrides: Partial<WidgetConfig> & { id: string }): WidgetConfig {
   return {
@@ -69,7 +71,7 @@ describe('ImageContainer', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders each child via WidgetRenderer with absolute slot positioning', async () => {
+  it('renders each child itself with absolute slot positioning', async () => {
     const children = [
       childOf({ id: 'a', properties: { title: 'Alpha', showWhenEmpty: true } }),
       childOf({ id: 'b', properties: { title: 'Beta', showWhenEmpty: true } }),
@@ -84,8 +86,7 @@ describe('ImageContainer', () => {
     );
     expect(await screen.findByText('Alpha')).toBeInTheDocument();
     expect(screen.getByText('Beta')).toBeInTheDocument();
-    const slots = container.querySelectorAll('[data-child-id]');
-    expect(slots).toHaveLength(2);
+    expect(container.querySelectorAll('[data-child-id]')).toHaveLength(2);
     const slotA = container.querySelector('[data-child-id="a"]') as HTMLElement;
     expect(slotA.style.getPropertyValue('--hmi-imgctn-x')).toBe('25%');
     expect(slotA.style.getPropertyValue('--hmi-imgctn-y')).toBe('40%');
@@ -146,13 +147,69 @@ describe('ImageContainer', () => {
     expect(await screen.findByText('Alpha')).toBeInTheDocument();
   });
 
-  it('defaults unplaced children to centre', () => {
+  it('defaults unplaced children to centre', async () => {
     const children = [
       childOf({ id: 'lonely', properties: { title: 'Lonely', showWhenEmpty: true } }),
     ];
     const { container } = renderImageContainer({ src: '/img.png' }, children);
+    expect(await screen.findByText('Lonely')).toBeInTheDocument();
     const slot = container.querySelector('[data-child-id="lonely"]') as HTMLElement;
     expect(slot.style.getPropertyValue('--hmi-imgctn-x')).toBe('50%');
     expect(slot.style.getPropertyValue('--hmi-imgctn-y')).toBe('50%');
+  });
+
+  // A widget module carries no app imports, so the render-time half of
+  // @shared/utils/childPositions is duplicated inside index.tsx. Letters and
+  // coordinates the operator sees on the image must match what the editor prints
+  // beside each child — and the local copies are module-private, so the only way
+  // to reach them is through a render. Each test below therefore compares
+  // rendered output against the shared helper rather than calling both directly.
+  it('labels markers the way the placement editor does', async () => {
+    const children = ['a', 'b', 'c'].map((id) => childOf({ id, properties: { title: id } }));
+    const { container } = renderImageContainer(
+      { src: '/img.png', childPositions: [{ id: 'b', x: 0.5, y: 0.5, label: 'Pump' }] },
+      children,
+    );
+    // Each label renders twice — once in the marker layer over the image, once
+    // inline beside the child in collapsed mode — so match all of them.
+    expect(await screen.findAllByText('Pump')).toHaveLength(2);
+    const markers = [...container.querySelectorAll('.hmi-imgctn__marker')].map(
+      (el) => el.textContent,
+    );
+    expect(markers).toEqual([
+      resolveMarkerLabel(undefined, 0),
+      resolveMarkerLabel({ id: 'b', x: 0.5, y: 0.5, label: 'Pump' }, 1),
+      resolveMarkerLabel(undefined, 2),
+    ]);
+    expect(markers).toEqual(['A', 'Pump', 'C']);
+  });
+
+  it('rolls marker letters past Z the way the placement editor does', async () => {
+    // Index 26 is the wrap point (Z → AA) and the one case a three-child test
+    // cannot reach, which is where a hand-copied loop would diverge.
+    const children = Array.from({ length: 27 }, (_, i) => childOf({ id: `c${i}` }));
+    const { container } = renderImageContainer({ src: '/img.png' }, children);
+    expect(await screen.findAllByText('c26')).not.toHaveLength(0);
+
+    const markers = [...container.querySelectorAll('.hmi-imgctn__marker')].map(
+      (el) => el.textContent,
+    );
+    expect(markers).toEqual(Array.from({ length: 27 }, (_, i) => autoMarkerLabel(i)));
+    expect(markers[25]).toBe('Z');
+    expect(markers[26]).toBe('AA');
+  });
+
+  it('clamps out-of-range coordinates the way the placement editor does', async () => {
+    const { container } = renderImageContainer(
+      { src: '/img.png', childPositions: [{ id: 'a', x: 2, y: -1 }] },
+      [childOf({ id: 'a' })],
+    );
+    expect(await screen.findAllByText('a')).not.toHaveLength(0);
+
+    const slot = container.querySelector('[data-child-id="a"]') as HTMLElement;
+    expect(slot.style.getPropertyValue('--hmi-imgctn-x')).toBe(`${clamp01(2) * 100}%`);
+    expect(slot.style.getPropertyValue('--hmi-imgctn-y')).toBe(`${clamp01(-1) * 100}%`);
+    expect(slot.style.getPropertyValue('--hmi-imgctn-x')).toBe('100%');
+    expect(slot.style.getPropertyValue('--hmi-imgctn-y')).toBe('0%');
   });
 });

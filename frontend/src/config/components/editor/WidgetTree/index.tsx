@@ -66,7 +66,7 @@ import { canExtendWith, verbTargets } from '@config/store/domains/selectionScope
 import { flattenVisibleRows, rowsBetween, type VisibleRowsInput } from './visibleRows';
 import { matchesSearchWords, withDotSearchSeparators } from '@shared/utils/search';
 import { EDITOR_NODE_IDS, parseWidgetSlotId } from '@shared/constants/editorSentinels';
-import { slotTargetLabel } from '@hmi/components/ComponentSlot/slotKey';
+import { slotTargetLabel } from '@shared/utils/componentSlots';
 import { insertComponentInto } from './insertComponent';
 import type { ContextMenuState, NodeKind } from './types';
 import AreaWidgetList from './AreaWidgetList';

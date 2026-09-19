@@ -83,7 +83,7 @@ npm run build                         # tsc + vite build; the type check
 | Changed | Also run |
 |---|---|
 | A built-in widget's registry entry or schema | `npm run docs:widgets` — regenerates `docs/user/catalog.md`, `docs/user/generated/widgets.json`, `docs/user/generated/property-sources.json`; commit them |
-| Anything under `frontend/widgets/` | `npm run build:stdlib` then `npm run docs:widgets`; commit both regenerated halves of `frontend/src/generated/stdlibManifest.json` (`.json` + `.editor.json`) and the catalog. `npx tsc -p frontend/tsconfig.stdlib.json` type-checks the sources against the SDK declarations. `npm run check:bundle-budget` from `frontend/` after `npm run build` — a per-PR gate: 32 kB raw / 10 kB gzip per widget and 96 kB gzip across the tree, counting every file the widget publishes (`index.js`, `style.css`, and a `fonts/` directory if it ships one) |
+| Anything under `frontend/widgets/` | `npm run build:builtin-widgets` then `npm run docs:widgets`; commit both regenerated halves of `frontend/src/generated/builtinWidgetsManifest.json` (`.json` + `.editor.json`) and the catalog. `npx tsc -p frontend/tsconfig.builtin-widgets.json` type-checks the sources against the SDK declarations. `npm run check:bundle-budget` from `frontend/` after `npm run build` — a per-PR gate: 32 kB raw / 10 kB gzip per widget and 96 kB gzip across the tree, counting every file the widget publishes (`index.js`, `style.css`, and a `fonts/` directory if it ships one) |
 | A property source | `npm run docs:widgets` (the source table is generated too) + backend validation tests |
 | Anything under `project-testbench/` diagnostics | `pytest backend/tests/test_project_testbench_diagnostics.py` — a golden snapshot; a new finding must be regenerated deliberately |
 | The user guide | `python build/render-docs.py <outdir> 0.0.0` — the rendered guide must build, and must load no resource from another host: an offline render fetches nothing at all, a `--web` one only the Google Fonts stylesheet. Hyperlinks in the prose may point anywhere |
@@ -92,13 +92,14 @@ npm run build                         # tsc + vite build; the type check
 Two drift guards run in the normal frontend suite.
 `frontend/src/hmi/registry/widgetMetadata.docs.test.ts` fails when the generated
 docs no longer match the registry, and `npm run docs:widgets` is the only
-sanctioned way to rewrite them. `stdlibManifest.test.ts` fails when
-`src/generated/stdlibManifest{,.editor}.json` no longer matches what
+sanctioned way to rewrite them. `builtinWidgetsManifest.test.ts` fails when
+`src/generated/builtinWidgetsManifest{,.editor}.json` no longer matches what
 `frontend/widgets/` compiles to — it re-runs the real compiler into a scratch
 directory rather than re-deriving schemas in TypeScript, and skips only where
-that compiler cannot run. Regenerate with `npm run build:stdlib`. The docs guard
-reads the baked manifest, so a stale manifest agrees with stale docs: it is the
-manifest guard, not the docs one, that catches an edited widget schema.
+that compiler cannot run. Regenerate with `npm run build:builtin-widgets`. The
+docs guard reads the baked manifest, so a stale manifest agrees with stale
+docs: it is the manifest guard, not the docs one, that catches an edited
+widget schema.
 
 ## Repo layout
 
@@ -205,12 +206,9 @@ Exact touchpoints for the changes that come up most. Every path is repo-relative
 
 ### Add a built-in widget
 
-Two shapes. **Prefer a stdlib widget** — same authoring contract as project
-content, so it can later be forked into a project unchanged. Reach for a
-compiled-in widget only when the thing genuinely needs the app graph: rendering
-child widgets, the router, or a store.
-
-**Stdlib widget** (`frontend/widgets/<Group>/<Name>/`):
+A **built-in widget** in `frontend/widgets/<Group>/<Name>/`, authored against
+the same SDK contract as project content, so it can later be forked into a
+project unchanged.
 
 1. `index.tsx` + optional `style.css`, authored against the custom-widget SDK —
    no imports, every helper an ambient global from `window.__nextHMI__`
@@ -225,27 +223,24 @@ child widgets, the router, or a store.
 2. `index.test.tsx` beside it, starting `import '../../testSdk';` — that binds
    the SDK globals. It is deliberately not in `src/test-setup.ts`: pulling the
    app graph into every test file defeats `vi.mock` in unrelated suites.
-   Resolving a stdlib module *URL* to its source is separate and automatic —
+   Resolving a built-in module *URL* to its source is separate and automatic —
    `vitest.config.ts` aliases `@shared/utils/widgetModuleLoader` to the
    widgets copy, so a test that renders one through the registry needs
    no setup at all.
-3. `npm run build:stdlib` (also run by `dev` and `build`), then commit both
-   regenerated halves of `frontend/src/generated/stdlibManifest.json`.
+3. `npm run build:builtin-widgets` (also run by `dev` and `build`), then commit
+   both regenerated halves of `frontend/src/generated/builtinWidgetsManifest.json`.
 4. `npm run docs:widgets`, then commit the regenerated catalog.
 
-Only three widgets are still compiled in — `ImageContainer`, `ComponentSlot`
-and `NavigationMenu` — each because it renders other widgets itself.
+A widget that places other widgets itself — at positions of its own choosing, or
+one it did not receive as a child — uses the SDK's composition primitives
+(`renderWidget`, `renderSlotWidgets`, `useComponentSlot`, `childConfigs`); see
+[Composition](../reference/custom-widgets.md#composition). `NavigationMenu` and
+`ImageContainer` are the worked examples.
 
-**Compiled-in widget** (`frontend/src/hmi/components/<Name>/`):
-
-1. Component + `index.module.css`.
-2. `frontend/src/hmi/registry/widgetRegistry.tsx` — register with `name`,
-   `category`, `description`, `icon`, `component`, `schema`. The category string
-   groups it in the Add-widget menu and in the published catalog.
-3. Spread `selfLayoutStyle(layout)` on the outer element so the editor's layout
-   fields apply.
-4. A test beside the component.
-5. `npm run docs:widgets`, then commit the regenerated catalog.
+The app itself can still render a built-in widget outside the page tree — the
+zero-config sidebar does, via
+`frontend/src/hmi/components/FallbackNavigationMenu.tsx`, which reads the entry
+off the registry rather than importing a module the app does not have.
 
 ### Add a property source
 

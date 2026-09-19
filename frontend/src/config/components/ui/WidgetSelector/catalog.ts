@@ -1,8 +1,9 @@
-// The descriptions and icons the cards below render are the stdlib manifest's
-// editor half, and importing this is what puts them on the registry entries.
-// Side-effect import from the surface that reads them, so the palette is whole
-// wherever it is built — the drawer, and the generated-catalog drift test.
-import '@hmi/registry/stdlibEditorMetadata';
+// The descriptions and icons the cards below render are the built-in-widgets
+// manifest's editor half, and importing this is what puts them on the
+// registry entries. Side-effect import from the surface that reads them, so
+// the palette is whole wherever it is built — the drawer, and the
+// generated-catalog drift test.
+import '@hmi/registry/builtinWidgetsEditorMetadata';
 import {
   BUILTIN_WIDGET_TYPES,
   DEFAULT_COMPONENT_CATEGORY,
@@ -19,8 +20,8 @@ export interface CatalogItem {
   description?: string;
   icon: IconValue;
   category: string;
-  /** Product-shipped (compiled-in or stdlib), as opposed to a project's own
-   *  custom widget or reusable component. Drives the card badge. */
+  /** Product-shipped (built-in), as opposed to a project's own custom widget or
+   *  reusable component. Drives the card badge. */
   builtin: boolean;
   /** A reusable component definition rather than a widget. Drives the card badge. */
   component: boolean;

@@ -7,7 +7,7 @@ import { evaluateVisibility } from '@config/utils/visibilityEvaluator';
 import type { VisibilityCondition } from '@shared/types/config';
 import TrendChart, { schema } from './index';
 
-// A stdlib widget reads the chart library off the SDK global, not from a module
+// A built-in widget reads the chart library off the SDK global, not from a module
 // import, so `vi.mock('recharts')` would never be consulted. Overwrite the
 // global instead — the slot `ensureRecharts()` fills in the app. Stubbing rather
 // than loading the real library is deliberate: jsdom measures

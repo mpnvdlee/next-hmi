@@ -582,6 +582,10 @@ def test_regenerate_widget_schemas_writes_manifest(widget_workspace):
     assert manifest["custom"]["Inputs/Foo"]["name"] == "Foo"
     assert manifest["custom"]["Inputs/Foo"]["category"] == "Inputs"
     assert manifest["custom"]["Inputs/Foo"]["schema"]["label"]["type"] == "string"
+    # No product widget lands here: the built-in-widgets build ships a baked
+    # manifest of its own, which `load_widget_manifest` overlays onto this half
+    # at read time.
+    assert manifest["builtin"] == {}
 
 
 CHART_WIDGET = """\
@@ -596,7 +600,8 @@ export default function Chart() {
 async def test_redirected_out_dir_leaves_the_default_build_root_untouched(
     widget_workspace, tmp_path
 ):
-    """The stdlib build compiles a different source tree into its own build root.
+    """The built-in-widgets build compiles a different source tree into its own
+    build root.
 
     Nothing it writes may land in the runtime-home cache — that is the whole
     reason ``out_dir`` exists, and the reason each target owns its status map.
@@ -605,23 +610,23 @@ async def test_redirected_out_dir_leaves_the_default_build_root_untouched(
     _write_widget(src, "Inputs/Project", GOOD_WIDGET)
     await widget_compiler.compile_all()
 
-    stdlib_src = tmp_path / "widgets"
-    stdlib_out = tmp_path / "stdlib-build"
-    stdlib_src.mkdir()
-    _write_widget(stdlib_src, "Layout/Stdlib", GOOD_WIDGET)
+    builtin_widgets_src = tmp_path / "widgets"
+    builtin_widgets_out = tmp_path / "builtin-widgets-build"
+    builtin_widgets_src.mkdir()
+    _write_widget(builtin_widgets_src, "Layout/Builtin", GOOD_WIDGET)
 
-    assert await widget_compiler.compile_all(stdlib_src, stdlib_out) is True
+    assert await widget_compiler.compile_all(builtin_widgets_src, builtin_widgets_out) is True
 
-    assert (stdlib_out / "Layout" / "Stdlib" / "index.js").is_file()
+    assert (builtin_widgets_out / "Layout" / "Builtin" / "index.js").is_file()
     assert not (build / "Layout").exists()
-    assert not (stdlib_out / "Inputs").exists()
+    assert not (builtin_widgets_out / "Inputs").exists()
 
     default_status = json.loads((build / ".build-status.json").read_text(encoding="utf-8"))
-    stdlib_status = json.loads(
-        (stdlib_out / ".build-status.json").read_text(encoding="utf-8")
+    builtin_widgets_status = json.loads(
+        (builtin_widgets_out / ".build-status.json").read_text(encoding="utf-8")
     )
     assert set(default_status["widgets"]) == {"Inputs/Project"}
-    assert set(stdlib_status["widgets"]) == {"Layout/Stdlib"}
+    assert set(builtin_widgets_status["widgets"]) == {"Layout/Builtin"}
 
 
 @pytest.mark.asyncio
@@ -680,7 +685,7 @@ async def test_compile_records_whether_a_module_references_recharts(
 
 
 @pytest.mark.asyncio
-async def test_generate_stdlib_manifest_emits_rows_the_frontend_registers(
+async def test_generate_builtin_widgets_manifest_emits_rows_the_frontend_registers(
     widget_workspace, tmp_path
 ):
     src, build = widget_workspace["src"], widget_workspace["build"]
@@ -695,10 +700,10 @@ async def test_generate_stdlib_manifest_emits_rows_the_frontend_registers(
     )
     (src / "Layout" / "Box" / "style.css").write_text(".box {}", encoding="utf-8")
 
-    manifest_path = tmp_path / "stdlibManifest.json"
+    manifest_path = tmp_path / "builtinWidgetsManifest.json"
     assert await widget_compiler.compile_all() is True
     assert widget_compiler.regenerate_widget_schemas() is True
-    assert widget_compiler.generate_stdlib_manifest(manifest_path) is True
+    assert widget_compiler.generate_builtin_widgets_manifest(manifest_path) is True
 
     rows = {row["key"]: row for row in json.loads(manifest_path.read_text(encoding="utf-8"))}
     assert list(rows) == sorted(rows), "rows must be key-sorted for a stable artifact"
@@ -706,7 +711,7 @@ async def test_generate_stdlib_manifest_emits_rows_the_frontend_registers(
     box = rows["Layout/Box"]
     assert box["name"] == "Box"
     assert box["group"] == "Layout"
-    assert box["origin"] == "stdlib"
+    assert box["origin"] == "builtin"
     assert box["displayName"] == "A Box"
     assert box["hostsChildren"] is True
     assert box["hasStyle"] is True
@@ -722,7 +727,7 @@ async def test_generate_stdlib_manifest_emits_rows_the_frontend_registers(
 
 
 @pytest.mark.asyncio
-async def test_generate_stdlib_manifest_splits_the_editor_half_out(
+async def test_generate_builtin_widgets_manifest_splits_the_editor_half_out(
     widget_workspace, tmp_path
 ):
     """The runtime half rides in every route's entry chunk, so it must carry
@@ -742,10 +747,10 @@ async def test_generate_stdlib_manifest_splits_the_editor_half_out(
         "export default function Box() { return null; }\n",
     )
 
-    manifest_path = tmp_path / "stdlibManifest.json"
+    manifest_path = tmp_path / "builtinWidgetsManifest.json"
     assert await widget_compiler.compile_all() is True
     assert widget_compiler.regenerate_widget_schemas() is True
-    assert widget_compiler.generate_stdlib_manifest(manifest_path) is True
+    assert widget_compiler.generate_builtin_widgets_manifest(manifest_path) is True
 
     row = json.loads(manifest_path.read_text(encoding="utf-8"))[0]
     assert "description" not in row
@@ -756,7 +761,7 @@ async def test_generate_stdlib_manifest_splits_the_editor_half_out(
         "motor": {"type": "struct", "requiredFields": ["run"]},
     }
 
-    editor_path = tmp_path / "stdlibManifest.editor.json"
+    editor_path = tmp_path / "builtinWidgetsManifest.editor.json"
     half = json.loads(editor_path.read_text(encoding="utf-8"))["Layout/Box"]
     assert half["description"] == "A box."
     assert half["icon"] == {"type": "builtin", "name": "square"}
@@ -769,7 +774,7 @@ async def test_generate_stdlib_manifest_splits_the_editor_half_out(
 
 
 @pytest.mark.asyncio
-async def test_stdlib_manifest_is_byte_identical_across_a_no_op_rebuild(
+async def test_builtin_widgets_manifest_is_byte_identical_across_a_no_op_rebuild(
     widget_workspace, tmp_path
 ):
     """The manifest is tracked in git and regenerated by every ``npm run dev``,
@@ -779,14 +784,14 @@ async def test_stdlib_manifest_is_byte_identical_across_a_no_op_rebuild(
     _write_widget(src, "Layout/Box", GOOD_WIDGET)
     stylesheet = src / "Layout" / "Box" / "style.css"
     stylesheet.write_text(".box {}", encoding="utf-8")
-    manifest_path = tmp_path / "stdlibManifest.json"
+    manifest_path = tmp_path / "builtinWidgetsManifest.json"
 
-    editor_path = tmp_path / "stdlibManifest.editor.json"
+    editor_path = tmp_path / "builtinWidgetsManifest.editor.json"
 
     async def rebuild() -> bytes:
         assert await widget_compiler.compile_all() is True
         assert widget_compiler.regenerate_widget_schemas() is True
-        assert widget_compiler.generate_stdlib_manifest(manifest_path) is True
+        assert widget_compiler.generate_builtin_widgets_manifest(manifest_path) is True
         # Both halves are tracked, so both have to be stable.
         return manifest_path.read_bytes() + editor_path.read_bytes()
 
@@ -809,7 +814,7 @@ async def test_stdlib_manifest_is_byte_identical_across_a_no_op_rebuild(
 
 
 @pytest.mark.asyncio
-async def test_publish_stdlib_assets_copies_only_what_a_browser_fetches(
+async def test_publish_builtin_widgets_assets_copies_only_what_a_browser_fetches(
     widget_workspace, tmp_path
 ):
     src, build = widget_workspace["src"], widget_workspace["build"]
@@ -819,13 +824,13 @@ async def test_publish_stdlib_assets_copies_only_what_a_browser_fetches(
     (src / "Layout" / "Box" / "fonts" / "face.woff2").write_bytes(b"font")
     _write_widget(src, "Content/Plain", GOOD_WIDGET)
 
-    manifest_path = tmp_path / "stdlibManifest.json"
-    publish_dir = tmp_path / "public" / "stdlib-js"
+    manifest_path = tmp_path / "builtinWidgetsManifest.json"
+    publish_dir = tmp_path / "public" / "builtin-widgets-js"
     await widget_compiler.compile_all()
     widget_compiler.regenerate_widget_schemas()
-    widget_compiler.generate_stdlib_manifest(manifest_path)
+    widget_compiler.generate_builtin_widgets_manifest(manifest_path)
 
-    assert widget_compiler.publish_stdlib_assets(publish_dir, manifest_path=manifest_path)
+    assert widget_compiler.publish_builtin_widgets_assets(publish_dir, manifest_path=manifest_path)
 
     assert (publish_dir / "Layout" / "Box" / "index.js").is_file()
     assert (publish_dir / "Layout" / "Box" / "style.css").is_file()
@@ -845,28 +850,28 @@ async def test_publish_stdlib_assets_copies_only_what_a_browser_fetches(
     # A stale publish dir is replaced, not merged into.
     (publish_dir / "Gone").mkdir()
     (publish_dir / "Gone" / "index.js").write_text("stale", encoding="utf-8")
-    assert widget_compiler.publish_stdlib_assets(publish_dir, manifest_path=manifest_path)
+    assert widget_compiler.publish_builtin_widgets_assets(publish_dir, manifest_path=manifest_path)
     assert not (publish_dir / "Gone").exists()
 
     assert build.is_dir()
 
 
 @pytest.mark.asyncio
-async def test_publish_stdlib_assets_fails_loudly_on_a_missing_artifact(
+async def test_publish_builtin_widgets_assets_fails_loudly_on_a_missing_artifact(
     widget_workspace, tmp_path
 ):
-    """A stdlib widget that didn't compile is a product defect — publishing a
+    """A built-in widget that didn't compile is a product defect — publishing a
     catalog with a hole in it must fail the build rather than ship it."""
     src, build = widget_workspace["src"], widget_workspace["build"]
     _write_widget(src, "Layout/Box", GOOD_WIDGET)
     await widget_compiler.compile_all()
     (build / "Layout" / "Box" / "index.js").unlink()
 
-    assert widget_compiler.publish_stdlib_assets(tmp_path / "stdlib-js") is False
+    assert widget_compiler.publish_builtin_widgets_assets(tmp_path / "builtin-widgets-js") is False
 
 
 @pytest.mark.asyncio
-async def test_publish_stdlib_assets_skips_a_widget_that_failed_to_compile(
+async def test_publish_builtin_widgets_assets_skips_a_widget_that_failed_to_compile(
     widget_workspace, tmp_path
 ):
     """An incremental build over an existing build root still holds the previous
@@ -882,19 +887,20 @@ async def test_publish_stdlib_assets_skips_a_widget_that_failed_to_compile(
     assert await widget_compiler.compile_all() is False
     assert (build / "Layout" / "Box" / "index.js").is_file()
 
-    publish_dir = tmp_path / "public" / "stdlib-js"
-    assert widget_compiler.publish_stdlib_assets(publish_dir) is False
+    publish_dir = tmp_path / "public" / "builtin-widgets-js"
+    assert widget_compiler.publish_builtin_widgets_assets(publish_dir) is False
     assert not (publish_dir / "Layout" / "Box").exists()
     # One broken widget must not block the rest of the tree.
     assert (publish_dir / "Content" / "Plain" / "index.js").is_file()
 
 
-def test_publish_stdlib_assets_refuses_a_directory_it_does_not_own(
+def test_publish_builtin_widgets_assets_refuses_a_directory_it_does_not_own(
     widget_workspace, tmp_path,
 ):
     """The publish root is emptied before it is refilled, and it arrives from a
     CLI flag. ``--publish-dir frontend/public`` — one segment short of
-    ``frontend/public/stdlib-js`` — must not delete the public asset tree."""
+    ``frontend/public/builtin-widgets-js`` — must not delete the public asset
+    tree."""
     src = widget_workspace["src"]
     _write_widget(src, "Layout/Box", GOOD_WIDGET)
     public = tmp_path / "public"
@@ -902,7 +908,7 @@ def test_publish_stdlib_assets_refuses_a_directory_it_does_not_own(
     bystander = public / "fonts" / "inter.woff2"
     bystander.write_bytes(b"font")
 
-    assert widget_compiler.publish_stdlib_assets(public) is False
+    assert widget_compiler.publish_builtin_widgets_assets(public) is False
     assert bystander.is_file(), "a mistyped publish root must not be deleted"
 
 
@@ -914,16 +920,16 @@ def test_run_once_does_not_publish_when_the_manifest_failed(
     runtime validate pages against schemas from a build that no longer exists."""
     src, build = widget_workspace["src"], widget_workspace["build"]
     _write_widget(src, "Layout/Box", GOOD_WIDGET)
-    publish_dir = tmp_path / "public" / "stdlib-js"
+    publish_dir = tmp_path / "public" / "builtin-widgets-js"
     publish_dir.mkdir(parents=True)
     previously_published = publish_dir / "manifest.json"
     previously_published.write_text("[]", encoding="utf-8")
 
     monkeypatch.setattr(
-        widget_compiler, "generate_stdlib_manifest", lambda *args, **kwargs: False
+        widget_compiler, "generate_builtin_widgets_manifest", lambda *args, **kwargs: False
     )
     code = widget_compiler._run_once(
-        src, build, tmp_path / "stdlibManifest.json", publish_dir
+        src, build, tmp_path / "builtinWidgetsManifest.json", publish_dir
     )
 
     assert code == 1

@@ -165,8 +165,8 @@ describe('inherited layout vars are reset where they are consumed', () => {
   const files = {
     'hmi.css': '../styles/hmi.css',
     'WidgetRenderer.css': './WidgetRenderer.css',
-    // The Container is a stdlib widget now — same guard, source moved.
-    'stdlib Container/style.css': '../../../widgets/Layout/Container/style.css',
+    // The Container is a built-in widget — same guard applies to its source.
+    'builtin Container/style.css': '../../../widgets/Layout/Container/style.css',
   };
 
   function varNames(css: string, re: RegExp): Set<string> {

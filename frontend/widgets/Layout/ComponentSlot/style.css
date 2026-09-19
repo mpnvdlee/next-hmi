@@ -1,7 +1,11 @@
 /* A real flex box rather than `display: contents`, so the definition can size
    the slot the way it sizes any other child (a card body with `grow: 1`, say)
-   and the supplied widget still lays out normally inside it. */
-.slot {
+   and the supplied widget still lays out normally inside it.
+   Chained with `.hmi-component` — which the root also carries — purely for
+   specificity: this sheet is injected at runtime, so its order against any
+   other widget's sheet is not guaranteed, and two classes beat one regardless
+   of order. */
+.hmi-component.hmi-slot {
   display: flex;
   flex-direction: column;
   gap: var(--hmi-space-sm);
@@ -11,7 +15,7 @@
 
 /* Editor-only. The label plus this padding is what stops the shell around an
    unfilled slot collapsing to a hairline, which is the whole reason it is drawn. */
-.empty {
+.hmi-component.hmi-slot--empty {
   align-items: center;
   justify-content: center;
   padding: var(--hmi-space-lg);
@@ -20,7 +24,7 @@
   background: var(--hmi-surface-raised);
 }
 
-.emptyLabel {
+.hmi-slot__empty-label {
   font-family: var(--hmi-type-label-font);
   font-size: var(--hmi-type-label-size);
   font-weight: var(--hmi-type-label-weight);

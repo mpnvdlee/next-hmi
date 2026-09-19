@@ -1,7 +1,7 @@
 /* Shared structural styles for the alarm surfaces — both list widgets, the
    popup and the detail dialog.
 
-   A plain global sheet, not a CSS module: the two list widgets are stdlib
+   A plain global sheet, not a CSS module: the two list widgets are built-in
    widgets, compiled outside the app bundle, so they cannot `composes:` from
    here. Modifier classes (`--quiet`, `--flush`, …) are therefore carried
    *alongside* their base class on the element rather than folded into it.

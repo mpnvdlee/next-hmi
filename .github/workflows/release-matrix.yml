@@ -36,9 +36,9 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: "22"
-      # `npm run build` compiles the built-in (stdlib) widgets first via the
-      # backend's Python widget compiler (imports tree_sitter); esbuild, its
-      # other prerequisite, arrives with `npm ci`.
+      # `npm run build` compiles the built-in widgets first via the backend's
+      # Python widget compiler (imports tree_sitter); esbuild, its other
+      # prerequisite, arrives with `npm ci`.
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
@@ -66,7 +66,7 @@ jobs:
       - run: npm run build
       # Backlog item 22: hard-fails on the per-chunk size budget, on the named
       # route budgets, and on the per-widget/tree caps over the esbuild-built
-      # dist/stdlib-js/ modules.
+      # dist/builtin-widgets-js/ modules.
       - run: npm run check:bundle-budget
       # The load-bearing rule of the two-edition split: an AGPL build attached
       # to a public release must carry no proprietary code. The ee build is

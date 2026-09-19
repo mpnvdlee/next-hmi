@@ -18,6 +18,7 @@
 # edition; see "Frontend bundle" below.
 # noqa: E501 — PyInstaller's spec format is permissive about line length.
 
+import json
 import os
 import re
 import sys
@@ -75,6 +76,38 @@ if not (frontend_dist / "index.html").is_file():
         f"No SPA bundle at {frontend_dist} — run the frontend build first "
         "(build/build-binary.sh does this for you)."
     )
+
+# The baked built-in-widgets manifest rides *inside* the bundle (vite copies
+# public/builtin-widgets-js into dist/), and a packaged runtime has no second
+# source for it: core.builtin_widgets_manifest falls back to
+# frontend/src/generated/, which no build ships. Every product widget is a
+# built-in widget, so a bundle without this file yields a binary whose
+# validator knows no widget types at all and refuses every page save —
+# silently, and only in the packaged artifact. Two ways to get there without
+# touching this spec: `npm run build:app` (which skips build:builtin-widgets),
+# and a dist/ left over from an older tree. Both are cheap to catch here and
+# expensive to diagnose in the field.
+_builtin_widgets_manifest = frontend_dist / "builtin-widgets-js" / "manifest.json"
+for _half in (
+    _builtin_widgets_manifest,
+    _builtin_widgets_manifest.with_name("manifest.editor.json"),
+):
+    if not _half.is_file():
+        raise SystemExit(
+            f"No baked built-in-widgets manifest at {_half} — the bundle must come "
+            "from `npm run build` (which runs build:builtin-widgets first), not "
+            "`npm run build:app`."
+        )
+try:
+    _builtin_widgets_rows = json.loads(_builtin_widgets_manifest.read_text(encoding="utf-8"))
+except ValueError as err:
+    raise SystemExit(f"{_builtin_widgets_manifest} is not valid JSON: {err}") from err
+if not isinstance(_builtin_widgets_rows, list) or not _builtin_widgets_rows:
+    raise SystemExit(
+        f"{_builtin_widgets_manifest} lists no widgets — the built-in-widgets compile "
+        "produced an empty catalog, so this binary would reject every widget on save."
+    )
+print(f"[spec] built-in-widgets catalog: {len(_builtin_widgets_rows)} widget(s)")
 
 _class_selector = re.compile(r"\.(-?[_a-zA-Z][\w-]{5,})")
 

@@ -71,6 +71,7 @@ export const SDK_NAMES = [
   'resolvePageTitle',
   'useNavigateToPage',
   'useVisiblePages',
+  'useCurrentUserGroups',
   'useActiveAlarms',
   'useAlarmSummary',
   'useAlarmText',
@@ -99,4 +100,15 @@ export const SDK_NAMES = [
   'VirtualNumpad',
   'CloseButton',
   'useWriteVariable',
+  // Composition primitives: what a widget needs to place other widgets itself
+  // rather than take the pre-rendered `children` prop. Used by built-in
+  // widgets like any other widget. (No apostrophes in this block — the parser
+  // in backend/tests/test_widget_compiler_sdk_names.py reads quotes, not
+  // comments.)
+  'renderWidget',
+  'renderSlotWidgets',
+  'useComponentSlot',
+  'useIsPreview',
+  'useActivePage',
+  'useAnchoredStyle',
 ] as const;

@@ -159,11 +159,11 @@ async def get_widget_schemas() -> dict:
     widget property writes.
 
     Read through the shared loader rather than the file, so the response carries
-    the same stdlib-overlaid ``builtin`` map the validators see. The overlay is
-    the reason there is no ``widget-schemas.json`` existence check here: stdlib
-    widgets ship with the product, so a runtime home that has never compiled
-    still has a catalog to serve. Only a manifest with nothing in either map —
-    no stdlib build, no compile — is a 404.
+    the same built-in-overlaid ``builtin`` map the validators see. The overlay
+    is the reason there is no ``widget-schemas.json`` existence check here:
+    built-in widgets ship with the product, so a runtime home that has never
+    compiled still has a catalog to serve. Only a manifest with nothing in
+    either map — no built-in-widgets build, no compile — is a 404.
     """
     manifest = load_widget_manifest()
     if not manifest.get("builtin") and not manifest.get("custom"):

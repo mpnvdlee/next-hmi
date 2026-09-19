@@ -4,7 +4,7 @@ import AddButton from '@config/components/ui/AddButton';
 import type { ImageIndicator } from '@shared/types/config';
 import { slugId } from '@shared/utils/id';
 import { resolveImageSrc } from '@shared/utils/imageAsset';
-import { clamp01 } from '@hmi/components/ImageContainer/positions';
+import { clamp01 } from '@shared/utils/childPositions';
 import ModalShell, { ModalCloseButton } from '@config/components/ui/ModalShell';
 import '../markerEditor.css';
 import './style.css';

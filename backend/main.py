@@ -246,7 +246,7 @@ register_exception_handlers(app)
 
 
 # NOTE: every top-level route lives under one of /api/, /ws, /mcp, or a
-# /widgets, /widget-js, /stdlib-js, /external-libraries, /assets, /_app static mount.
+# /widgets, /widget-js, /builtin-widgets-js, /external-libraries, /assets, /_app static mount.
 # When adding a new top-level route or mount outside those prefixes, also
 # add its first path segment to ``_SPA_EXCLUDED_SEGMENTS`` below — otherwise
 # the SPA catch-all will swallow it and return index.html for a typo'd URL.
@@ -286,25 +286,29 @@ _widget_build_dir = WIDGET_BUILD_DIR
 _widget_build_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/widget-js", StaticFiles(directory=str(_widget_build_dir), follow_symlink=False), name="widget-js")
 
-# Product stdlib widgets: compiled at build time and shipped with the frontend,
-# unlike /widget-js which is project content compiled on load. Served here rather
-# than from Vite's public/ dir because Vite appends `?import` to every dynamic
-# import (`__vite__injectQuery`, which `@vite-ignore` does not suppress) and then
-# 500s on a path it owns itself. Behind the same proxy hop /widget-js already
-# takes, a StaticFiles mount simply ignores the query.
-_stdlib_dist_env = os.environ.get("NEXTHMI_FRONTEND_DIST")
-_stdlib_js_dir = (
-    Path(_stdlib_dist_env).resolve() / "stdlib-js"
-    if _stdlib_dist_env
-    else repo_root() / "frontend" / "public" / "stdlib-js"
+# Product built-in widgets: compiled at build time and shipped with the
+# frontend, unlike /widget-js which is project content compiled on load. Served
+# here rather than from Vite's public/ dir because Vite appends `?import` to
+# every dynamic import (`__vite__injectQuery`, which `@vite-ignore` does not
+# suppress) and then 500s on a path it owns itself. Behind the same proxy hop
+# /widget-js already takes, a StaticFiles mount simply ignores the query.
+_builtin_widgets_dist_env = os.environ.get("NEXTHMI_FRONTEND_DIST")
+_builtin_widgets_js_dir = (
+    Path(_builtin_widgets_dist_env).resolve() / "builtin-widgets-js"
+    if _builtin_widgets_dist_env
+    else repo_root() / "frontend" / "public" / "builtin-widgets-js"
 )
-# Created, not probed: `npm run dev` runs `build:stdlib` while this module is
-# already importing, so a mount guarded on the directory existing loses the race
-# on a fresh clone and every stdlib module 404s until the backend is restarted.
-# An empty directory 404s per file instead, and starts serving the moment
-# esbuild fills it.
-_stdlib_js_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/stdlib-js", StaticFiles(directory=str(_stdlib_js_dir), follow_symlink=False), name="stdlib-js")
+# Created, not probed: `npm run dev` runs `build:builtin-widgets` while this
+# module is already importing, so a mount guarded on the directory existing
+# loses the race on a fresh clone and every built-in module 404s until the
+# backend is restarted. An empty directory 404s per file instead, and starts
+# serving the moment esbuild fills it.
+_builtin_widgets_js_dir.mkdir(parents=True, exist_ok=True)
+app.mount(
+    "/builtin-widgets-js",
+    StaticFiles(directory=str(_builtin_widgets_js_dir), follow_symlink=False),
+    name="builtin-widgets-js",
+)
 
 _external_libraries_dir = active_external_libraries_dir()
 _external_libraries_dir.mkdir(parents=True, exist_ok=True)
@@ -432,7 +436,7 @@ if _frontend_dist_env:
         "_app",
         "widgets",
         "widget-js",
-        "stdlib-js",
+        "builtin-widgets-js",
         "external-libraries",
         "assets",
         "docs",

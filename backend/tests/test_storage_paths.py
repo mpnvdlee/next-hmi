@@ -59,9 +59,9 @@ def test_switching_live_project_changes_resolved_paths(monkeypatch, tmp_path: Pa
 def test_repo_root_points_at_the_checkout_root() -> None:
     """The single place the ``backend/`` → repo-root depth is written down.
 
-    Its readers — the ``/stdlib-js`` mount, the baked stdlib manifest, the
-    built-in widget registry — all fail silently on a wrong depth (absent mount,
-    empty catalog), so the depth is asserted here instead."""
+    Its readers — the ``/builtin-widgets-js`` mount, the baked built-in-widgets
+    manifest, the built-in widget registry — all fail silently on a wrong depth
+    (absent mount, empty catalog), so the depth is asserted here instead."""
     root = storage.repo_root()
     assert (root / "backend" / "core" / "storage.py").is_file()
     assert (root / "frontend" / "package.json").is_file()

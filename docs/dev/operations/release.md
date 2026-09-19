@@ -107,6 +107,13 @@ xattr -dr com.apple.quarantine /tmp/nx/nexthmi-macos-arm64/
 Verify the banner shows the expected version, the UI loads at
 http://127.0.0.1:8000, and editing a custom widget hot-reloads.
 
+Then **save a page from the editor**. Page validation resolves every widget
+type through the baked built-in-widgets manifest, which travels inside the SPA
+bundle — so a bundle assembled without it produces a binary that renders fine and
+rejects every save. `build/nexthmi.spec` refuses such a bundle outright, but
+one save is the cheap end-to-end confirmation, and it is the one check a
+checkout can never fail.
+
 ### Windows (x64)
 
 In a PowerShell session on a Windows host, with the 3.12 venv activated
@@ -119,7 +126,8 @@ and `pyinstaller` installed:
 Output: `dist\nexthmi-windows-x64-<version>.zip`.
 
 Smoke-test on a clean unzip: confirm the SmartScreen workaround, the
-banner, the UI in Edge, and a custom-widget edit cycle.
+banner, the UI in Edge, a custom-widget edit cycle, and a page save (same
+reason as above).
 
 ### macOS Intel (not in MVP)
 

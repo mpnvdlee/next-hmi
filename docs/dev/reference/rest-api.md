@@ -389,7 +389,7 @@ A child of a `$component:` node inside `children` may carry a `slot` string nami
   `description`, `icon` and `exportedProperties` are optional. A custom entry
   whose exports could not be reduced to literals carries `schemaError` (the
   extractor's message) and an empty `schema` instead; the rest of the manifest
-  is written normally. The shipped stdlib widgets are overlaid onto `builtin`,
+  is written normally. The shipped built-in widgets are overlaid onto `builtin`,
   so a runtime home that has never compiled still answers with them; `404` means
   both maps are empty — nothing built at all.
   Consumers must accept unknown top-level keys for forward compatibility.

@@ -1,15 +1,14 @@
 """Widget-schema manifest extractor for the backend widget compiler.
 
-Parses TSX source via tree-sitter and folds the canonical catalog metadata and
-schema of built-in and custom widgets into a single manifest.
+Parses a widget's TSX source via tree-sitter and folds its canonical catalog
+metadata and schema into a single manifest. Every widget goes through the same
+path — a project's custom widgets and the product's built-in widgets alike —
+because both are authored against the same SDK contract.
 
 Strict mode: any non-literal expression at an allow-listed field aborts with
 ``ExtractionError`` naming the file and (when available) the line. A
 silently-incomplete manifest would cause validators to reject valid widget
 data.
-
-The single TSX grammar (``language_tsx``) handles both the built-in
-``widgetRegistry.tsx`` and custom-widget ``index.tsx`` files.
 """
 from __future__ import annotations
 
@@ -23,7 +22,6 @@ _TSX = tree_sitter.Language(tsts.language_tsx())
 _PARSER = tree_sitter.Parser(_TSX)
 
 SCHEMA_VERSION = 2
-_REGISTRY_FIELDS = ("name", "category", "description", "icon", "schema")
 _CUSTOM_EXPORTS = (
     "displayName",
     "hostsChildren",
@@ -344,80 +342,6 @@ def _find_top_level_export(
     return None
 
 
-def _extract_registry(source: str, file: str) -> dict[str, dict[str, Any]]:
-    tree = _PARSER.parse(source.encode("utf-8"))
-    root = tree.root_node
-    consts = _collect_consts(root, file)
-
-    decl = _find_top_level_export(root, "widgetRegistry")
-    if decl is None:
-        raise ExtractionError("could not find 'widgetRegistry' declaration", file)
-
-    init = decl.child_by_field_name("value")
-    if init is None:
-        raise ExtractionError(
-            "'widgetRegistry' has no initializer", file, _node_line(decl)
-        )
-
-    if init.type == "as_expression" or init.type == "satisfies_expression":
-        init = _named(init)[0]
-
-    if init.type != "object":
-        raise ExtractionError(
-            "'widgetRegistry' must be an object literal", file, _node_line(decl)
-        )
-
-    builtin: dict[str, dict[str, Any]] = {}
-    for prop in _named(init):
-        if prop.type == "comment":
-            continue
-        if prop.type != "pair":
-            raise ExtractionError(
-                "unexpected non-assignment in widgetRegistry", file, _node_line(prop)
-            )
-        key_node = prop.child_by_field_name("key")
-        val_node = prop.child_by_field_name("value")
-        if key_node is None or val_node is None:
-            continue
-        widget_type = _property_key(key_node, file)
-        entry_init = val_node
-        if entry_init.type == "as_expression" or entry_init.type == "satisfies_expression":
-            entry_init = _named(entry_init)[0]
-        if entry_init.type != "object":
-            raise ExtractionError(
-                f"entry for '{widget_type}' must be an object literal",
-                file,
-                _node_line(prop),
-            )
-        entry: dict[str, Any] = {}
-        for inner in _named(entry_init):
-            if inner.type == "comment":
-                continue
-            if inner.type != "pair":
-                continue
-            inner_key = inner.child_by_field_name("key")
-            inner_val = inner.child_by_field_name("value")
-            if inner_key is None or inner_val is None:
-                continue
-            try:
-                field_name = _property_key(inner_key, file)
-            except ExtractionError:
-                continue
-            if field_name not in _REGISTRY_FIELDS:
-                continue
-            try:
-                entry[field_name] = _literal_value(inner_val, file, consts)
-            except ExtractionError as err:
-                # Re-raise with context about which field tripped it.
-                raise ExtractionError(
-                    f"{err.message} (in '{widget_type}.{field_name}')",
-                    file,
-                    err.line if err.line is not None else _node_line(inner),
-                ) from err
-        builtin[widget_type] = entry
-    return builtin
-
-
 def _extract_custom_widget(source: str, file: str) -> dict[str, Any]:
     tree = _PARSER.parse(source.encode("utf-8"))
     root = tree.root_node
@@ -502,19 +426,19 @@ def _validate_catalog_entry(entry: dict[str, Any], file: str, key: str) -> None:
 
 def extract_schemas(
     *,
-    registry_source: str,
-    registry_file: str = "widgetRegistry.tsx",
     custom_widget_sources: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
-    """Build the widget-schema manifest from a registry source string and a
-    list of ``{"key", "file", "source"}`` dicts for custom widgets.
+    """Build the widget-schema manifest from a list of
+    ``{"key", "file", "source"}`` dicts, one per custom widget.
 
-    Manifest v2 uses the same metadata contract as the frontend registry:
-    ``name``, ``category``, optional ``description``/``icon``, and ``schema``.
+    Manifest v2 metadata contract: ``name``, ``category``, optional
+    ``description`` / ``icon``, and ``schema``.
+
+    ``builtin`` is always empty. Every product widget ships as a baked
+    built-in-widgets manifest read by ``core.builtin_widgets_manifest`` and
+    overlaid there, so this compile has no built-in source to read. The key
+    stays for the readers that merge onto it.
     """
-    builtin = _extract_registry(registry_source, registry_file)
-    for key, entry in builtin.items():
-        _validate_catalog_entry(entry, registry_file, key)
     custom: dict[str, dict[str, Any]] = {}
     for source_entry in custom_widget_sources or []:
         key = source_entry["key"]
@@ -545,4 +469,4 @@ def extract_schemas(
                 "schemaError": str(err),
             }
         custom[key] = catalog_entry
-    return {"version": SCHEMA_VERSION, "builtin": builtin, "custom": custom}
+    return {"version": SCHEMA_VERSION, "builtin": {}, "custom": custom}

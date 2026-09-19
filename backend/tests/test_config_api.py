@@ -39,10 +39,10 @@ def tmp_dirs(live_project_root: Path, monkeypatch, tmp_path: Path):
     )
     monkeypatch.setattr(structure, "WIDGET_SCHEMAS_PATH", manifest_path)
     monkeypatch.setattr(structure, "_manifest_cache", None)
-    # The catalog above is the whole point of these tests, and the real stdlib is
-    # merged over it — a shipped widget sharing a fixture name would silently
-    # replace the schema under test.
-    monkeypatch.setattr(structure, "stdlib_catalog", lambda: ((0, 0), {}))
+    # The catalog above is the whole point of these tests, and the real built-in
+    # catalog is merged over it — a shipped widget sharing a fixture name would
+    # silently replace the schema under test.
+    monkeypatch.setattr(structure, "builtin_widgets_catalog", lambda: ((0, 0), {}))
     return storage.active_project_root(), storage.active_pages_dir()
 
 
