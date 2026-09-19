@@ -242,6 +242,28 @@ def test_component_metadata_migration_rejects_file_swapped_to_symlink_after_scan
     assert "components/legacy.json#/: component file changed after scan" in caplog.text
 
 
+def _require_symlinks(tmp_path: Path) -> None:
+    """Probe symlink support up front.
+
+    The mutation hooks below run deep inside request handling (off the
+    test's own thread, via TestClient's anyio portal); pytest.skip() called
+    from there doesn't unwind cleanly — it corrupts the portal instead of
+    skipping the test. Probe here, in the test's own frame, instead.
+    """
+    # A file symlink (not a directory one) so cleanup is a plain unlink() —
+    # Windows directory symlinks need rmdir() instead, and the privilege
+    # this probes for gates both kinds identically.
+    target = tmp_path / ".symlink-probe-target"
+    target.touch()
+    probe = tmp_path / ".symlink-probe"
+    try:
+        probe.symlink_to(target)
+    except OSError as exc:
+        pytest.skip(f"symlinks unavailable: {exc}")
+    probe.unlink()
+    target.unlink()
+
+
 @pytest.mark.parametrize(
     "operation_family",
     ["create", "update", "delete", "create_folder", "delete_folder", "migrate"],
@@ -252,6 +274,7 @@ def test_component_mutations_stay_bound_when_root_is_swapped_after_validation(
     monkeypatch,
     operation_family: str,
 ):
+    _require_symlinks(tmp_path)
     components = storage.active_components_dir()
     component_id: str | None = None
     if operation_family in {"update", "delete"}:
@@ -277,10 +300,9 @@ def test_component_mutations_stay_bound_when_root_is_swapped_after_validation(
         if operation != operation_family or swapped:
             return
         components.rename(bound)
-        try:
-            components.symlink_to(outside, target_is_directory=True)
-        except OSError as exc:
-            pytest.skip(f"directory symlinks unavailable: {exc}")
+        # Symlink support was probed (and skipped on if unavailable) in the
+        # test's own frame above — this call is expected to succeed.
+        components.symlink_to(outside, target_is_directory=True)
         swapped = True
 
     monkeypatch.setattr(component_storage_module, "BOUND_MUTATION_HOOK", swap_root)
@@ -322,6 +344,7 @@ def test_component_mutations_stay_bound_when_root_is_swapped_after_validation(
 def test_component_create_stays_bound_when_group_is_swapped_after_validation(
     widget_client, tmp_path: Path, monkeypatch,
 ):
+    _require_symlinks(tmp_path)
     widget_client.post("/api/components/folders", json={"name": "Group"})
     group = storage.active_components_dir() / "Group"
     bound = storage.active_components_dir() / "Group-bound"
@@ -334,10 +357,9 @@ def test_component_create_stays_bound_when_group_is_swapped_after_validation(
         if operation != "create" or group.is_symlink():
             return
         group.rename(bound)
-        try:
-            group.symlink_to(outside, target_is_directory=True)
-        except OSError as exc:
-            pytest.skip(f"directory symlinks unavailable: {exc}")
+        # Symlink support was probed (and skipped on if unavailable) in the
+        # test's own frame above — this call is expected to succeed.
+        group.symlink_to(outside, target_is_directory=True)
 
     monkeypatch.setattr(component_storage_module, "BOUND_MUTATION_HOOK", swap_group)
 

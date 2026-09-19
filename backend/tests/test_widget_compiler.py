@@ -7,6 +7,7 @@ skip — local dev should `npm install` once in frontend/ to satisfy this.
 """
 import json
 import shutil
+import sys
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import core.storage as storage
@@ -348,7 +349,7 @@ def test_find_entries_skips_dotfiles_and_underscored_dirs(widget_workspace):
 
     entries = widget_compiler.find_entries()
 
-    rel = sorted(str(e.relative_to(src)) for e in entries)
+    rel = sorted(e.relative_to(src).as_posix() for e in entries)
     assert rel == ["Inputs/Foo/index.tsx"]
 
 
@@ -397,9 +398,17 @@ def test_canonical_widget_key_rejects_path_and_url_aliases(widget_workspace, key
 def test_discovery_skips_unsafe_or_ambiguous_widget_segments(widget_workspace):
     src = widget_workspace["src"]
     _write_widget(src, "Inputs/Good_Name-2", GOOD_WIDGET)
-    _write_widget(src, r"Inputs\Backslash", GOOD_WIDGET)
+    if sys.platform != "win32":
+        # A literal backslash in one path segment only stays one segment on
+        # POSIX; pathlib's Windows flavour treats \ as a separator too, so
+        # this would silently create Inputs/Backslash instead of the single
+        # ambiguous segment the test means to exercise.
+        _write_widget(src, r"Inputs\Backslash", GOOD_WIDGET)
     _write_widget(src, "Inputs/Encoded%2FName", GOOD_WIDGET)
-    _write_widget(src, "Inputs/Query?Name", GOOD_WIDGET)
+    if sys.platform != "win32":
+        # '?' is a reserved character in Windows filenames — mkdir fails
+        # outright, so there's no way to construct this fixture there.
+        _write_widget(src, "Inputs/Query?Name", GOOD_WIDGET)
     _write_widget(src, "Inputs/Fullwidth／Name", GOOD_WIDGET)  # noqa: RUF001 -- fullwidth-slash confusable, deliberately testing rejection of the lookalike as a path separator
     _write_widget(src, "Space Group/Name", GOOD_WIDGET)
 

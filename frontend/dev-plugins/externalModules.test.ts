@@ -284,9 +284,18 @@ describe('resolveRuntimeHome', () => {
   });
 
   test('uses the in-repo dev home when one exists and nothing outranks it', () => {
-    const saved = { data: process.env.NEXTHMI_DATA_DIR, xdg: process.env.XDG_CONFIG_HOME };
+    // The bootstrap file outranks the dev home, and `bootstrapConfigPath()`
+    // reads APPDATA on Windows but XDG_CONFIG_HOME elsewhere. Both have to be
+    // pointed somewhere empty, or a machine where a packaged build has ever run
+    // resolves the developer's real runtime home and fails this test.
+    const saved = {
+      data: process.env.NEXTHMI_DATA_DIR,
+      xdg: process.env.XDG_CONFIG_HOME,
+      appData: process.env.APPDATA,
+    };
     delete process.env.NEXTHMI_DATA_DIR;
     process.env.XDG_CONFIG_HOME = path.join(tmpRoot, 'xdg');
+    process.env.APPDATA = path.join(tmpRoot, 'appdata');
     fs.mkdirSync(path.join(tmpRoot, '.dev-runtime-home'), { recursive: true });
     try {
       expect(resolveRuntimeHome(tmpRoot)).toBe(path.join(tmpRoot, '.dev-runtime-home'));
@@ -295,6 +304,8 @@ describe('resolveRuntimeHome', () => {
       else process.env.NEXTHMI_DATA_DIR = saved.data;
       if (saved.xdg === undefined) delete process.env.XDG_CONFIG_HOME;
       else process.env.XDG_CONFIG_HOME = saved.xdg;
+      if (saved.appData === undefined) delete process.env.APPDATA;
+      else process.env.APPDATA = saved.appData;
     }
   });
 });

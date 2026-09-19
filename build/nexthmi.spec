@@ -325,6 +325,14 @@ a = Analysis(  # noqa: F821
         "pytest",
         "test",
         "tests",
+        # A dependency's hook declares tzdata as a hidden import, so every build
+        # warns that it is missing. Nothing here resolves IANA zone names (no
+        # zoneinfo, no pytz anywhere in backend/), and tzdata is not installed,
+        # so it is already absent from the artifact — naming it here only stops
+        # PyInstaller looking, and stops the warning reading like a real gap.
+        # Revisit if anything ever calls ZoneInfo(): Windows ships no system tz
+        # database, so that would need tzdata as a real runtime dependency.
+        "tzdata",
         *edition_excludes,
     ],
     noarchive=False,
@@ -353,6 +361,17 @@ a.pure = [entry for entry in a.pure if not _is_lgpl(entry[0])]
 a.binaries = [entry for entry in a.binaries if not _is_lgpl(entry[0])]
 a.datas = [entry for entry in a.datas if not _is_lgpl(entry[0])]
 
+# --- Application icon --------------------------------------------------------
+# Windows stamps the .ico into the executable's resource section, so this is
+# what Explorer, the taskbar and Alt-Tab show. PyInstaller only consumes an icon
+# on macOS when it emits a .app bundle, which this console build deliberately
+# does not: a .app swallows stdout, and the startup banner naming the runtime
+# home and the URL is the one thing an operator needs to see. The .icns and the
+# PNG set ship loose in the output folder instead (build-binary.sh), where the
+# .icns is ready for a future bundle and the PNGs back a Linux .desktop entry.
+# Regenerate all of them with build/icons/render-icons.py.
+_exe_icon = str(repo_root / "build" / "icons" / "nexthmi.ico") if sys.platform == "win32" else None
+
 pyz = PYZ(a.pure)  # noqa: F821
 
 exe = EXE(  # noqa: F821
@@ -371,6 +390,7 @@ exe = EXE(  # noqa: F821
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=_exe_icon,
 )
 
 # Distinct output folders per edition. One spec produces two artifacts under two

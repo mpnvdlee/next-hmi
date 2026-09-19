@@ -16,6 +16,9 @@ build/*
 !build/publish-docs.py
 !build/docs-assets/
 !build/docs-assets/*
+!build/icons/
+!build/icons/*
+!build/nexthmi.desktop.in
 !build/lgpl-OFFER.txt
 !build/lgpl/
 !build/lgpl/*

@@ -373,7 +373,10 @@ def test_projects_root_symlink_is_never_followed(monkeypatch, tmp_path: Path):
     outside.mkdir()
     (outside / "marker.txt").write_text("keep", encoding="utf-8")
     root.rmdir()
-    root.symlink_to(outside, target_is_directory=True)
+    try:
+        root.symlink_to(outside, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"directory symlinks unavailable: {exc}")
     with TestClient(_app()) as client:
         response = _receive(client, _pair(client), archive, transferId="tx-root-link")
     assert response.status_code == 422
@@ -407,7 +410,10 @@ def test_existing_target_symlink_is_preserved(monkeypatch, tmp_path: Path):
     outside.mkdir()
     (outside / "marker.txt").write_text("keep", encoding="utf-8")
     target = root / "source-copy"
-    target.symlink_to(outside, target_is_directory=True)
+    try:
+        target.symlink_to(outside, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"directory symlinks unavailable: {exc}")
     with TestClient(_app()) as client:
         response = _receive(
             client,

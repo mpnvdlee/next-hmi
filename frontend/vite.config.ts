@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import fs from 'fs';
-import { buildImportMap, resolveLiveProjectDir } from './dev-plugins/externalModules';
+import { buildImportMap, resolveLiveProjectDir } from './dev-plugins/externalModules.ts';
 
 /// <reference types="vitest/config" />
 
@@ -13,9 +13,9 @@ import { buildImportMap, resolveLiveProjectDir } from './dev-plugins/externalMod
 // repository, cloned into a gitignored `enterprise/` beside this checkout.
 // Nothing is overwritten: the build selects one of the two.
 function enterpriseRegistry(): string {
-  const oss = path.resolve(__dirname, 'src/enterprise/registry.ts');
+  const oss = path.resolve(import.meta.dirname, 'src/enterprise/registry.ts');
   if ((process.env.NEXTHMI_EDITION ?? 'oss') !== 'ee') return oss;
-  const ee = path.resolve(__dirname, '../enterprise/frontend/registry.ts');
+  const ee = path.resolve(import.meta.dirname, '../enterprise/frontend/registry.ts');
   if (!fs.existsSync(ee)) {
     throw new Error(
       `NEXTHMI_EDITION=ee but ${ee} is missing — clone the enterprise repository into enterprise/.`,
@@ -38,7 +38,7 @@ function enterpriseRegistry(): string {
 // live-project resolver live in ./dev-plugins/externalModules.ts so they can
 // be unit-tested.
 
-const REPO_ROOT = path.resolve(__dirname, '..');
+const REPO_ROOT = path.resolve(import.meta.dirname, '..');
 // Resolved from the runtime-home manifest, not assumed to be
 // `<repo>/project-testbench/` — see resolveLiveProjectDir.
 const LIVE_PROJECT_DIR = resolveLiveProjectDir(REPO_ROOT);
@@ -296,9 +296,9 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@hmi': path.resolve(__dirname, 'src/hmi'),
-      '@config': path.resolve(__dirname, 'src/config'),
-      '@shared': path.resolve(__dirname, 'src/shared'),
+      '@hmi': path.resolve(import.meta.dirname, 'src/hmi'),
+      '@config': path.resolve(import.meta.dirname, 'src/config'),
+      '@shared': path.resolve(import.meta.dirname, 'src/shared'),
       '@enterprise': enterpriseRegistry(),
     },
   },

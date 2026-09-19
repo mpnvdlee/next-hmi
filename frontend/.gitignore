@@ -12,8 +12,6 @@ dist
 dist-ssr
 *.local
 *.tsbuildinfo
-vite.config.js
-vite.config.d.ts
 .ruff_cache
 
 # Playwright (backlog item 37)

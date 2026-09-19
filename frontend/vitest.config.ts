@@ -12,12 +12,15 @@ export default defineConfig({
       // URL to the widget's TSX source. Aliasing here rather than exporting a
       // setter keeps the test seam out of the shipped bundle: nothing in src/
       // can swap the loader, and no test has to remember to install one.
-      '@shared/utils/widgetModuleLoader': path.resolve(__dirname, 'widgets/widgetModuleLoader.ts'),
-      '@hmi': path.resolve(__dirname, 'src/hmi'),
-      '@config': path.resolve(__dirname, 'src/config'),
-      '@shared': path.resolve(__dirname, 'src/shared'),
+      '@shared/utils/widgetModuleLoader': path.resolve(
+        import.meta.dirname,
+        'widgets/widgetModuleLoader.ts',
+      ),
+      '@hmi': path.resolve(import.meta.dirname, 'src/hmi'),
+      '@config': path.resolve(import.meta.dirname, 'src/config'),
+      '@shared': path.resolve(import.meta.dirname, 'src/shared'),
       // Tests always run against the open-source stub — see vite.config.ts.
-      '@enterprise': path.resolve(__dirname, 'src/enterprise/registry.ts'),
+      '@enterprise': path.resolve(import.meta.dirname, 'src/enterprise/registry.ts'),
     },
   },
   test: {
@@ -25,5 +28,8 @@ export default defineConfig({
     setupFiles: './src/test-setup.ts',
     globals: true,
     exclude: ['**/node_modules/**', '**/dist/**'],
+    // 'default' keeps the normal output; the guard adds nothing on a healthy
+    // run and fails the run when files go missing (see the script's header).
+    reporters: ['default', './scripts/test-file-count-guard.mjs'],
   },
 });

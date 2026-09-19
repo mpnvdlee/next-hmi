@@ -1,9 +1,19 @@
 {
+  /* Type checking for the build tooling: the Vite config and the dev-server
+   * plugins beside it. Nothing consumes JS from this project — it exists only
+   * to be checked — so it is a standalone `noEmit` project rather than a
+   * composite one referenced by tsconfig.json. Composite forces emit, and with
+   * no outDir `tsc -b` wrote transpiled .js/.d.ts next to every source here;
+   * the stray dev-plugins/externalModules.test.js that vitest then collected
+   * alongside its own .ts is what that cost. Run by `npm run build`, the same
+   * way tsconfig.builtin-widgets.json is. */
   "compilerOptions": {
-    "composite": true,
+    "noEmit": true,
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "allowSyntheticDefaultImports": true,
     "lib": ["ES2020"],
     "types": ["node", "vitest/globals"]

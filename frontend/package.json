@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "npm run build:builtin-widgets && vite",
     "build": "npm run build:builtin-widgets && npm run build:app",
-    "build:app": "tsc && tsc -p tsconfig.builtin-widgets.json && vite build",
+    "build:app": "tsc && tsc -p tsconfig.node.json && tsc -p tsconfig.builtin-widgets.json && vite build",
     "build:builtin-widgets": "node scripts/build-builtin-widgets.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "format": "prettier --write \"{src,widgets,scripts,dev-plugins}/**/*.{ts,tsx,mjs,css,json}\" \"*.{ts,mjs}\" custom-widgets-sdk.d.ts",

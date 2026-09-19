@@ -22,6 +22,7 @@ import io
 import json
 import logging
 import os
+import sys
 import tempfile
 import threading
 import time
@@ -114,21 +115,34 @@ BUILD_STATUS_PATH = WIDGET_BUILD_DIR / ".build-status.json"
 
 # ── Source-tree-anchored paths (frozen at import) ─────────────────────────────
 # Derived from this file's own location, so it can only change by moving this
-# file — frozen at import like the runtime-home constants above.
+# file — frozen at import like the runtime-home constants above. A PyInstaller
+# build seals this module inside the archive, where that walk lands above the
+# extracted tree, so the bundle root stands in for the checkout there: the spec
+# ships the frontend files the backend reads at their checkout-relative paths
+# under ``sys._MEIPASS``, same contract as ``models/theme.py``.
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
+def _resolve_repo_root() -> Path:
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        return Path(meipass).resolve()
+    return Path(__file__).resolve().parent.parent.parent
+
+
+_REPO_ROOT = _resolve_repo_root()
 
 
 def repo_root() -> Path:
     """The checkout / install root: the folder that holds ``backend/``.
 
-    Every reader of the frontend source tree (the ``/stdlib-js`` mount, the
-    baked stdlib manifest, the built-in widget registry) resolves through this
-    so the ``parents[]`` depth is one fact in one place. Those readers degrade
-    silently when the path is wrong — an empty catalog, an absent mount — so
+    Every reader of the frontend source tree (the ``/builtin-widgets-js`` mount,
+    the baked built-in-widgets manifest, the built-in widget registry) resolves
+    through this so the ``parents[]`` depth is one fact in one place. Those readers degrade
+    silently when the path is wrong — an empty catalog, an absent mount, a
+    built-in widget the validator then rejects as an unknown type — so
     hand-rolling the derivation per call site is how it breaks. A packaged
-    runtime has no ``frontend/`` under this root at all; those callers check
-    ``NEXTHMI_FRONTEND_DIST`` first.
+    runtime holds only the frontend files its build ships under this root;
+    callers whose file isn't one of them check ``NEXTHMI_FRONTEND_DIST`` first.
     """
     return _REPO_ROOT
 

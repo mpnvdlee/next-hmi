@@ -36,6 +36,5 @@
    * declarations shadow @types/react's for every file in the same program. That
    * is what tsconfig.builtin-widgets.json is for; see the note on its
    * `include`. */
-  "include": ["src", "widgets/testSdk.ts", "widgets/widgetModuleLoader.ts"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src", "widgets/testSdk.ts", "widgets/widgetModuleLoader.ts"]
 }
