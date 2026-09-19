@@ -16,6 +16,7 @@ from api.projects_api import router as projects_router
 from api.recipe_api import router as recipe_router
 from api.system_api import router as system_router
 from api.theme_api import router as theme_router
+from api.thumbnail_api import instance_router as thumbnail_router
 from api.users_api import router as users_router
 from api.widgets_api import router as widgets_router
 from core import project_bootstrap
@@ -189,15 +190,15 @@ async def lifespan(app: FastAPI):
     if migration.files_changed or migration.diagnostics:
         # A step that rewrites project files has to say so somewhere the author
         # can find it: the diagnostics name every value it could not express and
-        # every one whose meaning it changed, and the backups it leaves behind
-        # are the only way back.
+        # every one whose meaning it changed, and the backup it leaves behind is
+        # the only way back.
         log = logging.getLogger("nexthmi.migration")
         log.warning(
-            "Project migrated %d -> %d: %d file(s) rewritten. Pre-migration backups: %s",
+            "Project migrated %d -> %d: %d file(s) rewritten. Pre-migration backup: %s",
             migration.from_version,
             migration.to_version,
             len(migration.files_changed),
-            ", ".join(str(path) for path in migration.backups.values()) or "none",
+            migration.backup or "none",
         )
         for note in migration.diagnostics:
             log.warning("Migration note: %s", note)
@@ -275,11 +276,19 @@ app.include_router(users_router)
 app.include_router(widgets_router)
 app.include_router(theme_router)
 app.include_router(component_router)
-app.include_router(projects_router)
+# Projects are the manager's business: a running instance has no reason to list,
+# create, rename, delete or export the projects beside it, and browse-dir walks
+# the whole host filesystem. Instances bind loopback with no auth of their own,
+# so anything on the box could reach it directly — not serving it is stronger
+# than gating it at the proxy. A standalone ``uvicorn main:app`` has no manager
+# to ask, so there it stays mounted.
+if not _INSTANCE_MODE:
+    app.include_router(projects_router)
 # Loopback-only reload hook the manager calls after a workspace MCP write.
 app.include_router(internal_router)
 app.include_router(historian_router)
 app.include_router(http_source_router)
+app.include_router(thumbnail_router)
 
 # Static mounts for live-project content. ``follow_symlink=False`` prevents a
 # symlink in user-controlled content (e.g. ``ln -s / mylib`` inside

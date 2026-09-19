@@ -75,11 +75,12 @@ that path from a source checkout too — read the startup banner's
 
 The runtime home path is read-only from the UI — to move it, edit the env
 var or the bootstrap file and restart. `defaultProjectsRoot` (where new,
-imported and pulled projects land by default) is seeded to
-`<runtime_home>/Projects` on first run and is likewise not editable from the
-UI; every dialog that creates a project lets you type or browse to a
-different folder, and a permanent change means editing `projects.json` while
-the manager is stopped.
+imported and pulled projects land by default) is unset out of the box and
+resolves to your **Documents** folder (`%USERPROFILE%\Documents` on Windows);
+nothing is created for it. It is likewise not editable from the UI; every
+dialog that creates a project lets you type or browse to a different folder,
+and a permanent change means editing `projects.json` while the manager is
+stopped.
 
 ### Project folder
 
@@ -540,13 +541,19 @@ so it's always present after the platform default kicks in.
 ### Changing the default projects root
 
 `defaultProjectsRoot` in `projects.json` governs where new / imported /
-pulled projects land by default. It is written once, at first run, as
-`<runtime_home>/Projects`, and neither it nor the runtime home is editable
-from the UI — **Settings → Runtime home** displays the runtime home path
-read-only. Every create / import / pull dialog lets you type or browse to a
-different destination, so a one-off elsewhere needs no configuration. To
-change the default permanently, stop the manager, edit
-`defaultProjectsRoot` in `<runtime_home>/projects.json`, and relaunch.
+pulled projects land by default. Out of the box it is absent, and resolves to
+your **Documents** folder — a place that already exists, so the runtime never
+creates a folder to hold projects you may keep elsewhere. Neither it nor the
+runtime home is editable from the UI — **Settings → Runtime home** displays
+the runtime home path read-only. Every create / import / pull dialog lets you
+type or browse to a different destination, so a one-off elsewhere needs no
+configuration. To change the default permanently, stop the manager, add or
+edit `defaultProjectsRoot` in `<runtime_home>/projects.json`, and relaunch.
+
+Earlier builds wrote `<runtime_home>/Projects` into `projects.json` on first
+launch and created that folder. On upgrade, that auto-written value is removed
+so the Documents default applies; the folder and any projects registered inside
+it are left exactly where they are. A root you set yourself is never touched.
 
 ### Upgrading a binary install
 

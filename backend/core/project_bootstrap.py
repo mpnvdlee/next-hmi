@@ -26,14 +26,29 @@ from core.manifest import (
     save_manifest,
     write_project_metadata,
 )
-from core.project_migrations import PROJECT_FORMAT_VERSION
+from core.project_migrations import stamp_current_format
+from core.storage import repo_root
 from core.time_utils import iso_now
 
 logger = logging.getLogger(__name__)
 
-_REPO_ROOT = Path(__file__).parent.parent.parent
-_DEV_PROJECT = _REPO_ROOT / "project-testbench"
-_SEED_DIR_CANDIDATES = (_REPO_ROOT / "project-seed", _REPO_ROOT / "backend" / "project-seed")
+_SEED_DIRNAME = "project-seed"
+
+
+def _dev_project() -> Path:
+    return repo_root() / "project-testbench"
+
+
+def _seed_dir_candidates() -> tuple[Path, ...]:
+    """Where the bundled seed may sit, relative to the install root.
+
+    Resolved through ``repo_root()`` rather than this file's own location: a
+    frozen build seals this module inside the archive, where the walk up from
+    ``__file__`` lands *above* the extracted tree and finds no seed at all —
+    every new install would then come up with a bare default project.
+    """
+    root = repo_root()
+    return (root / _SEED_DIRNAME, root / "backend" / _SEED_DIRNAME)
 
 
 def _has_project_contents(path: Path) -> bool:
@@ -43,7 +58,7 @@ def _has_project_contents(path: Path) -> bool:
 
 def _seed_into(path: Path) -> bool:
     """Copy the bundled project-seed/ template into *path*. Returns True if a seed was found."""
-    for candidate in _SEED_DIR_CANDIDATES:
+    for candidate in _seed_dir_candidates():
         if candidate.is_dir():
             path.mkdir(parents=True, exist_ok=True)
             for entry in candidate.iterdir():
@@ -63,8 +78,9 @@ def _default_project_target(home: Path) -> tuple[Path, str]:
     working without manual setup. In binary/docker, drop a fresh
     ``Default-Project/`` next to the manifest.
     """
-    if _has_project_contents(_DEV_PROJECT):
-        return _DEV_PROJECT.resolve(), "Default"
+    dev_project = _dev_project()
+    if _has_project_contents(dev_project):
+        return dev_project.resolve(), "Default"
     return (home / "Default-Project").resolve(), "Default"
 
 
@@ -97,7 +113,7 @@ def ensure_default_project() -> ProjectEntry:
         # project-seed/ is already canonical, so stamp it here. A reused
         # pre-existing target (dev's project-testbench/ from a prior boot) is
         # deliberately left unstamped here; main.py's lifespan stamps it.
-        metadata = metadata.model_copy(update={"formatVersion": PROJECT_FORMAT_VERSION})
+        metadata = stamp_current_format(metadata)
         write_project_metadata(target, metadata)
 
     # ``ensure_project_metadata`` reuses the id already written into a target
@@ -115,7 +131,5 @@ def ensure_default_project() -> ProjectEntry:
             )
             manifest.projects.append(entry)
             logger.info("Bootstrap: registered default project '%s' (%s)", entry.name, entry.id)
-        if manifest.defaultProjectsRoot is None:
-            manifest.defaultProjectsRoot = str(home / "Projects")
         save_manifest(manifest)
     return entry

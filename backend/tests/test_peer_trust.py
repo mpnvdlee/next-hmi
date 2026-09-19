@@ -281,6 +281,7 @@ def tls_peer(tmp_path: Path, allow_loopback_peers):
     source.mkdir()
     write_project_metadata(source, ProjectMetadata(id="source-id", name="Source"))
     (source / "pages.json").write_text('{"pages": []}', encoding="utf-8")
+    (source / "users.json").write_text('{"users": []}', encoding="utf-8")
     manifest = load_manifest()
     manifest.projects.append(
         ProjectEntry(

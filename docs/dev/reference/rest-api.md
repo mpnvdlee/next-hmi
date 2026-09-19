@@ -684,19 +684,19 @@ These five routes are allow-listed by the auth gate (reachable without a session
 ### Supervisor — `/api/manager`
 
 - `GET /api/manager/running` → `{ instances: [InstanceSnapshot] }`, where `InstanceSnapshot` is `{ id, name, path, basePath, port, pid, status, startedAt, restarts, lastError }` and `status ∈ {"starting","running","stopped","crashed"}`.
-- `POST /api/manager/projects/{id}/start` → starts (or no-ops if already up) the project's child process; returns its snapshot. 202. 409 (`ConflictError`) if the project can't be started (e.g. unknown id / missing folder).
+- `POST /api/manager/projects/{id}/start` → starts (or no-ops if already up) the project's child process; returns its snapshot. Body (optional): `{ confirmUpgrade?: bool }`. 202. 409 (`ConflictError`) if the project can't be started — unknown id, missing folder, or its `formatVersion` is behind this build's baseline and `confirmUpgrade` was not set (the manager UI asks first, using the project's `needsUpgrade` from `GET /api/projects`). 409 as well, regardless of `confirmUpgrade`, if the project's `formatVersion` is newer than this build supports.
 - `POST /api/manager/projects/{id}/stop` → stops the child; returns `{ id, status: "stopped" }`. 200.
 - `GET /api/manager/projects/{id}/status` → the instance snapshot, or `{ id, status: "stopped" }` when not running.
 
 ### Project reverse proxy
 
-- `ANY /runtime/{projectId}/{path}` and `WS /runtime/{projectId}/ws` (and the `/editor/{projectId}/...` alias) — the manager streams these to the matching child instance on loopback. A pending fresh-project operator setup redirects the route root to the authenticated manager setup flow and rejects other HTTP/WS traffic until completion. Otherwise, returns `503` when the project is not running and `502` on an upstream error. `GET /runtime/{projectId}` (no trailing slash) redirects to `/runtime/{projectId}/`; likewise for `/editor/{projectId}`. These carry the same project-instance API surface documented elsewhere in this file. (The legacy `/p/{projectId}/` alias was removed — backlog R24/R51.)
+- `ANY /runtime/{projectId}/{path}` and `WS /runtime/{projectId}/ws` (and the `/editor/{projectId}/...` alias) — the manager streams these to the matching child instance on loopback. A pending fresh-project operator setup redirects the route root to the authenticated manager setup flow and rejects other HTTP/WS traffic until completion. Otherwise, returns `503` when the project is not running and `502` on an upstream error — except for a top-level document navigation (a `GET` whose `Accept` carries `text/html`), which has no child to serve it: a build that ships the frontend bundle answers that with the SPA shell for the project's own base, and the app explains the outage in place (`ProjectUnavailableOverlay`) without losing the URL; a build with no bundle to render falls back to `303` → `/projects?unavailable={id}&reason={why}`. `GET /runtime/{projectId}` (no trailing slash) redirects to `/runtime/{projectId}/`; likewise for `/editor/{projectId}`. These carry the same project-instance API surface documented elsewhere in this file. (The legacy `/p/{projectId}/` alias was removed — backlog R24/R51.)
 
 ---
 
 ## Projects API
 
-Base prefix: `/api/projects`. Manages the project list in the runtime-home manifest. Mounted on **both** apps; the manager dashboard is the primary caller (a project instance no longer offers an in-app projects view).
+Base prefix: `/api/projects`. Manages the project list in the runtime-home manifest. Mounted on the manager app, and on a standalone `uvicorn main:app` that has no manager beside it — but **not** on a manager-spawned project instance: a running project has no reason to list, rename, delete or export the projects around it, and `browse-dir` walks the whole host filesystem. An editor page that needs its own project's name reads it from the manager at the origin root (`managerApiJson`), not through its proxy base.
 
 - `GET /api/projects`
   - Each project includes `operatorSetupRequired`. It is true only for a fresh
@@ -704,9 +704,13 @@ Base prefix: `/api/projects`. Manages the project list in the runtime-home manif
   - `operatorSetupStatus` is `required`, `complete`, or `error`;
     `operatorSetupError` describes missing, unreadable, corrupt, or invalid
     credential state. Error-state projects cannot be started or proxied.
-  - Returns `{ defaultProjectId, defaultProjectsRoot, projects: [{ id, name, path, addedAt, lastOpenedAt, status, isDefault }] }`. `status` is computed (`"present"` or `"missing"`), not stored. The running set is authoritative for what's actually live — see `/api/manager/running`.
+  - Returns `{ defaultProjectId, defaultProjectsRoot, projects: [{ id, name, path, addedAt, lastOpenedAt, status, isDefault, formatVersion, needsUpgrade, unsupportedFormat, lastMigration, thumbnailUpdatedAt }] }`. `status` is computed (`"present"` or `"missing"`), not stored. The running set is authoritative for what's actually live — see `/api/manager/running`.
+  - `defaultProjectsRoot` is the **resolved** root (`core.manifest.default_projects_root`), never the raw manifest string: a `~`-relative, relative or unset setting comes back as the same absolute path `/api/projects/_runtime-home` and the peer-transfer install rule use, so a client can compare a project's `path` against it. Unset resolves to the user's Documents folder; neither endpoint creates it.
+  - `thumbnailUpdatedAt` is the stored thumbnail's mtime as an ISO 8601 string, or `null` when the project has never saved one. See `GET /api/projects/{id}/thumbnail` below.
+  - `formatVersion`/`lastMigration` are read from the project's own `config.json` (see [data-formats.md](../architecture/data-formats.md)) and are `null` when `status` is `"missing"`. `needsUpgrade` is `formatVersion < PROJECT_FORMAT_VERSION`; `unsupportedFormat` is `formatVersion > PROJECT_FORMAT_VERSION` (this build is older than the project). `lastMigration` is `{ fromVersion, toVersion, at, backups }` or `null`.
 - `POST /api/projects`
-  - Body: `{ name, path }`. Validates the destination is empty + writable, seeds from `project-seed/`, writes a fresh `project` metadata block into `config.json`, and appends to the manifest. Returns 409 when the path already carries project metadata.
+  - Body: `{ name, path, template? }`. Validates the destination is empty + writable, seeds from the chosen template, writes a fresh `project` metadata block into `config.json`, and appends to the manifest. Returns 409 when the path already carries project metadata.
+  - `template` — `"empty"` (default) seeds from `project-seed/`; `"example"` seeds the bundled NEXT BREW demo from `project-example/`. An unknown value is rejected with `422`.
 - `POST /api/projects/register`
   - Body: `{ path, name? }`. Adds an existing on-disk project folder to the manifest; the folder must already carry a `project` block in `config.json`.
   - `201` with the manifest entry. `422` when the path is not a directory or has no project metadata; `409` when the id is already in the manifest — the UI offers Locate instead.
@@ -724,12 +728,13 @@ Base prefix: `/api/projects`. Manages the project list in the runtime-home manif
   - Body: `{ path }`. Re-points a missing entry. Rejects (409) if the folder's metadata id doesn't match the manifest entry; rejects (422) if no metadata file is present.
 - `DELETE /api/projects/{id}?deleteFolder=<bool>`
   - Removes the entry. With `deleteFolder=true`, `rmtree`s the folder — but only after confirming `config.json` contains a valid `project` metadata block (defense against wrong-path wipeouts). Refuses (409) to delete a project that is in the manifest `running` set — stop it first.
+  - Also deletes the project's stored thumbnail, if any, regardless of `deleteFolder` — the screenshot lives outside the project folder.
 - `GET /api/projects/{id}/export`
   - Streams the project as a zip with `Content-Disposition: attachment; filename="<slug>.zip"`. 409 if the folder is missing on disk.
 - `POST /api/projects/import`
   - Multipart upload: `file` (zip), `destinationPath`, optional `name`. Validates destination, unpacks, adds a manifest entry. `422` on invalid zip, unsafe or symlink archive members, a reusable-component `$var` violation at any nested child/default-value source, or a malformed JSON, invalid UTF-8, unreadable, symlinked, or reparse-point component path. Component errors report `components/<file>.json#/<JSON pointer>`; file-content errors use the root pointer with a stable reason. `409` on id collision with an existing entry. The destination is cleaned up and no manifest entry is added after any validation failure.
 - `GET /api/projects/_runtime-home`
-  - Used by the create dialog to suggest the default folder.
+  - Used by the create dialog to suggest the default folder. Returns `runtimeHome` and `defaultProjectsRoot`. Read-only — the default root is the user's Documents folder, which already exists, so the suggested parent folder passes `validate-path` without anything being created.
 
 Manager-only project setup (device-manager authentication required):
 
@@ -741,6 +746,18 @@ Manager-only project setup (device-manager authentication required):
     replayed to replace a credential.
 
 > **Removed:** `POST /api/projects/{id}/make-live`. `make-live` is replaced by the supervisor's start/stop. The manager transfer API below replaces single-live peer push/pull.
+
+---
+
+## Thumbnail API
+
+- `POST /api/thumbnail`
+  - Body: a PNG, at most 2 MB. Served by the project instance only.
+  - Stores `<runtime_home>/.thumbnails/<activeProjectId>.png`. The project is the instance's own active project — the request carries no id, so an editor session cannot overwrite another project's thumbnail.
+  - `409` when no project is live on this instance. `422` when the body is not a PNG, exceeds the limit, or the active project's metadata is unreadable. `204` on success.
+- `GET /api/projects/{id}/thumbnail`
+  - Serves the stored PNG for a project, with `ETag`/`Last-Modified`. Manager app only.
+  - `404` when the project is unknown or has no thumbnail yet.
 
 ---
 

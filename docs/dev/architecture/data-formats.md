@@ -51,6 +51,7 @@ Outside any project, the runtime keeps its own state:
   licenses/               ← signed Ed25519 license tokens, one file per license (<id>.key)
   .logs/                  ← rotating application logs
   .widget-build/          ← compiled custom-widget JS (shared across all instances)
+  .thumbnails/            ← per-project main-page screenshots (<projectId>.png), installation-local
   .restart-pending        ← sentinel written by /api/system/restart
   .peer-tokens.json       ← hashed manager peer tokens (no bearer plaintext)
   .peer-transfer-sender.json   ← durable outgoing (push) phases, byte counts, and retry fingerprints (no bearer plaintext)
@@ -71,7 +72,7 @@ Outside any project, the runtime keeps its own state:
   ],
   "peers": [ ... ],            // manually-added manager LAN peers
   "defaultProjectId": "<uuid>",  // the project the origin root ("/") redirects to
-  "defaultProjectsRoot": "/abs/path"
+  "defaultProjectsRoot": "/abs/path"  // where new/imported/pulled projects land; absent ⇒ the user's Documents folder
 }
 ```
 
@@ -111,9 +112,11 @@ Outside any project, the runtime keeps its own state:
 - `<project>/assets/icons`, `<project>/assets/images`
   - user-supplied SVG icons and images, served at `/assets/*`
 - `<project>/certs/`
-  - reserved certificate folder created by the backend
+  - reserved certificate folder created by the backend. Installation-local: the whole folder is stripped by `core.project_packer` so the OPC-UA client private key never reaches a zip, a template or a peer transfer under any filename. The client pair regenerates on the receiver's first connect
 - `<project>/config.json` → `project`
   - embedded per-project metadata (stable UUID + display name + creation time); created on first registration and round-tripped through pack/unpack so the same folder always resolves to the same manifest entry
+  - `formatVersion` — the project's on-disk schema version (0 = unstamped, predates the field); see `core.project_migrations.PROJECT_FORMAT_VERSION` and the coordinator's module docstring
+  - `lastMigration` — set once a format migration actually runs: `{ fromVersion, toVersion, at, backups }`, where `backups` maps target name to the pre-migration backup path left on disk. Kept in place after later activations, but only read back once, right after an upgrade, to show a one-time notice — the Projects list never displays it permanently
 - `<project>/historian/`
   - historian runtime state (SQLite database + `config.json`). `config.json` travels with project pushes/pulls/zips; data files matching `*.db`, `*.db-wal`, `*.db-shm`, `*.sqlite`, `*.sqlite-journal` are stripped by `core.project_packer` so they stay installation-local.
 

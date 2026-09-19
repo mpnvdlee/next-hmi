@@ -201,8 +201,8 @@ own stable REST/WebSocket reason, `value_out_of_range` (see
   - process info, subscription status, restart, runtime home / default projects root
 - `backend/api/users_api.py`
   - users, groups, and access settings
-- `backend/api/projects_api.py`
-  - list / create / locate / delete / validate-path; export zip; import zip. (`make-live` is removed — the supervisor's running set replaces the single-live model; `delete` now refuses a project that is in the manifest `running` set rather than the old single live project.) No push/pull here — that's `manager_peers_api.py`, manager-only.
+- `backend/api/projects_api.py` (not on a managed instance)
+  - list / create / locate / delete / validate-path; export zip; import zip. `delete` refuses a project that is in the manifest `running` set. No push/pull here — that's `manager_peers_api.py`, manager-only. Mounted on the manager and on a standalone `uvicorn main:app`; a manager-spawned instance skips it, so the projects API is simply absent from the process that serves a live project.
 - `backend/api/supervisor_api.py` (manager only)
   - `GET /api/manager/running`, `POST /api/manager/projects/{id}/start`, `POST .../stop`, `GET .../status` — drive and report the per-project child processes.
 - `backend/api/manager_auth_api.py` (manager only)
@@ -255,7 +255,7 @@ The **supervisor** (`backend/services/supervisor.py`) is a singleton owned by th
 
 - starts/stops one child process per running project (`launcher.py --serve-project <path> --base-path /runtime/<slug>/ --port <ephemeral>` in source; the frozen binary in a packaged build), each bound to `127.0.0.1`. The spawn-time default base path is `/runtime/<slug>/` — the manager's `X-Forwarded-Prefix` header overrides it when a request actually comes in through `/editor/<slug>/`.
 - health-checks a freshly started child (`/api/health`) before reporting it `running`; auto-restarts a child that exits unexpectedly with exponential backoff and a circuit breaker that flips it to `crashed` after >5 restarts in 60 s.
-- persists the running set to the manifest (`running[]`) so `resume_all()` can bring projects back after a manager restart, re-binding the previous port when still free.
+- persists the running set to the manifest (`running[]`) so `resume_all()` can bring projects back after a manager restart, re-binding the previous port when still free. `resume_all()` prunes any entry it cannot bring up — a missing project or folder, and a project `start()` refuses (pending format upgrade, unusable credentials, a start guard). Such a project has no instance at all, so an entry left behind would make the manifest claim it is up while the dashboard shows it `stopped` with Stop disabled and the delete guard refuses with "stop it first". Starting it once the refusal is cleared re-adds it.
 - `running_snapshot()` returns per-instance `{id, name, path, basePath, port, pid, status, startedAt, restarts, lastError}` for the dashboard. `status ∈ {starting, running, stopped, crashed}`.
 
 `backend/services/project_resume.py` (`prepare_running_set`) runs once in the manager lifespan before `resume_all()`: on a fresh install with no projects at all, it seeds the bundled project and leaves it stopped while operator-password setup is pending. Existing projects recorded in the running set are resumed, while an operator who deliberately stopped everything is respected.

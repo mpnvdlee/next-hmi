@@ -1714,16 +1714,27 @@
   color: var(--cfg-accent);
 }
 
-/* ── Error banner ──────────────────────────────────────────── */
-.cfg-error-banner {
-  color: var(--cfg-danger-fg);
-  background: var(--cfg-danger-bg-soft);
-  border: 1px solid var(--cfg-danger-border-soft);
+/* ── Banners ───────────────────────────────────────────────── */
+.cfg-error-banner,
+.cfg-success-banner {
+  border: 1px solid transparent;
   border-radius: var(--cfg-radius);
   padding: 0.45rem 0.75rem;
   font-size: var(--cfg-font-size-base);
   margin-bottom: 0.75rem;
   flex-shrink: 0;
+}
+
+.cfg-error-banner {
+  color: var(--cfg-danger-fg);
+  background: var(--cfg-danger-bg-soft);
+  border-color: var(--cfg-danger-border-soft);
+}
+
+.cfg-success-banner {
+  color: var(--cfg-success-fg);
+  background: color-mix(in srgb, var(--cfg-success-fg) 8%, var(--cfg-surface));
+  border-color: color-mix(in srgb, var(--cfg-success-fg) 40%, var(--cfg-border));
 }
 
 .cfg-ds-props__status {

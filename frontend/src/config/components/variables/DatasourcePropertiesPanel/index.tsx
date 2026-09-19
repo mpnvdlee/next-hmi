@@ -478,6 +478,19 @@ function LifecycleButtons({
 }) {
   type LifecycleAction = 'start' | 'stop' | 'restart';
   const [activeAction, setActiveAction] = useState<LifecycleAction | null>(null);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // The panel is not re-keyed on a datasource switch, so this component
+  // survives one — and the timer would otherwise resolve against the newly
+  // selected datasource, leaving it stuck on "Starting…".
+  useEffect(
+    () => () => {
+      if (settleTimer.current !== null) clearTimeout(settleTimer.current);
+      settleTimer.current = null;
+      setActiveAction(null);
+    },
+    [dsName],
+  );
 
   async function action(endpoint: LifecycleAction) {
     setActiveAction(endpoint);
@@ -485,7 +498,8 @@ function LifecycleButtons({
       await apiJson(`/api/datasources/${encodeURIComponent(dsName)}/${endpoint}`, {
         method: 'POST',
       });
-      setTimeout(() => {
+      settleTimer.current = setTimeout(() => {
+        settleTimer.current = null;
         onStatusChange?.();
         setActiveAction(null);
       }, 1500);
@@ -554,6 +568,22 @@ function ConnectionButtons({
   // onStatusChange() below can flip `connected` to false mid-click, which
   // would otherwise swap the branch to "Connect" while still busy.
   const [activeAction, setActiveAction] = useState<'start' | 'stop' | null>(null);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onBusyChangeRef = useRef(onBusyChange);
+  onBusyChangeRef.current = onBusyChange;
+
+  // The panel is not re-keyed on a datasource switch, so this component
+  // survives one: clicking Connect on plc1 and selecting plc2 within the delay
+  // would otherwise leave plc2 showing "Connecting…" with its error suppressed.
+  useEffect(
+    () => () => {
+      if (settleTimer.current !== null) clearTimeout(settleTimer.current);
+      settleTimer.current = null;
+      onBusyChangeRef.current(false);
+      setActiveAction(null);
+    },
+    [dsName],
+  );
 
   async function run(action: 'start' | 'stop') {
     setActiveAction(action);
@@ -565,7 +595,8 @@ function ConnectionButtons({
       // The endpoint already swapped in a fresh engine (or tore it down) with
       // no stale error — refresh now so it doesn't linger for the full delay.
       onStatusChange?.();
-      setTimeout(() => {
+      settleTimer.current = setTimeout(() => {
+        settleTimer.current = null;
         onStatusChange?.();
         onBusyChange(false);
         setActiveAction(null);

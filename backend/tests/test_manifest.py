@@ -19,6 +19,8 @@ from core.manifest import (
     ProjectEntry,
     ProjectMetadata,
     default_project,
+    default_projects_root,
+    drop_auto_seeded_projects_root,
     find_project,
     load_manifest,
     migrate_invalid_project_ids,
@@ -98,6 +100,68 @@ def test_round_trip_preserves_default_projects_root(tmp_path: Path) -> None:
     save_manifest(ManifestV1(defaultProjectsRoot=str(tmp_path / "Projects")), f)
     loaded = load_manifest(f)
     assert loaded.defaultProjectsRoot == str(tmp_path / "Projects")
+
+
+def test_default_projects_root_resolves_every_way_of_writing_it(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """One resolver, because two would disagree about what is inside the root.
+
+    The setting is a raw operator string. Anything comparing a project path
+    against it — the peer-transfer install rule, the root the browser is told
+    about — has to expand and absolutize it identically, or a project that is
+    in the root reads as outside it.
+
+    Unset, it is the user's Documents folder — not a folder under the runtime
+    home, which would have to be created before the first project could land.
+    """
+    user = tmp_path / "user"
+    monkeypatch.setattr(runtime_home, "runtime_home_path", lambda: tmp_path / "runtime")
+    monkeypatch.setenv("HOME", str(user))
+    monkeypatch.setenv("USERPROFILE", str(user))
+    monkeypatch.chdir(tmp_path)
+
+    assert default_projects_root(ManifestV1()) == user / "Documents"
+    assert default_projects_root(ManifestV1(defaultProjectsRoot="   ")) == user / "Documents"
+    assert default_projects_root(ManifestV1(defaultProjectsRoot="~/Projects")) == (
+        user / "Projects"
+    )
+    assert default_projects_root(ManifestV1(defaultProjectsRoot="Projects")) == (
+        tmp_path / "Projects"
+    )
+
+
+def test_the_auto_seeded_projects_root_is_unpinned_on_startup(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """An upgrade must not keep honouring a root the runtime picked for itself.
+
+    First run used to stamp ``<runtime_home>/Projects`` into the manifest, so
+    without this an existing install would go on sending new projects there
+    however the default is resolved.
+    """
+    home = tmp_path / "runtime"
+    home.mkdir()
+    monkeypatch.setattr(runtime_home, "runtime_home_path", lambda: home)
+    save_manifest(ManifestV1(defaultProjectsRoot=str(home / "Projects")))
+
+    assert drop_auto_seeded_projects_root() == str(home / "Projects")
+    assert load_manifest().defaultProjectsRoot is None
+    assert drop_auto_seeded_projects_root() is None
+
+
+def test_an_operator_chosen_projects_root_survives_startup(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Only the one string the old bootstrap wrote is dropped — a real setting stays."""
+    home = tmp_path / "runtime"
+    home.mkdir()
+    chosen = tmp_path / "plant-projects"
+    monkeypatch.setattr(runtime_home, "runtime_home_path", lambda: home)
+    save_manifest(ManifestV1(defaultProjectsRoot=str(chosen)))
+
+    assert drop_auto_seeded_projects_root() is None
+    assert load_manifest().defaultProjectsRoot == str(chosen)
 
 
 def test_missing_on_disk_entries_survive_round_trip(tmp_path: Path) -> None:

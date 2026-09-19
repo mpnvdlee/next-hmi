@@ -16,6 +16,12 @@ function project(overrides: Partial<ProjectEntry> = {}): ProjectEntry {
     operatorSetupRequired: false,
     operatorSetupStatus: 'complete',
     operatorSetupError: null,
+    formatVersion: null,
+    minAppVersion: null,
+    needsUpgrade: false,
+    unsupportedFormat: false,
+    lastMigration: null,
+    thumbnailUpdatedAt: null,
     ...overrides,
   };
 }

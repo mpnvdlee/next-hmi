@@ -83,6 +83,12 @@ interface ProjectStore {
   saveAll(): Promise<void>;
   dismissSaveError(): void;
 
+  /** Best-effort work to run once a save has already been reported as done —
+   *  e.g. capturing a thumbnail. A hook throwing must never fail the save. */
+  _afterSaveHooks: Map<string, () => Promise<void>>;
+  registerAfterSave(key: string, fn: () => Promise<void>): void;
+  unregisterAfterSave(key: string): void;
+
   _snapshotExtensions: Map<string, SnapshotExtension>;
   registerSnapshotExtension(key: string, ext: SnapshotExtension): void;
   unregisterSnapshotExtension(key: string): void;
@@ -209,6 +215,16 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     get()._saveCallbacks.delete(key);
   },
 
+  _afterSaveHooks: new Map(),
+
+  registerAfterSave: (key, fn) => {
+    get()._afterSaveHooks.set(key, fn);
+  },
+
+  unregisterAfterSave: (key) => {
+    get()._afterSaveHooks.delete(key);
+  },
+
   _snapshotExtensions: new Map(),
 
   registerSnapshotExtension: (key, ext) => {
@@ -284,5 +300,11 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       dirty: s._dirtySeq !== dirtySeqAtStart,
       saving: false,
     }));
+
+    // Best-effort, and deliberately after the save has been reported as done:
+    // a hook that throws must never turn a successful save into a failed one.
+    for (const hook of get()._afterSaveHooks.values()) {
+      void hook().catch((err) => console.error('[projectStore] after-save hook failed:', err));
+    }
   },
 }));

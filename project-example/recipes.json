@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "datasetTypes": [
+    {
+      "id": "drink",
+      "name": "Drink",
+      "parameters": [
+        {
+          "id": "name",
+          "label": "Drink",
+          "binding": {
+            "$var": {
+              "path": "Brew:Drink/Name"
+            }
+          },
+          "dataType": "string"
+        },
+        {
+          "id": "setpoint",
+          "label": "Boiler setpoint",
+          "binding": {
+            "$var": {
+              "path": "Brew:Boiler/Setpoint"
+            }
+          },
+          "dataType": "float"
+        },
+        {
+          "id": "temp",
+          "label": "Boiler temperature",
+          "binding": {
+            "$var": {
+              "path": "Brew:Boiler/Temp"
+            }
+          },
+          "dataType": "float"
+        },
+        {
+          "id": "pressure",
+          "label": "Pump pressure",
+          "binding": {
+            "$var": {
+              "path": "Brew:Pump/Pressure"
+            }
+          },
+          "dataType": "float"
+        },
+        {
+          "id": "dose",
+          "label": "Dose",
+          "binding": {
+            "$var": {
+              "path": "Brew:Hopper/Dose"
+            }
+          },
+          "dataType": "float"
+        },
+        {
+          "id": "grind",
+          "label": "Grind",
+          "binding": {
+            "$var": {
+              "path": "Brew:Hopper/Grind"
+            }
+          },
+          "dataType": "string"
+        }
+      ],
+      "datasets": [
+        {
+          "id": "espresso",
+          "name": "Espresso",
+          "description": "Short and intense — 18 g in, 36 g out.",
+          "values": {
+            "name": "Espresso",
+            "setpoint": 93,
+            "temp": 93,
+            "pressure": 9,
+            "dose": 18,
+            "grind": "fine"
+          },
+          "updatedAt": "",
+          "updatedBy": "",
+          "loadedAt": "2026-09-12T16:25:51Z"
+        },
+        {
+          "id": "lungo",
+          "name": "Lungo",
+          "description": "Longer pull, gentler extraction.",
+          "values": {
+            "name": "Lungo",
+            "setpoint": 91,
+            "temp": 91,
+            "pressure": 8.5,
+            "dose": 19,
+            "grind": "medium"
+          },
+          "updatedAt": "",
+          "updatedBy": "",
+          "loadedAt": ""
+        },
+        {
+          "id": "flat-white",
+          "name": "Flat White",
+          "description": "Double ristretto base for milk.",
+          "values": {
+            "name": "Flat White",
+            "setpoint": 90,
+            "temp": 90,
+            "pressure": 9,
+            "dose": 20,
+            "grind": "medium"
+          },
+          "updatedAt": "",
+          "updatedBy": "",
+          "loadedAt": ""
+        }
+      ]
+    }
+  ]
+}

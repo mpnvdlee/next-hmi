@@ -96,6 +96,7 @@ frontend/coverage/
 # ── Custom widget build artefacts ────────────────────────────
 backend/widget-build/
 project-seed/.widget-build/
+project-example/.widget-build/
 
 # ── Dev runtime home ─────────────────────────────────────────
 .dev-runtime-home/
@@ -108,6 +109,10 @@ project-testbench/plugins/**/config.json
 
 # ── Historian runtime data (per-project, generated at runtime) ─
 project-testbench/historian/history.db*
+project-example/historian/history.db*
+
+# ── Pre-upgrade project backups (per-project, generated at runtime) ─
+project-example/.backups/*.zip
 
 # ── Claude harness runtime state ─────────────────────────────
 .claude/

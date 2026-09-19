@@ -53,3 +53,20 @@ def test_bootstrap_does_not_duplicate_once_project_is_running(home: Path) -> Non
 
     persisted = manifest_mod.load_manifest()
     assert [p.id for p in persisted.projects] == [first.id]
+
+
+def test_seed_lookup_follows_the_install_root(monkeypatch, tmp_path: Path) -> None:
+    """The seed resolves through ``repo_root()``, not through this module's own
+    location. Frozen, the walk up from ``__file__`` lands above the extracted
+    tree, and every fresh install would come up with a bare default project."""
+    install_root = tmp_path / "install"
+    seed = install_root / "project-seed"
+    seed.mkdir(parents=True)
+    (seed / "config.json").write_text('{"pages": []}', encoding="utf-8")
+    monkeypatch.setattr(project_bootstrap, "repo_root", lambda: install_root)
+
+    assert project_bootstrap._seed_dir_candidates()[0] == seed
+
+    target = tmp_path / "fresh"
+    assert project_bootstrap._seed_into(target) is True
+    assert (target / "config.json").read_text(encoding="utf-8") == '{"pages": []}'

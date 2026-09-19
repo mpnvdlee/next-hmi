@@ -1,0 +1,76 @@
+/* Widens the shared .name-modal surface for the two side-by-side template cards.
+   Both classes so it wins over .name-modal's max-width whatever the sheet order. */
+.name-modal.template-modal {
+  max-width: 46rem;
+}
+
+.template-modal__options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--cfg-space-4);
+}
+
+.template-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-2);
+  padding: var(--cfg-space-3);
+  border: 1px solid var(--cfg-border);
+  border-radius: calc(var(--cfg-radius) + 2px);
+  background: var(--cfg-surface);
+  color: var(--cfg-text);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color var(--cfg-motion-fast) var(--cfg-ease-standard),
+    background var(--cfg-motion-fast) var(--cfg-ease-standard);
+}
+
+.template-card:hover {
+  border-color: var(--cfg-accent);
+  background: color-mix(in srgb, var(--cfg-accent) 5%, var(--cfg-surface));
+}
+
+.template-card:focus-visible {
+  outline: var(--cfg-focus-outline);
+  outline-offset: 1px;
+  border-color: var(--cfg-accent);
+}
+
+.template-card__art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  object-position: top center;
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface-raised);
+}
+
+/* The empty-project card has no preview image, so its art is a <span>. Left
+   blank it reads as a still-loading thumbnail — draw a blank-page motif. */
+span.template-card__art {
+  display: grid;
+  place-items: center;
+}
+
+span.template-card__art::after {
+  content: '';
+  height: 58%;
+  aspect-ratio: 3 / 4;
+  border: 1px dashed var(--cfg-line-strong);
+  border-radius: 2px;
+  background: var(--cfg-surface);
+}
+
+.template-card__name {
+  font-size: var(--cfg-text-base);
+  font-weight: var(--cfg-fw-bold);
+}
+
+.template-card__note {
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-text-sm);
+  line-height: 1.45;
+}

@@ -6,6 +6,7 @@ state machine, manifest bookkeeping, and crash handling deterministically.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 import threading
@@ -14,6 +15,7 @@ from pathlib import Path
 
 import pytest
 from core import manifest as manifest_mod
+from core import project_migrations as pm
 from core import runtime_home, start_guards
 from services import supervisor as supervisor_mod
 
@@ -57,9 +59,28 @@ class _FakeProc:
         self.returncode = -9
 
 
-def _register_project(home: Path, tmp_path: Path, *, name: str = "Plant") -> str:
+def _register_project(
+    home: Path,
+    tmp_path: Path,
+    *,
+    name: str = "Plant",
+    format_version: int | None = None,
+    min_app: str | None = pm.PROJECT_FORMAT_MIN_APP,
+) -> str:
+    """Register a startable project. Fully stamped by default — spawn/health/crash
+    tests aren't exercising the upgrade gate; pass ``format_version`` or
+    ``min_app=None`` to test that."""
     target = tmp_path / name
     metadata = manifest_mod.ensure_project_metadata(target, name=name)
+    metadata = metadata.model_copy(
+        update={
+            "formatVersion": format_version
+            if format_version is not None
+            else supervisor_mod.PROJECT_FORMAT_VERSION,
+            "minAppVersion": min_app,
+        }
+    )
+    manifest_mod.write_project_metadata(target, metadata)
     (target / "users.json").write_text(
         json.dumps({"settings": {}, "groups": [], "users": []}), encoding="utf-8"
     )
@@ -110,7 +131,7 @@ def test_start_and_stop_are_serialized_per_project(home: Path, monkeypatch) -> N
     release = threading.Event()
     order: list[str] = []
 
-    def starting(_project_id: str):
+    def starting(_project_id: str, **_kwargs):
         order.append("start-enter")
         entered.set()
         assert release.wait(5)
@@ -187,6 +208,66 @@ def test_start_rechecks_credentials_before_returning_running_instance(
     (Path(project.path) / "users.json").unlink()
 
     with pytest.raises(ValueError, match=r"users\.json is missing"):
+        sup.start(project_id)
+
+
+def test_start_requires_confirm_upgrade_for_outdated_format(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    project_id = _register_project(home, tmp_path, format_version=0)
+    sup = _make_supervisor(monkeypatch, healthy=True)
+
+    with pytest.raises(ValueError, match="upgraded"):
+        sup.start(project_id)
+
+    snap = sup.start(project_id, confirm_upgrade=True)
+    assert snap["status"] == "running"
+
+
+def test_start_refuses_project_newer_than_this_build(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    project_id = _register_project(
+        home, tmp_path, format_version=supervisor_mod.PROJECT_FORMAT_VERSION + 1, min_app=None
+    )
+    sup = _make_supervisor(monkeypatch, healthy=True)
+
+    with pytest.raises(ValueError, match="requires a newer version"):
+        sup.start(project_id)
+    with pytest.raises(ValueError, match="requires a newer version"):
+        sup.start(project_id, confirm_upgrade=True)
+
+
+def test_start_refuses_a_current_project_carrying_no_release_stamp(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    """Its number says where it landed, not which build took it there."""
+    project_id = _register_project(home, tmp_path, min_app=None)
+    sup = _make_supervisor(monkeypatch, healthy=True)
+
+    with pytest.raises(ValueError, match="needs to be upgraded"):
+        sup.start(project_id)
+    assert sup.start(project_id, confirm_upgrade=True)["status"] == "running"
+
+
+def test_refusal_names_the_version_the_project_was_stamped_with(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    project_id = _register_project(
+        home, tmp_path, format_version=supervisor_mod.PROJECT_FORMAT_VERSION + 1
+    )
+    entry = manifest_mod.find_project(manifest_mod.load_manifest(), project_id)
+    assert entry is not None
+    root = Path(entry.path)
+    manifest_mod.write_project_metadata(
+        root,
+        manifest_mod.read_project_metadata(root).model_copy(
+            update={"minAppVersion": "9.9.9"}
+        ),
+    )
+    sup = _make_supervisor(monkeypatch, healthy=True)
+
+    with pytest.raises(ValueError, match=r"requires NEXT HMI 9\.9\.9 or newer"):
         sup.start(project_id)
 
 
@@ -351,6 +432,43 @@ def test_resume_all_prunes_missing_projects(home: Path, monkeypatch) -> None:
     sup = supervisor_mod.Supervisor()
     sup.resume_all()
     assert manifest_mod.load_manifest().running == []
+
+
+def test_resume_reports_an_upgrade_pending_project_without_a_traceback(
+    home: Path, tmp_path: Path, monkeypatch, caplog
+) -> None:
+    """A project waiting on its upgrade confirmation is an operator's to-do, not
+    a supervisor fault — a traceback every boot would bury the real ones."""
+    project_id = _register_project(home, tmp_path, min_app=None)
+    manifest_mod.upsert_running(project_id, 9002)
+    sup = _make_supervisor(monkeypatch, healthy=True)
+
+    with caplog.at_level(logging.WARNING, logger="services.supervisor"):
+        sup.resume_all()
+
+    assert sup.running_snapshot() == []
+    records = [r for r in caplog.records if r.name == "services.supervisor"]
+    assert [r.levelno for r in records] == [logging.WARNING]
+    assert records[0].exc_info is None
+    assert project_id in records[0].getMessage()
+    assert "needs to be upgraded" in records[0].getMessage()
+
+
+def test_resume_prunes_a_project_it_refused_to_start(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    """A refusal leaves no instance, so the persisted running set must not keep
+    claiming the project is up: the dashboard would show it Stopped with Stop
+    disabled while the delete guard still read it as running — nothing the
+    operator could stop, and nothing they could remove."""
+    project_id = _register_project(home, tmp_path, min_app=None)
+    manifest_mod.upsert_running(project_id, None)
+    sup = _make_supervisor(monkeypatch, healthy=True)
+
+    sup.resume_all()
+
+    assert sup.running_snapshot() == []
+    assert manifest_mod.running_entry(manifest_mod.load_manifest(), project_id) is None
 
 
 # ── real-subprocess coverage ──────────────────────────────────────────────

@@ -40,6 +40,7 @@ from typing import Any, BinaryIO, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
 
+from core import bootstrap, runtime_home
 from core.runtime_home import manifest_path
 from core.time_utils import iso_now
 
@@ -483,6 +484,49 @@ def default_project(manifest: ManifestV1) -> ProjectEntry | None:
     return find_project(manifest, manifest.defaultProjectId)
 
 
+def default_projects_root(manifest: ManifestV1) -> Path:
+    """Where new and incoming projects land, resolved the one way everyone must.
+
+    ``defaultProjectsRoot`` is a raw operator string: it may be ``~``-relative,
+    relative to the process CWD, or absent entirely. Every caller that compares
+    a project's path against the root — the peer-transfer install rule, the API
+    that tells the browser what the root is — has to resolve it identically, or
+    a project inside the root reads as outside it.
+
+    Unset, it is the user's Documents folder: a place that already exists and
+    that a non-technical operator can find, rather than a folder the runtime
+    has to conjure up inside its own bookkeeping directory.
+    """
+    raw = manifest.defaultProjectsRoot
+    root = (
+        Path(raw).expanduser()
+        if raw and raw.strip()
+        else bootstrap.platform_documents_dir()
+    )
+    return root.absolute()
+
+
+def drop_auto_seeded_projects_root() -> str | None:
+    """Unpin a projects root that an older first-run bootstrap wrote for itself.
+
+    Until this build, first run stamped ``<runtime_home>/Projects`` into the
+    manifest and created the folder. That was never an operator choice, so an
+    upgrade must not keep honouring it — clearing the key lets the resolver
+    fall through to the user's Documents folder. A root pointing anywhere else
+    is a real setting and is left alone. Returns the value dropped, if any.
+    """
+    with manifest_transaction() as manifest:
+        raw = manifest.defaultProjectsRoot
+        if not raw or not raw.strip():
+            return None
+        legacy = (runtime_home.runtime_home_path() / "Projects").absolute()
+        if Path(raw).expanduser().absolute() != legacy:
+            return None
+        manifest.defaultProjectsRoot = None
+        save_manifest(manifest)
+        return raw
+
+
 # ── running set (supervisor) ─────────────────────────────────────────────────
 
 
@@ -524,6 +568,23 @@ def remove_running(project_id: str) -> None:
 # ── per-project metadata (embedded in config.json) ───────────────────────────
 
 
+class ProjectMigrationRecord(BaseModel):
+    """The last time ``run_baseline_migration`` actually rewrote this project.
+
+    ``backup`` is the zip of the whole project taken before anything was
+    touched — see ``core.project_migrations._write_backup_zip``. ``None`` on a
+    record written before this field replaced the per-target ``backups`` map,
+    whose paths no longer exist to point at.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    fromVersion: int
+    toVersion: int
+    at: str
+    backup: str | None = None
+
+
 class ProjectMetadata(BaseModel):
     # Other writers (e.g. theme_manager._set_default_raw's ``defaultTheme``)
     # read-modify-write sibling fields directly into the same ``project``
@@ -538,6 +599,16 @@ class ProjectMetadata(BaseModel):
     # 0 = unstamped (every project predating this field reads as 0). See
     # core.project_migrations.PROJECT_FORMAT_VERSION.
     formatVersion: int = 0
+    # The release that introduced `formatVersion`, stamped beside it so a build
+    # too old to open this project can name the version the operator needs.
+    # None = written by a build predating this field. Display only — the
+    # integer above is what actually gates opening a project.
+    minAppVersion: str | None = None
+    # Set only when a format migration actually ran; left in place afterwards
+    # (never cleared) so the manager can read back what just happened and
+    # show it once, right after the upgrade — not a permanently-displayed
+    # project detail.
+    lastMigration: ProjectMigrationRecord | None = None
 
     _validate_id = field_validator("id")(validate_project_id)
 

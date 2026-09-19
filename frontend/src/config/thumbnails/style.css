@@ -1,0 +1,13 @@
+/* The offscreen frame captureThumbnail rasterises the main page in. Offscreen
+   rather than display:none — a hidden frame has no layout — and sized from the
+   capture constants so the framing is identical regardless of the author's
+   window, which matters because the shell's $viewport bindings switch layout
+   by breakpoint. */
+.cfg-thumbnail-capture {
+  position: fixed;
+  left: -20000px;
+  top: 0;
+  width: var(--cfg-capture-w);
+  height: var(--cfg-capture-h);
+  border: 0;
+}

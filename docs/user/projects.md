@@ -20,6 +20,7 @@ Everything the runtime needs is on disk, in formats you can read and diff. That'
 | `external-libraries/` | Third-party ESM bundles you import from widgets. |
 | `certs/` | Per-project OPC-UA client certificates. |
 | `historian/` | [Historian](historian.md) configuration plus this installation's local sample database. |
+| `.backups/` | A zip of the whole project, taken automatically before a file-format upgrade rewrites anything. Yours to keep or delete — nothing reads them back, and they never travel with an export or a transfer. |
 
 The backend creates any missing folder on startup, and never overwrites this tree on upgrade — it is your state, not the product's.
 
@@ -30,6 +31,11 @@ The backend creates any missing folder on startup, and never overwrites this tre
 Browse to the origin root (`http://localhost:8000` by default) and sign in with the **device-admin password**. The dashboard lists every project registered on this installation, one row each, showing its name, its **id**, its folder, and its status.
 
 The id is the project's address: it is what appears in `/runtime/<id>/` and `/editor/<id>/`, in the instance log folder, and in the scope of an MCP token. It is derived from the name when the project is created, and it stays put afterwards unless you change it deliberately — see **Rename** below.
+
+Each row shows a picture of that project's main page as it looked the last time
+the project was saved in the editor. A project that has never been saved shows
+a plain placeholder instead. The picture is stored on this installation only —
+it never travels with an export, a zip, or a transfer to another manager.
 
 Each row carries the actions for that project:
 
@@ -51,11 +57,22 @@ The set of running projects is remembered, so a restart brings the same ones bac
 > [!NOTE]
 > **A fresh project asks for an operator password first.** Any project copied from the bundled seed shows **Set operator password** instead of Start. Choose the password for that project's `admin` HMI account and the runtime and editor unlock. This is separate from the device-admin password that gates the dashboard itself; the seed ships no reusable operator credential.
 
+A project saved by an older build — or by one that predates the file-format stamp — has to be upgraded before it opens, so **Start** asks first instead of starting right away. Confirming zips the whole project into its `.backups/` folder before changing anything, and a one-time notice on the Projects page names what changed and where that backup landed. Declining leaves the project untouched. A project saved by a *newer* build shows **Requires update** in place of Start, naming the version it needs — update the application to that version or later. The file format only changes in a release whose second number moves, so a patch update (0.4.1 → 0.4.2) never makes a project unopenable elsewhere.
+
 ## How to create a project
 
 Three ways in, all from the dashboard toolbar. Each adds a row to the runtime-home manifest — the files live wherever you point them.
 
-1. **New project — scaffold from the seed.** Click **+ New project**. Enter a **Project name** and a **Parent folder** (type it or **Browse…**); the modal previews the exact folder it will create. Confirm and NEXT HMI copies the seed template into place and registers it.
+1. **New project — pick a template first.** Click **+ New project**.
+   **New project** first asks what to start from. **Empty project** gives you one
+   blank page. **NEXT BREW example** gives you a working demo machine — three
+   pages, a static datasource, alarms, recipes, two themes and two languages —
+   which is the fastest way to see how the pieces fit together before building
+   your own. Its `onHmiLoaded` global event writes starting values into its
+   datasource on load, so if you repoint it at a real server, look at that
+   event first.
+
+   Enter a **Project name** and a **Parent folder** (type it or **Browse…**); the modal previews the exact folder it will create. Confirm and NEXT HMI copies the chosen template into place and registers it.
 2. **Add existing — register a folder on disk.** Click **⊕ Add existing** and give the **Project folder** path, e.g. `/opt/hmi/line-a`. The folder must already hold a `config.json` with a `project` block. Use this after cloning a project from Git or copying a folder onto the machine. The project is registered but not started.
 3. **Import zip — unpack a shared build.** Click **↑ Import zip**, choose the **Zip file** and a **Destination folder**. See [Download & upload](#download--upload-a-project) below.
 
@@ -65,7 +82,7 @@ A project created or imported this way is never made the default automatically �
 
 The zip is the hand-off format: one file that carries the whole project, including its identity, so the other end registers it as the same project rather than a copy.
 
-**Download (export).** **Export** on the project's row streams the folder out as `<name>.nexthmi.zip`. The compiled custom-widget cache (`widget-build/`) is skipped — it is regenerated on the far side — and so are the historian's local database files (`*.db`, `*.sqlite`, and their journals), which are installation-local. Historian *configuration* does travel, so the receiver knows what to log. Symlinks are never followed into the archive.
+**Download (export).** **Export** on the project's row streams the folder out as `<name>.nexthmi.zip`. The compiled custom-widget cache (`widget-build/`) is skipped — it is regenerated on the far side — and so are the historian's local database files (`*.db`, `*.sqlite`, and their journals), the pre-upgrade zips in `.backups/`, and the whole `certs/` folder, all of which are installation-local. `certs/` holds an OPC-UA *private key*, which is never handed to anyone else; the receiver generates its own pair on first connect, and re-uploads any server certificate the datasource trusts. Historian *configuration* does travel, so the receiver knows what to log. Symlinks are never followed into the archive.
 
 **Upload (import).** **↑ Import zip** takes the **Zip file** and a **Destination folder**, unpacks it into a new project folder, and registers it. The archive is hardened on the way in: path traversal and absolute paths are rejected, symlinks are dropped, and the total is capped by `NEXTHMI_MAX_PROJECT_ZIP_MB` (500 MB by default) so an oversize archive is refused before any bytes reach disk.
 

@@ -97,4 +97,21 @@ describe('projectStore.saveAll', () => {
 
     expect(useProjectStore.getState().saveError).toBeNull();
   });
+
+  it('runs after-save hooks when the save succeeds', async () => {
+    const hook = vi.fn().mockResolvedValue(undefined);
+    useProjectStore.getState().registerAfterSave('thumb', hook);
+    await useProjectStore.getState().saveAll();
+    expect(hook).toHaveBeenCalled();
+    useProjectStore.getState().unregisterAfterSave('thumb');
+  });
+
+  it('reports success even when an after-save hook throws', async () => {
+    useProjectStore.getState().registerAfterSave('boom', async () => {
+      throw new Error('rasterise failed');
+    });
+    await useProjectStore.getState().saveAll();
+    expect(useProjectStore.getState().saveError).toBeNull();
+    useProjectStore.getState().unregisterAfterSave('boom');
+  });
 });

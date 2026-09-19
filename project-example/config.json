@@ -1,0 +1,1455 @@
+{
+  "version": 2,
+  "pages": [
+    {
+      "id": "main",
+      "title": {
+        "$loc": "Main"
+      },
+      "type": "page-group",
+      "children": [
+        {
+          "id": "brew",
+          "type": "page"
+        },
+        {
+          "id": "machine",
+          "type": "page"
+        },
+        {
+          "id": "monitor",
+          "type": "page"
+        }
+      ],
+      "showChildPagesInMenu": true
+    }
+  ],
+  "header": [
+    {
+      "id": "hdr",
+      "type": "Container",
+      "name": "Header",
+      "properties": {
+        "visible": true,
+        "showWhenEmpty": true,
+        "background": "var(--hmi-surface)"
+      },
+      "layout": {
+        "direction": "column",
+        "gap": "0",
+        "wrap": false,
+        "align": "stretch",
+        "justify": "flex-start",
+        "radius": "0",
+        "width": "100%",
+        "height": "100%",
+        "widthMode": "fixed",
+        "heightMode": "fixed",
+        "paddingTop": "0",
+        "paddingRight": "0",
+        "paddingBottom": "0",
+        "paddingLeft": "0"
+      },
+      "children": [
+        {
+          "id": "hdr-bar",
+          "type": "Container",
+          "name": "Bar",
+          "properties": {
+            "visible": true,
+            "showWhenEmpty": true,
+            "background": "transparent"
+          },
+          "layout": {
+            "direction": "row",
+            "gap": "14px",
+            "wrap": false,
+            "align": "center",
+            "justify": "flex-start",
+            "radius": "0",
+            "width": "100%",
+            "grow": 1,
+            "widthMode": "fixed",
+            "heightMode": "fill",
+            "paddingTop": "0",
+            "paddingRight": "20px",
+            "paddingBottom": "0",
+            "paddingLeft": "20px"
+          },
+          "children": [
+            {
+              "id": "hdr-logo",
+              "type": "Icon",
+              "name": "Logo",
+              "properties": {
+                "iconName": {
+                  "$static": {
+                    "type": "custom",
+                    "path": "icons/cup.svg"
+                  }
+                },
+                "size": 26,
+                "color": "var(--hmi-accent)",
+                "chrome": false
+              },
+              "layout": {
+                "widthMode": "hug",
+                "heightMode": "hug"
+              }
+            },
+            {
+              "id": "hdr-name",
+              "type": "Container",
+              "name": "Name",
+              "properties": {
+                "visible": true,
+                "showWhenEmpty": true,
+                "background": "transparent"
+              },
+              "layout": {
+                "direction": "column",
+                "gap": "1px",
+                "wrap": false,
+                "align": "stretch",
+                "justify": "flex-start",
+                "radius": "0",
+                "widthMode": "hug",
+                "heightMode": "hug",
+                "paddingTop": "0",
+                "paddingRight": "0",
+                "paddingBottom": "0",
+                "paddingLeft": "0"
+              },
+              "children": [
+                {
+                  "id": "hdr-name-t",
+                  "type": "Label",
+                  "name": "hdr-name-t",
+                  "properties": {
+                    "typography": "label",
+                    "text": {
+                      "$loc": "NEXT BREW"
+                    },
+                    "size": "14px",
+                    "weight": 800
+                  },
+                  "layout": {
+                    "widthMode": "hug",
+                    "heightMode": "hug"
+                  }
+                },
+                {
+                  "id": "hdr-name-s",
+                  "type": "Label",
+                  "name": "hdr-name-s",
+                  "properties": {
+                    "typography": "caption",
+                    "text": {
+                      "$loc": "Bench-top espresso"
+                    },
+                    "size": "10.5px",
+                    "color": "var(--hmi-text-muted)"
+                  },
+                  "layout": {
+                    "widthMode": "hug",
+                    "heightMode": "hug"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "hdr-rule-1",
+              "type": "Separator",
+              "name": "Divider",
+              "properties": {
+                "orientation": "vertical",
+                "thickness": 1,
+                "color": "var(--hmi-border)",
+                "inset": 18
+              },
+              "layout": {
+                "heightMode": "fill",
+                "widthMode": "hug"
+              }
+            },
+            {
+              "id": "hdr-tabs-wrap",
+              "type": "Container",
+              "name": "Tabs",
+              "properties": {
+                "visible": true,
+                "showWhenEmpty": true,
+                "background": "transparent"
+              },
+              "layout": {
+                "direction": "column",
+                "gap": "0",
+                "wrap": false,
+                "align": "stretch",
+                "justify": "flex-start",
+                "radius": "0",
+                "width": "430px",
+                "widthMode": "fixed",
+                "heightMode": "hug",
+                "paddingTop": "0",
+                "paddingRight": "0",
+                "paddingBottom": "0",
+                "paddingLeft": "0"
+              },
+              "children": [
+                {
+                  "id": "hdr-tabs",
+                  "type": "NavigationMenu",
+                  "name": "Pages",
+                  "properties": {
+                    "mode": "auto",
+                    "orientation": "horizontal",
+                    "display": "icon-label",
+                    "hierarchy": "flat",
+                    "iconStrategy": "configured",
+                    "activeStyle": "underline",
+                    "showSearch": false
+                  },
+                  "layout": {}
+                }
+              ]
+            },
+            {
+              "id": "hdr-sp",
+              "type": "StretchSpacer",
+              "name": "Spacer",
+              "properties": {
+                "mode": "ratio",
+                "ratio": 1
+              },
+              "layout": {
+                "grow": 1,
+                "widthMode": "fill",
+                "heightMode": "hug",
+                "minWidth": "auto"
+              }
+            },
+            {
+              "id": "hdr-alarms",
+              "type": "Container",
+              "name": "Alarm count",
+              "properties": {
+                "visible": true,
+                "showWhenEmpty": true,
+                "background": "var(--hmi-surface-raised)",
+                "border": "1px solid var(--hmi-border)"
+              },
+              "layout": {
+                "direction": "row",
+                "gap": "7px",
+                "wrap": false,
+                "align": "center",
+                "justify": "flex-start",
+                "radius": "999px",
+                "widthMode": "hug",
+                "heightMode": "hug",
+                "paddingTop": "6px",
+                "paddingRight": "12px",
+                "paddingBottom": "6px",
+                "paddingLeft": "12px"
+              },
+              "children": [
+                {
+                  "id": "hdr-alarms-i",
+                  "type": "Icon",
+                  "name": "Bell",
+                  "properties": {
+                    "iconName": {
+                      "$static": {
+                        "type": "builtin",
+                        "name": "bell"
+                      }
+                    },
+                    "size": 14,
+                    "color": {
+                      "$if": {
+                        "condition": {
+                          "$compare": {
+                            "left": {
+                              "$alarmCount": {
+                                "filter": "all"
+                              }
+                            },
+                            "operator": ">",
+                            "right": 0
+                          }
+                        },
+                        "true": "var(--hmi-fault)",
+                        "false": "var(--hmi-text-muted)"
+                      }
+                    }
+                  },
+                  "layout": {
+                    "widthMode": "hug",
+                    "heightMode": "hug"
+                  }
+                },
+                {
+                  "id": "hdr-alarms-n",
+                  "type": "Label",
+                  "name": "hdr-alarms-n",
+                  "properties": {
+                    "typography": "body",
+                    "text": {
+                      "$stringExpr": {
+                        "template": "{1}",
+                        "wildcards": {
+                          "1": {
+                            "$alarmCount": {
+                              "filter": "all"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "size": "12.5px",
+                    "weight": 650,
+                    "color": {
+                      "$if": {
+                        "condition": {
+                          "$compare": {
+                            "left": {
+                              "$alarmCount": {
+                                "filter": "all"
+                              }
+                            },
+                            "operator": ">",
+                            "right": 0
+                          }
+                        },
+                        "true": "var(--hmi-fault)",
+                        "false": "var(--hmi-text-muted)"
+                      }
+                    }
+                  },
+                  "layout": {
+                    "widthMode": "hug",
+                    "heightMode": "hug"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "hdr-light",
+              "type": "Button",
+              "name": "Light theme",
+              "properties": {
+                "label": {
+                  "$loc": "Light"
+                },
+                "variant": "outline",
+                "radius": "999px",
+                "actions": {
+                  "onPress": [
+                    {
+                      "type": "setActiveTheme",
+                      "theme": "crema"
+                    }
+                  ]
+                }
+              },
+              "layout": {
+                "widthMode": "hug",
+                "heightMode": "hug"
+              }
+            },
+            {
+              "id": "hdr-dark",
+              "type": "Button",
+              "name": "Dark theme",
+              "properties": {
+                "label": {
+                  "$loc": "Dark"
+                },
+                "variant": "outline",
+                "radius": "999px",
+                "actions": {
+                  "onPress": [
+                    {
+                      "type": "setActiveTheme",
+                      "theme": "darkroast"
+                    }
+                  ]
+                }
+              },
+              "layout": {
+                "widthMode": "hug",
+                "heightMode": "hug"
+              }
+            },
+            {
+              "id": "hdr-lang",
+              "type": "LanguageSwitcher",
+              "name": "Language",
+              "properties": {
+                "label": ""
+              },
+              "layout": {
+                "widthMode": "hug",
+                "heightMode": "hug"
+              }
+            },
+            {
+              "id": "hdr-about",
+              "type": "Button",
+              "name": "About",
+              "properties": {
+                "label": "",
+                "iconName": {
+                  "$static": {
+                    "type": "builtin",
+                    "name": "question"
+                  }
+                },
+                "variant": "outline",
+                "radius": "999px",
+                "actions": {
+                  "onPress": [
+                    {
+                      "type": "openDialog",
+                      "dialogId": "about",
+                      "size": "medium",
+                      "placement": "center",
+                      "backdrop": "dim"
+                    }
+                  ]
+                }
+              },
+              "layout": {
+                "widthMode": "hug",
+                "heightMode": "hug"
+              }
+            },
+            {
+              "id": "hdr-rule-2",
+              "type": "Separator",
+              "name": "Divider",
+              "properties": {
+                "orientation": "vertical",
+                "thickness": 1,
+                "color": "var(--hmi-border)",
+                "inset": 18
+              },
+              "layout": {
+                "heightMode": "fill",
+                "widthMode": "hug"
+              }
+            },
+            {
+              "id": "hdr-user",
+              "type": "UserBadge",
+              "name": "User",
+              "properties": {},
+              "layout": {
+                "widthMode": "hug",
+                "heightMode": "hug"
+              }
+            }
+          ]
+        },
+        {
+          "id": "hdr-edge",
+          "type": "Separator",
+          "name": "Divider",
+          "properties": {
+            "orientation": "horizontal",
+            "thickness": 1,
+            "color": "var(--hmi-border)",
+            "inset": 0
+          },
+          "layout": {
+            "widthMode": "fill",
+            "heightMode": "hug"
+          }
+        }
+      ]
+    }
+  ],
+  "footer": [
+    {
+      "id": "ftr",
+      "type": "Container",
+      "name": "Footer",
+      "properties": {
+        "visible": true,
+        "showWhenEmpty": true,
+        "background": "var(--hmi-surface)"
+      },
+      "layout": {
+        "direction": "column",
+        "gap": "0",
+        "wrap": false,
+        "align": "stretch",
+        "justify": "flex-start",
+        "radius": "0",
+        "width": "100%",
+        "height": "100%",
+        "widthMode": "fixed",
+        "heightMode": "fixed",
+        "paddingTop": "0",
+        "paddingRight": "0",
+        "paddingBottom": "0",
+        "paddingLeft": "0"
+      },
+      "children": [
+        {
+          "id": "ftr-edge",
+          "type": "Separator",
+          "name": "Divider",
+          "properties": {
+            "orientation": "horizontal",
+            "thickness": 1,
+            "color": "var(--hmi-border)",
+            "inset": 0
+          },
+          "layout": {
+            "widthMode": "fill",
+            "heightMode": "hug"
+          }
+        },
+        {
+          "id": "ftr-bar",
+          "type": "Container",
+          "name": "Bar",
+          "properties": {
+            "visible": true,
+            "showWhenEmpty": true,
+            "background": "transparent"
+          },
+          "layout": {
+            "direction": "row",
+            "gap": "14px",
+            "wrap": false,
+            "align": "center",
+            "justify": "flex-start",
+            "radius": "0",
+            "width": "100%",
+            "grow": 1,
+            "widthMode": "fixed",
+            "heightMode": "fill",
+            "paddingTop": "0",
+            "paddingRight": "20px",
+            "paddingBottom": "0",
+            "paddingLeft": "20px"
+          },
+          "children": [
+            {
+              "id": "ftr-state",
+              "type": "StatusPill",
+              "name": "Machine state",
+              "properties": {
+                "text": {
+                  "$if": {
+                    "condition": {
+                      "$var": {
+                        "path": "Brew:Machine/Brewing"
+                      }
+                    },
+                    "true": {
+                      "$loc": "Brewing"
+                    },
+                    "false": {
+                      "$if": {
+                        "condition": {
+                          "$var": {
+                            "path": "Brew:Machine/Power"
+                          }
+                        },
+                        "true": {
+                          "$loc": "Ready"
+                        },
+                        "false": {
+                          "$loc": "Off"
+                        }
+                      }
+                    }
+                  }
+                },
+                "tone": {
+                  "$if": {
+                    "condition": {
+                      "$var": {
+                        "path": "Brew:Machine/Brewing"
+                      }
+                    },
+                    "true": "accent",
+                    "false": {
+                      "$if": {
+                        "condition": {
+                          "$var": {
+                            "path": "Brew:Machine/Power"
+                          }
+                        },
+                        "true": "ok",
+                        "false": "neutral"
+                      }
+                    }
+                  }
+                },
+                "pulse": {
+                  "$var": {
+                    "path": "Brew:Machine/Brewing"
+                  }
+                },
+                "radius": "999px"
+              },
+              "layout": {
+                "widthMode": "hug",
+                "heightMode": "hug"
+              }
+            },
+            {
+              "id": "ftr-rule-1",
+              "type": "Separator",
+              "name": "Divider",
+              "properties": {
+                "orientation": "vertical",
+                "thickness": 1,
+                "color": "var(--hmi-border)",
+                "inset": 12
+              },
+              "layout": {
+                "heightMode": "fill",
+                "widthMode": "hug"
+              }
+            },
+            {
+              "id": "ftr-cups",
+              "type": "Label",
+              "name": "ftr-cups",
+              "properties": {
+                "typography": "code",
+                "text": {
+                  "$stringExpr": {
+                    "template": "{1} · {2}",
+                    "wildcards": {
+                      "1": {
+                        "$loc": "Cups today"
+                      },
+                      "2": {
+                        "$var": {
+                          "path": "Brew:Counters/CupsToday"
+                        }
+                      }
+                    }
+                  }
+                },
+                "color": "var(--hmi-text-muted)"
+              },
+              "layout": {
+                "widthMode": "hug",
+                "heightMode": "hug"
+              }
+            },
+            {
+              "id": "ftr-rule-2",
+              "type": "Separator",
+              "name": "Divider",
+              "properties": {
+                "orientation": "vertical",
+                "thickness": 1,
+                "color": "var(--hmi-border)",
+                "inset": 12
+              },
+              "layout": {
+                "heightMode": "fill",
+                "widthMode": "hug"
+              }
+            },
+            {
+              "id": "ftr-recipe",
+              "type": "Label",
+              "name": "ftr-recipe",
+              "properties": {
+                "typography": "code",
+                "text": {
+                  "$if": {
+                    "condition": {
+                      "$recipe": {
+                        "type": "drink",
+                        "field": "loaded"
+                      }
+                    },
+                    "true": {
+                      "$stringExpr": {
+                        "template": "{1} · {2}",
+                        "wildcards": {
+                          "1": {
+                            "$loc": "Recipe"
+                          },
+                          "2": {
+                            "$recipe": {
+                              "type": "drink",
+                              "field": "activeName"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "false": {
+                      "$loc": "No recipe loaded"
+                    }
+                  }
+                },
+                "color": "var(--hmi-text-muted)"
+              },
+              "layout": {
+                "widthMode": "hug",
+                "heightMode": "hug"
+              }
+            },
+            {
+              "id": "ftr-sp",
+              "type": "StretchSpacer",
+              "name": "Spacer",
+              "properties": {
+                "mode": "ratio",
+                "ratio": 1
+              },
+              "layout": {
+                "grow": 1,
+                "widthMode": "fill",
+                "heightMode": "hug",
+                "minWidth": "auto"
+              }
+            },
+            {
+              "id": "ftr-demo",
+              "type": "Label",
+              "name": "ftr-demo",
+              "properties": {
+                "typography": "code",
+                "text": {
+                  "$loc": "NEXT HMI demo project"
+                },
+                "color": "var(--hmi-text-muted)"
+              },
+              "layout": {
+                "widthMode": "hug",
+                "heightMode": "hug"
+              }
+            },
+            {
+              "id": "ftr-rule-3",
+              "type": "Separator",
+              "name": "Divider",
+              "properties": {
+                "orientation": "vertical",
+                "thickness": 1,
+                "color": "var(--hmi-border)",
+                "inset": 12
+              },
+              "layout": {
+                "heightMode": "fill",
+                "widthMode": "hug"
+              }
+            },
+            {
+              "id": "ftr-clock",
+              "type": "Clock",
+              "name": "Clock",
+              "properties": {
+                "format": "HH:mm:ss"
+              },
+              "layout": {
+                "widthMode": "hug",
+                "heightMode": "hug"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "leftSidebar": [],
+  "rightSidebar": [],
+  "shell": {
+    "appTitle": "NEXT BREW",
+    "appIcon": "images/nextbrew.svg",
+    "bootLogo": "images/nextbrew.svg",
+    "hmiScale": 1,
+    "showScrollbars": false,
+    "header": {
+      "enabled": true,
+      "expandedSize": "72px",
+      "defaultState": "expanded",
+      "background": "var(--hmi-surface)"
+    },
+    "footer": {
+      "enabled": true,
+      "expandedSize": "44px",
+      "defaultState": "expanded",
+      "background": "var(--hmi-surface)"
+    },
+    "leftSidebar": {
+      "enabled": false
+    },
+    "rightSidebar": {
+      "enabled": false
+    }
+  },
+  "dialogs": [
+    {
+      "id": "about",
+      "title": "About this demo",
+      "showCloseButton": true,
+      "closeOnBackgroundPress": true,
+      "widgets": [
+        {
+          "id": "about-root",
+          "type": "Container",
+          "name": "About",
+          "properties": {
+            "visible": true,
+            "showWhenEmpty": true,
+            "background": "transparent"
+          },
+          "layout": {
+            "direction": "column",
+            "gap": "18px",
+            "wrap": false,
+            "align": "stretch",
+            "justify": "flex-start",
+            "radius": "0",
+            "width": "100%",
+            "widthMode": "fixed",
+            "heightMode": "hug",
+            "paddingTop": "24px",
+            "paddingRight": "24px",
+            "paddingBottom": "24px",
+            "paddingLeft": "24px"
+          },
+          "children": [
+            {
+              "id": "about-head",
+              "type": "Container",
+              "name": "Head",
+              "properties": {
+                "visible": true,
+                "showWhenEmpty": true,
+                "background": "transparent"
+              },
+              "layout": {
+                "direction": "row",
+                "gap": "12px",
+                "wrap": false,
+                "align": "center",
+                "justify": "flex-start",
+                "radius": "0",
+                "widthMode": "fill",
+                "heightMode": "hug",
+                "paddingTop": "0",
+                "paddingRight": "0",
+                "paddingBottom": "0",
+                "paddingLeft": "0"
+              },
+              "children": [
+                {
+                  "id": "about-logo",
+                  "type": "Icon",
+                  "name": "Logo",
+                  "properties": {
+                    "iconName": {
+                      "$static": {
+                        "type": "custom",
+                        "path": "icons/cup.svg"
+                      }
+                    },
+                    "size": 28,
+                    "color": "var(--hmi-accent)",
+                    "chrome": false
+                  },
+                  "layout": {
+                    "widthMode": "hug",
+                    "heightMode": "hug"
+                  }
+                },
+                {
+                  "id": "about-title",
+                  "type": "Container",
+                  "name": "Title",
+                  "properties": {
+                    "visible": true,
+                    "showWhenEmpty": true,
+                    "background": "transparent"
+                  },
+                  "layout": {
+                    "direction": "column",
+                    "gap": "0",
+                    "wrap": false,
+                    "align": "stretch",
+                    "justify": "flex-start",
+                    "radius": "0",
+                    "widthMode": "fill",
+                    "heightMode": "hug",
+                    "grow": 1,
+                    "paddingTop": "0",
+                    "paddingRight": "0",
+                    "paddingBottom": "0",
+                    "paddingLeft": "0"
+                  },
+                  "children": [
+                    {
+                      "id": "about-h",
+                      "type": "Label",
+                      "name": "about-h",
+                      "properties": {
+                        "typography": "heading",
+                        "text": {
+                          "$loc": "NEXT BREW"
+                        }
+                      },
+                      "layout": {
+                        "widthMode": "fill",
+                        "heightMode": "hug"
+                      }
+                    },
+                    {
+                      "id": "about-s",
+                      "type": "Label",
+                      "name": "about-s",
+                      "properties": {
+                        "typography": "caption",
+                        "text": {
+                          "$loc": "A demo espresso machine, built entirely in the editor."
+                        },
+                        "color": "var(--hmi-text-muted)"
+                      },
+                      "layout": {
+                        "widthMode": "fill",
+                        "heightMode": "hug"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "about-rule-1",
+              "type": "Separator",
+              "name": "Divider",
+              "properties": {
+                "orientation": "horizontal",
+                "thickness": 1,
+                "color": "var(--hmi-border)",
+                "inset": 0
+              },
+              "layout": {
+                "widthMode": "fill",
+                "heightMode": "hug"
+              }
+            },
+            {
+              "id": "about-intro",
+              "type": "Label",
+              "name": "about-intro",
+              "properties": {
+                "typography": "body",
+                "text": {
+                  "$loc": "Nothing here talks to real hardware. The variables live in a static datasource, so every value starts where the project put it and only moves when you move it. That is the point — open the Machine page and drive it."
+                },
+                "wrap": "wrap"
+              },
+              "layout": {
+                "widthMode": "fill",
+                "heightMode": "hug"
+              }
+            },
+            {
+              "id": "about-rule-2",
+              "type": "Separator",
+              "name": "Divider",
+              "properties": {
+                "orientation": "horizontal",
+                "thickness": 1,
+                "color": "var(--hmi-border)",
+                "inset": 0
+              },
+              "layout": {
+                "widthMode": "fill",
+                "heightMode": "hug"
+              }
+            },
+            {
+              "id": "about-p",
+              "type": "Container",
+              "name": "Pages & shell",
+              "properties": {
+                "visible": true,
+                "showWhenEmpty": true,
+                "background": "transparent"
+              },
+              "layout": {
+                "direction": "column",
+                "gap": "2px",
+                "wrap": false,
+                "align": "stretch",
+                "justify": "flex-start",
+                "radius": "0",
+                "widthMode": "fill",
+                "heightMode": "hug",
+                "paddingTop": "0",
+                "paddingRight": "0",
+                "paddingBottom": "0",
+                "paddingLeft": "0"
+              },
+              "children": [
+                {
+                  "id": "about-p-t",
+                  "type": "Label",
+                  "name": "about-p-t",
+                  "properties": {
+                    "typography": "label",
+                    "text": {
+                      "$loc": "Pages & shell"
+                    },
+                    "color": "var(--hmi-accent)"
+                  },
+                  "layout": {
+                    "widthMode": "fill",
+                    "heightMode": "hug"
+                  }
+                },
+                {
+                  "id": "about-p-b",
+                  "type": "Label",
+                  "name": "about-p-b",
+                  "properties": {
+                    "typography": "body",
+                    "text": {
+                      "$loc": "Three pages in a group, plus a header and a footer. This panel is a dialog — for a page overlay, try Peek at the alarms on the Machine page."
+                    },
+                    "wrap": "wrap",
+                    "color": "var(--hmi-text-muted)"
+                  },
+                  "layout": {
+                    "widthMode": "fill",
+                    "heightMode": "hug"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "about-d",
+              "type": "Container",
+              "name": "Data & bindings",
+              "properties": {
+                "visible": true,
+                "showWhenEmpty": true,
+                "background": "transparent"
+              },
+              "layout": {
+                "direction": "column",
+                "gap": "2px",
+                "wrap": false,
+                "align": "stretch",
+                "justify": "flex-start",
+                "radius": "0",
+                "widthMode": "fill",
+                "heightMode": "hug",
+                "paddingTop": "0",
+                "paddingRight": "0",
+                "paddingBottom": "0",
+                "paddingLeft": "0"
+              },
+              "children": [
+                {
+                  "id": "about-d-t",
+                  "type": "Label",
+                  "name": "about-d-t",
+                  "properties": {
+                    "typography": "label",
+                    "text": {
+                      "$loc": "Data & bindings"
+                    },
+                    "color": "var(--hmi-accent)"
+                  },
+                  "layout": {
+                    "widthMode": "fill",
+                    "heightMode": "hug"
+                  }
+                },
+                {
+                  "id": "about-d-b",
+                  "type": "Label",
+                  "name": "about-d-b",
+                  "properties": {
+                    "typography": "body",
+                    "text": {
+                      "$loc": "One static datasource. Every reading is a $var binding, and the status pill and tile tones are computed with $if and $compare."
+                    },
+                    "wrap": "wrap",
+                    "color": "var(--hmi-text-muted)"
+                  },
+                  "layout": {
+                    "widthMode": "fill",
+                    "heightMode": "hug"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "about-a",
+              "type": "Container",
+              "name": "Actions",
+              "properties": {
+                "visible": true,
+                "showWhenEmpty": true,
+                "background": "transparent"
+              },
+              "layout": {
+                "direction": "column",
+                "gap": "2px",
+                "wrap": false,
+                "align": "stretch",
+                "justify": "flex-start",
+                "radius": "0",
+                "widthMode": "fill",
+                "heightMode": "hug",
+                "paddingTop": "0",
+                "paddingRight": "0",
+                "paddingBottom": "0",
+                "paddingLeft": "0"
+              },
+              "children": [
+                {
+                  "id": "about-a-t",
+                  "type": "Label",
+                  "name": "about-a-t",
+                  "properties": {
+                    "typography": "label",
+                    "text": {
+                      "$loc": "Actions"
+                    },
+                    "color": "var(--hmi-accent)"
+                  },
+                  "layout": {
+                    "widthMode": "fill",
+                    "heightMode": "hug"
+                  }
+                },
+                {
+                  "id": "about-a-b",
+                  "type": "Label",
+                  "name": "about-a-b",
+                  "properties": {
+                    "typography": "body",
+                    "text": {
+                      "$loc": "Brew now confirms with an alert, then writes a variable and reports back with a toast."
+                    },
+                    "wrap": "wrap",
+                    "color": "var(--hmi-text-muted)"
+                  },
+                  "layout": {
+                    "widthMode": "fill",
+                    "heightMode": "hug"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "about-r",
+              "type": "Container",
+              "name": "Recipes",
+              "properties": {
+                "visible": true,
+                "showWhenEmpty": true,
+                "background": "transparent"
+              },
+              "layout": {
+                "direction": "column",
+                "gap": "2px",
+                "wrap": false,
+                "align": "stretch",
+                "justify": "flex-start",
+                "radius": "0",
+                "widthMode": "fill",
+                "heightMode": "hug",
+                "paddingTop": "0",
+                "paddingRight": "0",
+                "paddingBottom": "0",
+                "paddingLeft": "0"
+              },
+              "children": [
+                {
+                  "id": "about-r-t",
+                  "type": "Label",
+                  "name": "about-r-t",
+                  "properties": {
+                    "typography": "label",
+                    "text": {
+                      "$loc": "Recipes"
+                    },
+                    "color": "var(--hmi-accent)"
+                  },
+                  "layout": {
+                    "widthMode": "fill",
+                    "heightMode": "hug"
+                  }
+                },
+                {
+                  "id": "about-r-b",
+                  "type": "Label",
+                  "name": "about-r-b",
+                  "properties": {
+                    "typography": "body",
+                    "text": {
+                      "$loc": "Three drinks. Loading one writes six variables at once and verifies them."
+                    },
+                    "wrap": "wrap",
+                    "color": "var(--hmi-text-muted)"
+                  },
+                  "layout": {
+                    "widthMode": "fill",
+                    "heightMode": "hug"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "about-al",
+              "type": "Container",
+              "name": "Alarms",
+              "properties": {
+                "visible": true,
+                "showWhenEmpty": true,
+                "background": "transparent"
+              },
+              "layout": {
+                "direction": "column",
+                "gap": "2px",
+                "wrap": false,
+                "align": "stretch",
+                "justify": "flex-start",
+                "radius": "0",
+                "widthMode": "fill",
+                "heightMode": "hug",
+                "paddingTop": "0",
+                "paddingRight": "0",
+                "paddingBottom": "0",
+                "paddingLeft": "0"
+              },
+              "children": [
+                {
+                  "id": "about-al-t",
+                  "type": "Label",
+                  "name": "about-al-t",
+                  "properties": {
+                    "typography": "label",
+                    "text": {
+                      "$loc": "Alarms"
+                    },
+                    "color": "var(--hmi-accent)"
+                  },
+                  "layout": {
+                    "widthMode": "fill",
+                    "heightMode": "hug"
+                  }
+                },
+                {
+                  "id": "about-al-b",
+                  "type": "Label",
+                  "name": "about-al-b",
+                  "properties": {
+                    "typography": "body",
+                    "text": {
+                      "$loc": "Four definitions — two on value ranges, one low-level, one boolean. Trip them from the Machine page."
+                    },
+                    "wrap": "wrap",
+                    "color": "var(--hmi-text-muted)"
+                  },
+                  "layout": {
+                    "widthMode": "fill",
+                    "heightMode": "hug"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "about-t",
+              "type": "Container",
+              "name": "Themes & translations",
+              "properties": {
+                "visible": true,
+                "showWhenEmpty": true,
+                "background": "transparent"
+              },
+              "layout": {
+                "direction": "column",
+                "gap": "2px",
+                "wrap": false,
+                "align": "stretch",
+                "justify": "flex-start",
+                "radius": "0",
+                "widthMode": "fill",
+                "heightMode": "hug",
+                "paddingTop": "0",
+                "paddingRight": "0",
+                "paddingBottom": "0",
+                "paddingLeft": "0"
+              },
+              "children": [
+                {
+                  "id": "about-t-t",
+                  "type": "Label",
+                  "name": "about-t-t",
+                  "properties": {
+                    "typography": "label",
+                    "text": {
+                      "$loc": "Themes & translations"
+                    },
+                    "color": "var(--hmi-accent)"
+                  },
+                  "layout": {
+                    "widthMode": "fill",
+                    "heightMode": "hug"
+                  }
+                },
+                {
+                  "id": "about-t-b",
+                  "type": "Label",
+                  "name": "about-t-b",
+                  "properties": {
+                    "typography": "body",
+                    "text": {
+                      "$loc": "Two themes and two languages, both switched from the header."
+                    },
+                    "wrap": "wrap",
+                    "color": "var(--hmi-text-muted)"
+                  },
+                  "layout": {
+                    "widthMode": "fill",
+                    "heightMode": "hug"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "globalEvents": {
+    "onHmiLoaded": [
+      {
+        "type": "writeDataVariable",
+        "datasource": "Brew",
+        "path": "Machine/Power",
+        "value": true
+      },
+      {
+        "type": "writeDataVariable",
+        "datasource": "Brew",
+        "path": "Machine/Brewing",
+        "value": false
+      },
+      {
+        "type": "writeDataVariable",
+        "datasource": "Brew",
+        "path": "Boiler/Temp",
+        "value": 92.5
+      },
+      {
+        "type": "writeDataVariable",
+        "datasource": "Brew",
+        "path": "Boiler/Setpoint",
+        "value": 93
+      },
+      {
+        "type": "writeDataVariable",
+        "datasource": "Brew",
+        "path": "Pump/Pressure",
+        "value": 9
+      },
+      {
+        "type": "writeDataVariable",
+        "datasource": "Brew",
+        "path": "Hopper/BeanLevel",
+        "value": 62
+      },
+      {
+        "type": "writeDataVariable",
+        "datasource": "Brew",
+        "path": "Hopper/Dose",
+        "value": 18
+      },
+      {
+        "type": "writeDataVariable",
+        "datasource": "Brew",
+        "path": "Hopper/Grind",
+        "value": "medium"
+      },
+      {
+        "type": "writeDataVariable",
+        "datasource": "Brew",
+        "path": "Tank/WaterLevel",
+        "value": 78
+      },
+      {
+        "type": "writeDataVariable",
+        "datasource": "Brew",
+        "path": "Waste/DrawerFull",
+        "value": false
+      },
+      {
+        "type": "writeDataVariable",
+        "datasource": "Brew",
+        "path": "Counters/CupsToday",
+        "value": 3
+      },
+      {
+        "type": "writeDataVariable",
+        "datasource": "Brew",
+        "path": "Counters/ShotTime",
+        "value": 27.5
+      },
+      {
+        "type": "writeDataVariable",
+        "datasource": "Brew",
+        "path": "Drink/Name",
+        "value": "Espresso"
+      },
+      {
+        "type": "showToast",
+        "message": {
+          "$loc": "Welcome to NEXT BREW — open the Machine page and drive it yourself."
+        },
+        "severity": "info",
+        "discard": "auto",
+        "duration": 6000
+      }
+    ],
+    "onPageLoaded": [],
+    "onLocaleChanged": [],
+    "onUserLoggedIn": [
+      {
+        "type": "showToast",
+        "message": {
+          "$stringExpr": {
+            "template": "{1} {2}",
+            "wildcards": {
+              "1": {
+                "$loc": "Signed in as"
+              },
+              "2": {
+                "$user": {
+                  "field": "username"
+                }
+              }
+            }
+          }
+        },
+        "severity": "info",
+        "discard": "auto",
+        "duration": 4000
+      }
+    ],
+    "onUserLoggedOut": []
+  },
+  "mcpEnabled": false
+}

@@ -83,7 +83,7 @@ describe('DatasourcePropertiesPanel', () => {
       expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled();
     });
 
-    it('does not clear its timeout on unmount, so onStatusChange still fires after the component is gone (leak)', async () => {
+    it('clears its settle timeout on unmount', async () => {
       mockedApiJson.mockResolvedValue(undefined);
       const onStatusChange = vi.fn();
 
@@ -104,7 +104,7 @@ describe('DatasourcePropertiesPanel', () => {
 
       await act(() => vi.advanceTimersByTimeAsync(1500));
 
-      expect(onStatusChange).toHaveBeenCalledTimes(1);
+      expect(onStatusChange).not.toHaveBeenCalled();
     });
   });
 
@@ -235,7 +235,7 @@ describe('DatasourcePropertiesPanel', () => {
       expect(screen.queryByRole('alert')).toBeNull();
     });
 
-    it('does not clear its timeout on unmount, so onStatusChange still fires after the component is gone (leak)', async () => {
+    it('clears its settle timeout on unmount', async () => {
       mockedApiJson.mockResolvedValue(undefined);
       const onStatusChange = vi.fn();
 
@@ -256,7 +256,47 @@ describe('DatasourcePropertiesPanel', () => {
 
       await act(() => vi.advanceTimersByTimeAsync(2000));
 
-      expect(onStatusChange).toHaveBeenCalledTimes(2);
+      expect(onStatusChange).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not carry a pending connect over to the next datasource', async () => {
+      mockedApiJson.mockResolvedValue(undefined);
+      const onStatusChange = vi.fn();
+
+      const { rerender } = render(
+        <DatasourcePropertiesPanel
+          config={makeOpcuaClientConfig()}
+          connected={false}
+          onSave={vi.fn()}
+          onStatusChange={onStatusChange}
+        />,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
+      await act(() => vi.advanceTimersByTimeAsync(0));
+      expect(screen.getByRole('button', { name: 'Connecting…' })).toBeDisabled();
+
+      // The panel is reused across a datasource switch — same component, new
+      // config — so a pending settle would otherwise land on the new selection.
+      const other = { ...makeOpcuaClientConfig(), name: 'PLC2' };
+      await act(async () => {
+        rerender(
+          <DatasourcePropertiesPanel
+            config={other}
+            connected={false}
+            statusError="[Errno 61] Connection refused"
+            onSave={vi.fn()}
+            onStatusChange={onStatusChange}
+          />,
+        );
+      });
+
+      expect(screen.getByRole('button', { name: 'Connect' })).toBeEnabled();
+      expect(screen.getByRole('alert')).toHaveTextContent('[Errno 61] Connection refused');
+
+      await act(() => vi.advanceTimersByTimeAsync(2000));
+
+      expect(onStatusChange).toHaveBeenCalledTimes(1);
     });
   });
 

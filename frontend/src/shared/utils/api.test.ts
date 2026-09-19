@@ -4,6 +4,7 @@ import {
   apiJson,
   isApiError,
   MANAGER_SESSION_REQUIRED,
+  setProjectUnavailableHandler,
   setSessionExpiredHandler,
 } from './api';
 
@@ -16,6 +17,7 @@ function jsonResponse(status: number, body: unknown): Response {
 
 afterEach(() => {
   setSessionExpiredHandler(null);
+  setProjectUnavailableHandler(null);
   vi.unstubAllGlobals();
 });
 
@@ -74,6 +76,20 @@ describe('apiErrorFrom', () => {
     const handler = vi.fn();
     setSessionExpiredHandler(handler);
     await apiErrorFrom(jsonResponse(401, { detail: 'invalid_credentials' }));
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('signals an absent project backend on a 503', async () => {
+    const handler = vi.fn();
+    setProjectUnavailableHandler(handler);
+    await apiErrorFrom(jsonResponse(503, { detail: 'Project is not running' }));
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it('leaves every other failure to its caller', async () => {
+    const handler = vi.fn();
+    setProjectUnavailableHandler(handler);
+    await apiErrorFrom(jsonResponse(500, { detail: 'boom' }));
     expect(handler).not.toHaveBeenCalled();
   });
 });

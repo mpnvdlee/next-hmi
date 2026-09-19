@@ -46,6 +46,22 @@ export function setSessionExpiredHandler(handler: (() => void) | null): void {
   sessionExpiredHandler = handler;
 }
 
+let projectUnavailableHandler: (() => void) | null = null;
+
+/**
+ * Register the one place that reacts to the project's backend not being there.
+ *
+ * The manager answers 503 for every call under a `/runtime|editor/<slug>/`
+ * prefix whose instance is not running, so without a central signal the app
+ * renders an empty project with no explanation — the same failure mode
+ * `setSessionExpiredHandler` exists for. The handler confirms *why* with the
+ * manager before showing anything; a 503 alone also covers an instance that is
+ * still starting.
+ */
+export function setProjectUnavailableHandler(handler: (() => void) | null): void {
+  projectUnavailableHandler = handler;
+}
+
 export async function apiErrorFrom(res: Response): Promise<ApiError> {
   let detail: string | undefined;
   let code: string | null = null;
@@ -57,6 +73,7 @@ export async function apiErrorFrom(res: Response): Promise<ApiError> {
     // body wasn't JSON — fall through to HTTP code
   }
   if (res.status === 401 && code === MANAGER_SESSION_REQUIRED) sessionExpiredHandler?.();
+  if (res.status === 503) projectUnavailableHandler?.();
   return new ApiError(detail ?? `HTTP ${res.status}`, res.status, code);
 }
 

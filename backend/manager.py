@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from collections.abc import Callable
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from urllib.parse import quote
@@ -38,12 +39,14 @@ from api.projects_api import router as projects_router
 from api.supervisor_api import router as supervisor_router
 from api.system_api import manager_router as system_router
 from api.telemetry_api import router as telemetry_router
+from api.thumbnail_api import manager_router as thumbnail_manager_router
 from api.tls_api import router as tls_router
 from core import manager_auth, operator_setup, peer_tokens, telemetry, tls_settings
 from core.exceptions import register_exception_handlers
 from core.logging_setup import configure_logging
 from core.manifest import (
     default_project,
+    drop_auto_seeded_projects_root,
     find_project,
     load_manifest,
     migrate_invalid_project_ids,
@@ -142,6 +145,13 @@ async def lifespan(app: FastAPI):
                 "manifest: migrated project ids that predate the canonical grammar: %s",
                 ", ".join(f"{old} -> {new}" for old, new in renamed.items()),
             )
+        unpinned = drop_auto_seeded_projects_root()
+        if unpinned:
+            logger.info(
+                "manifest: dropped the auto-seeded projects root %s — new projects now "
+                "default to the Documents folder; the folder itself is left untouched",
+                unpinned,
+            )
         reconcile_transfer_journals()
         project_resume.prepare_running_set()
         await asyncio.to_thread(supervisor.resume_all)
@@ -186,6 +196,7 @@ app.include_router(mcp_tokens_router)
 app.include_router(operator_setup_router)
 app.include_router(supervisor_router)
 app.include_router(projects_router)
+app.include_router(thumbnail_manager_router)
 app.include_router(system_router)
 app.include_router(tls_router)
 app.include_router(telemetry_router)
@@ -382,6 +393,14 @@ def _unavailable_reason(project_id: str) -> str | None:
     return "crashed" if status == "crashed" else "stopped"
 
 
+# Set by the SPA block below when this build ships a frontend bundle. A project
+# document whose instance is gone has no child to serve it, so the manager
+# renders the bundle itself and the app explains the outage in place
+# (ProjectUnavailableOverlay). A source checkout has no bundle to render, so the
+# guard falls back to bouncing the navigation to the dashboard.
+_render_instance_shell: Callable[[str], str] | None = None
+
+
 async def _proxy_ws_to_child(websocket: WebSocket, project_id: str) -> None:
     """Bridge a browser WebSocket to the project child's ``/ws``.
 
@@ -479,6 +498,10 @@ async def _proxy_http_to_child(
         raise HTTPException(status_code=404)
     reason = _unavailable_reason(project_id)
     if reason is not None and _is_document_request(request):
+        if _render_instance_shell is not None:
+            return HTMLResponse(
+                _render_instance_shell(forwarded_prefix or f"/runtime/{project_id}/")
+            )
         return RedirectResponse(
             url=f"/projects?unavailable={project_id}&reason={reason}", status_code=303
         )
@@ -602,6 +625,20 @@ if _frontend_dist_env:
             base_path="/",
             mode="manager",
         )
+
+    def _render_instance_index(base_path: str) -> str:
+        # Same bundle, told it is a project document under `base_path`, so the
+        # app boots the instance routes and its own 503s drive the overlay —
+        # rather than the manager dashboard appearing at a project URL.
+        return frontend_serve.render_index_html(
+            _frontend_dist,
+            _frontend_dist / "external-libraries",
+            _frontend_dist / "external-modules.json",
+            base_path=base_path,
+            mode="instance",
+        )
+
+    _render_instance_shell = _render_instance_index
 
     _spa_route_start = len(app.router.routes)
 

@@ -170,6 +170,26 @@ def test_pack_excludes_widget_build(tmp_path: Path) -> None:
     assert not any(n.startswith("widget-build/") for n in names), names
 
 
+def test_pack_excludes_certs(tmp_path: Path) -> None:
+    """certs/ holds an OPC-UA private key — it must not reach a zip, and that
+    holds for a key stored under a name no suffix filter would recognise."""
+    src = tmp_path / "src"
+    _make_project(src)
+    certs = src / "certs"
+    certs.mkdir()
+    (certs / "plc1-cert.der").write_bytes(b"public certificate")
+    (certs / "plc1-key.pem").write_bytes(b"-----BEGIN PRIVATE KEY-----")
+    (certs / "operator-upload.key").write_bytes(b"-----BEGIN PRIVATE KEY-----")
+
+    buf = io.BytesIO()
+    pack_project(src, buf)
+    buf.seek(0)
+    with zipfile.ZipFile(buf, "r") as zf:
+        names = set(zf.namelist())
+
+    assert not any(n.startswith("certs/") for n in names), names
+
+
 def test_pack_writes_metadata_if_missing(tmp_path: Path) -> None:
     """A folder with no metadata block should still pack — packer creates one in config.json."""
     src = tmp_path / "src"
@@ -341,3 +361,23 @@ def test_pack_preserves_executable_mode(tmp_path: Path) -> None:
 
     extracted_mode = (dest / "tool.sh").stat().st_mode & 0o777
     assert extracted_mode == 0o755
+
+
+def test_unpack_rejects_project_without_users(tmp_path: Path) -> None:
+    """An archive that carries no users.json installs a project nothing can start.
+
+    Regression: a content-less source folder packed into a well-formed archive
+    (the packer mints config.json for it), unpacked clean, and registered as a
+    complete transfer — leaving a project the supervisor then refused to start.
+    """
+    src = tmp_path / "src"
+    src.mkdir()
+    manifest_mod.ensure_project_metadata(src, name="Hollow")
+
+    buf = io.BytesIO()
+    pack_project(src, buf)
+    buf.seek(0)
+
+    dest = tmp_path / "dest"
+    with pytest.raises(UnsafeArchiveError, match=r"users\.json"):
+        unpack_project(buf, dest)

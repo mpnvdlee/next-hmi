@@ -168,6 +168,7 @@ elif _stamped is None:
 datas: list[tuple[str, str]] = [
     (str(frontend_dist), "frontend/dist"),
     (str(repo_root / "project-seed"), "project-seed"),
+    (str(repo_root / "project-example"), "project-example"),
     # Theme defaults are shared between the SPA's Theme Editor and the
     # backend's pydantic validation models; models/theme.py reads it via
     # sys._MEIPASS when frozen.

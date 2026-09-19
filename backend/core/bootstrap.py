@@ -47,17 +47,22 @@ def bootstrap_config_path() -> Path:
     return Path.home() / ".config" / "nexthmi" / CONFIG_FILENAME
 
 
-def platform_default_data_dir() -> Path:
-    """Default workspace location when no env var or bootstrap file is set.
+def platform_documents_dir() -> Path:
+    """The user's Documents folder — most discoverable spot for their files.
 
-    Documents folder on every platform — most discoverable spot for a
-    non-technical user to find their project files.
+    Windows reads ``USERPROFILE`` first: a roaming/redirected profile leaves
+    ``Path.home()`` pointing somewhere the user never browses to.
     """
     if sys.platform == "win32":
         userprofile = os.environ.get("USERPROFILE")
         if userprofile:
-            return Path(userprofile) / "Documents" / "NextHMI"
-    return Path.home() / "Documents" / "NextHMI"
+            return Path(userprofile) / "Documents"
+    return Path.home() / "Documents"
+
+
+def platform_default_data_dir() -> Path:
+    """Default runtime home when no env var or bootstrap file is set."""
+    return platform_documents_dir() / "NextHMI"
 
 
 def read_bootstrap_config(path: Path | None = None) -> dict[str, Any]:

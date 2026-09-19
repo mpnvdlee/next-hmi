@@ -56,6 +56,7 @@ Worth knowing before you hand a project to someone else, because it explains wha
 | `assets/`, `custom-widgets/`, `external-libraries/` | **Yes** | They are project content. |
 | `widget-build/` | No | Compiled widget output — rebuilt on the far side from the `.tsx` source. |
 | `historian/*.db`, `*.sqlite` (+ journals) | No | Logged samples are local to the installation that recorded them. |
+| `certs/` | No | It holds an OPC-UA private key. The receiver generates its own pair on first connect. |
 | `historian/config.json` | **Yes** | The receiver needs to know which variables to log. |
 | Symlinks | No | Never followed when packing, never created when unpacking. |
 

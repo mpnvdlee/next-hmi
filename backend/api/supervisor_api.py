@@ -11,11 +11,22 @@ import logging
 
 from core.exceptions import ConflictError
 from fastapi import APIRouter
+from pydantic import BaseModel
 from services.supervisor import supervisor
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/manager", tags=["manager"])
+
+
+class StartProjectBody(BaseModel):
+    # The manager UI sets this once the operator has confirmed upgrading a
+    # project whose on-disk format is behind this build's baseline; see
+    # Supervisor.start().
+    confirmUpgrade: bool = False
+
+
+_DEFAULT_START_BODY = StartProjectBody()
 
 
 @router.get("/running")
@@ -25,9 +36,11 @@ async def list_running() -> dict[str, list[dict]]:
 
 
 @router.post("/projects/{project_id}/start", status_code=202)
-async def start_project(project_id: str) -> dict:
+async def start_project(project_id: str, body: StartProjectBody = _DEFAULT_START_BODY) -> dict:
     try:
-        return await asyncio.to_thread(supervisor.start, project_id)
+        return await asyncio.to_thread(
+            supervisor.start, project_id, confirm_upgrade=body.confirmUpgrade
+        )
     except ValueError as exc:
         raise ConflictError(str(exc)) from exc
 

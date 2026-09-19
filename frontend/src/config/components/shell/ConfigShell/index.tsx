@@ -2,6 +2,7 @@ import './style.css';
 import { useEffect, useMemo } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import { useProjectStore } from '@shared/store/projectStore';
+import { captureThumbnail } from '@config/thumbnails/captureThumbnail';
 import VariableBindingPicker from '@config/components/editor/VariableBindingPicker';
 import WidgetPropPicker from '@config/components/editor/WidgetPropPicker';
 import IconSourcePicker from '@config/components/editor/IconSourcePicker';
@@ -132,6 +133,12 @@ export default function ConfigShell() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [dirty, saving, canUndo, canRedo, undo, redo, saveAll]);
+
+  useEffect(() => {
+    const { registerAfterSave, unregisterAfterSave } = useProjectStore.getState();
+    registerAfterSave('thumbnail', captureThumbnail);
+    return () => unregisterAfterSave('thumbnail');
+  }, []);
 
   return (
     <div className="cfg-shell">

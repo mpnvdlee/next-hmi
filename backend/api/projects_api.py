@@ -12,7 +12,7 @@ import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from core import mcp_tokens, operator_setup, runtime_home
 from core.exceptions import ConflictError, NotFoundError, ValidationError
@@ -33,24 +33,29 @@ from core.manifest import (
     validate_project_id,
     write_project_metadata,
 )
-from core.project_migrations import PROJECT_FORMAT_VERSION
+from core.project_migrations import PROJECT_FORMAT_VERSION, stamp_current_format
 from core.project_packer import (
     UnsafeArchiveError,
     pack_project,
     safe_filename,
     unpack_project,
 )
+from core.storage import repo_root
 from core.time_utils import iso_now
 from fastapi import APIRouter, File, Form, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from api.thumbnail_api import delete_thumbnail, thumbnail_path, thumbnail_updated_at
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
-_REPO_ROOT = Path(__file__).parent.parent.parent
-_SEED_DIR_CANDIDATES = (_REPO_ROOT / "project-seed", _REPO_ROOT / "backend" / "project-seed")
+_TEMPLATE_DIRNAMES: dict[str, str] = {
+    "empty": "project-seed",
+    "example": "project-example",
+}
 
 
 # ── request / response models ────────────────────────────────────────────────
@@ -59,6 +64,7 @@ _SEED_DIR_CANDIDATES = (_REPO_ROOT / "project-seed", _REPO_ROOT / "backend" / "p
 class CreateProjectBody(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     path: str = Field(min_length=1)
+    template: Literal["empty", "example"] = "empty"
 
 
 class LocateProjectBody(BaseModel):
@@ -84,24 +90,35 @@ class ValidatePathBody(BaseModel):
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 
-def _seed_dir() -> Path | None:
-    for candidate in _SEED_DIR_CANDIDATES:
+def _template_dir(template: str) -> Path | None:
+    """Locate a bundled project template under the install root.
+
+    Resolves through ``repo_root()`` rather than this file's own location: a
+    frozen build seals this module inside the archive, where the walk up from
+    ``__file__`` lands *above* the extracted tree and finds neither template.
+    """
+    dirname = _TEMPLATE_DIRNAMES.get(template)
+    if dirname is None:
+        return None
+    root = repo_root()
+    for candidate in (root / dirname, root / "backend" / dirname):
         if candidate.is_dir():
             return candidate
     return None
 
 
-def _copy_seed_into(target: Path) -> None:
-    seed = _seed_dir()
-    if seed is None:
-        # Empty project — caller is creating from scratch; create the minimal
-        # folder skeleton so ``ensure_active_project_dirs`` has something to
-        # work with when this project becomes live.
+def _copy_template_into(target: Path, template: str) -> None:
+    source = _template_dir(template)
+    if source is None:
+        # Only the empty template may be absent — a build without the bundled
+        # seed still has to be able to create a project.
+        if template != "empty":
+            raise ValidationError(f"Project template '{template}' is not bundled with this build")
         target.mkdir(parents=True, exist_ok=True)
         for sub in ("assets", "certs", "custom-widgets", "external-libraries"):
             (target / sub).mkdir(parents=True, exist_ok=True)
         return
-    for entry in seed.iterdir():
+    for entry in source.iterdir():
         dest = target / entry.name
         if entry.is_dir():
             shutil.copytree(entry, dest, dirs_exist_ok=True)
@@ -123,20 +140,62 @@ def _path_status(raw_path: str) -> str:
 
 
 def _entry_dict(entry: ProjectEntry, *, default_id: str | None = None) -> dict[str, Any]:
-    setup_state = operator_setup.state(Path(entry.path).expanduser())
+    path = Path(entry.path).expanduser()
+    setup_state = operator_setup.state(path)
+    status = _path_status(entry.path)
+    metadata = read_project_metadata(path) if status == "present" else None
+    format_version = metadata.formatVersion if metadata is not None else None
+    unsupported = format_version is not None and format_version > PROJECT_FORMAT_VERSION
+    # A project at the current format but carrying no release stamp predates the
+    # stamp, so it is replayed through the chain like a stale one.
+    needs_upgrade = (
+        metadata is not None
+        and not unsupported
+        and (
+            metadata.formatVersion < PROJECT_FORMAT_VERSION
+            or metadata.minAppVersion is None
+        )
+    )
     return {
         "id": entry.id,
         "name": entry.name,
         "path": entry.path,
         "addedAt": entry.addedAt,
         "lastOpenedAt": entry.lastOpenedAt,
-        "status": _path_status(entry.path),
+        "status": status,
         "isDefault": entry.id == default_id,
-        "mcpEnabled": project_mcp_enabled(Path(entry.path).expanduser()),
+        "mcpEnabled": project_mcp_enabled(path),
         "operatorSetupRequired": setup_state.status is operator_setup.SetupStatus.REQUIRED,
         "operatorSetupStatus": setup_state.status.value,
         "operatorSetupError": setup_state.error,
+        "formatVersion": format_version,
+        "minAppVersion": metadata.minAppVersion if metadata is not None else None,
+        "needsUpgrade": needs_upgrade,
+        "unsupportedFormat": unsupported,
+        "lastMigration": (
+            metadata.lastMigration.model_dump(mode="json")
+            if metadata is not None and metadata.lastMigration is not None
+            else None
+        ),
+        "thumbnailUpdatedAt": thumbnail_updated_at(entry.id),
     }
+
+
+def _ensure_default_root_ready(target: Path) -> None:
+    """Create the advertised default projects root before something lands in it.
+
+    Docker and headless Linux have no ``~/Documents``, so the create dialog's
+    own pre-filled default is a path whose parent is missing and
+    ``_validate_destination`` rejects it. The peer-transfer path already grows
+    the root before writing into it (``manager_peers_api._root``); this is the
+    same fix for the create path. Only a target actually inside the root does
+    anything — reading the root (``list_projects`` / ``_runtime-home``) must
+    keep creating nothing, and a target chosen elsewhere on disk must keep
+    failing on its own missing parent rather than have this conjure it up.
+    """
+    root = default_projects_root(load_manifest())
+    if target.is_relative_to(root):
+        root.mkdir(parents=True, exist_ok=True)
 
 
 def _validate_destination(target: Path, *, must_be_empty: bool) -> None:
@@ -181,6 +240,16 @@ def _move_runtime_state(old_id: str, new_id: str) -> None:
         except OSError:
             logger.warning(
                 "Could not move %s to %s after the project id changed", source, destination,
+            )
+
+    old_thumbnail, new_thumbnail = thumbnail_path(old_id), thumbnail_path(new_id)
+    if old_thumbnail.is_file() and not new_thumbnail.exists():
+        try:
+            old_thumbnail.rename(new_thumbnail)
+        except OSError:
+            logger.warning(
+                "Could not move %s to %s after the project id changed",
+                old_thumbnail, new_thumbnail,
             )
 
 
@@ -403,7 +472,7 @@ def list_projects() -> dict[str, Any]:
     manifest = load_manifest()
     return {
         "defaultProjectId": manifest.defaultProjectId,
-        "defaultProjectsRoot": manifest.defaultProjectsRoot,
+        "defaultProjectsRoot": str(default_projects_root(manifest)),
         "projects": [
             _entry_dict(entry, default_id=manifest.defaultProjectId)
             for entry in manifest.projects
@@ -602,7 +671,7 @@ def browse_dir(path: str | None = Query(default=None)) -> dict[str, Any]:
 
 @router.post("", status_code=201)
 def create_project(body: CreateProjectBody) -> dict[str, Any]:
-    """Seed a new project folder from ``project-seed/`` and add it to the manifest.
+    """Seed a new project folder from ``body.template`` and add it to the manifest.
 
     The target must not exist OR must be an empty directory. We seed into the
     directory and write a fresh ``project`` metadata block with a UUID into
@@ -621,18 +690,19 @@ def create_project(body: CreateProjectBody) -> dict[str, Any]:
             "add the existing project instead of creating it again.",
         )
 
+    _ensure_default_root_ready(target)
     _validate_destination(target, must_be_empty=True)
     target.mkdir(parents=True, exist_ok=True)
 
     try:
-        _copy_seed_into(target)
+        _copy_template_into(target, body.template)
     except OSError as exc:
         raise ValidationError(f"Failed to seed project at {target}: {exc}") from exc
 
     metadata = ensure_project_metadata(target, name=name)
     # Freshly seeded from project-seed/, which is already canonical, so stamp
     # it here rather than leaving it for the next activation.
-    metadata = metadata.model_copy(update={"formatVersion": PROJECT_FORMAT_VERSION})
+    metadata = stamp_current_format(metadata)
     write_project_metadata(target, metadata)
     with manifest_transaction() as manifest:
         if find_project(manifest, metadata.id) is not None:
@@ -750,19 +820,18 @@ def delete(project_id: str, deleteFolder: bool = False) -> dict[str, Any]:
 
         manifest.projects = [p for p in manifest.projects if p.id != entry.id]
         save_manifest(manifest)
+    delete_thumbnail(entry.id)
     logger.info("Removed project '%s' (%s) from manifest", entry.name, entry.id)
     return {"id": entry.id, "deletedFolder": bool(deleteFolder)}
 
 
 @router.get("/_runtime-home")
 def runtime_home_info() -> dict[str, Any]:
-    """Read-only helper used by the create dialog to suggest a default path."""
+    """Default paths for the settings page."""
     manifest = load_manifest()
-    home = runtime_home.runtime_home_path()
-    default_root = manifest.defaultProjectsRoot or str(home / "Projects")
     return {
-        "runtimeHome": str(home),
-        "defaultProjectsRoot": default_root,
+        "runtimeHome": str(runtime_home.runtime_home_path()),
+        "defaultProjectsRoot": str(default_projects_root(manifest)),
     }
 
 

@@ -9,6 +9,7 @@ test process.
 from __future__ import annotations
 
 import io
+import json
 import zipfile
 from pathlib import Path
 
@@ -16,6 +17,7 @@ import pytest
 from api import projects_api, system_api
 from core import manifest as manifest_mod
 from core import mcp_tokens, runtime_home
+from core import project_migrations as pm
 from core.exceptions import register_exception_handlers
 from core.project_packer import pack_project
 from fastapi import FastAPI
@@ -29,6 +31,18 @@ def home(monkeypatch, tmp_path: Path) -> Path:
     runtime_home_dir.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(runtime_home, "runtime_home_path", lambda: runtime_home_dir)
     return runtime_home_dir
+
+
+@pytest.fixture(autouse=True)
+def documents(monkeypatch, tmp_path: Path) -> Path:
+    """Stand-in for the user's Documents folder — where new projects default to.
+
+    Autouse so no test in this module can reach the real one.
+    """
+    docs = tmp_path / "Documents"
+    docs.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(manifest_mod.bootstrap, "platform_documents_dir", lambda: docs)
+    return docs
 
 
 @pytest.fixture
@@ -57,6 +71,7 @@ def client(monkeypatch, home: Path) -> TestClient:
 def _make_project_folder(target: Path, *, name: str = "Plant A") -> str:
     """Create a folder with project metadata and return its id."""
     target.mkdir(parents=True, exist_ok=True)
+    (target / "users.json").write_text('{"users":[]}')
     metadata = manifest_mod.ensure_project_metadata(target, name=name)
     return metadata.id
 
@@ -97,6 +112,107 @@ def test_list_marks_missing_and_default(client: TestClient, tmp_path: Path, home
     assert rows[present_id]["isDefault"] is True
     assert rows["ghost"]["status"] == "missing"
     assert rows["ghost"]["isDefault"] is False
+
+
+def test_list_reports_project_version_fields(
+    client: TestClient, tmp_path: Path, home: Path
+) -> None:
+    unstamped_path = tmp_path / "unstamped"
+    unstamped_id = _make_project_folder(unstamped_path, name="Unstamped")
+
+    current_path = tmp_path / "current"
+    current_id = _make_project_folder(current_path, name="Current")
+    manifest_mod.write_project_metadata(
+        current_path,
+        manifest_mod.read_project_metadata(current_path).model_copy(
+            update={
+                "formatVersion": projects_api.PROJECT_FORMAT_VERSION,
+                "minAppVersion": pm.PROJECT_FORMAT_MIN_APP,
+                "lastMigration": manifest_mod.ProjectMigrationRecord(
+                    fromVersion=0,
+                    toVersion=projects_api.PROJECT_FORMAT_VERSION,
+                    at="2026-05-24T10:00:00Z",
+                    backup="/tmp/proj/.backups/pre-migration-20260101T000000Z-app-1.2.3.zip",
+                ),
+            }
+        ),
+    )
+
+    unreleased_path = tmp_path / "unreleased"
+    unreleased_id = _make_project_folder(unreleased_path, name="Unreleased")
+    manifest_mod.write_project_metadata(
+        unreleased_path,
+        manifest_mod.read_project_metadata(unreleased_path).model_copy(
+            update={"formatVersion": projects_api.PROJECT_FORMAT_VERSION}
+        ),
+    )
+
+    newer_path = tmp_path / "newer"
+    newer_id = _make_project_folder(newer_path, name="Newer")
+    manifest_mod.write_project_metadata(
+        newer_path,
+        manifest_mod.read_project_metadata(newer_path).model_copy(
+            update={
+                "formatVersion": projects_api.PROJECT_FORMAT_VERSION + 1,
+                "minAppVersion": "9.9.9",
+            }
+        ),
+    )
+
+    manifest = manifest_mod.ManifestV1(
+        projects=[
+            manifest_mod.ProjectEntry(
+                id=unstamped_id, name="Unstamped", path=str(unstamped_path), addedAt="2026-05-24T10:00:00Z",
+            ),
+            manifest_mod.ProjectEntry(
+                id=current_id, name="Current", path=str(current_path), addedAt="2026-05-24T10:00:00Z",
+            ),
+            manifest_mod.ProjectEntry(
+                id=unreleased_id, name="Unreleased", path=str(unreleased_path), addedAt="2026-05-24T10:00:00Z",
+            ),
+            manifest_mod.ProjectEntry(
+                id=newer_id, name="Newer", path=str(newer_path), addedAt="2026-05-24T10:00:00Z",
+            ),
+            manifest_mod.ProjectEntry(
+                id="ghost", name="Gone", path=str(tmp_path / "does-not-exist"), addedAt="2026-05-24T10:00:00Z",
+            ),
+        ],
+    )
+    manifest_mod.save_manifest(manifest, home / "projects.json")
+
+    rows = {p["id"]: p for p in client.get("/api/projects").json()["projects"]}
+
+    assert rows[unstamped_id]["formatVersion"] == 0
+    assert rows[unstamped_id]["minAppVersion"] is None
+    assert rows[unstamped_id]["needsUpgrade"] is True
+    assert rows[unstamped_id]["unsupportedFormat"] is False
+    assert rows[unstamped_id]["lastMigration"] is None
+
+    assert rows[current_id]["formatVersion"] == projects_api.PROJECT_FORMAT_VERSION
+    assert rows[current_id]["needsUpgrade"] is False
+    assert rows[current_id]["unsupportedFormat"] is False
+    assert rows[current_id]["lastMigration"] == {
+        "fromVersion": 0,
+        "toVersion": projects_api.PROJECT_FORMAT_VERSION,
+        "at": "2026-05-24T10:00:00Z",
+        "backup": "/tmp/proj/.backups/pre-migration-20260101T000000Z-app-1.2.3.zip",
+    }
+
+    # At the current format, but stamped by a build from before the release
+    # field: replayed through the chain rather than trusted.
+    assert rows[unreleased_id]["formatVersion"] == projects_api.PROJECT_FORMAT_VERSION
+    assert rows[unreleased_id]["minAppVersion"] is None
+    assert rows[unreleased_id]["needsUpgrade"] is True
+    assert rows[unreleased_id]["unsupportedFormat"] is False
+
+    assert rows[newer_id]["unsupportedFormat"] is True
+    assert rows[newer_id]["needsUpgrade"] is False
+    assert rows[newer_id]["minAppVersion"] == "9.9.9"
+
+    assert rows["ghost"]["formatVersion"] is None
+    assert rows["ghost"]["minAppVersion"] is None
+    assert rows["ghost"]["needsUpgrade"] is False
+    assert rows["ghost"]["unsupportedFormat"] is False
 
 
 # ── default project ───────────────────────────────────────────────────────────
@@ -196,6 +312,23 @@ def test_rename_moves_instance_logs_and_widget_build(
     assert (home / ".logs" / "instances" / "plant-b" / "instance.log").read_text(
         encoding="utf-8",
     ) == "hello"
+
+
+def test_rename_moves_the_thumbnail(client: TestClient, tmp_path: Path, home: Path) -> None:
+    """An id change must carry `.thumbnails/<id>.png` too — otherwise the old
+    id's screenshot is orphaned and a later project reusing that freed id
+    would inherit it (`unique_slug` only excludes ids currently in the
+    manifest, not ones freed by a rename)."""
+    path = tmp_path / "plant-a"
+    project_id = _make_project_folder(path)
+    _single_project_manifest(home, path, project_id)
+    shot = home / ".thumbnails" / f"{project_id}.png"
+    shot.parent.mkdir(parents=True, exist_ok=True)
+    shot.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    assert client.patch(f"/api/projects/{project_id}", json={"id": "plant-b"}).status_code == 200
+    assert not shot.exists()
+    assert (home / ".thumbnails" / "plant-b.png").read_bytes() == b"\x89PNG\r\n\x1a\n"
 
 
 def test_rename_retargets_mcp_tokens(
@@ -406,6 +539,96 @@ def test_create_refuses_already_registered(client: TestClient, tmp_path: Path) -
     assert resp.status_code == 409, resp.text
 
 
+def test_create_project_defaults_to_empty_template(client, tmp_path):
+    target = tmp_path / "p1"
+    res = client.post("/api/projects", json={"name": "P1", "path": str(target)})
+    assert res.status_code == 201
+    # The seed ships no pages/ content of its own beyond home.
+    assert (target / "config.json").is_file()
+    assert not (target / "pages" / "brew.json").is_file()
+
+
+def test_create_project_from_example_template(client, tmp_path):
+    target = tmp_path / "p2"
+    res = client.post(
+        "/api/projects",
+        json={"name": "P2", "path": str(target), "template": "example"},
+    )
+    assert res.status_code == 201
+    assert (target / "pages" / "brew.json").is_file()
+    assert (target / "datasources" / "Brew.json").is_file()
+
+
+def test_example_template_ships_without_project_metadata():
+    """A template carrying a `project` block would clone its UUID into every
+    project created from it, and the manifest keys projects by that id."""
+    template = projects_api._template_dir("example")
+    assert template is not None, "project-example/ must be bundled"
+    config = json.loads((template / "config.json").read_text(encoding="utf-8"))
+    assert "project" not in config
+
+
+def test_example_template_ships_without_credentials():
+    """A template carrying a real admin passwordHash would clone the same
+    credential into every project made from it, and lock operators out of an
+    account whose plaintext exists nowhere — the same identity-artifact bug
+    the `project` id guard above prevents, but for a secret."""
+    template = projects_api._template_dir("example")
+    assert template is not None, "project-example/ must be bundled"
+    users = json.loads((template / "users.json").read_text(encoding="utf-8"))
+    assert users["operatorSetup"]["required"] is True
+    assert [user["id"] for user in users["users"]] == ["guest"]
+    assert all("passwordHash" not in user for user in users["users"])
+
+
+def test_template_lookup_follows_the_install_root(monkeypatch, tmp_path):
+    """Templates resolve through ``repo_root()``, not through this module's own
+    location. A frozen build seals the module inside the archive, so a walk up
+    from ``__file__`` lands above the extracted tree and reports every template
+    as unbundled — the failure mode a checkout can never reproduce."""
+    install_root = tmp_path / "install"
+    (install_root / "project-example").mkdir(parents=True)
+    (install_root / "project-seed").mkdir(parents=True)
+    monkeypatch.setattr(projects_api, "repo_root", lambda: install_root)
+
+    assert projects_api._template_dir("example") == install_root / "project-example"
+    assert projects_api._template_dir("empty") == install_root / "project-seed"
+
+
+def test_binary_and_image_ship_every_template():
+    """Each template has to land at the install root both packagings resolve
+    against: ``sys._MEIPASS`` for the binary, ``/app`` for the image."""
+    root = Path(__file__).resolve().parents[2]
+    spec = (root / "build" / "nexthmi.spec").read_text(encoding="utf-8")
+    dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
+    for dirname in projects_api._TEMPLATE_DIRNAMES.values():
+        assert (root / dirname).is_dir(), f"{dirname}/ is missing from the checkout"
+        assert f'"{dirname}"), "{dirname}"' in spec, f"the build spec does not ship {dirname}/"
+        assert f"COPY {dirname}/ /app/{dirname}/" in dockerfile, (
+            f"the Dockerfile does not copy {dirname}/ into /app"
+        )
+
+
+def test_two_example_projects_get_distinct_ids(client, tmp_path):
+    first = client.post(
+        "/api/projects",
+        json={"name": "A", "path": str(tmp_path / "a"), "template": "example"},
+    ).json()
+    second = client.post(
+        "/api/projects",
+        json={"name": "B", "path": str(tmp_path / "b"), "template": "example"},
+    ).json()
+    assert first["id"] != second["id"]
+
+
+def test_create_project_rejects_unknown_template(client, tmp_path):
+    res = client.post(
+        "/api/projects",
+        json={"name": "X", "path": str(tmp_path / "x"), "template": "nope"},
+    )
+    assert res.status_code == 422
+
+
 # ── locate ───────────────────────────────────────────────────────────────────
 
 
@@ -559,10 +782,63 @@ def test_unknown_id_returns_404(client: TestClient) -> None:
 # ── runtime-home info ────────────────────────────────────────────────────────
 
 
-def test_runtime_home_info(client: TestClient, home: Path) -> None:
+def test_runtime_home_info(client: TestClient, home: Path, documents: Path) -> None:
     body = client.get("/api/projects/_runtime-home").json()
     assert body["runtimeHome"] == str(home)
-    assert body["defaultProjectsRoot"].endswith("Projects")
+    assert body["defaultProjectsRoot"] == str(documents)
+
+
+def test_default_projects_root_is_ready_for_a_new_project(
+    client: TestClient, documents: Path
+) -> None:
+    """The create dialog pre-fills this root, so a child of it must validate.
+
+    Both the settings page (``_runtime-home``) and the projects page (the list
+    response, which never calls ``_runtime-home``) seed that dialog, so both
+    have to advertise a root that is already there — ``validate-path`` rejects
+    a missing parent, and the pre-filled default would be unsubmittable.
+    """
+    for url in ("/api/projects/_runtime-home", "/api/projects"):
+        root = Path(client.get(url).json()["defaultProjectsRoot"])
+        assert root == documents
+        assert root.is_dir()
+
+        body = client.post("/api/projects/validate-path", json={"path": str(root / "Brew")}).json()
+        assert body["ok"] is True, body
+
+
+def test_reading_the_default_root_creates_nothing(client: TestClient, home: Path) -> None:
+    """Asking where projects go must not conjure a folder up.
+
+    The root used to be ``<runtime_home>/Projects``, which both endpoints
+    created on sight — so an operator who kept their projects elsewhere still
+    got an empty ``Projects`` folder they never asked for.
+    """
+    client.get("/api/projects/_runtime-home")
+    client.get("/api/projects")
+
+    assert not (home / "Projects").exists()
+
+
+def test_creating_at_the_default_root_creates_it_first(
+    client: TestClient, documents: Path
+) -> None:
+    """Docker and headless Linux have no ``~/Documents``, so the pre-filled
+    default path's parent is missing when the create dialog submits it.
+
+    The peer-transfer path already creates the root before writing into it
+    (``manager_peers_api._root``); this is the same fix for the create path,
+    which used to reject with "Parent directory does not exist" instead.
+    """
+    documents.rmdir()
+    assert not documents.exists()
+
+    resp = client.post(
+        "/api/projects", json={"name": "Brew", "path": str(documents / "Brew")}
+    )
+
+    assert resp.status_code == 201, resp.text
+    assert documents.is_dir()
 
 
 # ── export / import ──────────────────────────────────────────────────────────
@@ -670,6 +946,7 @@ def test_import_rejects_when_id_already_registered(
     source.mkdir()
     source.mkdir(exist_ok=True)
     (source / "pages.json").write_text("{}")
+    (source / "users.json").write_text('{"users":[]}')
     manifest_mod.write_project_metadata(
         source,
         manifest_mod.ProjectMetadata(id=existing_id, name="Twin"),
@@ -771,3 +1048,70 @@ def test_import_rejects_malformed_component_without_registration(
     )
     assert not destination.exists()
     assert manifest_mod.load_manifest(home / "projects.json").projects == []
+
+
+def test_project_entry_reports_thumbnail_timestamp(client, home, tmp_path):
+    created = client.post(
+        "/api/projects", json={"name": "T", "path": str(tmp_path / "t")}
+    ).json()
+    listed = client.get("/api/projects").json()
+    entry = next(p for p in listed["projects"] if p["id"] == created["id"])
+    assert entry["thumbnailUpdatedAt"] is None
+
+    shot = home / ".thumbnails" / f"{created['id']}.png"
+    shot.parent.mkdir(parents=True, exist_ok=True)
+    shot.write_bytes(b"\x89PNG\r\n\x1a\n")
+    listed = client.get("/api/projects").json()
+    entry = next(p for p in listed["projects"] if p["id"] == created["id"])
+    assert entry["thumbnailUpdatedAt"] is not None
+
+
+def test_removing_a_project_deletes_its_thumbnail(client, home, tmp_path):
+    created = client.post(
+        "/api/projects", json={"name": "T2", "path": str(tmp_path / "t2")}
+    ).json()
+    shot = home / ".thumbnails" / f"{created['id']}.png"
+    shot.parent.mkdir(parents=True, exist_ok=True)
+    shot.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    client.delete(f"/api/projects/{created['id']}")
+    assert not shot.exists()
+
+
+def test_removing_a_project_with_delete_folder_also_deletes_its_thumbnail(client, home, tmp_path):
+    created = client.post(
+        "/api/projects", json={"name": "T3", "path": str(tmp_path / "t3")}
+    ).json()
+    shot = home / ".thumbnails" / f"{created['id']}.png"
+    shot.parent.mkdir(parents=True, exist_ok=True)
+    shot.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    res = client.delete(f"/api/projects/{created['id']}?deleteFolder=true")
+    assert res.status_code == 200
+    assert not shot.exists()
+
+
+def test_removal_succeeds_even_when_the_thumbnail_cannot_be_deleted(
+    client, home, tmp_path, monkeypatch
+):
+    created = client.post(
+        "/api/projects", json={"name": "T4", "path": str(tmp_path / "t4")}
+    ).json()
+    shot = home / ".thumbnails" / f"{created['id']}.png"
+    shot.parent.mkdir(parents=True, exist_ok=True)
+    shot.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    original_unlink = Path.unlink
+
+    def failing_unlink(self, *args, **kwargs):
+        if self == shot:
+            raise PermissionError("locked")
+        return original_unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", failing_unlink)
+
+    res = client.delete(f"/api/projects/{created['id']}")
+    assert res.status_code == 200
+
+    listed = client.get("/api/projects").json()
+    assert all(p["id"] != created["id"] for p in listed["projects"])

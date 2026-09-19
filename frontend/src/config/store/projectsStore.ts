@@ -2,6 +2,15 @@ import { create } from 'zustand';
 import { apiErrorFrom, apiJson, isApiError } from '@shared/utils/api';
 import { withBase } from '@shared/utils/runtimeBase';
 
+export interface ProjectMigrationRecord {
+  fromVersion: number;
+  toVersion: number;
+  at: string;
+  /** Zip of the whole project taken before the migration touched anything.
+   *  Null on a record written before this replaced the per-target backup map. */
+  backup: string | null;
+}
+
 export interface ProjectEntry {
   id: string;
   name: string;
@@ -19,6 +28,24 @@ export interface ProjectEntry {
   operatorSetupRequired: boolean;
   operatorSetupStatus: 'required' | 'complete' | 'error';
   operatorSetupError: string | null;
+  /** The project's on-disk schema version — null when `status` is `missing`. */
+  formatVersion: number | null;
+  /** The release that stamped `formatVersion`, so a build too old to open this
+   * project can name the version the operator needs. Null when the stamping
+   * build predated the field. Display only — never parsed or compared. */
+  minAppVersion: string | null;
+  /** `formatVersion` is behind this build's baseline; starting it needs the
+   * operator to confirm an upgrade first. */
+  needsUpgrade: boolean;
+  /** `formatVersion` is newer than this build supports; it cannot be started
+   * until the application is updated. */
+  unsupportedFormat: boolean;
+  /** Set once this project has actually been migrated; kept around (even
+   * after it is no longer the current format) as a pointer to the backup. */
+  lastMigration: ProjectMigrationRecord | null;
+  /** When the project's main-page thumbnail was last rasterised, or null if
+   * the project has never been saved and so has no thumbnail yet. */
+  thumbnailUpdatedAt: string | null;
 }
 
 export type PeerScheme = 'http' | 'https';
@@ -102,7 +129,7 @@ interface ProjectsStore {
   // Mutation actions throw on failure — callers (modals) display the error
   // locally. The store-level `error` is reserved for load failures shown in
   // the page header.
-  createProject(name: string, path: string): Promise<ProjectEntry>;
+  createProject(name: string, path: string, template?: 'empty' | 'example'): Promise<ProjectEntry>;
   registerExisting(path: string, name?: string): Promise<ProjectEntry>;
   locate(id: string, path: string): Promise<ProjectEntry>;
   renameProject(id: string, patch: { name?: string; id?: string }): Promise<ProjectEntry>;
@@ -236,10 +263,10 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
     return apiJson<BrowseDirResponse>(`/api/projects/browse-dir${query}`);
   },
 
-  createProject: async (name: string, path: string) => {
+  createProject: async (name: string, path: string, template: 'empty' | 'example' = 'empty') => {
     const entry = await apiJson<ProjectEntry>('/api/projects', {
       method: 'POST',
-      body: { name, path },
+      body: { name, path, template },
     });
     await get().load();
     return entry;

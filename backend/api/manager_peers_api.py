@@ -73,6 +73,7 @@ from api.projects_api import (
     _bind_staging_directory,
     _validate_staging_binding,
 )
+from api.thumbnail_api import delete_thumbnail
 
 public_router = APIRouter(prefix="/api/manager/peer", tags=["manager-peer"])
 manager_router = APIRouter(prefix="/api/manager", tags=["manager-peer"])
@@ -2283,6 +2284,8 @@ async def _stage_and_install(
                 save_manifest(current)
                 manifest_committed = True
             journal_update(phase="manifest_committed")
+            if collision_policy == "replace":
+                delete_thumbnail(destination_project_id)
         except BaseException:
             # Unwinding the install must not skip restoring the backup: if the
             # first rename fails we would otherwise leave the *new* project
