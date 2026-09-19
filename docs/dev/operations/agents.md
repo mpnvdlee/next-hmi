@@ -338,7 +338,7 @@ Use the `component-author` subagent; see
 ## Running the app
 
 ```bash
-python start-dev.py           # backend :8000 + frontend :5173
+python start-dev.py           # app (Vite) :8000, API :8001
 python start-dev.py --stop
 ```
 

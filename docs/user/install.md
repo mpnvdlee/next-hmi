@@ -131,8 +131,9 @@ password) is the operator surface:
   running project's **live screens** (`/runtime/<slug>/`) are open to anyone who
   can reach the host, deliberately: that is what an operator panel is. Operating
   is open too, unless a variable carries `interactableByGroups`
-  (see [Users, groups & permissions](users.md)). Put the manager on a trusted
-  network, and use [HTTPS](#https) the moment it leaves loopback.
+  (see [Users, groups & permissions](users.md)). The install answers on every
+  interface by default, so put the manager on a trusted network and use
+  [HTTPS](#https) where it is not.
 - **Start / Stop** — bring a project up or down. A running project gets
   its own backend instance and becomes reachable at `/runtime/<slug>/`
   (and `/editor/<slug>/`); the set of running projects is remembered and
@@ -214,10 +215,23 @@ To turn it off, either:
 
 ## HTTPS
 
-The manager serves plain HTTP by default, which is fine while it stays on
-loopback. The moment `NEXTHMI_HOST=0.0.0.0` puts the dashboard on a network,
-the device-admin password, every operator sign-in, and every project edit
-cross the wire in the clear.
+The manager binds every interface by default and serves plain HTTP, so out of
+the box the device-admin password, every operator sign-in, and every project
+edit cross the wire in the clear. A password still gates the dashboard and
+every editor — that part does not depend on the binding — but anyone who can
+watch the network reads it on its way past. Turn HTTPS on unless the network
+is one you trust, or pin the install to `NEXTHMI_HOST=127.0.0.1` and reach it
+some other way.
+
+The dashboard says so itself while that is the case. Open it at an address that
+is neither HTTPS nor `localhost` and a notice stands above the project list, on
+the settings page, and on the sign-in screen, linking to the switch. It follows
+the address in your URL bar rather than where the server runs — the same
+distinction the browser makes in [What plain HTTP costs the
+browser](#what-plain-http-costs-the-browser) below — so reaching a networked
+install from the machine it runs on shows nothing, while reaching it from a
+laptop shows the notice. The operator runtime and the editor stay quiet: it is
+addressed to whoever can act on it.
 
 Only the manager terminates TLS. Project children are spawned on loopback and
 reached over plain HTTP by the in-process proxy, so nothing else needs
@@ -292,9 +306,10 @@ moving it would break the port mapping the operator already published.
 1. Pick **HTTPS** on the protocol switch.
 2. Under **Certificate**, keep *Generated for this device* — the manager
    creates a self-signed certificate covering `localhost`, this host's name,
-   and its addresses — or choose *My own certificate* and upload a PEM
-   certificate and unencrypted PEM private key. Mismatched or passphrase-
-   protected keys are rejected at upload, not at the next startup.
+   and its addresses, including the one it is routed to on the network — or
+   choose *My own certificate* and upload a PEM certificate and
+   unencrypted PEM private key. Mismatched or passphrase-protected keys are
+   rejected at upload, not at the next startup.
 3. The manager stops running projects, restarts, and the page reopens itself
    on the new protocol — on port 8443, see [Ports](#ports) above. Projects
    resume on their own.
@@ -306,6 +321,13 @@ are written `0600`.
 A generated certificate is not signed by any authority, so browsers warn once
 per machine until someone accepts it. That warning is the cost of not needing a
 CA; the connection is encrypted either way, which a plain-HTTP one is not.
+
+It also names the addresses the device had when it was generated. If the device
+later answers on a different one — a new DHCP lease, a move to another network
+— the warning comes back for the address URL, and **Regenerate** under
+**Certificate** issues a fresh one for the address it has now. A static address
+or a DHCP reservation avoids the round trip. An already-generated certificate is
+never rewritten on its own.
 
 Upload your own key only over an HTTPS page — the UI warns when the page is on
 HTTP, since the key would otherwise cross the network in the clear. Turn on
@@ -328,7 +350,6 @@ bind:
 ```bash
 export NEXTHMI_SSL_CERTFILE=/etc/nexthmi/tls/fullchain.pem
 export NEXTHMI_SSL_KEYFILE=/etc/nexthmi/tls/privkey.pem
-export NEXTHMI_HOST=0.0.0.0
 ./nexthmi
 ```
 
@@ -341,11 +362,12 @@ uploaded certificate, re-upload it and pick the protocol again).
 
 ### Behind a terminating proxy
 
-Caddy, nginx, or Traefik in front of a loopback-bound manager is the better
-option where one already exists: it handles renewal, and the manager keeps
-its default `127.0.0.1` binding. Leave `NEXTHMI_SSL_*` unset and have the
-proxy send `X-Forwarded-Proto`. A proxy on the same host is trusted out of
-the box; one on another host needs its address allow-listed:
+Caddy, nginx, or Traefik in front of the manager is the better option where
+one already exists: it handles renewal. Set `NEXTHMI_HOST=127.0.0.1` so the
+manager answers the proxy alone and nothing reaches it directly, leave
+`NEXTHMI_SSL_*` unset, and have the proxy send `X-Forwarded-Proto`. A proxy
+on the same host is trusted out of the box; one on another host needs its
+address allow-listed:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -444,6 +466,7 @@ manual `host:port` entries.
 | `NEXTHMI_WIDGET_BUILD_DIR` | `<runtime_home>/.widget-build` | Compiled custom-widget output. |
 | `NEXTHMI_VALIDATION_SWEEP` | `on` | Set to `off` to skip the startup page-validation sweep. |
 | `NEXTHMI_TELEMETRY` | `on` | Set to `off` to stop the install-count ping and make the Settings switch read-only. See [Usage reporting](#usage-reporting). |
+| `NEXTHMI_HOST` | unset | Address the manager binds. Every interface, IPv4 and IPv6, by default; set `127.0.0.1` to answer this machine only — a reverse proxy on it, or nothing at all. Setting `0.0.0.0` binds IPv4 alone, which refuses `http://localhost:8000`. See [HTTPS](#https). |
 | `NEXTHMI_SSL_CERTFILE` / `NEXTHMI_SSL_KEYFILE` | unset | Serve HTTPS from the manager itself, overriding Settings → HTTPS. See [HTTPS](#https). |
 | `NEXTHMI_FORWARDED_ALLOW_IPS` | `127.0.0.1` | Proxy addresses whose `X-Forwarded-*` headers are trusted. |
 | `NEXTHMI_MAX_PROJECT_ZIP_MB` | `500` | Cap for zip uploads (export / import / push / pull). Oversize archives are rejected before any bytes hit disk. |
@@ -482,15 +505,29 @@ Existing volumes retain their current project credentials unchanged.
 
 A terminal window opens, prints the banner, and stays in the foreground:
 
-The banner shows the version, runtime-home path, browser URL, and log path.
+The banner shows the version, the runtime-home path, the address the default
+project answers on, and a link to the manager's project list (`/projects`) for
+reaching the others.
 
-Open the printed URL in any browser. Portable installs bind to loopback by
-default; set `NEXTHMI_HOST=0.0.0.0` explicitly when LAN access is intended.
+Open the printed URL in a browser. Those rows name `localhost`, for the browser
+on this device. Under **On the network** stand the two addresses another
+machine types instead — this device's name, and its address for a network whose
+name resolution does not carry it — because an install binds every interface by
+default. Set `NEXTHMI_HOST=127.0.0.1` to keep it to this machine only, and the
+network block goes with it: nothing else is answering. See [HTTPS](#https)
+before putting an install on a network you do not control.
 
 On the first launch, set the device-admin password. That is the only credential
 the install asks for: the seeded project holds only its `guest` user and opens
 straight away. Upgrades preserve an existing project's users and passwords
 byte-for-byte.
+
+**Do it straight away.** Until that password exists there is nothing to check a
+request against, so the first-run page accepts whoever reaches it first — this
+machine or any other on the network — and the install advertises itself over
+mDNS the whole time it waits. The window is short and it is yours to close:
+claim the install right after the first start, or bring it up with
+`NEXTHMI_HOST=127.0.0.1` and lift that once the password is set.
 
 To stop: focus the terminal window and press Ctrl-C — uvicorn's
 lifespan shutdown runs and the OPC-UA pool closes cleanly.

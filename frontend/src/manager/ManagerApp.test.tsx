@@ -969,3 +969,65 @@ describe('security section', () => {
     expect(modal()).not.toBeNull();
   });
 });
+
+// Only the two dashboard pages carry it: an operator at a wall panel cannot act
+// on it, so the runtime and the editor stay clear.
+describe('insecure-connection notice', () => {
+  const NOTICE = /serving over the network without HTTPS/i;
+
+  it('stands above the project list when the device answers on plain HTTP', async () => {
+    vi.stubGlobal('isSecureContext', false);
+
+    renderAt('/projects');
+
+    expect(await screen.findByText(NOTICE)).toBeInTheDocument();
+  });
+
+  it('stands on the settings page as well', async () => {
+    vi.stubGlobal('isSecureContext', false);
+
+    renderAt('/settings');
+
+    expect(await screen.findByText(NOTICE)).toBeInTheDocument();
+  });
+
+  // The gate is the screen the notice matters most on: the device-admin
+  // password typed into it is the exposure the sentence describes.
+  it('stands on the sign-in gate, which renders before any route does', () => {
+    vi.stubGlobal('isSecureContext', false);
+    useManagerStore.setState({ auth: 'needs-login' });
+
+    renderAt('/projects');
+
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.getByText(NOTICE)).toBeInTheDocument();
+  });
+
+  it('stands on the first-run setup gate too', () => {
+    vi.stubGlobal('isSecureContext', false);
+    useManagerStore.setState({ auth: 'needs-setup' });
+
+    renderAt('/projects');
+
+    expect(screen.getByRole('button', { name: 'Set password & continue' })).toBeInTheDocument();
+    expect(screen.getByText(NOTICE)).toBeInTheDocument();
+  });
+
+  it('drops the link on the settings page, where the HTTPS switch already is', async () => {
+    vi.stubGlobal('isSecureContext', false);
+
+    renderAt('/settings');
+
+    expect(await screen.findByText(NOTICE)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Turn on HTTPS in Settings' })).toBeNull();
+  });
+
+  it('is absent on a secure context', async () => {
+    vi.stubGlobal('isSecureContext', true);
+
+    renderAt('/projects');
+
+    expect(await screen.findByRole('button', { name: '+ New project' })).toBeInTheDocument();
+    expect(screen.queryByText(NOTICE)).toBeNull();
+  });
+});

@@ -33,7 +33,11 @@ advertises itself and never accepts a peer connection — see
   and pin the HTTP connection to that private unicast address. Public, mixed
   public/private, link-local, multicast, and unspecified answers are
   rejected; loopback requires an explicit deployment override
-  (`NEXTHMI_ALLOW_LOOPBACK_PEERS=1`).
+  (`NEXTHMI_ALLOW_LOOPBACK_PEERS=1`). What the advertising side publishes is
+  `core.net.advertised_address()` — the pinned `NEXTHMI_HOST`, else the routed
+  address — so a runtime pinned to loopback
+  advertises loopback and is rejected here by name, rather than luring peers
+  to an address it never bound.
 - There is no unauthenticated peer surface anywhere in the backend — every
   transfer, discovery, and pairing route requires either the manager session
   cookie (browser-initiated) or a peer bearer token.

@@ -40,6 +40,10 @@ export interface TlsStatus {
 
 interface Props {
   status: TlsStatus | null;
+  /** How many projects are running right now — the page already tracks this
+   * for the dashboard, and the restart this section triggers takes longer to
+   * come back the more of them there are (see {@link waitOutRestartBlind}). */
+  runningProjectCount: number;
   onLoad(): Promise<void>;
   onApply(enabled: boolean, mode: TlsMode): Promise<void>;
   onRegenerate(): Promise<void>;
@@ -49,6 +53,38 @@ interface Props {
 
 const RESTART_POLL_MS = 500;
 const RESTART_POLL_ATTEMPTS = 40;
+/**
+ * Floor and per-project shutdown allowance mirroring
+ * `_HARD_EXIT_GRACE_FLOOR_SECONDS` / `_STOP_GRACE_SECONDS` in
+ * `backend/api/system_api.py` and `backend/services/supervisor.py` — teardown
+ * stops one running project at a time, so more of them means a longer wait
+ * before the old process is actually gone.
+ */
+const RESTART_SHUTDOWN_FLOOR_MS = 30_000;
+const RESTART_SHUTDOWN_PER_PROJECT_MS = 13_000;
+const RESTART_SHUTDOWN_OVERHEAD_MS = 10_000;
+/**
+ * Ceiling for the replacement process's own startup, mirroring
+ * `_HEALTH_TIMEOUT_SECONDS` in `backend/services/supervisor.py` — the new
+ * listener does not bind until `resume_all` has every project answering
+ * health checks again, run concurrently, so this does not scale with count.
+ */
+const RESTART_STARTUP_CEILING_MS = 25_000;
+
+/**
+ * How long to hold the spinner before reopening on a port this page cannot
+ * poll — see {@link waitOutRestartBlind}. A flat guess undershoots once more
+ * than a couple of projects are running: the old process takes longer to
+ * shut every one of them down, and the new one waits for all of them to come
+ * back before its listener answers.
+ */
+function restartBlindWaitMs(runningProjectCount: number): number {
+  const shutdown = Math.max(
+    RESTART_SHUTDOWN_FLOOR_MS,
+    runningProjectCount * RESTART_SHUTDOWN_PER_PROJECT_MS + RESTART_SHUTDOWN_OVERHEAD_MS,
+  );
+  return shutdown + RESTART_STARTUP_CEILING_MS;
+}
 
 /** The port this page is on, with the scheme's default spelled out. */
 function currentPort(): string {
@@ -56,7 +92,8 @@ function currentPort(): string {
 }
 
 /**
- * Where this page has to reopen once the protocol changes.
+ * Where this page has to reopen once the protocol changes, and whether that
+ * means moving to another port.
  *
  * Usually the same host and port with the other scheme — the listener is
  * rebound in place. Under the launcher it is not: HTTPS binds a second port and
@@ -65,13 +102,13 @@ function currentPort(): string {
  * being vacated follows the move; behind Vite or a terminating proxy the port
  * belongs to something else and must stay as it is.
  */
-function targetUrl(https: boolean, tls: TlsStatus | null): string {
+function reopenTarget(https: boolean, tls: TlsStatus | null): { url: string; moves: boolean } {
   const vacated = (https ? tls?.httpPort : tls?.httpsPort) ?? null;
   const destination = (https ? tls?.httpsPort : tls?.httpPort) ?? null;
   const moves = vacated !== null && destination !== null && currentPort() === String(vacated);
   const port = moves ? String(destination) : window.location.port;
   const host = port ? `${window.location.hostname}:${port}` : window.location.hostname;
-  return `${https ? 'https:' : 'http:'}//${host}${window.location.pathname}`;
+  return { url: `${https ? 'https:' : 'http:'}//${host}${window.location.pathname}`, moves };
 }
 
 /** Resolve once the current listener stops answering, i.e. the restart began. */
@@ -85,6 +122,39 @@ async function waitForListenerToStop(): Promise<void> {
     }
   }
   // Took too long to go down; redirect anyway rather than stranding the page.
+}
+
+/**
+ * Resolve once this origin answers again — the replacement process is serving.
+ *
+ * `redirect: 'manual'` keeps the launcher's 307 readable as a response instead
+ * of a cross-origin failure: followed, it would land on the HTTPS port and a
+ * certificate the browser has not been taught to trust, and the rejection would
+ * read as "still down" forever.
+ */
+async function waitForListenerToReturn(): Promise<void> {
+  for (let attempt = 0; attempt < RESTART_POLL_ATTEMPTS; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, RESTART_POLL_MS));
+    try {
+      await fetch(withBase('/api/system/tls'), { cache: 'no-store', redirect: 'manual' });
+      return;
+    } catch {
+      // Still down.
+    }
+  }
+  // Took too long to come back; redirect anyway rather than stranding the page.
+}
+
+/**
+ * Wait out a restart this page has no way to observe.
+ *
+ * Turning HTTPS off moves the app to the plain-HTTP port, and an HTTPS page may
+ * not fetch an `http:` origin — mixed content blocks it — so there is no poll
+ * to make. The page itself outlives its own listener, though, so the wait can
+ * happen here rather than on a page served from the port being restarted.
+ */
+async function waitOutRestartBlind(runningProjectCount: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, restartBlindWaitMs(runningProjectCount)));
 }
 
 function formatExpiry(iso: string): string {
@@ -103,6 +173,7 @@ function expiryWarning(certificate: TlsCertificate, mode: TlsMode): string {
 
 export default function HttpsSection({
   status: tls,
+  runningProjectCount,
   onLoad,
   onApply,
   onRegenerate,
@@ -144,10 +215,18 @@ export default function HttpsSection({
     } catch {
       return;
     }
-    const destination = targetUrl(enabled, tls);
-    setRestartTarget(destination);
+    const { url, moves } = reopenTarget(enabled, tls);
+    setRestartTarget(url);
     await waitForListenerToStop();
-    window.location.replace(destination);
+    if (moves && enabled) {
+      // Turning HTTPS on: the port being left behind comes back as the
+      // redirector, so this origin answering again is the signal that the
+      // replacement process is up and the HTTPS port is bound.
+      await waitForListenerToReturn();
+    } else if (moves) {
+      await waitOutRestartBlind(runningProjectCount);
+    }
+    window.location.replace(url);
   }
 
   async function uploadCustom() {

@@ -100,7 +100,7 @@ def _render_logo() -> str:
 
 # ── Field rendering ──────────────────────────────────────────────────────────
 
-_LABEL_WIDTH = 14  # widest label + 2 spaces ("Runtime home")
+_LABEL_WIDTH = 18  # widest label + 2 spaces ("Default project")
 
 
 def _row(label: str, value: str) -> str:
@@ -128,6 +128,12 @@ class BannerFields:
     runtime_home: Path
     open_url: str
     version: str = "dev"
+    # The same listeners as another machine reaches them, one tuple per row:
+    # name and address within a row, one row per port — dev serves the app on
+    # :8000 and its API on :8001, and a tablet may want either. One block under
+    # the rows rather than a spelling beside each of them: repeating every URL
+    # three times is what made the splash unreadable.
+    network_urls: tuple[tuple[str, ...], ...] = ()
     # Dev-mode only.
     frontend_url: str | None = None
 
@@ -148,10 +154,23 @@ def render_banner(mode: Literal["runtime", "dev"], fields: BannerFields) -> str:
         out.append(_row("Backend", _url(fields.open_url)))
         if fields.frontend_url:
             out.append(_row("Frontend", _url(fields.frontend_url)))
+            out.append(_row("Project list", _url(f"{fields.frontend_url}/projects")))
     else:
-        # Runtime: just the click-here URL. The bind address (e.g. 0.0.0.0:8000)
-        # isn't a clickable URL, so it added noise without value.
-        out.append(_row("Open", _url(fields.open_url)))
+        # Runtime: the running default project, plus the manager's project
+        # list (same origin, /projects) to reach the others. The bind address
+        # (e.g. 0.0.0.0:8000) isn't a clickable URL, so it's left out.
+        out.append(_row("Default project", _url(fields.open_url)))
+        out.append(_row("Project list", _url(f"{fields.open_url}/projects")))
+
+    # The same servers, from anywhere else. The rows above are loopback, which
+    # is the wrong answer to "what do I type on the tablet" and the only answer
+    # to "what do I click here" — so both are printed, once each. Name and
+    # address share a row: they are alternatives, and stacking them read as two
+    # more things to open rather than one thing spelled two ways. A port that
+    # resolved to nothing reachable contributes no row rather than an empty one.
+    for index, row in enumerate(filter(None, fields.network_urls)):
+        alternatives = _muted(" / ").join(_url(url) for url in row)
+        out.append(_row("On the network" if index == 0 else "", alternatives))
 
     out.append("")
     out.append(_muted("  Press Ctrl-C to stop."))

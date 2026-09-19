@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 import os
+import socket
 import ssl
 import stat
 import sys
+import threading
 from pathlib import Path
 
 import launcher
 import pytest
-from core import runtime_home, tls_settings
+from core import net, runtime_home, tls_settings
 from fastapi.testclient import TestClient
 
 
@@ -55,6 +57,27 @@ def test_generated_certificate_covers_localhost(home: Path) -> None:
     assert "localhost" in described["names"]
     assert "127.0.0.1" in described["names"]
     assert len(described["fingerprint"]) == 64
+
+
+def test_generated_certificate_covers_the_routed_lan_address(
+    home: Path, monkeypatch
+) -> None:
+    """The banner's second URL is an IP; the certificate has to name it."""
+    monkeypatch.setattr(net, "lan_address", lambda: "192.168.1.10")
+    described = tls_settings.generate_self_signed()
+    assert "192.168.1.10" in described["names"]
+    assert "127.0.0.1" in described["names"]
+    assert "localhost" in described["names"]
+
+
+def test_generated_certificate_lists_loopback_once_without_a_route(
+    home: Path, monkeypatch
+) -> None:
+    """A host with no route answers loopback — which is already in the list."""
+    monkeypatch.setattr(net, "lan_address", lambda: "127.0.0.1")
+    described = tls_settings.generate_self_signed()
+    assert described["names"].count("127.0.0.1") == 1
+    assert "localhost" in described["names"]
 
 
 def test_generated_certificate_outlives_the_machine(home: Path) -> None:
@@ -708,3 +731,75 @@ async def test_request_without_a_resolvable_host_is_rejected() -> None:
     scope = {"type": "http", "path": "/", "headers": [], "server": None}
     await launcher._https_redirect_app(8443)(scope, None, send)
     assert sent[0]["status"] == 400
+
+
+# ── when the redirector is allowed to start ───────────────────────────────────
+# Uvicorn binds only after lifespan startup, and the manager's startup resumes
+# every running project first. The redirector has no lifespan, so it would be
+# answering the HTTP port seconds before the HTTPS port it points at exists —
+# and a page waiting out a protocol switch takes that as proof the replacement
+# is serving.
+
+
+@pytest.fixture
+def redirector_started(monkeypatch) -> threading.Event:
+    """Signals that the redirector reached ``server.run()``, binding nothing."""
+    import uvicorn
+
+    started = threading.Event()
+    monkeypatch.setattr(uvicorn.Server, "run", lambda self: started.set())
+    return started
+
+
+def test_port_accepting_tracks_a_real_listener() -> None:
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+        assert launcher._port_accepting("127.0.0.1", port) is True
+    assert launcher._port_accepting("127.0.0.1", port) is False
+
+
+def test_the_redirector_waits_for_the_port_it_points_at(
+    monkeypatch, redirector_started: threading.Event
+) -> None:
+    accepting = threading.Event()
+    monkeypatch.setattr(launcher, "_port_accepting", lambda *_, **__: accepting.is_set())
+
+    server, thread = launcher._start_https_redirector("127.0.0.1", 8000, 8443)
+    try:
+        assert not redirector_started.wait(0.4), "answered before :8443 accepted"
+        accepting.set()
+        assert redirector_started.wait(3.0), "never started once :8443 accepted"
+    finally:
+        server.should_exit = True
+        thread.join(timeout=3.0)
+
+
+def test_the_redirector_stops_waiting_eventually(
+    monkeypatch, redirector_started: threading.Event
+) -> None:
+    """A listener that never appears must not leave the HTTP port dark forever."""
+    monkeypatch.setattr(launcher, "_REDIRECTOR_WAIT_SECONDS", 0.0)
+    monkeypatch.setattr(launcher, "_port_accepting", lambda *_, **__: False)
+
+    server, thread = launcher._start_https_redirector("127.0.0.1", 8000, 8443)
+    try:
+        assert redirector_started.wait(3.0)
+    finally:
+        server.should_exit = True
+        thread.join(timeout=3.0)
+
+
+def test_a_shutdown_during_the_wait_leaves_the_port_alone(
+    monkeypatch, redirector_started: threading.Event
+) -> None:
+    """Nothing was bound yet, so the caller's join has no socket to wait on."""
+    monkeypatch.setattr(launcher, "_port_accepting", lambda *_, **__: False)
+
+    server, thread = launcher._start_https_redirector("127.0.0.1", 8000, 8443)
+    server.should_exit = True
+    thread.join(timeout=3.0)
+
+    assert not thread.is_alive()
+    assert not redirector_started.is_set()

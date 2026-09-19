@@ -607,7 +607,7 @@ Either certificate is `null` when absent or unreadable. `source: "env"` means HT
 - `PUT /api/system/tls/certificate/custom`
   - Multipart: `certificate` and `privateKey` (PEM, unencrypted key), each capped at `tls_settings.MAX_PEM_BYTES`. Stores the pair and switches `mode` to `custom`. `422` on an unusable pair or a storage failure; `409` when pinned by env.
 - `POST /api/system/tls/certificate`
-  - Regenerates the self-signed certificate — for expiry or a changed hostname. `422` on failure; `409` when pinned by env.
+  - Regenerates the self-signed certificate — for expiry, a changed hostname, or a changed address (the SANs cover the routed LAN address as of generation). `422` on failure; `409` when pinned by env.
 - `POST /api/system/tls/restart`
   - `409` unless `restartRequired` is true. Writes the restart sentinel, then shuts down gracefully so the manager's lifespan teardown stops running projects, peer discovery, and the proxy client before the socket is rebound. The supervisor re-execs; running projects resume from the persisted running set.
   - Returns `202 { "status": "restarting", "runtimeHome": "..." }`.

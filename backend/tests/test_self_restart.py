@@ -223,3 +223,98 @@ def test_grace_window_scales_with_running_children(monkeypatch) -> None:
     grace = system_api._hard_exit_grace_seconds()
     worst_case = 6 * (supervisor_module._STOP_GRACE_SECONDS + 5.0)
     assert grace > worst_case
+
+
+# ── the hard exit must not cancel the restart ─────────────────────────────────
+# The backstop exists to protect the restart from a stalled teardown, and it was
+# doing the opposite: ``os._exit`` skips every line of the launcher below
+# ``_serve``, so the re-exec never ran and the sentinel was never cleared. A
+# protocol switch that overran the grace window shut the device down instead of
+# bringing it back, and left a sentinel on disk for the next process to trip on.
+
+
+def test_hard_exit_applies_a_pending_restart_first(restart_app: FastAPI, monkeypatch) -> None:
+    order: list[str] = []
+    monkeypatch.setattr(system_api, "apply_pending_restart", lambda: order.append("restart"))
+    monkeypatch.setattr(system_api.os, "_exit", lambda code: order.append(f"exit{code}"))
+
+    asyncio.run(system_api.shutdown_after_response("tls"))
+
+    assert order == ["restart", "exit0"]
+
+
+def test_hard_exit_still_happens_when_the_restart_cannot_be_applied(
+    restart_app: FastAPI, monkeypatch
+) -> None:
+    """A re-exec that throws must not pin a process the teardown already lost."""
+
+    def boom() -> bool:
+        raise OSError("execv failed")
+
+    monkeypatch.setattr(system_api, "apply_pending_restart", boom)
+
+    asyncio.run(system_api.shutdown_after_response("tls"))
+
+    assert restart_app.state.restart_calls["os_exit"] == [0]
+
+
+def test_applying_a_restart_clears_the_sentinel_before_re_execing(
+    isolated_runtime_home: Path, monkeypatch
+) -> None:
+    """Cleared first, or the replacement restarts again on its own next exit."""
+    import launcher
+
+    seen: dict[str, bool] = {}
+    monkeypatch.setattr(
+        launcher.os,
+        "execv",
+        lambda *_: seen.update(sentinel=runtime_home.restart_sentinel_path().exists()),
+    )
+    system_api.write_restart_sentinel("tls")
+
+    launcher._apply_pending_restart()
+
+    assert seen == {"sentinel": False}
+
+
+def test_nothing_is_re_execed_without_a_sentinel(
+    isolated_runtime_home: Path, monkeypatch
+) -> None:
+    import launcher
+
+    monkeypatch.setattr(
+        launcher.os, "execv", lambda *_: pytest.fail("re-execed without a sentinel")
+    )
+    assert launcher._apply_pending_restart() is False
+
+
+def test_the_graceful_shutdown_cannot_outlast_the_hard_exit_grace() -> None:
+    """Unbounded, a lingering TLS connection held the shutdown for 30s.
+
+    Closing an asyncio SSL transport waits on the peer's ``close_notify`` for
+    ``SSL_SHUTDOWN_TIMEOUT``, and a browser that navigated away never sends one.
+    That is the same 30s as the backstop floor, so turning HTTPS off lost the
+    race every time and the runtime had to be started by hand.
+    """
+    import launcher
+
+    assert launcher.GRACEFUL_SHUTDOWN_SECONDS < asyncio.constants.SSL_SHUTDOWN_TIMEOUT
+    assert launcher.GRACEFUL_SHUTDOWN_SECONDS < system_api._HARD_EXIT_GRACE_FLOOR_SECONDS
+
+
+def test_serve_bounds_the_graceful_shutdown() -> None:
+    import launcher
+
+    captured: dict = {}
+    fake_uvicorn = type("U", (), {"run": staticmethod(lambda app, **kw: captured.update(kw))})
+    real_uvicorn = sys.modules.get("uvicorn")
+    sys.modules["uvicorn"] = fake_uvicorn  # type: ignore[assignment]
+    try:
+        launcher._serve(object(), host="h", port=1, verbose=False)
+    finally:
+        if real_uvicorn is None:
+            del sys.modules["uvicorn"]
+        else:
+            sys.modules["uvicorn"] = real_uvicorn
+
+    assert captured["timeout_graceful_shutdown"] == launcher.GRACEFUL_SHUTDOWN_SECONDS

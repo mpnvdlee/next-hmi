@@ -1,6 +1,6 @@
 """Production SPA serving with live import-map injection.
 
-The Vite dev server handles the SPA on :5173 in a checkout, so this module is
+The Vite dev server handles the SPA on :8000 in a checkout, so this module is
 inert in dev. In a deployed runtime (Docker, PyInstaller) Vite isn't around,
 so the backend has to serve the built ``index.html`` and the hashed asset
 bundle — and it has to splice a *fresh* import map into the HTML on every

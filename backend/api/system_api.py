@@ -107,6 +107,16 @@ def _hard_exit_grace_seconds() -> float:
     return max(_HARD_EXIT_GRACE_FLOOR_SECONDS, children * per_child + 10.0)
 
 
+def apply_pending_restart() -> bool:
+    """Re-exec into the pending restart. Replaced by the launcher at startup.
+
+    The default is a no-op because nothing else supervises this process: under
+    ``start-dev.py`` the dev runner reads the sentinel after the exit, and a
+    project instance never restarts itself.
+    """
+    return False
+
+
 def write_restart_sentinel(reason: str) -> None:
     """Drop the supervisor's restart marker. Atomic + crash-safe."""
     path = runtime_home.restart_sentinel_path()
@@ -156,6 +166,14 @@ async def shutdown_after_response(reason: str) -> None:
     grace = _hard_exit_grace_seconds()
     await asyncio.sleep(grace)
     logger.warning("restart: graceful shutdown exceeded %ss — hard exit", grace)
+    # A hard exit here used to end the restart: os._exit skips the launcher's
+    # sentinel re-exec, so the device shut down instead of coming back and the
+    # sentinel stayed on disk for the next process to trip over. Apply the
+    # restart ourselves before abandoning the process.
+    try:
+        apply_pending_restart()
+    except Exception:
+        logger.exception("restart: could not re-exec after the hard-exit grace")
     os._exit(0)
 
 
@@ -171,9 +189,10 @@ async def restart_backend(reason: str = "manual"):
        "reconnecting…" banner before their socket closes.
     3. Signal ourselves with ``SIGTERM`` — uvicorn catches it and runs the
        lifespan shutdown (OPC-UA pool, WS connections, log flush).
-    4. As a safety net, fall back to ``os._exit(0)`` if lifespan teardown
-       hasn't completed within ``_hard_exit_grace_seconds()``. Without this
-       a stuck async task could pin the process forever.
+    4. As a safety net, apply the restart directly and fall back to
+       ``os._exit(0)`` if lifespan teardown hasn't completed within
+       ``_hard_exit_grace_seconds()``. Without this a stuck async task could
+       pin the process forever.
 
     Returns 202 immediately so the caller can begin polling ``/api/system/info``
     for the new PID.

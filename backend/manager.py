@@ -228,9 +228,10 @@ else:
 # from ``_auth_gate`` below (see ``_is_gated``) because it carries its own
 # authentication — a manager session cookie or an MCP bearer token, checked by
 # ``mcp_server.auth.McpAuthMiddleware`` — rather than the plain cookie gate.
-# Intended for a local AI client (e.g. Claude Desktop) over loopback (the
-# default: ``NEXTHMI_HOST=127.0.0.1``). Per-project ``mcpEnabled`` still gates
-# writes at the tool layer, on top of that authentication.
+# That authentication is the boundary, not the bind address: the manager binds
+# every interface by default (``core.net.resolve_bind_host``), so a request off
+# the network reaches the same check a loopback one does. Per-project
+# ``mcpEnabled`` still gates writes at the tool layer, on top of it.
 mount_workspace_mcp(app)
 
 

@@ -382,7 +382,7 @@ Mounts are registered at module-import time against the project this instance is
 ## Health And Restart
 
 - `GET /api/health` is a basic liveness check
-- `POST /api/system/restart` writes `<runtime_home>/.restart-pending`, broadcasts `{type: "restarting", reason}` to every `/ws` client, then raises `SIGTERM` so uvicorn's lifespan teardown runs cleanly. A grace timer hard-exits if shutdown stalls. In **manager mode** the launcher sees the sentinel and re-execs a fresh interpreter so device-level static mounts re-resolve. A **managed instance** that exits is simply respawned by the supervisor — it never owns the re-exec loop (crash recovery is the supervisor's job).
+- `POST /api/system/restart` writes `<runtime_home>/.restart-pending`, broadcasts `{type: "restarting", reason}` to every `/ws` client, then raises `SIGTERM` so uvicorn's lifespan teardown runs cleanly. Uvicorn is given `timeout_graceful_shutdown` so a lingering connection cannot hold the process open — unbounded, a browser's pooled TLS socket held it for the full 30s of asyncio's `SSL_SHUTDOWN_TIMEOUT`, which is the grace timer's own floor. A grace timer applies the restart itself and then hard-exits if shutdown stalls anyway; hard-exiting without it skipped the re-exec and shut the device down instead of restarting it. In **manager mode** the launcher sees the sentinel and re-execs a fresh interpreter so device-level static mounts re-resolve. A **managed instance** that exits is simply respawned by the supervisor — it never owns the re-exec loop (crash recovery is the supervisor's job).
 
 ## Alarm Engine
 

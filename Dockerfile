@@ -123,7 +123,6 @@ COPY project-example/ /app/project-example/
 ENV ESBUILD_BINARY_PATH=/usr/local/bin/esbuild \
     NEXTHMI_DATA_DIR=/data \
     NEXTHMI_FRONTEND_DIST=/app/frontend/dist \
-    NEXTHMI_HOST=0.0.0.0 \
     NEXTHMI_WIDGET_BUILD_DIR=/data/.widget-build \
     WATCHFILES_FORCE_POLLING=1
 

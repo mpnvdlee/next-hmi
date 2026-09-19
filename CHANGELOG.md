@@ -9,6 +9,24 @@ are always called out under a **Changed** or **Removed** heading.
 
 ## [Unreleased]
 
+### Added
+
+- **The manager dashboard now says when it is serving without HTTPS.** Binding
+  every interface by default made plain HTTP a network exposure rather than a
+  local one, and the switch that fixes it sat in Settings with nothing pointing
+  at it. A notice now stands above the project list, on the settings page, and
+  on the sign-in screen — the one that matters most, since the device-admin
+  password typed into it is part of what crosses the wire in the clear. The
+  browser decides when it appears: a page served over HTTPS, or reached at
+  `localhost` / `127.0.0.1`, is a secure context and sees nothing; the same
+  install opened at `http://192.168.1.10:8000` is not, and gets the notice with
+  a link to **Settings → HTTPS**. It states the exposure instead of acting on
+  it — the same setup is routine on a sealed machine network and wrong on an
+  office LAN, and only the operator knows which one this is — and it cannot be
+  dismissed, because nothing has changed until HTTPS is on. The operator
+  runtime and the editor do not carry it; someone at a wall panel cannot act on
+  it. See [HTTPS](docs/user/install.md#https).
+
 ### Removed
 
 - **The per-project operator password prompt.** A project copied from the
@@ -44,6 +62,48 @@ are always called out under a **Changed** or **Removed** heading.
   set yourself is untouched. Every create / import / pull dialog still lets you
   type or browse anywhere. See
   [Changing the default projects root](docs/user/install.md#changing-the-default-projects-root).
+- **The dev runner serves the app on `:8000`, the port a release install uses.**
+  `start-dev.py` ran Vite on `:5173` with the API on `:8000`, so every URL a
+  contributor held — a bookmark, a screenshot in an issue, a tablet's
+  home-screen shortcut, the address in a bug report — pointed at a different
+  port depending on whether it came from a checkout or an install, and the two
+  could not be compared without editing the address bar. Vite now owns `:8000`
+  and proxies to the API server next door on `:8001`, which is the same origin
+  split a release install resolves internally. Nothing about the packaged
+  runtime changed; this is the dev workflow catching up to it. A tool of your
+  own that pointed at `:5173` needs repointing, and `python start-dev.py --stop`
+  now frees `:8000`/`:8001` rather than `:8000`/`:5173`.
+
+
+- **NEXT HMI is reachable on the network by default.** The manager used to bind
+  `127.0.0.1` and answer nobody but the machine it ran on, so a panel PC that
+  pinged fine was still a refused connection from every other machine until
+  someone found `NEXTHMI_HOST=0.0.0.0` — a variable with no UI and no flag
+  behind it. It now binds every interface, which is what the Docker image has
+  always done, and the startup banner prints the addresses to reach it at from
+  elsewhere — this machine's name and its address, under **On the network** —
+  beside the `localhost` rows for the browser sitting in front of it. The dev
+  server (`start-dev.py`) binds the same way, prints the same block, and
+  accepts any host name that resolves to it, so every adapter on a multi-homed
+  dev box reaches it.
+
+  **This changes an existing install on upgrade.** A deployment that relied on
+  the old default was unreachable from the network and is now reachable from it.
+  On an install that already has a device-admin password, nothing about who may
+  do what changed — that password gates the dashboard and every editor exactly
+  as before, `/mcp` still demands a session cookie or a bearer token, and a
+  running project's live screens were already open to anyone who could reach
+  the host. What changes is who can reach the host, and what that costs on
+  plain HTTP: the device-admin password, every operator sign-in and every MCP
+  token now cross the wire in the clear where they previously never left the
+  machine. Turn on [HTTPS](docs/user/install.md#https) if the network is not
+  one you trust, or set `NEXTHMI_HOST=127.0.0.1` to keep the old behaviour.
+
+  A **first boot with no password set yet** is the one case where reach and
+  authority are the same thing: the first-run page has nothing to authenticate
+  against and accepts whoever arrives first, and the manager advertises itself
+  over mDNS while it waits. Claim a fresh install right after starting it, or
+  start it with `NEXTHMI_HOST=127.0.0.1` until the password is in place.
 
 - **A running project's live screens need no password.** `/runtime/<slug>/` is
   now reachable without the device-admin session — an operator walks up to the
@@ -71,6 +131,40 @@ are always called out under a **Changed** or **Removed** heading.
 - **`POST /api/manager/projects/{id}/operator-setup` is gone.** Nothing consumes
   a setup marker, and the `operatorSetup` key is ignored wherever an existing
   project still carries one — it is dropped the next time users are saved.
+
+### Fixed
+
+- **`http://localhost:8000` answers again.** Binding every interface was
+  spelled `0.0.0.0`, which is the *IPv4* wildcard — one AF_INET socket and
+  nothing on `::1`. Browsers resolve `localhost` to `::1` first, so the one URL
+  everyone types was refused while `127.0.0.1` worked, which reads as a broken
+  install rather than a bind that named a family. The default is the empty host
+  now, the one spelling that binds the AF_INET + AF_INET6 pair; `NEXTHMI_HOST`
+  still pins an install to a single interface, and the Docker image no longer
+  pins itself to IPv4 by setting the old default explicitly. The dev server
+  needed both halves separately: Vite binds dual-stack via `server.host: true`,
+  and `start-dev.py` passes uvicorn `::` because its `--reload` path binds
+  through `Config.bind_socket`, which opens an AF_INET socket unless the host
+  string carries a colon — the opposite spelling from the one the launcher's
+  non-reload path needs. Windows keeps its IPv4 bind there, where `::` would
+  trade one half of localhost for the other.
+
+- **A peer now advertises the address the banner told you to use.** mDNS
+  advertised whatever the machine's own name resolved to, which on a stock
+  Debian /etc/hosts is `127.0.1.1` and on a host with wired, wifi and a VPN
+  adapter is whichever interface the name happens to point at — not the
+  address the runtime is actually reachable at. A discovered peer could
+  therefore be dialled at an address the runtime never answered on. The
+  advertisement and the startup banner now both start from the bind host, so
+  they cannot disagree: pin `NEXTHMI_HOST` and both follow the pin, leave it
+  unset and both name the address the kernel routes off-box.
+
+- **A generated HTTPS certificate covers the device's network address.** The
+  banner prints that address under **On the network**, but the self-signed
+  certificate only carried it when the hostname happened to resolve to it — so
+  opening it over HTTPS gave an avoidable certificate warning. New certificates name it. An existing certificate is not rewritten:
+  use **Regenerate** under **Settings → HTTPS → Certificate**, which is also
+  what to do after the device's address changes.
 
 ## [0.0.1-rc2] - 2026-08-29
 

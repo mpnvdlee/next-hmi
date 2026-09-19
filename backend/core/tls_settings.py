@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from core import runtime_home
+from core import net, runtime_home
 from core.storage import write_bytes_atomic, write_text_atomic
 
 logger = logging.getLogger(__name__)
@@ -200,13 +200,18 @@ def _san_entries() -> tuple[list[str], list[str]]:
     Best-effort: a certificate missing an address the operator happens to use
     is a browser warning, which self-signed certificates produce anyway, so
     resolution failures here are not worth failing generation over.
+
+    Generation happens once, so a later DHCP lease outdates the routed address
+    and the warning returns — **Settings → HTTPS → Regenerate** is the fix, and
+    the reason that button exists for more than expiry.
     """
+    # The address the banner prints beside the hostname, which the hostname's
+    # own ``getaddrinfo`` may never have returned. Named even under a
+    # ``NEXTHMI_HOST`` pin that makes it unreachable: one more SAN costs
+    # nothing, and unpinning later must not need a new certificate.
     names = {"localhost"}
-    addresses = {"127.0.0.1"}
-    try:
-        hostname = socket.gethostname()
-    except OSError:
-        hostname = ""
+    addresses = {"127.0.0.1", net.lan_address()}
+    hostname = net.hostname()
     if hostname:
         names.add(hostname)
         names.add(f"{hostname}.local")

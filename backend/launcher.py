@@ -11,8 +11,8 @@ needs to influence those paths has to do so *before* the first import. The
 launcher is the place that runs early enough to do that.
 
 The plain dev workflow (``python start-dev.py``) does **not** go through this
-module — it starts uvicorn directly against ``manager:app`` so Vite-on-:5173
-keeps working unchanged.
+module — it starts uvicorn directly against ``manager:app`` on :8001, behind
+the Vite dev server that owns :8000.
 """
 from __future__ import annotations
 
@@ -260,23 +260,62 @@ def _wait_port_free(host: str, port: int, deadline_sec: float = 5.0) -> bool:
         time.sleep(0.1)
 
 
+def _bind_targets(host: str) -> list[tuple[socket.AddressFamily, str]]:
+    """(family, address) pairs the real server would bind for *host*.
+
+    Mirrors ``asyncio.base_events.create_server``'s own split — the code path
+    ``launcher._serve`` actually runs through (``uvicorn.run()`` with no
+    ``reload``/``workers``, so no ``Config.bind_socket()`` involved): the empty
+    host (``core.net.DEFAULT_HOST``, the default) is dual-stack and gets one
+    AF_INET and one AF_INET6 socket, while a host string containing ``:`` is an
+    IPv6 literal and gets AF_INET6 alone. A single AF_INET probe on ``0.0.0.0``
+    made an IPv6-only occupant of the port read as free.
+    """
+    if host == "":
+        return [(socket.AF_INET, "0.0.0.0"), (socket.AF_INET6, "::")]
+    if ":" in host:
+        return [(socket.AF_INET6, host)]
+    return [(socket.AF_INET, host)]
+
+
 def _port_bindable(host: str, port: int) -> bool:
     """True iff we can actually bind a TCP socket on (host, port) right now.
 
     ``_processes_on_port`` only sees LISTEN sockets; this catches the rarer
     case where the port is reserved by the OS but no userspace listener shows.
     """
-    bind_host = host if host else "0.0.0.0"
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            # SO_REUSEADDR means the opposite thing on Windows: rather than
-            # only releasing a lingering TIME_WAIT, it lets this socket bind a
-            # port another socket is *actively* using — which would make the
-            # probe answer "free" for exactly the port conflict it exists to
-            # detect. POSIX still needs it, or a recent shutdown reads as busy.
-            if sys.platform != "win32":
-                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.bind((bind_host, port))
+        for family, addr in _bind_targets(host):
+            with socket.socket(family, socket.SOCK_STREAM) as s:
+                if family == socket.AF_INET6 and hasattr(socket, "IPPROTO_IPV6"):
+                    # asyncio sets this on the AF_INET6 socket of a dual-stack
+                    # bind so it doesn't also cover the AF_INET space the other
+                    # socket already owns; without it here, binding "::" first
+                    # could itself claim the port out from under the AF_INET
+                    # probe that follows, on a platform where V6ONLY defaults
+                    # off.
+                    s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+                if sys.platform == "win32":
+                    # Not SO_REUSEADDR: on Windows that option grants the
+                    # opposite of what POSIX gives it — it lets a socket bind a
+                    # port another one is *actively* using, so setting it here
+                    # would answer "free" for the exact conflict this probe
+                    # exists to catch. But plain no-option Windows bind already
+                    # permits stacking on an active listener too — that
+                    # exclusivity has to be asked for explicitly, with
+                    # SO_EXCLUSIVEADDRUSE, which is what "no option at all"
+                    # (the previous state here) failed to do.
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+                else:
+                    # Matches what our own listener will do: uvicorn's
+                    # non-reload bind (``launcher._serve`` -> ``uvicorn.run()``)
+                    # goes through asyncio's ``create_server``, which defaults
+                    # ``reuse_address`` to True on POSIX. Without it here, a
+                    # port this same probe just released reads as busy for the
+                    # TIME_WAIT interval even though the real server would take
+                    # it immediately.
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind((addr, port))
         return True
     except OSError:
         return False
@@ -368,6 +407,25 @@ def _restart_argv() -> list[str]:
     the stray positional on the way back up.
     """
     return sys.argv[1:] if getattr(sys, "frozen", False) else sys.argv
+
+
+def _apply_pending_restart() -> bool:
+    """Re-exec if a restart sentinel is waiting. Returns only when none was.
+
+    Re-exec rather than return, so static mounts and the TLS decision are made
+    fresh. The sentinel is cleared first: a replacement process that still saw
+    it would restart again on its own next clean exit.
+    """
+    from core import runtime_home
+
+    sentinel = runtime_home.restart_sentinel_path()
+    if not sentinel.exists():
+        return False
+    with contextlib.suppress(OSError):
+        sentinel.unlink()
+    logger.info("Restart sentinel present — re-executing launcher")
+    os.execv(sys.executable, [sys.executable, *_restart_argv()])
+    return True  # pragma: no cover - execv does not return
 
 
 class TlsConfigError(Exception):
@@ -507,6 +565,25 @@ def _https_redirect_app(https_port: int):
     return app
 
 
+def _port_accepting(host: str, port: int, timeout: float = 0.25) -> bool:
+    """True iff something accepts a TCP connection on (host, port) right now.
+
+    The inverse of ``_port_bindable``: that one asks whether we could take the
+    port, this one whether the thing that took it is ready to be talked to.
+    """
+    target = "127.0.0.1" if host in ("", "0.0.0.0") else host
+    try:
+        with socket.create_connection((target, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+# Giving up and redirecting anyway beats leaving the HTTP port dark forever,
+# and by this point a listener that has not appeared is not going to.
+_REDIRECTOR_WAIT_SECONDS = 120.0
+
+
 def _start_https_redirector(host: str, port: int, https_port: int):
     """Serve the redirect app on *port* in a background thread.
 
@@ -514,6 +591,14 @@ def _start_https_redirector(host: str, port: int, https_port: int):
     keeps owning SIGINT/SIGTERM. Returns the server and its thread so the
     caller can stop it before re-execing — the listening socket has to be
     released or the replacement process cannot rebind it.
+
+    Held back until the port it redirects *at* actually accepts. Uvicorn binds
+    only after lifespan startup, and the manager's startup resumes every
+    running project first — seconds during which this thread would already be
+    answering, on a port whose whole job is to say "the app is over there". A
+    page waiting out a protocol switch reads that as the replacement being up
+    and reopens itself on an HTTPS port nothing is listening on yet, which is
+    the "page not found until you reload" the operator sees.
     """
     import uvicorn
 
@@ -525,7 +610,25 @@ def _start_https_redirector(host: str, port: int, https_port: int):
         access_log=False,
         lifespan="off",
     ))
-    thread = threading.Thread(target=server.run, daemon=True, name="https-redirect")
+
+    def serve_once_the_target_answers() -> None:
+        deadline = time.monotonic() + _REDIRECTOR_WAIT_SECONDS
+        while not server.should_exit and not _port_accepting(host, https_port):
+            if time.monotonic() >= deadline:
+                logger.warning(
+                    "https-redirect: %s never started accepting; redirecting anyway",
+                    https_port,
+                )
+                break
+            time.sleep(0.1)
+        # A shutdown during the wait has no socket to release, so there is
+        # nothing for the caller's join to wait on — just don't start.
+        if not server.should_exit:
+            server.run()
+
+    thread = threading.Thread(
+        target=serve_once_the_target_answers, daemon=True, name="https-redirect"
+    )
     thread.start()
     return server, thread
 
@@ -553,6 +656,22 @@ def _absorb_uvicorns_signal_reraise():
         signal.signal(signal.SIGTERM, previous)
 
 
+# How long uvicorn may wait for open connections before it stops waiting.
+#
+# Left unset it waits forever, and over TLS that is not theoretical: a browser
+# keeps its keep-alive sockets pooled after navigating away, and closing an
+# asyncio SSL transport blocks on the peer's ``close_notify`` for
+# ``asyncio.constants.SSL_SHUTDOWN_TIMEOUT`` — 30s, which is also the floor of
+# the restart backstop in ``system_api``. Turning HTTPS off therefore lost that
+# race every time: the backstop hard-exited the process a fraction of a second
+# before the shutdown could finish, taking the sentinel re-exec with it, and the
+# operator had to start the runtime by hand to get HTTP back.
+#
+# The lifespan teardown that stops project children runs *after* this timeout
+# and is not bounded by it, so a shutdown with work to do still gets its time.
+GRACEFUL_SHUTDOWN_SECONDS = 5.0
+
+
 def _serve(app, host: str, port: int, verbose: bool, **uvicorn_kwargs) -> None:
     import uvicorn
 
@@ -562,6 +681,7 @@ def _serve(app, host: str, port: int, verbose: bool, **uvicorn_kwargs) -> None:
         port=port,
         log_level="info" if verbose else "warning",
         access_log=verbose,
+        timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_SECONDS,
         **uvicorn_kwargs,
     )
 
@@ -633,18 +753,22 @@ def _load_manager_app():
 
 def _run_manager(data_dir: Path, args: argparse.Namespace) -> int:
     """Manager mode (default) — supervisor + reverse proxy front door."""
+    from core import net
     from core.logging_setup import configure_logging
     configure_logging(verbose=args.verbose)
 
     app = _load_manager_app()
 
-    # Loopback by default. The workspace /mcp endpoint authenticates every
-    # request (manager session or MCP bearer token, see mcp_server.auth), but
-    # without NEXTHMI_SSL_* it's still plain HTTP — binding off-host accepts a
-    # trusted-LAN interception risk rather than a silent one. Set
-    # NEXTHMI_HOST=0.0.0.0 explicitly to reach the manager dashboard from other
-    # machines.
-    host = os.environ.get("NEXTHMI_HOST", "127.0.0.1")
+    # Reachable by default: a panel is opened from the machines around it, and
+    # an install that answered only itself read as broken from every one of
+    # them. Authentication is the boundary — the dashboard, every editor route
+    # and /mcp each demand a credential whichever interface the request came in
+    # on, and none of that changed with the binding. What did change is
+    # confidentiality: without NEXTHMI_SSL_* or Settings → HTTPS this is plain
+    # HTTP, so those credentials cross the wire in the clear. Turn HTTPS on
+    # wherever the network is not trusted. NEXTHMI_HOST=127.0.0.1 pins an
+    # install back to loopback.
+    host = net.resolve_bind_host()
     port = args.port or int(os.environ.get("NEXTHMI_PORT", "8000"))
 
     try:
@@ -719,26 +843,31 @@ def _run_manager(data_dir: Path, args: argparse.Namespace) -> int:
 
     app_port = https_port if split_ports else port
     scheme = "https" if tls else "http"
-    open_host = "127.0.0.1" if host in {"0.0.0.0", ""} else host
-    open_url = f"{scheme}://{open_host}:{app_port}"
+    open_url = net.display_url(scheme, host, app_port)
     print_banner(
         "runtime",
         BannerFields(
             runtime_home=data_dir,
             open_url=open_url,
+            network_urls=(tuple(net.network_urls(scheme, host, app_port)),),
             version=_read_version(),
         ),
     )
     redirector = redirector_thread = None
     if split_ports:
         redirector, redirector_thread = _start_https_redirector(host, port, https_port)
-        print(f"  http://{open_host}:{port} redirects here.")
+        print(f"  {net.display_url('http', host, port)} redirects here.")
         print()
     if expiry_warning is not None:
         print(f"  {expiry_warning}")
         print()
 
-    from core import runtime_home
+    # The backstop that abandons a stalled teardown calls os._exit, which skips
+    # everything below — including the re-exec. Hand it the re-exec so a restart
+    # that overruns still restarts instead of shutting the device down.
+    from api import system_api
+
+    system_api.apply_pending_restart = _apply_pending_restart
 
     with _absorb_uvicorns_signal_reraise():
         _serve(app, host=host, port=app_port, verbose=args.verbose, **serve_kwargs)
@@ -748,14 +877,8 @@ def _run_manager(data_dir: Path, args: argparse.Namespace) -> int:
         redirector_thread.join(timeout=5.0)
 
     # Self-restart loop: the manager's device-level /api/system/restart leaves a
-    # sentinel behind on clean exit. Re-exec a fresh interpreter so static
-    # mounts re-resolve.
-    sentinel = runtime_home.restart_sentinel_path()
-    if sentinel.exists():
-        with contextlib.suppress(OSError):
-            sentinel.unlink()
-        logger.info("Restart sentinel present — re-executing launcher")
-        os.execv(sys.executable, [sys.executable, *_restart_argv()])
+    # sentinel behind on clean exit.
+    _apply_pending_restart()
     return 0
 
 

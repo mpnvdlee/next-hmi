@@ -49,7 +49,8 @@ cd frontend && npm install && cd ..
 python start-dev.py            # stop with: python start-dev.py --stop
 ```
 
-Backend <http://localhost:8000>, frontend <http://localhost:5173>.
+The app is at <http://localhost:8000> — the same port a release install
+serves it on — with the API server behind it on <http://localhost:8001>.
 Architecture and deployment: [docs/dev/INDEX.md](../docs/dev/INDEX.md).
 
 ## Checks
