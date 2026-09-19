@@ -9,7 +9,7 @@ import {
 } from 'react';
 import type { WidgetConfig } from '@shared/types/config';
 import type { CSSWithVars } from '@shared/types/style';
-import { useComponentStore, selectComponentById } from '@shared/store/componentStore';
+import { componentChildren } from '@shared/store/componentStore';
 import { PreviewSelectionContext } from '../context/PreviewSelectionContext';
 import { useHostPageId } from '../context/HostPageContext';
 
@@ -224,10 +224,4 @@ function subtreeContainsWidget(
     }
   }
   return false;
-}
-
-function componentChildren(name: string): WidgetConfig[] | undefined {
-  const store = useComponentStore.getState();
-  const def = store.draftComponents[name] ?? selectComponentById(store.components, name);
-  return def?.children as WidgetConfig[] | undefined;
 }

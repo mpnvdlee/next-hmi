@@ -1,6 +1,7 @@
 import {
   aggregateBindingStatus,
   checkBindingSpec,
+  extractBindingSpecs,
   createBindingStatusSelector,
   type BindingSpec,
   type BindingStoreSlice,
@@ -15,7 +16,6 @@ function slice(overrides: Partial<BindingStoreSlice> = {}): BindingStoreSlice {
     metadataReceived: true,
     wsConnected: true,
     opcuaConnected: {},
-    snapshotReceived: true,
     ...overrides,
   };
 }
@@ -204,6 +204,106 @@ describe('checkBindingSpec', () => {
   });
 });
 
+describe('extractBindingSpecs', () => {
+  it('picks up a $var nested in an expression, with no type constraint of its own', () => {
+    const specs = extractBindingSpecs(
+      {
+        value: {
+          $stringExpr: {
+            template: '{1}',
+            wildcards: { 1: { $var: { path: 'PLC:Tanks/T1Volume' } } },
+          },
+        },
+      },
+      { value: { type: 'string' } },
+    );
+    expect(specs).toEqual([{ id: 'PLC:Tanks/T1Volume', accept: [] }]);
+  });
+
+  it('does not list a variable twice when a slot also binds it directly', () => {
+    const specs = extractBindingSpecs(
+      {
+        level: { $var: { path: 'PLC:Speed' } },
+        label: {
+          $stringExpr: { template: '{1}', wildcards: { 1: { $var: { path: 'PLC:Speed' } } } },
+        },
+      },
+      { level: { type: 'number' } },
+    );
+    expect(specs.map((spec) => spec.id)).toEqual(['PLC:Speed']);
+  });
+
+  it('checks an $if discriminant but not the branch that lost', () => {
+    const specs = extractBindingSpecs(
+      {
+        label: {
+          $if: {
+            condition: { $var: { path: 'PLC:Running' } },
+            true: { $var: { path: 'PLC:Rpm' } },
+            false: { $var: { path: 'PLC:Spare' } },
+          },
+        },
+      },
+      { label: { type: 'string' } },
+    );
+    // The condition is read on every render; at most one of the two results is
+    // ever on screen, so neither can be said to be missing.
+    expect(specs.map((spec) => spec.id)).toEqual(['PLC:Running']);
+  });
+
+  it('checks a $switch discriminant and its cases, not their results', () => {
+    const specs = extractBindingSpecs(
+      {
+        label: {
+          $switch: {
+            value: { $var: { path: 'PLC:Mode' } },
+            cases: [{ when: { $var: { path: 'PLC:ManualMode' } }, then: { $var: { path: 'PLC:A' } } }],
+            default: { $var: { path: 'PLC:B' } },
+          },
+        },
+      },
+      { label: { type: 'string' } },
+    );
+    expect(specs.map((spec) => spec.id).sort()).toEqual(['PLC:ManualMode', 'PLC:Mode']);
+  });
+
+  it('ignores variables that only gate visibility or only fire on press', () => {
+    const compare = (path: string) => ({
+      $compare: { left: { $var: { path } }, operator: '>', right: 0 },
+    });
+    const specs = extractBindingSpecs(
+      {
+        visible: compare('PLC:ShowIt'),
+        interactable: compare('PLC:Enabled'),
+        onPress: { events: [{ params: { value: compare('PLC:Cmd') } }] },
+      },
+      { onPress: { type: 'actions' } },
+    );
+    // None of the three is something the widget is *showing* — marking it for
+    // them would put an overlay on a widget that renders correctly.
+    expect(specs).toEqual([]);
+  });
+
+  it('claims nothing for a property the schema does not declare', () => {
+    // `registerCustomWidget` registers a widget whose exports could not be read
+    // (`schemaError`) with only the visibility gates, so every property on it
+    // lands here with no field — `actions` included. Harvesting those would put
+    // an amber "no data" mark on a widget that renders and works, for a
+    // variable only its press handler writes.
+    const specs = extractBindingSpecs(
+      {
+        onPress: {
+          events: [
+            { params: { value: { $compare: { left: { $var: { path: 'PLC:Cmd' } }, operator: '>', right: 0 } } } },
+          ],
+        },
+      },
+      {},
+    );
+    expect(specs).toEqual([]);
+  });
+});
+
 describe('aggregateBindingStatus', () => {
   const spec: BindingSpec = { id: 'PLC:Speed', accept: [] };
   const cached = slice({
@@ -221,6 +321,21 @@ describe('aggregateBindingStatus', () => {
     expect(aggregateBindingStatus([spec], { ...cached, opcuaConnected: { PLC: false } })).toBe(
       'disconnected',
     );
+  });
+
+  it('reports a sound binding with no value as nodata, not as a broken one', () => {
+    const noValue = slice({
+      varMeta: { 'PLC:Speed': meta({ kind: 'scalar', base: 'Float', array: false }) },
+    });
+    expect(aggregateBindingStatus([spec], noValue)).toBe('nodata');
+  });
+
+  it('keeps the red overlay for a variable no datasource knows', () => {
+    expect(aggregateBindingStatus([spec], slice())).toBe('disabled');
+  });
+
+  it('says nodata before the metadata has landed — nothing is known to be wrong yet', () => {
+    expect(aggregateBindingStatus([spec], slice({ metadataReceived: false }))).toBe('nodata');
   });
 });
 
@@ -286,7 +401,8 @@ describe('createBindingStatusSelector', () => {
       varMeta: { 'PLC:Alarms': meta(structArray) },
     });
 
-    expect(selector(base)).toBe('disabled');
+    // The element key has not been delivered yet — no data, not a bad binding.
+    expect(selector(base)).toBe('nodata');
     expect(
       selector({
         ...base,

@@ -34,13 +34,25 @@ describe('BootSplash', () => {
     expect(screen.getByText(/Loading configuration · 2\/3/)).toBeInTheDocument();
   });
 
-  it('renders no branding while the project config is still loading', () => {
+  it('renders the branding and notice on the first frame, before the config loads', () => {
     setConfig(false);
     render(<BootSplash phase="components" />);
-    expect(wordmark()).toBeNull();
-    expect(screen.queryByText(/AGPL-3\.0/)).not.toBeInTheDocument();
-    // The loading surface itself is still there.
+    expect(wordmark()).toBe('NEXT HMI');
+    expect(screen.getByText(/AGPL-3\.0/)).toBeInTheDocument();
     expect(screen.getByText(/Loading components · 1\/3/)).toBeInTheDocument();
+  });
+
+  it('holds ee branding back until the config loads, so a white label cannot flash the mark', () => {
+    window.__NEXTHMI_EDITION__ = 'ee';
+    setConfig(false);
+    try {
+      render(<BootSplash phase="components" />);
+      expect(wordmark()).toBeNull();
+      expect(document.querySelector('img')).toBeNull();
+      expect(screen.getByText(/Loading components · 1\/3/)).toBeInTheDocument();
+    } finally {
+      delete window.__NEXTHMI_EDITION__;
+    }
   });
 
   it('drops the AGPL notice in the ee build but keeps the branding', () => {
@@ -81,8 +93,12 @@ function Hold() {
 
 describe('useBootHold', () => {
   beforeEach(() => {
-    resetBootHold();
+    // Fake timers first: resetBootHold stamps the start of the floor, and that
+    // stamp has to come off the clock this test then advances. Reset it under
+    // the real clock and the floor is part-spent before the first assertion,
+    // by however long the suite took to get here.
     vi.useFakeTimers();
+    resetBootHold();
   });
   afterEach(() => {
     resetBootHold();

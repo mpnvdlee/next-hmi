@@ -97,6 +97,13 @@
   border: 2px dashed var(--hmi-binding-disconnected-border);
 }
 
+/* Binding sound, no value ever delivered — dashed amber, same family as
+   disconnected: both mean "no data", neither means "wrong". */
+.hmi-binding-overlay--nodata {
+  background: var(--hmi-binding-nodata-bg);
+  border: 2px dashed var(--hmi-binding-nodata-border);
+}
+
 /* Shared icon base */
 .hmi-binding-overlay__icon {
   display: block;
@@ -125,6 +132,31 @@
 
 .hmi-binding-overlay--disabled .hmi-binding-overlay__icon::after {
   transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+/* No-data icon: an amber ⊖ — a slot with nothing in it, not a fault. Drawn from
+   the two pseudo-elements rather than an SVG so it follows the token. */
+.hmi-binding-overlay--nodata .hmi-binding-overlay__icon::before,
+.hmi-binding-overlay--nodata .hmi-binding-overlay__icon::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.hmi-binding-overlay--nodata .hmi-binding-overlay__icon::before {
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 0.18rem solid var(--hmi-binding-nodata-icon);
+  border-radius: 50%;
+}
+
+.hmi-binding-overlay--nodata .hmi-binding-overlay__icon::after {
+  width: 0.85rem;
+  height: 0.18rem;
+  background: var(--hmi-binding-nodata-icon);
+  border-radius: 2px;
 }
 
 /* Disconnected icon: WiFi-off symbol (SVG background) */

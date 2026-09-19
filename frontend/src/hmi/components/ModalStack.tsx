@@ -16,6 +16,7 @@ import { useAnchoredStyle } from '@shared/hooks/useAnchoredStyle';
 import { InputScopeContext } from '@hmi/context/InputScopeContext';
 import { useResolvedDialogs, useResolvedPageOverlays } from '@hmi/hooks/useOpenOverlays';
 import WidgetRenderer from './WidgetRenderer';
+import { PageDataSettleGate } from './DataSettleGate';
 import PageGroupPageView from './PageGroupPageView';
 
 /** Distance (px) between successive same-placement docked cards, so opening a
@@ -156,11 +157,17 @@ export function ModalStack() {
           title: resolvePageTitle(overlayPage.title),
           onClose: () => closePageOverlay(overlayPage.id),
           children: (
-            <PageGroupPageView
-              pages={pages}
-              requestedId={overlayPage.id}
-              onNavigate={(pageId) => updatePageOverlay(overlayPage.id, pageId)}
-            />
+            // An overlay page id is sent in `set_context`'s `currentPageIds`
+            // (HmiView), so `context_ready` echoes it back and the overlay gets
+            // a real settle signal of its own — it does not inherit the host
+            // page's, which is already closed by the time the overlay opens.
+            <PageDataSettleGate pageId={overlayPage.id}>
+              <PageGroupPageView
+                pages={pages}
+                requestedId={overlayPage.id}
+                onNavigate={(pageId) => updatePageOverlay(overlayPage.id, pageId)}
+              />
+            </PageDataSettleGate>
           ),
         });
       })}
@@ -280,11 +287,17 @@ function DialogBody({
   componentProperties: Record<string, unknown>;
 }) {
   const scope = useMemo(() => ({ properties: componentProperties }), [componentProperties]);
+  // A dialog opened long after its page settled asks for variables of its own:
+  // `set_context` carries `openDialogIds` and the ack echoes them back, so this
+  // waits on the real signal. Without it a dialog whose values are not cached
+  // opens already marked, a beat before they land.
   return (
-    <InputScopeContext.Provider value={scope}>
-      {(dialog.widgets as WidgetConfig[]).map((comp) => (
-        <WidgetRenderer key={comp.id} node={comp} />
-      ))}
-    </InputScopeContext.Provider>
+    <PageDataSettleGate pageId={dialog.id} kind="dialog">
+      <InputScopeContext.Provider value={scope}>
+        {(dialog.widgets as WidgetConfig[]).map((comp) => (
+          <WidgetRenderer key={comp.id} node={comp} />
+        ))}
+      </InputScopeContext.Provider>
+    </PageDataSettleGate>
   );
 }

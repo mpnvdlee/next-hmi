@@ -7,9 +7,12 @@
  * - Falls back to `.hmi-unknown-widget` for unrecognised types.
  *
  * Binding-unavailable overlay:
- * - After the first `var_snapshot` from the server, any component whose
- *   VariableBinding(s) are absent from the variable store (disabled or
- *   not yet published by the PLC) gets a red-cross overlay.
+ * - A component whose VariableBinding(s) cannot be resolved is covered by a
+ *   marker: red cross for a binding that is wrong (unknown variable, wrong
+ *   type), amber for one that is only without data — the datasource is down,
+ *   or no value has ever arrived for it.
+ * - The amber ones wait for the surrounding `DataSettleGate`: a page renders
+ *   before its variables land, so nothing is marked until that load is over.
  *
  * Preview mode (set by PreviewContext):
  * - Wraps each component in `<div data-widget-id="..." className="hmi-preview-node">`.
@@ -27,7 +30,7 @@ import { widgetRegistry, isContainerHostType, placesOwnChildren } from '../regis
 import { useHmiStore } from '../store/hmiStore';
 import { PreviewContext } from '@shared/context/PreviewContext';
 import { DefinitionScopeContext } from '../context/DefinitionScopeContext';
-import { useBindingStatus } from '../utils/bindingValidation';
+import { useBindingStatus, type BindingStatus } from '../utils/bindingValidation';
 import { useResolvedProperties } from '../hooks/useResolvedProperties';
 import { useLiveScalars } from '../hooks/useLiveScalars';
 import { useTimeTick } from '../hooks/useTimeTick';
@@ -113,6 +116,12 @@ class WidgetErrorBoundary extends Component<EBProps, EBState> {
 
 const LOCKED_MESSAGE = 'Interaction not permitted';
 
+const BINDING_OVERLAY_LABELS: Record<Exclude<BindingStatus, 'ok'>, string> = {
+  disabled: 'Variable disabled',
+  disconnected: 'OPC UA disconnected',
+  nodata: 'No data',
+};
+
 /**
  * Build a flex-child style for the binding-unavailable wrapper.
  * The wrapper takes over the layout role normally played by .hmi-component,
@@ -141,10 +150,14 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
   const isVisible = usePropBoolean(node.properties, 'visible', true);
   const isInteractable = usePropBoolean(node.properties, 'interactable', true);
 
-  const bindingStatus = useBindingStatus(node.properties, entry?.schema ?? {});
-
   // Resolve translation references in properties ({ "$loc": "key" }).
   const resolvedProperties = useResolvedProperties(node.properties);
+
+  // Status is read from the *resolved* properties: a widget inside a component
+  // definition binds through `$componentProp`, which only becomes the real
+  // `$var` here. Reading the raw node instead left every such widget — most of
+  // a component-built page — with no bindings to check and so never marked.
+  const bindingStatus = useBindingStatus(resolvedProperties, entry?.schema ?? {});
 
   // Granular live-value subscription: re-render this widget only when a `$var`
   // it actually references ticks. `resolvedProperties` already has any parent
@@ -232,9 +245,7 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
           {comp}
           <div
             className={`hmi-binding-overlay hmi-binding-overlay--${bindingStatus}`}
-            aria-label={
-              bindingStatus === 'disconnected' ? 'OPC UA disconnected' : 'Variable disabled'
-            }
+            aria-label={BINDING_OVERLAY_LABELS[bindingStatus]}
           >
             <span className="hmi-binding-overlay__icon" aria-hidden="true" />
           </div>

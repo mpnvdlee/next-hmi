@@ -2,12 +2,12 @@ import { Suspense, useContext, useEffect, useMemo, useState, type ReactNode } fr
 import type { PageConfig, PageNode, PageGroupConfig, WidgetConfig } from '@shared/types/config';
 import { resolvePageContext } from '@shared/utils/pageTree';
 import { useConfigStore } from '@shared/store/configStore';
-import { useVariableStore } from '../store/variableStore';
 import WidgetRenderer from './WidgetRenderer';
 import WindowedContent from './WindowedContent';
 import { PageGroupStackContext, type PageGroupStackEntry } from './PageGroupStackContext';
 import { HostPageContext } from '../context/HostPageContext';
 import { ComponentSelfSuspenseContext } from '../context/ComponentSuspenseContext';
+import { prefetchWidgetModules, widgetModulesLoaded } from '../registry/widgetRegistry';
 import { ContentSpinner } from '@shared/components/Spinner';
 
 interface PageGroupPageViewProps {
@@ -144,35 +144,102 @@ interface PageContentProps {
   page: PageConfig;
 }
 
-// Safety valve: if the backend never acks this page's context (down, no
-// bindings, an old build without context_ready, ...), reveal anyway rather
-// than spin forever.
-const CONTEXT_READY_WAIT_MS = 1200;
+/** Per-page-visit answer to "is this page's widget code in memory?" — see
+ *  PageContent for why both halves are keyed by page id. */
+interface PageModuleVisit {
+  pageId: string;
+  ready: boolean;
+  timedOut: boolean;
+}
+
+// Safety valve for the module load. They are local files, so this only covers a
+// fetch that never lands at all; the wait is long enough that a page still
+// pulling widget code is never revealed half-built for being merely slow. What
+// the reveal then shows is the rest of the page with a hole where the stuck
+// widget is — every widget module keeps its own `fallback={null}` boundary, so
+// nothing escalates back onto this spinner.
+const MODULES_WAIT_MS = 5000;
 
 function PageContent({ page }: PageContentProps) {
   // A page arrives from the index with an empty `content` section and is
   // hydrated lazily on first visit (usePage). Hold a single page-filling spinner
-  // until the page has hydrated, every component chunk it uses has mounted, AND
-  // this page's own variables have been delivered (context_ready echoing this
-  // page's id — see HmiView's set_context effect) — then reveal header, content
-  // and footer together in one go, with widgets already carrying their live
-  // values. This keeps the page from reflowing piecemeal: no bands popping in
-  // behind their own spinner (they share one boundary with self-suspense
-  // disabled) and no labels growing from empty→value a beat after the spinner
-  // clears — for every navigation, not just the first page of the session.
+  // until the page has hydrated AND every widget module and component chunk it
+  // renders is in memory — then reveal header, content and footer together in
+  // one go, instead of reflowing piecemeal as the lazy imports return.
+  //
+  // Both of those are config and code: local files, milliseconds, never the
+  // datasource. The page's *variables* deliberately do not gate the reveal —
+  // a slow OPC-UA read would then delay every navigation, which is exactly the
+  // stall this used to have. Widgets render with the values the store already
+  // holds (they survive navigation) and `DataSettleGate` marks whatever turned
+  // out to have no data once the load settles.
   const hydrated = useConfigStore((s) => s.loadedPageIds.has(page.id));
-  const contextReady = useVariableStore((s) => s.contextReadyPageIds.includes(page.id));
-  // Tracks which page's wait timed out — comparing against the *current*
-  // page.id below means navigating away before a stale timer fires can't leak
-  // a stale "ready" into the next page (PageContent isn't remounted per page).
-  const [timedOutPageId, setTimedOutPageId] = useState<string | null>(null);
-  useEffect(() => {
-    if (!hydrated || contextReady) return;
-    const t = setTimeout(() => setTimedOutPageId(page.id), CONTEXT_READY_WAIT_MS);
-    return () => clearTimeout(t);
-  }, [hydrated, contextReady, page.id]);
-  const ready = hydrated && (contextReady || timedOutPageId === page.id);
   const sections = page.sections;
+  // Widget code is the second thing the reveal waits on, and the one the
+  // Suspense boundary below cannot supply: every widget type is a `lazy()` that
+  // only starts its import on first render, and `registerCustomWidget` wraps it
+  // in its own `fallback={null}` boundary, so a widget still in flight renders
+  // a hole rather than escalating here. Prefetching the page's modules — rather
+  // than escalating those boundaries — is also what keeps a widget that mounts
+  // later (WindowedContent scrolls one in, a visibility gate opens) from
+  // blanking the whole page body behind this spinner. The boundary below is
+  // left for the shared ComponentRenderer chunk a `$component:` instance
+  // waits on.
+  // A band that is switched off is never rendered, so its widgets' modules are
+  // not something this page is waiting for.
+  const showHeader = page.showHeader;
+  const showFooter = page.showFooter;
+  const nodes = useMemo(
+    () => [
+      ...(showHeader ? (sections.header ?? []) : []),
+      ...(sections.content ?? []),
+      ...(showFooter ? (sections.footer ?? []) : []),
+    ],
+    [sections, showHeader, showFooter],
+  );
+  // Both answers are latched per page id, not as bare booleans: PageContent is
+  // not remounted between two top-level pages, so a plain `true` would carry
+  // the previous page's answer — an expired wait included — into the next one.
+  // Reset during render rather than from an effect, so the new page never gets
+  // a frame of the old page's verdict.
+  const [visit, setVisit] = useState<PageModuleVisit>(() => ({
+    pageId: page.id,
+    ready: false,
+    timedOut: false,
+  }));
+  if (visit.pageId !== page.id) {
+    setVisit({ pageId: page.id, ready: false, timedOut: false });
+  }
+  useEffect(() => {
+    if (!hydrated) return;
+    const markReady = () =>
+      setVisit((v) => (v.pageId === page.id && !v.ready ? { ...v, ready: true } : v));
+    if (widgetModulesLoaded(nodes)) {
+      markReady();
+      return;
+    }
+    let alive = true;
+    void prefetchWidgetModules(nodes).then(() => {
+      if (alive) markReady();
+    });
+    return () => {
+      alive = false;
+    };
+  }, [hydrated, nodes, page.id]);
+  useEffect(() => {
+    if (!hydrated || visit.ready) return;
+    const t = setTimeout(
+      () => setVisit((v) => (v.pageId === page.id ? { ...v, timedOut: true } : v)),
+      MODULES_WAIT_MS,
+    );
+    return () => clearTimeout(t);
+  }, [hydrated, visit.ready, page.id]);
+  // Answered during render, not only from the effect above: navigating back to
+  // a page whose modules are all in memory would otherwise flash the body
+  // spinner for the one frame before effects run. The walk only happens while
+  // the page is still waiting — once latched, the two booleans short-circuit it.
+  const modulesOk = visit.ready || visit.timedOut || (hydrated && widgetModulesLoaded(nodes));
+  const ready = hydrated && modulesOk;
   const renderWidget = (widget: WidgetConfig) => <WidgetRenderer key={widget.id} node={widget} />;
   return (
     <HostPageContext.Provider value={page.id}>
