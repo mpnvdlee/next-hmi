@@ -2,8 +2,11 @@
 target path from its own active project rather than from the request."""
 from __future__ import annotations
 
+import asyncio
 import struct
+import time
 import zlib
+from contextlib import suppress
 from pathlib import Path
 
 import httpx
@@ -169,6 +172,47 @@ async def test_aborts_a_streamed_oversized_body_before_buffering_it_all(
     assert res.status_code == 422
     assert pulled["n"] < total_chunks
     assert not (home / ".thumbnails").exists()
+
+
+@pytest.mark.asyncio
+async def test_writing_the_thumbnail_does_not_block_the_event_loop(monkeypatch, home: Path):
+    """The write takes `core.storage`'s module-wide lock and can run for a
+    while under a large payload — on a project instance this loop also drives
+    the OPC-UA and WebSocket variable pipeline, so a blocking write on it
+    would stall every one of those for as long as the write takes. A
+    concurrent coroutine's heartbeat has to keep ticking while the write is
+    in flight, which only happens if the write actually left the loop."""
+    monkeypatch.setattr(thumbnail_api, "_active_project_id", lambda: "proj-1")
+
+    def slow_write(path: Path, data: bytes) -> None:
+        time.sleep(0.3)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+    monkeypatch.setattr(thumbnail_api, "write_bytes_atomic", slow_write)
+
+    ticks = 0
+
+    async def heartbeat() -> None:
+        nonlocal ticks
+        while True:
+            await asyncio.sleep(0.02)
+            ticks += 1
+
+    hb = asyncio.create_task(heartbeat())
+    try:
+        transport = httpx.ASGITransport(app=_build_app())
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+            res = await ac.post(
+                "/api/thumbnail", content=_png_bytes(), headers={"Content-Type": "image/png"}
+            )
+    finally:
+        hb.cancel()
+        with suppress(asyncio.CancelledError):
+            await hb
+
+    assert res.status_code == 204
+    assert ticks >= 5
 
 
 @pytest.fixture

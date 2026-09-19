@@ -792,7 +792,7 @@
       {
         "type": "UserBadge",
         "name": "User Badge",
-        "description": "Shows the currently signed-in user as an initialled badge.",
+        "description": "Shows the signed-in user as an initialled badge, with optional sign-in and sign-out affordances.",
         "props": [
           {
             "key": "usernameText",
@@ -807,8 +807,52 @@
             "group": "Content"
           },
           {
+            "key": "signInLabel",
+            "label": "Sign-in label",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "Log in"
+          },
+          {
+            "key": "showGroups",
+            "label": "Show groups",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": true
+          },
+          {
+            "key": "signInIcon",
+            "label": "Sign-in icon",
+            "type": "icon",
+            "group": "Appearance"
+          },
+          {
+            "key": "signOutIcon",
+            "label": "Sign-out icon",
+            "type": "icon",
+            "group": "Appearance"
+          },
+          {
+            "key": "radius",
+            "label": "Radius",
+            "type": "String",
+            "group": "Appearance"
+          },
+          {
             "key": "actions",
             "label": "On Press",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "onSignIn",
+            "label": "On Sign In",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "onSignOut",
+            "label": "On Sign Out",
             "type": "actions",
             "group": "Actions"
           },

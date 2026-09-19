@@ -1,5 +1,6 @@
 """REST API for datasource management (CRUD + browse)."""
 
+import asyncio
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
@@ -260,7 +261,11 @@ async def generate_datasource_certificate(body: CertGenerateBody) -> CertGenerat
     certs_dir.mkdir(parents=True, exist_ok=True)
     cert_path = certs_dir / f"{base}-cert.der"
     key_path = certs_dir / f"{base}-key.pem"
-    generate_self_signed_client_certificate(
+    # RSA-2048 keygen plus the cert/key writes take ~100-300ms — off the loop,
+    # which on a project instance also drives the OPC-UA and WebSocket
+    # variable pipeline.
+    await asyncio.to_thread(
+        generate_self_signed_client_certificate,
         str(cert_path),
         str(key_path),
         common_name=body.common_name.strip() or "webhmi-opc-client",

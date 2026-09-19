@@ -9,6 +9,7 @@ process values out of an export or a peer push.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
@@ -51,16 +52,22 @@ async def _read_bounded_body(request: Request) -> bytes:
 
 @instance_router.post("/thumbnail", status_code=204)
 async def put_thumbnail(request: Request) -> Response:
-    """Store the PNG the editor rasterised after a successful save."""
+    """Store the PNG the editor rasterised after a successful save.
+
+    ``_active_project_id`` reads ``config.json`` off disk and
+    ``write_bytes_atomic`` takes ``core.storage``'s module-wide lock for a
+    write up to 2 MB — both off the loop, which on a project instance also
+    drives the OPC-UA and WebSocket variable pipeline.
+    """
     body = await _read_bounded_body(request)
     if not body.startswith(PNG_MAGIC):
         raise ValidationError("Thumbnail must be a PNG")
 
-    project_id = _active_project_id()
+    project_id = await asyncio.to_thread(_active_project_id)
     if project_id is None:
         raise ValidationError("No active project to attach a thumbnail to")
 
-    write_bytes_atomic(thumbnail_path(project_id), body)
+    await asyncio.to_thread(write_bytes_atomic, thumbnail_path(project_id), body)
     return Response(status_code=204)
 
 

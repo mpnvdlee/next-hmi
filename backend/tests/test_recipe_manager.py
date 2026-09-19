@@ -252,6 +252,24 @@ async def test_upload_keeps_previous_value_when_read_fails(mgr: RecipeManager):
 
 
 @pytest.mark.asyncio
+async def test_upload_permission_denied_keeps_previous_value(mgr: RecipeManager):
+    # Both variables have a fresh live value, but Grind's read is denied by the
+    # permission hook — its previously-stored value must survive, the same way
+    # a denied write is skipped on download.
+    dm = FakeStaticDM({"Temp": {"data_type": "float"}, "Grind": {"data_type": "integer"}})
+    dm.seed("DS", "Temp", 88.5)
+    dm.seed("DS", "Grind", 9)
+    mgr.set_datasource_manager(dm)
+    mgr.set_config(RecipeConfig.model_validate(_config()))
+    cfg = await mgr.upload_into(
+        "espresso", username="op", permission_check=lambda ds, path: path != "Grind"
+    )
+    ds = cfg.dataset_types[0].datasets[0]
+    assert ds.values["temp"] == 88.5  # permitted read applied
+    assert ds.values["grind"] == 4  # denied read left untouched
+
+
+@pytest.mark.asyncio
 async def test_set_config_preserves_loaded_at(mgr: RecipeManager):
     dm = FakeStaticDM({"Temp": {"data_type": "float"}, "Grind": {"data_type": "integer"}})
     mgr.set_datasource_manager(dm)

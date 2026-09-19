@@ -7,9 +7,12 @@ from datetime import UTC
 from pathlib import Path
 from typing import Any
 
+import core.passwords as passwords_module
 import pytest
 import services.users_manager as users_manager_module
 from conftest import FakeWebSocket
+from core import user_auth_throttle
+from core.exceptions import RateLimitError
 from core.passwords import hash_password, is_valid_hash, verify_password
 from services.users_manager import (
     _DEFAULT_DOCUMENT,
@@ -135,12 +138,12 @@ def test_get_users_returns_full_document(api_client):
     assert "users" in data
     assert "settings" in data
     assert all(user["password"] == "" for user in data["users"])
-    assert all("passwordSet" in user for user in data["users"])
+    assert all("passwordSet" not in user for user in data["users"])
 
 
 def test_put_users_document_saves_all_sections_together(api_client):
     document = {
-        "settings": {"autoLoginName": "operator1", "configAccessGroups": ["operator"]},
+        "settings": {"autoLoginName": "operator1"},
         "groups": [
             {"id": "guest", "label": "Guest"},
             {"id": "operator", "label": "Operators"},
@@ -172,39 +175,14 @@ def test_put_users_document_saves_all_sections_together(api_client):
 def test_put_users_document_validation_failure_leaves_file_unchanged(api_client):
     before = load()
     invalid = copy.deepcopy(before)
-    invalid["settings"]["configAccessGroups"] = ["missing-group"]
+    invalid["users"].append(
+        {"id": "ghost", "username": "ghost", "password": "", "groups": ["missing-group"]}
+    )
 
     resp = api_client.put("/api/users", json=invalid)
 
     assert resp.status_code == 422
     assert load() == before
-
-
-def test_put_users_document_cannot_consume_pending_operator_setup(api_client):
-    pending = load()
-    pending["operatorSetup"] = {"version": 1, "required": True}
-    save(pending)
-    submitted = copy.deepcopy(pending)
-    submitted.pop("operatorSetup")
-
-    resp = api_client.put("/api/users", json=submitted)
-
-    assert resp.status_code == 200
-    assert resp.json()["operatorSetup"] == {"version": 1, "required": True}
-    assert load()["operatorSetup"] == {"version": 1, "required": True}
-
-
-def test_put_users_document_cannot_discard_malformed_operator_setup(api_client):
-    malformed = load()
-    malformed["operatorSetup"] = None
-    save(malformed)
-    submitted = api_client.get("/api/users").json()
-    submitted.pop("operatorSetup")
-
-    resp = api_client.put("/api/users", json=submitted)
-
-    assert resp.status_code == 422
-    assert load() == malformed
 
 
 def test_put_groups_saves_and_returns(api_client):
@@ -275,10 +253,12 @@ def test_get_redacts_legacy_plaintext_without_rewriting(api_client, users_tmp):
     before = users_tmp.read_bytes()
 
     payload = api_client.get("/api/users").json()
+    credential_state = api_client.get("/api/users/credential-state").json()
 
     returned = next(user for user in payload["users"] if user["id"] == "legacy")
     assert returned["password"] == ""
-    assert returned["passwordSet"] is True
+    assert "passwordSet" not in returned
+    assert credential_state["legacy"] is True
     assert users_tmp.read_bytes() == before
 
 
@@ -471,9 +451,21 @@ def test_delete_user_removes_user(api_client):
 
 
 def test_delete_referenced_group_is_rejected_without_persistence(api_client):
+    api_client.put(
+        "/api/users/users",
+        json=[
+            {"id": "guest", "username": "guest", "password": "", "groups": ["guest"]},
+            {
+                "id": "u-op1",
+                "username": "operator1",
+                "password": "pass",
+                "groups": ["operator"],
+            },
+        ],
+    )
     before = load()
 
-    response = api_client.delete("/api/users/groups/admin")
+    response = api_client.delete("/api/users/groups/operator")
 
     assert response.status_code == 422
     assert load() == before
@@ -485,19 +477,20 @@ def test_delete_guest_user_is_blocked(api_client):
 
 
 def test_put_settings_saves(api_client):
-    resp = api_client.put(
-        "/api/users/settings",
-        json={"autoLoginName": "guest", "configAccessGroups": ["engineer", "admin"]},
-    )
+    resp = api_client.put("/api/users/settings", json={"autoLoginName": "guest"})
     assert resp.status_code == 200
+    assert resp.json() == {"autoLoginName": "guest"}
 
 
-def test_put_settings_rejects_unknown_configAccessGroup(api_client):
+def test_put_settings_drops_a_leftover_config_access_setting(api_client):
+    """A project saved before the setting was removed must still save, not 422."""
     resp = api_client.put(
         "/api/users/settings",
         json={"autoLoginName": "guest", "configAccessGroups": ["nonexistent"]},
     )
-    assert resp.status_code == 422
+    assert resp.status_code == 200
+    assert resp.json() == {"autoLoginName": "guest"}
+    assert "configAccessGroups" not in load()["settings"]
 
 
 # ─── WebSocket login/logout + permission tests ─────────────────────────────
@@ -525,14 +518,31 @@ def _setup_users_file(path: Path) -> None:
             "groups": ["operator", "guest"],
         }
     )
+    # Exactly what the editor writes for a new user (UsersView: password ''),
+    # after an admin has widened its groups. Nothing requires a password to be
+    # set before that, so this shape is on real panels.
+    doc["users"].append(
+        {
+            "id": "u-nopass",
+            "username": "nopass",
+            "password": "",
+            "groups": ["engineer", "guest"],
+        }
+    )
     path.write_text(json.dumps(doc))
 
 
 @pytest.fixture()
-def ws_manager(tmp_path, monkeypatch):
+def auth_users(tmp_path, monkeypatch):
+    """Point ``users_path()`` at a document with one of every credential shape."""
     users_path = tmp_path / "users.json"
     _setup_users_file(users_path)
     monkeypatch.setattr(users_manager_module, "users_path", lambda: users_path)
+    return users_path
+
+
+@pytest.fixture()
+def ws_manager(auth_users):
     return WebSocketManager()
 
 
@@ -876,3 +886,154 @@ def test_request_identity_does_not_echo_request_id(ws_manager, users_tmp):
     resp = fake_ws.messages[0]
     assert resp["type"] == "user_identity"
     assert "requestId" not in resp
+
+
+# ─── passwordless accounts, throttling, and the timing oracle ───────────────
+
+
+def _login(ws_manager, username: str, password: str, *, client_id: str = "c1"):
+    """Run one WebSocket login and return the messages it sent back."""
+    ws = FakeWebSocket()
+    ws_manager._connections[client_id] = ws
+    ws_manager._client_users[client_id] = {}
+    asyncio.run(
+        ws_manager._handle_login(
+            client_id,
+            {
+                "type": "login",
+                "scope": "runtime:tab1:inst1",
+                "username": username,
+                "password": password,
+            },
+        )
+    )
+    return ws.messages
+
+
+def test_authenticate_refuses_an_account_with_no_password(auth_users):
+    """`Basic bGluZWJvc3M6` — a known username and an empty password — signed in
+    as any account the editor had created and an admin had given groups to."""
+    assert asyncio.run(users_manager_module.authenticate("nopass", "")) is None
+    assert asyncio.run(users_manager_module.authenticate("nopass", "guess")) is None
+
+
+def test_authenticate_refuses_guest_sign_in(auth_users):
+    """``guest`` is the anonymous identity, never a login."""
+    assert asyncio.run(users_manager_module.authenticate("guest", "")) is None
+    assert asyncio.run(users_manager_module.authenticate("guest", "guest")) is None
+
+
+def test_authenticate_still_accepts_real_credentials(auth_users):
+    identity, _doc = asyncio.run(users_manager_module.authenticate("hashed", "hashed-pass"))
+    assert identity["username"] == "hashed"
+    legacy, _doc = asyncio.run(users_manager_module.authenticate("operator1", "op1pass"))
+    assert legacy["groups"] == ["operator", "guest"]
+
+
+def test_ws_login_with_no_password_set_is_refused(ws_manager):
+    messages = _login(ws_manager, "nopass", "")
+
+    assert [m["type"] for m in messages] == ["auth_error"]
+    assert messages[0]["reason"] == "invalid_credentials"
+    assert ws_manager._client_users["c1"] == {}
+
+
+def test_ws_login_as_guest_with_an_empty_password_is_refused(ws_manager):
+    messages = _login(ws_manager, "guest", "")
+
+    assert [m["type"] for m in messages] == ["auth_error"]
+    assert ws_manager._client_users["c1"] == {}
+
+
+def test_auto_login_still_works_for_a_passwordless_user(ws_manager, auth_users):
+    """The other half of the fix: ``settings.autoLoginName`` names an account
+    that by design has no password, and it must keep resolving."""
+    doc = json.loads(auth_users.read_text())
+    doc["settings"]["autoLoginName"] = "nopass"
+    auth_users.write_text(json.dumps(doc))
+
+    ws = FakeWebSocket()
+    ws_manager._connections["c1"] = ws
+    asyncio.run(
+        ws_manager.handle_message(
+            "c1", json.dumps({"type": "request_identity", "scope": "runtime:tab1:inst1"})
+        )
+    )
+
+    assert [m["type"] for m in ws.messages] == ["user_identity"]
+    assert ws.messages[0]["username"] == "nopass"
+    assert ws.messages[0]["groups"] == ["engineer", "guest"]
+
+
+def test_unknown_username_costs_the_same_as_a_wrong_password(auth_users, monkeypatch):
+    """51x between a miss and a hit is an account enumerator on a route an
+    anonymous LAN caller can reach. Derivations, not wall-clock."""
+    derivations: list[int] = []
+    real = passwords_module.hashlib.pbkdf2_hmac
+
+    def counting(*args, **kwargs):
+        derivations.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(passwords_module.hashlib, "pbkdf2_hmac", counting)
+
+    assert asyncio.run(users_manager_module.authenticate("hashed", "wrong")) is None
+    known_user = len(derivations)
+    derivations.clear()
+
+    assert asyncio.run(users_manager_module.authenticate("nobody-at-all", "wrong")) is None
+    unknown_user = len(derivations)
+
+    assert (known_user, unknown_user) == (1, 1)
+
+
+def test_repeated_failures_lock_the_username_out(ws_manager):
+    """Five wrong guesses and the *right* password stops working for a minute —
+    the manager's own login throttle, applied to the project-user path."""
+    for _ in range(5):
+        assert _login(ws_manager, "hashed", "wrong")[0]["reason"] == "invalid_credentials"
+
+    locked = _login(ws_manager, "hashed", "hashed-pass")
+    assert [m["type"] for m in locked] == ["auth_error"]
+    assert locked[0]["reason"] == "rate_limited"
+
+    user_auth_throttle.reset()
+    assert _login(ws_manager, "hashed", "hashed-pass")[0]["type"] == "user_identity"
+
+
+def test_lockout_is_scoped_to_the_username_it_was_earned_by(ws_manager):
+    for _ in range(5):
+        _login(ws_manager, "hashed", "wrong")
+
+    assert _login(ws_manager, "operator1", "op1pass")[0]["type"] == "user_identity"
+
+
+def test_a_good_password_clears_the_failure_count(ws_manager):
+    for _ in range(4):
+        _login(ws_manager, "hashed", "wrong")
+    assert _login(ws_manager, "hashed", "hashed-pass")[0]["type"] == "user_identity"
+
+    for _ in range(4):
+        _login(ws_manager, "hashed", "wrong")
+    assert _login(ws_manager, "hashed", "hashed-pass")[0]["type"] == "user_identity"
+
+
+def test_authenticate_raises_rate_limit_so_rest_callers_answer_429(auth_users):
+    """``datasource_api`` and ``recipe_api`` both funnel through here; the
+    registered ``RateLimitError`` handler turns this into HTTP 429."""
+    for _ in range(5):
+        assert asyncio.run(users_manager_module.authenticate("hashed", "wrong")) is None
+
+    with pytest.raises(RateLimitError):
+        asyncio.run(users_manager_module.authenticate("hashed", "hashed-pass"))
+
+
+def test_a_username_flood_trips_the_global_cooldown():
+    """A guess that rotates usernames never meets the per-name counter, so the
+    ceiling across all names is what bounds the hashing an anonymous flood can
+    buy on a panel PC."""
+    for attempt in range(60):
+        assert user_auth_throttle.lockout_remaining(f"ghost{attempt}") == 0.0
+        user_auth_throttle.register_login_failure(f"ghost{attempt}")
+
+    assert user_auth_throttle.lockout_remaining("operator1") > 0.0

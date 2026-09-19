@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from core.http_origins import invalidate_http_origin_cache
 from core.storage import active_datasources_dir, read_json
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
@@ -43,6 +44,11 @@ async def reload(body: ReloadBody) -> dict[str, str]:
     # values reflect the edit.
     if body.artifact_type == "variables":
         await _reload_datasources(body.artifact_ids)
+
+    # The manager MCP wrote straight to disk, so every cache derived from a
+    # project document is now stale — including the $http origin allowlist,
+    # where stale means the proxy still trusts an origin the edit removed.
+    invalidate_http_origin_cache()
 
     event = ConfigChangedEvent(
         artifact_type=body.artifact_type,

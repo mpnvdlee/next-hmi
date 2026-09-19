@@ -513,7 +513,6 @@ def test_create_seeds_and_registers(client: TestClient, tmp_path: Path) -> None:
     metadata = manifest_mod.read_project_metadata(target)
     assert metadata is not None
     assert metadata.id == body["id"]
-    assert body["operatorSetupRequired"] is True
     users = (target / "users.json").read_text(encoding="utf-8")
     assert '"password": "admin"' not in users
 
@@ -576,7 +575,6 @@ def test_example_template_ships_without_credentials():
     template = projects_api._template_dir("example")
     assert template is not None, "project-example/ must be bundled"
     users = json.loads((template / "users.json").read_text(encoding="utf-8"))
-    assert users["operatorSetup"]["required"] is True
     assert [user["id"] for user in users["users"]] == ["guest"]
     assert all("passwordHash" not in user for user in users["users"])
 

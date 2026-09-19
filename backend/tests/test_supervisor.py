@@ -157,36 +157,35 @@ def test_start_and_stop_are_serialized_per_project(home: Path, monkeypatch) -> N
     assert order == ["start-enter", "start-exit", "stop"]
 
 
-def test_start_rejects_project_with_pending_operator_setup(
-    home: Path, tmp_path: Path
+def test_start_accepts_a_project_whose_only_user_is_guest(
+    home: Path, tmp_path: Path, monkeypatch
 ) -> None:
+    """A freshly seeded project carries no admin account and nothing gates it."""
     project_id = _register_project(home, tmp_path)
     project = manifest_mod.find_project(manifest_mod.load_manifest(), project_id)
     assert project is not None
     (Path(project.path) / "users.json").write_text(
         json.dumps(
-                {
-                    "settings": {},
-                    "groups": [
-                        {"id": "guest", "label": "Guest"},
-                        {"id": "admin", "label": "Admin"},
-                    ],
-                    "users": [
-                        {
-                            "id": "guest",
-                            "username": "guest",
-                            "password": "",
-                            "groups": ["guest"],
-                        }
-                    ],
-                    "operatorSetup": {"version": 1, "required": True},
+            {
+                "settings": {},
+                "groups": [
+                    {"id": "guest", "label": "Guest"},
+                    {"id": "admin", "label": "Admin"},
+                ],
+                "users": [
+                    {
+                        "id": "guest",
+                        "username": "guest",
+                        "password": "",
+                        "groups": ["guest"],
+                    }
+                ],
             }
         ),
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="operator password"):
-        supervisor_mod.Supervisor().start(project_id)
+    assert _make_supervisor(monkeypatch, healthy=True).start(project_id)["status"] == "running"
 
 
 def test_start_rechecks_credentials_before_returning_running_instance(
@@ -339,6 +338,24 @@ class TestStartGuards:
         sup.resume_all()
 
         assert sup.running_snapshot() == []
+
+    def test_resume_keeps_the_running_set_when_a_guard_refusal_may_pass_later(
+        self, home: Path, tmp_path: Path, monkeypatch, refusing
+    ) -> None:
+        """Unlike a pending format upgrade, a guard's refusal is not something
+        the operator resolves in the Projects page — the enterprise activation
+        gate refuses every start on its own while a licence is lapsed, and
+        lifts itself the moment it is renewed. Pruning here erases the running
+        set for good: a reboot in that window would mean nothing comes back
+        once the licence is fixed, because nothing remembers what to restart."""
+        project_id = _register_project(home, tmp_path)
+        manifest_mod.upsert_running(project_id, 9001)
+        sup = _make_supervisor(monkeypatch, healthy=True)
+
+        sup.resume_all()
+
+        assert sup.running_snapshot() == []
+        assert manifest_mod.running_entry(manifest_mod.load_manifest(), project_id) is not None
 
     def test_a_crashed_instance_is_not_respawned(
         self, home: Path, tmp_path: Path, monkeypatch, refusing

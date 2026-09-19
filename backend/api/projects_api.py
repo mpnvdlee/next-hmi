@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from core import mcp_tokens, operator_setup, runtime_home
+from core import mcp_tokens, runtime_home, users_document
 from core.exceptions import ConflictError, NotFoundError, ValidationError
 from core.manifest import (
     ManifestV1,
@@ -141,7 +141,7 @@ def _path_status(raw_path: str) -> str:
 
 def _entry_dict(entry: ProjectEntry, *, default_id: str | None = None) -> dict[str, Any]:
     path = Path(entry.path).expanduser()
-    setup_state = operator_setup.state(path)
+    users_state = users_document.state(path)
     status = _path_status(entry.path)
     metadata = read_project_metadata(path) if status == "present" else None
     format_version = metadata.formatVersion if metadata is not None else None
@@ -165,9 +165,8 @@ def _entry_dict(entry: ProjectEntry, *, default_id: str | None = None) -> dict[s
         "status": status,
         "isDefault": entry.id == default_id,
         "mcpEnabled": project_mcp_enabled(path),
-        "operatorSetupRequired": setup_state.status is operator_setup.SetupStatus.REQUIRED,
-        "operatorSetupStatus": setup_state.status.value,
-        "operatorSetupError": setup_state.error,
+        "credentialsStatus": "ok" if users_state.valid else "error",
+        "credentialsError": users_state.error,
         "formatVersion": format_version,
         "minAppVersion": metadata.minAppVersion if metadata is not None else None,
         "needsUpgrade": needs_upgrade,

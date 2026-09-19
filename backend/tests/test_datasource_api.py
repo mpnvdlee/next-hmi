@@ -1,9 +1,14 @@
 """Tests for datasource_api CRUD routes."""
+import asyncio
+import json
 import sys
+import time
+from contextlib import suppress
 from pathlib import Path
 
 import api.datasource_api as datasource_api_module
 import core.storage as storage
+import httpx
 import pytest
 from core.exceptions import register_exception_handlers
 from fastapi import FastAPI
@@ -317,6 +322,81 @@ def test_rest_write_requires_project_user_credentials(ds_client):
     )
     assert response.status_code == 401
     assert response.json()["detail"] == "invalid_credentials"
+
+
+def _restricted_setpoint(manager, groups: list[str]) -> dict:
+    manager.save(
+        "plc1",
+        {
+            "name": "plc1",
+            "type": "static",
+            "variables": [
+                {
+                    "kind": "variable",
+                    "display_name": "Setpoint",
+                    "data_type": "Int16",
+                    "enabled": True,
+                    "interactableByGroups": groups,
+                }
+            ],
+        },
+    )
+    return {"datasource": "plc1", "path": "Setpoint", "value": 42}
+
+
+def _write_project_users(root: Path, *extra: dict) -> None:
+    root.joinpath("users.json").write_text(
+        json.dumps(
+            {
+                "settings": {"autoLoginName": "guest"},
+                "groups": [
+                    {"id": "guest", "label": "Guest"},
+                    {"id": "engineer", "label": "Engineer"},
+                ],
+                "users": [
+                    {"id": "guest", "username": "guest", "password": "", "groups": ["guest"]},
+                    *extra,
+                ],
+            }
+        )
+    )
+
+
+def test_rest_write_refuses_an_account_with_no_password(ds_client, live_project_root: Path):
+    """``interactableByGroups`` is the only per-tag restriction an anonymous
+    operator faces on the public runtime prefix, and ``Basic bGluZWJvc3M6`` —
+    a real username with an empty password — walked straight through it."""
+    client, manager = ds_client
+    payload = _restricted_setpoint(manager, ["engineer"])
+    _write_project_users(
+        live_project_root,
+        {"id": "u-lb", "username": "lineboss", "password": "", "groups": ["engineer", "guest"]},
+    )
+
+    anonymous = client.post("/api/datasources/write", json=payload)
+    assert anonymous.status_code == 401
+
+    response = client.post("/api/datasources/write", json=payload, auth=("lineboss", ""))
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid_credentials"
+
+
+def test_rest_write_throttles_repeated_credential_failures(ds_client, live_project_root: Path):
+    """Nothing counted failures on a route reachable with no session at all,
+    and each attempt costs a 200 000-iteration PBKDF2."""
+    client, manager = ds_client
+    payload = _restricted_setpoint(manager, ["engineer"])
+    _write_project_users(
+        live_project_root,
+        {"id": "u-lb", "username": "lineboss", "password": "", "groups": ["engineer", "guest"]},
+    )
+
+    for _ in range(5):
+        attempt = client.post("/api/datasources/write", json=payload, auth=("lineboss", "guess"))
+        assert attempt.status_code == 401
+
+    locked = client.post("/api/datasources/write", json=payload, auth=("lineboss", "guess"))
+    assert locked.status_code == 429
 
 
 def test_rest_write_shares_envelope_coercion_and_group_permission(ds_client, monkeypatch):
@@ -641,6 +721,59 @@ def test_generate_certificate_rejects_out_of_range_validity(ds_client):
         "/api/datasources/certs/generate", json={"name": "my-plc", "validity_days": 0}
     )
     assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_generating_a_certificate_does_not_block_the_event_loop(
+    monkeypatch, live_project_root: Path
+):
+    """RSA-2048 keygen plus the cert/key writes happen inside this handler —
+    on a project instance the same loop drives the OPC-UA and WebSocket
+    variable pipeline, so running that synchronously would stall both for as
+    long as generation takes (~100-300ms). A concurrent coroutine's heartbeat
+    has to keep ticking while generation is in flight, which only happens if
+    the work actually left the loop."""
+    storage.active_datasources_dir().mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(datasource_api_module, "_opcua_pool", None)
+    monkeypatch.setattr(datasource_api_module, "_test_server_pool", None)
+    monkeypatch.setattr(datasource_api_module, "datasource_manager", DatasourceManager())
+
+    def slow_generate(cert_path: str, key_path: str, **_kwargs: object) -> None:
+        time.sleep(0.3)
+        Path(cert_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(cert_path).write_bytes(b"cert")
+        Path(key_path).write_bytes(b"key")
+
+    monkeypatch.setattr(
+        datasource_api_module, "generate_self_signed_client_certificate", slow_generate
+    )
+
+    ticks = 0
+
+    async def heartbeat() -> None:
+        nonlocal ticks
+        while True:
+            await asyncio.sleep(0.02)
+            ticks += 1
+
+    from api.datasource_api import router
+
+    test_app = FastAPI()
+    register_exception_handlers(test_app)
+    test_app.include_router(router)
+
+    hb = asyncio.create_task(heartbeat())
+    try:
+        transport = httpx.ASGITransport(app=test_app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+            resp = await ac.post("/api/datasources/certs/generate", json={"name": "my-plc"})
+    finally:
+        hb.cancel()
+        with suppress(asyncio.CancelledError):
+            await hb
+
+    assert resp.status_code == 200
+    assert ticks >= 5
 
 
 # ── GET /certs/info ────────────────────────────────────────────────────────────

@@ -16,9 +16,8 @@ function project(overrides: Partial<ProjectEntry> = {}): ProjectEntry {
     status: 'present',
     isDefault: false,
     mcpEnabled: false,
-    operatorSetupRequired: false,
-    operatorSetupStatus: 'complete',
-    operatorSetupError: null,
+    credentialsStatus: 'ok',
+    credentialsError: null,
     formatVersion: null,
     minAppVersion: null,
     needsUpgrade: false,
@@ -743,35 +742,22 @@ describe('project version / upgrade gate', () => {
 });
 
 describe('operator credential state', () => {
-  it('replaces the run controls with a setup prompt while credentials are missing', () => {
-    useProjectsStore.setState({
-      projects: [project({ operatorSetupRequired: true, operatorSetupStatus: 'required' })],
-    });
+  it('offers the run controls on a project that has no operator account yet', () => {
+    useProjectsStore.setState({ projects: [project()] });
     renderAt('/projects');
 
     const projectRow = within(row('Line 1'));
-    expect(projectRow.getByRole('button', { name: 'Set operator password' })).toBeInTheDocument();
-    expect(projectRow.queryByRole('button', { name: 'Start' })).toBeNull();
-    expect(projectRow.getByRole('radio')).toBeDisabled();
-  });
-
-  it('opens the operator-setup dialog from the row prompt', async () => {
-    useProjectsStore.setState({
-      projects: [project({ operatorSetupRequired: true, operatorSetupStatus: 'required' })],
-    });
-    renderAt('/projects');
-
-    await userEvent.click(screen.getByRole('button', { name: 'Set operator password' }));
-
-    expect(within(await openModal()).getByText('Set operator password')).toBeInTheDocument();
+    expect(projectRow.getByRole('button', { name: 'Start' })).toBeInTheDocument();
+    expect(projectRow.queryByRole('button', { name: 'Set operator password' })).toBeNull();
+    expect(projectRow.getByRole('radio')).toBeEnabled();
   });
 
   it('reports an unreadable credential as a disabled row action carrying the reason', () => {
     useProjectsStore.setState({
       projects: [
         project({
-          operatorSetupStatus: 'error',
-          operatorSetupError: 'users.json is corrupt',
+          credentialsStatus: 'error',
+          credentialsError: 'users.json is corrupt',
         }),
       ],
     });
@@ -780,27 +766,6 @@ describe('operator credential state', () => {
     const button = within(row('Line 1')).getByRole('button', { name: 'Credentials unavailable' });
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute('title', 'users.json is corrupt');
-  });
-
-  it('auto-opens the setup dialog for the project named by ?operatorSetup', async () => {
-    window.history.replaceState({}, '', '/projects?operatorSetup=p1');
-    useProjectsStore.setState({
-      projects: [project({ operatorSetupRequired: true, operatorSetupStatus: 'required' })],
-    });
-    renderAt('/projects');
-
-    expect(within(await openModal()).getByText('Set operator password')).toBeInTheDocument();
-    expect(window.location.search).toBe('');
-  });
-
-  it('ignores ?operatorSetup for a project that no longer needs setup', async () => {
-    window.history.replaceState({}, '', '/projects?operatorSetup=p1');
-    useProjectsStore.setState({ projects: [project()] });
-    renderAt('/projects');
-
-    await waitFor(() => expect(screen.getByText('Line 1')).toBeInTheDocument());
-    expect(modal()).toBeNull();
-    window.history.replaceState({}, '', '/');
   });
 });
 

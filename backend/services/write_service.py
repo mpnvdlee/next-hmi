@@ -6,11 +6,14 @@ coerce → dispatch → write implementation. Handles scalars *and* whole-array
 values, static and OPC-UA datasources, optional verify read-back, and returns a
 structured :class:`WriteOutcome` with an error reason on failure.
 
-Permission checks are intentionally *not* here — they depend on per-client
-identity and stay with the caller (the WebSocket handler / recipe WS handler).
-Auditing sits with them for the same reason, and one more: a recipe download
-reaches this module with no operator behind it, so a record emitted here could
-not say who to attribute the write to.
+The one *rule* every write caller applies — ``write_permitted``, and the
+``write_permission_gate`` that binds it to an identity for a whole recipe
+download — lives here so the callers cannot drift apart. Resolving *which*
+identity is still theirs: it comes from a per-connection session (the WebSocket
+handlers) or from credentials on a request (the REST write endpoints), neither
+of which this module can see. Auditing sits with them for the same reason, and
+one more: a recipe download reaches this module with no operator behind it, so a
+record emitted here could not say who to attribute the write to.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from __future__ import annotations
 import math
 import re
 import struct
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -79,6 +83,28 @@ def write_permitted(identity: Any, entry_data: Any) -> bool:
     user_groups = {group for group in groups if isinstance(group, str)}
     allowed_groups = {group for group in interactable_groups if isinstance(group, str)}
     return bool(user_groups & allowed_groups)
+
+
+def write_permission_gate(
+    identity: Any, datasource_manager: Any,
+) -> Callable[[str, str], bool]:
+    """Bind one identity to the per-variable ACL, as ``(datasource, path) -> bool``.
+
+    The shape ``recipe_manager.download`` takes as ``permission_check``. Both
+    download entry points build their gate here — the WebSocket ``recipeLoad``
+    handler and ``POST /api/recipes/datasets/{id}/download`` — so the two cannot
+    drift into enforcing different rules on the same write.
+    """
+
+    def permitted(ds_name: str, base_path: str) -> bool:
+        entry_data = (
+            datasource_manager.get_entry(ds_name, base_path)
+            if datasource_manager is not None
+            else None
+        )
+        return write_permitted(identity, entry_data)
+
+    return permitted
 
 
 def array_registry_path(path: str) -> str:

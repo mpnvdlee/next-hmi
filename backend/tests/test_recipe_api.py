@@ -57,7 +57,8 @@ def _config() -> dict:
 def recipe_client(monkeypatch, live_project_root: Path):
     storage.ensure_active_project_dirs()
     fresh = RecipeManager()
-    fresh.set_datasource_manager(FakeStaticDM({"Temp": {"data_type": "float"}}))
+    dm = FakeStaticDM({"Temp": {"data_type": "float"}})
+    fresh.set_datasource_manager(dm)
     monkeypatch.setattr(recipe_manager_module, "recipe_manager", fresh)
     monkeypatch.setattr(recipe_api_module, "recipe_manager", fresh)
 
@@ -71,6 +72,7 @@ def recipe_client(monkeypatch, live_project_root: Path):
     register_exception_handlers(test_app)
     test_app.include_router(recipe_api_module.router)
     with TestClient(test_app) as client:
+        client.dm = dm
         yield client
 
 
@@ -123,3 +125,140 @@ def test_upload_endpoint(recipe_client):
     # Temp not in cache → read returns None, overwriting stored value
     values = r.json()["datasetTypes"][0]["datasets"][0]["values"]
     assert "temp" in values
+
+
+# ── Per-variable write ACL on the REST download path ──────────────────────────
+
+
+def _restricted_entry(*_args) -> dict[str, Any]:
+    return {"data_type": "float", "interactableByGroups": ["admin"]}
+
+
+def _restrict_live_variable(monkeypatch) -> None:
+    """Make every variable admin-only on the datasource registry the API reads.
+
+    The REST handler looks the variable up on the live ``datasource_manager``
+    singleton — the same object ``datasource_api`` checks against — so the patch
+    goes on that instance rather than on a name imported into a test module.
+    """
+    from services.datasource_manager import datasource_manager as live_dm
+
+    monkeypatch.setattr(live_dm, "get_entry", _restricted_entry)
+
+
+def test_rest_download_refuses_a_group_restricted_parameter(recipe_client, monkeypatch):
+    """A REST caller carries no session, so it is anonymous — and an anonymous
+    caller may not write a variable an admin restricted with
+    ``interactableByGroups``. The WebSocket ``recipeLoad`` path already refuses
+    this; its REST twin must refuse it identically instead of writing the PLC.
+    """
+    _restrict_live_variable(monkeypatch)
+    recipe_client.put("/api/recipes/config", json=_config())
+
+    r = recipe_client.post("/api/recipes/datasets/espresso/download", json={})
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["result"] == "failed"
+    assert body["written"] == 0
+    assert body["failures"] == [{"parameterId": "temp", "reason": "permission_denied"}]
+
+
+def test_rest_download_allows_a_restricted_parameter_for_a_group_member(
+    recipe_client, monkeypatch
+):
+    """Project credentials on the request lift the caller out of anonymous."""
+    _restrict_live_variable(monkeypatch)
+
+    async def authenticate(username, password):
+        if (username, password) == ("boss", "secret"):
+            return {"username": username, "groups": ["admin"]}, {}
+        return None
+
+    monkeypatch.setattr(recipe_api_module.users_manager, "authenticate", authenticate)
+    recipe_client.put("/api/recipes/config", json=_config())
+
+    r = recipe_client.post(
+        "/api/recipes/datasets/espresso/download", json={}, auth=("boss", "secret")
+    )
+
+    assert r.status_code == 200
+    assert r.json()["result"] == "success"
+
+
+def test_rest_download_rejects_invalid_credentials(recipe_client, monkeypatch):
+    """Credentials that do not authenticate are refused, not downgraded to guest."""
+
+    async def authenticate(username, password):
+        return None
+
+    monkeypatch.setattr(recipe_api_module.users_manager, "authenticate", authenticate)
+    recipe_client.put("/api/recipes/config", json=_config())
+
+    r = recipe_client.post(
+        "/api/recipes/datasets/espresso/download", json={}, auth=("boss", "wrong")
+    )
+
+    assert r.status_code == 401
+    assert r.json()["detail"] == "invalid_credentials"
+
+
+# ── Per-variable read ACL on the REST upload path ──────────────────────────────
+
+
+def test_rest_upload_refuses_a_group_restricted_parameter(recipe_client, monkeypatch):
+    """`upload` reads live values into a saved dataset — the same write-side ACL
+    its download sibling enforces must gate that read, or an anonymous caller
+    overwrites a stored setpoint the admin locked to a group."""
+    _restrict_live_variable(monkeypatch)
+    recipe_client.put("/api/recipes/config", json=_config())
+    recipe_client.dm.update_static_value("DS", "Temp", 150.0)
+
+    r = recipe_client.post("/api/recipes/datasets/espresso/upload")
+
+    assert r.status_code == 200
+    values = r.json()["datasetTypes"][0]["datasets"][0]["values"]
+    assert values["temp"] == 92.0  # denied read left the stored value untouched
+
+
+def test_rest_upload_allows_and_attributes_a_restricted_parameter_for_a_group_member(
+    recipe_client, monkeypatch
+):
+    """Project credentials on the request lift the caller out of anonymous, and
+    the upload is attributed to them rather than to an empty string."""
+    _restrict_live_variable(monkeypatch)
+
+    async def authenticate(username, password):
+        if (username, password) == ("boss", "secret"):
+            return {"username": username, "groups": ["admin"]}, {}
+        return None
+
+    monkeypatch.setattr(recipe_api_module.users_manager, "authenticate", authenticate)
+    recipe_client.put("/api/recipes/config", json=_config())
+    recipe_client.dm.update_static_value("DS", "Temp", 150.0)
+
+    r = recipe_client.post(
+        "/api/recipes/datasets/espresso/upload", auth=("boss", "secret")
+    )
+
+    assert r.status_code == 200
+    dataset = r.json()["datasetTypes"][0]["datasets"][0]
+    assert dataset["values"]["temp"] == 150.0
+    assert dataset["updatedBy"] == "boss"
+
+
+def test_rest_upload_rejects_invalid_credentials(recipe_client, monkeypatch):
+    """Credentials that do not authenticate are refused, not downgraded to guest."""
+
+    async def authenticate(username, password):
+        return None
+
+    monkeypatch.setattr(recipe_api_module.users_manager, "authenticate", authenticate)
+    recipe_client.put("/api/recipes/config", json=_config())
+
+    r = recipe_client.post(
+        "/api/recipes/datasets/espresso/upload", auth=("boss", "wrong")
+    )
+
+    assert r.status_code == 401
+    assert r.json()["detail"] == "invalid_credentials"

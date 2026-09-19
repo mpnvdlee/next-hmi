@@ -371,7 +371,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "96926a9a9445ac1d",
+    "buildTs": "9bd731bf496e06a6",
     "displayName": "User Badge",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -383,7 +383,28 @@
       "groupsText": {
         "type": "string"
       },
+      "signInLabel": {
+        "type": "string"
+      },
+      "showGroups": {
+        "type": "boolean"
+      },
+      "signInIcon": {
+        "type": "icon"
+      },
+      "signOutIcon": {
+        "type": "icon"
+      },
+      "radius": {
+        "type": "string"
+      },
       "actions": {
+        "type": "actions"
+      },
+      "onSignIn": {
+        "type": "actions"
+      },
+      "onSignOut": {
         "type": "actions"
       }
     },

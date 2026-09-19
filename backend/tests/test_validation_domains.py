@@ -266,19 +266,20 @@ def test_auto_login_and_duplicate_usernames(ctx):
             {"id": "a", "username": "same"},
             {"id": "b", "username": "same"},
         ],
-        "settings": {"autoLoginName": "nobody", "configAccessGroups": ["operator", "ghost"]},
+        "settings": {"autoLoginName": "nobody"},
     }
     found = codes(validate_users(users, ctx))
     assert "user-duplicate" in found
     assert "user-unknown" in found
-    assert "user-group-unknown" in found
 
 
 def test_valid_users_document_is_clean(ctx):
     users = {
         "groups": [{"id": "operator"}, {"id": "admin"}],
         "users": [{"id": "a", "username": "a", "groups": ["operator"]}],
-        "settings": {"autoLoginName": "a", "configAccessGroups": ["admin"]},
+        # A leftover `configAccessGroups` from before the setting was removed is
+        # dead weight, not a finding — even when it names a group that is gone.
+        "settings": {"autoLoginName": "a", "configAccessGroups": ["ghost"]},
     }
     assert validate_users(users, ctx).warnings == []
 

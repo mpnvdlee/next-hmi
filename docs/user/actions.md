@@ -77,7 +77,7 @@ Inside those handlers the **`$result`** source reads fields of what came back. W
 
 `onSettled` sees the union of both. The `reason` vocabulary is fixed, so you can branch on it with `$compare`:
 
-`invalid_credentials` · `permission_denied` · `bad_request` · `bad_path` · `bad_field` · `invalid_value` · `opcua_unreachable` · `write_failed` · `array_index_out_of_bounds` · `array_state_unavailable` · `timeout` · `disconnected`
+`invalid_credentials` · `rate_limited` · `permission_denied` · `bad_request` · `bad_path` · `bad_field` · `invalid_value` · `opcua_unreachable` · `write_failed` · `array_index_out_of_bounds` · `array_state_unavailable` · `timeout` · `disconnected`
 
 A worked pattern — a Start button that confirms, writes, and tells the operator either way:
 

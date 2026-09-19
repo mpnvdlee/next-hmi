@@ -2,9 +2,9 @@
 
 from typing import Any
 
-from core import operator_setup
+from core import users_document
 from core.exceptions import UserConflictError, UserNotFoundError, UserValidationError
-from core.passwords import hash_password
+from core.passwords import has_password, hash_password
 from fastapi import APIRouter, Body
 from services import users_manager
 
@@ -22,13 +22,31 @@ def _require_valid_id(value: Any, label: str) -> str:
     return str(value)
 
 
-def _redact_document(document: dict[str, Any]) -> dict[str, Any]:
+def _redact_document(
+    document: dict[str, Any], *, include_credential_state: bool = False
+) -> dict[str, Any]:
+    """Strip stored credentials from every account.
+
+    ``include_credential_state`` also attaches ``passwordSet`` — the editor
+    needs it to render the "(unchanged)" vs "(no password)" placeholder, but
+    the anonymous ``GET /api/users`` must not hand an unauthenticated LAN
+    caller a target list of which accounts carry a credential.
+    """
     redacted = dict(document)
     redacted["users"] = [
         {
             **{key: value for key, value in user.items() if key != "passwordHash"},
             "password": "",
-            "passwordSet": bool(user.get("password", "")) or "passwordHash" in user,
+            **(
+                {
+                    # The same test sign-in makes: an unusable stored hash is
+                    # not a password set, or the editor would show a
+                    # credential nobody can present as configured.
+                    "passwordSet": has_password(user)
+                }
+                if include_credential_state
+                else {}
+            ),
         }
         for user in document.get("users", [])
         if isinstance(user, dict)
@@ -109,10 +127,10 @@ def _normalize_users(
     return normalized
 
 
-def _require_valid_setup_document(document: dict[str, Any]) -> None:
-    setup_state = operator_setup.document_state(document)
-    if setup_state.status is operator_setup.SetupStatus.ERROR:
-        raise UserValidationError(setup_state.error or "users.json is invalid")
+def _require_valid_users_document(document: dict[str, Any]) -> None:
+    users_state = users_document.document_state(document)
+    if not users_state.valid:
+        raise UserValidationError(users_state.error or "users.json is invalid")
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────
@@ -120,8 +138,31 @@ def _require_valid_setup_document(document: dict[str, Any]) -> None:
 
 @router.get("")
 def get_users() -> dict:
-    """Return the users document with stored credentials redacted."""
+    """Return the users document with stored credentials redacted.
+
+    Anonymous — the live view resolves ``$user``/``$userGroups`` and the
+    sign-in dropdown with no session, so this must never carry
+    ``passwordSet``: that would hand an unauthenticated LAN caller a target
+    list of which accounts have a credential to guess.
+    """
     return _redact_document(users_manager.load())
+
+
+@router.get("/credential-state")
+def get_credential_state() -> dict[str, bool]:
+    """Which accounts carry a credential, by id.
+
+    Gated: the manager's allowlist is deny-by-default and this path isn't on
+    it, so only a signed-in editor can reach it. Kept separate from
+    ``get_users`` rather than gating the whole roster, because the live view
+    still needs the anonymous roster for identity resolution.
+    """
+    document = users_manager.load()
+    return {
+        str(user.get("id")): has_password(user)
+        for user in document.get("users", [])
+        if isinstance(user, dict)
+    }
 
 
 @router.put("")
@@ -153,20 +194,8 @@ def put_users_document(body: dict = Body(...)) -> dict:
         raise UserValidationError("Cannot remove the 'guest' group")
 
     auto_login = settings.get("autoLoginName", "guest")
-    config_groups = settings.get("configAccessGroups", [])
     if not isinstance(auto_login, str):
         raise UserValidationError("autoLoginName must be a string")
-    if not isinstance(config_groups, list) or not all(
-        isinstance(g, str) for g in config_groups
-    ):
-        raise UserValidationError("configAccessGroups must be a list of strings")
-    unknown_config_groups = [
-        group_id for group_id in config_groups if group_id not in seen_group_ids
-    ]
-    if unknown_config_groups:
-        raise UserValidationError(
-            f"Unknown groups in configAccessGroups: {unknown_config_groups}"
-        )
 
     current = users_manager.load()
     current_by_id = {
@@ -177,42 +206,26 @@ def put_users_document(body: dict = Body(...)) -> dict:
     normalized_users = _normalize_users(users, seen_group_ids, current_by_id)
 
     document = {
-        "settings": {
-            "autoLoginName": auto_login,
-            "configAccessGroups": list(config_groups),
-        },
+        "settings": {"autoLoginName": auto_login},
         "groups": normalized_groups,
         "users": normalized_users,
     }
-    if "operatorSetup" in current:
-        document["operatorSetup"] = current["operatorSetup"]
-    _require_valid_setup_document(document)
+    _require_valid_users_document(document)
     users_manager.save(document)
-    return _redact_document(document)
+    return _redact_document(document, include_credential_state=True)
 
 
 @router.put("/settings")
 def put_settings(body: dict) -> dict:
     """Replace the settings section."""
     auto_login = body.get("autoLoginName", "guest")
-    config_groups = body.get("configAccessGroups", [])
 
     if not isinstance(auto_login, str):
         raise UserValidationError("autoLoginName must be a string")
-    if not isinstance(config_groups, list) or not all(
-        isinstance(g, str) for g in config_groups
-    ):
-        raise UserValidationError("configAccessGroups must be a list of strings")
 
     doc = users_manager.load()
-
-    existing_ids = {g["id"] for g in doc.get("groups", []) if isinstance(g, dict)}
-    unknown = [g for g in config_groups if g not in existing_ids]
-    if unknown:
-        raise UserValidationError(f"Unknown groups in configAccessGroups: {unknown}")
-
-    doc["settings"] = {"autoLoginName": auto_login, "configAccessGroups": config_groups}
-    _require_valid_setup_document(doc)
+    doc["settings"] = {"autoLoginName": auto_login}
+    _require_valid_users_document(doc)
     users_manager.save(doc)
     return doc["settings"]
 
@@ -236,14 +249,6 @@ def put_groups(body: list = Body(...)) -> list:
         raise UserValidationError("Cannot remove the 'guest' group")
 
     doc = users_manager.load()
-    config_groups = doc.get("settings", {}).get("configAccessGroups", [])
-    unknown_config = [
-        group_id for group_id in config_groups if group_id not in seen_ids
-    ]
-    if unknown_config:
-        raise UserValidationError(
-            f"Groups are still used by config access: {unknown_config}"
-        )
     referenced = sorted(
         {
             group_id
@@ -258,7 +263,7 @@ def put_groups(body: list = Body(...)) -> list:
     doc["groups"] = [
         {"id": g["id"], "label": str(g.get("label", g["id"]))} for g in body
     ]
-    _require_valid_setup_document(doc)
+    _require_valid_users_document(doc)
     users_manager.save(doc)
     return doc["groups"]
 
@@ -276,7 +281,7 @@ def delete_group(group_id: str) -> dict:
         raise UserNotFoundError(f"Group '{group_id}' not found")
 
     doc["groups"] = updated
-    _require_valid_setup_document(doc)
+    _require_valid_users_document(doc)
     users_manager.save(doc)
     return {"deleted": group_id}
 
@@ -299,9 +304,9 @@ def put_users(body: list = Body(...)) -> list:
         if isinstance(group, dict)
     }
     doc["users"] = _normalize_users(body, group_ids, current_by_id)
-    _require_valid_setup_document(doc)
+    _require_valid_users_document(doc)
     users_manager.save(doc)
-    return _redact_document(doc)["users"]
+    return _redact_document(doc, include_credential_state=True)["users"]
 
 
 @router.delete("/users/{user_id}")
@@ -326,6 +331,6 @@ def delete_user(user_id: str) -> dict:
         raise UserNotFoundError(f"User '{user_id}' not found")
 
     doc["users"] = updated
-    _require_valid_setup_document(doc)
+    _require_valid_users_document(doc)
     users_manager.save(doc)
     return {"deleted": user_id}

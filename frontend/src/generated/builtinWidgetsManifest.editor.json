@@ -573,7 +573,7 @@
     }
   },
   "Content/UserBadge": {
-    "description": "Shows the currently signed-in user as an initialled badge.",
+    "description": "Shows the signed-in user as an initialled badge, with optional sign-in and sign-out affordances.",
     "icon": {
       "type": "builtin",
       "name": "user"
@@ -589,9 +589,49 @@
         "group": "Content",
         "description": "Overrides the signed-in user's group list."
       },
+      "signInLabel": {
+        "label": "Sign-in label",
+        "group": "Content",
+        "defaultValue": "Log in",
+        "description": "Shown on the sign-in affordance while nobody is signed in."
+      },
+      "showGroups": {
+        "format": "onoff",
+        "label": "Show groups",
+        "group": "Appearance",
+        "defaultValue": true
+      },
+      "signInIcon": {
+        "label": "Sign-in icon",
+        "group": "Appearance",
+        "description": "Defaults to the lock glyph."
+      },
+      "signOutIcon": {
+        "label": "Sign-out icon",
+        "group": "Appearance",
+        "description": "Defaults to the sign-out glyph."
+      },
+      "radius": {
+        "format": "length",
+        "label": "Radius",
+        "defaultToken": "--hmi-radius-full",
+        "group": "Appearance"
+      },
       "actions": {
         "label": "On Press",
         "group": "Actions"
+      },
+      "onSignIn": {
+        "label": "On Sign In",
+        "group": "Actions",
+        "event": "onSignIn",
+        "description": "Run by the sign-in affordance, which only appears once this is set."
+      },
+      "onSignOut": {
+        "label": "On Sign Out",
+        "group": "Actions",
+        "event": "onSignOut",
+        "description": "Run by the sign-out button, which only appears once this is set."
       }
     }
   },

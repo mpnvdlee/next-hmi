@@ -32,6 +32,22 @@ _guards: list[StartGuard] = []
 _lock = threading.Lock()
 
 
+class TransientStartRefusal(ValueError):
+    """A guard's refusal that may pass on its own, with no operator action.
+
+    A guard answers "may it start *right now*" — the enterprise activation
+    gate refuses every start while a licence is lapsed, and lifts itself the
+    moment it is renewed. That is unlike the other reasons ``Supervisor.start``
+    raises plain ``ValueError`` for (a pending format upgrade, unreadable
+    credentials): those are an operator's to-do in the Projects page, and stay
+    refused until it is done. ``resume_all`` prunes the persisted running set
+    on the latter — an instance nothing will spawn on its own must stop being
+    claimed as running — but not on this one, or a reboot during a lapsed
+    licence would erase what was running before it and nothing would come back
+    once the licence is fixed.
+    """
+
+
 def register_guard(fn: StartGuard) -> None:
     with _lock:
         if fn not in _guards:

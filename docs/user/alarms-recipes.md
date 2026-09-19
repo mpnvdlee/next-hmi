@@ -41,4 +41,4 @@ What has no built-in widget is the *selection* UI — the grid of saved datasets
 - Read state with **`$recipe`** — *Loaded recipe name* (`activeName`), *Is loaded* (`loaded`), or *Parameters changed* (`parametersChanged`, true when live values have drifted from the loaded set).
 - Call **`recipeDownload(datasetId)`** and **`recipeUpload(datasetId)`** from your buttons, and read the configuration with `useRecipeConfig` / `useRecipeState`.
 
-The same two operations are also available over REST at `POST /api/recipes/datasets/{id}/download` and `/upload`, which is the route to take from an external MES or scheduler.
+The same two operations are also available over REST at `POST /api/recipes/datasets/{id}/download` and `/upload`, which is the route to take from an external MES or scheduler. A download honours the same per-variable write permissions as a button does: a parameter bound to a variable you [restricted to a group](users.md) is skipped with `permission_denied` unless the request carries the credentials of a user in that group.

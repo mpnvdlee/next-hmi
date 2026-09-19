@@ -24,6 +24,21 @@ def _no_telemetry(monkeypatch) -> None:
     monkeypatch.setenv("NEXTHMI_TELEMETRY", "off")
 
 
+@pytest.fixture(autouse=True)
+def _reset_user_auth_throttle():
+    """Failed project-user logins are process-global state.
+
+    Without this, five wrong-password assertions spread across the suite lock
+    that username out and the next module's valid login fails on ordering
+    alone.
+    """
+    from core import user_auth_throttle
+
+    user_auth_throttle.reset()
+    yield
+    user_auth_throttle.reset()
+
+
 @pytest.fixture
 def live_project_root(monkeypatch, tmp_path: Path) -> Path:
     """Point ``storage._active_project_path`` at a tmp folder for the test.

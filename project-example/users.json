@@ -1,13 +1,6 @@
 {
   "settings": {
-    "autoLoginName": "guest",
-    "configAccessGroups": [
-      "admin"
-    ]
-  },
-  "operatorSetup": {
-    "version": 1,
-    "required": true
+    "autoLoginName": "guest"
   },
   "groups": [
     {

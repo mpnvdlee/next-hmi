@@ -35,11 +35,15 @@ export function makeDefaultDialog(taken: Iterable<string> = []): DialogConfig {
   return { id: slugId('New Dialog', taken), title: 'New Dialog', widgets: [] };
 }
 
-/** Every newly placed widget gets a `visible` property wired to the
- *  `$userGroups` source with an empty group list — visible to everyone by
- *  default, but one click away from gating by user group. */
+/** Every newly placed widget gets its `visible` and `interactable` properties
+ *  wired to the `$userGroups` source with an empty group list — visible and
+ *  operable for everyone by default, but one click away from gating by user
+ *  group. */
 function defaultVisibility(): Record<string, unknown> {
-  return { visible: { $userGroups: { groups: [] } } };
+  return {
+    visible: { $userGroups: { groups: [] } },
+    interactable: { $userGroups: { groups: [] } },
+  };
 }
 
 export function makeDefaultContainer(taken: Iterable<string> = []): WidgetConfig {

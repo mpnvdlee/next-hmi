@@ -233,13 +233,20 @@ Plots recorded tag history over selectable time ranges, or buffers live values w
 
 ### User Badge
 
-Shows the currently signed-in user as an initialled badge.
+Shows the signed-in user as an initialled badge, with optional sign-in and sign-out affordances.
 
 | Property | Label | Type |
 |---|---|---|
 | `usernameText` | Username text | `String` |
 | `groupsText` | Groups text | `String` |
+| `signInLabel` | Sign-in label | `String` |
+| `showGroups` | Show groups | `Boolean` |
+| `signInIcon` | Sign-in icon | `icon` |
+| `signOutIcon` | Sign-out icon | `icon` |
+| `radius` | Radius | `String` |
 | `actions` | On Press | `actions` |
+| `onSignIn` | On Sign In | `actions` |
+| `onSignOut` | On Sign Out | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 

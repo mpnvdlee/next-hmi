@@ -13,6 +13,7 @@ from core.exceptions import (
     ConfigNotFoundError,
     ConfigValidationError,
 )
+from core.http_origins import invalidate_http_origin_cache
 from core.page_index import (
     collect_dialog_ids,
     collect_dialog_property_keys,
@@ -500,9 +501,10 @@ _PAGE_PERSISTED_FIELDS: frozenset[str] = frozenset({
 
 
 def _invalidate_runtime_cache() -> None:
-    """Drop the websocket manager's cached pages_config after any config/page write."""
+    """Drop caches derived from config/page files after any write to them."""
     from services.websocket_manager import invalidate_runtime_pages_config_cache
     invalidate_runtime_pages_config_cache()
+    invalidate_http_origin_cache()
     _page_meta_cache.clear()
 
 

@@ -26,7 +26,6 @@ import RemoveProjectModal from '@config/components/projects/ProjectsView/RemoveP
 import RenameProjectModal from '@config/components/projects/ProjectsView/RenameProjectModal';
 import LocateProjectModal from '@config/components/projects/ProjectsView/LocateProjectModal';
 import UpgradeProjectModal from '@config/components/projects/ProjectsView/UpgradeProjectModal';
-import OperatorSetupModal from '@config/components/projects/ProjectsView/OperatorSetupModal';
 import PeerTransferModal from '@config/components/projects/ProjectsView/PeerTransferModal';
 import SystemInfoSection from '@config/components/admin/SystemInfoSection';
 import RuntimeHomeSection from '@config/components/admin/RuntimeHomeSection';
@@ -294,7 +293,6 @@ type Dialog =
   | { kind: 'locate'; entry: ProjectEntry }
   | { kind: 'transfer'; entry: ProjectEntry }
   | { kind: 'pull' }
-  | { kind: 'operator-setup'; entry: ProjectEntry }
   | { kind: 'upgrade'; entry: ProjectEntry };
 
 function ProjectsPage() {
@@ -352,17 +350,6 @@ function ProjectsPage() {
     const rest = params.toString();
     window.history.replaceState({}, '', rest ? `/projects?${rest}` : '/projects');
   }, []);
-
-  useEffect(() => {
-    const requestedId = new URLSearchParams(window.location.search).get('operatorSetup');
-    if (!requestedId) return;
-    const entry = projects.find(
-      (project) => project.id === requestedId && project.operatorSetupRequired,
-    );
-    if (!entry) return;
-    setDialog({ kind: 'operator-setup', entry });
-    window.history.replaceState({}, '', '/projects');
-  }, [projects]);
 
   const act = useCallback(async (id: string, fn: (id: string) => Promise<void>) => {
     setBusyId(id);
@@ -485,7 +472,7 @@ function ProjectsPage() {
                             disabled={
                               busyId === p.id ||
                               p.status === 'missing' ||
-                              p.operatorSetupStatus !== 'complete'
+                              p.credentialsStatus === 'error'
                             }
                             onChange={() => makeDefault(p)}
                           />
@@ -506,23 +493,14 @@ function ProjectsPage() {
                       </div>
                     </div>
                     <div className="project-row__actions">
-                      {p.operatorSetupStatus === 'error' ? (
+                      {p.credentialsStatus === 'error' ? (
                         <Button
                           variant="default"
                           size="sm"
                           disabled
-                          title={p.operatorSetupError ?? 'Project credentials are unavailable'}
+                          title={p.credentialsError ?? 'Project credentials are unavailable'}
                         >
                           Credentials unavailable
-                        </Button>
-                      ) : p.operatorSetupRequired ? (
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          disabled={busyId === p.id || p.status === 'missing'}
-                          onClick={() => setDialog({ kind: 'operator-setup', entry: p })}
-                        >
-                          Set operator password
                         </Button>
                       ) : running ? (
                         <>
@@ -636,7 +614,7 @@ function ProjectsPage() {
           defaultRoot={defaultRoot}
           template={dialog.template}
           onCancel={closeDialog}
-          onCreated={(entry) => setDialog({ kind: 'operator-setup', entry })}
+          onCreated={closeDialog}
         />
       )}
       {dialog.kind === 'add-existing' && (
@@ -666,9 +644,6 @@ function ProjectsPage() {
           onCancel={closeDialog}
           onLocated={closeDialog}
         />
-      )}
-      {dialog.kind === 'operator-setup' && (
-        <OperatorSetupModal entry={dialog.entry} onCompleted={closeDialog} />
       )}
       {dialog.kind === 'upgrade' && (
         <UpgradeProjectModal

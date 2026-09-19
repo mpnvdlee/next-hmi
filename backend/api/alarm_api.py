@@ -6,6 +6,7 @@ from typing import Any
 
 from core import audit
 from core.exceptions import AlarmNotFoundError, AlarmValidationError
+from core.http_origins import invalidate_http_origin_cache
 from fastapi import APIRouter, Query
 from models.alarm import (
     AlarmConfig,
@@ -39,6 +40,12 @@ def get_alarm_config() -> AlarmConfig:
 def put_alarm_config(body: AlarmConfig) -> AlarmConfig:
     """Replace the entire alarm configuration."""
     alarm_manager.set_config(body)
+    # Alarm titles, descriptions and trigger bounds are property values, so
+    # alarms.json is one of the documents the $http origin allowlist is derived
+    # from (core/http_origins.py). Its mtime fingerprint alone is not enough on
+    # a filesystem with coarse granularity, and stale there means the public
+    # proxy still trusts an origin this save removed.
+    invalidate_http_origin_cache()
     return alarm_manager.get_config()
 
 

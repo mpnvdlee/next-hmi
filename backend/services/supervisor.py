@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-from core import operator_setup, runtime_home, start_guards
+from core import runtime_home, start_guards, users_document
 from core.manifest import (
     find_project,
     load_manifest,
@@ -189,11 +189,14 @@ class Supervisor:
         on-disk format is behind ``PROJECT_FORMAT_VERSION`` and the caller has
         not passed ``confirm_upgrade=True`` (the manager UI asks first; a
         project stamped newer than this build supports is refused outright).
+        Raises ``start_guards.TransientStartRefusal`` (itself a ``ValueError``)
+        when a registered guard refuses instead — see ``resume_all``, which
+        treats the two differently.
         """
         validate_project_id(project_id)
         refusal = start_guards.refusal(project_id)
         if refusal is not None:
-            raise ValueError(refusal)
+            raise start_guards.TransientStartRefusal(refusal)
         with self.project_operation_lock(project_id):
             return self._start_serialized(project_id, confirm_upgrade=confirm_upgrade)
 
@@ -206,14 +209,10 @@ class Supervisor:
             project_path = Path(entry.path).expanduser()
             if not project_path.is_dir():
                 raise ValueError(f"Project folder is missing at {entry.path}")
-            setup_state = operator_setup.state(project_path)
-            if setup_state.status is operator_setup.SetupStatus.REQUIRED:
+            users_state = users_document.state(project_path)
+            if not users_state.valid:
                 raise ValueError(
-                    "Set this project's operator password in the manager before starting it"
-                )
-            if setup_state.status is operator_setup.SetupStatus.ERROR:
-                raise ValueError(
-                    f"Project credentials are unavailable: {setup_state.error}"
+                    f"Project credentials are unavailable: {users_state.error}"
                 )
             metadata = read_project_metadata(project_path)
             if metadata is not None:
@@ -465,13 +464,11 @@ class Supervisor:
                 instance.last_error = "project folder missing on restart"
                 return
             project_path = Path(entry.path).expanduser()
-            setup_state = operator_setup.state(project_path)
-            if setup_state.status is not operator_setup.SetupStatus.COMPLETE:
+            users_state = users_document.state(project_path)
+            if not users_state.valid:
                 instance.status = "crashed"
                 instance.last_error = (
-                    "operator setup required"
-                    if setup_state.status is operator_setup.SetupStatus.REQUIRED
-                    else f"Project credentials are unavailable: {setup_state.error}"
+                    f"Project credentials are unavailable: {users_state.error}"
                 )
                 return
             self._spawn_locked(instance, project_path, instance.port)
@@ -510,6 +507,13 @@ class Supervisor:
                 # credentials, a guard saying no. Tracebacks for those, every
                 # boot, would bury the failures that are actually the supervisor's.
                 logger.warning("supervisor: cannot resume '%s': %s", project_id, exc)
+                if isinstance(exc, start_guards.TransientStartRefusal):
+                    # A guard can lift its own refusal later with nothing for
+                    # the operator to do — the enterprise activation gate while
+                    # a licence is lapsed, say. Pruning here would erase this
+                    # project from the running set for good: a reboot during
+                    # the lapse would mean nothing comes back once it is fixed.
+                    return
                 # A refused project has no instance at all, so leaving it in the
                 # persisted running set makes the manifest claim something the
                 # supervisor is not doing: the dashboard reads the instance map

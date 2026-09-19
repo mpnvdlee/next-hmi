@@ -444,7 +444,29 @@
               "id": "hdr-user",
               "type": "UserBadge",
               "name": "User",
-              "properties": {},
+              "properties": {
+                "signInLabel": {
+                  "$loc": "Log in"
+                },
+                "onSignIn": {
+                  "onSignIn": [
+                    {
+                      "type": "openDialog",
+                      "dialogId": "login",
+                      "size": "small",
+                      "placement": "center",
+                      "backdrop": "dim"
+                    }
+                  ]
+                },
+                "onSignOut": {
+                  "onSignOut": [
+                    {
+                      "type": "logoutUser"
+                    }
+                  ]
+                }
+              },
               "layout": {
                 "widthMode": "hug",
                 "heightMode": "hug"

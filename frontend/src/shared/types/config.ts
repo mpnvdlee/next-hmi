@@ -409,6 +409,7 @@ export interface AnchorRect {
  */
 export type ActionResultReason =
   | 'invalid_credentials'
+  | 'rate_limited'
   | 'permission_denied'
   | 'bad_request'
   | 'bad_path'
