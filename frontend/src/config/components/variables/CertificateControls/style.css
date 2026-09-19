@@ -1,0 +1,75 @@
+@import '../../ui/NameInputModal/style.css';
+
+.cfg-cert-controls {
+  display: flex;
+  gap: var(--cfg-space-2);
+}
+
+.cert-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-1);
+}
+
+.cert-modal__label {
+  font-size: var(--cfg-text-sm);
+  font-weight: var(--cfg-fw-medium);
+  color: var(--cfg-text);
+}
+
+.cert-modal__hint {
+  margin: 0;
+  font-size: var(--cfg-text-sm);
+  line-height: 1.5;
+  color: var(--cfg-text-muted);
+}
+
+.cert-modal__error {
+  margin: 0;
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-danger-fg);
+}
+
+.cert-modal__status--valid {
+  color: var(--cfg-text);
+}
+
+.cert-modal__status--expiring {
+  color: var(--cfg-warning-fg);
+}
+
+.cert-modal__status--expired {
+  color: var(--cfg-danger-fg);
+  font-weight: var(--cfg-fw-medium);
+}
+
+.cert-info-modal {
+  min-width: min(30rem, calc(100vw - (var(--cfg-space-6) * 2)));
+}
+
+.cert-info-modal__path {
+  word-break: break-all;
+}
+
+.cert-info-modal__list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--cfg-space-2) var(--cfg-space-4);
+  margin: 0;
+  font-size: var(--cfg-text-sm);
+}
+
+.cert-info-modal__list dt {
+  color: var(--cfg-text-muted);
+}
+
+.cert-info-modal__list dd {
+  margin: 0;
+  color: var(--cfg-text);
+  word-break: break-word;
+}
+
+.cert-info-modal__fingerprint {
+  font-family: var(--cfg-font-mono, monospace);
+  font-size: var(--cfg-text-xs);
+}

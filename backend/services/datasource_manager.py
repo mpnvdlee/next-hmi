@@ -13,7 +13,7 @@ import hashlib
 import logging
 import re
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any, ClassVar
 
 from core.exceptions import DatasourceValidationError
@@ -42,6 +42,8 @@ _ELEM_INDEX_RE = re.compile(r"\[(\d+)\]$")
 # a direct field of an array-of-struct element (mirrors the "array_elem"
 # encoding in DatasourceOpcuaEngine.read_current_values).
 _ARRAY_FIELD_RE = re.compile(r"^(\d+):(.+)$")
+# Element folders of an array-of-struct are named "[N]" by the browse.
+_ELEMENT_SEGMENT_RE = re.compile(r"^\[\d+\]$")
 
 
 class DatasourceEntry:
@@ -249,10 +251,95 @@ class DatasourceEntry:
         if is_array:
             entry_dict["_is_array"] = True
             entry_dict["_array_length"] = len(folder_children)
-            entry_dict["_element_paths"] = self._sorted_element_paths(
-                folder_path, folder_children
-            )
+            element_paths = self._sorted_element_paths(folder_path, folder_children)
+            entry_dict["_element_paths"] = element_paths
+            # Reverse map so a leaf can be placed into its element in O(1).
+            # Scanning _element_paths instead costs O(array length) string
+            # comparisons on every datachange under a wide array.
+            entry_dict["_element_index"] = {
+                path: idx for idx, path in enumerate(element_paths)
+            }
         return entry_dict
+
+    def ancestor_folders(self, leaf_path: str) -> tuple[str, ...]:
+        """Every registered folder composite *leaf_path* belongs to, innermost first.
+
+        The folder half of :meth:`ancestor_field_targets`, for the datachange
+        path that only needs to know which composites to refresh whole. Same
+        walk and same membership rule, without building the field encoding
+        that caller discards — dict lookups and slices instead of a
+        ``split``/``join`` per ancestor, on the hottest loop in the product.
+        """
+        folders: list[str] = []
+        cut = leaf_path.rfind("/")
+        while cut > 0:
+            folder_path = leaf_path[:cut]
+            fentry = self.folder_registry.get(folder_path)
+            if fentry is not None:
+                if not self.is_aggregate_boundary(fentry):
+                    folders.append(folder_path)
+                else:
+                    # Mirrors the `len(rest) >= 2` + known-element test below:
+                    # a leaf directly at the array level has no element to
+                    # patch into, so the folder is not a target.
+                    element_end = leaf_path.find("/", cut + 1)
+                    if element_end != -1 and fentry.get("_element_index", {}).get(
+                        leaf_path[:element_end]
+                    ) is not None:
+                        folders.append(folder_path)
+            cut = leaf_path.rfind("/", 0, cut)
+        return tuple(folders)
+
+    def ancestor_field_targets(self, leaf_path: str) -> tuple[tuple[str, str | None], ...]:
+        """``(folder_path, field_name)`` for every registered folder containing
+        *leaf_path*, innermost first.
+
+        A leaf lives in as many struct composites as it has registered folder
+        ancestors, and a client may bind any one of them — so a change has to
+        be patched into all of them, not just the outermost. *field_name* uses
+        the encodings ``_snapshot_struct_value_for_broadcast`` understands: a
+        ``"/"``-joined nested path for a plain struct folder, ``"idx:rest"``
+        for an array-of-struct folder. A ``field_name`` of ``None`` means the
+        ancestor is real but neither encoding can address it — the caller has
+        to rebuild it whole rather than patch one field into it.
+
+        Recomputed per call rather than memoised per leaf: the walk is one
+        dict lookup per path segment, while a memo would hold a tuple for
+        every subscribed variable for the life of the datasource — tens of
+        thousands of them on exactly the wide browses this path exists to
+        make cheap.
+        """
+        targets: list[tuple[str, str | None]] = []
+        # Walk the prefixes by slicing *leaf_path* rather than rebuilding each
+        # one from a `parts[:i]` join: on the deep browses this exists to serve
+        # that is O(depth) copies instead of O(depth**2) segments, per
+        # datachange.
+        cut = leaf_path.rfind("/")
+        while cut > 0:
+            folder_path = leaf_path[:cut]
+            fentry = self.folder_registry.get(folder_path)
+            if fentry is not None:
+                rest = leaf_path[cut + 1 :].split("/")
+                if not self.is_aggregate_boundary(fentry):
+                    # A plain-struct ancestor is patched by walking its cache as
+                    # nested dicts, and there is no dict encoding for a path
+                    # that crosses an array element ("aArr/[0]/x"): the patcher
+                    # would replace the cached list with a dict and drop every
+                    # element but the one being written. Hand it back as
+                    # unaddressable so the caller rebuilds it instead.
+                    if any(_ELEMENT_SEGMENT_RE.match(seg) for seg in rest[:-1]):
+                        targets.append((folder_path, None))
+                    else:
+                        targets.append((folder_path, "/".join(rest)))
+                # The element folder itself is addressed by index, and a leaf
+                # directly *at* the array level (no element segment) has no
+                # field to patch.
+                elif len(rest) >= 2:
+                    idx = fentry.get("_element_index", {}).get(f"{folder_path}/{rest[0]}")
+                    if idx is not None:
+                        targets.append((folder_path, f"{idx}:{'/'.join(rest[1:])}"))
+            cut = leaf_path.rfind("/", 0, cut)
+        return tuple(targets)
 
     def _wire_ancestor_map(self) -> None:
         """Rewrite _var_to_folder so every leaf variable points to its effective root ancestor.
@@ -333,6 +420,15 @@ class DatasourceManager:
         self._lock = threading.Lock()
         self.datasources: dict[str, DatasourceEntry] = {}  # name -> entry
         self._active_pages: dict[str, set[str]] = {}  # client_id -> set[composite_key]
+        # Folder composites the server's own consumers read — an alarm trigger
+        # addressing an array element by index. Registered the same way a
+        # client's page is, so `_is_key_wanted` is one question with one answer
+        # instead of a client-page check plus a hardcoded guess at who else
+        # might care.
+        self._interest_keys: dict[str, set[str]] = {}  # owner -> set[composite_key]
+        # Union of the two above, kept in step by their writers so the gate on
+        # the datachange path is one lookup rather than a scan per reader.
+        self._wanted_keys: set[str] = set()
         self._enqueue_callback: Callable[..., None] | None = None
         self._value_listeners: list[Callable[[str, Any], None]] = []
         # name -> on-disk filename (no extension). Deterministic per name so
@@ -384,7 +480,8 @@ class DatasourceManager:
         field_name: str,
         value: Any,
         folder_path: str | None = None,
-    ) -> tuple[dict[str, Any] | list[Any], str | None, dict[str, Any] | None] | None:
+        copy_aggregate: bool = True,
+    ) -> tuple[dict[str, Any] | list[Any] | None, str | None, dict[str, Any] | None] | None:
         """Patch a single field into a struct/array-of-struct cache entry in place.
 
         Returns ``(aggregate_snapshot, elem_key, elem_snapshot)``, or None if
@@ -402,6 +499,13 @@ class DatasourceManager:
         element under its own composite key — the per-element addressing
         {path, index} bindings resolve to (§10.5) — alongside the aggregate.
         For every other case they are ``None``.
+
+        The in-place patch always happens — ``snapshot()`` serves folder
+        composites straight out of the cache, so a composite nobody is
+        watching still has to stay correct for the next client that connects.
+        ``copy_aggregate=False`` only skips building the defensive copy of the
+        aggregate, which is the expensive half on a wide folder and is pure
+        waste when the caller is not going to broadcast it.
         """
         with self._lock:
             current = entry.cache.get(key)
@@ -438,7 +542,11 @@ class DatasourceManager:
                         elem_key = build_var_key(entry.name, elem_paths[index])
                         entry.cache[elem_key] = elem_snapshot
                 # Copy before unlock so queued payload cannot be mutated later.
-                return self._snapshot_copy(current), elem_key, elem_snapshot
+                return (
+                    self._snapshot_copy(current) if copy_aggregate else None,
+                    elem_key,
+                    elem_snapshot,
+                )
 
             if not isinstance(current, dict):
                 current = {}
@@ -456,7 +564,7 @@ class DatasourceManager:
                 return None
             node[leaf] = value
             # Copy before unlock so queued payload cannot be mutated later.
-            return self._snapshot_copy(current), None, None
+            return (self._snapshot_copy(current) if copy_aggregate else None), None, None
 
     def _build_folder_fields_snapshot(self, entry: DatasourceEntry, fentry: dict) -> dict[str, Any] | list[dict[str, Any]]:
         """Build a (possibly nested) snapshot of a struct folder's fields.
@@ -835,6 +943,13 @@ class DatasourceManager:
             folder_path, _ = entry._var_to_folder[path]
             logger.debug("update: %s → folder broadcast for %s", path, folder_path)
             self._enqueue_folder_struct(datasource, entry, folder_path, priority)
+            # `_var_to_folder` stops at the nearest array-of-struct boundary, so
+            # a struct *containing* that array (a widget's `actualPosition`
+            # holding `aGuardBoxesWcs`) is not covered by the line above.
+            for ancestor in entry.ancestor_folders(path):
+                if ancestor == folder_path:
+                    continue
+                self._refresh_folder_composite(datasource, entry, ancestor, priority)
 
     def _enqueue_folder_struct(
         self,
@@ -842,6 +957,7 @@ class DatasourceManager:
         entry: DatasourceEntry,
         folder_path: str,
         priority: bool = False,
+        broadcast: bool = True,
     ) -> None:
         """Build field-map from child caches and enqueue for WS broadcast.
 
@@ -851,10 +967,21 @@ class DatasourceManager:
         resolves per-element regardless of which write path touched it (this
         is the full-rebuild path used by static-datasource struct writes and
         by any OPC-UA leaf ``_node_to_field`` doesn't cover).
+
+        *broadcast* is False for a composite that is only being kept correct
+        for the next reader (see ``update``): the cache write still happens —
+        it is the whole point of the call — and only the aggregate's emit is
+        skipped. Elements are emitted either way, as everywhere else.
+
+        Deliberately not gated on ``self._enqueue_callback``: the cache write
+        is what ``snapshot()`` and ``set_context`` read, and ``_value_listeners``
+        (alarms, historian) consume emits with no WS callback in sight. In a
+        served process the callback is installed at import time (``main.py``),
+        so the window this would cover does not exist there anyway.
         """
         with self._lock:
             fentry = entry.folder_registry.get(folder_path)
-        if not fentry or self._enqueue_callback is None:
+        if not fentry:
             return
         key = build_var_key(datasource, folder_path)
         fields_snapshot = self._build_folder_fields_snapshot(entry, fentry)
@@ -862,12 +989,13 @@ class DatasourceManager:
             # Also store in cache so snapshot() picks it up
             with self._lock:
                 entry.cache[key] = self._snapshot_copy(fields_snapshot)
-            self._emit_cache_update(key, fields_snapshot, priority)
-            logger.debug(
-                "_enqueue_folder_struct: broadcast key=%s len=%s",
-                key,
-                len(fields_snapshot) if isinstance(fields_snapshot, (list, dict)) else "?",
-            )
+            if broadcast:
+                self._emit_cache_update(key, fields_snapshot, priority)
+                logger.debug(
+                    "_enqueue_folder_struct: broadcast key=%s len=%s",
+                    key,
+                    len(fields_snapshot) if isinstance(fields_snapshot, (list, dict)) else "?",
+                )
             if DatasourceEntry.is_aggregate_boundary(fentry) and isinstance(fields_snapshot, list):
                 elem_paths = fentry.get("_element_paths", [])
                 for idx, elem_snapshot in enumerate(fields_snapshot):
@@ -899,7 +1027,6 @@ class DatasourceManager:
         instead of re-rendering on any element's change (§10.5).
         """
         value = self._coerce(value)
-        key = build_var_key(datasource, path)
         entry = self._get_datasource_entry(datasource)
         if entry is None:
             return
@@ -911,15 +1038,140 @@ class DatasourceManager:
                     entry.cache[leaf_key] = value
             if changed:
                 self._emit_cache_update(leaf_key, value, priority)
+
+        # The caller's own route is always patched, exactly as before: the
+        # OPC-UA node map that produced ``(path, field_name)`` is the authority
+        # on where this leaf belongs, and ``ancestor_field_targets`` drops any
+        # ancestor that has no field at all (an element folder missing from
+        # ``_element_paths``, a leaf sitting directly at an array level) and
+        # hands back a ``None`` field for one no encoding reaches. The extra
+        # ancestors are the ones that may be built or skipped wholesale (see
+        # ``_patch_folder_composite``).
+        self._patch_folder_composite(
+            datasource, entry, path, field_name, value, priority, may_rebuild=False,
+        )
+        if leaf_path is None:
+            return
+        for folder_path, folder_field in entry.ancestor_field_targets(leaf_path):
+            if folder_field is None:
+                # No field encoding reaches this one (its path to the leaf
+                # crosses an array element). Rebuilding it from the child
+                # caches — which already hold the new value — is the only way
+                # to keep it correct.
+                self._refresh_folder_composite(datasource, entry, folder_path, priority)
+                continue
+            if (folder_path, folder_field) == (path, field_name):
+                continue
+            self._patch_folder_composite(
+                datasource, entry, folder_path, folder_field, value, priority,
+            )
+
+    def _refresh_folder_composite(
+        self,
+        datasource: str,
+        entry: DatasourceEntry,
+        folder_path: str,
+        priority: bool,
+    ) -> None:
+        """Rebuild one ancestor composite whole from the child caches.
+
+        Same rule as ``_patch_folder_composite``, for the same reason: one that
+        is already cached is kept correct whether or not anyone is reading it,
+        because ``snapshot()``/``set_context`` serve cache entries verbatim and
+        a stale one would be handed to the next client to bind it. Only the
+        broadcast is skipped. One nobody reads and nothing has cached stays
+        absent — that is what keeps a deep browse from holding a full copy of
+        the value tree per ancestor level.
+        """
+        key = build_var_key(datasource, folder_path)
+        wanted = self._is_key_wanted(key)
+        if not wanted and not self._is_cached(entry, key):
+            return
+        self._enqueue_folder_struct(datasource, entry, folder_path, priority, broadcast=wanted)
+
+    def _patch_folder_composite(
+        self,
+        datasource: str,
+        entry: DatasourceEntry,
+        folder_path: str,
+        field_name: str,
+        value: Any,
+        priority: bool,
+        may_rebuild: bool = True,
+    ) -> None:
+        """Patch one ancestor composite's cache and broadcast it if wanted.
+
+        A composite that is not in the cache yet is never *patched* into
+        existence: the result would be a struct holding only the fields that
+        happened to tick since boot, and ``snapshot()`` serves cache entries
+        verbatim, so the next client to connect would get that fragment.
+        Either it is worth having — then it is built whole from the child
+        caches — or nothing reads it and it is left absent, which is also what
+        keeps a deep browse from holding one full nested copy of the value tree
+        per ancestor level. ``set_context`` reads an absent composite fresh.
+
+        *may_rebuild* is False for the caller's own route, which is patched
+        into existence as it always has been — it is the composite the node map
+        names, every leaf under it patches it, and ``read_current_values``
+        seeds it on subscribe.
+        """
+        key = build_var_key(datasource, folder_path)
+        wanted = self._is_key_wanted(key)
+        if may_rebuild and not self._is_cached(entry, key):
+            if wanted:
+                self._enqueue_folder_struct(datasource, entry, folder_path, priority)
+            return
         broadcast = self._snapshot_struct_value_for_broadcast(
-            entry, key, field_name, value, folder_path=path,
+            entry, key, field_name, value, folder_path=folder_path,
+            copy_aggregate=wanted,
         )
         if broadcast is None:
             return
         enqueue_val, elem_key, elem_snapshot = broadcast
-        self._emit_cache_update(key, enqueue_val, priority)
+        if enqueue_val is not None:
+            self._emit_cache_update(key, enqueue_val, priority)
         if elem_key is not None:
             self._emit_cache_update(elem_key, elem_snapshot, priority)
+
+    def _is_key_wanted(self, key: str) -> bool:
+        """Whether any client page or server-side consumer reads *key*.
+
+        The question the folder-composite gate asks: a leaf sits inside every
+        one of its ancestor composites, and on a deeply nested browse
+        (``PLC1/gPlc/…/stRobotActualData``) the outermost of those can hold tens
+        of thousands of leaves — copying and shipping it on every datachange is
+        pure waste when nothing reads it. "Reads it" means some client's active
+        page binds the key (``set_client_page``) or one of the server's own
+        consumers does (``set_interest_keys``).
+
+        Array-of-struct folders are not special-cased by the callers: their
+        elements are cached and emitted under their own composite keys whatever
+        the answer here, so ``{path, index}`` bindings and an alarm addressing
+        one element keep being fed. Composites nobody reads still get their
+        cache kept correct, so ``snapshot()`` and ``set_context`` stay right for
+        the next client to connect.
+
+        One membership test against a union kept in step by the (rare) writers,
+        rather than a scan of every reader's set: this runs once per ancestor
+        per datachange, on the path the rest of this file exists to make cheap,
+        while ``set_client_page``/``set_interest_keys`` fire on page navigation
+        and config edits.
+        """
+        with self._lock:
+            return key in self._wanted_keys
+
+    def _is_cached(self, entry: DatasourceEntry, key: str) -> bool:
+        with self._lock:
+            return key in entry.cache
+
+    def _rebuild_wanted_keys(self) -> None:
+        """Recompute the union read by ``_is_key_wanted``. Caller holds the lock."""
+        wanted: set[str] = set()
+        for keys in self._active_pages.values():
+            wanted |= keys
+        for keys in self._interest_keys.values():
+            wanted |= keys
+        self._wanted_keys = wanted
 
     def seed_cached_values(self, updates: dict[str, Any]) -> None:
         """Seed cache entries without broadcasting them to all clients."""
@@ -1050,10 +1302,34 @@ class DatasourceManager:
         """Record which composite keys are on a client's active page."""
         with self._lock:
             self._active_pages[client_id] = set(var_keys)
+            self._rebuild_wanted_keys()
 
     def clear_client(self, client_id: str) -> None:
         with self._lock:
             self._active_pages.pop(client_id, None)
+            self._rebuild_wanted_keys()
+
+    def set_interest_keys(self, owner: str, var_keys: Iterable[str]) -> None:
+        """Record the composite keys a server-side consumer reads.
+
+        Only *folder composites* are gated on this (`_is_key_wanted`); a leaf
+        key is emitted to `_value_listeners` whatever anyone's interest, so a
+        consumer reading only leaves needs nothing here. What it covers is the
+        aggregate an alarm addresses by index — a trigger bound to
+        ``DS:Motors`` with ``index: 2`` reads the array folder's composite, and
+        without a registration that composite stops being emitted as soon as no
+        client page binds it, leaving the alarm evaluating nothing.
+
+        Called by the alarm manager whenever its trigger map is rebuilt. An
+        empty set deregisters.
+        """
+        keys = set(var_keys)
+        with self._lock:
+            if keys:
+                self._interest_keys[owner] = keys
+            else:
+                self._interest_keys.pop(owner, None)
+            self._rebuild_wanted_keys()
 
     def get_priority_keys(self) -> set[str]:
         """Return union of composite keys across all clients' active pages."""

@@ -9,6 +9,10 @@ interface TestSettings {
   password?: string;
   security_policy?: string;
   security_mode?: string;
+  client_certificate?: string;
+  client_private_key?: string;
+  client_private_key_password?: string;
+  server_certificate?: string;
 }
 
 type TestState = 'idle' | 'testing' | 'ok' | 'fail';
@@ -19,13 +23,13 @@ export default function ConnectionTest({ settings }: { settings: TestSettings })
   const [state, setState] = useState<TestState>('idle');
   const [message, setMessage] = useState<string | null>(null);
 
-  const { server_url, username, password, security_policy, security_mode } = settings;
-
   // Stale results are misleading once the inputs change — reset to idle.
+  // The caller memoizes `settings` from those same inputs, so it is
+  // referentially stable and safe as the sole dependency.
   useEffect(() => {
     setState('idle');
     setMessage(null);
-  }, [server_url, username, password, security_policy, security_mode]);
+  }, [settings]);
 
   const run = useCallback(async () => {
     setState('testing');
@@ -33,7 +37,7 @@ export default function ConnectionTest({ settings }: { settings: TestSettings })
     try {
       const res = await apiJson<TestConnectionResult>('/api/datasources/test-connection', {
         method: 'POST',
-        body: { server_url, username, password, security_policy, security_mode },
+        body: settings,
       });
       if (res.ok) {
         setState('ok');
@@ -46,7 +50,7 @@ export default function ConnectionTest({ settings }: { settings: TestSettings })
       setState('fail');
       setMessage(err instanceof Error ? err.message : 'Connection failed');
     }
-  }, [server_url, username, password, security_policy, security_mode]);
+  }, [settings]);
 
   return (
     <div className="ds-wizard__test">
@@ -54,7 +58,7 @@ export default function ConnectionTest({ settings }: { settings: TestSettings })
         variant="neutral"
         size="sm"
         onClick={() => void run()}
-        disabled={state === 'testing' || !server_url.trim()}
+        disabled={state === 'testing' || !settings.server_url.trim()}
       >
         {state === 'testing' ? 'Testing…' : 'Test connection'}
       </Button>

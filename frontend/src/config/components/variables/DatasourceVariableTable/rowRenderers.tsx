@@ -258,6 +258,8 @@ interface FolderRowCellsProps {
   onSetFolderEnabled: (path: string, nodeId: string | undefined, enabled: boolean) => void;
   onRemoveNode: (path: string) => void;
   onRenameFolder?: (folderPath: string, newName: string) => void;
+  /** Min/Max columns are hidden for this release — see `SHOW_RANGE_COLUMNS`. */
+  showRange?: boolean;
 }
 
 function FolderRowCellsImpl({
@@ -271,6 +273,7 @@ function FolderRowCellsImpl({
   onSetFolderEnabled,
   onRemoveNode,
   onRenameFolder,
+  showRange = true,
 }: FolderRowCellsProps) {
   const key = path;
   const isCollapsed = collapsed.has(key);
@@ -332,8 +335,12 @@ function FolderRowCellsImpl({
         })()}
       </div>
       <div className="cfg-vtable-cell" />
-      <div className="cfg-vtable-cell cfg-vtable-cell--range" />
-      <div className="cfg-vtable-cell cfg-vtable-cell--range" />
+      {showRange && (
+        <>
+          <div className="cfg-vtable-cell cfg-vtable-cell--range" />
+          <div className="cfg-vtable-cell cfg-vtable-cell--range" />
+        </>
+      )}
       {showLive && <div className="cfg-vtable-cell" />}
       {isEditable && (
         <div className="cfg-vtable-cell cfg-vtable-cell--actions">
@@ -362,6 +369,8 @@ interface VariableRowCellsProps {
   isEditable: boolean;
   /** Min/Max editing is offered on every datasource type — see `RangeCells`. */
   rangeEditable: boolean;
+  /** Min/Max columns are hidden for this release — see `SHOW_RANGE_COLUMNS`. */
+  showRange?: boolean;
   liveValues: Record<string, string>;
   collapsed?: Set<string>;
   onToggleArray?: (key: string) => void;
@@ -378,6 +387,7 @@ export function VariableRowCells({
   showLive,
   isEditable,
   rangeEditable,
+  showRange = true,
   liveValues,
   collapsed,
   onToggleArray,
@@ -481,11 +491,13 @@ export function VariableRowCells({
           }
         />
       </div>
-      <RangeCells
-        entry={entry}
-        editable={rangeEditable}
-        onUpdate={(patch) => onUpdateVar(path, entry.node_id, patch)}
-      />
+      {showRange && (
+        <RangeCells
+          entry={entry}
+          editable={rangeEditable}
+          onUpdate={(patch) => onUpdateVar(path, entry.node_id, patch)}
+        />
+      )}
       {showLive &&
         (isArray ? (
           <div className="cfg-vtable-cell cfg-vtable-cell--live" />
@@ -521,6 +533,8 @@ interface ArrayElementRowCellsProps {
   dsType: DatasourceType;
   showLive: boolean;
   isEditable: boolean;
+  /** Min/Max columns are hidden for this release — see `SHOW_RANGE_COLUMNS`. */
+  showRange?: boolean;
 }
 
 export function ArrayElementRowCells({
@@ -532,6 +546,7 @@ export function ArrayElementRowCells({
   dsType,
   showLive,
   isEditable,
+  showRange = true,
 }: ArrayElementRowCellsProps) {
   const varKey = buildVarKey(dsName, path);
   const elementValue = useVariableStore((s) => {
@@ -564,8 +579,12 @@ export function ArrayElementRowCells({
       <div className="cfg-vtable-cell">
         <AccessBadge writable={parent.writable} showUnknown />
       </div>
-      <div className="cfg-vtable-cell cfg-vtable-cell--range" />
-      <div className="cfg-vtable-cell cfg-vtable-cell--range" />
+      {showRange && (
+        <>
+          <div className="cfg-vtable-cell cfg-vtable-cell--range" />
+          <div className="cfg-vtable-cell cfg-vtable-cell--range" />
+        </>
+      )}
       {showLive && (
         <WritableLiveCell value={displayStr} canWrite={canWrite} dsName={dsName} path={writePath} />
       )}

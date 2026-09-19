@@ -31,9 +31,30 @@ const DISCOVERY: DiscoveryResult = {
   ],
 };
 
-function routeApi(overrides?: { test?: TestConnectionResult }) {
+function routeApi(overrides?: {
+  test?: TestConnectionResult;
+  generate?: { client_certificate: string; client_private_key: string };
+}) {
   mockedApiJson.mockImplementation(async (url: string) => {
     if (url.includes('/discover')) return DISCOVERY as never;
+    if (url.includes('/certs/generate'))
+      return (overrides?.generate ?? {
+        client_certificate: 'certs/generated.pem',
+        client_private_key: 'certs/generated.key',
+      }) as never;
+    if (url.includes('/certs/info'))
+      return {
+        readable: true,
+        subject: 'CN=generated',
+        fingerprint: 'ab'.repeat(32),
+        issuedAt: '2026-01-01T00:00:00+00:00',
+        expiresAt: '2036-01-01T00:00:00+00:00',
+        expiresInDays: 3650,
+        expired: false,
+        expiring: false,
+        selfSigned: true,
+        names: ['localhost'],
+      } as never;
     if (url.includes('/test-connection'))
       return (overrides?.test ?? { ok: true, server_name: 'LinePLC', error: null }) as never;
     return undefined as never;
@@ -293,5 +314,59 @@ describe('OpcuaConnectionWizard', () => {
     for (const call of fetchMock.mock.calls) {
       expect(String(call[0])).not.toContain(secret);
     }
+  });
+
+  it('generates a self-signed certificate pair and fills in the cert/key fields', async () => {
+    await goToSignInWithSecureEndpoint();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate certificate…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await screen.findByText('certs/generated.pem');
+    expect(screen.getByText('certs/generated.key')).toBeInTheDocument();
+    expect(mockedApiJson).toHaveBeenCalledWith(
+      '/api/datasources/certs/generate',
+      expect.objectContaining({
+        method: 'POST',
+        body: { name: 'SecurePLC', common_name: 'SecurePLC', validity_days: 3650 },
+      }),
+    );
+  });
+
+  it('shows the certificate lifecycle when Certificate info is clicked', async () => {
+    await goToSignInWithSecureEndpoint();
+    fireEvent.click(screen.getByRole('button', { name: 'Generate certificate…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    await screen.findByText('certs/generated.pem');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Certificate info' }));
+
+    await screen.findByText('Valid — 3650 days left');
+    expect(mockedApiJson).toHaveBeenCalledWith(
+      '/api/datasources/certs/info?path=certs%2Fgenerated.pem',
+    );
+  });
+
+  it('forwards the certificate paths to the pre-save connection test for a secured connection', async () => {
+    await goToSignInWithSecureEndpoint();
+    fireEvent.click(screen.getByRole('button', { name: 'Generate certificate…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    await screen.findByText('certs/generated.pem');
+
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'engineer' } });
+    fireEvent.click(screen.getByRole('button', { name: /Next/ })); // → Sync
+    fireEvent.click(screen.getByRole('button', { name: /Test connection/ }));
+
+    await waitFor(() =>
+      expect(mockedApiJson).toHaveBeenCalledWith(
+        '/api/datasources/test-connection',
+        expect.objectContaining({
+          body: expect.objectContaining({
+            client_certificate: 'certs/generated.pem',
+            client_private_key: 'certs/generated.key',
+          }),
+        }),
+      ),
+    );
   });
 });

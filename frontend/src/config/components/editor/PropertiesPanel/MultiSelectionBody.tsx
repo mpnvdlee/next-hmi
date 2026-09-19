@@ -1,9 +1,9 @@
 import { useMemo, type ComponentType, type ReactNode } from 'react';
 import { isContainerHostType, widgetRegistry } from '@hmi/registry/widgetRegistry';
-import { SOURCE_CAPABLE_TYPES } from '@hmi/utils/propertySourceRules';
+import { bindsVariable } from '@hmi/utils/propertySourceRules';
 import type { LayoutConfig, WidgetConfig } from '@shared/types/config';
 import type { RequiredFieldEntry } from '@shared/types/widgetSchema';
-import { isStructType, primaryType } from '@shared/utils/valueTypes';
+import { primaryType } from '@shared/utils/valueTypes';
 import { parseTokenVar, usePanelTokenValues } from '@shared/utils/themeDefaultHint';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
@@ -81,12 +81,7 @@ export default function MultiSelectionBody({
     const field = schema[key];
     const value = multiValueOf(comps, key);
     const fieldType = primaryType(field.type).toLowerCase();
-    // The same test `SchemaFieldRow` draws the row with (`isStructType` for a
-    // struct row, `SOURCE_CAPABLE_TYPES` for a sourced one). A literal `'struct'`
-    // here would leave a named struct — `Alarms[]`, a custom widget's declared
-    // type — rendered as a binding row whose `✎` is missing under multi-selection
-    // but present under single.
-    const sourced = isStructType(fieldType) || SOURCE_CAPABLE_TYPES.has(fieldType);
+    const sourced = bindsVariable(fieldType);
     return (
       <SchemaFieldRow
         key={key}

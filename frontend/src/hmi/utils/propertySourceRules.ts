@@ -11,6 +11,7 @@ import {
   isPropertySourceKey,
 } from './propertySourceRegistry';
 import type { ProducedValueType, PropertySourceKey } from './propertySourceRegistry';
+import { isStructType } from '@shared/utils/valueTypes';
 
 export { PROPERTY_SOURCE_KEYS };
 
@@ -90,6 +91,25 @@ export const SOURCE_CAPABLE_TYPES = new Set([
   'option-list',
   'record-list',
 ]);
+
+/**
+ * Whether a schema field's row binds a variable — i.e. draws the path input and
+ * its binding picker (`✎` / `×`) rather than a plain value editor.
+ *
+ * Two disjoint families qualify: source-capable types (scalars, `record-list`,
+ * the editor kinds), and struct types — `struct`, `struct[]`, or a named type a
+ * custom widget declares (`Alarms[]`). Both bind a single `$var` /
+ * `$componentProp`.
+ *
+ * `SchemaFieldRow` draws the row with this test, so every panel that decides
+ * whether to *offer* the picker has to ask the same question — a literal
+ * `'struct'` at any one of them leaves a `struct[]` rendered as a binding row
+ * with no picker to open, and its `✎` and `×` vanish.
+ */
+export function bindsVariable(fieldType: string): boolean {
+  const type = fieldType.toLowerCase();
+  return isStructType(type) || SOURCE_CAPABLE_TYPES.has(type);
+}
 
 /**
  * Get the default allowed property sources for a value type.

@@ -1693,14 +1693,21 @@
   flex-shrink: 0;
 }
 
+.cfg-ds-props__status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cfg-space-1);
+}
+
+.cfg-ds-props__btn-group {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+}
+
 .cfg-ds-props__error {
   color: var(--cfg-danger-fg);
-  background: var(--cfg-danger-bg-soft);
-  border: 1px solid var(--cfg-danger-border-soft);
-  border-radius: var(--cfg-radius);
-  padding: 0.45rem 0.75rem;
   font-size: var(--cfg-font-size-base);
-  margin: 0.5rem 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -178,7 +178,7 @@ Base prefix: `/api/datasources`. Datasource types supported (`models/datasource.
   - Returns summary items shaped as
     `{ name, type, connected, variable_count, enabled_count, error }`.
   - `connected` is filled from the OPC-UA pool for `opcua-client` entries and from the test-server pool for `opcua-test-server` entries.
-  - `error` is a user-facing reason the datasource is not running (or `null`). For an `opcua-test-server` it carries the start failure — e.g. a port already in use — captured when the server can't bind; the editor shows it as an error status dot + message instead of the backend aborting startup.
+  - `error` is a user-facing reason the datasource is not running (or `null`). For an `opcua-test-server` it carries the start failure — e.g. a port already in use — captured when the server can't bind. For an `opcua-client` it carries the reason the last connect attempt failed (`DatasourceOpcuaEngine.error`), cleared on the next successful connect. Either way the editor shows it as an error status dot + message instead of the backend aborting startup.
 - `GET /api/datasources/{name}`
   - Returns the full datasource config (settings + variables).
   - Query: `include_variables=true|false` (default `true`). When `false`, the `variables` key is stripped from the response.
@@ -237,6 +237,14 @@ Pre-save helpers. None of them touch the live pool or persist a datasource.
 - `POST /api/datasources/certs`
   - Multipart: `file`. Called once per file in the secure-connection step (client certificate, private key, server certificate) — never for the key password, which stays a plain settings field.
   - Stores the upload under `<live-project>/certs/` with a sanitized filename and returns `{ "path": "certs/<filename>" }`, the value the caller stores in `client_certificate` / `client_private_key` / `server_certificate`. A filename that would escape the certs folder is `422`.
+- `POST /api/datasources/certs/generate`
+  - Body: `{ "name": "<base>", "common_name": "<CN>", "validity_days": <n> }`. All optional — `name` defaults to `"client"` (sanitized the same way as an upload filename), `common_name` defaults to `"webhmi-opc-client"`, `validity_days` defaults to `3650` (1–36500).
+  - Generates a self-signed client cert + key pair server-side (RSA 2048, SHA-256) and writes it to `<live-project>/certs/<base>-cert.der` (DER) / `<base>-key.pem` (PEM) — the cert encoding an imported OPC-UA PKI store (UaExpert, Optix, …) uses. **Overwrites** any existing pair at that path — a repeat call with the same `name` regenerates in place rather than accumulating new files.
+  - Returns `{ "client_certificate": "certs/<base>-cert.der", "client_private_key": "certs/<base>-key.pem" }`, the value the caller stores in `client_certificate` / `client_private_key`. Used by both the connection wizard's "Generate certificate" step and the properties panel's standalone button.
+- `GET /api/datasources/certs/info?path=certs/<filename>`
+  - Validity of a stored certificate, for the editor's lifecycle display. Only the filename is honoured — the lookup never leaves `<live-project>/certs/`.
+  - Returns `{ readable, subject, fingerprint, issuedAt, expiresAt, expiresInDays, expired, expiring, selfSigned, names }`. `expiresInDays` is signed (negative once past), `expiring` is true inside the 90-day warning window.
+  - A path that holds no parseable certificate (missing file, a private key, a typo) answers `{ "readable": false }` with the rest of the fields empty — not an HTTP error. PEM and DER both read.
 
 ### Browse
 
@@ -249,10 +257,12 @@ Pre-save helpers. None of them touch the live pool or persist a datasource.
 
 - `POST /api/datasources/{name}/start`
   - `opcua-test-server` → starts the test server (`{ "status": "started" }`).
-  - `opcua-client` → reconnects the client (`{ "status": "reconnecting" }`).
+  - `opcua-client` → connects the client (`{ "status": "connected" }`).
   - `422` for `static`.
 - `POST /api/datasources/{name}/stop`
-  - Only valid for `opcua-test-server` (`422` otherwise). Returns `{ "status": "stopped" }`.
+  - `opcua-test-server` → stops the test server, and its paired client (`{ "status": "stopped" }`).
+  - `opcua-client` → disconnects the client (`{ "status": "disconnected" }`).
+  - `422` for `static`.
 - `POST /api/datasources/{name}/restart`
   - `opcua-test-server` → restarts (`{ "status": "restarted" }`).
   - `opcua-client` → reconnects (`{ "status": "reconnecting" }`).

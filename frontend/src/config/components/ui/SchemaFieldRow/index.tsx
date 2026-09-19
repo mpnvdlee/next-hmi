@@ -7,7 +7,7 @@ import type {
   WidgetConfig,
 } from '@shared/types/config';
 import { structVarDefault } from '@hmi/utils/bindingValidation';
-import { SOURCE_CAPABLE_TYPES } from '@hmi/utils/propertySourceRules';
+import { SOURCE_CAPABLE_TYPES, bindsVariable } from '@hmi/utils/propertySourceRules';
 import { primaryType, isStructType } from '@shared/utils/valueTypes';
 import { evaluateVisibility } from '../../../utils/visibilityEvaluator';
 import { renderSchemaField } from '../../../utils/renderSchemaField';
@@ -204,9 +204,12 @@ export default function SchemaFieldRow({
   // empty tier-3 box. Source-capable types (scalars, `record-list`, …) keep their
   // own editors, so they are excluded even though `record-list` is struct-like.
   const isStruct = isStructType(fieldType) && !isSourceCapable;
+  // The row's own union — exported as `bindsVariable` so the panels that decide
+  // whether to *offer* the picker ask exactly the question this row answers.
+  const hasSourcePill = bindsVariable(fieldType);
   const detectedSource = mixed
     ? mixed.source
-    : isSourceCapable || isStruct
+    : hasSourcePill
       ? (getPropertySource(effectiveValue) as PropertySource | null)
       : null;
   const currentSource = isSourceCapable ? detectedSource : null;
@@ -222,7 +225,6 @@ export default function SchemaFieldRow({
       : effectiveValue
     : undefined;
 
-  const hasSourcePill = isSourceCapable || isStruct;
   const titleText =
     fieldType === 'actions' && schema.label === 'Actions' ? 'On Pressed' : schema.label;
 

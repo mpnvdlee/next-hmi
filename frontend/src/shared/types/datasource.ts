@@ -47,9 +47,36 @@ interface StaticSettings {
 export interface TestServerSettings {
   port: number;
   endpoint_path: string;
+  // Extra secured endpoints, on top of the always-available NoSecurity one.
+  // Each entry is "<Policy>/<Mode>", e.g. "Basic256Sha256/SignAndEncrypt".
+  security_policies?: string[];
 }
 
 export type DatasourceSettings = OpcuaClientSettings | StaticSettings | TestServerSettings;
+
+/** GET /api/datasources/certs/info — a stored certificate's lifecycle.
+ *  Every field but `readable` is empty when the path holds no certificate this
+ *  backend can parse. */
+export interface CertificateInfo {
+  readable: boolean;
+  subject: string;
+  fingerprint: string;
+  issuedAt: string;
+  expiresAt: string;
+  /** Signed — negative once the certificate has already expired. */
+  expiresInDays: number;
+  expired: boolean;
+  expiring: boolean;
+  selfSigned: boolean;
+  names: string[];
+}
+
+/** POST /api/datasources/certs/generate — the generated pair's project-relative
+ *  paths, keyed by the settings fields they are written back to. */
+export interface GeneratedCertPaths {
+  client_certificate: string;
+  client_private_key: string;
+}
 
 // ── Variable tree nodes ──────────────────────────────────────────────────────
 
@@ -188,6 +215,7 @@ function defaultSettings(type: DatasourceType): DatasourceSettings {
       return {
         port: 4855,
         endpoint_path: '/nexthmi/test/',
+        security_policies: [],
       };
   }
 }
