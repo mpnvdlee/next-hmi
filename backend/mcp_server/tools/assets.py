@@ -17,6 +17,7 @@ from core.storage import (
     active_icons_dir,
     active_images_dir,
     active_pages_dir,
+    active_videos_dir,
     read_json,
     write_bytes_atomic,
     write_text_atomic,
@@ -31,7 +32,7 @@ from ..write_helpers import emit_change
 _NAME_RE = re.compile(r"^[A-Za-z0-9_\-.]+$")
 _MAX_SVG_BYTES = 5 * 1024 * 1024
 _MAX_IMAGE_BYTES = 5 * 1024 * 1024
-_ASSET_REF_TYPES = frozenset({"image", "icon"})
+_ASSET_REF_TYPES = frozenset({"image", "icon", "video"})
 
 # SVG payloads are rendered inline in the HMI; strip the elements/attrs that
 # would let an uploaded asset run script in the host page.
@@ -163,6 +164,7 @@ def _list_items() -> list[tuple[str, str, dict]]:
     for asset_dir, asset_type in (
         (active_icons_dir(), "icon"),
         (active_images_dir(), "image"),
+        (active_videos_dir(), "video"),
     ):
         if not asset_dir.exists():
             continue

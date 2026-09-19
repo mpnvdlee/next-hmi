@@ -15,6 +15,7 @@ A project is a self-contained folder anywhere on disk, registered in the runtime
   assets/
     icons/
     images/
+    videos/
   certs/
   custom-widgets/
     _template/
@@ -110,8 +111,8 @@ Outside any project, the runtime keeps its own state:
   - custom component source and optional assets (compiled `index.js` lives in `<runtime_home>/.widget-build/<Name>/`, not here)
 - `<project>/external-libraries/*/`
   - third-party ESM bundles importable from custom-widget source
-- `<project>/assets/icons`, `<project>/assets/images`
-  - user-supplied SVG icons and images, served at `/assets/*`
+- `<project>/assets/icons`, `<project>/assets/images`, `<project>/assets/videos`
+  - user-supplied SVG icons, images and recorded video, served at `/assets/*` (range requests included, so a video seeks). Nested folders are scanned; `GET /api/assets` offers `.svg` under `icons`, `.png`/`.webp`/`.jpg`/`.jpeg`/`.gif`/`.svg` under `images`, and `.mp4`/`.webm`/`.m4v`/`.mov` under `videos` — `.mkv` is excluded, an HTML `<video>` never plays it. All three folders are created at startup by `core.storage.ensure_active_project_dirs`
 - `<project>/certs/`
   - reserved certificate folder created by the backend. Installation-local: the whole folder is stripped by `core.project_packer` so the OPC-UA client private key never reaches a zip, a template or a peer transfer under any filename. The client pair regenerates on the receiver's first connect
 - `<project>/config.json` → `project`

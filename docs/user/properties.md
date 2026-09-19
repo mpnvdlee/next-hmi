@@ -16,7 +16,7 @@ Two questions answer every property:
 
 Any of these can also be an **array**. An optional *format* refines the editor without changing the type — a `String` can present as a URL field, a dropdown, a password mask, a CSS-length input, a direction/align picker; a `Boolean` as a Visible/Hidden or Enabled/Disabled toggle.
 
-`String`, `Integer`, `Float`, `Boolean`, `DateTime`, `Date`, `Time`, `Duration`, `color`, `icon`, `image`
+`String`, `Integer`, `Float`, `Boolean`, `DateTime`, `Date`, `Time`, `Duration`, `color`, `icon`, `image`, `video`
 
 ## The sources
 

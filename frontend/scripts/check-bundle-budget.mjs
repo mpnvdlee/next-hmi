@@ -68,10 +68,15 @@ const ICON_CHUNK_GZIP_BUDGET = 100 * 1024;
 // The tree cap guards the total product surface instead: it is the size of every
 // built-in put together, manifest.json included, and it grows with each widget
 // promoted to built-in. Raise it deliberately when the set expands; never
-// raise the per-widget cap to make room for the tree.
+// raise the per-widget cap to make room for the tree. Raised from 96 kB when
+// Video became the 39th built-in: it sits well inside the per-widget cap, and
+// the tree simply had less headroom left than one more widget needs. Leave a
+// few kB of slack when raising — a cap sitting a few hundred bytes above the
+// current total fails CI on an unrelated CSS tweak to any of the 39, which
+// turns the gate into noise rather than signal.
 const BUILTIN_WIDGET_RAW_BUDGET = 32 * 1024;
 const BUILTIN_WIDGET_GZIP_BUDGET = 10 * 1024;
-const BUILTIN_WIDGETS_TREE_GZIP_BUDGET = 96 * 1024;
+const BUILTIN_WIDGETS_TREE_GZIP_BUDGET = 104 * 1024;
 
 const ROUTE_BUDGETS_GZIP = {
   manager: 150 * 1024,
@@ -90,8 +95,15 @@ const ROUTE_BUDGETS_GZIP = {
   // one *is* feature code, unlike the raises above, and it was taken knowing
   // the lazification path below was the alternative — the marker modals
   // (ChildPositionsEditor, ImageIndicatorsEditor) remain the next thing to move
-  // off this closure if the route needs headroom again.
-  editor: 330 * 1024,
+  // off this closure if the route needs headroom again. Raised again from
+  // 330 kB for the Video widget. Most of that growth is structural rather than
+  // editor feature code: the editor statically imports
+  // builtinWidgetsManifest.editor.json to draw property panels, so every new
+  // built-in lands its whole schema in this closure, and none of the
+  // lazification paths above recover it — only splitting that manifest per
+  // widget would. The rest is VideoSourcePicker and its icon, which ConfigShell
+  // imports statically like the other asset pickers.
+  editor: 340 * 1024,
   'chart-heavy-hmi': 350 * 1024,
 };
 const ROUTE_ENTRY_POINTS = {

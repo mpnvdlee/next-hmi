@@ -714,7 +714,7 @@ export const icon = { type: 'builtin', name: 'gauge' } as const;
 
 ### Field-type reference
 
-A field's `type` is a **simple datatype** (`boolean`, `integer`, `float`, `string`, `datetime`, `date`, `time`, `duration`), one of their arrays (`'float[]'`, `'string[]'`, …), a **named struct** (`'struct'`, `'Alarms[]'`, …), or an **editor-only kind** (`color`, `icon`, `image`, `option-list`, `actions`, …). It may also be a **list** — the first entry drives the editor control, the rest form the variable-binding filter (e.g. `['float','integer','boolean']`, or `['option-list','string[]','integer[]']`). The types themselves, their bindable sources, and the full source model are specified in [../architecture/value-types.md](../architecture/value-types.md); the table below maps each `type` to the hook a custom component reads it with.
+A field's `type` is a **simple datatype** (`boolean`, `integer`, `float`, `string`, `datetime`, `date`, `time`, `duration`), one of their arrays (`'float[]'`, `'string[]'`, …), a **named struct** (`'struct'`, `'Alarms[]'`, …), or an **editor-only kind** (`color`, `icon`, `image`, `video`, `option-list`, `actions`, …). It may also be a **list** — the first entry drives the editor control, the rest form the variable-binding filter (e.g. `['float','integer','boolean']`, or `['option-list','string[]','integer[]']`). The types themselves, their bindable sources, and the full source model are specified in [../architecture/value-types.md](../architecture/value-types.md); the table below maps each `type` to the hook a custom component reads it with.
 
 | `type`              | Read with                                  |
 |---------------------|--------------------------------------------|
@@ -728,6 +728,7 @@ A field's `type` is a **simple datatype** (`boolean`, `integer`, `float`, `strin
 | `color`             | `usePropString` (CSS color string)         |
 | `icon`              | `usePropString` + icon helpers             |
 | `image`             | `usePropString`                            |
+| `video`             | `usePropString`                            |
 | `struct`            | `usePropStruct` (or `useStructVariable`)   |
 | `option-list`       | inspect `properties.<key>` directly        |
 | `actions`           | `executeWidgetActions(props[key][event])`  |
@@ -739,9 +740,9 @@ A field's `type` is a **simple datatype** (`boolean`, `integer`, `float`, `strin
 
 All optional unless marked **required**.
 
-- `format` — refines a base type to upgrade its editor without changing the value; source rules still follow the **base type**. The full per-type format catalog (`string`: `url`/`multiline`/`password`/`select`/`length`/`direction`/`align`/`justify`/`page`; `float`: `percentage`; `boolean`: `toggle`/`visibility`/`enablement`/`wrap`) is in [../architecture/value-types.md](../architecture/value-types.md).
+- `format` — refines a base type to upgrade its editor without changing the value; source rules still follow the **base type**. The full per-type format catalog (`string`: `url`/`multiline`/`password`/`select`/`length`/`direction`/`align`/`justify`/`page`/`variables`; `float`: `percentage`; `boolean`: `toggle`/`visibility`/`enablement`/`wrap`) is in [../architecture/value-types.md](../architecture/value-types.md).
 - `defaultValue` — value the editor inserts when the field is added or reset.
-- `placeholder` — empty-state hint (used by `string`, `integer`/`float`, `icon`, `image` inputs).
+- `placeholder` — empty-state hint (used by `string` and `integer`/`float` inputs; the asset pickers hardcode their own).
 - `min`, `max`, `step` — numeric input constraints (`integer` / `float`).
 - The variable picker filter is the `type` itself: list non-editor entries (e.g. `['float','integer']`, `'string[]'`) restrict which variables can be bound. There is no separate `dataType` field.
 
@@ -752,6 +753,7 @@ The value types and the full source model are specified in [../architecture/valu
 - `event` — only for `actions`: the key used to store the action array within the property value (default `'onPress'`).
 - `options` — **required** for `format: 'select'`; array of `{ label, value, icon? }`.
 - `display` — only with `format: 'select'`: `'auto' | 'dropdown' | 'button-text' | 'button-icon'`. `'auto'` picks button-icon when every option has an icon, otherwise dropdown.
+- `recordedWhen` — only with `format: 'variables'`: a `VisibilityCondition` (or `AND`-joined array) that, while it holds, narrows the picker to the variables the historian records. Omitted, the field picks from the whole variable tree.
 - `requiredFields` — only for `struct`. See below.
 
 ### Struct details

@@ -1,0 +1,26 @@
+/* Variable list — the editor for a `format: 'variables'` field. The list shell,
+   the rows and their action buttons are all shared config-UI pieces
+   (cfg-editor-actions, PropRow, cfg-row-action-btn); only the live-mode picker
+   trigger and the dropdown's width need anything of their own. */
+
+/* The live-mode trigger reuses the `.cfg-var-field` box a bound path renders in,
+   so it has to give up the browser's own button chrome and left-align its label
+   the way the div version does. */
+button.cfg-var-list__pick {
+  cursor: pointer;
+  text-align: start;
+  font: inherit;
+}
+
+/* Variable keys are long and share a prefix; sized from the trigger they would
+   all truncate to the same ellipsis. The popup is free to outgrow the control —
+   `Select` clamps it against the viewport once a popupClassName is set. */
+.cfg-var-list__popup {
+  min-width: max-content;
+}
+
+/* Move-up reuses the down chevron, turned over — the same trick the Select
+   trigger uses for its open state, so both arrows keep one stroke weight. */
+.cfg-var-list__up {
+  transform: rotate(180deg);
+}

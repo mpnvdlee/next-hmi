@@ -2,7 +2,7 @@
 // its Container children are lazy built-in modules, so the SDK has to be bound
 // and the first paint of every assertion below is asynchronous.
 import '../../testSdk';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { useComponentPropStore } from '@hmi/store/widgetPropStore';
@@ -69,6 +69,24 @@ describe('ImageContainer', () => {
   it('renders nothing when visible is false', () => {
     const { container } = renderImageContainer({ visible: false }, [childOf({ id: 'a' })]);
     expect(container.firstChild).toBeNull();
+  });
+
+  it('roots a bound asset path under /assets, the way a $static payload arrives', async () => {
+    // A $var or $urlParam on the asset field delivers the stored path verbatim;
+    // in `src` a project-relative one would resolve against the page url.
+    const { container } = renderImageContainer({ src: 'images/plant.png' });
+
+    await waitFor(() =>
+      expect(container.querySelector('img')).toHaveAttribute('src', '/assets/images/plant.png'),
+    );
+  });
+
+  it('leaves an already-resolved asset url alone', async () => {
+    const { container } = renderImageContainer({ src: { $static: { path: 'images/plant.png' } } });
+
+    await waitFor(() =>
+      expect(container.querySelector('img')).toHaveAttribute('src', '/assets/images/plant.png'),
+    );
   });
 
   it('renders each child itself with absolute slot positioning', async () => {

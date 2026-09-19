@@ -88,6 +88,7 @@ export const SDK_NAMES = [
   'isCustomIconAssetPath',
   'useInlineSvg',
   'withBase',
+  'assetSrc',
   'apiJson',
   'isApiError',
   'executeWidgetActions',

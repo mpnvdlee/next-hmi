@@ -11,6 +11,100 @@ are always called out under a **Changed** or **Removed** heading.
 
 ### Added
 
+- **A Video widget plays recorded footage on a screen.** Putting a changeover
+  clip or a line-clearance procedure on a panel meant a Web Frame pointed at
+  something else that hosted the file. **Video** is a widget now: it takes a
+  file from the project or a URL, with the settings you would expect — autoplay
+  (muted, as every browser insists), loop, controls, fit, poster image, preload,
+  playback rate and volume — plus a **Play when** binding that starts and stops
+  it from a variable, **State** and **Current time** write-backs, and On Play /
+  Pause / Ended / Error actions. It plays recorded files: HLS playlists and RTSP
+  camera feeds are not streams it can open. A **Codec** setting and a second,
+  fallback source are there because H.265 does not decode everywhere — which
+  file to ship, and what the widget shows when the panel cannot play one, is in
+  [Files & assets](docs/user/files.md#video-files).
+
+- **Projects have an `assets/videos/` folder.** It sits beside `icons/` and
+  `images/` and works the same way: drop a `.mp4`, `.webm`, `.m4v` or `.mov` in
+  it — subfolders included — reload the editor tab, and pick the file. `.mkv` is
+  deliberately not offered; no browser plays it in a `<video>` element. The
+  folder is served read-only like the rest of `/assets/` and answers range
+  requests, so the operator can drag the scrub bar without waiting for the whole
+  clip. Over MCP `assets_list` reports videos and the delete guard protects
+  them, but `assets_upload` still takes icons and images only: its 5 MB payload
+  cap means nothing to a video, so clips are copied in or arrive with a project
+  import. See
+  [Files & assets](docs/user/files.md#where-each-kind-of-file-lives).
+
+- **A `video` property type.** A schema field typed `video` — on a built-in
+  widget, a custom widget, or a component input — opens the video picker and
+  stores the same small `{ path }` payload an `image` field does, from the same
+  sources.
+
+- **Every project row shows a picture of its main page.** The dashboard listed
+  projects as name, id, folder and status, which tells you nothing about which
+  screen set a row actually is — on an installation carrying five of them, the
+  only way to tell was to open each one. The editor now renders the project's
+  main page off-screen after each save and stores it as a thumbnail, and the row
+  shows it; a project that has never been saved gets a plain placeholder. The
+  capture runs after the save rather than inside it, so it can never delay or
+  fail one, and it drives the preview surface rather than the runtime — which
+  means a save does not fire `onHmiLoaded` and cannot write to a datasource as a
+  side effect. The picture is installation-local: it never travels with an
+  export, a zip, or a transfer. See
+  [Managing projects](docs/user/projects.md#the-manager-dashboard).
+
+- **Creating a project starts from a template.** **+ New project** now asks what
+  to start from before it asks where to put it. **Empty project** is the
+  previous behaviour, one blank page. **NEXT BREW example** installs a working
+  demo machine — three pages, a static datasource, alarms, recipes, two themes
+  and two languages — which is the shortest path from installed to something to
+  read. See [How to create a project](docs/user/projects.md#how-to-create-a-project).
+
+- **The User Badge signs operators in and out.** The badge showed who was
+  signed in and nothing more, so every project rebuilt the same pair of Log in /
+  Log out buttons beside it, each gated on its own `$compare` against `guest`.
+  It now carries the affordance itself: a **Log in** button while the session is
+  the anonymous `guest`, the identity plus a sign-out button once it is not, and
+  an optional **On Press** for the identity. Each half appears only when you
+  give it actions to run, so a panel that never signs anyone out is unchanged.
+  The NEXT BREW example drops its own two buttons and wires the badge instead.
+  See [Sign in and out on a screen](docs/user/users.md#sign-in-and-out-on-a-screen).
+
+- **A secured OPC-UA connection can be set up without leaving the editor.**
+  Certificates had to exist before the connection did — generated with `openssl`
+  somewhere else and uploaded. **Generate certificate…** now writes a
+  self-signed RSA-2048 pair into the project's `certs/` folder and fills the
+  path fields in, and **Certificate info** reads one back: subject, fingerprint,
+  issue and expiry dates, subject alt names, self-signed or not, and whether it
+  is valid, inside the 90-day warning window, or already expired. Generating
+  again under the same name overwrites in place, so renewal is one click rather
+  than a folder of accumulating files. See
+  [Secure the connection with certificates](docs/user/datasources.md#secure-the-connection-with-certificates).
+
+- **Connect and Disconnect are explicit on an OPC-UA datasource**, replacing a
+  single **Reconnect**. A connection stays down until you ask for it and stays
+  down after you disconnect, instead of retrying underneath you, and a failed
+  attempt prints the server's own reason under the status rather than leaving
+  you to read the log. See
+  [Connect, disconnect, and see why it failed](docs/user/datasources.md#connect-disconnect-and-see-why-it-failed).
+
+- **The editor's top bar can transfer the open project.** Sending a project to
+  another device meant leaving the editor for the dashboard and finding the row
+  again. The bar now carries **Transfer**, opening the same dialog. What travels
+  is the project on disk, so the button stays disabled while there are unsaved
+  edits rather than silently sending the previous state. See
+  [Push & pull between devices](docs/user/projects.md#push--pull-between-devices).
+
+- **A transfer dialog that explains itself.** A refusal used to surface as the
+  backend's raw sentence. The dialog now names the cause and the fix — the
+  peer's device-admin password rather than this one's, a pairing lockout with
+  the countdown to wait out, a host name that did not resolve, an address
+  outside the trusted LAN, a port with nothing listening, a failed TLS
+  handshake, a peer certificate that no longer matches the pinned one — and
+  detects an id or folder collision *before* sending, offering the resolution
+  choices in place. Progress is named as it runs rather than shown as a bar.
+
 - **The manager dashboard now says when it is serving without HTTPS.** Binding
   every interface by default made plain HTTP a network exposure rather than a
   local one, and the switch that fixes it sat in Settings with nothing pointing
@@ -133,6 +227,30 @@ are always called out under a **Changed** or **Removed** heading.
   project still carries one — it is dropped the next time users are saved.
 
 ### Fixed
+
+- **An absolute URL typed into an asset field stays one.** An image field read
+  anything that did not begin with `images/` as a filename inside that folder,
+  so pasting `https://example.com/logo.png` into one produced
+  `/assets/images/https://example.com/logo.png` and a broken image. `http(s):`,
+  `data:` and `blob:` values are passed through untouched now, in image and
+  video fields alike, and the diagnostics pill no longer reports one as a
+  missing asset. A path already rooted at `icons/` or `videos/` is likewise left
+  alone rather than being prefixed into `images/icons/…`; only a bare filename
+  still resolves inside `assets/images/`, which is what values stored before the
+  folder became part of the path look like.
+
+- **A stroke-outline SVG icon stays an outline.** Custom icon rendering deleted
+  every fill and stroke attribute and forced `fill: currentColor`, which assumed
+  an icon is a filled silhouette — so an outline asset (`fill="none"` plus a
+  stroke) lost its strokes and had its geometry filled in. Icon, Button and Menu
+  Toggle all share that path, so every outline asset broke the same way.
+  Concrete paint values are repointed at the widget's colour now, across
+  attributes, inline styles and `<style>` blocks, and `none` is left alone. See
+  [Files & assets](docs/user/files.md).
+
+- **Browser keychains stay out of a password field.** A String Input with
+  **Password field** ticked offered to save and auto-fill on a panel PC, where
+  the browser profile is shared by everyone who walks up to it.
 
 - **`http://localhost:8000` answers again.** Binding every interface was
   spelled `0.0.0.0`, which is the *IPv4* wildcard — one AF_INET socket and

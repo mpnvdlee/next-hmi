@@ -65,6 +65,8 @@
 
 .hmi-imgctn__marker {
   position: absolute;
+  left: var(--hmi-imgctn-x, 50%);
+  top: var(--hmi-imgctn-y, 50%);
   transform: translate(-50%, -50%);
   height: 26px;
   padding: 0 var(--hmi-space-md);

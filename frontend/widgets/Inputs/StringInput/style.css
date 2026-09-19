@@ -70,3 +70,7 @@
   cursor: not-allowed;
   pointer-events: none;
 }
+
+.hmi-string-input__input--masked {
+  -webkit-text-security: disc;
+}

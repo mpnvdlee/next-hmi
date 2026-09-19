@@ -341,7 +341,7 @@ type ComponentAction =
  * A field's `type` is a value type (`boolean` | `integer` | `float` |
  * `string` | `datetime` | `date` | `time` | `duration`), one of their arrays
  * (`'float[]'` …), a named struct (`'struct'`, `'Alarms[]'`, …), or an
- * editor-only kind (`color` | `icon` | `image` | `option-list` |
+ * editor-only kind (`color` | `icon` | `image` | `video` | `option-list` |
  * `record-list` | `actions` | `groups` | `image-indicators` |
  * `child-positions` | `page-group`). It may also be a list — the first entry
  * drives the editor control, the rest form the variable-binding filter (e.g.
@@ -387,6 +387,9 @@ interface SchemaField {
   defaultToken?: string;
   /** Conditional visibility — a condition or an AND-joined array, referencing sibling keys. */
   visibleWhen?: unknown;
+  /** For a `variable` field: when it passes, the picker offers only the variables
+   *  the historian records. Same shape and evaluation as `visibleWhen`. */
+  recordedWhen?: unknown;
   event?: string;
 }
 
@@ -761,6 +764,16 @@ declare function useInlineSvg(url: string | null | undefined): string;
 /** Prefixes an absolute app path with the instance base, so a URL still
  *  resolves when the project is proxied under /runtime/<slug>/ or /editor/<slug>/. */
 declare function withBase(path: string): string;
+/**
+ * Resolves an asset-field value to something `<img src>`/`<video src>` can load.
+ *
+ * A `$static` payload already arrives as a full `/assets/…` url, but a `$var`
+ * or `$urlParam` on the same field delivers the stored path verbatim — and a
+ * project-relative `images/logo.png` would otherwise resolve against the page
+ * url. A path rooted at `images/`, `icons/` or `videos/` is prefixed; anything
+ * absolute, rooted or remote passes through, as does a bare filename.
+ */
+declare function assetSrc(value: string): string;
 /** What `apiJson` throws when the backend answers non-2xx: `message` is the
  *  response body's `detail` (or `HTTP <status>` when it carried none), `status`
  *  the HTTP status, `code` the body's machine-readable `code` when it had one. */

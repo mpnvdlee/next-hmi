@@ -18,6 +18,7 @@ from core.storage import (
     active_pages_dir,
     active_project_root,
     active_translations_dir,
+    active_videos_dir,
     read_csv,
     read_json,
 )
@@ -121,9 +122,11 @@ class ValidationContext:
     translation_keys: frozenset[str] = field(default_factory=frozenset)
     # Curated built-in icon ids — mirrors frontend/src/shared/config/iconAllowlist.ts.
     builtin_icons: frozenset[str] = field(default_factory=lambda: _BUILTIN_ICON_IDS)
-    # Relative asset paths ("icons/<name>" / "images/<name>") under the active project.
+    # Relative asset paths ("icons/<name>" / "images/<name>" / "videos/<name>")
+    # under the active project.
     icon_assets: frozenset[str] = field(default_factory=frozenset)
     image_assets: frozenset[str] = field(default_factory=frozenset)
+    video_assets: frozenset[str] = field(default_factory=frozenset)
     # declared_property_keys() memo, keyed by widget type — a node walk resolves
     # the same widget type repeatedly (e.g. every Button on a page), and the
     # result only depends on widget_type for the lifetime of this context.
@@ -637,6 +640,13 @@ def _collect_asset_names(asset_dir) -> frozenset[str]:
     return names
 
 
+def _is_absolute_asset_url(value: Any) -> bool:
+    """An image/video field may hold a remote URL instead of a workspace path —
+    ``imageAssetUrl`` passes those through untouched. Nothing on disk can
+    confirm one, so it is not a missing asset."""
+    return isinstance(value, str) and value.lower().startswith(("http://", "https://", "data:", "blob:"))
+
+
 def _collect_user_groups() -> frozenset[str]:
     """Group ids from users.json. Unreadable/absent yields an empty set, which
     the consumers treat as "unknown" and skip rather than flagging every
@@ -673,6 +683,7 @@ def build_context() -> ValidationContext:
         user_groups=_collect_user_groups(),
         icon_assets=_collect_asset_names(active_icons_dir()),
         image_assets=_collect_asset_names(active_images_dir()),
+        video_assets=_collect_asset_names(active_videos_dir()),
     )
 
 
@@ -698,7 +709,7 @@ def _property_source_key(value: dict) -> str:
 # enforced by test_structure_parity.py / valueTypes.test.ts against the shared
 # frontend/src/shared/types/__fixtures__/editorKinds.json fixture.
 _EDITOR_KINDS: frozenset[str] = frozenset({
-    "color", "icon", "image", "option-list", "actions", "groups",
+    "color", "icon", "image", "video", "option-list", "actions", "groups",
     "image-indicators", "child-positions", "menu-items", "page-group", "slot",
     "widgets", "_action",
 })
@@ -1000,8 +1011,16 @@ def _validate_property_value(
                     report.warn(path, f"unknown icon asset '{icon_path}'", severity="error", code="icon-unknown")
         elif field_type == "image" and isinstance(payload, dict):
             image_path = payload.get("path")
-            if not isinstance(image_path, str) or image_path not in ctx.image_assets:
+            if not _is_absolute_asset_url(image_path) and (
+                not isinstance(image_path, str) or image_path not in ctx.image_assets
+            ):
                 report.warn(path, f"unknown image asset '{image_path}'", severity="error", code="image-unknown")
+        elif field_type == "video" and isinstance(payload, dict):
+            video_path = payload.get("path")
+            if not _is_absolute_asset_url(video_path) and (
+                not isinstance(video_path, str) or video_path not in ctx.video_assets
+            ):
+                report.warn(path, f"unknown video asset '{video_path}'", severity="error", code="video-unknown")
     elif source_key == "$loc":
         # Runtime resolver (frontend/src/hmi/utils/propertySourceEval.ts:evaluateLoc) only
         # accepts a string payload; any other shape silently resolves to null at render.

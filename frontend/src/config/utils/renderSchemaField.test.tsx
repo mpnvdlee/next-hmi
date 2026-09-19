@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderSchemaField, resolveDefaultDisplay } from './renderSchemaField';
 import type { SchemaField } from '@shared/types/widgetSchema';
 
@@ -273,6 +274,7 @@ const COLOR_SCHEMA_TOKEN_DEFAULT: SchemaField = {
 };
 const ICON_SCHEMA: SchemaField = { type: 'icon', label: 'Icon' };
 const IMAGE_SCHEMA: SchemaField = { type: 'image', label: 'Image' };
+const VIDEO_SCHEMA: SchemaField = { type: 'video', label: 'Video' };
 
 describe('renderSchemaField — mixed multi-selection', () => {
   it('dims every boolean option and names the state, with no default marked', () => {
@@ -343,6 +345,35 @@ describe('renderSchemaField — mixed multi-selection', () => {
       'placeholder',
       'images/logo.svg or https://…',
     );
+  });
+
+  it('puts "Mixed" in a video field\'s placeholder instead of its path prompt', () => {
+    render(<>{renderSchemaField(VIDEO_SCHEMA, undefined, vi.fn(), undefined, true)}</>);
+    expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', 'Mixed');
+  });
+
+  it('keeps the video path prompt when the field is merely unset', () => {
+    render(<>{renderSchemaField(VIDEO_SCHEMA, undefined, vi.fn())}</>);
+    expect(screen.getByRole('textbox')).toHaveAttribute(
+      'placeholder',
+      'videos/clip.mp4 or https://…',
+    );
+  });
+
+  // A bare name would otherwise resolve against assets/images/ — the shared
+  // asset resolver's fallback root, and the wrong folder for this field.
+  it.each([
+    ['clip.mp4', 'videos/clip.mp4'],
+    ['videos/lines/clip.mp4', 'videos/lines/clip.mp4'],
+    ['https://cdn.example.com/clip.mp4', 'https://cdn.example.com/clip.mp4'],
+  ])('roots a typed video path (%s)', async (typed, stored) => {
+    const onChange = vi.fn();
+    render(<>{renderSchemaField(VIDEO_SCHEMA, undefined, onChange)}</>);
+
+    await userEvent.type(screen.getByRole('textbox'), typed);
+    await userEvent.tab();
+
+    expect(onChange).toHaveBeenCalledWith({ $static: { path: stored } });
   });
 
   it('puts "Mixed" in a length field\'s placeholder instead of leaving it blank', () => {

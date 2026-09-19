@@ -56,8 +56,14 @@ export interface SchemaField {
   /** Optional format refining a base type — a UI-only hint that upgrades the
    *  editor without changing the value's base type (so source rules are still
    *  decided by the base type). Open-ended; recognised values include
-   *  `url`, `multiline`, `select`, `password` (string) and `percentage` (float). */
+   *  `url`, `multiline`, `select`, `password`, `variables` (string) and
+   *  `percentage` (float). */
   format?: string;
+  /** For a `format: 'variables'` field: while this condition holds, the picker
+   *  offers only the variables the historian records. Omitted or failing, it
+   *  offers the whole variable tree. Same shape and evaluation as
+   *  {@link SchemaField.visibleWhen}. */
+  recordedWhen?: VisibilityCondition | VisibilityCondition[];
   /** For 'actions' type: the ActionsConfig event key this field edits (defaults to 'onPress'). */
   event?: string;
   /** Conditional visibility: field only shown when condition(s) pass.

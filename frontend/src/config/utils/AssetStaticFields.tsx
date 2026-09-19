@@ -1,4 +1,4 @@
-import type { IconValue, ImageValue } from '@shared/types/config';
+import type { IconValue, ImageValue, VideoValue } from '@shared/types/config';
 import PathInputField from '@config/components/ui/PathInputField';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { assetName } from '@config/components/editor/assetPickerUtils';
@@ -119,6 +119,56 @@ export function ImageStaticField({
       }}
       pickTitle="Pick image"
       onPick={() => openPicker('image', (val) => onChange({ $static: val }), label)}
+      onClear={committed ? () => onChange(undefined) : undefined}
+    />
+  );
+}
+
+/** An asset path that names no folder and is not a URL, rooted at `videos/`.
+ *  Anything already rooted or absolute is the author's own spelling. */
+function rootBareVideoPath(text: string): string {
+  if (!text || text.includes('/') || /^(?:https?:\/\/|data:|blob:)/i.test(text)) return text;
+  return `videos/${text}`;
+}
+
+/**
+ * Static editor for `video`-typed fields — the image field's twin, for the same
+ * reason: a video can be a project asset picked from the browser *or* a path the
+ * author types (a `videos/…` file not yet in the picker, or a remote URL).
+ */
+export function VideoStaticField({
+  value,
+  onChange,
+  label,
+  mixed = false,
+}: {
+  value: unknown;
+  onChange: (v: unknown) => void;
+  /** Property name the picker shows before its own action. */
+  label?: string;
+  /** A multi-selection whose widgets hold different videos — see
+   *  {@link IconStaticField}. */
+  mixed?: boolean;
+}) {
+  const openPicker = useEditorDomainStore((s) => s.openAssetPicker);
+  const video = staticPayload<VideoValue>(value);
+  const committed = video?.path ?? '';
+
+  return (
+    <PathInputField
+      value={committed}
+      placeholder={mixed ? MIXED_LABEL : 'videos/clip.mp4 or https://…'}
+      titleFromDraft
+      onCommit={(text) => {
+        // A bare filename is resolved against assets/images/ by the shared
+        // asset resolver, which is the wrong folder for this field — root it
+        // here so typing `clip.mp4` means the video of that name.
+        const path = rootBareVideoPath(text.trim());
+        if (path === committed) return;
+        onChange(path ? { $static: { path } } : undefined);
+      }}
+      pickTitle="Pick video"
+      onPick={() => openPicker('video', (val) => onChange({ $static: val }), label)}
       onClear={committed ? () => onChange(undefined) : undefined}
     />
   );

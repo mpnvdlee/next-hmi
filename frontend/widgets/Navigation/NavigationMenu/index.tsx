@@ -145,7 +145,7 @@ type MenuItem =
       label: string;
       icon?: { $static: IconValue };
     }
-  | { type: 'action'; actions: unknown[]; label: string; icon?: { $static: IconValue } }
+  | { type: 'action'; actions: ComponentAction[]; label: string; icon?: { $static: IconValue } }
   | { type: 'divider' }
   | { type: 'section-header'; label: string }
   | { type: 'submenu'; label: string; icon?: { $static: IconValue }; items: MenuItem[] };
@@ -177,14 +177,6 @@ function matchesSearchWords(query: string, searchable: (string | undefined)[]): 
     .join(' ')
     .toLowerCase();
   return words.every((word) => haystack.includes(word));
-}
-
-function pageGroupContains(group: PageGroupConfig, id: string): boolean {
-  for (const child of group.children) {
-    if (child.id === id) return true;
-    if (isPageGroup(child) && pageGroupContains(child, id)) return true;
-  }
-  return false;
 }
 
 /**
@@ -308,6 +300,9 @@ export default function NavigationMenu({ properties, layout }: HmiWidgetProps = 
   const scope = useHmiScope();
   const userGroups = useCurrentUserGroups() as string[];
   const activePageId = activePage.pageId;
+  // The resolved ancestor-group trail of the active page — the same answer a
+  // per-group subtree walk would compute, already in hand.
+  const activeGroupIds = activePage.groupIds;
 
   // Schema-driven props with defaults that preserve today's behaviour.
   const mode = getPropString(properties, 'mode', 'auto', evalCtx) as Mode;
@@ -406,7 +401,7 @@ export default function NavigationMenu({ properties, layout }: HmiWidgetProps = 
     if (groupExpansion === 'remember') return false; // empty memory = collapsed
     // 'auto' (default): expand the branch leading to the active page.
     if (activePageId === null) return false;
-    return group.id === activePageId || pageGroupContains(group, activePageId);
+    return group.id === activePageId || activeGroupIds.includes(group.id);
   }
 
   function toggleGroupInline(group: PageGroupConfig) {
@@ -525,7 +520,7 @@ export default function NavigationMenu({ properties, layout }: HmiWidgetProps = 
   function renderGroupRow(group: PageGroupConfig, depth: number): JSX.Element {
     const isActive =
       activePageId !== null &&
-      (group.id === activePageId || pageGroupContains(group, activePageId));
+      (group.id === activePageId || activeGroupIds.includes(group.id));
     const expanded = isGroupExpanded(group);
 
     return (
@@ -572,7 +567,7 @@ export default function NavigationMenu({ properties, layout }: HmiWidgetProps = 
         return renderGroupRow(node, 0);
       }
       const groupIsActive =
-        (activePageId !== null && pageGroupContains(node, activePageId)) ||
+        (activePageId !== null && activeGroupIds.includes(node.id)) ||
         activePage.requestedId === node.id;
       return renderNavButton({
         key: node.id,
@@ -638,7 +633,7 @@ export default function NavigationMenu({ properties, layout }: HmiWidgetProps = 
           type="button"
           className="hmi-navmenu__link"
           onClick={(e: { currentTarget: HTMLElement }) =>
-            executeWidgetActions(item.actions as never, {
+            executeWidgetActions(item.actions, {
               scope,
               evalCtx,
               anchorEl: e.currentTarget,

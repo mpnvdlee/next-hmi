@@ -127,6 +127,12 @@
           }
         ]
       },
+      "radius": {
+        "format": "length",
+        "label": "Radius",
+        "defaultToken": "--hmi-radius",
+        "group": "Appearance"
+      },
       "variable": {
         "label": "Variable",
         "description": "Optional struct driving the button from the PLC: bVisible and bEnabled gate it, bValue is written on press."
@@ -436,6 +442,12 @@
         "label": "Icon",
         "group": "Appearance",
         "description": "Shown when the dot is not pulsing."
+      },
+      "radius": {
+        "format": "length",
+        "label": "Radius",
+        "defaultToken": "--hmi-radius-full",
+        "group": "Appearance"
       }
     }
   },
@@ -464,9 +476,14 @@
         ]
       },
       "variables": {
+        "format": "variables",
         "label": "Variables",
         "group": "Data",
-        "description": "Comma-separated variable paths, e.g. testserver:Motor1/Speed, testserver:Motor1/Temperature."
+        "description": "One line per variable, drawn — and coloured — in this order.",
+        "recordedWhen": {
+          "property": "source",
+          "notEquals": "live"
+        }
       },
       "timeRange": {
         "format": "select",
@@ -632,6 +649,347 @@
         "group": "Actions",
         "event": "onSignOut",
         "description": "Run by the sign-out button, which only appears once this is set."
+      }
+    }
+  },
+  "Content/Video": {
+    "description": "Plays a recorded video from a project asset or a URL.",
+    "icon": {
+      "type": "builtin",
+      "name": "play"
+    },
+    "schema": {
+      "sourceMode": {
+        "format": "select",
+        "label": "Source",
+        "group": "Content",
+        "defaultValue": "asset",
+        "options": [
+          {
+            "label": "Asset",
+            "value": "asset"
+          },
+          {
+            "label": "URL",
+            "value": "url"
+          }
+        ]
+      },
+      "asset": {
+        "label": "Video asset",
+        "group": "Content",
+        "visibleWhen": {
+          "property": "sourceMode",
+          "equals": "asset"
+        }
+      },
+      "url": {
+        "label": "Video URL",
+        "group": "Content",
+        "visibleWhen": {
+          "property": "sourceMode",
+          "equals": "url"
+        }
+      },
+      "codec": {
+        "format": "select",
+        "label": "Codec",
+        "group": "Content",
+        "defaultValue": "auto",
+        "options": [
+          {
+            "label": "Auto",
+            "value": "auto"
+          },
+          {
+            "label": "H.264 (AVC)",
+            "value": "h264"
+          },
+          {
+            "label": "HEVC (H.265)",
+            "value": "hevc"
+          },
+          {
+            "label": "VP9",
+            "value": "vp9"
+          },
+          {
+            "label": "AV1",
+            "value": "av1"
+          }
+        ]
+      },
+      "codecString": {
+        "label": "Codec string override",
+        "group": "Content",
+        "placeholder": "e.g. hvc1.1.6.L93.B0",
+        "description": "Overrides the codecs parameter emitted for the chosen codec preset.",
+        "visibleWhen": {
+          "property": "codec",
+          "notEquals": "auto"
+        }
+      },
+      "fallbackMode": {
+        "format": "select",
+        "label": "Fallback source",
+        "group": "Content",
+        "defaultValue": "asset",
+        "options": [
+          {
+            "label": "Asset",
+            "value": "asset"
+          },
+          {
+            "label": "URL",
+            "value": "url"
+          }
+        ]
+      },
+      "fallbackAsset": {
+        "label": "Fallback video asset",
+        "group": "Content",
+        "visibleWhen": {
+          "property": "fallbackMode",
+          "equals": "asset"
+        }
+      },
+      "fallbackUrl": {
+        "label": "Fallback video URL",
+        "group": "Content",
+        "visibleWhen": {
+          "property": "fallbackMode",
+          "equals": "url"
+        }
+      },
+      "fallbackCodec": {
+        "format": "select",
+        "label": "Fallback codec",
+        "group": "Content",
+        "defaultValue": "auto",
+        "options": [
+          {
+            "label": "Auto",
+            "value": "auto"
+          },
+          {
+            "label": "H.264 (AVC)",
+            "value": "h264"
+          },
+          {
+            "label": "HEVC (H.265)",
+            "value": "hevc"
+          },
+          {
+            "label": "VP9",
+            "value": "vp9"
+          },
+          {
+            "label": "AV1",
+            "value": "av1"
+          }
+        ]
+      },
+      "fallbackCodecString": {
+        "label": "Fallback codec string override",
+        "group": "Content",
+        "placeholder": "e.g. avc1.640028",
+        "description": "Overrides the codecs parameter emitted for the fallback codec preset.",
+        "visibleWhen": {
+          "property": "fallbackCodec",
+          "notEquals": "auto"
+        }
+      },
+      "poster": {
+        "label": "Poster image",
+        "group": "Content"
+      },
+      "autoplay": {
+        "label": "Autoplay",
+        "group": "Playback",
+        "defaultValue": false,
+        "description": "Forces the video muted — browsers block unmuted autoplay."
+      },
+      "muted": {
+        "label": "Muted",
+        "group": "Playback",
+        "defaultValue": true
+      },
+      "loop": {
+        "label": "Loop",
+        "group": "Playback",
+        "defaultValue": false
+      },
+      "controls": {
+        "label": "Show controls",
+        "group": "Playback",
+        "defaultValue": true
+      },
+      "playsInline": {
+        "label": "Play inline",
+        "group": "Playback",
+        "defaultValue": true
+      },
+      "preload": {
+        "format": "select",
+        "label": "Preload",
+        "group": "Playback",
+        "defaultValue": "metadata",
+        "options": [
+          {
+            "label": "None",
+            "value": "none"
+          },
+          {
+            "label": "Metadata",
+            "value": "metadata"
+          },
+          {
+            "label": "Auto",
+            "value": "auto"
+          }
+        ]
+      },
+      "playbackRate": {
+        "label": "Playback rate",
+        "group": "Playback",
+        "min": 0.25,
+        "max": 4,
+        "step": 0.25,
+        "defaultValue": 1
+      },
+      "volume": {
+        "label": "Volume",
+        "group": "Playback",
+        "min": 0,
+        "max": 1,
+        "step": 0.05,
+        "defaultValue": 1
+      },
+      "pauseWhenHidden": {
+        "label": "Pause when hidden",
+        "group": "Playback",
+        "defaultValue": true,
+        "description": "Pauses playback when the browser tab is hidden. Does not auto-resume."
+      },
+      "fit": {
+        "format": "select",
+        "label": "Fit",
+        "group": "Appearance",
+        "defaultValue": "contain",
+        "options": [
+          {
+            "label": "Contain",
+            "value": "contain"
+          },
+          {
+            "label": "Cover",
+            "value": "cover"
+          },
+          {
+            "label": "Fill",
+            "value": "fill"
+          },
+          {
+            "label": "None",
+            "value": "none"
+          },
+          {
+            "label": "Scale down",
+            "value": "scale-down"
+          }
+        ]
+      },
+      "backgroundColor": {
+        "label": "Background color",
+        "group": "Appearance",
+        "defaultToken": "--hmi-bg"
+      },
+      "cornerRadius": {
+        "format": "select",
+        "label": "Corner radius",
+        "group": "Appearance",
+        "defaultValue": "none",
+        "options": [
+          {
+            "label": "None",
+            "value": "none"
+          },
+          {
+            "label": "Small",
+            "value": "sm"
+          },
+          {
+            "label": "Medium",
+            "value": "md"
+          },
+          {
+            "label": "Large",
+            "value": "lg"
+          }
+        ]
+      },
+      "borderStyle": {
+        "format": "select",
+        "label": "Border",
+        "group": "Appearance",
+        "defaultValue": "none",
+        "options": [
+          {
+            "label": "None",
+            "value": "none"
+          },
+          {
+            "label": "Subtle",
+            "value": "subtle"
+          },
+          {
+            "label": "Strong",
+            "value": "strong"
+          }
+        ]
+      },
+      "showDiagnostics": {
+        "label": "Show diagnostics",
+        "group": "Appearance",
+        "defaultValue": false,
+        "description": "Authoring aid: explains an unsupported codec instead of showing a blank frame. Off by default so an operator never meets a codec probe table."
+      },
+      "playWhen": {
+        "label": "Play when",
+        "group": "Data",
+        "description": "Plays while true, pauses while false. Left unbound, playback is manual."
+      },
+      "stateVariable": {
+        "label": "State variable",
+        "group": "Data",
+        "write": true,
+        "description": "Writes \"playing\", \"paused\" or \"ended\" as playback state changes."
+      },
+      "currentTimeVariable": {
+        "label": "Current time variable",
+        "group": "Data",
+        "write": true,
+        "description": "Writes the current playback position in seconds, throttled to once/second."
+      },
+      "onPlay": {
+        "label": "On Play",
+        "group": "Actions",
+        "event": "onPlay"
+      },
+      "onPause": {
+        "label": "On Pause",
+        "group": "Actions",
+        "event": "onPause"
+      },
+      "onEnded": {
+        "label": "On Ended",
+        "group": "Actions",
+        "event": "onEnded"
+      },
+      "onError": {
+        "label": "On Error",
+        "group": "Actions",
+        "event": "onError"
       }
     }
   },
@@ -2026,7 +2384,7 @@
     }
   },
   "Navigation/PageNavigator": {
-    "description": "Previous / next controls stepping through a page group.",
+    "description": "Previous / next controls stepping through a page group. Either control can be relabelled, gated on a condition, or hidden.",
     "icon": {
       "type": "builtin",
       "name": "arrows-left-right"
@@ -2035,6 +2393,44 @@
       "groupId": {
         "label": "Target group",
         "placeholder": "(nearest ancestor)"
+      },
+      "previousLabel": {
+        "label": "Previous label",
+        "defaultValue": "← Previous",
+        "placeholder": "← Previous"
+      },
+      "nextLabel": {
+        "label": "Next label",
+        "defaultValue": "Next →",
+        "placeholder": "Next →"
+      },
+      "showPrevious": {
+        "format": "onoff",
+        "label": "Show previous",
+        "group": "Appearance",
+        "defaultValue": true,
+        "description": "Drop the Previous control entirely, rather than only disabling it."
+      },
+      "showNext": {
+        "format": "onoff",
+        "label": "Show next",
+        "group": "Appearance",
+        "defaultValue": true,
+        "description": "Drop the Next control entirely, rather than only disabling it."
+      },
+      "prevEnabled": {
+        "format": "onoff",
+        "label": "Previous enabled",
+        "group": "Behaviour",
+        "defaultValue": true,
+        "description": "Bind a condition to hold Previous shut on a step."
+      },
+      "nextEnabled": {
+        "format": "onoff",
+        "label": "Next enabled",
+        "group": "Behaviour",
+        "defaultValue": true,
+        "description": "Bind a condition to hold Next shut on a step."
       }
     }
   },

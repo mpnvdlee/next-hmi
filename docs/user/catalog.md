@@ -117,6 +117,7 @@ Runs actions and can bind a writable boolean struct (bVisible / bEnabled / bValu
 | `iconName` | Icon | `icon` |
 | `color` | Color | `color` |
 | `variant` | Style | `String` |
+| `radius` | Radius | `String` |
 | `variable` | Variable | `struct` |
 | `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |
@@ -211,6 +212,7 @@ A tone-colored status pill, with an optional second line and pulsing dot.
 | `tone` | Tone | `String` |
 | `pulse` | Pulse | `Boolean` |
 | `iconName` | Icon | `icon` |
+| `radius` | Radius | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
@@ -247,6 +249,47 @@ Shows the signed-in user as an initialled badge, with optional sign-in and sign-
 | `actions` | On Press | `actions` |
 | `onSignIn` | On Sign In | `actions` |
 | `onSignOut` | On Sign Out | `actions` |
+| `visible` | Visible | `Boolean` |
+| `interactable` | Interactable | `Boolean` |
+
+### Video
+
+Plays a recorded video from a project asset or a URL.
+
+| Property | Label | Type |
+|---|---|---|
+| `sourceMode` | Source | `String` |
+| `asset` | Video asset | `video` |
+| `url` | Video URL | `String` |
+| `codec` | Codec | `String` |
+| `codecString` | Codec string override | `String` |
+| `fallbackMode` | Fallback source | `String` |
+| `fallbackAsset` | Fallback video asset | `video` |
+| `fallbackUrl` | Fallback video URL | `String` |
+| `fallbackCodec` | Fallback codec | `String` |
+| `fallbackCodecString` | Fallback codec string override | `String` |
+| `poster` | Poster image | `image` |
+| `autoplay` | Autoplay | `Boolean` |
+| `muted` | Muted | `Boolean` |
+| `loop` | Loop | `Boolean` |
+| `controls` | Show controls | `Boolean` |
+| `playsInline` | Play inline | `Boolean` |
+| `preload` | Preload | `String` |
+| `playbackRate` | Playback rate | `Float` |
+| `volume` | Volume | `Float` |
+| `pauseWhenHidden` | Pause when hidden | `Boolean` |
+| `fit` | Fit | `String` |
+| `backgroundColor` | Background color | `color` |
+| `cornerRadius` | Corner radius | `String` |
+| `borderStyle` | Border | `String` |
+| `showDiagnostics` | Show diagnostics | `Boolean` |
+| `playWhen` | Play when | `Boolean` |
+| `stateVariable` | State variable | `String` |
+| `currentTimeVariable` | Current time variable | `String` |
+| `onPlay` | On Play | `actions` |
+| `onPause` | On Pause | `actions` |
+| `onEnded` | On Ended | `actions` |
+| `onError` | On Error | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
@@ -492,7 +535,7 @@ Displays a numeric value with a label and unit.
 
 | Property | Label | Type |
 |---|---|---|
-| `variable` | Value | `Float | Integer | Boolean` |
+| `variable` | Value | `Float | Integer` |
 | `label` | Label | `String` |
 | `unit` | Unit | `String` |
 | `decimals` | Decimal places | `Integer` |
@@ -560,11 +603,17 @@ Sidebar or top-bar menu mirroring the page tree, with rich display options.
 
 ### Page Navigator
 
-Previous / next controls stepping through a page group.
+Previous / next controls stepping through a page group. Either control can be relabelled, gated on a condition, or hidden.
 
 | Property | Label | Type |
 |---|---|---|
 | `groupId` | Target group | `page-group` |
+| `previousLabel` | Previous label | `String` |
+| `nextLabel` | Next label | `String` |
+| `showPrevious` | Show previous | `Boolean` |
+| `showNext` | Show next | `Boolean` |
+| `prevEnabled` | Previous enabled | `Boolean` |
+| `nextEnabled` | Next enabled | `Boolean` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 

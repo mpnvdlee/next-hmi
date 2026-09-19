@@ -32,6 +32,12 @@ describe('propertySourceRules', () => {
     expect(sources).not.toContain('$loc');
   });
 
+  it('offers a video field the same sources as an image field', () => {
+    expect(getDefaultPropertySources('video')).toEqual(getDefaultPropertySources('image'));
+    expect(getDefaultPropertySources('video')).toContain('$static');
+    expect(getDefaultPropertySources('video')).toContain('$urlParam');
+  });
+
   it('returns empty for non-value-source types', () => {
     expect(getDefaultPropertySources('struct')).toEqual([]);
     expect(getDefaultPropertySources('actions')).toEqual([]);

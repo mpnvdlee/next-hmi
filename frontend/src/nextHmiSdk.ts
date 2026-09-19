@@ -62,6 +62,7 @@ import {
 } from '@shared/utils/phosphorIcons';
 import { useInlineSvg } from '@hmi/utils/useInlineSvg';
 import { withBase } from '@shared/utils/runtimeBase';
+import { assetSrc } from '@shared/utils/imageAsset';
 import { apiJson, isApiError } from '@shared/utils/api';
 import { useLanguageSelection } from '@hmi/hooks/useLanguageSelection';
 import { useAlarmSummary } from '@hmi/hooks/useAlarmSummary';
@@ -150,6 +151,7 @@ export const nextHmiSdk = {
   isCustomIconAssetPath,
   useInlineSvg,
   withBase,
+  assetSrc,
   apiJson,
   isApiError,
   executeWidgetActions,

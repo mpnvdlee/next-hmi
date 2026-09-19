@@ -15,7 +15,6 @@ import { randomUuid } from '@shared/utils/id';
 import { HmiScopeContext } from '../context/HmiScopeContext';
 import { useResolvedDialogs, useResolvedPageOverlays } from '../hooks/useOpenOverlays';
 import { renderRegionChildren } from '../components/renderRegion';
-import FallbackNavigationMenu from '../components/FallbackNavigationMenu';
 import ShellRegion from '../components/ShellRegion';
 import { useSidebarFullHeight } from '../components/ShellRegion/useSidebarFullHeight';
 import PageGroupPageView from '../components/PageGroupPageView';
@@ -156,8 +155,6 @@ export default function HmiView() {
       : {};
   const rootClassName = `hmi-root${resolvedShell.showScrollbars ? ' hmi-root--scrollbars' : ''}`;
 
-  // When leftSidebar is empty, fall back to the built-in NavigationMenu so the
-  // zero-config runtime keeps a navigation surface.
   const headerCfg: ShellRegionConfig = resolvedShell.header ?? {};
   const footerCfg: ShellRegionConfig = resolvedShell.footer ?? {};
   const leftSidebarCfg: ShellRegionConfig = resolvedShell.leftSidebar ?? {};
@@ -165,7 +162,7 @@ export default function HmiView() {
 
   const headerContent = renderRegionChildren(header);
   const footerContent = renderRegionChildren(footer);
-  const leftSidebarContent = renderRegionChildren(leftSidebar, <FallbackNavigationMenu />);
+  const leftSidebarContent = renderRegionChildren(leftSidebar);
   const rightSidebarContent = renderRegionChildren(rightSidebar);
 
   const {

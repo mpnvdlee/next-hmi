@@ -24,6 +24,7 @@ export const EDITOR_KINDS = [
   'color',
   'icon',
   'image',
+  'video',
   'option-list',
   'actions',
   'groups',

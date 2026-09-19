@@ -106,6 +106,7 @@ SDK_NAMES: tuple[str, ...] = (
     "isCustomIconAssetPath",
     "useInlineSvg",
     "withBase",
+    "assetSrc",
     "apiJson",
     "isApiError",
     "executeWidgetActions",

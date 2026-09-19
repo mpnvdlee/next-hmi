@@ -211,6 +211,12 @@ export type ImageValue = {
   path: string; // relative path under assets/, e.g. 'images/logo.png'
 };
 
+/** A selected video from the live project's assets/videos folder.
+ *  Carried as the payload of a `$static` value on `video`-typed fields. */
+export type VideoValue = {
+  path: string; // relative path under assets/, e.g. 'videos/clip.mp4'
+};
+
 /** $stringExpr: string template with wildcard placeholders and optional inline functions */
 export interface StringExprSource {
   $stringExpr: {

@@ -18,7 +18,7 @@ export const icon = { type: 'builtin', name: 'image-square' } as const;
 export default function LogoTitle({ properties, layout }: HmiWidgetProps) {
   const title = usePropString(properties, 'title', 'NEXT HMI');
   const subtitle = usePropString(properties, 'subtitle', '');
-  const logoUrl = usePropString(properties, 'logoUrl', '');
+  const logoUrl = assetSrc(usePropString(properties, 'logoUrl', ''));
 
   return (
     <div className="hmi-component hmi-logo-title" style={selfLayoutStyle(layout)}>

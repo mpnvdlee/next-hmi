@@ -2,7 +2,7 @@
 
 Every property value answers two questions:
 
-1. **What type is it?** — the kind of value (`String`, `Integer`, `Float`, `Boolean`, `DateTime`, `Date`, `Time`, `Duration`, `color`, `icon`, `image`). Any type can also be an **array** of that type.
+1. **What type is it?** — the kind of value (`String`, `Integer`, `Float`, `Boolean`, `DateTime`, `Date`, `Time`, `Duration`, `color`, `icon`, `image`, `video`). Any type can also be an **array** of that type.
 2. **Where does it come from?** — the source (a literal you typed, a datasource variable, the logged-in user, a computed expression, …).
 
 The **type is decided by the field**. A label's `text` field needs a `String`; a gauge's `value` field needs a `Float`. You don't pick the type — you pick a **source** that produces the type the field wants.
@@ -31,7 +31,8 @@ The kinds of value a field can hold. Any of these can also appear as an **array*
 | `Duration` | `"PT1H30M"`, `5400` | Spans of time, elapsed/remaining |
 | `color` | `"#ff0000"`, `"var(--accent)"` | Colors, fills, strokes |
 | `icon` | `{ type, name }` | Icon pickers |
-| `image` | `{ path }` | Image from `assets/` |
+| `image` | `{ path }` | Image from `assets/images/` |
+| `video` | `{ path }` | Recorded video from `assets/videos/` |
 
 ### Formats (subtypes)
 
@@ -48,6 +49,7 @@ The types above are the *runtime* kinds. A field may also declare an **optional 
 | `String` | `align` | A cross-axis alignment picker (`start`, `center`, `end`, `stretch`, …) |
 | `String` | `justify` | A main-axis alignment picker (`start`, `center`, `end`, `space-between`, …) |
 | `String` | `page` | A dropdown of the project's pages (stores the page id) |
+| `String` | `variables` | One row per variable key, each picked and reordered on its own; stored comma-separated. Like `actions`, the group takes no source pill — every row is its own property row |
 | `Float` | `percentage` | A 0–100 input with a `%` affix |
 | `Boolean` | `toggle` | A plain on/off switch (default) |
 | `Boolean` | `visibility` | A **Visible / Hidden** toggle |
@@ -69,13 +71,15 @@ Two kinds of source, by where their type comes from:
 
 > **Source availability is decided by the field's *type* alone.** A source is offered wherever its produced type matches the field — there is no per-field allowlist. The old `valueSourceTypes` schema field (which let a widget hand-pick which sources its inputs accept) is **removed**: it duplicated and fought the type system. Drop `valueSourceTypes` from every schema; the field's `type` is the single gate for which sources appear.
 
+The scalar types derive that list from each source's produced type. The editor kinds are not scalars, so theirs is written out per kind in `frontend/src/hmi/utils/propertySourceRules.ts` — `image` and `video` share one list (`$static`, `$var`, `$urlParam`, `$if`, `$switch`, `$widgetProp`), `icon` adds `$page` to it, and `color` drops `$urlParam` from it. `$componentProp` and `$result` are added on top by the editor wherever the surrounding scope offers them, on any type.
+
 ### Flexible sources (fit any field)
 
 These carry whatever type the field requires, so you can use them almost anywhere.
 
 | Source | Shape | What it gives you |
 |---|---|---|
-| `$static` | `{ $static: value }` | A fixed value you type or pick — the literal for **any** type, including a structured `icon` (`{ type, name }`) or `image` (`{ path }`). For those, the editor opens a picker rather than a text box |
+| `$static` | `{ $static: value }` | A fixed value you type or pick — the literal for **any** type, including a structured `icon` (`{ type, name }`), `image` (`{ path }`) or `video` (`{ path }`). For those, the editor opens a picker rather than a text box |
 | `$var` | `{ $var: { path, index? } }` | A live datasource / OPC-UA variable |
 | `$widgetProp` | `{ $widgetProp: { componentId, property, path? } }` | A property **exported by another component** on the page (sibling → me). `path` is an optional slash-path into a struct/array member of the exported value (e.g. `name` on a selected row) |
 | `$componentProp` | `{ $componentProp: name }` | A value **passed in by my parent** component or dialog (parent → me) |
@@ -203,7 +207,7 @@ The map is `OPCUA_TO_SIMPLE` in `backend/core/value_types.py`, mirrored in
 | *anything else* | `String` (fallback) |
 
 - **The datasources manager is where the tree lives.** Browsing or editing a datasource records, per leaf, its real `data_type`, whether it's `writable`, and an explicit `is_array` plus optional positive `array_length` for fixed arrays. Folders organise, folders-with-variables become structs, and the same scalar / array / struct / struct-array shapes described above are exactly what `$var` binds to.
-- **There are eight simple types, not five.** `VALUE_TYPES` is `Boolean`, `Integer`, `Float`, `String`, `DateTime`, `Date`, `Time`, `Duration` — `Date`, `Time` and `Duration` collapse from their own OPC-UA datatypes rather than riding on `DateTime`. `color`, `icon` and `image` are the exception: they have no OPC-UA datatype at all and exist only as field types, refined by the **field**, never by the variable.
+- **There are eight simple types, not five.** `VALUE_TYPES` is `Boolean`, `Integer`, `Float`, `String`, `DateTime`, `Date`, `Time`, `Duration` — `Date`, `Time` and `Duration` collapse from their own OPC-UA datatypes rather than riding on `DateTime`. `color`, `icon`, `image` and `video` are the exception: they have no OPC-UA datatype at all and exist only as field types, refined by the **field**, never by the variable.
 - **The static datasource works in reverse.** It has no live server, so picking a simple type synthesises a *representative* OPC-UA type to store (`SIMPLE_TO_REPRESENTATIVE`): `Integer` → `Int32`, `Float` → `Double`, `Boolean` → `Boolean`, `String` → `String`, `DateTime` / `Date` / `Time` → `DateTime`, `Duration` → `Double`. The round trip is therefore lossy for `Date`, `Time` and `Duration` — a static `Date` reads back as `DateTime`.
 
 ---

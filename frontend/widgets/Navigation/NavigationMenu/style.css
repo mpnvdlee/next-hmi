@@ -340,22 +340,18 @@
   gap: var(--hmi-space-snug);
 }
 
-@media (max-width: 1024px) {
-  [data-region] > .hmi-navmenu {
-    width: 176px;
-  }
-}
-
+/* Chrome only, for the same reason as the rule above: the width the sidebar
+   used to pin at each breakpoint is the author's to set from the Layout panel.
+   Leaving those pins behind is what made a region-hosted menu hug above
+   1024px and then jump to a hard 176px below it. */
 @media (max-width: 768px) {
   [data-region] > .hmi-navmenu {
-    width: 100%;
     max-height: 220px;
     border-right: none;
     border-bottom: 1px solid var(--hmi-border);
   }
 
   [data-region] > .hmi-navmenu.hmi-navmenu--collapsed {
-    width: 100%;
     max-height: 42px;
     overflow: hidden;
   }

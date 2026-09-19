@@ -1,0 +1,154 @@
+/* Chained with the global `.hmi-component`, which sets font-family and, on the
+   same selector, the shared `min-height: 0` default. The two-class selector
+   here wins on specificity rather than on stylesheet order, which a
+   runtime-injected sheet cannot rely on. */
+.hmi-component.hmi-video {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--hmi-video-bg, var(--hmi-bg));
+  min-height: 120px;
+}
+
+.hmi-video--border-subtle {
+  border: 1px solid var(--hmi-border);
+}
+
+.hmi-video--border-strong {
+  border: 2px solid var(--hmi-text-muted);
+}
+
+.hmi-video--radius-sm {
+  border-radius: var(--hmi-radius-sm);
+}
+
+.hmi-video--radius-md {
+  border-radius: var(--hmi-radius);
+}
+
+.hmi-video--radius-lg {
+  border-radius: var(--hmi-radius-lg);
+}
+
+.hmi-video__body {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.hmi-video__el {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  background: transparent;
+}
+
+.hmi-video__el--fit-cover {
+  object-fit: cover;
+}
+
+.hmi-video__el--fit-fill {
+  object-fit: fill;
+}
+
+.hmi-video__el--fit-none {
+  object-fit: none;
+}
+
+.hmi-video__el--fit-scale-down {
+  object-fit: scale-down;
+}
+
+.hmi-component.hmi-video--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hmi-video__placeholder {
+  color: var(--hmi-text-muted);
+  font-size: var(--hmi-type-caption-size);
+}
+
+.hmi-video__tap-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: color-mix(in srgb, var(--hmi-bg) 55%, transparent);
+  color: var(--hmi-text);
+  font-size: var(--hmi-type-body-size);
+  font-weight: var(--hmi-type-subheading-weight);
+  border: 0;
+  cursor: pointer;
+}
+
+.hmi-video__hint {
+  position: absolute;
+  right: var(--hmi-space-sm);
+  bottom: var(--hmi-space-sm);
+  padding: var(--hmi-space-hair) var(--hmi-space-sm);
+  background: var(--hmi-surface);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius-sm);
+  color: var(--hmi-text-muted);
+  font-size: var(--hmi-type-caption-size);
+  pointer-events: none;
+}
+
+.hmi-video__diagnostics {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-sm);
+  align-items: center;
+  justify-content: center;
+  padding: var(--hmi-space-lg);
+  background: var(--hmi-video-bg, var(--hmi-bg));
+  color: var(--hmi-text-muted);
+  font-size: var(--hmi-type-caption-size);
+  text-align: center;
+  overflow: auto;
+}
+
+.hmi-video__diagnostics-title {
+  color: var(--hmi-text);
+  font-size: var(--hmi-type-body-size);
+  font-weight: var(--hmi-type-subheading-weight);
+}
+
+.hmi-video__diagnostics-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-hair);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-width: 100%;
+}
+
+.hmi-video__diagnostics-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hmi-space-sm);
+  justify-content: center;
+}
+
+.hmi-video__diagnostics-role {
+  color: var(--hmi-text);
+}
+
+.hmi-video__diagnostics-status {
+  color: var(--hmi-warn);
+}
+
+.hmi-video__diagnostics-note {
+  max-width: 42ch;
+  margin: 0;
+}

@@ -497,7 +497,7 @@ Runtime implementation:
 `HmiView`:
 
 - loads config and translations
-- renders `TopBar`, `NavigationMenu`, header, page body, footer, and active dialog
+- renders the shell regions (header, sidebars, footer), the page body and the active dialog
 - sends visible binding keys to the backend
 
 ### PreviewView

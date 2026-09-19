@@ -19,6 +19,29 @@ describe('Image', () => {
     expect(img).toHaveAttribute('src', '/assets/images/plant.png');
   });
 
+  it('roots a bound asset path under /assets, the way a $static payload arrives', () => {
+    // A $var or $urlParam on the asset field delivers the stored path verbatim;
+    // in `src` a project-relative one would resolve against the page url.
+    renderImage({ src: 'images/plant.png', alt: 'Plant overview' });
+
+    const img = screen.getByRole('img', { name: 'Plant overview' });
+    expect(img).toHaveAttribute('src', '/assets/images/plant.png');
+  });
+
+  it('leaves an already-resolved asset url alone', () => {
+    renderImage({ src: { $static: { path: 'images/plant.png' } }, alt: 'Plant overview' });
+
+    const img = screen.getByRole('img', { name: 'Plant overview' });
+    expect(img).toHaveAttribute('src', '/assets/images/plant.png');
+  });
+
+  it('leaves a remote url alone', () => {
+    renderImage({ src: 'https://cdn.example.com/plant.png', alt: 'Plant overview' });
+
+    const img = screen.getByRole('img', { name: 'Plant overview' });
+    expect(img).toHaveAttribute('src', 'https://cdn.example.com/plant.png');
+  });
+
   it('shows a placeholder when no src is set', () => {
     renderImage({});
 

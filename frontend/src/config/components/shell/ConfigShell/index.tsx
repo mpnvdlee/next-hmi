@@ -7,6 +7,7 @@ import VariableBindingPicker from '@config/components/editor/VariableBindingPick
 import WidgetPropPicker from '@config/components/editor/WidgetPropPicker';
 import IconSourcePicker from '@config/components/editor/IconSourcePicker';
 import ImageSourcePicker from '@config/components/editor/ImageSourcePicker';
+import VideoSourcePicker from '@config/components/editor/VideoSourcePicker';
 import { ConfigToastStack } from '../ConfigToastStack';
 import { ConfigUpdatedBanner } from '../ConfigUpdatedBanner';
 import ConfigTopBar from '../ConfigTopBar';
@@ -233,6 +234,7 @@ export default function ConfigShell() {
       <WidgetPropPicker />
       <IconSourcePicker />
       <ImageSourcePicker />
+      <VideoSourcePicker />
       <ConfigToastStack />
     </div>
   );

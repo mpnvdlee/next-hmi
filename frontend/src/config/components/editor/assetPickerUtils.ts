@@ -3,12 +3,14 @@ import { apiJson } from '@shared/utils/api';
 import { withBase } from '@shared/utils/runtimeBase';
 import { matchesSearchWords } from '@shared/utils/search';
 
-type AssetType = 'icon' | 'image';
+type AssetType = 'icon' | 'image' | 'video';
 
 interface WorkspaceAsset {
   name: string;
   path: string;
   type: AssetType;
+  /** File size in bytes, as reported by /api/assets. */
+  size: number;
 }
 
 export interface FolderContents<T> {
@@ -27,7 +29,8 @@ export function assetName(path: string): string {
   return parts[parts.length - 1] ?? path;
 }
 
-/** Folder path relative to the assets/icons or assets/images root, e.g. "path/to/pump.svg" -> "path/to". */
+/** Folder path relative to the asset-type root (assets/icons, assets/images,
+ *  assets/videos), e.g. "path/to/pump.svg" -> "path/to". */
 export function assetFolder(path: string): string {
   const parts = path.split('/').slice(1, -1);
   return parts.join('/');

@@ -68,6 +68,9 @@ You don't hand-wire links. Navigation widgets read the page tree and stay in syn
 - **Navigation Menu** — A sidebar or top-bar menu that mirrors the page tree automatically. Choose orientation, icon/label display, flat vs. tree hierarchy, and how sub-menus expand.
 - **Tab Bar** — Switches between the sibling pages of a group as tabs — ideal inside a page group.
 - **Breadcrumb** — Shows the trail of pages leading to the current one, with an optional home icon.
-- **Page Navigator** — Back / forward / up controls scoped to a page group's navigation stack.
+- **Page Navigator** — Back / forward / up controls scoped to a page group's navigation
+  stack. **Previous enabled** and **Next enabled** each take a binding, so a step can hold
+  one control shut until the operator has filled something in while the other stays live;
+  **Show previous** and **Show next** drop a control altogether rather than disabling it.
 
 Put these in a **shell region** (see [Layout](layout.md)) so they persist while operators move between screens.

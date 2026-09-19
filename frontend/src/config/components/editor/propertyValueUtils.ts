@@ -275,14 +275,24 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
 }
 
 /**
+ * The payload inside a `{ $static: T }` wrapper, left as itself; a bare value is
+ * returned unchanged. The one place the wrapper shape is read — a `{ $loc }`
+ * option has to compare as the object it is, and the editors that need the
+ * payload rather than a string would otherwise each test the `$` key by hand.
+ */
+export function unwrapStatic(value: unknown): unknown {
+  if (value !== null && typeof value === 'object' && '$static' in (value as object)) {
+    return (value as Record<string, unknown>).$static;
+  }
+  return value;
+}
+
+/**
  * Extract a value from a plain primitive or `{ $static: T }` source, stringified.
  * Returns `fallback` (default `''`) when the value is null/undefined — suitable for
  * controlled `<input>` values regardless of the underlying type.
  */
 export function getStaticString(value: unknown, fallback = ''): string {
-  if (value == null) return fallback;
-  if (typeof value === 'object' && '$static' in (value as Record<string, unknown>)) {
-    return String((value as Record<string, unknown>).$static ?? fallback);
-  }
-  return String(value);
+  const inner = unwrapStatic(value);
+  return inner == null ? fallback : String(inner);
 }

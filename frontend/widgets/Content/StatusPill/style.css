@@ -9,7 +9,7 @@
   box-sizing: border-box;
   padding: var(--hmi-space-snug) var(--hmi-space-lg);
   border: 1px solid var(--hmi-border);
-  border-radius: var(--hmi-radius-full);
+  border-radius: var(--hmi-status-pill-radius, var(--hmi-radius-full));
   font-family: var(--hmi-type-label-font);
   font-size: var(--hmi-type-label-size);
   font-weight: var(--hmi-type-subheading-weight);

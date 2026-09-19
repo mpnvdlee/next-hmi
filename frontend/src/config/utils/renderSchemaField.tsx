@@ -6,7 +6,7 @@ import PageSelect from '@config/components/ui/PageSelect';
 import { getStaticString } from '@config/components/editor/propertyValueUtils';
 import { primaryType } from '@shared/utils/valueTypes';
 import { parseTokenVar, resolveTokenValue, tokenLabel } from '@shared/utils/themeDefaultHint';
-import { IconStaticField, ImageStaticField } from './AssetStaticFields';
+import { IconStaticField, ImageStaticField, VideoStaticField } from './AssetStaticFields';
 import { LengthField } from './LengthField';
 import SlotNameField from './SlotNameField';
 import BoolButtonGroup from '@config/components/ui/BoolButtonGroup';
@@ -249,6 +249,13 @@ export function renderSchemaField(
   if (type === 'image') {
     return (
       <ImageStaticField value={value} onChange={onChange} label={schema.label} mixed={mixed} />
+    );
+  }
+
+  // 'video' static editor — opens the video asset picker.
+  if (type === 'video') {
+    return (
+      <VideoStaticField value={value} onChange={onChange} label={schema.label} mixed={mixed} />
     );
   }
 

@@ -201,6 +201,10 @@ def active_images_dir() -> Path:
     return active_assets_dir() / "images"
 
 
+def active_videos_dir() -> Path:
+    return active_assets_dir() / "videos"
+
+
 def active_config_dir() -> Path:
     return active_project_root()
 
@@ -272,6 +276,7 @@ def ensure_active_project_dirs() -> None:
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     active_icons_dir().mkdir(parents=True, exist_ok=True)
     active_images_dir().mkdir(parents=True, exist_ok=True)
+    active_videos_dir().mkdir(parents=True, exist_ok=True)
 
     # Translation baseline so the language APIs work on first launch.
     default_csv = active_translations_dir() / "Default.csv"

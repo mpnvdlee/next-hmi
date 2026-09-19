@@ -366,6 +366,12 @@
             "defaultValue": "solid"
           },
           {
+            "key": "radius",
+            "label": "Radius",
+            "type": "String",
+            "group": "Appearance"
+          },
+          {
             "key": "variable",
             "label": "Variable",
             "type": "struct"
@@ -699,6 +705,12 @@
             "group": "Appearance"
           },
           {
+            "key": "radius",
+            "label": "Radius",
+            "type": "String",
+            "group": "Appearance"
+          },
+          {
             "key": "visible",
             "label": "Visible",
             "type": "Boolean",
@@ -853,6 +865,236 @@
           {
             "key": "onSignOut",
             "label": "On Sign Out",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "Video",
+        "name": "Video",
+        "description": "Plays a recorded video from a project asset or a URL.",
+        "props": [
+          {
+            "key": "sourceMode",
+            "label": "Source",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "asset"
+          },
+          {
+            "key": "asset",
+            "label": "Video asset",
+            "type": "video",
+            "group": "Content"
+          },
+          {
+            "key": "url",
+            "label": "Video URL",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "codec",
+            "label": "Codec",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "auto"
+          },
+          {
+            "key": "codecString",
+            "label": "Codec string override",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "fallbackMode",
+            "label": "Fallback source",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "asset"
+          },
+          {
+            "key": "fallbackAsset",
+            "label": "Fallback video asset",
+            "type": "video",
+            "group": "Content"
+          },
+          {
+            "key": "fallbackUrl",
+            "label": "Fallback video URL",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "fallbackCodec",
+            "label": "Fallback codec",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "auto"
+          },
+          {
+            "key": "fallbackCodecString",
+            "label": "Fallback codec string override",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "poster",
+            "label": "Poster image",
+            "type": "image",
+            "group": "Content"
+          },
+          {
+            "key": "autoplay",
+            "label": "Autoplay",
+            "type": "Boolean",
+            "group": "Playback",
+            "defaultValue": false
+          },
+          {
+            "key": "muted",
+            "label": "Muted",
+            "type": "Boolean",
+            "group": "Playback",
+            "defaultValue": true
+          },
+          {
+            "key": "loop",
+            "label": "Loop",
+            "type": "Boolean",
+            "group": "Playback",
+            "defaultValue": false
+          },
+          {
+            "key": "controls",
+            "label": "Show controls",
+            "type": "Boolean",
+            "group": "Playback",
+            "defaultValue": true
+          },
+          {
+            "key": "playsInline",
+            "label": "Play inline",
+            "type": "Boolean",
+            "group": "Playback",
+            "defaultValue": true
+          },
+          {
+            "key": "preload",
+            "label": "Preload",
+            "type": "String",
+            "group": "Playback",
+            "defaultValue": "metadata"
+          },
+          {
+            "key": "playbackRate",
+            "label": "Playback rate",
+            "type": "Float",
+            "group": "Playback",
+            "defaultValue": 1
+          },
+          {
+            "key": "volume",
+            "label": "Volume",
+            "type": "Float",
+            "group": "Playback",
+            "defaultValue": 1
+          },
+          {
+            "key": "pauseWhenHidden",
+            "label": "Pause when hidden",
+            "type": "Boolean",
+            "group": "Playback",
+            "defaultValue": true
+          },
+          {
+            "key": "fit",
+            "label": "Fit",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "contain"
+          },
+          {
+            "key": "backgroundColor",
+            "label": "Background color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "cornerRadius",
+            "label": "Corner radius",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "none"
+          },
+          {
+            "key": "borderStyle",
+            "label": "Border",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "none"
+          },
+          {
+            "key": "showDiagnostics",
+            "label": "Show diagnostics",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": false
+          },
+          {
+            "key": "playWhen",
+            "label": "Play when",
+            "type": "Boolean",
+            "group": "Data"
+          },
+          {
+            "key": "stateVariable",
+            "label": "State variable",
+            "type": "String",
+            "group": "Data"
+          },
+          {
+            "key": "currentTimeVariable",
+            "label": "Current time variable",
+            "type": "String",
+            "group": "Data"
+          },
+          {
+            "key": "onPlay",
+            "label": "On Play",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "onPause",
+            "label": "On Pause",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "onEnded",
+            "label": "On Ended",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "onError",
+            "label": "On Error",
             "type": "actions",
             "group": "Actions"
           },
@@ -1906,7 +2148,7 @@
           {
             "key": "variable",
             "label": "Value",
-            "type": "Float | Integer | Boolean",
+            "type": "Float | Integer",
             "group": "Data"
           },
           {
@@ -2170,12 +2412,52 @@
       {
         "type": "PageNavigator",
         "name": "Page Navigator",
-        "description": "Previous / next controls stepping through a page group.",
+        "description": "Previous / next controls stepping through a page group. Either control can be relabelled, gated on a condition, or hidden.",
         "props": [
           {
             "key": "groupId",
             "label": "Target group",
             "type": "page-group"
+          },
+          {
+            "key": "previousLabel",
+            "label": "Previous label",
+            "type": "String",
+            "defaultValue": "← Previous"
+          },
+          {
+            "key": "nextLabel",
+            "label": "Next label",
+            "type": "String",
+            "defaultValue": "Next →"
+          },
+          {
+            "key": "showPrevious",
+            "label": "Show previous",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": true
+          },
+          {
+            "key": "showNext",
+            "label": "Show next",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": true
+          },
+          {
+            "key": "prevEnabled",
+            "label": "Previous enabled",
+            "type": "Boolean",
+            "group": "Behaviour",
+            "defaultValue": true
+          },
+          {
+            "key": "nextEnabled",
+            "label": "Next enabled",
+            "type": "Boolean",
+            "group": "Behaviour",
+            "defaultValue": true
           },
           {
             "key": "visible",

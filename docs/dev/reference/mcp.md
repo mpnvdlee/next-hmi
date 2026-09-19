@@ -127,11 +127,11 @@ max 500). MCP resources are not exposed; clients that only surface tools
 - `translations_set_cell(dict_name, key, language_code, value)`
 
 ### Assets
-- `assets_list(cursor?, limit?)` — metadata only (fetch binaries via `GET /assets/<path>`)
+- `assets_list(cursor?, limit?)` — metadata only (fetch binaries via `GET /assets/<path>`); each item is `{ name, path, type, mime, size }` with `type` one of `icon` | `image` | `video`
 - `assets_upload(name, group, content, encoding, mime?, overwrite?)` — `group` is `"icons"` or `"images"`; `name` must match `[A-Za-z0-9_\-.]+`. `encoding` selects the payload format:
   - `"svg"` — `content` is UTF-8 SVG markup; `mime` defaults to `image/svg+xml`. Sanitized before write: `<script>` and `<foreignObject>` tags are stripped, `on*` event-handler attributes are removed, and `href`/`xlink:href` values starting with `javascript:` are cleared.
   - `"base64"` — `content` is base64-encoded binary; `mime` is required (e.g. `image/png`, `image/webp`).
-  Both encodings enforce a **5 MB** payload limit.
+  Both encodings enforce a **5 MB** payload limit. `group` rejects anything but `icons` and `images` outright, so there is no video upload path at all — raising the cap would not add one. The reasoning behind that is the cap: a clip does not fit a 5 MB base64 payload. `assets/videos/` is filled by copying files in or by a project import; `assets_list` and `assets_delete` cover them either way.
 - `assets_delete(path, confirm?)` *destructive — refuses (in both dry-run and confirmed paths) if any page or component references the asset*
 
 ### Read-only domains

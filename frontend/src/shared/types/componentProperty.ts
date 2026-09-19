@@ -50,6 +50,7 @@ export const VALUE_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: 'select', label: 'Select (enum)' },
   { value: 'icon', label: 'Icon' },
   { value: 'image', label: 'Image' },
+  { value: 'video', label: 'Video' },
   { value: 'struct', label: 'Struct' },
   { value: 'actions', label: 'Actions' },
   { value: 'widgets', label: 'Widget slot' },

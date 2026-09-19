@@ -38,6 +38,7 @@ def test_active_paths_compose_under_project_root(live_project_root: Path) -> Non
     assert storage.active_certs_dir() == project / "certs"
     assert storage.active_icons_dir() == project / "assets" / "icons"
     assert storage.active_images_dir() == project / "assets" / "images"
+    assert storage.active_videos_dir() == project / "assets" / "videos"
 
 
 def test_switching_live_project_changes_resolved_paths(monkeypatch, tmp_path: Path) -> None:

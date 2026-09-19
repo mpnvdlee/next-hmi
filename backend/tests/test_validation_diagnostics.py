@@ -33,6 +33,7 @@ def ctx() -> ValidationContext:
         translation_keys=frozenset({"app.title"}),
         icon_assets=frozenset({"icons/logo.svg"}),
         image_assets=frozenset({"images/logo.png"}),
+        video_assets=frozenset({"videos/intro.mp4"}),
     )
 
 
@@ -226,6 +227,40 @@ def test_image_known_does_not_warn(ctx):
     _validate_property_value(
         {"$static": {"path": "images/logo.png"}},
         {"type": "image"}, ctx, "/p", report,
+    )
+    assert report.warnings == []
+
+
+def test_video_unknown(ctx):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$static": {"path": "videos/missing.mp4"}},
+        {"type": "video"}, ctx, "/p", report,
+    )
+    w = _warn(report)
+    assert (w.code, w.severity) == ("video-unknown", "error")
+
+
+def test_video_known_does_not_warn(ctx):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$static": {"path": "videos/intro.mp4"}},
+        {"type": "video"}, ctx, "/p", report,
+    )
+    assert report.warnings == []
+
+
+@pytest.mark.parametrize("field_type,url", [
+    ("video", "https://cdn.example.com/clip.mp4"),
+    ("video", "blob:http://localhost/9f2c"),
+    ("image", "https://cdn.example.com/logo.png"),
+    ("image", "data:image/png;base64,iVBORw0KGgo="),
+])
+def test_absolute_asset_url_is_not_an_unknown_asset(ctx, field_type, url):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$static": {"path": url}},
+        {"type": field_type}, ctx, "/p", report,
     )
     assert report.warnings == []
 

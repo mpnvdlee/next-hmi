@@ -19,6 +19,7 @@ import {
   PreviewText,
 } from '../../editor/PropertySourceEditor/editors/shared';
 import './style.css';
+import { formatBytes } from '@shared/utils/formatBytes';
 
 // The historian stores every sample as a REAL, so only variables that coerce to
 // a number are loggable (see `historian_manager.on_variable_change`).
@@ -33,18 +34,6 @@ const DEFAULT_RETENTION_SECONDS = 30 * DAY_SECONDS;
 // on the next cleanup pass.
 function toDayText(seconds: number): string {
   return String(Number((seconds / DAY_SECONDS).toFixed(4)));
-}
-
-function formatBytes(bytes: number): string {
-  if (!bytes) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let i = 0;
-  let val = bytes;
-  while (val >= 1024 && i < units.length - 1) {
-    val /= 1024;
-    i++;
-  }
-  return `${val.toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
 }
 
 export default function HistorianConfig() {

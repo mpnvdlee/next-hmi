@@ -15,10 +15,16 @@ export const schema = {
   },
   variables: {
     type: 'string' as const,
+    format: 'variables' as const,
     label: 'Variables',
     group: 'Data',
-    description:
-      'Comma-separated variable paths, e.g. testserver:Motor1/Speed, testserver:Motor1/Temperature.',
+    description: 'One line per variable, drawn — and coloured — in this order.',
+    // Recorded mode can only draw what the historian stores, so the picker is
+    // its tracked list. Live mode buffers values off the connection, so it
+    // offers the whole variable tree. Gated against 'live' for the same reason
+    // the visibility rules below are: the editor reads the stored property and
+    // knows nothing of the 'history' default.
+    recordedWhen: { property: 'source', notEquals: 'live' },
   },
   timeRange: {
     type: 'string' as const,

@@ -59,7 +59,6 @@ import type { ComponentDefinition } from '@shared/types/componentTypes';
 import type { ThemeConfig } from '@shared/types/theme';
 import WidgetRenderer from '@hmi/components/WidgetRenderer';
 import { renderRegionChildren } from '@hmi/components/renderRegion';
-import FallbackNavigationMenu from '@hmi/components/FallbackNavigationMenu';
 import ShellRegion from '@hmi/components/ShellRegion';
 import { useSidebarFullHeight } from '@hmi/components/ShellRegion/useSidebarFullHeight';
 import PageGroupPageView from '@hmi/components/PageGroupPageView';
@@ -562,11 +561,10 @@ export default function PreviewView() {
     components: WidgetConfig[],
     focused: boolean,
     emptyHint: string,
-    fallback: React.ReactNode = null,
   ): React.ReactNode =>
     renderRegionChildren(
       components,
-      focused ? <span className="hmi-area--empty-hint">{emptyHint}</span> : fallback,
+      focused ? <span className="hmi-area--empty-hint">{emptyHint}</span> : null,
     );
 
   const headerContent = renderRegion(header, isHeader, 'Header area — add components via the tree');
@@ -575,7 +573,6 @@ export default function PreviewView() {
     leftSidebar,
     isLeftSidebar,
     'Left sidebar — add components via the tree',
-    <FallbackNavigationMenu />,
   );
   const rightSidebarContent = renderRegion(
     rightSidebar,

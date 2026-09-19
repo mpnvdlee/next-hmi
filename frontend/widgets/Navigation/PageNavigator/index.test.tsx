@@ -64,6 +64,8 @@ function renderNavigator(
 
 const prevButton = () => screen.getByRole('button', { name: 'Previous page' });
 const nextButton = () => screen.getByRole('button', { name: 'Next page' });
+const queryPrev = () => screen.queryByRole('button', { name: 'Previous page' });
+const queryNext = () => screen.queryByRole('button', { name: 'Next page' });
 
 describe('PageNavigator', () => {
   beforeEach(() => {
@@ -171,6 +173,73 @@ describe('PageNavigator', () => {
       </MemoryRouter>,
     );
     expect(container.querySelector('.hmi-page-navigator')).toBeNull();
+  });
+
+  it('holds next shut while its gate is closed, leaving previous live', async () => {
+    const user = userEvent.setup();
+    renderNavigator({ nextEnabled: false });
+    expect(nextButton()).toBeDisabled();
+    expect(prevButton()).toBeEnabled();
+    await user.click(prevButton());
+    expect(onNavigate).toHaveBeenCalledWith('overview');
+  });
+
+  it('holds previous shut while its gate is closed, leaving next live', async () => {
+    const user = userEvent.setup();
+    renderNavigator({ prevEnabled: false });
+    expect(prevButton()).toBeDisabled();
+    expect(nextButton()).toBeEnabled();
+    await user.click(nextButton());
+    expect(onNavigate).toHaveBeenCalledWith('alarms');
+  });
+
+  it('gates each control independently', () => {
+    renderNavigator({ prevEnabled: false, nextEnabled: false });
+    expect(prevButton()).toBeDisabled();
+    expect(nextButton()).toBeDisabled();
+  });
+
+  it('navigates once a gate opens', async () => {
+    const user = userEvent.setup();
+    renderNavigator({ prevEnabled: true, nextEnabled: true });
+    await user.click(nextButton());
+    expect(onNavigate).toHaveBeenCalledWith('alarms');
+  });
+
+  it('treats unset gates as open', () => {
+    renderNavigator({});
+    expect(prevButton()).toBeEnabled();
+    expect(nextButton()).toBeEnabled();
+  });
+
+  it('keeps an end-of-group control shut even when its gate is open', () => {
+    renderNavigator({ prevEnabled: true, nextEnabled: true }, [entry(LINE, 'overview')]);
+    expect(prevButton()).toBeDisabled();
+  });
+
+  it('drops the previous control when it is turned off', () => {
+    renderNavigator({ showPrevious: false });
+    expect(queryPrev()).toBeNull();
+    expect(nextButton()).toBeEnabled();
+  });
+
+  it('drops the next control when it is turned off', () => {
+    renderNavigator({ showNext: false });
+    expect(queryNext()).toBeNull();
+    expect(prevButton()).toBeEnabled();
+  });
+
+  it('keeps its root when both controls are turned off, so it stays selectable', () => {
+    const { container } = renderNavigator({ showPrevious: false, showNext: false });
+    expect(container.querySelector('.hmi-page-navigator')).not.toBeNull();
+    expect(queryPrev()).toBeNull();
+    expect(queryNext()).toBeNull();
+  });
+
+  it('shows both controls by default', () => {
+    renderNavigator({});
+    expect(queryPrev()).not.toBeNull();
+    expect(queryNext()).not.toBeNull();
   });
 
   it('offers only a way back in when the active page is not in the group', async () => {

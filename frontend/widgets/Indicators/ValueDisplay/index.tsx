@@ -1,7 +1,7 @@
 /* @jsxRuntime classic */
 export const schema = {
   variable: {
-    type: ['float', 'integer', 'boolean'] as const,
+    type: ['float', 'integer'] as const,
     label: 'Value',
     group: 'Data',
   },

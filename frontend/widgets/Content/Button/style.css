@@ -33,7 +33,7 @@
   background: var(--hmi-accent);
   color: var(--hmi-accent-on);
   border: 1px solid var(--hmi-accent);
-  border-radius: var(--hmi-radius);
+  border-radius: var(--hmi-btn-radius, var(--hmi-radius));
   font-size: var(--hmi-type-body-size);
   font-weight: var(--hmi-type-subheading-weight);
   letter-spacing: var(--hmi-type-body-tracking);

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { IconValue, ImageValue, VariableBinding } from '@shared/types/config';
+import type { IconValue, ImageValue, VideoValue, VariableBinding } from '@shared/types/config';
 import type { ComponentOption } from '@config/components/editor/WidgetOptionsContext';
 import type { ComponentPropertySchema } from '@shared/types/componentProperty';
 import type { RequiredFieldEntry, SchemaField } from '@shared/types/widgetSchema';
@@ -82,12 +82,14 @@ interface WidgetPropPickerTarget extends WidgetPropPickerOptions {
 
 type AssetPickerTarget =
   | { type: 'icon'; onPick: (value: IconValue) => void; label?: string }
-  | { type: 'image'; onPick: (value: ImageValue) => void; label?: string };
+  | { type: 'image'; onPick: (value: ImageValue) => void; label?: string }
+  | { type: 'video'; onPick: (value: VideoValue) => void; label?: string };
 
 /** `label` names the property being set — the picker shows it before its own action. */
 interface OpenAssetPicker {
   (type: 'icon', onPick: (value: IconValue) => void, label?: string): void;
   (type: 'image', onPick: (value: ImageValue) => void, label?: string): void;
+  (type: 'video', onPick: (value: VideoValue) => void, label?: string): void;
 }
 
 interface EditorDomainStore {

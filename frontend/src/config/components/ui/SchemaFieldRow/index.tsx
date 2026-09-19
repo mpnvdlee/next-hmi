@@ -25,6 +25,7 @@ import GroupsField from '../GroupsField';
 import ImageIndicatorsEditor from '../../editor/ImageIndicatorsEditor';
 import ChildPositionsEditor from '../../editor/ChildPositionsEditor';
 import ItemsInput, { type ItemEntry } from '../../editor/ItemsInput';
+import VariableListInput from '../../editor/VariableListInput';
 import PageGroupSelect from '../PageGroupSelect';
 import PropRow from '../PropRow';
 import FieldGroup from '../FieldGroup';
@@ -243,6 +244,26 @@ export default function SchemaFieldRow({
           headerTitle={titleText}
           description={schema.description}
           pathPrefix={path}
+        />
+      </div>
+    );
+  }
+
+  // A variable list has no single value of its own to badge/summarize/collapse
+  // either — each entry is its own row, so it takes the same plain-header shape
+  // as an action list. Which variables its rows may name is decided by a sibling
+  // property, which only this row is handed.
+  if (schema.format === 'variables') {
+    return (
+      <div className="cfg-field-group">
+        <VariableListInput
+          value={value}
+          onChange={onChange}
+          label={titleText}
+          description={schema.description}
+          recordedOnly={
+            schema.recordedWhen ? evaluateVisibility(schema.recordedWhen, allProperties) : false
+          }
         />
       </div>
     );

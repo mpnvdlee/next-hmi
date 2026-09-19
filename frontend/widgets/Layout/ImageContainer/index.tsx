@@ -87,7 +87,7 @@ function markerLabel(entry: Placement | undefined, treeIndex: number): string {
 export default function ImageContainer({ properties, layout, childConfigs }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
 
-  const src = getPropString(properties, 'src', '', evalCtx);
+  const src = assetSrc(getPropString(properties, 'src', '', evalCtx));
   const alt = getPropString(properties, 'alt', '', evalCtx);
   const fitRaw = getPropString(properties, 'fit', 'contain', evalCtx);
   const fit = VALID_FITS.includes(fitRaw) ? fitRaw : 'contain';
@@ -120,11 +120,12 @@ export default function ImageContainer({ properties, layout, childConfigs }: Hmi
   // A child hidden by its own `visible` property keeps its marker letter: the
   // letters are tree-order labels the placement panel shows, so they must not
   // shuffle when a binding flips.
+  const positionById = new Map(
+    Array.isArray(rawPositions) ? rawPositions.map((p) => [p.id, p]) : [],
+  );
   const placedChildren = allChildren
     .map((child, treeIndex) => {
-      const entry = Array.isArray(rawPositions)
-        ? rawPositions.find((p) => p.id === child.id)
-        : undefined;
+      const entry = positionById.get(child.id);
       return {
         child,
         x: clamp01(entry?.x ?? 0.5),
@@ -174,7 +175,7 @@ export default function ImageContainer({ properties, layout, childConfigs }: Hmi
               <span
                 key={`m-${child.id}`}
                 className="hmi-imgctn__marker"
-                style={{ left: `${x * 100}%`, top: `${y * 100}%` }}
+                style={{ '--hmi-imgctn-x': `${x * 100}%`, '--hmi-imgctn-y': `${y * 100}%` }}
               >
                 {label}
               </span>

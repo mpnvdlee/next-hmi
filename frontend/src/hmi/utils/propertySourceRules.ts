@@ -63,6 +63,7 @@ const EDITOR_KIND_SOURCES: Record<string, PropertySourceKey[]> = {
   color: ['$static', '$var', '$if', '$switch', '$widgetProp'],
   icon: ['$static', '$var', '$urlParam', '$if', '$switch', '$page', '$widgetProp'],
   image: ['$static', '$var', '$urlParam', '$if', '$switch', '$widgetProp'],
+  video: ['$static', '$var', '$urlParam', '$if', '$switch', '$widgetProp'],
   'option-list': ['$static', '$user', '$var', '$languages', '$widgetProp'],
   // A bound array-of-records (e.g. a data grid's rows). No static — always
   // resolves to a real array from a variable, the recipe list, or an export.
@@ -88,6 +89,7 @@ export const SOURCE_CAPABLE_TYPES = new Set([
   'color',
   'icon',
   'image',
+  'video',
   'option-list',
   'record-list',
 ]);
