@@ -105,3 +105,6 @@ You don't hand-wire links. Navigation widgets read the page tree and stay in syn
   **Show previous** and **Show next** drop a control altogether rather than disabling it.
 
 Put these in a **shell region** (see [Layout](layout.md)) so they persist while operators move between screens.
+
+> [!NOTE]
+> **Size a Navigation Menu from the Layout panel**, the same as any other widget — its **Width** and **Height** rows are what decide how much room it takes. It has no width of its own to fight you: the default **Hug** makes it as wide as its labels need, and **Fill** hands it the rest of the sidebar.

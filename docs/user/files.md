@@ -27,6 +27,14 @@ There is no upload button in the editor today. Assets are added by putting the f
 
 The runtime serves the whole tree read-only at `/assets/…`, mirroring the folder layout — `assets/images/logo.svg` is served at `/assets/images/logo.svg`. That is also how you reference one from a place with no picker, such as the shell's `appIcon` setting.
 
+> [!NOTE]
+> **Your SVG takes the widget's colour.** Whatever paint an icon declares —
+> `fill`, `stroke`, an inline `style`, or a `<style>` block — is repointed at
+> the widget's own colour when it renders, so one file works on a dark header
+> and a light card. `fill="none"` is left alone, which is what keeps a
+> stroke-outline icon an outline instead of filling its geometry in. An icon
+> that declares no paint at all inherits the widget colour as a fill.
+
 > [!TIP]
 > **Icon fields take built-ins too.** Type a name like `gear` or `play` straight into an icon field and you get the bundled [Phosphor](https://phosphoricons.com) glyph — no file needed. The picker browses built-ins and your custom SVGs side by side.
 

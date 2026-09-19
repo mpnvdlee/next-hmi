@@ -9,7 +9,7 @@ WebSocket broadcast bus with the existing REST API.
 > process that sees every project) and presents the whole workspace through one
 > stable endpoint. An AI client connects once to the origin `/mcp` and never
 > reconfigures as projects start, stop, or are created. Child project instances
-> no longer serve MCP.
+> serve no MCP endpoint of their own.
 
 ## Workspace model
 

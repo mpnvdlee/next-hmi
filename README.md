@@ -177,7 +177,8 @@ cd frontend && npm install && cd ..
 python start-dev.py       # app on :8000 (Vite with HMR), API on :8001
 ```
 
-Stop with `python start-dev.py --stop` or Ctrl-C. Tests and linters:
+Stop with Ctrl-C, or `python start-dev.py --stop` to free `:8000`/`:8001` from
+another shell. Tests and linters:
 `pytest backend/tests`, `ruff check backend`, and `npm test` / `npm run lint` /
 `npm run build` from `frontend/`.
 
@@ -218,6 +219,6 @@ custom widgets — is your own work and is not covered by the copyleft; that is
 written down in [LICENSE-EXCEPTION.md](LICENSE-EXCEPTION.md) rather than left to
 interpretation. Hand a build to someone outside your organisation and the AGPL
 asks you to offer them the corresponding source; a
-[commercial licence](COMMERCIAL.md) at €100 per shipped unit is the alternative
+[commercial licence](COMMERCIAL.md) is the alternative
 to doing that. A separate proprietary enterprise build adds an audit trail for
 regulated plants — see [next-hmi.com/licensing](https://next-hmi.com/licensing).

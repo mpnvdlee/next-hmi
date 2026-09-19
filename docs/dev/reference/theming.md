@@ -81,9 +81,9 @@ For example, label tracking is `--hmi-type-label-tracking` backed by
 | `--hmi-radius-lg` | Large radius | `spacing.radius_lg` | `border-radius: var(--hmi-radius-lg);` |
 | `--hmi-shadow` | Elevation shadow | `spacing.shadow` | `box-shadow: var(--hmi-shadow);` |
 
-> Runtime structural constants (nav width, topbar height, select height) are **not** theme
-> tokens. They are defined in `hmi.css` and component CSS files and are not editable in the
-> Theme Editor.
+> Runtime structural constants (topbar height, select height) are **not** theme
+> tokens. They are defined in `hmi.tokens.css` and component CSS files and are not editable
+> in the Theme Editor.
 
 > **Input padding is not one of them.** `--hmi-input-padding-x/-y`, `--hmi-input-gap` and
 > `--hmi-select-padding-x/-y` are derived from `--hmi-space-sm` in `hmi.tokens.css`, so a
@@ -102,45 +102,16 @@ they track a theme that changes density. Use one instead of a literal `2px`/`4px
 | `--hmi-space-tight` | `--hmi-space-sm × 0.5` |
 | `--hmi-space-snug` | `--hmi-space-sm × 0.75` |
 
-#### Removed: the back-compat aliases
-
-`hmi.tokens.css` used to carry a layer of legacy token names that resolved onto
-the current combos. **That layer is gone** — the names below no longer resolve,
-and a stylesheet still using one gets an invalid value, so the declaration is
-dropped and the property falls back to whatever it inherits. Rewrite against the
-right-hand column:
-
-| Removed | Use instead |
-|---|---|
-| `--hmi-font` | `--hmi-type-body-font` |
-| `--hmi-font-mono` | `--hmi-type-code-font` |
-| `--hmi-text-xs`, `--hmi-text-sm` | `--hmi-type-caption-size` |
-| `--hmi-text-base`, `--hmi-text-md`, `--hmi-font-size-base` | `--hmi-type-body-size` |
-| `--hmi-text-lg` | `--hmi-type-subheading-size` |
-| `--hmi-text-xl` | `--hmi-type-heading-size` |
-| `--hmi-fw-normal` | `--hmi-type-body-weight` |
-| `--hmi-fw-medium` | `--hmi-type-subheading-weight` |
-| `--hmi-fw-bold` | `--hmi-type-heading-weight` |
-| `--hmi-space-xs`, `--hmi-space-1`, `--hmi-space-2` | `--hmi-space-sm` |
-| `--hmi-space-3` | `--hmi-space-md` |
-| `--hmi-space-4` … `--hmi-space-8` | `--hmi-space-lg` |
-| `--hmi-shadow-sm`, `--hmi-shadow-md`, `--hmi-shadow-lg` | `--hmi-shadow` |
-| `--hmi-header-h` | `--hmi-topbar-height` |
-
-The aliases were lossy, which is why they went: `--hmi-text-xs` and
-`--hmi-text-sm` both landed on the caption size, and none of the type aliases
-carried a combo's `tracking` or `transform` — so a theme could change those and
-nothing using an alias would move.
+Only the names in this catalog resolve. An `--hmi-*` variable that is not one
+of them has no value, so the declaration using it is dropped and the property
+falls back to whatever it inherits.
 
 For gaps finer than `--hmi-space-sm`, use the sub-step scale rather than a
 literal: `--hmi-space-hair`, `--hmi-space-tight`, `--hmi-space-snug` (a quarter,
 a half and three quarters of `--hmi-space-sm`).
 
-Motion is no longer editable. `--hmi-motion-fast` (120ms), `--hmi-motion-base` (180ms),
-and `--hmi-motion-slow` (260ms) are static constants in `hmi.tokens.css` so transitions
-still animate.
-
-<!-- TOKENS:END -->
+Motion is not editable: `--hmi-motion-fast` (120ms), `--hmi-motion-base` (180ms)
+and `--hmi-motion-slow` (260ms) are static constants in `hmi.tokens.css`.
 
 ## Theme Token Pipeline
 
@@ -257,8 +228,8 @@ motion) are not declared in CSS. They are written as inline styles on `:root` by
 3. **Aliases** referenced by component CSS but not surfaced in the editor —
    `--hmi-radius-full` and the static motion durations
 
-Non-theme structural constants (e.g. `--hmi-topbar-height`, `--hmi-nav-width`) live in
-`frontend/src/hmi/styles/hmi.css` and per-component CSS files.
+Non-theme structural constants (e.g. `--hmi-topbar-height`, `--hmi-select-height`)
+live in `frontend/src/hmi/styles/hmi.tokens.css` and per-component CSS files.
 
 #### Derived secondary tokens (CSS-only, not editable)
 

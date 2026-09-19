@@ -143,7 +143,7 @@ Slots are structural: the set of slots is whatever **Component Slot** widgets th
 The two halves belong together, and the warnings pill says so when they drift: a **Component Slot** that picks no property gives callers nowhere to aim, and a **Widget slot** property no **Component Slot** picks has nowhere to put content.
 
 > [!TIP]
-> **Sizing an instance works.** Size, growth and margins set on the placed component apply to it as a whole — what's inside (direction, gap, padding) stays with the component's own design.
+> **Sizing an instance works.** Size and growth set on the placed component apply to it as a whole — what's inside (direction, gap, padding) stays with the component's own design.
 
 ## Reading a value from an API (`$http`)
 

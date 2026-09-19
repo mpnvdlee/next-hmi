@@ -86,6 +86,7 @@ stopped.
 
 ```
 <project>/
+  .backups/               pre-upgrade project zips (installation-local)
   config.json             page tree + project metadata + global settings (incl. mcpEnabled)
   pages/                  one JSON per page
   datasources/            one JSON per datasource
@@ -107,8 +108,9 @@ stopped.
 ```
 
 The backend creates any missing folders on startup. Everything in this
-tree is treated as user state — schema migrations are handled in code,
-but project folders are never overwritten by an upgrade.
+tree is user state: an application upgrade never overwrites it. A project
+written by an older build is brought to the current file format on request,
+after a backup — see [Managing projects](projects.md#the-manager-dashboard).
 
 ## Managing projects
 
@@ -137,9 +139,8 @@ password) is the operator surface:
 - **Start / Stop** — bring a project up or down. A running project gets
   its own backend instance and becomes reachable at `/runtime/<slug>/`
   (and `/editor/<slug>/`); the set of running projects is remembered and
-  auto-resumed after a restart.
-  This replaces the old single "make live" switch — multiple projects run
-  side by side with no global downtime.
+  auto-resumed after a restart. Projects run side by side — starting or
+  stopping one never touches another.
 - **+ New project** — create at an absolute path, seeded from the bundled
   template.
 - **⊕ Add existing** — register a project folder that is already on disk (a
@@ -559,8 +560,11 @@ Then re-launch `nexthmi.command`. (Alternative: right-click the file →
 **Windows** — SmartScreen shows *"Windows protected your PC."* Click
 *"More info"* → *"Run anyway."*
 
-We skip code signing until distribution demand justifies the Apple
-Developer Program + Authenticode cost.
+The public builds are not code-signed, and that is the arrangement rather
+than a gap waiting to be filled: a signed build is part of what a
+[commercial licence](../../COMMERCIAL.md#signing) buys. It changes nothing
+about what this build does — the prompts above are a one-time step, not a
+limitation.
 
 ### Changing the runtime home
 

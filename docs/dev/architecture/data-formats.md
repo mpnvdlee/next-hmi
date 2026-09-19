@@ -12,6 +12,7 @@ A project is a self-contained folder anywhere on disk, registered in the runtime
 
 ```text
 <project>/
+  .backups/               ← pre-migration project zips; installation-local, excluded from exports
   assets/
     icons/
     images/
@@ -121,8 +122,9 @@ Outside any project, the runtime keeps its own state:
   - reserved certificate folder created by the backend. Installation-local: the whole folder is stripped by `core.project_packer` so the OPC-UA client private key never reaches a zip, a template or a peer transfer under any filename. The client pair regenerates on the receiver's first connect
 - `<project>/config.json` → `project`
   - embedded per-project metadata (stable UUID + display name + creation time); created on first registration and round-tripped through pack/unpack so the same folder always resolves to the same manifest entry
-  - `formatVersion` — the project's on-disk schema version (0 = unstamped, predates the field); see `core.project_migrations.PROJECT_FORMAT_VERSION` and the coordinator's module docstring
-  - `lastMigration` — set once a format migration actually runs: `{ fromVersion, toVersion, at, backups }`, where `backups` maps target name to the pre-migration backup path left on disk. Kept in place after later activations, but only read back once, right after an upgrade, to show a one-time notice — the Projects list never displays it permanently
+  - `formatVersion` — the project's on-disk schema version; `0` means unstamped. Below `core.project_migrations.PROJECT_FORMAT_VERSION` the project is migrated before it is served, above it the project is refused. This integer is the only gate
+  - `minAppVersion` — the release that stamped `formatVersion`, written beside it by every writer (`core.project_migrations.stamp_current_format`). Display only, never parsed or compared: it is how a build too old to open a project can still name the version the operator needs, which it could not otherwise know. `null` when the stamping build predates the field — and that absence is a signal in itself, since the number then says where the project landed without saying which code took it there, so the coordinator replays the whole chain and the manager asks for the same upgrade confirmation as on a stale project
+  - `lastMigration` — `{ fromVersion, toVersion, at, backup }`, written only when a migration actually ran. `backup` is the pre-migration zip of the whole project, `<project>/.backups/pre-migration-<stamp>-app-<release>.zip` (`null` on records predating the field). The record stays on disk but is read back only once, right after an upgrade, for a one-time notice — the Projects list never displays it. How the migration runs is in [backend.md](backend.md#project-format-migration)
 - `<project>/historian/`
   - historian runtime state (SQLite database + `config.json`). `config.json` travels with project pushes/pulls/zips; data files matching `*.db`, `*.db-wal`, `*.db-shm`, `*.sqlite`, `*.sqlite-journal` are stripped by `core.project_packer` so they stay installation-local.
 
@@ -354,8 +356,7 @@ the single source of truth shared between backend Pydantic models and the fronte
 registry.
 
 On first access the backend seeds `themes/default.json` from defaults if no
-theme exists yet. A theme file is read as-is — there is no legacy shape and no
-read-time normalization.
+theme exists yet. A theme file is read as-is, with no read-time normalization.
 
 One theme file has three sections:
 
@@ -489,7 +490,7 @@ Each reusable component is stored at `<project>/components/<id>.json`:
 }
 ```
 
-Each entry of `componentProperties` carries `type` and `label`, plus optional `description` (one line shown under the field in the properties panel), `defaultValue`, `structSchema`, `write`, `options`, `display`, `placeholder`, `min`, `max`, `step` — and nothing else (`extra="forbid"`). `defaultValue` is real at runtime, not editor-only: `ComponentRenderer` fills it in for every property the instance leaves `undefined`, so the value the properties panel prints as the field's `· default` hint is the value `$componentProp` resolves to. An explicit `null` is a set value and does *not* fall back.
+Each entry of `componentProperties` carries `type` and `label`, plus optional `description` (one line shown under the field in the properties panel), `defaultValue`, `structSchema`, `write`, `options`, `display`, `optionType`, `placeholder`, `min`, `max`, `step` — and nothing else (`extra="forbid"`). `defaultValue` is real at runtime, not editor-only: `ComponentRenderer` fills it in for every property the instance leaves `undefined`, so the value the properties panel prints as the field's `· default` hint is the value `$componentProp` resolves to. An explicit `null` is a set value and does *not* fall back.
 
 The component direct-binding rule is recursive: no `$var` source may appear in any child value or `componentProperties[*].defaultValue`, including inside nested objects, lists, or other property sources. Component writes, diagnostics, persisted reads, and project imports share that rule and report the exact escaped JSON source path ending in `/$var`; diagnostic field paths are unescaped for editor lookup. Startup scans all component files before metadata migration, leaving binding-invalid files byte-for-byte unchanged. A present component file that is malformed JSON, invalid UTF-8, or unreadable fails closed at its root source path (`components/<file>.json#/`) rather than being treated as absent or valid. The component root, nested directories, and JSON files must be real in-project filesystem entries, never symlinks or Windows reparse points. All metadata migration and CRUD/folder mutations remain anchored to retained no-follow POSIX directory descriptors or Windows no-delete-share directory handles; deletion is likewise descriptor/handle based. A root, group, or file swapped after validation therefore cannot redirect the operation to external data. Imports, pushes, and pulls reject and clean up such projects before registration. Nested reusable components are also rejected. A `$componentProp` is only substituted when it is a property's entire value (`"text": {"$componentProp": "label"}`); nested inside another source, or anywhere outside `properties` such as `layout`, it resolves once and then stops updating, so validation reports it as a `componentprop-nested` warning. Compute the derived value on the instance — instances may use `$var` freely — and pass the finished result through a plain `$componentProp`.
 
@@ -650,8 +651,7 @@ Backend behavior:
 - additional dictionaries are any other `*.csv` files in the same directory
 - dictionary filenames are derived from the dictionary name
 - dictionary names are validated before file creation
-- the CSV shape is unchanged: existing valid files and project import/export
-  archives need no migration, and CSV replacement is atomic
+- CSV replacement is atomic
 - every dictionary mutation holds the same per-file process-local and OS lock
   across read, validation, and atomic replacement, including REST and MCP
   writers
@@ -696,7 +696,7 @@ Compiled build artifacts are written to `<runtime_home>/.widget-build/` (outside
 - `widget-schemas.json`
   - `{ "version": 2, "builtin": {}, "custom": { "<Name-or-Group/Name>": { … } } }` — the catalog manifest the compiler regenerates from every custom widget's source (`services/widget_schemas.py`, tree-sitter over `index.tsx`). `builtin` is always empty: the product's own widgets ship as the baked built-in-widgets manifest, which `core.validation.structure.load_widget_manifest` overlays onto this half at read time
   - each entry carries `name`, `category`, `description`, `icon`, `schema` and `exportedProperties`; it is what `GET /api/widget-schemas`, `GET /api/widgets`, the MCP tools and backend validation all read
-  - a widget whose exports cannot be reduced to literals gets `schemaError` and an empty `schema` instead of failing the whole run, so one unreadable widget no longer costs every other widget its schema
+  - a widget whose exports cannot be reduced to literals gets `schemaError` and an empty `schema` instead of failing the whole run, so an unreadable widget costs only its own schema
 
 A sibling source folder such as `custom-widgets/_template/` can hold a starter
 template. Folders starting with `_` are ignored by the custom-component listing

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 While the project is pre-1.0, minor versions may include breaking changes; these
 are always called out under a **Changed** or **Removed** heading.
 
-## [Unreleased]
+## [0.1.0] - Unreleased
 
 ### Added
 
@@ -57,9 +57,10 @@ are always called out under a **Changed** or **Removed** heading.
 - **Creating a project starts from a template.** **+ New project** now asks what
   to start from before it asks where to put it. **Empty project** is the
   previous behaviour, one blank page. **NEXT BREW example** installs a working
-  demo machine — three pages, a static datasource, alarms, recipes, two themes
-  and two languages — which is the shortest path from installed to something to
-  read. See [How to create a project](docs/user/projects.md#how-to-create-a-project).
+  demo machine — eight pages plus two dialogs, a static datasource, alarms,
+  recipes, two themes, two languages and a five-step guided setup wizard —
+  which is the shortest path from installed to something to read. See
+  [How to create a project](docs/user/projects.md#how-to-create-a-project).
 
 - **The User Badge signs operators in and out.** The badge showed who was
   signed in and nothing more, so every project rebuilt the same pair of Log in /
@@ -120,6 +121,14 @@ are always called out under a **Changed** or **Removed** heading.
   dismissed, because nothing has changed until HTTPS is on. The operator
   runtime and the editor do not carry it; someone at a wall panel cannot act on
   it. See [HTTPS](docs/user/install.md#https).
+
+- **Catalog polish.** Trend Chart's Variables field picks a live variable
+  through a picker instead of a typed path; Page Navigator's Previous and Next
+  controls each gate on their own enabled condition; Button and Status Pill
+  both gained a corner-radius control; Value Display now accepts `Float` and
+  `Integer` only, the two types it actually renders; and a Navigation Menu with
+  no page in the tree naming it is no longer rendered as an empty shell. See
+  [Built-in widget catalog](docs/user/catalog.md).
 
 ### Removed
 
@@ -197,6 +206,70 @@ are always called out under a **Changed** or **Removed** heading.
   set yourself is untouched. Every create / import / pull dialog still lets you
   type or browse anywhere. See
   [Changing the default projects root](docs/user/install.md#changing-the-default-projects-root).
+
+- **Layout sizing is Hug / Fill / Fixed, and the raw flex rows are gone.** The
+  Layout panel offered Basis, Grow, Shrink and Align self *alongside* a width
+  and a height, so the same question could be answered twice, in two
+  vocabularies, and the two could disagree — and the panel gave no hint which
+  one won. Width and Height are each one row now: a mode and, under **Fixed**, a
+  length. **Hug** is the content's own size, **Fill** takes what the parent has
+  left, and **Fill weight** — one number per widget, below both rows — splits
+  that leftover space between Fill siblings. Min/Max bounds sit under the axis
+  they bound, all rows visible rather than folded behind a disclosure. Authored
+  projects carrying the old keys keep working. See
+  [Layout](docs/user/layout.md#the-layout-fields).
+
+- **A widget with no size of its own now hugs its content, not stretches to
+  fill.** Leaving a widget's Width or Height unset used to stretch it across
+  its parent's cross axis by default; it now hugs the size of its content
+  instead, matching the **Hug** / **Fill** / **Fixed** model everywhere else in
+  the Layout panel. This is a deliberate change, not a bug. **It changes how an
+  existing project renders:** a widget that relied on that stretch — because
+  its Width or Height was never explicitly set to **Fill** — can look smaller
+  or different the first time you open the project on this build. Open the
+  widget's **Layout** panel and set the affected axis to **Fill** to put it
+  back the way it was. See [Layout](docs/user/layout.md#the-layout-fields).
+
+- **A Navigation Menu is sized from the Layout panel like every other widget.**
+  Its stylesheet pinned `width: 100%` plus fixed pixel widths for a menu placed
+  straight in a shell region, which outranked every Width the panel offered —
+  including the Hug it displayed as the default — so a menu in a container wider
+  than its labels kept the leftover space inside itself. The pins are gone and
+  the widget honours its layout properties.
+
+- **A page reveals when its widgets are ready, not when its data is.** A page
+  used to wait on config hydration and then paint as an empty shell while widget
+  modules loaded, and a slow OPC-UA read stalled every navigation. The reveal
+  now waits on the page's own widget modules, with a 5-second safety valve, and
+  the boot splash warms the built-ins so later navigations find them in memory.
+  Variables no longer gate it at all. Because data can now arrive after the
+  reveal, the binding overlay splits in two: **red** still means a binding that
+  does not resolve, and a new **amber** mark means a sound binding that no value
+  reached — shown only once the server has said it sent everything it could, so
+  a value still in flight is never flagged. See
+  [The marks on a widget](docs/user/subscribing.md#the-marks-on-a-widget).
+
+- **A new widget arrives with Interactable already on `$userGroups`.** `visible`
+  came pre-wired to that source with an empty group list; `interactable` came
+  with nothing, so locking a control to a group meant switching its source by
+  hand first — the half an operator-facing project reaches for most. Both are
+  seeded now. Behaviour is unchanged: an empty group list is true for everyone.
+
+- **An unavailable project explains itself at the URL you typed.** Opening
+  `/runtime/<id>/` or `/editor/<id>/` for an instance that is not running
+  redirected to the dashboard with the reason in a query string, so the URL was
+  lost along with the answer. The app now boots at that address and says which
+  it is — not running, crashed, folder missing, or no such project registered —
+  with the way back on the overlay.
+
+- **An import refuses an archive that carries no `users.json`.** A metadata
+  block alone does not prove an archive holds a project: a content-less folder
+  packed into a well-formed archive unpacked clean, registered, and then refused
+  to start, surfacing the failure well away from the transfer that caused it.
+  Unpack now also requires the one document the manager and the supervisor both
+  demand. Export is unchanged, so a damaged project can still be carried
+  elsewhere and repaired.
+
 - **The dev runner serves the app on `:8000`, the port a release install uses.**
   `start-dev.py` ran Vite on `:5173` with the API on `:8000`, so every URL a
   contributor held — a bookmark, a screenshot in an issue, a tablet's
@@ -268,6 +341,22 @@ are always called out under a **Changed** or **Removed** heading.
   project still carries one — it is dropped the next time users are saved.
 
 ### Fixed
+
+- **Windows is a supported platform, not just an advertised one.** rc1 already
+  claimed a Windows binary, but neither the packaged build nor the test suite
+  worked on Windows itself, and the binary that did come out carried no app
+  icon. All three work now — the build, the test suite, and the icon on the
+  packaged `.exe` — which is what makes rc1's claim true.
+
+- **A component definition is covered by undo.** Editing a component's own
+  widgets and inputs used to sit outside the editor's undo stack, so a mistake
+  made while inside a component definition could not be undone the way every
+  other edit can — it now can. A `select` property can also declare options
+  beyond plain strings, a property can be given a default value at the moment
+  it is added instead of only afterward, that default is what an unset field
+  shows instead of a blank, and the outline marking an unfilled slot no longer
+  appears in the widget's UI preview. See
+  [Passing values into components](docs/user/properties.md#passing-values-into-components).
 
 - **An absolute URL typed into an asset field stays one.** An image field read
   anything that did not begin with `images/` as a filename inside that folder,
@@ -414,5 +503,6 @@ below ships in the initial open-source build.
   shipped loose (replaceable) in binary builds, with the LGPL texts and a
   written source offer bundled alongside.
 
+[0.1.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v0.1.0
 [0.0.1-rc2]: https://github.com/mpnvdlee/next-hmi/releases/tag/v0.0.1-rc2
 [0.0.1-rc1]: https://github.com/mpnvdlee/next-hmi/releases/tag/v0.0.1-rc1

@@ -15,7 +15,7 @@ Widgets are the pieces you drop on a page. This chapter covers placing them, mov
 > [!TIP]
 > **Containers are added their own way.** A `Container` has its own **Add Container** menu item rather than living in the widget list, because it's the thing that *hosts* other widgets. Drop widgets into it to build layout — see [Layout](layout.md).
 
-![The properties panel for a selected shell region. Each row is one schema field; the small square on the left opens the source picker.](images/editor-property-panel.png)
+![The properties panel for a selected Ring Gauge. Each row is one schema field — the small square on the left opens the source picker, and the purple link icon marks a row already bound to a variable.](images/editor-property-panel.png)
 
 ## Schema-driven properties
 
@@ -30,7 +30,7 @@ Most fields also carry a small **source pill** — that's where a static value b
 
 ## Make controls do something: actions
 
-Interactive widgets (**Button**, **Menu Toggle**) have an **Actions** field holding a list that runs, top to bottom, when the control is pressed. The thirteen action types cover four jobs:
+Interactive widgets (**Button**, **Menu Toggle**) have an **Actions** field holding a list that runs, top to bottom, when the control is pressed. The twelve action types cover four jobs:
 
 - **Screens** — open or close a **dialog**, or open an ordinary page as a **page overlay**.
 - **Machine** — **write a variable** (set a coil, a mode, a setpoint), or **load / save a recipe**.
@@ -43,4 +43,7 @@ The five that cross the wire carry `onSuccess` / `onFailed` / `onSettled` handle
 > **Moving between pages is not an action.** Navigation widgets read the page tree instead — see [Pages & navigation](pages.md#give-operators-a-way-around).
 
 > [!NOTE]
-> **Visibility & permissions.** Every widget exposes **Visible** and **Interactable** booleans. Set either one's source to `$userGroups` and it becomes a group test — a Start button restricted to *operator* renders read-only for everyone else, with no scripting. See [Users, groups & permissions](users.md#gate-what-a-group-can-see-and-do).
+> **Visibility & permissions.** Every widget exposes **Visible** and **Interactable** booleans, and both arrive already wired to the `$userGroups` source with no groups ticked. Tick the groups and it becomes a group test — a Start button restricted to *operator* renders read-only for everyone else, with no scripting and no source to switch first. See [Users, groups & permissions](users.md#gate-what-a-group-can-see-and-do).
+
+> [!TIP]
+> **Showing who is signed in.** The **User Badge** widget puts the current user in the header and carries the sign-in and sign-out buttons with it — see [Sign in and out on a screen](users.md#sign-in-and-out-on-a-screen).

@@ -18,7 +18,7 @@ This is the panel that answers "why is my tag not updating?" — if the path is 
 
 Every widget found in the project's `custom-widgets/` folder, with its build **Status** (OK / failed / unknown), whether it has CSS, and when it was compiled. **Recompile** one, or **Recompile all** — the route out of a stale build after editing files on disk. A failed build shows the compiler's own error message. See [Building your own widgets](custom-widgets.md).
 
-A third state sits between the two: **No schema**. The widget compiled and renders fine, but its `schema` / `exportedProperties` exports could not be read, so the editor offers no property fields and no exported properties for it. The message underneath says why. Other widgets are unaffected — one unreadable widget no longer costs the rest their schemas.
+A third state sits between the two: **No schema**. The widget compiled and renders fine, but its `schema` / `exportedProperties` exports could not be read, so the editor offers no property fields and no exported properties for it. The message underneath says why. Other widgets are unaffected — an unreadable widget costs only its own schema.
 
 ### Connected Runtimes
 
@@ -53,6 +53,10 @@ Two findings are specific to reusable components:
 ## Common symptoms
 
 **A bound field is blank or dimmed.** The runtime distinguishes three failure states, and they mean different things — *absent* (the source can't produce a value yet), *bad quality* (connected but the tag reports bad/uncertain/stale), and *disconnected* (the whole datasource is down, which degrades every tag it owns). The table in [Binding & subscribing](subscribing.md#what-happens-when-data-goes-bad) says which is which.
+
+**A widget carries a coloured mark.** Read the colour before you read the binding: **red** is a binding that doesn't resolve — a configuration error on the page — while **amber** is a sound binding that no value reached, which points at the datasource instead. [The marks on a widget](subscribing.md#the-marks-on-a-widget) has the full set.
+
+**Opening a project URL says the project is unavailable.** The URL you typed stays put and the overlay names the cause: it is **not running** (start it from the projects page), the instance **crashed** (start it again to see the failure), its **folder is missing** (use **Locate…**), or **no project with that id** is registered on this device. The way back to the projects page is on the overlay.
 
 **A value never updates, and never goes bad either.** Check **Fast Subscriptions**: a tag that appears nowhere is not subscribed. Common causes: the variable is not enabled in the datasource's variable table, the binding points at a path that was renamed on the PLC (the browse-diff banner in the Datasources area flags this), or the widget binding it is not on a visible page.
 

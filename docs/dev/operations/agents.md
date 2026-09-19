@@ -83,7 +83,7 @@ npm run build                         # tsc + vite build; the type check
 | Changed | Also run |
 |---|---|
 | A built-in widget's registry entry or schema | `npm run docs:widgets` — regenerates `docs/user/catalog.md`, `docs/user/generated/widgets.json`, `docs/user/generated/property-sources.json`; commit them |
-| Anything under `frontend/widgets/` | `npm run build:builtin-widgets` then `npm run docs:widgets`; commit both regenerated halves of `frontend/src/generated/builtinWidgetsManifest.json` (`.json` + `.editor.json`) and the catalog. `npx tsc -p frontend/tsconfig.builtin-widgets.json` type-checks the sources against the SDK declarations. `npm run check:bundle-budget` from `frontend/` after `npm run build` — a per-PR gate: 32 kB raw / 10 kB gzip per widget and 96 kB gzip across the tree, counting every file the widget publishes (`index.js`, `style.css`, and a `fonts/` directory if it ships one) |
+| Anything under `frontend/widgets/` | `npm run build:builtin-widgets` then `npm run docs:widgets`; commit both regenerated halves of `frontend/src/generated/builtinWidgetsManifest.json` (`.json` + `.editor.json`) and the catalog. `npx tsc -p frontend/tsconfig.builtin-widgets.json` type-checks the sources against the SDK declarations. `npm run check:bundle-budget` from `frontend/` after `npm run build` — a per-PR gate: 32 kB raw / 10 kB gzip per widget and 104 kB gzip across the tree, counting every file the widget publishes (`index.js`, `style.css`, and a `fonts/` directory if it ships one) |
 | A property source | `npm run docs:widgets` (the source table is generated too) + backend validation tests |
 | Anything under `project-testbench/` diagnostics | `pytest backend/tests/test_project_testbench_diagnostics.py` — a golden snapshot; a new finding must be regenerated deliberately |
 | The user guide | `python build/render-docs.py <outdir> 0.0.0` — the rendered guide must build, and must load no resource from another host: an offline render fetches nothing at all, a `--web` one only the Google Fonts stylesheet. Hyperlinks in the prose may point anywhere |
@@ -315,6 +315,23 @@ manager-only. Pydantic models in `backend/models/`. Document it in
 4. Tests under `backend/tests/test_mcp_*.py`; catalog entry in
    [../reference/mcp.md](../reference/mcp.md), user-visible limits in
    `docs/user/mcp.md`.
+
+### Change a project's on-disk format
+
+Any change that makes an existing project file unreadable needs a migration
+step, or projects in the field break silently.
+
+1. Write the step's rewrite rules in their own `backend/core/migration_*.py`
+   module, then append a `MigrationStep` to `_STEPS` in
+   `backend/core/project_migrations.py` and bump `PROJECT_FORMAT_VERSION` to its
+   `to_version`. The coordinator's behaviour is in
+   [../architecture/backend.md](../architecture/backend.md#project-format-migration).
+2. Steps must be re-runnable — a project with no `minAppVersion` is replayed
+   through the whole chain — so each one skips what it has already converted.
+3. Tests under `backend/tests/test_project_migrations.py`; describe the changed
+   file shape in [../architecture/data-formats.md](../architecture/data-formats.md).
+4. The release that ships it must bump `PROJECT_FORMAT_MIN_APP` and move the
+   minor or major — see [release.md](release.md#project-format).
 
 ### Change a WebSocket message
 

@@ -23,6 +23,8 @@ Installation-wide settings — the runtime home, HTTPS, the device-admin passwor
 
 The canvas in the middle is a **live preview** — every edit renders exactly as an operator will see it.
 
+![The editor top bar: the project name and warnings pill on the left; Undo, Redo, Save, Live View, Transfer, Help and Sign out on the right.](images/editor-topbar.png)
+
 ## Saving your work
 
 Edits are held in the editor until you save them, so you can undo freely before anything touches disk.
@@ -34,6 +36,8 @@ Edits are held in the editor until you save them, so you can undo freely before 
 | **Save users** · **Discard users** | Accounts and groups save separately — a security change is never mixed into a normal save. These appear in the header only while that draft is dirty. |
 
 Closing the tab with unsaved work prompts you first. Once a save lands, the server writes the project files and broadcasts a `config_changed` message, so every open runtime picks the change up on its own — there is no separate publish step.
+
+Each save also refreshes the picture of this project shown on the Manager's project list: the main page is rendered off-screen and stored as a thumbnail. It runs after the save, never blocks it, and never fires your project's `onHmiLoaded` event — so a save cannot write to a datasource as a side effect.
 
 > [!NOTE]
 > **Two different "saves".** A **custom widget** is a file you edit outside the editor; the backend compiles it the moment you save the `.tsx` and hot-swaps it into open pages. That is unrelated to the editor's Save button. See [Building your own widgets](custom-widgets.md).
@@ -57,3 +61,4 @@ Closing the tab with unsaved work prompts you first. Once a save lands, the serv
 - **Try the screen without leaving the editor.** The preview toolbar's **Mode** control has two buttons: the pencil is **Config mode**, where a click selects the widget you clicked, and the play button is **Test mode**, where clicks run actions and navigation works — press your own buttons, open your own overlays, watch a write land.
 - **Watch the warnings pill.** The header runs a project-wide validation pass and surfaces findings — an incomplete `$var` binding, a reference to a datasource that no longer exists — without blocking the save. Click a finding to jump to it; see [Diagnostics](diagnostics.md#the-warnings-pill).
 - **Open the runtime beside it.** The header's second button opens this project's operator runtime in a new tab, so you can keep a real screen open while you edit.
+- **Send the project from here.** The header's **Transfer** button pushes the open project to another NEXT HMI device, without a detour through the Manager. What travels is the project *on disk*, so the button stays disabled — "Save your changes before transferring" — until your edits are saved. It appears only where a Manager is serving the editor. See [Push & pull between devices](projects.md#push--pull-between-devices).

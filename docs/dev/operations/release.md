@@ -113,7 +113,7 @@ of the matching OS and arch.
 ### macOS (Apple Silicon)
 
 ```bash
-# from repo root, with the 3.12 venv activated and pyinstaller installed
+# from repo root, with the 3.14 venv activated and pyinstaller installed
 ./build/build-binary.sh 0.x.y
 ```
 
@@ -139,7 +139,7 @@ checkout can never fail.
 
 ### Windows (x64)
 
-In a PowerShell session on a Windows host, with the 3.12 venv activated
+In a PowerShell session on a Windows host, with the 3.14 venv activated
 and `pyinstaller` installed:
 
 ```powershell
@@ -164,14 +164,26 @@ runner.
 
 After verifying every artifact:
 
-1. Push the release branch + tag.
-2. Upload `nexthmi-macos-arm64-<version>.zip`,
-   `nexthmi-windows-x64-<version>.zip`, and
-   `nexthmi-docker-linux-<arch>.zip` to the release page (GitHub Releases
-   or wherever the project lives).
+1. Push the release branch, then the tag. A `v*` tag runs
+   `.github/workflows/release-matrix.yml`, which rebuilds the whole matrix from
+   a clean checkout: the frontend and backend suites, a Docker image plus
+   first-boot/restart smoke test on each native arch, portable macOS arm64 and
+   Windows x64 builds with the same smoke test, and a documentation-site render.
+   The `release-readiness` job fails the release if any of those is red,
+   skipped or missing, and both publish jobs hang off it.
+2. Don't upload the portable zips by hand. On a green matrix `publish-release`
+   attaches `nexthmi-macos-arm64-<version>.zip` and
+   `nexthmi-windows-x64-<version>.zip` to the GitHub Release for the tag,
+   creating it with generated notes when it does not exist yet; a tag carrying a
+   hyphen (`v0.1.0-rc.1`) is published `--prerelease`, so only a bare `vX.Y.Z`
+   can become "Latest". Check the Release page once the run is green. CI does
+   not build the offline Docker installer — attach a locally built
+   `nexthmi-docker-linux-<arch>.zip` yourself if the release needs one.
 3. Update [deploy.md](deploy.md)'s download URLs if they changed.
-4. Optionally push the Docker image to a registry for `docker pull`
-   consumers (the zip already carries the image for offline installs).
+4. The registry image is published for you, on a **final** tag only:
+   `docker-publish` loads the two smoke-tested per-arch tarballs and pushes
+   `ghcr.io/<repo>:<version>` and `:latest` as one multi-arch manifest. An RC
+   tag builds and smoke-tests both images and publishes neither.
 5. Publish the guide to the website, from a checkout that has `enterprise/`
    cloned in:
 
@@ -213,9 +225,11 @@ After verifying every artifact:
 
 - Code signing / notarization is out of scope. Operators see the
   unsigned-binary prompt on first launch. Document in `deploy.md`.
-- No automated CI for binary builds — the matrix is a small enough that
-  the maintainer's two laptops handle it. Revisit if release cadence
-  picks up.
+- The macOS leg of the matrix is Apple Silicon only, and no leg covers the
+  quarantine/SmartScreen prompt a real browser download picks up, a
+  double-clicked `nexthmi.command`, or graceful console-signal shutdown on
+  Windows. Those still need a hand check on the built zips; the per-job
+  comments in `release-matrix.yml` list what each leg leaves uncovered.
 - `tree-sitter-languages` doesn't ship a current-Python wheel; we use
   `tree-sitter` + `tree-sitter-typescript` directly, both of which
   publish 3.14 wheels.

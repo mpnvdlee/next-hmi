@@ -25,9 +25,11 @@ Every row is on screen from the start; nothing is folded behind a disclosure. A 
 
 There is no row for the raw flex properties — no Basis, Grow, Shrink or Align self. Direction, Align and the two size modes cover what they covered, and a panel that offers both invites you to set the same thing twice and get a fight.
 
+![The Layout section for a Container: Width mode and Height mode as Hug / Fill / Fixed segmented buttons, each above its own length and Min/Max rows, with Fill weight at the bottom.](images/layout-panel.png)
+
 ### Width and Height
 
-Each is one row: a length and a mode.
+Each takes two rows: the **mode** — Hug, Fill or Fixed as segmented buttons — and the length beneath it, with that axis's Min and Max under those.
 
 | Mode | The widget is |
 |---|---|
@@ -60,7 +62,7 @@ Each icon draws the arrangement it picks, and both rows follow the container's *
 
 Four rows — **Padding top**, **right**, **bottom** and **left** — one per side, each independent. Clear one and it falls back to the theme's own default padding, never to whatever the other three happen to share, so emptying a side can't silently borrow a number from its neighbours.
 
-There is no **Margin**. Spacing between widgets is the parent's job — a container's **Gap** and **Padding** — which is one place to look instead of two that add up. A margin stored by an older project no longer renders at all: space that widget with its parent's gap or padding instead.
+There is no **Margin**. Spacing between widgets is the parent's job — a container's **Gap** and **Padding** — which is one place to look instead of two that add up.
 
 Length fields take any CSS length — `200px`, `100%`, `12rem`, `auto` — so you can mix fixed and proportional freely. Leave a field empty and it inherits: Radius falls back to the theme's `--hmi-radius` rather than to a hardcoded value.
 
@@ -95,7 +97,7 @@ Project-wide shell settings also cover the browser **tab title**, the **favicon*
 
 For a P&ID, a floor plan, or a machine photo, use an **Image Container** instead of a flex Container. It hosts children at **absolute positions** on top of a background image — a valve indicator here, a temperature readout there. Set **Fit** for how the image scales, and **Collapse below** to a pixel width under which the absolute placement is abandoned and children stack normally, so a phone doesn't get a postage-stamp overview.
 
-![The viewport selector switches the canvas between fit-to-screen, laptop, tablet and phone; the mode toggle switches between editing and preview.](images/editor-viewport-selector.png)
+![The preview toolbar: VIEWPORT switches the canvas between fit-to-screen, laptop, tablet and phone, SCALING zooms it, and MODE toggles between editing and testing the screen.](images/editor-viewport-selector.png)
 
 ## One project, every screen size
 

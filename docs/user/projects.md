@@ -10,12 +10,13 @@ Everything the runtime needs is on disk, in formats you can read and diff. That'
 |---|---|
 | `config.json` | The page index, the shell, global events, and the project's own id and settings. |
 | `pages/` | One JSON per page — the widget tree for that screen. |
+| `dialogs/` | The same documents for the pages of the **Dialogs** folder — the screens an action opens as an overlay. See [Pages & navigation](pages.md). |
 | `components/` | Reusable composite components you place with input properties. |
 | `datasources/` | OPC-UA connections and static data, plus the browsed variable tree. |
 | `alarms.json` · `alarm_state.json` | Alarm definitions, and the live acknowledgement state. |
 | `recipes.json` · `recipe_state.json` | Recipe dataset types and datasets, and which dataset is loaded. |
 | `themes/` · `translations/` · `users.json` | Tokens, [message catalogs](translations.md) per dictionary and language, and [accounts + groups](users.md). |
-| `assets/icons/` · `assets/images/` | SVG icons and images referenced by widgets. See [Files & assets](files.md). |
+| `assets/icons/` · `assets/images/` · `assets/videos/` | SVG icons, images and videos referenced by widgets. See [Files & assets](files.md). |
 | `custom-widgets/` | Your authored `.tsx` widgets. See [Custom widgets](custom-widgets.md). |
 | `external-libraries/` | Third-party ESM bundles you import from widgets. |
 | `certs/` | Per-project OPC-UA client certificates. |
@@ -26,7 +27,7 @@ The backend creates any missing folder on startup, and never overwrites this tre
 
 ## The Manager dashboard
 
-![The Manager dashboard: the toolbar's Import zip / Add existing / Pull from peer / New project buttons, and one project row showing its name, status, folder and per-row actions.](images/manager-dashboard.png)
+![The Manager dashboard: the toolbar's Import zip / Add existing / Pull from peer / New project buttons, above two project rows showing name, id, status, folder and per-row actions — the first with a picture of its main page, the second with the placeholder a project that has never been saved gets.](images/manager-dashboard.png)
 
 Browse to the origin root (`http://localhost:8000` by default) and sign in with the **device-admin password**. The dashboard lists every project registered on this installation, one row each, showing its name, its **id**, its folder, and its status.
 
@@ -66,11 +67,14 @@ Three ways in, all from the dashboard toolbar. Each adds a row to the runtime-ho
 1. **New project — pick a template first.** Click **+ New project**.
    **New project** first asks what to start from. **Empty project** gives you one
    blank page. **NEXT BREW example** gives you a working demo machine — three
-   pages, a static datasource, alarms, recipes, two themes and two languages —
-   which is the fastest way to see how the pieces fit together before building
-   your own. Its `onHmiLoaded` global event writes starting values into its
+   pages plus a Dialogs folder (an about dialog, a sign-in dialog and a
+   five-page guided brew wizard), a static datasource, alarms, recipes, two
+   themes and two languages — which is the fastest way to see how the pieces fit
+   together before building your own. Its `onHmiLoaded` global event writes starting values into its
    datasource on load, so if you repoint it at a real server, look at that
    event first.
+
+   ![The Start a new project dialog: two template cards side by side — Empty project, showing a blank page outline, and NEXT BREW example, previewing the demo machine's dashboard.](images/new-project-template.png)
 
    Enter a **Project name** and a **Parent folder** (type it or **Browse…**); the modal previews the exact folder it will create. Confirm and NEXT HMI copies the chosen template into place and registers it.
 2. **Add existing — register a folder on disk.** Click **⊕ Add existing** and give the **Project folder** path, e.g. `/opt/hmi/line-a`. The folder must already hold a `config.json` with a `project` block. Use this after cloning a project from Git or copying a folder onto the machine. The project is registered but not started.
@@ -86,13 +90,37 @@ The zip is the hand-off format: one file that carries the whole project, includi
 
 **Upload (import).** **↑ Import zip** takes the **Zip file** and a **Destination folder**, unpacks it into a new project folder, and registers it. The archive is hardened on the way in: path traversal and absolute paths are rejected, symlinks are dropped, and the total is capped by `NEXTHMI_MAX_PROJECT_ZIP_MB` (500 MB by default) so an oversize archive is refused before any bytes reach disk.
 
+An archive has to actually hold a project: one carrying a `config.json`
+metadata block but no `users.json` is refused on the way in, rather than
+registering an entry that then refuses to start. Exporting such a project is
+still allowed, so a damaged one can be carried somewhere else and repaired.
+
 Because the id travels with the archive, importing a project that is *already* registered on this installation is refused with a conflict. Remove the existing entry first, or import onto a different machine.
 
 ## Push & pull between devices
 
 **Transfer** (on a project row) pushes that project to another manager on the LAN; **⇩ Pull from peer** (in the toolbar) fetches one the other way. Both use the same packing code path as the zip, over the wire. The editor's top bar carries the same **Transfer** button for the project you have open — save your changes first, since only what is on disk travels.
 
-Pair once with the destination's existing device-admin password; after that a revocable peer token authenticates the transfer. Discovery is by mDNS, and a peer can always be entered manually as `host:port`. The full trust model, collision policy (reject / copy with a new id / replace a stopped project with rollback), and the HTTPS certificate pinning are in [Installing and running](install.md#peer-transfer-over-https).
+Pair once with the destination's existing device-admin password; after that a revocable peer token authenticates the transfer. Discovery is by mDNS, and a peer can always be entered manually as `host:port` — a peer found both ways is offered once, not twice. The full trust model and the HTTPS certificate pinning are in [Installing and running](install.md#peer-transfer-over-https).
+
+**When the far side already has that project.** The dialog checks before it
+sends, so a clash on the project's **id**, its **destination folder**, or both
+is named up front rather than surfacing as a failure. Pick how to resolve it:
+
+| Resolution | Does |
+|---|---|
+| **Don't overwrite anything** | The default. The transfer is refused if anything is in the way. |
+| **Install as a separate copy** | Installs alongside the existing project under a new id. |
+| **Replace the existing project** | Overwrites it — only a stopped project, only after you confirm, and rolled back if the install fails partway. |
+
+**When it fails anyway.** The dialog says what went wrong and what to do about
+it, instead of printing a raw error: a wrong device-admin password (the
+*peer's*, not this manager's), a pairing lockout with the countdown to wait
+out, a host name that didn't resolve, an address outside the trusted LAN, a
+port with nothing listening, a failed TLS handshake, or a peer certificate that
+no longer matches the one pinned at first contact. Progress is named the same
+way as it runs — packing, uploading, extracting, backing up, installing,
+registering, starting.
 
 > [!IMPORTANT]
 > Transfer defaults to plain HTTP and assumes a trusted LAN. Serve the peer over HTTPS before sending anything across a network you don't control.

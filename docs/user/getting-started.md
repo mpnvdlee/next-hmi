@@ -27,11 +27,39 @@ $ ./nexthmi.command
 1. **Start the server** — Run one of the commands above. On first launch it creates its **runtime home** — a per-installation folder (default `~/Documents/NextHMI/`, or wherever `NEXTHMI_DATA_DIR` points) that holds the project manifest, logs, and the widget build cache.
 2. **Open the Manager** — Browse to `http://localhost:8000`. The **Manager** lists every project registered on this installation and lets you start, stop, open, transfer and remove them.
 3. **Set the device-admin password** — On a fresh installation the Manager asks you to choose one, and asks for it on every later visit. This gate gets you into the dashboard; it is separate from the per-project operator accounts you define later.
-4. **Start the example project** — The install ships with one, seeded from the bundled template. It needs no credential of its own: press **Start**.
+4. **The default project is already running** — The install creates one for you, a blank project with a single page, and starts it during that same first launch, so its row shows **Running** rather than a Start button. It needs no credential of its own. **Stop** and **Start** are on the row whenever you want to take it down and bring it back.
 5. **Open its editor** — Press **Open editor** to land under `/editor/<project>/` — or read [Managing projects](projects.md) to create your own first.
+
+> [!TIP]
+> **Want something already built instead?** Click **+ New project** and pick the
+> **NEXT BREW example** template — see [the tour](#take-the-tour-next-brew) below.
 
 > [!NOTE]
 > **Three URL areas to know.** `localhost:8000` is the Manager. A running project's operator runtime is under `/runtime/<project>/`, and its editor is under `/editor/<project>/` — with one path per config area beneath it (`/editor/<project>/datasources`, `/editor/<project>/theme`, …).
+
+## Take the tour: NEXT BREW
+
+The fastest way to see how the pieces fit is to read a project that already
+works. **+ New project** → **NEXT BREW example** gives you a demo brewery —
+three pages plus a Dialogs folder (an about dialog, a sign-in dialog and a
+five-page guided brew wizard), a static datasource, alarms, recipes, two themes
+and two languages — with nothing to wire up first.
+
+Open its runtime and try the things that are hard to picture from a
+description:
+
+1. **Sign in.** The header carries a [User Badge](users.md#sign-in-and-out-on-a-screen) reading **Log in**. The demo account is printed on the dialog itself — `brewer` / `espresso`.
+2. **Watch the Machine page change.** Signing in is not cosmetic. The setpoint steppers become operable — they are **Interactable** gated on the `admin` group — and a **Service** card appears that was hidden entirely, gated on **Visible**. While you are a guest, a caption sits in the card's place naming what is missing and why, so the mechanism is legible before you unlock it.
+3. **Sign out again** from the same badge, and watch both go away.
+
+That is the whole of [users, groups and permissions](users.md) in one screen.
+Then open the editor on the same project and look at how it was done — the
+gates are properties in the **Visibility** group, not code.
+
+> [!NOTE]
+> The example's `onHmiLoaded` global event writes starting values into its
+> datasource on load. If you repoint it at a real server, read that event
+> first — see [Global events](actions.md#global-events).
 
 ## Build your first screen
 

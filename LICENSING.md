@@ -34,11 +34,12 @@ Two notes sit alongside the AGPL and do not modify it:
 The licence follows the artifact, not the buyer.
 
 - **AGPL-3.0** — the public downloads `nexthmi-macos-arm64.zip`,
-  `nexthmi-windows-x64.zip`, `nexthmi-docker-linux-<arch>.zip`. A per-unit
-  commercial licensee gets this same byte-identical build under these same
-  terms.
+  `nexthmi-windows-x64.zip`, `nexthmi-docker-linux-<arch>.zip`. A commercial
+  licensee is delivered something different — see
+  [COMMERCIAL.md](COMMERCIAL.md#redistribution-licence) for what and why.
 - **NEXT HMI Commercial License** — the `nexthmi-enterprise-<os>-<arch>` builds,
-  which contain proprietary modules that are not in this repository. Its terms
+  which are code-signed and contain proprietary modules that are not in this
+  repository. The public downloads above are unsigned. Its terms
   are not committed here, because nothing here is licensed under them; request
   them from <licensing@next-hmi.com>.
 
@@ -46,6 +47,6 @@ The licence follows the artifact, not the buyer.
 
 The AGPL never requires payment. A commercial licence is the alternative to
 complying with its source-disclosure terms — relevant to machine builders,
-integrators, and SaaS vendors that redistribute or network-serve modified
-builds. An enterprise module subscription is also available. See
+integrators, and SaaS vendors that redistribute a build, or network-serve a
+modified one. A separate add-on module is priced there too. See
 [COMMERCIAL.md](COMMERCIAL.md) for who each option is for and how to buy.

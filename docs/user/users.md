@@ -41,10 +41,45 @@ Select **Settings** in the tree for the one project-wide choice:
 
 ## Sign in and out on a screen
 
-There is no built-in login widget, because a sign-in screen is layout like any other. Wire one with actions ([Actions](actions.md)):
+The **User Badge** widget is the ready-made way in. Drop it in the header and it
+shows who is signed in — an initialled avatar, the username, and their groups —
+and carries the sign-in and sign-out affordances with it.
 
-- **Log in** — a **Log in user** action whose **Username** and **Password** are bound to wherever the operator typed them (a custom-widget field exported as a `$widgetProp`, a component input, a `$static` for a fixed kiosk account). It runs asynchronously: use `onFailed` to show a toast on a wrong password, `onSuccess` to navigate to the home page.
+It reads the session itself, so there is nothing to bind for the common case:
+
+| While signed in as | The badge shows |
+|---|---|
+| `guest` | A **Log in** button — your **Sign-in label**, with a sign-in icon. |
+| A real user | The avatar, username and groups, plus a sign-out icon button. |
+
+Each half appears only once you give it something to run, which is what keeps
+the badge usable on a panel that never signs anyone out:
+
+- **On Sign In** — the actions the Log in button runs. Usually a single **Open
+  Dialog** pointing at your sign-in dialog.
+- **On Sign Out** — the actions the sign-out button runs. Usually just **Log out
+  user**.
+- **On Press** — optional, makes the identity itself pressable, for a profile or
+  shift-handover dialog.
+
+**Appearance** carries **Show groups**, your own **Sign-in icon** and **Sign-out
+icon**, and a **Radius** if the theme's fully-round default doesn't suit the
+header. **Username text** and **Groups text** override what it displays, for the
+rare screen that should name someone other than the session user.
+
+The NEXT BREW example template wires exactly this — the badge in the header,
+opening a login dialog for guests and calling `logoutUser` for everyone else.
+
+**Building the dialog itself.** The sign-in dialog behind the badge is layout
+like any other screen, wired with actions ([Actions](actions.md)):
+
+- **Log in** — a **Log in user** action whose **Username** and **Password** are bound to wherever the operator typed them (a String Input's `$widgetProp`, a component input, a `$static` for a fixed kiosk account). It runs asynchronously: use `onFailed` to show a toast on a wrong password, `onSuccess` to close the dialog.
 - **Log out** — a **Log out user** action drops the session back to the auto-login user.
+
+> [!TIP]
+> Tick **Password field** on the String Input holding the password so the entry
+> is masked. It deliberately keeps browser keychains out, so a panel PC never
+> offers to save — or auto-fill — an operator's credentials.
 
 Sign-in is **per open runtime**, not per browser and not per installation: two tabs on the same panel PC can be two different operators, and each keeps its own identity until it is closed or logged out.
 
@@ -53,6 +88,8 @@ Global events give the rest of the plumbing — `onUserLoggedIn` and `onUserLogg
 ## Gate what a group can see and do
 
 Every widget carries **Visible** and **Interactable** in its **Visibility** group. Both are plain booleans, so any source can drive them — but the one you want here is **`$userGroups`**, which is true when the signed-in user is in one of the groups you tick (an empty list means *everyone*).
+
+Both already arrive on that source. A newly placed widget has **Visible** and **Interactable** wired to `$userGroups` with an empty group list, so gating one is ticking the groups — there is no source to switch first, and a widget you never touch stays visible and operable for everyone.
 
 | Goal | Set |
 |---|---|
