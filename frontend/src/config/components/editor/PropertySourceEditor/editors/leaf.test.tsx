@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { VarEditor } from './leaf';
+import userEvent from '@testing-library/user-event';
+import { useConfigStore } from '@shared/store/configStore';
+import { PageEditor, PageIsActiveEditor, VarEditor } from './leaf';
 
 describe('VarEditor', () => {
   it('shows the composite path with index suffix', () => {
@@ -89,5 +91,38 @@ describe('VarEditor', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Change variable binding' }));
     expect(onOpenBindingPicker).toHaveBeenCalled();
+  });
+});
+
+describe('page pickers', () => {
+  const page = (id: string, title: string) => ({
+    id,
+    type: 'page' as const,
+    title,
+    sections: { content: [] },
+  });
+
+  // jsdom has no layout, so the popup's scroll-into-view call needs a stub.
+  Element.prototype.scrollIntoView = vi.fn();
+
+  beforeEach(() => {
+    useConfigStore.setState({
+      pages: [page('home', 'Home')],
+      dialogs: [page('motor-detail', 'Motor detail')],
+    });
+  });
+
+  it('$page offers a Dialogs-folder page, whose title and path it can read', async () => {
+    render(<PageEditor value={{ $page: { field: 'title' } }} onChange={vi.fn()} />);
+    await userEvent.click(screen.getAllByRole('combobox')[1]);
+
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toContain('Motor detail');
+  });
+
+  it('$pageIsActive leaves out a Dialogs-folder page, which is never the active route', async () => {
+    render(<PageIsActiveEditor value={{ $pageIsActive: {} }} onChange={vi.fn()} />);
+    await userEvent.click(screen.getByRole('combobox'));
+
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).not.toContain('Motor detail');
   });
 });

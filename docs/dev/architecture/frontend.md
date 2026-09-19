@@ -96,7 +96,7 @@ The frontend uses Zustand.
 Shared stores:
 
 - `frontend/src/shared/store/configStore.ts`
-  - pages, header, footer, dialogs
+  - pages, header, footer, the Dialogs-folder page tree
   - tree mutation helpers
   - persistence through `saveConfigToBackend()`
 - `frontend/src/shared/store/projectStore.ts`
@@ -114,7 +114,7 @@ Shared stores:
 Runtime stores:
 
 - `frontend/src/hmi/store/hmiStore.ts`
-  - dialog/UI runtime state
+  - overlay/UI runtime state
 - `frontend/src/hmi/store/variableStore.ts`
   - scalar and struct live values
   - WebSocket connection flags
@@ -158,7 +158,7 @@ Error handling notes:
 
 `useConfig()` boots the config by fetching `/api/config/config` into `configStore`.
 
-The backend returns a v2 **page index** — page metadata and structure with no component children for pages. On success, `configStore` populates `pages` (with empty `children: []` arrays), `header`, `footer`, and `dialogs`.
+The backend returns a v2 **page index** — page metadata and structure with no component children for pages. On success, `configStore` populates `pages` (with empty `children: []` arrays), `header`, `footer`, and `dialogs` (the second page tree, page children empty the same way).
 
 New state after bootstrap:
 
@@ -167,7 +167,7 @@ New state after bootstrap:
 
 ### Lazy Page Hydration
 
-Component trees for individual pages are fetched on demand via `GET /api/config/pages/{id}`.
+Component trees for individual pages are fetched on demand via `GET /api/config/{root}/{id}` — `pages` or `dialogs`, whichever root the page sits in, since each keeps its documents in its own directory.
 
 `usePage(pageId)` (from `frontend/src/shared/hooks/useConfig.ts`) is the primary consumer. It:
 
@@ -187,7 +187,7 @@ Call sites:
 `saveConfigToBackend()` performs two operations:
 
 1. `PUT /api/config/config` — saves the page index (page metadata only, no component children)
-2. For each `pageId` in `dirtyPageIds`: `PUT /api/config/pages/{pageId}` — saves the page's component tree
+2. For each `pageId` in `dirtyPageIds`: `PUT /api/config/{root}/{pageId}` — saves the page's component tree to its root's directory
 
 `dirtyPageIds` is cleared on success.
 
@@ -234,21 +234,53 @@ The frontend actively tells the backend which variables matter right now.
 Current producers:
 
 - `HmiView`
-  - sends `set_context` with `currentPageIds` and `openDialogIds`
+  - sends `set_context` with `currentPageIds` — the active page plus every open overlay's resolved page
 - `PreviewView`
-  - sends `set_context` with preview page/dialog context
+  - sends `set_context` with preview page/overlay context
 - `DatasourceVariableTable`
   - sends `set_context` with `priorityKeys` for currently visible rows after scroll settle
 
-`HmiView` keeps two independent runtime overlay stacks:
+### Page reveal and data settling
 
-- dialog stack via `openDialogIds`
-- page overlay stack via `openPageOverlayIds`
+Two questions that used to share one spinner are now separate.
 
-Backdrop close behavior is stack-aware:
+**Reveal** is a config-and-code question. `PageGroupPageView` waits on the
+page's own widget *modules* (the registry's prefetch/warmup machinery) with a
+5-second safety valve, and the boot splash idle-warms the built-ins so a later
+navigation finds them in memory. A page's variables do not gate the reveal at
+all, so a slow OPC-UA read no longer stalls every navigation.
 
-- closes top-most closeable dialog first
-- otherwise closes the top-most page overlay
+**Marking** is a data question, and it can only start once data has stopped
+arriving. `DataSettleGate` + `useDataSettling` hold the binding overlays off a
+subtree until the surface's `set_context` has been acked by `context_ready`
+echoing its id, or a `NO_DATA_GRACE_MS` (3s) fallback expires for the case where
+that signal never comes. The latch is per *wait*, not per key: navigating back
+to a page this long-lived gate already saw, or a reconnect clearing
+`contextReadyPageIds`, has to earn a fresh grace. It is reset during render
+rather than from an effect so a new wait never shows a frame of the previous
+one's verdict.
+
+`aggregateBindingStatus` then resolves one widget-level status —
+`disconnected` (socket or datasource down, authoritative even while values
+remain cached), `disabled` (a binding that does not resolve, drawn red),
+`nodata` (sound binding, no value, drawn amber) or `ok`.
+`extractRenderedVarKeys` narrows the overlay to variables actually on screen —
+dropping the losing branch of an `$if`/`$switch` and any property that is
+visibility-only or an actions payload — so a `$stringExpr` is covered without
+over-marking on unrelated variables. An overlay opened long after its host
+page settled asks for variables of its own, so its resolved page id rides in
+`currentPageIds` and the `context_ready` ack echoes it: the overlay settles on
+that signal rather than inheriting the host page's already-closed window.
+
+`HmiView` keeps one runtime overlay stack, `openPageOverlayIds`. Each entry's
+`pageId` is the node the action targeted (a page *or* a page group) and is the
+overlay's identity; `activePageId` follows navigation inside it.
+`useResolvedPageOverlays` resolves both against either page root, and it is the
+resolved *page* — never a group id — that is hydrated, sent in `set_context`
+and waited on by the settle gate.
+
+A press on the backdrop closes the top-most overlay, unless its node sets
+`closeOnBackgroundPress: false`.
 
 ## Component Registry
 
@@ -391,8 +423,8 @@ registry helpers read:
 the saved definition from `componentStore` (or the draft when inside a preview
 iframe) and renders its tree, with three behaviours worth knowing:
 
-- **Declared defaults are filled in.** Every property the instance leaves `undefined` takes its `componentProperties[*].defaultValue` before the tree is rendered, so the panel's `· default` hint matches what `$componentProp` resolves to at runtime. An explicit `null` counts as set.
-- **Instance sizing folds onto the first root.** The self-sizing half of the instance's layout (`SELF_LAYOUT_KEYS` in `layoutUtils.ts` — `grow`, min/max sizes, `width`, `height`, `widthMode`, `heightMode`) is merged onto the definition's *first* root node rather than applied to a wrapper: a wrapper would re-parent the roots and break flex values authored against the real parent, and folding onto every root would multiply the sizing by their count. Direction, gap and padding describe the component's insides and stay with the definition — an instance never reads them, and the panel renders an instance in `leaf` mode, which has no row for one, so the 4 → 5 migration drops the container half of its stored layout outright. It does the same for every other non-`Container` node, on the same grounds: `containerLayoutProps` has exactly one caller, so an `ImageContainer` — which hosts children but pins them to image slots — reads those keys no more than an instance or a leaf does.
+- **Declared defaults are filled in.** Every property the instance leaves `undefined` takes its `componentProperties[*].defaultValue` before the tree is rendered, so the panel's `· default` hint matches what `$componentProp` resolves to at runtime. An explicit `null` counts as set. The rule is not component-only: the helper is `withDeclaredDefaults` in `hmi/utils/componentPropResolution.ts`, and pages and page groups fill their declarations with it too. `ModalStack` publishes *only* the values the `openDialog` action supplied; `PageGroupPageView` layers the defaults under them, folding the declaration chain innermost-first (page, then its groups outward; a group's chrome band gets its own group chain without the page). That order is the whole precedence rule — supplied beats page default beats inner-group default beats outer-group default — and it only works in one place, which is why the merge does not also happen in `ModalStack`.
+- **Instance sizing folds onto the first root.** The self-sizing half of the instance's layout (`SELF_LAYOUT_KEYS` in `layoutUtils.ts` — `grow`, min/max sizes, `width`, `height`, `widthMode`, `heightMode`) is merged onto the definition's *first* root node rather than applied to a wrapper: a wrapper would re-parent the roots and break flex values authored against the real parent, and folding onto every root would multiply the sizing by their count. Direction, gap and padding describe the component's insides and stay with the definition — an instance never reads them, and the panel renders an instance in `leaf` mode, which has no row for one, so the baseline migration drops the container half of its stored layout outright. It does the same for every other non-`Container` node, on the same grounds: `containerLayoutProps` has exactly one caller, so an `ImageContainer` — which hosts children but pins them to image slots — reads those keys no more than an instance or a leaf does.
 - **Slot content is published on context.** The instance's `childConfigs` are grouped by slot and provided on `ComponentSlotContext`; `DefinitionScopeContext` is set to `true` around the definition's own widgets.
 
 Children referencing `$componentProp` resolve against `InputScopeContext`,
@@ -444,7 +476,7 @@ Source-capable field types are the value types plus the editor-only `option-list
 
 Editor implementation:
 
-- `PropertySourceSelector` controls the property source per field; the offered sources come from `getAllowedPropertySources(fieldType)` (derived from each source's `produces` metadata in `propertySourceRegistry.ts`), plus scope-injected sources (`$componentProp` inside a widget/dialog, `$result` inside an async-action handler)
+- `PropertySourceSelector` controls the property source per field; the offered sources come from `getAllowedPropertySources(fieldType)` (derived from each source's `produces` metadata in `propertySourceRegistry.ts`), plus scope-injected sources (`$componentProp` inside a widget, on a widget whose owning page or one of its ancestor page-groups is in the Dialogs root and declares component properties, or on a widget in page-group chrome whose group chain declares some; `$result` inside an async-action handler)
 - `PropertySourceEditor` renders source-specific editors
 - `visibilityEvaluator` controls conditional field visibility via `visibleWhen`
 - `TranslationInput` uses `{ "$loc": "key" }` for translation references
@@ -481,12 +513,12 @@ Runtime implementation:
 - `$user` with `field: 'userList'` is component-resolved (only valid for `option-list` fields); `$languages` is also component-resolved
 - `$widgetProp` is resolved at component-tree render time by reading the current `WidgetContext`; it is never evaluated by `propertySourceEval.ts` and is forbidden outside a widget's internal tree
 - bad-quality and disconnected `$var` reads resolve to the field's fallback (not a crash); coercion between mismatched base types follows the rules in [value-types.md](value-types.md) (`frontend/src/hmi/utils/coercion.ts`)
-- `frontend/src/hmi/hooks/useEvalContext.ts` wires a reactive `EvaluationContext` (variable store, translation store, URL params, active page ID) for use in HMI components. The index route renders a page without naming it in the URL, so the active page id falls back to `resolvePageContext(pages)` — the same page `HmiView` picks. `$page` and `$pageIsActive` share that one id, so neither reports "no page" on the landing screen
+- `frontend/src/hmi/hooks/useEvalContext.ts` wires a reactive `EvaluationContext` (variable store, translation store, URL params, host and active page IDs) for use in HMI components. `$page` resolves the **host** page — `HostPageContext`, provided by a page's own content and by a page-group's chrome bands — so it reports the page being rendered even inside a page overlay, which renders a page without touching the URL. Outside any page (app shell regions) it falls back to the route's active page; the index route names no page in the URL, so that id falls back in turn to `resolvePageContext(pages)` — the same page `HmiView` picks, so neither `$page` nor `$pageIsActive` reports "no page" on the landing screen
 - Variable shape metadata and the binding-picker tree speak **value types** (`boolean`/`integer`/`float`/`string`/`datetime`, plus `[]` arrays and named structs); real OPC-UA types are converted to these at the two HMI boundaries (`DatasourceManager.variable_metadata` and `GET /api/datasources/{name}/variables`). The classifier and conversion live in `frontend/src/shared/utils/valueTypes.ts` (and `backend/core/value_types.py`).
 - `nodeVarType` and the array-shape helpers in `frontend/src/shared/types/` derive array types from `is_array`; an optional positive `array_length` records only a fixed size.
 - `layoutUtils` getters (`getPropString`, `getPropNumber`, `getPropBoolean`) accept an optional `EvaluationContext` to resolve property sources at render time
 - `layoutUtils` hooks (`usePropVar`, `usePropString`, `usePropNumber`, `usePropBoolean`, `usePropStruct`, `useCssVar`) call `useEvalContext()` internally and simplify the most common per-component patterns; prefer these over the plain getters inside component render functions
-- `frontend/src/hmi/utils/widgetActions.ts` centralizes action execution so components define actions and delegate runtime behavior to one executor; supported action types: `openDialog`, `closeDialog`, `openPageOverlay`, `closePageOverlay`, `writeDataVariable`, `setLanguage`, `loginUser`, `logoutUser`, `showAlert`, `showToast`; `ActionsConfig` supports both `onPress` and `onChange` event keys; schema fields of type `actions` carry an optional `event` string to indicate which key is used
+- `frontend/src/hmi/utils/widgetActions.ts` centralizes action execution so components define actions and delegate runtime behavior to one executor; supported action types: `openDialog`, `openPageOverlay`, `closePageOverlay`, `writeDataVariable`, `setLanguage`, `loginUser`, `logoutUser`, `showAlert`, `showToast`; `ActionsConfig` supports both `onPress` and `onChange` event keys; schema fields of type `actions` carry an optional `event` string to indicate which key is used
 - `loginUser`, `logoutUser`, and `writeDataVariable` are async — each generates a `requestId` per invocation, registers a pending entry with `frontend/src/hmi/utils/actionDispatcher.ts`, and the backend echoes the `requestId` on its response. On response, the dispatcher invokes the authored `onSuccess` or `onFailed` followed by `onSettled`, replaying the original firing site's `inputScopeProps` so nested `$widgetProp` references still resolve. Pending entries expire after 10 s as `reason: 'timeout'`, and flush as `reason: 'disconnected'` when the WebSocket closes (`useWebSocket.ts` → `flushAllAsDisconnected`). The outer action list is still fire-and-forget — sequencing across an async action must use its `onSuccess` slot, not list ordering
 - `frontend/src/hmi/hooks/useGlobalEvents.ts` runs the configured `globalEvents` action arrays on app/page/locale/auth lifecycle (`onHmiLoaded`, `onPageLoaded`, `onLocaleChanged`, `onUserLoggedIn`, `onUserLoggedOut`)
 
@@ -497,7 +529,7 @@ Runtime implementation:
 `HmiView`:
 
 - loads config and translations
-- renders the shell regions (header, sidebars, footer), the page body and the active dialog
+- renders the shell regions (header, sidebars, footer), the page body and the open overlays
 - sends visible binding keys to the backend
 
 ### PreviewView
@@ -511,7 +543,7 @@ It supports these special `pageId` values:
 
 - `__header__`
 - `__footer__`
-- dialog IDs
+- the id of any page in the Dialogs root
 
 ## Styling Model
 

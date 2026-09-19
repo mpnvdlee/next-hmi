@@ -28,7 +28,14 @@ function project(overrides: Partial<AllAreas> = {}): AllAreas {
         sections: { content: [container, button('loose')] },
       },
     ],
-    dialogs: [{ id: 'dlg', title: 'Confirm', widgets: [button('dlg-btn')] }],
+    dialogs: [
+      {
+        id: 'dlg',
+        type: 'page',
+        title: 'Confirm',
+        sections: { content: [button('dlg-btn')] },
+      },
+    ],
     ...overrides,
   };
 }
@@ -66,9 +73,17 @@ describe('resolvePreviewInsertTarget', () => {
     });
   });
 
-  it('targets the dialog holding a leaf widget inside it', () => {
+  it('targets the section of a Dialogs-folder page holding a leaf widget', () => {
     expect(resolvePreviewInsertTarget(project(), 'dlg-btn', 'dlg')).toEqual({
-      kind: 'dialog-page',
+      kind: 'page-section',
+      nodeId: makePageSectionId('dlg', 'content'),
+      name: 'Confirm',
+    });
+  });
+
+  it('falls back to the Dialogs-folder page the preview is showing', () => {
+    expect(resolvePreviewInsertTarget(project(), null, 'dlg')).toEqual({
+      kind: 'page',
       nodeId: 'dlg',
       name: 'Confirm',
     });

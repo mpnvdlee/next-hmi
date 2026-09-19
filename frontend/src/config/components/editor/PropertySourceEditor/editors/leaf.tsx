@@ -361,6 +361,9 @@ export function PageEditor({
           value={obj.pageId ?? ''}
           onChange={(v) => onChange({ $page: { ...obj, pageId: v } })}
           emptyLabel="(Current active page)"
+          // Reads a page rather than going to it, and resolves against both
+          // roots — a Dialogs-folder page has a title and a path to report.
+          include="all"
         />
       </PropRow>
       {isPathString && (

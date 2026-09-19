@@ -56,8 +56,8 @@ export interface EvaluationContext {
    */
   resolveHttpRequest?: (spec: HttpRequestSpec) => HttpEntry | undefined;
   /**
-   * Innermost input scope (widget/dialog) at the read site. Drives `$componentProp`
-   * resolution: top-level references in component property
+   * Innermost input scope (component instance/page overlay) at the read site.
+   * Drives `$componentProp` resolution: top-level references in component property
    * bags are pre-resolved by `useResolvedProperties`; this is what catches
    * references nested inside other sources and inside action payloads.
    */
@@ -159,8 +159,9 @@ function evaluatePropertyValueInternal(
 
 /**
  * Looks up `payload` against `context.inputScopeProps` (published by the
- * surrounding widget/dialog) and recursively evaluates the result, so a `$var`
- * parent or a `key/sub/path` extension resolves to a live value.
+ * surrounding component instance/page overlay) and recursively evaluates the
+ * result, so a `$var` parent or a `key/sub/path` extension resolves to a live
+ * value.
  */
 function evaluateComponentProp(
   payload: unknown,

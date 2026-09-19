@@ -214,10 +214,10 @@ Every property has a **type** (`String`, `Integer`, `Float`, `Boolean`,
 `$recipe`, `$recipeList`, `$page`, `$viewport`, `$result`.
 
 Icons and images are plain `$static` values carrying a structured payload
-(`{ type, name }` / `{ path }`). `$componentProp` (formerly `$inputProp`) reads a
-value passed in by the parent component or dialog; `$widgetProp` reads a property
-exported by a sibling component. `$result` exists only inside an async action's
-`onSuccess` / `onFailed` / `onSettled` handlers.
+(`{ type, name }` / `{ path }`). `$componentProp` reads a value passed in by the
+parent component, or supplied by the action that opened the page overlay; `$widgetProp` reads a property exported by a sibling component.
+`$result` exists only inside an async action's `onSuccess` / `onFailed` /
+`onSettled` handlers.
 
 Canonical model: [../architecture/value-types.md](../architecture/value-types.md).
 

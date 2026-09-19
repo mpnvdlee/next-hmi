@@ -3,25 +3,23 @@ import type { CSSProperties, ReactNode } from 'react';
 import CloseButton from '@shared/components/CloseButton';
 import type {
   AnchorRect,
-  DialogConfig,
   OverlayPlacement,
   OverlaySize,
-  WidgetConfig,
+  PageNode,
+  PageRoot,
 } from '@shared/types/config';
-import { useConfigStore } from '@shared/store/configStore';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { resolvePageTitle } from '@shared/utils/pageTree';
 import { isAnchoredPlacement } from '@shared/utils/anchorPosition';
 import { useAnchoredStyle } from '@shared/hooks/useAnchoredStyle';
 import { InputScopeContext } from '@hmi/context/InputScopeContext';
-import { useResolvedDialogs, useResolvedPageOverlays } from '@hmi/hooks/useOpenOverlays';
-import WidgetRenderer from './WidgetRenderer';
+import { useResolvedPageOverlays } from '@hmi/hooks/useOpenOverlays';
 import { PageDataSettleGate } from './DataSettleGate';
 import PageGroupPageView from './PageGroupPageView';
 
 /** Distance (px) between successive same-placement docked cards, so opening a
- *  second dialog/overlay at the same edge doesn't render pixel-for-pixel on
- *  top of the first. */
+ *  second overlay at the same edge doesn't render pixel-for-pixel on top of
+ *  the first. */
 const STACK_OFFSET_STEP = 16;
 
 /**
@@ -40,9 +38,9 @@ function resolveEffectivePlacement(
 }
 
 /**
- * Builds the modal card's className from its resolved anchoring/placement/size.
- * Shared by both dialogs and page overlays so their docking behavior — and the
- * trigger-without-anchor fallback above — stays in one place.
+ * Builds the modal card's className from its resolved anchoring/placement/size,
+ * so the docking behavior — and the trigger-without-anchor fallback above —
+ * stays in one place.
  */
 function buildModalClassName({
   anchored,
@@ -75,26 +73,33 @@ function stackOffsetStyle(index: number): CSSProperties | undefined {
 }
 
 /**
- * Renders the modal backdrop with page-overlay and dialog stacks.
+ * The close settings of an overlay's card. They belong to the node the action
+ * named, and only a Dialogs-folder node carries them: an ordinary page borrowed
+ * as an overlay always closes both ways.
+ */
+function closeSettings(root: PageRoot, target: PageNode) {
+  const own = root === 'dialogs';
+  return {
+    showCloseButton: !own || target.showCloseButton !== false,
+    closeOnBackgroundPress: !own || target.closeOnBackgroundPress !== false,
+  };
+}
+
+/**
+ * Renders the modal backdrop with the page-overlay stack, in the order the
+ * overlays opened — the last one is on top and is the one the backdrop acts on.
  * Shared between HmiView and PreviewView.
  */
 export function ModalStack() {
-  // Still needed directly: PageGroupPageView (for page overlays) resolves its
-  // own page-group chrome stack from the full page tree, not just the
-  // already-resolved overlay page.
-  const pages = useConfigStore((s) => s.pages);
-  const closeDialog = useHmiStore((s) => s.closeDialog);
   const closePageOverlay = useHmiStore((s) => s.closePageOverlay);
   const updatePageOverlay = useHmiStore((s) => s.updatePageOverlay);
 
-  const openDialogs = useResolvedDialogs();
   const openPageOverlays = useResolvedPageOverlays();
 
-  // Tracks how many docked cards already claim a given placement (across both
-  // overlays and dialogs, in render order) so a second card at the same edge
-  // renders offset from the first instead of directly on top of it. In-flow
-  // centered cards and anchored popovers don't collide by construction, so
-  // they never consume a slot.
+  // Tracks how many docked cards already claim a given placement (in render
+  // order) so a second card at the same edge renders offset from the first
+  // instead of directly on top of it. In-flow centered cards and anchored
+  // popovers don't collide by construction, so they never consume a slot.
   const placementStackCounts = new Map<OverlayPlacement, number>();
   function stackIndexFor(
     anchored: boolean,
@@ -109,102 +114,72 @@ export function ModalStack() {
     return n;
   }
 
-  const dim =
-    openPageOverlays.some(({ entry }) => (entry.backdrop ?? 'dim') === 'dim') ||
-    openDialogs.some(({ entry }) => (entry.backdrop ?? 'dim') === 'dim');
+  const dim = openPageOverlays.some(({ entry }) => (entry.backdrop ?? 'dim') === 'dim');
 
-  if (openDialogs.length === 0 && openPageOverlays.length === 0) return null;
+  if (openPageOverlays.length === 0) return null;
 
   return (
     <div
       className={`hmi-modal-backdrop${dim ? '' : ' hmi-modal-backdrop--transparent'}`}
       onClick={() => {
-        // Dialogs always render above page overlays (see zIndex below), so a
-        // dialog — if any is open — is whichever the operator is actually
-        // looking at; only fall back to closing the topmost page overlay when
-        // no dialog is on top of it.
-        const topDialog = openDialogs[openDialogs.length - 1]?.dialog;
-        if (topDialog) {
-          if (topDialog.closeOnBackgroundPress) {
-            closeDialog(topDialog.id);
-          }
-          return;
-        }
-        const topItem = openPageOverlays[openPageOverlays.length - 1];
-        if (topItem) {
-          closePageOverlay(topItem.page.id);
+        const top = openPageOverlays[openPageOverlays.length - 1];
+        if (top && closeSettings(top.root, top.target).closeOnBackgroundPress) {
+          closePageOverlay(top.entry.pageId);
         }
       }}
     >
-      {openPageOverlays.map(({ entry, page: overlayPage }, index) => {
-        const anchored = isAnchoredPlacement(entry.placement) && Boolean(entry.anchorRect);
-        const stackIndex = stackIndexFor(anchored, entry.placement, entry.size);
-        const fixedStyle =
-          entry.size === 'fixed'
-            ? { width: entry.width ?? 400, height: entry.height ?? 300 }
-            : undefined;
-        return renderModalCard({
-          key: `overlay-page-${overlayPage.id}`,
-          anchorRect: anchored ? entry.anchorRect : null,
-          placement: entry.placement,
-          className: buildModalClassName({
-            anchored,
-            placement: entry.placement,
-            size: entry.size,
-          }),
-          style: { ...fixedStyle, ...stackOffsetStyle(stackIndex) },
-          zIndex: index + 1,
-          title: resolvePageTitle(overlayPage.title),
-          onClose: () => closePageOverlay(overlayPage.id),
-          children: (
-            // An overlay page id is sent in `set_context`'s `currentPageIds`
-            // (HmiView), so `context_ready` echoes it back and the overlay gets
-            // a real settle signal of its own — it does not inherit the host
-            // page's, which is already closed by the time the overlay opens.
-            <PageDataSettleGate pageId={overlayPage.id}>
-              <PageGroupPageView
-                pages={pages}
-                requestedId={overlayPage.id}
-                onNavigate={(pageId) => updatePageOverlay(overlayPage.id, pageId)}
-              />
-            </PageDataSettleGate>
-          ),
-        });
-      })}
       <div className="hmi-modal-stack">
-        {openDialogs.map(({ dialog, entry }, index) => {
-          const anchored = isAnchoredPlacement(entry.placement) && Boolean(entry.anchorRect);
-          const stackIndex = stackIndexFor(anchored, entry.placement, entry.size);
-          const fixedStyle =
-            entry.size === 'fixed'
-              ? { width: entry.width ?? 400, height: entry.height ?? 300 }
-              : undefined;
-          return renderModalCard({
-            key: dialog.id,
-            anchorRect: anchored ? entry.anchorRect : null,
-            placement: entry.placement,
-            className: buildModalClassName({
-              anchored,
+        {openPageOverlays.map(
+          ({ entry, node: overlayNode, page: activePage, root, rootNodes, target }, index) => {
+            const anchored = isAnchoredPlacement(entry.placement) && Boolean(entry.anchorRect);
+            const stackIndex = stackIndexFor(anchored, entry.placement, entry.size);
+            const fixedStyle =
+              entry.size === 'fixed'
+                ? { width: entry.width ?? 400, height: entry.height ?? 300 }
+                : undefined;
+            return renderModalCard({
+              key: `overlay-page-${entry.pageId}`,
+              anchorRect: anchored ? entry.anchorRect : null,
               placement: entry.placement,
-              size: entry.size,
-            }),
-            style: { ...fixedStyle, ...stackOffsetStyle(stackIndex) },
-            zIndex: openPageOverlays.length + index + 1,
-            title: dialog.title,
-            onClose: dialog.showCloseButton ? () => closeDialog(dialog.id) : null,
-            children: (
-              <DialogBody dialog={dialog} componentProperties={entry.componentProperties} />
-            ),
-          });
-        })}
+              className: buildModalClassName({
+                anchored,
+                placement: entry.placement,
+                size: entry.size,
+              }),
+              style: { ...fixedStyle, ...stackOffsetStyle(stackIndex) },
+              zIndex: index + 1,
+              title: resolvePageTitle(target.title),
+              onClose: closeSettings(root, target).showCloseButton
+                ? () => closePageOverlay(entry.pageId)
+                : null,
+              children: (
+                <PageOverlayBody
+                  rootNodes={rootNodes}
+                  takesInputs={root === 'dialogs'}
+                  requestedId={overlayNode.id}
+                  activePageId={activePage?.id}
+                  componentProperties={entry.componentProperties}
+                  onNavigate={(pageId, replace) => {
+                    // A `replace` call is `PageGroupPageView` canonicalising a group
+                    // id to its first child — meaningful for a URL, not for an
+                    // overlay, whose own resolution already falls back the same way.
+                    // Honouring it would move the entry off the group the action
+                    // named, so `closePageOverlay` could no longer close by it.
+                    if (!replace) updatePageOverlay(entry.pageId, pageId);
+                  }}
+                />
+              ),
+            });
+          },
+        )}
       </div>
     </div>
   );
 }
 
 /**
- * Shared modal-card shape for both dialogs and page overlays: a header (title
- * + optional close button) over a content body, inside a `ModalCard`.
+ * The modal-card shape every page overlay shares: a header (title + optional
+ * close button) over a content body, inside a `ModalCard`.
  */
 function renderModalCard({
   key,
@@ -281,25 +256,52 @@ function ModalCard({
   );
 }
 
-function DialogBody({
-  dialog,
+function PageOverlayBody({
+  rootNodes,
+  takesInputs,
+  requestedId,
+  activePageId,
   componentProperties,
+  onNavigate,
 }: {
-  dialog: DialogConfig;
+  /** The page-tree root the overlay's node lives in. */
+  rootNodes: PageNode[];
+  /** Whether that node takes input parameters — only the Dialogs folder's do. */
+  takesInputs: boolean;
+  /** The node the overlay shows — may be a page group. */
+  requestedId: string;
+  /** The leaf page under it, which is what the backend acks. */
+  activePageId: string | undefined;
   componentProperties: Record<string, unknown>;
+  onNavigate: (pageId: string, replace?: boolean) => void;
 }) {
-  const scope = useMemo(() => ({ properties: componentProperties }), [componentProperties]);
-  // A dialog opened long after its page settled asks for variables of its own:
-  // `set_context` carries `openDialogIds` and the ack echoes them back, so this
-  // waits on the real signal. Without it a dialog whose values are not cached
-  // opens already marked, a beat before they land.
+  // Only the values the action supplied. Declared defaults are layered in by
+  // `PageGroupPageView`, which is the only place that knows the whole group
+  // trail — folding them in here would make the outermost declaration win. A
+  // node outside the Dialogs folder takes no inputs, so it gets no scope at all.
+  const scope = useMemo(
+    () => (takesInputs ? { properties: componentProperties } : null),
+    [takesInputs, componentProperties],
+  );
+  // Outside the settle gate and the page view so a page-group's header/footer
+  // chrome reads the overlay's values too, not just the page body.
   return (
-    <PageDataSettleGate pageId={dialog.id} kind="dialog">
-      <InputScopeContext.Provider value={scope}>
-        {(dialog.widgets as WidgetConfig[]).map((comp) => (
-          <WidgetRenderer key={comp.id} node={comp} />
-        ))}
-      </InputScopeContext.Provider>
-    </PageDataSettleGate>
+    <InputScopeContext.Provider value={scope}>
+      {/* An overlay's *resolved page* id is sent in `set_context`'s
+          `currentPageIds` (HmiView), so `context_ready` echoes it back and the
+          overlay gets a real settle signal of its own — it does not inherit the
+          host page's, which is already closed by the time the overlay opens. A
+          targeted page group has no id the backend knows, so the gate keys off
+          the page inside it rather than waiting forever on an ack for the
+          group. */}
+      <PageDataSettleGate pageId={activePageId}>
+        <PageGroupPageView
+          pages={rootNodes}
+          requestedId={requestedId}
+          onNavigate={onNavigate}
+          takesInputs={takesInputs}
+        />
+      </PageDataSettleGate>
+    </InputScopeContext.Provider>
   );
 }

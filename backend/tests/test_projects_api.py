@@ -633,8 +633,8 @@ def test_example_template_ships_only_the_documented_demo_account():
     assert "passwordHash" not in guest, "guest can never carry a password"
     assert verify_password(brewer, DEMO_PASSWORD)
 
-    config = json.loads((template / "config.json").read_text(encoding="utf-8"))
-    assert DEMO_PASSWORD in json.dumps(config), (
+    login_page = json.loads((template / "dialogs" / "login.json").read_text(encoding="utf-8"))
+    assert DEMO_PASSWORD in json.dumps(login_page), (
         "the login dialog must print the demo password it ships"
     )
 

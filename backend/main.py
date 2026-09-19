@@ -145,17 +145,18 @@ def _run_validation_sweep() -> None:
         return
     log = logging.getLogger("nexthmi.validation_sweep")
     try:
-        from core.storage import active_pages_dir, read_json
+        from core.page_index import page_document_files
+        from core.storage import read_json
         from core.validation import build_context, validate_page
     except Exception as exc:
         log.warning("validation sweep skipped: %s", exc)
         return
-    pages_dir = active_pages_dir()
-    if not pages_dir.exists():
+    documents = page_document_files(skip_internal=False)
+    if not documents:
         return
     ctx = build_context()
     findings_total = 0
-    for path in pages_dir.glob("*.json"):
+    for path in documents:
         if path.stem.startswith("__"):
             continue
         try:

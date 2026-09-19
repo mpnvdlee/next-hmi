@@ -1,21 +1,33 @@
 import { useMemo } from 'react';
-import type { DialogConfig, PageNode } from '@shared/types/config';
+import type { PageNode } from '@shared/types/config';
 import { SHELL_REGION_IDS } from '@shared/types/config';
 import { isPageGroup } from '@shared/utils/pageTree';
 import { filterComponents, filterPage, filterPageGroup, type ShellAreas } from './treeFilters';
-import { matchesSearchWords, withDotSearchSeparators } from '@shared/utils/search';
+import { withDotSearchSeparators } from '@shared/utils/search';
 
 interface FilteredTrees {
   filteredShell: ShellAreas;
   filteredPages: PageNode[];
-  filteredDialogs: DialogConfig[];
+  filteredDialogs: PageNode[];
+}
+
+/** One page-tree root filtered by the query, each path prefixed with the
+ *  root's own section label so a search can name the section too. */
+function filterRoot(nodes: PageNode[], wordQuery: string, label: string): PageNode[] {
+  return nodes
+    .map((node) =>
+      isPageGroup(node)
+        ? filterPageGroup(node, wordQuery, label)
+        : filterPage(node, wordQuery, label),
+    )
+    .filter((n): n is PageNode => n !== null);
 }
 
 export function useTreeSearch(
   searchQuery: string,
   shell: ShellAreas,
   pages: PageNode[],
-  dialogs: DialogConfig[],
+  dialogs: PageNode[],
 ): FilteredTrees {
   const wordQuery = withDotSearchSeparators(searchQuery);
   const filteredShell = useMemo<ShellAreas>(() => {
@@ -29,31 +41,15 @@ export function useTreeSearch(
     return out;
   }, [shell, searchQuery, wordQuery]);
 
-  const filteredPages = useMemo(() => {
-    if (!searchQuery.trim()) return pages;
-    return pages
-      .map((node) =>
-        isPageGroup(node)
-          ? filterPageGroup(node, wordQuery, 'Pages')
-          : filterPage(node, wordQuery, 'Pages'),
-      )
-      .filter((n): n is PageNode => n !== null);
-  }, [pages, searchQuery, wordQuery]);
+  const filteredPages = useMemo(
+    () => (searchQuery.trim() ? filterRoot(pages, wordQuery, 'Pages') : pages),
+    [pages, searchQuery, wordQuery],
+  );
 
-  const filteredDialogs = useMemo(() => {
-    if (!searchQuery.trim()) return dialogs;
-    return dialogs
-      .map((d) => {
-        const dialogPath = `Dialogs / ${d.title}`;
-        const titleMatches = matchesSearchWords(wordQuery, [dialogPath, d.id]);
-        const filteredComponents = filterComponents(d.widgets, wordQuery, dialogPath);
-        if (titleMatches || filteredComponents.length > 0) {
-          return { ...d, widgets: titleMatches ? d.widgets : filteredComponents };
-        }
-        return null;
-      })
-      .filter((d): d is DialogConfig => d !== null);
-  }, [dialogs, searchQuery, wordQuery]);
+  const filteredDialogs = useMemo(
+    () => (searchQuery.trim() ? filterRoot(dialogs, wordQuery, 'Dialogs') : dialogs),
+    [dialogs, searchQuery, wordQuery],
+  );
 
   return { filteredShell, filteredPages, filteredDialogs };
 }

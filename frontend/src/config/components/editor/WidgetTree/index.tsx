@@ -1,11 +1,12 @@
 /**
  * WidgetTree — left sidebar panel for /editor.
  *
- * Four collapsible sections: Header · Footer · Pages · Dialogs
+ * Collapsible sections: the shell regions · Pages · Dialogs
  *
- * - Header / Footer: singleton areas; right-click or + to add components
- * - Pages: existing page CRUD + drag reorder
- * - Dialogs: add / rename / delete dialog, edit components inside it
+ * - Shell regions: singleton areas; right-click or + to add components
+ * - Pages: the navigable page tree — page and page-group CRUD + drag reorder
+ * - Dialogs: the same tree for pages and page groups only ever opened as an
+ *   overlay; pages move between the two by drag or cut and paste
  * - Components inside any area: same container / leaf context menu as before
  *
  * Style rule: zero `style={{}}` except CSS custom properties.
@@ -30,7 +31,8 @@ import { useToggleSet } from '@shared/hooks/useToggleSet';
 import {
   SHELL_REGION_IDS,
   shellSectionIdForRegion,
-  type PageConfig,
+  type PageNode,
+  type PageRoot,
   type ShellRegionId,
 } from '@shared/types/config';
 import ContextMenu from './ContextMenu';
@@ -38,7 +40,6 @@ import WidgetSelector from '../../ui/WidgetSelector';
 import {
   makeComponentOfType,
   makeDefaultContainer,
-  makeDefaultDialog,
   makeDefaultPage,
   makeDefaultPageGroup,
 } from './treeUtils';
@@ -59,7 +60,12 @@ import {
 } from './clipboardDispatch';
 import { collectAllCollapsibleIds, findRevealTarget, type ShellAreas } from './treeFilters';
 import { useTreeSearch } from './useTreeSearch';
-import { findPageNodeById, isPageGroup, resolvePageTitle } from '@shared/utils/pageTree';
+import {
+  allPageRootNodes,
+  findPageNodeById,
+  isPageGroup,
+  resolvePageTitle,
+} from '@shared/utils/pageTree';
 import { findComponentInPages } from '@shared/utils/widgetTree';
 import { detectCopyPasteKey, type SelectionModifiers } from '@shared/utils/domEvent';
 import { canExtendWith, verbTargets } from '@config/store/domains/selectionScope';
@@ -72,12 +78,15 @@ import type { ContextMenuState, NodeKind } from './types';
 import AreaWidgetList from './AreaWidgetList';
 import TreePage from './TreePage';
 import TreePageGroup from './TreePageGroup';
-import TreeDialogPage from './TreeDialogPage';
 import SectionRow from './SectionRow';
 import TreeRow from '../../ui/TreeRow';
 import TreeSearchBar from '../../ui/TreeSearchBar';
 import { TreeDiagnosticDot } from '../../ui/TreeAffordances';
-import { containsSeverityTitle, useDiagnosticIndex } from '@config/hooks/useProjectDiagnostics';
+import {
+  containsSeverityTitle,
+  pageRootSeverity,
+  useDiagnosticIndex,
+} from '@config/hooks/useProjectDiagnostics';
 import { TreeSelectionContext } from './treeSelectionContext';
 import { TreeSearchHighlight, TreeSearchQueryProvider } from './TreeSearchHighlight';
 
@@ -123,20 +132,45 @@ function insertTargetName(
   kind: NodeKind,
 ): string | undefined {
   if (kind === 'area') return SHELL_SECTION_META[nodeId as ShellRegionId]?.label;
-  if (kind === 'dialog-page') {
-    const dialog = store.dialogs.find((d) => d.id === nodeId);
-    return dialog ? resolvePageTitle(dialog.title) : undefined;
-  }
+  const pageNodes = allPageRootNodes(store);
   if (kind === 'page') {
-    const page = findPageNodeById(store.pages, nodeId);
+    const page = findPageNodeById(pageNodes, nodeId);
     return page && !isPageGroup(page) ? resolvePageTitle(page.title) : undefined;
   }
   if (kind === 'widget-slot') {
     const [widgetId, slot] = parseWidgetSlotId(nodeId);
-    const widget = findComponentInPages(store.pages, widgetId);
+    const widget = findComponentInPages(pageNodes, widgetId);
     return widget ? slotTargetLabel(widget.name, slot) : undefined;
   }
-  return findComponentInPages(store.pages, nodeId)?.name;
+  return findComponentInPages(pageNodes, nodeId)?.name;
+}
+
+/** The page-tree root a section menu adds to. */
+function rootOfMenu(kind: NodeKind): PageRoot {
+  return kind === 'dialogs-root' ? 'dialogs' : 'pages';
+}
+
+interface PageRootListProps {
+  nodes: PageNode[];
+  root: PageRoot;
+  collapsed: Set<string>;
+  onToggle: (id: string) => void;
+  onCtxMenu: (event: React.MouseEvent, id: string, kind: NodeKind) => void;
+  editingPageId: string | null;
+  editingTitle: string;
+  onEditChange: (value: string) => void;
+  onEditCommit: (id: string) => void;
+}
+
+/** The top level of one page-tree root — Pages or Dialogs render identically. */
+function PageRootList({ nodes, root, ...rest }: PageRootListProps) {
+  return nodes.map((node) =>
+    isPageGroup(node) ? (
+      <TreePageGroup key={node.id} group={node} root={root} {...rest} />
+    ) : (
+      <TreePage key={node.id} page={node} root={root} {...rest} />
+    ),
+  );
 }
 
 /** Pointer-first so the band under the cursor decides the drop; the rect-based
@@ -165,6 +199,14 @@ export default function WidgetTree() {
 
   const sensors = useDndSensors();
   const diagnostics = useDiagnosticIndex();
+  const pagesSeverity = useMemo(
+    () => pageRootSeverity(pages, diagnostics.byArtifact),
+    [pages, diagnostics.byArtifact],
+  );
+  const dialogsSeverity = useMemo(
+    () => pageRootSeverity(dialogs, diagnostics.byArtifact),
+    [dialogs, diagnostics.byArtifact],
+  );
   const eventsSeverity = diagnostics.byArtifact.get('globalEvents:globalEvents');
 
   const [collapsed, toggleCollapsed, setCollapsed] = useToggleSet<string>(treeCollapsedIds);
@@ -400,15 +442,11 @@ export default function WidgetTree() {
   const handleEditCommit = useCallback(
     (id: string) => {
       if (editingTitle.trim()) {
-        if (dialogs.some((p) => p.id === id)) {
-          useConfigStore.getState().renameDialog(id, editingTitle.trim());
-        } else {
-          const node = findPageNodeById(pages, id);
-          if (node) {
-            const title = editingTitle.trim();
-            if (isPageGroup(node)) useConfigStore.getState().updatePageGroup(id, { title });
-            else useConfigStore.getState().updatePage(id, { title });
-          }
+        const node = findPageNodeById(allPageRootNodes({ pages, dialogs }), id);
+        if (node) {
+          const title = editingTitle.trim();
+          if (isPageGroup(node)) useConfigStore.getState().updatePageGroup(id, { title });
+          else useConfigStore.getState().updatePage(id, { title });
         }
       }
       setEditingPageId(null);
@@ -429,14 +467,14 @@ export default function WidgetTree() {
 
       switch (verb) {
         case 'addPage':
-          store.addPage(makeDefaultPage(ids));
+          store.addPage(makeDefaultPage(ids), rootOfMenu(kind));
           break;
 
         case 'addPageGroup':
           if (kind === 'page-group') {
             store.addPageGroupToPageGroup(nodeId, makeDefaultPageGroup(ids));
           } else {
-            store.addPageGroup(makeDefaultPageGroup(ids));
+            store.addPageGroup(makeDefaultPageGroup(ids), rootOfMenu(kind));
           }
           break;
 
@@ -453,13 +491,7 @@ export default function WidgetTree() {
           break;
 
         case 'rename': {
-          const dialog = dialogs.find((p) => p.id === nodeId);
-          if (dialog) {
-            setEditingPageId(nodeId);
-            setEditingTitle(dialog.title);
-            break;
-          }
-          const pg = findPageNodeById(pages, nodeId);
+          const pg = findPageNodeById(allPageRootNodes({ pages, dialogs }), nodeId);
           if (pg) {
             setEditingPageId(nodeId);
             setEditingTitle(resolvePageTitle(pg.title));
@@ -475,7 +507,7 @@ export default function WidgetTree() {
           break;
 
         case 'deletePageGroup': {
-          const groupNode = findPageNodeById(pages, nodeId);
+          const groupNode = findPageNodeById(allPageRootNodes({ pages, dialogs }), nodeId);
           const idsToClose = [nodeId];
           if (groupNode && isPageGroup(groupNode))
             idsToClose.push(...groupNode.children.map((c) => c.id));
@@ -486,13 +518,6 @@ export default function WidgetTree() {
             useEditorDomainStore.getState().setSelected(null);
           break;
         }
-
-        case 'deleteDialog':
-          store.deleteDialog(nodeId);
-          useEditorDomainStore.getState().closeTab(nodeId);
-          if (useEditorDomainStore.getState().selectedId === nodeId)
-            useEditorDomainStore.getState().setSelected(null);
-          break;
 
         case 'delete':
           // Right-click has already re-pointed the selection unless the node was
@@ -639,13 +664,24 @@ export default function WidgetTree() {
       const store = useConfigStore.getState();
       if (plan.kind === 'widget') {
         store.moveWidgetsTo(resolved.nodeIds, plan.target, plan.index);
-      } else store.movePageTo(plan.nodeId, plan.groupId, plan.index);
+      } else store.movePageTo(plan.nodeId, plan.groupId, plan.index, plan.root);
     },
     [endDrag, planFor],
   );
 
   const selectedIds = useMemo(() => new Set(selectedIdList), [selectedIdList]);
   const treeSelection = useMemo(() => ({ selectedIds, selectRow }), [selectedIds, selectRow]);
+
+  const rowProps = {
+    collapsed,
+    onToggle: toggleCollapsed,
+    onCtxMenu: handleCtxMenu,
+    editingPageId,
+    editingTitle,
+    onEditChange: setEditingTitle,
+    onEditCommit: handleEditCommit,
+  };
+  const searchRowProps = { ...rowProps, collapsed: effectiveCollapsed };
 
   return (
     <TreeSearchQueryProvider query={wordSearchQuery}>
@@ -761,6 +797,7 @@ export default function WidgetTree() {
                   <SectionRow
                     label="Pages"
                     icon="📄"
+                    dropId={EDITOR_NODE_IDS.PAGES}
                     isOpen={effectiveSectionsOpen.has(EDITOR_NODE_IDS.PAGES)}
                     onToggle={() => toggleSection(EDITOR_NODE_IDS.PAGES)}
                     addTitle="Add page or page group"
@@ -785,7 +822,7 @@ export default function WidgetTree() {
                       })
                     }
                     count={pages.length}
-                    severity={diagnostics.byKind.get('page')}
+                    severity={pagesSeverity}
                   />
                 )}
                 {pagesVisible &&
@@ -794,33 +831,7 @@ export default function WidgetTree() {
                     filteredPages.length === 0 ? (
                       <div className="cfg-tree-section-empty">No pages match</div>
                     ) : (
-                      filteredPages.map((node) =>
-                        isPageGroup(node) ? (
-                          <TreePageGroup
-                            key={node.id}
-                            group={node}
-                            collapsed={effectiveCollapsed}
-                            onToggle={toggleCollapsed}
-                            onCtxMenu={handleCtxMenu}
-                            editingPageId={editingPageId}
-                            editingTitle={editingTitle}
-                            onEditChange={setEditingTitle}
-                            onEditCommit={handleEditCommit}
-                          />
-                        ) : (
-                          <TreePage
-                            key={node.id}
-                            page={node as PageConfig}
-                            collapsed={effectiveCollapsed}
-                            onToggle={toggleCollapsed}
-                            onCtxMenu={handleCtxMenu}
-                            editingPageId={editingPageId}
-                            editingTitle={editingTitle}
-                            onEditChange={setEditingTitle}
-                            onEditCommit={handleEditCommit}
-                          />
-                        ),
-                      )
+                      <PageRootList nodes={filteredPages} root="pages" {...searchRowProps} />
                     )
                   ) : (
                     <SortableContext
@@ -830,33 +841,7 @@ export default function WidgetTree() {
                       {pages.length === 0 ? (
                         <div className="cfg-tree-section-empty">No pages — use + to add one</div>
                       ) : (
-                        pages.map((node) =>
-                          isPageGroup(node) ? (
-                            <TreePageGroup
-                              key={node.id}
-                              group={node}
-                              collapsed={collapsed}
-                              onToggle={toggleCollapsed}
-                              onCtxMenu={handleCtxMenu}
-                              editingPageId={editingPageId}
-                              editingTitle={editingTitle}
-                              onEditChange={setEditingTitle}
-                              onEditCommit={handleEditCommit}
-                            />
-                          ) : (
-                            <TreePage
-                              key={node.id}
-                              page={node}
-                              collapsed={collapsed}
-                              onToggle={toggleCollapsed}
-                              onCtxMenu={handleCtxMenu}
-                              editingPageId={editingPageId}
-                              editingTitle={editingTitle}
-                              onEditChange={setEditingTitle}
-                              onEditCommit={handleEditCommit}
-                            />
-                          ),
-                        )
+                        <PageRootList nodes={pages} root="pages" {...rowProps} />
                       )}
                     </SortableContext>
                   ))}
@@ -865,46 +850,56 @@ export default function WidgetTree() {
                   <SectionRow
                     label="Dialogs"
                     icon="⊞"
+                    dropId={EDITOR_NODE_IDS.DIALOGS}
                     isOpen={effectiveSectionsOpen.has(EDITOR_NODE_IDS.DIALOGS)}
                     onToggle={() => toggleSection(EDITOR_NODE_IDS.DIALOGS)}
-                    addTitle="Add dialog"
+                    addTitle="Add a dialog or dialog group"
+                    onAdd={(e) =>
+                      setCtxMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        nodeId: EDITOR_NODE_IDS.DIALOGS,
+                        kind: 'dialogs-root',
+                      })
+                    }
                     selected={selectedId === EDITOR_NODE_IDS.DIALOGS}
                     onSelect={() =>
                       useEditorDomainStore
                         .getState()
                         .setSelected(EDITOR_NODE_IDS.DIALOGS, 'dialogs')
                     }
-                    onAdd={() => {
-                      const store = useConfigStore.getState();
-                      store.addDialog(makeDefaultDialog(collectAllIds(store)));
-                    }}
+                    onCtxMenu={(e) =>
+                      setCtxMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        nodeId: EDITOR_NODE_IDS.DIALOGS,
+                        kind: 'dialogs-root',
+                      })
+                    }
                     count={dialogs.length}
-                    severity={diagnostics.byKind.get('dialog')}
+                    severity={dialogsSeverity}
                   />
                 )}
-                {dialogsVisible && effectiveSectionsOpen.has(EDITOR_NODE_IDS.DIALOGS) && (
-                  <>
-                    {filteredDialogs.length === 0 ? (
-                      <div className="cfg-tree-section-empty">
-                        {isSearching ? 'No dialogs match' : 'No dialogs — use + to add one'}
-                      </div>
+                {dialogsVisible &&
+                  effectiveSectionsOpen.has(EDITOR_NODE_IDS.DIALOGS) &&
+                  (isSearching ? (
+                    filteredDialogs.length === 0 ? (
+                      <div className="cfg-tree-section-empty">No dialogs match</div>
                     ) : (
-                      filteredDialogs.map((dialog) => (
-                        <TreeDialogPage
-                          key={dialog.id}
-                          popup={dialog}
-                          collapsed={effectiveCollapsed}
-                          onToggle={toggleCollapsed}
-                          onCtxMenu={handleCtxMenu}
-                          editingPageId={editingPageId}
-                          editingTitle={editingTitle}
-                          onEditChange={setEditingTitle}
-                          onEditCommit={handleEditCommit}
-                        />
-                      ))
-                    )}
-                  </>
-                )}
+                      <PageRootList nodes={filteredDialogs} root="dialogs" {...searchRowProps} />
+                    )
+                  ) : (
+                    <SortableContext
+                      items={dialogs.map((p) => p.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {dialogs.length === 0 ? (
+                        <div className="cfg-tree-section-empty">No dialogs — use + to add one</div>
+                      ) : (
+                        <PageRootList nodes={dialogs} root="dialogs" {...rowProps} />
+                      )}
+                    </SortableContext>
+                  ))}
               </div>
             </DropIndicatorProvider>
           </DndContext>

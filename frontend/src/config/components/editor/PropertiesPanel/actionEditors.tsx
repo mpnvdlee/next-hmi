@@ -7,7 +7,7 @@
  * an editor here, register it in the map.
  *
  * Editors share an ActionEditorCtx for parent callbacks (update, picker
- * openers) and computed lists (dialogs, allPages).
+ * openers) and computed lists (overlay targets).
  */
 
 // File exports the ACTION_EDITORS registry alongside its component definitions —
@@ -17,10 +17,9 @@
 import { useContext, useMemo, type ComponentType, type ReactNode } from 'react';
 import type {
   ButtonAction,
-  DialogConfig,
   OverlayPlacement,
   OverlaySize,
-  PageConfig,
+  PageNode,
   VariableBinding,
 } from '@shared/types/config';
 import type { SchemaField } from '@shared/types/widgetSchema';
@@ -36,8 +35,11 @@ import Select from '../../ui/Select';
 import BoolButtonGroup from '../../ui/BoolButtonGroup';
 import SchemaFieldRow from '../../ui/SchemaFieldRow';
 import type ActionsInputType from './ActionsInput';
-import { componentPropertyToSchemaField } from '@shared/types/componentProperty';
-import { resolvePageTitle } from '@shared/utils/pageTree';
+import {
+  componentPropertyToSchemaField,
+  type ComponentPropertySchema,
+} from '@shared/types/componentProperty';
+import { isPageGroup, resolvePageTitle } from '@shared/utils/pageTree';
 import { ResultFieldsContext } from '../PropertySourceEditor/resultFieldsContext';
 import { varBindingOf } from '../bindingPickerUtils';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
@@ -45,11 +47,29 @@ import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
 
 // ── Shared ─────────────────────────────────────────────────────────────────
 
+/** Every node an Open/Close Page Overlay action may name — leaf pages *and*
+ *  page groups — per page-tree root. Only a Dialogs-folder node takes input
+ *  parameters. */
+export interface OverlayTargets {
+  dialogs: PageNode[];
+  pages: PageNode[];
+}
+
+/** The overlay target with this id, and whether it is in the Dialogs folder. */
+export function findOverlayTarget(
+  targets: OverlayTargets,
+  id: string | undefined,
+): { node: PageNode; inDialogs: boolean } | null {
+  const inDialogs = targets.dialogs.find((node) => node.id === id);
+  if (inDialogs) return { node: inDialogs, inDialogs: true };
+  const inPages = targets.pages.find((node) => node.id === id);
+  return inPages ? { node: inPages, inDialogs: false } : null;
+}
+
 export interface ActionEditorCtx {
   /** Patch this action with the given partial. */
   update: (patch: Partial<ButtonAction>) => void;
-  dialogs: DialogConfig[];
-  allPages: PageConfig[];
+  overlayTargets: OverlayTargets;
   /** Cached `data_type` for writeDataVariable bindings, keyed by `${ds}:${path}`. */
   dataTypes: Record<string, VariableWriteDescriptor>;
   /** Generic binding picker — for loginUser/setLanguage style fields. */
@@ -223,75 +243,53 @@ function ResultHandlersSubrows({
 
 // ── Per-action editors ─────────────────────────────────────────────────────
 
-const DIALOG_SCHEMA: SchemaField = { type: 'String', format: 'select', label: 'Dialog' };
+/**
+ * The "Input Parameters" section `openDialog` grows for a target that declares
+ * any: one row per input parameter, holding the value the action passes in.
+ */
+function ActionComponentProperties({
+  declared,
+  values,
+  onChange,
+}: {
+  declared: Record<string, ComponentPropertySchema> | undefined;
+  values: Record<string, unknown>;
+  onChange: (next: Record<string, unknown>) => void;
+}) {
+  const fields = useMemo(
+    () =>
+      Object.entries(declared ?? {}).map(
+        ([key, schema]) => [key, componentPropertyToSchemaField(schema)] as const,
+      ),
+    [declared],
+  );
+  if (fields.length === 0) return null;
 
-const OpenDialogEditor: EditorFor<'openDialog'> = ({ action, ctx }) => {
-  const dialog = ctx.dialogs.find((d) => d.id === action.dialogId);
-  const componentPropFields = useMemo(() => {
-    if (!dialog?.componentProperties) return [];
-    return Object.entries(dialog.componentProperties).map(
-      ([key, schema]) => [key, componentPropertyToSchemaField(schema)] as const,
-    );
-  }, [dialog?.componentProperties]);
-  const componentProps = action.componentProperties ?? {};
-
-  function patchComponentProp(key: string, value: unknown) {
-    const next = { ...componentProps };
+  function patch(key: string, value: unknown) {
+    const next = { ...values };
     if (value === undefined) delete next[key];
     else next[key] = value;
-    ctx.update({ componentProperties: next });
+    onChange(next);
   }
 
   return (
-    <>
-      <ActionFieldRow ctx={ctx} fieldKey="dialogId" schema={DIALOG_SCHEMA} label="Dialog">
-        <Select value={action.dialogId} onChange={(v) => ctx.update({ dialogId: v })}>
-          <option value="">— select dialog —</option>
-          {ctx.dialogs.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.title}
-            </option>
-          ))}
-        </Select>
-      </ActionFieldRow>
-      <OverlayLayoutFields action={action} ctx={ctx} defaultSize="auto" />
-      {componentPropFields.length > 0 && (
-        <div className="cfg-section">
-          <div className="cfg-section__title">Component Properties</div>
-          {componentPropFields.map(([key, field]) => (
-            <SchemaFieldRow
-              key={key}
-              schema={field}
-              value={componentProps[key]}
-              onChange={(v) => patchComponentProp(key, v)}
-              allProperties={componentProps}
-            />
-          ))}
-        </div>
-      )}
-    </>
+    <div className="cfg-section">
+      <div className="cfg-section__title">Input Parameters</div>
+      {fields.map(([key, field]) => (
+        <SchemaFieldRow
+          key={key}
+          schema={field}
+          value={values[key]}
+          onChange={(v) => patch(key, v)}
+          allProperties={values}
+        />
+      ))}
+    </div>
   );
-};
-
-const CloseDialogEditor: EditorFor<'closeDialog'> = ({ action, ctx }) => {
-  return (
-    <ActionFieldRow ctx={ctx} fieldKey="dialogId" schema={DIALOG_SCHEMA} label="Dialog">
-      <Select
-        value={action.dialogId ?? ''}
-        onChange={(v) => ctx.update({ dialogId: v || undefined })}
-      >
-        <option value="">Top-most dialog</option>
-        {ctx.dialogs.map((dialog) => (
-          <option key={dialog.id} value={dialog.id}>
-            {dialog.title}
-          </option>
-        ))}
-      </Select>
-    </ActionFieldRow>
-  );
-};
+}
 
 const PAGE_SCHEMA: SchemaField = { type: 'String', format: 'select', label: 'Page' };
+const DIALOG_SCHEMA: SchemaField = { type: 'String', format: 'select', label: 'Dialog' };
 const SIZE_SCHEMA: SchemaField = { type: 'String', format: 'select', label: 'Size' };
 const PLACEMENT_SCHEMA: SchemaField = { type: 'String', format: 'select', label: 'Placement' };
 const BACKDROP_SCHEMA: SchemaField = { type: 'Boolean', label: 'Dim background' };
@@ -350,9 +348,9 @@ function BackdropField({
   );
 }
 
-type OverlayAction = Extract<ButtonAction, { type: 'openDialog' } | { type: 'openPageOverlay' }>;
+type OverlayAction = Extract<ButtonAction, { type: 'openDialog' | 'openPageOverlay' }>;
 
-/** Shared placement and sizing fields for dialog and page-overlay actions. */
+/** Placement and sizing fields of the page-overlay action. */
 function OverlayLayoutFields({
   action,
   ctx,
@@ -431,17 +429,62 @@ function OverlayLayoutFields({
   );
 }
 
+/** `<option>` per node. A group is labelled as one: it opens its active child
+ *  inside its own chrome, which is a different thing from opening that child on
+ *  its own. */
+function overlayTargetOptions(nodes: PageNode[]) {
+  return nodes.map((node) => (
+    <option key={node.id} value={node.id}>
+      {resolvePageTitle(node.title)}
+      {isPageGroup(node) ? ' (page group)' : ''}
+    </option>
+  ));
+}
+
+/** Both roots, each in its own group — the close action closes either kind, so
+ *  its picker is the only one that still spans the whole page tree. */
+function everyOverlayTargetOption(targets: OverlayTargets) {
+  return (
+    <>
+      {targets.dialogs.length > 0 && (
+        <optgroup label="Dialogs">{overlayTargetOptions(targets.dialogs)}</optgroup>
+      )}
+      {targets.pages.length > 0 && (
+        <optgroup label="Pages">{overlayTargetOptions(targets.pages)}</optgroup>
+      )}
+    </>
+  );
+}
+
+const OpenDialogEditor: EditorFor<'openDialog'> = ({ action, ctx }) => {
+  const target = findOverlayTarget(ctx.overlayTargets, action.pageId);
+  return (
+    <>
+      <ActionFieldRow ctx={ctx} fieldKey="pageId" schema={DIALOG_SCHEMA} label="Dialog">
+        <Select value={action.pageId} onChange={(v) => ctx.update({ pageId: v })}>
+          <option value="">— select dialog —</option>
+          {overlayTargetOptions(ctx.overlayTargets.dialogs)}
+        </Select>
+      </ActionFieldRow>
+      <OverlayLayoutFields action={action} ctx={ctx} defaultSize="medium" />
+      {target?.inDialogs && (
+        <ActionComponentProperties
+          declared={target.node.componentProperties}
+          values={action.componentProperties ?? {}}
+          onChange={(next) => ctx.update({ componentProperties: next })}
+        />
+      )}
+    </>
+  );
+};
+
 const OpenPageOverlayEditor: EditorFor<'openPageOverlay'> = ({ action, ctx }) => {
   return (
     <>
       <ActionFieldRow ctx={ctx} fieldKey="pageId" schema={PAGE_SCHEMA} label="Page">
         <Select value={action.pageId} onChange={(v) => ctx.update({ pageId: v })}>
           <option value="">— select page —</option>
-          {ctx.allPages.map((page) => (
-            <option key={page.id} value={page.id}>
-              {resolvePageTitle(page.title)}
-            </option>
-          ))}
+          {overlayTargetOptions(ctx.overlayTargets.pages)}
         </Select>
       </ActionFieldRow>
       <OverlayLayoutFields action={action} ctx={ctx} defaultSize="medium" />
@@ -453,12 +496,8 @@ const ClosePageOverlayEditor: EditorFor<'closePageOverlay'> = ({ action, ctx }) 
   return (
     <ActionFieldRow ctx={ctx} fieldKey="pageId" schema={PAGE_SCHEMA} label="Page">
       <Select value={action.pageId ?? ''} onChange={(v) => ctx.update({ pageId: v || undefined })}>
-        <option value="">Top-most overlay page</option>
-        {ctx.allPages.map((page) => (
-          <option key={page.id} value={page.id}>
-            {resolvePageTitle(page.title)}
-          </option>
-        ))}
+        <option value="">Top-most overlay</option>
+        {everyOverlayTargetOption(ctx.overlayTargets)}
       </Select>
     </ActionFieldRow>
   );
@@ -822,7 +861,6 @@ type ActionEditors = {
 
 export const ACTION_EDITORS: ActionEditors = {
   openDialog: OpenDialogEditor,
-  closeDialog: CloseDialogEditor,
   openPageOverlay: OpenPageOverlayEditor,
   closePageOverlay: ClosePageOverlayEditor,
   writeDataVariable: WriteDataVariableEditor,

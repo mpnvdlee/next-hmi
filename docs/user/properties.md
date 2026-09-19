@@ -29,7 +29,7 @@ Any of these can also be an **array**. An optional *format* refines the editor w
 | `$if` | flexible | One of two values chosen by a condition. |
 | `$switch` | flexible | One of many values chosen by a key. |
 | `$widgetProp` | flexible | A value exported by a sibling widget on the page. |
-| `$componentProp` | flexible | A value passed in by the parent component / dialog. |
+| `$componentProp` | flexible | A value passed in from outside — by the parent component, or by the action that opened this page as an overlay. |
 | `$result` | flexible | A field of an action's result (in its handlers only). |
 | `$http` | flexible | A value picked out of an HTTP API response. |
 | `$loc` · `$stringExpr` | String | Translated text, or a template like `Tank {1} of {2}`. |

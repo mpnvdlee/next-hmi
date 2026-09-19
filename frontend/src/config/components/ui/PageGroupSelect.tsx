@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { getStaticString } from '@config/components/editor/propertyValueUtils';
 import { useConfigStore } from '@shared/store/configStore';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
-import { resolvePageTitle } from '@shared/utils/pageTree';
+import { allPageRootNodes, resolvePageTitle } from '@shared/utils/pageTree';
 import { findInPages } from '@shared/utils/widgetTree';
 import type { PageGroupConfig } from '@shared/types/config';
 import Select from './Select';
@@ -21,9 +21,15 @@ function groupLabel(group: PageGroupConfig | undefined): string {
 export default function PageGroupSelect({ value, onChange, placeholder }: Props) {
   const selectedId = useEditorDomainStore((s) => s.selectedId);
   const pages = useConfigStore((s) => s.pages);
+  const dialogs = useConfigStore((s) => s.dialogs);
+  // Both roots: a navigator or tab bar inside a Dialogs-folder page group needs
+  // the same ancestor chain as one on a navigable page.
   const chain = useMemo(
-    () => (selectedId ? (findInPages(pages, selectedId).groupTrail ?? []) : []),
-    [pages, selectedId],
+    () =>
+      selectedId
+        ? (findInPages(allPageRootNodes({ pages, dialogs }), selectedId).groupTrail ?? [])
+        : [],
+    [pages, dialogs, selectedId],
   );
   const nearest = chain[chain.length - 1];
   const parent = chain[chain.length - 2];

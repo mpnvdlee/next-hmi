@@ -1,4 +1,5 @@
-import type { ButtonAction, DialogConfig, PageConfig } from '@shared/types/config';
+import type { ButtonAction } from '@shared/types/config';
+import type { OverlayTargets } from './actionEditors';
 import type { getWriteCoercionKind } from '@config/utils/variableType';
 
 export function getDefaultValueForKind(
@@ -12,21 +13,21 @@ export function getDefaultValueForKind(
 /** Build a fresh default ButtonAction for the given type. */
 export function makeDefaultAction(
   type: string,
-  context: { dialogs: DialogConfig[]; allPages: PageConfig[] },
+  context: { overlayTargets: OverlayTargets },
 ): ButtonAction | null {
   switch (type) {
     case 'openDialog':
       return {
         type: 'openDialog',
-        dialogId: context.dialogs[0]?.id ?? '',
+        pageId: context.overlayTargets.dialogs[0]?.id ?? '',
         componentProperties: {},
+        size: 'medium',
+        placement: 'center',
       };
-    case 'closeDialog':
-      return { type: 'closeDialog' };
     case 'openPageOverlay':
       return {
         type: 'openPageOverlay',
-        pageId: context.allPages[0]?.id ?? '',
+        pageId: context.overlayTargets.pages[0]?.id ?? '',
         size: 'medium',
         placement: 'center',
       };

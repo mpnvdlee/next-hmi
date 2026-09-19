@@ -6,9 +6,10 @@
  * it never imports editor component styles.
  *
  * postMessage bridge (same-origin):
- *   INBOUND  { type: 'pages_update',  pages, header, footer, dialogs, pageContent }
+ *   INBOUND  { type: 'pages_update',  pages, dialogs, header, footer, pageContent }
  *            → replaces the config store so tree edits appear live.
- *            pageContent: Record<pageId, children[]> carries loaded page component content.
+ *            pageContent: Record<pageId, children[]> carries loaded page component content
+ *            for pages of both roots.
  *   INBOUND  { type: 'set_selected',  ids: string[], lead: string | null }
  *            → adds a preview selection class to every matching widget or page
  *            group; `lead` is the one the preview scrolls into view.
@@ -22,7 +23,8 @@
  * Special virtual pageId values handled:
  *   '__header__' → shows only the user-defined header area
  *   '__footer__' → shows only the user-defined footer area
- *   <dialogId>   → shows a dialog's components in a dashed preview box
+ *   <id in the Dialogs folder> → the page or page group in a modal card on a
+ *                                plain background, as an overlay shows it
  *   <pageId>    → normal page render
  */
 
@@ -45,19 +47,20 @@ import { HmiScopeContext } from '@hmi/context/HmiScopeContext';
 import { AlertModal } from '@hmi/components/AlertModal';
 import { HmiToastStack } from '@hmi/components/ToastStack';
 import { ModalStack } from '@hmi/components/ModalStack';
+import { useResolvedPageOverlays } from '@hmi/hooks/useOpenOverlays';
 import CloseButton from '@shared/components/CloseButton';
 import {
   EMPTY_PAGE_GROUPS,
+  findPageNodeById,
   resolveMainStyle,
   resolvePageContext,
+  resolvePageTitle,
   mapPages,
-  findPageById,
 } from '@shared/utils/pageTree';
 import { getPageChildren } from '@shared/utils/pageContent';
-import type { WidgetConfig } from '@shared/types/config';
+import type { PageNode, WidgetConfig } from '@shared/types/config';
 import type { ComponentDefinition } from '@shared/types/componentTypes';
 import type { ThemeConfig } from '@shared/types/theme';
-import WidgetRenderer from '@hmi/components/WidgetRenderer';
 import { renderRegionChildren } from '@hmi/components/renderRegion';
 import ShellRegion from '@hmi/components/ShellRegion';
 import { useSidebarFullHeight } from '@hmi/components/ShellRegion/useSidebarFullHeight';
@@ -108,7 +111,6 @@ export default function PreviewView() {
   const shell = useConfigStore((s) => s.shell);
   const dialogs = useConfigStore((s) => s.dialogs);
   const wsConnected = useVariableStore((s) => s.wsConnected);
-  const openDialogEntries = useHmiStore((s) => s.openDialogs);
   const openPageOverlayEntries = useHmiStore((s) => s.openPageOverlays);
   const trustedParentOrigin = window.location.origin;
 
@@ -225,26 +227,23 @@ export default function PreviewView() {
   const isLeftSidebar = areaId === '__leftSidebar__';
   const isRightSidebar = areaId === '__rightSidebar__';
   const isShellArea = isHeader || isFooter || isLeftSidebar || isRightSidebar;
-  const dialog = !isShellArea ? dialogs.find((p) => p.id === areaId) : undefined;
-  const { page, pageGroups } =
-    !isShellArea && !dialog
-      ? resolvePageContext(pages, areaId)
-      : { page: null, pageGroups: EMPTY_PAGE_GROUPS };
+  // A Dialogs-folder node is never navigated to, so it previews the way an
+  // overlay shows it rather than inside the shell.
+  const overlayNode: PageNode | undefined =
+    !isShellArea && areaId ? findPageNodeById(dialogs, areaId) : undefined;
+  const { page, pageGroups } = !isShellArea
+    ? resolvePageContext(overlayNode ? dialogs : pages, areaId)
+    : { page: null, pageGroups: EMPTY_PAGE_GROUPS };
 
   // Hydrate page content when the route changes (tab switch, link navigation).
   // Mirrors HmiView — the preview can safely fetch individual page content from
   // the backend; only useConfig() is avoided to prevent overwriting in-memory edits.
   usePage(page?.id);
-  const openPageOverlayIds = openPageOverlayEntries.map((e) => e.pageId);
+  // Same resolution the runtime uses, so an overlay targeting a page group
+  // hydrates and subscribes the page inside it rather than the group id.
+  const openPageOverlays = useResolvedPageOverlays();
+  const openPageOverlayIds = openPageOverlays.flatMap((item) => (item.page ? [item.page.id] : []));
   usePages(openPageOverlayIds);
-  const openDialogs = openDialogEntries
-    .map((entry) => dialogs.find((d) => d.id === entry.id))
-    .filter((d): d is NonNullable<typeof d> => Boolean(d));
-  const openPageOverlays = openPageOverlayEntries
-    .map((entry) => ({ entry, page: findPageById(pages, entry.pageId) }))
-    .filter((item): item is { entry: typeof item.entry; page: NonNullable<typeof item.page> } =>
-      Boolean(item.page),
-    );
 
   // The preview can contain unsaved bindings that the backend cannot discover
   // from the persisted page. Track the visible binding set separately from the
@@ -255,9 +254,7 @@ export default function PreviewView() {
     ...footer,
     ...leftSidebar,
     ...rightSidebar,
-    ...(dialog?.widgets ?? []),
-    ...openPageOverlays.flatMap((item) => getPageChildren(item.page)),
-    ...openDialogs.flatMap((d) => d.widgets),
+    ...openPageOverlays.flatMap((item) => (item.page ? getPageChildren(item.page) : [])),
   ]);
   const previewPriorityKeySignature = [...previewPriorityKeys].sort().join('\u0000');
 
@@ -370,12 +367,7 @@ export default function PreviewView() {
       ? [currentPageId, ...openPageOverlayIds]
       : [...openPageOverlayIds];
 
-    sendWsMessage({
-      type: 'set_context',
-      currentPageIds,
-      openDialogIds: [...(dialog ? [dialog.id] : []), ...openDialogEntries.map((d) => d.id)],
-      priorityKeys: previewPriorityKeys,
-    });
+    sendWsMessage({ type: 'set_context', currentPageIds, priorityKeys: previewPriorityKeys });
 
     // Component-tree references are intentionally omitted. The sorted binding-key
     // signature below re-sends context for binding edits without doing so for
@@ -384,11 +376,9 @@ export default function PreviewView() {
   }, [
     wsConnected,
     page?.id,
-    dialog?.id,
     isShellArea,
     areaId,
     openPageOverlayEntries,
-    openDialogEntries,
     previewPriorityKeySignature,
   ]);
 
@@ -397,7 +387,7 @@ export default function PreviewView() {
   // before a binding edit sends its replacement context.
   useEffect(() => {
     return () => {
-      sendWsMessage({ type: 'set_context', currentPageIds: [], openDialogIds: [] });
+      sendWsMessage({ type: 'set_context', currentPageIds: [] });
     };
   }, []);
 
@@ -430,22 +420,21 @@ export default function PreviewView() {
         // The parent sends a pageContent map with loaded pages' component children.
         // Merge each one into the pages array so individual pages render correctly.
         const pageContent = event.data.pageContent as Record<string, WidgetConfig[]> | undefined;
-        const incomingPages = event.data.pages ?? [];
-        const hydratedPages =
+        const hydrate = (incoming: PageNode[]) =>
           pageContent && Object.keys(pageContent).length > 0
-            ? mapPages(incomingPages, (page) =>
+            ? mapPages(incoming, (page) =>
                 pageContent[page.id] !== undefined
                   ? { ...page, children: pageContent[page.id] }
                   : page,
               )
-            : incomingPages;
-        store.setPages(hydratedPages);
+            : incoming;
+        store.setPages(hydrate(event.data.pages ?? []));
+        store.setDialogs(hydrate(event.data.dialogs ?? []));
         store.setHeader(event.data.header ?? []);
         store.setFooter(event.data.footer ?? []);
         store.setLeftSidebar(event.data.leftSidebar ?? []);
         store.setRightSidebar(event.data.rightSidebar ?? []);
         store.setShell(event.data.shell ?? {});
-        store.setDialogs(event.data.dialogs ?? []);
         store.setGlobalEvents(event.data.globalEvents ?? {});
         return;
       }
@@ -516,42 +505,53 @@ export default function PreviewView() {
     any: hasFullHeightSidebar,
   } = useSidebarFullHeight(shell.leftSidebar ?? {}, shell.rightSidebar ?? {});
 
-  // ── Dialog: render as a compact modal card on a plain background ────────────
-  if (dialog) {
+  // ── Dialogs folder: the page as its overlay card, on a plain background ─────
+  if (overlayNode) {
     return (
       <HmiScopeContext.Provider value="runtime:preview">
         <PreviewContext.Provider value={true}>
-          <div className={rootClassName} style={rootStyle}>
-            <div
-              className="hmi-dialog-preview cfg-checkerboard-bg"
-              onClickCapture={handleLayoutClick}
-              ref={layoutRef}
-            >
-              <div className="hmi-modal">
-                <div className="hmi-modal__header">
-                  <span className="hmi-modal__title">{dialog.title}</span>
-                  {dialog.showCloseButton && <CloseButton className="hmi-modal__close" />}
-                </div>
-                {/* Same `data-flow-*` attributes the runtime's `ModalStack`
-                    sets — without them a previewed dialog's widgets would
-                    fall back to the plain CSS default and the preview would
-                    drift from the real render. */}
+          <PreviewSelectionContext.Provider value={previewSelectionSet}>
+            <PageDataSettleGate pageId={page?.id}>
+              <div className={rootClassName} style={rootStyle}>
                 <div
-                  className="hmi-modal__content"
-                  data-flow-direction="row"
-                  data-flow-align="stretch"
+                  className="hmi-overlay-preview cfg-checkerboard-bg"
+                  onClickCapture={handleLayoutClick}
+                  ref={layoutRef}
                 >
-                  {dialog.widgets.length > 0 ? (
-                    dialog.widgets.map((comp) => <WidgetRenderer key={comp.id} node={comp} />)
-                  ) : (
-                    <p className="hmi-no-page">Dialog is empty — add components via the tree.</p>
-                  )}
+                  <div className="hmi-modal">
+                    <div className="hmi-modal__header">
+                      <span className="hmi-modal__title">
+                        {resolvePageTitle(overlayNode.title)}
+                      </span>
+                      {overlayNode.showCloseButton !== false && (
+                        <CloseButton className="hmi-modal__close" />
+                      )}
+                    </div>
+                    {/* Same `data-flow-*` attributes the runtime's `ModalStack`
+                        sets — without them the previewed page would sit in a
+                        plain CSS default and drift from the real render. */}
+                    <div
+                      className="hmi-modal__content"
+                      data-flow-direction="row"
+                      data-flow-align="stretch"
+                    >
+                      <PageGroupPageView
+                        pages={dialogs}
+                        requestedId={areaId}
+                        onNavigate={(pageId, replace) =>
+                          navigate(`/preview/${pageId}`, { replace: replace ?? false })
+                        }
+                        takesInputs
+                      />
+                    </div>
+                  </div>
                 </div>
+                <ModalStack />
+                <AlertModal scope="runtime:preview" />
+                <HmiToastStack />
               </div>
-            </div>
-            <AlertModal scope="runtime:preview" />
-            <HmiToastStack />
-          </div>
+            </PageDataSettleGate>
+          </PreviewSelectionContext.Provider>
         </PreviewContext.Provider>
       </HmiScopeContext.Provider>
     );

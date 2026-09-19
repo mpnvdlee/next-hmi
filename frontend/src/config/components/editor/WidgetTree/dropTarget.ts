@@ -10,18 +10,26 @@
 
 import type { WidgetParentTarget } from '@shared/store/configStore';
 import {
+  PAGE_ROOTS,
   SHELL_REGION_IDS,
   regionForShellSectionId,
   type PageNode,
+  type PageRoot,
   type ShellRegionId,
   type WidgetConfig,
 } from '@shared/types/config';
 import {
+  EDITOR_NODE_IDS,
   parsePageGroupSectionDropId,
   parseSectionDropId,
   parseWidgetSlotDropId,
 } from '@shared/constants/editorSentinels';
-import { findPageNodeById, isPageGroup, pageHasExplicitSections } from '@shared/utils/pageTree';
+import {
+  allPageRootNodes,
+  findPageNodeById,
+  isPageGroup,
+  pageHasExplicitSections,
+} from '@shared/utils/pageTree';
 import { getPageChildren } from '@shared/utils/pageContent';
 import { hasSlotSections, isContainerHostType } from '@hmi/registry/widgetRegistry';
 import {
@@ -36,7 +44,8 @@ export type DropBand = 'top' | 'middle' | 'bottom';
 
 /** `beside` marks a plan that lands next to the hovered row rather than inside
  *  it — an index alone does not say which, since a row that hosts the drop can
- *  also name a position within itself. */
+ *  also name a position within itself. A page plan with no `groupId` lands at the
+ *  top level of `root`, which may differ from the root the page leaves. */
 export type DropPlan =
   | {
       kind: 'widget';
@@ -45,7 +54,20 @@ export type DropPlan =
       index?: number;
       beside?: true;
     }
-  | { kind: 'page'; nodeId: string; groupId: string | null; index?: number; beside?: true };
+  | {
+      kind: 'page';
+      nodeId: string;
+      groupId: string | null;
+      root: PageRoot;
+      index?: number;
+      beside?: true;
+    };
+
+/** The section row each page-tree root's own drop lands on. */
+const ROOT_SECTION_IDS: Record<string, PageRoot> = {
+  [EDITOR_NODE_IDS.PAGES]: 'pages',
+  [EDITOR_NODE_IDS.DIALOGS]: 'dialogs',
+};
 
 /** Pointer y at drop time. dnd-kit reports the press position and the delta, not
  *  the live pointer; keyboard drags have no pointer at all. */
@@ -72,8 +94,6 @@ function parentTargetOf(parent: WidgetParentInfo): WidgetParentTarget {
       };
     case 'shell-area':
       return { kind: 'shell-area', region: parent.region };
-    case 'dialog':
-      return { kind: 'dialog', dialogId: parent.dialogId };
     case 'page-section':
       return { kind: 'page-section', pageId: parent.pageId, sectionId: parent.sectionId };
     case 'page-group-chrome':
@@ -115,7 +135,7 @@ function containerTarget(widget: WidgetConfig): WidgetParentTarget | null {
 }
 
 function pageChildTarget(p: AllAreas, pageId: string): WidgetParentTarget | null {
-  const page = findPageNodeById(p.pages, pageId);
+  const page = findPageNodeById(allPageRootNodes(p), pageId);
   if (!page || isPageGroup(page)) return null;
   // With Header/Content/Footer folders the section rows take the drop instead.
   if (pageHasExplicitSections(page)) return null;
@@ -142,29 +162,37 @@ function widgetBeside(
   };
 }
 
-function pageSiblings(p: AllAreas, pageId: string): { list: PageNode[]; groupId: string | null } {
-  const walk = (
-    nodes: PageNode[],
-    groupId: string | null,
-  ): { list: PageNode[]; groupId: string | null } | null => {
-    if (nodes.some((n) => n.id === pageId)) return { list: nodes, groupId };
+interface PageSiblings {
+  list: PageNode[];
+  groupId: string | null;
+  root: PageRoot;
+}
+
+function pageSiblings(p: AllAreas, pageId: string): PageSiblings {
+  const walk = (nodes: PageNode[], groupId: string | null, root: PageRoot): PageSiblings | null => {
+    if (nodes.some((n) => n.id === pageId)) return { list: nodes, groupId, root };
     for (const node of nodes) {
       if (!isPageGroup(node)) continue;
-      const found = walk(node.children, node.id);
+      const found = walk(node.children, node.id, root);
       if (found) return found;
     }
     return null;
   };
-  return walk(p.pages, null) ?? { list: p.pages, groupId: null };
+  for (const root of PAGE_ROOTS) {
+    const found = walk(p[root], null, root);
+    if (found) return found;
+  }
+  return { list: p.pages, groupId: null, root: 'pages' };
 }
 
 function pageBeside(p: AllAreas, activeId: string, overPageId: string, after: boolean): DropPlan {
-  const { list, groupId } = pageSiblings(p, overPageId);
+  const { list, groupId, root } = pageSiblings(p, overPageId);
   const at = list.findIndex((n) => n.id === overPageId) + (after ? 1 : 0);
   return {
     kind: 'page',
     nodeId: activeId,
     groupId,
+    root,
     index: indexAfterRemoval(list, new Set([activeId]), at),
     beside: true,
   };
@@ -192,8 +220,9 @@ export function resolveDropTarget(
 ): DropPlan | null {
   if (activeId === overId) return null;
 
+  const pageNodes = allPageRootNodes(p);
   const draggedWidget = findWidgetEverywhere(p, activeId);
-  const draggedPage = draggedWidget ? null : findPageNodeById(p.pages, activeId);
+  const draggedPage = draggedWidget ? null : findPageNodeById(pageNodes, activeId);
   if (!draggedWidget && !draggedPage) return null;
   const moved = isMovedWidgets(movedIds) ? movedIds : collectMovedWidgets(p, movedIds);
 
@@ -227,6 +256,14 @@ export function resolveDropTarget(
     };
   }
 
+  // A root's own section row takes a page at the end of that root's top level —
+  // the only way into an empty Dialogs folder, and a move across the two roots.
+  const rootSection = ROOT_SECTION_IDS[overId];
+  if (rootSection) {
+    if (!draggedPage) return null;
+    return { kind: 'page', nodeId: activeId, groupId: null, root: rootSection };
+  }
+
   // The empty placeholder carries the region id, the section row its own id.
   const region = (SHELL_REGION_IDS as readonly string[]).includes(overId)
     ? (overId as ShellRegionId)
@@ -252,12 +289,13 @@ export function resolveDropTarget(
     return widgetBeside(p, activeId, moved.roots, overId, band !== 'top');
   }
 
-  const overPage = findPageNodeById(p.pages, overId);
+  const overPage = findPageNodeById(pageNodes, overId);
   if (overPage) {
     if (draggedPage) {
       if (isSelfOrDescendantPage(draggedPage, overId)) return null;
       if (band === 'middle' && isPageGroup(overPage)) {
-        return { kind: 'page', nodeId: activeId, groupId: overPage.id };
+        const { root } = pageSiblings(p, overPage.id);
+        return { kind: 'page', nodeId: activeId, groupId: overPage.id, root };
       }
       return pageBeside(p, activeId, overId, band !== 'top');
     }
@@ -275,12 +313,6 @@ export function resolveDropTarget(
         getPageChildren(overPage).length,
       ),
     };
-  }
-
-  const dialog = p.dialogs.find((d) => d.id === overId);
-  if (dialog) {
-    if (!draggedWidget) return null;
-    return { kind: 'widget', nodeId: activeId, target: { kind: 'dialog', dialogId: dialog.id } };
   }
 
   return null;

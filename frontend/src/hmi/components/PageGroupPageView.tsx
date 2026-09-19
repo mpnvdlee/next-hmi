@@ -1,20 +1,53 @@
 import { Suspense, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { PageConfig, PageNode, PageGroupConfig, WidgetConfig } from '@shared/types/config';
+import type { ComponentPropertySchema } from '@shared/types/componentProperty';
 import { resolvePageContext } from '@shared/utils/pageTree';
 import { useConfigStore } from '@shared/store/configStore';
 import WidgetRenderer from './WidgetRenderer';
 import WindowedContent from './WindowedContent';
+import { COLUMN_FLOW } from './layoutUtils';
 import { PageGroupStackContext, type PageGroupStackEntry } from './PageGroupStackContext';
 import { HostPageContext } from '../context/HostPageContext';
+import { InputScopeContext, type InputScopeValue } from '../context/InputScopeContext';
+import { withDeclaredDefaults } from '../utils/componentPropResolution';
 import { ComponentSelfSuspenseContext } from '../context/ComponentSuspenseContext';
 import { prefetchWidgetModules, widgetModulesLoaded } from '../registry/widgetRegistry';
 import { ContentSpinner } from '@shared/components/Spinner';
+
+type Declarations = Record<string, ComponentPropertySchema> | undefined;
+
+/**
+ * Layer declared defaults under the values already in scope, innermost scope
+ * first. `withDeclaredDefaults` only fills a key that is still `undefined`, so
+ * folding the chain innermost -> outermost is the whole precedence rule in one
+ * line: values the action supplied beat every default, and the innermost
+ * declaration of a name beats an outer one's.
+ *
+ * A chain that declares nothing publishes no frame of its own — the inherited
+ * one passes through untouched, so an ordinary page keeps costing nothing.
+ */
+function foldDeclaredDefaults(
+  inherited: InputScopeValue | null,
+  chain: Declarations[],
+): InputScopeValue | null {
+  if (!chain.some(Boolean)) return inherited;
+  return {
+    properties: chain.reduce(
+      (acc, declared) => withDeclaredDefaults(acc, declared),
+      inherited?.properties ?? {},
+    ),
+  };
+}
 
 interface PageGroupPageViewProps {
   pages: PageNode[];
   requestedId?: string;
   onNavigate: (pageId: string, replace?: boolean) => void;
   emptyMessage?: string;
+  /** Whether the nodes shown take input parameters — true only for a page
+   *  overlay of the Dialogs folder. Anywhere else a node's declarations are
+   *  ignored and its `$componentProp`s read nothing. */
+  takesInputs?: boolean;
 }
 
 export default function PageGroupPageView({
@@ -22,6 +55,7 @@ export default function PageGroupPageView({
   requestedId,
   onNavigate,
   emptyMessage = 'No page found.',
+  takesInputs = false,
 }: PageGroupPageViewProps) {
   const parentStack = useContext(PageGroupStackContext);
 
@@ -54,13 +88,53 @@ export default function PageGroupPageView({
     return next;
   }, [parentStack, pageGroups, page, onNavigate]);
 
+  // Values an `openDialog` action supplied, published by `ModalStack` —
+  // the base every declared default layers under.
+  const inheritedScope = useContext(InputScopeContext);
+
+  // Declarations come from `pageGroups` — the trail `resolvePageContext`
+  // returned for *this* view — never from `stack`, which is prefixed by
+  // `parentStack`. Inside an overlay that prefix is the background page's
+  // groups, whose parameters have nothing to do with what the overlay shows.
+  const chromeOffset = stack.length - pageGroups.length;
+
+  // Scope for each shell's own header/footer band, aligned with `stack`. Chrome
+  // sits outside the page, so the active page's declarations are not in its
+  // chain — only its own group's, then its ancestors'.
+  const chromeScopes = useMemo(
+    () =>
+      stack.map((_, level) => {
+        const index = level - chromeOffset;
+        if (index < 0 || !takesInputs) return inheritedScope;
+        return foldDeclaredDefaults(
+          inheritedScope,
+          pageGroups
+            .slice(0, index + 1)
+            .reverse()
+            .map((group) => group.componentProperties),
+        );
+      }),
+    [stack, chromeOffset, pageGroups, inheritedScope, takesInputs],
+  );
+
+  const pageScope = useMemo(
+    () =>
+      takesInputs
+        ? foldDeclaredDefaults(inheritedScope, [
+            page?.componentProperties,
+            ...[...pageGroups].reverse().map((group) => group.componentProperties),
+          ])
+        : inheritedScope,
+    [page, pageGroups, inheritedScope, takesInputs],
+  );
+
   if (!page) {
     return <p className="hmi-no-page">{emptyMessage}</p>;
   }
 
   return (
     <PageGroupStackContext.Provider value={stack}>
-      <ActiveBranch stack={stack} page={page} />
+      <ActiveBranch stack={stack} chromeScopes={chromeScopes} page={page} pageScope={pageScope} />
     </PageGroupStackContext.Provider>
   );
 }
@@ -68,7 +142,11 @@ export default function PageGroupPageView({
 interface ActiveBranchProps {
   /** Full stack of group entries (outer → innermost) covering the resolved route. */
   stack: PageGroupStackEntry[];
+  /** Input scope for each stack level's chrome bands, same indexing as `stack`. */
+  chromeScopes: (InputScopeValue | null)[];
   page: PageConfig;
+  /** Input scope for the active page's own widgets. */
+  pageScope: InputScopeValue | null;
 }
 
 /**
@@ -77,15 +155,17 @@ interface ActiveBranchProps {
  * slice that ends at its own level — so widgets in that shell's header/footer
  * default to that shell's group (not the deepest one).
  */
-function ActiveBranch({ stack, page }: ActiveBranchProps) {
+function ActiveBranch({ stack, chromeScopes, page, pageScope }: ActiveBranchProps) {
   function buildAt(level: number): ReactNode {
-    if (level >= stack.length) return <PageContent page={page} />;
+    if (level >= stack.length) return <PageContent page={page} inputScope={pageScope} />;
     const entry = stack[level];
     return (
       <PageGroupShell
         key={entry.group.id}
         group={entry.group}
         chromeStack={stack.slice(0, level + 1)}
+        chromeScope={chromeScopes[level] ?? null}
+        activePageId={page.id}
       >
         {buildAt(level + 1)}
       </PageGroupShell>
@@ -98,10 +178,21 @@ interface PageGroupShellProps {
   group: PageGroupConfig;
   /** Stack slice ending at (and including) this group; scoped to the chrome bands. */
   chromeStack: PageGroupStackEntry[];
+  /** Input scope for the chrome bands — this group's parameters and its
+   *  ancestors', but never the active page's. */
+  chromeScope: InputScopeValue | null;
+  /** Deepest active page under this group — the page its chrome bands decorate. */
+  activePageId: string;
   children: ReactNode;
 }
 
-function PageGroupShell({ group, chromeStack, children }: PageGroupShellProps) {
+function PageGroupShell({
+  group,
+  chromeStack,
+  chromeScope,
+  activePageId,
+  children,
+}: PageGroupShellProps) {
   const header = group.header ?? [];
   const footer = group.footer ?? [];
   // Chromeless groups still expose `data-page-group-id` via a layout-neutral
@@ -114,41 +205,39 @@ function PageGroupShell({ group, chromeStack, children }: PageGroupShellProps) {
       </div>
     );
   }
+  // Header and footer are the same band under the same three providers; a
+  // provider added to one and not the other is invisible until a group renders
+  // the band that was missed.
+  const band = (Tag: 'header' | 'footer', widgets: WidgetConfig[]) =>
+    widgets.length > 0 && (
+      <Tag className={`hmi-page-group-shell__${Tag}`} {...COLUMN_FLOW}>
+        <HostPageContext.Provider value={activePageId}>
+          <PageGroupStackContext.Provider value={chromeStack}>
+            <InputScopeContext.Provider value={chromeScope}>
+              {widgets.map((widget) => (
+                <WidgetRenderer key={widget.id} node={widget} />
+              ))}
+            </InputScopeContext.Provider>
+          </PageGroupStackContext.Provider>
+        </HostPageContext.Provider>
+      </Tag>
+    );
+
   return (
     <div className="hmi-page-group-shell" data-page-group-id={group.id}>
-      {header.length > 0 && (
-        <header
-          className="hmi-page-group-shell__header"
-          data-flow-direction="column"
-          data-flow-align="stretch"
-        >
-          <PageGroupStackContext.Provider value={chromeStack}>
-            {header.map((widget) => (
-              <WidgetRenderer key={widget.id} node={widget} />
-            ))}
-          </PageGroupStackContext.Provider>
-        </header>
-      )}
+      {band('header', header)}
       <div className="hmi-page-group-shell__content">{children}</div>
-      {footer.length > 0 && (
-        <footer
-          className="hmi-page-group-shell__footer"
-          data-flow-direction="column"
-          data-flow-align="stretch"
-        >
-          <PageGroupStackContext.Provider value={chromeStack}>
-            {footer.map((widget) => (
-              <WidgetRenderer key={widget.id} node={widget} />
-            ))}
-          </PageGroupStackContext.Provider>
-        </footer>
-      )}
+      {band('footer', footer)}
     </div>
   );
 }
 
 interface PageContentProps {
   page: PageConfig;
+  /** Scope published to the page's own widgets: the values supplied to the
+   *  overlay, with the page's declared defaults under them and its groups'
+   *  under those. Computed by the view, which holds the whole group trail. */
+  inputScope: InputScopeValue | null;
 }
 
 /** Per-page-visit answer to "is this page's widget code in memory?" — see
@@ -159,15 +248,18 @@ interface PageModuleVisit {
   timedOut: boolean;
 }
 
-// Safety valve for the module load. They are local files, so this only covers a
-// fetch that never lands at all; the wait is long enough that a page still
-// pulling widget code is never revealed half-built for being merely slow. What
-// the reveal then shows is the rest of the page with a hole where the stuck
-// widget is — every widget module keeps its own `fallback={null}` boundary, so
-// nothing escalates back onto this spinner.
+// Safety valve for both halves of the reveal wait: the module load, and (below)
+// the page's own content fetch. Widget modules are local files, so this mostly
+// covers a fetch that never lands at all; the wait is long enough that a page
+// still pulling widget code is never revealed half-built for being merely slow.
+// What the reveal then shows is the rest of the page with a hole where the
+// stuck widget is — every widget module keeps its own `fallback={null}`
+// boundary, so nothing escalates back onto this spinner. A page whose content
+// fetch itself failed reveals the same way: `hydrated` never turns true on its
+// own, so this valve is the only way back short of navigating away and back.
 const MODULES_WAIT_MS = 5000;
 
-function PageContent({ page }: PageContentProps) {
+function PageContent({ page, inputScope }: PageContentProps) {
   // A page arrives from the index with an empty `content` section and is
   // hydrated lazily on first visit (usePage). Hold a single page-filling spinner
   // until the page has hydrated AND every widget module and component chunk it
@@ -233,58 +325,60 @@ function PageContent({ page }: PageContentProps) {
       alive = false;
     };
   }, [hydrated, nodes, page.id]);
+  // Not gated on `hydrated`: a page whose content fetch failed never sets it,
+  // and this is the only clock counting down for that half too.
   useEffect(() => {
-    if (!hydrated || visit.ready) return;
+    if (visit.ready) return;
     const t = setTimeout(
       () => setVisit((v) => (v.pageId === page.id ? { ...v, timedOut: true } : v)),
       MODULES_WAIT_MS,
     );
     return () => clearTimeout(t);
-  }, [hydrated, visit.ready, page.id]);
+  }, [visit.ready, page.id]);
   // Answered during render, not only from the effect above: navigating back to
   // a page whose modules are all in memory would otherwise flash the body
   // spinner for the one frame before effects run. The walk only happens while
   // the page is still waiting — once latched, the two booleans short-circuit it.
-  const modulesOk = visit.ready || visit.timedOut || (hydrated && widgetModulesLoaded(nodes));
-  const ready = hydrated && modulesOk;
+  // `timedOut` alone (without `hydrated`) is what reveals a page stuck on a
+  // failed content fetch instead of spinning until it's navigated away from.
+  const ready = visit.timedOut || (hydrated && (visit.ready || widgetModulesLoaded(nodes)));
   const renderWidget = (widget: WidgetConfig) => <WidgetRenderer key={widget.id} node={widget} />;
   return (
     <HostPageContext.Provider value={page.id}>
-      <div className="hmi-page" data-page-id={page.id}>
-        {ready ? (
-          <Suspense fallback={<ContentSpinner />}>
-            <ComponentSelfSuspenseContext.Provider value={false}>
-              {page.showHeader && (
-                <header
-                  className="hmi-page__header"
-                  data-flow-direction="column"
-                  data-flow-align="stretch"
+      <InputScopeContext.Provider value={inputScope}>
+        <div className="hmi-page" data-page-id={page.id}>
+          {ready ? (
+            <Suspense fallback={<ContentSpinner />}>
+              <ComponentSelfSuspenseContext.Provider value={false}>
+                {page.showHeader && (
+                  <header
+                    className="hmi-page__header"
+                    {...COLUMN_FLOW}
+                  >
+                    {(sections.header ?? []).map(renderWidget)}
+                  </header>
+                )}
+                <main
+                  className="hmi-page__content"
+                  {...COLUMN_FLOW}
                 >
-                  {(sections.header ?? []).map(renderWidget)}
-                </header>
-              )}
-              <main
-                className="hmi-page__content"
-                data-flow-direction="column"
-                data-flow-align="stretch"
-              >
-                <WindowedContent items={sections.content ?? []} render={renderWidget} />
-              </main>
-              {page.showFooter && (
-                <footer
-                  className="hmi-page__footer"
-                  data-flow-direction="column"
-                  data-flow-align="stretch"
-                >
-                  {(sections.footer ?? []).map(renderWidget)}
-                </footer>
-              )}
-            </ComponentSelfSuspenseContext.Provider>
-          </Suspense>
-        ) : (
-          <ContentSpinner />
-        )}
-      </div>
+                  <WindowedContent items={sections.content ?? []} render={renderWidget} />
+                </main>
+                {page.showFooter && (
+                  <footer
+                    className="hmi-page__footer"
+                    {...COLUMN_FLOW}
+                  >
+                    {(sections.footer ?? []).map(renderWidget)}
+                  </footer>
+                )}
+              </ComponentSelfSuspenseContext.Provider>
+            </Suspense>
+          ) : (
+            <ContentSpinner />
+          )}
+        </div>
+      </InputScopeContext.Provider>
     </HostPageContext.Provider>
   );
 }

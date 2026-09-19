@@ -1,6 +1,6 @@
 /**
- * Component Property — declarative schema for a parameter that a widget or dialog
- * accepts from its caller. Resolved at runtime via `{ $componentProp: "key" }`.
+ * Component Property — declarative schema for a parameter that a component, page
+ * or page group accepts from its caller. Resolved at runtime via `{ $componentProp: "key" }`.
  */
 
 import type { SchemaField } from './widgetSchema';
@@ -22,7 +22,8 @@ export interface StructSchemaNode {
 }
 
 /**
- * Schema definition for a single component property declared by a widget or dialog.
+ * Schema definition for a single component property declared by a component, page
+ * or page group.
  *
  * Mirrors `SchemaField` minus the component-only fields (`event`, `visibleWhen`)
  * and `requiredFields` — for component properties, the rich `structSchema` tree is
@@ -101,7 +102,7 @@ export function componentPropertyToSchemaField(prop: ComponentPropertySchema): S
 }
 
 /**
- * Rename references to a component-property key in a widget/dialog subtree.
+ * Rename references to a component-property key in a widget subtree.
  * Slash paths retain their suffix: `motor/speed` becomes `machine/speed`.
  */
 export function renameComponentPropertyReferences<T>(value: T, oldKey: string, newKey: string): T {

@@ -29,7 +29,7 @@ describe('Button', () => {
     vi.clearAllMocks();
     __resetForTests();
     useVariableStore.setState({ values: {}, varMeta: {} });
-    useHmiStore.setState({ openDialogs: [], openPageOverlays: [], pendingToasts: [] });
+    useHmiStore.setState({ openPageOverlays: [], pendingToasts: [] });
   });
 
   afterEach(() => {
@@ -134,11 +134,11 @@ describe('Button', () => {
     const user = userEvent.setup();
     renderButton({
       label: 'Open',
-      actions: { onPress: [{ type: 'openDialog', dialogId: 'settings' }] },
+      actions: { onPress: [{ type: 'openPageOverlay', pageId: 'settings' }] },
     });
 
     await user.click(screen.getByRole('button', { name: 'Open' }));
 
-    expect(useHmiStore.getState().openDialogs.map((d) => d.id)).toContain('settings');
+    expect(useHmiStore.getState().openPageOverlays.map((o) => o.pageId)).toContain('settings');
   });
 });

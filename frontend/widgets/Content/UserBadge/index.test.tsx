@@ -37,7 +37,7 @@ describe('UserBadge', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __resetForTests();
-    useHmiStore.setState({ currentUsersByScope: {}, openDialogs: [] });
+    useHmiStore.setState({ currentUsersByScope: {}, openPageOverlays: [] });
   });
 
   afterEach(() => {
@@ -91,7 +91,7 @@ describe('UserBadge', () => {
   });
 
   describe('sign-in affordance', () => {
-    const OPEN_LOGIN = { onSignIn: [{ type: 'openDialog', dialogId: 'login' }] };
+    const OPEN_LOGIN = { onSignIn: [{ type: 'openPageOverlay', pageId: 'login' }] };
 
     it('replaces the guest identity once sign-in actions are configured', () => {
       const { container } = renderBadge({ onSignIn: OPEN_LOGIN });
@@ -127,7 +127,7 @@ describe('UserBadge', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Log in' }));
 
-      expect(useHmiStore.getState().openDialogs.map((d) => d.id)).toContain('login');
+      expect(useHmiStore.getState().openPageOverlays.map((o) => o.pageId)).toContain('login');
     });
   });
 

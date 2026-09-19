@@ -180,7 +180,7 @@ describe('DataSettleGate', () => {
 describe('PageDataSettleGate', () => {
   beforeEach(() => {
     // Same "exists, never delivered" state the suite above uses: the only
-    // question here is which ack list opens the gate.
+    // question here is whether the ack names this page.
     useVariableStore.setState({
       values: {},
       varMeta: { 'PLC:Speed': { type: { kind: 'scalar', base: 'Float', array: false } } },
@@ -191,28 +191,23 @@ describe('PageDataSettleGate', () => {
     });
   });
 
-  function renderFor(kind: 'page' | 'dialog') {
+  function renderFor(pageId: string) {
     return render(
       <MemoryRouter>
-        <PageDataSettleGate pageId="x1" kind={kind}>
+        <PageDataSettleGate pageId={pageId}>
           <WidgetRenderer node={NODE} />
         </PageDataSettleGate>
       </MemoryRouter>,
     );
   }
 
-  it('settles a dialog on the ack echoing its id, not on the grace timer', () => {
-    useVariableStore.setState({ contextReadyPageIds: [], contextReadyDialogIds: ['x1'] });
-    expect(
-      renderFor('dialog').container.querySelector('.hmi-binding-overlay--nodata'),
-    ).not.toBeNull();
+  it('settles a page on the ack echoing its id, not on the grace timer', () => {
+    useVariableStore.setState({ contextReadyPageIds: ['x1'] });
+    expect(renderFor('x1').container.querySelector('.hmi-binding-overlay--nodata')).not.toBeNull();
   });
 
-  it('does not let a page ack settle a dialog of the same id, or the reverse', () => {
-    useVariableStore.setState({ contextReadyPageIds: ['x1'], contextReadyDialogIds: [] });
-    expect(renderFor('dialog').container.querySelector('.hmi-binding-overlay')).toBeNull();
-
-    useVariableStore.setState({ contextReadyPageIds: [], contextReadyDialogIds: ['x1'] });
-    expect(renderFor('page').container.querySelector('.hmi-binding-overlay')).toBeNull();
+  it('does not let an ack for another page settle this one', () => {
+    useVariableStore.setState({ contextReadyPageIds: ['x2'] });
+    expect(renderFor('x1').container.querySelector('.hmi-binding-overlay')).toBeNull();
   });
 });

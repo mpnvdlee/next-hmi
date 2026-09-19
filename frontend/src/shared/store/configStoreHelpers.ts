@@ -1,6 +1,5 @@
 import type {
   WidgetConfig,
-  DialogConfig,
   PageConfig,
   PageGroupChild,
   PageGroupConfig,
@@ -128,14 +127,15 @@ export function toIndexNodes(nodes: PageNode[]): unknown[] {
   });
 }
 
-/** Shape accepted by mapAllAreas — a subset of ConfigStore. */
+/** Shape accepted by mapAllAreas — a subset of ConfigStore. `pages` and
+ *  `dialogs` are the two roots of the page tree. */
 export interface AllAreas {
   pages: PageNode[];
   header: WidgetConfig[];
   footer: WidgetConfig[];
   leftSidebar: WidgetConfig[];
   rightSidebar: WidgetConfig[];
-  dialogs: DialogConfig[];
+  dialogs: PageNode[];
 }
 
 /** Apply a component-list mapper across ALL areas simultaneously. */
@@ -143,17 +143,21 @@ export function mapAllAreas(
   s: AllAreas,
   mapFn: (components: WidgetConfig[]) => WidgetConfig[],
 ): AllAreas {
-  const pagesWithMappedSections = mapPages(s.pages, (page) => ({
-    ...page,
-    sections: replacePageSectionWidgets(page, mapFn(getPageChildren(page))),
-  }));
+  const mapRoot = (nodes: PageNode[]): PageNode[] =>
+    mapPageGroupChrome(
+      mapPages(nodes, (page) => ({
+        ...page,
+        sections: replacePageSectionWidgets(page, mapFn(getPageChildren(page))),
+      })),
+      mapFn,
+    );
   return {
-    pages: mapPageGroupChrome(pagesWithMappedSections, mapFn),
+    pages: mapRoot(s.pages),
     header: mapFn(s.header),
     footer: mapFn(s.footer),
     leftSidebar: mapFn(s.leftSidebar),
     rightSidebar: mapFn(s.rightSidebar),
-    dialogs: s.dialogs.map((pop) => ({ ...pop, widgets: mapFn(pop.widgets) })),
+    dialogs: mapRoot(s.dialogs),
   };
 }
 
@@ -173,7 +177,7 @@ export function mapPreserving<T>(list: T[], fn: (item: T) => T): T[] {
  * whose content actually changed.
  *
  * Differs from `mapAllAreas` in what it leaves alone: the patch object itself, and
- * any page, group, dialog or shell array the edit did not touch, come back as the
+ * any page, group or shell array the edit did not touch, come back as the
  * very same objects — so a batch write that reaches one page hands React one changed
  * page rather than a whole new project, and a write that changes nothing re-renders
  * no subscriber at all. That also makes the dirty-page bookkeeping fall out of the
@@ -228,19 +232,11 @@ export function editAllAreas<T extends Partial<AllAreas>>(
     if (widgets !== undefined) replace(region, edit(widgets));
   }
   if (s.pages !== undefined) replace('pages', mapPreserving(s.pages, editNode));
-  if (s.dialogs !== undefined) {
-    replace(
-      'dialogs',
-      mapPreserving(s.dialogs, (dialog) => {
-        const widgets = edit(dialog.widgets);
-        return widgets === dialog.widgets ? dialog : { ...dialog, widgets };
-      }),
-    );
-  }
+  if (s.dialogs !== undefined) replace('dialogs', mapPreserving(s.dialogs, editNode));
   return { areas, touchedPageIds };
 }
 
-/** Collect every id used across a project: pages, page-groups, dialogs, and all widgets. */
+/** Collect every id used across a project: pages and page-groups of both roots, and all widgets. */
 export function collectAllIds(s: AllAreas): Set<string> {
   const acc = new Set<string>();
   const walkNode = (node: PageNode): void => {
@@ -254,14 +250,11 @@ export function collectAllIds(s: AllAreas): Set<string> {
     }
   };
   s.pages.forEach(walkNode);
+  s.dialogs.forEach(walkNode);
   collectWidgetIds(s.header, acc);
   collectWidgetIds(s.footer, acc);
   collectWidgetIds(s.leftSidebar, acc);
   collectWidgetIds(s.rightSidebar, acc);
-  for (const dialog of s.dialogs) {
-    acc.add(dialog.id);
-    collectWidgetIds(dialog.widgets, acc);
-  }
   return acc;
 }
 
@@ -282,7 +275,7 @@ export function collectWidgetIdsOfType(s: AllAreas, type: string): string[] {
 }
 
 /**
- * Every widget in the project — shell regions, page tree, dialogs — depth first.
+ * Every widget in the project — shell regions, then both page-tree roots — depth first.
  *
  * The one place the area order and the page-group recursion are written down, so
  * a new area reaches every caller at once. Returning `true` from *visit* stops
@@ -318,7 +311,7 @@ export function forEachProjectWidget(
   walk(s.leftSidebar);
   walk(s.rightSidebar);
   s.pages.forEach(walkNode);
-  for (const dialog of s.dialogs) walk(dialog.widgets);
+  s.dialogs.forEach(walkNode);
 }
 
 /**

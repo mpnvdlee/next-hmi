@@ -27,7 +27,9 @@ A project is a self-contained folder anywhere on disk, registered in the runtime
   themes/
     <themeId>.json        ← one theme each (colors, typography, spacing)
   pages/
-    <pageId>.json         ← per-page component tree
+    <pageId>.json         ← per-page component tree (the navigable tree)
+  dialogs/
+    <pageId>.json         ← the same document, for a page of the Dialogs folder
   components/
     <componentId>.json    ← user-defined reusable component
   alarms.json             ← alarm definitions (groups + alarms)
@@ -82,11 +84,13 @@ Outside any project, the runtime keeps its own state:
 ## What Lives Where
 
 - `<project>/config.json`
-  - Page index: HMI page list, header, footer, dialog metadata, global lifecycle events (v2 — no component children for pages). Also holds `project.defaultTheme` — the id of the default theme
+  - Page index: HMI page list, header, footer, the Dialogs folder's page list, global lifecycle events (v2 — no component children for pages). Also holds `project.defaultTheme` — the id of the default theme
 - `<project>/themes/<themeId>.json`
   - One theme per file (colors, typography, and spacing tokens editable in Theme Editor). The id is the file stem
 - `<project>/pages/<pageId>.json`
-  - Per-page component tree for one page
+  - Page document for one page of the navigable tree: its metadata and component tree
+- `<project>/dialogs/<pageId>.json`
+  - The identical document for a page of the **Dialogs folder** — `config.json`'s second index root keeps its pages in their own directory
 - `<project>/components/<componentId>.json`
   - User-defined reusable component: input properties + internal component tree
 - `<project>/alarms.json`
@@ -124,7 +128,7 @@ Outside any project, the runtime keeps its own state:
 
 ## Config File (v2 — Split-Page Storage)
 
-`config.json` is the **page index**. It stores page metadata and structure but **no component children** for individual pages. Component trees for each page live in separate `pages/<pageId>.json` files.
+`config.json` is the **page index**. It stores page metadata and structure but **no component children** for individual pages. Each page's document lives in the directory of the index root that holds it: `pages/<pageId>.json` for the navigable tree, `dialogs/<pageId>.json` for the Dialogs folder.
 
 Top-level shape (`api.config_api._empty_config`):
 
@@ -179,13 +183,24 @@ Index page-group node (children are page references only):
   "id": "grp-1",
   "title": "Section",
   "type": "page-group",
+  "events": { "onOpen": [], "onClose": [] },
+  "componentProperties": {
+    "motorId": { "type": "String", "label": "Motor", "defaultValue": "M1" }
+  },
   "children": [
     { "id": "page-2", "title": "Sub Page", "type": "page" }
   ]
 }
 ```
 
-Per-page file shape (`pages/<pageId>.json`):
+Both node kinds accept an optional `events` map of lifecycle action arrays —
+`onOpen` and `onClose`, fired as navigation enters and leaves the node. A group
+keeps its map here in the index, since it has no file of its own; a page keeps
+its map on its page document alongside the rest of its metadata. The key is
+optional and additive: a project written without it reads unchanged.
+
+Per-page file shape (`pages/<pageId>.json`, or `dialogs/<pageId>.json` for a
+page of the Dialogs folder — one shape, two directories):
 
 ```json
 {
@@ -260,21 +275,51 @@ it *and* reads it, so the public build shows the product branding whatever the
 key says. The AGPL notice beside it is edition-bound the same way, and no
 setting hides it (see `COMMERCIAL.md`).
 
-`dialogs` stores dialog definitions inline:
+A page may carry `componentProperties`, the same `Record<string,
+ComponentPropertySchema>` interface a component declares. The
+`openDialog` action supplies the values, widgets inside read them with
+`$componentProp`, and a page reached by navigation falls back to each
+declaration's `defaultValue`. The field lives in `pages/<id>.json` like the rest
+of the page metadata; it is optional, so a project written before it existed
+reads back unchanged.
 
-- `id`
-- `title`
-- optional `closeOnBackgroundPress`
-- optional `showCloseButton`
-- `children` — component tree
+A page-group node may carry the identical `componentProperties` block, and
+`openDialog` may target a group id — its active child then renders inside
+the group's chrome. A group's declarations live in the index node in
+`config.json`, not in a page file, because that is where the rest of a group's
+metadata lives. When a name is declared at more than one level the innermost
+declaration wins: the page's beats its groups', an inner group's beats an outer
+one's, and a value the action supplied beats them all
+([value-types.md](value-types.md#defaults)).
+
+`dialogs` is a second page-index tree, identical in shape to `pages` — page
+and page-group nodes, each page's widgets in its own document under
+`dialogs/`. It is the **Dialogs folder**: the nodes in it are never navigated
+to, only opened by `openDialog` — `openPageOverlay` is the same modal over a
+node in the `pages` root, and takes no parameters. Nothing else distinguishes them, and a
+node moves between the two roots unchanged — apart from its document, which
+moves to the other directory with it (see below).
+
+Two optional keys are read only on a node in this root, on both kinds:
+
+- `showCloseButton` — the modal's close button. Absent means shown
+- `closeOnBackgroundPress` — a press on the backdrop closes it. Absent means it does
+
+`componentProperties` is likewise only read here — declared on a page in its
+page document, on a group in its index node, exactly as above.
 
 ### Storage behavior
 
-The page index (`config.json`) and per-page trees (`pages/<id>.json`) are read
-and written through the `/api/config/*` endpoints documented in
-[../reference/rest-api.md](../reference/rest-api.md). Orphaned page files — files
-whose IDs are no longer in the index — are automatically removed when the index
-is saved.
+The page index (`config.json`) and the page documents (`pages/<id>.json`,
+`dialogs/<id>.json`) are read and written through the `/api/config/*` endpoints
+documented in [../reference/rest-api.md](../reference/rest-api.md).
+
+Saving the index reconciles the two directories with the two roots:
+
+- a page whose root changed has its document **moved** to the other directory
+  first, so the sweep below never mistakes it for an orphan
+- each directory is then swept against **its own** root's ids, and a document
+  whose id is no longer there is deleted
 
 ### Property Values
 

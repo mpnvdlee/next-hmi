@@ -76,6 +76,34 @@ def test_pages_create_registers_in_config_index():
     assert {"id": page_id, "type": "page"} in config["pages"]
 
 
+def test_pages_create_can_place_the_page_in_the_dialogs_folder():
+    response = _run(pages_tools.pages_create(title="Motor detail", root="dialogs"))
+    page_id = response["page_id"]
+    config = storage.read_json(storage.active_config_dir() / "config.json")
+    assert {"id": page_id, "type": "page"} in config["dialogs"]
+    assert not any(n.get("id") == page_id for n in config.get("pages", []))
+
+
+def test_pages_create_rejects_an_unknown_root():
+    from core.exceptions import ConfigValidationError
+
+    with pytest.raises(ConfigValidationError):
+        _run(pages_tools.pages_create(title="Home", root="elsewhere"))
+    assert list(storage.active_pages_dir().glob("*.json")) == []
+
+
+def test_dialogs_folder_pages_are_editable_and_deletable():
+    page_id = _run(pages_tools.pages_create(title="Motor detail", root="dialogs"))["page_id"]
+    added = _run(pages_tools.pages_add_widget(page_id=page_id, widget={"type": "Button"}, index=0))
+    assert added["result"] == "applied"
+
+    _run(pages_tools.pages_delete(page_id=page_id, confirm=True))
+
+    config = storage.read_json(storage.active_config_dir() / "config.json")
+    assert config["dialogs"] == []
+    assert not (storage.active_pages_dir() / f"{page_id}.json").exists()
+
+
 def test_pages_create_defaults_title_to_new_page():
     response = _run(pages_tools.pages_create())
     page = storage.read_json(storage.active_pages_dir() / f"{response['page_id']}.json")

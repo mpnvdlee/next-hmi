@@ -46,34 +46,21 @@ export function executeWidgetActions(
   const inputScopeProps = evalCtx.inputScopeProps;
 
   for (const action of actions) {
-    if (action.type === 'openDialog') {
-      const resolved = action.componentProperties
+    if (action.type === 'openDialog' || action.type === 'openPageOverlay') {
+      // Only a Dialogs-folder node declares input parameters, so only
+      // `openDialog` carries values to resolve against the opener's scope.
+      const supplied = action.type === 'openDialog' ? action.componentProperties : undefined;
+      const resolvedPageProps = supplied
         ? Object.fromEntries(
-            Object.entries(action.componentProperties).map(([k, v]) => [
+            Object.entries(supplied).map(([k, v]) => [
               k,
               resolveComponentPropValue(v, inputScopeProps),
             ]),
           )
-        : undefined;
-      useHmiStore.getState().openDialog(action.dialogId, resolved, {
-        size: action.size ?? 'auto',
-        placement: action.placement,
-        width: action.width,
-        height: action.height,
-        backdrop: action.backdrop,
-        anchorRect: anchorRectFor(action.placement, anchorEl),
-      });
-      continue;
-    }
-
-    if (action.type === 'closeDialog') {
-      useHmiStore.getState().closeDialog(action.dialogId);
-      continue;
-    }
-
-    if (action.type === 'openPageOverlay') {
+        : {};
       useHmiStore.getState().openPageOverlay({
         pageId: action.pageId,
+        componentProperties: resolvedPageProps,
         size: action.size ?? 'medium',
         placement: action.placement ?? 'center',
         width: action.width,

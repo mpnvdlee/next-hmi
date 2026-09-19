@@ -1,16 +1,25 @@
 from __future__ import annotations
 
 import copy
+from pathlib import Path
 from typing import Any
 
 from api.config_api import _PAGE_PERSISTED_FIELDS
 from core.exceptions import ConfigNotFoundError, ConfigValidationError
 from core.ids import slug_id
-from core.page_index import contains_page, remove_page
+from core.page_index import (
+    INDEX_ROOTS,
+    all_root_nodes,
+    contains_page,
+    find_page_document,
+    page_document_dir,
+    page_document_files,
+    remove_page,
+    root_nodes,
+)
 from core.storage import (
     WIDGET_BUILD_DIR,
     active_config_dir,
-    active_pages_dir,
     read_json,
     write_json,
 )
@@ -133,6 +142,12 @@ def _widget_name_for(widget_type: str) -> str:
     return _name_lookup_cache[2].get(widget_type, widget_type)
 
 
+def _document_path(page_id: str) -> Path | None:
+    """Where this page's document actually is, whichever root holds it."""
+    found = find_page_document(page_id)
+    return found[1] if found is not None else None
+
+
 def _read_page(page_id: str) -> dict[str, Any]:
     """Read an existing, indexed page for mutation. Never creates one.
 
@@ -144,18 +159,19 @@ def _read_page(page_id: str) -> dict[str, Any]:
     index count as not-found — only ``pages_create`` may create *and* index a
     page in the same operation.
     """
-    path = active_pages_dir() / f"{page_id}.json"
-    if not path.exists():
+    path = _document_path(page_id)
+    if path is None:
         raise ConfigNotFoundError(f"Page '{page_id}' not found")
-    config = _read_config_index()
-    pages_index = config.get("pages")
-    if not isinstance(pages_index, list) or not contains_page(pages_index, page_id):
+    if not contains_page(all_root_nodes(_read_config_index()), page_id):
         raise ConfigNotFoundError(f"Page '{page_id}' not found")
     return read_json(path)
 
 
-def _write_page(page_id: str, payload: dict[str, Any]) -> None:
-    write_json(active_pages_dir() / f"{page_id}.json", payload)
+def _write_page(page_id: str, payload: dict[str, Any], root: str | None = None) -> None:
+    """Write a page document into the directory of the root that holds it —
+    `root` names it for a page being created, which no index knows yet."""
+    path = _document_path(page_id) if root is None else page_document_dir(root) / f"{page_id}.json"
+    write_json(path or page_document_dir("pages") / f"{page_id}.json", payload)
     invalidate_runtime_pages_config_cache()
 
 
@@ -198,9 +214,7 @@ def _pages_list_items() -> list[tuple[str, str, dict]]:
         config = read_json(config_path)
     except Exception:
         return items
-    pages = config.get("pages", []) if isinstance(config, dict) else []
-
-    def walk(nodes: list, prefix: str = "") -> None:
+    def walk(nodes: list, root: str, prefix: str) -> None:
         for node in nodes:
             if not isinstance(node, dict):
                 continue
@@ -208,22 +222,25 @@ def _pages_list_items() -> list[tuple[str, str, dict]]:
             if not isinstance(nid, str):
                 continue
             if node.get("type") == "page-group":
-                items.append(
-                    (f"{prefix}{nid}", nid, {"id": nid, "type": "page-group", "label": node.get("label", nid)})
-                )
-                walk(node.get("children", []), f"{prefix}{nid}/")
+                items.append((
+                    f"{prefix}{nid}",
+                    nid,
+                    {"id": nid, "type": "page-group", "root": root, "label": node.get("label", nid)},
+                ))
+                walk(node.get("children", []), root, f"{prefix}{nid}/")
             else:
-                items.append((f"{prefix}{nid}", nid, {"id": nid, "type": "page"}))
+                items.append((f"{prefix}{nid}", nid, {"id": nid, "type": "page", "root": root}))
 
-    walk(pages)
+    for root in INDEX_ROOTS:
+        walk(root_nodes(config, root), root, f"{root}/")
     return items
 
 
 def _get_page_payload(page_id: str) -> dict[str, Any]:
     if not is_valid_page_id(page_id):
         raise ConfigValidationError(f"Invalid page id: {page_id!r}")
-    path = active_pages_dir() / f"{page_id}.json"
-    if not path.exists():
+    path = _document_path(page_id)
+    if path is None:
         raise ConfigNotFoundError(f"Page '{page_id}' not found")
     return read_json(path)
 
@@ -238,8 +255,13 @@ pages_list = expose_read_tool(
     description=(
         "List page-index summaries. Returns ``{ items, next_cursor? }``. "
         "Pass ``next_cursor`` back as ``cursor`` to fetch the following page. "
-        "Default page size 100, max 500. Each item has ``id`` and ``type`` "
-        "(``page`` or ``page-group``); use ``pages_get`` for full page JSON."
+        "Default page size 100, max 500. Each item has ``id``, ``type`` "
+        "(``page`` or ``page-group``) and ``root``: ``pages`` for the navigable "
+        "tree, ``dialogs`` for pages that only open as an overlay (the only "
+        "ones that take input parameters). Items are ordered by their cursor "
+        "key, which starts with the root name, so the ``dialogs`` root comes "
+        "before ``pages`` and a cursor from an older build no longer points at "
+        "the same entry. Use ``pages_get`` for full page JSON."
     ),
 )
 pages_get = expose_read_tool(
@@ -254,19 +276,24 @@ async def pages_create(
     title: str | None = None,
     route: str | None = None,
     layout: str | None = None,
+    root: str = "pages",
     idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     """Create a new page record. The server derives a slug page_id from the title.
 
-    The new page is appended to the top-level page index in ``config.json``.
+    The new page is appended to the top level of the ``root`` index in
+    ``config.json``: ``pages`` (default) for a navigable page, ``dialogs`` for a
+    page that only opens as an overlay and can declare input parameters.
     """
+    if root not in INDEX_ROOTS:
+        raise ConfigValidationError(f"root must be one of {list(INDEX_ROOTS)}")
     label = get_agent_label()
     if idempotency_key:
         cached = idempotency.get(label, idempotency_key)
         if cached is not None:
             return cached
     page_title = title if title is not None else "New Page"
-    existing_page_ids = {f.stem for f in active_pages_dir().glob("*.json")}
+    existing_page_ids = {f.stem for f in page_document_files(skip_internal=False)}
     page_id = slug_id(page_title, existing_page_ids)
     payload: dict[str, Any] = {
         "id": page_id,
@@ -278,15 +305,15 @@ async def pages_create(
     if layout is not None:
         payload["layout"] = layout
     async with locks.acquire(("page", page_id), ("config", "config")):
-        _write_page(page_id, payload)
+        _write_page(page_id, payload, root=root)
         try:
             config = _read_config_index()
-            pages_index = config.setdefault("pages", [])
-            if isinstance(pages_index, list) and not contains_page(pages_index, page_id):
-                pages_index.append({"id": page_id, "type": "page"})
+            root_index = config.setdefault(root, [])
+            if isinstance(root_index, list) and not contains_page(all_root_nodes(config), page_id):
+                root_index.append({"id": page_id, "type": "page"})
                 _write_config_index(config)
         except Exception:
-            (active_pages_dir() / f"{page_id}.json").unlink(missing_ok=True)
+            (page_document_dir(root) / f"{page_id}.json").unlink(missing_ok=True)
             invalidate_runtime_pages_config_cache()
             raise
         response = applied_response(f"Created page '{page_id}'", None, payload)
@@ -310,7 +337,8 @@ async def pages_delete(
 ) -> dict[str, Any]:
     """Delete a page. Two-step: dry-run unless ``confirm=true``.
 
-    Also removes the page entry from the ``config.json`` index if present.
+    Also removes the page entry from whichever ``config.json`` index root
+    holds it.
     """
     label = get_agent_label()
     if idempotency_key:
@@ -319,7 +347,7 @@ async def pages_delete(
             return cached
     if not is_valid_page_id(page_id):
         raise ConfigValidationError("Invalid page_id")
-    path = active_pages_dir() / f"{page_id}.json"
+    path = _document_path(page_id) or page_document_dir("pages") / f"{page_id}.json"
     if not confirm:
         try:
             preview_before = read_json(path)
@@ -334,8 +362,7 @@ async def pages_delete(
         path.unlink(missing_ok=True)
         invalidate_runtime_pages_config_cache()
         config = _read_config_index()
-        pages_index = config.get("pages")
-        if isinstance(pages_index, list) and remove_page(pages_index, page_id):
+        if any(remove_page(root_nodes(config, root), page_id) for root in INDEX_ROOTS):
             _write_config_index(config)
         response = applied_response(f"Deleted page '{page_id}'", before, None)
     await emit_change(

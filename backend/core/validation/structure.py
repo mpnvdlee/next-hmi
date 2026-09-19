@@ -4,10 +4,18 @@ import json
 import re
 import time
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any
 
 from core.builtin_widgets_manifest import CatalogVersion, builtin_widgets_catalog
-from core.page_index import collect_dialog_ids, collect_dialog_property_keys
+from core.page_index import (
+    INDEX_ROOTS,
+    collect_page_group_property_keys,
+    declared_property_keys,
+    iter_page_groups,
+    page_document_files,
+    root_nodes,
+)
 from core.page_index import collect_page_ids as _index_collect_page_ids
 from core.storage import (
     WIDGET_BUILD_DIR,
@@ -15,7 +23,6 @@ from core.storage import (
     active_config_dir,
     active_icons_dir,
     active_images_dir,
-    active_pages_dir,
     active_project_root,
     active_translations_dir,
     active_videos_dir,
@@ -107,9 +114,17 @@ class ValidationContext:
     # than reporting every group as unknown.
     user_groups: frozenset[str] = field(default_factory=frozenset)
     page_ids: set[str] = field(default_factory=set)
+    # Ids of the nodes in the navigable ``pages`` root of the index. A page
+    # there has no input scope: only the Dialogs folder's pages take input
+    # parameters, so a ``$componentProp`` on one of these reads nothing.
+    navigable_page_ids: frozenset[str] = field(default_factory=frozenset)
+    # Ids of the nodes in the ``dialogs`` root. Nothing routes to one, so a
+    # field that *navigates* — a menu item, a `format: 'page'` property —
+    # naming one points at a screen the runtime will never show. Empty when the
+    # index wasn't read, which skips the check rather than flagging every page.
+    dialogs_page_ids: frozenset[str] = field(default_factory=frozenset)
     component_ids: set[str] = field(default_factory=set)
-    dialog_ids: set[str] = field(default_factory=set)
-    # Component/dialog id -> the property names its interface declares. A missing
+    # Component id -> the property names its interface declares. A missing
     # id means the interface wasn't collected (fresh checkout / deploy runtime) —
     # best-effort, skip rather than false-positive an unknown-property warning.
     component_property_keys: dict[str, frozenset[str]] = field(default_factory=dict)
@@ -117,7 +132,14 @@ class ValidationContext:
     # of an instance carries the slot it fills; a name not in this set means the
     # definition dropped that slot and the child now renders in the first one.
     component_slots: dict[str, frozenset[str]] = field(default_factory=dict)
-    dialog_property_keys: dict[str, frozenset[str]] = field(default_factory=dict)
+    # Page *or page-group* id -> the property names its ``componentProperties``
+    # declares, which the openDialog action fills. Only the Dialogs folder's
+    # nodes take input parameters, so a node in the ``pages`` root maps to the
+    # empty set whatever it stores.
+    page_property_keys: dict[str, frozenset[str]] = field(default_factory=dict)
+    # False while walking a page that has no input scope (see
+    # ``navigable_page_ids``); ``validate_page`` sets it on its own copy.
+    input_scope: bool = True
     # Keys of the active (Default) translation dictionary.
     translation_keys: frozenset[str] = field(default_factory=frozenset)
     # Curated built-in icon ids — mirrors frontend/src/shared/config/iconAllowlist.ts.
@@ -251,8 +273,8 @@ def load_widget_manifest() -> dict:
 
 # config.json is read once and cached by mtime, so a single build_context() — and a
 # multi-page save batch, which never rewrites config.json — parses it at most once;
-# both page-group ids and dialog ids derive from this one read. Process-local, like
-# the manifest/datasource caches above.
+# the page-group ids and both index roots derive from this one read. Process-local,
+# like the manifest/datasource caches above.
 _config_cache: tuple[int, dict] | None = None
 
 
@@ -275,21 +297,75 @@ def _read_config() -> dict:
     return doc
 
 
-def _page_stems() -> frozenset[str]:
-    pages_dir = active_pages_dir()
-    if not pages_dir.exists():
-        return frozenset()
-    return frozenset(
-        p.stem for p in pages_dir.glob("*.json") if not p.stem.startswith("__")
+def _page_stems(files: list[Path] | None = None) -> frozenset[str]:
+    return frozenset(p.stem for p in (page_document_files() if files is None else files))
+
+
+_page_property_keys_cache: tuple[frozenset[tuple[str, int]], dict[str, frozenset[str]]] | None = None
+
+
+def _collect_page_file_property_keys(files: list[Path] | None = None) -> dict[str, frozenset[str]]:
+    """Page id (file stem) -> the property names its ``componentProperties`` declares.
+
+    Fingerprint-cached (name + mtime per file) like ``_collect_component_interfaces``
+    — this opens every page file, and every debounced ``POST /api/config/validate``
+    call rebuilds the context. ``files`` lets a caller that already listed the
+    document directories pass the listing in rather than pay for a second one.
+    """
+    global _page_property_keys_cache
+    if files is None:
+        files = page_document_files()
+    if not files:
+        _page_property_keys_cache = None
+        return {}
+    # The path, not the bare name: the same id can only be in one directory, but
+    # a move between them is a change this cache has to notice.
+    fingerprint = frozenset((str(p), p.stat().st_mtime_ns) for p in files)
+    if _page_property_keys_cache is not None and _page_property_keys_cache[0] == fingerprint:
+        return _page_property_keys_cache[1]
+    keys: dict[str, frozenset[str]] = {}
+    for path in files:
+        try:
+            doc = read_json(path)
+        except Exception:
+            # A hand-edited page must not break an advisory sweep; the page API
+            # reports its own parse errors.
+            continue
+        if not isinstance(doc, dict):
+            # Leave the id uncollected rather than collecting it as declaring
+            # nothing: `declared is not None` is what gates the check, so an
+            # empty set would flag every argument a caller passes to a page
+            # whose file is merely malformed. Skip rather than false-positive.
+            continue
+        keys[path.stem] = declared_property_keys(doc)
+    _page_property_keys_cache = (fingerprint, keys)
+    return keys
+
+
+def collect_page_property_keys(
+    config: Any = None, files: list[Path] | None = None
+) -> dict[str, frozenset[str]]:
+    """Page or page-group id -> its declared input parameters (see
+    ``ValidationContext.page_property_keys``).
+
+    Defaults to the on-disk index; a caller validating an unsaved index body
+    (``PUT /api/config``'s payload, which may move a node between roots) passes
+    it here instead so ids are resolved against the roots it assigns, not the
+    index this same request is about to replace.
+    """
+    if config is None:
+        config = _read_config()
+    in_dialogs_folder = _index_collect_page_ids(root_nodes(config, "dialogs"))
+    keys: dict[str, frozenset[str]] = dict.fromkeys(
+        _index_collect_page_ids(root_nodes(config, "pages")), frozenset()
     )
-
-
-def _collect_page_ids() -> set[str]:
-    # Page ids = page-file stems union page-group ids from the config index.
-    pages = _read_config().get("pages")
-    ids: set[str] = set(_page_stems())
-    ids |= _index_collect_page_ids(pages if isinstance(pages, list) else [])
-    return ids
+    keys.update(
+        (page_id, declared)
+        for page_id, declared in _collect_page_file_property_keys(files).items()
+        if page_id in in_dialogs_folder
+    )
+    keys.update(collect_page_group_property_keys(root_nodes(config, "dialogs")))
+    return keys
 
 
 _ComponentInterfaces = tuple[dict[str, frozenset[str]], dict[str, frozenset[str]]]
@@ -402,16 +478,6 @@ def _collect_component_interfaces() -> _ComponentInterfaces:
         slots[path.stem] = frozenset(found)
     _component_interface_cache = (fingerprint, (keys, slots))
     return keys, slots
-
-
-def _collect_dialog_ids() -> set[str]:
-    dialogs = _read_config().get("dialogs")
-    return collect_dialog_ids(dialogs if isinstance(dialogs, list) else [])
-
-
-def _collect_dialog_property_keys() -> dict[str, frozenset[str]]:
-    dialogs = _read_config().get("dialogs")
-    return collect_dialog_property_keys(dialogs if isinstance(dialogs, list) else [])
 
 
 _ds_scan_cache: tuple[
@@ -623,19 +689,24 @@ _asset_names_cache: dict[str, tuple[frozenset[tuple[str, int]], frozenset[str]]]
 
 
 def _collect_asset_names(asset_dir) -> frozenset[str]:
-    """Relative asset paths under ``asset_dir``, fingerprint-cached (name +
-    mtime per file) like ``_scan_datasources_from_disk`` — this runs on every
-    debounced ``POST /api/config/validate`` call otherwise."""
+    """Relative asset paths under ``asset_dir``, including nested subfolders,
+    fingerprint-cached (relative path + mtime per file) like
+    ``_collect_component_interfaces`` — this runs on every debounced
+    ``POST /api/config/validate`` call otherwise. ``/api/assets`` and the asset
+    pickers walk subfolders the same way (``rglob``), so this has to match or
+    a page referencing a nested asset gets rejected as unknown."""
     if not asset_dir.exists():
         _asset_names_cache.pop(str(asset_dir), None)
         return frozenset()
-    files = list(asset_dir.iterdir())
-    fingerprint = frozenset((p.name, p.stat().st_mtime_ns) for p in files if p.is_file())
+    files = [p for p in asset_dir.rglob("*") if p.is_file()]
+    fingerprint = frozenset(
+        (p.relative_to(asset_dir).as_posix(), p.stat().st_mtime_ns) for p in files
+    )
     cache_key = str(asset_dir)
     cached = _asset_names_cache.get(cache_key)
     if cached is not None and cached[0] == fingerprint:
         return cached[1]
-    names = frozenset(f"{asset_dir.name}/{name}" for name, _ in fingerprint)
+    names = frozenset(f"{asset_dir.name}/{rel}" for rel, _ in fingerprint)
     _asset_names_cache[cache_key] = (fingerprint, names)
     return names
 
@@ -669,16 +740,27 @@ def _collect_user_groups() -> frozenset[str]:
 def build_context() -> ValidationContext:
     """Snapshot the world for the duration of a single validation pass."""
     component_property_keys, component_slots = _collect_component_interfaces()
+    # One read and one walk per root: every page-id field below is derived from
+    # the same index, and this runs on every debounced editor validate.
+    config = _read_config()
+    # One listing of both document directories, shared by the two collectors
+    # below — each would otherwise re-glob and re-stat every page file.
+    page_files = page_document_files()
+    navigable_page_ids = frozenset(_index_collect_page_ids(root_nodes(config, "pages")))
+    dialogs_page_ids = frozenset(_index_collect_page_ids(root_nodes(config, "dialogs")))
     return ValidationContext(
         widget_schemas=load_widget_manifest(),
         datasource_registry=_collect_datasource_registry(),
         datasource_types=_collect_datasource_types(),
-        page_ids=_collect_page_ids(),
+        page_ids=set(_page_stems(page_files)) | navigable_page_ids | dialogs_page_ids,
+        navigable_page_ids=navigable_page_ids,
+        dialogs_page_ids=dialogs_page_ids,
         component_ids=set(component_property_keys),
         component_property_keys=component_property_keys,
         component_slots=component_slots,
-        dialog_ids=_collect_dialog_ids(),
-        dialog_property_keys=_collect_dialog_property_keys(),
+        # Pages and page groups share one map: the overlay actions may target
+        # either, and an id is only ever one of the two.
+        page_property_keys=collect_page_property_keys(config, page_files),
         translation_keys=_collect_translation_keys(),
         user_groups=_collect_user_groups(),
         icon_assets=_collect_asset_names(active_icons_dir()),
@@ -846,27 +928,72 @@ def _validate_write_target(
         )
 
 
+_PAGE_TARGET_ACTIONS = frozenset(
+    {"openPage", "openDialog", "openPageOverlay", "closePageOverlay", "navigateTo"}
+)
+
+_TOAST_SEVERITIES = frozenset({"info", "warning", "error"})
+
+
+def _check_overlay_root(
+    kind: str, page_id: str, ctx: ValidationContext, path: str, report: ValidationReport
+) -> None:
+    """Flag an overlay action naming a target from the other page-tree root.
+
+    Each open action offers one root — Open Dialog the Dialogs folder, Open Page
+    As Overlay the navigable ``pages`` — so a target that has since moved across
+    still exists, and would otherwise pass silently while its picker shows blank.
+    Both tests are positive membership, so an unread index skips the check
+    instead of flagging everything.
+    """
+    if kind == "openDialog" and page_id in ctx.navigable_page_ids:
+        report.warn(
+            path,
+            f"page '{page_id}' is not in the Dialogs folder — open it with "
+            "Open Page As Overlay instead",
+            severity="error",
+            code="overlay-wrong-root",
+        )
+    elif kind == "openPageOverlay" and page_id in ctx.dialogs_page_ids:
+        report.warn(
+            path,
+            f"page '{page_id}' is in the Dialogs folder — open it with Open Dialog "
+            "instead, which passes its input parameters",
+            severity="error",
+            code="overlay-wrong-root",
+        )
+
+
 def _validate_action(action: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> None:
     if not isinstance(action, dict):
         return
     kind = action.get("type") or action.get("action")
     if kind == "writeDataVariable":
         _validate_write_target(action, ctx, path, report)
+    if kind == "showToast":
+        severity = action.get("severity")
+        if isinstance(severity, str) and severity not in _TOAST_SEVERITIES:
+            report.warn(
+                f"{path}/severity",
+                f"unknown toast severity '{severity}'",
+                severity="error",
+                code="toast-severity-invalid",
+            )
     target = action.get("target") or action.get("pageId")
-    if kind in {"openPage", "openPageOverlay", "navigateTo"} and isinstance(target, str):  # noqa: SIM102 -- no autofix offered, left as-is per the mechanical-only policy for this family
+    # closePageOverlay's pageId is optional (empty = close the topmost overlay),
+    # so only a named one is a reference.
+    names_target = isinstance(target, str) and (target != "" or kind != "closePageOverlay")
+    if kind in _PAGE_TARGET_ACTIONS and names_target:  # noqa: SIM102 -- no autofix offered, left as-is per the mechanical-only policy for this family
         if target not in ctx.page_ids:
             report.add(path, f"action target page '{target}' does not exist")
-    # closeDialog's dialogId is optional (empty = close the topmost dialog); only
-    # validate it when the action actually names a dialog.
-    dialog_id = action.get("dialogId")
-    if kind in {"openDialog", "closeDialog"} and isinstance(dialog_id, str) and dialog_id:  # noqa: SIM102 -- no autofix offered, left as-is per the mechanical-only policy for this family
-        if dialog_id not in ctx.dialog_ids:
-            report.add(path, f"action target dialog '{dialog_id}' does not exist")
-    if kind == "openDialog" and isinstance(dialog_id, str) and dialog_id:
-        declared = ctx.dialog_property_keys.get(dialog_id)
+    page_id = action.get("pageId")
+    if kind in ("openDialog", "openPageOverlay") and isinstance(page_id, str) and page_id:
+        _check_overlay_root(kind, page_id, ctx, f"{path}/pageId", report)
+    if kind == "openDialog" and isinstance(page_id, str) and page_id:
+        declared = ctx.page_property_keys.get(page_id)
         args = action.get("componentProperties")
         if declared is not None and isinstance(args, dict):
-            target = f"dialog '{dialog_id}'"
+            target = f"page '{page_id}'"
             for key in args:
                 if key not in declared:
                     _warn_unknown_property(report, f"{path}/componentProperties/{key}", key, target)
@@ -961,6 +1088,46 @@ def _validate_slot(
     _validate_property_value(value, schema_field, ctx, path, report)
 
 
+def _static_page_id(value: Any) -> str | None:
+    """The page id a field holds, written either bare or wrapped in `$static`.
+    Anything else (a live binding, a nested source) names no page up front."""
+    if isinstance(value, str):
+        return value or None
+    if isinstance(value, dict) and set(value.keys()) == {"$static"}:
+        inner = value.get("$static")
+        return inner if isinstance(inner, str) and inner else None
+    return None
+
+
+def _check_navigable(page_id: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> None:
+    """Flag a navigation target sitting in the Dialogs folder. Only the overlay
+    actions reach those, so a menu item or `format: 'page'` field naming one
+    goes nowhere — the runtime resolves the route against the `pages` root
+    alone and renders its empty state."""
+    pid = _static_page_id(page_id)
+    if pid is not None and pid in ctx.dialogs_page_ids:
+        report.warn(
+            path,
+            f"page '{pid}' is in the Dialogs folder — nothing navigates to it, "
+            "so this target opens nothing",
+            severity="error", code="page-not-navigable",
+        )
+
+
+def _validate_menu_items(items: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> None:
+    """Walk a NavigationMenu's manual item list for targets it cannot reach.
+    Recursive — a `submenu` item carries its own list."""
+    if not isinstance(items, list):
+        return
+    for i, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "page-link":
+            _check_navigable(item.get("pageId"), ctx, f"{path}/{i}/pageId", report)
+        elif item.get("type") == "submenu":
+            _validate_menu_items(item.get("items"), ctx, f"{path}/{i}/items", report)
+
+
 def _validate_property_value(
     value: Any,
     schema_field: dict | None,
@@ -975,6 +1142,11 @@ def _validate_property_value(
     if isinstance(field_type, list):
         field_type = field_type[0] if field_type else None
     field_type = field_type.lower() if isinstance(field_type, str) else None
+
+    if isinstance(schema_field, dict) and schema_field.get("format") == "page":
+        _check_navigable(value, ctx, path, report)
+    elif field_type == "menu-items":
+        _validate_menu_items(value, ctx, path, report)
 
     if not _has_property_source(value):
         # Static literal — type-check against schema.
@@ -1117,6 +1289,13 @@ def _validate_property_value(
             report.warn(
                 path, "property name is empty",
                 severity="warning", code="componentprop-empty",
+            )
+        elif not ctx.input_scope:
+            report.warn(
+                path,
+                f"input parameter '{payload}' reads nothing here — only pages in "
+                "the Dialogs folder take input parameters",
+                severity="warning", code="componentprop-no-scope",
             )
     elif source_key == "$recipe" and isinstance(payload, dict):  # noqa: SIM102 -- no autofix offered, left as-is per the mechanical-only policy for this family
         if not payload.get("type"):
@@ -1288,7 +1467,8 @@ def validate_page(page: Any, ctx: ValidationContext) -> ValidationReport:
     """Top-level walker for a page document.
 
     Pages have a ``sections`` map (``{ "content": [...], "footer": [...] }``)
-    whose values are widget-node arrays.
+    whose values are widget-node arrays, plus an optional ``events`` map of
+    lifecycle action lists.
     """
     report = ValidationReport()
     if not isinstance(page, dict):
@@ -1297,6 +1477,9 @@ def validate_page(page: Any, ctx: ValidationContext) -> ValidationReport:
     pid = page.get("id")
     if pid is not None and not is_valid_page_id(pid):
         report.add("/id", "invalid page id")
+    if pid in ctx.navigable_page_ids:
+        ctx = ctx_for_root(ctx, "pages")
+    report.extend(validate_page_node_events(page, ctx))
     sections = page.get("sections")
     if sections is None:
         return report
@@ -1312,6 +1495,17 @@ def validate_page(page: Any, ctx: ValidationContext) -> ValidationReport:
     return report
 
 
+def ctx_for_root(ctx: ValidationContext, root: str) -> ValidationContext:
+    """Narrow a validation context to one index root.
+
+    Only the Dialogs folder's nodes take input parameters, so anything under
+    the navigable root is walked without an input scope — a `$componentProp`
+    read there earns the same componentprop-no-scope warning wherever the walk
+    starts from.
+    """
+    return ctx if root == "dialogs" else replace(ctx, input_scope=False)
+
+
 def validate_shell_areas(config: Any, ctx: ValidationContext) -> ValidationReport:
     """Validate the shell component arrays (header/footer/sidebars) and the
     project-wide shell region bindings. Paths are relative to `config` itself
@@ -1321,19 +1515,12 @@ def validate_shell_areas(config: Any, ctx: ValidationContext) -> ValidationRepor
     report = ValidationReport()
     if not isinstance(config, dict):
         return report
+    # A shell region renders around every page, so nothing supplies it input
+    # parameters — same as a page outside the Dialogs folder.
+    ctx = replace(ctx, input_scope=False)
     for area in _SHELL_REGIONS:
         _walk_widget_array(config.get(area), ctx, f"/{area}", report)
     validate_shell_regions(config.get("shell"), ctx, "/shell", report)
-    return report
-
-
-def validate_dialog(dialog: Any, ctx: ValidationContext) -> ValidationReport:
-    """Validate a single dialog's widget tree. Paths are relative to `dialog`
-    itself (``/widgets/0/...``)."""
-    report = ValidationReport()
-    if not isinstance(dialog, dict):
-        return report
-    _walk_widget_array(dialog.get("widgets"), ctx, "/widgets", report)
     return report
 
 
@@ -1341,16 +1528,28 @@ def validate_global_events(events: Any, ctx: ValidationContext) -> ValidationRep
     """Validate the action targets in a ``globalEvents`` map. Paths are
     relative to `events` itself (``/onLoad/0``)."""
     report = ValidationReport()
+    # Project-wide handlers run outside every page, so nothing supplies them
+    # input parameters.
+    ctx = replace(ctx, input_scope=False)
     if isinstance(events, dict):
         for event_name, actions in events.items():
             validate_action_targets(actions, ctx, f"/{event_name}", report)
     return report
 
 
+def validate_page_node_events(node: Any, ctx: ValidationContext) -> ValidationReport:
+    """Validate the action targets in a page or page-group node's ``events``
+    map. Paths are relative to the node itself (``/events/onOpen/0``)."""
+    report = ValidationReport()
+    if isinstance(node, dict):
+        validate_action_targets(node.get("events"), ctx, "/events", report)
+    return report
+
+
 def _reparented(report: ValidationReport, prefix: str) -> ValidationReport:
     """Copy `report` with `prefix` prepended to every finding/warning path —
-    lets a validator written against its own artifact root (`/widgets/0/...`)
-    be reused at the path it lives under in a larger document (`/dialogs/x/...`)."""
+    lets a validator written against its own artifact root (`/events/onOpen/0`)
+    be reused at the path it lives under in a larger document (`/pages/x/...`)."""
     out = ValidationReport()
     out.findings = [replace(f, path=f"{prefix}{f.path}") for f in report.findings]
     out.warnings = [replace(w, path=f"{prefix}{w.path}") for w in report.warnings]
@@ -1362,10 +1561,11 @@ def validate_config_areas(config: Any, ctx: ValidationContext) -> ValidationRepo
 
     Mirrors :func:`validate_page` for the non-page surfaces persisted by
     ``PUT /api/config/config``: the shell component arrays (header/footer/
-    sidebars), each dialog's widget tree, the project-wide shell region bindings,
-    and the action targets in ``globalEvents``. Findings block the write;
-    warnings ride along in the success response. Reuses :func:`validate_dialog`
-    and :func:`validate_global_events` — the same walkers the realtime
+    sidebars), the project-wide shell region bindings, the action targets in
+    ``globalEvents``, and the lifecycle events on the page-group nodes of both
+    index roots. Findings block the write; warnings ride along in the success
+    response. Reuses :func:`validate_global_events` and
+    :func:`validate_page_node_events` — the same walkers the realtime
     ``POST /api/config/validate`` endpoint uses per-artifact — reparented onto
     this document's paths.
     """
@@ -1373,13 +1573,22 @@ def validate_config_areas(config: Any, ctx: ValidationContext) -> ValidationRepo
     if not isinstance(config, dict):
         return report
     report.extend(validate_shell_areas(config, ctx))
-    dialogs = config.get("dialogs")
-    if isinstance(dialogs, list):
-        for dialog in dialogs:
-            if not isinstance(dialog, dict):
-                continue
-            did = dialog.get("id")
-            label = did if isinstance(did, str) and did else "?"
-            report.extend(_reparented(validate_dialog(dialog, ctx), f"/dialogs/{label}"))
     report.extend(_reparented(validate_global_events(config.get("globalEvents"), ctx), "/globalEvents"))
+    for root in INDEX_ROOTS:
+        _walk_page_group_events(
+            root_nodes(config, root), ctx_for_root(ctx, root), f"/{root}", report
+        )
     return report
+
+
+def _walk_page_group_events(
+    nodes: list[Any], ctx: ValidationContext, path: str, report: ValidationReport
+) -> None:
+    """Walk the page index for page-group lifecycle events.
+
+    A group keeps its ``events`` in the index, so the config document is the
+    only place they can be validated. Plain page nodes are skipped — a page's
+    events live on its own file and are walked by :func:`validate_page`.
+    """
+    for node, node_path in iter_page_groups(nodes, path):
+        report.extend(_reparented(validate_page_node_events(node, ctx), node_path))

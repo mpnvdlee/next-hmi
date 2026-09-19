@@ -5,9 +5,8 @@ import { createContext, useContext } from 'react';
  * shared ComponentRenderer chunk loads.
  *
  * Default `true`: each instance wraps itself in a silent `fallback={null}`
- * boundary so chrome (the page-group header/footer/sidebars) and dialogs pop in
- * without flashing a spinner and without escalating to the app-level page
- * spinner.
+ * boundary so chrome (the page-group header/footer/sidebars) pops in without
+ * flashing a spinner and without escalating to the app-level page spinner.
  *
  * A page's own sections set this to `false` so their component instances skip
  * the inner boundary and let the surrounding content-area spinner handle that

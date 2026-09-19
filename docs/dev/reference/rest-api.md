@@ -47,7 +47,7 @@ These are FastAPI `StaticFiles` mounts and serve any file in the named directory
 
 ## Config API
 
-Base prefix: `/api/config`. Page index, shared shell areas, dialogs, dictionaries and translations all live here.
+Base prefix: `/api/config`. Page index, shared shell areas, dictionaries and translations all live here.
 
 ### Global config (page index + shared areas)
 
@@ -79,25 +79,34 @@ Base prefix: `/api/config`. Page index, shared shell areas, dialogs, dictionarie
     - Each entry must be an object with a string `id`.
     - IDs must be unique across the entire (recursive) index.
     - `type` must be `"page"`, `"page-group"`, or omitted.
-    - Page entries must not embed page content (`children` / `sections`) — that lives in the per-page file. Use `PUT /api/config/pages/{id}`.
+    - Page entries must not embed page content (`children` / `sections`) — that lives in the page's own document. Use `PUT /api/config/{root}/{id}`.
+    - The body carries both index roots: `pages` is required, `dialogs` is optional and **preserved** when omitted (an explicit `[]` clears it).
     - Group entries must have a `children` array; optional `header` / `footer` arrays are allowed.
-  - On save the index is normalized: groups keep their metadata; page entries are reduced to `{ id, type: "page" }` (metadata for pages is stored in the per-page file).
-  - Orphaned page files (id no longer in the index, excluding `__*.json`) are deleted.
+  - On save the index is normalized: groups keep their metadata — including an optional `componentProperties` declaration block, which `openDialog` may target — while page entries are reduced to `{ id, type: "page" }` (metadata for pages is stored in the per-page file).
+  - A page whose root changed is relocated: its document moves between `pages/` and `dialogs/` before anything is swept.
+  - Orphaned page documents (id no longer in *that directory's* root, excluding `__*.json`) are deleted.
   - Returns the normalized payload.
 
 ### Per-page content
 
-- `GET /api/config/pages/{page_id}`
+Each index root keeps its page documents in its own directory, and the route
+names which: `/api/config/pages/{id}` addresses `pages/<id>.json`,
+`/api/config/dialogs/{id}` addresses `dialogs/<id>.json`. The two routes are
+otherwise identical — same body, same validation, same responses — and a page
+that moves between the roots is read and written through the route of the root
+it is in now.
+
+- `GET /api/config/pages/{page_id}` · `GET /api/config/dialogs/{page_id}`
   - Returns the full page document. If the file is missing returns `{ "id": page_id, "sections": { "content": [] } }`.
   - `422` if `page_id` doesn't match `[A-Za-z0-9_-]{1,128}`.
-- `PUT /api/config/pages/{page_id}`
+- `PUT /api/config/pages/{page_id}` · `PUT /api/config/dialogs/{page_id}`
   - Body is merged into the persisted file; only these keys are kept on disk:
-    `title`, `icon`, `description`, `breadcrumbLabel`, `hidden`, `role`, `order`, `showHeader`, `showFooter`, `sections`.
+    `title`, `icon`, `description`, `breadcrumbLabel`, `hidden`, `role`, `order`, `route`, `layout`, `showHeader`, `showFooter`, `mainPadding`, `mainBackground`, `events`, `componentProperties`, `showCloseButton`, `closeOnBackgroundPress`, `sections`.
   - `sections` (when supplied) must be an object whose values are arrays. Pages may not contain `type: "page-group"` nodes — nest a group inside another group instead (`422`).
   - Returns the merged document `{ id, ...persisted fields, warnings: [{path, message}] }`. `warnings` is the validator's advisory bucket (incomplete `$var` bindings, unknown datasources/variables) — non-blocking and surfaced by the editor as "Saved · N warnings". Hard errors still 422.
   - `422` if `page_id` is invalid.
-- `DELETE /api/config/pages/{page_id}`
-  - Removes the page file if present. Returns `{ "ok": true }`.
+- `DELETE /api/config/pages/{page_id}` · `DELETE /api/config/dialogs/{page_id}`
+  - Removes that directory's page document if present. Returns `{ "ok": true }`.
   - `422` if `page_id` is invalid.
 
 ### Validation
@@ -116,12 +125,12 @@ Both endpoints are read-only: they never persist, recompile, or rewrite anything
 `sourcePath` is a JSON Pointer into the posted draft; `widgetId` / `propKey` / `breadcrumb` are recovered by walking that pointer against the tree, so the same shape works for every artifact kind. `nested` marks a finding inside a sub-slot of a property (an `$if` condition, say) rather than on the property's own value.
 
 - `POST /api/config/validate`
-  - Body: `{ "kind": "page" | "dialog" | "shell" | "globalEvents" | "component", "draft": { ... } }`.
+  - Body: `{ "kind": "page" | "shell" | "globalEvents" | "component", "draft": { ... } }`.
   - Validates the posted *unsaved* draft, so it covers edits the editor hasn't saved. Disk is read only for context (widget registry, translations, assets).
   - `422` when `kind` is not one of the five, or `draft` is not an object.
   - Returns `{ "diagnostics": [ ... ] }`.
 - `GET /api/config/validate`
-  - Whole-project sweep from disk: shell areas, every dialog, `globalEvents`, every page file, reusable components, translation dictionaries, and custom-widget build status — everything the realtime endpoint never sees because only one artifact is open at a time.
+  - Whole-project sweep from disk: shell areas, `globalEvents`, every page file, reusable components, translation dictionaries, and custom-widget build status — everything the realtime endpoint never sees because only one artifact is open at a time.
   - Returns `{ "diagnostics": [ ... ] }` in the same row shape. This is what the editor's Diagnostics panel lists.
 
 ### Dictionaries

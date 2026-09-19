@@ -1,14 +1,13 @@
 import { isContainerHostType, resolveWidgetMetadata } from '@hmi/registry/widgetRegistry';
 import type {
   WidgetConfig,
-  DialogConfig,
   PageConfig,
   PageGroupConfig,
   PageNode,
   ShellRegionId,
 } from '@shared/types/config';
 import { SHELL_REGION_IDS } from '@shared/types/config';
-import { isPageGroup } from '@shared/utils/pageTree';
+import { allPageRootNodes, isPageGroup } from '@shared/utils/pageTree';
 import { slugId } from '@shared/utils/id';
 import { mapPreserving } from '@shared/store/configStoreHelpers';
 
@@ -29,10 +28,6 @@ export function makeDefaultPageGroup(taken: Iterable<string> = []): PageGroupCon
     children: [],
     showChildPagesInMenu: false,
   };
-}
-
-export function makeDefaultDialog(taken: Iterable<string> = []): DialogConfig {
-  return { id: slugId('New Dialog', taken), title: 'New Dialog', widgets: [] };
 }
 
 /** Every newly placed widget gets its `visible` and `interactable` properties
@@ -99,12 +94,12 @@ export function removeComponentById(components: WidgetConfig[], id: string): Wid
 /**
  * Locates the immediate parent of a widget by id, returning enough context to
  * place a sibling next to it. The parent may be a container widget, a shell
- * region, a dialog, a page section, or a page-group header/footer array.
+ * region, a page section, or a page-group header/footer array — in either
+ * page-tree root.
  */
 export type WidgetParentInfo =
   | { kind: 'container'; parent: WidgetConfig; siblings: WidgetConfig[]; index: number }
   | { kind: 'shell-area'; region: ShellRegionId; siblings: WidgetConfig[]; index: number }
-  | { kind: 'dialog'; dialogId: string; siblings: WidgetConfig[]; index: number }
   | {
       kind: 'page-section';
       pageId: string;
@@ -126,7 +121,7 @@ interface ProjectState {
   leftSidebar: WidgetConfig[];
   rightSidebar: WidgetConfig[];
   pages: PageNode[];
-  dialogs: DialogConfig[];
+  dialogs: PageNode[];
 }
 
 /** {@link findContainerParent}'s hit as the `container` variant — the same four
@@ -200,15 +195,7 @@ export function findParentInfo(state: ProjectState, id: string): WidgetParentInf
     const inContainer = findContainerParent(arr, id);
     if (inContainer) return containerInfo(inContainer);
   }
-  for (const dialog of state.dialogs) {
-    const idx = dialog.widgets.findIndex((w) => w.id === id);
-    if (idx !== -1) {
-      return { kind: 'dialog', dialogId: dialog.id, siblings: dialog.widgets, index: idx };
-    }
-    const inContainer = findContainerParent(dialog.widgets, id);
-    if (inContainer) return containerInfo(inContainer);
-  }
-  for (const node of state.pages) {
+  for (const node of allPageRootNodes(state)) {
     const r = findInPageNode(node, id);
     if (r) return r;
   }

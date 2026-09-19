@@ -349,14 +349,13 @@ Priority keys are grouped by datasource and forwarded to the matching OPC-UA eng
 
 Current frontend producers:
 
-- `HmiView` sends `set_context` with active runtime page/dialog/overlay-page context
-- `PreviewView` sends `set_context` with preview page/dialog context
+- `HmiView` sends `set_context` with active runtime page + open-overlay page context
+- `PreviewView` sends `set_context` with preview page/overlay context
 - `DatasourceVariableTable` sends `set_context` with explicit `priorityKeys`
 
 `set_context` payload currently supports:
 
 - `currentPageIds` (overlay pages included — there is no separate key)
-- `openDialogIds`
 - `priorityKeys`
 
 ## REST Surface

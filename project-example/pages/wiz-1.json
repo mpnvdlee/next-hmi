@@ -170,8 +170,12 @@
                                   "path": "Brew:Machine/Power"
                                 }
                               },
-                              "true": "On",
-                              "false": "Off"
+                              "true": {
+                                "$loc": "On"
+                              },
+                              "false": {
+                                "$loc": "Off"
+                              }
                             }
                           },
                           "tone": {

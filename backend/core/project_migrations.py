@@ -7,8 +7,8 @@ A project's stamped format version lives at ``config.json``'s
 every project activation (see ``main.py``'s lifespan) because it is a no-op
 once a project is already stamped at ``PROJECT_FORMAT_VERSION``.
 
-``_STEPS`` holds one combined step, 4 → 7: it rewrites stored layouts into the
-Hug/Fill/Fixed sizing model, retiring the raw flex keys and margin from
+``_STEPS`` holds two steps. The first, 4 → 7, rewrites stored layouts into
+the Hug/Fill/Fixed sizing model, retiring the raw flex keys and margin from
 authored projects (see ``core.migration_size_modes``), then collapses the
 `padding` shorthand into the four side keys it overlapped with (see
 ``core.migration_padding``) — both against the same staged copy, in one atomic
@@ -16,7 +16,10 @@ swap. A project stamped below 4 is carried through it too — no shape
 older than the baseline is otherwise supported. (Formats 5 and 6 briefly
 existed as two separate steps during development; nothing was ever stamped at
 either in the wild, so they were retired and folded into this one combined
-step rather than kept as dead waypoints.)
+step rather than kept as dead waypoints.) The second, 7 → 8, turns every
+dialog into a page in the Dialogs folder and rewrites the dialog actions into
+page-overlay actions, moving their documents into ``dialogs/``
+(see ``core.migration_dialogs_folder``).
 
 ``PROJECT_FORMAT_VERSION`` only ever counts up, including when steps are
 retired: the number is stamped into user data that travels between builds
@@ -31,10 +34,10 @@ no build can derive for a format that postdates it. Bump the two together,
 and only in a release whose minor or major moves: the published contract is
 that a patch update never makes a project unopenable. That rule governs
 released versions; a pre-release sorts below the release it is a candidate
-for, so ``0.0.1`` introducing format 7 over an ``0.0.1-rc2`` that carried 4
-keeps the promise whole — "0.0.1 or newer" does exclude every rc. It is a
-display string only — never parsed or compared. The integer stays the sole
-gate.
+for, so ``0.1.0`` introducing formats 5 through 8 over the ``0.0.1-rc*`` line
+that carried 4 keeps the promise whole — "0.1.0 or newer" does exclude every
+rc, and no release ever stamped 5, 6 or 7 on its own. It is a display string
+only — never parsed or compared. The integer stays the sole gate.
 
 Its absence carries meaning of its own: a project with no ``minAppVersion`` was
 stamped by a build from before the field, so the number it carries says where
@@ -51,12 +54,16 @@ path alike, so a migrated project root is left as clean as it started. A
 project that cannot be zipped is not migrated: the archive is written first and
 a failure there aborts with nothing touched.
 
+Every target a pending step names is staged, including one the project does
+not have yet: a migrated project therefore ends up with the step's directory
+targets present, empty ones included.
+
 To add a step: append a ``MigrationStep`` to ``_STEPS`` whose
 ``from_version`` is the current ``PROJECT_FORMAT_VERSION``, then bump
 ``PROJECT_FORMAT_VERSION`` to its ``to_version``. Each step declares one or
 more ``targets`` naming the top-level project paths it reads and writes;
-``_TARGET_PATHS`` maps each name to its project-relative path, which may be a
-directory (``datasources``) or a single file (``config.json``). Add a
+``_TARGET_PATHS`` maps each name to its project-relative path and shape —
+a directory (``datasources``) or a single file (``config.json``). Add a
 ``_TARGET_PATHS`` entry if the step touches a path no existing target covers.
 The coordinator only stages a target when at least one pending step actually
 names it, and swaps each staged target back into place independently once
@@ -80,24 +87,41 @@ from core.manifest import (
     read_project_metadata,
     write_project_metadata,
 )
+from core.migration_dialogs_folder import STEP_NAME as DIALOGS_FOLDER_STEP_NAME
+from core.migration_dialogs_folder import migrate_dialogs_folder
 from core.migration_padding import migrate_padding
 from core.migration_size_modes import migrate_size_modes
 from core.project_packer import BACKUPS_SUBDIR, pack_project, safe_filename
 from core.time_utils import iso_now
 from core.version import app_version
 
-PROJECT_FORMAT_VERSION = 7
-# The release that introduced format 7. See the module docstring; bump with it.
-PROJECT_FORMAT_MIN_APP = "0.0.1"
+PROJECT_FORMAT_VERSION = 8
+# The release that introduced format 8. See the module docstring; bump with it.
+PROJECT_FORMAT_MIN_APP = "0.1.0"
 
-# Target name -> project-relative path a step reads and writes. A value may be a
-# directory or a single file; the coordinator stages either shape.
-_TARGET_PATHS: dict[str, str] = {
-    "datasources": "datasources",
-    "themes": "themes",
-    "pages": "pages",
-    "components": "components",
-    "config": "config.json",
+@dataclass(frozen=True)
+class _Target:
+    """Where a target lives in a project, and which shape it has.
+
+    The shape cannot be read off the disk — a target a step writes for the
+    first time does not exist yet — so it is declared here, beside the path,
+    rather than in a second table keyed on the same names.
+    """
+
+    path: str
+    directory: bool = True
+
+
+# Target name -> the project-relative path a step reads and writes. A directory
+# a step writes for the first time is staged empty rather than skipped (see
+# `_stage_target`).
+_TARGET_PATHS: dict[str, _Target] = {
+    "datasources": _Target("datasources"),
+    "themes": _Target("themes"),
+    "pages": _Target("pages"),
+    "dialogs": _Target("dialogs"),
+    "components": _Target("components"),
+    "config": _Target("config.json", directory=False),
 }
 
 
@@ -205,6 +229,13 @@ _STEPS: list[MigrationStep] = [
         targets=("config", "pages", "components"),
         run=_retire_flex_and_collapse_padding,
     ),
+    MigrationStep(
+        from_version=7,
+        to_version=8,
+        name=DIALOGS_FOLDER_STEP_NAME,
+        targets=("config", "pages", "dialogs", "components"),
+        run=migrate_dialogs_folder,
+    ),
 ]
 
 
@@ -264,36 +295,51 @@ def _discard_path(path: Path) -> None:
         path.unlink(missing_ok=True)
 
 
-def _stage_target(real_path: Path, needed: bool) -> tuple[Path | None, Path]:
-    """Move *real_path* aside and stage a copy of it if *needed* and it exists.
+def _stage_target(real_path: Path, needed: bool, *, directory: bool) -> tuple[Path | None, Path]:
+    """Move *real_path* aside and stage a copy of it if *needed*.
 
     The real directory or file is *moved* (not copied) aside, and a fresh copy
-    of that aside copy becomes the staging path steps mutate. Returns
-    ``(None, real_path)`` — nothing moved, nothing to swap back later — when
-    either no pending step needs this target or it doesn't exist yet.
+    of that aside copy becomes the staging path steps mutate. A target the
+    project does not have yet is staged all the same — an empty directory, or
+    for a file simply a path the step may create — so a step that writes a
+    target into existence still writes outside the project and lands in one
+    atomic swap. (In production every directory target exists before this runs:
+    ``main.py`` calls ``ensure_active_project_dirs`` first. The branch is what
+    keeps a step's writes staged wherever that is not true.) Returns
+    ``(None, real_path)`` — nothing moved, nothing to swap back later — only
+    when no pending step needs this target.
     """
-    if needed and real_path.exists():
-        aside_path = _aside_name(real_path)
-        real_path.rename(aside_path)
-        staging_path = real_path.with_name(f"{real_path.name}.migrating-{uuid.uuid4().hex[:8]}")
-        try:
-            _copy_path(aside_path, staging_path)
-        except Exception:
-            # The rename already succeeded; undo it so a failed staging copy
-            # doesn't leave real_path missing with nothing on disk to put back
-            # (the caller only learns of aside_path on return).
-            aside_path.rename(real_path)
-            raise
-        return aside_path, staging_path
-    return None, real_path
+    if not needed:
+        return None, real_path
+    staging_path = real_path.with_name(f"{real_path.name}.migrating-{uuid.uuid4().hex[:8]}")
+    if not real_path.exists():
+        if directory:
+            staging_path.mkdir(parents=True)
+        return None, staging_path
+    aside_path = _aside_name(real_path)
+    real_path.rename(aside_path)
+    try:
+        _copy_path(aside_path, staging_path)
+    except Exception:
+        # The rename already succeeded; undo it so a failed staging copy
+        # doesn't leave real_path missing with nothing on disk to put back
+        # (the caller only learns of aside_path on return).
+        aside_path.rename(real_path)
+        raise
+    return aside_path, staging_path
 
 
-def _swap_target(real_path: Path, aside_path: Path | None, staging_path: Path) -> bool:
-    """Atomically move the staged, migrated copy into place. No-op if never staged."""
-    if aside_path is not None:
-        staging_path.rename(real_path)
-        return True
-    return False
+def _swap_target(real_path: Path, staging_path: Path) -> bool:
+    """Atomically move the staged, migrated copy into place.
+
+    The discriminator is the staging path itself: a target that was never staged
+    has ``staging_path == real_path`` and nothing to move, and a staged file
+    target the step never created has nothing to move either.
+    """
+    if staging_path == real_path or not staging_path.exists():
+        return False
+    staging_path.rename(real_path)
+    return True
 
 
 def run_baseline_migration(project_root: Path, *, dry_run: bool = False) -> MigrationResult:
@@ -339,7 +385,7 @@ def run_baseline_migration(project_root: Path, *, dry_run: bool = False) -> Migr
     # owed to this project, in the order they must run.
     chain_start = 0 if unstamped_release else current_version
     pending = [step for step in _STEPS if step.from_version >= chain_start]
-    real_paths = {name: project_root / rel for name, rel in _TARGET_PATHS.items()}
+    real_paths = {name: project_root / t.path for name, t in _TARGET_PATHS.items()}
     needed = {name for step in pending for name in step.targets}
 
     if dry_run:
@@ -381,7 +427,9 @@ def run_baseline_migration(project_root: Path, *, dry_run: bool = False) -> Migr
     swapped: dict[str, bool] = dict.fromkeys(_TARGET_PATHS, False)
     try:
         for name, real_path in real_paths.items():
-            asides[name], staging[name] = _stage_target(real_path, name in needed)
+            asides[name], staging[name] = _stage_target(
+                real_path, name in needed, directory=_TARGET_PATHS[name].directory
+            )
 
         result = MigrationResult(
             already_current=False,
@@ -396,7 +444,7 @@ def run_baseline_migration(project_root: Path, *, dry_run: bool = False) -> Migr
             result.diagnostics.extend(step_result.diagnostics)
 
         for name, real_path in real_paths.items():
-            swapped[name] = _swap_target(real_path, asides[name], staging[name])
+            swapped[name] = _swap_target(real_path, staging[name])
 
         new_metadata = stamp_current_format(metadata).model_copy(
             update={
@@ -440,14 +488,15 @@ def _restore_after_failure(
     The aside copy is *moved* back rather than copied: the pre-migration zip is
     the durable record of this state, so nothing needs to survive here.
     """
-    if aside_path is not None:
-        if swapped:
-            # A later failure — the metadata stamp, or another target's swap —
-            # left migrated data under the old formatVersion. Drop it, so what
-            # is on disk is what the unchanged stamp describes.
-            _discard_path(real_path)
-        if not real_path.exists() and aside_path.exists():
-            aside_path.rename(real_path)
+    if swapped:
+        # A later failure — the metadata stamp, or another target's swap —
+        # left migrated data under the old formatVersion. Drop it, so what
+        # is on disk is what the unchanged stamp describes. With no aside
+        # there was nothing there before either, so dropping it is the whole
+        # restore for a target staged from nothing.
+        _discard_path(real_path)
+    if aside_path is not None and not real_path.exists() and aside_path.exists():
+        aside_path.rename(real_path)
     if staging_path is not None and staging_path != real_path and staging_path.exists():
         _discard_path(staging_path)
 

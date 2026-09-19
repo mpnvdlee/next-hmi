@@ -28,10 +28,23 @@ interface Props {
   properties: Record<string, ComponentPropertySchema>;
   /** Name of the component or dialog these properties belong to. */
   ownerName?: string;
+  /** What this interface is called where it is being edited. A component
+   *  declares *component properties* a placement fills; a page in the Dialogs
+   *  folder declares *input parameters* the opening action fills — same shape,
+   *  two names, and each surface uses the one its own docs and diagnostics do. */
+  title?: string;
+  /** Singular form of `title`, for the add and delete controls. */
+  itemNoun?: string;
   onChange: (next: Record<string, ComponentPropertySchema>) => void;
 }
 
-export default function ComponentPropertiesEditor({ properties, ownerName, onChange }: Props) {
+export default function ComponentPropertiesEditor({
+  properties,
+  ownerName,
+  title = 'Component Properties',
+  itemNoun = 'component property',
+  onChange,
+}: Props) {
   const [addingProp, setAddingProp] = useState(false);
   const [editingStructKey, setEditingStructKey] = useState<string | null>(null);
   // Expansion lives here, keyed by property key, so the row a property was just
@@ -75,12 +88,12 @@ export default function ComponentPropertiesEditor({ properties, ownerName, onCha
     <>
       <div className="cfg-section">
         <div className="cfg-component-props__title-row">
-          <span className="cfg-section__title">Component Properties</span>
-          <AddButton title="Add component property" onClick={() => setAddingProp(true)} />
+          <span className="cfg-section__title">{title}</span>
+          <AddButton title={`Add ${itemNoun}`} onClick={() => setAddingProp(true)} />
         </div>
 
         {propertyEntries.length === 0 && (
-          <div className="cfg-prop-hint cfg-component-prop-empty">No component properties yet.</div>
+          <div className="cfg-prop-hint cfg-component-prop-empty">No {itemNoun}s yet.</div>
         )}
 
         {propertyEntries.map(([key, schema]) => (

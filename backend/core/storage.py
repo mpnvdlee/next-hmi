@@ -217,6 +217,13 @@ def active_pages_dir() -> Path:
     return active_project_root() / "pages"
 
 
+def active_dialogs_dir() -> Path:
+    """Page documents of the Dialogs folder — the index's second root keeps its
+    pages in their own directory, so a project's navigable screens and its
+    overlays are separable on disk."""
+    return active_project_root() / "dialogs"
+
+
 def active_translations_dir() -> Path:
     return active_project_root() / "translations"
 
@@ -271,7 +278,7 @@ def ensure_active_project_dirs() -> None:
     active_external_libraries_dir().mkdir(parents=True, exist_ok=True)
     active_certs_dir().mkdir(parents=True, exist_ok=True)
     WIDGET_BUILD_DIR.mkdir(parents=True, exist_ok=True)
-    for sub in ("datasources", "pages", "translations", "components"):
+    for sub in ("datasources", "pages", "dialogs", "translations", "components"):
         (project_root / sub).mkdir(parents=True, exist_ok=True)
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     active_icons_dir().mkdir(parents=True, exist_ok=True)
@@ -355,6 +362,20 @@ def write_json(path: str | Path, data: Any) -> None:
             if tmp_path is not None and tmp_path.exists():
                 tmp_path.unlink(missing_ok=True)
             raise
+
+
+def move_file(src: str | Path, dst: str | Path) -> None:
+    """Move a document to another directory, atomically within the project.
+
+    A page whose index root changes has to take its file with it (see
+    ``PUT /api/config/config``): a copy-then-delete would leave two documents
+    for one id if the delete failed, so this is one ``os.replace`` under the
+    same lock the writers take.
+    """
+    src_path, dst_path = Path(src), Path(dst)
+    with _lock:
+        dst_path.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(src_path, dst_path)
 
 
 def write_text_atomic(path: str | Path, data: str, encoding: str = "utf-8") -> None:

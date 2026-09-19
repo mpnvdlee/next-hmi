@@ -5,18 +5,20 @@ import type {
   PageNode,
   WidgetConfig,
   LayoutConfig,
-  DialogConfig,
   PageGroupConfig,
+  PageRoot,
   GlobalEventsConfig,
   ShellAreaId,
   ShellConfig,
   LazyPageResponse,
 } from '../types/config';
-import { SHELL_REGION_IDS, regionForShellSectionId } from '../types/config';
+import { PAGE_ROOTS, SHELL_REGION_IDS, regionForShellSectionId } from '../types/config';
 import { useProjectStore } from './projectStore';
 import {
+  allPageRootNodes,
   findPageById,
   findPageGroupById,
+  findPageRoot,
   flattenPages,
   findOwningPage,
   insertPageIntoPageGroup,
@@ -66,6 +68,10 @@ const PAGE_SAVE_FIELDS = [
   'showFooter',
   'mainPadding',
   'mainBackground',
+  'events',
+  'componentProperties',
+  'showCloseButton',
+  'closeOnBackgroundPress',
 ] as const satisfies readonly (keyof PageConfig)[];
 
 // Compile-time invariant: every non-structural PageConfig key must appear in PAGE_SAVE_FIELDS.
@@ -99,7 +105,7 @@ function _throttledSnapshot(ms = 500) {
 
 /**
  * `set` for a write that changes the *shape* of the tree — anything that adds,
- * removes, moves or wholesale-replaces a page, page-group, dialog or widget.
+ * removes, moves or wholesale-replaces a page, page-group or widget.
  *
  * The `structureRev` bump rides in the same patch as the change, so no subscriber can
  * observe one without the other: a separate `setState` would let a memo keyed on the
@@ -115,6 +121,47 @@ function _setTree(patch: Partial<ConfigStore> | ((s: ConfigStore) => Partial<Con
   }));
 }
 
+// ── Page-tree roots ──────────────────────────────────────────────────────────
+
+type RootSlice = Pick<ConfigStore, 'pages' | 'dialogs'>;
+
+/** A store patch that replaces one page-tree root. */
+function _rootPatch(root: PageRoot, nodes: PageNode[]): Partial<RootSlice> {
+  return root === 'pages' ? { pages: nodes } : { dialogs: nodes };
+}
+
+/** Apply `fn` to whichever root holds `id` — the Pages tree or the Dialogs
+ *  folder. An empty patch when neither does, so the other root keeps its
+ *  identity and an unknown id changes nothing. */
+function _inRootOf(
+  s: RootSlice,
+  id: string,
+  fn: (nodes: PageNode[]) => PageNode[],
+): Partial<RootSlice> {
+  const root = findPageRoot(s, id);
+  return root ? _rootPatch(root, fn(s[root])) : {};
+}
+
+/** Replace one root with freshly loaded wire nodes. A page arriving with
+ *  content is already hydrated (an undo/redo snapshot), so it is marked loaded
+ *  and dirty for the next save; the other root's pages keep the loaded/dirty
+ *  state they had. */
+function _loadRoot(s: ConfigStore, root: PageRoot, raw: unknown[]): Partial<ConfigStore> {
+  const normalized = normalizePageNodes(raw);
+  const otherIds = new Set(
+    flattenPages(s[root === 'pages' ? 'dialogs' : 'pages']).map((p) => p.id),
+  );
+  const hydrated = flattenPages(normalized)
+    .filter((p) => getPageChildren(p).length > 0)
+    .map((p) => p.id);
+  const keep = (ids: Set<string>) => [...ids].filter((id) => otherIds.has(id));
+  return {
+    ..._rootPatch(root, normalized),
+    loadedPageIds: new Set([...keep(s.loadedPageIds), ...hydrated]),
+    dirtyPageIds: new Set([...keep(s.dirtyPageIds), ...hydrated]),
+  };
+}
+
 // ── Move helpers ─────────────────────────────────────────────────────────────
 
 /** Where a relocated widget lands, named by its new parent rather than by the
@@ -122,7 +169,6 @@ function _setTree(patch: Partial<ConfigStore> | ((s: ConfigStore) => Partial<Con
 export type WidgetParentTarget =
   | { kind: 'container'; containerId: string; slot?: string }
   | { kind: 'shell-area'; region: ShellAreaId }
-  | { kind: 'dialog'; dialogId: string }
   | { kind: 'page-section'; pageId: string; sectionId: string }
   | { kind: 'page-group-chrome'; groupId: string; area: 'header' | 'footer' };
 
@@ -133,12 +179,10 @@ function _spliceAt(list: WidgetConfig[], nodes: WidgetConfig[], index?: number):
 }
 
 /** The page whose file has to be rewritten because the target lives on it. */
-function _targetOwningPage(
-  s: Pick<ConfigStore, 'pages'>,
-  target: WidgetParentTarget,
-): PageConfig | null {
-  if (target.kind === 'page-section') return findPageById(s.pages, target.pageId) ?? null;
-  if (target.kind === 'container') return findOwningPage(s.pages, target.containerId) ?? null;
+function _targetOwningPage(s: RootSlice, target: WidgetParentTarget): PageConfig | null {
+  const nodes = allPageRootNodes(s);
+  if (target.kind === 'page-section') return findPageById(nodes, target.pageId) ?? null;
+  if (target.kind === 'container') return findOwningPage(nodes, target.containerId) ?? null;
   return null;
 }
 
@@ -195,15 +239,9 @@ function _insertWidgetsAtTarget(
   switch (target.kind) {
     case 'shell-area':
       return { [target.region]: _spliceAt(s[target.region], nodes, index) };
-    case 'dialog':
-      return {
-        dialogs: s.dialogs.map((d) =>
-          d.id === target.dialogId ? { ...d, widgets: _spliceAt(d.widgets, nodes, index) } : d,
-        ),
-      };
     case 'page-section':
-      return {
-        pages: mapPages(s.pages, (page) =>
+      return _inRootOf(s, target.pageId, (roots) =>
+        mapPages(roots, (page) =>
           page.id === target.pageId
             ? {
                 ...page,
@@ -218,13 +256,13 @@ function _insertWidgetsAtTarget(
               }
             : page,
         ),
-      };
+      );
     case 'page-group-chrome':
-      return {
-        pages: updatePageGroupChrome(s.pages, target.groupId, target.area, (widgets) =>
+      return _inRootOf(s, target.groupId, (roots) =>
+        updatePageGroupChrome(roots, target.groupId, target.area, (widgets) =>
           _spliceAt(widgets, nodes, index),
         ),
-      };
+      );
     case 'container': {
       // A container can live in any area, so every area gets the same mapper —
       // which hands back the list it was given wherever the container is not.
@@ -284,6 +322,13 @@ function _isDescendantPageNode(nodes: PageNode[], nodeId: string, candidateId: s
   return nodeId === candidateId || walk(node.children);
 }
 
+/** The endpoint holding one page's document. Each index root keeps its pages in
+ *  its own directory on disk, and the URL names which — so a page that moves
+ *  between the two is loaded and saved from where it actually lives. */
+function _pageDocumentUrl(root: PageRoot, pageId: string): string {
+  return `/api/config/${root}/${encodeURIComponent(pageId)}`;
+}
+
 /** Returns the same Set reference if `id` is already present — avoids per-keystroke Set churn. */
 function _withDirty(prev: Set<string>, id: string): Set<string> {
   if (prev.has(id)) return prev;
@@ -311,10 +356,11 @@ interface ConfigStore {
   rightSidebar: WidgetConfig[];
   /** Project-wide shell config. Empty object = use built-in defaults. */
   shell: ShellConfig;
-  dialogs: DialogConfig[];
+  /** The Dialogs folder: the second page-tree root, next to `pages` (see `PageRoot`). */
+  dialogs: PageNode[];
   globalEvents: GlobalEventsConfig;
   /**
-   * Counts changes to the *shape* of the tree — a page, page-group, dialog or widget
+   * Counts changes to the *shape* of the tree — a page, page-group or widget
    * added, removed, moved, or replaced wholesale by a load. Transient view state, not
    * project data: `saveConfigToBackend` and projectStore's `captureSnapshot` each
    * enumerate the fields they take and this is not one of them, so it reaches neither
@@ -337,6 +383,8 @@ interface ConfigStore {
   // Bootstrap / hydration
   /** Accepts raw, unvalidated wire nodes — runs them through normalizePageNodes(). */
   setPages(pages: unknown[]): void;
+  /** Same as `setPages`, for the Dialogs folder root. */
+  setDialogs(dialogs: unknown[]): void;
   markLoaded(): void;
   setHeader(components: WidgetConfig[]): void;
   setFooter(components: WidgetConfig[]): void;
@@ -344,7 +392,6 @@ interface ConfigStore {
   setRightSidebar(components: WidgetConfig[]): void;
   setShell(shell: ShellConfig): void;
   updateShell(patch: Partial<ShellConfig>): void;
-  setDialogs(dialogs: DialogConfig[]): void;
   /**
    * Put every area back as it was, together with the page bookkeeping that went
    * with it — the rollback for a composite edit whose second half refused after
@@ -363,9 +410,10 @@ interface ConfigStore {
   /** Fetch a single page's component content from the backend and hydrate it. */
   loadPageContent(pageId: string): Promise<void>;
 
-  // Page CRUD
-  addPage(page: PageConfig): void;
-  addPageGroup(group: PageGroupConfig): void;
+  // Page CRUD — a node is found in whichever root holds it; `root` picks where a
+  // new top-level node goes.
+  addPage(page: PageConfig, root?: PageRoot): void;
+  addPageGroup(group: PageGroupConfig, root?: PageRoot): void;
   /** Insert a page-group as a direct child of another page-group. */
   addPageGroupToPageGroup(parentGroupId: string, group: PageGroupConfig): void;
   deletePage(pageId: string): void;
@@ -381,18 +429,11 @@ interface ConfigStore {
   reorderPageChildren(pageId: string, widgets: WidgetConfig[]): void;
   setPageSections(pageId: string, sections: Record<string, WidgetConfig[]>): void;
 
-  // Dialog CRUD
-  addDialog(dialog: DialogConfig): void;
-  deleteDialog(dialogId: string): void;
-  renameDialog(dialogId: string, title: string): void;
-  updateDialog(dialogId: string, patch: Partial<Omit<DialogConfig, 'id' | 'widgets'>>): void;
-
   // Component mutations — work across all areas
   addComponentToPage(pageId: string, comp: WidgetConfig): void;
   addComponentToPageSection(pageId: string, sectionId: string, comp: WidgetConfig): void;
   addComponentToPageGroupArea(groupId: string, area: 'header' | 'footer', comp: WidgetConfig): void;
   addComponentToArea(area: ShellAreaId, comp: WidgetConfig): void;
-  addComponentToDialog(dialogId: string, comp: WidgetConfig): void;
   addComponentToContainer(containerId: string, comp: WidgetConfig): void;
   addComponentToWidgetSlot(widgetId: string, slot: string, comp: WidgetConfig): void;
   deleteComponent(id: string): void;
@@ -419,9 +460,11 @@ interface ConfigStore {
    * once the moved widgets are out of it — what `resolveDropTarget` returns.
    */
   moveWidgetsTo(nodeIds: string[], target: WidgetParentTarget, index?: number): void;
-  /** Relocate a page or page group into a group (`null` = root), keeping its id. */
-  movePageTo(nodeId: string, target: string | null, index?: number): void;
-  reorderPages(pages: PageNode[]): void;
+  /** Relocate a page or page group into a group, keeping its id — across roots
+   *  too. `target` null places it at the top level of `root`. */
+  movePageTo(nodeId: string, target: string | null, index?: number, root?: PageRoot): void;
+  /** Replace the top level of one root with the same nodes in a new order. */
+  reorderPages(pages: PageNode[], root?: PageRoot): void;
 
   /** Persist the current runtime config state to the backend via PUT /api/config/config. */
   saveConfigToBackend(): Promise<boolean>;
@@ -475,18 +518,8 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
 
   // ── Bootstrap / hydration ───────────────────────────────────────────────────
 
-  setPages: (pages) => {
-    const normalized = normalizePageNodes(pages);
-    // Recompute loaded set: any page that arrives with non-empty content is
-    // already hydrated (e.g. from undo/redo snapshots). Mark those dirty too
-    // so they will be saved on the next explicit save.
-    const loadedPageIds = new Set<string>(
-      flattenPages(normalized)
-        .filter((p) => getPageChildren(p).length > 0)
-        .map((p) => p.id),
-    );
-    _setTree({ pages: normalized, loadedPageIds, dirtyPageIds: new Set(loadedPageIds) });
-  },
+  setPages: (pages) => _setTree((s) => _loadRoot(s, 'pages', pages)),
+  setDialogs: (dialogs) => _setTree((s) => _loadRoot(s, 'dialogs', dialogs)),
   markLoaded: () => set({ loaded: true }),
   setHeader: (header) => _setTree({ header }),
   setFooter: (footer) => _setTree({ footer }),
@@ -497,7 +530,6 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     _throttledSnapshot();
     set((s) => ({ shell: { ...s.shell, ...patch } }));
   },
-  setDialogs: (dialogs) => _setTree({ dialogs }),
   restoreAreas: (snapshot) => {
     _setTree({
       pages: snapshot.pages,
@@ -518,7 +550,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
 
   // ── Page mutations ─────────────────────────────────────────────────────────
 
-  addPage: (page) => {
+  addPage: (page, root = 'pages') => {
     _snapshot();
     const newPage: PageConfig = {
       ...page,
@@ -526,42 +558,44 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       sections: page.sections ?? { content: [] },
     };
     _setTree((s) => ({
-      pages: [...s.pages, newPage],
+      ..._rootPatch(root, [...s[root], newPage]),
       loadedPageIds: new Set([...s.loadedPageIds, newPage.id]),
       dirtyPageIds: _withDirty(s.dirtyPageIds, newPage.id),
     }));
   },
 
-  addPageGroup: (group) => {
+  addPageGroup: (group, root = 'pages') => {
     _snapshot();
-    _setTree((s) => ({
-      pages: [...s.pages, { ...group, children: group.children ?? [] }],
-    }));
+    _setTree((s) => _rootPatch(root, [...s[root], { ...group, children: group.children ?? [] }]));
   },
 
   addPageGroupToPageGroup: (parentGroupId, group) => {
     _snapshot();
     const nested: PageGroupConfig = { ...group, children: group.children ?? [] };
-    _setTree((s) => ({
-      pages: insertPageGroupIntoPageGroup(s.pages, parentGroupId, nested),
-    }));
+    _setTree((s) =>
+      _inRootOf(s, parentGroupId, (nodes) =>
+        insertPageGroupIntoPageGroup(nodes, parentGroupId, nested),
+      ),
+    );
   },
 
   deletePage: (pageId) => {
     _snapshot();
     _setTree((s) => ({
-      pages: removePageNode(s.pages, pageId).nodes,
+      ..._inRootOf(s, pageId, (nodes) => removePageNode(nodes, pageId).nodes),
       loadedPageIds: new Set([...s.loadedPageIds].filter((id) => id !== pageId)),
       dirtyPageIds: new Set([...s.dirtyPageIds].filter((id) => id !== pageId)),
     }));
   },
 
   updatePage: (pageId, patch) => {
-    const current = findPageById(get().pages, pageId);
+    const current = findPageById(allPageRootNodes(get()), pageId);
     if (!current || !_patchHasChange(current, patch)) return;
     _throttledSnapshot();
     set((s) => ({
-      pages: mapPages(s.pages, (page) => (page.id === pageId ? { ...page, ...patch } : page)),
+      ..._inRootOf(s, pageId, (nodes) =>
+        mapPages(nodes, (page) => (page.id === pageId ? { ...page, ...patch } : page)),
+      ),
       dirtyPageIds: _withDirty(s.dirtyPageIds, pageId),
     }));
   },
@@ -569,7 +603,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   // Structural: the patch can carry the group's `header` / `footer` widget lists, and
   // the paste path uses it to splice a widget into group chrome.
   updatePageGroup: (groupId, patch) => {
-    const current = findPageGroupById(get().pages, groupId);
+    const current = findPageGroupById(allPageRootNodes(get()), groupId);
     if (!current || !_patchHasChange(current, patch)) return;
     _throttledSnapshot();
     _setTree((s) => {
@@ -578,20 +612,20 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         if (node.id === groupId) return { ...node, ...patch };
         return { ...node, children: node.children.map(walk) as PageGroupChild[] };
       }
-      return { pages: s.pages.map(walk) };
+      return _inRootOf(s, groupId, (nodes) => nodes.map(walk));
     });
   },
 
   deletePageGroup: (groupId) => {
     _snapshot();
-    const group = findPageGroupById(get().pages, groupId);
+    const group = findPageGroupById(allPageRootNodes(get()), groupId);
     const descendantIds = group ? flattenPages(group.children).map((p) => p.id) : [];
     _setTree((s) => {
       // Sweep every descendant page, not just direct children — nested groups
       // would otherwise leak pages into loadedPageIds/dirtyPageIds.
       const descendantPageIds = new Set(descendantIds);
       return {
-        pages: removePageGroup(s.pages, groupId),
+        ..._inRootOf(s, groupId, (nodes) => removePageGroup(nodes, groupId)),
         loadedPageIds: new Set([...s.loadedPageIds].filter((id) => !descendantPageIds.has(id))),
         dirtyPageIds: new Set([...s.dirtyPageIds].filter((id) => !descendantPageIds.has(id))),
       };
@@ -606,7 +640,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       sections: page.sections ?? { content: [] },
     };
     _setTree((s) => ({
-      pages: insertPageIntoPageGroup(s.pages, groupId, newPage),
+      ..._inRootOf(s, groupId, (nodes) => insertPageIntoPageGroup(nodes, groupId, newPage)),
       loadedPageIds: new Set([...s.loadedPageIds, newPage.id]),
       dirtyPageIds: _withDirty(s.dirtyPageIds, newPage.id),
     }));
@@ -614,16 +648,20 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
 
   reorderPageGroupChildren: (groupId, pages) => {
     _snapshot();
-    _setTree((s) => ({ pages: replacePageGroupChildren(s.pages, groupId, pages) }));
+    _setTree((s) =>
+      _inRootOf(s, groupId, (nodes) => replacePageGroupChildren(nodes, groupId, pages)),
+    );
   },
 
   reorderPageChildren: (pageId, children) => {
     _snapshot();
     _setTree((s) => ({
-      pages: mapPages(s.pages, (page) => {
-        if (page.id !== pageId) return page;
-        return { ...page, sections: distributeToSections(page, children) };
-      }),
+      ..._inRootOf(s, pageId, (nodes) =>
+        mapPages(nodes, (page) => {
+          if (page.id !== pageId) return page;
+          return { ...page, sections: distributeToSections(page, children) };
+        }),
+      ),
       dirtyPageIds: _withDirty(s.dirtyPageIds, pageId),
     }));
   },
@@ -631,31 +669,11 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   setPageSections: (pageId, sections) => {
     _snapshot();
     _setTree((s) => ({
-      pages: mapPages(s.pages, (page) => (page.id === pageId ? { ...page, sections } : page)),
+      ..._inRootOf(s, pageId, (nodes) =>
+        mapPages(nodes, (page) => (page.id === pageId ? { ...page, sections } : page)),
+      ),
       dirtyPageIds: _withDirty(s.dirtyPageIds, pageId),
     }));
-  },
-
-  // ── Dialog mutations ────────────────────────────────────────────────────────
-
-  addDialog: (dialog) => {
-    _snapshot();
-    _setTree((s) => ({ dialogs: [...s.dialogs, dialog] }));
-  },
-
-  deleteDialog: (dialogId) => {
-    _snapshot();
-    _setTree((s) => ({ dialogs: s.dialogs.filter((p) => p.id !== dialogId) }));
-  },
-
-  renameDialog: (dialogId, title) => {
-    _throttledSnapshot();
-    set((s) => ({ dialogs: s.dialogs.map((p) => (p.id === dialogId ? { ...p, title } : p)) }));
-  },
-
-  updateDialog: (dialogId, patch) => {
-    _throttledSnapshot();
-    set((s) => ({ dialogs: s.dialogs.map((p) => (p.id === dialogId ? { ...p, ...patch } : p)) }));
   },
 
   // ── Component mutations ────────────────────────────────────────────────────
@@ -663,7 +681,9 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   addComponentToPage: (pageId, comp) => {
     _snapshot();
     _setTree((s) => ({
-      pages: mapPages(s.pages, (page) => (page.id === pageId ? appendToSection(page, comp) : page)),
+      ..._inRootOf(s, pageId, (nodes) =>
+        mapPages(nodes, (page) => (page.id === pageId ? appendToSection(page, comp) : page)),
+      ),
       dirtyPageIds: _withDirty(s.dirtyPageIds, pageId),
     }));
   },
@@ -671,8 +691,10 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   addComponentToPageSection: (pageId, sectionId, comp) => {
     _snapshot();
     _setTree((s) => ({
-      pages: mapPages(s.pages, (page) =>
-        page.id === pageId ? appendToSection(page, comp, sectionId) : page,
+      ..._inRootOf(s, pageId, (nodes) =>
+        mapPages(nodes, (page) =>
+          page.id === pageId ? appendToSection(page, comp, sectionId) : page,
+        ),
       ),
       dirtyPageIds: _withDirty(s.dirtyPageIds, pageId),
     }));
@@ -680,9 +702,11 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
 
   addComponentToPageGroupArea: (groupId, area, comp) => {
     _snapshot();
-    _setTree((s) => ({
-      pages: updatePageGroupChrome(s.pages, groupId, area, (widgets) => [...widgets, comp]),
-    }));
+    _setTree((s) =>
+      _inRootOf(s, groupId, (nodes) =>
+        updatePageGroupChrome(nodes, groupId, area, (widgets) => [...widgets, comp]),
+      ),
+    );
   },
 
   addComponentToArea: (area, comp) => {
@@ -690,18 +714,9 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     _setTree((s) => ({ [area]: [...s[area], comp] }));
   },
 
-  addComponentToDialog: (dialogId, comp) => {
-    _snapshot();
-    _setTree((s) => ({
-      dialogs: s.dialogs.map((pop) =>
-        pop.id === dialogId ? { ...pop, widgets: [...pop.widgets, comp] } : pop,
-      ),
-    }));
-  },
-
   addComponentToContainer: (containerId, comp) => {
     _snapshot();
-    const owningPage = findOwningPage(get().pages, containerId);
+    const owningPage = findOwningPage(allPageRootNodes(get()), containerId);
     _setTree((s) => ({
       ..._mapAllAreas(s, (components) =>
         mapAllComponents(components, (c) =>
@@ -766,25 +781,20 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     _setTree((s) => {
       const shellRegion = regionForShellSectionId(parentId);
       if (shellRegion) return { [shellRegion]: newChildren };
-      if (s.dialogs.some((pop) => pop.id === parentId)) {
+      if (findPageById(allPageRootNodes(s), parentId)) {
         return {
-          dialogs: s.dialogs.map((pop) =>
-            pop.id === parentId ? { ...pop, widgets: newChildren } : pop,
-          ),
-        };
-      }
-      if (findPageById(s.pages, parentId)) {
-        return {
-          pages: mapPages(s.pages, (page) =>
-            page.id === parentId
-              ? { ...page, sections: replacePageSectionWidgets(page, newChildren) }
-              : page,
+          ..._inRootOf(s, parentId, (nodes) =>
+            mapPages(nodes, (page) =>
+              page.id === parentId
+                ? { ...page, sections: replacePageSectionWidgets(page, newChildren) }
+                : page,
+            ),
           ),
           dirtyPageIds: _withDirty(s.dirtyPageIds, parentId),
         };
       }
       const mapper = (c: WidgetConfig) => (c.id === parentId ? { ...c, children: newChildren } : c);
-      const owningPage = findOwningPage(s.pages, parentId);
+      const owningPage = findOwningPage(allPageRootNodes(s), parentId);
       return {
         ..._mapAllAreas(s, (comps) => mapAllComponents(comps, mapper)),
         dirtyPageIds: owningPage ? _withDirty(s.dirtyPageIds, owningPage.id) : s.dirtyPageIds,
@@ -795,7 +805,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   moveWidgetTo: (nodeId, target, index) => {
     useProjectStore.getState().runBatched(() => {
       const before = get();
-      const sourcePage = findOwningPage(before.pages, nodeId);
+      const sourcePage = findOwningPage(allPageRootNodes(before), nodeId);
       const targetPage = _targetOwningPage(before, target);
       _setTree((s) => {
         // One pass: sweep the node out of wherever it lives, then splice it into
@@ -808,15 +818,19 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           if (removed) moved = removed;
           return arr;
         };
-        const pagesAfterSections = mapPages(s.pages, (page) => {
-          const res = _removeComponentFromPage(page, nodeId);
-          if (!moved && res.removed) moved = res.removed;
-          return res.page;
-        });
-        const pagesWithout = mapPageGroupChrome(pagesAfterSections, removeFrom);
+        const sweepRoot = (nodes: PageNode[]) =>
+          mapPageGroupChrome(
+            mapPages(nodes, (page) => {
+              const res = _removeComponentFromPage(page, nodeId);
+              if (!moved && res.removed) moved = res.removed;
+              return res.page;
+            }),
+            removeFrom,
+          );
+        const pagesWithout = sweepRoot(s.pages);
+        const dialogsWithout = sweepRoot(s.dialogs);
         const shellWithout = {} as Record<ShellAreaId, WidgetConfig[]>;
         for (const region of SHELL_REGION_IDS) shellWithout[region] = removeFrom(s[region]);
-        const dialogsWithout = s.dialogs.map((d) => ({ ...d, widgets: removeFrom(d.widgets) }));
         if (!moved) return {};
 
         // The slot tag names a slot of the old parent; a target that has no slots
@@ -877,27 +891,40 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     });
   },
 
-  movePageTo: (nodeId, target, index) => {
+  movePageTo: (nodeId, target, index, root = 'pages') => {
     // A group cannot become its own descendant. Checked before the batch opens,
     // so a refused move leaves no snapshot and no dirty flag behind.
-    if (target && _isDescendantPageNode(get().pages, nodeId, target)) return;
+    if (target && _isDescendantPageNode(allPageRootNodes(get()), nodeId, target)) return;
     useProjectStore.getState().runBatched(() => {
       _setTree((s) => {
-        const { nodes, removed } = removePageNode(s.pages, nodeId);
+        const source = findPageRoot(s, nodeId);
+        if (!source) return {};
+        const { nodes, removed } = removePageNode(s[source], nodeId);
         if (!removed) return {};
+        // The node leaves its own root first, so a move within one root and a
+        // move across the two are the same splice.
+        const without: RootSlice = { ...s, ..._rootPatch(source, nodes) };
+        const destination = target ? findPageRoot(without, target) : root;
+        if (!destination) return {};
         if (!target) {
-          const roots = [...nodes];
+          const roots = [...without[destination]];
           roots.splice(index ?? roots.length, 0, removed);
-          return { pages: roots };
+          return { ..._rootPatch(source, nodes), ..._rootPatch(destination, roots) };
         }
-        return { pages: _insertIntoGroup(nodes, target, removed as PageGroupChild, index) };
+        return {
+          ..._rootPatch(source, nodes),
+          ..._rootPatch(
+            destination,
+            _insertIntoGroup(without[destination], target, removed as PageGroupChild, index),
+          ),
+        };
       });
     });
   },
 
-  reorderPages: (pages) => {
+  reorderPages: (pages, root = 'pages') => {
     _snapshot();
-    _setTree({ pages });
+    _setTree(_rootPatch(root, pages));
   },
 
   // ── Backend persistence ────────────────────────────────────────────────────
@@ -914,13 +941,13 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     _throttledSnapshot();
     const idSet = new Set(ids);
     set((s) => {
-      // `_editAllAreas` rather than `_mapAllAreas`: a page, dialog or shell array
-      // this write did not reach comes back as the very same object, so a
+      // `_editAllAreas` rather than `_mapAllAreas`: a page or shell array this
+      // write did not reach comes back as the very same object, so a
       // `useShallow` selector over the areas holds its identity across a
       // keystroke instead of re-reading on every character. It also reports the
       // pages that actually changed, which is what marks them dirty — no
       // `findOwningPage` sweep per id. Widgets with no owning page live in
-      // shell, dialogs or page-group chrome, all persisted via the index PUT.
+      // shell or page-group chrome, both persisted via the index PUT.
       const { areas, touchedPageIds } = _editAllAreas(s, (widgets) =>
         mapAllComponents(widgets, (c) => {
           if (!idSet.has(c.id)) return c;
@@ -942,14 +969,16 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
 
   loadPageContent: async (pageId) => {
     if (get().loadedPageIds.has(pageId)) return;
+    const root = findPageRoot(get(), pageId);
+    if (!root) return;
     try {
-      const data = await apiJson<LazyPageResponse>(
-        `/api/config/pages/${encodeURIComponent(pageId)}`,
-      );
+      const data = await apiJson<LazyPageResponse>(_pageDocumentUrl(root, pageId));
       const sections = normalizeSections(data.sections);
 
       _setTree((s) => ({
-        pages: mapPages(s.pages, (page) => (page.id === pageId ? { ...page, sections } : page)),
+        ..._inRootOf(s, pageId, (nodes) =>
+          mapPages(nodes, (page) => (page.id === pageId ? { ...page, sections } : page)),
+        ),
         loadedPageIds: new Set([...s.loadedPageIds, pageId]),
       }));
     } catch (err) {
@@ -978,12 +1007,12 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         method: 'PUT',
         body: {
           pages: _toIndexNodes(pages),
+          dialogs: _toIndexNodes(dialogs),
           header,
           footer,
           leftSidebar,
           rightSidebar,
           shell,
-          dialogs,
           globalEvents,
         },
       });
@@ -993,7 +1022,15 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       const savedPageIds = new Set<string>();
       const failedPages: Array<{ id: string; message: string }> = [];
       if (dirtyPageIds.size > 0) {
-        const pageMap = new Map(flattenPages(pages).map((p) => [p.id, p]));
+        // Each page with the root it sits in, so its document is saved to that
+        // root's directory.
+        const pageMap = new Map(
+          PAGE_ROOTS.flatMap((root) =>
+            flattenPages(root === 'pages' ? pages : dialogs).map(
+              (p) => [p.id, { page: p, root }] as const,
+            ),
+          ),
+        );
         const { loadedPageIds } = get();
         // Each page resolves to its own outcome rather than throwing: one
         // failing page must not discard the dirty-clears of its siblings that
@@ -1001,8 +1038,9 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         // save status can name the page that failed.
         const results = await Promise.all(
           Array.from(dirtyPageIds).map(async (pageId) => {
-            const page = pageMap.get(pageId);
-            if (!page) return null;
+            const entry = pageMap.get(pageId);
+            if (!entry) return null;
+            const { page, root } = entry;
             const body: Record<string, unknown> = { id: pageId };
             // Send null for undefined fields so the backend can strip them from
             // disk — without this, clearing a metadata field (e.g. unchecking
@@ -1015,10 +1053,7 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
               body.sections = page.sections;
             }
             try {
-              await apiJson(`/api/config/pages/${encodeURIComponent(pageId)}`, {
-                method: 'PUT',
-                body,
-              });
+              await apiJson(_pageDocumentUrl(root, pageId), { method: 'PUT', body });
             } catch (err) {
               console.error(`[configStore] Failed to save page ${pageId}:`, err);
               return { id: pageId, message: errorMessage(err) };

@@ -15,21 +15,26 @@ from core.exceptions import (
 )
 from core.http_origins import invalidate_http_origin_cache
 from core.page_index import (
-    collect_dialog_ids,
-    collect_dialog_property_keys,
+    INDEX_ROOTS,
+    all_root_nodes,
     collect_page_ids,
+    find_page_document,
     is_page_group,
+    iter_page_groups,
+    page_document_dir,
+    page_document_files,
+    root_nodes,
 )
 from core.storage import (
     BUILD_STATUS_PATH,
     active_alarms_config_path,
     active_config_dir,
     active_custom_widgets_dir,
-    active_pages_dir,
     active_project_root,
     active_recipes_config_path,
     active_translations_dir,
     component_files,
+    move_file,
     read_csv,
     read_json,
     write_csv,
@@ -46,16 +51,18 @@ from core.translations import (
 from core.validation import (
     ValidationReport,
     build_context,
+    collect_page_property_keys,
     component_slot_property_gaps,
     component_undeclared_slots,
+    ctx_for_root,
     is_valid_dict_name,
     is_valid_page_id,
     validate_alarms,
     validate_config_areas,
-    validate_dialog,
     validate_global_events,
     validate_historian,
     validate_page,
+    validate_page_node_events,
     validate_recipes,
     validate_shell_areas,
     validate_users,
@@ -120,9 +127,12 @@ _SHELL_REGION_LABELS = {
 _GLOBAL_EVENTS_OWNER = "__events__"
 
 
-def _synthetic_owner(artifact_kind: str, segments: list[str]) -> dict[str, Any] | None:
+def _synthetic_owner(
+    artifact_kind: str, segments: list[str], owner_id: str | None = None
+) -> dict[str, Any] | None:
     """Resolve a finding that belongs to a panel rather than to a widget node —
-    shell region settings and global event handlers.
+    shell region settings, global event handlers, and a page or page-group
+    node's own lifecycle events.
 
     Returns the owner id, the property-relative field path, the breadcrumb and
     which segment is the property itself, or None when the path isn't one of
@@ -136,6 +146,10 @@ def _synthetic_owner(artifact_kind: str, segments: list[str]) -> dict[str, Any] 
             return _synthetic_row(f"__{region}__", segments[2:], [label, prop_key], prop_key, 0)
     if artifact_kind == "globalEvents" and segments:
         return _synthetic_row(_GLOBAL_EVENTS_OWNER, segments, [segments[0]], segments[0], 0)
+    # `/events/onOpen/0` on a page or page-group draft. The panel that edits
+    # them scopes itself to the node's own id, so that is the badge's owner.
+    if artifact_kind in {"page", "pageGroup"} and len(segments) >= 2 and segments[0] == "events":
+        return _synthetic_row(owner_id, segments[1:], ["Events", segments[1]], segments[1], 0)
     return None
 
 
@@ -165,7 +179,7 @@ def _resolve_finding(draft: Any, path: str, artifact_kind: str = "") -> dict[str
     the property's own top-level value.
 
     Path-only + the real tree — deliberately has no id/name knowledge beyond
-    what it finds by walking, so it works unchanged across page/dialog/shell/
+    what it finds by walking, so it works unchanged across page/shell/
     globalEvents/component drafts. `artifact_kind` only disambiguates the
     panel-owned paths that never reach a widget node (see `_synthetic_owner`).
     """
@@ -177,8 +191,8 @@ def _resolve_finding(draft: Any, path: str, artifact_kind: str = "") -> dict[str
     current = draft
     widget_id: str | None = None
     # Labels found before the property name and after it are kept apart so the
-    # property still reads in path order: `Save > onPress > openDialog`, not
-    # `Save > openDialog > onPress`.
+    # property still reads in path order: `Save > onPress > openPageOverlay`,
+    # not `Save > openPageOverlay > onPress`.
     breadcrumb_parts: list[str] = []
     sub_parts: list[str] = []
     prop_key: str | None = None
@@ -227,7 +241,10 @@ def _resolve_finding(draft: Any, path: str, artifact_kind: str = "") -> dict[str
         parts = [*parts, segments[-1]]
 
     if widget_id is None:
-        synthetic = _synthetic_owner(artifact_kind, segments)
+        owner_id = draft.get("id") if isinstance(draft, dict) else None
+        synthetic = _synthetic_owner(
+            artifact_kind, segments, owner_id if isinstance(owner_id, str) else None
+        )
         if synthetic is not None:
             widget_id = synthetic["widgetId"]
             field_path = synthetic["fieldPath"]
@@ -348,6 +365,23 @@ def _validate_component_tree(component: Any, ctx: Any) -> ValidationReport:
             code="slot-undeclared",
         )
     return report
+
+
+def _collect_page_group_diagnostics(
+    nodes: Any, ctx: Any, diagnostics: list[dict[str, Any]]
+) -> None:
+    """Validate the lifecycle events on every page-group node in the index.
+
+    Each group is reported as its own artifact so the warnings list can name
+    and select it — paths stay relative to the group (``/events/onOpen/0``),
+    matching what the page sweep produces for a page's own events.
+    """
+    for node, _path in iter_page_groups(nodes):
+        gid = node.get("id") if isinstance(node.get("id"), str) else None
+        report = validate_page_node_events(node, ctx)
+        diagnostics.extend(
+            _diagnostic_rows(report, artifact_kind="pageGroup", artifact_id=gid, draft=node)
+        )
 
 
 def _collect_component_diagnostics(ctx: Any, diagnostics: list[dict[str, Any]]) -> None:
@@ -473,8 +507,11 @@ def _collect_domain_diagnostics(ctx: Any, diagnostics: list[dict[str, Any]]) -> 
         )
 
 
-# mtime-keyed cache for page-file metadata read during index hydration.
-# Each GET /api/config/config otherwise re-reads every page file under a lock.
+# mtime-keyed cache for page-document metadata read during index hydration.
+# Each GET /api/config/config otherwise re-reads every document under a lock.
+# Keyed by the document's path, not by the id: the two index roots have their own
+# directories, and the same id in both would otherwise serve one root's document
+# for the other's node whenever their mtimes matched.
 # Process-local: relies on the single-worker uvicorn run. Multi-worker deployments
 # would need a shared invalidation channel (each worker only clears its own cache).
 _page_meta_cache: dict[str, tuple[int, dict[str, Any]]] = {}
@@ -496,6 +533,10 @@ _PAGE_PERSISTED_FIELDS: frozenset[str] = frozenset({
     "showFooter",
     "mainPadding",
     "mainBackground",
+    "events",
+    "componentProperties",
+    "showCloseButton",
+    "closeOnBackgroundPress",
     "sections",
 })
 
@@ -508,27 +549,29 @@ def _invalidate_runtime_cache() -> None:
     _page_meta_cache.clear()
 
 
-def _read_page_index_metadata(node_id: str) -> dict[str, Any]:
+def _read_page_index_metadata(node_id: str, root: str) -> dict[str, Any]:
     # Defense-in-depth: refuse to follow ids whose shape can't resolve to a safe filename
-    # under PAGES_DIR. PUT validates ids on write, but GET reads whatever is in config.json.
+    # under the root's directory. PUT validates ids on write, but GET reads
+    # whatever is in config.json.
     if not is_valid_page_id(node_id):
         return {}
-    page_path = active_pages_dir() / f"{node_id}.json"
+    page_path = page_document_dir(root) / f"{node_id}.json"
+    cache_key = str(page_path)
     try:
         mtime = page_path.stat().st_mtime_ns
     except FileNotFoundError:
-        _page_meta_cache.pop(node_id, None)
+        _page_meta_cache.pop(cache_key, None)
         return {}
-    cached = _page_meta_cache.get(node_id)
+    cached = _page_meta_cache.get(cache_key)
     if cached and cached[0] == mtime:
         return cached[1]
     try:
         raw = read_json(page_path)
     except FileNotFoundError:
-        _page_meta_cache.pop(node_id, None)
+        _page_meta_cache.pop(cache_key, None)
         return {}
     file_data = {k: v for k, v in raw.items() if k != "id"} if isinstance(raw, dict) else {}
-    _page_meta_cache[node_id] = (mtime, file_data)
+    _page_meta_cache[cache_key] = (mtime, file_data)
     return file_data
 
 # ── Dictionary helpers ────────────────────────────────────────────────────────
@@ -578,11 +621,11 @@ def _clean_index_node(node: dict[str, Any]) -> dict[str, Any]:
     return {"id": node["id"], "type": "page"}
 
 
-def _hydrate_index_tree(nodes: list[Any]) -> list[dict[str, Any]]:
+def _hydrate_index_tree(nodes: list[Any], root: str) -> list[dict[str, Any]]:
     """Merge per-page file metadata into structural page nodes.
 
     Group nodes carry their metadata in the index; page nodes pull title, icon,
-    sections, etc. from their per-page JSON file.
+    sections, etc. from their document — which lives in `root`'s own directory.
     """
     result: list[dict[str, Any]] = []
     for node in nodes:
@@ -595,12 +638,12 @@ def _hydrate_index_tree(nodes: list[Any]) -> list[dict[str, Any]]:
         if is_page_group(node):
             result.append({
                 **node,
-                "children": _hydrate_index_tree(node.get("children", [])),
+                "children": _hydrate_index_tree(node.get("children", []), root),
             })
             continue
 
         result.append({
-            **_read_page_index_metadata(node_id),
+            **_read_page_index_metadata(node_id, root),
             "id": node_id,
             "type": "page",
         })
@@ -631,13 +674,13 @@ def _load_global_config() -> dict[str, Any]:
         return _empty_config()
     return {
         "version": 2,
-        "pages": _hydrate_index_tree(_list_field(raw, "pages")),
+        "pages": _hydrate_index_tree(_list_field(raw, "pages"), "pages"),
         "header": _list_field(raw, "header"),
         "footer": _list_field(raw, "footer"),
         "leftSidebar": _list_field(raw, "leftSidebar"),
         "rightSidebar": _list_field(raw, "rightSidebar"),
         "shell": raw.get("shell", {}) if isinstance(raw.get("shell"), dict) else {},
-        "dialogs": _list_field(raw, "dialogs"),
+        "dialogs": _hydrate_index_tree(_list_field(raw, "dialogs"), "dialogs"),
         "globalEvents": raw.get("globalEvents", {}) if isinstance(raw.get("globalEvents"), dict) else {},
         "mcpEnabled": raw.get("mcpEnabled") is True,
     }
@@ -701,9 +744,22 @@ async def get_config() -> Any:
 async def put_config(body: dict) -> Any:
     if "pages" not in body or not isinstance(body["pages"], list):
         raise ConfigValidationError("'pages' array is required")
-    _validate_index_nodes(body["pages"], set())
-
+    if "dialogs" in body and not isinstance(body["dialogs"], list):
+        raise ConfigValidationError("'dialogs' must be an array")
     existing_raw = read_json(_config_path()) if _config_path().exists() else {}
+    # The Dialogs folder is preserved when the body omits it, like `mcpEnabled`
+    # and the `project` block: this endpoint carries whatever surface its caller
+    # edits, and an older client that knows nothing of the second root must not
+    # empty it — the orphan sweep below would then delete every one of its page
+    # files. Clearing it is still possible, with an explicit empty array.
+    if "dialogs" not in body:
+        body = {**body, "dialogs": _list_field(existing_raw, "dialogs")}
+    # One id set across both roots: a node id names one page or group,
+    # whichever root it sits in.
+    index_ids: set[str] = set()
+    for root in INDEX_ROOTS:
+        _validate_index_nodes(_list_field(body, root), index_ids)
+
     existing_mcp_enabled = (
         existing_raw.get("mcpEnabled") is True if isinstance(existing_raw, dict) else False
     )
@@ -719,7 +775,7 @@ async def put_config(body: dict) -> Any:
         "leftSidebar": _list_field(body, "leftSidebar"),
         "rightSidebar": _list_field(body, "rightSidebar"),
         "shell": body.get("shell", {}) if isinstance(body.get("shell"), dict) else {},
-        "dialogs": _list_field(body, "dialogs"),
+        "dialogs": [_clean_index_node(n) for n in _list_field(body, "dialogs") if isinstance(n, dict)],
         "globalEvents": body.get("globalEvents", {}) if isinstance(body.get("globalEvents"), dict) else {},
         # Preserve the admin-managed flag — `PUT /api/config` carries the editable
         # surface (pages/shell/etc.) and should not silently clear it.
@@ -731,27 +787,54 @@ async def put_config(body: dict) -> Any:
         payload["project"] = existing_project_block
 
     # Validate the widget trees this document carries (shell component arrays,
-    # dialogs, globalEvents, shell region bindings) before persisting — the
-    # per-page endpoint validates page sections, but this surface was previously
-    # written unchecked. Resolve cross-references (pages, dialogs) against the
-    # incoming body so a page/dialog created in the same save validates.
+    # globalEvents, shell region bindings) before persisting — the per-page
+    # endpoint validates page sections, but this surface was previously written
+    # unchecked. Resolve page cross-references against the incoming body so a
+    # page created — or moved between the two page-tree roots — in the same
+    # save validates against its new assignment, not the on-disk index this
+    # request is about to replace.
     ctx = build_context()
-    ctx.page_ids = collect_page_ids(payload["pages"])
-    ctx.dialog_ids = collect_dialog_ids(payload["dialogs"])
-    ctx.dialog_property_keys = collect_dialog_property_keys(payload["dialogs"])
+    ctx.page_ids = collect_page_ids(all_root_nodes(payload))
+    ctx.navigable_page_ids = frozenset(collect_page_ids(root_nodes(payload, "pages")))
+    ctx.dialogs_page_ids = frozenset(collect_page_ids(root_nodes(payload, "dialogs")))
+    ctx.page_property_keys = collect_page_property_keys(payload)
     report = validate_config_areas(payload, ctx)
     if not report.ok:
         raise ConfigValidationError(report.to_message())
 
     write_json(_config_path(), payload)
 
-    # Remove orphaned page files whose IDs are no longer in the index
-    index_ids = ctx.page_ids
-    for path in active_pages_dir().glob("*.json"):
-        if path.stem.startswith("__"):
+    # A node that changed root has to take its document with it: each directory
+    # is swept against its own root's ids below, so a page moved from Pages to
+    # the Dialogs folder (or back) would otherwise be deleted as an orphan of
+    # the root it left. Relocated first, and through the storage helpers, so the
+    # sweep never sees a document that is only half-moved.
+    root_ids = {root: collect_page_ids(_list_field(payload, root)) for root in INDEX_ROOTS}
+    for root, ids in root_ids.items():
+        for page_id in ids:
+            # These ids become filenames. `_validate_index_nodes` above does not
+            # check their shape, and this is the first path that writes with
+            # them, so guard here as every other id-to-path hop does.
+            if not is_valid_page_id(page_id):
+                continue
+            target = page_document_dir(root) / f"{page_id}.json"
+            if target.exists():
+                continue
+            found = find_page_document(page_id)
+            if found is not None and found[0] != root:
+                move_file(found[1], target)
+
+    # Remove orphaned page documents whose id is no longer in the root that
+    # directory belongs to.
+    for root, ids in root_ids.items():
+        directory = page_document_dir(root)
+        if not directory.is_dir():
             continue
-        if path.stem not in index_ids:
-            path.unlink(missing_ok=True)
+        for path in directory.glob("*.json"):
+            if path.stem.startswith("__"):
+                continue
+            if path.stem not in ids:
+                path.unlink(missing_ok=True)
 
     _invalidate_runtime_cache()
     return payload
@@ -762,7 +845,7 @@ async def put_config(body: dict) -> Any:
 # as the write-API's blocking structural guard (which stays untouched — these
 # are purely advisory and never block a save).
 
-_VALIDATE_KINDS = frozenset({"page", "dialog", "shell", "globalEvents", "component"})
+_VALIDATE_KINDS = frozenset({"page", "shell", "globalEvents", "component"})
 
 
 @router.post("/validate")
@@ -785,8 +868,6 @@ async def validate_draft(body: dict) -> Any:
     artifact_id = draft.get("id") if isinstance(draft.get("id"), str) else None
     if kind == "page":
         report = validate_page(draft, ctx)
-    elif kind == "dialog":
-        report = validate_dialog(draft, ctx)
     elif kind == "shell":
         report = validate_shell_areas(draft, ctx)
         artifact_id = "shell"
@@ -825,17 +906,6 @@ async def get_project_diagnostics() -> Any:
             _diagnostic_rows(shell_report, artifact_kind="shell", artifact_id="shell", draft=shell_draft)
         )
 
-        dialogs = raw.get("dialogs")
-        if isinstance(dialogs, list):
-            for dialog in dialogs:
-                if not isinstance(dialog, dict):
-                    continue
-                did = dialog.get("id") if isinstance(dialog.get("id"), str) else None
-                dialog_report = validate_dialog(dialog, ctx)
-                diagnostics.extend(
-                    _diagnostic_rows(dialog_report, artifact_kind="dialog", artifact_id=did, draft=dialog)
-                )
-
         global_events = raw.get("globalEvents")
         if isinstance(global_events, dict):
             events_report = validate_global_events(global_events, ctx)
@@ -843,21 +913,24 @@ async def get_project_diagnostics() -> Any:
                 events_report, artifact_kind="globalEvents", artifact_id="globalEvents", draft=global_events,
             ))
 
-    pages_dir = active_pages_dir()
-    if pages_dir.exists():
-        for path in sorted(pages_dir.glob("*.json")):
-            if path.stem.startswith("__"):
-                continue
-            try:
-                page = read_json(path)
-            except FileNotFoundError:
-                continue
-            if not isinstance(page, dict):
-                continue
-            page_report = validate_page(page, ctx)
-            diagnostics.extend(
-                _diagnostic_rows(page_report, artifact_kind="page", artifact_id=path.stem, draft=page)
+        # Page-group lifecycle events live in the index, not on a page file, so
+        # the per-page sweep below never sees them.
+        for root in INDEX_ROOTS:
+            _collect_page_group_diagnostics(
+                root_nodes(raw, root), ctx_for_root(ctx, root), diagnostics
             )
+
+    for path in page_document_files():
+        try:
+            page = read_json(path)
+        except FileNotFoundError:
+            continue
+        if not isinstance(page, dict):
+            continue
+        page_report = validate_page(page, ctx)
+        diagnostics.extend(
+            _diagnostic_rows(page_report, artifact_kind="page", artifact_id=path.stem, draft=page)
+        )
 
     _collect_component_diagnostics(ctx, diagnostics)
     _collect_translation_diagnostics(diagnostics)
@@ -867,19 +940,23 @@ async def get_project_diagnostics() -> Any:
 
 
 # ── Per-page content endpoints ─────────────────────────────────────────────────
+# One pair of handlers, mounted under both roots: `/api/config/pages/{id}` and
+# `/api/config/dialogs/{id}`. The path names the directory the document lives
+# in, so a URL always addresses exactly one file — where a `?root=` parameter
+# would default to one directory and silently write the wrong one when a caller
+# forgot it.
 
-@router.get("/pages/{page_id}")
-async def get_page(page_id: str) -> Any:
+
+async def _get_page_document(page_id: str, root: str) -> Any:
     if not is_valid_page_id(page_id):
         raise ConfigValidationError("Invalid page id")
-    path = active_pages_dir() / f"{page_id}.json"
+    path = page_document_dir(root) / f"{page_id}.json"
     if not path.exists():
         return {"id": page_id, "sections": {"content": []}}
     return read_json(path)
 
 
-@router.put("/pages/{page_id}")
-async def put_page(page_id: str, body: dict) -> Any:
+async def _put_page_document(page_id: str, root: str, body: dict) -> Any:
     if not is_valid_page_id(page_id):
         raise ConfigValidationError("Invalid page id")
     if "sections" in body:
@@ -895,7 +972,7 @@ async def put_page(page_id: str, body: dict) -> Any:
                         "Pages may not contain page-groups — nest the group inside another page-group instead",
                     )
 
-    path = active_pages_dir() / f"{page_id}.json"
+    path = page_document_dir(root) / f"{page_id}.json"
     try:
         existing = read_json(path)
     except FileNotFoundError:
@@ -911,7 +988,8 @@ async def put_page(page_id: str, body: dict) -> Any:
     # toggles like `hidden` can be removed, not just set.
     merged = {k: v for k, v in merged.items() if v is not None}
     payload = {"id": page_id, **merged}
-    report = validate_page(payload, build_context())
+    ctx = build_context()
+    report = validate_page(payload, ctx)
     if not report.ok:
         raise ConfigValidationError(report.to_message())
     write_json(path, payload)
@@ -920,7 +998,7 @@ async def put_page(page_id: str, body: dict) -> Any:
         artifact_type="page",
         artifact_ids=[page_id],
         source="rest",
-        summary=f"PUT /api/config/pages/{page_id}",
+        summary=f"PUT /api/config/{root}/{page_id}",
         diff=make_diff(before, payload),
     )
     # Fire-and-forget so a slow browser tab doesn't bound REST response time.
@@ -929,14 +1007,43 @@ async def put_page(page_id: str, body: dict) -> Any:
     return payload
 
 
-@router.delete("/pages/{page_id}")
-async def delete_page(page_id: str) -> Any:
+async def _delete_page_document(page_id: str, root: str) -> Any:
     if not is_valid_page_id(page_id):
         raise ConfigValidationError("Invalid page id")
-    path = active_pages_dir() / f"{page_id}.json"
+    path = page_document_dir(root) / f"{page_id}.json"
     path.unlink(missing_ok=True)
     _invalidate_runtime_cache()
     return {"ok": True}
+
+
+@router.get("/pages/{page_id}")
+async def get_page(page_id: str) -> Any:
+    return await _get_page_document(page_id, "pages")
+
+
+@router.put("/pages/{page_id}")
+async def put_page(page_id: str, body: dict) -> Any:
+    return await _put_page_document(page_id, "pages", body)
+
+
+@router.delete("/pages/{page_id}")
+async def delete_page(page_id: str) -> Any:
+    return await _delete_page_document(page_id, "pages")
+
+
+@router.get("/dialogs/{page_id}")
+async def get_dialogs_document(page_id: str) -> Any:
+    return await _get_page_document(page_id, "dialogs")
+
+
+@router.put("/dialogs/{page_id}")
+async def put_dialogs_document(page_id: str, body: dict) -> Any:
+    return await _put_page_document(page_id, "dialogs", body)
+
+
+@router.delete("/dialogs/{page_id}")
+async def delete_dialogs_document(page_id: str) -> Any:
+    return await _delete_page_document(page_id, "dialogs")
 
 
 # ── Dictionary config ─────────────────────────────────────────────────────────

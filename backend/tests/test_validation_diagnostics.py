@@ -5,6 +5,8 @@ Every catalog code is non-blocking: it must land in `report.warnings`
 reject the write with a 422).
 """
 
+from dataclasses import replace
+
 import pytest
 from core.validation import ValidationContext
 from core.validation.report import ValidationReport
@@ -94,6 +96,25 @@ def test_write_target_incomplete(ctx):
     _validate_action({"type": "writeDataVariable", "value": 1}, ctx, "/a", report)
     w = _warn(report)
     assert (w.code, w.severity) == ("var-empty", "warning")
+
+
+def test_toast_severity_invalid(ctx):
+    report = ValidationReport()
+    _validate_action(
+        {"type": "showToast", "message": "hi", "severity": "success"}, ctx, "/a", report
+    )
+    w = _warn(report)
+    assert (w.code, w.severity) == ("toast-severity-invalid", "error")
+    assert w.path == "/a/severity"
+
+
+def test_toast_severity_valid_is_silent(ctx):
+    report = ValidationReport()
+    for sev in ("info", "warning", "error"):
+        _validate_action(
+            {"type": "showToast", "message": "hi", "severity": sev}, ctx, "/a", report
+        )
+    assert report.warnings == []
 
 
 def test_write_target_resolvable_is_silent(ctx):
@@ -245,6 +266,30 @@ def test_video_known_does_not_warn(ctx):
     report = ValidationReport()
     _validate_property_value(
         {"$static": {"path": "videos/intro.mp4"}},
+        {"type": "video"}, ctx, "/p", report,
+    )
+    assert report.warnings == []
+
+
+def test_video_known_in_subfolder_does_not_warn(live_project_root):
+    """`/api/assets` and the picker both offer nested videos (rglob) — the
+    validator must key its asset context the same way or it rejects content
+    the picker just offered."""
+    import core.storage as storage
+    from core.validation.structure import _collect_asset_names
+
+    storage.ensure_active_project_dirs()
+    nested = storage.active_videos_dir() / "lines"
+    nested.mkdir(parents=True)
+    (nested / "clip.mp4").write_bytes(b"\x00\x00\x00 ftypmp42")
+
+    ctx = ValidationContext(
+        widget_schemas={"version": 2, "builtin": {}, "custom": {}},
+        video_assets=_collect_asset_names(storage.active_videos_dir()),
+    )
+    report = ValidationReport()
+    _validate_property_value(
+        {"$static": {"path": "videos/lines/clip.mp4"}},
         {"type": "video"}, ctx, "/p", report,
     )
     assert report.warnings == []
@@ -488,38 +533,34 @@ def test_prop_unknown_skipped_for_schemaless_widget():
     assert report.findings == []
 
 
-def test_prop_unknown_dialog_arg():
-    ctx = _prop_ctx(
-        dialog_ids={"popup1"}, dialog_property_keys={"popup1": frozenset({"title"})}
-    )
+def test_prop_unknown_page_overlay_arg():
+    ctx = _prop_ctx(page_ids={"detail"}, page_property_keys={"detail": frozenset({"motorId"})})
     report = ValidationReport()
     _validate_action(
-        {"type": "openDialog", "dialogId": "popup1", "componentProperties": {"ghost": 1}},
+        {"type": "openDialog", "pageId": "detail", "componentProperties": {"ghost": 1}},
         ctx, "/a", report,
     )
     w = _warn(report)
     assert (w.code, w.severity) == ("prop-unknown", "warning")
     assert w.path == "/a/componentProperties/ghost"
-    assert "dialog 'popup1'" in w.message
+    assert "page 'detail'" in w.message
 
 
-def test_prop_unknown_dialog_arg_declared_is_silent():
-    ctx = _prop_ctx(
-        dialog_ids={"popup1"}, dialog_property_keys={"popup1": frozenset({"title"})}
-    )
+def test_prop_unknown_page_overlay_arg_declared_is_silent():
+    ctx = _prop_ctx(page_ids={"detail"}, page_property_keys={"detail": frozenset({"motorId"})})
     report = ValidationReport()
     _validate_action(
-        {"type": "openDialog", "dialogId": "popup1", "componentProperties": {"title": "x"}},
+        {"type": "openDialog", "pageId": "detail", "componentProperties": {"motorId": "M1"}},
         ctx, "/a", report,
     )
     assert report.warnings == []
 
 
-def test_prop_unknown_dialog_arg_skipped_when_dialogs_uncollected():
-    ctx = _prop_ctx(dialog_ids={"popup1"})
+def test_prop_unknown_page_overlay_arg_skipped_when_pages_uncollected():
+    ctx = _prop_ctx(page_ids={"detail"})
     report = ValidationReport()
     _validate_action(
-        {"type": "openDialog", "dialogId": "popup1", "componentProperties": {"ghost": 1}},
+        {"type": "openDialog", "pageId": "detail", "componentProperties": {"ghost": 1}},
         ctx, "/a", report,
     )
     assert report.warnings == []
@@ -539,4 +580,127 @@ def test_pageisactive_empty_page_not_diagnosed(ctx):
 def test_random_not_diagnosed(ctx):
     report = ValidationReport()
     _validate_property_value({"$random": {"min": 0, "max": 1}}, None, ctx, "/p", report)
+    assert report.warnings == []
+
+
+# ── Navigation targets that cannot be reached ────────────────────────────────
+
+
+@pytest.fixture()
+def nav_ctx(ctx) -> ValidationContext:
+    """A project whose `motor-detail` page sits in the Dialogs folder."""
+    return replace(ctx, dialogs_page_ids=frozenset({"motor-detail"}))
+
+
+def _root_ctx() -> ValidationContext:
+    """`motor-detail` in the Dialogs folder, `home` in the navigable tree."""
+    return _prop_ctx(
+        page_ids={"motor-detail", "home"},
+        dialogs_page_ids=frozenset({"motor-detail"}),
+        navigable_page_ids=frozenset({"home"}),
+    )
+
+
+def test_open_dialog_naming_a_navigable_page():
+    report = ValidationReport()
+    _validate_action({"type": "openDialog", "pageId": "home"}, _root_ctx(), "/a", report)
+    w = _warn(report)
+    assert (w.code, w.severity, w.path) == ("overlay-wrong-root", "error", "/a/pageId")
+    assert "Open Page As Overlay" in w.message
+
+
+def test_open_page_overlay_naming_the_dialogs_folder():
+    report = ValidationReport()
+    _validate_action(
+        {"type": "openPageOverlay", "pageId": "motor-detail"}, _root_ctx(), "/a", report
+    )
+    w = _warn(report)
+    assert (w.code, w.path) == ("overlay-wrong-root", "/a/pageId")
+    assert "Open Dialog" in w.message
+
+
+def test_each_overlay_action_naming_its_own_root_is_silent():
+    ctx = _root_ctx()
+    report = ValidationReport()
+    _validate_action({"type": "openDialog", "pageId": "motor-detail"}, ctx, "/a", report)
+    _validate_action({"type": "openPageOverlay", "pageId": "home"}, ctx, "/b", report)
+    # Close spans both roots, so neither target is wrong for it.
+    _validate_action({"type": "closePageOverlay", "pageId": "motor-detail"}, ctx, "/c", report)
+    _validate_action({"type": "closePageOverlay", "pageId": "home"}, ctx, "/d", report)
+    assert report.warnings == []
+
+
+def test_overlay_root_check_is_skipped_when_the_index_was_not_read():
+    # Both membership tests are positive, so empty roots flag nothing rather
+    # than flagging every overlay action in the project.
+    report = ValidationReport()
+    _validate_action(
+        {"type": "openDialog", "pageId": "motor-detail"},
+        _prop_ctx(page_ids={"motor-detail"}),
+        "/a",
+        report,
+    )
+    assert report.warnings == []
+
+
+def test_page_field_naming_the_dialogs_folder(nav_ctx):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$static": "motor-detail"},
+        {"type": "String", "format": "page"}, nav_ctx, "/p", report,
+    )
+    w = _warn(report)
+    assert (w.code, w.severity) == ("page-not-navigable", "error")
+
+
+def test_page_field_naming_a_bare_id_is_checked_too(nav_ctx):
+    report = ValidationReport()
+    _validate_property_value(
+        "motor-detail",
+        {"type": "String", "format": "page"}, nav_ctx, "/p", report,
+    )
+    assert _warn(report).code == "page-not-navigable"
+
+
+def test_page_field_naming_a_navigable_page_is_silent(nav_ctx):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$static": "home"},
+        {"type": "String", "format": "page"}, nav_ctx, "/p", report,
+    )
+    assert report.warnings == []
+
+
+def test_menu_item_linking_to_the_dialogs_folder(nav_ctx):
+    report = ValidationReport()
+    _validate_property_value(
+        [{"type": "page-link", "pageId": "motor-detail", "label": "Motor"}],
+        {"type": "menu-items"}, nav_ctx, "/p", report,
+    )
+    w = _warn(report)
+    assert (w.code, w.path) == ("page-not-navigable", "/p/0/pageId")
+
+
+def test_menu_item_inside_a_submenu_is_checked_too(nav_ctx):
+    report = ValidationReport()
+    _validate_property_value(
+        [
+            {"type": "divider"},
+            {
+                "type": "submenu",
+                "label": "Machine",
+                "items": [{"type": "page-link", "pageId": "motor-detail"}],
+            },
+        ],
+        {"type": "menu-items"}, nav_ctx, "/p", report,
+    )
+    assert _warn(report).path == "/p/1/items/0/pageId"
+
+
+def test_menu_item_linking_to_a_navigable_page_is_silent(nav_ctx):
+    report = ValidationReport()
+    _validate_property_value(
+        [{"type": "page-link", "pageId": "home"}],
+        {"type": "menu-items"}, nav_ctx, "/p", report,
+    )
     assert report.warnings == []

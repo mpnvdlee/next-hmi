@@ -9,7 +9,7 @@ never be compared against a stored string. It can be compared against an
 
 Deriving it means walking every document the validation layer resolves property
 values in. That is two layers, not one: ``core/validation/structure.py`` for the
-page tree — ``config.json`` (shell widget arrays, dialogs, shell regions,
+page tree — ``config.json`` (shell widget arrays, page-group chrome, shell regions,
 ``globalEvents`` action payloads), every page file, every reusable component —
 and ``core/validation/domains.py`` for the domains that live in their own files:
 ``alarms.json`` (alarm ``title``/``description``/``image``, every entry of
@@ -72,14 +72,14 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+from core.page_index import page_document_files
 from core.storage import (
     NoLiveProjectError,
     active_alarms_config_path,
-    active_components_dir,
     active_config_dir,
-    active_pages_dir,
     active_project_root,
     active_recipes_config_path,
+    component_files,
     read_json,
 )
 
@@ -294,18 +294,10 @@ def _project_documents() -> list[Path]:
     ):
         if path.is_file():
             documents.append(path)
-    pages_dir = active_pages_dir()
-    if pages_dir.is_dir():
-        documents.extend(
-            path for path in sorted(pages_dir.glob("*.json"))
-            if path.is_file() and not path.stem.startswith("__")
-        )
-    components_dir = active_components_dir()
-    if components_dir.is_dir():
-        documents.extend(
-            path for path in sorted(components_dir.rglob("*.json"))
-            if path.is_file() and not path.stem.startswith("__")
-        )
+    documents.extend(page_document_files())
+    documents.extend(
+        path for path, _group in component_files() if not path.stem.startswith("__")
+    )
     return documents
 
 

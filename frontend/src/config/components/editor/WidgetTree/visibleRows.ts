@@ -9,7 +9,6 @@ import {
 import {
   SHELL_REGION_IDS,
   shellSectionIdForRegion,
-  type DialogConfig,
   type PageConfig,
   type PageNode,
   type ShellRegionId,
@@ -41,7 +40,6 @@ export type VisibleRowKind =
   | 'page-group'
   | 'page-group-area'
   | 'page-section'
-  | 'dialog'
   | 'widget'
   | 'widget-slot';
 
@@ -68,8 +66,8 @@ export interface VisibleWidgetRow {
  * Only a container host shows its children, a collapsed row shows none, and an
  * instance addressing several slots regroups them under one independently
  * collapsible folder per slot. The two trees differ only in what they hang this
- * walk off (shell regions, pages and dialogs here; a flat definition in the
- * components editor), so the widget part lives here once.
+ * walk off (shell regions and both page-tree roots here; a flat definition in
+ * the components editor), so the widget part lives here once.
  */
 export function walkVisibleWidgets(
   widgets: readonly WidgetConfig[],
@@ -101,8 +99,8 @@ export interface VisibleRowsInput {
   pages: PageNode[];
   /** Post-search shell widgets — pass `filteredShell`. */
   shell: Record<ShellRegionId, WidgetConfig[]>;
-  /** Post-search dialogs — pass `filteredDialogs`. */
-  dialogs: DialogConfig[];
+  /** Post-search Dialogs-folder nodes — pass `filteredDialogs`. */
+  dialogs: PageNode[];
   /** Pass `effectiveCollapsed`, not the raw collapse set. */
   collapsed: ReadonlySet<string>;
   /** Pass `effectiveSectionsOpen`. */
@@ -191,11 +189,7 @@ export function flattenVisibleRows(input: VisibleRowsInput): VisibleRow[] {
   if (visible.dialogs) {
     push(EDITOR_NODE_IDS.DIALOGS, 'dialogs-section', 0);
     if (sectionsOpen.has(EDITOR_NODE_IDS.DIALOGS)) {
-      for (const dialog of dialogs) {
-        push(dialog.id, 'dialog', 1);
-        if (collapsed.has(dialog.id)) continue;
-        pushWidgets(dialog.widgets, 2);
-      }
+      for (const node of dialogs) pushPageNode(node, 1);
     }
   }
 

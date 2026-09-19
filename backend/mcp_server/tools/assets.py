@@ -11,12 +11,12 @@ from core.exceptions import (
     ConfigNotFoundError,
     ConfigValidationError,
 )
+from core.page_index import page_document_files
 from core.storage import (
     active_assets_dir,
     active_components_dir,
     active_icons_dir,
     active_images_dir,
-    active_pages_dir,
     active_videos_dir,
     read_json,
     write_bytes_atomic,
@@ -135,7 +135,8 @@ def _asset_referenced(asset_path: str) -> bool:
     """Schema-aware reference check across pages and reusable components."""
     from core.validation.structure import load_widget_manifest
     schemas = load_widget_manifest()
-    for path in active_pages_dir().glob("*.json"):
+    page_documents = page_document_files(skip_internal=False)
+    for path in page_documents:
         try:
             doc = read_json(path)
         except Exception:

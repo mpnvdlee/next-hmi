@@ -39,6 +39,7 @@ import type { DatasourceListItem } from '@shared/types/datasource';
 import { parseVarKey } from '@shared/types/datasource';
 import { isArrayShape } from '@shared/types/arrayShape';
 import { findComponentInPages } from '@shared/utils/widgetTree';
+import { allPageRootNodes } from '@shared/utils/pageTree';
 import { apiJson } from '@shared/utils/api';
 import { withDotSearchSeparators } from '@shared/utils/search';
 import type { StructSchemaNode } from '@shared/types/componentProperty';
@@ -79,6 +80,7 @@ export default function VariableBindingPicker() {
   const closeBindingPicker = useEditorDomainStore((s) => s.closeBindingPicker);
 
   const pages = useConfigStore((s) => s.pages);
+  const dialogs = useConfigStore((s) => s.dialogs);
   const updateComponent = useConfigStore((s) => s.updateComponent);
 
   // Tree of DatasourceNode[] — each datasource is a top-level collapsible node
@@ -102,8 +104,11 @@ export default function VariableBindingPicker() {
 
   // Find the target component and its current binding (var mode only)
   const comp = useMemo(
-    () => (!isComponentPropMode && target ? findComponentInPages(pages, target.componentId) : null),
-    [isComponentPropMode, target, pages],
+    () =>
+      !isComponentPropMode && target
+        ? findComponentInPages(allPageRootNodes({ pages, dialogs }), target.componentId)
+        : null,
+    [isComponentPropMode, target, pages, dialogs],
   );
 
   const currentKey = useMemo<string | null>(() => {

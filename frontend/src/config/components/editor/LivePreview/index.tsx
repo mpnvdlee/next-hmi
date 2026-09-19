@@ -30,7 +30,12 @@ import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { useConfigStore } from '@shared/store/configStore';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { useComponentStore } from '@shared/store/componentStore';
-import { findPageNodeById, isPageGroup, treeContains } from '@shared/utils/pageTree';
+import {
+  allPageRootNodes,
+  findPageNodeById,
+  isPageGroup,
+  treeContains,
+} from '@shared/utils/pageTree';
 import { withBase } from '@shared/utils/runtimeBase';
 import {
   EDITOR_NODE_IDS,
@@ -115,9 +120,7 @@ function resolveEditorRegion(id: string, state: EditorTreeSnapshot): EditorRegio
   if (treeContains(state.footer, id)) return 'footer';
   if (treeContains(state.leftSidebar, id)) return 'leftSidebar';
   if (treeContains(state.rightSidebar, id)) return 'rightSidebar';
-  if (state.dialogs.some((dialog) => dialog.id === id || treeContains(dialog.widgets, id))) {
-    return 'dialogs';
-  }
+  if (isFound(findInPages(state.dialogs, id))) return 'dialogs';
   if (isFound(findInPages(state.pages, id))) return 'pages';
   return null;
 }
@@ -144,7 +147,7 @@ function resolveEditorCategoryTitle(
 
   const previewShellTitle = SHELL_AREA_LABELS[previewAreaId];
   if (previewShellTitle) return previewShellTitle;
-  if (state.dialogs.some((dialog) => dialog.id === previewAreaId)) return 'Dialogs';
+  if (findPageNodeById(state.dialogs, previewAreaId)) return 'Dialogs';
   return 'Pages';
 }
 
@@ -158,7 +161,7 @@ function readPathIds(data: Record<string, unknown>): string[] {
 }
 
 /** The right-clicked node, but only when it is a widget: copying or deleting a
- *  whole page, dialog or shell area stays a tree action. */
+ *  whole page or shell area stays a tree action. */
 function resolveClickedWidget(
   state: ReturnType<typeof useConfigStore.getState>,
   id: string | null,
@@ -452,7 +455,7 @@ export default function LivePreview({ pageId }: { pageId: string }) {
         const rawPageId = data.pageId as string | undefined;
         if (!rawPageId) return;
         let nextPageId = rawPageId;
-        const pageNode = findPageNodeById(useConfigStore.getState().pages, rawPageId);
+        const pageNode = findPageNodeById(allPageRootNodes(useConfigStore.getState()), rawPageId);
         if (pageNode && isPageGroup(pageNode)) {
           const firstChild = pageNode.children[0];
           if (firstChild) nextPageId = firstChild.id;
@@ -622,9 +625,10 @@ export default function LivePreview({ pageId }: { pageId: string }) {
           ...(isFit ? {} : { '--preview-w': `${vp.w}px`, '--preview-h': `${vp.h}px` }),
           ...(scale !== 1 ? { transform: `scale(${scale})`, transformOrigin: 'top center' } : {}),
         };
-  // Dialogs render their own modal chrome (border/shadow) on a plain checkerboard —
-  // the device-frame wrapper would double up as an extra frame around them.
-  const isDialogPreview = dialogs.some((d) => d.id === pageId);
+  // A Dialogs-folder page previews as its overlay card, which brings its own modal
+  // chrome (border/shadow) on a plain checkerboard — the device-frame wrapper
+  // would double up as an extra frame around it.
+  const isOverlayPreview = findPageNodeById(dialogs, pageId) !== undefined;
   const previewTitle = useMemo(
     () =>
       resolveEditorCategoryTitle(selectedId, selectedRegion, pageId, {
@@ -733,7 +737,7 @@ export default function LivePreview({ pageId }: { pageId: string }) {
       <div className="editor-preview-scroller" ref={scrollerRef}>
         <div
           className={`editor-preview-wrapper${isFit ? ' editor-preview-wrapper--fit' : ''}${
-            isDialogPreview ? ' editor-preview-wrapper--frameless' : ''
+            isOverlayPreview ? ' editor-preview-wrapper--frameless' : ''
           }`}
           style={wrapperStyle}
         >

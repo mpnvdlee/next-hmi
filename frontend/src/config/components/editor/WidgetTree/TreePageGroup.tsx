@@ -3,7 +3,7 @@ import { FolderSimple } from '@phosphor-icons/react';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
-import type { PageGroupConfig } from '@shared/types/config';
+import type { PageGroupConfig, PageRoot } from '@shared/types/config';
 import { TreeDiagnosticDot, TreeRenameInput } from '../../ui/TreeAffordances';
 import TreeRow from '../../ui/TreeRow';
 import { useIsCut } from './cutState';
@@ -29,6 +29,8 @@ interface TreePageGroupProps {
   onEditChange: (value: string) => void;
   onEditCommit: (id: string) => void;
   depth?: number;
+  /** The page-tree root this group sits in — the region its selection reports. */
+  root?: PageRoot;
 }
 
 export default function TreePageGroup({
@@ -41,6 +43,7 @@ export default function TreePageGroup({
   onEditChange,
   onEditCommit,
   depth = 1,
+  root = 'pages',
 }: TreePageGroupProps) {
   const selectedId = useEditorDomainStore((s) => s.selectedId);
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
@@ -90,7 +93,7 @@ export default function TreePageGroup({
             label={<TreeSearchHighlight text={resolvePageTitle(group.title)} />}
           />
         }
-        onSelect={() => useEditorDomainStore.getState().setSelected(group.id, 'pages')}
+        onSelect={() => useEditorDomainStore.getState().setSelected(group.id, root)}
         onContextMenu={(event) => {
           event.preventDefault();
           onCtxMenu(event, group.id, 'page-group');
@@ -136,6 +139,7 @@ export default function TreePageGroup({
                     onEditChange={onEditChange}
                     onEditCommit={onEditCommit}
                     depth={depth + 1}
+                    root={root}
                   />
                 ) : (
                   <TreePage
@@ -149,6 +153,7 @@ export default function TreePageGroup({
                     onEditChange={onEditChange}
                     onEditCommit={onEditCommit}
                     depth={depth + 1}
+                    root={root}
                   />
                 ),
               )

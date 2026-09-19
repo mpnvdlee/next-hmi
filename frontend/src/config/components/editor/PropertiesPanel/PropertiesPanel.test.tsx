@@ -257,3 +257,64 @@ describe('PropertiesPanel', () => {
     });
   });
 });
+
+/** A page in the Dialogs folder is an ordinary page — the panel is the one place
+ *  that can say what makes it different, since its only other tell is which
+ *  sections happen to be missing. */
+describe('a page in the Dialogs folder', () => {
+  beforeEach(() => {
+    setupStores();
+    useEditorDomainStore.setState({ selectedId: null, selectedIds: [] });
+  });
+
+  function selectOverlayPage(id = 'motor-detail') {
+    useConfigStore.setState({
+      pages: [{ id: 'home', type: 'page', title: 'Home', sections: { content: [] } }],
+      dialogs: [
+        { id: 'motor-detail', type: 'page', title: 'Motor detail', sections: { content: [] } },
+        {
+          id: 'wizard',
+          type: 'page-group',
+          title: 'Setup wizard',
+          children: [{ id: 'step-1', type: 'page', title: 'Step 1', sections: { content: [] } }],
+        },
+      ],
+      loadedPageIds: new Set(['home', 'motor-detail', 'step-1']),
+    });
+    useEditorDomainStore.setState({ selectedId: id, selectedIds: [id] });
+    render(<PropertiesPanel />);
+  }
+
+  /** The header's kind line — "what the selected thing is". */
+  const kind = () => document.querySelector('.cfg-panel-header__type')?.textContent;
+
+  /** The first section's title, which names the same thing the header does. */
+  const sectionTitle = () => document.querySelector('.cfg-section__title')?.textContent;
+
+  it('names the kind as a dialog, not a plain page', () => {
+    selectOverlayPage();
+    expect(kind()).toBe('Dialog');
+    expect(sectionTitle()).toBe('Dialog');
+    expect(screen.getByText('Dialog Open')).toBeInTheDocument();
+  });
+
+  it('names a page group in there as a dialog too', () => {
+    selectOverlayPage('wizard');
+    expect(kind()).toBe('Dialog Group');
+    expect(sectionTitle()).toBe('Dialog Group');
+    expect(screen.getByText('Dialog Group Open')).toBeInTheDocument();
+  });
+
+  it('calls its declarations input parameters, the name the action fills them by', () => {
+    selectOverlayPage();
+    expect(screen.getByText('Input Parameters')).toBeInTheDocument();
+  });
+
+  it('leaves a navigable page reading as a plain page', () => {
+    useEditorDomainStore.setState({ selectedId: 'page-1', selectedIds: ['page-1'] });
+    render(<PropertiesPanel />);
+    expect(kind()).toBe('Page');
+    expect(sectionTitle()).toBe('Page');
+    expect(screen.getByText('Page Open')).toBeInTheDocument();
+  });
+});

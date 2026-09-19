@@ -32,7 +32,11 @@ from typing import Any, cast
 from core import audit
 from core.exceptions import RateLimitError
 from core.number_utils import get_config_float
-from core.storage import active_config_dir, active_pages_dir, read_json
+from core.page_index import INDEX_ROOTS, page_document_dir, root_nodes
+from core.storage import (
+    active_config_dir,
+    read_json,
+)
 from fastapi import WebSocket
 from models.datasource import build_var_key, parse_var_key
 from models.websocket import (
@@ -50,7 +54,6 @@ from models.websocket import (
 from services import write_service
 
 logger = logging.getLogger(__name__)
-_MAX_DIALOG_IDS = 2000
 
 
 def _config_path():
@@ -536,11 +539,9 @@ class WebSocketManager:
         if self._datasource_manager is None or self._opcua_pool is None:
             return
         current_page_ids = _resolve_current_page_ids(msg)
-        open_dialog_ids = _coerce_non_empty_str_list(msg.get("openDialogIds"), _MAX_DIALOG_IDS)
         explicit_priority_keys = _extract_explicit_priority_keys(msg)
         composite_keys = _resolve_context_composite_keys(
             current_page_ids=current_page_ids,
-            open_dialog_ids=open_dialog_ids,
             explicit_priority_keys=explicit_priority_keys,
         )
         sent_keys = await self._send_cached_values(client_id, composite_keys)
@@ -548,14 +549,12 @@ class WebSocketManager:
         missing_keys = composite_keys - sent_keys
         if missing_keys:
             task = asyncio.create_task(
-                self._send_uncached_values_then_ready(
-                    client_id, missing_keys, current_page_ids, open_dialog_ids
-                )
+                self._send_uncached_values_then_ready(client_id, missing_keys, current_page_ids)
             )
             self._deferred_tasks.add(task)
             task.add_done_callback(self._deferred_tasks.discard)
         else:
-            await self._send_context_ready(client_id, current_page_ids, open_dialog_ids)
+            await self._send_context_ready(client_id, current_page_ids)
 
     async def _handle_write_field(self, client_id: str, msg: WriteFieldMessage) -> None:
         """Write a value to the PLC via the appropriate OPC-UA pool engine,
@@ -954,27 +953,23 @@ class WebSocketManager:
         client_id: str,
         composite_keys: set[str],
         current_page_ids: list[str],
-        open_dialog_ids: list[str],
     ) -> None:
         """Background continuation of `_handle_set_context`'s fire-and-forget
         OPC-UA prefetch: once the uncached reads land (or fail), tell the
         client this context is ready regardless, so it isn't left waiting
         forever on a page whose variables couldn't be read."""
         await self._send_uncached_values(client_id, composite_keys)
-        await self._send_context_ready(client_id, current_page_ids, open_dialog_ids)
+        await self._send_context_ready(client_id, current_page_ids)
 
-    async def _send_context_ready(
-        self, client_id: str, current_page_ids: list[str], open_dialog_ids: list[str]
-    ) -> None:
+    async def _send_context_ready(self, client_id: str, current_page_ids: list[str]) -> None:
         """Tell the client every variable requested by this set_context has
         been sent (from cache and/or freshly read). The client uses this to
         reveal a newly navigated page once its own data has actually arrived,
         instead of a session-wide "a snapshot landed at some point" flag.
 
-        Dialog ids are echoed alongside the page ids: their variables were
-        requested on the same round-trip (`_resolve_context_composite_keys`
-        folds both into one key set), so an open dialog can settle on this ack
-        rather than on a timer."""
+        The page ids are echoed so each surface — the routed page and every
+        open page overlay — can recognise the ack for its own id and settle on
+        it rather than on a timer."""
         ws = self._connections.get(client_id)
         if ws is None:
             return
@@ -983,7 +978,6 @@ class WebSocketManager:
                 json.dumps({
                     "type": "context_ready",
                     "currentPageIds": current_page_ids,
-                    "openDialogIds": open_dialog_ids,
                 })
             )
         except Exception:
@@ -1055,12 +1049,11 @@ def _get_runtime_pages_config() -> dict | None:
 def _resolve_context_composite_keys(
     *,
     current_page_ids: list[str],
-    open_dialog_ids: list[str],
     explicit_priority_keys: set[str],
 ) -> set[str]:
     # Datasource live-values can drive fast-subscriptions using explicit
-    # priority keys without any page/dialog context.
-    if not current_page_ids and not open_dialog_ids:
+    # priority keys without any page context.
+    if not current_page_ids:
         return set(explicit_priority_keys)
 
     pages_config = _get_runtime_pages_config()
@@ -1070,7 +1063,6 @@ def _resolve_context_composite_keys(
     composite_keys = _collect_from_runtime_pages_config(
         pages_config,
         current_page_ids=current_page_ids,
-        open_dialog_ids=open_dialog_ids,
     )
     composite_keys.update(explicit_priority_keys)
     return composite_keys
@@ -1086,13 +1078,11 @@ def _collect_context_composite_keys(
     raw_pages_config: dict,
     *,
     current_page_ids: list[str],
-    open_dialog_ids: list[str],
 ) -> set[str]:
     """Collect all variable keys for the current runtime context (raw input)."""
     return _collect_from_runtime_pages_config(
         _to_runtime_pages_config(raw_pages_config),
         current_page_ids=current_page_ids,
-        open_dialog_ids=open_dialog_ids,
     )
 
 
@@ -1100,28 +1090,20 @@ def _collect_from_runtime_pages_config(
     pages_config: dict,
     *,
     current_page_ids: list[str],
-    open_dialog_ids: list[str],
 ) -> set[str]:
-    """Collect variable keys from a pages_config already in runtime shape."""
+    """Collect variable keys from a pages_config already in runtime shape.
+
+    A current page id may name a page in either index root: the routed page
+    lives under ``pages``, an open page overlay under either one."""
     keys: set[str] = set()
 
     _walk_components(pages_config.get("header", []), keys)
     _walk_components(pages_config.get("footer", []), keys)
 
     for page_id in current_page_ids:
-        _collect_active_scope_composite_keys(pages_config.get("pages", []), page_id, keys)
-
-    if open_dialog_ids:
-        dialogs = pages_config.get("dialogs", [])
-        dialog_map = {
-            dialog.get("id"): dialog
-            for dialog in dialogs
-            if isinstance(dialog, dict) and isinstance(dialog.get("id"), str)
-        }
-        for dialog_id in open_dialog_ids:
-            dialog = dialog_map.get(dialog_id)
-            if isinstance(dialog, dict):
-                _walk_components(dialog.get("widgets", []), keys)
+        for root in INDEX_ROOTS:
+            if _collect_active_scope_composite_keys(pages_config.get(root, []), page_id, keys):
+                break
 
     return keys
 
@@ -1202,36 +1184,57 @@ def _is_page_group_node(node: Any) -> bool:
 def _to_runtime_pages_config(raw: dict) -> dict:
     if not isinstance(raw, dict):
         return {"pages": [], "header": [], "footer": [], "dialogs": []}
-    pages   = v if isinstance(v := raw.get("pages"),   list) else []
     header  = v if isinstance(v := raw.get("header"),  list) else []
     footer  = v if isinstance(v := raw.get("footer"),  list) else []
-    dialogs = v if isinstance(v := raw.get("dialogs"), list) else []
 
     return {
-        "pages": [_to_runtime_page_node(node) for node in pages if isinstance(node, dict)],
+        **{
+            root: [
+                _to_runtime_page_node(node, root)
+                for node in root_nodes(raw, root)
+                if isinstance(node, dict)
+            ]
+            for root in INDEX_ROOTS
+        },
         "header": [node for node in header if isinstance(node, dict)],
         "footer": [node for node in footer if isinstance(node, dict)],
-        "dialogs": [node for node in dialogs if isinstance(node, dict)],
     }
 
 
-def _load_page_file_children(page_id: str) -> list[dict]:
-    """Load component children for a leaf page from its per-page file (v2 split-page storage)."""
+def _load_page_file_children(page_id: str, root: str) -> list[dict]:
+    """Load a leaf page's widgets from its document — every section's array,
+    since a page document keeps its widgets in a ``sections`` map.
+
+    The directory comes from the index root the node was found under, never from
+    a search: a leftover ``pages/<id>.json`` beside the real ``dialogs/<id>.json``
+    would otherwise decide what the operator sees, and an unreadable document in
+    one root would silently serve the other root's.
+    """
     try:
-        data = read_json(active_pages_dir() / f"{page_id}.json")
+        data: Any = read_json(page_document_dir(root) / f"{page_id}.json")
     except Exception:
+        # Includes a runtime with no live project, where the resolver itself
+        # raises — the same "no document" answer.
         return []
-    children = data.get("children", []) if isinstance(data, dict) else []
-    return [c for c in children if isinstance(c, dict)]
+    sections = data.get("sections") if isinstance(data, dict) else None
+    if not isinstance(sections, dict):
+        return []
+    return [
+        widget
+        for widgets in sections.values()
+        if isinstance(widgets, list)
+        for widget in widgets
+        if isinstance(widget, dict)
+    ]
 
 
-def _to_runtime_page_node(node: dict) -> dict:
+def _to_runtime_page_node(node: dict, root: str) -> dict:
     if _is_page_group_node(node):
         return {
             **{k: v for k, v in node.items() if k != "children"},
             "type": "page-group",
             "children": [
-                _to_runtime_page_node(child)
+                _to_runtime_page_node(child, root)
                 for child in _iter_dict_children(node.get("children", []))
             ],
         }
@@ -1242,11 +1245,11 @@ def _to_runtime_page_node(node: dict) -> dict:
     raw_children = _iter_dict_children(node.get("children", []))
     if not raw_children:
         page_id = node.get("id", "")
-        raw_children = _load_page_file_children(page_id) if page_id else []
+        raw_children = _load_page_file_children(page_id, root) if page_id else []
     children: list[dict] = []
     for child in raw_children:
         if _is_page_group_node(child):
-            children.append(_to_runtime_page_node(child))
+            children.append(_to_runtime_page_node(child, root))
         else:
             children.append(child)
 

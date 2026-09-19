@@ -5,17 +5,20 @@ import {
   SHELL_REGION_IDS,
   shellSectionIdForRegion,
   regionForShellSectionId,
-  type DialogConfig,
   type PageConfig,
   type PageGroupChild,
   type PageGroupConfig,
+  type PageNode,
+  type PageRoot,
   type WidgetConfig,
 } from '@shared/types/config';
 import { EDITOR_NODE_IDS } from '@shared/constants/editorSentinels';
-import { collectAllIds, type AllAreas } from '@shared/store/configStoreHelpers';
-import { findComponentById, findInPages } from '@shared/utils/widgetTree';
+import { collectAllIds, findWidgetsByIds, type AllAreas } from '@shared/store/configStoreHelpers';
+import { findComponentById } from '@shared/utils/widgetTree';
 import {
+  allPageRootNodes,
   findPageNodeById,
+  findPageRoot,
   findParentPageGroup,
   flattenPages,
   isPageGroup,
@@ -61,7 +64,7 @@ function restoreStore(before: StoreSnapshot): void {
  *  a moved group's unsaved content still reaches disk. */
 function keepPageState(before: StoreSnapshot): void {
   useConfigStore.setState((s) => {
-    const present = new Set(flattenPages(s.pages).map((page) => page.id));
+    const present = new Set(flattenPages(allPageRootNodes(s)).map((page) => page.id));
     const merge = (current: Set<string>, prior: Set<string>) => {
       const next = new Set(current);
       for (const id of prior) if (present.has(id)) next.add(id);
@@ -86,38 +89,11 @@ export function projectFromStore(): ProjectSnapshot {
   };
 }
 
-function findWidgetInPageGroupChrome(
-  nodes: ProjectSnapshot['pages'],
-  id: string,
-): WidgetConfig | null {
-  for (const node of nodes) {
-    if (!isPageGroup(node)) continue;
-    if (node.header) {
-      const found = findComponentById(node.header, id);
-      if (found) return found;
-    }
-    if (node.footer) {
-      const found = findComponentById(node.footer, id);
-      if (found) return found;
-    }
-    const nested = findWidgetInPageGroupChrome(node.children, id);
-    if (nested) return nested;
-  }
-  return null;
-}
-
+/** The live widget object for one id, wherever it sits — shell region, page
+ *  section or page-group chrome. Routed through the shared project walk so the
+ *  area order and the page-group recursion stay written down in one place. */
 export function findWidgetEverywhere(p: ProjectSnapshot, id: string): WidgetConfig | null {
-  for (const region of SHELL_REGION_IDS) {
-    const found = findComponentById(p[region], id);
-    if (found) return found;
-  }
-  for (const dialog of p.dialogs) {
-    const found = findComponentById(dialog.widgets, id);
-    if (found) return found;
-  }
-  const { comp } = findInPages(p.pages, id);
-  if (comp) return comp;
-  return findWidgetInPageGroupChrome(p.pages, id);
+  return findWidgetsByIds(p, new Set([id])).get(id) ?? null;
 }
 
 export function kindForSelectedId(
@@ -134,8 +110,7 @@ export function kindForSelectedId(
   }
   if (regionForShellSectionId(id)) return null;
   if ((SHELL_REGION_IDS as readonly string[]).includes(id)) return { kind: 'area', nodeId: id };
-  if (p.dialogs.some((d) => d.id === id)) return { kind: 'dialog-page', nodeId: id };
-  const pageNode = findPageNodeById(p.pages, id);
+  const pageNode = findPageNodeById(allPageRootNodes(p), id);
   if (pageNode) {
     return isPageGroup(pageNode)
       ? { kind: 'page-group', nodeId: id }
@@ -153,12 +128,8 @@ export function resolveCopySource(
   nodeId: string,
   kind: NodeKind,
 ): ClipboardNode | null {
-  if (kind === 'dialog-page') {
-    const dialog = p.dialogs.find((d) => d.id === nodeId);
-    return dialog ? { kind: 'dialog', node: dialog } : null;
-  }
   if (kind === 'page' || kind === 'page-group') {
-    const node = findPageNodeById(p.pages, nodeId);
+    const node = findPageNodeById(allPageRootNodes(p), nodeId);
     if (!node) return null;
     return isPageGroup(node) ? { kind: 'page-group', node } : { kind: 'page', node };
   }
@@ -235,11 +206,8 @@ function insertWidgetSiblingAfter(
         spliceAfter(parent.siblings, parent.index, newWidget),
       );
       return true;
-    case 'dialog':
-      store.reorderChildren(parent.dialogId, spliceAfter(parent.siblings, parent.index, newWidget));
-      return true;
     case 'page-section': {
-      const page = findPageNodeById(p.pages, parent.pageId);
+      const page = findPageNodeById(allPageRootNodes(p), parent.pageId);
       if (!page || isPageGroup(page)) return false;
       const newSiblings = spliceAfter<WidgetConfig>(parent.siblings, parent.index, newWidget);
       store.setPageSections(parent.pageId, { ...page.sections, [parent.sectionId]: newSiblings });
@@ -254,7 +222,7 @@ function insertWidgetSiblingAfter(
 }
 
 function findPageContainer(
-  pages: ProjectSnapshot['pages'],
+  pages: PageNode[],
   pageId: string,
 ): { parentGroup: PageGroupConfig | null; siblings: PageGroupChild[]; index: number } | null {
   const topLevelIdx = pages.findIndex((n) => !isPageGroup(n) && n.id === pageId);
@@ -283,9 +251,12 @@ function insertPageSiblingAfter(
   newPage: PageConfig,
 ): void {
   const store = useConfigStore.getState();
-  const ctx = findPageContainer(p.pages, targetPageId);
+  // The sibling lands in the root its target sits in — the Pages tree or the
+  // Dialogs folder.
+  const root: PageRoot = findPageRoot(p, targetPageId) ?? 'pages';
+  const ctx = findPageContainer(p[root], targetPageId);
   if (!ctx) {
-    store.addPage(newPage);
+    store.addPage(newPage, root);
     return;
   }
   if (ctx.parentGroup) {
@@ -294,15 +265,14 @@ function insertPageSiblingAfter(
     store.reorderPageGroupChildren(ctx.parentGroup.id, newChildren);
     return;
   }
-  const topLevelIdx = p.pages.findIndex((n) => n.id === targetPageId);
-  store.addPage(newPage);
-  store.reorderPages(spliceAfter(p.pages, topLevelIdx, newPage));
+  const topLevelIdx = p[root].findIndex((n) => n.id === targetPageId);
+  store.addPage(newPage, root);
+  store.reorderPages(spliceAfter(p[root], topLevelIdx, newPage), root);
 }
 
 type WidgetPasteAction = (p: ProjectSnapshot, nodeId: string, comp: WidgetConfig) => boolean;
 type PagePasteAction = (p: ProjectSnapshot, nodeId: string, page: PageConfig) => boolean;
 type PageGroupPasteAction = (p: ProjectSnapshot, nodeId: string, group: PageGroupConfig) => boolean;
-type DialogPasteAction = (p: ProjectSnapshot, nodeId: string, dialog: DialogConfig) => boolean;
 
 /** Kinds whose widget paste is exactly an append to that node — the same
  *  resolution the context-menu add flows and the widget drawer use. Listed
@@ -314,7 +284,6 @@ const APPEND_PASTE_KINDS: ReadonlySet<NodeKind> = new Set([
   'page-group-section',
   'widget-slot',
   'area',
-  'dialog-page',
 ]);
 
 /** The two kinds whose paste is not a plain append. */
@@ -322,7 +291,7 @@ const WIDGET_PASTE: Partial<Record<NodeKind, WidgetPasteAction>> = {
   page: (p, id, comp) => {
     // A page with Header/Content/Footer folders requires an explicit section
     // target — mirrors the gating in ContextMenu.tsx and MoveModal.tsx.
-    if (pageHasExplicitSections(findPageNodeById(p.pages, id))) return false;
+    if (pageHasExplicitSections(findPageNodeById(allPageRootNodes(p), id))) return false;
     useConfigStore.getState().addComponentToPage(id, comp);
     return true;
   },
@@ -344,7 +313,11 @@ function pasteWidget(
 
 const PAGE_PASTE: Partial<Record<NodeKind, PagePasteAction>> = {
   'pages-root': (_p, _id, page) => {
-    useConfigStore.getState().addPage(page);
+    useConfigStore.getState().addPage(page, 'pages');
+    return true;
+  },
+  'dialogs-root': (_p, _id, page) => {
+    useConfigStore.getState().addPage(page, 'dialogs');
     return true;
   },
   'page-group': (_p, id, page) => {
@@ -359,7 +332,11 @@ const PAGE_PASTE: Partial<Record<NodeKind, PagePasteAction>> = {
 
 const PAGE_GROUP_PASTE: Partial<Record<NodeKind, PageGroupPasteAction>> = {
   'pages-root': (_p, _id, group) => {
-    useConfigStore.getState().addPageGroup(group);
+    useConfigStore.getState().addPageGroup(group, 'pages');
+    return true;
+  },
+  'dialogs-root': (_p, _id, group) => {
+    useConfigStore.getState().addPageGroup(group, 'dialogs');
     return true;
   },
   'page-group': (_p, id, group) => {
@@ -368,26 +345,10 @@ const PAGE_GROUP_PASTE: Partial<Record<NodeKind, PageGroupPasteAction>> = {
   },
 };
 
-const DIALOG_PASTE: Partial<Record<NodeKind, DialogPasteAction>> = {
-  'dialog-page': (_p, _id, dialog) => {
-    useConfigStore.getState().addDialog(dialog);
-    return true;
-  },
-  area: (_p, _id, dialog) => {
-    useConfigStore.getState().addDialog(dialog);
-    return true;
-  },
-  'pages-root': (_p, _id, dialog) => {
-    useConfigStore.getState().addDialog(dialog);
-    return true;
-  },
-};
-
 const REJECT_LABEL: Record<ClipboardNodeKind, string> = {
   widget: 'Cannot paste component here',
   page: 'Cannot paste page here',
   'page-group': 'Cannot paste page group here',
-  dialog: 'Cannot paste dialog here',
 };
 
 function insertClipboardNode(
@@ -403,8 +364,6 @@ function insertClipboardNode(
       return PAGE_PASTE[kind]?.(p, nodeId, entry.node) ?? false;
     case 'page-group':
       return PAGE_GROUP_PASTE[kind]?.(p, nodeId, entry.node) ?? false;
-    case 'dialog':
-      return DIALOG_PASTE[kind]?.(p, nodeId, entry.node) ?? false;
   }
 }
 
@@ -420,14 +379,14 @@ function targetAccepts(
   switch (clipboardKind) {
     case 'widget':
       if (kind === 'leaf') return findParentInfo(p, nodeId) !== null;
-      if (kind === 'page') return !pageHasExplicitSections(findPageNodeById(p.pages, nodeId));
+      if (kind === 'page') {
+        return !pageHasExplicitSections(findPageNodeById(allPageRootNodes(p), nodeId));
+      }
       return APPEND_PASTE_KINDS.has(kind);
     case 'page':
       return PAGE_PASTE[kind] !== undefined;
     case 'page-group':
       return PAGE_GROUP_PASTE[kind] !== undefined;
-    case 'dialog':
-      return DIALOG_PASTE[kind] !== undefined;
   }
 }
 
@@ -444,9 +403,6 @@ function removeCutSource(entry: ClipboardNode): void {
       break;
     case 'page-group':
       store.deletePageGroup(entry.node.id);
-      break;
-    case 'dialog':
-      store.deleteDialog(entry.node.id);
       break;
   }
 }
@@ -495,9 +451,7 @@ function nodeStillPresent(p: ProjectSnapshot, entry: ClipboardNode): boolean {
       return findWidgetEverywhere(p, entry.node.id) !== null;
     case 'page':
     case 'page-group':
-      return findPageNodeById(p.pages, entry.node.id) !== null;
-    case 'dialog':
-      return p.dialogs.some((d) => d.id === entry.node.id);
+      return findPageNodeById(allPageRootNodes(p), entry.node.id) !== undefined;
   }
 }
 

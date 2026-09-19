@@ -256,7 +256,7 @@ type OverlayBackdrop = 'dim' | 'none';
 type ComponentAction =
   | {
       type: 'openDialog';
-      dialogId: string;
+      pageId: string;
       componentProperties?: Record<string, unknown>;
       size?: OverlaySize;
       placement?: OverlayPlacement;
@@ -266,7 +266,6 @@ type ComponentAction =
       /** Height in pixels — only relevant when size is 'fixed'. */
       height?: number;
     }
-  | { type: 'closeDialog'; dialogId?: string }
   | {
       type: 'openPageOverlay';
       pageId: string;

@@ -209,6 +209,56 @@ describe('normalizePageNode', () => {
     expect(result.sections.content).toHaveLength(1);
     expect(result.sections.footer).toHaveLength(1);
   });
+
+  it('preserves lifecycle events on a page', () => {
+    const result = normalizePageNode({
+      id: 'p1',
+      title: 'Page 1',
+      events: { onOpen: [{ type: 'openPageOverlay', pageId: 'd1' }] },
+    });
+    expect(result?.events?.onOpen).toHaveLength(1);
+    expect(result?.events?.onClose).toBeUndefined();
+  });
+
+  it('preserves lifecycle events on a page-group', () => {
+    const result = normalizePageNode({
+      id: 'g1',
+      title: 'Group 1',
+      type: 'page-group',
+      children: [],
+      events: { onClose: [{ type: 'closePageOverlay' }] },
+    });
+    expect(result?.events?.onClose).toHaveLength(1);
+  });
+
+  it('drops malformed and empty event entries', () => {
+    expect(normalizePageNode({ id: 'p1', title: 'P', events: 'nope' })?.events).toBeUndefined();
+    expect(normalizePageNode({ id: 'p2', title: 'P', events: {} })?.events).toBeUndefined();
+    expect(
+      normalizePageNode({ id: 'p3', title: 'P', events: { onOpen: [], onWeird: [{}] } })?.events,
+    ).toBeUndefined();
+  });
+
+  it('keeps a declared componentProperties block', () => {
+    const raw = {
+      id: 'p1',
+      title: 'Motor detail',
+      componentProperties: { motorId: { type: 'String', label: 'Motor', defaultValue: 'M1' } },
+    };
+    const result = normalizePageNode(raw) as PageConfig;
+    expect(result.componentProperties).toEqual({
+      motorId: { type: 'String', label: 'Motor', defaultValue: 'M1' },
+    });
+  });
+
+  it('drops a non-object componentProperties value', () => {
+    const result = normalizePageNode({
+      id: 'p1',
+      title: 'Page',
+      componentProperties: 'nope',
+    }) as PageConfig;
+    expect(result.componentProperties).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------

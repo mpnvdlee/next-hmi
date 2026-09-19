@@ -48,6 +48,13 @@ def test_the_step_chain_is_contiguous_and_ends_at_the_current_version() -> None:
     assert pm._STEPS[-1].to_version == pm.PROJECT_FORMAT_VERSION
 
 
+def test_min_app_names_a_release_that_exists():
+    """The stamp is what a too-old build shows an operator, so it has to name
+    a version they can actually download. 0.0.1 was never released."""
+    from core.project_migrations import PROJECT_FORMAT_MIN_APP
+    assert PROJECT_FORMAT_MIN_APP == "0.1.0"
+
+
 def test_already_current_is_a_no_op(project_root: Path) -> None:
     _stamp(project_root, pm.PROJECT_FORMAT_VERSION, min_app=pm.PROJECT_FORMAT_MIN_APP)
     result = pm.run_baseline_migration(project_root)
@@ -364,18 +371,50 @@ def test_failure_between_swaps_restores_the_already_swapped_target(
     assert read_project_metadata(project_root).formatVersion == 0
 
 
-def test_target_that_does_not_exist_is_not_staged(
+def test_a_directory_target_that_does_not_exist_is_staged_empty(
     project_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """A step that writes a directory into existence (the Dialogs folder of a
+    project that never had one) must still write outside the project and land in
+    one swap — so a missing directory target is staged empty rather than skipped,
+    and the migrated project ends up holding it."""
     _stamp(project_root, 0)
-    _register_step(monkeypatch, lambda staged, project_root: pm.StepResult())
+
+    def write_into_staged(staged, _project_root) -> pm.StepResult:
+        (staged["datasources"] / "made.json").write_text("{}")
+        # Staged, not live: nothing is under the real path until the swap.
+        assert not (project_root / "datasources").exists()
+        return pm.StepResult(files_changed=["made.json"])
+
+    _register_step(monkeypatch, write_into_staged)
 
     result = pm.run_baseline_migration(project_root)
 
+    assert (project_root / "datasources" / "made.json").exists()
+    # Nothing was moved aside — there was nothing there to move.
     assert not list(project_root.glob("*.pre-swap-*"))
-    # Nothing to stage, but the project is still zipped before it is stamped.
+    assert not list(project_root.glob("*.migrating-*"))
     assert result.backup is not None and result.backup.exists()
     assert read_project_metadata(project_root).formatVersion == 1
+
+
+def test_a_failed_step_leaves_no_directory_it_staged_from_nothing(
+    project_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _stamp(project_root, 0)
+
+    def fail_after_writing(staged, _project_root) -> pm.StepResult:
+        (staged["datasources"] / "made.json").write_text("{}")
+        raise RuntimeError("boom")
+
+    _register_step(monkeypatch, fail_after_writing)
+
+    with pytest.raises(pm.MigrationFailedError):
+        pm.run_baseline_migration(project_root)
+
+    assert not (project_root / "datasources").exists()
+    assert not list(project_root.glob("*.migrating-*"))
+    assert read_project_metadata(project_root).formatVersion == 0
 
 
 # ── the pre-migration zip ────────────────────────────────────────────────────

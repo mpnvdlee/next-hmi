@@ -32,7 +32,7 @@ describe('Dropdown', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __resetForTests();
-    useHmiStore.setState({ openDialogs: [], pendingToasts: [] });
+    useHmiStore.setState({ openPageOverlays: [], pendingToasts: [] });
     useComponentPropStore.setState({ props: {} });
   });
 
@@ -80,13 +80,13 @@ describe('Dropdown', () => {
     const user = userEvent.setup();
     renderDropdown({
       options: OPTIONS,
-      onChange: { onChange: [{ type: 'openDialog', dialogId: 'units-help' }] },
+      onChange: { onChange: [{ type: 'openPageOverlay', pageId: 'units-help' }] },
     });
 
     await user.click(screen.getByRole('combobox'));
     await user.click(screen.getByRole('option', { name: 'Celsius' }));
 
-    expect(useHmiStore.getState().openDialogs.map((d) => d.id)).toContain('units-help');
+    expect(useHmiStore.getState().openPageOverlays.map((o) => o.pageId)).toContain('units-help');
   });
 
   it('drops a selection the options list no longer offers', () => {

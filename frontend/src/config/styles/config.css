@@ -2309,8 +2309,8 @@
   border: 3px solid var(--cfg-surface);
 }
 
-/* Dialog preview: modal card centered, no dark backdrop */
-.hmi-dialog-preview {
+/* Preview of a Dialogs-folder page: its overlay card centered, no dark backdrop */
+.hmi-overlay-preview {
   height: 100%;
   display: flex;
   align-items: center;

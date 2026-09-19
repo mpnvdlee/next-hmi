@@ -55,8 +55,9 @@ describe('ModalStack page overlays — the settle window', () => {
       loadedPageIds: new Set(['ov1']),
     });
     useHmiStore.setState({
-      openDialogs: [],
-      openPageOverlays: [{ pageId: 'ov1', size: 'auto', placement: 'center' }],
+      openPageOverlays: [
+        { pageId: 'ov1', componentProperties: {}, size: 'auto', placement: 'center' },
+      ],
     });
     // A variable that exists but has never delivered a value — the state the
     // overlay is in for as long as its own set_context read takes.
@@ -79,6 +80,32 @@ describe('ModalStack page overlays — the settle window', () => {
   });
 
   it('marks it once the backend acks the overlay page itself', () => {
+    useVariableStore.setState({ contextReadyPageIds: ['host', 'ov1'] });
+    const { container } = renderOverlay();
+    expect(container.querySelector('.hmi-binding-overlay')).toHaveClass(
+      'hmi-binding-overlay--nodata',
+    );
+  });
+
+  it('settles a page-group overlay on the page inside it, not the group id', () => {
+    // A page group has no page file and is not what `set_context` sends, so the
+    // backend never acks it. Keying the gate on the group id would leave the
+    // overlay waiting out the whole grace on every open.
+    useConfigStore.setState({
+      pages: [
+        {
+          id: 'grp',
+          title: 'Group',
+          type: 'page-group',
+          children: [OVERLAY_PAGE],
+        } as unknown as PageConfig,
+      ],
+    });
+    useHmiStore.setState({
+      openPageOverlays: [
+        { pageId: 'grp', componentProperties: {}, size: 'auto', placement: 'center' },
+      ],
+    });
     useVariableStore.setState({ contextReadyPageIds: ['host', 'ov1'] });
     const { container } = renderOverlay();
     expect(container.querySelector('.hmi-binding-overlay')).toHaveClass(

@@ -34,10 +34,6 @@ interface VariableStore {
    * yet genuinely hasn't had its own data delivered.
    */
   contextReadyPageIds: string[];
-  /** `openDialogIds` from the same ack. A dialog's variables are requested on
-   *  the same `set_context` as its page's, so an open dialog settles on this
-   *  rather than on a timeout. */
-  contextReadyDialogIds: string[];
   /** True while the WebSocket connection to the backend is open */
   wsConnected: boolean;
   /** Per-datasource OPC-UA connection state. Key = datasource name, value = connected. */
@@ -53,7 +49,7 @@ interface VariableStore {
   /** Replace the complete value generation when a new WS snapshot starts. */
   replaceValues(values: Record<string, unknown>): void;
   markSnapshotReceived(): void;
-  setContextReady(currentPageIds: string[], openDialogIds: string[]): void;
+  setContextReady(currentPageIds: string[]): void;
   /** Remove one or more variable IDs from the store (variable disabled on server) */
   removeVars(ids: string[]): void;
   setWsConnected(v: boolean): void;
@@ -68,7 +64,6 @@ export const useVariableStore = create<VariableStore>((set) => ({
   metadataReceived: false,
   snapshotReceived: false,
   contextReadyPageIds: [],
-  contextReadyDialogIds: [],
   wsConnected: false,
   opcuaConnected: {},
 
@@ -84,8 +79,7 @@ export const useVariableStore = create<VariableStore>((set) => ({
 
   markSnapshotReceived: () => set({ snapshotReceived: true }),
 
-  setContextReady: (currentPageIds, openDialogIds) =>
-    set({ contextReadyPageIds: currentPageIds, contextReadyDialogIds: openDialogIds }),
+  setContextReady: (currentPageIds) => set({ contextReadyPageIds: currentPageIds }),
 
   removeVars: (ids) =>
     set((state) => {
@@ -106,10 +100,9 @@ export const useVariableStore = create<VariableStore>((set) => ({
             wsConnected: true,
             snapshotReceived: false,
             contextReadyPageIds: [],
-            contextReadyDialogIds: [],
             opcuaConnected: {},
           }
-        : { wsConnected: false, contextReadyPageIds: [], contextReadyDialogIds: [] },
+        : { wsConnected: false, contextReadyPageIds: [] },
     ),
 
   setOpcuaConnected: (datasource, v) =>

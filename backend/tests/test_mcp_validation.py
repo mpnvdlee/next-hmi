@@ -154,44 +154,42 @@ def test_validate_widget_node_rejects_loc_object_payload(ctx):
     assert any("$loc payload must be a string" in f.message for f in report.findings)
 
 
-# ── dialog action targets ──────────────────────────────────────────────────────
+# ── page overlay action targets ────────────────────────────────────────────────
 
 
-def test_validate_action_missing_dialog(ctx):
-    ctx.dialog_ids = {"login"}
+@pytest.mark.parametrize("kind", ["openDialog", "openPageOverlay", "closePageOverlay"])
+def test_validate_page_overlay_action_missing_page(ctx, kind):
+    ctx.page_ids = {"login"}
     report = validate_widget_node(
         {
             "type": "Button",
-            "properties": {
-                "actions": {"onClick": [{"type": "openDialog", "dialogId": "ghost"}]}
-            },
+            "properties": {"actions": {"onClick": [{"type": kind, "pageId": "ghost"}]}},
         },
         ctx,
     )
     assert not report.ok
-    assert "target dialog 'ghost' does not exist" in report.findings[0].message
+    assert "target page 'ghost' does not exist" in report.findings[0].message
 
 
-def test_validate_action_known_dialog_ok(ctx):
-    ctx.dialog_ids = {"login"}
+@pytest.mark.parametrize("kind", ["openDialog", "openPageOverlay", "closePageOverlay"])
+def test_validate_page_overlay_action_known_page_ok(ctx, kind):
+    ctx.page_ids = {"login"}
     report = validate_widget_node(
         {
             "type": "Button",
-            "properties": {
-                "actions": {"onClick": [{"type": "openDialog", "dialogId": "login"}]}
-            },
+            "properties": {"actions": {"onClick": [{"type": kind, "pageId": "login"}]}},
         },
         ctx,
     )
     assert report.ok
 
 
-def test_validate_action_close_dialog_without_id_ok(ctx):
-    # closeDialog with no dialogId closes the topmost dialog — not a reference.
+def test_validate_action_close_page_overlay_without_id_ok(ctx):
+    # closePageOverlay with no pageId closes the topmost overlay — not a reference.
     report = validate_widget_node(
         {
             "type": "Button",
-            "properties": {"actions": {"onClick": [{"type": "closeDialog"}]}},
+            "properties": {"actions": {"onClick": [{"type": "closePageOverlay", "pageId": ""}]}},
         },
         ctx,
     )
@@ -276,13 +274,22 @@ def test_validate_config_areas_warns_on_shell_widget_var(ctx):
     assert any("unknown datasource" in w.message for w in report.warnings)
 
 
-def test_validate_config_areas_rejects_unknown_dialog_widget(ctx):
+def test_validate_config_areas_checks_dialogs_folder_group_events(ctx):
     report = validate_config_areas(
-        {"dialogs": [{"id": "login", "widgets": [{"id": "x", "type": "Mystery"}]}]},
+        {
+            "dialogs": [
+                {
+                    "id": "settings",
+                    "type": "page-group",
+                    "events": {"onOpen": [{"type": "openPageOverlay", "pageId": "ghost"}]},
+                    "children": [],
+                }
+            ]
+        },
         ctx,
     )
     assert not report.ok
-    assert "unknown widget type" in report.findings[0].message
+    assert report.findings[0].path == "/dialogs/settings/events/onOpen/0"
 
 
 def test_validate_config_areas_checks_global_event_action_targets(ctx):

@@ -1,7 +1,7 @@
 [
   {
     "artifactId": "popup1",
-    "artifactKind": "dialog",
+    "artifactKind": "page",
     "breadcrumb": "Button \u203a variable",
     "code": "componentprop-empty",
     "fieldPath": [
@@ -11,7 +11,7 @@
     "nested": false,
     "propKey": "variable",
     "severity": "warning",
-    "sourcePath": "/widgets/0/properties/variable",
+    "sourcePath": "/sections/content/0/properties/variable",
     "widgetId": "button-24"
   },
   {

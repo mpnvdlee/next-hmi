@@ -16,6 +16,7 @@ import LivePreview from '../components/editor/LivePreview';
 import PreviewEmptyState from '../components/editor/PreviewEmptyState';
 import PropertiesPanel from '../components/editor/PropertiesPanel';
 import {
+  allPageRootNodes,
   findFirstPage,
   findOwningPage,
   findPageNodeById,
@@ -52,17 +53,17 @@ export default function EditorView() {
     const tabIds = editorState.previewTabId
       ? [...editorState.openTabIds, editorState.previewTabId]
       : editorState.openTabIds;
+    const pageNodes = allPageRootNodes({ pages, dialogs });
     const stale = tabIds.filter((id) => {
       if (id.startsWith('__') && id.endsWith('__')) return false;
-      if (dialogs.some((d) => d.id === id)) return false;
-      if (findPageNodeById(pages, id)) return false;
+      if (findPageNodeById(pageNodes, id)) return false;
       return true;
     });
     if (stale.length > 0) editorState.closeTabs(stale);
   }, [pages, dialogs]);
 
   // When selectedId changes, activate the tab containing that node. If its
-  // page/dialog/shell area is not pinned yet, show it as the temporary tab.
+  // page or shell area is not pinned yet, show it as the temporary tab.
   useEffect(() => {
     if (!selectedId) return;
 
@@ -70,12 +71,13 @@ export default function EditorView() {
       if (regionForShellSectionId(selectedId)) return selectedId;
 
       const shellAreas = { header, footer, leftSidebar, rightSidebar };
+      const pageNodes = allPageRootNodes({ pages, dialogs });
 
-      const loadablePages: PageConfig[] = flattenPages(pages);
+      const loadablePages: PageConfig[] = flattenPages(pageNodes);
       const resolveLoadable = (id: string): string | undefined =>
         loadablePages.find((p) => p.id === id)?.id;
 
-      const selectedPageNode = findPageNodeById(pages, selectedId);
+      const selectedPageNode = findPageNodeById(pageNodes, selectedId);
       if (selectedPageNode) {
         if (isPageGroup(selectedPageNode)) {
           return findFirstPage(selectedPageNode.children)?.id ?? null;
@@ -83,9 +85,7 @@ export default function EditorView() {
         return resolveLoadable(selectedId) ?? null;
       }
 
-      if (dialogs.some((p) => p.id === selectedId)) return selectedId;
-
-      const pg = findOwningPage(pages, selectedId);
+      const pg = findOwningPage(pageNodes, selectedId);
       if (pg) return resolveLoadable(pg.id) ?? null;
 
       for (const region of SHELL_REGION_IDS) {
@@ -93,9 +93,6 @@ export default function EditorView() {
           return shellSectionIdForRegion(region);
         }
       }
-
-      const pop = dialogs.find((p) => treeContains(p.widgets, selectedId));
-      if (pop) return pop.id;
 
       return null;
     };

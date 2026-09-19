@@ -34,6 +34,5 @@ export function insertComponentInto(
     const [widgetId, slot] = parseWidgetSlotId(nodeId);
     store.addComponentToWidgetSlot(widgetId, slot, comp);
   } else if (kind === 'area') store.addComponentToArea(nodeId as ShellAreaId, comp);
-  else if (kind === 'dialog-page') store.addComponentToDialog(nodeId, comp);
   else store.addComponentToContainer(nodeId, comp);
 }

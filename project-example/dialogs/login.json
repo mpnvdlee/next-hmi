@@ -1,0 +1,351 @@
+{
+  "id": "login",
+  "title": {
+    "$loc": "Sign in"
+  },
+  "showCloseButton": true,
+  "closeOnBackgroundPress": true,
+  "sections": {
+    "content": [
+      {
+        "id": "login-root",
+        "type": "Container",
+        "name": "Login",
+        "properties": {
+          "visible": true,
+          "showWhenEmpty": true,
+          "background": "transparent"
+        },
+        "layout": {
+          "direction": "column",
+          "gap": "18px",
+          "wrap": false,
+          "align": "stretch",
+          "justify": "flex-start",
+          "radius": "0",
+          "widthMode": "fixed",
+          "heightMode": "hug",
+          "paddingTop": "24px",
+          "paddingRight": "24px",
+          "paddingBottom": "24px",
+          "paddingLeft": "24px",
+          "width": "100%"
+        },
+        "children": [
+          {
+            "id": "login-head",
+            "type": "Container",
+            "name": "Head",
+            "properties": {
+              "visible": true,
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "row",
+              "gap": "10px",
+              "wrap": false,
+              "align": "center",
+              "justify": "flex-start",
+              "radius": "0",
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "paddingTop": "0",
+              "paddingRight": "0",
+              "paddingBottom": "0",
+              "paddingLeft": "0"
+            },
+            "children": [
+              {
+                "id": "login-icon",
+                "type": "Icon",
+                "name": "Icon",
+                "properties": {
+                  "iconName": {
+                    "$static": {
+                      "type": "builtin",
+                      "name": "lock"
+                    }
+                  },
+                  "size": 22,
+                  "color": "var(--hmi-accent)",
+                  "chrome": false
+                },
+                "layout": {
+                  "widthMode": "hug",
+                  "heightMode": "hug"
+                }
+              },
+              {
+                "id": "login-title",
+                "type": "Container",
+                "name": "Title",
+                "properties": {
+                  "visible": true,
+                  "showWhenEmpty": true,
+                  "background": "transparent"
+                },
+                "layout": {
+                  "direction": "column",
+                  "gap": "0",
+                  "wrap": false,
+                  "align": "stretch",
+                  "justify": "flex-start",
+                  "radius": "0",
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "paddingTop": "0",
+                  "paddingRight": "0",
+                  "paddingBottom": "0",
+                  "paddingLeft": "0",
+                  "grow": 1
+                },
+                "children": [
+                  {
+                    "id": "login-s",
+                    "type": "Label",
+                    "name": "login-s",
+                    "properties": {
+                      "typography": "body",
+                      "text": {
+                        "$loc": "Unlock the machine settings."
+                      },
+                      "wrap": "wrap"
+                    },
+                    "layout": {
+                      "widthMode": "fill",
+                      "heightMode": "hug"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "login-rule-1",
+            "type": "Separator",
+            "name": "Divider",
+            "properties": {
+              "orientation": "horizontal",
+              "thickness": 1,
+              "color": "var(--hmi-border)",
+              "inset": 0
+            },
+            "layout": {
+              "widthMode": "fill",
+              "heightMode": "hug"
+            }
+          },
+          {
+            "id": "login-fields",
+            "type": "Container",
+            "name": "Fields",
+            "properties": {
+              "visible": true,
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "column",
+              "gap": "14px",
+              "wrap": false,
+              "align": "stretch",
+              "justify": "flex-start",
+              "radius": "0",
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "paddingTop": "0",
+              "paddingRight": "0",
+              "paddingBottom": "0",
+              "paddingLeft": "0"
+            },
+            "children": [
+              {
+                "id": "login-user",
+                "type": "Dropdown",
+                "name": "Username",
+                "properties": {
+                  "label": {
+                    "$loc": "Username"
+                  },
+                  "options": [
+                    "brewer"
+                  ],
+                  "selectedValue": "brewer"
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              },
+              {
+                "id": "login-pass",
+                "type": "StringInput",
+                "name": "Password",
+                "properties": {
+                  "label": {
+                    "$loc": "Password"
+                  },
+                  "placeholder": "",
+                  "isPassword": true
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              },
+              {
+                "id": "login-hint",
+                "type": "Label",
+                "name": "login-hint",
+                "properties": {
+                  "typography": "caption",
+                  "text": {
+                    "$loc": "Demo account: brewer / espresso"
+                  },
+                  "wrap": "wrap",
+                  "color": "var(--hmi-text-muted)"
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              }
+            ]
+          },
+          {
+            "id": "login-rule-2",
+            "type": "Separator",
+            "name": "Divider",
+            "properties": {
+              "orientation": "horizontal",
+              "thickness": 1,
+              "color": "var(--hmi-border)",
+              "inset": 0
+            },
+            "layout": {
+              "widthMode": "fill",
+              "heightMode": "hug"
+            }
+          },
+          {
+            "id": "login-actions",
+            "type": "Container",
+            "name": "Actions",
+            "properties": {
+              "visible": true,
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "row",
+              "gap": "12px",
+              "wrap": false,
+              "align": "stretch",
+              "justify": "flex-end",
+              "radius": "0",
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "paddingTop": "0",
+              "paddingRight": "0",
+              "paddingBottom": "0",
+              "paddingLeft": "0"
+            },
+            "children": [
+              {
+                "id": "login-cancel",
+                "type": "Button",
+                "name": "Cancel",
+                "properties": {
+                  "label": {
+                    "$loc": "Cancel"
+                  },
+                  "variant": "outline",
+                  "actions": {
+                    "onPress": [
+                      {
+                        "type": "closePageOverlay",
+                        "pageId": "login"
+                      }
+                    ]
+                  }
+                },
+                "layout": {
+                  "widthMode": "hug",
+                  "heightMode": "hug"
+                }
+              },
+              {
+                "id": "login-submit",
+                "type": "Button",
+                "name": "Sign in",
+                "properties": {
+                  "label": {
+                    "$loc": "Sign in"
+                  },
+                  "iconName": {
+                    "$static": {
+                      "type": "builtin",
+                      "name": "lock"
+                    }
+                  },
+                  "variant": "solid",
+                  "actions": {
+                    "onPress": [
+                      {
+                        "type": "loginUser",
+                        "username": {
+                          "$widgetProp": {
+                            "componentId": "login-user",
+                            "property": "selectedValue"
+                          }
+                        },
+                        "password": {
+                          "$widgetProp": {
+                            "componentId": "login-pass",
+                            "property": "value"
+                          }
+                        },
+                        "onSuccess": [
+                          {
+                            "type": "closePageOverlay",
+                            "pageId": "login"
+                          }
+                        ],
+                        "onFailed": [
+                          {
+                            "type": "showToast",
+                            "message": {
+                              "$stringExpr": {
+                                "template": "{1} ({2})",
+                                "wildcards": {
+                                  "1": {
+                                    "$loc": "Sign-in failed"
+                                  },
+                                  "2": {
+                                    "$result": "reason"
+                                  }
+                                }
+                              }
+                            },
+                            "severity": "error",
+                            "discard": "auto",
+                            "duration": 5000
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "layout": {
+                  "widthMode": "hug",
+                  "heightMode": "hug"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -10,7 +10,8 @@ NonEmptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_lengt
 
 
 class ComponentPropertySchema(BaseModel):
-    """Schema definition for a property declared by a reusable component or dialog."""
+    """Schema definition for a property declared by a reusable component, or
+    for an input parameter declared by a page or page group."""
 
     model_config = ConfigDict(extra="forbid")
 

@@ -630,7 +630,7 @@ function makeStableComponentInstance(componentId: string): ComponentType<HmiWidg
   function ComponentInstance(props: HmiWidgetProps) {
     const selfBoundary = useComponentSelfSuspense();
     const instance = <LazyComponentRenderer {...props} _widgetId={componentId} />;
-    // Chrome/dialogs pop in silently via their own boundary. Page content sets
+    // Chrome pops in silently via its own boundary. Page content sets
     // the context to false so the load surfaces on the content-area spinner
     // (see PageGroupPageView) instead of a placeholder per component.
     return selfBoundary ? <Suspense fallback={null}>{instance}</Suspense> : instance;

@@ -1,11 +1,5 @@
 import { create } from 'zustand';
-import type {
-  DialogConfig,
-  GlobalEventsConfig,
-  PageNode,
-  ShellConfig,
-  WidgetConfig,
-} from '../types/config';
+import type { GlobalEventsConfig, PageNode, ShellConfig, WidgetConfig } from '../types/config';
 import type { ComponentDefinition } from '../types/componentTypes';
 import { useConfigStore } from './configStore';
 import { useTranslationStore } from './translationStore';
@@ -36,7 +30,7 @@ interface Snapshot {
   leftSidebar: WidgetConfig[];
   rightSidebar: WidgetConfig[];
   shell: ShellConfig;
-  dialogs: DialogConfig[];
+  dialogs: PageNode[];
   globalEvents: GlobalEventsConfig;
   translationLanguages: Array<{ code: string }>;
   translations: Record<string, Record<string, string>>;

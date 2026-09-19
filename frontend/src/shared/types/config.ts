@@ -173,7 +173,7 @@ export interface TimeSource {
   };
 }
 
-/** $widgetProp: read a live exported property value from another component on the same page/dialog */
+/** $widgetProp: read a live exported property value from another component on the same page */
 export interface WidgetPropSource {
   $widgetProp: {
     componentId: string; // id of the source component
@@ -349,6 +349,16 @@ interface PageNodeBase {
   mainPadding?: string;
   /** CSS color for the main region's background while this node is active. Inner level wins. Defaults to white. */
   mainBackground?: string;
+  /** Actions fired when this node is entered / left. A group counts as entered
+   *  only when navigation crosses into it from outside — moving between its own
+   *  child pages leaves it open. */
+  events?: PageEventsConfig;
+  /** Whether the modal card shows a close button while this node is open as a
+   *  page overlay. Read only for a node in the Dialogs folder; absent = shown. */
+  showCloseButton?: boolean;
+  /** Whether pressing the backdrop closes this node's page overlay. Read only
+   *  for a node in the Dialogs folder; absent = closes. */
+  closeOnBackgroundPress?: boolean;
 }
 
 export interface PageConfig extends PageNodeBase {
@@ -359,6 +369,11 @@ export interface PageConfig extends PageNodeBase {
   showFooter?: boolean;
   /** Section-keyed map of widgets. Keys: 'content' (always), 'header'/'footer' when the toggle is on. */
   sections: Record<string, WidgetConfig[]>;
+  /** Input parameters, declared like ComponentDefinition.componentProperties.
+   *  Read only for a page in the Dialogs folder: the `openDialog` action
+   *  supplies the values, and each one it leaves out falls back to its
+   *  declaration's `defaultValue`. */
+  componentProperties?: Record<string, ComponentPropertySchema>;
 }
 
 export interface PageGroupConfig extends PageNodeBase {
@@ -371,13 +386,27 @@ export interface PageGroupConfig extends PageNodeBase {
   header?: WidgetConfig[];
   /** Widgets rendered below every active sub-page in this group. */
   footer?: WidgetConfig[];
+  /** Input parameters, declared like ComponentDefinition.componentProperties.
+   *  Read only for a group in the Dialogs folder: the `openDialog` action
+   *  that targets it supplies the values, and each one it leaves out falls back
+   *  to its declaration's `defaultValue`. The innermost declaration of a name
+   *  wins — a page's own declaration shadows its groups', an inner group's
+   *  shadows an outer one's. */
+  componentProperties?: Record<string, ComponentPropertySchema>;
 }
 
 export type PageGroupChild = PageConfig | PageGroupConfig;
 
 export type PageNode = PageConfig | PageGroupConfig;
 
-/** Size of a page overlay or dialog modal. `auto` sizes to content (no explicit width/height). */
+/** The two roots of the page tree. `pages` is what navigation reaches;
+ *  `dialogs` is the Dialogs folder — pages and page groups only ever shown by
+ *  the `openDialog` action, and the only ones that take input parameters. */
+export type PageRoot = 'pages' | 'dialogs';
+
+export const PAGE_ROOTS: readonly PageRoot[] = ['pages', 'dialogs'] as const;
+
+/** Size of a page overlay modal. `auto` sizes to content (no explicit width/height). */
 export type OverlaySize = 'auto' | 'small' | 'medium' | 'fullscreen' | 'fixed';
 
 /** Placement anchor of a page overlay modal.
@@ -394,7 +423,7 @@ export type OverlayPlacement =
   | 'trigger-left'
   | 'trigger-right';
 
-/** Whether an overlay/dialog dims the full-screen backdrop behind it. */
+/** Whether a page overlay dims the full-screen backdrop behind it. */
 export type OverlayBackdrop = 'dim' | 'none';
 
 /** Bounding box of a trigger element, captured for anchored placement. */
@@ -432,7 +461,10 @@ export type ActionResultReason =
 export type ButtonAction =
   | {
       type: 'openDialog';
-      dialogId: string;
+      /** Target node id — a page, or a page group (its active child renders
+       *  inside the group's header/footer chrome), in the Dialogs folder. */
+      pageId: string;
+      /** Input-parameter values for the declarations the target carries. */
       componentProperties?: Record<string, unknown>;
       size?: OverlaySize;
       placement?: OverlayPlacement;
@@ -442,9 +474,11 @@ export type ButtonAction =
       /** Height in pixels — only relevant when size is 'fixed'. */
       height?: number;
     }
-  | { type: 'closeDialog'; dialogId?: string }
   | {
       type: 'openPageOverlay';
+      /** Target node id — a page, or a page group (its active child renders
+       *  inside the group's header/footer chrome), in the `pages` root. A
+       *  navigable page declares no input parameters, so none are passed. */
       pageId: string;
       size?: OverlaySize;
       placement?: OverlayPlacement;
@@ -454,6 +488,9 @@ export type ButtonAction =
       /** Height in pixels — only relevant when size is 'fixed'. */
       height?: number;
     }
+  /** Closes either kind of overlay. `pageId` names the page or page group the
+   *  overlay was opened with, or the page it has since navigated to; empty
+   *  closes the top-most overlay. */
   | { type: 'closePageOverlay'; pageId?: string }
   | {
       type: 'writeDataVariable';
@@ -529,6 +566,12 @@ export interface ActionsConfig {
   [key: string]: ButtonAction[] | undefined;
 }
 
+/** Lifecycle events on a page or page-group node. */
+export interface PageEventsConfig {
+  onOpen?: ButtonAction[];
+  onClose?: ButtonAction[];
+}
+
 /** Global lifecycle events — singleton config, not per-component. */
 export interface GlobalEventsConfig {
   onUserLoggedIn?: ButtonAction[];
@@ -538,17 +581,6 @@ export interface GlobalEventsConfig {
   onLocaleChanged?: ButtonAction[];
 }
 
-/** A named dialog modal — the user builds it like a page. */
-export interface DialogConfig {
-  id: string;
-  title: string;
-  closeOnBackgroundPress?: boolean;
-  showCloseButton?: boolean;
-  /** Component-property schema declarations, mirrors ComponentDefinition.componentProperties. */
-  componentProperties?: Record<string, ComponentPropertySchema>;
-  widgets: WidgetConfig[];
-}
-
 /**
  * Normalized, in-memory aggregate of the page tree + global areas — the shape
  * configStore holds after `normalizePageNodes()` has run. Not what the wire
@@ -556,6 +588,8 @@ export interface DialogConfig {
  */
 export interface PagesConfig {
   pages: PageNode[];
+  /** The Dialogs folder — a second page-tree root (see `PageRoot`). */
+  dialogs?: PageNode[];
   /** Project-wide shell. */
   shell?: ShellConfig;
   /** Header components — array form, rendered as the header content when shell.header.component is absent. */
@@ -566,29 +600,30 @@ export interface PagesConfig {
   leftSidebar?: WidgetConfig[];
   /** Right-sidebar components — array form, rendered as the right sidebar content when shell.rightSidebar.component is absent. */
   rightSidebar?: WidgetConfig[];
-  dialogs?: DialogConfig[];
   globalEvents?: GlobalEventsConfig;
 }
 
 /**
  * Wire response of `GET /api/config/config` — the bootstrap payload. Page
  * entries are index-hydrated but not yet validated: a page whose file hasn't
- * been written yet can arrive without `title` or `sections`. Pass `pages`
- * through `normalizePageNodes()` (the runtime guard) to get `PagesConfig`.
+ * been written yet can arrive without `title` or `sections`. Pass `pages` and
+ * `dialogs` through `normalizePageNodes()` (the runtime guard) to get
+ * `PagesConfig`.
  */
 export interface PagesBootstrapResponse {
   pages: unknown[];
+  dialogs?: unknown[];
   shell?: ShellConfig;
   header?: WidgetConfig[];
   footer?: WidgetConfig[];
   leftSidebar?: WidgetConfig[];
   rightSidebar?: WidgetConfig[];
-  dialogs?: DialogConfig[];
   globalEvents?: GlobalEventsConfig;
 }
 
 /**
- * Wire response of `GET /api/config/pages/{id}` — one page document, or a
+ * Wire response of `GET /api/config/{root}/{id}` (`pages` or `dialogs`, the
+ * directory that root's documents live in) — one page document, or a
  * `{ id, sections }` stub when the page file doesn't exist yet. Only
  * `sections` is consumed today; run it through `normalizeSections()` before
  * use, since its inner shape isn't guaranteed either.

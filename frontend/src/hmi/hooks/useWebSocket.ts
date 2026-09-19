@@ -35,7 +35,7 @@ type WsMessage =
   | { type: 'var_update'; values?: Record<string, unknown> }
   | { type: 'var_removed'; ids?: string[] }
   | { type: 'var_metadata'; meta?: Record<string, VarMeta> }
-  | { type: 'context_ready'; currentPageIds?: string[]; openDialogIds?: string[] }
+  | { type: 'context_ready'; currentPageIds?: string[] }
   | { type: 'opcua_status'; datasource: string; connected: boolean }
   | {
       type: 'user_identity';
@@ -125,24 +125,22 @@ let _pendingSnapshot = false;
 // corresponding values (see backend _handle_set_context), so queuing it
 // through this same buffer guarantees the store's scalars/structs are already
 // updated by the time a consumer sees contextReadyPageIds include a page.
-let _pendingContextReady: { pageIds: string[]; dialogIds: string[] } | null = null;
+let _pendingContextReady: { pageIds: string[] } | null = null;
 // Normalized page-set of the most recent set_context we actually sent. Used to
 // drop stale context_ready acks: a superseded navigation's background OPC-UA
 // prefetch can land after we've already moved on, and applying its ack would
-// drop the current surface from contextReadyPageIds/contextReadyDialogIds and
-// flash it back to its spinner. The backend echoes both id lists verbatim, so
-// matching on them identifies the ack's originating set_context without a
-// wire-level token — and both have to be in the key: opening a dialog resends
-// the context with the *same* page list, so a page-only key cannot tell the
-// deferred pre-dialog ack from the current one, and letting it through clears
-// contextReadyDialogIds under the dialog that just settled.
+// drop the current surface from contextReadyPageIds and flash it back to its
+// spinner. The backend echoes the id list verbatim, so matching on it
+// identifies the ack's originating set_context without a wire-level token.
+// Opening or closing a page overlay changes that list too, since the overlay's
+// page is sent alongside the routed one.
 let _lastSentContextKey: string | null = null;
 let _flushRaf: number | null = null;
 let _flushFns: {
   applyBatch: { current: (updates: Record<string, unknown>) => void };
   replaceValues: { current: (values: Record<string, unknown>) => void };
   markSnapshotReceived: { current: () => void };
-  setContextReady: { current: (pageIds: string[], dialogIds: string[]) => void };
+  setContextReady: { current: (pageIds: string[]) => void };
 } | null = null;
 
 function flushPendingVarUpdates(): void {
@@ -159,7 +157,7 @@ function flushPendingVarUpdates(): void {
     else _flushFns.applyBatch.current(values);
   }
   if (wasSnapshot) _flushFns.markSnapshotReceived.current();
-  if (contextReady) _flushFns.setContextReady.current(contextReady.pageIds, contextReady.dialogIds);
+  if (contextReady) _flushFns.setContextReady.current(contextReady.pageIds);
 }
 
 function enqueueVarUpdate(
@@ -189,13 +187,8 @@ function idListKey(ids: unknown): string {
     .join('\n');
 }
 
-/** Order-independent key of a set_context / context_ready surface set. */
-function contextKey(pageIds: unknown, dialogIds: unknown): string {
-  return `${idListKey(pageIds)}\u0000${idListKey(dialogIds)}`;
-}
-
-function enqueueContextReady(currentPageIds: string[], openDialogIds: string[]): void {
-  _pendingContextReady = { pageIds: currentPageIds, dialogIds: openDialogIds };
+function enqueueContextReady(currentPageIds: string[]): void {
+  _pendingContextReady = { pageIds: currentPageIds };
   if (_flushRaf === null) {
     _flushRaf = requestAnimationFrame(flushPendingVarUpdates);
   }
@@ -222,10 +215,7 @@ export function sendWsMessage(msg: unknown): void {
       msg !== null &&
       (msg as { type?: unknown }).type === 'set_context'
     ) {
-      _lastSentContextKey = contextKey(
-        (msg as { currentPageIds?: unknown }).currentPageIds,
-        (msg as { openDialogIds?: unknown }).openDialogIds,
-      );
+      _lastSentContextKey = idListKey((msg as { currentPageIds?: unknown }).currentPageIds);
     }
     _ws.send(JSON.stringify(msg));
   }
@@ -334,11 +324,10 @@ export function useWebSocket(): void {
             return;
           case 'context_ready': {
             const readyPageIds = Array.isArray(msg.currentPageIds) ? msg.currentPageIds : [];
-            const readyDialogIds = Array.isArray(msg.openDialogIds) ? msg.openDialogIds : [];
             // Drop acks from a superseded set_context (see _lastSentContextKey)
             // so a late prefetch can't flash the current page back to a spinner.
-            if (contextKey(readyPageIds, readyDialogIds) === _lastSentContextKey) {
-              enqueueContextReady(readyPageIds, readyDialogIds);
+            if (idListKey(readyPageIds) === _lastSentContextKey) {
+              enqueueContextReady(readyPageIds);
             }
             return;
           }

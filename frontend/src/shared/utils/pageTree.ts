@@ -1,11 +1,16 @@
 import type {
+  ButtonAction,
   WidgetConfig,
   PageConfig,
   PageGroupChild,
   PageNode,
   PageGroupConfig,
+  PageEventsConfig,
+  PageRoot,
   PageTitle,
 } from '@shared/types/config';
+import { PAGE_ROOTS } from '@shared/types/config';
+import type { ComponentPropertySchema } from '@shared/types/componentProperty';
 import type { CSSWithVars } from '@shared/types/style';
 import { getPageChildren } from './pageContent';
 import { useTranslationStore } from '@shared/store/translationStore';
@@ -72,6 +77,19 @@ function isLikelyPageGroupCandidate(candidate: Record<string, unknown>): boolean
   return candidate.type === 'page-group';
 }
 
+/** Runtime guard for a node's `events` map: keeps only known event keys whose
+ *  value is an action array, and returns undefined when nothing survives. */
+function readPageEvents(raw: unknown): PageEventsConfig | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const source = raw as Record<string, unknown>;
+  const events: PageEventsConfig = {};
+  for (const key of ['onOpen', 'onClose'] as const) {
+    const actions = source[key];
+    if (Array.isArray(actions) && actions.length > 0) events[key] = actions as ButtonAction[];
+  }
+  return Object.keys(events).length > 0 ? events : undefined;
+}
+
 function readMetadata(c: Record<string, unknown>) {
   const meta: Partial<{
     description: string;
@@ -81,6 +99,9 @@ function readMetadata(c: Record<string, unknown>) {
     order: number;
     mainPadding: string;
     mainBackground: string;
+    events: PageEventsConfig;
+    showCloseButton: boolean;
+    closeOnBackgroundPress: boolean;
   }> = {};
   if (typeof c.description === 'string') meta.description = c.description;
   if (typeof c.breadcrumbLabel === 'string') meta.breadcrumbLabel = c.breadcrumbLabel;
@@ -91,6 +112,12 @@ function readMetadata(c: Record<string, unknown>) {
   if (typeof c.order === 'number' && Number.isFinite(c.order)) meta.order = c.order;
   if (typeof c.mainPadding === 'string') meta.mainPadding = c.mainPadding;
   if (typeof c.mainBackground === 'string') meta.mainBackground = c.mainBackground;
+  const events = readPageEvents(c.events);
+  if (events) meta.events = events;
+  if (typeof c.showCloseButton === 'boolean') meta.showCloseButton = c.showCloseButton;
+  if (typeof c.closeOnBackgroundPress === 'boolean') {
+    meta.closeOnBackgroundPress = c.closeOnBackgroundPress;
+  }
   return meta;
 }
 
@@ -105,6 +132,16 @@ export function normalizeSections(raw: unknown): Record<string, WidgetConfig[]> 
   }
   if (!Array.isArray(sections.content)) sections.content = [];
   return sections;
+}
+
+/** Runtime guard for the `componentProperties` wire field a page or page group
+ *  may declare: an object, never an array, never null. */
+function normalizeComponentProperties(
+  raw: unknown,
+): { componentProperties: Record<string, ComponentPropertySchema> } | Record<string, never> {
+  return raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? { componentProperties: raw as Record<string, ComponentPropertySchema> }
+    : {};
 }
 
 export function normalizePageNode(node: unknown): PageNode | null {
@@ -141,6 +178,7 @@ export function normalizePageNode(node: unknown): PageNode | null {
         : {}),
       ...(Array.isArray(candidate.header) ? { header: candidate.header as WidgetConfig[] } : {}),
       ...(Array.isArray(candidate.footer) ? { footer: candidate.footer as WidgetConfig[] } : {}),
+      ...normalizeComponentProperties(candidate.componentProperties),
     };
   }
 
@@ -155,6 +193,7 @@ export function normalizePageNode(node: unknown): PageNode | null {
     ...metadata,
     ...(typeof candidate.showHeader === 'boolean' ? { showHeader: candidate.showHeader } : {}),
     ...(typeof candidate.showFooter === 'boolean' ? { showFooter: candidate.showFooter } : {}),
+    ...normalizeComponentProperties(candidate.componentProperties),
   };
 }
 
@@ -173,6 +212,18 @@ export function flattenPages(nodes: PageNode[]): PageConfig[] {
   }
   for (const node of nodes) walk(node);
   return pages;
+}
+
+/** Every node in the tree, groups included, in depth-first order. Callers that
+ *  can only target a leaf page use `flattenPages`. */
+export function flattenPageNodes(nodes: PageNode[]): PageNode[] {
+  const out: PageNode[] = [];
+  function walk(node: PageNode): void {
+    out.push(node);
+    if (isPageGroup(node)) for (const child of node.children) walk(child);
+  }
+  for (const node of nodes) walk(node);
+  return out;
 }
 
 export function findFirstPage(nodes: PageNode[]): PageConfig | undefined {
@@ -204,6 +255,23 @@ export function findPageNodeById(nodes: PageNode[], id: string): PageNode | unde
 export function findPageById(nodes: PageNode[], id: string): PageConfig | undefined {
   const node = findPageNodeById(nodes, id);
   return node && isPageNode(node) ? node : undefined;
+}
+
+/** Both page-tree roots, as the config store holds them. */
+export type PageRoots = Record<PageRoot, PageNode[]>;
+
+/** Both roots' top-level nodes in one list — for a read that does not care
+ *  which root a node lives under. Mutations go through `findPageRoot`. */
+export function allPageRootNodes(roots: PageRoots): PageNode[] {
+  return roots.dialogs.length === 0 ? roots.pages : [...roots.pages, ...roots.dialogs];
+}
+
+/** The root holding the node with this id, or null when neither does. */
+export function findPageRoot(roots: PageRoots, id: string): PageRoot | null {
+  for (const root of PAGE_ROOTS) {
+    if (findPageNodeById(roots[root], id)) return root;
+  }
+  return null;
 }
 
 export function findParentPageGroup(

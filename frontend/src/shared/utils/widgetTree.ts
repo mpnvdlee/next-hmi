@@ -22,8 +22,11 @@ export function flattenComponents(comps: WidgetConfig[]): WidgetConfig[] {
   return result;
 }
 
-interface FindInPagesResult {
+export interface FindInPagesResult {
   page?: PageConfig;
+  /** When a comp matches inside a page's own widget tree, that page. Absent for
+   *  a comp found in page-group header/footer chrome, which belongs to no page. */
+  ownerPage?: PageConfig;
   pageGroup?: PageGroupConfig;
   comp?: WidgetConfig;
   /** When a comp matches, the array reference holding it (page-group header/footer or page children). */
@@ -63,7 +66,7 @@ export function findInPages(pages: PageNode[], id: string): FindInPagesResult {
       }
       const comps = getPageChildren(node);
       const comp = findComponentById(comps, id);
-      if (comp) return { comp, container: comps, groupTrail: [...trail] };
+      if (comp) return { comp, ownerPage: node, container: comps, groupTrail: [...trail] };
     }
     return {};
   }

@@ -13,7 +13,7 @@
  * Style: zero style={} props. All classes are cfg-prop-* or editor-props-*.
  */
 
-import { useContext, useEffect, useMemo, useRef } from 'react';
+import { useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { FieldPathContext } from '../../ui/FieldGroup/fieldPathContext';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { useConfigStore } from '@shared/store/configStore';
@@ -31,15 +31,16 @@ import type {
   PageGroupConfig,
   WidgetConfig,
   LayoutConfig,
-  DialogConfig,
   GlobalEventsConfig,
   ActionsConfig,
+  PageEventsConfig,
   ShellConfig,
   ShellRegionConfig,
   ShellRegionId,
   LockedFeedback,
 } from '@shared/types/config';
 import { LOCKED_FEEDBACK_MODES } from '@shared/types/config';
+import type { ComponentPropertySchema } from '@shared/types/componentProperty';
 import PanelHeader from '../../ui/PanelHeader';
 import PropRow from '../../ui/PropRow';
 import PathInputField from '../../ui/PathInputField';
@@ -54,11 +55,17 @@ import Select from '../../ui/Select';
 import SchemaFieldRow from '../../ui/SchemaFieldRow';
 import {
   findComponentById,
-  findContainerComps,
   findInPages,
+  type FindInPagesResult,
   flattenComponents,
+  isFound,
 } from '@shared/utils/widgetTree';
-import { findOwningPage, findPageById, resolvePageTitle } from '@shared/utils/pageTree';
+import {
+  allPageRootNodes,
+  findOwningPage,
+  findPageById,
+  resolvePageTitle,
+} from '@shared/utils/pageTree';
 import { usePanelDiagnostics, type DiagnosticsArtifact } from '@config/hooks/usePanelDiagnostics';
 import { isBuiltinIconId } from '@shared/utils/phosphorIcons';
 import { getEdition } from '@shared/utils/runtimeBase';
@@ -210,7 +217,9 @@ function PropertiesPanelBody() {
   const updateComponents = useConfigStore((s) => s.updateComponents);
   const updatePage = useConfigStore((s) => s.updatePage);
   const updatePageGroup = useConfigStore((s) => s.updatePageGroup);
-  const renameDialog = useConfigStore((s) => s.renameDialog);
+  // Both page-tree roots in one list: a page panel, a widget's owning page and
+  // its option list resolve the same way whichever root the page sits in.
+  const pageNodes = useMemo(() => allPageRootNodes({ pages, dialogs }), [pages, dialogs]);
 
   // Realtime build diagnostics for whichever artifact `selectedId` currently
   // resolves to — mirrors the branching below, but must run unconditionally
@@ -220,7 +229,7 @@ function PropertiesPanelBody() {
     [header, footer, leftSidebar, rightSidebar, shell],
   );
   // Reuses the previous {kind, draft} wrapper when both are unchanged, so an
-  // unrelated store update (e.g. editing a different page while this dialog's
+  // unrelated store update (e.g. editing a different page while this page's
   // panel is open) doesn't allocate a new object and re-trigger
   // usePanelDiagnostics' effect (keyed on referential identity) for content
   // that didn't actually change.
@@ -232,23 +241,17 @@ function PropertiesPanelBody() {
         next = { kind: 'globalEvents', id: 'globalEvents', draft: globalEvents };
       } else if (SHELL_AREA_PANELS[selectedId]) {
         next = { kind: 'shell', id: 'shell', draft: shellDraft };
+      } else if (
+        findComponentById(header, selectedId) ||
+        findComponentById(footer, selectedId) ||
+        findComponentById(leftSidebar, selectedId) ||
+        findComponentById(rightSidebar, selectedId)
+      ) {
+        next = { kind: 'shell', id: 'shell', draft: shellDraft };
       } else {
-        const dialog = dialogs.find(
-          (d) => d.id === selectedId || findComponentById(d.widgets, selectedId),
-        );
-        if (dialog) {
-          next = { kind: 'dialog', id: dialog.id, draft: dialog };
-        } else if (
-          findComponentById(header, selectedId) ||
-          findComponentById(footer, selectedId) ||
-          findComponentById(leftSidebar, selectedId) ||
-          findComponentById(rightSidebar, selectedId)
-        ) {
-          next = { kind: 'shell', id: 'shell', draft: shellDraft };
-        } else {
-          const owningPage = findPageById(pages, selectedId) ?? findOwningPage(pages, selectedId);
-          if (owningPage) next = { kind: 'page', id: owningPage.id, draft: owningPage };
-        }
+        const owningPage =
+          findPageById(pageNodes, selectedId) ?? findOwningPage(pageNodes, selectedId);
+        if (owningPage) next = { kind: 'page', id: owningPage.id, draft: owningPage };
       }
     }
     const prev = diagnosticsArtifactRef.current;
@@ -258,26 +261,29 @@ function PropertiesPanelBody() {
         : next;
     diagnosticsArtifactRef.current = stable;
     return stable;
-  }, [
-    selectedId,
-    dialogs,
-    header,
-    footer,
-    leftSidebar,
-    rightSidebar,
-    pages,
-    globalEvents,
-    shellDraft,
-  ]);
+  }, [selectedId, header, footer, leftSidebar, rightSidebar, pageNodes, globalEvents, shellDraft]);
   usePanelDiagnostics(diagnosticsArtifact);
 
   const headerOptions = useMemo(() => buildComponentOptions(header), [header]);
   const footerOptions = useMemo(() => buildComponentOptions(footer), [footer]);
   const leftSidebarOptions = useMemo(() => buildComponentOptions(leftSidebar), [leftSidebar]);
   const rightSidebarOptions = useMemo(() => buildComponentOptions(rightSidebar), [rightSidebar]);
+  // One walk answers every question the panel asks about the selection: which
+  // node it is, what contains it, and which root it lives under. Searching
+  // `pages` first then `dialogs` visits the same nodes in the same order as one
+  // walk over both roots, so the match is unchanged. This runs on every
+  // keystroke in the panel, and each walk descends every loaded page's widgets.
+  const selection = useMemo(() => {
+    if (!selectedId) return { hit: {} as FindInPagesResult, inDialogs: false };
+    const inPages = findInPages(pages, selectedId);
+    if (isFound(inPages)) return { hit: inPages, inDialogs: false };
+    const inDialogsRoot = findInPages(dialogs, selectedId);
+    return { hit: inDialogsRoot, inDialogs: isFound(inDialogsRoot) };
+  }, [pages, dialogs, selectedId]);
+
   const pageOptions = useMemo(
-    () => (selectedId ? buildComponentOptions(findContainerComps(pages, selectedId)) : []),
-    [pages, selectedId],
+    () => buildComponentOptions(selection.hit.container ?? []),
+    [selection],
   );
 
   const areas = useMemo(
@@ -349,21 +355,24 @@ function PropertiesPanelBody() {
     );
   }
 
-  // Dialog by id
-  const dialog = dialogs.find((p) => p.id === selectedId);
-  if (dialog) {
-    return <DialogPanel dialog={dialog} onRename={(title) => renameDialog(dialog.id, title)} />;
-  }
-
-  // Pages / components inside pages
-  const { page, pageGroup, comp: pageComp } = findInPages(pages, selectedId);
+  // Pages / components inside pages, in either root. Only the Dialogs folder's
+  // nodes take input parameters and have overlay settings of their own.
+  const { page, pageGroup, comp: pageComp, ownerPage, groupTrail } = selection.hit;
+  const inDialogs = selection.inDialogs;
   if (page) {
-    return <PagePanel page={page} onRename={(title) => updatePage(page.id, { title })} />;
+    return (
+      <PagePanel
+        page={page}
+        inDialogs={inDialogs}
+        onRename={(title) => updatePage(page.id, { title })}
+      />
+    );
   }
   if (pageGroup) {
     return (
       <PageGroupPanel
         pageGroup={pageGroup}
+        inDialogs={inDialogs}
         onRename={(title) => updatePageGroup(pageGroup.id, { title })}
       />
     );
@@ -371,7 +380,13 @@ function PropertiesPanelBody() {
   if (pageComp) {
     return (
       <WidgetOptionsContext.Provider value={pageOptions}>
-        <ComponentPanel key={pageComp.id} comp={pageComp} updateComponent={updateComponent} />
+        <PageComponentPropertyScope
+          page={ownerPage}
+          groupTrail={groupTrail}
+          takesInputs={inDialogs}
+        >
+          <ComponentPanel key={pageComp.id} comp={pageComp} updateComponent={updateComponent} />
+        </PageComponentPropertyScope>
       </WidgetOptionsContext.Provider>
     );
   }
@@ -424,81 +439,92 @@ function PropertiesPanelBody() {
     );
   }
 
-  // Components inside dialogs
-  for (const p of dialogs) {
-    const comp = findComponentById(p.widgets, selectedId);
-    if (comp) {
-      return <DialogComponentPanel dialog={p} comp={comp} updateComponent={updateComponent} />;
-    }
-  }
-
   return <div className="cfg-panel-empty">Component not found.</div>;
 }
 
-function DialogComponentPanel({
-  dialog,
-  comp,
-  updateComponent,
+/** Merge declarations from innermost scope outwards — the first chain entry to
+ *  declare a name owns it, matching what the runtime resolves. */
+function mergeDeclarations(
+  chain: (Record<string, ComponentPropertySchema> | undefined)[],
+): Record<string, ComponentPropertySchema> {
+  const merged: Record<string, ComponentPropertySchema> = {};
+  for (const declared of chain) {
+    for (const [key, schema] of Object.entries(declared ?? {})) {
+      if (!(key in merged)) merged[key] = schema;
+    }
+  }
+  return merged;
+}
+
+/**
+ * Publishes the input parameters a widget can actually read to the source
+ * picker, so it can bind `$componentProp`. That is the owning page's
+ * declarations over its ancestor page-groups' — page shadows group, inner group
+ * shadows outer. A widget in page-group chrome renders around pages rather than
+ * inside one, so it gets its group chain alone. Only the Dialogs folder's pages
+ * take input parameters, so anywhere else the scope is empty whatever the
+ * nodes declare.
+ *
+ * A scope that declares nothing publishes nothing: consumers key on the context
+ * being present, not on its contents, so an empty frame would offer
+ * `$componentProp` on every widget of every page and flip `SlotNameField`'s
+ * hint to the component-definition wording on pages that can never satisfy it.
+ */
+function PageComponentPropertyScope({
+  page,
+  groupTrail,
+  takesInputs,
+  children,
 }: {
-  dialog: DialogConfig;
-  comp: WidgetConfig;
-  updateComponent: (id: string, patch: Patch) => void;
+  page: PageConfig | undefined;
+  groupTrail: PageGroupConfig[] | undefined;
+  takesInputs: boolean;
+  children: ReactNode;
 }) {
-  const options = useMemo(() => buildComponentOptions(dialog.widgets), [dialog.widgets]);
-  const componentPropertySchemaValue = useMemo(
-    () => ({ properties: dialog.componentProperties ?? {} }),
-    [dialog.componentProperties],
-  );
+  const value = useMemo(() => {
+    if (!takesInputs) return null;
+    const declared = mergeDeclarations([
+      page?.componentProperties,
+      ...[...(groupTrail ?? [])].reverse().map((group) => group.componentProperties),
+    ]);
+    return Object.keys(declared).length > 0 ? { properties: declared } : null;
+  }, [page, groupTrail, takesInputs]);
   return (
-    <WidgetOptionsContext.Provider value={options}>
-      <ComponentPropertySchemaContext.Provider value={componentPropertySchemaValue}>
-        <FieldPathContext.Provider value={[dialog.title]}>
-          <ComponentPanel key={comp.id} comp={comp} updateComponent={updateComponent} />
-        </FieldPathContext.Provider>
-      </ComponentPropertySchemaContext.Provider>
-    </WidgetOptionsContext.Provider>
+    <ComponentPropertySchemaContext.Provider value={value}>
+      {children}
+    </ComponentPropertySchemaContext.Provider>
   );
 }
 
-// ── DialogPanel ───────────────────────────────────────────────────────────────
+// ── OverlaySection ───────────────────────────────────────────────────────────
+// How the overlay card of a Dialogs-folder page or group closes. The node the
+// Open Page Overlay action names decides it; absent means yes, as for any page
+// opened as an overlay.
 
-function DialogPanel({
-  dialog,
-  onRename,
+function OverlaySection({
+  node,
+  onPatch,
 }: {
-  dialog: DialogConfig;
-  onRename: (t: string) => void;
+  node: { showCloseButton?: boolean; closeOnBackgroundPress?: boolean };
+  onPatch: (patch: { showCloseButton?: boolean; closeOnBackgroundPress?: boolean }) => void;
 }) {
-  const updateDialog = useConfigStore((s) => s.updateDialog);
-
   return (
-    <FieldPathContext.Provider value={[dialog.title]}>
-      <PanelHeader kind="Dialog" name={dialog.title} />
-      <div className="cfg-section">
-        <div className="cfg-section__title">Dialog</div>
-        <PropRow label="Title" sourceless>
-          <TextField value={dialog.title} onCommit={onRename} />
-        </PropRow>
-        <PropRow label="Close on backdrop">
-          <BoolButtonGroup
-            value={dialog.closeOnBackgroundPress ?? false}
-            onChange={(v) => updateDialog(dialog.id, { closeOnBackgroundPress: v })}
-          />
-        </PropRow>
-        <PropRow label="Show close button">
-          <BoolButtonGroup
-            value={dialog.showCloseButton ?? false}
-            onChange={(v) => updateDialog(dialog.id, { showCloseButton: v })}
-            labels={['Show', 'Hide']}
-          />
-        </PropRow>
-      </div>
-      <ComponentPropertiesEditor
-        ownerName={dialog.title}
-        properties={dialog.componentProperties ?? {}}
-        onChange={(next) => updateDialog(dialog.id, { componentProperties: next })}
-      />
-    </FieldPathContext.Provider>
+    <div className="cfg-section">
+      <div className="cfg-section__title">Overlay</div>
+      <PropRow label="Show close button">
+        <BoolButtonGroup
+          value={node.showCloseButton !== false}
+          onChange={(v) => onPatch({ showCloseButton: v })}
+          labels={['Show', 'Hide']}
+        />
+      </PropRow>
+      <PropRow label="Close on backdrop">
+        <BoolButtonGroup
+          value={node.closeOnBackgroundPress !== false}
+          onChange={(v) => onPatch({ closeOnBackgroundPress: v })}
+        />
+      </PropRow>
+    </div>
   );
 }
 
@@ -509,7 +535,17 @@ const PAGE_TITLE_SCHEMA: SchemaField = {
   label: 'Title',
 };
 
-function PagePanel({ page, onRename }: { page: PageConfig; onRename: (t: string) => void }) {
+function PagePanel({
+  page,
+  inDialogs,
+  onRename,
+}: {
+  page: PageConfig;
+  /** In the Dialogs folder: overlay settings and input parameters instead of
+   *  the navigation-only metadata. */
+  inDialogs: boolean;
+  onRename: (t: string) => void;
+}) {
   const updatePage = useConfigStore((s) => s.updatePage);
   const setPageSections = useConfigStore((s) => s.setPageSections);
 
@@ -549,9 +585,9 @@ function PagePanel({ page, onRename }: { page: PageConfig; onRename: (t: string)
   return (
     <PanelScopeContext.Provider value={page.id}>
       <FieldPathContext.Provider value={[resolvePageTitle(page.title)]}>
-        <PanelHeader kind="Page" name={resolvePageTitle(page.title)} />
+        <PanelHeader kind={inDialogs ? 'Dialog' : 'Page'} name={resolvePageTitle(page.title)} />
         <div className="cfg-section">
-          <div className="cfg-section__title">Page</div>
+          <div className="cfg-section__title">{inDialogs ? 'Dialog' : 'Page'}</div>
           <SchemaFieldRow
             propKey="__title__"
             schema={PAGE_TITLE_SCHEMA}
@@ -577,8 +613,28 @@ function PagePanel({ page, onRename }: { page: PageConfig; onRename: (t: string)
             />
           </PropRow>
         </div>
-        <PageMetadataSection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
-        <MainSection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
+        {inDialogs ? (
+          <OverlaySection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
+        ) : (
+          <>
+            <PageMetadataSection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
+            <MainSection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
+          </>
+        )}
+        <PageEventsSection
+          node={page}
+          kindLabel={inDialogs ? 'Dialog' : 'Page'}
+          onPatch={(patch) => updatePage(page.id, patch)}
+        />
+        {inDialogs && (
+          <ComponentPropertiesEditor
+            ownerName={resolvePageTitle(page.title)}
+            title="Input Parameters"
+            itemNoun="input parameter"
+            properties={page.componentProperties ?? {}}
+            onChange={(next) => updatePage(page.id, { componentProperties: next })}
+          />
+        )}
       </FieldPathContext.Provider>
     </PanelScopeContext.Provider>
   );
@@ -704,41 +760,131 @@ function PageMetadataSection({
   );
 }
 
+// ── PageEventsSection ────────────────────────────────────────────────────────
+// The lifecycle events a page or page-group node carries. Same wiring as
+// GlobalEventsPanel — an ActionsInput per event — but patched onto the node
+// instead of the singleton config.
+
+function PageEventsSection({
+  node,
+  kindLabel,
+  onPatch,
+}: {
+  node: { events?: PageEventsConfig };
+  /** 'Page' / 'Group', or 'Dialog' / 'Dialog Group' in the Dialogs folder —
+   *  the noun the event labels read with. */
+  kindLabel: string;
+  onPatch: (patch: Record<string, unknown>) => void;
+}) {
+  const events = node.events ?? {};
+
+  function handleChange(eventKey: keyof PageEventsConfig, value: unknown) {
+    const actions = (value as ActionsConfig | undefined)?.[eventKey];
+    const next: PageEventsConfig = { ...events };
+    // An empty list is the absence of a handler — drop the key rather than
+    // persisting `[]`, and drop `events` entirely once it holds nothing.
+    if (actions && actions.length > 0) next[eventKey] = actions;
+    else delete next[eventKey];
+    onPatch({ events: Object.keys(next).length > 0 ? next : undefined });
+  }
+
+  return (
+    <div className="cfg-section">
+      <div className="cfg-section__title">Events</div>
+      {(
+        [
+          { eventKey: 'onOpen', label: `${kindLabel} Open` },
+          { eventKey: 'onClose', label: `${kindLabel} Close` },
+        ] as const
+      ).map(({ eventKey, label }) => (
+        <div className="cfg-field-group" key={eventKey}>
+          <ActionsInput
+            value={{ [eventKey]: events[eventKey] ?? [] } as ActionsConfig}
+            onChange={(v) => handleChange(eventKey, v)}
+            eventKey={eventKey}
+            eventLabel={label}
+            headerTitle={label}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PageGroupPanel({
   pageGroup,
+  inDialogs,
   onRename,
 }: {
   pageGroup: PageGroupConfig;
+  /** In the Dialogs folder: overlay settings and input parameters instead of
+   *  the navigation-only metadata. */
+  inDialogs: boolean;
   onRename: (t: string) => void;
 }) {
   const updatePageGroup = useConfigStore((s) => s.updatePageGroup);
 
   return (
-    <FieldPathContext.Provider value={[resolvePageTitle(pageGroup.title)]}>
-      <PanelHeader kind="Page Group" name={resolvePageTitle(pageGroup.title)} />
-      <div className="cfg-section">
-        <div className="cfg-section__title">Page Group</div>
-        <SchemaFieldRow
-          propKey="__title__"
-          schema={PAGE_TITLE_SCHEMA}
-          sourceless
-          value={pageGroup.title}
-          onChange={(v) => onRename(v as string)}
+    // The group owns its event findings — the backend stamps the group id as
+    // their owner, the same way a page owns its own (see `_synthetic_owner`).
+    <PanelScopeContext.Provider value={pageGroup.id}>
+      <FieldPathContext.Provider value={[resolvePageTitle(pageGroup.title)]}>
+        <PanelHeader
+          kind={inDialogs ? 'Dialog Group' : 'Page Group'}
+          name={resolvePageTitle(pageGroup.title)}
         />
-        <PropRow label="Show child pages in menu">
-          <BoolButtonGroup
-            value={pageGroup.showChildPagesInMenu === true}
-            onChange={(v) => updatePageGroup(pageGroup.id, { showChildPagesInMenu: v })}
-            labels={['Show', 'Hide']}
+        <div className="cfg-section">
+          <div className="cfg-section__title">{inDialogs ? 'Dialog Group' : 'Page Group'}</div>
+          <SchemaFieldRow
+            propKey="__title__"
+            schema={PAGE_TITLE_SCHEMA}
+            sourceless
+            value={pageGroup.title}
+            onChange={(v) => onRename(v as string)}
           />
-        </PropRow>
-      </div>
-      <PageMetadataSection
-        node={pageGroup}
-        onPatch={(patch) => updatePageGroup(pageGroup.id, patch)}
-      />
-      <MainSection node={pageGroup} onPatch={(patch) => updatePageGroup(pageGroup.id, patch)} />
-    </FieldPathContext.Provider>
+          {!inDialogs && (
+            <PropRow label="Show child pages in menu">
+              <BoolButtonGroup
+                value={pageGroup.showChildPagesInMenu === true}
+                onChange={(v) => updatePageGroup(pageGroup.id, { showChildPagesInMenu: v })}
+                labels={['Show', 'Hide']}
+              />
+            </PropRow>
+          )}
+        </div>
+        {inDialogs ? (
+          <OverlaySection
+            node={pageGroup}
+            onPatch={(patch) => updatePageGroup(pageGroup.id, patch)}
+          />
+        ) : (
+          <>
+            <PageMetadataSection
+              node={pageGroup}
+              onPatch={(patch) => updatePageGroup(pageGroup.id, patch)}
+            />
+            <MainSection
+              node={pageGroup}
+              onPatch={(patch) => updatePageGroup(pageGroup.id, patch)}
+            />
+          </>
+        )}
+        <PageEventsSection
+          node={pageGroup}
+          kindLabel={inDialogs ? 'Dialog Group' : 'Group'}
+          onPatch={(patch) => updatePageGroup(pageGroup.id, patch)}
+        />
+        {inDialogs && (
+          <ComponentPropertiesEditor
+            ownerName={resolvePageTitle(pageGroup.title)}
+            title="Input Parameters"
+            itemNoun="input parameter"
+            properties={pageGroup.componentProperties ?? {}}
+            onChange={(next) => updatePageGroup(pageGroup.id, { componentProperties: next })}
+          />
+        )}
+      </FieldPathContext.Provider>
+    </PanelScopeContext.Provider>
   );
 }
 

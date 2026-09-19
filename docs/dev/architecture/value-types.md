@@ -48,7 +48,7 @@ The types above are the *runtime* kinds. A field may also declare an **optional 
 | `String` | `direction` | A `row` \| `column` picker |
 | `String` | `align` | A cross-axis alignment picker (`start`, `center`, `end`, `stretch`, …) |
 | `String` | `justify` | A main-axis alignment picker (`start`, `center`, `end`, `space-between`, …) |
-| `String` | `page` | A dropdown of the project's pages (stores the page id) |
+| `String` | `page` | A dropdown of the project's **navigable** pages (stores the page id). The Dialogs folder is left out — nothing routes to one, so naming it would author a dead target; a page id already stored from there stays listed, marked *not navigable* |
 | `String` | `variables` | One row per variable key, each picked and reordered on its own; stored comma-separated. Like `actions`, the group takes no source pill — every row is its own property row |
 | `Float` | `percentage` | A 0–100 input with a `%` affix |
 | `Boolean` | `toggle` | A plain on/off switch (default) |
@@ -82,7 +82,7 @@ These carry whatever type the field requires, so you can use them almost anywher
 | `$static` | `{ $static: value }` | A fixed value you type or pick — the literal for **any** type, including a structured `icon` (`{ type, name }`), `image` (`{ path }`) or `video` (`{ path }`). For those, the editor opens a picker rather than a text box |
 | `$var` | `{ $var: { path, index? } }` | A live datasource / OPC-UA variable |
 | `$widgetProp` | `{ $widgetProp: { componentId, property, path? } }` | A property **exported by another component** on the page (sibling → me). `path` is an optional slash-path into a struct/array member of the exported value (e.g. `name` on a selected row) |
-| `$componentProp` | `{ $componentProp: name }` | A value **passed in by my parent** component or dialog (parent → me) |
+| `$componentProp` | `{ $componentProp: name }` | A value **passed in from outside** — by my parent component, or by the action that opened the page overlay I am in (outside → me) |
 | `$result` | `{ $result: field }` | An action's result (only inside `onSuccess` / `onFailed` / `onSettled`) |
 | `$if` | `{ $if: { condition, true, false } }` | One of two values, chosen by a condition |
 | `$switch` | `{ $switch: { value, cases[{ when, then }], default } }` | One of many values, chosen by a key |
@@ -113,7 +113,7 @@ Each of these only works in a field of the matching type.
 | `$user`, groups | String | `{ $user: { field } }` `field: groups` | The logged-in user's group **labels, comma-joined** — `resolveUser` returns `groups.map(labelOf).join(', ')`, so this is one `String`, not a `String[]`, despite the registry advertising `string[]`. For membership tests use `$userGroups`, which is what the `visible` / `interactable` gate uses |
 | `$user`, userList | Record[] / String | `{ $user: { field } }` `field: userList` | Every username in the project. Its home is an **`option-list`** field, where it resolves to `{ label, value }` pairs; bound to a scalar field instead it joins the names with `", "`, since `ResolvedValue` cannot carry an array |
 | `$userGroups` | Boolean | `{ $userGroups: { groups } }` | `true` when the logged-in user is in one of the selected groups (empty `groups` = everyone). The source behind the standard `visible` / `interactable` group gate |
-| `$page`, id | String | `{ $page: { field, pageId? } }` `field: id` | The page's id |
+| `$page`, id | String | `{ $page: { field, pageId? } }` `field: id` | The page's id. With no `pageId` this is the page **being rendered**, which inside a page overlay is not the route's — see [Page metadata in depth](#page-metadata-in-depth-page) |
 | `$page`, title | String | `{ $page: { field, pageId? } }` `field: title` | The page's title |
 | `$page`, icon | String | `{ $page: { field, pageId? } }` `field: icon` | The page's icon name |
 | `$page`, description | String | `{ $page: { field, pageId? } }` `field: description` | The page's description |
@@ -319,9 +319,17 @@ Each input has a **type**, exactly like any other field. So an input can be a `S
 
 One declared type is not an input at all: `widgets` names a [slot](data-formats.md#component-slots). It holds no value, so `$componentProp` cannot read it and the binding picker never offers it; what it declares is where the *caller's widgets* go.
 
+### Pages and page groups declare the same inputs
+
+Components are not the only thing that takes inputs. A page and a page group each carry a `componentProperties` map of the identical shape, and the widgets inside read it with `$componentProp` exactly as a component's children do — no separate source exists for them. What differs is who fills the values in: not a placement, but the action that opens the overlay. `openDialog` takes a `componentProperties` map, resolved against the opening widget's own scope before it is handed over. Only a node in the **Dialogs** root declares inputs — a navigable page has no action to fill them, which is why the sibling `openPageOverlay` carries no such map (see [data-formats.md](data-formats.md#config-file-v2--split-page-storage)). `openDialog` may name a page *or* a page group; a group opens its active child inside the group's header/footer chrome, which is what makes a parameterised tabbed modal one overlay rather than several.
+
+A page reached by ordinary navigation — a menu, a Tab Bar, a URL — is opened by no action, so it is handed no values and every declaration falls back to its `defaultValue`. Navigation targets and URL parameters deliberately carry none. Values supplied to a page overlay belong to that overlay instance, so navigating to a sibling page inside the open overlay keeps them.
+
 ### Defaults
 
-`defaultValue` applies at runtime, not only in the editor: an instance that leaves a property `undefined` gets the declared default before the component's tree renders, so what the properties panel shows as the field's `· default` hint is what `$componentProp` resolves to. An explicit `null` is a *set* value — an author clearing a field on purpose — and does not fall back. Struct, `actions` and `widgets` properties have no default (a struct resolves to a variable subtree, an actions list to handlers, a `widgets` property to whatever the caller puts in the slot).
+`defaultValue` applies at runtime, not only in the editor: an instance that leaves a property `undefined` gets the declared default before the component's tree renders, so what the properties panel shows as the field's `· default` hint is what `$componentProp` resolves to. An explicit `null` is a *set* value — an author clearing a field on purpose — and does not fall back. Pages and page groups fill their declarations in the same way (`withDeclaredDefaults`, one helper for all of them), which is what makes a parameterised page usable as a navigation destination: reached that way it renders entirely on its declared defaults. Struct, `actions` and `widgets` properties have no default (a struct resolves to a variable subtree, an actions list to handlers, a `widgets` property to whatever the caller puts in the slot).
+
+A name can be declared at several levels at once — on the page and on the groups it nests in. **The innermost declaration wins**: a widget on the page sees the page's default, a widget in a group's chrome sees that group's, and an outer group's is reached only when nothing inner declares the name. Values the opening action supplied sit above every default. `PageGroupPageView` computes this by folding the declaration chain innermost-first through `withDeclaredDefaults`, which only fills a key that is still `undefined`; the shadowing is deliberate and raises no diagnostic. Chrome is *outside* the page, so a group's header and footer never see the active page's declarations.
 
 ### `$componentProp` only substitutes as a whole value
 
@@ -378,6 +386,46 @@ const enabled = fields?.bEnabled === true  // required → safe to read directly
 Rule of thumb: **required members are safe to read; optional members should always have a fallback.**
 
 ---
+
+## Page metadata in depth (`$page`)
+
+`$page` with an explicit `pageId` reads that page. **Without one it reads the
+page being rendered** — not the route. `resolvePage` resolves
+`pageId ?? hostPageId` (`useEvalContext`), and `hostPageId` comes from
+`HostPageContext`, which the page's own content and a page-group's chrome bands
+provide. Only where nothing provides it does it fall back to the route's active
+page, derived from `location.pathname` and falling back in turn to the first
+page on the index route.
+
+On an ordinary screen the two are the same page, so the distinction never shows.
+Inside a **page overlay** they are not: an overlay action renders a page without
+touching the URL, so the route still names the host page while `$page` correctly
+reports the overlay's. A gate keyed on the overlay's page
+
+```json
+{ "$switch": {
+  "value": { "$page": { "field": "id" } },
+  "cases": [ { "when": "wiz-2", "then": { "$compare": { … } } } ],
+  "default": true } }
+```
+
+matches its case in an overlay exactly as it does on a route, and a step counter
+built the same way renders the step it is on. A page-group's shared `header` /
+`footer` band resolves the group's **deepest active child**, so one band can
+distinguish its steps — a `$switch` on `$page.id` in the band of a wizard group
+selects per step.
+
+Three scopes still resolve the route's page, because no page owns them: the app
+shell's header, footer and sidebars; and anything rendered outside
+`HmiView`'s page tree. That is the right answer there — a breadcrumb in the app
+header describes where the operator navigated to, not what an overlay happens to
+be showing on top of it.
+
+`$pageIsActive` reads the same `hostPageId` when no explicit `page` is given,
+but answers a different question: it compares against the **route's** active
+page. Inside an overlay it is therefore `false` — the overlay's page is rendered,
+not navigated to. Its picker offers navigable pages only, for that reason: a
+Dialogs-folder page could never make it true.
 
 ## Putting it together
 

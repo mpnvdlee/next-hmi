@@ -76,7 +76,7 @@
                     "properties": {
                       "text": {
                         "$stringExpr": {
-                          "template": "{1} — {2} cup(s)",
+                          "template": "{1} — {2} {3}",
                           "wildcards": {
                             "1": {
                               "$switch": {
@@ -88,24 +88,35 @@
                                 "cases": [
                                   {
                                     "when": "espresso",
-                                    "then": "Espresso"
+                                    "then": {
+                                      "$loc": "Espresso"
+                                    }
                                   },
                                   {
                                     "when": "filter",
-                                    "then": "Filter"
+                                    "then": {
+                                      "$loc": "Filter"
+                                    }
                                   },
                                   {
                                     "when": "decaf",
-                                    "then": "Decaf"
+                                    "then": {
+                                      "$loc": "Decaf"
+                                    }
                                   }
                                 ],
-                                "default": "No beans"
+                                "default": {
+                                  "$loc": "No beans"
+                                }
                               }
                             },
                             "2": {
                               "$var": {
                                 "path": "Brew:Wizard/CupCount"
                               }
+                            },
+                            "3": {
+                              "$loc": "Cups"
                             }
                           }
                         }
@@ -187,7 +198,7 @@
                                     "message": {
                                       "$loc": "Brewing started."
                                     },
-                                    "severity": "success",
+                                    "severity": "info",
                                     "discard": "auto",
                                     "duration": 3000
                                   },
@@ -200,9 +211,12 @@
                                     "type": "showToast",
                                     "message": {
                                       "$stringExpr": {
-                                        "template": "Could not start: {1}",
+                                        "template": "{1}: {2}",
                                         "wildcards": {
                                           "1": {
+                                            "$loc": "Could not start"
+                                          },
+                                          "2": {
                                             "$result": "reason"
                                           }
                                         }

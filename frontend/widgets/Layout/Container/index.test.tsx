@@ -32,7 +32,6 @@ describe('WidgetRenderer visible property', () => {
       opcuaConnected: {},
     });
     useHmiStore.setState({
-      openDialogs: [],
       openPageOverlays: [],
       currentUsersByScope: {},
       loginErrorsByScope: {},

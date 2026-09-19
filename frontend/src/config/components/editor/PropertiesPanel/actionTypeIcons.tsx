@@ -4,25 +4,18 @@ import Icon, { LinkGlyphPaths, GlobeGlyphPaths } from '../../ui/glyphIcon';
 import { actionTypeColorStyle } from './actionsPreview';
 
 /** One hand-authored inline SVG glyph per action type, same visual language as
- *  the property-source badges. See `glyphIcon.tsx`. openDialog/closeDialog/
- *  writeDataVariable use the 24×24 glyphs from the property-panel design
- *  sandbox; the rest still use the original 16×16 set. */
+ *  the property-source badges. See `glyphIcon.tsx`. writeDataVariable uses the
+ *  24×24 glyph from the property-panel design sandbox; the rest still use the
+ *  original 16×16 set. */
 
 type ActionType = ButtonAction['type'];
 
 const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
-  // Dialog with a title bar.
+  // A modal card centred on a screen.
   openDialog: (
-    <Icon viewBox="0 0 24 24" strokeWidth={2}>
-      <rect x="4" y="5" width="16" height="14" rx="2" />
-      <path d="M4 9h16" />
-    </Icon>
-  ),
-  // Same dialog, a close bar through the middle.
-  closeDialog: (
-    <Icon viewBox="0 0 24 24" strokeWidth={2}>
-      <rect x="4" y="5" width="16" height="14" rx="2" />
-      <path d="M9 12h6" />
+    <Icon>
+      <rect x="1.5" y="2.5" width="13" height="11" rx="1" />
+      <rect x="4.5" y="5.5" width="7" height="5" rx="1" />
     </Icon>
   ),
   // Two overlapping pages.

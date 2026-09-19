@@ -1,7 +1,7 @@
 import { useConfigStore } from '@shared/store/configStore';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { useComponentStore } from '@shared/store/componentStore';
-import { flattenPages } from '@shared/utils/pageTree';
+import { allPageRootNodes, flattenPages } from '@shared/utils/pageTree';
 import { getPageChildren } from '@shared/utils/pageContent';
 
 export type PreviewPoster = (message: Record<string, unknown>) => void;
@@ -13,7 +13,7 @@ export function buildPagesUpdate(pageIds?: string[]): Record<string, unknown> {
   const s = useConfigStore.getState();
   const wanted = pageIds ? new Set(pageIds) : s.loadedPageIds;
   const pageContent: Record<string, unknown[]> = {};
-  for (const page of flattenPages(s.pages)) {
+  for (const page of flattenPages(allPageRootNodes(s))) {
     if (wanted.has(page.id)) {
       pageContent[page.id] = getPageChildren(page) as unknown[];
     }
@@ -21,12 +21,12 @@ export function buildPagesUpdate(pageIds?: string[]): Record<string, unknown> {
   return {
     type: 'pages_update',
     pages: s.pages,
+    dialogs: s.dialogs,
     header: s.header,
     footer: s.footer,
     leftSidebar: s.leftSidebar,
     rightSidebar: s.rightSidebar,
     shell: s.shell,
-    dialogs: s.dialogs,
     globalEvents: s.globalEvents,
     pageContent,
   };

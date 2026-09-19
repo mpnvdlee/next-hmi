@@ -10,7 +10,7 @@ import {
 import { generateId } from '@shared/utils/id';
 import type { ButtonAction } from '@shared/types/config';
 
-const closeDialog: ButtonAction = { type: 'closeDialog' };
+const closePageOverlay: ButtonAction = { type: 'closePageOverlay' };
 const showToast: ButtonAction = {
   type: 'showToast',
   message: 'x',
@@ -65,17 +65,17 @@ describe('actionDispatcher', () => {
     registerPending({
       requestId,
       scope: 's',
-      onSuccess: [closeDialog],
+      onSuccess: [closePageOverlay],
       onFailed: [showToast],
-      onSettled: [closeDialog],
+      onSettled: [closePageOverlay],
     });
 
     resolvePending(requestId, { username: 'op1' }, true);
 
     expect(calls).toHaveLength(2);
-    expect(calls[0].actions).toEqual([closeDialog]);
+    expect(calls[0].actions).toEqual([closePageOverlay]);
     expect(calls[0].resultValue).toEqual({ username: 'op1' });
-    expect(calls[1].actions).toEqual([closeDialog]); // onSettled
+    expect(calls[1].actions).toEqual([closePageOverlay]); // onSettled
   });
 
   it('routes resolvePending(ok=false) to onFailed + onSettled', () => {
@@ -86,9 +86,9 @@ describe('actionDispatcher', () => {
     registerPending({
       requestId,
       scope: 's',
-      onSuccess: [closeDialog],
+      onSuccess: [closePageOverlay],
       onFailed: [showToast],
-      onSettled: [closeDialog],
+      onSettled: [closePageOverlay],
     });
 
     resolvePending(requestId, { reason: 'invalid_credentials' }, false);
@@ -96,7 +96,7 @@ describe('actionDispatcher', () => {
     expect(calls).toHaveLength(2);
     expect(calls[0].actions).toEqual([showToast]);
     expect(calls[0].resultValue).toEqual({ reason: 'invalid_credentials' });
-    expect(calls[1].actions).toEqual([closeDialog]); // onSettled fires for failure too
+    expect(calls[1].actions).toEqual([closePageOverlay]); // onSettled fires for failure too
   });
 
   it('correlates by requestId — resolving one entry leaves others pending', () => {
@@ -105,13 +105,13 @@ describe('actionDispatcher', () => {
 
     const idA = generateId();
     const idB = generateId();
-    registerPending({ requestId: idA, scope: 's', onSuccess: [closeDialog] });
+    registerPending({ requestId: idA, scope: 's', onSuccess: [closePageOverlay] });
     registerPending({ requestId: idB, scope: 's', onSuccess: [showToast] });
 
     resolvePending(idA, {}, true);
 
     expect(calls).toHaveLength(1);
-    expect(calls[0].actions).toEqual([closeDialog]);
+    expect(calls[0].actions).toEqual([closePageOverlay]);
 
     // Resolving an unknown id is a no-op
     resolvePending('unknown', {}, true);
@@ -142,7 +142,7 @@ describe('actionDispatcher', () => {
       requestId,
       scope: 's',
       onFailed: [showToast],
-      onSettled: [closeDialog],
+      onSettled: [closePageOverlay],
     });
 
     vi.advanceTimersByTime(9_999);
@@ -153,7 +153,7 @@ describe('actionDispatcher', () => {
     expect(calls).toHaveLength(2);
     expect(calls[0].actions).toEqual([showToast]);
     expect(calls[0].resultValue).toEqual({ reason: 'timeout' });
-    expect(calls[1].actions).toEqual([closeDialog]);
+    expect(calls[1].actions).toEqual([closePageOverlay]);
   });
 
   it('clears the timeout when resolvePending arrives in time', () => {
@@ -161,7 +161,12 @@ describe('actionDispatcher', () => {
     registerActionRunner(runner);
 
     const requestId = generateId();
-    registerPending({ requestId, scope: 's', onSuccess: [closeDialog], onFailed: [showToast] });
+    registerPending({
+      requestId,
+      scope: 's',
+      onSuccess: [closePageOverlay],
+      onFailed: [showToast],
+    });
 
     resolvePending(requestId, {}, true);
     expect(calls).toHaveLength(1);
@@ -181,7 +186,7 @@ describe('actionDispatcher', () => {
       requestId: idA,
       scope: 's',
       onFailed: [showToast],
-      onSettled: [closeDialog],
+      onSettled: [closePageOverlay],
     });
     registerPending({ requestId: idB, scope: 's', onFailed: [showToast] });
 
@@ -204,7 +209,7 @@ describe('actionDispatcher', () => {
     registerPending({
       requestId,
       scope: 'runtime:tab1:inst1',
-      onSuccess: [closeDialog],
+      onSuccess: [closePageOverlay],
       inputScopeProps: { dialogProp: 42 },
     });
 
@@ -236,7 +241,7 @@ describe('actionDispatcher', () => {
     registerPending({
       requestId,
       scope: 's',
-      onSuccess: [closeDialog],
+      onSuccess: [closePageOverlay],
       onSettled: [showToast],
     });
 
@@ -288,13 +293,13 @@ describe('actionDispatcher', () => {
       onResult: () => {
         throw new Error('boom');
       },
-      onSuccess: [closeDialog],
+      onSuccess: [closePageOverlay],
     });
 
     resolvePending(requestId, {}, true);
 
     expect(calls).toHaveLength(1);
-    expect(calls[0].actions).toEqual([closeDialog]);
+    expect(calls[0].actions).toEqual([closePageOverlay]);
     errorSpy.mockRestore();
   });
 
@@ -303,7 +308,7 @@ describe('actionDispatcher', () => {
     // No registerActionRunner call
 
     const requestId = generateId();
-    registerPending({ requestId, scope: 's', onSuccess: [closeDialog] });
+    registerPending({ requestId, scope: 's', onSuccess: [closePageOverlay] });
     resolvePending(requestId, {}, true);
 
     expect(warnSpy).toHaveBeenCalled();

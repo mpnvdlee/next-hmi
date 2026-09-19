@@ -325,7 +325,8 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     key: '$componentProp',
     contentTier: 1,
     label: 'Component Property',
-    description: 'A value passed in by the parent component or dialog.',
+    description:
+      'A value passed in by the parent component, or by the action that opened this page overlay.',
     short: 'Component Prop',
     abbr: 'CP',
     produces: ['any'],

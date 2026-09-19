@@ -123,6 +123,47 @@ are always called out under a **Changed** or **Removed** heading.
 
 ### Removed
 
+- **Dialogs, as a separate kind of document.** A dialog was built like a page,
+  but was not one: it stored its widgets inline in `config.json`, carried its
+  own title and close settings, and only the **Open Dialog** action could show
+  it — so a screen authored as a page could not become a popup, and a popup
+  could not grow tabs, a header, or sub-pages without being rebuilt. The
+  **Dialogs** section of the page tree now holds ordinary **pages and page
+  groups**, and **Open Page Overlay** opens them. Everything a page has comes
+  with them: sections, page events, group chrome, the same canvas.
+  **Open Dialog** and **Close Dialog** are gone, along with the `DialogConfig`
+  shape and the `openDialogIds` field of the `set_context` / `context_ready`
+  websocket messages.
+
+  On disk, a Dialogs-folder page keeps its document in the project's own
+  `dialogs/` directory beside `pages/`, so the two kinds of screen stay
+  separable; the upgrade moves them there, and dragging a page between the
+  two sections moves its document with it.
+
+  Existing projects are converted on first open, at project format 8: every
+  dialog becomes a page in the Dialogs folder with its widgets, its input
+  parameters and its close behaviour intact. A project is backed up before it
+  is migrated, as always. **Open Dialog** keeps its name and now names a page
+  rather than a dialog, so a hand-written custom widget that hard-codes one
+  only has to rename its `dialogId` field to `pageId`; **Close Dialog** becomes
+  **Close Dialog/Overlay** (`closePageOverlay`), the one action that closes
+  either kind.
+
+  Opening a screen over another is two actions, by which section it comes from.
+  **Open Dialog** lists the Dialogs folder and fills the target's input
+  parameters in. **Open Page As Overlay** lists the navigable pages and takes
+  none. Each picker therefore offers exactly the screens it can reach, and
+  moving a screen between the two sections is flagged by the warnings pill,
+  which names the action to switch to.
+
+  What is new rather than carried over: **input parameters** and the **Overlay**
+  settings (close button, close on backdrop) are declared on any page or page
+  group in the Dialogs folder, so a parameterised popup can now be a whole
+  tabbed page group. A page in the **Pages** section is a navigation
+  destination, so it declares neither — it can still be opened as an overlay,
+  taking no parameters and using the default close behaviour. See
+  [Pages & navigation](docs/user/pages.md#overlays-a-page-shown-on-top-of-the-current-screen).
+
 - **The per-project operator password prompt.** A project copied from the
   bundled seed used to show **Set operator password** instead of Start, and
   refused its runtime and editor until a device admin had minted that project's

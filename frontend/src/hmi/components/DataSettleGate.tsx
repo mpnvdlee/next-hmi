@@ -8,9 +8,9 @@ import { useVariableStore } from '../store/variableStore';
 const NO_DATA_GRACE_MS = 3000;
 
 interface DataSettleGateProps {
-  /** Identifies the load being waited on — a page id, a dialog id. A new key
-   *  reopens the window, so a timer from the page navigated away from cannot
-   *  close the window for the page navigated to. */
+  /** Identifies the load being waited on — a page id. A new key reopens the
+   *  window, so a timer from the page navigated away from cannot close the
+   *  window for the page navigated to. */
   settleKey: string | undefined;
   /** True once this surface's data has been delivered as far as it will be.
    *  For a page that is `context_ready` echoing its id: the client applies it
@@ -60,28 +60,24 @@ export default function DataSettleGate({ settleKey, done, children }: DataSettle
 
 /**
  * The gate for a surface whose settle signal is the backend's `context_ready`
- * echoing its own id — a runtime or preview page, an open page overlay, an open
- * dialog. One place decides how that ack is read, rather than each caller
- * re-deriving it from the store.
+ * echoing its own id — a runtime or preview page, or an open page overlay. One
+ * place decides how that ack is read, rather than each caller re-deriving it
+ * from the store.
  *
- * A dialog's variables ride the same `set_context` as its page's (the backend
- * folds `openDialogIds` into one key set and echoes both lists back), so it
- * settles on the ack too rather than sitting out the grace.
+ * An overlay's page rides the same `set_context` as the routed page (both are
+ * in `currentPageIds`, and the backend echoes the list back), so it settles on
+ * the ack too rather than sitting out the grace.
  */
 export function PageDataSettleGate({
   pageId,
-  kind = 'page',
   children,
 }: {
   pageId: string | undefined;
-  kind?: 'page' | 'dialog';
   children: ReactNode;
 }) {
-  const done = useVariableStore((s) => {
-    if (pageId === undefined) return false;
-    const ids = kind === 'dialog' ? s.contextReadyDialogIds : s.contextReadyPageIds;
-    return ids.includes(pageId);
-  });
+  const done = useVariableStore(
+    (s) => pageId !== undefined && s.contextReadyPageIds.includes(pageId),
+  );
   return (
     <DataSettleGate settleKey={pageId} done={done}>
       {children}

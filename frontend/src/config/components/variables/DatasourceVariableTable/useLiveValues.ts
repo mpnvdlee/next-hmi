@@ -15,12 +15,7 @@ interface Params {
 }
 
 function sendPriorityContext(priorityKeys: string[]) {
-  sendWsMessage({
-    type: 'set_context',
-    currentPageIds: [],
-    openDialogIds: [],
-    priorityKeys,
-  });
+  sendWsMessage({ type: 'set_context', currentPageIds: [], priorityKeys });
 }
 
 function sameValues(a: Record<string, string>, b: Record<string, string>): boolean {

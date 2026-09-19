@@ -1,8 +1,8 @@
 import type { HmiWidgetProps, WidgetConfig } from '@shared/types/config';
-import type { ComponentPropertySchema } from '@shared/types/componentProperty';
 import { memo, useContext, useMemo } from 'react';
 import { useComponentStore, selectComponentById } from '@shared/store/componentStore';
 import { InputScopeContext } from '../context/InputScopeContext';
+import { withDeclaredDefaults } from '../utils/componentPropResolution';
 import { ComponentSlotContext } from '../context/ComponentSlotContext';
 import { DefinitionScopeContext } from '../context/DefinitionScopeContext';
 import { PreviewContext } from '@shared/context/PreviewContext';
@@ -65,30 +65,6 @@ function ComponentRenderer({
       </ComponentSlotContext.Provider>
     </InputScopeContext.Provider>
   );
-}
-
-/**
- * Fill in the declared default for every property the instance left unset.
- *
- * Without this a default is a lie: the properties panel prints it as the field's
- * `· default` hint and the components editor's preview mocks it in, while the
- * real page resolves `$componentProp` to nothing and the widget reading it
- * renders blank.
- *
- * `null` is a set value (an author clearing a field on purpose), so only
- * `undefined` falls through to the default.
- */
-function withDeclaredDefaults(
-  properties: Record<string, unknown> | undefined,
-  declared: Record<string, ComponentPropertySchema> | undefined,
-): Record<string, unknown> {
-  const merged = { ...(properties ?? {}) };
-  for (const [key, schema] of Object.entries(declared ?? {})) {
-    if (merged[key] === undefined && schema?.defaultValue !== undefined) {
-      merged[key] = schema.defaultValue;
-    }
-  }
-  return merged;
 }
 
 /**

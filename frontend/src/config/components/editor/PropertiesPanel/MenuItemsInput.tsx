@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { ActionsConfig, MenuItemConfig } from '@shared/types/config';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import { useConfigStore } from '@shared/store/configStore';
-import { flattenPages, resolvePageTitle } from '@shared/utils/pageTree';
+import { allPageRootNodes, flattenPages, resolvePageTitle } from '@shared/utils/pageTree';
 import Select from '@config/components/ui/Select';
 import PropRow from '@config/components/ui/PropRow';
 import FieldGroup from '@config/components/ui/FieldGroup';
@@ -116,9 +116,16 @@ interface Props {
 export default function MenuItemsInput({ value, onChange, title, description, pathPrefix }: Props) {
   const items = value ?? EMPTY_ITEMS;
   const pages = useConfigStore((s) => s.pages);
+  const dialogs = useConfigStore((s) => s.dialogs);
   const pageTitles = useMemo(
-    () => Object.fromEntries(flattenPages(pages).map((p) => [p.id, resolvePageTitle(p.title)])),
-    [pages],
+    () =>
+      Object.fromEntries(
+        flattenPages(allPageRootNodes({ pages, dialogs })).map((p) => [
+          p.id,
+          resolvePageTitle(p.title),
+        ]),
+      ),
+    [pages, dialogs],
   );
 
   // One item open at a time — the row itself hosts the editors, so expanding a

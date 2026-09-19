@@ -265,6 +265,9 @@ _RUNTIME_PUBLIC_ROUTES: dict[str, tuple[tuple[str, ...], ...]] = {
     "GET": (
         ("api", "config", "config"),
         ("api", "config", "pages", _ONE),
+        # Same document, other index root: an overlay's page is as public as a
+        # navigable one — the live view opens both without a session.
+        ("api", "config", "dialogs", _ONE),
         ("api", "config", "dictionaries"),
         ("api", "config", "translations"),
         ("api", "themes"),
@@ -315,6 +318,12 @@ def _is_gated(path: str, method: str = "GET", raw_path: str | None = None) -> bo
     if path == "/mcp" or path.startswith("/mcp/"):
         return False
     if path.startswith("/api/"):
+        return True
+    if path.lstrip("/") in _RUNTIME_PRIVATE_DOCS:
+        # The manager's own FastAPI instance leaves its interactive docs
+        # enabled at the same default paths it withholds for a proxied child
+        # above — they enumerate every gated endpoint's path, method and
+        # schema, and the manager binds every interface by default.
         return True
     parts = _proxy_parts(path)
     if parts is None:
@@ -755,7 +764,14 @@ async def _proxy_http_to_child(
         raise HTTPException(status_code=404)
     reason = _unavailable_reason(project_id)
     if reason is not None and _is_document_request(request):
-        if _render_instance_shell is not None:
+        # The shell's overlay only has something to show an operator who is
+        # already signed in — it probes ``/api/projects`` and
+        # ``/api/manager/running``, both gated. ``/runtime/<id>/`` is public
+        # (the live-view wall panel needs no session), so a session-less
+        # visitor would otherwise get a page whose every call 503s with
+        # nothing on screen; send them to the dashboard instead, same as a
+        # build with no bundle to render.
+        if _render_instance_shell is not None and _has_valid_session(request.cookies):
             return HTMLResponse(
                 _render_instance_shell(forwarded_prefix or f"/runtime/{project_id}/")
             )

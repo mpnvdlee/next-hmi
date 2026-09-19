@@ -84,7 +84,7 @@ leaving a half-initialised socket registered.
 | `restarting` | `{ type, reason }` | Right before the backend SIGTERMs itself for `POST /api/system/restart`. Clients disconnect and poll `/api/system/info` for the new process. |
 | `widget_updated` | `{ type, key, name, ts, schema_ok }` | A custom widget recompiled or was deleted; `key` is its normalized path relative to `custom-widgets/`. |
 | `config_changed` | see [config_changed](#config_changed) | After every MCP- or REST-driven config write. |
-| `context_ready` | `{ type, currentPageIds: [string, ...], openDialogIds: [string, ...] }` | Reply to `set_context`: every variable requested for `currentPageIds` **and** `openDialogIds` has been sent, from cache and/or a fresh OPC-UA read. Both id lists are echoed verbatim, so an open dialog settles on this ack rather than on the grace timer. The client does **not** hold the page for it — a page renders as soon as its config and widget modules are in memory — it uses the ack to decide when a binding that still has no value is genuinely without data, and only then marks it (amber "no data" overlay). A page whose ack never arrives falls back to a 3 s grace. The client should ignore any `context_ready` whose page-set **and** dialog-set don't both match its most recently sent `set_context` (a superseded navigation's background prefetch can still land late, and opening a dialog resends the context with the same page list). |
+| `context_ready` | `{ type, currentPageIds: [string, ...] }` | Reply to `set_context`: every variable requested for `currentPageIds` has been sent, from cache and/or a fresh OPC-UA read. The id list is echoed verbatim, so an overlay — whose resolved page id is in that list — settles on this ack rather than on the grace timer. The client does **not** hold the page for it — a page renders as soon as its config and widget modules are in memory — it uses the ack to decide when a binding that still has no value is genuinely without data, and only then marks it (amber "no data" overlay). A page whose ack never arrives falls back to a 3 s grace. The client should ignore any `context_ready` whose page-set doesn't match its most recently sent `set_context` (a superseded navigation's background prefetch can still land late, and opening an overlay resends the context with its page appended). |
 
 > Auto-login (`request_identity`) never carries a `requestId` in its
 > `user_identity`, so the client dispatcher does not confuse it with a `login`
@@ -92,30 +92,28 @@ leaving a half-initialised socket registered.
 
 ## Client → server messages
 
-- `set_context` — update active page / dialog context for fast-subscription
+- `set_context` — update active page / overlay context for fast-subscription
   priority and prime the per-client priority set.
 
   ```json
   {
     "type": "set_context",
-    "currentPageIds": ["home"],
-    "openDialogIds": ["confirmDialog"],
+    "currentPageIds": ["home", "motor-detail"],
     "priorityKeys": ["MyPLC:Motor1"]
   }
   ```
 
-  - `currentPageIds` is the only page-context key read. The older
-    `currentPageId` (single string) and `openOverlayPageIds` (array) were
-    removed, not deprecated — a frame still sending either carries no page
-    context and its bindings are never primed.
-  - Hard caps: `currentPageIds` ≤ 2000, `openDialogIds` ≤ 2000, `priorityKeys`
+  - `currentPageIds` is the only page-context key read. A frame sending
+    anything else in its place carries no page context, and its bindings are
+    never primed.
+  - Hard caps: `currentPageIds` ≤ 2000, `priorityKeys`
     ≤ 5000. Excess entries are dropped silently.
   - The backend resolves bindings from the runtime pages config (walking nested
     `$if` / `$switch` / `$compare` expressions for `$var` references) and updates
     OPC-UA fast subscriptions accordingly.
 
-  Current producers: `HmiView` (active page + dialog context), `PreviewView`
-  (preview page/dialog context), `DatasourceVariableTable` (explicit
+  Current producers: `HmiView` (active page + open overlays), `PreviewView`
+  (preview page/overlay context), `DatasourceVariableTable` (explicit
   `priorityKeys` for visible rows after scroll settle).
 
 - `write_field` — write a value to a variable.

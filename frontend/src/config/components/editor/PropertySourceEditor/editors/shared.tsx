@@ -26,7 +26,7 @@ import { ParentPathContext, useParentPath, withSegs } from '../parentPathContext
 import { primaryType } from '@shared/utils/valueTypes';
 import { useUsersDomainStore, type UserGroup } from '@config/store/domains/usersDomainStore';
 import { useConfigStore } from '@shared/store/configStore';
-import { flattenPages, resolvePageTitle } from '@shared/utils/pageTree';
+import { allPageRootNodes, flattenPages, resolvePageTitle } from '@shared/utils/pageTree';
 import {
   COMPARE_OPERAND_SCHEMA,
   OPERATORS,
@@ -270,6 +270,7 @@ export function CollapsedPreview({ value, fieldType }: { value: unknown; fieldTy
   const groups = useUsersDomainStore((s) => s.draft?.groups ?? s.data?.groups ?? EMPTY_GROUPS_LIST);
   const ensureGroupsLoaded = useUsersDomainStore((s) => s.ensureLoaded);
   const pages = useConfigStore((s) => s.pages);
+  const dialogs = useConfigStore((s) => s.dialogs);
   useEffect(() => {
     if (isRecord(value) && '$userGroups' in value) ensureGroupsLoaded();
   }, [value, ensureGroupsLoaded]);
@@ -278,8 +279,14 @@ export function CollapsedPreview({ value, fieldType }: { value: unknown; fieldTy
     [groups],
   );
   const pageTitles = useMemo(
-    () => Object.fromEntries(flattenPages(pages).map((p) => [p.id, resolvePageTitle(p.title)])),
-    [pages],
+    () =>
+      Object.fromEntries(
+        flattenPages(allPageRootNodes({ pages, dialogs })).map((p) => [
+          p.id,
+          resolvePageTitle(p.title),
+        ]),
+      ),
+    [pages, dialogs],
   );
   return (
     <PreviewText swatch={colorVal}>

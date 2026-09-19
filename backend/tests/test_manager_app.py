@@ -347,6 +347,7 @@ _RUNTIME_PUBLIC_CALLS = [
     ("GET", "widgets/Gauge/widget.json"),
     ("GET", "api/config/config"),
     ("GET", "api/config/pages/home"),
+    ("GET", "api/config/dialogs/motor-detail"),
     ("GET", "api/config/dictionaries"),
     ("GET", "api/config/translations"),
     ("GET", "api/config/translations?lang=nl"),
@@ -507,6 +508,15 @@ def test_runtime_child_api_docs_are_not_public(client: TestClient) -> None:
     assert client.get("/runtime/ghost/openapi.json").status_code == 401
     assert client.get("/runtime/ghost/docs").status_code == 401
     assert client.get("/runtime/ghost/redoc").status_code == 401
+
+
+def test_manager_own_api_docs_are_not_public(client: TestClient) -> None:
+    """The manager withholds a proxied child's docs (above); it must withhold
+    its own the same way — they enumerate every gated endpoint's path, method
+    and schema, and the manager binds every interface by default."""
+    assert client.get("/openapi.json").status_code == 401
+    assert client.get("/docs").status_code == 401
+    assert client.get("/redoc").status_code == 401
 
 
 def test_unauthenticated_editor_document_navigation_is_sent_to_sign_in(
@@ -780,6 +790,59 @@ def test_document_navigation_to_unopenable_project_is_served_the_project_shell(
             # An XHR under the same prefix keeps the machine-readable failure —
             # that 503 is what drives the overlay.
             assert tc.get(f"/{prefix}/ghost/api/health").status_code == 503
+    finally:
+        if prev is None:
+            os.environ.pop("NEXTHMI_FRONTEND_DIST", None)
+        else:
+            os.environ["NEXTHMI_FRONTEND_DIST"] = prev
+        frontend_serve.reset_render_cache()
+        importlib.reload(manager)
+
+
+def test_document_navigation_to_unopenable_project_without_a_session_is_sent_back_to_projects(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """The instance shell above only works for an operator who already has a
+    session: its overlay probes ``/api/projects`` and ``/api/manager/running``,
+    both gated, and swallows the 401. ``/runtime/<id>/`` is the one prefix
+    whose document is public (the live-view wall panel needs no session; the
+    editor equivalent is always gated and is sent to sign-in first, never
+    reaching this code), so serving that shell to a session-less visitor there
+    boots a page whose every call 503s with nothing on screen — the old
+    redirect to the dashboard at least lands somewhere."""
+    import importlib
+    import os
+
+    from services import frontend_serve
+
+    home_dir = tmp_path / "runtime-home"
+    home_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(runtime_home, "runtime_home_path", lambda: home_dir)
+    monkeypatch.setenv("NEXTHMI_DATA_DIR", str(home_dir))
+
+    dist = tmp_path / "dist"
+    (dist / "_app").mkdir(parents=True)
+    (dist / "index.html").write_text(
+        '<!doctype html><html><head></head><body><div id="root"></div></body></html>'
+    )
+    frontend_serve.reset_render_cache()
+
+    import manager
+
+    prev = os.environ.get("NEXTHMI_FRONTEND_DIST")
+    os.environ["NEXTHMI_FRONTEND_DIST"] = str(dist)
+    try:
+        manager = importlib.reload(manager)
+        monkeypatch.setattr(manager.project_resume, "prepare_running_set", lambda: None)
+        monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
+        monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
+        with TestClient(manager.app) as tc:
+            # No auth/setup call: this visitor carries no session cookie at all.
+            resp = tc.get(
+                "/runtime/ghost/", headers={"accept": "text/html"}, follow_redirects=False
+            )
+            assert resp.status_code == 303
+            assert resp.headers["location"] == "/projects?unavailable=ghost&reason=unknown"
     finally:
         if prev is None:
             os.environ.pop("NEXTHMI_FRONTEND_DIST", None)

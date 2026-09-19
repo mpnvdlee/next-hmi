@@ -153,6 +153,30 @@ def test_unpack_distinguishes_absent_components_dir_from_non_directory(tmp_path:
     assert "components#/: component storage is not a directory" in str(exc_info.value)
 
 
+def test_pack_carries_the_dialogs_directory(tmp_path: Path) -> None:
+    """The Dialogs folder keeps its page documents in their own directory, and a
+    project that travels without them arrives with every overlay empty."""
+    src = tmp_path / "proj"
+    _make_project(src)
+    (src / "pages").mkdir(exist_ok=True)
+    (src / "pages" / "home.json").write_text('{"id":"home","sections":{"content":[]}}')
+    (src / "dialogs").mkdir(exist_ok=True)
+    (src / "dialogs" / "motor-detail.json").write_text(
+        '{"id":"motor-detail","sections":{"content":[]}}'
+    )
+    zip_path = tmp_path / "proj.zip"
+
+    pack_project(src, zip_path)
+
+    with zipfile.ZipFile(zip_path) as zf:
+        assert "dialogs/motor-detail.json" in zf.namelist()
+
+    dst = tmp_path / "restored"
+    unpack_project(zip_path, dst)
+    assert (dst / "dialogs" / "motor-detail.json").exists()
+    assert (dst / "pages" / "home.json").exists()
+
+
 def test_pack_excludes_widget_build(tmp_path: Path) -> None:
     src = tmp_path / "src"
     _make_project(src)

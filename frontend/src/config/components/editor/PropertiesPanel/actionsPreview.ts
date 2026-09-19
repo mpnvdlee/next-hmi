@@ -8,25 +8,21 @@ export const ACTION_TYPES = [
     type: 'openDialog' as const,
     label: 'Open Dialog',
     category: 'Screens',
-    description: 'Opens a dialog, optionally passing input properties its widgets read.',
-  },
-  {
-    type: 'closeDialog' as const,
-    label: 'Close Dialog',
-    category: 'Screens',
-    description: 'Closes a named dialog, or the top-most one when left empty.',
+    description:
+      'Opens a page or page group from the Dialogs folder as a modal on top of the current screen, passing it input parameters.',
   },
   {
     type: 'openPageOverlay' as const,
-    label: 'Open Page Overlay',
+    label: 'Open Page As Overlay',
     category: 'Screens',
-    description: 'Opens a page or page group as a modal on top of the current screen.',
+    description:
+      'Opens a navigable page or page group as a modal on top of the current screen.',
   },
   {
     type: 'closePageOverlay' as const,
-    label: 'Close Page Overlay',
+    label: 'Close Dialog/Overlay',
     category: 'Screens',
-    description: 'Closes a named page overlay, or the top-most one when left empty.',
+    description: 'Closes a named dialog or page overlay, or the top-most one when left empty.',
   },
   {
     type: 'writeDataVariable' as const,
@@ -88,8 +84,7 @@ export const ACTION_TYPES = [
  *  collapsed-summary keyword so the row reads with one consistent tint (same
  *  rule the property-panel sandbox uses: keyword color == badge color). */
 export const ACTION_TYPE_TINT: Record<ButtonAction['type'], string> = {
-  openDialog: 'if',
-  closeDialog: 'static',
+  openDialog: 'componentProp',
   openPageOverlay: 'page',
   closePageOverlay: 'static',
   writeDataVariable: 'var',

@@ -798,7 +798,49 @@
                                             "placement": "center",
                                             "backdrop": "dim"
                                           }
+                                        ],
+                                        "onFailed": [
+                                          {
+                                            "type": "showToast",
+                                            "message": {
+                                              "$stringExpr": {
+                                                "template": "{1}: {2}",
+                                                "wildcards": {
+                                                  "1": {
+                                                    "$loc": "Write failed"
+                                                  },
+                                                  "2": {
+                                                    "$result": "reason"
+                                                  }
+                                                }
+                                              }
+                                            },
+                                            "severity": "error",
+                                            "discard": "auto",
+                                            "duration": 4000
+                                          }
                                         ]
+                                      }
+                                    ],
+                                    "onFailed": [
+                                      {
+                                        "type": "showToast",
+                                        "message": {
+                                          "$stringExpr": {
+                                            "template": "{1}: {2}",
+                                            "wildcards": {
+                                              "1": {
+                                                "$loc": "Write failed"
+                                              },
+                                              "2": {
+                                                "$result": "reason"
+                                              }
+                                            }
+                                          }
+                                        },
+                                        "severity": "error",
+                                        "discard": "auto",
+                                        "duration": 4000
                                       }
                                     ]
                                   }

@@ -128,27 +128,14 @@
                       "typography": "caption",
                       "color": "var(--hmi-warn)",
                       "visible": {
-                        "$switch": {
-                          "value": {
+                        "$compare": {
+                          "left": {
                             "$var": {
                               "path": "Brew:Wizard/BeanType"
                             }
                           },
-                          "cases": [
-                            {
-                              "when": "espresso",
-                              "then": false
-                            },
-                            {
-                              "when": "filter",
-                              "then": false
-                            },
-                            {
-                              "when": "decaf",
-                              "then": false
-                            }
-                          ],
-                          "default": true
+                          "operator": "===",
+                          "right": ""
                         }
                       }
                     },
@@ -239,27 +226,14 @@
                   "showNext": true,
                   "prevEnabled": true,
                   "nextEnabled": {
-                    "$switch": {
-                      "value": {
+                    "$compare": {
+                      "left": {
                         "$var": {
                           "path": "Brew:Wizard/BeanType"
                         }
                       },
-                      "cases": [
-                        {
-                          "when": "espresso",
-                          "then": true
-                        },
-                        {
-                          "when": "filter",
-                          "then": true
-                        },
-                        {
-                          "when": "decaf",
-                          "then": true
-                        }
-                      ],
-                      "default": false
+                      "operator": "!==",
+                      "right": ""
                     }
                   }
                 },

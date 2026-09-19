@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useHmiStore } from '@hmi/store/hmiStore';
-import type { WidgetConfig, PageConfig, PageGroupConfig, DialogConfig } from '@shared/types/config';
+import type { WidgetConfig, PageConfig, PageGroupConfig } from '@shared/types/config';
 import { copyTreeNode, pasteToast, readTreeNodeFromClipboard, regenerateIds } from './clipboardOps';
 
 function stubClipboard() {
@@ -39,7 +39,7 @@ describe('copyTreeNode', () => {
     const { writeText } = stubClipboard();
     writeText.mockRejectedValueOnce(new Error('denied'));
 
-    await copyTreeNode({ kind: 'dialog', node: { id: 'd1', title: 'D', widgets: [] } });
+    await copyTreeNode({ kind: 'widget', node: { id: 'w1', type: 'Button', name: 'B' } });
 
     expect(useHmiStore.getState().pendingToasts[0]).toMatchObject({
       severity: 'error',
@@ -52,7 +52,7 @@ describe('copyTreeNode', () => {
     // point the operator at a permission prompt that cannot fix it.
     Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
 
-    await copyTreeNode({ kind: 'dialog', node: { id: 'd1', title: 'D', widgets: [] } });
+    await copyTreeNode({ kind: 'widget', node: { id: 'w1', type: 'Button', name: 'B' } });
 
     expect(useHmiStore.getState().pendingToasts[0]).toMatchObject({
       severity: 'error',
@@ -127,16 +127,6 @@ describe('readTreeNodeFromClipboard', () => {
     const result = await readTreeNodeFromClipboard();
 
     expect(result?.kind).toBe('page-group');
-  });
-
-  it('classifies a dialog node by its title + widgets shape', async () => {
-    const { readText } = stubClipboard();
-    const dialog = { id: 'd1', title: 'Dialog', widgets: [] };
-    readText.mockResolvedValueOnce(JSON.stringify(dialog));
-
-    const result = await readTreeNodeFromClipboard();
-
-    expect(result?.kind).toBe('dialog');
   });
 });
 
@@ -220,23 +210,6 @@ describe('regenerateIds', () => {
     expect(result.node.children).toHaveLength(2);
     expect(result.node.children[0].id).not.toBe('page-1');
     expect(result.node.children[1].id).not.toBe('group-2');
-  });
-
-  it('assigns a fresh id to a dialog and regenerates its widget ids', () => {
-    const dialog: DialogConfig = {
-      id: 'dialog-1',
-      title: 'Confirm',
-      widgets: [{ id: 'w1', type: 'Button', name: 'Confirm' }],
-    };
-    const taken = new Set(['dialog-1']);
-
-    const result = regenerateIds({ kind: 'dialog', node: dialog }, taken) as {
-      kind: 'dialog';
-      node: DialogConfig;
-    };
-
-    expect(result.node.id).not.toBe('dialog-1');
-    expect(result.node.widgets[0].id).not.toBe('w1');
   });
 });
 

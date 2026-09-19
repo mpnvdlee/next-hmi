@@ -32,10 +32,10 @@ export default function ContextMenu({ menu, onClose, onAction }: ContextMenuProp
   const addWidgetItem = btn('Add Widget/Component…', 'openWidgetSelector');
 
   const items: ReactNode[] = [];
-  if (menu.kind === 'pages-root') {
+  if (menu.kind === 'pages-root' || menu.kind === 'dialogs-root') {
     items.push(
-      btn('Add Page', 'addPage'),
-      btn('Add Page Group', 'addPageGroup'),
+      btn(menu.kind === 'dialogs-root' ? 'Add Dialog' : 'Add Page', 'addPage'),
+      btn(menu.kind === 'dialogs-root' ? 'Add Dialog Group' : 'Add Page Group', 'addPageGroup'),
       sep('s1'),
       btn('Paste', 'paste'),
     );
@@ -66,19 +66,6 @@ export default function ContextMenu({ menu, onClose, onAction }: ContextMenuProp
       btn('Paste', 'paste'),
       sep('s3'),
       btn('Delete Page', 'deletePage', true),
-    );
-  } else if (menu.kind === 'dialog-page') {
-    items.push(
-      btn('Add Container', 'addContainer'),
-      addWidgetItem,
-      sep('s1'),
-      btn('Rename', 'rename'),
-      sep('s2'),
-      btn('Cut', 'cut'),
-      btn('Copy', 'copy'),
-      btn('Paste', 'paste'),
-      sep('s3'),
-      btn('Delete Dialog', 'deleteDialog', true),
     );
   } else if (
     menu.kind === 'page-section' ||

@@ -1,12 +1,13 @@
 import { createContext, useContext } from 'react';
 
 /**
- * Input-scope frame published by widgets and dialogs to their descendants.
- * `$componentProp` lookups read the innermost scope. A nested widget shadows the
- * surrounding dialog; an explicit pass-through via the widget's instance
- * properties is the way to forward outer values inward.
+ * Input-scope frame published by component instances and Dialogs-folder page
+ * overlays to their descendants. `$componentProp` lookups read the innermost
+ * scope. A nested component instance shadows the surrounding overlay; an
+ * explicit pass-through via the instance's properties is the way to forward
+ * outer values inward.
  */
-interface InputScopeValue {
+export interface InputScopeValue {
   /** Resolved instance property values keyed by property name. */
   properties: Record<string, unknown>;
 }

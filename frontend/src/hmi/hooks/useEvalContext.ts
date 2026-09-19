@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useVariableStore } from '../store/variableStore';
 import { useTranslationStore } from '@shared/store/translationStore';
@@ -13,7 +13,12 @@ import { useRecipeStore } from '../store/recipeStore';
 import { useDeviceInfoStore } from '../store/deviceInfoStore';
 import { readHttpSource } from '../store/httpSourceStore';
 import { useConfigStore } from '@shared/store/configStore';
-import { findPagePath, resolvePageContext, resolvePageTitle } from '@shared/utils/pageTree';
+import {
+  allPageRootNodes,
+  findPagePath,
+  resolvePageContext,
+  resolvePageTitle,
+} from '@shared/utils/pageTree';
 import type { PagePathSegment } from '@shared/types/config';
 import type { EvaluationContext, ResolvedValue } from '../utils/propertySourceEval';
 import { useViewport, getViewportSnapshot } from './useViewport';
@@ -49,6 +54,13 @@ export function useEvalContext(): EvaluationContext {
   // via getState()/getViewportSnapshot() inside resolvers — keeps the evalCtx
   // reference stable so downstream useMemos don't invalidate on every tick.
   const pages = useConfigStore((s) => s.pages);
+  // Subscribed so a title or breadcrumb edit in the Dialogs folder reaches the
+  // widgets bound to `$page`, and held in a ref so the resolvers below read the
+  // current roots without the memo having to churn on every page edit — the
+  // same split the other resolvers make with `getState()`.
+  const dialogs = useConfigStore((s) => s.dialogs);
+  const pageRootsRef = useRef({ pages, dialogs });
+  pageRootsRef.current = { pages, dialogs };
   useViewport();
 
   const activePageId = useMemo(() => {
@@ -120,19 +132,24 @@ export function useEvalContext(): EvaluationContext {
         resolveRecipeList: (typeId) => useRecipeStore.getState().getList(typeId),
 
         resolvePagePath: (pageId) => {
-          const target = pageId ?? activePageId;
+          const target = pageId ?? hostPageId;
           if (!target) return [];
-          const trail = findPagePath(useConfigStore.getState().pages, target);
+          // Both roots: an overlay of the Dialogs folder publishes its own page
+          // as the host, and that page is not in the navigable tree.
+          const trail = findPagePath(allPageRootNodes(pageRootsRef.current), target);
           return trail.map((n) => ({
             id: n.id,
             label: pageBreadcrumbLabel(n) ?? resolvePageTitle(n.title),
           }));
         },
 
+        // Defaults to the page being rendered, not the route's: a page overlay
+        // renders a page without touching the URL, so keying on the route would
+        // report the host page behind the overlay throughout it.
         resolvePage: (field, pageId, separator): ResolvedValue => {
-          const target = pageId ?? activePageId;
+          const target = pageId ?? hostPageId;
           if (!target) return null;
-          const trail = findPagePath(useConfigStore.getState().pages, target);
+          const trail = findPagePath(allPageRootNodes(pageRootsRef.current), target);
           if (trail.length === 0) return null;
           const node = trail[trail.length - 1];
           const meta = node as unknown as Record<string, unknown>;

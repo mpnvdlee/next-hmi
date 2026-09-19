@@ -4,8 +4,8 @@
  * Right-clicking in the preview picks the same node a left-click would select,
  * so the insertion target is derived from that node: a container hosts the new
  * widget itself, anything else hands off to whatever holds it (a container, a
- * page section, a shell area, a dialog, a page-group's chrome). With nothing
- * under the cursor the area currently shown in the preview takes it.
+ * page section, a shell area, a page-group's chrome). With nothing under the
+ * cursor the area currently shown in the preview takes it.
  */
 
 import type { AllAreas } from '@shared/store/configStoreHelpers';
@@ -22,7 +22,12 @@ import {
   shellSectionIdForRegion,
   type ShellRegionId,
 } from '@shared/types/config';
-import { findPageNodeById, isPageGroup, resolvePageTitle } from '@shared/utils/pageTree';
+import {
+  allPageRootNodes,
+  findPageNodeById,
+  isPageGroup,
+  resolvePageTitle,
+} from '@shared/utils/pageTree';
 import { findParentInfo } from '../WidgetTree/treeUtils';
 import { findWidgetEverywhere, kindForSelectedId } from '../WidgetTree/clipboardDispatch';
 import type { NodeKind } from '../WidgetTree/types';
@@ -35,14 +40,8 @@ export interface PreviewInsertTarget {
 }
 
 function pageTitleOf(project: AllAreas, pageId: string): string {
-  const node = findPageNodeById(project.pages, pageId);
+  const node = findPageNodeById(allPageRootNodes(project), pageId);
   return node ? resolvePageTitle(node.title) : pageId;
-}
-
-function dialogTarget(project: AllAreas, dialogId: string): PreviewInsertTarget | null {
-  const dialog = project.dialogs.find((d) => d.id === dialogId);
-  if (!dialog) return null;
-  return { kind: 'dialog-page', nodeId: dialog.id, name: resolvePageTitle(dialog.title) };
 }
 
 function areaTarget(region: ShellRegionId): PreviewInsertTarget {
@@ -83,8 +82,6 @@ function parentTarget(project: AllAreas, widgetId: string): PreviewInsertTarget 
       return containerTarget(project, parent.parent.id, parent.siblings[parent.index]?.slot);
     case 'shell-area':
       return areaTarget(parent.region);
-    case 'dialog':
-      return dialogTarget(project, parent.dialogId);
     case 'page-section':
       return {
         kind: 'page-section',
@@ -102,13 +99,12 @@ function parentTarget(project: AllAreas, widgetId: string): PreviewInsertTarget 
   }
 }
 
-/** The area the preview is currently showing: a shell region, a dialog, or a page. */
+/** The area the preview is currently showing: a shell region or a page, in
+ *  either page-tree root. */
 function previewAreaTarget(project: AllAreas, previewAreaId: string): PreviewInsertTarget | null {
   const region = regionForShellSectionId(previewAreaId);
   if (region) return areaTarget(region);
-  const dialog = dialogTarget(project, previewAreaId);
-  if (dialog) return dialog;
-  const page = findPageNodeById(project.pages, previewAreaId);
+  const page = findPageNodeById(allPageRootNodes(project), previewAreaId);
   if (page && !isPageGroup(page)) {
     return { kind: 'page', nodeId: page.id, name: resolvePageTitle(page.title) };
   }
@@ -128,8 +124,6 @@ export function resolvePreviewInsertTarget(
       return parentTarget(project, resolved.nodeId) ?? previewAreaTarget(project, previewAreaId);
     case 'page':
       return { kind: 'page', nodeId: resolved.nodeId, name: pageTitleOf(project, resolved.nodeId) };
-    case 'dialog-page':
-      return dialogTarget(project, resolved.nodeId);
     case 'area':
       return areaTarget(resolved.nodeId as ShellRegionId);
     default:

@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState, type ComponentType, type ReactNode } from 'react';
+import { useContext, useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import type { BindingPickMetadata } from '@config/store/domains/editorDomainStore';
 import {
@@ -8,14 +8,8 @@ import {
   writeDescriptorNeedsRefresh,
 } from '@config/utils/variableType';
 import { useConfigStore } from '@shared/store/configStore';
-import { flattenPages, resolvePageTitle } from '@shared/utils/pageTree';
-import type {
-  ActionsConfig,
-  ButtonAction,
-  DialogConfig,
-  PageConfig,
-  VariableBinding,
-} from '@shared/types/config';
+import { flattenPageNodes, resolvePageTitle } from '@shared/utils/pageTree';
+import type { ActionsConfig, ButtonAction, VariableBinding } from '@shared/types/config';
 import { bindingParts } from '@shared/types/config';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import Select from '@config/components/ui/Select';
@@ -33,7 +27,12 @@ import {
   actionTypeLabel,
 } from './actionsPreview';
 import { getDefaultValueForKind, makeDefaultAction } from './actionMutations';
-import { ACTION_EDITORS, type ActionEditorCtx } from './actionEditors';
+import {
+  ACTION_EDITORS,
+  findOverlayTarget,
+  type ActionEditorCtx,
+  type OverlayTargets,
+} from './actionEditors';
 import ActionTypeDrawer from './ActionTypeDrawer';
 
 const BROWSE_ACTIONS = '__browse';
@@ -75,7 +74,16 @@ export default function ActionsInput({
 }: Props) {
   const pages = useConfigStore((s) => s.pages);
   const dialogs = useConfigStore((s) => s.dialogs);
-  const allPages = flattenPages(pages);
+  // Each overlay action names a page or a page group: Open Dialog from the
+  // Dialogs root, Open Page As Overlay from `pages`, Close Dialog/Overlay from
+  // either.
+  // Memoised: this renders once per action field — and the page-events section
+  // adds two more per page panel — so an unmemoised pair of full page-tree
+  // flattens would run on every keystroke, times the number of mounted rows.
+  const overlayTargets: OverlayTargets = useMemo(
+    () => ({ dialogs: flattenPageNodes(dialogs), pages: flattenPageNodes(pages) }),
+    [dialogs, pages],
+  );
   const openBindingPicker = useEditorDomainStore((s) => s.openBindingPicker);
   const actions =
     (value as Record<string, ButtonAction[] | undefined> | undefined)?.[eventKey] ?? [];
@@ -89,7 +97,7 @@ export default function ActionsInput({
   }
 
   function addAction(type: string) {
-    const next = makeDefaultAction(type, { dialogs, allPages });
+    const next = makeDefaultAction(type, { overlayTargets });
     if (!next) return;
     const idx = actions.length;
     update([...actions, next]);
@@ -239,8 +247,7 @@ export default function ActionsInput({
           idx={idx}
           pathPrefix={effectivePathPrefix}
           eventKey={eventKey}
-          dialogs={dialogs}
-          allPages={allPages}
+          overlayTargets={overlayTargets}
           dataTypes={dataTypes}
           openBindingPicker={openBindingPicker}
           onUpdate={(patch) => updateAction(idx, patch)}
@@ -267,13 +274,9 @@ export default function ActionsInput({
 /** One-line collapsed summary per action type — shown when the row's
  *  tier-3 FieldGroup is collapsed, same role as CollapsedPreview for
  *  expression fields. */
-function actionSummaryText(
-  action: ButtonAction,
-  dialogs: DialogConfig[],
-  allPages: PageConfig[],
-): ReactNode {
+function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets): ReactNode {
   const tint = ACTION_TYPE_TINT[action.type];
-  // Keyword renders in the action's tint; a named value (dialog title, dataset
+  // Keyword renders in the action's tint; a named value (page title, dataset
   // id, username, …) is user data, not a keyword, so it stays plain — same
   // split property previews make between structural words and interpolated
   // values (see previewNodes).
@@ -286,19 +289,15 @@ function actionSummaryText(
   );
   switch (action.type) {
     case 'openDialog': {
-      const d = dialogs.find((x) => x.id === action.dialogId);
-      return d ? K('Open', d.title) : K('Open dialog');
-    }
-    case 'closeDialog': {
-      const d = dialogs.find((x) => x.id === action.dialogId);
-      return d ? K('Close', d.title) : K('Close top-most dialog');
+      const p = findOverlayTarget(overlayTargets, action.pageId)?.node;
+      return p ? K('Open dialog', resolvePageTitle(p.title)) : K('Open dialog');
     }
     case 'openPageOverlay': {
-      const p = allPages.find((x) => x.id === action.pageId);
+      const p = findOverlayTarget(overlayTargets, action.pageId)?.node;
       return p ? K('Open', resolvePageTitle(p.title), ' overlay') : K('Open page overlay');
     }
     case 'closePageOverlay': {
-      const p = allPages.find((x) => x.id === action.pageId);
+      const p = findOverlayTarget(overlayTargets, action.pageId)?.node;
       return p ? K('Close', resolvePageTitle(p.title), ' overlay') : K('Close top-most overlay');
     }
     case 'writeDataVariable':
@@ -361,8 +360,7 @@ function ActionRow({
   idx,
   pathPrefix,
   eventKey,
-  dialogs,
-  allPages,
+  overlayTargets,
   dataTypes,
   openBindingPicker,
   onUpdate,
@@ -374,8 +372,7 @@ function ActionRow({
   idx: number;
   pathPrefix: string[];
   eventKey: string;
-  dialogs: DialogConfig[];
-  allPages: PageConfig[];
+  overlayTargets: OverlayTargets;
   dataTypes: Record<string, VariableWriteDescriptor>;
   openBindingPicker: ActionEditorCtx['openBindingPicker'];
   onUpdate: (patch: Partial<ButtonAction>) => void;
@@ -397,8 +394,7 @@ function ActionRow({
 
   const ctx: ActionEditorCtx = {
     update: onUpdate,
-    dialogs,
-    allPages,
+    overlayTargets,
     dataTypes,
     openBindingPicker,
     openWriteVarPicker: onOpenWriteVarPicker,
@@ -415,7 +411,7 @@ function ActionRow({
       drawerTitle={actionLabel}
       badge={<ActionTypeBadge type={action.type} />}
       kindLabel={<KindLabel>{actionLabel}</KindLabel>}
-      summary={<PreviewText>{actionSummaryText(action, dialogs, allPages)}</PreviewText>}
+      summary={<PreviewText>{actionSummaryText(action, overlayTargets)}</PreviewText>}
       actions={
         <button
           className="cfg-row-action-btn cfg-row-action-btn--stretch"

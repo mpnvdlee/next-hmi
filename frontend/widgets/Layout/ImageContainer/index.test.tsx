@@ -48,7 +48,6 @@ describe('ImageContainer', () => {
       opcuaConnected: {},
     });
     useHmiStore.setState({
-      openDialogs: [],
       openPageOverlays: [],
       currentUsersByScope: {},
       loginErrorsByScope: {},
@@ -112,7 +111,6 @@ describe('ImageContainer', () => {
 
   it('drops marker, slot, and stacked row for group-gated children', async () => {
     useHmiStore.setState({
-      openDialogs: [],
       openPageOverlays: [],
       currentUsersByScope: {
         'runtime:main': { username: 'op', groups: ['operator'], groupLabels: {} },

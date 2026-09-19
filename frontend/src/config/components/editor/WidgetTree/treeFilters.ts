@@ -8,7 +8,7 @@ import type {
 } from '@shared/types/config';
 import { SHELL_REGION_IDS, shellSectionIdForRegion } from '@shared/types/config';
 import { isContainerHostType, resolveWidgetMetadata } from '@hmi/registry/widgetRegistry';
-import { isPageGroup, resolvePageTitle } from '@shared/utils/pageTree';
+import { allPageRootNodes, isPageGroup, resolvePageTitle } from '@shared/utils/pageTree';
 import { mapPageSections } from '@shared/utils/pageContent';
 import {
   EDITOR_NODE_IDS,
@@ -173,22 +173,17 @@ function collectPageGroupCollapsibleIds(group: PageGroupConfig): string[] {
 export function collectAllCollapsibleIds(
   pages: PageNode[],
   shell: ShellAreas,
-  dialogs: { id: string; widgets: WidgetConfig[] }[],
+  dialogs: PageNode[],
 ): string[] {
   const ids: string[] = [];
 
-  for (const node of pages) {
+  for (const node of allPageRootNodes({ pages, dialogs })) {
     if (isPageGroup(node)) ids.push(...collectPageGroupCollapsibleIds(node));
     else ids.push(...collectPageCollapsibleIds(node));
   }
 
   for (const region of SHELL_REGION_IDS) {
     ids.push(...collectContainerIds(shell[region]));
-  }
-
-  for (const dialog of dialogs) {
-    ids.push(dialog.id);
-    ids.push(...collectContainerIds(dialog.widgets));
   }
 
   return ids;
@@ -245,7 +240,7 @@ export function findRevealTarget(
   selectedId: string,
   pages: PageNode[],
   shell: ShellAreas,
-  dialogs: { id: string; widgets: WidgetConfig[] }[],
+  dialogs: PageNode[],
 ): RevealTarget | null {
   if (selectedId === EDITOR_NODE_IDS.EVENTS) return null;
   if (selectedId === EDITOR_NODE_IDS.PAGES)
@@ -262,18 +257,11 @@ export function findRevealTarget(
     if (ancestors) return { sectionId: shellSectionIdForRegion(region), expandIds: ancestors };
   }
 
-  for (const dialog of dialogs) {
-    if (dialog.id === selectedId) {
-      return { sectionId: EDITOR_NODE_IDS.DIALOGS, expandIds: [] };
-    }
-    const dialogAncestors = findComponentAncestors(dialog.widgets, selectedId);
-    if (dialogAncestors) {
-      return { sectionId: EDITOR_NODE_IDS.DIALOGS, expandIds: [dialog.id, ...dialogAncestors] };
-    }
-  }
-
   const pageAncestors = findInPages(pages, selectedId);
   if (pageAncestors) return { sectionId: EDITOR_NODE_IDS.PAGES, expandIds: pageAncestors };
+
+  const dialogAncestors = findInPages(dialogs, selectedId);
+  if (dialogAncestors) return { sectionId: EDITOR_NODE_IDS.DIALOGS, expandIds: dialogAncestors };
 
   return null;
 }
