@@ -758,25 +758,6 @@ def test_post_validate_shell_region_nested_expression(client):
     assert diagnostic["nested"] is True
 
 
-def test_post_validate_page_shell_override_belongs_to_its_page(client):
-    """A page's shellOverride is edited in that page's own panel, so the page
-    owns the finding and the region stays in the field path — the page panel
-    shows all four regions and their field names would otherwise collide."""
-    draft = {
-        "id": "home",
-        "shellOverride": {"footer": {"overlay": {"$var": {"path": "Missing:Flag"}}}},
-        "sections": {},
-    }
-    resp = client.post("/api/config/validate", json={"kind": "page", "draft": draft})
-    assert resp.status_code == 200
-    diagnostic = next(d for d in resp.json()["diagnostics"] if d["code"] == "var-unknown")
-    assert diagnostic["widgetId"] == "home"
-    assert diagnostic["propKey"] == "overlay"
-    assert diagnostic["fieldPath"] == ["footer", "overlay"]
-    assert diagnostic["nested"] is False
-    assert diagnostic["breadcrumb"] == "Shell override › Footer › overlay"  # noqa: RUF001
-
-
 def test_post_validate_shell_default_state_enum(client):
     draft = {"shell": {"header": {"defaultState": "sideways"}}}
     resp = client.post("/api/config/validate", json={"kind": "shell", "draft": draft})

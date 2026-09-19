@@ -226,7 +226,7 @@ function insertWidgetSiblingAfter(
       // so the paste lands in the slot the target sits in, not the first one.
       const target = parent.siblings[parent.index];
       const slotted = target?.slot ? { ...newWidget, slot: target.slot } : newWidget;
-      store.reorderChildren(parent.parentId, spliceAfter(parent.siblings, parent.index, slotted));
+      store.reorderChildren(parent.parent.id, spliceAfter(parent.siblings, parent.index, slotted));
       return true;
     }
     case 'shell-area':

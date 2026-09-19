@@ -1,15 +1,11 @@
 /**
- * Shared binding-validation utilities used by both the runtime overlay
- * (ComponentRenderer) and the editor properties panel (PropertiesPanel).
+ * "Is this variable binding compatible with this schema field?" — one answer for
+ * both the runtime overlay (ComponentRenderer) and the editor panel, so the
+ * editor's ! indicator and the HMI's red cross always agree.
  *
- * The single source of truth for "is this variable binding compatible with
- * this schema field?" lives here, so the editor's ! indicator and the HMI's
- * red-cross overlay always agree.
- *
- * The overlay variants split by cause: red for a binding that is *wrong*
- * (unknown variable, incompatible type) and amber for one that is merely
- * without data (datasource down, or a value that never arrived). Only the red
- * one is a config error; the amber ones resolve themselves when data lands.
+ * The variants split by cause: red for a binding that is *wrong* (unknown
+ * variable, incompatible type), amber for one merely without data (datasource
+ * down, value never arrived). Only red is a config error.
  */
 
 import { getPropBinding } from '../components/layoutUtils';
@@ -60,18 +56,15 @@ export type BindingStatus = 'ok' | 'disabled' | 'disconnected' | 'nodata';
 /**
  * Convert a component's property map + schema into per-field BindingSpecs.
  *
- * A property whose whole value is a `$var` is checked against its schema slot's
- * type. Every *other* variable the widget puts on screen — one nested inside a
+ * A property whose whole value is a `$var` is type-checked against its schema
+ * slot. Every *other* variable the widget puts on screen — nested in a
  * `$stringExpr` template, a `$compare` operand — is checked for presence only:
- * it has no slot of its own, so there is no declared type to validate against,
- * but a widget showing a variable that is dead or missing still has to say so.
- * Missing them is what let a KPI whose value came from a `$stringExpr` wildcard
- * keep rendering its last number with no mark at all.
+ * it has no slot, so no declared type, but a widget showing a dead variable
+ * still has to say so.
  *
- * "On screen" is the limit, and `extractRenderedVarKeys` is where it is drawn:
- * a variable that only appears in an action payload, in a `visible` condition,
- * or in the branch of an `$if`/`$switch` that lost decides nothing the viewer
- * can see, and marking the widget for it would be a mark with no referent.
+ * "On screen" is the limit, drawn by `extractRenderedVarKeys`: a variable that
+ * only appears in an action payload, a `visible` condition, or a losing
+ * `$if`/`$switch` branch would be a mark with no referent.
  */
 export function extractBindingSpecs(
   properties: Record<string, unknown> | undefined,
@@ -82,6 +75,11 @@ export function extractBindingSpecs(
   const covered = new Set<string>();
   const nested = new Set<string>();
   for (const key of Object.keys(properties)) {
+    // A gate key is excluded up front, ahead of the direct-binding match below:
+    // `visible: { $componentProp: … }` resolves to a plain `$var` once the
+    // instance supplies one, and that whole-value match must not mark it any
+    // more than the nested walk (gated by `isRenderedProperty` below) does.
+    if (isVisibilityGateProperty(key)) continue;
     const field = schema[key];
     const b = getPropBinding(properties, key);
     const id = b ? bindingKey(b) : '';
@@ -105,21 +103,15 @@ export function extractBindingSpecs(
 }
 
 /** Whether a property's variables reach the screen at all. An `actions` payload
- *  runs on press, and a visibility gate decides whether the widget renders
- *  rather than what it shows — a missing value in either is not something the
- *  viewer is looking at.
+ *  runs on press and a visibility gate decides whether the widget renders, so
+ *  neither is something the viewer is looking at. The gate keys come from the
+ *  pinned universal-property list so a third one added to the schema does not
+ *  silently start marking healthy widgets.
  *
- *  The gate keys come from the pinned universal-property list rather than being
- *  spelled out here: a third gate property added to the schema would otherwise
- *  start marking widgets that render correctly, and nothing would catch it.
- *
- *  A key the schema does not declare is not treated as rendered either. There
- *  is no way to tell what such a property does — and the case is not rare:
- *  `registerCustomWidget` falls back to a schema of just the visibility gates
- *  when the compiler could not read a widget's exports (`schemaError`), so
- *  every property on that widget lands here, `actions` included, and a press
- *  handler writing to a never-published variable would mark a widget that
- *  renders and works. Post-rename leftovers on a node hit the same path. */
+ *  A key the schema does not declare is not rendered either: `registerCustomWidget`
+ *  falls back to a gates-only schema when the compiler could not read a widget's
+ *  exports (`schemaError`), so every property on that widget lands here —
+ *  `actions` included — as do post-rename leftovers on a node. */
 function isRenderedProperty(key: string, field?: { type: string | string[] }): boolean {
   if (isVisibilityGateProperty(key)) return false;
   if (field === undefined) return false;
@@ -132,18 +124,13 @@ function isRenderedProperty(key: string, field?: { type: string | string[] }): b
 /**
  * Validate a single binding against store state.
  *
- * Shape/type validation is decided from the authoritative `varMeta[id].type`
- * — never from sniffing the live value's runtime shape. An indexed binding is
- * resolved to its element type first, so `EventCounters[3]` (an `Integer[]`
- * element) validates against a scalar `Integer` slot. A `struct[]` with zero
- * current elements is still valid (metadata carries the shape).
+ * Shape and type come from the authoritative `varMeta[id].type`, never from
+ * sniffing the live value: an indexed binding resolves to its element type
+ * first, so `EventCounters[3]` validates against a scalar `Integer` slot, and a
+ * `struct[]` with no elements yet is still valid.
  *
- * Returns:
- *  - `'ok'`      — binding is present and compatible with the schema field
- *  - `'invalid'` — binding is definitively wrong (wrong shape, missing, or type
- *                  mismatch); triggers the red-cross overlay / ! badge
- *  - `'pending'` — metadata says the binding is valid but no live value has
- *                  arrived yet; caller should treat as "data still loading"
+ * `'invalid'` is definitively wrong and raises the red cross; `'pending'` means
+ * the binding is sound but no value has arrived.
  */
 export function checkBindingSpec(
   spec: BindingSpec,
@@ -185,10 +172,8 @@ export function checkBindingSpec(
   return 'ok';
 }
 
-/**
- * Aggregate multiple BindingSpecs into a single component-level status.
- * Used by WidgetRenderer to decide whether to show the overlay and which variant.
- */
+/** Aggregate BindingSpecs into one component-level status — which overlay
+ *  variant `WidgetRenderer` shows, if any. */
 export function aggregateBindingStatus(
   bindingSpecs: BindingSpec[],
   s: BindingStoreSlice,
@@ -214,24 +199,20 @@ export function aggregateBindingStatus(
 
   if (allPresent) return 'ok';
 
-  // The variable exists and the binding is sound — no value has arrived for it.
-  // Not a config error, so never the red cross: amber, and only once the
-  // surrounding DataSettleGate says the load is over (see `useBindingStatus`),
-  // so a value still in flight is waited for rather than marked.
+  // Binding sound, no value yet. Not a config error, so amber — and only once
+  // the surrounding DataSettleGate says the load is over (`useBindingStatus`).
   return 'nodata';
 }
 
 // ── Component-level binding status hook ──────────────────────────────────────
 
 /**
- * Build a memoizing selector over `bindingSpecs`: the O(bindingSpecs.length)
- * `aggregateBindingStatus` recompute only runs when a store update actually
- * touched something a spec depends on (its value/meta, a referenced
- * datasource's opcua-connected flag, or the global ws/snapshot flags) —
- * unrelated store updates (e.g. another datasource entirely) return the
- * cached result without scanning bindingSpecs at all.
+ * Memoizing selector over `bindingSpecs`: the O(n) recompute runs only when a
+ * store update touched something a spec depends on (its value/meta, a referenced
+ * datasource's opcua flag, the global ws/snapshot flags). Any other update
+ * returns the cached result without scanning at all.
  *
- * `onRecompute` is test instrumentation only; production callers omit it.
+ * `onRecompute` is test instrumentation only.
  */
 export function createBindingStatusSelector(
   bindingSpecs: BindingSpec[],
@@ -284,16 +265,12 @@ export function createBindingStatusSelector(
 }
 
 /**
- * React hook — subscribes to the variable store and returns the aggregate
- * binding status for a set of BindingSpecs. Used by WidgetRenderer.
+ * The aggregate binding status for a widget's specs, as `WidgetRenderer` reads it.
  *
- * While the surrounding surface is still settling (`DataSettleGate`), a
- * 'nodata' answer is held at 'ok': a page reveals without waiting for its
- * variables, so every binding on it is momentarily valueless and marking there
- * would flash a mark over the whole page for the length of one OPC-UA read.
- * 'disabled' and 'disconnected' are not held — neither is a matter of timing.
- * The selector still runs, so the moment the window closes the mark is the live
- * answer, not a stale snapshot of it.
+ * While the surface is still settling (`DataSettleGate`), 'nodata' is held at
+ * 'ok': a page reveals without waiting for its variables, so marking there would
+ * flash a mark over the whole page for one OPC-UA read. The selector still runs,
+ * so the answer is live the moment the window closes.
  */
 export function useBindingStatus(
   properties: Record<string, unknown> | undefined,
@@ -303,11 +280,9 @@ export function useBindingStatus(
   const selector = useMemo(() => createBindingStatusSelector(bindingSpecs), [bindingSpecs]);
   const status = useVariableStore(selector);
   const settling = useDataSettling();
-  // Only the "no value yet" answer waits: it is the one the settle window
-  // exists for. A wrong binding is wrong whatever the datasource is doing, and
-  // a reconnect reopens this window — holding 'disconnected' here would clear
-  // every overlay on screen the instant the backend went down, which is the
-  // opposite of what that overlay is for.
+  // Only "no value yet" waits. A wrong binding is wrong whatever the datasource
+  // is doing, and a reconnect reopens this window — holding 'disconnected' would
+  // clear every overlay the instant the backend went down.
   return settling && status === 'nodata' ? 'ok' : status;
 }
 
@@ -315,10 +290,7 @@ export function useBindingStatus(
 
 const EMPTY_VAR = { $var: { path: '' } } as const;
 
-/**
- * Normalise a struct field value: if it already has a `$var` wrapper return it
- * as-is, otherwise return the empty default.
- */
+/** A struct field value with its `$var` wrapper, or the empty default. */
 export function structVarDefault(value: unknown): unknown {
   if (value && typeof value === 'object' && '$var' in (value as Record<string, unknown>)) {
     return value;

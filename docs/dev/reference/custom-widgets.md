@@ -146,7 +146,7 @@ The whitelist is whole-word matched against `frontend/src/shared/utils/nextHmiSd
 
 - Write components in `index.tsx`.
 - Do not import React, hooks, or internal app helpers — use the SDK globals listed below.
-- Use `selfLayoutStyle(layout)` on the outermost wrapper so the editor's layout fields (basis/grow/min-size/etc.) take effect.
+- Use `selfLayoutStyle(layout)` on the outermost wrapper so the editor's layout fields (Width/Height mode, Fill weight, min/max size, etc.) take effect.
 - Use `widgetColorStyle(color)` when a schema `color` field should override a default theme color.
 - Type declarations for the SDK live in `frontend/custom-widgets-sdk.d.ts`; copy or reference it from your project's `tsconfig` to get editor completion.
 
@@ -168,7 +168,7 @@ export default function MyWidget({ properties, layout }: HmiWidgetProps) {
 
 The canonical list of names exposed on `window.__nextHMI__` lives in `frontend/src/shared/utils/nextHmiSdkNames.ts`. Type signatures are in `frontend/custom-widgets-sdk.d.ts`.
 
-**SDK version:** `SDK_VERSION` in `nextHmiSdkNames.ts` (currently `1`) is versioned independently of the app itself. Bump it whenever an existing name is removed or renamed, or an existing function's signature or return shape changes incompatibly; a purely additive change (a new name) doesn't require a bump. Nothing reads this at runtime today — it exists so this doc, commit messages, and widget authors have one unambiguous number to reference for compatibility.
+**SDK version:** `SDK_VERSION` in `nextHmiSdkNames.ts` (currently `2`) is versioned independently of the app itself. Bump it whenever an existing name is removed or renamed, or an existing function's signature or return shape changes incompatibly; a purely additive change (a new name) doesn't require a bump. Nothing reads this at runtime today — it exists so this doc, commit messages, and widget authors have one unambiguous number to reference for compatibility.
 
 ### React primitives
 
@@ -327,7 +327,7 @@ hand-edited JSON or a `widgets` property wired to an ancestor.
 
 - `executeWidgetActions(actions, ctx?)` — runs an action array through the shared action pipeline. Optional `ctx` accepts `{ scope?, evalCtx? }` so you can run actions in a non-default scope or with a custom evaluation context.
 - `selfLayoutStyle(layout)` — converts the editor's layout config into a `style` object for the wrapper.
-- `containerLayoutStyle(layout)` — the `--container-*` half of the same layout, for a widget that declares `hostsChildren` and places its children itself. Pair it with a stylesheet resetting every `--container-*` it reads to `initial` — see the `hostsChildren` note under [Schema](#schema).
+- `containerLayoutProps(layout)` — the `--container-*` half of the same layout, plus the `data-flow-direction`/`data-flow-align` attributes that tell each child's own `widthMode`/`heightMode` which screen axis is main, for a widget that declares `hostsChildren` and places its children itself. Returns `{ style, 'data-flow-direction', 'data-flow-align' }` — spread the whole object onto whichever element is actually `display: flex`. That element must carry `hmi-component` (or `hmi-container`), which is where the shared layout barrier resets every `--container-*` and `--w-*`/`--h-*`. A host split across two elements can destructure instead — `style` onto the outer, class-carrying element and the two `data-flow-*` fields onto the inner one that actually flexes, since `--container-*` still reaches the inner element by ordinary CSS inheritance — see the `hostsChildren` note under [Schema](#schema). `style` still carries the four padding longhands (`paddingTop`/`Right`/`Bottom`/`Left`) if the layout sets them — a widget with its own padding should usually peel those back off before applying `style` to the flex-item element and reapply them one level in, the way `Container` does (see the note there): that element is also whatever a Fill-mode ancestor gives `flex-grow`/`flex-basis: 0`, and a border-box element's own padding sets a floor under that math, skewing a configured Fill weight — worse, *inconsistently*, whenever a sibling picks up a padding-free wrapper (e.g. `WidgetRenderer`'s binding/lock overlay) and this widget doesn't.
 - `widgetColorStyle(color)` — converts a hex / theme-token / `var(--…)` color string into a `style` object that sets the element's `backgroundColor`. Returns `{}` when the color is unset, so the element falls through to its CSS theme token (e.g. `background: var(--hmi-accent)`) and re-skins with the theme.
 - `useCssVar(name, fallback)` — reads a CSS custom property from the document root, subscribing to theme changes.
 - `withBase(path)` — prefixes a root-relative app path with the instance base, so the URL still resolves when the project is proxied under `/runtime/<slug>/` or `/editor/<slug>/`. Idempotent, and a no-op at the root base. Apply it to any URL you hand to `fetch`, an `<img src>` or an `<a href>` — the built-in `Trend Chart` wraps its `/api/historian/query` fetch in it.
@@ -697,7 +697,8 @@ Optional sibling exports:
 
 - `exportedProperties: ExportedProperty[]` — declares which runtime values this component publishes for sibling components to consume via `$widgetProp`. Extracted into the schema manifest like `schema`, so the editor's `$widgetProp` picker lists them without loading the module; it must be an array of objects each with a non-empty `key`, or the widget lands in the manifest with a `schemaError`.
 - `displayName: string` — the label shown in the palette, the widget tree and the properties panel header. The folder name stays the widget *type* that page files reference; export this when that type reads badly as a label, since a folder name cannot carry spaces (`StretchSpacer` → `Stretch Spacer`). Defaults to the folder name.
-- `hostsChildren: boolean` — declares that nodes of this type carry a `children` array. The editor then treats the widget as a container (drop target, collapse toggle, tree recursion, move target) and the renderer hands the already-rendered children in as the component's `children` prop. Read them with `React.Children`, and place them with `containerLayoutStyle(layout)` — pair that with a stylesheet resetting every `--container-*` it reads to `initial`, or a nested host inherits its parent's direction and gap. The built-in `Container` is the worked example.
+- `hostsChildren: boolean` — declares that nodes of this type carry a `children` array. The editor then treats the widget as a container (drop target, collapse toggle, tree recursion, move target) and the renderer hands the already-rendered children in as the component's `children` prop. Read them with `React.Children`, and place them with `containerLayoutProps(layout)` on the element that is actually `display: flex` — that element must carry `hmi-component` (or `hmi-container`), which is where the shared layout barrier in `hmi.css` resets every `--container-*` and `--w-*`/`--h-*`, and without it a nested host inherits its parent's direction and gap. The built-in `Container` is the worked example for the **split** form of this: its actual flex parent is `.hmi-container__content`, an inner element that carries neither class — only the outer `.hmi-container` does, and `--container-*` reaches the inner element by ordinary CSS inheritance, so only the class-carrying element needs it. `Container` also keeps its own configured padding off that outer element entirely, applying it instead to `.hmi-container__content` (and `.hmi-container__title`, when there is one) — see `containerLayoutProps` above for why.
+- `flowsChildren: boolean` — declares that those children are laid out with flexbox, off `containerLayoutProps`. Narrower than `hostsChildren`, and only meaningful with it: a host that pins its children to fixed slots (the built-in `ImageContainer`) hosts without flowing. Declaring it is what gives each child a resolvable main axis: the Layout panel offers them Hug/Fill/Fixed against it, and `hmi.css`'s flow-translation block reads each child's own axis-neutral `widthMode`/`heightMode` intent against whichever screen axis this host's own `data-flow-direction` says is main. Without it, a child's Fill/Hug intent applies against whatever ancestor is actually its flex parent, which may not be this one. Set it on any widget that arranges children in order (a row, a card, a grid).
 - `category: string` — the card category. Defaults to the widget's source folder, or `Other` for a flat widget.
 - `description: string` — a one-line summary shown on the widget's card in the editor's widget selector (the drawer opened via **Add Widget/Component…** on the tree context menu).
 - `icon: IconValue` — a structured built-in or custom icon, using the same value produced by the editor's icon picker. A built-in icon is `{ type: 'builtin', name: '<allowlist-id>' }`; a workspace SVG is `{ type: 'custom', path: 'icons/<file>.svg' }`. When omitted, custom widgets fall back to a generic puzzle-piece icon.
@@ -705,6 +706,7 @@ Optional sibling exports:
 ```tsx
 export const displayName = 'Analog Gauge';
 export const hostsChildren = false; // omit unless the widget hosts children
+export const flowsChildren = false; // and this too, if it flexes them
 export const category = 'Process';
 export const description = 'A round analog gauge with min/max and a value binding.';
 export const icon = { type: 'builtin', name: 'gauge' } as const;
@@ -737,7 +739,7 @@ A field's `type` is a **simple datatype** (`boolean`, `integer`, `float`, `strin
 
 All optional unless marked **required**.
 
-- `format` — refines a base type to upgrade its editor without changing the value; source rules still follow the **base type**. The full per-type format catalog (`string`: `url`/`multiline`/`password`/`select`/`length`/`spacing`/`direction`/`align`/`justify`/`page`; `float`: `percentage`; `boolean`: `toggle`/`visibility`/`enablement`/`wrap`) is in [../architecture/value-types.md](../architecture/value-types.md).
+- `format` — refines a base type to upgrade its editor without changing the value; source rules still follow the **base type**. The full per-type format catalog (`string`: `url`/`multiline`/`password`/`select`/`length`/`direction`/`align`/`justify`/`page`; `float`: `percentage`; `boolean`: `toggle`/`visibility`/`enablement`/`wrap`) is in [../architecture/value-types.md](../architecture/value-types.md).
 - `defaultValue` — value the editor inserts when the field is added or reset.
 - `placeholder` — empty-state hint (used by `string`, `integer`/`float`, `icon`, `image` inputs).
 - `min`, `max`, `step` — numeric input constraints (`integer` / `float`).

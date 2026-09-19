@@ -252,6 +252,23 @@ describe('WidgetRenderer', () => {
       expect(container.querySelector('.hmi-lock-wrapper')).not.toBeNull();
       expect(container.querySelector('.hmi-lock-wrapper')!.getAttribute('title')).toBeNull();
     });
+
+    // The wrapper takes over the flex-child role from the widget inside it,
+    // which still renders and still applies its own `width`/`height` from the
+    // same `layout` — so the wrapper must carry only the flex-child fields
+    // (flexGrow here) and never `width`/`height` too, or a percentage size
+    // resolves against the wrong box and the widget overflows its own wrapper.
+    it("does not double-apply width/height onto the lock wrapper around the widget's own", () => {
+      const { container } = renderNode({
+        ...lockedButton,
+        layout: { width: '50%', height: '80px', grow: 1 },
+      });
+
+      const wrapper = container.querySelector('.hmi-lock-wrapper') as HTMLElement;
+      expect(wrapper.style.width).toBe('');
+      expect(wrapper.style.height).toBe('');
+      expect(wrapper.style.flexGrow).toBe('1');
+    });
   });
 
   describe('render-error boundary', () => {

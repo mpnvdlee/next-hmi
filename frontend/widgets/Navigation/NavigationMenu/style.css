@@ -1,21 +1,12 @@
-/* Navigation sizing constants — not theme-driven. Read only by the rules in
-   this sheet, so they travel with it. */
-:root {
-  --hmi-nav-width: 200px;
-  --hmi-nav-width-collapsed: 48px;
-}
-
-/* Single class, unlike the other built-in widgets' host rules: this widget's
-   root is the `<nav>` and does not carry `.hmi-component`, so there is nothing
-   to chain to. It therefore also gets no `--self-*` reset and honours no
-   `selfLayoutStyle()` — the menu sizes itself from the rules below and from
-   the region it sits in. Deliberate: giving it the base class would change
-   how an authored menu sizes. */
+/* No width here on purpose. The root carries `.hmi-component` and
+   `selfLayoutStyle()`, so the menu sizes from the Layout panel like every other
+   widget — including the Hug the panel shows as the default, which a hard
+   `width: 100%` used to override whatever the author (or their container's
+   Align) asked for. */
 .hmi-navmenu {
   display: flex;
   flex-direction: column;
   gap: var(--hmi-space-tight);
-  width: 100%;
   background: transparent;
   overflow-y: auto;
   overflow-x: hidden;
@@ -23,17 +14,14 @@
   transition: width 0.2s ease;
 }
 
-/* Standalone fallback sidebar (rendered as the region's direct child when the
-   project defines no left sidebar) — there it owns its width and edge. As a
-   widget it fills the slot the author sized instead. */
+/* Sidebar chrome for a menu dropped straight into a shell region — a region
+   renders its widgets as its own DOM children, so this is the bare "menu is
+   the sidebar" shape. Chrome only: the width that used to live here pinned the
+   box against the Layout panel, which is the one thing this widget must not
+   do. */
 [data-region] > .hmi-navmenu {
-  width: var(--hmi-nav-width);
   background: var(--hmi-surface);
   border-right: 1px solid var(--hmi-border);
-}
-
-[data-region] > .hmi-navmenu.hmi-navmenu--collapsed {
-  width: var(--hmi-nav-width-collapsed);
 }
 
 .hmi-navmenu__toggle {
@@ -256,7 +244,6 @@
 /* ── Horizontal orientation (top-bar layout) ───────────────────────────── */
 .hmi-navmenu--horizontal {
   flex-direction: row;
-  width: 100%;
   height: auto;
   align-items: stretch;
   border-right: none;

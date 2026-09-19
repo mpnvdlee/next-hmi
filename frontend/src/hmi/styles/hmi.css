@@ -107,6 +107,18 @@
   flex: 1;
   padding: var(--hmi-main-padding, 0);
   background: var(--hmi-main-bg, white);
+  /* A flex column with a definite height, always — not only when the page has a
+     header or footer. `.hmi-page__content` is the one scrollport below this, and
+     it can only own the scrolling (and hand its children free space for a
+     `grow`) if every ancestor down to it has a definite height. Guarding this on
+     `:has(header/footer)` used to leave a plain page as nested auto-height
+     blocks, where `grow: 1` and `height: 100%` both silently did nothing.
+     Still `auto`, not `hidden`: a page routes its own overflow into
+     `.hmi-page__content`, but `.hmi-main` also renders things that are not a
+     page — the "no page" notice, the page-switch overlay — and clipping those
+     would leave no way to reach them. */
+  display: flex;
+  flex-direction: column;
   overflow: auto;
 }
 
@@ -138,26 +150,13 @@
   }
 }
 
-/* Single page layout. When showHeader/showFooter are off, the header/footer
-   blocks aren't rendered and the content section fills the viewport. When
-   either toggle is on, .hmi-main becomes a flex column so the header/footer
-   stay pinned while the content region scrolls. */
-.hmi-main:has(.hmi-page__header),
-.hmi-main:has(.hmi-page__footer) {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
+/* Single page layout. The optional header/footer blocks stay pinned and the
+   content region between them scrolls — the same shape whether or not those
+   toggles are on, so a widget's `Height: Fill` behaves identically on every
+   page. */
 .hmi-page {
   display: flex;
   flex-direction: column;
-  gap: var(--hmi-space-lg);
-}
-
-.hmi-page:has(> .hmi-page__header),
-.hmi-page:has(> .hmi-page__footer) {
-  gap: 0;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
@@ -168,38 +167,152 @@
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
+  /* Same gap the content region carries, and for the same reason: a Container
+     no longer brings a margin of its own, so without one two widgets dropped
+     into page chrome render flush against each other. */
+  gap: var(--hmi-space-lg);
 }
 
-.hmi-page:has(> .hmi-page__header) > .hmi-page__content,
-.hmi-page:has(> .hmi-page__footer) > .hmi-page__content {
+.hmi-page__content {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
   display: flex;
   flex-direction: column;
+  /* Unconditional, unlike the header/footer-only rule this replaces: the gap is
+     now the only thing spacing a page's top-level widgets, since a Container no
+     longer carries a margin of its own (see widgets/Layout/Container/style.css). */
   gap: var(--hmi-space-lg);
+}
+
+/* ── Flow translation ───────────────────────────────────────────
+   Each flex child emits its own two axes' flow-intent as axis-neutral custom
+   properties — `--w-*` for the screen's width axis, `--h-*` for height —
+   written by `selfLayoutStyle()` (layoutUtils.ts) from nothing but its own
+   `widthMode`/`heightMode`, with no idea which one its parent treats as main.
+   That is this block's job: read here, off the flex *parent*'s own
+   `data-flow-direction` (which screen axis is main) and `data-flow-align`
+   (whether an unset cross-axis child already stretches), never off the child.
+   A `$var`/`$switch`-bound `direction` just works — the runtime resolves it
+   like any other property source and writes the plain result into the
+   attribute (`containerLayoutProps` in layoutUtils.ts), so this rule sees the
+   same DOM state a literal `row`/`column` would have produced.
+   Three selector paths per rule, one per nesting depth, each matching any of
+   the four classes that can be the flex item: plain; the editor preview
+   (`.hmi-preview-node` is `display: contents`, so the actual flex item is the
+   element inside it); and a *second*, nested preview node — a `$component:`
+   instance in the editor gets one `.hmi-preview-node` for the instance
+   (`WidgetRenderer` for the `$component:` node itself) and another for the
+   definition's root widget (the recursive `WidgetRenderer` call
+   `ComponentRenderer` makes), so its root widget sits two `display: contents`
+   layers down, not one. The binding/lock wrapper is in the `:is()` list
+   because it is itself `position: relative`, so it — not the widget it wraps
+   — is the flex item; at each depth it needs the same declarations the plain
+   classes get, which is why one list covers both. That is more depth than the
+   shrink pins below need, since those only pin the plain and editor-preview
+   shapes. A component definition whose
+   own root is itself a `$component:` instance nests a third nothing-lost
+   `display: contents` layer this block does not reach — not a shape any
+   project actually builds today, but worth knowing if one ever does.
+   Placed before the shrink pins on purpose: both this block's rules and the
+   pins carry the same specificity (one attribute or `:is()` group, plus one
+   class), so for the one case they overlap — a Fill child inside page/page-
+   group chrome, which leaves `--w-shrink`/`--h-shrink` unset — the *later*
+   rule wins the tie. The pins must stay later so `flex-shrink: 0` keeps
+   beating this block's `var(--w-shrink, 1)` fallback there. */
+[data-flow-direction='row']
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
+[data-flow-direction='row']
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
+[data-flow-direction='row']
+  > .hmi-preview-node
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper) {
+  flex-grow: var(--w-grow, 0);
+  flex-basis: var(--w-basis, auto);
+  flex-shrink: var(--w-shrink, 1);
+}
+[data-flow-direction='column']
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
+[data-flow-direction='column']
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
+[data-flow-direction='column']
+  > .hmi-preview-node
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper) {
+  flex-grow: var(--h-grow, 0);
+  flex-basis: var(--h-basis, auto);
+  flex-shrink: var(--h-shrink, 1);
+}
+
+[data-flow-direction='row'][data-flow-align='stretch']
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
+[data-flow-direction='row'][data-flow-align='stretch']
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
+[data-flow-direction='row'][data-flow-align='stretch']
+  > .hmi-preview-node
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper) {
+  align-self: var(--h-alignself-stretch, auto);
+}
+[data-flow-direction='row']:not([data-flow-align='stretch'])
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
+[data-flow-direction='row']:not([data-flow-align='stretch'])
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
+[data-flow-direction='row']:not([data-flow-align='stretch'])
+  > .hmi-preview-node
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper) {
+  align-self: var(--h-alignself-notstretch, auto);
+}
+[data-flow-direction='column'][data-flow-align='stretch']
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
+[data-flow-direction='column'][data-flow-align='stretch']
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
+[data-flow-direction='column'][data-flow-align='stretch']
+  > .hmi-preview-node
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper) {
+  align-self: var(--w-alignself-stretch, auto);
+}
+[data-flow-direction='column']:not([data-flow-align='stretch'])
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
+[data-flow-direction='column']:not([data-flow-align='stretch'])
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
+[data-flow-direction='column']:not([data-flow-align='stretch'])
+  > .hmi-preview-node
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper) {
+  align-self: var(--w-alignself-notstretch, auto);
 }
 
 /* Pin direct children of header/content/footer to their declared sizes so a
    tall widget overflows the content region (which scrolls) instead of being
    shrunk by the flex column. Specificity bumped via the parent class to win
-   over `.hmi-component { flex-shrink: var(--self-shrink, 1) }` and the
-   container's own `flex-shrink: var(--self-shrink, 1)`.
+   over both the `.hmi-component, .hmi-container { flex: 0 1 auto; … }`
+   default further below and the flow-translation block above — an inline
+   `flexShrink` from a Hug/Fixed mode still wins over all three; this pin only
+   matters while nothing inline sets it (Fill, or no mode at all).
    The `> .hmi-preview-node > …` paths cover the editor preview, where
    WidgetRenderer wraps each widget in a `display: contents` node — the
-   actual flex item there is the inner `.hmi-component` / `.hmi-container`. */
-.hmi-page__header > .hmi-component,
-.hmi-page__header > .hmi-container,
-.hmi-page__header > .hmi-preview-node > .hmi-component,
-.hmi-page__header > .hmi-preview-node > .hmi-container,
-.hmi-page__content > .hmi-component,
-.hmi-page__content > .hmi-container,
-.hmi-page__content > .hmi-preview-node > .hmi-component,
-.hmi-page__content > .hmi-preview-node > .hmi-container,
-.hmi-page__footer > .hmi-component,
-.hmi-page__footer > .hmi-container,
-.hmi-page__footer > .hmi-preview-node > .hmi-component,
-.hmi-page__footer > .hmi-preview-node > .hmi-container {
+   actual flex item there is the inner `.hmi-component` / `.hmi-container`.
+   The second, two-preview-node path is the same `$component:` instance case
+   the flow-translation block above documents — a component placed directly
+   as a page's top-level child. */
+:is(.hmi-page__header, .hmi-page__content, .hmi-page__footer) > :is(.hmi-component, .hmi-container),
+:is(.hmi-page__header, .hmi-page__content, .hmi-page__footer)
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container),
+:is(.hmi-page__header, .hmi-page__content, .hmi-page__footer)
+  > .hmi-preview-node
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container) {
   flex-shrink: 0;
 }
 
@@ -209,8 +322,7 @@
    editor wrapper is excluded so authoring hit-testing/selection stays exact).
    `contain-intrinsic-size: auto <fallback>` makes the browser remember each
    widget's real size after first render, so the scrollbar stays stable. */
-.hmi-page__content > .hmi-component,
-.hmi-page__content > .hmi-container {
+.hmi-page__content > :is(.hmi-component, .hmi-container) {
   content-visibility: auto;
   contain-intrinsic-size: auto 48px;
 }
@@ -234,13 +346,8 @@
 
 /* Page-group shell — header/footer that wrap whichever sub-page is active.
    Same flex-pin pattern as the page layout so the active sub-page scrolls in
-   the middle while the group's chrome stays fixed. */
-.hmi-main:has(.hmi-page-group-shell) {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
+   the middle while the group's chrome stays fixed. (`.hmi-main` is already the
+   flex column every branch needs, so this only styles the shell itself.) */
 .hmi-page-group-shell {
   display: flex;
   flex-direction: column;
@@ -272,14 +379,11 @@
   flex-direction: column;
 }
 
-.hmi-page-group-shell__header > .hmi-component,
-.hmi-page-group-shell__header > .hmi-container,
-.hmi-page-group-shell__header > .hmi-preview-node > .hmi-component,
-.hmi-page-group-shell__header > .hmi-preview-node > .hmi-container,
-.hmi-page-group-shell__footer > .hmi-component,
-.hmi-page-group-shell__footer > .hmi-container,
-.hmi-page-group-shell__footer > .hmi-preview-node > .hmi-component,
-.hmi-page-group-shell__footer > .hmi-preview-node > .hmi-container {
+:is(.hmi-page-group-shell__header, .hmi-page-group-shell__footer)
+  > :is(.hmi-component, .hmi-container),
+:is(.hmi-page-group-shell__header, .hmi-page-group-shell__footer)
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container) {
   flex-shrink: 0;
 }
 
@@ -303,32 +407,82 @@
 .hmi-component {
   color: var(--hmi-text);
   font-family: var(--hmi-type-body-font);
+}
 
-  /* Self-layout barrier. Custom properties INHERIT, and `selfLayoutStyle()`
-     only emits the fields the author actually set — so without this reset a
-     widget inside a container with `grow: 1` would inherit that grow and
-     silently ignore its own (unset) default of 0. `initial` on a custom
-     property is the guaranteed-invalid value, which makes each `var()` below
-     fall back to its documented default; the widget's own inline style still
-     wins, because inline declarations beat this rule.
-     Every `--self-*` consumed anywhere must be listed here — see the
-     completeness guard in layoutUtils.test.ts. */
-  --self-basis: initial;
-  --self-grow: initial;
-  --self-shrink: initial;
-  --self-align: initial;
-  --self-min-width: initial;
-  --self-max-width: initial;
-  --self-min-height: initial;
+/* ── Layout barrier ─────────────────────────────────────────── */
+/* Plain CSS defaults for every self-layout root the flow-translation block
+   above (or its shrink-pin neighbour below) can treat as a flex item:
+   `.hmi-component` (every widget but the Container), `.hmi-container` (the
+   Container's own root), and the binding/lock wrappers that take over the
+   flex-item role for a widget whose binding is unavailable or that is
+   locked. `selfLayoutStyle()` / `selfFlexChildStyle()` / `containerLayoutProps()`
+   (layoutUtils.ts) set `width`/`height`/min/max and the pre-size-mode raw flex
+   fields directly as inline style whenever the author set a value — inline
+   always wins over this rule regardless of specificity, so an unset field
+   simply falls through to the default below. Those don't need resetting: a
+   plain CSS property never inherits into a nested widget. The custom-property
+   half below does. */
+.hmi-component,
+.hmi-container,
+.hmi-binding-wrapper,
+.hmi-lock-wrapper {
+  /* A node using the size-mode system instead emits `--w-*`/`--h-*` — the
+     axis-neutral flow-intent vocabulary the "Flow translation" block above
+     reads off whichever axis its *parent* says is main. Those genuinely need
+     resetting here: unlike the eight direct properties above, a custom
+     property inherits, so a `Container` sized `Width: Fill` would otherwise
+     leak `--w-grow: 1` into every widget nested inside it that doesn't set
+     its own — each reads the ancestor's growth weight as if it were told to
+     grow itself. The wrappers need the same reset for the same reason: each
+     is itself a flex item the translation block matches (see its own
+     comment), nested inside whatever `.hmi-component`/`.hmi-container` it
+     wraps — without this, a locked or binding-unavailable widget silently
+     inherited its *ancestor* Container's flow vars instead of its own.
+     `FLOW_CSS_VARS` in layoutUtils.ts is the table these come from; the guard
+     in layoutUtils.test.ts fails when a key is added there and not here, or
+     when a class the translation block treats as a flex item is missing from
+     this selector list. */
+  --w-grow: initial;
+  --w-basis: initial;
+  --w-shrink: initial;
+  --w-alignself-stretch: initial;
+  --w-alignself-notstretch: initial;
+  --h-grow: initial;
+  --h-basis: initial;
+  --h-shrink: initial;
+  --h-alignself-stretch: initial;
+  --h-alignself-notstretch: initial;
 
-  /* Dynamic layout values consumed from CSS custom properties set by components */
-  flex-basis: var(--self-basis, auto);
-  flex-grow: var(--self-grow, 0);
-  flex-shrink: var(--self-shrink, 1);
-  align-self: var(--self-align, auto);
-  min-width: var(--self-min-width, 0);
-  max-width: var(--self-max-width, none);
-  min-height: var(--self-min-height, 0);
+  flex: 0 1 auto;
+  align-self: auto;
+  min-width: 0;
+  max-width: none;
+  min-height: 0;
+  max-height: none;
+}
+
+/* The child-layout half is unrelated to the flex-item barrier above, and
+   scoped to `.hmi-component`/`.hmi-container` only — a binding/lock wrapper
+   never hosts children of its own, so it never emits or needs `--container-*`.
+   Style is set on this element by `containerLayoutProps()` but read by a
+   *different* element, the flex host's own content wrapper (e.g.
+   `.hmi-container__content`) — real cross-element indirection, so it still
+   needs the custom-property barrier. Reset here rather than in each flex
+   host's own stylesheet because `containerLayoutProps()` is on the
+   custom-widget SDK: a project widget that declares `flowsChildren` has to
+   get this barrier without hand-writing it, or nesting it in a `column` host
+   makes it silently render as a column. Only reset here, never consumed —
+   how a widget arranges its children is that widget's own CSS.
+   `CONTAINER_CSS_VARS` in layoutUtils.ts is the table these come from; the
+   guard in layoutUtils.test.ts fails when a key is added there and not here. */
+.hmi-component,
+.hmi-container {
+  --container-direction: initial;
+  --container-gap: initial;
+  --container-wrap: initial;
+  --container-align: initial;
+  --container-justify: initial;
+  --container-radius: initial;
 }
 
 .hmi-page-group--selected {

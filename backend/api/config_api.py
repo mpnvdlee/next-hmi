@@ -119,29 +119,19 @@ _SHELL_REGION_LABELS = {
 _GLOBAL_EVENTS_OWNER = "__events__"
 
 
-def _synthetic_owner(
-    artifact_kind: str, artifact_id: str | None, segments: list[str]
-) -> dict[str, Any] | None:
+def _synthetic_owner(artifact_kind: str, segments: list[str]) -> dict[str, Any] | None:
     """Resolve a finding that belongs to a panel rather than to a widget node —
-    shell region settings, per-page shell overrides and global event handlers.
+    shell region settings and global event handlers.
 
     Returns the owner id, the property-relative field path, the breadcrumb and
     which segment is the property itself, or None when the path isn't one of
     those (leaving the widget walk's own answer in place).
     """
-    if len(segments) >= 3 and segments[0] in {"shell", "shellOverride"}:
+    if len(segments) >= 3 and segments[0] == "shell":
         region = segments[1]
         if region in _SHELL_REGION_LABELS:
             label = _SHELL_REGION_LABELS[region]
             prop_key = segments[2]
-            if segments[0] == "shellOverride":
-                # A per-page override is edited in that page's own panel, not in
-                # the project-wide Shell area panel, so the page owns it and the
-                # region stays in the field path — one page panel shows all four
-                # regions and their field names would collide otherwise.
-                return _synthetic_row(
-                    artifact_id, segments[1:], ["Shell override", label, prop_key], prop_key, 1
-                )
             return _synthetic_row(f"__{region}__", segments[2:], [label, prop_key], prop_key, 0)
     if artifact_kind == "globalEvents" and segments:
         return _synthetic_row(_GLOBAL_EVENTS_OWNER, segments, [segments[0]], segments[0], 0)
@@ -167,9 +157,7 @@ def _synthetic_row(
     }
 
 
-def _resolve_finding(
-    draft: Any, path: str, artifact_kind: str = "", artifact_id: str | None = None
-) -> dict[str, Any]:
+def _resolve_finding(draft: Any, path: str, artifact_kind: str = "") -> dict[str, Any]:
     """Walk `path` against the already-validated `draft` to recover the
     finding's widgetId/propKey, a readable breadcrumb, and whether it targets
     a nested sub-slot of the property (e.g. an `$if` condition) rather than
@@ -177,9 +165,8 @@ def _resolve_finding(
 
     Path-only + the real tree — deliberately has no id/name knowledge beyond
     what it finds by walking, so it works unchanged across page/dialog/shell/
-    globalEvents/component drafts. `artifact_kind`/`artifact_id` only
-    disambiguate the panel-owned paths that never reach a widget node
-    (see `_synthetic_owner`).
+    globalEvents/component drafts. `artifact_kind` only disambiguates the
+    panel-owned paths that never reach a widget node (see `_synthetic_owner`).
     """
     segments = [
         _unescape_json_pointer_segment(segment)
@@ -239,7 +226,7 @@ def _resolve_finding(
         parts = [*parts, segments[-1]]
 
     if widget_id is None:
-        synthetic = _synthetic_owner(artifact_kind, artifact_id, segments)
+        synthetic = _synthetic_owner(artifact_kind, segments)
         if synthetic is not None:
             widget_id = synthetic["widgetId"]
             field_path = synthetic["fieldPath"]
@@ -270,7 +257,7 @@ def _diagnostic_rows(
     build diagnostics never block a write, so both belong in the same list."""
     rows: list[dict[str, Any]] = []
     for f in (*report.findings, *report.warnings):
-        resolved = _resolve_finding(draft, f.path, artifact_kind, artifact_id)
+        resolved = _resolve_finding(draft, f.path, artifact_kind)
         rows.append({
             "artifactId": artifact_id,
             "artifactKind": artifact_kind,
@@ -506,7 +493,6 @@ _PAGE_PERSISTED_FIELDS: frozenset[str] = frozenset({
     "layout",
     "showHeader",
     "showFooter",
-    "shellOverride",
     "mainPadding",
     "mainBackground",
     "sections",

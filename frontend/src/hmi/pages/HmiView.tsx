@@ -19,7 +19,7 @@ import FallbackNavigationMenu from '../components/FallbackNavigationMenu';
 import ShellRegion from '../components/ShellRegion';
 import { useSidebarFullHeight } from '../components/ShellRegion/useSidebarFullHeight';
 import PageGroupPageView from '../components/PageGroupPageView';
-import { SHELL_REGION_IDS, type ShellConfig, type ShellRegionConfig } from '@shared/types/config';
+import type { ShellConfig, ShellRegionConfig } from '@shared/types/config';
 import type { CSSWithVars } from '@shared/types/style';
 import { ModalStack } from '../components/ModalStack';
 import { AlertModal } from '../components/AlertModal';
@@ -143,8 +143,7 @@ export default function HmiView() {
     };
   }, []);
 
-  // Merge per-page override on top of the project shell.
-  const resolvedShell: ShellConfig = mergeShell(shell, page?.shellOverride);
+  const resolvedShell: ShellConfig = shell ?? {};
   const mainStyle: CSSWithVars = resolveMainStyle(pageGroups, page);
   // `--hmi-scale` drives `.hmi-root`'s `zoom` (hmi.css) — CSS `zoom`
   // participates in box sizing AND propagates to position:fixed descendants
@@ -252,23 +251,4 @@ export default function HmiView() {
       </PageDataSettleGate>
     </HmiScopeContext.Provider>
   );
-}
-
-/**
- * Deep-merge a per-page ShellConfig override on top of the project ShellConfig.
- * Each region merges field-by-field so an override patch like
- * `{ leftSidebar: { defaultState: 'hidden' } }` keeps the project's other
- * region settings (expandedSize, overlay, …) intact.
- */
-function mergeShell(
-  base: ShellConfig | undefined,
-  override: Partial<ShellConfig> | undefined,
-): ShellConfig {
-  if (!override) return base ?? {};
-  const out: ShellConfig = { ...base };
-  for (const id of SHELL_REGION_IDS) {
-    if (override[id] === undefined) continue;
-    out[id] = { ...(base?.[id] ?? {}), ...override[id] };
-  }
-  return out;
 }

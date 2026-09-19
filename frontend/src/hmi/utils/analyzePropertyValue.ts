@@ -1,4 +1,9 @@
-import { isVarSource, isTimeSource, isHttpSource, isRecord } from '@shared/types/propertyValueGuards';
+import {
+  isVarSource,
+  isTimeSource,
+  isHttpSource,
+  isRecord,
+} from '@shared/types/propertyValueGuards';
 
 /**
  * Single recursive walk over a value that collects, in one pass:
@@ -68,9 +73,7 @@ export function analyzePropertyValue(value: unknown): PropertyValueAnalysis {
     keys.length || state.usesTime || state.usesHttp
       ? {
           varKeys: keys.length ? keys : EMPTY_KEYS,
-          renderedVarKeys: rendered.size
-            ? keys.filter((key) => rendered.has(key))
-            : EMPTY_KEYS,
+          renderedVarKeys: rendered.size ? keys.filter((key) => rendered.has(key)) : EMPTY_KEYS,
           usesTime: state.usesTime,
           usesHttp: state.usesHttp,
         }

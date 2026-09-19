@@ -19,6 +19,17 @@ describe('renderSchemaField — format:"length"', () => {
     expect(onChange).toHaveBeenCalledWith('16%');
   });
 
+  // A unit missing from the cycle is not merely unreachable: `nextUnit` reads
+  // its `indexOf` of -1 as "start over", so one click rewrites the stored value
+  // to px with nothing offering the unit back.
+  it('cycles from an unlisted unit to px, with no way back', () => {
+    const onChange = vi.fn();
+    render(<>{renderSchemaField(LENGTH_SCHEMA, '50vh', onChange)}</>);
+    expect(screen.getByTitle('Cycle unit')).toHaveTextContent('vh');
+    fireEvent.click(screen.getByTitle('Cycle unit'));
+    expect(onChange).toHaveBeenCalledWith('50px');
+  });
+
   it('recombines number + unit into a string on number change', () => {
     const onChange = vi.fn();
     render(<>{renderSchemaField(LENGTH_SCHEMA, '16px', onChange)}</>);

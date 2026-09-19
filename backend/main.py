@@ -185,7 +185,22 @@ async def lifespan(app: FastAPI):
     # Check (and stamp) the live project's on-disk format before anything
     # reads it — datasource_manager.load_all() below assumes the current
     # baseline, and a project stamped newer than this build is rejected here.
-    run_baseline_migration(active_project_root())
+    migration = run_baseline_migration(active_project_root())
+    if migration.files_changed or migration.diagnostics:
+        # A step that rewrites project files has to say so somewhere the author
+        # can find it: the diagnostics name every value it could not express and
+        # every one whose meaning it changed, and the backups it leaves behind
+        # are the only way back.
+        log = logging.getLogger("nexthmi.migration")
+        log.warning(
+            "Project migrated %d -> %d: %d file(s) rewritten. Pre-migration backups: %s",
+            migration.from_version,
+            migration.to_version,
+            len(migration.files_changed),
+            ", ".join(str(path) for path in migration.backups.values()) or "none",
+        )
+        for note in migration.diagnostics:
+            log.warning("Migration note: %s", note)
     users_manager.load_or_create()
     alarm_manager.load()
     recipe_manager.load()

@@ -1,51 +1,41 @@
 .hmi-container {
-  /* Layout barrier — the Container is the only widget that both consumes these
-     custom properties and hands them down, so it must reset every one it reads.
-     Custom properties inherit and `containerLayoutStyle()` emits only the
-     fields the author actually set, so without this a container nested in a
-     `column` parent would inherit `column` and ignore its own `row` default —
-     the default the layout panel advertises. `initial` on a custom property is
-     the guaranteed-invalid value, so each `var()` below falls back to its
-     documented default; this container's own inline style still wins, because
-     inline declarations beat this rule.
-     The `--self-*` half repeats the `.hmi-component` barrier in hmi.css, which
-     does not reach here — the Container root carries `.hmi-container` instead.
-     Every var consumed below must be listed; layoutUtils.test.ts guards that. */
-  --container-direction: initial;
-  --container-gap: initial;
-  --container-wrap: initial;
-  --container-align: initial;
-  --container-justify: initial;
-  --container-radius: initial;
+  /* Only this widget's own skin vocabulary is reset here. The `--container-*`
+     vars it reads below inherit like these do, but they come from
+     `containerLayoutProps()` on the SDK rather than from this widget, so the
+     shared `.hmi-component, .hmi-container` barrier in hmi.css resets them
+     once for every flex host instead of each one repeating the list. `initial`
+     on a custom property is the guaranteed-invalid value, so each `var()`
+     below falls back to its documented default; this container's own inline
+     style still wins, because inline declarations beat both rules. (The self-
+     sizing half of `containerLayoutProps()` — width/height/min/max, and the
+     axis-neutral `--w-*`/`--h-*` flow-intent vars `hmi.css`'s translation
+     block reads — sets direct CSS properties and its own separately-reset
+     vars, with nothing of its own to track here.)
+     Every var consumed below must be reset in one of the two places;
+     layoutUtils.test.ts guards that. */
   --container-bg: initial;
   --container-border: initial;
   --container-shadow: initial;
-  --self-basis: initial;
-  --self-grow: initial;
-  --self-shrink: initial;
-  --self-align: initial;
-  --self-min-width: initial;
-  --self-max-width: initial;
-  --self-min-height: initial;
 
   display: flex;
   flex-direction: column;
   gap: var(--hmi-space-sm);
-  padding: var(--hmi-space-sm);
-  /* Theme-driven defaults; a per-instance layout value (inline style /
+  /* Padding is inline on `.hmi-container__title`/`.hmi-container__content`
+     (index.tsx), not here — see the comment there. */
+  /* No default margin. A container's spacing is its parent's job — every region
+     that hosts widgets sets a `gap` (`.hmi-page__content`, `.hmi-page__header`
+     and `__footer`, the page-group shell chrome, `ShellRegion`'s `.region`, and
+     every Container) — so a margin of its own only stacked on top of that, and an
+     author reaching for an edge-to-edge layout had to zero a value they never
+     set. The Layout panel no longer offers margin at all, and `SELF_DIRECT_KEYS`
+     in layoutUtils.ts no longer emits one, so a margin an older project still
+     stores is simply not read.
+     Theme-driven defaults below; a per-instance layout value (inline style /
      --container-radius) overrides. Switching theme re-skins these. */
-  margin: var(--hmi-space-sm);
   background: var(--container-bg, transparent);
   border: var(--container-border, none);
   box-shadow: var(--container-shadow, none);
   border-radius: var(--container-radius, var(--hmi-radius));
-  flex-basis: var(--self-basis, auto);
-  flex-grow: var(--self-grow, 0);
-  flex-shrink: var(--self-shrink, 1);
-  align-self: var(--self-align, auto);
-  min-width: var(--self-min-width, 0);
-  max-width: var(--self-max-width, none);
-  min-height: var(--self-min-height, 0);
 }
 
 .hmi-container__content {

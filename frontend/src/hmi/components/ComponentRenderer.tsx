@@ -94,13 +94,13 @@ function withDeclaredDefaults(
 /**
  * Fold the instance's own sizing onto the definition's first root node.
  *
- * The instance is a widget in its parent's layout, so `grow`, `basis`, `width`
- * and friends set on the `$component:` node have to reach the DOM — otherwise an
- * author sizing an instance in the editor sees nothing happen. They are merged
- * onto the root rather than applied to a wrapper element: a wrapper re-parents
- * the roots into a box of its own, so flex properties authored against a row
- * parent start resolving against a column and a `basis: 0` root collapses to
- * zero height.
+ * The instance is a widget in its parent's layout, so `widthMode`, `grow`,
+ * `width` and friends set on the `$component:` node have to reach the DOM —
+ * otherwise an author sizing an instance in the editor sees nothing happen. They
+ * are merged onto the root rather than applied to a wrapper element: a wrapper
+ * re-parents the roots into a box of its own, so flex properties authored
+ * against a row parent start resolving against a column and a Fill root
+ * collapses to zero height.
  *
  * Only the first root takes them. A definition with several roots renders as
  * several siblings, and folding onto each would multiply the instance's sizing

@@ -1,24 +1,20 @@
 /**
- * The built-in-widgets manifest's editor half, applied to the registry on import.
+ * The built-in-widgets manifest's editor half, applied to the registry on import
+ * — importing this module *is* the effect, there is nothing to call.
  *
- * Importing this module *is* the effect — there is nothing to call. It is
- * imported only from `src/config/`, which is what keeps the labels, options,
- * defaults, descriptions and icons out of every HMI route's static-import
- * closure while leaving them synchronously present for the editor: module
- * evaluation finishes before React renders, so the palette and the properties
- * panel see whole schemas on their first paint.
- *
- * Import it from a config module whenever a new editor surface starts reading
- * `widgetRegistry` outside `ConfigRoutes`' subtree.
+ * Imported only from `src/config/`, which keeps labels, options, defaults,
+ * descriptions and icons out of every HMI route's static-import closure while
+ * leaving them synchronously present for the editor. Import it from a config
+ * module whenever a new editor surface reads `widgetRegistry` outside
+ * `ConfigRoutes`' subtree.
  */
 import editorManifest from '../../generated/builtinWidgetsManifest.editor.json';
 import type { BuiltinWidgetEditorEntry } from '@shared/types/widgetSchema';
 import { applyBuiltinWidgetsEditorMetadata } from './widgetRegistry';
 
-// Through `unknown` for the same reason the runtime half is: TypeScript infers
-// the JSON as a union of per-widget object literals whose schemas differ, so it
-// never structurally matches the entry type. builtinWidgetsManifest.test.ts is
-// the guard that the generated file really has this shape.
+// Through `unknown` for the same reason the runtime half is: tsc infers the JSON
+// as a union of per-widget literals whose schemas differ, so it never matches
+// the entry type. builtinWidgetsManifest.test.ts guards the real shape.
 applyBuiltinWidgetsEditorMetadata(
   editorManifest as unknown as Record<string, BuiltinWidgetEditorEntry>,
 );

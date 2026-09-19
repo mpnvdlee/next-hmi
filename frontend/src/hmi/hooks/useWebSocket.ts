@@ -159,8 +159,7 @@ function flushPendingVarUpdates(): void {
     else _flushFns.applyBatch.current(values);
   }
   if (wasSnapshot) _flushFns.markSnapshotReceived.current();
-  if (contextReady)
-    _flushFns.setContextReady.current(contextReady.pageIds, contextReady.dialogIds);
+  if (contextReady) _flushFns.setContextReady.current(contextReady.pageIds, contextReady.dialogIds);
 }
 
 function enqueueVarUpdate(
@@ -429,6 +428,11 @@ export function useWebSocket(): void {
         // widget under the disconnected overlay for the rest of the page load:
         // nothing fires `onopen` again, and a healthy socket schedules no
         // reconnect to clear it.
+        //
+        // The effect cleanup takes the same branch: it nulls `_ws` before
+        // calling close(), so none of the teardown below runs for it. That is
+        // deliberate — only the root `AppInner` unmounts, and the cleanup
+        // flushes the in-flight actions itself.
         if (_ws !== ws) return;
         _ws = null;
         setWsConnectedRef.current(false);

@@ -1,6 +1,10 @@
 .region {
   display: flex;
   flex-direction: column;
+  /* A Container brings no margin of its own any more (see
+     `widgets/Layout/Container/style.css`), so the region is what separates the
+     widgets dropped into it — as `.hmi-page__content` is for a page. */
+  gap: var(--hmi-space-sm);
   background: var(--hmi-region-bg, var(--hmi-surface));
   /* No `transition: width` — sidebars are sized via JS observer that mirrors
      the inner content (e.g. NavigationMenu) frame by frame. A CSS width

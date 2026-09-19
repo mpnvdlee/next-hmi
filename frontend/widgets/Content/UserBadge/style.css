@@ -1,6 +1,6 @@
 /* `min-width: 0` is not repeated on the root: the global `.hmi-component`
-   already resolves it from `--self-min-width`, defaulting to 0, and a rule here
-   would override the author's configured minimum instead of falling back to it. */
+   already defaults to it, and a rule here would win over an author's own
+   `minWidth` (set inline by `selfLayoutStyle`) instead of falling back to it. */
 .hmi-user-badge {
   display: flex;
   align-items: center;

@@ -11,6 +11,7 @@
     "buildTs": "ee669168604954cb",
     "displayName": "Alarm History",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Content & controls",
     "schema": {
       "title": {
@@ -40,6 +41,7 @@
     "buildTs": "f7e114d390ae84dd",
     "displayName": "Alarm List",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Content & controls",
     "schema": {
       "title": {
@@ -66,6 +68,7 @@
     "buildTs": "b43ec4eafb43de86",
     "displayName": null,
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Content & controls",
     "schema": {
       "label": {
@@ -116,6 +119,7 @@
     "buildTs": "e0f7d82dcaa63597",
     "displayName": null,
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Content & controls",
     "schema": {
       "format": {
@@ -142,6 +146,7 @@
     "buildTs": "92cf6577d225f950",
     "displayName": null,
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Content & controls",
     "schema": {
       "iconName": {
@@ -171,6 +176,7 @@
     "buildTs": "2758105ee80fae48",
     "displayName": null,
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Content & controls",
     "schema": {
       "src": {
@@ -200,6 +206,7 @@
     "buildTs": "e2a11193fad2cb17",
     "displayName": null,
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Content & controls",
     "schema": {
       "text": {
@@ -235,9 +242,10 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "455e4486d5b058fa",
+    "buildTs": "ce7458c8c872c4a9",
     "displayName": "Logo Title",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Content & controls",
     "schema": {
       "logoUrl": {
@@ -264,6 +272,7 @@
     "buildTs": "cf28d82be34c8e40",
     "displayName": "Page Title",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Content & controls",
     "schema": {
       "text": {
@@ -290,6 +299,7 @@
     "buildTs": "774e342949b784aa",
     "displayName": "Status Pill",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Content & controls",
     "schema": {
       "text": {
@@ -322,6 +332,7 @@
     "buildTs": "cab48eb1e6fabd66",
     "displayName": "Trend Chart",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Content & controls",
     "schema": {
       "source": {
@@ -360,9 +371,10 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "70f161d3e85c01ba",
+    "buildTs": "96926a9a9445ac1d",
     "displayName": "User Badge",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Content & controls",
     "schema": {
       "usernameText": {
@@ -386,9 +398,10 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "8650a32dc36dddb4",
+    "buildTs": "afa75e2c661031e6",
     "displayName": "Web Frame",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Content & controls",
     "schema": {
       "url": {
@@ -532,9 +545,10 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "f88d3ac193787209",
+    "buildTs": "e51a2126a10965bb",
     "displayName": null,
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Indicators",
     "schema": {
       "variable": {
@@ -567,6 +581,7 @@
     "buildTs": "aa95f9c92b021b2c",
     "displayName": "LED Indicator",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Indicators",
     "schema": {
       "variable": {
@@ -587,9 +602,10 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "625e552afc1bf113",
+    "buildTs": "42f8cfa9f4f7148e",
     "displayName": "Progress Bar",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Indicators",
     "schema": {
       "variable": {
@@ -643,6 +659,7 @@
     "buildTs": "2cfa961cb34cc570",
     "displayName": "Ring Gauge",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Indicators",
     "schema": {
       "value": {
@@ -690,6 +707,7 @@
     "buildTs": "13876123932ae064",
     "displayName": "Stat Tile",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Indicators",
     "schema": {
       "label": {
@@ -722,9 +740,10 @@
     "hasFonts": false,
     "usesRecharts": true,
     "buildOk": true,
-    "buildTs": "32d48606b160bacf",
+    "buildTs": "0be227ad96938dbf",
     "displayName": null,
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Indicators",
     "schema": {
       "variable": {
@@ -757,9 +776,10 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "069475c05f71ac91",
+    "buildTs": "bde4c28db3fee0d0",
     "displayName": "Value Display",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Indicators",
     "schema": {
       "variable": {
@@ -793,6 +813,7 @@
     "buildTs": "afe6a4fe530523c3",
     "displayName": "Button Row",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Inputs",
     "schema": {
       "label": {
@@ -836,6 +857,7 @@
     "buildTs": "4bb65df0d02800ac",
     "displayName": null,
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Inputs",
     "schema": {
       "label": {
@@ -872,6 +894,7 @@
     "buildTs": "c81895427d8b2b69",
     "displayName": "Number Input",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Inputs",
     "schema": {
       "label": {
@@ -922,6 +945,7 @@
     "buildTs": "e9b4d42ef79dfc56",
     "displayName": "Numeric Stepper",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Inputs",
     "schema": {
       "label": {
@@ -966,6 +990,7 @@
     "buildTs": "7177803903e27bad",
     "displayName": "String Input",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Inputs",
     "schema": {
       "label": {
@@ -995,6 +1020,7 @@
     "buildTs": "2abfded6c23fe121",
     "displayName": null,
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Inputs",
     "schema": {
       "label": {
@@ -1021,9 +1047,10 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "419eea933d473c8a",
+    "buildTs": "feee20e1bdbf2c4a",
     "displayName": "Component Slot",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Layout & structure",
     "schema": {
       "slot": {
@@ -1041,9 +1068,10 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "b064a20ccd8173ac",
+    "buildTs": "41ef2c96b383ceee",
     "displayName": null,
     "hostsChildren": true,
+    "flowsChildren": true,
     "category": "Layout & structure",
     "schema": {
       "title": {
@@ -1073,9 +1101,10 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "56e353e2ff64c13e",
+    "buildTs": "5b98051206e6984c",
     "displayName": "Fixed Spacer",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Layout & structure",
     "schema": {
       "size": {
@@ -1096,6 +1125,7 @@
     "buildTs": "c56d0a8eca664526",
     "displayName": "Image Container",
     "hostsChildren": true,
+    "flowsChildren": null,
     "category": "Layout & structure",
     "schema": {
       "src": {
@@ -1128,6 +1158,7 @@
     "buildTs": "b2411a0a80bd080e",
     "displayName": null,
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Layout & structure",
     "schema": {
       "orientation": {
@@ -1154,9 +1185,10 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "c51c078d63e8e282",
+    "buildTs": "6c9d98e4b1891b9c",
     "displayName": "Stretch Spacer",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Layout & structure",
     "schema": {
       "mode": {
@@ -1183,6 +1215,7 @@
     "buildTs": "433258f13a799856",
     "displayName": null,
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Navigation",
     "schema": {
       "separator": {
@@ -1212,6 +1245,7 @@
     "buildTs": "8ffd927bae4d95c8",
     "displayName": "Language Switcher",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Navigation",
     "schema": {
       "label": {
@@ -1232,6 +1266,7 @@
     "buildTs": "884f2ed8c4571173",
     "displayName": "Menu Toggle",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Navigation",
     "schema": {
       "bound": {
@@ -1261,9 +1296,10 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "102770cacdefd255",
+    "buildTs": "f0df9cd43465b64b",
     "displayName": "Navigation Menu",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Navigation",
     "schema": {
       "mode": {
@@ -1314,6 +1350,7 @@
     "buildTs": "c656293e13036614",
     "displayName": "Page Navigator",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Navigation",
     "schema": {
       "groupId": {
@@ -1334,6 +1371,7 @@
     "buildTs": "53d60005f90d153b",
     "displayName": "Tab Bar",
     "hostsChildren": null,
+    "flowsChildren": null,
     "category": "Navigation",
     "schema": {
       "groupId": {

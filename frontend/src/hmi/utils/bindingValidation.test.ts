@@ -257,7 +257,9 @@ describe('extractBindingSpecs', () => {
         label: {
           $switch: {
             value: { $var: { path: 'PLC:Mode' } },
-            cases: [{ when: { $var: { path: 'PLC:ManualMode' } }, then: { $var: { path: 'PLC:A' } } }],
+            cases: [
+              { when: { $var: { path: 'PLC:ManualMode' } }, then: { $var: { path: 'PLC:A' } } },
+            ],
             default: { $var: { path: 'PLC:B' } },
           },
         },
@@ -284,6 +286,14 @@ describe('extractBindingSpecs', () => {
     expect(specs).toEqual([]);
   });
 
+  it('ignores a visibility gate even when its whole value collapses to a plain $var', () => {
+    // `visible: { $componentProp: … }` resolves to a plain `$var` once the
+    // instance supplies one — the direct getPropBinding match above the nested
+    // walk must not pick that up either, or a resolved gate would out-mark
+    // itself despite the check above.
+    expect(extractBindingSpecs({ visible: { $var: { path: 'PLC:ShowIt' } } }, {})).toEqual([]);
+  });
+
   it('claims nothing for a property the schema does not declare', () => {
     // `registerCustomWidget` registers a widget whose exports could not be read
     // (`schemaError`) with only the visibility gates, so every property on it
@@ -294,7 +304,13 @@ describe('extractBindingSpecs', () => {
       {
         onPress: {
           events: [
-            { params: { value: { $compare: { left: { $var: { path: 'PLC:Cmd' } }, operator: '>', right: 0 } } } },
+            {
+              params: {
+                value: {
+                  $compare: { left: { $var: { path: 'PLC:Cmd' } }, operator: '>', right: 0 },
+                },
+              },
+            },
           ],
         },
       },

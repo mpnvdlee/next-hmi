@@ -105,9 +105,8 @@ function PageGroupShell({ group, chromeStack, children }: PageGroupShellProps) {
   const header = group.header ?? [];
   const footer = group.footer ?? [];
   // Chromeless groups still expose `data-page-group-id` via a layout-neutral
-  // wrapper (`display: contents`) so tooling can find every group in the tree.
-  // The `.hmi-main:has(.hmi-page-group-shell)` rule deliberately matches only
-  // chrome-bearing wrappers — chromeless groups don't impose the flex layout.
+  // wrapper (`display: contents`) so tooling can find every group in the tree,
+  // and the active page keeps flexing against `.hmi-main` directly.
   if (header.length === 0 && footer.length === 0) {
     return (
       <div className="hmi-page-group-mark" data-page-group-id={group.id}>
@@ -118,7 +117,11 @@ function PageGroupShell({ group, chromeStack, children }: PageGroupShellProps) {
   return (
     <div className="hmi-page-group-shell" data-page-group-id={group.id}>
       {header.length > 0 && (
-        <header className="hmi-page-group-shell__header">
+        <header
+          className="hmi-page-group-shell__header"
+          data-flow-direction="column"
+          data-flow-align="stretch"
+        >
           <PageGroupStackContext.Provider value={chromeStack}>
             {header.map((widget) => (
               <WidgetRenderer key={widget.id} node={widget} />
@@ -128,7 +131,11 @@ function PageGroupShell({ group, chromeStack, children }: PageGroupShellProps) {
       )}
       <div className="hmi-page-group-shell__content">{children}</div>
       {footer.length > 0 && (
-        <footer className="hmi-page-group-shell__footer">
+        <footer
+          className="hmi-page-group-shell__footer"
+          data-flow-direction="column"
+          data-flow-align="stretch"
+        >
           <PageGroupStackContext.Provider value={chromeStack}>
             {footer.map((widget) => (
               <WidgetRenderer key={widget.id} node={widget} />
@@ -248,15 +255,27 @@ function PageContent({ page }: PageContentProps) {
           <Suspense fallback={<ContentSpinner />}>
             <ComponentSelfSuspenseContext.Provider value={false}>
               {page.showHeader && (
-                <header className="hmi-page__header">
+                <header
+                  className="hmi-page__header"
+                  data-flow-direction="column"
+                  data-flow-align="stretch"
+                >
                   {(sections.header ?? []).map(renderWidget)}
                 </header>
               )}
-              <main className="hmi-page__content">
+              <main
+                className="hmi-page__content"
+                data-flow-direction="column"
+                data-flow-align="stretch"
+              >
                 <WindowedContent items={sections.content ?? []} render={renderWidget} />
               </main>
               {page.showFooter && (
-                <footer className="hmi-page__footer">
+                <footer
+                  className="hmi-page__footer"
+                  data-flow-direction="column"
+                  data-flow-align="stretch"
+                >
                   {(sections.footer ?? []).map(renderWidget)}
                 </footer>
               )}

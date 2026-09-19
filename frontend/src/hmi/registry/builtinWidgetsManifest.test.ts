@@ -8,7 +8,10 @@ import manifest from '../../generated/builtinWidgetsManifest.json';
 import editorManifest from '../../generated/builtinWidgetsManifest.editor.json';
 import { widgetRegistry } from './widgetRegistry';
 import './builtinWidgetsEditorMetadata';
-import type { CustomWidgetManifestEntry, BuiltinWidgetEditorEntry } from '@shared/types/widgetSchema';
+import type {
+  CustomWidgetManifestEntry,
+  BuiltinWidgetEditorEntry,
+} from '@shared/types/widgetSchema';
 
 /**
  * Drift guard for the baked built-in-widgets manifest.

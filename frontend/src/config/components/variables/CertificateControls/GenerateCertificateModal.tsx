@@ -63,8 +63,8 @@ export default function GenerateCertificateModal({
           placeholder="client"
         />
         <span className="cert-modal__hint">
-          Written as certs/{trimmedName}-cert.der and certs/{trimmedName}-key.pem — generating
-          again with this name overwrites the pair in place.
+          Written as certs/{trimmedName}-cert.der and certs/{trimmedName}-key.pem — generating again
+          with this name overwrites the pair in place.
         </span>
       </label>
 

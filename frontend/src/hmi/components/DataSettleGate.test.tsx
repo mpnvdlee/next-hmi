@@ -203,7 +203,9 @@ describe('PageDataSettleGate', () => {
 
   it('settles a dialog on the ack echoing its id, not on the grace timer', () => {
     useVariableStore.setState({ contextReadyPageIds: [], contextReadyDialogIds: ['x1'] });
-    expect(renderFor('dialog').container.querySelector('.hmi-binding-overlay--nodata')).not.toBeNull();
+    expect(
+      renderFor('dialog').container.querySelector('.hmi-binding-overlay--nodata'),
+    ).not.toBeNull();
   });
 
   it('does not let a page ack settle a dialog of the same id, or the reverse', () => {

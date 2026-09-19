@@ -10,6 +10,7 @@ import {
 import type { WidgetConfig } from '@shared/types/config';
 import type { CSSWithVars } from '@shared/types/style';
 import { componentChildren } from '@shared/store/componentStore';
+import { COLUMN_FLOW } from './layoutUtils';
 import { PreviewSelectionContext } from '../context/PreviewSelectionContext';
 import { useHostPageId } from '../context/HostPageContext';
 
@@ -188,6 +189,10 @@ function WindowItem({ item, children }: { item: WidgetConfig; children: ReactNod
       ref={ref}
       className="hmi-window-item"
       data-windowed={mounted ? 'on' : 'off'}
+      // This item takes over the direct-child flex-item role from
+      // `.hmi-page__content` above `WINDOW_THRESHOLD`, so it carries the same
+      // flow contract that band does.
+      {...COLUMN_FLOW}
       style={mounted ? undefined : placeholderStyle}
     >
       {mounted ? children : null}

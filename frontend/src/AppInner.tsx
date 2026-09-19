@@ -78,12 +78,7 @@ export function ComponentsReadyGate({
     // the first painted frame is already themed instead of flashing the
     // built-in fallback palette. It resolves either way, so a backend that is
     // still coming up delays nothing here.
-    Promise.all([
-      loadCustomWidgets(),
-      loadComponents(),
-      ensureThemeTokens(),
-      preload?.(),
-    ]).then(
+    Promise.all([loadCustomWidgets(), loadComponents(), ensureThemeTokens(), preload?.()]).then(
       () => setReady(true),
       // Nothing in here may hold the splash. `preload` is a route chunk, and a
       // stale hash after a redeploy rejects it — the route's own Suspense and

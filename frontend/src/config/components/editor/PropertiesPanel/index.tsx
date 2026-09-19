@@ -72,6 +72,7 @@ import ComponentPropertiesEditor from '../../componentProperties/ComponentProper
 import { ComponentPropertySchemaContext } from '../PropertySourceEditor/componentPropertySchemaContext';
 
 import { LayoutFields } from '../../ui/LayoutFields';
+import { usesFlexLayout } from '@shared/utils/parentFlow';
 import { CONTAINER_DEFAULT_TOKENS } from '../../ui/LayoutFields/containerDefaultTokens';
 import { parseTokenVar, usePanelTokenValues } from '@shared/utils/themeDefaultHint';
 import { WidgetOptionsContext } from '../WidgetOptionsContext';
@@ -84,15 +85,6 @@ import { detectCopyPasteKey } from '@shared/utils/domEvent';
 import { EDITOR_NODE_IDS } from '@shared/constants/editorSentinels';
 
 const SECTION_IDS = new Set<string>([EDITOR_NODE_IDS.PAGES, EDITOR_NODE_IDS.DIALOGS]);
-
-const SHELL_REGION_IDS: ShellRegionId[] = ['header', 'leftSidebar', 'rightSidebar', 'footer'];
-
-const SHELL_OVERRIDE_LABELS: Record<ShellRegionId, string> = {
-  header: 'Header',
-  leftSidebar: 'Left sidebar',
-  rightSidebar: 'Right sidebar',
-  footer: 'Footer',
-};
 
 /** Free-text asset path with the standard edit/clear affordances, so a URL stays
  *  typable without a bespoke button row. */
@@ -555,9 +547,6 @@ function PagePanel({ page, onRename }: { page: PageConfig; onRename: (t: string)
   }
 
   return (
-    // The page owns its shellOverride findings — the backend stamps the page id
-    // as their owner, since the override is edited here and not in the
-    // project-wide Shell area panel (see `_synthetic_owner`).
     <PanelScopeContext.Provider value={page.id}>
       <FieldPathContext.Provider value={[resolvePageTitle(page.title)]}>
         <PanelHeader kind="Page" name={resolvePageTitle(page.title)} />
@@ -590,10 +579,6 @@ function PagePanel({ page, onRename }: { page: PageConfig; onRename: (t: string)
         </div>
         <PageMetadataSection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
         <MainSection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
-        <PageShellOverrideSection
-          override={page.shellOverride ?? {}}
-          onPatch={(patch) => updatePage(page.id, { shellOverride: patch })}
-        />
       </FieldPathContext.Provider>
     </PanelScopeContext.Provider>
   );
@@ -620,52 +605,6 @@ function MainSection({
         <ColorInput value={node.mainBackground} onChange={(v) => onPatch({ mainBackground: v })} />
       </PropRow>
     </div>
-  );
-}
-
-function PageShellOverrideSection({
-  override,
-  onPatch,
-}: {
-  override: Partial<ShellConfig>;
-  onPatch: (next: Partial<ShellConfig> | undefined) => void;
-}) {
-  function patchRegion(id: ShellRegionId, regionPatch: Partial<ShellRegionConfig> | undefined) {
-    const current = override[id] ?? {};
-    const next: ShellRegionConfig = regionPatch ? { ...current, ...regionPatch } : {};
-    // Drop the region key entirely when its patch ends up empty so the
-    // saved config stays minimal.
-    const cleaned: ShellRegionConfig = Object.fromEntries(
-      Object.entries(next).filter(([, v]) => v !== undefined),
-    ) as ShellRegionConfig;
-    const merged: Partial<ShellConfig> = { ...override };
-    if (Object.keys(cleaned).length === 0) delete merged[id];
-    else merged[id] = cleaned;
-    onPatch(Object.keys(merged).length === 0 ? undefined : merged);
-  }
-
-  // One collapsed section per region rather than a flat list: the same field
-  // set as the Shell area panel, four times over, would bury the rest of the
-  // page panel. Collapsed, an overridden region still reads as such from its
-  // title.
-  return (
-    <>
-      {SHELL_REGION_IDS.map((id) => (
-        <CollapsibleSection
-          key={id}
-          title={`${SHELL_OVERRIDE_LABELS[id]} (this page only)`}
-          defaultCollapsed
-        >
-          <ShellRegionFields
-            id={id}
-            config={override[id] ?? {}}
-            onPatch={(patch) => patchRegion(id, patch)}
-            pathPrefix={[id]}
-            inheritable
-          />
-        </CollapsibleSection>
-      ))}
-    </>
   );
 }
 
@@ -826,7 +765,7 @@ function ComponentPanel({
   const schema = entry?.schema ?? {};
   const schemaKeys = Object.keys(schema);
   const schemaGroups = groupSchemaKeys(schema);
-  const isContainer = comp.type === 'Container';
+  const isContainer = usesFlexLayout(comp.type);
   const layout = comp.layout ?? {};
   const props = comp.properties ?? {};
 
@@ -1228,50 +1167,33 @@ function blankToUndefined(v: unknown): unknown {
   return typeof v === 'string' && v.trim() === '' ? undefined : v;
 }
 
-/**
- * The bindable fields of one shell region. Shared by the project-wide Shell
- * area panel and a page's per-page override so the two can't drift.
- *
- * `pathPrefix` puts the region into each field's diagnostic/selection path.
- * The shell panel edits one region and leaves it empty; the override panel
- * edits all four in a single page panel and prefixes with the region id, which
- * is exactly the shape the backend reports (`/shellOverride/<region>/<field>`).
- */
+/** The bindable fields of one shell region, rendered by the Shell area panel. */
 function ShellRegionFields({
   id,
   config,
   onPatch,
-  pathPrefix = [],
-  inheritable = false,
 }: {
   id: ShellRegionId;
   config: ShellRegionConfig;
   onPatch: (patch: Partial<ShellRegionConfig>) => void;
-  pathPrefix?: string[];
-  /** True for the per-page override, where an unset field means "inherit the
-   *  project shell" rather than "take the built-in default". Values are then
-   *  stored as picked — collapsing a default back to `undefined` would make
-   *  the override unable to say `enabled: true` over a project-wide `false`. */
-  inheritable?: boolean;
 }) {
   const openBindingPicker = useEditorDomainStore((s) => s.openBindingPicker);
   const scope = useContext(PanelScopeContext);
-  const at = (key: string) => [...pathPrefix, key];
-  const defaultStateDiagnostic = useFieldDiagnostic(scope, at('defaultState'));
+  const defaultStateDiagnostic = useFieldDiagnostic(scope, ['defaultState']);
 
   // Synthetic id+key for the binding picker overlay. The picker uses these
   // strings only as a target identifier — there is no real component lookup.
-  const bindingTargetId = `__shell_${pathPrefix.join('_')}${id}__`;
+  const bindingTargetId = `__shell_${id}__`;
 
   return (
     <>
       <SchemaFieldRow
-        path={at('enabled')}
+        path={['enabled']}
         schema={SHELL_ENABLED_SCHEMA}
         value={config.enabled}
         // `true` is the default — store it as unset so the saved config stays
         // minimal and matches what the old static toggle wrote.
-        onChange={(v) => onPatch({ enabled: !inheritable && v === true ? undefined : v })}
+        onChange={(v) => onPatch({ enabled: v === true ? undefined : v })}
         onOpenPicker={(onPick, currentBinding) =>
           openBindingPicker(bindingTargetId, 'enabled', {
             onPick,
@@ -1283,16 +1205,13 @@ function ShellRegionFields({
 
       <PropRow label="Default state" diagnostic={defaultStateDiagnostic}>
         <Select
-          value={config.defaultState ?? (inheritable ? '' : 'expanded')}
+          value={config.defaultState ?? 'expanded'}
           onChange={(v) =>
             onPatch({
               defaultState: (v as 'expanded' | 'collapsed' | 'hidden') || undefined,
             })
           }
         >
-          {/* Only the override can be cleared back to "unset" — the project
-              shell has no outer config to fall back to. */}
-          {inheritable && <option value="">inherit</option>}
           {SHELL_DEFAULT_STATES.map((state) => (
             <option key={state} value={state}>
               {state}
@@ -1302,7 +1221,7 @@ function ShellRegionFields({
       </PropRow>
 
       <SchemaFieldRow
-        path={at('expandedSize')}
+        path={['expandedSize']}
         schema={SHELL_EXPANDED_SIZE_SCHEMA}
         value={config.expandedSize}
         onChange={(v) => onPatch({ expandedSize: blankToUndefined(v) })}
@@ -1316,7 +1235,7 @@ function ShellRegionFields({
       />
 
       <SchemaFieldRow
-        path={at('collapsedSize')}
+        path={['collapsedSize']}
         schema={SHELL_COLLAPSED_SIZE_SCHEMAS[id === 'header' || id === 'footer' ? 'auto' : 'zero']}
         value={config.collapsedSize}
         onChange={(v) => onPatch({ collapsedSize: blankToUndefined(v) })}
@@ -1331,10 +1250,10 @@ function ShellRegionFields({
 
       {(id === 'leftSidebar' || id === 'rightSidebar') && (
         <SchemaFieldRow
-          path={at('fullHeight')}
+          path={['fullHeight']}
           schema={SHELL_FULL_HEIGHT_SCHEMA}
           value={config.fullHeight}
-          onChange={(v) => onPatch({ fullHeight: !inheritable && v === false ? undefined : v })}
+          onChange={(v) => onPatch({ fullHeight: v === false ? undefined : v })}
           onOpenPicker={(onPick, currentBinding) =>
             openBindingPicker(bindingTargetId, 'fullHeight', {
               onPick,
@@ -1346,7 +1265,7 @@ function ShellRegionFields({
       )}
 
       <SchemaFieldRow
-        path={at('background')}
+        path={['background']}
         schema={SHELL_BACKGROUND_SCHEMA}
         value={config.background}
         onChange={(v) => onPatch({ background: blankToUndefined(v) })}
@@ -1360,7 +1279,7 @@ function ShellRegionFields({
       />
 
       <SchemaFieldRow
-        path={at('expanded')}
+        path={['expanded']}
         schema={SHELL_EXPANDED_SCHEMA}
         value={config.expanded}
         onChange={(v) => onPatch({ expanded: v as ShellRegionConfig['expanded'] })}
@@ -1374,7 +1293,7 @@ function ShellRegionFields({
       />
 
       <SchemaFieldRow
-        path={at('overlay')}
+        path={['overlay']}
         schema={SHELL_OVERLAY_SCHEMA}
         value={config.overlay}
         onChange={(v) => onPatch({ overlay: v as ShellRegionConfig['overlay'] })}

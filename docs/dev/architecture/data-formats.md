@@ -255,12 +255,6 @@ it *and* reads it, so the public build shows the product branding whatever the
 key says. The AGPL notice beside it is edition-bound the same way, and no
 setting hides it (see `COMMERCIAL.md`).
 
-A page may carry `shellOverride`, a `Partial<ShellConfig>` merged on top of the
-project shell for that page only. The page panel offers the same region fields
-as the Shell area panel, and the merge is per field — an absent key inherits the
-project value, so a page can also turn a project-wide `enabled: false` region
-back on.
-
 `dialogs` stores dialog definitions inline:
 
 - `id`

@@ -6,9 +6,9 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from core.builtin_widgets_manifest import CatalogVersion, builtin_widgets_catalog
 from core.page_index import collect_dialog_ids, collect_dialog_property_keys
 from core.page_index import collect_page_ids as _index_collect_page_ids
-from core.builtin_widgets_manifest import CatalogVersion, builtin_widgets_catalog
 from core.storage import (
     WIDGET_BUILD_DIR,
     active_components_dir,
@@ -1238,7 +1238,7 @@ validate_property_value = _validate_property_value
 def validate_shell_regions(
     shell_like: Any, ctx: ValidationContext, base_path: str, report: ValidationReport
 ) -> None:
-    """Validate the bindable fields on a ShellConfig / per-page shellOverride."""
+    """Validate the bindable fields on a ShellConfig."""
     if not isinstance(shell_like, dict):
         return
     for region in _SHELL_REGIONS:
@@ -1269,8 +1269,7 @@ def validate_page(page: Any, ctx: ValidationContext) -> ValidationReport:
     """Top-level walker for a page document.
 
     Pages have a ``sections`` map (``{ "content": [...], "footer": [...] }``)
-    whose values are widget-node arrays, plus an optional ``shellOverride`` whose
-    region configs carry bindable ($var) fields.
+    whose values are widget-node arrays.
     """
     report = ValidationReport()
     if not isinstance(page, dict):
@@ -1279,7 +1278,6 @@ def validate_page(page: Any, ctx: ValidationContext) -> ValidationReport:
     pid = page.get("id")
     if pid is not None and not is_valid_page_id(pid):
         report.add("/id", "invalid page id")
-    validate_shell_regions(page.get("shellOverride"), ctx, "/shellOverride", report)
     sections = page.get("sections")
     if sections is None:
         return report

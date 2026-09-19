@@ -1,5 +1,5 @@
 import { useMemo, type ComponentType, type ReactNode } from 'react';
-import { isContainerHostType, widgetRegistry } from '@hmi/registry/widgetRegistry';
+import { widgetRegistry } from '@hmi/registry/widgetRegistry';
 import { bindsVariable } from '@hmi/utils/propertySourceRules';
 import type { LayoutConfig, WidgetConfig } from '@shared/types/config';
 import type { RequiredFieldEntry } from '@shared/types/widgetSchema';
@@ -14,6 +14,7 @@ import SchemaFieldRow from '../../ui/SchemaFieldRow';
 import WidgetIcon from '../../ui/WidgetIcon';
 import { LayoutFields } from '../../ui/LayoutFields';
 import { CONTAINER_DEFAULT_TOKENS } from '../../ui/LayoutFields/containerDefaultTokens';
+import { usesFlexLayout } from '@shared/utils/parentFlow';
 import { commonSchemaOf } from './commonSchema';
 import { mixedLayoutMap, multiValueOf } from './multiValue';
 
@@ -54,9 +55,11 @@ export default function MultiSelectionBody({
   const { keys, schema } = useMemo(() => commonSchemaOf(comps), [comps]);
   const schemaGroups = useMemo(() => groupSchemaKeys(schema), [schema]);
   const mixedLayout = useMemo(() => mixedLayoutMap(comps), [comps]);
-  // The smaller field set unless every selection is a container — offering
-  // container-only layout rows for a leaf would write properties it cannot use.
-  const allContainers = comps.every((c) => isContainerHostType(c.type));
+  // The smaller field set unless every selection arranges its own children with
+  // flex — offering container-only layout rows for a leaf would write properties
+  // it cannot use. Hosting children is not the test (see `usesFlexLayout`), and
+  // the 4 → 5 migration drops those keys wherever this row would not offer them.
+  const allContainers = comps.every((c) => usesFlexLayout(c.type));
   const leadLayout = comps[0].layout ?? {};
 
   const tokenValues = usePanelTokenValues([

@@ -4,7 +4,11 @@ import { Suspense } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ComponentSelfSuspenseContext } from '../context/ComponentSuspenseContext';
-import { widgetRegistry, registerCustomWidget, type CustomWidgetManifestEntry } from './widgetRegistry';
+import {
+  widgetRegistry,
+  registerCustomWidget,
+  type CustomWidgetManifestEntry,
+} from './widgetRegistry';
 import builtinWidgetsManifest from '../../generated/builtinWidgetsManifest.json';
 
 /**

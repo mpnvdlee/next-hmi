@@ -215,8 +215,10 @@ project unchanged.
    ([../reference/custom-widgets.md](../reference/custom-widgets.md)). Export
    `schema`, `description`, `category`, `icon`; `VISIBILITY_SCHEMA` is merged
    automatically. Add `displayName` when the folder name reads badly as a label
-   (`StretchSpacer` → `Stretch Spacer`), and `hostsChildren = true` if its nodes
-   carry a `children` array. Plain global class names, not CSS modules —
+   (`StretchSpacer` → `Stretch Spacer`), `hostsChildren = true` if its nodes
+   carry a `children` array, and `flowsChildren = true` on top of that if it
+   lays those children out with flexbox — that is what gives each of them a main
+   axis for the Layout panel's Hug/Fill/Fixed rows. Plain global class names, not CSS modules —
    chain them with `.hmi-component` (`.hmi-component.hmi-foo`) wherever the rule
    overrides something that base class sets, since a runtime-injected sheet
    cannot rely on stylesheet order.

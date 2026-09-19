@@ -10,7 +10,6 @@ export interface LayoutConfig {
   justify?: string;
 
   // ── Container — inner spacing ──────────────────────────────────────────────
-  padding?: string;
   paddingTop?: string;
   paddingRight?: string;
   paddingBottom?: string;
@@ -21,24 +20,25 @@ export interface LayoutConfig {
   radius?: string;
 
   // ── Self — sizing ──────────────────────────────────────────────────────────
+  /** How the widget sizes itself on this axis: 'hug' | 'fill' | 'fixed' (or a
+   *  property source). `hmi.css`'s axis-translation block reads it (via
+   *  `selfLayoutStyle` in `hmi/components/layoutUtils.ts`) against whichever
+   *  screen axis the parent's own `data-flow-direction` says is main. */
+  widthMode?: string;
+  heightMode?: string;
   width?: string;
   height?: string;
   minWidth?: string;
   maxWidth?: string;
   minHeight?: string;
+  maxHeight?: string;
 
   // ── Self — flex placement ──────────────────────────────────────────────────
-  alignSelf?: string;
-  basis?: string;
+  /** Fill weight, authored by the panel's grow-weight row when a mode is Fill —
+   *  the one shared value both axes' Fill rows read and write. The one field
+   *  of the pre-size-mode shape still authored: a node carrying no mode at all
+   *  keeps it, and `selfLayoutStyle` passes that one through as `flexGrow`. */
   grow?: number;
-  shrink?: number;
-
-  // ── Self — spacing ─────────────────────────────────────────────────────────
-  margin?: string;
-  marginTop?: string;
-  marginRight?: string;
-  marginBottom?: string;
-  marginLeft?: string;
 }
 
 export interface VariableBinding {
@@ -353,8 +353,6 @@ export interface PageConfig extends PageNodeBase {
   showFooter?: boolean;
   /** Section-keyed map of widgets. Keys: 'content' (always), 'header'/'footer' when the toggle is on. */
   sections: Record<string, WidgetConfig[]>;
-  /** Per-page shell overrides. Merged on top of the project's ShellConfig. */
-  shellOverride?: Partial<ShellConfig>;
 }
 
 export interface PageGroupConfig extends PageNodeBase {
@@ -551,7 +549,7 @@ export interface DialogConfig {
  */
 export interface PagesConfig {
   pages: PageNode[];
-  /** Project-wide shell. Per-page overrides live on PageConfig.shellOverride. */
+  /** Project-wide shell. */
   shell?: ShellConfig;
   /** Header components — array form, rendered as the header content when shell.header.component is absent. */
   header?: WidgetConfig[];

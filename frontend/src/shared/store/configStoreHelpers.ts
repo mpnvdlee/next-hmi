@@ -6,6 +6,7 @@ import type {
   PageGroupConfig,
   PageNode,
 } from '../types/config';
+import { SHELL_REGION_IDS } from '../types/config';
 import {
   getPageChildren,
   mapPageSections,
@@ -157,7 +158,7 @@ export function mapAllAreas(
 }
 
 /** Map a list, handing back the input array when every entry came out identical. */
-function mapPreserving<T>(list: T[], fn: (item: T) => T): T[] {
+export function mapPreserving<T>(list: T[], fn: (item: T) => T): T[] {
   let changed = false;
   const next = list.map((item) => {
     const mapped = fn(item);
@@ -171,17 +172,23 @@ function mapPreserving<T>(list: T[], fn: (item: T) => T): T[] {
  * One widget-list edit applied to every area in a single pass, reporting the pages
  * whose content actually changed.
  *
- * Differs from `mapAllAreas` in what it leaves alone: a page, group, dialog or shell
- * array the edit did not touch comes back as the very same object, so a batch write
- * that reaches one page hands React one changed page rather than a whole new project.
- * That also makes the dirty-page bookkeeping fall out of the walk, instead of costing
- * a `findOwningPage` sweep per id. `edit` must return the array it was given when it
- * changes nothing — `pruneWidgets` and `duplicateWidgets` both do.
+ * Differs from `mapAllAreas` in what it leaves alone: the patch object itself, and
+ * any page, group, dialog or shell array the edit did not touch, come back as the
+ * very same objects — so a batch write that reaches one page hands React one changed
+ * page rather than a whole new project, and a write that changes nothing re-renders
+ * no subscriber at all. That also makes the dirty-page bookkeeping fall out of the
+ * walk, instead of costing a `findOwningPage` sweep per id. `edit` must return the
+ * array it was given when it changes nothing — `pruneWidgets` and `duplicateWidgets`
+ * both do.
+ *
+ * Written against a partial so it can also sit inside `_setTree`, which is handed
+ * one key some writes and six others; an area the patch does not carry is not
+ * visited and not invented.
  */
-export function editAllAreas(
-  s: AllAreas,
+export function editAllAreas<T extends Partial<AllAreas>>(
+  s: T,
   edit: (widgets: WidgetConfig[]) => WidgetConfig[],
-): { areas: AllAreas; touchedPageIds: string[] } {
+): { areas: T; touchedPageIds: string[] } {
   const touchedPageIds: string[] = [];
 
   const editPage = (page: PageConfig): PageConfig => {
@@ -209,20 +216,28 @@ export function editAllAreas(
     return next;
   };
 
-  return {
-    areas: {
-      pages: mapPreserving(s.pages, editNode),
-      header: edit(s.header),
-      footer: edit(s.footer),
-      leftSidebar: edit(s.leftSidebar),
-      rightSidebar: edit(s.rightSidebar),
-      dialogs: mapPreserving(s.dialogs, (dialog) => {
+  let areas = s;
+  const replace = <K extends keyof AllAreas>(key: K, value: AllAreas[K]): void => {
+    if (value === s[key]) return;
+    if (areas === s) areas = { ...s };
+    (areas as AllAreas)[key] = value;
+  };
+
+  for (const region of SHELL_REGION_IDS) {
+    const widgets = s[region];
+    if (widgets !== undefined) replace(region, edit(widgets));
+  }
+  if (s.pages !== undefined) replace('pages', mapPreserving(s.pages, editNode));
+  if (s.dialogs !== undefined) {
+    replace(
+      'dialogs',
+      mapPreserving(s.dialogs, (dialog) => {
         const widgets = edit(dialog.widgets);
         return widgets === dialog.widgets ? dialog : { ...dialog, widgets };
       }),
-    },
-    touchedPageIds,
-  };
+    );
+  }
+  return { areas, touchedPageIds };
 }
 
 /** Collect every id used across a project: pages, page-groups, dialogs, and all widgets. */
@@ -251,26 +266,45 @@ export function collectAllIds(s: AllAreas): Set<string> {
 }
 
 /**
- * Resolve widget ids to the objects currently holding them, in one pass that stops
- * as soon as every id is accounted for.
+ * Every widget id in the project whose `type` matches — in practice, the
+ * instances of one component definition.
  *
- * Deliberately narrower than a classification walk: a caller that only needs the
- * live objects for a known handful of ids — the properties panel re-reads them on
- * every keystroke, since a property write replaces every widget object — must not
- * pay for an index of the whole project to get them. An id that is no longer in the
- * tree is simply absent from the result.
+ * A definition's own root nodes have no parent flow inside the definition:
+ * where the instance lands decides it. The Layout panel answers that by asking
+ * the instances themselves, and this walk is what it asks.
  */
-export function findWidgetsByIds(s: AllAreas, ids: ReadonlySet<string>): Map<string, WidgetConfig> {
-  const found = new Map<string, WidgetConfig>();
+export function collectWidgetIdsOfType(s: AllAreas, type: string): string[] {
+  const found: string[] = [];
+  forEachProjectWidget(s, (widget) => {
+    if (widget.type === type) found.push(widget.id);
+  });
+  return found;
+}
+
+/**
+ * Every widget in the project — shell regions, page tree, dialogs — depth first.
+ *
+ * The one place the area order and the page-group recursion are written down, so
+ * a new area reaches every caller at once. Returning `true` from *visit* stops
+ * the walk: a caller that has found what it needs pays for no more of the tree.
+ */
+export function forEachProjectWidget(
+  s: AllAreas,
+  visit: (widget: WidgetConfig) => boolean | void,
+): void {
+  let stop = false;
   const walk = (widgets: WidgetConfig[] | undefined): void => {
     for (const widget of widgets ?? []) {
-      if (found.size === ids.size) return;
-      if (ids.has(widget.id)) found.set(widget.id, widget);
+      if (stop) return;
+      if (visit(widget) === true) {
+        stop = true;
+        return;
+      }
       walk(widget.children as WidgetConfig[] | undefined);
     }
   };
   const walkNode = (node: PageNode): void => {
-    if (found.size === ids.size) return;
+    if (stop) return;
     if (isPageGroup(node)) {
       walk(node.header);
       walk(node.footer);
@@ -285,6 +319,25 @@ export function findWidgetsByIds(s: AllAreas, ids: ReadonlySet<string>): Map<str
   walk(s.rightSidebar);
   s.pages.forEach(walkNode);
   for (const dialog of s.dialogs) walk(dialog.widgets);
+}
+
+/**
+ * Resolve widget ids to the objects currently holding them, in one pass that stops
+ * as soon as every id is accounted for.
+ *
+ * Deliberately narrower than a classification walk: a caller that only needs the
+ * live objects for a known handful of ids — the properties panel re-reads them on
+ * every keystroke, since a property write replaces every widget object — must not
+ * pay for an index of the whole project to get them. An id that is no longer in the
+ * tree is simply absent from the result.
+ */
+export function findWidgetsByIds(s: AllAreas, ids: ReadonlySet<string>): Map<string, WidgetConfig> {
+  const found = new Map<string, WidgetConfig>();
+  if (ids.size === 0) return found;
+  forEachProjectWidget(s, (widget) => {
+    if (ids.has(widget.id)) found.set(widget.id, widget);
+    return found.size === ids.size;
+  });
   return found;
 }
 

@@ -64,7 +64,6 @@ const PAGE_SAVE_FIELDS = [
   'order',
   'showHeader',
   'showFooter',
-  'shellOverride',
   'mainPadding',
   'mainBackground',
 ] as const satisfies readonly (keyof PageConfig)[];
@@ -292,7 +291,7 @@ function _withDirty(prev: Set<string>, id: string): Set<string> {
 }
 
 // Shallow ref-equality only — callers must hand in fresh object/array values when
-// they want an object-valued patch (e.g. `shellOverride`) to register as a change.
+// they want an object-valued patch (e.g. `role`) to register as a change.
 function _patchHasChange<T extends object>(current: T, patch: Partial<T>): boolean {
   for (const key in patch) {
     if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
@@ -904,47 +903,26 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   // ── Backend persistence ────────────────────────────────────────────────────
 
   updateComponent: (id, patch) => {
-    _throttledSnapshot();
-    // Find the owning page so only that page is marked dirty (common hot path).
-    const owningPage = findOwningPage(get().pages, id);
-    set((s) => {
-      const updated = _mapAllAreas(s, (components) =>
-        mapAllComponents(components, (c) => {
-          if (c.id !== id) return c;
-          return {
-            ...c,
-            ...(patch.name !== undefined ? { name: patch.name } : {}),
-            ...(patch.properties !== undefined
-              ? { properties: { ...c.properties, ...patch.properties } }
-              : {}),
-            ...(patch.layout !== undefined ? { layout: { ...c.layout, ...patch.layout } } : {}),
-          };
-        }),
-      );
-      // Widgets without an owning page live in shell, dialogs, or page-group chrome —
-      // all persisted via the index PUT, so no per-page save is needed.
-      const dirtyPageIds = owningPage ? _withDirty(s.dirtyPageIds, owningPage.id) : s.dirtyPageIds;
-      return { ...updated, dirtyPageIds };
-    });
+    get().updateComponents([id], patch);
   },
 
   updateComponents: (ids, patch) => {
     if (ids.length === 0) return;
-    if (ids.length === 1) {
-      get().updateComponent(ids[0], patch);
-      return;
-    }
-    // Throttled like the single-widget write rather than batched: `runBatched`
+    // Throttled like a single-widget write rather than batched: `runBatched`
     // pushes a snapshot unconditionally, which would make every keystroke in a
     // multi-selected field its own undo entry.
     _throttledSnapshot();
     const idSet = new Set(ids);
-    const owningPages = ids
-      .map((id) => findOwningPage(get().pages, id))
-      .filter((page): page is PageConfig => page != null);
     set((s) => {
-      const updated = _mapAllAreas(s, (components) =>
-        mapAllComponents(components, (c) => {
+      // `_editAllAreas` rather than `_mapAllAreas`: a page, dialog or shell array
+      // this write did not reach comes back as the very same object, so a
+      // `useShallow` selector over the areas holds its identity across a
+      // keystroke instead of re-reading on every character. It also reports the
+      // pages that actually changed, which is what marks them dirty — no
+      // `findOwningPage` sweep per id. Widgets with no owning page live in
+      // shell, dialogs or page-group chrome, all persisted via the index PUT.
+      const { areas, touchedPageIds } = _editAllAreas(s, (widgets) =>
+        mapAllComponents(widgets, (c) => {
           if (!idSet.has(c.id)) return c;
           return {
             ...c,
@@ -957,8 +935,8 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
         }),
       );
       let dirtyPageIds = s.dirtyPageIds;
-      for (const page of owningPages) dirtyPageIds = _withDirty(dirtyPageIds, page.id);
-      return { ...updated, dirtyPageIds };
+      for (const pageId of touchedPageIds) dirtyPageIds = _withDirty(dirtyPageIds, pageId);
+      return { ...areas, dirtyPageIds };
     });
   },
 

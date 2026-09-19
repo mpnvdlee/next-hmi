@@ -100,6 +100,7 @@ async def list_components() -> list[dict]:
             "buildTs": status.get("ts") if status else None,
             "displayName": metadata.get("displayName"),
             "hostsChildren": metadata.get("hostsChildren"),
+            "flowsChildren": metadata.get("flowsChildren"),
             "category": metadata.get("category"),
             "description": metadata.get("description"),
             "icon": metadata.get("icon"),

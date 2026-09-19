@@ -44,7 +44,6 @@ The types above are the *runtime* kinds. A field may also declare an **optional 
 | `String` | `select` | A dropdown of allowed values |
 | `String` | `password` | A masked input |
 | `String` | `length` | A CSS size input (`300px`, `50%`, `auto`) |
-| `String` | `spacing` | A box editor for 1–4 side values (`8px`, `8px 16px`) |
 | `String` | `direction` | A `row` \| `column` picker |
 | `String` | `align` | A cross-axis alignment picker (`start`, `center`, `end`, `stretch`, …) |
 | `String` | `justify` | A main-axis alignment picker (`start`, `center`, `end`, `space-between`, …) |

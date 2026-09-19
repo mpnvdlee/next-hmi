@@ -5,7 +5,6 @@ import type {
   PageNode,
   PageGroupConfig,
   PageTitle,
-  ShellConfig,
 } from '@shared/types/config';
 import type { CSSWithVars } from '@shared/types/style';
 import { getPageChildren } from './pageContent';
@@ -156,9 +155,6 @@ export function normalizePageNode(node: unknown): PageNode | null {
     ...metadata,
     ...(typeof candidate.showHeader === 'boolean' ? { showHeader: candidate.showHeader } : {}),
     ...(typeof candidate.showFooter === 'boolean' ? { showFooter: candidate.showFooter } : {}),
-    ...(candidate.shellOverride && typeof candidate.shellOverride === 'object'
-      ? { shellOverride: candidate.shellOverride as Partial<ShellConfig> }
-      : {}),
   };
 }
 

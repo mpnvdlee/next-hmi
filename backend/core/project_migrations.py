@@ -7,11 +7,12 @@ A project's stamped format version lives at ``config.json``'s
 every project activation (see ``main.py``'s lifespan) because it is a no-op
 once a project is already stamped at ``PROJECT_FORMAT_VERSION``.
 
-``_STEPS`` is empty: the current on-disk shape is the baseline, and no
-legacy shape is supported. An unstamped project is stamped straight to
-``PROJECT_FORMAT_VERSION`` without any file being read or rewritten. The
-coordinator below is kept so the first real format change is a step
-registration rather than a new subsystem.
+``_STEPS`` holds two steps: 4 → 5 rewrites stored layouts into the Hug/Fill/Fixed
+sizing model, retiring the raw flex keys and margin from authored projects (see
+``core.migration_size_modes``); 5 → 6 collapses the `padding` shorthand into the
+four side keys it overlapped with (see ``core.migration_padding``). A project
+stamped below 4 is carried through both — no shape older than the baseline is
+otherwise supported.
 
 ``PROJECT_FORMAT_VERSION`` only ever counts up, including when steps are
 retired: the number is stamped into user data that travels between builds
@@ -33,6 +34,7 @@ independently once every pending step across all targets has succeeded.
 from __future__ import annotations
 
 import shutil
+import tempfile
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -40,8 +42,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from core.manifest import read_project_metadata, write_project_metadata
+from core.migration_padding import migrate_padding
+from core.migration_size_modes import migrate_size_modes
 
-PROJECT_FORMAT_VERSION = 4
+PROJECT_FORMAT_VERSION = 6
 
 # Target name -> project-relative path a step reads and writes. A value may be a
 # directory or a single file; the coordinator stages either shape.
@@ -100,7 +104,11 @@ class MigrationStep:
     to_version: int
     name: str
     targets: tuple[str, ...]  # keys of _TARGET_PATHS whose staged paths .run() operates on
-    run: Callable[[Mapping[str, Path], bool], StepResult]  # (staged paths, dry_run) -> StepResult
+    # (staged paths, real project root) -> StepResult. A step always writes to the
+    # paths it is handed and never learns whether this is a dry run: the
+    # coordinator stages one into a throwaway copy and deletes it afterwards. The
+    # project root is passed separately because the staging is not under it.
+    run: Callable[[Mapping[str, Path], Path], StepResult]
 
 
 @dataclass
@@ -116,7 +124,22 @@ class MigrationResult:
     backups: dict[str, Path] = field(default_factory=dict)
 
 
-_STEPS: list[MigrationStep] = []
+_STEPS: list[MigrationStep] = [
+    MigrationStep(
+        from_version=4,
+        to_version=5,
+        name="layouts-to-size-modes",
+        targets=("config", "pages", "components"),
+        run=migrate_size_modes,
+    ),
+    MigrationStep(
+        from_version=5,
+        to_version=6,
+        name="padding-to-sides",
+        targets=("config", "pages", "components"),
+        run=migrate_padding,
+    ),
+]
 
 
 # ── coordinator ───────────────────────────────────────────────────────────────
@@ -128,7 +151,7 @@ def _backup_dir_name(real_path: Path) -> Path:
 
 
 def _copy_path(src: Path, dst: Path) -> None:
-    """Duplicate a staged target, whichever shape it is."""
+    """Duplicate a target, whichever shape it is."""
     if src.is_dir():
         shutil.copytree(src, dst)
     else:
@@ -219,10 +242,19 @@ def run_baseline_migration(project_root: Path, *, dry_run: bool = False) -> Migr
             from_version=current_version,
             to_version=PROJECT_FORMAT_VERSION,
         )
-        for step in pending:
-            step_result = step.run(real_paths, True)
-            result.files_changed.extend(step_result.files_changed)
-            result.diagnostics.extend(step_result.diagnostics)
+        # Staged into a throwaway copy rather than handed the originals: a step
+        # whose passes each read the shape the one before it wrote can only
+        # report what it *would* do by actually doing it, and every step would
+        # otherwise have to duplicate the targets itself.
+        with tempfile.TemporaryDirectory() as tmp:
+            preview = {name: Path(tmp) / path.name for name, path in real_paths.items()}
+            for name, real_path in real_paths.items():
+                if name in needed and real_path.exists():
+                    _copy_path(real_path, preview[name])
+            for step in pending:
+                step_result = step.run(preview, project_root)
+                result.files_changed.extend(step_result.files_changed)
+                result.diagnostics.extend(step_result.diagnostics)
         return result
 
     backups: dict[str, Path | None] = dict.fromkeys(_TARGET_PATHS)
@@ -240,7 +272,7 @@ def run_baseline_migration(project_root: Path, *, dry_run: bool = False) -> Migr
             backups={name: path for name, path in backups.items() if path is not None},
         )
         for step in pending:
-            step_result = step.run(staging, False)
+            step_result = step.run(staging, project_root)
             result.files_changed.extend(step_result.files_changed)
             result.diagnostics.extend(step_result.diagnostics)
 

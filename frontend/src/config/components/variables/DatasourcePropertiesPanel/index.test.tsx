@@ -377,7 +377,9 @@ describe('DatasourcePropertiesPanel', () => {
       const connectButton = screen.getByRole('button', { name: 'Connect' });
       expect(error.closest('.cfg-panel-header')).not.toBeNull();
       expect(error.closest('.cfg-section')).toBeNull(); // not nested inside Control
-      expect(error.compareDocumentPosition(connectButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(
+        error.compareDocumentPosition(connectButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
       expect(error).toHaveTextContent('Connection timed out');
     });
 
@@ -395,7 +397,9 @@ describe('DatasourcePropertiesPanel', () => {
       const startButton = screen.getByRole('button', { name: 'Start' });
       expect(error.closest('.cfg-panel-header')).not.toBeNull();
       expect(error.closest('.cfg-section')).toBeNull();
-      expect(error.compareDocumentPosition(startButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(
+        error.compareDocumentPosition(startButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
       expect(error).toHaveTextContent('Port already in use');
     });
 

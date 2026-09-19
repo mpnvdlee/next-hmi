@@ -154,30 +154,6 @@ def test_validate_widget_node_rejects_loc_object_payload(ctx):
     assert any("$loc payload must be a string" in f.message for f in report.findings)
 
 
-# ── shellOverride bindings ─────────────────────────────────────────────────────
-
-
-def test_validate_page_checks_shell_override_var_binding(ctx):
-    report = validate_page(
-        {
-            "id": "page-home",
-            "shellOverride": {"leftSidebar": {"expanded": {"$var": {"path": "Nope:X/Y"}}}},
-        },
-        ctx,
-    )
-    assert report.ok  # unknown datasource is advisory
-    assert any("unknown datasource" in w.message for w in report.warnings)
-
-
-def test_validate_page_rejects_non_boolean_shell_override_literal(ctx):
-    report = validate_page(
-        {"id": "page-home", "shellOverride": {"header": {"overlay": "yes"}}},
-        ctx,
-    )
-    assert not report.ok
-    assert any("expected boolean" in f.message for f in report.findings)
-
-
 # ── dialog action targets ──────────────────────────────────────────────────────
 
 

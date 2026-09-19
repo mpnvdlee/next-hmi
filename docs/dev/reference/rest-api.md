@@ -86,7 +86,7 @@ Base prefix: `/api/config`. Page index, shared shell areas, dialogs, dictionarie
   - `422` if `page_id` doesn't match `[A-Za-z0-9_-]{1,128}`.
 - `PUT /api/config/pages/{page_id}`
   - Body is merged into the persisted file; only these keys are kept on disk:
-    `title`, `icon`, `description`, `breadcrumbLabel`, `hidden`, `role`, `order`, `showHeader`, `showFooter`, `shellOverride`, `sections`.
+    `title`, `icon`, `description`, `breadcrumbLabel`, `hidden`, `role`, `order`, `showHeader`, `showFooter`, `sections`.
   - `sections` (when supplied) must be an object whose values are arrays. Pages may not contain `type: "page-group"` nodes — nest a group inside another group instead (`422`).
   - Returns the merged document `{ id, ...persisted fields, warnings: [{path, message}] }`. `warnings` is the validator's advisory bucket (incomplete `$var` bindings, unknown datasources/variables) — non-blocking and surfaced by the editor as "Saved · N warnings". Hard errors still 422.
   - `422` if `page_id` is invalid.
