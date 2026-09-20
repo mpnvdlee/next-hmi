@@ -234,6 +234,10 @@ export default function PreviewView() {
   const { page, pageGroups } = !isShellArea
     ? resolvePageContext(overlayNode ? dialogs : pages, areaId)
     : { page: null, pageGroups: EMPTY_PAGE_GROUPS };
+  // What `set_context` actually sends for this route, and so what `context_ready`
+  // echoes back: a page-group route resolves to its first child (`page`), never
+  // the group id itself, while a shell area has no page and falls back to `areaId`.
+  const currentPageId = page?.id ?? (isShellArea ? areaId : undefined);
 
   // Hydrate page content when the route changes (tab switch, link navigation).
   // Mirrors HmiView — the preview can safely fetch individual page content from
@@ -362,7 +366,6 @@ export default function PreviewView() {
 
     // For special preview routes (__header__/__footer__/__leftSidebar__/__rightSidebar__),
     // send the route id so subscriptions stay active even when no concrete page is selected.
-    const currentPageId = page?.id ?? (isShellArea ? areaId : undefined);
     const currentPageIds = currentPageId
       ? [currentPageId, ...openPageOverlayIds]
       : [...openPageOverlayIds];
@@ -375,9 +378,7 @@ export default function PreviewView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     wsConnected,
-    page?.id,
-    isShellArea,
-    areaId,
+    currentPageId,
     openPageOverlayEntries,
     previewPriorityKeySignature,
   ]);
@@ -586,8 +587,9 @@ export default function PreviewView() {
         <PreviewSelectionContext.Provider value={previewSelectionSet}>
           {/* Same settle signal as the runtime: the preview sends its own
               set_context and gets its own ack, so an editor page also renders
-              before its data. */}
-          <PageDataSettleGate pageId={areaId}>
+              before its data. Keyed on the same id `set_context` sent — a
+              page-group route acks its resolved first child, not the group. */}
+          <PageDataSettleGate pageId={currentPageId}>
             <div className={rootClassName} style={rootStyle}>
               <div
                 className={`hmi-layout${hasFullHeightSidebar ? ' hmi-layout--row' : ''}`}

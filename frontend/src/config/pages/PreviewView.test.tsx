@@ -10,6 +10,20 @@ import type { ComponentDefinition } from '@shared/types/componentTypes';
 import type { PageNode } from '@shared/types/config';
 import PreviewView from './PreviewView';
 
+// Records every `pageId` PreviewView hands the settle gate, across every
+// render — including the one before PageGroupPageView's own effect replaces a
+// page-group route with its resolved child, which is the render that exposes
+// a gate keyed on the group id rather than on what `set_context` actually sent.
+const settleGatePageIds: (string | undefined)[] = [];
+vi.mock('@hmi/components/DataSettleGate', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@hmi/components/DataSettleGate')>();
+  const RecordingPageDataSettleGate: typeof actual.PageDataSettleGate = (props) => {
+    settleGatePageIds.push(props.pageId);
+    return <actual.PageDataSettleGate {...props} />;
+  };
+  return { ...actual, PageDataSettleGate: RecordingPageDataSettleGate };
+});
+
 const ORIGIN = window.location.origin;
 
 // jsdom lacks these browser APIs that ShellRegion / scroll-into-view rely on.
@@ -471,6 +485,23 @@ describe('PreviewView — page-group selection highlighting', () => {
     act(() => dispatchFromParent({ type: 'set_selected', ids: [], lead: null }));
 
     expect(document.querySelector('.hmi-page-group--selected')).toBeNull();
+  });
+});
+
+describe('PreviewView — settle gate on a page-group route', () => {
+  beforeEach(() => {
+    settleGatePageIds.length = 0;
+    setupStores(GROUP_PAGES);
+    useVariableStore.setState({ contextReadyPageIds: ['page1'] });
+  });
+
+  it('keys the settle gate on the resolved child, not the group the route names', () => {
+    // PageGroupPageView's own effect replaces a group route with its resolved
+    // child on the very next render, which would mask the bug if only the
+    // settled DOM were checked — the first (pre-replace) call is what exposes
+    // a gate still keyed on the group id `context_ready` never echoes.
+    renderPreview('grp1');
+    expect(settleGatePageIds[0]).toBe('page1');
   });
 });
 
