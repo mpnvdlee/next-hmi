@@ -22,39 +22,6 @@
         }
       ],
       "showChildPagesInMenu": true
-    },
-    {
-      "id": "brew-wizard",
-      "title": {
-        "$loc": "Guided brew setup"
-      },
-      "icon": "flask",
-      "description": "A five-step run-up to pulling a shot.",
-      "type": "page-group",
-      "hidden": true,
-      "showChildPagesInMenu": false,
-      "children": [
-        {
-          "id": "wiz-1",
-          "type": "page"
-        },
-        {
-          "id": "wiz-2",
-          "type": "page"
-        },
-        {
-          "id": "wiz-3",
-          "type": "page"
-        },
-        {
-          "id": "wiz-4",
-          "type": "page"
-        },
-        {
-          "id": "wiz-5",
-          "type": "page"
-        }
-      ]
     }
   ],
   "header": [
@@ -859,6 +826,262 @@
     {
       "id": "login",
       "type": "page"
+    },
+    {
+      "id": "brew-wizard",
+      "title": {
+        "$loc": "Guided brew setup"
+      },
+      "icon": "flask",
+      "description": "A five-step run-up to pulling a shot.",
+      "type": "page-group",
+      "showChildPagesInMenu": false,
+      "componentProperties": {
+        "startingBeanType": {
+          "type": "string",
+          "label": "Starting bean type",
+          "description": "Seeds Brew:Wizard/BeanType when the wizard opens.",
+          "defaultValue": ""
+        },
+        "startingCupCount": {
+          "type": "integer",
+          "label": "Starting cup count",
+          "description": "Seeds Brew:Wizard/CupCount when the wizard opens.",
+          "defaultValue": 0
+        }
+      },
+      "events": {
+        "onOpen": [
+          {
+            "type": "writeDataVariable",
+            "datasource": "Brew",
+            "path": "Wizard/BeanType",
+            "value": {
+              "$componentProp": "startingBeanType"
+            },
+            "onFailed": [
+              {
+                "type": "showToast",
+                "message": {
+                  "$stringExpr": {
+                    "template": "{1}: {2}",
+                    "wildcards": {
+                      "1": {
+                        "$loc": "Write failed"
+                      },
+                      "2": {
+                        "$result": "reason"
+                      }
+                    }
+                  }
+                },
+                "severity": "error",
+                "discard": "auto",
+                "duration": 4000
+              }
+            ]
+          },
+          {
+            "type": "writeDataVariable",
+            "datasource": "Brew",
+            "path": "Wizard/CupCount",
+            "value": {
+              "$componentProp": "startingCupCount"
+            },
+            "onFailed": [
+              {
+                "type": "showToast",
+                "message": {
+                  "$stringExpr": {
+                    "template": "{1}: {2}",
+                    "wildcards": {
+                      "1": {
+                        "$loc": "Write failed"
+                      },
+                      "2": {
+                        "$result": "reason"
+                      }
+                    }
+                  }
+                },
+                "severity": "error",
+                "discard": "auto",
+                "duration": 4000
+              }
+            ]
+          }
+        ],
+        "onClose": []
+      },
+      "footer": [
+        {
+          "id": "brew-wizard-nav",
+          "type": "Container",
+          "name": "Step navigation",
+          "properties": {
+            "showWhenEmpty": true,
+            "background": "transparent"
+          },
+          "layout": {
+            "direction": "row",
+            "gap": "10px",
+            "wrap": false,
+            "align": "center",
+            "justify": "flex-start",
+            "widthMode": "fill",
+            "heightMode": "hug",
+            "paddingTop": "16px",
+            "paddingRight": "16px",
+            "paddingBottom": "16px",
+            "paddingLeft": "16px"
+          },
+          "children": [
+            {
+              "id": "brew-wizard-count",
+              "type": "Label",
+              "name": "Step counter",
+              "properties": {
+                "text": {
+                  "$switch": {
+                    "value": {
+                      "$page": {
+                        "field": "id"
+                      }
+                    },
+                    "cases": [
+                      {
+                        "when": "wiz-1",
+                        "then": "1 / 5"
+                      },
+                      {
+                        "when": "wiz-2",
+                        "then": "2 / 5"
+                      },
+                      {
+                        "when": "wiz-3",
+                        "then": "3 / 5"
+                      },
+                      {
+                        "when": "wiz-4",
+                        "then": "4 / 5"
+                      },
+                      {
+                        "when": "wiz-5",
+                        "then": "5 / 5"
+                      }
+                    ],
+                    "default": ""
+                  }
+                },
+                "typography": "caption",
+                "color": "var(--hmi-text-muted)"
+              },
+              "layout": {
+                "widthMode": "fill",
+                "heightMode": "hug"
+              }
+            },
+            {
+              "id": "brew-wizard-nav-sp",
+              "type": "StretchSpacer",
+              "name": "Spacer",
+              "properties": {
+                "mode": "ratio",
+                "ratio": 1
+              },
+              "layout": {
+                "grow": 1,
+                "widthMode": "fill",
+                "heightMode": "hug",
+                "minWidth": "auto"
+              }
+            },
+            {
+              "id": "brew-wizard-navigator",
+              "type": "PageNavigator",
+              "name": "Step navigation",
+              "properties": {
+                "groupId": "brew-wizard",
+                "previousLabel": {
+                  "$loc": "← Previous"
+                },
+                "nextLabel": {
+                  "$loc": "Next →"
+                },
+                "showPrevious": true,
+                "showNext": true,
+                "prevEnabled": true,
+                "nextEnabled": {
+                  "$switch": {
+                    "value": {
+                      "$page": {
+                        "field": "id"
+                      }
+                    },
+                    "cases": [
+                      {
+                        "when": "wiz-2",
+                        "then": {
+                          "$compare": {
+                            "left": {
+                              "$var": {
+                                "path": "Brew:Wizard/BeanType"
+                              }
+                            },
+                            "operator": "!==",
+                            "right": ""
+                          }
+                        }
+                      },
+                      {
+                        "when": "wiz-4",
+                        "then": {
+                          "$compare": {
+                            "left": {
+                              "$var": {
+                                "path": "Brew:Wizard/CupCount"
+                              }
+                            },
+                            "operator": ">",
+                            "right": 0
+                          }
+                        }
+                      }
+                    ],
+                    "default": true
+                  }
+                }
+              },
+              "layout": {
+                "widthMode": "hug",
+                "heightMode": "hug"
+              }
+            }
+          ]
+        }
+      ],
+      "children": [
+        {
+          "id": "wiz-1",
+          "type": "page"
+        },
+        {
+          "id": "wiz-2",
+          "type": "page"
+        },
+        {
+          "id": "wiz-3",
+          "type": "page"
+        },
+        {
+          "id": "wiz-4",
+          "type": "page"
+        },
+        {
+          "id": "wiz-5",
+          "type": "page"
+        }
+      ]
     }
   ],
   "globalEvents": {

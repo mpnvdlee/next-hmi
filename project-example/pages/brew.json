@@ -780,69 +780,15 @@
                               "actions": {
                                 "onPress": [
                                   {
-                                    "type": "writeDataVariable",
-                                    "datasource": "Brew",
-                                    "path": "Wizard/BeanType",
-                                    "value": "",
-                                    "onSuccess": [
-                                      {
-                                        "type": "writeDataVariable",
-                                        "datasource": "Brew",
-                                        "path": "Wizard/CupCount",
-                                        "value": 0,
-                                        "onSuccess": [
-                                          {
-                                            "type": "openPageOverlay",
-                                            "pageId": "wiz-1",
-                                            "size": "medium",
-                                            "placement": "center",
-                                            "backdrop": "dim"
-                                          }
-                                        ],
-                                        "onFailed": [
-                                          {
-                                            "type": "showToast",
-                                            "message": {
-                                              "$stringExpr": {
-                                                "template": "{1}: {2}",
-                                                "wildcards": {
-                                                  "1": {
-                                                    "$loc": "Write failed"
-                                                  },
-                                                  "2": {
-                                                    "$result": "reason"
-                                                  }
-                                                }
-                                              }
-                                            },
-                                            "severity": "error",
-                                            "discard": "auto",
-                                            "duration": 4000
-                                          }
-                                        ]
-                                      }
-                                    ],
-                                    "onFailed": [
-                                      {
-                                        "type": "showToast",
-                                        "message": {
-                                          "$stringExpr": {
-                                            "template": "{1}: {2}",
-                                            "wildcards": {
-                                              "1": {
-                                                "$loc": "Write failed"
-                                              },
-                                              "2": {
-                                                "$result": "reason"
-                                              }
-                                            }
-                                          }
-                                        },
-                                        "severity": "error",
-                                        "discard": "auto",
-                                        "duration": 4000
-                                      }
-                                    ]
+                                    "type": "openDialog",
+                                    "pageId": "brew-wizard",
+                                    "componentProperties": {
+                                      "startingBeanType": "",
+                                      "startingCupCount": 0
+                                    },
+                                    "size": "medium",
+                                    "placement": "center",
+                                    "backdrop": "dim"
                                   }
                                 ]
                               }
