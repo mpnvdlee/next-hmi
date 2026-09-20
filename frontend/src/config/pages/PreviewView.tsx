@@ -376,12 +376,7 @@ export default function PreviewView() {
     // signature below re-sends context for binding edits without doing so for
     // unrelated visual/property edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    wsConnected,
-    currentPageId,
-    openPageOverlayEntries,
-    previewPriorityKeySignature,
-  ]);
+  }, [wsConnected, currentPageId, openPageOverlayEntries, previewPriorityKeySignature]);
 
   // Clear this preview client's context only when the iframe truly unmounts.
   // Keeping cleanup separate avoids clearing all subscriptions immediately
