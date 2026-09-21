@@ -40,6 +40,30 @@ def _reset_user_auth_throttle():
 
 
 @pytest.fixture
+def require_symlinks(tmp_path: Path) -> None:
+    """Skip the test unless this machine can create symlinks at all.
+
+    Probed here, in the test's own frame, rather than where the symlink is
+    actually made: several of these tests make theirs deep inside request
+    handling, off the test's own thread via TestClient's anyio portal, and a
+    ``pytest.skip()`` raised from there doesn't unwind cleanly — it corrupts the
+    portal instead of skipping the test.
+    """
+    # A file symlink (not a directory one) so cleanup is a plain unlink() —
+    # Windows directory symlinks need rmdir() instead, and the privilege this
+    # probes for gates both kinds identically.
+    target = tmp_path / ".symlink-probe-target"
+    target.touch()
+    probe = tmp_path / ".symlink-probe"
+    try:
+        probe.symlink_to(target)
+    except OSError as exc:
+        pytest.skip(f"symlinks unavailable: {exc}")
+    probe.unlink()
+    target.unlink()
+
+
+@pytest.fixture
 def live_project_root(monkeypatch, tmp_path: Path) -> Path:
     """Point ``storage._active_project_path`` at a tmp folder for the test.
 

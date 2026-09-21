@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { ButtonAction } from '@shared/types/config';
+import { optionColorStyle } from '@config/components/editor/PropertySourceSelector/propertySourceStyle';
 
 /** `category` groups the browse drawer, matching the catalog sections in
  *  `docs/user/actions.md`. */
@@ -100,7 +101,7 @@ export const ACTION_TYPE_TINT: Record<ButtonAction['type'], string> = {
 /** Sets `--option-color` to the action's tint, the hook badges and popup rows
  *  read their color from. */
 export function actionTypeColorStyle(type: ButtonAction['type']): CSSProperties {
-  return { '--option-color': `var(--cfg-source-${ACTION_TYPE_TINT[type]})` } as CSSProperties;
+  return optionColorStyle(ACTION_TYPE_TINT[type]);
 }
 
 /** Human label for an action type, falling back to the raw type. */

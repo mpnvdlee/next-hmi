@@ -213,16 +213,13 @@ def test_widget_schemas_404s_when_neither_map_has_anything(uncompiled_client):
     assert resp.status_code == 404, resp.text
 
 
-def test_widgets_api_rejects_file_and_parent_symlink_entries(widgets_client):
+def test_widgets_api_rejects_file_and_parent_symlink_entries(widgets_client, require_symlinks):
     client, src, _ = widgets_client
     target_file = src.parent / "target.tsx"
     target_file.write_text(GOOD_WIDGET, encoding="utf-8")
     file_link = src / "Inputs" / "FileLink" / "index.tsx"
     file_link.parent.mkdir(parents=True)
-    try:
-        file_link.symlink_to(target_file)
-    except OSError as err:
-        pytest.skip(f"symlinks unavailable: {err}")
+    file_link.symlink_to(target_file)
 
     target_group = src.parent / "target-group"
     _write_widget(target_group, "DirectoryLink", GOOD_WIDGET)

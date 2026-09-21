@@ -45,7 +45,7 @@ from core.manifest import (
     upsert_running,
     validate_project_id,
 )
-from core.project_migrations import PROJECT_FORMAT_VERSION
+from core.project_migrations import PROJECT_FORMAT_VERSION, needs_migration
 from core.version import app_version
 
 logger = logging.getLogger(__name__)
@@ -226,14 +226,7 @@ class Supervisor:
                         f"This project requires {needed} to open; this build is "
                         f"{app_version()}. Update the application before starting it."
                     )
-                # No release stamp means the project predates the stamp, so its
-                # format number says where it landed without saying which build
-                # took it there — replayed through the chain like a stale one.
-                needs_upgrade = (
-                    metadata.formatVersion < PROJECT_FORMAT_VERSION
-                    or metadata.minAppVersion is None
-                )
-                if needs_upgrade and not confirm_upgrade:
+                if needs_migration(metadata) and not confirm_upgrade:
                     raise ValueError(
                         "This project needs to be upgraded to this build's file format "
                         "before it can start. Confirm the upgrade in the Projects page."

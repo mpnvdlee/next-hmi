@@ -65,7 +65,7 @@ def test_seed_lookup_follows_the_install_root(monkeypatch, tmp_path: Path) -> No
     (seed / "config.json").write_text('{"pages": []}', encoding="utf-8")
     monkeypatch.setattr(project_bootstrap, "repo_root", lambda: install_root)
 
-    assert project_bootstrap._seed_dir_candidates()[0] == seed
+    assert project_bootstrap.bundled_template_dir(install_root, "project-seed") == seed
 
     target = tmp_path / "fresh"
     assert project_bootstrap._seed_into(target) is True

@@ -158,7 +158,7 @@ def test_component_manager_scans_invalid_binding_before_metadata_migration(
 
 
 def test_component_manager_rejects_symlinked_components_root_without_external_read(
-    widget_client, tmp_path: Path, caplog,
+    widget_client, tmp_path: Path, caplog, require_symlinks,
 ):
     components = storage.active_components_dir()
     components.rmdir()
@@ -167,10 +167,7 @@ def test_component_manager_rejects_symlinked_components_root_without_external_re
     external = outside / "legacy.json"
     original = b'{"id":"outside","name":"Outside","icon":"gauge","children":[]}'
     external.write_bytes(original)
-    try:
-        components.symlink_to(outside, target_is_directory=True)
-    except OSError as exc:
-        pytest.skip(f"directory symlinks unavailable: {exc}")
+    components.symlink_to(outside, target_is_directory=True)
 
     component_manager_module.component_manager.load()
 
@@ -182,16 +179,13 @@ def test_component_manager_rejects_symlinked_components_root_without_external_re
 
 
 def test_component_manager_rejects_symlinked_component_file_without_external_read(
-    widget_client, tmp_path: Path, caplog,
+    widget_client, tmp_path: Path, caplog, require_symlinks,
 ):
     external = tmp_path / "outside-component.json"
     original = b'{"id":"outside","name":"Outside","icon":"gauge","children":[]}'
     external.write_bytes(original)
     linked = storage.active_components_dir() / "linked.json"
-    try:
-        linked.symlink_to(external)
-    except OSError as exc:
-        pytest.skip(f"file symlinks unavailable: {exc}")
+    linked.symlink_to(external)
 
     component_manager_module.component_manager.load()
 
@@ -203,7 +197,7 @@ def test_component_manager_rejects_symlinked_component_file_without_external_rea
 
 
 def test_component_metadata_migration_rejects_file_swapped_to_symlink_after_scan(
-    widget_client, tmp_path: Path, caplog, monkeypatch,
+    widget_client, tmp_path: Path, caplog, monkeypatch, require_symlinks,
 ):
     component = storage.active_components_dir() / "legacy.json"
     component.write_bytes(
@@ -222,10 +216,7 @@ def test_component_metadata_migration_rejects_file_swapped_to_symlink_after_scan
         nonlocal swapped
         if operation == "migrate" and not swapped:
             component.unlink()
-            try:
-                component.symlink_to(external)
-            except OSError as exc:
-                pytest.skip(f"file symlinks unavailable: {exc}")
+            component.symlink_to(external)
             swapped = True
 
     monkeypatch.setattr(
@@ -242,28 +233,6 @@ def test_component_metadata_migration_rejects_file_swapped_to_symlink_after_scan
     assert "components/legacy.json#/: component file changed after scan" in caplog.text
 
 
-def _require_symlinks(tmp_path: Path) -> None:
-    """Probe symlink support up front.
-
-    The mutation hooks below run deep inside request handling (off the
-    test's own thread, via TestClient's anyio portal); pytest.skip() called
-    from there doesn't unwind cleanly — it corrupts the portal instead of
-    skipping the test. Probe here, in the test's own frame, instead.
-    """
-    # A file symlink (not a directory one) so cleanup is a plain unlink() —
-    # Windows directory symlinks need rmdir() instead, and the privilege
-    # this probes for gates both kinds identically.
-    target = tmp_path / ".symlink-probe-target"
-    target.touch()
-    probe = tmp_path / ".symlink-probe"
-    try:
-        probe.symlink_to(target)
-    except OSError as exc:
-        pytest.skip(f"symlinks unavailable: {exc}")
-    probe.unlink()
-    target.unlink()
-
-
 @pytest.mark.parametrize(
     "operation_family",
     ["create", "update", "delete", "create_folder", "delete_folder", "migrate"],
@@ -273,8 +242,8 @@ def test_component_mutations_stay_bound_when_root_is_swapped_after_validation(
     tmp_path: Path,
     monkeypatch,
     operation_family: str,
+    require_symlinks,
 ):
-    _require_symlinks(tmp_path)
     components = storage.active_components_dir()
     component_id: str | None = None
     if operation_family in {"update", "delete"}:
@@ -342,9 +311,8 @@ def test_component_mutations_stay_bound_when_root_is_swapped_after_validation(
 
 
 def test_component_create_stays_bound_when_group_is_swapped_after_validation(
-    widget_client, tmp_path: Path, monkeypatch,
+    widget_client, tmp_path: Path, monkeypatch, require_symlinks,
 ):
-    _require_symlinks(tmp_path)
     widget_client.post("/api/components/folders", json={"name": "Group"})
     group = storage.active_components_dir() / "Group"
     bound = storage.active_components_dir() / "Group-bound"

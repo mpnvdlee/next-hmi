@@ -571,7 +571,9 @@ def _port_accepting(host: str, port: int, timeout: float = 0.25) -> bool:
     The inverse of ``_port_bindable``: that one asks whether we could take the
     port, this one whether the thing that took it is ready to be talked to.
     """
-    target = "127.0.0.1" if host in ("", "0.0.0.0") else host
+    from core import net
+
+    target = net.LOOPBACK if net.is_wildcard(host) else host
     try:
         with socket.create_connection((target, port), timeout=timeout):
             return True

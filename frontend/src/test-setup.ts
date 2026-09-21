@@ -30,3 +30,23 @@ new MutationObserver((records) => {
     }
   }
 }).observe(document.head, { childList: true });
+
+/**
+ * jsdom has no `IntersectionObserver`, and `SelectionDrawer`'s scroll-spy sets
+ * one up on mount. Installed per test file rather than here at import, because
+ * `WindowedContent` deliberately mounts everything when the API is absent: a
+ * globally defined inert stub would switch every page-rendering test to
+ * windowed behaviour and mount nothing.
+ */
+export function stubIntersectionObserver(): void {
+  class IntersectionObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return [];
+    }
+  }
+  // @ts-expect-error assigning a test stub
+  global.IntersectionObserver = IntersectionObserverStub;
+}

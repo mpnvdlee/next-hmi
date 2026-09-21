@@ -671,9 +671,23 @@ def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
         raise
 
 
-def read_project_metadata(project_root: Path) -> ProjectMetadata | None:
-    """Read the ``project`` block from ``config.json``."""
-    config = _read_config_json(project_config_path(project_root))
+def read_project_config(project_root: Path) -> dict[str, Any] | None:
+    """A project's whole ``config.json``, for a caller that wants more than one
+    field off it. ``None`` on a missing or unparseable file."""
+    return _read_config_json(project_config_path(project_root))
+
+
+def read_project_metadata(
+    project_root: Path, config: dict[str, Any] | None = None
+) -> ProjectMetadata | None:
+    """Read the ``project`` block from ``config.json``.
+
+    *config* lets a caller that has already read the file pass it in — the
+    project listing reads several fields off one project and would otherwise
+    parse the largest file in the project once per field.
+    """
+    if config is None:
+        config = read_project_config(project_root)
     if config is None:
         return None
     block = config.get(PROJECT_METADATA_KEY)
@@ -697,7 +711,7 @@ def write_project_metadata(project_root: Path, metadata: ProjectMetadata) -> Non
         _atomic_write_json(path, config)
 
 
-def project_mcp_enabled(project_root: Path) -> bool:
+def project_mcp_enabled(project_root: Path, config: dict[str, Any] | None = None) -> bool:
     """Whether the workspace MCP may write to this project, read straight off
     ``config.json``.
 
@@ -705,7 +719,8 @@ def project_mcp_enabled(project_root: Path) -> bool:
     which means a *stopped* project's flag is still authoritative. Missing file /
     field / any non-``true`` value resolves to ``False`` (closed by default).
     """
-    config = _read_config_json(project_config_path(project_root))
+    if config is None:
+        config = read_project_config(project_root)
     return isinstance(config, dict) and config.get("mcpEnabled") is True
 
 

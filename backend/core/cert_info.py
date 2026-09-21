@@ -24,29 +24,22 @@ logger = logging.getLogger(__name__)
 EXPIRY_WARNING_DAYS = 90
 
 
-def describe_certificate(path: Path) -> dict[str, Any] | None:
-    """Subject, fingerprint and validity of a certificate file.
+def describe_x509(raw: bytes) -> dict[str, Any]:
+    """Subject, fingerprint and validity of one X.509 certificate.
 
-    ``None`` when the file is missing or is not a certificate at all — a
-    private key, or the operator's path typo. Callers surface that as "unknown"
-    rather than an error: a certificate this process cannot read is still one
-    the OPC-UA server may accept.
+    Accepts PEM or DER, and raises ``ValueError`` when *raw* is neither. The one
+    describer in the tree: the OPC-UA client certificates this module reads and
+    the manager's own HTTPS certificate (``core.tls_settings``) are the same
+    file format answering the same questions, and a second copy is a second
+    expiry rule to keep in step.
     """
-    try:
-        raw = path.read_bytes()
-    except OSError:
-        return None
-
     from cryptography import x509
 
-    try:
-        if b"-----BEGIN" in raw[:64]:
-            der = ssl.PEM_cert_to_DER_cert(raw.decode("utf-8"))
-        else:
-            der = raw
-        certificate = x509.load_der_x509_certificate(der)
-    except (ValueError, UnicodeDecodeError):
-        return None
+    if b"-----BEGIN" in raw[:64]:
+        der = ssl.PEM_cert_to_DER_cert(raw.decode("utf-8"))
+    else:
+        der = raw
+    certificate = x509.load_der_x509_certificate(der)
 
     try:
         names = [
@@ -72,6 +65,24 @@ def describe_certificate(path: Path) -> dict[str, Any] | None:
         "selfSigned": certificate.issuer == certificate.subject,
         "names": names,
     }
+
+
+def describe_certificate(path: Path) -> dict[str, Any] | None:
+    """Subject, fingerprint and validity of a certificate file.
+
+    ``None`` when the file is missing or is not a certificate at all — a
+    private key, or the operator's path typo. Callers surface that as "unknown"
+    rather than an error: a certificate this process cannot read is still one
+    the OPC-UA server may accept.
+    """
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None
+    try:
+        return describe_x509(raw)
+    except ValueError:
+        return None
 
 
 # Re-check at most this often per file: long enough that a reconnect loop

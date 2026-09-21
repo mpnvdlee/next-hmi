@@ -7,6 +7,7 @@ import {
   type DiscoveredPeer,
   type PeerProject,
   type PeerScheme,
+  type PeerTransferStatus,
   useProjectsStore,
 } from '@config/store/projectsStore';
 import { basename } from '@shared/utils/paths';
@@ -29,18 +30,6 @@ interface Props {
   runningLocalProjectIds?: ReadonlySet<string>;
   onClose(): void;
   onTransferred(): void;
-}
-
-interface TransferStatus {
-  transferId: string;
-  phase: string;
-  /** The phase that was running when it failed; `phase` holds the outcome. */
-  failedPhase?: string | null;
-  status:
-    'active' | 'complete' | 'error' | 'cancelled' | 'applied_pending_start' | 'recovery_required';
-  bytesDone: number;
-  bytesTotal: number;
-  message?: string | null;
 }
 
 /** A project already registered on whichever side receives this transfer. */
@@ -114,7 +103,7 @@ export default function PeerTransferModal({
   // paired with the refusal that follows it.
   const [attemptedFolder, setAttemptedFolder] = useState<string | null>(null);
   const [refusedFolder, setRefusedFolder] = useState<string | null>(null);
-  const [transfer, setTransfer] = useState<TransferStatus | null>(null);
+  const [transfer, setTransfer] = useState<PeerTransferStatus | null>(null);
   const [lastActivePhase, setLastActivePhase] = useState<string | null>(null);
   const [transferId, setTransferId] = useState(() => `${isPull ? 'pull' : 'tx'}-${randomUuid()}`);
   const [copyDestinationId, setCopyDestinationId] = useState(() => randomUuid());

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { projectSlug } from '@shared/utils/runtimeBase';
+import { managerApiJson } from '@shared/utils/api';
 
 /**
  * Why this project document cannot show its project, or `null` while it can.
@@ -19,19 +20,6 @@ interface ProjectAvailabilityStore {
 
 type ManagerProject = { id: string; name?: string; status?: string };
 type ManagerInstance = { id: string; status?: string };
-
-/**
- * The manager's own API, at the origin root.
- *
- * Deliberately not `apiJson`: that prefixes the runtime base, which under a
- * `/editor/<slug>/` document points at the *instance* backend — the one that
- * isn't answering, which is how we got here.
- */
-async function managerJson<T>(path: string): Promise<T> {
-  const res = await fetch(path, { credentials: 'same-origin' });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return (await res.json()) as T;
-}
 
 /** The same ladder `_unavailable_reason` walks, from what the manager reports. */
 export function reasonFor(
@@ -73,8 +61,8 @@ export const useProjectAvailabilityStore = create<ProjectAvailabilityStore>((set
     inFlight = (async () => {
       try {
         const [listing, running] = await Promise.all([
-          managerJson<{ projects: ManagerProject[] }>('/api/projects'),
-          managerJson<{ instances: ManagerInstance[] }>('/api/manager/running'),
+          managerApiJson<{ projects: ManagerProject[] }>('/api/projects'),
+          managerApiJson<{ instances: ManagerInstance[] }>('/api/manager/running'),
         ]);
         const projects = listing.projects ?? [];
         const reason = reasonFor(projectId, projects, running.instances ?? []);

@@ -118,7 +118,7 @@ export interface PeerProject {
   inProjectsRoot?: boolean;
 }
 
-interface PeerTransferStatus {
+export interface PeerTransferStatus {
   transferId: string;
   phase: string;
   /** The phase that was running when it failed; `phase` holds the outcome. */

@@ -538,17 +538,14 @@ def test_copy_transfer_with_start_runs_the_real_upgrade_gate(
     assert body["startError"] is None
 
 
-def test_projects_root_symlink_is_never_followed(monkeypatch, tmp_path: Path):
+def test_projects_root_symlink_is_never_followed(monkeypatch, tmp_path: Path, require_symlinks):
     _, root = _configure_home(monkeypatch, tmp_path)
     archive = _archive(tmp_path)
     outside = tmp_path / "outside"
     outside.mkdir()
     (outside / "marker.txt").write_text("keep", encoding="utf-8")
     root.rmdir()
-    try:
-        root.symlink_to(outside, target_is_directory=True)
-    except OSError as exc:
-        pytest.skip(f"directory symlinks unavailable: {exc}")
+    root.symlink_to(outside, target_is_directory=True)
     with TestClient(_app()) as client:
         response = _receive(client, _pair(client), archive, transferId="tx-root-link")
     assert response.status_code == 422
@@ -644,25 +641,8 @@ def test_a_tilde_relative_projects_root_still_owns_its_own_projects(
     assert listed.json()["projects"][0]["inProjectsRoot"] is True
 
 
-def _require_symlinks(tmp_path: Path) -> None:
-    """Probe symlink support up front (mirrors `test_component_api.py`).
-
-    `pytest.skip()` from deep inside request handling doesn't unwind cleanly
-    on every platform, so this probes in the test's own frame instead.
-    """
-    target = tmp_path / ".symlink-probe-target"
-    target.touch()
-    probe = tmp_path / ".symlink-probe"
-    try:
-        probe.symlink_to(target)
-    except OSError as exc:
-        pytest.skip(f"symlinks unavailable: {exc}")
-    probe.unlink()
-    target.unlink()
-
-
 def test_project_directly_in_root_is_in_root_through_a_symlinked_ancestor(
-    monkeypatch, tmp_path: Path
+    monkeypatch, tmp_path: Path, require_symlinks
 ):
     """3.6 regression: `default_projects_root` returned `.absolute()` while a
     project's stored path is `.resolve()`d (symlink-free). A symlink anywhere
@@ -670,7 +650,6 @@ def test_project_directly_in_root_is_in_root_through_a_symlinked_ancestor(
     stored, resolved entry path does not, so an in-root project's parent no
     longer equals the root and the peer-transfer clash check goes dark.
     """
-    _require_symlinks(tmp_path)
     real_parent = tmp_path / "realparent"
     real_parent.mkdir()
     link_parent = tmp_path / "link"
@@ -734,7 +713,9 @@ def test_peer_project_listing_never_creates_the_projects_root(
     assert not root.exists()
 
 
-def test_peer_project_listing_tolerates_a_symlinked_root(monkeypatch, tmp_path: Path):
+def test_peer_project_listing_tolerates_a_symlinked_root(
+    monkeypatch, tmp_path: Path, require_symlinks
+):
     """`_root()` refuses a symlinked root outright — an install-time guard
     that has no business failing a read-only listing."""
     home = tmp_path / "runtime"
@@ -742,10 +723,7 @@ def test_peer_project_listing_tolerates_a_symlinked_root(monkeypatch, tmp_path: 
     outside = tmp_path / "outside-root"
     outside.mkdir()
     root = home / "Projects"
-    try:
-        root.symlink_to(outside, target_is_directory=True)
-    except OSError as exc:
-        pytest.skip(f"directory symlinks unavailable: {exc}")
+    root.symlink_to(outside, target_is_directory=True)
     monkeypatch.setattr(runtime_home, "runtime_home_path", lambda: home)
     save_manifest(ManifestV1(defaultProjectsRoot=str(root)))
     manager_auth.set_password("destination-admin")
@@ -782,16 +760,13 @@ def test_target_appearance_race_is_preserved(monkeypatch, tmp_path: Path):
     assert load_manifest().projects == []
 
 
-def test_existing_target_symlink_is_preserved(monkeypatch, tmp_path: Path):
+def test_existing_target_symlink_is_preserved(monkeypatch, tmp_path: Path, require_symlinks):
     _, root = _configure_home(monkeypatch, tmp_path)
     outside = tmp_path / "outside-target"
     outside.mkdir()
     (outside / "marker.txt").write_text("keep", encoding="utf-8")
     target = root / "source-copy"
-    try:
-        target.symlink_to(outside, target_is_directory=True)
-    except OSError as exc:
-        pytest.skip(f"directory symlinks unavailable: {exc}")
+    target.symlink_to(outside, target_is_directory=True)
     with TestClient(_app()) as client:
         response = _receive(
             client,

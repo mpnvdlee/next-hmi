@@ -39,16 +39,30 @@ def _dev_project() -> Path:
     return repo_root() / "project-testbench"
 
 
-def _seed_dir_candidates() -> tuple[Path, ...]:
-    """Where the bundled seed may sit, relative to the install root.
+def bundled_template_dir(root: Path, dirname: str) -> Path | None:
+    """Where the bundled template *dirname* sits under the install *root*, if at all.
 
-    Resolved through ``repo_root()`` rather than this file's own location: a
-    frozen build seals this module inside the archive, where the walk up from
-    ``__file__`` lands *above* the extracted tree and finds no seed at all —
-    every new install would then come up with a bare default project.
+    The caller resolves *root* through ``repo_root()`` rather than this file's
+    own location: a frozen build seals these modules inside the archive, where
+    the walk up from ``__file__`` lands *above* the extracted tree and finds no
+    template at all — every new install would then come up with a bare default
+    project, and the create dialog would report every template as unbundled.
     """
-    root = repo_root()
-    return (root / _SEED_DIRNAME, root / "backend" / _SEED_DIRNAME)
+    for candidate in (root / dirname, root / "backend" / dirname):
+        if candidate.is_dir():
+            return candidate
+    return None
+
+
+def copy_template_into(source: Path, target: Path) -> None:
+    """Copy a bundled template tree into *target*, merging with what is there."""
+    target.mkdir(parents=True, exist_ok=True)
+    for entry in source.iterdir():
+        dest = target / entry.name
+        if entry.is_dir():
+            shutil.copytree(entry, dest, dirs_exist_ok=True)
+        else:
+            shutil.copy2(entry, dest)
 
 
 def _has_project_contents(path: Path) -> bool:
@@ -58,17 +72,11 @@ def _has_project_contents(path: Path) -> bool:
 
 def _seed_into(path: Path) -> bool:
     """Copy the bundled project-seed/ template into *path*. Returns True if a seed was found."""
-    for candidate in _seed_dir_candidates():
-        if candidate.is_dir():
-            path.mkdir(parents=True, exist_ok=True)
-            for entry in candidate.iterdir():
-                dest = path / entry.name
-                if entry.is_dir():
-                    shutil.copytree(entry, dest, dirs_exist_ok=True)
-                else:
-                    shutil.copy2(entry, dest)
-            return True
-    return False
+    source = bundled_template_dir(repo_root(), _SEED_DIRNAME)
+    if source is None:
+        return False
+    copy_template_into(source, path)
+    return True
 
 
 def _default_project_target(home: Path) -> tuple[Path, str]:

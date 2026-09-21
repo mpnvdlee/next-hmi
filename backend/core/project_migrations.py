@@ -139,6 +139,22 @@ def stamp_current_format(metadata: ProjectMetadata) -> ProjectMetadata:
     )
 
 
+def needs_migration(metadata: ProjectMetadata) -> bool:
+    """Whether *metadata* is behind what this build opens, and has to be migrated.
+
+    A project already at ``PROJECT_FORMAT_VERSION`` but carrying no
+    ``minAppVersion`` counts: that stamp predates the field, so its number says
+    where the project landed without saying which build took it there, and
+    ``run_baseline_migration`` replays the whole chain for it.
+
+    One predicate for all three readers — the dashboard's "needs upgrade" flag,
+    the supervisor's start refusal and the migration itself. Hand-copied, they
+    drift, and a dashboard that offers Start for a project the supervisor then
+    refuses is how that drift stays invisible.
+    """
+    return metadata.formatVersion < PROJECT_FORMAT_VERSION or metadata.minAppVersion is None
+
+
 class UnsupportedProjectFormatError(Exception):
     """The project's stamped format version is newer than this build supports."""
 
@@ -372,7 +388,7 @@ def run_baseline_migration(project_root: Path, *, dry_run: bool = False) -> Migr
     # re-runnable for exactly this: each skips what it has already converted.
     unstamped_release = metadata.minAppVersion is None
 
-    if current_version == PROJECT_FORMAT_VERSION and not unstamped_release:
+    if not needs_migration(metadata):
         return MigrationResult(
             already_current=True,
             dry_run=dry_run,

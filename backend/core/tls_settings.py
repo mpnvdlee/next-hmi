@@ -19,7 +19,6 @@ certificate keeps working and the UI reports the setting as externally owned.
 from __future__ import annotations
 
 import datetime
-import hashlib
 import ipaddress
 import json
 import logging
@@ -33,6 +32,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from core import net, runtime_home
+from core.cert_info import describe_x509
 from core.storage import write_bytes_atomic, write_text_atomic
 
 logger = logging.getLogger(__name__)
@@ -45,10 +45,10 @@ _CONFIG_FILENAME = "config.json"
 # way this certificate is ever trusted. A panel that outlives its certificate
 # by 18 years is the worse failure.
 _VALIDITY_DAYS = 365 * 20
-# Long enough before expiry that a plant can schedule the swap into a planned
-# stop rather than discovering it from an operator's browser warning.
-EXPIRY_WARNING_DAYS = 90
 MAX_PEM_BYTES = 64 * 1024
+
+# What `describe` passes on from `cert_info.describe_x509`.
+_ADMIN_CERT_FIELDS = ("fingerprint", "expiresAt", "expiresInDays", "expired", "expiring", "names")
 
 # Generated and uploaded material sit side by side so switching between them
 # never destroys the other, and switching back needs no re-upload.
@@ -340,34 +340,14 @@ def describe(home: Path | None = None, mode: Mode = "generated") -> dict[str, An
     except (FileNotFoundError, OSError, UnicodeDecodeError):
         return None
 
-    from cryptography import x509
-
     try:
-        der = ssl.PEM_cert_to_DER_cert(pem)
-        certificate = x509.load_der_x509_certificate(der)
+        described = describe_x509(pem.encode("utf-8"))
     except ValueError as exc:
         raise TlsError(f"Stored certificate is not readable: {exc}") from exc
-    try:
-        names = [
-            str(entry.value)
-            for entry in certificate.extensions.get_extension_for_class(
-                x509.SubjectAlternativeName
-            ).value
-        ]
-    except x509.ExtensionNotFound:
-        names = []
-    # Signed, so an already-expired certificate reads as a negative number
-    # rather than collapsing into the same "0 days" as one expiring today.
-    remaining = certificate.not_valid_after_utc - datetime.datetime.now(datetime.UTC)
-    expires_in_days = remaining.days
-    return {
-        "fingerprint": hashlib.sha256(der).hexdigest(),
-        "expiresAt": certificate.not_valid_after_utc.isoformat(),
-        "expiresInDays": expires_in_days,
-        "expired": expires_in_days < 0,
-        "expiring": expires_in_days < EXPIRY_WARNING_DAYS,
-        "names": names,
-    }
+    # The HTTPS admin section shows a machine-generated certificate, so it asks
+    # less of one than the OPC-UA panel does of an operator's: no subject, no
+    # issue date, and self-signed is the whole point rather than a finding.
+    return {key: described[key] for key in _ADMIN_CERT_FIELDS}
 
 
 def _describe_quietly(home: Path | None, which: Mode) -> dict[str, Any] | None:

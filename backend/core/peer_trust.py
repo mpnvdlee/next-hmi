@@ -20,7 +20,6 @@ unannounced certificate change is indistinguishable from an interception.
 
 from __future__ import annotations
 
-import datetime
 import hashlib
 import json
 import socket
@@ -175,14 +174,12 @@ def _pin_expiry_days(pin: Pin) -> int | None:
     ``None`` if the stored PEM can't be parsed — leaves the caller to fall
     back to its normal "something else went wrong" message.
     """
-    from cryptography import x509
+    from core.cert_info import describe_x509
 
     try:
-        certificate = x509.load_pem_x509_certificate(pin.pem.encode("utf-8"))
+        return describe_x509(pin.pem.encode("utf-8"))["expiresInDays"]
     except ValueError:
         return None
-    remaining = certificate.not_valid_after_utc - datetime.datetime.now(datetime.UTC)
-    return remaining.days
 
 
 def describe_mismatch(host: str, port: int, address: str) -> str | None:

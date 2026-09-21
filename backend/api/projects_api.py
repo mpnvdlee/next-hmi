@@ -26,6 +26,7 @@ from core.manifest import (
     load_manifest,
     manifest_transaction,
     project_mcp_enabled,
+    read_project_config,
     read_project_metadata,
     running_entry,
     save_manifest,
@@ -34,7 +35,12 @@ from core.manifest import (
     validate_project_id,
     write_project_metadata,
 )
-from core.project_migrations import PROJECT_FORMAT_VERSION, stamp_current_format
+from core.project_bootstrap import bundled_template_dir, copy_template_into
+from core.project_migrations import (
+    PROJECT_FORMAT_VERSION,
+    needs_migration,
+    stamp_current_format,
+)
 from core.project_packer import (
     UnsafeArchiveError,
     pack_project,
@@ -92,20 +98,11 @@ class ValidatePathBody(BaseModel):
 
 
 def _template_dir(template: str) -> Path | None:
-    """Locate a bundled project template under the install root.
-
-    Resolves through ``repo_root()`` rather than this file's own location: a
-    frozen build seals this module inside the archive, where the walk up from
-    ``__file__`` lands *above* the extracted tree and finds neither template.
-    """
+    """The bundled folder behind a ``template`` name, or ``None`` if unbundled."""
     dirname = _TEMPLATE_DIRNAMES.get(template)
     if dirname is None:
         return None
-    root = repo_root()
-    for candidate in (root / dirname, root / "backend" / dirname):
-        if candidate.is_dir():
-            return candidate
-    return None
+    return bundled_template_dir(repo_root(), dirname)
 
 
 def _copy_template_into(target: Path, template: str) -> None:
@@ -119,12 +116,7 @@ def _copy_template_into(target: Path, template: str) -> None:
         for sub in ("assets", "certs", "custom-widgets", "external-libraries"):
             (target / sub).mkdir(parents=True, exist_ok=True)
         return
-    for entry in source.iterdir():
-        dest = target / entry.name
-        if entry.is_dir():
-            shutil.copytree(entry, dest, dirs_exist_ok=True)
-        else:
-            shutil.copy2(entry, dest)
+    copy_template_into(source, target)
 
 
 def _resolve_path(raw: str) -> Path:
@@ -140,25 +132,19 @@ def _path_status(raw_path: str) -> str:
     return "present" if path.is_dir() else "missing"
 
 
-def _entry_dict(
-    entry: ProjectEntry, *, default_id: str | None = None, root: Path
-) -> dict[str, Any]:
+def _entry_dict(entry: ProjectEntry, manifest: ManifestV1) -> dict[str, Any]:
+    """One project's row for the dashboard. Both manifest-wide facts it needs —
+    the default project and the projects root — are read off the manifest the
+    caller already holds, rather than threaded in beside it."""
+    root = default_projects_root(manifest)
     path = Path(entry.path).expanduser()
     users_state = users_document.state(path)
     status = _path_status(entry.path)
-    metadata = read_project_metadata(path) if status == "present" else None
+    config = read_project_config(path) if status == "present" else None
+    metadata = read_project_metadata(path, config) if status == "present" else None
     format_version = metadata.formatVersion if metadata is not None else None
     unsupported = format_version is not None and format_version > PROJECT_FORMAT_VERSION
-    # A project at the current format but carrying no release stamp predates the
-    # stamp, so it is replayed through the chain like a stale one.
-    needs_upgrade = (
-        metadata is not None
-        and not unsupported
-        and (
-            metadata.formatVersion < PROJECT_FORMAT_VERSION
-            or metadata.minAppVersion is None
-        )
-    )
+    needs_upgrade = metadata is not None and not unsupported and needs_migration(metadata)
     return {
         "id": entry.id,
         "name": entry.name,
@@ -174,8 +160,8 @@ def _entry_dict(
         "addedAt": entry.addedAt,
         "lastOpenedAt": entry.lastOpenedAt,
         "status": status,
-        "isDefault": entry.id == default_id,
-        "mcpEnabled": project_mcp_enabled(path),
+        "isDefault": entry.id == manifest.defaultProjectId,
+        "mcpEnabled": project_mcp_enabled(path, config),
         "credentialsStatus": "ok" if users_state.valid else "error",
         "credentialsError": users_state.error,
         "formatVersion": format_version,
@@ -492,8 +478,7 @@ def list_projects() -> dict[str, Any]:
         "defaultProjectId": manifest.defaultProjectId,
         "defaultProjectsRoot": str(root),
         "projects": [
-            _entry_dict(entry, default_id=manifest.defaultProjectId, root=root)
-            for entry in manifest.projects
+            _entry_dict(entry, manifest) for entry in manifest.projects
         ],
     }
 
@@ -530,7 +515,7 @@ def set_default(project_id: str) -> dict[str, Any]:
         entry = _require_entry(manifest, project_id)
         manifest.defaultProjectId = entry.id
         save_manifest(manifest)
-    return _entry_dict(entry, default_id=entry.id, root=default_projects_root(manifest))
+    return _entry_dict(entry, manifest)
 
 
 @router.patch("/{project_id}")
@@ -554,9 +539,7 @@ def update_project(project_id: str, body: UpdateProjectBody) -> dict[str, Any]:
     with manifest_transaction() as manifest:
         entry = _require_entry(manifest, project_id)
         if new_name is None and (new_id is None or new_id == entry.id):
-            return _entry_dict(
-                entry, default_id=manifest.defaultProjectId, root=default_projects_root(manifest)
-            )
+            return _entry_dict(entry, manifest)
         if running_entry(manifest, entry.id) is not None:
             raise ConflictError("Cannot rename a running project. Stop it first.")
 
@@ -601,9 +584,7 @@ def update_project(project_id: str, body: UpdateProjectBody) -> dict[str, Any]:
         write_project_metadata(target, metadata.model_copy(update=updates))
 
     logger.info("Renamed project '%s' to '%s' (%s)", old_id, entry.name, entry.id)
-    return _entry_dict(
-        entry, default_id=manifest.defaultProjectId, root=default_projects_root(manifest)
-    )
+    return _entry_dict(entry, manifest)
 
 
 @router.post("/validate-path")
@@ -742,7 +723,7 @@ def create_project(body: CreateProjectBody) -> dict[str, Any]:
         manifest.projects.append(entry)
         save_manifest(manifest)
     logger.info("Created project '%s' (%s) at %s", name, metadata.id, target)
-    return _entry_dict(entry, root=default_projects_root(manifest))
+    return _entry_dict(entry, manifest)
 
 
 @router.post("/register", status_code=201)
@@ -779,7 +760,7 @@ def register_existing_project(body: RegisterProjectBody) -> dict[str, Any]:
         save_manifest(manifest)
     set_project_metadata_name(target, display_name)
     logger.info("Registered existing project '%s' (%s) at %s", display_name, metadata.id, target)
-    return _entry_dict(entry, root=default_projects_root(manifest))
+    return _entry_dict(entry, manifest)
 
 
 @router.post("/{project_id}/locate")
@@ -802,7 +783,7 @@ def locate(project_id: str, body: LocateProjectBody) -> dict[str, Any]:
             )
         entry.path = str(target)
         save_manifest(manifest)
-    return _entry_dict(entry, root=default_projects_root(manifest))
+    return _entry_dict(entry, manifest)
 
 
 @router.delete("/{project_id}", status_code=200)
@@ -936,4 +917,4 @@ async def import_project(
         ),
     )
     logger.info("Imported project '%s' (%s) at %s", entry.name, metadata.id, target)
-    return _entry_dict(entry, root=default_projects_root(_manifest))
+    return _entry_dict(entry, _manifest)

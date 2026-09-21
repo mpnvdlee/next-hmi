@@ -154,6 +154,14 @@ def _expand_padding_layout(layout: dict[str, Any], where: str, notes: list[str])
     return True
 
 
+# The three walkers below and the sweep in `migrate_padding` repeat
+# `migration_size_modes._walk_project` rather than calling it, on purpose. That
+# walk threads a layout flow through every level, which it derives from widget
+# declarations it loads through the compiler's schema extractor; this step reads
+# no flow at all, so sharing it would mean handing it a `_WidgetTypes` this step
+# has no use for and cannot cheaply build, and letting the output of a step that
+# has already shipped move whenever a sibling's walk does. Same reason
+# `_switch_branches` above stays local.
 def _migrate_node(node: Any, where: str, notes: list[str]) -> bool:
     if not isinstance(node, dict):
         return False

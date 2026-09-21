@@ -1,15 +1,9 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import PropertySourceSelector from './index';
+import { stubIntersectionObserver } from '../../../../test-setup';
 
-beforeAll(() => {
-  class IntersectionObserverStub {
-    observe() {}
-    disconnect() {}
-  }
-  // @ts-expect-error assigning a test stub
-  global.IntersectionObserver = IntersectionObserverStub;
-});
+beforeAll(stubIntersectionObserver);
 
 describe('PropertySourceSelector', () => {
   it('opens the property-source drawer from the question-mark dropdown action', () => {

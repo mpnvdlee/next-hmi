@@ -434,16 +434,13 @@ def test_casefold_colliding_source_keys_are_both_rejected(widget_workspace):
     assert widget_compiler._exclude_casefold_collisions([upper, lower], src) == []
 
 
-def test_discovery_rejects_file_and_parent_directory_symlinks(widget_workspace):
+def test_discovery_rejects_file_and_parent_directory_symlinks(widget_workspace, require_symlinks):
     src = widget_workspace["src"]
     target_file = src.parent / "target.tsx"
     target_file.write_text(GOOD_WIDGET, encoding="utf-8")
     file_link = src / "Inputs" / "FileLink" / "index.tsx"
     file_link.parent.mkdir(parents=True)
-    try:
-        file_link.symlink_to(target_file)
-    except OSError as err:
-        pytest.skip(f"symlinks unavailable: {err}")
+    file_link.symlink_to(target_file)
 
     target_group = src.parent / "target-group"
     _write_widget(target_group, "DirectoryLink", GOOD_WIDGET)
@@ -460,16 +457,13 @@ def test_discovery_rejects_file_and_parent_directory_symlinks(widget_workspace):
 
 
 @pytest.mark.asyncio
-async def test_compile_entry_refuses_symlink_omitted_by_discovery(widget_workspace):
+async def test_compile_entry_refuses_symlink_omitted_by_discovery(widget_workspace, require_symlinks):
     src, build = widget_workspace["src"], widget_workspace["build"]
     target = src.parent / "target.tsx"
     target.write_text(GOOD_WIDGET, encoding="utf-8")
     linked_entry = src / "Inputs" / "Linked" / "index.tsx"
     linked_entry.parent.mkdir(parents=True)
-    try:
-        linked_entry.symlink_to(target)
-    except OSError as err:
-        pytest.skip(f"symlinks unavailable: {err}")
+    linked_entry.symlink_to(target)
 
     assert await widget_compiler.compile_entry(linked_entry, src) is False
     assert not (build / "Inputs" / "Linked" / "index.js").exists()
@@ -1019,7 +1013,9 @@ def test_collect_touched_entries_groups_changes_to_their_index_tsx(widget_worksp
 
 
 @pytest.mark.asyncio
-async def test_watcher_does_not_re_admit_symlinked_entry(widget_workspace, monkeypatch):
+async def test_watcher_does_not_re_admit_symlinked_entry(
+    widget_workspace, monkeypatch, require_symlinks
+):
     import watchfiles
 
     src, build = widget_workspace["src"], widget_workspace["build"]
@@ -1027,10 +1023,7 @@ async def test_watcher_does_not_re_admit_symlinked_entry(widget_workspace, monke
     target.write_text(GOOD_WIDGET, encoding="utf-8")
     linked_entry = src / "Inputs" / "Linked" / "index.tsx"
     linked_entry.parent.mkdir(parents=True)
-    try:
-        linked_entry.symlink_to(target)
-    except OSError as err:
-        pytest.skip(f"symlinks unavailable: {err}")
+    linked_entry.symlink_to(target)
 
     async def fake_awatch(_root, recursive=True):
         yield {(1, str(linked_entry))}

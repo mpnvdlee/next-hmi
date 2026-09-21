@@ -12,6 +12,7 @@ import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
 import { usePanelDiagnostics } from '@config/hooks/usePanelDiagnostics';
 import { apiJson } from '@shared/utils/api';
+import { stubIntersectionObserver } from '../../../../test-setup';
 
 vi.mock('@shared/utils/api', () => ({ apiJson: vi.fn() }));
 const mockedApiJson = vi.mocked(apiJson);
@@ -132,14 +133,7 @@ describe('ActionsInput — full discriminator sweep', () => {
 describe('ActionsInput — browse drawer', () => {
   beforeEach(setupStores);
 
-  beforeAll(() => {
-    class IntersectionObserverStub {
-      observe() {}
-      disconnect() {}
-    }
-    // @ts-expect-error assigning a test stub
-    global.IntersectionObserver = IntersectionObserverStub;
-  });
+  beforeAll(stubIntersectionObserver);
 
   it('leads the Add dropdown with a browse row that opens the categorised drawer', async () => {
     const user = userEvent.setup();
