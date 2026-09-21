@@ -160,7 +160,9 @@ def _acquire_file_lock(handle: BinaryIO) -> None:
         # byte 0's exclusive lock makes a plain read() of it raise
         # PermissionError instead of blocking. Check emptiness via seek/tell
         # (position-only, never touches the locked byte) so a losing racer
-        # doesn't crash — it just skips the redundant write and waits below.
+        # doesn't crash — it just skips the redundant write and goes on to the
+        # lock below, which (unlike the flock branch) retries for ~10 s and then
+        # raises rather than waiting indefinitely.
         handle.seek(0, os.SEEK_END)
         if handle.tell() == 0:
             handle.seek(0)

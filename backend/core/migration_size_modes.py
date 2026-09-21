@@ -563,7 +563,7 @@ def _write_mode_fields(paths: Any, result: Any, types: _WidgetTypes) -> None:
 # * A sizing bound to a `$var` — or to a `$switch` with a branch that is one —
 #   becomes `Fixed` over that same bound length.
 # * `margin` and its four sides are dropped outright: no row, no replacement, and
-#   `SELF_DIRECT_KEYS` no longer emits them, so a stored one had stopped
+#   `SELF_DIRECT_PROPS` no longer emits them, so a stored one had stopped
 #   rendering anyway. Reported per removal, since losing one moves the widget.
 # * A `grow` over a basis that is not `0` becomes Fill on a content floor.
 # * The container half of a layout is dropped from every non-`Container`.

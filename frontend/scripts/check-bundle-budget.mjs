@@ -90,8 +90,9 @@ const ROUTE_BUDGETS_GZIP = {
   // recoverable path there is lazifying WidgetIcon/IconSourcePicker. Raised
   // again from 320 kB for React 19's larger vendor-react chunk (~+14 kB
   // gzip) — no code-side fix available for framework-runtime growth. Raised
-  // again from 325 kB for the Layout panel's Figma-style controls (~+1.6 kB
-  // gzip: the alignment grid, the spacing box, the composite size rows). This
+  // again from 325 kB for the Layout panel's controls (~+1.6 kB gzip: the two
+  // direction-dependent icon rows for align and justify, the four independent
+  // padding rows, and a mode row plus three length rows per axis). This
   // one *is* feature code, unlike the raises above, and it was taken knowing
   // the lazification path below was the alternative — the marker modals
   // (ChildPositionsEditor, ImageIndicatorsEditor) remain the next thing to move

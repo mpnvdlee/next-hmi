@@ -351,11 +351,14 @@ export function selectOptionKey(value: unknown): string {
  *
  * The options list is authored label-first, so a row exists before its value
  * does — a number cell cleared back to empty, a translation nobody has picked.
- * Its {@link selectOptionKey} is `''`, which is also an unset field's key: such
- * a row would read as the current selection of every instance that never set
- * the property, and two of them would be indistinguishable from each other.
+ * Such a row would read as the current selection of every instance that never
+ * set the property, and two of them would be indistinguishable from each other.
  * The row stays in the authoring list; it is simply offered nowhere until it
  * holds something.
+ *
+ * Unset means `undefined` or `null` only. An empty string is a value a set may
+ * deliberately offer — the "—" entry {@link selectOptionKey} keeps as `''` —
+ * so it passes.
  */
 export function hasOptionValue(value: unknown): boolean {
   return value !== undefined && value !== null;

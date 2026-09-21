@@ -238,7 +238,7 @@ mount_workspace_mcp(app)
 # The same project child is served under two verb-first, browser-facing
 # prefixes: ``/runtime/<slug>/`` and ``/editor/<slug>/``. Both forward
 # themselves as ``X-Forwarded-Prefix`` so the child bakes the right base into
-# ``index.html``. (The legacy ``/p/<id>/`` alias was removed — backlog R24/R51.)
+# ``index.html``. (The legacy ``/p/<id>/`` alias was removed.)
 _PROXY_PREFIXES = ("runtime", "editor")
 
 

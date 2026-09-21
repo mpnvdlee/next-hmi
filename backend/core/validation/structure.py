@@ -993,10 +993,12 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
         declared = ctx.page_property_keys.get(page_id)
         args = action.get("componentProperties")
         if declared is not None and isinstance(args, dict):
-            target = f"page '{page_id}'"
+            owner_label = f"page '{page_id}'"
             for key in args:
                 if key not in declared:
-                    _warn_unknown_property(report, f"{path}/componentProperties/{key}", key, target)
+                    _warn_unknown_property(
+                        report, f"{path}/componentProperties/{key}", key, owner_label
+                    )
     # Async actions nest follow-up lists (onSuccess/onFailed/onSettled) and
     # showAlert nests its button handlers; their targets deserve the same checks
     # as a top-level action.

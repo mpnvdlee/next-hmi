@@ -390,8 +390,9 @@ interface SchemaField {
   defaultToken?: string;
   /** Conditional visibility — a condition or an AND-joined array, referencing sibling keys. */
   visibleWhen?: unknown;
-  /** For a `variable` field: when it passes, the picker offers only the variables
-   *  the historian records. Same shape and evaluation as `visibleWhen`. */
+  /** For a `format: 'variables'` field: when it passes, the picker offers only
+   *  the variables the historian records. Same shape and evaluation as
+   *  `visibleWhen`. */
   recordedWhen?: unknown;
   event?: string;
 }

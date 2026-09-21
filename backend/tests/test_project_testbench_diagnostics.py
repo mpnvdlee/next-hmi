@@ -75,6 +75,5 @@ def test_project_testbench_diagnostics_match_golden_snapshot(testbench_diagnosti
         "project-testbench's diagnostics changed. If this is a new, "
         "unapproved finding, fix the binding instead of updating the golden "
         "file. If it's a deliberate new/changed intentional finding, "
-        f"regenerate {GOLDEN_PATH} and record it in "
-        "docs/operations/maintenance-backlog.md #39."
+        f"regenerate {GOLDEN_PATH} deliberately."
     )

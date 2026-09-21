@@ -126,6 +126,12 @@ class CertInfo(BaseModel):
     ``readable`` is false when the path holds no certificate this process can
     parse (missing file, a private key, a typo'd path); every other field is
     then unset and the editor shows the lifecycle as unknown.
+
+    camelCase where the two models above are snake_case: those carry the
+    persisted datasource-settings keys the wizard writes back
+    (``client_certificate`` / ``client_private_key``), while nothing here has an
+    on-disk counterpart — it is read straight into TypeScript's
+    ``CertificateInfo``.
     """
 
     readable: bool

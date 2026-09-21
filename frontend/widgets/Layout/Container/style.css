@@ -27,7 +27,7 @@
      and `__footer`, the page-group shell chrome, `ShellRegion`'s `.region`, and
      every Container) — so a margin of its own only stacked on top of that, and an
      author reaching for an edge-to-edge layout had to zero a value they never
-     set. The Layout panel no longer offers margin at all, and `SELF_DIRECT_KEYS`
+     set. The Layout panel no longer offers margin at all, and `SELF_DIRECT_PROPS`
      in layoutUtils.ts no longer emits one, so a margin an older project still
      stores is simply not read.
      Theme-driven defaults below; a per-instance layout value (inline style /

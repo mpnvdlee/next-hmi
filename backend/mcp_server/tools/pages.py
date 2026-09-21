@@ -46,7 +46,8 @@ from ._common import (
 def _hosts_children(widget_type: str) -> bool:
     """Whether nodes of this type carry a ``children`` array — they render as
     containers and need the array even when empty, so the UI tree has a drop
-    target. Mirrors ``isContainerHostType`` on the frontend.
+    target. The declared half of ``isContainerHostType`` on the frontend: that
+    one also counts a type with widget slots, which no page node here can be.
 
     Every widget declares it with ``export const hostsChildren = true``. A
     project widget wins over a same-named built-in one, mirroring the frontend
@@ -65,6 +66,7 @@ def _hosts_children(widget_type: str) -> bool:
     builtin = manifest.get("builtin")
     entry = builtin.get(widget_type) if isinstance(builtin, dict) else None
     return isinstance(entry, dict) and entry.get("hostsChildren") is True
+
 
 # Top-level page fields that pages_set_metadata may patch. ``id`` and
 # ``sections`` are excluded — renames and structural rewrites must go through

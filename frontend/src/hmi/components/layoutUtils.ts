@@ -318,8 +318,8 @@ function containerStyle(layout?: LayoutConfig): CSSWithVars {
 
 /**
  * A flex host's layout as the props object it takes to actually behave like
- * one: `style` — self-sizing plus the child-layout `--container-*` vars, same
- * as the old `containerLayoutStyle` — and `data-flow-direction` /
+ * one: `style` — self-sizing plus the child-layout `--container-*` vars — and
+ * `data-flow-direction` /
  * `data-flow-align`, the attributes `hmi.css`'s translation block reads off a
  * flex parent to decide which of a child's two axes is main. Spread the whole
  * object onto whichever element is actually `display: flex`; a host split

@@ -7,7 +7,7 @@ import type { EvaluationContext } from '../utils/propertySourceEval';
 
 /**
  * Reactive `useEvalContext` for components rendered OUTSIDE the WidgetRenderer
- * tree — shell regions, popups, the fallback NavigationMenu.
+ * tree — shell regions and popups.
  *
  * `useEvalContext` is deliberately stable across variable/time ticks (widgets
  * get their reactivity from WidgetRenderer's granular subscriptions), so a

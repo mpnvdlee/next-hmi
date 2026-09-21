@@ -4,7 +4,7 @@ Runs once in the manager lifespan before :meth:`Supervisor.resume_all`. Two case
 
 * **Running set already populated** — nothing to do; resume handles it.
 * **Fresh install** — no projects at all. Seed the bundled example project; a
-  pending first-run operator setup keeps it stopped until credentials exist.
+  ``users.json`` that does not read back as valid keeps it stopped.
 
 An install that has projects but deliberately none running (operator stopped them
 all) is respected: the running set stays empty.

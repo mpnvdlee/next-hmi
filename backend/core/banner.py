@@ -100,7 +100,7 @@ def _render_logo() -> str:
 
 # ── Field rendering ──────────────────────────────────────────────────────────
 
-_LABEL_WIDTH = 18  # widest label + 2 spaces ("Default project")
+_LABEL_WIDTH = 18  # widest label ("Default project", 15) + a 3-space gutter
 
 
 def _row(label: str, value: str) -> str:

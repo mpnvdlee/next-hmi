@@ -295,10 +295,10 @@
 /* Pin direct children of header/content/footer to their declared sizes so a
    tall widget overflows the content region (which scrolls) instead of being
    shrunk by the flex column. Specificity bumped via the parent class to win
-   over both the `.hmi-component, .hmi-container { flex: 0 1 auto; … }`
-   default further below and the flow-translation block above — an inline
-   `flexShrink` from a Hug/Fixed mode still wins over all three; this pin only
-   matters while nothing inline sets it (Fill, or no mode at all).
+   over the `.hmi-component, .hmi-container { flex: 0 1 auto; … }` default
+   further below; against the flow-translation block above the specificity
+   ties, so source order decides and these pins have to stay after it — see
+   the note there.
    The `> .hmi-preview-node > …` paths cover the editor preview, where
    WidgetRenderer wraps each widget in a `display: contents` node — the
    actual flex item there is the inner `.hmi-component` / `.hmi-container`.
