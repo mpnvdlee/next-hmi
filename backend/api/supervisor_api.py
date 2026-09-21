@@ -26,9 +26,6 @@ class StartProjectBody(BaseModel):
     confirmUpgrade: bool = False
 
 
-_DEFAULT_START_BODY = StartProjectBody()
-
-
 @router.get("/running")
 async def list_running() -> dict[str, list[dict]]:
     """Status snapshot for every instance the supervisor knows about."""
@@ -36,10 +33,12 @@ async def list_running() -> dict[str, list[dict]]:
 
 
 @router.post("/projects/{project_id}/start", status_code=202)
-async def start_project(project_id: str, body: StartProjectBody = _DEFAULT_START_BODY) -> dict:
+async def start_project(project_id: str, body: StartProjectBody | None = None) -> dict:
     try:
         return await asyncio.to_thread(
-            supervisor.start, project_id, confirm_upgrade=body.confirmUpgrade
+            supervisor.start,
+            project_id,
+            confirm_upgrade=bool(body and body.confirmUpgrade),
         )
     except ValueError as exc:
         raise ConflictError(str(exc)) from exc

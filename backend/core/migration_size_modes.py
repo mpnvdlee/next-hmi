@@ -902,7 +902,13 @@ def _write_main_mode(
         )
     else:
         if _length(basis) is not None:
+            replaced = layout.get(main_key)
             layout[main_key] = basis
+            if _is_bound(replaced):
+                notes.append(
+                    f"{where}: dropped a bound {main_key} — the stored basis outranked it in "
+                    "CSS, so the render is unchanged, but the binding itself is gone"
+                )
         if _is_bound(layout.get("shrink")):
             # `_main_axis_mode` refuses on a bound `shrink` too. Nothing authors
             # one now and no row can edit it, so the mode is read without it:

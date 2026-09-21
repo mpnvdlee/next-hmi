@@ -835,6 +835,23 @@ def test_a_widget_the_project_owns_keeps_the_container_half() -> None:
     assert any("a widget this project owns" in note for note in notes)
 
 
+def test_a_literal_basis_over_a_bound_width_is_reported() -> None:
+    """`basis` outranked `width` in CSS, so the render is preserved when the
+    literal wins — but an authored binding is discarded, and every other value
+    this step discards is reported."""
+    notes: list[str] = []
+    node = {
+        "type": "Label",
+        "layout": {"basis": "154px", "width": {"$var": {"path": "plc:Width"}}},
+    }
+
+    retire_visit(node, ("row", "stretch"), "w", notes)
+
+    assert node["layout"]["width"] == "154px"
+    assert node["layout"]["widthMode"] == "fixed"
+    assert any("dropped a bound width" in note for note in notes)
+
+
 def test_a_sized_container_keeps_the_container_half() -> None:
     notes: list[str] = []
     node = {"type": "Container", "layout": {"direction": "column", "gap": "8px", "width": "10px"}}
