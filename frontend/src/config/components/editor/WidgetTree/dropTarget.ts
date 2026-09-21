@@ -89,7 +89,7 @@ function parentTargetOf(parent: WidgetParentInfo): WidgetParentTarget {
     case 'container':
       return {
         kind: 'container',
-        containerId: parent.parent.id,
+        containerId: parent.parentId,
         slot: parent.siblings[parent.index]?.slot,
       };
     case 'shell-area':

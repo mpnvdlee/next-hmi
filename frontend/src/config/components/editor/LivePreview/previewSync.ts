@@ -4,7 +4,7 @@ import { useComponentStore } from '@shared/store/componentStore';
 import { allPageRootNodes, flattenPages } from '@shared/utils/pageTree';
 import { getPageChildren } from '@shared/utils/pageContent';
 
-export type PreviewPoster = (message: Record<string, unknown>) => void;
+type PreviewPoster = (message: Record<string, unknown>) => void;
 
 /** `pageIds` restricts which pages' content travels. Omitted means every
  *  loaded page, which is what the editor canvas needs because it can navigate

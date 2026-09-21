@@ -80,11 +80,11 @@ def describe_certificate(path: Path) -> dict[str, Any] | None:
 # on a long-lived connection still gets caught without a restart.
 _EXPIRY_CHECK_TTL_S = 3600.0
 
-# (path, label) -> (mtime at last check, monotonic time of last check, message)
-_expiry_check_cache: dict[tuple[str, str], tuple[float, float, str | None]] = {}
+# (path, label) -> (mtime at last check, monotonic time of last check)
+_expiry_check_cache: dict[tuple[str, str], tuple[float, float]] = {}
 
 
-def log_expiry_warning(path: Path, label: str) -> str | None:
+def log_expiry_warning(path: Path, label: str) -> None:
     """Log that ``path``'s certificate is near or past expiry, if it is.
 
     Never raises: an expired client certificate is the server's call to refuse,
@@ -105,12 +105,11 @@ def log_expiry_warning(path: Path, label: str) -> str | None:
     now = time.monotonic()
     cached = _expiry_check_cache.get(cache_key)
     if cached is not None:
-        cached_mtime, checked_at, message = cached
+        cached_mtime, checked_at = cached
         if cached_mtime == mtime and now - checked_at < _EXPIRY_CHECK_TTL_S:
-            return message
+            return
 
     described = describe_certificate(path)
-    message = None
     if described is not None and described["expiring"]:
         days = described["expiresInDays"]
         message = (
@@ -119,5 +118,4 @@ def log_expiry_warning(path: Path, label: str) -> str | None:
             else f"{label}: certificate {path.name} expires in {days} days"
         )
         logger.warning(message)
-    _expiry_check_cache[cache_key] = (mtime, now, message)
-    return message
+    _expiry_check_cache[cache_key] = (mtime, now)

@@ -41,7 +41,7 @@ from core.storage import (
 from core.time_utils import iso_now
 
 from services.frontend_serve import build_import_map
-from services.widget_schemas import ExtractionError, extract_schemas
+from services.widget_schemas import extract_schemas
 
 logger = logging.getLogger(__name__)
 
@@ -829,9 +829,6 @@ def _regenerate_widget_schemas(target: CompileTarget) -> bool:
                 )
         write_json(target.schemas_path, manifest)
         return True
-    except ExtractionError as err:
-        logger.error("Widget-schema extractor failed: %s", err)
-        return False
     except OSError as err:
         logger.error("Widget-schema extractor I/O error: %s", err)
         return False

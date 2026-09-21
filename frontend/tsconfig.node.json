@@ -13,7 +13,6 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "rewriteRelativeImportExtensions": true,
     "allowSyntheticDefaultImports": true,
     "lib": ["ES2020"],
     "types": ["node", "vitest/globals"]

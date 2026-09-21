@@ -94,7 +94,7 @@ export default function VideoSourcePicker() {
 
   return (
     <AssetPickerShell
-      title={target?.label}
+      title={target.label}
       action="Select video"
       onClose={close}
       onConfirm={() => handleConfirm()}

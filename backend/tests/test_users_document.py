@@ -33,7 +33,7 @@ def test_seed_ships_no_credential_and_needs_no_setup() -> None:
 
 
 def test_seeded_project_on_disk_is_valid(tmp_path: Path) -> None:
-    assert users_document.is_valid(_write(tmp_path, _seed_document())) is True
+    assert users_document.state(_write(tmp_path, _seed_document())).valid is True
 
 
 def test_missing_document_is_invalid(tmp_path: Path) -> None:
@@ -66,7 +66,7 @@ def test_leftover_config_access_setting_is_ignored(tmp_path: Path) -> None:
     document["settings"]["configAccessGroups"] = ["admin", "nonexistent"]
 
     assert users_document.document_state(document).valid is True
-    assert users_document.is_valid(_write(tmp_path, document)) is True
+    assert users_document.state(_write(tmp_path, document)).valid is True
 
 
 def test_duplicate_group_id_is_invalid() -> None:

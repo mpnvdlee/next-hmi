@@ -259,22 +259,6 @@ export function collectAllIds(s: AllAreas): Set<string> {
 }
 
 /**
- * Every widget id in the project whose `type` matches — in practice, the
- * instances of one component definition.
- *
- * A definition's own root nodes have no parent flow inside the definition:
- * where the instance lands decides it. The Layout panel answers that by asking
- * the instances themselves, and this walk is what it asks.
- */
-export function collectWidgetIdsOfType(s: AllAreas, type: string): string[] {
-  const found: string[] = [];
-  forEachProjectWidget(s, (widget) => {
-    if (widget.type === type) found.push(widget.id);
-  });
-  return found;
-}
-
-/**
  * Every widget in the project — shell regions, then both page-tree roots — depth first.
  *
  * The one place the area order and the page-group recursion are written down, so

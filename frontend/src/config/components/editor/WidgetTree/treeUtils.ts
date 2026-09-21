@@ -98,7 +98,7 @@ export function removeComponentById(components: WidgetConfig[], id: string): Wid
  * page-tree root.
  */
 export type WidgetParentInfo =
-  | { kind: 'container'; parent: WidgetConfig; siblings: WidgetConfig[]; index: number }
+  | { kind: 'container'; parentId: string; siblings: WidgetConfig[]; index: number }
   | { kind: 'shell-area'; region: ShellRegionId; siblings: WidgetConfig[]; index: number }
   | {
       kind: 'page-section';
@@ -129,13 +129,13 @@ interface ProjectState {
 function containerInfo(found: { container: WidgetConfig; index: number }): WidgetParentInfo {
   return {
     kind: 'container',
-    parent: found.container,
+    parentId: found.container.id,
     siblings: found.container.children ?? [],
     index: found.index,
   };
 }
 
-export function findContainerParent(
+function findContainerParent(
   widgets: WidgetConfig[],
   id: string,
 ): { container: WidgetConfig; index: number } | null {

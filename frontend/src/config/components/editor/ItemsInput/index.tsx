@@ -12,7 +12,7 @@ import {
 /** What one row's value may hold. It is absent while the row is still being
  *  authored — a translation nobody picked yet, a number cell the author
  *  cleared — which is also how such a row survives a round-trip through JSON. */
-export type ItemValue = string | number | boolean | { $loc: string };
+type ItemValue = string | number | boolean | { $loc: string };
 
 export interface ItemEntry {
   label: string;

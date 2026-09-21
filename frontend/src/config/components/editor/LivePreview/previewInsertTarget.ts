@@ -79,7 +79,7 @@ function parentTarget(project: AllAreas, widgetId: string): PreviewInsertTarget 
   if (!parent) return null;
   switch (parent.kind) {
     case 'container':
-      return containerTarget(project, parent.parent.id, parent.siblings[parent.index]?.slot);
+      return containerTarget(project, parent.parentId, parent.siblings[parent.index]?.slot);
     case 'shell-area':
       return areaTarget(parent.region);
     case 'page-section':

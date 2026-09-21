@@ -82,14 +82,18 @@ def test_warns_only_once_the_certificate_is_near_expiry(tmp_path: Path, caplog):
     past = _certificate(tmp_path / "past.pem", days=-5)
 
     with caplog.at_level(logging.WARNING):
-        assert log_expiry_warning(healthy, "opcua client") is None
-        near_message = log_expiry_warning(near, "opcua client")
-        past_message = log_expiry_warning(past, "opcua client")
+        log_expiry_warning(healthy, "opcua client")
+        log_expiry_warning(near, "opcua client")
+        log_expiry_warning(past, "opcua client")
 
-    assert near_message is not None and "expires in 30 days" in near_message
-    assert past_message is not None and "expired 5 days ago" in past_message
+    assert "healthy.pem" not in caplog.text
     assert "opcua client" in caplog.text
+    assert "near.pem expires in 30 days" in caplog.text
+    assert "past.pem expired 5 days ago" in caplog.text
 
 
-def test_warning_is_silent_for_an_unreadable_path(tmp_path: Path):
-    assert log_expiry_warning(tmp_path / "absent.pem", "opcua client") is None
+def test_warning_is_silent_for_an_unreadable_path(tmp_path: Path, caplog):
+    with caplog.at_level(logging.WARNING):
+        log_expiry_warning(tmp_path / "absent.pem", "opcua client")
+
+    assert caplog.text == ""

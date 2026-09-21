@@ -402,8 +402,6 @@ widget's module has waited for its stylesheet too, so it never reveals the
 widget unstyled and restyles it a frame later. That stylesheet then has the
 module's lifetime rather than a mount's — it stays for the session, and a
 recompile drops the build it supersedes only once the replacement has landed.
-`useStylesheet()` still reference-counts the stylesheets a mount injects on its
-own.
 
 Two conditions are logged rather than left silent: an entry carrying
 `schemaError` (it renders, but the editor has no property fields or

@@ -30,7 +30,6 @@ import type {
 
 export type { CustomWidgetManifestEntry };
 import type { ComponentDefinition } from '@shared/types/componentTypes';
-import { wrapComponentWithStylesheet } from '@shared/hooks/useWidgetStylesheet';
 import { getWidgetJsPath, getWidgetStylePath } from '@shared/utils/widgetPaths';
 import { ensureStylesheet, releaseStylesheet } from '@shared/hooks/useStylesheet';
 import { loadWidgetModule } from '@shared/utils/widgetModuleLoader';
@@ -358,10 +357,6 @@ export function registerCustomWidget(entry: CustomWidgetManifestEntry): void {
   else declaredHostTypes.delete(entry.name);
   setFlowsChildren(entry.name, entry.flowsChildren === true);
 
-  const Wrapped: ComponentType<HmiWidgetProps> = entry.hasStyle
-    ? wrapComponentWithStylesheet(LazyComp, entry)
-    : LazyComp;
-
   function CustomWidgetEntry(props: HmiWidgetProps) {
     // Always its own silent boundary, wherever the widget sits. The page gate
     // (PageGroupPageView) prefetches a page's modules before revealing it, so
@@ -375,7 +370,7 @@ export function registerCustomWidget(entry: CustomWidgetManifestEntry): void {
     // and footer — to redraw one widget.
     return (
       <Suspense fallback={null}>
-        <Wrapped {...props} />
+        <LazyComp {...props} />
       </Suspense>
     );
   }

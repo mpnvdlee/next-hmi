@@ -40,10 +40,6 @@ def state(project_root: Path) -> DocumentState:
     return document_state(document)
 
 
-def is_valid(project_root: Path) -> bool:
-    return state(project_root).valid
-
-
 def document_state(document: Any) -> DocumentState:
     """Classify an already-loaded users document without mutating it."""
     if not isinstance(document, dict):
