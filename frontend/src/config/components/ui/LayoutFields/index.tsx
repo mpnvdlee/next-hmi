@@ -5,6 +5,7 @@ import type { PropertySource } from '@hmi/utils/propertySourceRegistry';
 import { effectiveSizeMode, lengthSuppressed } from '@hmi/components/layoutUtils';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { varBindingOf } from '@config/components/editor/bindingPickerUtils';
+import { slotFilter } from '@config/components/editor/PropertySourceEditor/editors/utils';
 import { LAYOUT_PATH_KEY } from '@config/utils/propertyPath';
 import PropRow from '../PropRow';
 import SchemaFieldRow from '../SchemaFieldRow';
@@ -456,7 +457,7 @@ export function LayoutFields({
         onChange={commit}
         onOpenPicker={
           componentId
-            ? (onPick, currentBinding) =>
+            ? (onPick, currentBinding, anyType) =>
                 openBindingPicker(componentId, `${LAYOUT_PATH_KEY}.${f.key}`, {
                   // Layout values live on `comp.layout`, not `comp.properties`,
                   // so the picker can neither read this binding back nor write
@@ -464,7 +465,7 @@ export function LayoutFields({
                   // callback of its own gets `commit` instead of the picker's
                   // `properties[propertyKey]` fallback.
                   onPick: onPick ?? ((binding) => commit({ $var: binding })),
-                  filter: { label: f.schema.label, type: f.schema.type },
+                  filter: slotFilter({ label: f.schema.label, type: f.schema.type }, anyType),
                   // A nested slot inside the value overrides with its own binding.
                   currentBinding: currentBinding ?? varBindingOf(layout[f.key]),
                 })

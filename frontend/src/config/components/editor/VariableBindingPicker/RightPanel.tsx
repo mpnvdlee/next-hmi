@@ -53,6 +53,13 @@ function acceptedTypeLabel(token: string): string {
   return a.kind === 'scalar' ? `${a.base}${a.array ? '[]' : ''}` : token;
 }
 
+// No accepted value type means the slot is unconstrained, the same rule
+// `scalarIsValid` applies.
+function acceptedValueTypeLabels(type: string | string[] | undefined): string {
+  const accepted = type !== undefined ? acceptedValueTypes(type) : [];
+  return accepted.length > 0 ? accepted.map(acceptedTypeLabel).join(' / ') : 'Any';
+}
+
 function FolderPathBadge({ ds, parentPath }: { ds?: string; parentPath: string }) {
   if (!ds) return null;
   return (
@@ -534,11 +541,9 @@ function VarScalarPanel({ pickerTitle, mode }: { pickerTitle: string; mode: VarM
                 {scalarIsValid ? '✓' : '✗'}
               </span>
             )}
-            {schemaField?.type !== undefined && acceptedValueTypes(schemaField.type).length > 0 && (
-              <span className="editor-binding-char-row__type">
-                {acceptedValueTypes(schemaField.type).map(acceptedTypeLabel).join(' / ')}
-              </span>
-            )}
+            <span className="editor-binding-char-row__type">
+              {acceptedValueTypeLabels(schemaField?.type)}
+            </span>
             {schemaField?.write === true ? (
               <AccessBadge writable={true} />
             ) : (

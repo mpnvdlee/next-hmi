@@ -6,11 +6,24 @@ import { varBindingOf } from '../../bindingPickerUtils';
  *  picker opens on it. It travels as an argument rather than being resolved by
  *  the opener because a nested slot (an `$if` branch, a `$switch` case, a
  *  `$stringExpr` wildcard) lives inside the property value — the opener only
- *  ever sees the property's top-level value. */
+ *  ever sees the property's top-level value.
+ *
+ *  `anyType` marks a slot that formats whatever it gets — a `$stringExpr` or
+ *  `$http` wildcard — so the property's own type does not constrain it. */
 export type OpenBindingPicker = (
   onPick?: (binding: VariableBinding) => void,
   currentBinding?: VariableBinding,
+  anyType?: boolean,
 ) => void;
+
+/** The picker filter for a slot: an `anyType` slot keeps only the property's
+ *  label, since its type, access and required fields describe the property. */
+export function slotFilter<F extends { label?: string }>(
+  filter: F,
+  anyType?: boolean,
+): F | { label?: string } {
+  return anyType ? { label: filter.label } : filter;
+}
 
 /**
  * Wraps a parent binding picker so that when a binding is picked the `apply`
@@ -18,21 +31,23 @@ export type OpenBindingPicker = (
  *
  * `current` is the wrapped slot's own value: it becomes the preselect whenever
  * a deeper wrap doesn't supply one of its own, so the innermost slot that knows
- * its binding always wins.
+ * its binding always wins. `anyType` follows the same rule.
  */
 export function wrapPicker(
   parent: OpenBindingPicker | undefined,
   apply: (b: VariableBinding) => void,
   current?: unknown,
+  anyType?: boolean,
 ): OpenBindingPicker | undefined {
   if (!parent) return undefined;
-  return (onPick, currentBinding) =>
+  return (onPick, currentBinding, slotAnyType) =>
     parent(
       (b) => {
         apply(b);
         onPick?.(b);
       },
       currentBinding ?? varBindingOf(current),
+      slotAnyType ?? anyType,
     );
 }
 

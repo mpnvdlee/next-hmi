@@ -13,6 +13,7 @@ import PanelHeader from '../../ui/PanelHeader';
 import SchemaFieldRow from '../../ui/SchemaFieldRow';
 import WidgetIcon from '../../ui/WidgetIcon';
 import { LayoutFields } from '../../ui/LayoutFields';
+import { slotFilter } from '../PropertySourceEditor/editors/utils';
 import { CONTAINER_DEFAULT_TOKENS } from '../../ui/LayoutFields/containerDefaultTokens';
 import { usesFlexLayout } from '@shared/utils/parentFlow';
 import { commonSchemaOf } from './commonSchema';
@@ -104,17 +105,20 @@ export default function MultiSelectionBody({
               // fallback writes to that one lead id — so it gets a writer that
               // fans out, landing a picked (or cleared) binding wherever a typed
               // edit would.
-              (onPick, currentBinding) =>
+              (onPick, currentBinding, anyType) =>
                 openBindingPicker(comps[0].id, key, {
                   onPick: onPick ?? ((binding) => patchProp(key, { $var: binding })),
                   currentBinding,
-                  filter: {
-                    label: field.label,
-                    type: field.type,
-                    write: (field as { write?: boolean }).write,
-                    requiredFields: (field as { requiredFields?: RequiredFieldEntry[] })
-                      .requiredFields,
-                  },
+                  filter: slotFilter(
+                    {
+                      label: field.label,
+                      type: field.type,
+                      write: (field as { write?: boolean }).write,
+                      requiredFields: (field as { requiredFields?: RequiredFieldEntry[] })
+                        .requiredFields,
+                    },
+                    anyType,
+                  ),
                 })
             : undefined
         }

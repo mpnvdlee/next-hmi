@@ -8,6 +8,7 @@ import type {
 import type { AlarmSelection } from '@config/store/alarmConfigStore';
 import type { VariableBinding } from '@shared/types/config';
 import type { OpenBindingPicker } from '../../editor/PropertySourceEditor';
+import { slotFilter } from '../../editor/PropertySourceEditor/editors/utils';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import PanelHeader from '../../ui/PanelHeader';
 import PropRow from '../../ui/PropRow';
@@ -104,13 +105,13 @@ function AlarmPanel({
     apply: (binding: VariableBinding) => void,
     filter: { label: string; type: string | string[] },
   ): OpenBindingPicker {
-    return (onPick) => {
+    return (onPick, _currentBinding, anyType) => {
       openBindingPicker('', scope, {
         onPick: (binding: VariableBinding) => {
           apply(binding);
           onPick?.(binding);
         },
-        filter,
+        filter: slotFilter(filter, anyType),
         currentBinding: varBindingOf(current),
       });
     };
