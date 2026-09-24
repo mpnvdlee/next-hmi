@@ -540,7 +540,7 @@ def _walk_variable_tree(nodes: Any, prefix: str, out: dict[str, dict]) -> None:
         if not isinstance(node, dict):
             continue
         kind = node.get("kind")
-        name = node.get("display_name") if kind == "variable" else node.get("name")
+        name = node.get("name") if kind == "folder" else node.get("display_name")
         if not isinstance(name, str) or not name:
             continue
         path = f"{prefix}/{name}" if prefix else name
@@ -553,7 +553,7 @@ def _walk_variable_tree(nodes: Any, prefix: str, out: dict[str, dict]) -> None:
                 child.get("display_name")
                 for child in children
                 if isinstance(child, dict)
-                and child.get("kind") == "variable"
+                and child.get("kind") != "folder"
                 and isinstance(child.get("display_name"), str)
             ]
             if field_names or is_array:
@@ -564,7 +564,7 @@ def _walk_variable_tree(nodes: Any, prefix: str, out: dict[str, dict]) -> None:
                     "fields": field_names,
                 })
             _walk_variable_tree(children, path, out)
-        elif kind == "variable":
+        else:
             raw_type = node.get("data_type")
             simple = to_simple_type(raw_type, as_array_suffix=False) if isinstance(raw_type, str) else "String"
             out[path] = vartype.node_var_type({
