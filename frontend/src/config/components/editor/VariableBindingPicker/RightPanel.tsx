@@ -46,6 +46,13 @@ function splitPath(path: string): { parentPath: string; varName: string } {
     : { parentPath: path.slice(0, slash), varName: path.slice(slash + 1) };
 }
 
+// Schema tokens are authored in any case ('float'); show the canonical simple
+// type ('Float') so the row matches the selected variable's type beside it.
+function acceptedTypeLabel(token: string): string {
+  const a = parseTypeToken(token);
+  return a.kind === 'scalar' ? `${a.base}${a.array ? '[]' : ''}` : token;
+}
+
 function FolderPathBadge({ ds, parentPath }: { ds?: string; parentPath: string }) {
   if (!ds) return null;
   return (
@@ -529,7 +536,7 @@ function VarScalarPanel({ pickerTitle, mode }: { pickerTitle: string; mode: VarM
             )}
             {schemaField?.type !== undefined && acceptedValueTypes(schemaField.type).length > 0 && (
               <span className="editor-binding-char-row__type">
-                {acceptedValueTypes(schemaField.type).join(' / ')}
+                {acceptedValueTypes(schemaField.type).map(acceptedTypeLabel).join(' / ')}
               </span>
             )}
             {schemaField?.write === true ? (
