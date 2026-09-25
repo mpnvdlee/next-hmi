@@ -33,6 +33,7 @@ import { collectComponentPriorityKeys } from '../components/layoutUtils';
 import { ContentSpinner } from '@shared/components/Spinner';
 import { useGlobalEvents } from '../hooks/useGlobalEvents';
 import { usePageEvents } from '../hooks/usePageEvents';
+import { useProjectWidgetWarmup } from '../hooks/useProjectWidgetWarmup';
 
 export default function HmiView() {
   useConfig();
@@ -83,6 +84,7 @@ export default function HmiView() {
   // Resolve the current page from the index first, then hydrate its content.
   const { page, pageGroups } = resolvePageContext(pages, id);
   usePage(page?.id);
+  useProjectWidgetWarmup(configLoaded && !bootHold ? page?.id : undefined);
   const openPageOverlays = useResolvedPageOverlays();
   // The *resolved* page of each overlay, never the raw target: an overlay may
   // name a page group, which has no page file to hydrate and no id the backend

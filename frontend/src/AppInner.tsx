@@ -72,9 +72,14 @@ export function ComponentsReadyGate({
   children,
   splash = false,
   preload,
+  warmBuiltins = true,
 }: {
   children: React.ReactNode;
   splash?: boolean;
+  /** Warm every built-in widget module once open. The operator runtime turns
+   *  this off: it warms what the project actually uses instead
+   *  (useProjectWidgetWarmup), once its first page has settled. */
+  warmBuiltins?: boolean;
   /** The lazy chunk `children` renders. Awaited with the rest, so opening the
    *  gate hands straight to the view instead of dropping onto the route-level
    *  Suspense fallback for the length of one more round-trip. */
@@ -104,7 +109,7 @@ export function ComponentsReadyGate({
   // enough that a page can reveal before they land and paint every bound widget
   // with the disconnected overlay.
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !warmBuiltins) return;
     if (typeof requestIdleCallback !== 'function') {
       const t = setTimeout(() => void prefetchBuiltinWidgetModules(), 2000);
       return () => clearTimeout(t);
@@ -113,7 +118,7 @@ export function ComponentsReadyGate({
       timeout: 10000,
     });
     return () => cancelIdleCallback(handle);
-  }, [ready]);
+  }, [ready, warmBuiltins]);
   if (!ready) {
     return splash ? (
       <BootSplash phase="components" />
@@ -199,7 +204,7 @@ export default function AppInner() {
   // screen blinking between two palettes on the way up.
   const hmiRoute = (
     <Suspense fallback={<BootSplash phase="components" />}>
-      <ComponentsReadyGate splash preload={importHmiView}>
+      <ComponentsReadyGate splash preload={importHmiView} warmBuiltins={false}>
         <HmiView />
       </ComponentsReadyGate>
     </Suspense>

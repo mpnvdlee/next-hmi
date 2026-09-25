@@ -4,6 +4,7 @@ import {
   BUILTIN_WIDGET_TYPES,
   prefetchBuiltinWidgetModules,
   registerCustomWidget,
+  warmWidgetModules,
   type CustomWidgetManifestEntry,
 } from './widgetRegistry';
 
@@ -49,5 +50,41 @@ describe('prefetchBuiltinWidgetModules', () => {
 
     const fetched = vi.mocked(loadWidgetModule).mock.calls.map(([path]) => path);
     expect(fetched.some((path) => path.includes(name))).toBe(false);
+  });
+});
+
+describe('warmWidgetModules', () => {
+  function register(name: string) {
+    registerCustomWidget({
+      key: `Project/${name}`,
+      name,
+      group: 'Project',
+      hasStyle: false,
+      usesRecharts: false,
+      buildTs: '2026-09-25T10:00:00Z',
+    } as unknown as CustomWidgetManifestEntry);
+  }
+  const fetchedNames = () => vi.mocked(loadWidgetModule).mock.calls.map(([path]) => String(path));
+
+  beforeEach(() => {
+    vi.mocked(loadWidgetModule).mockClear();
+    ['WarmA', 'WarmB', 'WarmUnused'].forEach(register);
+  });
+
+  it('loads what the trees render, nested included, and nothing else', async () => {
+    warmWidgetModules([
+      { id: 'a', type: 'WarmA', name: 'a', children: [{ id: 'b', type: 'WarmB', name: 'b' }] },
+    ]);
+    await vi.waitFor(() => expect(fetchedNames()).toHaveLength(2));
+    expect(fetchedNames().some((p) => p.includes('WarmA'))).toBe(true);
+    expect(fetchedNames().some((p) => p.includes('WarmB'))).toBe(true);
+    expect(fetchedNames().some((p) => p.includes('WarmUnused'))).toBe(false);
+  });
+
+  it('loads nothing once cancelled', async () => {
+    const cancel = warmWidgetModules([{ id: 'a', type: 'WarmA', name: 'a' }]);
+    cancel();
+    await new Promise((r) => setTimeout(r, 200));
+    expect(fetchedNames()).toHaveLength(0);
   });
 });

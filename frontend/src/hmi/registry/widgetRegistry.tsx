@@ -398,8 +398,9 @@ export function registerCustomWidget(entry: CustomWidgetManifestEntry): void {
 // page revealed the moment its config and variables land still has none of its
 // widget code in memory: it paints as an empty shell and grows as N module
 // round-trips return. The page gate (PageGroupPageView) therefore waits on the
-// modules too, and the boot splash warms the built-ins so later navigations
-// find them already there.
+// modules too, and later navigations find them already there: the operator
+// runtime warms every module its project uses once the first page has settled
+// (`warmWidgetModules`), the editor preview warms the built-ins.
 
 // Memo for the top-level walk. The page gate asks the same question two or
 // three times per visit (a synchronous check, the prefetch, then a re-check on
@@ -503,6 +504,50 @@ export function prefetchBuiltinWidgetModules(): Promise<void> {
     if (mod && !mod.usesRecharts) pending.push(mod.load());
   }
   return Promise.allSettled(pending).then(() => undefined);
+}
+
+type IdleHandle = { cancel: () => void };
+
+function whenIdle(fn: () => void): IdleHandle {
+  if (typeof requestIdleCallback !== 'function') {
+    const t = setTimeout(fn, 50);
+    return { cancel: () => clearTimeout(t) };
+  }
+  const h = requestIdleCallback(fn, { timeout: 2000 });
+  return { cancel: () => cancelIdleCallback(h) };
+}
+
+/**
+ * Warm every module these trees need, one per idle period, so the first visit
+ * to a page finds its widget code already in memory. Returns a cancel.
+ *
+ * Unlike `prefetchBuiltinWidgetModules` this covers exactly what the trees
+ * render: project widgets (and the external libraries their imports pull in)
+ * and chart widgets included, built-ins the project never places left out.
+ * One at a time, because it runs while the operator is already using the
+ * page, and a burst would queue their own requests behind it.
+ */
+export function warmWidgetModules(roots: WidgetConfig[]): () => void {
+  const queue = [...collectWidgetTypes(roots)]
+    .map((type) => widgetModuleFor(type))
+    .filter((mod): mod is WidgetModuleEntry => mod !== undefined && !mod.loaded);
+  let cancelled = false;
+  let handle: IdleHandle | null = null;
+  const next = () => {
+    const mod = queue.shift();
+    if (cancelled || !mod) return;
+    void mod
+      .load()
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) handle = whenIdle(next);
+      });
+  };
+  handle = whenIdle(next);
+  return () => {
+    cancelled = true;
+    handle?.cancel();
+  };
 }
 
 /**
