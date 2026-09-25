@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { withBase } from '@shared/utils/runtimeBase';
+import { subscribeConfigChanged } from '@shared/events/configChangedBus';
 
 /** `fill="…"` / `stroke="…"` presentation attributes, not `fill-opacity` or `stroke-width`. */
 const PAINT_ATTR = /\s(fill|stroke)="([^"]*)"/gi;
@@ -37,6 +38,47 @@ function recolorSvg(svgText: string): string {
   return svg;
 }
 
+// Recoloured markup per URL for the rest of the page load. Icons remount on
+// every page switch, and without this each remount paid a fetch and painted one
+// frame without its icon. `resolved` is what a first render can read
+// synchronously; `pending` shares one fetch between icons mounting together.
+const resolved = new Map<string, string>();
+const pending = new Map<string, Promise<string>>();
+
+// An asset rewritten in place keeps its URL, so the only way to see the new
+// file is to forget the old one. Icons already on screen keep what they show;
+// the next mount fetches again.
+subscribeConfigChanged((event) => {
+  if (event.artifact_type !== 'asset') return;
+  resolved.clear();
+  pending.clear();
+});
+
+function loadInlineSvg(url: string): Promise<string> {
+  const hit = resolved.get(url);
+  if (hit !== undefined) return Promise.resolve(hit);
+  let load = pending.get(url);
+  if (!load) {
+    load = fetch(withBase(url))
+      .then((r) => {
+        if (!r.ok) throw new Error(`${r.status} ${url}`);
+        return r.text();
+      })
+      .then((text) => {
+        const svg = recolorSvg(text);
+        resolved.set(url, svg);
+        return svg;
+      })
+      .finally(() => pending.delete(url));
+    pending.set(url, load);
+  }
+  return load;
+}
+
+function cachedSvg(url: string | null | undefined): string {
+  return url ? (resolved.get(url) ?? '') : '';
+}
+
 /**
  * Fetches an SVG from a URL and repoints its colours at `currentColor`, so the
  * icon inherits CSS `color` from its parent, and returns the markup ready for
@@ -44,24 +86,24 @@ function recolorSvg(svgText: string): string {
  * colours change, so outline icons keep their outlines.
  */
 export function useInlineSvg(url: string | null | undefined): string {
-  const [svgContent, setSvgContent] = useState('');
+  const [shown, setShown] = useState(() => ({ url, svg: cachedSvg(url) }));
+  // Reset during render rather than from an effect, so a changed URL never
+  // gets a frame of the previous icon.
+  if (shown.url !== url) setShown({ url, svg: cachedSvg(url) });
 
   useEffect(() => {
-    if (!url) {
-      setSvgContent('');
-      return;
-    }
+    if (!url) return;
     let cancelled = false;
-    fetch(withBase(url))
-      .then((r) => r.text())
-      .then((text) => {
-        if (!cancelled) setSvgContent(recolorSvg(text));
-      })
-      .catch(() => {});
+    loadInlineSvg(url).then(
+      (svg) => {
+        if (!cancelled) setShown((s) => (s.url === url && s.svg === svg ? s : { url, svg }));
+      },
+      () => {},
+    );
     return () => {
       cancelled = true;
     };
   }, [url]);
 
-  return svgContent;
+  return shown.url === url ? shown.svg : cachedSvg(url);
 }

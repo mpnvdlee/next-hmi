@@ -70,7 +70,7 @@ describe('MenuToggleButton', () => {
   it('renders a custom SVG icon fetched and stripped of hardcoded fill colors', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({ text: async () => '<svg fill="red"><path/></svg>' }),
+      vi.fn().mockResolvedValue({ ok: true, text: async () => '<svg fill="red"><path/></svg>' }),
     );
     const { container } = renderToggle({
       bound: false,

@@ -51,7 +51,7 @@ describe('Icon', () => {
   it('renders a custom SVG asset with colors stripped and currentColor injected', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({ text: async () => '<svg stroke="blue"><path/></svg>' }),
+      vi.fn().mockResolvedValue({ ok: true, text: async () => '<svg stroke="blue"><path/></svg>' }),
     );
     const { container } = renderIcon({ iconName: '/assets/icons/gauge.svg', color: '#0000ff' });
 

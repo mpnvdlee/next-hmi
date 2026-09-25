@@ -1,12 +1,18 @@
 import { renderHook, waitFor } from '@testing-library/react';
+import { publishConfigChanged } from '@shared/events/configChangedBus';
 import { useInlineSvg } from './useInlineSvg';
 
 function mockFetchOnce(text: string) {
-  return vi.fn().mockResolvedValue({ text: async () => text });
+  return vi.fn().mockResolvedValue({ ok: true, text: async () => text });
+}
+
+function forgetCachedAssets() {
+  publishConfigChanged({ artifact_type: 'asset', artifact_ids: [], source: 'mcp', summary: '' });
 }
 
 describe('useInlineSvg', () => {
   afterEach(() => {
+    forgetCachedAssets();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -90,7 +96,7 @@ describe('useInlineSvg', () => {
   });
 
   it('discards a stale in-flight response after the url changes', async () => {
-    let resolveFirst!: (value: { text: () => Promise<string> }) => void;
+    let resolveFirst!: (value: { ok: boolean; text: () => Promise<string> }) => void;
     const fetchMock = vi
       .fn()
       .mockImplementationOnce(
@@ -99,7 +105,7 @@ describe('useInlineSvg', () => {
             resolveFirst = resolve;
           }),
       )
-      .mockResolvedValueOnce({ text: async () => '<svg><path d="second" /></svg>' });
+      .mockResolvedValueOnce({ ok: true, text: async () => '<svg><path d="second" /></svg>' });
     vi.stubGlobal('fetch', fetchMock);
 
     const { result, rerender } = renderHook(({ url }) => useInlineSvg(url), {
@@ -109,7 +115,7 @@ describe('useInlineSvg', () => {
     rerender({ url: '/icons/second.svg' });
     await waitFor(() => expect(result.current).toContain('second'));
 
-    resolveFirst({ text: async () => '<svg><path d="first" /></svg>' });
+    resolveFirst({ ok: true, text: async () => '<svg><path d="first" /></svg>' });
     await new Promise((r) => setTimeout(r, 0));
 
     expect(result.current).toContain('second');
@@ -117,7 +123,7 @@ describe('useInlineSvg', () => {
   });
 
   it('does not throw when the component unmounts before the fetch resolves', async () => {
-    let resolveFetch!: (value: { text: () => Promise<string> }) => void;
+    let resolveFetch!: (value: { ok: boolean; text: () => Promise<string> }) => void;
     vi.stubGlobal(
       'fetch',
       vi.fn().mockImplementation(
@@ -131,19 +137,66 @@ describe('useInlineSvg', () => {
     const { unmount } = renderHook(() => useInlineSvg('/icons/gear.svg'));
     unmount();
 
-    expect(() => resolveFetch({ text: async () => '<svg></svg>' })).not.toThrow();
+    expect(() => resolveFetch({ ok: true, text: async () => '<svg></svg>' })).not.toThrow();
     await new Promise((r) => setTimeout(r, 0));
   });
 
-  it('re-fetches the same url on every mount (no caching across mounts)', async () => {
-    const fetchMock = mockFetchOnce('<svg></svg>');
+  it('shows an icon fetched earlier on the first render of a later mount', async () => {
+    const fetchMock = mockFetchOnce('<svg><path d="gear" /></svg>');
+    vi.stubGlobal('fetch', fetchMock);
+
+    const first = renderHook(() => useInlineSvg('/icons/gear.svg'));
+    await waitFor(() => expect(first.result.current).toContain('gear'));
+    first.unmount();
+
+    const second = renderHook(() => useInlineSvg('/icons/gear.svg'));
+    expect(second.result.current).toContain('gear');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares one fetch between icons that mount together', async () => {
+    const fetchMock = mockFetchOnce('<svg><path d="gear" /></svg>');
+    vi.stubGlobal('fetch', fetchMock);
+
+    const a = renderHook(() => useInlineSvg('/icons/gear.svg'));
+    const b = renderHook(() => useInlineSvg('/icons/gear.svg'));
+    await waitFor(() => expect(a.result.current).toContain('gear'));
+    await waitFor(() => expect(b.result.current).toContain('gear'));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetches again after a failed fetch instead of caching the failure', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, text: async () => 'Not Found' })
+      .mockResolvedValueOnce({ ok: true, text: async () => '<svg><path d="gear" /></svg>' });
     vi.stubGlobal('fetch', fetchMock);
 
     const first = renderHook(() => useInlineSvg('/icons/gear.svg'));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(first.result.current).toBe('');
     first.unmount();
 
-    renderHook(() => useInlineSvg('/icons/gear.svg'));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const second = renderHook(() => useInlineSvg('/icons/gear.svg'));
+    await waitFor(() => expect(second.result.current).toContain('gear'));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('fetches again after an asset change is announced', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, text: async () => '<svg><path d="old" /></svg>' })
+      .mockResolvedValueOnce({ ok: true, text: async () => '<svg><path d="new" /></svg>' });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const first = renderHook(() => useInlineSvg('/icons/gear.svg'));
+    await waitFor(() => expect(first.result.current).toContain('old'));
+    first.unmount();
+
+    forgetCachedAssets();
+    const second = renderHook(() => useInlineSvg('/icons/gear.svg'));
+    await waitFor(() => expect(second.result.current).toContain('new'));
   });
 });
