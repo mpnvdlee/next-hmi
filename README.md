@@ -119,7 +119,7 @@ the editor that builds them. Click any shot for full size.
 </tr>
 </table>
 
-The longer walkthrough — the editor, the property panel and its 23 sources, the
+The longer walkthrough — the editor, the property panel and its 24 sources, the
 OPC-UA wizard, recipes, translations and theming — is at
 **[next-hmi.com/tour](https://next-hmi.com/tour)**.
 
@@ -134,7 +134,7 @@ OPC-UA wizard, recipes, translations and theming — is at
   browses, viewport-aware so the tags on screen update first.
 - **Git-native projects** — every artifact is JSON or CSV on disk, so your
   change control already works and a project moves as a folder or a zip.
-- **Property sources** — 23 composable sources (`$var`, `$if`, `$switch`,
+- **Property sources** — 24 composable sources (`$var`, `$if`, `$switch`,
   `$loc`, `$viewport`, …) that nest, so no property needs a script.
 - **Custom widgets** — drop a `.tsx` into `custom-widgets/` and it hot-compiles.
   No Node toolchain, no rebuild of the core.
