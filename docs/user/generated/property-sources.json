@@ -56,6 +56,22 @@
     ]
   },
   {
+    "key": "$not",
+    "label": "Invert",
+    "description": "The opposite of a boolean value: true becomes false and false becomes true.",
+    "produces": [
+      "boolean"
+    ]
+  },
+  {
+    "key": "$formula",
+    "label": "Formula",
+    "description": "A number calculated from values with + − × ÷ and parentheses.",
+    "produces": [
+      "float"
+    ]
+  },
+  {
     "key": "$random",
     "label": "Random Value",
     "description": "A random number within a configured range.",

@@ -25,9 +25,10 @@ import {
   VarEditor,
   ViewportEditor,
 } from './editors/leaf';
-import { CompareEditor, IfEditor, SwitchEditor } from './editors/conditional';
+import { CompareEditor, IfEditor, NotEditor, SwitchEditor } from './editors/conditional';
 import { WidgetPropEditor, ComponentPropEditor } from './editors/picker';
 import { StringExprEditor } from './editors/stringExpr';
+import { FormulaEditor } from './editors/formula';
 import { HttpEditor } from './editors/http';
 import type { OpenBindingPicker } from './editors/utils';
 
@@ -77,6 +78,12 @@ const SOURCE_EDITORS: Record<PropertySource, SourceEditorRenderer> = {
   ),
   $compare: ({ value, onChange, onOpenBindingPicker }) => (
     <CompareEditor value={value} onChange={onChange} onOpenBindingPicker={onOpenBindingPicker} />
+  ),
+  $not: ({ value, onChange, onOpenBindingPicker }) => (
+    <NotEditor value={value} onChange={onChange} onOpenBindingPicker={onOpenBindingPicker} />
+  ),
+  $formula: ({ value, onChange, onOpenBindingPicker }) => (
+    <FormulaEditor value={value} onChange={onChange} onOpenBindingPicker={onOpenBindingPicker} />
   ),
   $random: ({ value, onChange }) => <RandomEditor value={value} onChange={onChange} />,
   $switch: ({ value, onChange, schema, onOpenBindingPicker }) => (

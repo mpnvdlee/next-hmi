@@ -840,6 +840,11 @@
   margin: 0 0 var(--cfg-space-2);
 }
 
+.cfg-prop-hint--error {
+  color: var(--cfg-danger-fg);
+  font-style: normal;
+}
+
 .cfg-result-editor {
   display: flex;
   flex-direction: column;

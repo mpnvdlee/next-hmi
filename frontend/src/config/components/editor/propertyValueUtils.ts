@@ -255,6 +255,20 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
       shortenBindingPath(propertyValuePreview(v, undefined, depth + 1)),
     );
   }
+  if (key === '$formula') {
+    const f = obj.$formula as
+      { expression?: string; wildcards?: Record<string, unknown> } | undefined;
+    if (!f?.expression) return 'formula(…)';
+    if (depth >= MAX_PREVIEW_DEPTH) return f.expression;
+    return substituteWildcards(f.expression, f.wildcards ?? {}, (v) =>
+      shortenBindingPath(propertyValuePreview(v, undefined, depth + 1)),
+    );
+  }
+  if (key === '$not') {
+    const n = obj.$not as { value?: unknown } | undefined;
+    if (!n || depth >= MAX_PREVIEW_DEPTH) return 'not(…)';
+    return `not(${propertyValuePreview(n.value, undefined, depth + 1)})`;
+  }
   if (key === '$alarmCount') {
     const ac = obj.$alarmCount as { filter?: string } | undefined;
     return ac?.filter ? `alarms(${ac.filter})` : 'alarms(…)';

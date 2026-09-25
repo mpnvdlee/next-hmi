@@ -395,6 +395,60 @@ def test_switch_case_with_when_only_stays_silent_for_case(ctx):
     assert "switch-case-empty" not in {w.code for w in report.warnings}
 
 
+def test_not_value_empty(ctx):
+    report = ValidationReport()
+    _validate_property_value({"$not": {"value": None}}, None, ctx, "/p", report)
+    w = _warn(report)
+    assert (w.code, w.severity) == ("not-value-empty", "warning")
+
+
+def test_not_validates_nested_value(ctx):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$not": {"value": {"$compare": {"left": None, "operator": ">", "right": 1}}}},
+        None, ctx, "/p", report,
+    )
+    assert "compare-operand-empty" in {w.code for w in report.warnings}
+
+
+def test_formula_empty(ctx):
+    report = ValidationReport()
+    _validate_property_value({"$formula": {"expression": " ", "wildcards": {}}}, None, ctx, "/p", report)
+    w = _warn(report)
+    assert (w.code, w.severity) == ("formula-empty", "warning")
+
+
+@pytest.mark.parametrize("expression", ["1 +", "(1 + 2", "1 2", "1 ^ 2", "{a} + 1", "2 * * 3", "()"])
+def test_formula_invalid(ctx, expression):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$formula": {"expression": expression, "wildcards": {}}}, None, ctx, "/p", report,
+    )
+    w = _warn(report)
+    assert (w.code, w.severity) == ("formula-invalid", "error")
+
+
+@pytest.mark.parametrize("expression", ["1 + 2 * 3", "(1 + 2) * 3", "-2 * -(3 + 1)", ".5 * 4", "{ 1 } / 2.5"])
+def test_formula_valid(ctx, expression):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$formula": {"expression": expression, "wildcards": {"1": {"$static": 3}}}},
+        None, ctx, "/p", report,
+    )
+    assert report.warnings == []
+    assert report.findings == []
+
+
+def test_formula_wildcard_empty(ctx):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$formula": {"expression": "{1} * {2}", "wildcards": {"1": {"$static": 3}}}},
+        None, ctx, "/p", report,
+    )
+    w = _warn(report)
+    assert (w.code, w.path) == ("formula-wildcard-empty", "/p/$formula/wildcards/2")
+
+
 def test_stringexpr_empty(ctx):
     report = ValidationReport()
     _validate_property_value(

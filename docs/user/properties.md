@@ -33,7 +33,8 @@ Any of these can also be an **array**. An optional *format* refines the editor w
 | `$result` | flexible | A field of an action's result (in its handlers only). |
 | `$http` | flexible | A value picked out of an HTTP API response. |
 | `$loc` · `$stringExpr` | String | Translated text, or a template like `Tank {1} of {2}`. |
-| `$compare` · `$pageIsActive` · `$userGroups` | Boolean | A comparison result, whether a page is active, or whether the signed-in user is in one of the listed groups. |
+| `$compare` · `$not` · `$pageIsActive` · `$userGroups` | Boolean | A comparison result, the opposite of another boolean, whether a page is active, or whether the signed-in user is in one of the listed groups. |
+| `$formula` | Float | A number calculated from other values, like `({1} - 32) / 1.8` — `+ - * /` and parentheses. Empty when an input is missing or you divide by zero. |
 | `$user` | String / String[] | The signed-in user's name, or their groups. |
 | `$device` · `$urlParam` | String | This machine's identity (hostname, IP, MAC), or a parameter from the page URL. |
 | `$viewport` | String / Integer | Screen size class, orientation, width, height. |

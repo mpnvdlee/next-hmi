@@ -45,6 +45,8 @@ PROPERTY_SOURCE_KEYS = frozenset({
     "$if",
     "$switch",
     "$compare",
+    "$not",
+    "$formula",
     "$random",
     "$user",
     "$userGroups",
@@ -1025,6 +1027,68 @@ def validate_action_targets(actions: Any, ctx: ValidationContext, path: str, rep
 
 _WILDCARD_RE = re.compile(r"\{([^{}]*)\}")
 
+# `$formula` grammar, mirrored from frontend/src/hmi/utils/formula.ts:
+#   expr := term (("+" | "-") term)*     term := unary (("*" | "/") unary)*
+#   unary := ("-" | "+") unary | primary  primary := number | "{n}" | "(" expr ")"
+_FORMULA_TOKEN_RE = re.compile(r"\s*(?:(\d+(?:\.\d*)?|\.\d+)|\{\s*(\d+)\s*\}|([-+*/()]))")
+
+
+def _formula_is_valid(expression: str) -> bool:
+    """Whether `expression` parses as a `$formula` — syntax only; the runtime
+    still yields null for an unbound placeholder or a division by zero."""
+    tokens: list[str] = []
+    src = expression.rstrip()
+    pos = 0
+    while pos < len(src):
+        m = _FORMULA_TOKEN_RE.match(src, pos)
+        if not m:
+            return False
+        tokens.append(m.group(3) or "n")
+        pos = m.end()
+    if not tokens:
+        return False
+
+    i = 0
+
+    def expr() -> bool:
+        nonlocal i
+        if not term():
+            return False
+        while i < len(tokens) and tokens[i] in "+-":
+            i += 1
+            if not term():
+                return False
+        return True
+
+    def term() -> bool:
+        nonlocal i
+        if not unary():
+            return False
+        while i < len(tokens) and tokens[i] in "*/":
+            i += 1
+            if not unary():
+                return False
+        return True
+
+    def unary() -> bool:
+        nonlocal i
+        while i < len(tokens) and tokens[i] in "+-":
+            i += 1
+        if i >= len(tokens):
+            return False
+        if tokens[i] == "n":
+            i += 1
+            return True
+        if tokens[i] != "(":
+            return False
+        i += 1
+        if not expr() or i >= len(tokens) or tokens[i] != ")":
+            return False
+        i += 1
+        return True
+
+    return expr() and i == len(tokens)
+
 
 def _is_unset(value: Any) -> bool:
     """A source-capable slot is 'unset' when undefined, or when it's an
@@ -1242,6 +1306,25 @@ def _validate_property_value(
             payload.get("right"), None, ctx, f"{path}/$compare/right", report,
             code="compare-operand-empty", message="right operand is unset",
         )
+    elif source_key == "$not" and isinstance(payload, dict):
+        _validate_slot(
+            payload.get("value"), None, ctx, f"{path}/$not/value", report,
+            code="not-value-empty", message="value to invert is unset",
+        )
+    elif source_key == "$formula" and isinstance(payload, dict):
+        expression = payload.get("expression")
+        if not isinstance(expression, str) or expression.strip() == "":
+            report.warn(
+                f"{path}/$formula/expression", "formula is empty",
+                severity="warning", code="formula-empty",
+            )
+        elif not _formula_is_valid(expression):
+            report.warn(
+                f"{path}/$formula/expression", f"formula '{expression}' is not valid",
+                severity="error", code="formula-invalid",
+            )
+        else:
+            _validate_wildcards([expression], payload, "$formula", ctx, path, report)
     elif source_key == "$stringExpr" and isinstance(payload, dict):
         template = payload.get("template")
         if not isinstance(template, str) or template == "":

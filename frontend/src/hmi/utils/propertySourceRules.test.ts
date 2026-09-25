@@ -83,8 +83,8 @@ describe('propertySourceRules', () => {
     }
   });
 
-  it('contains all 24 valid source types', () => {
-    expect(PROPERTY_SOURCE_KEYS).toHaveLength(24);
+  it('contains all 26 valid source types', () => {
+    expect(PROPERTY_SOURCE_KEYS).toHaveLength(26);
     expect(PROPERTY_SOURCE_KEYS).toContain('$static');
     expect(PROPERTY_SOURCE_KEYS).toContain('$var');
     expect(PROPERTY_SOURCE_KEYS).toContain('$loc');
@@ -92,6 +92,8 @@ describe('propertySourceRules', () => {
     expect(PROPERTY_SOURCE_KEYS).toContain('$pageIsActive');
     expect(PROPERTY_SOURCE_KEYS).toContain('$if');
     expect(PROPERTY_SOURCE_KEYS).toContain('$compare');
+    expect(PROPERTY_SOURCE_KEYS).toContain('$not');
+    expect(PROPERTY_SOURCE_KEYS).toContain('$formula');
     expect(PROPERTY_SOURCE_KEYS).toContain('$random');
     expect(PROPERTY_SOURCE_KEYS).toContain('$switch');
     expect(PROPERTY_SOURCE_KEYS).toContain('$user');

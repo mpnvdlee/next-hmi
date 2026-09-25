@@ -502,8 +502,8 @@ Editor implementation:
 
 Runtime implementation:
 
-- `frontend/src/hmi/utils/propertySourceEval.ts` evaluates all core property sources (`$static`, `$var`, `$loc`, `$urlParam`, `$pageIsActive`, `$if`, `$compare`, `$random`, `$switch`, `$user`, `$device`, `$time`, `$widgetProp`, `$componentProp`, `$stringExpr`, `$alarmCount`, `$page`, `$viewport`, `$result`); icon and image values are plain `$static` payloads (`{ type, name }` / `{ path }`) resolved by the `$static` handler
 - `$result` is only meaningful inside async-action result handlers (`onSuccess` / `onFailed` / `onSettled` on `loginUser`, `logoutUser`, `writeDataVariable`); `{ $result: 'field' }` reads the named field off the response payload (e.g. `reason`, `username`); outside that context, or for an unknown field, it resolves to `null`
+- `frontend/src/hmi/utils/propertySourceEval.ts` evaluates all core property sources (`$static`, `$var`, `$loc`, `$urlParam`, `$pageIsActive`, `$if`, `$compare`, `$not`, `$formula`, `$random`, `$switch`, `$user`, `$device`, `$time`, `$widgetProp`, `$componentProp`, `$stringExpr`, `$alarmCount`, `$page`, `$viewport`, `$result`); icon and image values are plain `$static` payloads (`{ type, name }` / `{ path }`) resolved by the `$static` handler
 - `$stringExpr` parses `{N}` placeholders inside a template, where `N` is a wildcard key. Placeholders may wrap the wildcard with chained transforms — `ToLower`, `ToUpper`, `Trim`, `Capitalize`, `Round`, `Round1`, `Round2` — applied inside-out
 - `$user` with `field: 'userList'` is component-resolved (only valid for `option-list` fields); `$languages` is also component-resolved
 - `$widgetProp` is resolved at component-tree render time by reading the current `WidgetContext`; it is never evaluated by `propertySourceEval.ts` and is forbidden outside a widget's internal tree

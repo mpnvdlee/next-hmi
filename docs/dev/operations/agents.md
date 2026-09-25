@@ -208,7 +208,7 @@ Inline styles and property parsing are in [Hard rules](#hard-rules). Beyond thos
 
 Every property has a **type** (`String`, `Integer`, `Float`, `Boolean`,
 `DateTime`, …) and a **source**. The canonical sources are: `$static`, `$var`,
-`$loc`, `$if`, `$switch`, `$compare`, `$random`, `$user`, `$userGroups`,
+`$loc`, `$if`, `$switch`, `$compare`, `$not`, `$formula`, `$random`, `$user`, `$userGroups`,
 `$device`, `$time`, `$urlParam`, `$pageIsActive`, `$widgetProp`,
 `$componentProp`, `$languages`, `$stringExpr`, `$http`, `$alarmCount`,
 `$recipe`, `$recipeList`, `$page`, `$viewport`, `$result`.

@@ -88,6 +88,47 @@ interface PreviewLookups {
 
 const EMPTY_LOOKUPS: PreviewLookups = {};
 
+/**
+ * A `{n}`-placeholder template (`$stringExpr`, `$formula`) with each wildcard
+ * replaced by what it is bound to. Template syntax (braces, function names,
+ * operators) is the construct's own literal text, so it takes the tint — same
+ * rule as `if(`/`switch(`. What the wildcards resolve to is data, and renders
+ * plain.
+ */
+function templateNodes(
+  template: string,
+  wildcards: Record<string, unknown>,
+  tint: string,
+  depth: number,
+  lookups: PreviewLookups,
+): ReactNode {
+  let keyCounter = 0;
+  return substituteWildcards<ReactNode>(
+    template,
+    wildcards,
+    (wildcard) => (
+      <Fragment key={keyCounter++}>
+        {isRecord(wildcard) && '$var' in wildcard ? (
+          // A template concatenates several of these, so each bound path is
+          // shortened from the front — unlike a lone `$var` summary, which
+          // has the whole row to itself and stays complete.
+          <BreakableToken
+            text={shortenBindingPath(propertyValuePreview(wildcard, undefined, depth + 1))}
+          />
+        ) : (
+          previewNodes(wildcard, undefined, depth + 1, lookups)
+        )}
+      </Fragment>
+    ),
+    (text) => (
+      <Kw tint={tint} key={keyCounter++}>
+        {text}
+      </Kw>
+    ),
+    (parts) => <>{parts}</>,
+  );
+}
+
 function previewNodes(
   value: unknown,
   fieldType: string | undefined,
@@ -102,33 +143,24 @@ function previewNodes(
       { template?: string; wildcards?: Record<string, unknown> } | undefined;
     if (!se?.template || depth >= MAX_PREVIEW_DEPTH)
       return propertyValuePreview(value, fieldType, depth);
-    // Template syntax (braces, function names) is the construct's own literal
-    // text, so it takes the tint — same rule as `if(`/`switch(` below. What the
-    // wildcards resolve to is data, and renders plain.
-    let keyCounter = 0;
-    return substituteWildcards<ReactNode>(
-      se.template,
-      se.wildcards ?? {},
-      (wildcard) => (
-        <Fragment key={keyCounter++}>
-          {isRecord(wildcard) && '$var' in wildcard ? (
-            // A template concatenates several of these, so each bound path is
-            // shortened from the front — unlike a lone `$var` summary, which
-            // has the whole row to itself and stays complete.
-            <BreakableToken
-              text={shortenBindingPath(propertyValuePreview(wildcard, undefined, depth + 1))}
-            />
-          ) : (
-            previewNodes(wildcard, undefined, depth + 1, lookups)
-          )}
-        </Fragment>
-      ),
-      (text) => (
-        <Kw tint="stringExpr" key={keyCounter++}>
-          {text}
-        </Kw>
-      ),
-      (parts) => <>{parts}</>,
+    return templateNodes(se.template, se.wildcards ?? {}, 'stringExpr', depth, lookups);
+  }
+  if ('$formula' in value) {
+    const f = value.$formula as
+      { expression?: string; wildcards?: Record<string, unknown> } | undefined;
+    if (!f?.expression || depth >= MAX_PREVIEW_DEPTH)
+      return propertyValuePreview(value, fieldType, depth);
+    return templateNodes(f.expression, f.wildcards ?? {}, 'formula', depth, lookups);
+  }
+  if ('$not' in value) {
+    if (depth >= MAX_PREVIEW_DEPTH) return <Kw tint="not">not(…)</Kw>;
+    const n = value.$not as { value?: unknown } | undefined;
+    return (
+      <>
+        <Kw tint="not">not(</Kw>
+        {previewNodes(n?.value, undefined, depth + 1, lookups)}
+        <Kw tint="not">)</Kw>
+      </>
     );
   }
   if ('$userGroups' in value) {

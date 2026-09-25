@@ -14,6 +14,8 @@ export type PropertySource =
   | '$pageIsActive'
   | '$if'
   | '$compare'
+  | '$not'
+  | '$formula'
   | '$random'
   | '$switch'
   | '$user'
@@ -174,6 +176,26 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
         right: 0,
       },
     }),
+  },
+  {
+    source: '$not',
+    key: '$not',
+    contentTier: 3,
+    label: 'Invert',
+    description: 'The opposite of a boolean value: true becomes false and false becomes true.',
+    abbr: '!',
+    produces: ['boolean'],
+    createDefault: () => ({ $not: { value: { $var: { path: '' } } } }),
+  },
+  {
+    source: '$formula',
+    key: '$formula',
+    contentTier: 3,
+    label: 'Formula',
+    description: 'A number calculated from values with + − × ÷ and parentheses.',
+    abbr: 'fx',
+    produces: ['float'],
+    createDefault: () => ({ $formula: { expression: '', wildcards: {} } }),
   },
   {
     source: '$random',

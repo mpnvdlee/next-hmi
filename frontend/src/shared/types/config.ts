@@ -122,6 +122,21 @@ export interface CompareSource {
   };
 }
 
+/** $not: boolean inverse of a value-source-capable value */
+export interface NotSource {
+  $not: {
+    value: unknown;
+  };
+}
+
+/** $formula: arithmetic over `{n}` placeholders, e.g. "({1} - 32) / 1.8" */
+export interface FormulaSource {
+  $formula: {
+    expression: string;
+    wildcards: Record<string, unknown>; // keyed by placeholder number, like $stringExpr
+  };
+}
+
 /** $random: random number (number only) */
 export interface RandomSource {
   $random: {

@@ -7,6 +7,7 @@ import { imageBodyToUrl } from '@shared/utils/imageAsset';
 import { withBase } from '@shared/utils/runtimeBase';
 import { resolveComponentPropKey } from './componentPropResolution';
 import { toNumber } from './coercion';
+import { evaluateFormula, parseFormula } from './formula';
 
 /**
  * Evaluates `$`-prefixed property sources. The dispatch table at
@@ -88,6 +89,8 @@ const SOURCE_HANDLERS: Record<string, SourceHandler> = {
   $pageIsActive: (payload, ctx) => evaluatePageIsActive(payload, ctx),
   $if: (payload, ctx, d) => evaluateIf(payload, ctx, d),
   $compare: (payload, ctx, d) => evaluateCompare(payload, ctx, d),
+  $not: (payload, ctx, d) => evaluateNot(payload, ctx, d),
+  $formula: (payload, ctx, d) => evaluateFormulaSource(payload, ctx, d),
   $random: (payload) => evaluateRandom(payload),
   $switch: (payload, ctx, d) => evaluateSwitch(payload, ctx, d),
   $user: (payload, ctx) => evaluateUser(payload, ctx),
@@ -339,6 +342,29 @@ function evaluateCompare(
     default:
       return false;
   }
+}
+
+function evaluateNot(payload: unknown, context: EvaluationContext, depth: number): ResolvedValue {
+  if (!isRecord(payload)) return null;
+  const value = evaluatePropertyValueInternal(payload.value, context, depth);
+  if (typeof value === 'boolean') return !value;
+  // PLCs often expose a flag as a 0/1 integer.
+  if (typeof value === 'number' && !isNaN(value)) return value === 0;
+  return null;
+}
+
+function evaluateFormulaSource(
+  payload: unknown,
+  context: EvaluationContext,
+  depth: number,
+): ResolvedValue {
+  if (!isRecord(payload) || typeof payload.expression !== 'string') return null;
+  const node = parseFormula(payload.expression);
+  if (!node) return null;
+  const wildcards = wildcardsOf(payload);
+  return evaluateFormula(node, (key) =>
+    toNumber(evaluatePropertyValueInternal(wildcards[key], context, depth)),
+  );
 }
 
 function evaluateRandom(randObj: unknown): ResolvedValue {

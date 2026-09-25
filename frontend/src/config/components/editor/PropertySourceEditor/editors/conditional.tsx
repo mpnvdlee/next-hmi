@@ -6,10 +6,11 @@ import { BranchEditor, CompareFields, KindLabel, PreviewText, SwitchCasePreview 
 import { ParentPathContext, useParentPath, withSegs } from '../parentPathContext';
 import { COMPARE_OPERAND_SCHEMA, type Operator, type OpenBindingPicker, wrapPicker } from './utils';
 import type { SchemaField } from '@shared/types/widgetSchema';
-import type { CompareSource, IfSource, SwitchSource } from '@shared/types/config';
+import type { CompareSource, IfSource, NotSource, SwitchSource } from '@shared/types/config';
 import { primaryType } from '@shared/utils/valueTypes';
 
 const IF_CONDITION_SCHEMA: SchemaField = { type: 'Boolean', label: 'Condition' };
+const NOT_VALUE_SCHEMA: SchemaField = { type: 'Boolean', label: 'Value' };
 
 /**
  * $if — condition + true/false outputs.
@@ -68,6 +69,32 @@ export function IfEditor({
         </>
       )}
     </>
+  );
+}
+
+/** $not — one boolean input, returned inverted. */
+export function NotEditor({
+  value,
+  onChange,
+  onOpenBindingPicker,
+}: {
+  value: unknown;
+  onChange: (v: unknown) => void;
+  onOpenBindingPicker?: OpenBindingPicker;
+}) {
+  const notObj = (value as NotSource)?.$not ?? { value: { $var: { path: '' } } };
+  const parent = useParentPath();
+
+  return (
+    <ParentPathContext.Provider value={withSegs(parent, '$not', 'value')}>
+      <BranchEditor
+        label="Invert this value"
+        value={notObj.value}
+        onChange={(v) => onChange({ $not: { value: v } })}
+        schema={NOT_VALUE_SCHEMA}
+        onOpenBindingPicker={onOpenBindingPicker}
+      />
+    </ParentPathContext.Provider>
   );
 }
 
