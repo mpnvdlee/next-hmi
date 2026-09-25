@@ -85,6 +85,13 @@ export const ACTION_TYPES = [
     category: 'Interface',
     description: 'Shows a transient message with an info, warning or error severity.',
   },
+  {
+    type: 'if' as const,
+    label: 'If / Else',
+    category: 'Logic',
+    description:
+      'Runs one list of actions when a condition holds — a variable, a comparison — and another when it does not.',
+  },
 ] as const;
 
 /** Tint token per action type, mirrored onto both the badge and the
@@ -96,6 +103,7 @@ export const ACTION_TYPE_TINT: Record<ButtonAction['type'], string> = {
   closePageOverlay: 'static',
   writeDataVariable: 'var',
   toggleDataVariable: 'not',
+  if: 'if',
   recipeLoad: 'recipe',
   recipeSave: 'recipeList',
   loginUser: 'user',

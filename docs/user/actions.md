@@ -13,7 +13,7 @@ Custom widgets fire the same lists through the SDK's `executeWidgetActions`, so 
 
 ## The action catalog
 
-Thirteen types, in the order the **Add action** menu lists them. **Browse actions…** at the top of that menu opens the same catalog as a searchable drawer, grouped as below.
+Fourteen types, in the order the **Add action** menu lists them. **Browse actions…** at the top of that menu opens the same catalog as a searchable drawer, grouped as below.
 
 ### Screens
 
@@ -65,6 +65,12 @@ See [Users, groups & permissions](users.md#sign-in-and-out-on-a-screen) for the 
 | **Set Theme** | Switches the active theme by id — day/night buttons, or a per-line brand. See [Theming](theming.md). |
 | **Show Alert** | A modal with a **Title**, **Description**, and two buttons whose captions you set. **OK** and **Cancel** each run their own action list, which is how you gate a dangerous write behind a confirmation. `dismissible` decides whether clicking away counts as cancel. |
 | **Show Toast** | A transient message — **severity** `info` / `warning` / `error`, **discard** `auto` (after **duration**, 4000 ms by default) or `manual`. The message is a property, so `$loc` and `$var` work in it. |
+
+### Logic
+
+| Action | Does |
+|---|---|
+| **If / Else** | Evaluates a **Condition** — a Boolean variable, a comparison (`$compare`: *Mode = 2*, *Level > 80*), a negation, a user-group check — and runs its **Then** list when it holds, its **Else** list when it does not. Branches take any actions, including another **If / Else**. The condition reads the value the panel has at that moment. |
 
 ## Async actions and `$result`
 

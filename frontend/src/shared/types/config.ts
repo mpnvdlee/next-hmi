@@ -519,6 +519,14 @@ export type ButtonAction =
       onSettled?: ButtonAction[];
     }
   | {
+      /** Runs `then` when `condition` evaluates truthy, `else` otherwise. The
+       *  condition is any property-source value — a `$var`, a `$compare`, … */
+      type: 'if';
+      condition: unknown;
+      then?: ButtonAction[];
+      else?: ButtonAction[];
+    }
+  | {
       type: 'toggleDataVariable';
       datasource: string;
       path: string;

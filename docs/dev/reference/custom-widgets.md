@@ -630,6 +630,7 @@ Supported action types (see `frontend/src/config/components/editor/PropertiesPan
 - `openDialog` (a Dialogs-folder node, with `componentProperties`) / `openPageOverlay` (a node in the `pages` root) / `closePageOverlay` (either)
 - `writeDataVariable` — `{ datasource, path, value }`; value is a literal (`string | number | boolean`, or an array for a whole-array target), or a property source (`$componentProp`, `$var`, …) evaluated when the action fires.
 - `toggleDataVariable` — `{ datasource, path }`; inverts a Boolean variable from its current server-side value.
+- `if` — `{ condition, then, else }`; evaluates `condition` (any property-source value, e.g. a `$var` or `$compare`) and runs the `then` or `else` action list.
 - `setLanguage` — switches the active HMI language; the `language` property is resolved from component properties at runtime.
 - `loginUser` / `logoutUser` — scope-based authentication (the scope defaults to the current `useHmiScope()`).
 - `showAlert` — modal alert with `onCancel` / `onOk` nested action lists.

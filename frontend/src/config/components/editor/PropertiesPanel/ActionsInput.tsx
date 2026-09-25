@@ -1,4 +1,11 @@
-import { useContext, useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react';
+import {
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from 'react';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import type { BindingPickMetadata } from '@config/store/domains/editorDomainStore';
 import {
@@ -340,6 +347,10 @@ function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets)
       ) : (
         K('Write data variable')
       );
+    case 'if': {
+      const condition = propertyValuePreview(action.condition, 'boolean');
+      return condition !== '—' ? K('If', condition) : K('If condition');
+    }
     case 'toggleDataVariable':
       return action.datasource && action.path ? (
         <>

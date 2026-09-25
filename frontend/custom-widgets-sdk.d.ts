@@ -288,6 +288,13 @@ type ComponentAction =
       onSettled?: ComponentAction[];
     }
   | {
+      type: 'if';
+      /** Any property-source value; `then` runs when it evaluates truthy. */
+      condition: unknown;
+      then?: ComponentAction[];
+      else?: ComponentAction[];
+    }
+  | {
       type: 'toggleDataVariable';
       datasource: string;
       path: string;

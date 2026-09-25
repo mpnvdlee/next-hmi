@@ -39,6 +39,14 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
       <LinkGlyphPaths />
     </Icon>
   ),
+  // A path forking in two — one branch or the other.
+  if: (
+    <Icon>
+      <path d="M8 13.5 v-5" />
+      <path d="M8 8.5 L3.5 3.5 M8 8.5 L12.5 3.5" />
+      <path d="M3.5 6 v-2.5 h2.5 M12.5 6 v-2.5 h-2.5" />
+    </Icon>
+  ),
   // Two opposed arrows — flips a flag.
   toggleDataVariable: (
     <Icon>

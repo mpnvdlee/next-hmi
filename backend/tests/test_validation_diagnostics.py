@@ -155,6 +155,21 @@ def test_write_target_in_result_handler(ctx):
     assert (w.code, w.path) == ("var-test-server", "/a/onSuccess/0/datasource")
 
 
+def test_write_target_in_if_branch(ctx):
+    report = ValidationReport()
+    _validate_action(
+        {
+            "type": "if",
+            "condition": {"$var": {"path": "PLC:Motor/Speed"}},
+            "then": [],
+            "else": [{"type": "toggleDataVariable", "datasource": "PLC", "path": "Motor/Ghost"}],
+        },
+        ctx, "/a", report,
+    )
+    w = _warn(report)
+    assert (w.code, w.path) == ("var-unknown", "/a/else/0/datasource")
+
+
 def test_write_target_in_alert_handler(ctx):
     report = ValidationReport()
     _validate_action(

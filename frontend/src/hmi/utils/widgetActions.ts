@@ -1,5 +1,6 @@
 import type { AnchorRect, ButtonAction, OverlayPlacement } from '@shared/types/config';
-import type { EvaluationContext } from '@hmi/utils/propertySourceEval';
+import type { EvaluationContext, ResolvedValue } from '@hmi/utils/propertySourceEval';
+import { useVariableStore } from '@hmi/store/variableStore';
 import { evaluatePropertyValue } from '@hmi/utils/propertySourceEval';
 import { isAnchoredPlacement } from '@shared/utils/anchorPosition';
 import { resolveComponentPropValue } from '@hmi/utils/componentPropResolution';
@@ -37,6 +38,11 @@ function anchorRectFor(
   };
 }
 
+function readStoredVariable(datasource: string, path: string): ResolvedValue {
+  const value = useVariableStore.getState().values[`${datasource}:${path}`];
+  return (value !== undefined ? value : null) as ResolvedValue;
+}
+
 export function executeWidgetActions(
   actions: ButtonAction[] | undefined,
   context: ActionContext = {},
@@ -69,6 +75,19 @@ export function executeWidgetActions(
         backdrop: action.backdrop,
         anchorRect: anchorRectFor(action.placement, anchorEl),
       });
+      continue;
+    }
+
+    if (action.type === 'if') {
+      // Page and global events fire outside any widget, so their context has
+      // no variable reader of its own; the condition reads the live store.
+      const conditionCtx: EvaluationContext = evalCtx.resolveVariable
+        ? evalCtx
+        : { ...evalCtx, resolveVariable: readStoredVariable };
+      const branch = evaluatePropertyValue(action.condition, conditionCtx)
+        ? action.then
+        : action.else;
+      executeWidgetActions(branch, context);
       continue;
     }
 

@@ -35,6 +35,8 @@ export function makeDefaultAction(
       return { type: 'closePageOverlay' };
     case 'writeDataVariable':
       return { type: 'writeDataVariable', datasource: '', path: '', value: '' };
+    case 'if':
+      return { type: 'if', condition: { $var: { path: '' } }, then: [], else: [] };
     case 'toggleDataVariable':
       return { type: 'toggleDataVariable', datasource: '', path: '' };
     case 'recipeLoad':

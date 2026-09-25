@@ -1001,10 +1001,10 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
                     _warn_unknown_property(
                         report, f"{path}/componentProperties/{key}", key, owner_label
                     )
-    # Async actions nest follow-up lists (onSuccess/onFailed/onSettled) and
-    # showAlert nests its button handlers; their targets deserve the same checks
-    # as a top-level action.
-    for slot in ("onSuccess", "onFailed", "onSettled", "onOk", "onCancel"):
+    # Async actions nest follow-up lists (onSuccess/onFailed/onSettled),
+    # showAlert nests its button handlers and `if` its two branches; their
+    # targets deserve the same checks as a top-level action.
+    for slot in ("onSuccess", "onFailed", "onSettled", "onOk", "onCancel", "then", "else"):
         nested = action.get(slot)
         if isinstance(nested, list):
             validate_action_targets(nested, ctx, f"{path}/{slot}", report)

@@ -647,6 +647,52 @@ const WriteDataVariableEditor: EditorFor<'writeDataVariable'> = ({ action, ctx }
   );
 };
 
+const CONDITION_SCHEMA: SchemaField = { type: 'Boolean', label: 'Condition' };
+
+const IfEditor: EditorFor<'if'> = ({ action, ctx }) => {
+  const NestedActions = ctx.ActionsInput;
+  const branches = [
+    { key: 'then', label: 'Then' },
+    { key: 'else', label: 'Else' },
+  ] as const;
+  return (
+    <>
+      <ParentPathContext.Provider value={[...ctx.path, 'condition']}>
+        <CollapsiblePropertyCard
+          title="Condition"
+          value={action.condition}
+          onChange={(v) => ctx.update({ condition: v })}
+          schema={CONDITION_SCHEMA}
+          onOpenBindingPicker={(onPick, currentBinding) =>
+            ctx.openBindingPicker('', 'if-condition', {
+              currentBinding: currentBinding ?? varBindingOf(action.condition),
+              // A nested source (a comparison's operand) supplies its own
+              // onPick; only a bare condition is replaced by the binding.
+              onPick: (binding) =>
+                onPick ? onPick(binding) : ctx.update({ condition: { $var: binding } }),
+            })
+          }
+        />
+      </ParentPathContext.Provider>
+      {branches.map(({ key, label }) => (
+        <NestedActions
+          key={key}
+          value={{ [key]: action[key] ?? [] }}
+          onChange={(v) => {
+            const sub = v as Record<string, unknown>;
+            ctx.update({ [key]: (sub[key] ?? []) as ButtonAction[] } as Partial<ButtonAction>);
+          }}
+          eventKey={key}
+          eventLabel={label}
+          headerTitle={label}
+          pathPrefix={ctx.path}
+          resultFields={ctx.resultFields}
+        />
+      ))}
+    </>
+  );
+};
+
 const ToggleDataVariableEditor: EditorFor<'toggleDataVariable'> = ({ action, ctx }) => {
   const widgetId = useContext(PanelScopeContext);
   const targetDiagnostic = useFieldDiagnostic(widgetId, [...ctx.path, 'datasource']);
@@ -943,6 +989,7 @@ export const ACTION_EDITORS: ActionEditors = {
   closePageOverlay: ClosePageOverlayEditor,
   writeDataVariable: WriteDataVariableEditor,
   toggleDataVariable: ToggleDataVariableEditor,
+  if: IfEditor,
   recipeLoad: RecipeLoadEditor,
   recipeSave: RecipeSaveEditor,
   loginUser: LoginUserEditor,
