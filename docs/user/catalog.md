@@ -25,6 +25,7 @@ Groups and lays out child widgets in a row or column. Hosts other widgets.
 |---|---|---|
 | `title` | Title | `String` |
 | `showWhenEmpty` | Show when empty | `Boolean` |
+| `overflow` | Overflow | `String` |
 | `background` | Background | `color` |
 | `border` | Border | `String` |
 | `shadow` | Shadow | `String` |

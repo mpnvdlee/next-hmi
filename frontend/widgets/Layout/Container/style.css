@@ -52,6 +52,39 @@
   justify-content: var(--container-justify, flex-start);
 }
 
+.hmi-container > .hmi-container__content.hmi-container__content--clip {
+  overflow: hidden;
+}
+
+/* An author who picks Scroll asked for a visible bar, so this overrides the
+   HMI-wide hidden-scrollbar rule in hmi.css — whose selector it must outrank,
+   since a runtime-injected sheet cannot rely on stylesheet order. Same bar as
+   the `.hmi-root--scrollbars` opt-in there: `scrollbar-width: auto` only undoes
+   the `none`, because any other value sends Chrome down the standard path,
+   which ignores the ::-webkit rules and falls back to macOS's overlay bar — the
+   one that fades out exactly when the operator needs the "more below" hint. */
+.hmi-container > .hmi-container__content.hmi-container__content--scroll {
+  overflow: auto;
+  scrollbar-width: auto;
+}
+
+.hmi-container > .hmi-container__content.hmi-container__content--scroll::-webkit-scrollbar {
+  display: block;
+  width: 10px;
+  height: 10px;
+}
+
+.hmi-container > .hmi-container__content.hmi-container__content--scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.hmi-container > .hmi-container__content.hmi-container__content--scroll::-webkit-scrollbar-thumb {
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 5px;
+  background-color: var(--hmi-text-4);
+}
+
 .hmi-container__title {
   width: 100%;
   font-family: var(--hmi-type-label-font);

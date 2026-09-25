@@ -109,4 +109,21 @@ describe('WidgetRenderer visible property', () => {
 
     expect(screen.queryByText('Main Container')).not.toBeInTheDocument();
   });
+
+  it.each([
+    ['scroll', 'hmi-container__content--scroll'],
+    ['clip', 'hmi-container__content--clip'],
+  ])('marks the content box for overflow %s', async (overflow, cls) => {
+    renderContainer({ title: 'Main Container', overflow });
+
+    const el = (await screen.findByText('Main Container')).closest('.hmi-container') as HTMLElement;
+    expect(el.querySelector('.hmi-container__content')).toHaveClass(cls);
+  });
+
+  it('adds no overflow modifier by default', async () => {
+    renderContainer({ title: 'Main Container' });
+
+    const el = (await screen.findByText('Main Container')).closest('.hmi-container') as HTMLElement;
+    expect(el.querySelector('.hmi-container__content')?.className).toBe('hmi-container__content');
+  });
 });

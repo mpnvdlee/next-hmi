@@ -47,6 +47,13 @@
             "defaultValue": false
           },
           {
+            "key": "overflow",
+            "label": "Overflow",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "visible"
+          },
+          {
             "key": "background",
             "label": "Background",
             "type": "color",

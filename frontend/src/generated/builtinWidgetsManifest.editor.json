@@ -1949,6 +1949,27 @@
         "defaultValue": false,
         "description": "Keep the frame and background even when every child is hidden, instead of collapsing away."
       },
+      "overflow": {
+        "format": "select",
+        "label": "Overflow",
+        "group": "Content",
+        "defaultValue": "visible",
+        "options": [
+          {
+            "label": "Visible",
+            "value": "visible"
+          },
+          {
+            "label": "Clip",
+            "value": "clip"
+          },
+          {
+            "label": "Scroll",
+            "value": "scroll"
+          }
+        ],
+        "description": "What happens to children that do not fit. Clip and Scroll need a bounded size (Fixed or Fill); a Hug container grows to fit its children instead."
+      },
       "background": {
         "label": "Background",
         "group": "Appearance"

@@ -10,6 +10,20 @@ export const schema = {
     description:
       'Keep the frame and background even when every child is hidden, instead of collapsing away.',
   },
+  overflow: {
+    type: 'string' as const,
+    format: 'select' as const,
+    label: 'Overflow',
+    group: 'Content',
+    defaultValue: 'visible',
+    options: [
+      { label: 'Visible', value: 'visible' },
+      { label: 'Clip', value: 'clip' },
+      { label: 'Scroll', value: 'scroll' },
+    ],
+    description:
+      'What happens to children that do not fit. Clip and Scroll need a bounded size (Fixed or Fill); a Hug container grows to fit its children instead.',
+  },
   background: { type: 'color' as const, label: 'Background', group: 'Appearance' },
   border: {
     type: 'string' as const,
@@ -47,6 +61,7 @@ export default function Container({ properties, layout, children }: HmiWidgetPro
   const background = getPropString(properties, 'background', '', evalCtx);
   const border = getPropString(properties, 'border', '', evalCtx);
   const shadow = getPropString(properties, 'shadow', '', evalCtx);
+  const overflow = getPropString(properties, 'overflow', 'visible', evalCtx);
   const isEmpty = React.Children.count(children) === 0;
 
   if (isEmpty && !showWhenEmpty) return null;
@@ -100,7 +115,15 @@ export default function Container({ properties, layout, children }: HmiWidgetPro
           {title}
         </span>
       )}
-      <div className="hmi-container__content" style={contentStyle} {...flowAttrs}>
+      <div
+        className={
+          overflow === 'clip' || overflow === 'scroll'
+            ? `hmi-container__content hmi-container__content--${overflow}`
+            : 'hmi-container__content'
+        }
+        style={contentStyle}
+        {...flowAttrs}
+      >
         {children}
       </div>
     </div>
