@@ -28,6 +28,8 @@ import {
 import type { LayoutConfig, WidgetConfig } from '@shared/types/config';
 import selfLayoutKeys from '@shared/types/__fixtures__/selfLayoutKeys.json';
 import { useVariableStore } from '../store/variableStore';
+import { useComponentStore } from '@shared/store/componentStore';
+import type { ComponentDefinition } from '@shared/types/componentTypes';
 import { useRecipeStore } from '../store/recipeStore';
 import { useComponentPropStore } from '../store/widgetPropStore';
 import type { RecipeConfig } from '@shared/types/recipe';
@@ -607,6 +609,80 @@ describe('collectComponentPriorityKeys', () => {
     expect(new Set(collectComponentPriorityKeys(components))).toEqual(
       new Set(['PLC:Label', 'PLC:Mode', 'PLC:ExpectedMode', 'PLC:Width', 'PLC:ChildValue']),
     );
+  });
+
+  describe('inside component definitions', () => {
+    const sensorCard = {
+      id: 'sensor-card',
+      name: 'sensor-card',
+      componentProperties: {
+        sensor: { type: 'struct', label: 'Sensor' },
+        speed: { type: 'Float', label: 'Speed', defaultValue: { $var: { path: 'PLC:DefaultSpeed' } } },
+      },
+      children: [
+        {
+          id: 'button',
+          type: 'Button',
+          name: 'Button',
+          properties: { variable: { $componentProp: 'sensor/stFiltered' } },
+        },
+        {
+          id: 'speed',
+          type: 'ValueDisplay',
+          name: 'Speed',
+          properties: { variable: { $componentProp: 'speed' } },
+        },
+      ],
+    } as unknown as ComponentDefinition;
+
+    beforeEach(() => {
+      useComponentStore.setState({ components: [sensorCard], draftComponents: {} });
+    });
+
+    it('lists the keys a definition derives from the instance bindings and declared defaults', () => {
+      const components: WidgetConfig[] = [
+        {
+          id: 'card-1',
+          type: '$component:sensor-card',
+          name: 'Card',
+          properties: { sensor: { $var: { path: 'PLC:Sensor' } } },
+        },
+      ];
+
+      expect(new Set(collectComponentPriorityKeys(components))).toEqual(
+        new Set(['PLC:Sensor', 'PLC:Sensor/stFiltered', 'PLC:DefaultSpeed']),
+      );
+    });
+
+    it('carries the scope through a component nested in another', () => {
+      const outer = {
+        id: 'outer',
+        name: 'outer',
+        componentProperties: { source: { type: 'struct', label: 'Source' } },
+        children: [
+          {
+            id: 'inner',
+            type: '$component:sensor-card',
+            name: 'Inner',
+            properties: { sensor: { $componentProp: 'source/stMotor' }, speed: 3 },
+          },
+        ],
+      } as unknown as ComponentDefinition;
+      useComponentStore.setState({ components: [sensorCard, outer], draftComponents: {} });
+
+      const keys = collectComponentPriorityKeys([
+        {
+          id: 'outer-1',
+          type: '$component:outer',
+          name: 'Outer',
+          properties: { source: { $var: { path: 'PLC:Line' } } },
+        },
+      ]);
+
+      expect(new Set(keys)).toEqual(
+        new Set(['PLC:Line', 'PLC:Line/stMotor', 'PLC:Line/stMotor/stFiltered']),
+      );
+    });
   });
 });
 

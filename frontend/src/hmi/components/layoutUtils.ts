@@ -9,6 +9,8 @@ import type { CSSWithVars } from '@shared/types/style';
 import { getVarBinding, hasPropertySourceKey, isRecord } from '@shared/types/propertyValueGuards';
 import { evaluatePropertyValue, type EvaluationContext } from '../utils/propertySourceEval';
 import { extractVarKeys } from '../utils/extractVarKeys';
+import { resolveComponentPropValue, withDeclaredDefaults } from '../utils/componentPropResolution';
+import { componentDefinition } from '@shared/store/componentStore';
 import { useEvalContext } from '../hooks/useEvalContext';
 import { useLiveScalars } from '../hooks/useLiveScalars';
 import { getViewportSnapshot } from '../hooks/useViewport';
@@ -644,18 +646,54 @@ export function useCssVar(varName: string, fallback: string): string {
  * Used to build the `priorityKeys` list when sending `set_context` from
  * HmiView so the backend subscribes and pushes variables even when the page
  * config has not been saved to disk yet.
+ *
+ * Descends into the definitions of `$component:` instances with the
+ * instance's properties as the `$componentProp` scope. A definition that
+ * binds a sub-path of a struct input (`sensor/stSignalFiltered`) reads a
+ * composite no instance names; the backend only builds and pushes a nested
+ * struct composite when some client asks for it, so it has to be listed here.
  */
 export function collectComponentPriorityKeys(components: WidgetConfig[]): string[] {
   const keySet = new Set<string>();
-  function walk(nodes: WidgetConfig[]): void {
+  function walk(
+    nodes: WidgetConfig[],
+    scope: Record<string, unknown> | undefined,
+    seenComponents: ReadonlySet<string>,
+  ): void {
     for (const comp of nodes) {
-      for (const key of extractVarKeys(comp.properties)) keySet.add(key);
+      const properties = resolveScopedProperties(comp.properties, scope);
+      for (const key of extractVarKeys(properties)) keySet.add(key);
       for (const key of extractVarKeys(comp.layout)) keySet.add(key);
       if (comp.children?.length) {
-        walk(comp.children);
+        walk(comp.children, scope, seenComponents);
+      }
+      if (typeof comp.type === 'string' && comp.type.startsWith(COMPONENT_TYPE_PREFIX)) {
+        const name = comp.type.slice(COMPONENT_TYPE_PREFIX.length);
+        if (seenComponents.has(name)) continue;
+        const definition = componentDefinition(name);
+        if (!definition?.children?.length) continue;
+        walk(
+          definition.children as WidgetConfig[],
+          withDeclaredDefaults(properties, definition.componentProperties),
+          new Set([...seenComponents, name]),
+        );
       }
     }
   }
-  walk(components);
+  walk(components, undefined, new Set());
   return [...keySet];
+}
+
+const COMPONENT_TYPE_PREFIX = '$component:';
+
+function resolveScopedProperties(
+  properties: Record<string, unknown> | undefined,
+  scope: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!properties || !scope) return properties;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(properties)) {
+    out[key] = resolveComponentPropValue(value, scope);
+  }
+  return out;
 }

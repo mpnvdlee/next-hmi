@@ -6,6 +6,7 @@ import { useConfig, usePage, usePages } from '@shared/hooks/useConfig';
 import { useTranslations } from '@shared/hooks/useTranslations';
 import { useDisableBrowserZoom } from '@shared/hooks/useDisableBrowserZoom';
 import { useConfigStore } from '@shared/store/configStore';
+import { useComponentStore } from '@shared/store/componentStore';
 import { useHmiStore } from '../store/hmiStore';
 import { sendWsMessage } from '../hooks/useWebSocket';
 import { useVariableStore } from '../store/variableStore';
@@ -100,6 +101,9 @@ export default function HmiView() {
   // nested expressions (for example $if/$switch/$compare) are included.
   // Additionally, derive explicit priorityKeys from the in-memory component
   // tree so the backend subscribes variables even before config is saved to disk.
+  // Component definitions load asynchronously; the priority keys a
+  // `$component:` instance derives from its definition only exist once it has.
+  const componentDefinitions = useComponentStore((s) => s.components);
   useEffect(() => {
     if (!wsConnected) return;
 
@@ -126,7 +130,7 @@ export default function HmiView() {
     // openPageOverlayEntries (Zustand state) changes reference only when overlays
     // are actually added/removed, avoiding spurious re-fires.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wsConnected, page?.id, openPageOverlayEntries]);
+  }, [wsConnected, page?.id, openPageOverlayEntries, componentDefinitions]);
 
   // Clear this client's runtime context only on true unmount (navigating away
   // from the HMI view entirely). Deliberately a separate, empty-deps effect:

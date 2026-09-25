@@ -194,9 +194,12 @@ export function selectComponentById(
  * so they cannot disagree about what a component renders.
  */
 export function componentChildren(name: string): WidgetConfig[] | undefined {
+  return componentDefinition(name)?.children as WidgetConfig[] | undefined;
+}
+
+export function componentDefinition(name: string): ComponentDefinition | undefined {
   const store = useComponentStore.getState();
-  const def = store.draftComponents[name] ?? selectComponentById(store.components, name);
-  return def?.children as WidgetConfig[] | undefined;
+  return store.draftComponents[name] ?? selectComponentById(store.components, name);
 }
 
 export async function saveComponentDrafts(): Promise<void> {
