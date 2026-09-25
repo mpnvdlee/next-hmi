@@ -67,7 +67,9 @@ function resolveOptions(
     if ('$user' in obj) {
       const field = (obj.$user as Record<string, unknown>)?.field;
       if (field === 'userList') {
-        return users.map((u) => ({ label: u.username, value: String(u.id) }));
+        // Valued by username, not id: the list's usual consumer is a sign-in
+        // form, and `loginUser` authenticates by username.
+        return users.map((u) => ({ label: u.username, value: u.username }));
       }
       if (field === 'groups') {
         return userGroups.map((group) => ({

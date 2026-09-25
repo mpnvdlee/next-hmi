@@ -232,7 +232,9 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     abbr: '@',
     // username → string; groups / userList → string[]
     produces: ['string', 'string[]'],
-    createDefault: () => ({ $user: { field: 'username' } }),
+    createDefault: (fieldType) => ({
+      $user: { field: fieldType.toLowerCase() === 'option-list' ? 'userList' : 'username' },
+    }),
   },
   {
     source: '$userGroups',

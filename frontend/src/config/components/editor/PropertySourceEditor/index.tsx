@@ -31,6 +31,7 @@ import { StringExprEditor } from './editors/stringExpr';
 import { FormulaEditor } from './editors/formula';
 import { HttpEditor } from './editors/http';
 import type { OpenBindingPicker } from './editors/utils';
+import { primaryType } from '@shared/utils/valueTypes';
 
 export { CollapsedPreview, KindLabel, PreviewText } from './editors/shared';
 export { PickerField } from '../../ui/PathInputField';
@@ -94,7 +95,13 @@ const SOURCE_EDITORS: Record<PropertySource, SourceEditorRenderer> = {
       onOpenBindingPicker={onOpenBindingPicker}
     />
   ),
-  $user: ({ value, onChange }) => <UserFieldEditor value={value} onChange={onChange} />,
+  $user: ({ value, onChange, schema }) => (
+    <UserFieldEditor
+      value={value}
+      onChange={onChange}
+      listOnly={schema !== undefined && primaryType(schema.type).toLowerCase() === 'option-list'}
+    />
+  ),
   $userGroups: ({ value, onChange }) => <UserGroupsEditor value={value} onChange={onChange} />,
   $device: ({ value, onChange }) => <DeviceFieldEditor value={value} onChange={onChange} />,
   $time: ({ value, onChange }) => <TimeEditor value={value} onChange={onChange} />,

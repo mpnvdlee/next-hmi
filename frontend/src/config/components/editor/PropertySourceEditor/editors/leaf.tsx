@@ -199,11 +199,28 @@ export function RandomEditor({
 export function UserFieldEditor({
   value,
   onChange,
+  listOnly = false,
 }: {
   value: unknown;
   onChange: (v: unknown) => void;
+  /** An option-list field takes a list, so only the list-valued fields apply. */
+  listOnly?: boolean;
 }) {
-  const userObj = (value as UserSource)?.$user ?? { field: 'username' };
+  const userObj = (value as UserSource)?.$user ?? { field: listOnly ? 'userList' : 'username' };
+
+  if (listOnly) {
+    return (
+      <PropRow label="List" description="Fills the options from the project's users or groups.">
+        <Select
+          value={userObj.field === 'groups' ? 'groups' : 'userList'}
+          onChange={(v) => onChange({ $user: { field: v } })}
+        >
+          <option value="userList">All users</option>
+          <option value="groups">All user groups</option>
+        </Select>
+      </PropRow>
+    );
+  }
 
   return (
     <>
