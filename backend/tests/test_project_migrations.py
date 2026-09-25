@@ -52,7 +52,7 @@ def test_min_app_names_a_release_that_exists():
     """The stamp is what a too-old build shows an operator, so it has to name
     a version they can actually download. 0.0.1 was never released."""
     from core.project_migrations import PROJECT_FORMAT_MIN_APP
-    assert PROJECT_FORMAT_MIN_APP == "0.1.0"
+    assert PROJECT_FORMAT_MIN_APP == "1.0.0"
 
 
 def test_already_current_is_a_no_op(project_root: Path) -> None:

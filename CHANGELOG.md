@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 While the project is pre-1.0, minor versions may include breaking changes; these
 are always called out under a **Changed** or **Removed** heading.
 
-## [0.1.0] - Unreleased
+## [1.0.0] - Unreleased
 
 ### Added
 
@@ -503,6 +503,6 @@ below ships in the initial open-source build.
   shipped loose (replaceable) in binary builds, with the LGPL texts and a
   written source offer bundled alongside.
 
-[0.1.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v0.1.0
+[1.0.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.0.0
 [0.0.1-rc2]: https://github.com/mpnvdlee/next-hmi/releases/tag/v0.0.1-rc2
 [0.0.1-rc1]: https://github.com/mpnvdlee/next-hmi/releases/tag/v0.0.1-rc1

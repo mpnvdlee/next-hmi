@@ -175,7 +175,7 @@ After verifying every artifact:
    attaches `nexthmi-macos-arm64-<version>.zip` and
    `nexthmi-windows-x64-<version>.zip` to the GitHub Release for the tag,
    creating it with generated notes when it does not exist yet; a tag carrying a
-   hyphen (`v0.1.0-rc.1`) is published `--prerelease`, so only a bare `vX.Y.Z`
+   hyphen (`v1.0.0-rc.1`) is published `--prerelease`, so only a bare `vX.Y.Z`
    can become "Latest". Check the Release page once the run is green. CI does
    not build the offline Docker installer — attach a locally built
    `nexthmi-docker-linux-<arch>.zip` yourself if the release needs one.

@@ -34,8 +34,8 @@ no build can derive for a format that postdates it. Bump the two together,
 and only in a release whose minor or major moves: the published contract is
 that a patch update never makes a project unopenable. That rule governs
 released versions; a pre-release sorts below the release it is a candidate
-for, so ``0.1.0`` introducing formats 5 through 8 over the ``0.0.1-rc*`` line
-that carried 4 keeps the promise whole — "0.1.0 or newer" does exclude every
+for, so ``1.0.0`` introducing formats 5 through 8 over the ``0.0.1-rc*`` line
+that carried 4 keeps the promise whole — "1.0.0 or newer" does exclude every
 rc, and no release ever stamped 5, 6 or 7 on its own. It is a display string
 only — never parsed or compared. The integer stays the sole gate.
 
@@ -97,7 +97,7 @@ from core.version import app_version
 
 PROJECT_FORMAT_VERSION = 8
 # The release that introduced format 8. See the module docstring; bump with it.
-PROJECT_FORMAT_MIN_APP = "0.1.0"
+PROJECT_FORMAT_MIN_APP = "1.0.0"
 
 @dataclass(frozen=True)
 class _Target:
