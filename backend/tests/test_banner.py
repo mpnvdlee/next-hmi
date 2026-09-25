@@ -4,7 +4,8 @@ from pathlib import Path
 
 from core.banner import BannerFields, render_banner
 
-_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+# SGR colour codes, and OSC 8 hyperlink wrappers (`ESC ] 8 ;; url ESC \\`).
+_ANSI = re.compile(r"\x1b\[[0-9;]*m|\x1b\]8;;[^\x1b]*\x1b\\")
 
 
 def _rows(out: str) -> list[str]:
@@ -14,7 +15,11 @@ def _rows(out: str) -> list[str]:
     ``pytest -s`` — comparing raw lines would pass in CI and fail in a
     terminal. Stripping the escapes keeps the column padding assertable.
     """
-    return [_ANSI.sub("", line).strip() for line in out.splitlines() if "://" in line]
+    return [
+        _ANSI.sub("", line).strip()
+        for line in out.splitlines()
+        if "://" in line and "Open a web browser" not in line
+    ]
 
 
 def _fields() -> BannerFields:
@@ -132,3 +137,24 @@ def test_banner_never_prints_a_log_path() -> None:
         out = render_banner(mode, _fields())
         assert "Logs" not in out
         assert "nexthmi.log" not in out
+
+
+def test_banner_walks_a_first_time_user_to_the_project_list() -> None:
+    out = _ANSI.sub("", render_banner("runtime", _fields()))
+    assert "Getting started" in out
+    assert "Open a web browser and go to http://127.0.0.1:8000/projects" in out
+    assert "tablet" not in out
+
+
+def test_dev_banner_sends_the_browser_to_the_frontend() -> None:
+    out = _ANSI.sub("", render_banner("dev", _fields()))
+    assert "go to http://localhost:5173/projects" in out
+
+
+def test_network_step_appears_only_when_there_is_a_network_address() -> None:
+    fields = BannerFields(
+        runtime_home=Path("/srv/nexthmi-home"),
+        open_url="http://localhost:8000",
+        network_urls=(("http://panel-pc:8000",),),
+    )
+    assert "On the network" in _ANSI.sub("", render_banner("runtime", fields)).split("Getting started")[1]

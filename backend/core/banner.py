@@ -111,7 +111,16 @@ def _row(label: str, value: str) -> str:
 
 
 def _url(text: str) -> str:
-    return _wrap(text, _ANSI_BRIGHT_CYAN)
+    """A URL, painted and — where the terminal supports OSC 8 — clickable.
+
+    Most terminals auto-link ``http://localhost:8000`` but not a bare LAN IP
+    or ``panel-pc:8000``; the explicit hyperlink makes every row clickable.
+    Terminals without OSC 8 ignore the escape and print the plain text.
+    """
+    painted = _wrap(text, _ANSI_BRIGHT_CYAN)
+    if not _color_enabled():
+        return painted
+    return f"\x1b]8;;{text}\x1b\\{painted}\x1b]8;;\x1b\\"
 
 
 def _muted(text: str) -> str:
@@ -136,6 +145,23 @@ class BannerFields:
     network_urls: tuple[tuple[str, ...], ...] = ()
     # Dev-mode only.
     frontend_url: str | None = None
+
+
+def _getting_started(mode: Literal["runtime", "dev"], fields: BannerFields) -> list[str]:
+    """First steps for someone who has just started NEXT HMI and is looking at
+    a terminal, not yet at the app."""
+    base = fields.frontend_url if mode == "dev" and fields.frontend_url else fields.open_url
+    projects = f"{base}/projects"
+    steps = [
+        f"Open a web browser and go to {_url(projects)}",
+        "First visit: choose a device-admin password; after that, sign in with it",
+        "Pick a project: Open runs it, Open editor lets you change it",
+    ]
+    if any(fields.network_urls):
+        steps.append("A tablet or panel on the same network uses an address under On the network")
+    lines = [f"  {_wrap('Getting started', _ANSI_BOLD)}"]
+    lines.extend(f"    {_muted(f'{n}.')} {step}" for n, step in enumerate(steps, start=1))
+    return lines
 
 
 def render_banner(mode: Literal["runtime", "dev"], fields: BannerFields) -> str:
@@ -172,6 +198,8 @@ def render_banner(mode: Literal["runtime", "dev"], fields: BannerFields) -> str:
         alternatives = _muted(" / ").join(_url(url) for url in row)
         out.append(_row("On the network" if index == 0 else "", alternatives))
 
+    out.append("")
+    out.extend(_getting_started(mode, fields))
     out.append("")
     out.append(_muted("  Press Ctrl-C to stop."))
     out.append("")
