@@ -539,8 +539,15 @@
   background: var(--cfg-surface);
 }
 
-.cfg-prop-input--compact:focus {
+/* The standard 2px offset outline spills over the row rules of a dense table
+   and doubles up with the border; an inset ring stays inside the cell. The
+   doubled class outranks the generic `.cfg-prop-input:focus-visible` below. */
+.cfg-prop-input.cfg-prop-input--compact:focus,
+.cfg-prop-input.cfg-prop-input--compact:focus-visible {
+  outline: none;
+  border-color: var(--cfg-accent);
   background: var(--cfg-surface);
+  box-shadow: inset 0 0 0 1px var(--cfg-accent);
 }
 
 .cfg-prop-affix {
