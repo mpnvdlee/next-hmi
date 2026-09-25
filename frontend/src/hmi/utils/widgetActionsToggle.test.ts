@@ -42,3 +42,30 @@ describe('toggleDataVariable dispatch', () => {
     expect(beginAsyncAction).not.toHaveBeenCalled();
   });
 });
+
+describe('writeDataVariable value resolution', () => {
+  it('resolves a $componentProp value against the firing scope before sending', () => {
+    executeWidgetActions(
+      [
+        {
+          type: 'writeDataVariable',
+          datasource: 'Brew',
+          path: 'Wizard/CupCount',
+          value: { $componentProp: 'startingCupCount' },
+        },
+      ],
+      { scope: 'runtime', evalCtx: { inputScopeProps: { startingCupCount: 4 } } },
+    );
+    expect(sendWsMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'write_field', value: 4 }),
+    );
+  });
+
+  it('sends a literal array untouched', () => {
+    executeWidgetActions(
+      [{ type: 'writeDataVariable', datasource: 'PLC', path: 'Arr', value: [1, 2] }],
+      { scope: 'runtime' },
+    );
+    expect(sendWsMessage).toHaveBeenCalledWith(expect.objectContaining({ value: [1, 2] }));
+  });
+});

@@ -8,6 +8,7 @@ import { useHmiStore } from '@hmi/store/hmiStore';
 import { useThemeRuntimeStore } from '@hmi/store/themeRuntimeStore';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { randomUuid } from '@shared/utils/id';
+import { hasPropertySourceKey } from '@shared/types/propertyValueGuards';
 import { beginAsyncAction } from '@hmi/utils/actionDispatcher';
 
 interface ActionContext {
@@ -85,7 +86,11 @@ export function executeWidgetActions(
         scope,
         datasource: action.datasource,
         path: action.path,
-        value: action.value,
+        // A sourced value (a dialog's `$componentProp`, a `$var`) is resolved
+        // here; the backend only coerces literals and rejects an object.
+        value: hasPropertySourceKey(action.value)
+          ? evaluatePropertyValue(action.value, evalCtx)
+          : action.value,
       });
       continue;
     }

@@ -221,3 +221,51 @@ describe('usePageEvents — page overlays', () => {
     expect(fired()).toEqual(['a1:close', 'a2:open']);
   });
 });
+
+// ---------------------------------------------------------------------------
+// usePageEvents — dialog input parameters
+// ---------------------------------------------------------------------------
+describe('usePageEvents — dialog input parameters', () => {
+  function dialogGroup(): PageNode {
+    return {
+      ...group('wiz', [page('w1')]),
+      componentProperties: {
+        bean: { type: 'string', label: 'Bean', defaultValue: '' },
+        count: { type: 'integer', label: 'Count', defaultValue: 3 },
+      },
+    } as PageNode;
+  }
+
+  function scopeOf(tagId: string): unknown {
+    const call = executeWidgetActions.mock.calls.find(
+      ([actions]) => Array.isArray(actions) && actions[0]?.pageId === tagId,
+    );
+    return (call?.[1] as { evalCtx?: { inputScopeProps?: unknown } })?.evalCtx?.inputScopeProps;
+  }
+
+  it('runs a dialog’s events with the values it was opened with, defaults filled in', () => {
+    useConfigStore.setState({ dialogs: [dialogGroup()] });
+    renderAt('solo');
+    act(() =>
+      useHmiStore.setState({
+        openPageOverlays: [
+          {
+            pageId: 'wiz',
+            componentProperties: { bean: 'arabica' },
+            size: 'auto',
+            placement: 'center',
+          },
+        ],
+      }),
+    );
+    expect(scopeOf('wiz:open')).toEqual({ bean: 'arabica', count: 3 });
+
+    setOverlays([]);
+    expect(scopeOf('wiz:close')).toEqual({ bean: 'arabica', count: 3 });
+  });
+
+  it('gives a routed page’s events no input scope', () => {
+    renderAt('solo');
+    expect(scopeOf('solo:open')).toBeUndefined();
+  });
+});

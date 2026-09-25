@@ -43,7 +43,7 @@ Both open actions carry the presentation fields:
 
 | Action | Does |
 |---|---|
-| **Write Data Variable** | Pushes a value to a writable tag — a coil, a mode, a setpoint. Target is a datasource + path; the **value** is a fixed literal typed to match the tag (true/false, a number, text — or a JSON array for a whole-array tag). It cannot be bound to another tag or computed; the server coerces it to the tag's data type on write. |
+| **Write Data Variable** | Pushes a value to a writable tag — a coil, a mode, a setpoint. Target is a datasource + path; the **value** is a fixed literal typed to match the tag (true/false, a number, text — or a JSON array for a whole-array tag). Inside a dialog's own actions and events, **Value from** can take it from one of the dialog's input parameters instead. The server coerces it to the tag's data type on write. |
 | **Toggle Boolean Variable** | Flips a writable Boolean tag — `true` becomes `false` and back. The server reads the tag's current value and writes the opposite, so a stale screen or a second panel cannot make it write the wrong state. Only Boolean variables can be picked. Fails with `value_unavailable` when the tag has no known value yet. |
 | **Recipe: Load** | Downloads a saved dataset into its variables. **Dataset** may be fixed or bound (a row id from a `$recipeList` grid). **Verify** reads the values back after writing and fails the action if they didn't take. |
 | **Recipe: Save** | Captures current live values into a dataset. Leave **Dataset** empty to update the one that is loaded. |
@@ -128,7 +128,7 @@ A **page** opens and closes on every arrival and departure — a subscribe-on-ar
 
 A **page group** is entered and left as a whole. Moving between two pages inside the same group does not close it, so group-level actions are the place for setup that all its screens share rather than something each page repeats. Nested groups unwind in order: leaving a deep page closes the page, then the inner group, then the outer one; arriving opens them outermost-first.
 
-Reusing a page as a modal counts too — a page shown by **Open Dialog** or **Open Page As Overlay** fires its own Page Open and Page Close. Its groups are not entered, since nothing navigated into them.
+Reusing a page as a modal counts too — a page shown by **Open Dialog** or **Open Page As Overlay** fires its own Page Open and Page Close. Its groups are not entered, since nothing navigated into them. A dialog's events run with its **input parameters** in scope, so a Dialog Open can write the values it was opened with to the machine.
 
 Order across the two mechanisms is fixed: the project-wide `onPageLoaded` runs before the arriving page's own **Page Open**.
 

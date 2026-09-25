@@ -512,7 +512,8 @@ export type ButtonAction =
       type: 'writeDataVariable';
       datasource: string;
       path: string;
-      value: string | number | boolean | unknown[];
+      /** A literal, or a dialog input parameter resolved when the action fires. */
+      value: string | number | boolean | unknown[] | { $componentProp: string };
       onSuccess?: ButtonAction[];
       onFailed?: ButtonAction[];
       onSettled?: ButtonAction[];

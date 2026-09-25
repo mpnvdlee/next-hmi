@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useConfigStore } from '@shared/store/configStore';
 import { executeWidgetActions } from '../utils/widgetActions';
 import { resolvePageContext } from '@shared/utils/pageTree';
+import { withDeclaredDefaults } from '../utils/componentPropResolution';
 import { useResolvedPageOverlays } from './useOpenOverlays';
 import type { PageNode } from '@shared/types/config';
 
@@ -45,15 +46,30 @@ function resolveTrail(nodes: PageNode[], id: string | undefined): PageNode[] {
  * Holds the node objects themselves, not just ids: a page deleted while it is
  * open still has to fire the onClose it was configured with.
  */
-function useTrailEvents(trail: PageNode[], scope: string): void {
+function useTrailEvents(
+  trail: PageNode[],
+  scope: string,
+  inputScopes?: ReadonlyMap<string, Record<string, unknown>>,
+): void {
   const prevTrailRef = useRef<PageNode[]>([]);
+  // A closing node's scope is the one it opened with — its overlay entry, and
+  // with it the map's current row, may already be gone.
+  const prevScopesRef = useRef<ReadonlyMap<string, Record<string, unknown>> | undefined>(undefined);
   useEffect(() => {
     const { closed, opened } = diffPageTrail(prevTrailRef.current, trail);
+    const prevScopes = prevScopesRef.current;
+    prevScopesRef.current = inputScopes;
     if (closed.length === 0 && opened.length === 0) return;
     prevTrailRef.current = trail;
-    for (const node of closed) executeWidgetActions(node.events?.onClose, { scope });
-    for (const node of opened) executeWidgetActions(node.events?.onOpen, { scope });
-  }, [trail, scope]);
+    for (const node of closed) {
+      const inputScopeProps = prevScopes?.get(node.id);
+      executeWidgetActions(node.events?.onClose, { scope, evalCtx: { inputScopeProps } });
+    }
+    for (const node of opened) {
+      const inputScopeProps = inputScopes?.get(node.id);
+      executeWidgetActions(node.events?.onOpen, { scope, evalCtx: { inputScopeProps } });
+    }
+  }, [trail, scope, inputScopes]);
 }
 
 /**
@@ -95,5 +111,23 @@ export function usePageEvents(scope: string): void {
     () => overlays.flatMap((o) => resolveTrail(o.rootNodes, o.node.id)),
     [overlays],
   );
-  useTrailEvents(overlayTrail, scope);
+  // A Dialogs-folder overlay's events read the parameters it was opened with,
+  // filled in with each trail node's declared defaults — the same scope its
+  // widgets resolve `$componentProp` against.
+  const overlayInputScopes = useMemo(() => {
+    const scopes = new Map<string, Record<string, unknown>>();
+    for (const o of overlays) {
+      if (o.root !== 'dialogs') continue;
+      const nodes = resolveTrail(o.rootNodes, o.node.id);
+      const props = [...nodes]
+        .reverse()
+        .reduce(
+          (acc, node) => withDeclaredDefaults(acc, node.componentProperties),
+          o.entry.componentProperties,
+        );
+      for (const node of nodes) scopes.set(node.id, props);
+    }
+    return scopes;
+  }, [overlays]);
+  useTrailEvents(overlayTrail, scope, overlayInputScopes);
 }

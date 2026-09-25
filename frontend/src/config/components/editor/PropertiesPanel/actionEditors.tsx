@@ -44,6 +44,7 @@ import { ResultFieldsContext } from '../PropertySourceEditor/resultFieldsContext
 import { varBindingOf } from '../bindingPickerUtils';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
 import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
+import { useComponentPropertySchema } from '../PropertySourceEditor/componentPropertySchemaContext';
 
 // ── Shared ─────────────────────────────────────────────────────────────────
 
@@ -523,17 +524,29 @@ const WriteDataVariableEditor: EditorFor<'writeDataVariable'> = ({ action, ctx }
   const descriptor = ctx.dataTypes[key];
   const valueKind = getWriteCoercionKind(descriptor?.dataType);
   const canonicalType = canonicalOpcuaWriteType(descriptor?.dataType);
-  const validation = descriptor
-    ? coerceOpcuaWrite(action.value, {
-        dataType: descriptor.dataType,
-        isArray: descriptor.isArray,
-        arrayLength: descriptor.arrayLength,
-        indexed: descriptor.indexed,
-        arrayIndex: descriptor.arrayIndex,
-        min: descriptor.min,
-        max: descriptor.max,
-      })
-    : null;
+  // Inside a dialog's events (or a dialog widget) the value may come from one
+  // of its input parameters instead of being typed in.
+  const inputScope = useComponentPropertySchema();
+  const params = Object.entries(inputScope?.properties ?? {});
+  const boundParam =
+    action.value !== null &&
+    typeof action.value === 'object' &&
+    !Array.isArray(action.value) &&
+    typeof action.value.$componentProp === 'string'
+      ? action.value.$componentProp
+      : null;
+  const validation =
+    descriptor && boundParam === null
+      ? coerceOpcuaWrite(action.value, {
+          dataType: descriptor.dataType,
+          isArray: descriptor.isArray,
+          arrayLength: descriptor.arrayLength,
+          indexed: descriptor.indexed,
+          arrayIndex: descriptor.arrayIndex,
+          min: descriptor.min,
+          max: descriptor.max,
+        })
+      : null;
   const valueSchema: SchemaField = {
     type: valueKind === 'boolean' ? 'boolean' : valueKind === 'number' ? 'number' : 'string',
     label: 'Value',
@@ -552,59 +565,83 @@ const WriteDataVariableEditor: EditorFor<'writeDataVariable'> = ({ action, ctx }
         />
       </PropRow>
 
-      <PropRow
-        label="Value"
-        selection={{ path: [...ctx.path, 'value'], schema: valueSchema }}
-        block={descriptor?.isArray && !descriptor.indexed}
-        diagnostic={
-          validation?.ok === false ? { level: 'error', message: validation.reason } : undefined
-        }
-      >
-        {descriptor?.isArray && !descriptor.indexed ? (
-          <textarea
-            className="cfg-prop-input"
-            placeholder="JSON array"
-            value={typeof action.value === 'string' ? action.value : JSON.stringify(action.value)}
-            onChange={(event) => {
-              try {
-                const parsed: unknown = JSON.parse(event.target.value);
-                ctx.update({ value: Array.isArray(parsed) ? parsed : event.target.value });
-              } catch {
-                ctx.update({ value: event.target.value });
-              }
-            }}
-          />
-        ) : valueKind === 'boolean' ? (
-          <BoolButtonGroup
-            value={action.value === true}
-            onChange={(v) => ctx.update({ value: v })}
-            labels={['True', 'False']}
-          />
-        ) : valueKind === 'number' && canonicalType !== 'Integer' ? (
-          <input
-            type="number"
-            className="cfg-prop-input"
-            placeholder="Value"
-            value={typeof action.value === 'number' ? action.value : 0}
-            onChange={(e) =>
-              ctx.update({ value: e.target.value === '' ? 0 : Number(e.target.value) })
+      {(params.length > 0 || boundParam !== null) && (
+        <PropRow label="Value from">
+          <Select
+            value={boundParam ?? ''}
+            onChange={(v) =>
+              ctx.update({
+                value: v ? { $componentProp: v } : valueKind === 'boolean' ? false : '',
+              })
             }
-          />
-        ) : (
-          <input
-            type="text"
-            className="cfg-prop-input"
-            placeholder="Value"
-            value={String(action.value)}
-            onChange={(e) => ctx.update({ value: e.target.value })}
-          />
-        )}
-        {validation?.ok === false && (
-          <span className="cfg-ds-props__error" role="alert">
-            {validation.reason}
-          </span>
-        )}
-      </PropRow>
+          >
+            <option value="">Fixed value</option>
+            {params.map(([key, schema]) => (
+              <option key={key} value={key}>
+                Parameter: {schema.label || key}
+              </option>
+            ))}
+            {boundParam !== null && !params.some(([key]) => key === boundParam) && (
+              <option value={boundParam}>Parameter: {boundParam} (not declared)</option>
+            )}
+          </Select>
+        </PropRow>
+      )}
+      {boundParam === null && (
+        <PropRow
+          label="Value"
+          selection={{ path: [...ctx.path, 'value'], schema: valueSchema }}
+          block={descriptor?.isArray && !descriptor.indexed}
+          diagnostic={
+            validation?.ok === false ? { level: 'error', message: validation.reason } : undefined
+          }
+        >
+          {descriptor?.isArray && !descriptor.indexed ? (
+            <textarea
+              className="cfg-prop-input"
+              placeholder="JSON array"
+              value={typeof action.value === 'string' ? action.value : JSON.stringify(action.value)}
+              onChange={(event) => {
+                try {
+                  const parsed: unknown = JSON.parse(event.target.value);
+                  ctx.update({ value: Array.isArray(parsed) ? parsed : event.target.value });
+                } catch {
+                  ctx.update({ value: event.target.value });
+                }
+              }}
+            />
+          ) : valueKind === 'boolean' ? (
+            <BoolButtonGroup
+              value={action.value === true}
+              onChange={(v) => ctx.update({ value: v })}
+              labels={['True', 'False']}
+            />
+          ) : valueKind === 'number' && canonicalType !== 'Integer' ? (
+            <input
+              type="number"
+              className="cfg-prop-input"
+              placeholder="Value"
+              value={typeof action.value === 'number' ? action.value : 0}
+              onChange={(e) =>
+                ctx.update({ value: e.target.value === '' ? 0 : Number(e.target.value) })
+              }
+            />
+          ) : (
+            <input
+              type="text"
+              className="cfg-prop-input"
+              placeholder="Value"
+              value={String(action.value)}
+              onChange={(e) => ctx.update({ value: e.target.value })}
+            />
+          )}
+          {validation?.ok === false && (
+            <span className="cfg-ds-props__error" role="alert">
+              {validation.reason}
+            </span>
+          )}
+        </PropRow>
+      )}
       <ResultHandlersSubrows action={action} actionType="writeDataVariable" ctx={ctx} />
     </>
   );

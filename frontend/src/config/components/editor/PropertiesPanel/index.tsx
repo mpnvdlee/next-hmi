@@ -628,6 +628,7 @@ function PagePanel({
         <PageEventsSection
           node={page}
           kindLabel={inDialogs ? 'Dialog' : 'Page'}
+          inputs={inDialogs ? page.componentProperties : undefined}
           onPatch={(patch) => updatePage(page.id, patch)}
         />
         {inDialogs && (
@@ -807,9 +808,13 @@ function ComponentLink({ componentId, typeName }: { componentId: string; typeNam
 function PageEventsSection({
   node,
   kindLabel,
+  inputs,
   onPatch,
 }: {
   node: { events?: PageEventsConfig };
+  /** A Dialogs-folder node's input parameters — its event actions run with
+   *  them in scope, so their fields may read them. */
+  inputs?: Record<string, ComponentPropertySchema>;
   /** 'Page' / 'Group', or 'Dialog' / 'Dialog Group' in the Dialogs folder —
    *  the noun the event labels read with. */
   kindLabel: string;
@@ -827,26 +832,33 @@ function PageEventsSection({
     onPatch({ events: Object.keys(next).length > 0 ? next : undefined });
   }
 
+  const inputScope = useMemo(
+    () => (inputs && Object.keys(inputs).length > 0 ? { properties: inputs } : null),
+    [inputs],
+  );
+
   return (
-    <div className="cfg-section">
-      <div className="cfg-section__title">Events</div>
-      {(
-        [
-          { eventKey: 'onOpen', label: `${kindLabel} Open` },
-          { eventKey: 'onClose', label: `${kindLabel} Close` },
-        ] as const
-      ).map(({ eventKey, label }) => (
-        <div className="cfg-field-group" key={eventKey}>
-          <ActionsInput
-            value={{ [eventKey]: events[eventKey] ?? [] } as ActionsConfig}
-            onChange={(v) => handleChange(eventKey, v)}
-            eventKey={eventKey}
-            eventLabel={label}
-            headerTitle={label}
-          />
-        </div>
-      ))}
-    </div>
+    <ComponentPropertySchemaContext.Provider value={inputScope}>
+      <div className="cfg-section">
+        <div className="cfg-section__title">Events</div>
+        {(
+          [
+            { eventKey: 'onOpen', label: `${kindLabel} Open` },
+            { eventKey: 'onClose', label: `${kindLabel} Close` },
+          ] as const
+        ).map(({ eventKey, label }) => (
+          <div className="cfg-field-group" key={eventKey}>
+            <ActionsInput
+              value={{ [eventKey]: events[eventKey] ?? [] } as ActionsConfig}
+              onChange={(v) => handleChange(eventKey, v)}
+              eventKey={eventKey}
+              eventLabel={label}
+              headerTitle={label}
+            />
+          </div>
+        ))}
+      </div>
+    </ComponentPropertySchemaContext.Provider>
   );
 }
 
@@ -911,6 +923,7 @@ function PageGroupPanel({
         <PageEventsSection
           node={pageGroup}
           kindLabel={inDialogs ? 'Dialog Group' : 'Group'}
+          inputs={inDialogs ? pageGroup.componentProperties : undefined}
           onPatch={(patch) => updatePageGroup(pageGroup.id, patch)}
         />
         {inDialogs && (
