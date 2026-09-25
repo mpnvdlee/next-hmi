@@ -14,6 +14,9 @@
  */
 
 import { useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useInRouterContext, useNavigate } from 'react-router-dom';
+import { editorPath } from '@shared/utils/runtimeBase';
+import { useComponentEditorStore } from '@config/store/componentEditorStore';
 import { FieldPathContext } from '../../ui/FieldGroup/fieldPathContext';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { useConfigStore } from '@shared/store/configStore';
@@ -761,6 +764,41 @@ function PageMetadataSection({
   );
 }
 
+// ── WidgetKind ───────────────────────────────────────────────────────────────
+// Whether the selection is a built-in/custom widget or an instance of a project
+// component — they edit in different places, and the panel alone does not say.
+
+const COMPONENT_TYPE_PREFIX = '$component:';
+
+function WidgetKind({ type, typeName }: { type: string; typeName: string }) {
+  // Unit tests mount the panel without a router; the link then degrades to text.
+  const routed = useInRouterContext();
+  if (!type.startsWith(COMPONENT_TYPE_PREFIX)) return <>Widget · {typeName}</>;
+  const componentId = type.slice(COMPONENT_TYPE_PREFIX.length);
+  return routed ? (
+    <ComponentLink componentId={componentId} typeName={typeName} />
+  ) : (
+    <>Component · {typeName}</>
+  );
+}
+
+function ComponentLink({ componentId, typeName }: { componentId: string; typeName: string }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      type="button"
+      className="cfg-panel-header__type-link"
+      title="Open in the component editor"
+      onClick={() => {
+        navigate(editorPath('/components'));
+        useComponentEditorStore.getState().openTab(componentId);
+      }}
+    >
+      Component · {typeName} ↗
+    </button>
+  );
+}
+
 // ── PageEventsSection ────────────────────────────────────────────────────────
 // The lifecycle events a page or page-group node carries. Same wiring as
 // GlobalEventsPanel — an ActionsInput per event — but patched onto the node
@@ -1028,7 +1066,7 @@ function ComponentPanel({
         <PanelHeader
           icon={<WidgetIcon type={comp.type} size={18} />}
           name={displayName}
-          kind={entry?.name ?? comp.type}
+          kind={<WidgetKind type={comp.type} typeName={entry?.name ?? comp.type} />}
         />
 
         {/* ── Identity ─────────────────────────────────────────────────── */}

@@ -4,7 +4,7 @@ import './style.css';
 interface Props {
   /** What the selected thing is — "alarm group", "Page". Omit where the tree
    *  already says it and the name carries its own qualifier (a recipe's id). */
-  kind?: string;
+  kind?: ReactNode;
   /**
    * The thing's own name. Omit for a panel whose kind *is* its title (Settings,
    * Global Events) — the kind then renders alone, promoted to the heading style.

@@ -59,6 +59,24 @@
   letter-spacing: normal;
 }
 
+.cfg-panel-header__type-link {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--cfg-accent);
+  cursor: pointer;
+}
+
+.cfg-panel-header__type-link:hover {
+  text-decoration: underline;
+}
+
+.cfg-panel-header__type-link:focus-visible {
+  outline: var(--cfg-focus-outline);
+  outline-offset: var(--cfg-focus-offset);
+}
+
 .cfg-panel-header__name {
   font-weight: 700;
   font-size: 14px;
