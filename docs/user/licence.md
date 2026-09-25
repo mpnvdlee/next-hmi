@@ -6,7 +6,7 @@ NEXT HMI is free and open-source software under **AGPL-3.0**. Most people who ru
 
 The open-source build is the whole product. Historian, alarms, recipes, users and groups, peer transfer, the editor, the custom-widget SDK — all of it is in the box.
 
-In the open-source build there is **no licence key, no feature unlock and no runtime check** anywhere in the code. Nothing phones home, nothing expires, nothing counts your tags, your screens or your operators.
+In the open-source build there is **no licence key, no feature unlock and no runtime check** anywhere in the code. Nothing expires, nothing counts your tags, your screens or your operators. The one outgoing connection is an anonymous install-count ping that carries no project data and that you can turn off — see [Usage reporting](install.md#usage-reporting).
 
 > [!NOTE]
 > A separate **enterprise build** exists for regulated plants that need an audit
