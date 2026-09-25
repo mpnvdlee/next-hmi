@@ -31,6 +31,13 @@ export const ACTION_TYPES = [
     description: 'Pushes a value to a writable variable — a coil, a mode, a setpoint.',
   },
   {
+    type: 'toggleDataVariable' as const,
+    label: 'Toggle Boolean Variable',
+    category: 'Machine',
+    description:
+      'Flips a writable Boolean variable — true becomes false, false becomes true — from its current value on the server.',
+  },
+  {
     type: 'recipeLoad' as const,
     label: 'Recipe: Load',
     category: 'Machine',
@@ -88,6 +95,7 @@ export const ACTION_TYPE_TINT: Record<ButtonAction['type'], string> = {
   openPageOverlay: 'page',
   closePageOverlay: 'static',
   writeDataVariable: 'var',
+  toggleDataVariable: 'not',
   recipeLoad: 'recipe',
   recipeSave: 'recipeList',
   loginUser: 'user',

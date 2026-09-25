@@ -9,6 +9,7 @@ fire-and-forget behaviour for clients that haven't opted into result handling.
 """
 
 import asyncio
+import json
 from typing import Any
 
 from conftest import (
@@ -265,3 +266,67 @@ def test_no_request_id_means_silent_failure() -> None:
     _run_write(manager, msg)
 
     assert ws.messages == []
+
+
+# ── toggle_field ─────────────────────────────────────────────────────────────
+
+
+def _toggle(**extra: Any) -> dict[str, Any]:
+    base = {
+        "type": "toggle_field",
+        "datasource": "DS",
+        "path": "Run",
+        "scope": "runtime:tab1:inst1",
+        "requestId": "req-1",
+    }
+    base.update(extra)
+    return base
+
+
+def test_toggle_writes_the_inverse_of_the_cached_static_value() -> None:
+    ws = FakeWebSocket()
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Run": {"data_type": "Boolean"}})
+    manager = _make_manager(ws, ds_entry=ds_entry)
+    manager._datasource_manager.cached = {"DS:Run": True}  # type: ignore[union-attr]
+
+    asyncio.run(manager.handle_message("c1", json.dumps(_toggle())))
+
+    assert manager._datasource_manager.static_updates == [("DS", "Run", False)]  # type: ignore[union-attr]
+    assert ws.messages == [
+        {"type": "write_response", "requestId": "req-1", "datasource": "DS", "path": "Run"},
+    ]
+
+
+def test_toggle_respects_interactable_groups() -> None:
+    ws = FakeWebSocket()
+    ds_entry = FakeDatasourceEntry(
+        ds_type="static",
+        registry={"Run": {"data_type": "Boolean", "interactableByGroups": ["operator"]}},
+    )
+    manager = _make_manager(ws, ds_entry=ds_entry)
+    manager._datasource_manager.cached = {"DS:Run": True}  # type: ignore[union-attr]
+
+    asyncio.run(manager._handle_toggle_field("c1", _toggle()))
+
+    assert manager._datasource_manager.static_updates == []  # type: ignore[union-attr]
+    assert ws.messages[0]["reason"] == "permission_denied"
+
+
+def test_toggle_without_path_is_a_bad_request() -> None:
+    ws = FakeWebSocket()
+    manager = _make_manager(ws, ds_entry=None)
+
+    asyncio.run(manager._handle_toggle_field("c1", _toggle(path="")))
+
+    assert ws.messages[0]["reason"] == "bad_request"
+
+
+def test_toggle_of_unknown_value_reports_value_unavailable() -> None:
+    ws = FakeWebSocket()
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Run": {"data_type": "Boolean"}})
+    manager = _make_manager(ws, ds_entry=ds_entry)
+    manager._datasource_manager.cached = {}  # type: ignore[union-attr]
+
+    asyncio.run(manager._handle_toggle_field("c1", _toggle()))
+
+    assert ws.messages[0]["reason"] == "value_unavailable"

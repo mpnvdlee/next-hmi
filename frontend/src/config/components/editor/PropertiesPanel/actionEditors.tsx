@@ -164,7 +164,12 @@ function LoginFieldEditor({
 
 type ResultEventKey = 'onSuccess' | 'onFailed' | 'onSettled';
 type AsyncActionType =
-  'loginUser' | 'logoutUser' | 'writeDataVariable' | 'recipeLoad' | 'recipeSave';
+  | 'loginUser'
+  | 'logoutUser'
+  | 'writeDataVariable'
+  | 'toggleDataVariable'
+  | 'recipeLoad'
+  | 'recipeSave';
 
 /**
  * Field names the backend populates on the result payload, per (action type, slot).
@@ -184,6 +189,11 @@ const RESULT_FIELDS_BY_ACTION_SLOT: Record<AsyncActionType, Record<ResultEventKe
     onSettled: ['username', 'groups', 'groupLabels', 'reason'],
   },
   writeDataVariable: {
+    onSuccess: ['datasource', 'path'],
+    onFailed: ['datasource', 'path', 'reason'],
+    onSettled: ['datasource', 'path', 'reason'],
+  },
+  toggleDataVariable: {
     onSuccess: ['datasource', 'path'],
     onFailed: ['datasource', 'path', 'reason'],
     onSettled: ['datasource', 'path', 'reason'],
@@ -600,6 +610,37 @@ const WriteDataVariableEditor: EditorFor<'writeDataVariable'> = ({ action, ctx }
   );
 };
 
+const ToggleDataVariableEditor: EditorFor<'toggleDataVariable'> = ({ action, ctx }) => {
+  const widgetId = useContext(PanelScopeContext);
+  const targetDiagnostic = useFieldDiagnostic(widgetId, [...ctx.path, 'datasource']);
+  const descriptor = ctx.dataTypes[`${action.datasource}:${action.path}`];
+  const notBoolean =
+    descriptor !== undefined && canonicalOpcuaWriteType(descriptor.dataType) !== 'Boolean';
+  return (
+    <>
+      <PropRow
+        label="Variable"
+        diagnostic={
+          notBoolean
+            ? { level: 'error', message: 'Only a Boolean variable can be toggled.' }
+            : targetDiagnostic
+        }
+      >
+        <PickerField
+          mono
+          displayText={
+            action.datasource && action.path ? `${action.datasource}:${action.path}` : ''
+          }
+          emptyLabel="Not bound"
+          pickTitle="Change variable binding"
+          onPick={ctx.openWriteVarPicker}
+        />
+      </PropRow>
+      <ResultHandlersSubrows action={action} actionType="toggleDataVariable" ctx={ctx} />
+    </>
+  );
+};
+
 const LoginUserEditor: EditorFor<'loginUser'> = ({ action, ctx }) => (
   <>
     <LoginFieldEditor
@@ -864,6 +905,7 @@ export const ACTION_EDITORS: ActionEditors = {
   openPageOverlay: OpenPageOverlayEditor,
   closePageOverlay: ClosePageOverlayEditor,
   writeDataVariable: WriteDataVariableEditor,
+  toggleDataVariable: ToggleDataVariableEditor,
   recipeLoad: RecipeLoadEditor,
   recipeSave: RecipeSaveEditor,
   loginUser: LoginUserEditor,

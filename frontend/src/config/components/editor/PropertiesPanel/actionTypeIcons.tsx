@@ -39,6 +39,13 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
       <LinkGlyphPaths />
     </Icon>
   ),
+  // Two opposed arrows — flips a flag.
+  toggleDataVariable: (
+    <Icon>
+      <path d="M2.5 5.5 h10 M10 3 l2.5 2.5 L10 8" />
+      <path d="M13.5 10.5 h-10 M6 8 l-2.5 2.5 L6 13" />
+    </Icon>
+  ),
   // Tray, arrow down — load into the form.
   recipeLoad: (
     <Icon>

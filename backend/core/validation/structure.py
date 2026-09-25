@@ -898,9 +898,9 @@ def validate_var_ref(
 def _validate_write_target(
     action: dict, ctx: ValidationContext, path: str, report: ValidationReport
 ) -> None:
-    """`writeDataVariable`'s target is a flat datasource/path pair, not a `$var`
-    payload, so it never reaches validate_var_ref — check it here against the
-    same registry. Diagnostics anchor on `<action>/datasource`, which the
+    """A `writeDataVariable` / `toggleDataVariable` target is a flat
+    datasource/path pair, not a `$var` payload, so it never reaches
+    validate_var_ref — check it here against the same registry. Diagnostics anchor on `<action>/datasource`, which the
     property panel maps back to the action's Variable row."""
     ds_name = action.get("datasource")
     var_path = action.get("path")
@@ -970,7 +970,7 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
     if not isinstance(action, dict):
         return
     kind = action.get("type") or action.get("action")
-    if kind == "writeDataVariable":
+    if kind in ("writeDataVariable", "toggleDataVariable"):
         _validate_write_target(action, ctx, path, report)
     if kind == "showToast":
         severity = action.get("severity")

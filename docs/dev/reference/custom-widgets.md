@@ -628,7 +628,8 @@ export default function MyActionButton({ properties, layout }: HmiWidgetProps) {
 Supported action types (see `frontend/src/config/components/editor/PropertiesPanel/actionsPreview.ts` for the canonical list):
 
 - `openDialog` (a Dialogs-folder node, with `componentProperties`) / `openPageOverlay` (a node in the `pages` root) / `closePageOverlay` (either)
-- `writeDataVariable` — `{ datasource, path, value }`; value may be a literal or a `$var` / `$static` source resolved at run time.
+- `writeDataVariable` — `{ datasource, path, value }`; value is a literal (`string | number | boolean`, or an array for a whole-array target) sent to the backend as-is — a property source here is **not** evaluated, so resolve one yourself before building the action.
+- `toggleDataVariable` — `{ datasource, path }`; inverts a Boolean variable from its current server-side value.
 - `setLanguage` — switches the active HMI language; the `language` property is resolved from component properties at runtime.
 - `loginUser` / `logoutUser` — scope-based authentication (the scope defaults to the current `useHmiScope()`).
 - `showAlert` — modal alert with `onCancel` / `onOk` nested action lists.

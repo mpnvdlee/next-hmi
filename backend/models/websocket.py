@@ -8,6 +8,7 @@ and are used by websocket_manager.handle_message() for early field access.
 Message types (client → server):
   set_context      — update the client's active page context for priority subscriptions
   write_field      — write a value to a PLC variable via OPC-UA
+  toggle_field     — invert a Boolean variable, read server-side
   login            — authenticate a scoped session with username/password
   logout           — revert a scoped session back to guest
   request_identity — auto-login the configured autoLoginName user for a scope
@@ -32,6 +33,15 @@ class WriteFieldMessage(TypedDict, total=False):
     path: Required[str]
     field: Required[str]
     value: Required[Any]
+    scope: str
+    requestId: str
+
+
+class ToggleFieldMessage(TypedDict, total=False):
+    """Client → server: invert a Boolean variable from its server-side value."""
+    type: Required[str]
+    datasource: Required[str]
+    path: Required[str]
     scope: str
     requestId: str
 

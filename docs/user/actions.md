@@ -13,7 +13,7 @@ Custom widgets fire the same lists through the SDK's `executeWidgetActions`, so 
 
 ## The action catalog
 
-Twelve types, in the order the **Add action** menu lists them. **Browse actions…** at the top of that menu opens the same catalog as a searchable drawer, grouped as below.
+Thirteen types, in the order the **Add action** menu lists them. **Browse actions…** at the top of that menu opens the same catalog as a searchable drawer, grouped as below.
 
 ### Screens
 
@@ -43,7 +43,8 @@ Both open actions carry the presentation fields:
 
 | Action | Does |
 |---|---|
-| **Write Data Variable** | Pushes a value to a writable tag — a coil, a mode, a setpoint. Target is a datasource + path; the **value** is a property, so it can be a literal, another tag, or a computed `$if`. |
+| **Write Data Variable** | Pushes a value to a writable tag — a coil, a mode, a setpoint. Target is a datasource + path; the **value** is a fixed literal typed to match the tag (true/false, a number, text — or a JSON array for a whole-array tag). It cannot be bound to another tag or computed; the server coerces it to the tag's data type on write. |
+| **Toggle Boolean Variable** | Flips a writable Boolean tag — `true` becomes `false` and back. The server reads the tag's current value and writes the opposite, so a stale screen or a second panel cannot make it write the wrong state. Only Boolean variables can be picked. Fails with `value_unavailable` when the tag has no known value yet. |
 | **Recipe: Load** | Downloads a saved dataset into its variables. **Dataset** may be fixed or bound (a row id from a `$recipeList` grid). **Verify** reads the values back after writing and fails the action if they didn't take. |
 | **Recipe: Save** | Captures current live values into a dataset. Leave **Dataset** empty to update the one that is loaded. |
 
@@ -67,7 +68,7 @@ See [Users, groups & permissions](users.md#sign-in-and-out-on-a-screen) for the 
 
 ## Async actions and `$result`
 
-Five actions cross the wire and therefore *may fail*: **Write Data Variable**, **Recipe: Load**, **Recipe: Save**, **Login User**, **Logout User**. Each carries three optional handler lists:
+Six actions cross the wire and therefore *may fail*: **Write Data Variable**, **Toggle Boolean Variable**, **Recipe: Load**, **Recipe: Save**, **Login User**, **Logout User**. Each carries three optional handler lists:
 
 - **onSuccess** — the server acknowledged.
 - **onFailed** — the server refused, or the request timed out (10 seconds) or the connection dropped.
@@ -78,13 +79,13 @@ Inside those handlers the **`$result`** source reads fields of what came back. W
 | Action | onSuccess | onFailed |
 |---|---|---|
 | **Login / Logout User** | `username`, `groups`, `groupLabels` | `reason` |
-| **Write Data Variable** | `datasource`, `path` | `datasource`, `path`, `reason` |
+| **Write Data Variable** · **Toggle Boolean Variable** | `datasource`, `path` | `datasource`, `path`, `reason` |
 | **Recipe: Load** | `result`, `datasetId`, `written`, `total`, `verified`, `failures` | `reason` |
 | **Recipe: Save** | `datasetId` | `reason` |
 
 `onSettled` sees the union of both. The `reason` vocabulary is fixed, so you can branch on it with `$compare`:
 
-`invalid_credentials` · `rate_limited` · `permission_denied` · `bad_request` · `bad_path` · `bad_field` · `invalid_value` · `opcua_unreachable` · `write_failed` · `array_index_out_of_bounds` · `array_state_unavailable` · `timeout` · `disconnected`
+`invalid_credentials` · `rate_limited` · `permission_denied` · `bad_request` · `bad_path` · `bad_field` · `invalid_value` · `opcua_unreachable` · `write_failed` · `array_index_out_of_bounds` · `array_state_unavailable` · `value_unavailable` · `timeout` · `disconnected`
 
 A worked pattern — a Start button that confirms, writes, and tells the operator either way:
 

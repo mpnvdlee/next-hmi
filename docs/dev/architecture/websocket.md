@@ -79,8 +79,8 @@ leaving a half-initialised socket registered.
 | `recipe_error` | `{ type, requestId, reason }` | A correlated `recipe_load` / `recipe_save` failed. |
 | `user_identity` | `{ type, scope, username, groups, groupLabels }` | After `login`, `logout`, or `request_identity`. |
 | `auth_error` | `{ type, scope, reason }` | Failed `login`. `reason` is `"invalid_credentials"`, or `"rate_limited"` while the credential throttle is holding this username off. |
-| `write_response` | `{ type, requestId, datasource, path }` | A correlated `write_field` succeeded — see [Action result correlation](#action-result-correlation). |
-| `write_error` | `{ type, requestId, datasource, path, reason }` | A correlated `write_field` failed. |
+| `write_response` | `{ type, requestId, datasource, path }` | A correlated `write_field` or `toggle_field` succeeded — see [Action result correlation](#action-result-correlation). |
+| `write_error` | `{ type, requestId, datasource, path, reason }` | A correlated `write_field` or `toggle_field` failed. |
 | `restarting` | `{ type, reason }` | Right before the backend SIGTERMs itself for `POST /api/system/restart`. Clients disconnect and poll `/api/system/info` for the new process. |
 | `widget_updated` | `{ type, key, name, ts, schema_ok }` | A custom widget recompiled or was deleted; `key` is its normalized path relative to `custom-widgets/`. |
 | `config_changed` | see [config_changed](#config_changed) | After every MCP- or REST-driven config write. |
@@ -146,6 +146,27 @@ leaving a half-initialised socket registered.
     `write_response` / `write_error` (see below); when omitted the write is
     fire-and-forget with no response.
 
+- `toggle_field` — invert a Boolean variable.
+
+  ```json
+  {
+    "type": "toggle_field",
+    "datasource": "MyPLC",
+    "path": "Motor1/Run",
+    "scope": "runtime:main",
+    "requestId": "8f3c…"
+  }
+  ```
+
+  - Same fields as `write_field` minus `value` and `field`. The backend reads
+    the current value itself (a fresh node read for OPC-UA, the cache for a
+    static datasource) and writes its inverse through `write_service.write_value`,
+    so the permission check, range check, audit record and reply are the same
+    as a `write_field`. The client never sends the value: its copy may be stale.
+  - A variable whose `data_type` is not Boolean fails with `invalid_value`; one
+    whose current value is not a boolean (never read, read failed) fails with
+    `value_unavailable` and writes nothing.
+
 - `recipe_load` — download a saved dataset (recipes feature).
 
   ```json
@@ -198,7 +219,7 @@ message to be ignored silently.
 
 ## Action result correlation
 
-Client-fired async actions (`login`, `logout`, `write_field`, `recipe_load`,
+Client-fired async actions (`login`, `logout`, `write_field`, `toggle_field`, `recipe_load`,
 `recipe_save`) accept an optional `requestId` (UUID). When supplied, the backend
 echoes it on the corresponding response so the frontend dispatcher
 (`frontend/src/hmi/utils/actionDispatcher.ts`) can fire the authored
@@ -207,11 +228,11 @@ echoes it on the corresponding response so the frontend dispatcher
 - `login` → `user_identity` (success) or `auth_error` (failure); both echo
   `requestId`.
 - `logout` → `user_identity` (guest) with the echoed `requestId`.
-- `write_field` → `write_response` on success, `write_error` on failure.
+- `write_field` / `toggle_field` → `write_response` on success, `write_error` on failure.
 - `recipe_load` / `recipe_save` → `recipe_response` on success (with the
   `DownloadResult` exposed as `$result` in handlers), `recipe_error` on failure.
 
-Every deterministic failure path in `_handle_write_field` emits a `write_error`
+Every deterministic failure path in `_handle_write_field` and `_handle_toggle_field` emits a `write_error`
 immediately, so the client never waits out the 10 s timeout. Reason codes are a
 stable contract the frontend `$switch`es on:
 
@@ -229,6 +250,7 @@ stable contract the frontend `$switch`es on:
 | `write_failed`        | Write: the OPC-UA `write_node` call raised |
 | `array_index_out_of_bounds` | Write: an indexed write exceeds a fixed array's declared length |
 | `array_state_unavailable` | Write: indexed array state is missing/stale, so siblings cannot be preserved safely |
+| `value_unavailable` | Toggle: the variable's current value is not a known boolean, so there is nothing to invert |
 | `verify_mismatch` | Write: `verify` was requested, the write itself succeeded, but reading the value back did not match what was written. Only reachable when the caller opts in — `recipe_load` with `verify: true` is the one producer today; `write_field` never sets it |
 
 `invalid_value` follows the documented [OPC-UA write-coercion matrix](backend.md#opc-ua-write-coercion-matrix). The REST variable-write endpoint uses project-user HTTP Basic credentials, then calls the same request parser, `interactableByGroups` permission helper, coercer, and dispatcher.

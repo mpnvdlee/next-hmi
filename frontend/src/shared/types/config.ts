@@ -469,6 +469,7 @@ export type ActionResultReason =
   | 'write_failed'
   | 'array_index_out_of_bounds'
   | 'array_state_unavailable'
+  | 'value_unavailable'
   | 'timeout'
   | 'disconnected';
 
@@ -512,6 +513,14 @@ export type ButtonAction =
       datasource: string;
       path: string;
       value: string | number | boolean | unknown[];
+      onSuccess?: ButtonAction[];
+      onFailed?: ButtonAction[];
+      onSettled?: ButtonAction[];
+    }
+  | {
+      type: 'toggleDataVariable';
+      datasource: string;
+      path: string;
       onSuccess?: ButtonAction[];
       onFailed?: ButtonAction[];
       onSettled?: ButtonAction[];

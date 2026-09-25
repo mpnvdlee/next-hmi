@@ -98,6 +98,16 @@ def test_write_target_incomplete(ctx):
     assert (w.code, w.severity) == ("var-empty", "warning")
 
 
+def test_toggle_target_unknown_variable(ctx):
+    report = ValidationReport()
+    _validate_action(
+        {"type": "toggleDataVariable", "datasource": "PLC", "path": "Motor/Ghost"},
+        ctx, "/a", report,
+    )
+    w = _warn(report)
+    assert (w.code, w.path) == ("var-unknown", "/a/datasource")
+
+
 def test_toast_severity_invalid(ctx):
     report = ValidationReport()
     _validate_action(

@@ -120,7 +120,7 @@ export default function ActionsInput({
 
     async function ensureDataTypes() {
       for (const action of actions) {
-        if (action.type !== 'writeDataVariable') continue;
+        if (action.type !== 'writeDataVariable' && action.type !== 'toggleDataVariable') continue;
         if (!action.datasource || !action.path) continue;
 
         const key = `${action.datasource}:${action.path}`;
@@ -143,6 +143,32 @@ export default function ActionsInput({
 
   function openWriteVarPicker(actionIdx: number) {
     const current = actions[actionIdx];
+    if (current?.type === 'toggleDataVariable') {
+      openBindingPicker('', 'toggleDataVariable', {
+        currentBinding:
+          current.datasource && current.path
+            ? { path: `${current.datasource}:${current.path}` }
+            : undefined,
+        onPick: (binding: VariableBinding, metadata?: BindingPickMetadata) => {
+          const { datasource, location } = bindingParts(binding);
+          const targetPath =
+            metadata?.index !== undefined ? `${location}[${metadata.index}]` : location;
+          updateAction(actionIdx, { datasource, path: targetPath });
+          if (metadata?.dataType) {
+            setDataTypes((prev) => ({
+              ...prev,
+              [`${datasource}:${targetPath}`]: {
+                dataType: metadata.dataType!,
+                isArray: metadata.isArray === true,
+                complete: false,
+              },
+            }));
+          }
+        },
+        filter: { label: 'Toggle target', write: true, type: ['Boolean'] },
+      });
+      return;
+    }
     // The write target is stored as a flat datasource/path pair (index already
     // baked into `path` as a `[N]` suffix), which is exactly the picker's key.
     const currentBinding =
@@ -313,6 +339,16 @@ function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets)
         </>
       ) : (
         K('Write data variable')
+      );
+    case 'toggleDataVariable':
+      return action.datasource && action.path ? (
+        <>
+          <Kw tint={tint}>Toggle</Kw>
+          {'\u00a0'}
+          <BreakableToken text={`${action.datasource}:${action.path}`} />
+        </>
+      ) : (
+        K('Toggle boolean variable')
       );
     case 'recipeLoad': {
       const dataset = propertyValuePreview(action.datasetId, 'string');

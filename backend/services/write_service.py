@@ -42,6 +42,7 @@ REASON_VERIFY_MISMATCH = "verify_mismatch"
 REASON_ARRAY_INDEX_OUT_OF_BOUNDS = "array_index_out_of_bounds"
 REASON_ARRAY_STATE_UNAVAILABLE = "array_state_unavailable"
 REASON_VALUE_OUT_OF_RANGE = "value_out_of_range"
+REASON_VALUE_UNAVAILABLE = "value_unavailable"
 
 
 @dataclass
@@ -70,6 +71,24 @@ def parse_write_request(payload: Any) -> tuple[str, str, str | None, Any] | None
     ):
         return None
     return datasource, path, field, payload["value"]
+
+
+def parse_toggle_request(payload: Any) -> tuple[str, str] | None:
+    """Validate a toggle envelope — a write that carries no value of its own."""
+    if not isinstance(payload, dict):
+        return None
+    datasource = payload.get("datasource")
+    path = payload.get("path")
+    if (
+        not isinstance(datasource, str)
+        or not datasource.strip()
+        or datasource != datasource.strip()
+        or not isinstance(path, str)
+        or not path.strip()
+        or path != path.strip()
+    ):
+        return None
+    return datasource, path
 
 
 def write_permitted(identity: Any, entry_data: Any) -> bool:
@@ -646,6 +665,33 @@ async def write_value(
             return WriteOutcome(False, REASON_VERIFY_MISMATCH)
 
     return WriteOutcome(True)
+
+
+async def toggle_value(
+    datasource_manager: Any,
+    opcua_pool: Any,
+    ds_name: str,
+    path: str,
+) -> tuple[WriteOutcome, bool | None]:
+    """Invert a Boolean variable and return the outcome plus the value written.
+
+    The current value is read here, on the server, rather than sent by the
+    client: an operator panel's copy can be stale (a reconnect, a second panel,
+    a slow subscription), and toggling from it would write the wrong state.
+    """
+    if datasource_manager is None:
+        return WriteOutcome(False, REASON_OPCUA_UNREACHABLE), None
+    entry_data = datasource_manager.get_entry(ds_name, _ARRAY_INDEX_RE.sub("", path))
+    if entry_data is None:
+        return WriteOutcome(False, REASON_BAD_PATH), None
+    data_type = entry_data.get("data_type")
+    if not isinstance(data_type, str) or _CANONICAL_TYPE_ALIASES.get(data_type.strip().lower()) != "boolean":
+        return WriteOutcome(False, REASON_INVALID_VALUE), None
+    current = await read_value(datasource_manager, opcua_pool, ds_name, path)
+    if not isinstance(current, bool):
+        return WriteOutcome(False, REASON_VALUE_UNAVAILABLE), None
+    target = not current
+    return await write_value(datasource_manager, opcua_pool, ds_name, path, target), target
 
 
 async def read_value(

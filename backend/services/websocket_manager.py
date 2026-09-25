@@ -44,6 +44,7 @@ from models.websocket import (
     LogoutMessage,
     RequestIdentityMessage,
     SetContextMessage,
+    ToggleFieldMessage,
     WriteFieldMessage,
     build_auth_error,
     build_user_identity,
@@ -463,6 +464,8 @@ class WebSocketManager:
             await self._handle_set_context(client_id, cast(SetContextMessage, msg))
         elif msg_type == "write_field":
             await self._handle_write_field(client_id, cast(WriteFieldMessage, msg))
+        elif msg_type == "toggle_field":
+            await self._handle_toggle_field(client_id, cast(ToggleFieldMessage, msg))
         elif msg_type == "recipe_load":
             await self._handle_recipe_load(client_id, msg)
         elif msg_type == "recipe_save":
@@ -583,11 +586,49 @@ class WebSocketManager:
             return
 
         ds_name, path, field, value = write_request
+        await self._checked_write(client_id, msg, ds_name, path, field=field, value=value)
+
+    async def _handle_toggle_field(self, client_id: str, msg: ToggleFieldMessage) -> None:
+        """Invert a Boolean variable. Same permission check, audit and
+        `write_response` / `write_error` contract as `_handle_write_field`; the
+        value written is read on the server, never taken from the client."""
+        request_id = msg.get("requestId")
+
+        if self._datasource_manager is None:
+            await self._send_write_result(
+                client_id, request_id, "", "", write_service.REASON_OPCUA_UNREACHABLE
+            )
+            return
+
+        target = write_service.parse_toggle_request(msg)
+        if target is None:
+            logger.warning("toggle_field: missing datasource/path in %s", msg)
+            ds_name = str(msg.get("datasource", ""))
+            path = str(msg.get("path", ""))
+            await self._send_write_result(client_id, request_id, ds_name, path, REASON_BAD_REQUEST)
+            return
+
+        ds_name, path = target
+        await self._checked_write(client_id, msg, ds_name, path, toggle=True)
+
+    async def _checked_write(
+        self,
+        client_id: str,
+        msg: WriteFieldMessage | ToggleFieldMessage,
+        ds_name: str,
+        path: str,
+        *,
+        field: str | None = None,
+        value: Any = None,
+        toggle: bool = False,
+    ) -> None:
+        """Resolve, permission-check, write (or toggle), audit and respond."""
+        request_id = msg.get("requestId")
         registry_path = _ARRAY_INDEX_RE.sub("", path)
 
         entry_data = self._datasource_manager.get_entry(ds_name, registry_path)
         if entry_data is None:
-            logger.warning("write_field: unknown %s:%s", ds_name, path)
+            logger.warning("%s: unknown %s:%s", msg.get("type"), ds_name, path)
             await self._send_write_result(
                 client_id, request_id, ds_name, path, write_service.REASON_BAD_PATH
             )
@@ -595,15 +636,20 @@ class WebSocketManager:
 
         scope = msg.get("scope", "")
         if not self._check_write_permitted(client_id, scope, entry_data):
-            logger.warning("write_field denied for %s:%s (scope=%s)", ds_name, path, scope)
+            logger.warning("%s denied for %s:%s (scope=%s)", msg.get("type"), ds_name, path, scope)
             await self._send_write_result(client_id, request_id, ds_name, path, REASON_PERMISSION_DENIED)
             return
 
-        outcome = await write_service.write_value(
-            self._datasource_manager, self._opcua_pool, ds_name, path, value, field=field,
-        )
+        if toggle:
+            outcome, value = await write_service.toggle_value(
+                self._datasource_manager, self._opcua_pool, ds_name, path,
+            )
+        else:
+            outcome = await write_service.write_value(
+                self._datasource_manager, self._opcua_pool, ds_name, path, value, field=field,
+            )
         if not outcome.ok:
-            logger.warning("write_field %s:%s.%s failed: %s", ds_name, path, field, outcome.reason)
+            logger.warning("%s %s:%s.%s failed: %s", msg.get("type"), ds_name, path, field, outcome.reason)
         else:
             # Moving a setpoint is the most consequential thing an operator does
             # here, and it is one of the few actions with an actor the server

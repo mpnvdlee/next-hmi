@@ -35,6 +35,8 @@ export function makeDefaultAction(
       return { type: 'closePageOverlay' };
     case 'writeDataVariable':
       return { type: 'writeDataVariable', datasource: '', path: '', value: '' };
+    case 'toggleDataVariable':
+      return { type: 'toggleDataVariable', datasource: '', path: '' };
     case 'recipeLoad':
       return { type: 'recipeLoad', datasetId: { $static: '' }, verify: false };
     case 'recipeSave':

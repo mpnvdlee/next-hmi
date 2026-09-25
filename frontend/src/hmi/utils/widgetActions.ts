@@ -90,6 +90,19 @@ export function executeWidgetActions(
       continue;
     }
 
+    if (action.type === 'toggleDataVariable') {
+      if (!action.datasource || !action.path) continue;
+      const requestId = beginAsyncAction(action, scope, inputScopeProps);
+      sendWsMessage({
+        type: 'toggle_field',
+        ...(requestId && { requestId }),
+        scope,
+        datasource: action.datasource,
+        path: action.path,
+      });
+      continue;
+    }
+
     if (action.type === 'recipeLoad') {
       const datasetId = String(evaluatePropertyValue(action.datasetId, evalCtx) ?? '');
       if (!datasetId) continue;

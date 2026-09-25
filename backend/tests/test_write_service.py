@@ -508,3 +508,50 @@ async def test_read_value_static_array_index():
     dm = FakeStaticDM({"Steps": {"data_type": "integer", "is_array": True, "array_length": 3}})
     await write_service.write_value(dm, None, "DS", "Steps", [5, 6, 7])
     assert await write_service.read_value(dm, None, "DS", "Steps[1]") == 6
+
+
+# ── toggle_value ─────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_static_toggle_inverts_current_value():
+    dm = FakeStaticDM({"Run": {"data_type": "Boolean"}})
+    dm._entry.cache[build_var_key("DS", "Run")] = True
+    outcome, written = await write_service.toggle_value(dm, None, "DS", "Run")
+    assert outcome.ok
+    assert written is False
+    assert dm._entry.cache[build_var_key("DS", "Run")] is False
+
+
+@pytest.mark.asyncio
+async def test_opcua_toggle_reads_the_server_value():
+    engine = FakeEngine()
+    engine._store["ns=2;s=Run"] = False
+    dm = FakeOpcuaDM({"Run": {"data_type": "bool", "node_id": "ns=2;s=Run"}})
+    outcome, written = await write_service.toggle_value(dm, FakeOpcuaPool(engine), "PLC", "Run")
+    assert outcome.ok
+    assert written is True
+    assert engine.writes == [("ns=2;s=Run", True)]
+
+
+@pytest.mark.asyncio
+async def test_toggle_rejects_non_boolean_variable():
+    dm = FakeStaticDM({"Speed": {"data_type": "int32"}})
+    dm._entry.cache[build_var_key("DS", "Speed")] = 1
+    outcome, written = await write_service.toggle_value(dm, None, "DS", "Speed")
+    assert (outcome.ok, outcome.reason, written) == (False, write_service.REASON_INVALID_VALUE, None)
+
+
+@pytest.mark.asyncio
+async def test_toggle_without_a_known_value_writes_nothing():
+    dm = FakeStaticDM({"Run": {"data_type": "Boolean"}})
+    outcome, written = await write_service.toggle_value(dm, None, "DS", "Run")
+    assert (outcome.ok, outcome.reason, written) == (False, write_service.REASON_VALUE_UNAVAILABLE, None)
+    assert dm._entry.cache == {}
+
+
+@pytest.mark.asyncio
+async def test_toggle_bad_path():
+    dm = FakeStaticDM({})
+    outcome, _ = await write_service.toggle_value(dm, None, "DS", "Nope")
+    assert outcome.reason == write_service.REASON_BAD_PATH

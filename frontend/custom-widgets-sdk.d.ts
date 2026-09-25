@@ -288,6 +288,14 @@ type ComponentAction =
       onSettled?: ComponentAction[];
     }
   | {
+      type: 'toggleDataVariable';
+      datasource: string;
+      path: string;
+      onSuccess?: ComponentAction[];
+      onFailed?: ComponentAction[];
+      onSettled?: ComponentAction[];
+    }
+  | {
       type: 'loginUser';
       username: unknown;
       password: unknown;
