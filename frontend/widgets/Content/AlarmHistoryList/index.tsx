@@ -108,7 +108,7 @@ export default function AlarmHistoryList({ properties, layout }: HmiWidgetProps)
               <span className={levelDotClass(entry.level)} />
               <div className="hmi-alarm-row__content">
                 <div className="hmi-alarm-row__title">
-                  [{entry.code}] {alarmText(entry.title)}
+                  {entry.code ? `[${entry.code}] ` : ''}{alarmText(entry.title)}
                 </div>
                 <div className="hmi-alarm-row__meta">
                   {formatAlarmDateTime(entry.triggered_at)} →{' '}

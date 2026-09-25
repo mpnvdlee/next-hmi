@@ -85,7 +85,7 @@ export default function AlarmListManaged({ properties, layout }: HmiWidgetProps)
               <span className={levelDotClass(alarm.level)} />
               <div className="hmi-alarm-row__content">
                 <div className="hmi-alarm-row__title">
-                  [{alarm.code}] {alarmText(alarm.title)}
+                  {alarm.code ? `[${alarm.code}] ` : ''}{alarmText(alarm.title)}
                 </div>
                 <div className="hmi-alarm-row__meta">
                   {formatAlarmTimeShort(alarm.triggered_at)}

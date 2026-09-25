@@ -71,6 +71,16 @@ describe('AlarmListManaged', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
   });
 
+  it('omits the code brackets for an alarm without a code', () => {
+    useAlarmStore.setState({
+      active: [mkAlarm({ code: '' })],
+      summary: mkSummary({ total: 1, unacked: 1 }),
+    });
+    renderList();
+
+    expect(screen.getByText('Motor Overheat')).toBeInTheDocument();
+  });
+
   it('applies the badgeZero styling variant when the unacked count is 0', () => {
     useAlarmStore.setState({ active: [], summary: mkSummary({ total: 0, unacked: 0 }) });
     renderList();

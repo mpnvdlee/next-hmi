@@ -83,6 +83,17 @@ describe('AlarmHistoryList', () => {
     expect(screen.getByText('Not acked')).toBeInTheDocument();
   });
 
+  it('omits the code brackets for an entry without a code', async () => {
+    vi.mocked(apiJson).mockResolvedValue([mkEntry({ code: '' })]);
+    render(
+      <MemoryRouter>
+        <AlarmHistoryList properties={{}} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByText('Motor Overheat')).toBeInTheDocument());
+  });
+
   it('renders the configured title', async () => {
     vi.mocked(apiJson).mockResolvedValue([]);
     render(
