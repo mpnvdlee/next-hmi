@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
+import { preloadableLazy } from '@shared/utils/settledLazy';
 import { Routes, Route } from 'react-router-dom';
 import { useWebSocket } from '@hmi/hooks/useWebSocket';
 import { subscribeWidgetUpdated } from '@shared/events/widgetUpdatedBus';
@@ -132,15 +133,13 @@ export function ComponentsReadyGate({
 }
 
 // Lazy imports so each view's CSS is only loaded when the route is visited.
-// The import functions are named so the gate above can await the same chunk —
-// `import()` resolves from the module cache the second time, so this is one
-// fetch either way.
-const importHmiView = () => import('@hmi/pages/HmiView');
-const importPreviewView = () => import('@config/pages/PreviewView');
-const HmiView = lazy(importHmiView);
+// The gate awaits the same chunk through `preload`, so by the time it opens the
+// view renders without suspending — a fallback here would hold the reveal for
+// React's 300 ms throttle (see settledLazy).
+const HmiView = preloadableLazy(() => import('@hmi/pages/HmiView'));
 const ConfigRoutes = lazy(() => import('@config/pages/ConfigRoutes'));
 // Preview route — loaded inside the editor live-preview iframe
-const PreviewView = lazy(importPreviewView);
+const PreviewView = preloadableLazy(() => import('@config/pages/PreviewView'));
 
 export default function AppInner() {
   // Start the WebSocket connection once for the lifetime of the app.
@@ -204,7 +203,7 @@ export default function AppInner() {
   // screen blinking between two palettes on the way up.
   const hmiRoute = (
     <Suspense fallback={<BootSplash phase="components" />}>
-      <ComponentsReadyGate splash preload={importHmiView} warmBuiltins={false}>
+      <ComponentsReadyGate splash preload={HmiView.preload} warmBuiltins={false}>
         <HmiView />
       </ComponentsReadyGate>
     </Suspense>
@@ -213,7 +212,7 @@ export default function AppInner() {
   // preview, and a change made to one copy only is invisible until the editor's
   // live preview behaves differently from the standalone one.
   const previewRoute = (
-    <ComponentsReadyGate preload={importPreviewView}>
+    <ComponentsReadyGate preload={PreviewView.preload}>
       <PreviewView />
     </ComponentsReadyGate>
   );

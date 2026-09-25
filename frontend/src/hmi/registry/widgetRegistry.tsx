@@ -14,11 +14,8 @@
  * as documented in the architecture.
  */
 
-/* This is a registry of data + functions, not a component module — fast
- * refresh rules don't apply. */
-/* eslint-disable react-refresh/only-export-components */
-
-import { lazy, Suspense, type ComponentType } from 'react';
+import { Suspense, type ComponentType } from 'react';
+import { settledLazy } from '@shared/utils/settledLazy';
 import { useComponentSelfSuspense } from '../context/ComponentSuspenseContext';
 import type { HmiWidgetProps, IconValue, WidgetConfig } from '@shared/types/config';
 import type {
@@ -65,6 +62,9 @@ const COMPONENT_TYPE_PREFIX = '$component:';
 interface WidgetModuleEntry {
   load: () => Promise<ComponentType<HmiWidgetProps>>;
   loaded: boolean;
+  /** The loaded component, so the widget's `lazy()` can render it without
+   *  suspending (see settledLazy). */
+  component?: ComponentType<HmiWidgetProps>;
   /** Module reads `window.__nextHMI__.Recharts`. Kept out of the boot warm-up. */
   usesRecharts: boolean;
 }
@@ -87,6 +87,7 @@ function registerWidgetModule(
       (pending ??= load().then(
         (comp) => {
           record.loaded = true;
+          record.component = comp;
           return comp;
         },
         (err) => {
@@ -122,9 +123,10 @@ registerWidgetModule(COMPONENT_TYPE_PREFIX, async () => {
 // any other type, so the prefetch shares the one import and `widgetModulesLoaded`
 // answers for it out of the same set — every `$component:x` instance draws
 // through this one chunk.
-const LazyComponentRenderer = lazy(async () => ({
-  default: await widgetModuleFor(COMPONENT_TYPE_PREFIX)!.load(),
-})) as ComponentType<HmiWidgetProps & { _widgetId: string }>;
+const LazyComponentRenderer = settledLazy(
+  () => widgetModuleFor(COMPONENT_TYPE_PREFIX)!.component,
+  () => widgetModuleFor(COMPONENT_TYPE_PREFIX)!.load(),
+) as ComponentType<HmiWidgetProps & { _widgetId: string }>;
 
 // ── Shared schema fragments ───────────────────────────────────────────────────
 
@@ -350,8 +352,11 @@ export function registerCustomWidget(entry: CustomWidgetManifestEntry): void {
     },
     needsRecharts,
   );
-  const load = widgetModules.get(entry.name)!.load;
-  const LazyComp = lazy(async () => ({ default: await load() })) as ComponentType<HmiWidgetProps>;
+  const record = widgetModules.get(entry.name)!;
+  const LazyComp = settledLazy(
+    () => record.component,
+    record.load,
+  ) as ComponentType<HmiWidgetProps>;
 
   if (entry.hostsChildren) declaredHostTypes.add(entry.name);
   else declaredHostTypes.delete(entry.name);

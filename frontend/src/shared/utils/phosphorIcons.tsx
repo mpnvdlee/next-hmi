@@ -1,7 +1,8 @@
-import { lazy, type LazyExoticComponent } from 'react';
+import type { LazyExoticComponent } from 'react';
 import type { Icon } from '@phosphor-icons/react';
 import { BUILTIN_ICON_IDS } from '@shared/config/iconAllowlist';
 import { stripBase } from '@shared/utils/runtimeBase';
+import { settledLazy } from '@shared/utils/settledLazy';
 
 export type IconComponent = LazyExoticComponent<Icon>;
 
@@ -28,13 +29,28 @@ export type IconComponent = LazyExoticComponent<Icon>;
 // lot of picker/tree UX would be lost.
 const lazyIconCache: Record<string, IconComponent> = {};
 
+// Once the icon chunk is in, every icon — including one mounting for the first
+// time — renders without suspending (see settledLazy).
+let iconComponents: Record<string, Icon> | undefined;
+let iconChunk: Promise<Record<string, Icon>> | null = null;
+
+function loadIconComponents(): Promise<Record<string, Icon>> {
+  return (iconChunk ??= import('./phosphorIconComponents').then(
+    (mod) => (iconComponents = mod.BUILTIN_ICON_COMPONENTS),
+    (err) => {
+      iconChunk = null;
+      throw err;
+    },
+  ));
+}
+
 function loadLazyIcon(iconId: string): IconComponent {
   const cached = lazyIconCache[iconId];
   if (cached) return cached;
-  const LazyIcon = lazy(async () => {
-    const { BUILTIN_ICON_COMPONENTS } = await import('./phosphorIconComponents');
-    return { default: BUILTIN_ICON_COMPONENTS[iconId] };
-  });
+  const LazyIcon = settledLazy(
+    () => iconComponents?.[iconId],
+    () => loadIconComponents().then((icons) => icons[iconId]),
+  ) as IconComponent;
   lazyIconCache[iconId] = LazyIcon;
   return LazyIcon;
 }

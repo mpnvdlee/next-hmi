@@ -5,6 +5,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ComponentSelfSuspenseContext } from '../context/ComponentSuspenseContext';
 import {
+  prefetchWidgetModules,
   widgetRegistry,
   registerCustomWidget,
   type CustomWidgetManifestEntry,
@@ -67,5 +68,13 @@ describe('widget module boundary', () => {
     renderWidget('StatusPill', false);
     expect(screen.queryByText('page-spinner')).toBeNull();
     await waitFor(() => expect(screen.queryByText('page-spinner')).toBeNull());
+  });
+
+  it('draws a prefetched widget on its first render, without suspending', async () => {
+    // A suspend here, even into a `null` fallback, starts React's 300 ms
+    // reveal throttle — the page gate prefetches so that it never has to.
+    await prefetchWidgetModules([{ id: 'w1', type: 'LedIndicator', name: 'w1' }]);
+    const { container } = renderWidget('LedIndicator', true);
+    expect(container.innerHTML).not.toBe('');
   });
 });
