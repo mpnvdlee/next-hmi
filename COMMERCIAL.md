@@ -41,16 +41,11 @@ unactivated "commercial build": the edition seam has two values, `oss` and `ee`.
 The open-source build in this repository contains no licence check at all and
 never will.
 
-Priced **€149 per device** — one fee per NEXT HMI server that leaves your
+Priced **per device** — one fee per NEXT HMI server that leaves your
 building, perpetual for devices already delivered, with no renewal and no
 expiry. One server is one device; the browser screens on it are never counted,
-so a panel PC and twenty tablets are one licence.
-
-| Devices in a contract year | Per device, once |
-|---|---|
-| 1 – 100 | €149 |
-| 101 – 500 | €125 |
-| 501+ | ask <mailto:licensing@next-hmi.com> |
+so a panel PC and twenty tablets are one licence. Current prices and volume
+tiers are at **[next-hmi.com/pricing](https://next-hmi.com/pricing)**.
 
 The tier is set by what you take in the running contract year, and there is no
 minimum: five machines a year is five times the tier price, with nothing to
@@ -85,9 +80,9 @@ Adds an **audit trail** — an append-only, attributed record of operator action
 — for plants under regulatory audit requirements. Separate build, its own
 add-on key on top of the runtime licence, code not in this repository.
 
-**€99 per installation**, once, perpetual — one fee per plant that switches it
-on, whatever number of devices that plant runs. Not a subscription, and no
-second price list to explain.
+Priced **per installation**, once, perpetual — one fee per plant that switches
+it on, whatever number of devices that plant runs. Not a subscription; see
+[next-hmi.com/pricing](https://next-hmi.com/pricing).
 
 It is the only paid module today. What separates a paid module from the free
 build is scale and regulatory pressure, never a feature held back: alarms, the
