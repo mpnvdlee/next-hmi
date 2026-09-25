@@ -24,8 +24,8 @@ from core.project_packer import pack_project
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-# What project-example's login dialog tells the operator to type.
-DEMO_PASSWORD = "espresso"
+# What project-example's login dialog tells the operator to type, per account.
+DEMO_PASSWORDS = {"brewer": "espresso", "barista": "latte"}
 
 
 @pytest.fixture
@@ -618,25 +618,30 @@ def test_seed_template_ships_without_credentials():
     assert all("passwordHash" not in user for user in users["users"])
 
 
-def test_example_template_ships_only_the_documented_demo_account():
-    """The example is a demo, so unlike the seed it does ship one login — its
-    sign-in dialog is nothing to look at without an account to use. What must
-    not happen is a credential whose plaintext lives nowhere, so pin the
-    shipped hash to the very password the dialog prints on screen: the two
-    cannot drift apart without this failing."""
+def test_example_template_ships_only_the_documented_demo_accounts():
+    """The example is a demo, so unlike the seed it does ship logins — its
+    sign-in dialog is nothing to look at without an account to use, and two
+    of them in different groups show the user list and group gating at work.
+    What must not happen is a credential whose plaintext lives nowhere, so pin
+    each shipped hash to the very password the dialog prints on screen: the
+    two cannot drift apart without this failing."""
     template = projects_api._template_dir("example")
     assert template is not None, "project-example/ must be bundled"
 
     users = json.loads((template / "users.json").read_text(encoding="utf-8"))
-    assert [user["id"] for user in users["users"]] == ["guest", "brewer"]
-    guest, brewer = users["users"]
+    assert [user["id"] for user in users["users"]] == ["guest", *DEMO_PASSWORDS]
+    guest, *accounts = users["users"]
     assert "passwordHash" not in guest, "guest can never carry a password"
-    assert verify_password(brewer, DEMO_PASSWORD)
 
-    login_page = json.loads((template / "dialogs" / "login.json").read_text(encoding="utf-8"))
-    assert DEMO_PASSWORD in json.dumps(login_page), (
-        "the login dialog must print the demo password it ships"
+    login_page = json.dumps(
+        json.loads((template / "dialogs" / "login.json").read_text(encoding="utf-8"))
     )
+    for account in accounts:
+        password = DEMO_PASSWORDS[account["id"]]
+        assert verify_password(account, password)
+        assert f"{account['username']} / {password}" in login_page, (
+            "the login dialog must print every demo password it ships"
+        )
 
 
 def test_template_lookup_follows_the_install_root(monkeypatch, tmp_path):

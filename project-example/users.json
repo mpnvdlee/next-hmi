@@ -10,6 +10,10 @@
     {
       "id": "admin",
       "label": "Administrators"
+    },
+    {
+      "id": "operator",
+      "label": "Operators"
     }
   ],
   "users": [
@@ -34,6 +38,21 @@
       },
       "groups": [
         "admin"
+      ]
+    },
+    {
+      "id": "barista",
+      "username": "barista",
+      "password": "",
+      "passwordHash": {
+        "version": 1,
+        "algorithm": "pbkdf2-sha256",
+        "iterations": 200000,
+        "salt": "6aa0d4948c09acf89052e5a9880d3de5",
+        "digest": "be67e8b4dd34ab17d8acee6ebf1aad62d051f46603e23fb81769339cd951cf40"
+      },
+      "groups": [
+        "operator"
       ]
     }
   ]

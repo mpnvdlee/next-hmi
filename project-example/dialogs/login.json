@@ -168,9 +168,11 @@
                   "label": {
                     "$loc": "Username"
                   },
-                  "options": [
-                    "brewer"
-                  ],
+                  "options": {
+                    "$user": {
+                      "field": "userList"
+                    }
+                  },
                   "selectedValue": "brewer"
                 },
                 "layout": {
@@ -201,7 +203,7 @@
                 "properties": {
                   "typography": "caption",
                   "text": {
-                    "$loc": "Demo account: brewer / espresso"
+                    "$loc": "Demo accounts: brewer / espresso (machine settings), barista / latte"
                   },
                   "wrap": "wrap",
                   "color": "var(--hmi-text-muted)"
