@@ -283,7 +283,7 @@ function ActionComponentProperties({
   }
 
   return (
-    <div className="cfg-section">
+    <div className="cfg-section cfg-section--flush">
       <div className="cfg-section__title">Input Parameters</div>
       {fields.map(([key, field]) => (
         <SchemaFieldRow

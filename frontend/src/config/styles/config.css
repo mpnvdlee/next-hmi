@@ -957,6 +957,13 @@
   border-bottom: none;
 }
 
+/* A titled group nested inside an already-padded body (an action row's
+   fields): the title marks the group, the parent supplies the inset. */
+.cfg-section.cfg-section--flush {
+  padding: var(--cfg-space-2) 0 0;
+  border-bottom: none;
+}
+
 .cfg-section__title {
   font-size: 11px;
   font-weight: 600;
