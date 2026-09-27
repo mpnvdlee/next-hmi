@@ -210,7 +210,9 @@ try {
     # $LASTEXITCODE set to that real exit code. A launch failure (bad PATH, no
     # python at all) throws before any process exists, so it never touches
     # $LASTEXITCODE — clearing it first is what makes the two distinguishable.
-    $LASTEXITCODE = $null
+    # Clear the global one: a plain assignment creates a script-scoped copy that
+    # shadows it, so every later $LASTEXITCODE check in this script reads $null.
+    $global:LASTEXITCODE = $null
     try {
       python -m services.widget_compiler --once
     } catch {
