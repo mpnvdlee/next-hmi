@@ -55,8 +55,8 @@ Architecture and deployment: [docs/dev/INDEX.md](../docs/dev/INDEX.md).
 
 ## Checks
 
-CI runs these on your pull request; running them locally is the fast way to find
-a failure.
+Run these before opening a pull request. CI runs the same checks when a release
+is tagged, not on each pull request, so a failure you miss here surfaces there.
 
 ```bash
 # repo root, venv active
@@ -64,10 +64,11 @@ pytest backend/tests
 ruff check backend
 
 # from frontend/
-npm test
+npm test -- --run        # `npm test` alone stays in watch mode
 npm run lint
 npm run format:check
 npm run build            # also type-checks
+npm run check:bundle-budget
 ```
 
 ## Conventions
