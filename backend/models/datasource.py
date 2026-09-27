@@ -1,4 +1,4 @@
-﻿"""Datasource configuration models.
+"""Datasource configuration models.
 
 Variable/struct tree node array encoding: ``is_array`` (bool) marks a node as
 an array; ``array_length`` is meaningful only when ``is_array`` is true — a

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * VariableBindingPicker — full-screen overlay.
  *
  * Opens when a "Change…" button is clicked in the Properties Panel.
