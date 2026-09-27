@@ -9,13 +9,13 @@ All responses are JSON unless noted. Domain errors are mapped by `core/exception
 - `ValidationError` → `422 { "detail": "<message>" }`
 - `RateLimitError` → `429 { "detail": "<message>" }`
 
-Routes split across **two apps**: the **manager** (`backend/manager.py`, default port `8000`) owns `/api/manager/*` and the project list, and reverse-proxies `/runtime/<slug>/*` and `/editor/<slug>/*` to a project instance. A **project instance** (`backend/main.py`) owns the config/datasource/alarm/widget/WebSocket surface below — reached at the origin root in dev/direct-uvicorn, or under `/runtime/<slug>/` (or `/editor/<slug>/`) through the manager proxy. Endpoints are marked **(manager)** where they live only on the manager app.
+Routes split across **two apps**: the **manager** (`backend/manager.py`, default port `8000`) owns `/api/manager/*` and the project list, and reverse-proxies `/runtime/<slug>/*` and `/editor/<slug>/*` to a project instance. A **project instance** (`backend/main.py`) owns the config/datasource/alarm/widget/WebSocket surface below — reached at the origin root when run standalone (`uvicorn main:app`), or under `/runtime/<slug>/` (or `/editor/<slug>/`) through the manager proxy. Endpoints are marked **(manager)** where they live only on the manager app.
 
 A few endpoints raise `fastapi.HTTPException` directly with other status codes — those are called out per endpoint.
 
 ## Authentication
 
-The **manager** front door is gated by a single **device-admin password** set on first run. The manager's `_auth_gate` middleware requires a valid session cookie (`nexthmi_manager_session`, a stateless HMAC-signed token) on every `/api/*` and `/editor/*` request, except `/api/manager/auth/*`, `/api/manager/peer/*`, and `/api/health`. Peer endpoints perform their own bearer-token authentication (only pairing accepts the existing device-admin password). See **Manager API** below for the login/setup endpoints; the password digest lives in `<runtime_home>/.manager-auth.json`.
+The **manager** front door is gated by a single **device-admin password** set on first run. The manager's `_auth_gate` middleware requires a valid session cookie (`nexthmi_manager_session`, a stateless HMAC-signed token) on every `/api/*` and `/editor/*` request (and on the manager's own `openapi.json` / `docs` / `redoc`), except `/api/manager/auth/*`, `/api/manager/peer/*`, `/api/manager/mcp/pair`, `/api/health`, and `/mcp`. Peer endpoints perform their own bearer-token authentication (only pairing accepts the existing device-admin password); `/mcp` takes a manager session or an MCP bearer token (see [mcp.md](mcp.md)); MCP pairing checks the device-admin password itself. See **Manager API** below for the login/setup endpoints; the password digest lives in `<runtime_home>/.manager-auth.json`.
 
 **`/runtime/*` is the exception: a live operator view is public.** A deny-by-default allowlist (`_RUNTIME_PUBLIC_ROUTES` in `manager.py`) names the child routes a running screen needs — the SPA document and its static mounts, a fixed set of config / theme / component / widget / user reads, alarm history, historian queries, the operator-action POSTs (alarm ack, recipe load and save, `$http`), and `/ws`. Everything else under `/runtime/*` still needs the session: every write verb, `api/datasources`, `api/system/*`, `api/projects/*`, `api/internal/*`, `api/health`, and the instance's own `openapi.json` / `docs` / `redoc`. `HEAD` follows `GET`; `OPTIONS` is gated, since an anonymous preflight would otherwise enumerate the withheld routes.
 
@@ -23,7 +23,7 @@ A path segment is refused outright when *any* decoding of it — the original, e
 
 `/editor/<slug>/ws` requires the cookie; `/runtime/<slug>/ws` does not.
 
-A **project instance's** own HTTP API and WebSocket are unauthenticated — instances bind `127.0.0.1` and are only reachable through the manager proxy (which strips the manager cookie before forwarding). Running an instance directly (dev / `uvicorn main:app`) exposes it unauthenticated, so bind a trusted interface in that case.
+A **project instance's** own HTTP API and WebSocket are unauthenticated — instances bind `127.0.0.1` and are only reachable through the manager proxy (which strips the manager cookie before forwarding). Running an instance standalone (`uvicorn main:app`) exposes it unauthenticated, so bind a trusted interface in that case. `start-dev.py` runs the manager, so dev goes through the same gate.
 
 ## Health
 
@@ -32,11 +32,12 @@ A **project instance's** own HTTP API and WebSocket are unauthenticated — inst
 ## Static mounts
 
 - `/widgets/*` — files under `<live-project>/custom-widgets/` (component CSS, fonts, etc.)
-- `/widget-js/*` — files under `<runtime_home>/.widget-build/` (compiled custom-component bundles)
+- `/widget-js/*` — files under the instance's widget-build directory, `<runtime_home>/.widget-build/<project-id>/` for a supervisor-spawned instance (compiled custom-widget bundles)
+- `/builtin-widgets-js/*` — the shipped built-in widget bundles, from `$NEXTHMI_FRONTEND_DIST/builtin-widgets-js/` in a build, or `frontend/public/builtin-widgets-js/` in a source checkout
 - `/assets/*` — files under `<live-project>/assets/` (icons, images)
 - `/external-libraries/*` — files under `<live-project>/external-libraries/` (third-party bundles a custom widget loads)
 
-These are FastAPI `StaticFiles` mounts and serve any file in the named directory.
+These are FastAPI `StaticFiles` mounts and serve any file in the named directory. When `NEXTHMI_FRONTEND_DIST` is set, the instance also serves the SPA bundle (`/_app/*`) and its document catch-all, registered last.
 
 ## Documentation
 
@@ -67,20 +68,23 @@ Base prefix: `/api/config`. Page index, shared shell areas, dictionaries and tra
       "rightSidebar": [],
       "shell": {},
       "dialogs": [],
-      "globalEvents": {}
+      "globalEvents": {},
+      "mcpEnabled": false
     }
     ```
 
+  - `pages` and `dialogs` are the two index roots, with the same node shape: `pages` is the navigable tree, `dialogs` the pages that only open as an overlay (their documents live in `dialogs/`).
   - `globalEvents` is an object keyed by lifecycle event name; each value is an array of action objects.
 
 - `PUT /api/config/config`
-  - Body must contain a `pages` array; `header`, `footer`, `leftSidebar`, `rightSidebar`, `shell`, `dialogs`, `globalEvents` are accepted optionally.
+  - Body must contain a `pages` array; `header`, `footer`, `leftSidebar`, `rightSidebar`, `shell`, `dialogs`, `globalEvents`, `mcpEnabled` are accepted optionally. An omitted `mcpEnabled` keeps the stored value, and the embedded `project` metadata block is always kept.
+  - The shell areas and `globalEvents` are validated before anything is written; a blocking finding is `422`.
   - Index validation rules (`422` on failure):
     - Each entry must be an object with a string `id`.
     - IDs must be unique across the entire (recursive) index.
     - `type` must be `"page"`, `"page-group"`, or omitted.
     - Page entries must not embed page content (`children` / `sections`) — that lives in the page's own document. Use `PUT /api/config/{root}/{id}`.
-    - The body carries both index roots: `pages` is required, `dialogs` is optional and **preserved** when omitted (an explicit `[]` clears it).
+    - The body carries both index roots: `pages` is required, `dialogs` is optional and **preserved** when omitted (an explicit `[]` clears it); a `dialogs` that is not an array is `422`.
     - Group entries must have a `children` array; optional `header` / `footer` arrays are allowed.
   - On save the index is normalized: groups keep their metadata — including an optional `componentProperties` declaration block, which `openDialog` may target — while page entries are reduced to `{ id, type: "page" }` (metadata for pages is stored in the per-page file).
   - A page whose root changed is relocated: its document moves between `pages/` and `dialogs/` before anything is swept.
@@ -102,8 +106,9 @@ it is in now.
 - `PUT /api/config/pages/{page_id}` · `PUT /api/config/dialogs/{page_id}`
   - Body is merged into the persisted file; only these keys are kept on disk:
     `title`, `icon`, `description`, `breadcrumbLabel`, `hidden`, `role`, `order`, `route`, `layout`, `showHeader`, `showFooter`, `mainPadding`, `mainBackground`, `events`, `componentProperties`, `showCloseButton`, `closeOnBackgroundPress`, `sections`.
-  - `sections` (when supplied) must be an object whose values are arrays. Pages may not contain `type: "page-group"` nodes — nest a group inside another group instead (`422`).
-  - Returns the merged document `{ id, ...persisted fields, warnings: [{path, message}] }`. `warnings` is the validator's advisory bucket (incomplete `$var` bindings, unknown datasources/variables) — non-blocking and surfaced by the editor as "Saved · N warnings". Hard errors still 422.
+  - An explicit `null` for a key removes it from the stored document.
+  - `sections` (when supplied) must be an object whose values are arrays. A section may not list a `type: "page-group"` node — nest a group inside another group instead (`422`).
+  - Returns the merged document `{ id, ...persisted fields }`, with no warnings array — advisory findings come from `/api/config/validate`. A blocking validation finding is `422`. Broadcasts `config_changed` (`source: "rest"`).
   - `422` if `page_id` is invalid.
 - `DELETE /api/config/pages/{page_id}` · `DELETE /api/config/dialogs/{page_id}`
   - Removes that directory's page document if present. Returns `{ "ok": true }`.
@@ -118,7 +123,7 @@ Both endpoints are read-only: they never persist, recompile, or rewrite anything
   "artifactId": "home", "artifactKind": "page", "sourcePath": "/sections/content/0/properties/text/$var",
   "widgetId": "w-3", "propKey": "text", "fieldPath": ["path"],
   "code": "unknown-variable", "severity": "error", "message": "...",
-  "breadcrumb": "Boiler > Text > text", "nested": false
+  "breadcrumb": "Boiler › Text › text", "nested": false
 }
 ```
 
@@ -127,10 +132,10 @@ Both endpoints are read-only: they never persist, recompile, or rewrite anything
 - `POST /api/config/validate`
   - Body: `{ "kind": "page" | "shell" | "globalEvents" | "component", "draft": { ... } }`.
   - Validates the posted *unsaved* draft, so it covers edits the editor hasn't saved. Disk is read only for context (widget registry, translations, assets).
-  - `422` when `kind` is not one of the five, or `draft` is not an object.
+  - `422` when `kind` is not one of the four, or `draft` is not an object.
   - Returns `{ "diagnostics": [ ... ] }`.
 - `GET /api/config/validate`
-  - Whole-project sweep from disk: shell areas, `globalEvents`, every page file, reusable components, translation dictionaries, and custom-widget build status — everything the realtime endpoint never sees because only one artifact is open at a time.
+  - Whole-project sweep from disk: shell areas, `globalEvents`, page-group lifecycle events in both index roots, every page file, reusable components, translation dictionaries, custom-widget build status, and the alarms, recipes, historian and users documents — everything the realtime endpoint never sees because only one artifact is open at a time.
   - Returns `{ "diagnostics": [ ... ] }` in the same row shape. This is what the editor's Diagnostics panel lists.
 
 ### Dictionaries
@@ -157,7 +162,7 @@ All translation endpoints take a `?dict=<name>` query (default `Default`). The C
   - An existing zero-byte CSV is malformed (`422`); an absent CSV remains a separate empty/missing result.
 - `POST /api/config/translations?dict=Default`
   - Body: `{ "key": "MyKey" }`.
-  - `422` if key missing; `409` if the key already exists.
+  - `422` if key missing; `404` if the dictionary does not exist; `409` if the key already exists.
   - Appends a row with empty values for the other language columns.
   - Returns the full translations document.
 - `PUT /api/config/translations?dict=Default`
@@ -175,7 +180,7 @@ These endpoints take the same validated `?dict=<name>` query (default `Default`)
 
 - `POST /api/config/translations/language?dict=Custom`
   - Body: `{ "code": "fr-FR" }`.
-  - `422` if code missing; `409` if the language already exists.
+  - `422` if code missing; `404` if the dictionary does not exist; `409` if the language already exists.
   - Adds a new column to the selected CSV (existing rows get an empty cell).
 - `DELETE /api/config/translations/language/{code}?dict=Custom`
   - `404` if the file is missing or the code is not present. `422` if you try to remove the first column.
@@ -210,10 +215,11 @@ Base prefix: `/api/datasources`. Datasource types supported (`models/datasource.
     }
     ```
 
-  - Stored payload always includes `"name": <name>` so the on-disk file is self-identifying.
-  - Runtime sync after save:
-    - `opcua-client` — starts (new) or restarts (existing) the pool engine.
-    - `opcua-test-server` — starts (new) or restarts (existing) the test-server instance.
+  - Stored payload always includes `"name": <name>` so the on-disk file is self-identifying. An omitted or `null` `variables` keeps the stored tree; only `[]` clears it. Returns the stored payload.
+  - A `static` datasource's variables are checked against the supported data types (`422`).
+  - Runtime sync after save: an existing datasource's engine is stopped first and its old keys are broadcast as `var_removed`; fresh `var_metadata` and values follow the restart. Then
+    - `opcua-client` — the pool engine is started.
+    - `opcua-test-server` — the test-server instance is started.
     - `static` — no runtime engine.
 - `DELETE /api/datasources/{name}`
   - Stops the OPC-UA engine and any paired test server, broadcasts `var_removed` for previously enabled variables and folder paths, deletes the config.
@@ -223,6 +229,7 @@ Base prefix: `/api/datasources`. Datasource types supported (`models/datasource.
 
 - `GET /api/datasources/{name}/variables`
   - Returns `{ "variables": [...] }`. `404` if the datasource is missing.
+  - Query: `simple=true|false` (default `true`). `true` reports each `data_type` as its simple type; `false` returns the raw OPC-UA types.
 - `PUT /api/datasources/{name}/variables`
   - Body is the new `variables` array (replaces only the variable tree).
   - Computes the enabled-path delta:
@@ -237,7 +244,8 @@ Base prefix: `/api/datasources`. Datasource types supported (`models/datasource.
   - Requires HTTP Basic credentials for a user in the active project's `users.json`; manager-session authentication is not accepted as a substitute for an HMI identity.
   - Body uses the WebSocket write envelope: `{ "datasource": "PLC", "path": "Motor/Speed", "value": 42, "field"?: "name" }`.
   - Returns `{ "ok": true, "reason": null }` or `{ "ok": false, "reason": "<stable reason>" }`; invalid credentials return HTTP `401`. An account with no password set is invalid credentials like any other — it can never be signed in as. Repeated failures are throttled (`core/user_auth_throttle.py`): five in a row for one username, or a flood across many, answer HTTP `429` until the lockout expires.
-  - Uses the same envelope parser, `interactableByGroups` authorization, coercion matrix, and write service as WebSocket `write_field`. Present `null` reaches coercion and returns `invalid_value`; missing or malformed envelope fields return `bad_request`.
+  - Uses the same envelope parser, `interactableByGroups` authorization, coercion matrix, and write service as WebSocket `write_field`, and answers with the same `reason` vocabulary ([websocket.md](../architecture/websocket.md#action-result-correlation)). Present `null` reaches coercion and returns `invalid_value`; missing or malformed envelope fields return `bad_request`; an unknown variable is `bad_path`; a caller outside `interactableByGroups` is `permission_denied`.
+  - A variable not marked `writable: true` — for an element, its array; for a struct field, that member — is refused as `read_only` and nothing is written. The check runs after coercion, so an uncoercible value to a read-only variable still reports `invalid_value`.
 
 ### Connection wizard
 
@@ -257,7 +265,7 @@ Pre-save helpers. None of them touch the live pool or persist a datasource.
   - Generates a self-signed client cert + key pair server-side (RSA 2048, SHA-256) and writes it to `<live-project>/certs/<base>-cert.der` (DER) / `<base>-key.pem` (PEM) — the cert encoding an imported OPC-UA PKI store (UaExpert, Optix, …) uses. **Overwrites** any existing pair at that path — a repeat call with the same `name` regenerates in place rather than accumulating new files.
   - Returns `{ "client_certificate": "certs/<base>-cert.der", "client_private_key": "certs/<base>-key.pem" }`, the value the caller stores in `client_certificate` / `client_private_key`. Used by both the connection wizard's "Generate certificate" step and the properties panel's standalone button.
 - `GET /api/datasources/certs/info?path=certs/<filename>`
-  - Validity of a stored certificate, for the editor's lifecycle display. Only the filename is honoured — the lookup never leaves `<live-project>/certs/`.
+  - Validity of a stored certificate, for the editor's lifecycle display. Only the filename is honoured — the lookup never leaves `<live-project>/certs/`. `path` is required, and a filename that sanitizes to `.` or `..` is `422`.
   - Returns `{ readable, subject, fingerprint, issuedAt, expiresAt, expiresInDays, expired, expiring, selfSigned, names }`. `expiresInDays` is signed (negative once past), `expiring` is true inside the 90-day warning window.
   - A path that holds no parseable certificate (missing file, a private key, a typo) answers `{ "readable": false }` with the rest of the fields empty — not an HTTP error. PEM and DER both read.
 
@@ -282,6 +290,8 @@ Pre-save helpers. None of them touch the live pool or persist a datasource.
   - `opcua-test-server` → restarts (`{ "status": "restarted" }`).
   - `opcua-client` → reconnects (`{ "status": "reconnecting" }`).
   - `422` for `static`.
+
+Starting or restarting an `opcua-test-server` whose port cannot be bound is `409`.
 
 `503` is returned from any lifecycle/browse endpoint when the corresponding pool was not wired into the API at startup.
 
@@ -341,6 +351,7 @@ A project defines **dataset types** (independent axes). Each type owns **paramet
   - `404` if the dataset id is unknown. Returns `DownloadResult` `{ result: success|partial|failed, datasetId, written, total, verified, failures: [{ parameterId, reason }] }`.
 - `POST /api/recipes/datasets/{id}/upload`
   - Reads current live values and overwrites the dataset's `values` in place. `404` if unknown. Returns the updated `RecipeConfig`.
+  - Takes the same optional HTTP Basic credentials as download (`401` when they do not authenticate, `429` on the throttle), applies the same per-variable `interactableByGroups` check, and records the authenticated user as the dataset's `updatedBy`.
 
 The WebSocket `recipe_load` / `recipe_save` messages (see `architecture/websocket.md`) drive the same manager methods for button-bound `recipeLoad` / `recipeSave` actions that need `$result`.
 
@@ -361,20 +372,22 @@ Base prefix: `/api/components`. These endpoints manage reusable components (name
   - `404` if missing. Returns `{ "status": "ok" }`.
 - `GET /api/components/folders` → `string[]` — every component folder path, any depth (including empty folders), `/`-joined (e.g. `"A/B/C"`).
 - `POST /api/components/folders`
-  - Body: `{ name }`, a `/`-joined path. Creates the folder and any missing intermediate folders in one call.
+  - Body: `{ name }`, a `/`-joined path. Creates the folder and any missing intermediate folders in one call. Returns `{ "status": "ok", "name": "<normalized path>" }`; `409` if it exists, `422` for an invalid folder name.
 - `DELETE /api/components/folders/{folder_path:path}`
-  - Deletes the folder and everything inside it — subfolders and components alike. `folder_path` may itself be a `/`-joined nested path.
+  - Deletes the folder and everything inside it — subfolders and components alike. `folder_path` may itself be a `/`-joined nested path. Returns `{ "status": "ok" }`; `404` if missing.
 
 ### `ComponentDefinition` shape
 
 ```json
 {
-  "id": "uuid",
+  "id": "mywidget",
   "name": "MyWidget",
   "group": "Process/Overview",
   "description": "Shows the current process state.",
   "category": "Process",
   "icon": { "type": "builtin", "name": "gauge" },
+  "width": 320,
+  "height": 200,
   "componentProperties": {
     "label": {
       "type": "string",
@@ -398,7 +411,7 @@ Base prefix: `/api/components`. These endpoints manage reusable components (name
 }
 ```
 
-Allowed `componentProperties[*].type` values: `string`, `number`, `boolean`, `color`, `url`, `icon`, `image`, `struct`, `select`, `actions`. `description` is optional and mirrors `SchemaField.description` on the frontend. Extra keys at any level are rejected (`extra="forbid"`).
+`componentProperties[*].type` is not restricted by the backend (`ComponentPropertySchema.type` is a string). The editor offers `string`, `integer`, `float`, `boolean`, `datetime`, `date`, `time`, `duration`, `color`, `select`, `icon`, `image`, `video`, `struct`, `actions` and `widgets` (a slot); a value type may carry a `[]` array suffix. `width` / `height` are optional fixed canvas dimensions for the components editor (integers > 0). `description` is optional and mirrors `SchemaField.description` on the frontend. Extra keys at any level are rejected (`extra="forbid"`).
 
 A child of a `$component:` node inside `children` may carry a `slot` string naming which of the definition's slots it fills — see [Component slots](../architecture/data-formats.md#component-slots).
 
@@ -432,9 +445,9 @@ These endpoints expose what's in the user workspace directly (no `/api` prefix o
   - Supports both layouts:
     - Flat: `<Name>/index.tsx` → `group: null`.
     - Grouped: `<Group>/<Name>/index.tsx` → `group: "<Group>"`.
-  - Returns `[{ key, name, group, hasStyle, hasFonts, buildOk, buildError, buildTs, category, description, icon, schema, exportedProperties, schemaError }]`.
+  - Returns `[{ key, name, group, hasStyle, hasFonts, buildOk, buildError, buildTs, displayName, hostsChildren, flowsChildren, repeatsChildren, category, description, icon, schema, exportedProperties, schemaError }]`.
   - `key` is the normalized project-relative widget path (`<Name>` or `<Group>/<Name>`). `buildOk` / `buildError` / `buildTs` come from that key in `<runtime_home>/.widget-build/.build-status.json`.
-  - `category`, `description`, `icon`, `schema` and `exportedProperties` are read from the compiled `<runtime_home>/.widget-build/widget-schemas.json` (`null` when the widget has never compiled). They let the client register a widget — schema, drawer card, `$widgetProp` list — without importing its module, which is what makes the modules load lazily on first render instead of all at once at startup.
+  - `displayName`, `hostsChildren`, `flowsChildren`, `repeatsChildren`, `category`, `description`, `icon`, `schema` and `exportedProperties` are read from the compiled `<runtime_home>/.widget-build/widget-schemas.json` (`null` when the widget has never compiled). They let the client register a widget — schema, drawer card, `$widgetProp` list — without importing its module, which is what makes the modules load lazily on first render instead of all at once at startup.
   - `schemaError` is set when the widget compiled but the schema extractor could not reduce its exports to literals. The widget still renders; the editor offers no property fields and no `$widgetProp`s for it. Every other widget keeps its schema — one unreadable widget costs only its own.
 - `POST /api/widgets/recompile`
   - Recompiles every custom widget and regenerates the schema manifest. Broadcasts a `widget_updated` event per widget so open browsers reload the module.
@@ -443,8 +456,8 @@ These endpoints expose what's in the user workspace directly (no `/api` prefix o
   - Recompiles one widget by registry `key` (flat `<Name>` or grouped `<Group>/<Name>`). Same response shape.
   - `404` for an unknown key, and for a raw path containing a percent-escape — the key is matched against the undecoded path so an encoded traversal cannot resolve.
 - `GET /api/assets`
-  - Lists files from `<live-project>/assets/icons` (`.svg` only) and `<live-project>/assets/images` (`.png`, `.webp`, `.jpg`, `.jpeg`, `.gif`, `.svg`), recursing into subfolders.
-  - Returns `[{ name, path, type: "icon" | "image", mime, size }]`. `path` is relative to the assets root and can be served via `/assets/{path}`.
+  - Lists files from `<live-project>/assets/icons` (`.svg` only), `<live-project>/assets/images` (`.png`, `.webp`, `.jpg`, `.jpeg`, `.gif`, `.svg`) and `<live-project>/assets/videos` (`.mp4`, `.webm`, `.m4v`, `.mov`), recursing into subfolders.
+  - Returns `[{ name, path, type: "icon" | "image" | "video", mime, size }]`. `path` is relative to the assets root, subfolder included (`icons/…`, `images/…`, `videos/…`), and can be served via `/assets/{path}`.
 
 ---
 
@@ -464,15 +477,22 @@ These endpoints expose what's in the user workspace directly (no `/api` prefix o
 Base prefix: `/api/users`. IDs (user id, group id, username) must match `[A-Za-z0-9_-]+` and be ≤ 64 chars.
 
 - `GET /api/users` → full users document `{ settings, groups, users }`, with every
-  stored password redacted to `""`, no `passwordHash`, and a boolean
-  `passwordSet` per user.
+  stored password redacted to `""` and no `passwordHash`. It is public (the
+  live view resolves `$user` and the sign-in dropdown without a session), so it
+  says nothing about which accounts carry a credential.
+- `GET /api/users/credential-state` → `{ "<userId>": bool }` — whether each
+  account has a usable credential (an unusable stored hash reads `false`). Not
+  on the public `/runtime` allowlist, so it needs the device-admin session; the
+  editor reads it for the "(unchanged)" / "(no password)" placeholder.
 - `PUT /api/users`
   - Body: the complete `{ settings, groups, users }` document returned by `GET /api/users`.
   - Validates all sections and their group references before atomically replacing `users.json`; validation failure leaves the stored document unchanged.
   - Preserves unchanged stored credentials without exposing them. A non-empty
-    submitted password is stored in the server-managed `passwordHash` object
+    submitted password (at most 512 characters, `422` otherwise) is stored in the
+    server-managed `passwordHash` object
     `{ version, algorithm, iterations, salt, digest }`, with `password: ""`.
     Clients may never submit `passwordHash` directly.
+  - Returns the redacted document with a boolean `passwordSet` per user.
   - A `password` string is literal plaintext regardless of its prefix, and an
     unchanged save preserves the exact stored credential value.
   - The canonical `guest` user is required, must keep both id and username
@@ -493,7 +513,7 @@ Base prefix: `/api/users`. IDs (user id, group id, username) must match `[A-Za-z
   - Body: array of `{ id, username, password, groups: [groupId, ...] }`.
   - `422` on invalid id/username, missing `guest` user, or zero-group user. `409` on duplicate id / username.
   - Applies the same canonical-guest, group-reference, password hashing, hash-injection rejection, and redaction rules as the full-document endpoint.
-  - Returns the redacted persisted users list.
+  - Returns the redacted persisted users list, with `passwordSet` per user.
 - `DELETE /api/users/users/{user_id}`
   - `422` for `guest`; `404` if not found. Returns `{ "deleted": user_id }`.
 
@@ -536,9 +556,8 @@ no `/api/admin/*` routes at all: no license check, no license storage, no
 machine fingerprinting.
 
 The `ee` build (`NEXTHMI_EDITION=ee`) mounts additional routers on top of the
-same core app, among them the device-license and machine-id routes earlier
-revisions of this file documented. That code is not in this repository, so
-neither are its endpoint shapes — they are documented next to the
+same core app, among them device-license and machine-id routes. That code is
+not in this repository, so neither are its endpoint shapes — they are documented next to the
 implementation, which keeps this reference verifiable against the source beside
 it. See [Edition seam](../architecture/backend.md#edition-seam).
 
@@ -556,8 +575,8 @@ Base prefix: `/api/system`.
 - `GET /api/system/alarm-triggers`
   - Returns `{ <datasource_name>: ["<path1>", ...] }` listing the OPC-UA paths kept on the fast subscription by the alarm manager.
 - `POST /api/system/restart`
-  - Optional query: `?reason=<string>` — surfaced to clients on the broadcast and recorded in the sentinel file.
-  - Writes `<runtime_home>/.restart-pending`, broadcasts `{type: "restarting", reason}` over `/ws`, then raises `SIGTERM` so uvicorn's lifespan teardown runs. A grace timer hard-exits if shutdown stalls. The supervisor (`backend/launcher.py` for binaries, `start-dev.py` in dev) re-execs a fresh interpreter on the next loop iteration.
+  - Optional query: `?reason=<string>` — surfaced to clients on the broadcast.
+  - Project instance only. Broadcasts `{type: "restarting", reason}` over `/ws`, then raises `SIGTERM` so uvicorn's lifespan teardown runs. A grace timer applies the restart and hard-exits if shutdown stalls. The manager's supervisor (`services/supervisor.py`) respawns the exited child; see [backend.md § Health And Restart](../architecture/backend.md#health-and-restart).
   - Returns `202 { "status": "restarting", "reason": "..." }`. Frontends should poll `/api/system/info` to detect when the new process is ready.
 - `GET /api/system/runtimes`
   - Returns `{ "runtimes": [ { clientId, scope, username, groups, connectedAt } ] }` for every currently-connected WebSocket scope that starts with `runtime:`. Diagnostics only.
@@ -565,7 +584,7 @@ Base prefix: `/api/system`.
   - Returns `{ "path": "<runtime home>" }`, resolved fresh per call from env var / bootstrap config / platform default so the answer always matches what `core.storage` sees.
   - The manifest's `defaultProjectsRoot` is *not* here — read it from `GET /api/projects/_runtime-home`, which returns both values.
 - `GET /api/system/logs?lines=500`
-  - Tails `<runtime_home>/.logs/nexthmi.log`. `lines` is clamped to `[1, 5000]`.
+  - Tails the process's `nexthmi.log`: `<runtime_home>/.logs/` for the manager by default (`NEXTHMI_LOGS_DIR` overrides it, and a binary install on a bootstrap-derived runtime home keeps logs beside the bootstrap file), a per-project `instances/<id>/` folder under that for a project instance. `lines` is clamped to `[1, 5000]`.
   - Returns `{ path, lines: [string], returned, total, truncated }`. A missing log file (first startup) yields an empty `lines` array, not a `404`.
 - `GET /api/system/logs/download`
   - Streams the current (non-rotated) log file as `text/plain` attachment. `404` when no log file exists yet.
@@ -669,7 +688,7 @@ Base prefix: `/api/historian`. Samples live in a SQLite database under the live 
     `{ "ok": bool, "status": int, "body": any, "error": string | null }`.
   - `ok: false` with `status: 0` for a non-`http(s)` scheme, a hostless URL, a refused origin, or a transport error; `ok: false` with the upstream status for a non-2xx response or a body over 1 MiB.
   - Response body is parsed as JSON regardless of `content-type` and falls back to raw text. Timeout is a fixed 10 s. Redirects are walked one hop at a time with the scheme and origin check re-run on **every** hop, capped at 5 (`more than 5 redirects` otherwise), and all caller-supplied headers are dropped once a hop leaves its origin — otherwise a configured host could redirect the proxy into an unconfigured one and carry the project's API key with it.
-  - **Only origins the project itself configures are reachable.** The request's origin (scheme + host + port, default ports normalised, host compared case-insensitively) must match one an `$http` property source in this project names — see [`$http`](../architecture/value-types.md#http-requests-in-depth-http). Anything else is refused with `ok: false`, `status: 0` and `error: "origin '…' is not configured by an $http source in this project"`. Path, query, headers and body are unrestricted.
+  - **Only origins the project itself configures are reachable.** The request's origin (scheme + host + port, default ports normalised, host compared case-insensitively) must match one an `$http` property source in this project names — see [`$http`](../architecture/value-types.md#http-requests-in-depth-http). Anything else is refused with `ok: false`, `status: 0` and `error: "origin '…' is not configured by an $http source in this project"`. Once any source in the project interpolates its own host, any http(s) origin is allowed except loopback, link-local and unspecified addresses (`core/http_origins.py`). Path, query, headers and body are unrestricted.
 
 ---
 
@@ -691,21 +710,21 @@ Loopback-only hooks, driven by the manager, never by browsers. The router is rea
 
 ### Auth — `/api/manager/auth`
 
-These five routes are allow-listed by the auth gate (reachable without a session cookie); everything else on the manager requires it. `change-password` still self-authenticates via `currentPassword`.
+These five routes are allow-listed by the auth gate (the whole `/api/manager/auth` prefix is reachable without a session cookie); the gate's other exceptions are listed under [Authentication](#authentication). `change-password` still self-authenticates via `currentPassword`. Every route answers `{ authenticated: bool }` (status adds `passwordSet`).
 
 Every route that issues the cookie issues the same one: `HttpOnly`, `SameSite=Lax`, `Secure` over TLS, and good for 24 h from the moment it is minted. That lifetime is absolute rather than idle-based — no request refreshes it — so a caller signed in for a day is asked for the password again whether or not it was using the session.
 
 - `GET /api/manager/auth/status` → `{ passwordSet, authenticated }`.
 - `POST /api/manager/auth/setup` — Body `{ password }`. Sets the device-admin password on first run and issues a session cookie. 409 if a password already exists.
 - `POST /api/manager/auth/login` — Body `{ password }`. Issues a session cookie on success. `422` on wrong password; `429` (`RateLimitError`) when the in-memory throttle is locked (5 consecutive failures → 60 s lockout).
-- `POST /api/manager/auth/change-password` — Body `{ currentPassword, newPassword }`. Verifies the current password (reusing the login lockout), rotates it, revokes every peer-transfer token, and reissues the session cookie so the caller stays signed in. `422` on wrong current password; `429` when locked out.
+- `POST /api/manager/auth/change-password` — Body `{ currentPassword, newPassword }`. Verifies the current password (reusing the login lockout), rotates it, revokes every peer-transfer token and every MCP token, and reissues the session cookie so the caller stays signed in. `422` on wrong current password; `429` when locked out.
 - `POST /api/manager/auth/logout` — Clears the session cookie.
 
 ### Supervisor — `/api/manager`
 
 - `GET /api/manager/running` → `{ instances: [InstanceSnapshot] }`, where `InstanceSnapshot` is `{ id, name, path, basePath, port, pid, status, startedAt, restarts, lastError }` and `status ∈ {"starting","running","stopped","crashed"}`.
-- `POST /api/manager/projects/{id}/start` → starts (or no-ops if already up) the project's child process; returns its snapshot. Body (optional): `{ confirmUpgrade?: bool }`. 202. 409 (`ConflictError`) if the project can't be started — unknown id, missing folder, or the project's `needsUpgrade` holds and `confirmUpgrade` was not set (the manager UI asks first, using `needsUpgrade` from `GET /api/projects`). 409 as well, regardless of `confirmUpgrade`, if the project's `formatVersion` is newer than this build supports; the message names the version the project needs and the one this build is.
-- `POST /api/manager/projects/{id}/stop` → stops the child; returns `{ id, status: "stopped" }`. 200.
+- `POST /api/manager/projects/{id}/start` → starts (or no-ops if already up) the project's child process; returns its snapshot. Body (optional): `{ confirmUpgrade?: bool }`. 202. 409 (`ConflictError`) if the project can't be started — unknown or invalid id, missing folder, an unusable `users.json`, a start-guard refusal, or the project's `needsUpgrade` holds and `confirmUpgrade` was not set (the manager UI asks first, using `needsUpgrade` from `GET /api/projects`). 409 as well, regardless of `confirmUpgrade`, if the project's `formatVersion` is newer than this build supports; the message names the version the project needs and the one this build is.
+- `POST /api/manager/projects/{id}/stop` → stops the child; returns its instance snapshot with `status: "stopped"`, or `{ id, status: "stopped" }` when no instance existed. 200.
 - `GET /api/manager/projects/{id}/status` → the instance snapshot, or `{ id, status: "stopped" }` when not running.
 
 ### Project reverse proxy
@@ -722,18 +741,20 @@ Base prefix: `/api/projects`. Manages the project list in the runtime-home manif
   - `credentialsStatus` is `ok` or `error`; `credentialsError` describes a
     missing, unreadable, corrupt, or structurally invalid `users.json`.
     Error-state projects cannot be started or proxied.
-  - Returns `{ defaultProjectId, defaultProjectsRoot, projects: [{ id, name, path, addedAt, lastOpenedAt, status, isDefault, formatVersion, minAppVersion, needsUpgrade, unsupportedFormat, lastMigration, thumbnailUpdatedAt }] }`. `status` is computed (`"present"` or `"missing"`), not stored. The running set is authoritative for what's actually live — see `/api/manager/running`.
+  - Returns `{ defaultProjectId, defaultProjectsRoot, projects: [{ id, name, path, inProjectsRoot, addedAt, lastOpenedAt, status, isDefault, mcpEnabled, credentialsStatus, credentialsError, formatVersion, minAppVersion, needsUpgrade, unsupportedFormat, lastMigration, thumbnailUpdatedAt }] }`. `status` is computed (`"present"` or `"missing"`), not stored. The running set is authoritative for what's actually live — see `/api/manager/running`.
+  - `inProjectsRoot` is whether the project's folder is a direct child of the resolved `defaultProjectsRoot` — the only place a peer transfer can install.
   - `defaultProjectsRoot` is the **resolved** root (`core.manifest.default_projects_root`), never the raw manifest string: a `~`-relative, relative or unset setting comes back as the same absolute path `/api/projects/_runtime-home` and the peer-transfer install rule use, so a client can compare a project's `path` against it. Unset resolves to the user's Documents folder; neither endpoint creates it.
   - `thumbnailUpdatedAt` is the stored thumbnail's mtime as an ISO 8601 string, or `null` when the project has never saved one. See `GET /api/projects/{id}/thumbnail` below.
   - The format fields are read from the project's own `config.json` (see [data-formats.md](../architecture/data-formats.md)) and are `null` when `status` is `"missing"`. `unsupportedFormat` is `formatVersion > PROJECT_FORMAT_VERSION` (this build is older than the project); `needsUpgrade` is `formatVersion < PROJECT_FORMAT_VERSION` **or** `minAppVersion` is `null` (a project with no release stamp is replayed through the chain rather than trusted). `minAppVersion` is the release that stamped the format — display only, for naming the version an operator needs. `lastMigration` is `{ fromVersion, toVersion, at, backup }` or `null`.
 - `POST /api/projects`
-  - Body: `{ name, path, template? }`. Validates the destination is empty + writable, seeds from the chosen template, writes a fresh `project` metadata block into `config.json`, and appends to the manifest. Returns 409 when the path already carries project metadata.
-  - `template` — `"empty"` (default) seeds from `project-seed/`; `"example"` seeds the bundled NEXT BREW demo from `project-example/`. An unknown value is rejected with `422`.
+  - Body: `{ name, path, template? }`. Validates the destination is empty + writable, seeds from the chosen template, writes a fresh `project` metadata block (stamped at the current format) into `config.json`, and appends to the manifest. `201` with the manifest entry. `409` when the path already carries project metadata or its id is already registered.
+  - A destination inside the default projects root has that root created first — Docker and headless Linux have no `~/Documents`. A destination elsewhere must already have a parent.
+  - `template` — `"empty"` (default) seeds from `project-seed/`; `"example"` seeds the bundled NEXT BREW demo from `project-example/`. An unknown value, or a template this build does not bundle, is `422`.
 - `POST /api/projects/register`
   - Body: `{ path, name? }`. Adds an existing on-disk project folder to the manifest; the folder must already carry a `project` block in `config.json`.
   - `201` with the manifest entry. `422` when the path is not a directory or has no project metadata; `409` when the id is already in the manifest — the UI offers Locate instead.
 - `POST /api/projects/validate-path`
-  - Non-throwing validation used by the create / import dialogs. Returns `{ valid, reason? }`.
+  - Body: `{ path }`. Non-throwing validation used by the create / import dialogs. Returns `{ ok, resolvedPath, reason? }`; `reason` is `path-is-file`, `not-readable`, `parent-missing`, `parent-not-writable`, or the resolution error. On success it adds `exists`, `isEmpty`, and `parentWritable`.
 - `GET /api/projects/browse-dir?path=<absolute path>`
   - Backs the in-app folder picker: a browser never exposes the absolute path of an OS folder dialog, so the create / add-existing / import dialogs walk the backend's real filesystem through this instead.
   - Falls back to the home directory when `path` is missing, unreadable, or not a directory (a file path resolves to its parent). Dot-directories are hidden.
@@ -742,17 +763,19 @@ Base prefix: `/api/projects`. Manages the project list in the runtime-home manif
   - Body: `{ name?, id? }` — send only what changes; an unchanged pair is a no-op that returns the entry. Renames the manifest entry and the `project` block in the folder's `config.json`.
   - An id change also moves `defaultProjectId`, the instance log folder and the widget-build cache, and re-scopes every MCP token issued for the project (so outstanding tokens follow the project instead of dangling at an id nothing answers to). It does **not** rename the folder on disk.
   - `409` when the project is in the manifest `running` set (stop it first) or when the new id is already registered — compared case-insensitively, since the id doubles as a folder name under the runtime home. `422` on an empty name, an id the grammar in `core.manifest.validate_project_id` rejects, or an id change on a project whose folder carries no metadata (the embedded id has to follow the manifest). A name-only change works with the folder missing.
+- `POST /api/projects/{id}/default`
+  - No body. Makes this project the origin-root default (`/` opens its runtime, starting it on demand) by setting the manifest's `defaultProjectId`; works whether the project is running or stopped. Returns the project's list entry. `404` for an unknown id.
 - `POST /api/projects/{id}/locate`
   - Body: `{ path }`. Re-points a missing entry. Rejects (409) if the folder's metadata id doesn't match the manifest entry; rejects (422) if no metadata file is present.
 - `DELETE /api/projects/{id}?deleteFolder=<bool>`
-  - Removes the entry. With `deleteFolder=true`, `rmtree`s the folder — but only after confirming `config.json` contains a valid `project` metadata block (defense against wrong-path wipeouts). Refuses (409) to delete a project that is in the manifest `running` set — stop it first.
+  - Removes the entry. With `deleteFolder=true`, `rmtree`s the folder — but only after confirming `config.json` contains a valid `project` metadata block (defense against wrong-path wipeouts; `422` otherwise). Refuses (409) to delete a project that is in the manifest `running` set — stop it first. Returns `{ id, deletedFolder }`.
   - Also deletes the project's stored thumbnail, if any, regardless of `deleteFolder` — the screenshot lives outside the project folder.
 - `GET /api/projects/{id}/export`
-  - Streams the project as a zip with `Content-Disposition: attachment; filename="<slug>.zip"`. 409 if the folder is missing on disk.
+  - Streams the project as a zip with `Content-Disposition: attachment; filename="<name>.nexthmi.zip"` (the project name, made filename-safe). 409 if the folder is missing on disk.
 - `POST /api/projects/import`
-  - Multipart upload: `file` (zip), `destinationPath`, optional `name`. Validates destination, unpacks, adds a manifest entry. `422` on invalid zip, unsafe or symlink archive members, a reusable-component `$var` violation at any nested child/default-value source, or a malformed JSON, invalid UTF-8, unreadable, symlinked, or reparse-point component path. Component errors report `components/<file>.json#/<JSON pointer>`; file-content errors use the root pointer with a stable reason. `409` on id collision with an existing entry. The destination is cleaned up and no manifest entry is added after any validation failure.
+  - Multipart upload: `file` (zip), `destinationPath`, optional `name`. Validates destination, unpacks, adds a manifest entry; `201` with the entry. `422` on invalid zip, unsafe or symlink archive members, a reusable-component `$var` violation at any nested child/default-value source, or a malformed JSON, invalid UTF-8, unreadable, symlinked, or reparse-point component path. Component errors report `components/<file>.json#/<JSON pointer>`; file-content errors use the root pointer with a stable reason. `409` on id collision with an existing entry, or a destination that already holds a project. The destination is cleaned up and no manifest entry is added after any validation failure.
 - `GET /api/projects/_runtime-home`
-  - Used by the create dialog to suggest the default folder. Returns `runtimeHome` and `defaultProjectsRoot`. Read-only — the default root is the user's Documents folder, which already exists, so the suggested parent folder passes `validate-path` without anything being created.
+  - Used by the create dialog to suggest the default folder. Returns `runtimeHome` and `defaultProjectsRoot`. Read-only — it creates nothing. Unset, the default root is the user's Documents folder; where that does not exist (Docker, headless Linux) `validate-path` reports `parent-missing` for the suggestion, and `POST /api/projects` creates the root when the destination is inside it.
 
 ---
 
@@ -773,21 +796,25 @@ Base prefix: `/api/projects`. Manages the project list in the runtime-home manif
 Wire contract only — see [peer-transfer.md](peer-transfer.md) for the trust
 model, operator workflow, collision policies, and reliability guarantees.
 
-The current workflow always names a local source project and a remote
-destination project. It uses plain HTTP only on an explicitly trusted LAN;
-bearer authentication does not provide confidentiality against interception.
-The destination persists only a SHA-256 digest of each random peer token.
+The workflow always names a local source project and a remote destination
+project. Transport is HTTP or HTTPS per peer (`scheme` / `peerScheme`, default
+`http`). Plain HTTP is for an explicitly trusted LAN only — bearer
+authentication does not provide confidentiality against interception; HTTPS
+pins the peer's certificate on first contact. The destination persists only a
+SHA-256 digest of each random peer token.
 
 - `POST /api/manager/peer/pair` — public pairing endpoint. Body
-  `{ password, name? }`; returns the plaintext token once.
+  `{ password, name? }`; `201 { tokenId, token, transport, trustedLanOnly }`,
+  the plaintext token returned once. `403` when the caller is not on a private
+  address, `422` on a wrong password, `429` on the device-admin login throttle.
 - `GET /api/manager/peer/projects` — bearer-authenticated project list for
-  explicit destination selection. Each entry is
-  `{ id, name, folder, inProjectsRoot, running }`. `inProjectsRoot` is whether
-  that project's folder really is a child of the peer's projects root — the
-  only place a transfer can install — so the caller can tell a folder clash
-  from a same-named project registered elsewhere on the peer's disk. A peer
-  predating the field omits it; treat it as `true`.
-- `POST /api/manager/peer/transfers` — bearer-authenticated multipart receive:
+  explicit destination selection, covering projects whose folder exists. Each
+  entry is `{ id, name, folder, inProjectsRoot, running }`. `inProjectsRoot` is
+  whether that project's folder really is a child of the peer's projects root —
+  the only place a transfer can install — so the caller can tell a folder
+  clash from a same-named project registered elsewhere on the peer's disk. The
+  modal reads a missing value as `true`.
+- `POST /api/manager/peer/transfers` — bearer-authenticated multipart receive (`201`):
   `file`, `transferId`, `sourceProjectId`, `destinationProjectId`,
   `destinationFolder`, `collisionPolicy`, `confirmReplace`, and `start`.
   The folder must be one direct child of `defaultProjectsRoot`. `reject` is the
@@ -795,14 +822,27 @@ The destination persists only a SHA-256 digest of each random peer token.
   a stopped registered destination, and its exact target-root folder; it keeps
   a sibling backup and rolls back on apply/manifest failure. No project starts
   unless requested, and unrelated processes/running entries are untouched.
-- `DELETE /api/manager/peer/transfers/{transferId}` — cancel an in-flight receive.
+- `DELETE /api/manager/peer/transfers/{transferId}` — cancel an in-flight
+  receive; `{ transferId, cancelRequested, tooLate? }`, `409` for a
+  `recovery_required` receipt.
 - `GET /api/manager/peer/transfers/{transferId}/status` — read the durable
   receiver claim/apply/receipt status with the same bearer token.
 - `POST /api/manager/peer-pair` and `POST /api/manager/peer-projects` —
   session-authenticated browser proxies for pairing and destination discovery.
+  Bodies `{ host, port = 8000, scheme, password, name? }` and
+  `{ host, port, scheme, token }`. Pairing adds `certificateFingerprint` when a
+  certificate is pinned for the peer. A peer that refuses or cannot be reached
+  is `409` with an explanatory `detail` (the peer's own `detail` forwarded, or
+  the classified transport failure).
 - `POST /api/manager/transfers` — starts an outgoing explicit-source transfer
-  with HTTP 202. `GET` / `DELETE /api/manager/transfers/{transferId}` polls or
-  cancels it. Same-ID/same-parameter retries are idempotent; different
+  with HTTP 202. Body `{ sourceProjectId, destinationProjectId,
+  destinationFolder, peerHost, peerPort = 8000, peerScheme, token,
+  collisionPolicy, confirmReplace, start, transferId? }` — an omitted
+  `transferId` is minted by the server. `GET` / `DELETE
+  /api/manager/transfers/{transferId}` polls or cancels it. The state object is
+  `{ transferId, sourceProjectId, destinationProjectId, phase, failedPhase,
+  status, bytesDone, bytesTotal, message, result }`, with the failure text in
+  `message`. Same-ID/same-parameter retries are idempotent; different
   parameters or archive bytes return 409. The sender retains the caller's
   stable ID, phase, byte progress, and archive fingerprint across restart but
   does not persist the bearer token. A failed transfer also reports
@@ -810,15 +850,16 @@ The destination persists only a SHA-256 digest of each random peer token.
   the terminal outcome. Connect is bounded to 10 seconds and transfer I/O to
   10 minutes.
 - `POST /api/manager/pulls` — starts an incoming explicit-source transfer with
-  HTTP 202: this manager downloads
+  HTTP 202, taking the same body as `/transfers`: this manager downloads
   `GET /api/manager/peer/projects/{sourceProjectId}/archive` from the paired
   peer and installs it locally, reusing the same collision/backup/rollback
   core as the receive endpoint above. `GET` / `DELETE
   /api/manager/pulls/{transferId}` polls or cancels it, with the same
   idempotent-retry and durable-across-restart behavior as `/transfers`.
-- `GET /api/manager/peers/discovered`, `POST /api/manager/peers/manual`, and
-  `DELETE /api/manager/peers/manual?host=...&port=...` — manager-owned mDNS and
-  manual discovery.
+- `GET /api/manager/peers/discovered`, `POST /api/manager/peers/manual` (body
+  `{ host, port = 8000, scheme, name? }`), and
+  `DELETE /api/manager/peers/manual?host=...&port=...` (→ `{ host, port, removed: true }`)
+  — manager-owned mDNS and manual discovery.
 - `GET /api/manager/peers/trust` → `{ pins: [{ host, port, fingerprint, pinnedAt }] }`
   — the certificates pinned on first contact. The PEM itself never leaves the
   server.
@@ -850,8 +891,7 @@ stem). The author-chosen *default* theme id is stored in `config.json`'s
 defaults are loaded from `frontend/src/shared/themeDefaults.json`. Runtime theme
 switching is a client-side concern — the backend only tracks the default.
 
-`/api/themes` (plural) is the whole theme surface — there is no singular
-`/api/theme` endpoint.
+`/api/themes` (plural) and `/api/default-theme` are the whole theme surface.
 
 ### List themes
 
@@ -862,10 +902,10 @@ switching is a client-side concern — the backend only tracks the default.
 
 - `GET /api/themes/{id}` → `ThemeConfig`. `404` (`ThemeNotFoundError`) if the id is unknown.
 - `PUT /api/themes/{id}`
-  - Body: full `ThemeConfig` (all three sections required). Extra fields are rejected (`extra="forbid"`). Per-field validators apply: colors must be `#RGB`, `#RRGGBB`, or `rgb()` / `rgba()`; font families ≤ 256 chars; font weights between `100` and `900`. `422` on validation failure (`ThemeValidationError`); returns the saved theme. Creates or replaces the theme.
+  - Body: a `ThemeConfig`; an omitted section, or field, takes its default. Extra fields are rejected (`extra="forbid"`). Per-field validators apply: colors must be `#RGB`, `#RRGGBB`, or `rgb()` / `rgba()`; font families non-empty and ≤ 256 chars; font weights between `100` and `900`; each `*_transform` one of `none`, `uppercase`, `lowercase`, `capitalize`. `422` on validation failure (`ThemeValidationError`); returns the saved theme. Creates or replaces the theme.
 - `POST /api/themes`
   - Body: `{ "name": "<display name>", "source"?: "<id>" }`. Creates a new theme (id slugged from `name`), duplicating `source` when given, otherwise built-in defaults. Returns `{ "id", "config" }`. `404` if `source` is unknown.
-- `DELETE /api/themes/{id}` → `{ "deleted": "<id>" }`. `404` if unknown; `409` (`ThemeConflictError`) when it is the only theme. If the deleted theme was the default, the pointer moves to the first remaining theme.
+- `DELETE /api/themes/{id}` → `{ "deleted": "<id>" }`. `404` if unknown; `409` (`ThemeConflictError`) when it is the only theme. If the deleted theme was the default, the first remaining theme becomes the effective default.
 
 ### Default-theme pointer
 
@@ -878,7 +918,7 @@ Kept off the `/api/themes/{id}` path so an id literally named `default` is never
 ### Validate a theme
 
 - `POST /api/themes/{id}/validate`
-  - Body: a raw theme payload (the `{id}` path segment is not used to load anything). Validates without saving. Returns `200` in every case — both fatal parse failures and domain diagnostics share one `ThemeValidationResult` response, never FastAPI's separately-shaped automatic 422:
+  - Body: a raw theme payload (the `{id}` path segment is not used to load anything). Validates without saving. Returns `200` for any JSON object — both fatal parse failures and domain diagnostics share one `ThemeValidationResult` response rather than FastAPI's separately-shaped automatic 422 (a body that is not an object still gets that 422):
 
     ```json
     {
@@ -890,20 +930,20 @@ Kept off the `/api/themes/{id}` path so an id literally named `default` is never
     }
     ```
 
-    A malformed payload (bad color format, unknown field, out-of-range weight, ...) instead returns `valid: false` with one `errors` entry per pydantic finding, `code` set to the pydantic error `type` (e.g. `"string_pattern_mismatch"`) and `path` set to the dotted field location:
+    A malformed payload (bad color format, unknown field, out-of-range weight, ...) instead returns `valid: false` with one `errors` entry per pydantic finding, `code` set to the pydantic error `type` (e.g. `"value_error"` for a field validator, `"extra_forbidden"` for an unknown key) and `path` set to the dotted field location:
 
     ```json
     {
       "valid": false,
       "warnings": [],
       "errors": [
-        { "level": "error", "code": "string_pattern_mismatch", "path": "colors.text", "message": "String should match pattern '...'" }
+        { "level": "error", "code": "value_error", "path": "colors.text", "message": "Value error, Invalid color format: nope" }
       ]
     }
     ```
 
   - The WCAG AA contrast check (≥ 4.5:1) covers four pairs: `text` vs `bg`, `text` vs `surface`, `text_muted` vs `bg`, `text_muted` vs `surface`.
-  - `PUT /api/themes/{id}` is unchanged: it still takes a typed `ThemeConfig` body, so a malformed write still gets FastAPI's normal automatic `422`. Unifying the response shape only applies to the read-only `/validate` endpoint, whose entire purpose is to report a result rather than reject a request.
+  - `PUT /api/themes/{id}` takes a typed `ThemeConfig` body, so a malformed write gets FastAPI's normal automatic `422`. The unified response shape applies only to the read-only `/validate` endpoint, whose entire purpose is to report a result rather than reject a request.
 
 ### `ThemeConfig` shape
 

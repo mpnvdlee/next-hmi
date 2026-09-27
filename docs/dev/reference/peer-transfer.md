@@ -18,17 +18,25 @@ advertises itself and never accepts a peer connection — see
 ## Trust model
 
 - **Pairing** — the initiator authenticates once with the *destination's*
-  existing device-admin password (`POST /pair`). The destination returns a
+  existing device-admin password (`POST /api/manager/peer/pair`). The destination returns a
   random bearer token and persists only its SHA-256 digest; the plaintext
   token is shown once and lives only in the transfer modal's component state
   (never web storage).
-- **Tokens** are individually revocable (Settings → peer tokens) and are all
-  revoked automatically when the device-admin password changes
-  (`authGeneration` pinning in `core/peer_tokens.py`).
-- **Transport** is plain HTTP, accepted only as an explicit trusted-LAN risk —
-  bearer auth stops unauthenticated mutation but does not encrypt the pairing
-  password, token, or archive in transit. Deployments needing confidentiality
-  need a private network or TLS termination in front.
+- **Tokens** are individually revocable (`DELETE /api/manager/peer-tokens/{tokenId}`;
+  the dashboard has no control for it) and are all revoked automatically when
+  the device-admin password changes (`authGeneration` pinning in
+  `core/peer_tokens.py`).
+- **Transport** is HTTP or HTTPS, picked per peer in the modal (a discovered
+  peer advertises the scheme it serves in its mDNS TXT record). Plain HTTP is
+  accepted only as an explicit trusted-LAN risk — bearer auth stops
+  unauthenticated mutation but does not encrypt the pairing password, token,
+  or archive in transit. HTTPS uses trust on first use (`core/peer_trust.py`):
+  the peer's certificate is pinned the first time it is seen, in
+  `<runtime_home>/.peer-trust.json`, and required to match during every later
+  handshake, before any token or project byte is sent. A pinned peer is never
+  spoken to over plain HTTP again, whatever scheme a TXT record claims. A
+  renewed peer certificate breaks transfers until its pin is dropped
+  (`DELETE /api/manager/peers/trust`), by design.
 - **Address pinning** — outgoing connections resolve the peer hostname once
   and pin the HTTP connection to that private unicast address. Public, mixed
   public/private, link-local, multicast, and unspecified answers are
@@ -59,8 +67,8 @@ From the editor's top bar:
 All three open `PeerTransferModal` (`frontend/src/config/components/projects/ProjectsView/PeerTransferModal.tsx`),
 which:
 
-1. Takes a peer host/port (autocompleted from mDNS discovery + manually-added
-   peers) and pairs.
+1. Takes a peer host, protocol and port (autocompleted from mDNS discovery +
+   manually-added peers) and pairs.
 2. For pull, lists the peer's registered projects to pick a source from.
 3. Detects the name clashes it can see against the destination's registered
    projects and, only when there is one, asks how to resolve it (see below);
@@ -72,15 +80,18 @@ which:
    `transferId`, while any amended parameter — or a refusal only a fresh id can
    clear — starts a new transfer under one; the same id with different
    parameters is a `409`. A failure names the phase the backend was in when it
-   failed (`failedPhase`), not the last one the poller happened to catch.
+   failed (`failedPhase`), not the last one the poller happened to catch, and
+   carries a cause: the peer's own error `detail` is forwarded (length-capped),
+   and a transport failure is classified (`_transport_reason`: the connection
+   timed out, could not be opened, or the request failed).
 
 ## Collision policies
 
-The wire values are unchanged — `collisionPolicy` is still `reject`, `copy` or
-`replace` — but the operator no longer picks one from a dropdown. The modal
-detects a clash as the destination folder is typed and only then offers the
-resolutions ("don't overwrite anything", "install as a separate copy", "replace
-the existing project") with the consequence of each. With no clash there is no
+`collisionPolicy` is `reject`, `copy` or `replace`, but the operator does not
+pick one from a list. The modal detects a clash as the destination folder is
+typed and only then offers the resolutions ("don't overwrite anything",
+"install as a separate copy", "replace the existing project") with the
+consequence of each. With no clash there is no
 control at all and `reject` is sent.
 
 What the modal detects is narrower than the rule below, deliberately: it can

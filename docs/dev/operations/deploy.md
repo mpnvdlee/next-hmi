@@ -22,8 +22,8 @@ Its security model assumes it sits on a **trusted OT/plant network**.
   Perimeter isolation is the primary control; the application's own passwords
   are the second layer, not the first.
 - **Serve over HTTPS.** The manager binds every interface by default, and on
-  plain HTTP the device-admin password, operator passwords, and every project
-  edit cross the wire in the clear. See
+  plain HTTP the device-admin password, project users' passwords, and every
+  project edit cross the wire in the clear. See
   [HTTPS](../../user/install.md#https); `NEXTHMI_HOST=127.0.0.1` is the other
   way out, for an install that is only ever reached through a proxy.
 - **Reach it through a reverse proxy or VPN, not by widening the app.** If the

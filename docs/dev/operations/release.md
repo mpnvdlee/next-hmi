@@ -5,15 +5,22 @@ operator-facing install instructions.
 
 ## Versioning
 
-Pick a semver-ish tag (`0.x.y`). The version string ends up in:
+Releases follow semver on the 1.x line: a patch (`1.0.1`) for fixes, a minor
+(`1.1.0`) for new features, a major for breaking changes — and a
+project-format change moves at least the minor
+([Project format](#project-format)). The git tag is the version with a `v`
+prefix (`v1.1.0`); a release candidate carries a hyphenated suffix
+(`v1.1.0-rc.1`). The version string ends up in:
 
 - `build/_vendor/version.txt` — embedded in the PyInstaller bundle.
 - The `version.txt` file shipped at the top of the binary zip.
-- The launcher banner (`NEXT HMI 0.x.y`).
-- Optionally the Docker image tag.
+- The launcher banner (`v1.1.0` under the logo).
+- The Docker image tag (`nexthmi:1.1.0`) and `/app/version.txt` inside the
+  image, passed as the `NEXTHMI_VERSION` build argument.
 
-The build scripts accept the version via a positional argument
-(`./build/build-binary.sh 0.3.1`) or the `NEXTHMI_VERSION` env var.
+The build scripts accept the version, without the `v`, via a positional
+argument (`./build/build-binary.sh 1.1.0`) or the `NEXTHMI_VERSION` env var.
+The release workflow derives it from the tag the same way.
 
 ### Project format
 
@@ -50,21 +57,23 @@ ruff check backend
 
 # Frontend
 cd frontend
-npm test
+npm test -- --run
 npm run lint
 npm run format:check
 npm run build
+npm run check:bundle-budget
 cd ..
 ```
 
-All four suites must be green. The frontend build doubles as a
-TypeScript check.
+Every check must be green: the release matrix's `frontend` job runs the same
+ones, the bundle budget included, and fails the tag on any of them. The
+frontend build doubles as a TypeScript check.
 
 ### License-signing key
 
-If this is an `ee` release, verify that `_PUBLIC_KEY_HEX` in
-`license.py` is the production verify key. Both `license.py` and the
-issuer, `generate_license.py`, live in the private `nexthmi-enterprise`
+If this is an `ee` release, verify that `_TRUSTED_KEYS_HEX` in
+`license.py` holds the production verify key. Both `license.py` and the
+issuer, `generate_license.py`, live in the private `next-hmi-enterprise`
 repository (cloned into the gitignored `enterprise/` directory for `ee`
 builds), not in this repository. Its private half
 (`license-signing-PROD.key`) never leaves the offline issuing machine.
@@ -80,7 +89,7 @@ source checkout required.
 
 ```bash
 # from repo root, Docker on PATH; single-arch per host
-./build/build-docker.sh 0.x.y
+./build/build-docker.sh 1.1.0
 ```
 
 Output: `dist/nexthmi-docker-linux-<arch>.zip`, containing
@@ -101,8 +110,8 @@ cd /tmp/nxd/nexthmi-docker-linux-x64
 Optional — also publish to a registry for `docker pull` consumers:
 
 ```bash
-docker tag nexthmi:0.x.y nexthmi:latest
-# docker push <registry>/nexthmi:0.x.y && docker push <registry>/nexthmi:latest
+docker tag nexthmi:1.1.0 nexthmi:latest
+# docker push <registry>/nexthmi:1.1.0 && docker push <registry>/nexthmi:latest
 ```
 
 ## Binaries
@@ -114,7 +123,7 @@ of the matching OS and arch.
 
 ```bash
 # from repo root, with the 3.14 venv activated and pyinstaller installed
-./build/build-binary.sh 0.x.y
+./build/build-binary.sh 1.1.0
 ```
 
 Output: `dist/nexthmi-macos-arm64-<version>.zip`.
@@ -143,7 +152,7 @@ In a PowerShell session on a Windows host, with the 3.14 venv activated
 and `pyinstaller` installed:
 
 ```powershell
-.\build\build-binary.ps1 -Version 0.x.y
+.\build\build-binary.ps1 -Version 1.1.0
 ```
 
 Output: `dist\nexthmi-windows-x64-<version>.zip`.
@@ -152,7 +161,7 @@ Smoke-test on a clean unzip: confirm the SmartScreen workaround, the
 banner, the UI in Edge, a custom-widget edit cycle, and a page save (same
 reason as above).
 
-### macOS Intel (not in MVP)
+### macOS Intel (not built)
 
 Currently dropped. Rosetta doesn't make PyInstaller produce x64 output
 from arm64 Python. Adding it back requires setting up an Intel macOS
@@ -175,16 +184,15 @@ After verifying every artifact:
    attaches `nexthmi-macos-arm64-<version>.zip` and
    `nexthmi-windows-x64-<version>.zip` to the GitHub Release for the tag,
    creating it with generated notes when it does not exist yet; a tag carrying a
-   hyphen (`v1.0.0-rc.1`) is published `--prerelease`, so only a bare `vX.Y.Z`
+   hyphen (`v1.1.0-rc.1`) is published `--prerelease`, so only a bare `vX.Y.Z`
    can become "Latest". Check the Release page once the run is green. CI does
    not build the offline Docker installer — attach a locally built
    `nexthmi-docker-linux-<arch>.zip` yourself if the release needs one.
-3. Update [deploy.md](deploy.md)'s download URLs if they changed.
-4. The registry image is published for you, on a **final** tag only:
+3. The registry image is published for you, on a **final** tag only:
    `docker-publish` loads the two smoke-tested per-arch tarballs and pushes
    `ghcr.io/<repo>:<version>` and `:latest` as one multi-arch manifest. An RC
    tag builds and smoke-tests both images and publishes neither.
-5. Publish the guide to the website, from a checkout that has `enterprise/`
+4. Publish the guide to the website, from a checkout that has `enterprise/`
    cloned in:
 
    ```bash

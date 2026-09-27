@@ -17,7 +17,7 @@ Scope note:
 - `cfg-*`
   - config/editor/admin UI selectors
 
-Several HMI built-ins also use CSS Modules for component-local styling, while still relying on shared `hmi-*` base classes from `frontend/src/hmi/styles/hmi.css`.
+A few runtime components (`AlarmDetailDialog`, `AlarmPopup`, `ShellRegion`, and the shared `CloseButton`) use CSS Modules for component-local styling, while still relying on shared `hmi-*` base classes from `frontend/src/hmi/styles/hmi.css`. Built-in widgets use a plain `style.css` beside their `index.tsx`, like custom widgets.
 
 ## Theme Tokens
 
@@ -29,14 +29,15 @@ Single source of truth:
 - `frontend/src/shared/themeDefaults.json` — default values, read by both the backend Pydantic
   models (`backend/models/theme.py`) and the frontend registry.
 - `frontend/src/shared/utils/themeTokens.ts` — `THEME_TOKENS` registry. Each entry carries the
-  CSS variable name, theme JSON path, label, description, sample usage, and the editor UI
-  metadata (input type, group, placeholder, min/max/step). Also exports `defaultTheme()`,
-  `themeSections()`, and `applyThemeTokens()`.
+  CSS variable name, theme JSON path, section, label, and the editor UI metadata (input type,
+  options, group, wide, placeholder, min/max/step). Also exports `defaultTheme()`,
+  `themeSections()`, and `applyThemeTokens()`. The "Controls" and "Sample usage" columns
+  below are this document's, not registry fields.
 
 Defaults auto-apply on module load (so the very first paint already has the design palette);
 the active project theme (from the `/api/themes` index) overrides them via inline styles on `:root`.
 
-#### Colors — edit in Theme Editor → Colors
+#### Colors — edit in the Themes editor → Colors
 
 | Token | Controls | Theme JSON path | Sample usage |
 | ------ | ------ | ------ | ------ |
@@ -51,7 +52,7 @@ the active project theme (from the `/api/themes` index) overrides them via inlin
 | `--hmi-warn` | Warning state | `colors.warn` | `color: var(--hmi-warn);` |
 | `--hmi-fault` | Error/fault state | `colors.fault` | `color: var(--hmi-fault);` |
 
-#### Typography — edit in Theme Editor → Typography
+#### Typography — edit in the Themes editor → Typography
 
 Typography has seven reusable combos: `heading`, `subheading`, `body`,
 `caption`, `code`, `value`, and `label`. Every combo has the same five fields,
@@ -69,7 +70,7 @@ definitions:
 For example, label tracking is `--hmi-type-label-tracking` backed by
 `typography.label_tracking`.
 
-#### Spacing, radius & shadow — edit in Theme Editor → Spacing
+#### Spacing, radius & shadow — edit in the Themes editor → Spacing
 
 | Token | Controls | Theme JSON path | Sample usage |
 | ------ | ------ | ------ | ------ |
@@ -83,7 +84,7 @@ For example, label tracking is `--hmi-type-label-tracking` backed by
 
 > Runtime structural constants (topbar height, select height) are **not** theme
 > tokens. They are defined in `hmi.tokens.css` and component CSS files and are not editable
-> in the Theme Editor.
+> in the Themes editor.
 
 > **Input padding is not one of them.** `--hmi-input-padding-x/-y`, `--hmi-input-gap` and
 > `--hmi-select-padding-x/-y` are derived from `--hmi-space-sm` in `hmi.tokens.css`, so a
@@ -138,30 +139,32 @@ and the apply mechanism.
    to the project's default theme. The backend only tracks the default pointer
    (`config.json` → `project.defaultTheme`, set via `PUT /api/default-theme`).
 4. **Token registry** — `THEME_TOKENS` is the single registry. Each entry carries
-   the CSS variable, theme JSON path, label, description, sample usage, and the
-   editor UI metadata (`section`, `inputType`, `group`, `wide`, `placeholder`,
-   `min`/`max`/`step`). `themeSections()` derives the Theme Editor layout from it;
-   `defaultTheme()` returns a fresh clone for Reset / import.
+   the CSS variable (`cssVar`), theme JSON path (`themePath`), `label`, and the
+   editor UI metadata (`section`, `inputType`, `options`, `group`, `wide`,
+   `placeholder`, `min`/`max`/`step`). `themeSections()` derives the Themes editor
+   layout from it; `defaultTheme()` returns a fresh clone for Reset / import.
 5. **Derived secondaries** — `frontend/src/hmi/styles/hmi.tokens.css` derives
    `--hmi-surface-2/3`, `--hmi-text-2/3/4`, `--hmi-border-strong`,
    `--hmi-accent-soft/ink/on`, `--hmi-{ok,warn,fault}-soft` via `color-mix()` from
    the primaries (see the table below). CSS-only — not in the editor.
 6. **Cross-tab sync** — `LS_THEME_PREVIEW` (live editor preview, consumed by
-   `PreviewView`) and `LS_THEME_SAVED` (post-save refresh, consumed by `HmiView`)
-   localStorage keys signal theme changes between browser tabs. `ThemeSection` is
+   `PreviewView`, which paints it with `applyPreviewTheme()` and then ignores the
+   index load) and `LS_THEME_SAVED` (post-save refresh, consumed by `AppInner`,
+   which re-fetches with `loadAndApplyThemeTokens({ force: true })` and realigns
+   `themeRuntimeStore`) localStorage keys signal theme changes between browser tabs. `ThemeSection` is
    typed `'colors' | 'typography' | 'spacing'` (lowercase).
 
 ## Config Tokens
 
 Defined in `frontend/src/config/styles/config.tokens.css`, which is the
-authority — **that file defines ~153 tokens; the list below is the ~38-token
+authority — **that file defines ~156 tokens; the list below is the ~38-token
 core, not the full set.** Check the file before inventing a value: the
 undocumented remainder is mostly component-scoped families that already cover
 what a new config component needs.
 
 | Family | Count | Covers |
 | ------ | ------ | ------ |
-| `--cfg-source-*` | 24 | Per-property-source accent colors — one per source, plus `--cfg-source-mixed` for a multi-selection whose widgets disagree (see [Source Color Tokens](#source-color-tokens)) |
+| `--cfg-source-*` | 26 | Per-property-source accent colors — one per source, plus `--cfg-source-mixed` for a multi-selection whose widgets disagree (see [Source Color Tokens](#source-color-tokens)) |
 | `--cfg-preview-*` | 13 | The canvas preview chrome |
 | `--cfg-danger-*` · `--cfg-error-*` · `--cfg-warning-*` · `--cfg-success-*` · `--cfg-info-*` | 23 | State fills, borders and foregrounds, each with soft/strong variants |
 | `--cfg-btn-*` · `--cfg-input-*` · `--cfg-select-*` · `--cfg-toggle-*` · `--cfg-check-*` | 18 | Control sizing — heights, padding, gaps |
@@ -283,7 +286,7 @@ inside the runtime so built-in components and user widgets can opt in.
 | `.hmi-live-dot` | Pulsing indicator dot with `--warn / --fault / --idle` modifiers |
 | `.hmi-kicker` | Uppercase eyebrow label (small caps with letter-spacing) |
 | `.hmi-readout` | Numeric readout — mono font, tabular nums, weight bold |
-| `.hmi-bar` + `.hmi-bar__fill` | Linear progress bar with `--ok / --warn / --fault` modifiers |
+| `.hmi-bar` + `.hmi-bar__fill` | Linear progress bar; the fill takes `--ok / --warn / --fault` modifiers (`.hmi-bar__fill--ok`, …) |
 
 ## Focus and Accessibility
 
@@ -297,7 +300,7 @@ Config controls use a shared keyboard focus style from `frontend/src/config/styl
 
 All config UI components live in `frontend/src/config/components/` and follow these rules:
 
-- Components are grouped by area in subfolders: `admin/`, `editor/`, `translations/`, `users/`, `variables/`, `shell/`, `ui/`, and `shared/`
+- Components are grouped by area in subfolders: `admin/`, `alarms/`, `componentProperties/`, `compositions/`, `editor/`, `historian/`, `projects/`, `recipes/`, `shared/`, `shell/`, `themes/`, `translations/`, `ui/`, `users/` and `variables/`
 - Each component lives in its **own folder** (`ComponentName/index.tsx` + `ComponentName/style.css`)
 - Per-component CSS must be kept as small as possible — reuse classes from `config.css` instead of duplicating styles
 - The `styles/` folder contains `config.css` (layout, primitives, utility classes) and `config.tokens.css` (config design token variables); no other shared or per-page stylesheets belong there
@@ -330,12 +333,9 @@ Supported sizes:
 Applied classes:
 
 - `cfg-btn`
-- `cfg-btn--primary`
-- `cfg-btn--danger`
-- `cfg-btn--ghost`
-- `cfg-btn--icon`
+- `cfg-btn--<variant>` for every variant but `default` (`cfg-btn--primary`, `cfg-btn--ghost`, …)
 - `cfg-btn--sm`
-- `cfg-btn--full`
+- `cfg-btn--full` (`fullWidth`)
 
 ### PropRow
 
@@ -385,18 +385,20 @@ Realizes the panel-wide themed-default/override model for colors:
 - The `×` in the field's `FieldActions` column reverts an override back to
   following the theme.
 
-The popup is a single scrollable list — Default, theme tokens, suggested
-colors, custom — not a tabbed picker; it floats (`position: fixed`) so the
-field box's `overflow: hidden` can't clip it.
+The popup is one list in three zones — a pinned Default row, a scrollable
+list of theme colors and suggested colors under group labels, and a pinned
+Custom row — not a tabbed picker; it floats (`position: fixed`) so the field
+box's `overflow: hidden` can't clip it.
 
 Key classes:
 
-- `cfg-color-picker`, `cfg-color-picker__label`, `cfg-color-picker__swatch`
-  (+ `--default`, `--selected` modifiers)
-- `cfg-color-picker__popup`, `cfg-color-picker__options`,
-  `cfg-color-picker__option` (+ `--custom`, `--selected` modifiers),
-  `cfg-color-picker__option-name`, `cfg-color-picker__option-hex`,
-  `cfg-color-picker__divider`
+- `cfg-color-picker`, `cfg-color-picker__label` (+ `--has-value`),
+  `cfg-color-picker__swatch` (+ `--default`, `--selected` modifiers)
+- `cfg-color-picker__popup`, `cfg-color-picker__popup-header`,
+  `cfg-color-picker__popup-title`, `cfg-color-picker__options`,
+  `cfg-color-picker__group-label` (+ `--divided`),
+  `cfg-color-picker__option` (+ `--selected`),
+  `cfg-color-picker__option-name`, `cfg-color-picker__option-hex`
 - `cfg-color-picker__custom-row`, `cfg-color-picker__input`,
   `cfg-color-picker__close`
 
@@ -451,14 +453,14 @@ publishing its own, so nesting one inside a labelled group is transparent.
 Key classes:
 
 - `cfg-field-group`, `cfg-field-group--tier{1,2,3}`, `--selected`,
-  `--sourceless`, `--invalid`
+  `--sourceless`, `--invalid`, `--warning`
 - `cfg-field-group__row` (+ `--block`), `cfg-field-group__box`,
   `cfg-field-group__content`, `cfg-field-group__nest`
 - `cfg-field-group__header`, `cfg-field-group__header-actions`
 - `cfg-field-group__label`, `cfg-field-group__desc`,
   `cfg-field-group__badge` (+ `--invalid`, `--warning`),
   `cfg-field-group__badge-cap`, `cfg-field-group__actions`
-- `cfg-field-group__preview`, `cfg-field-group__preview-text` (+ `--mono`),
+- `cfg-field-group__preview`, `cfg-field-group__preview-text`,
   `cfg-field-group__preview-swatch`
 
 An invalid/unresolved binding is marked two ways: the badge shows a corner
@@ -485,7 +487,7 @@ Hand-authored inline SVG icon sets, one visual language shared across the
 panel:
 
 - `frontend/src/config/components/ui/glyphIcon.tsx` — base `GlyphIcon` (stroke
-  width, viewBox) plus shared glyph path fragments (`BoltGlyphPath`,
+  width, viewBox) plus shared glyph path fragments (`LinkGlyphPaths`,
   `GlobeGlyphPaths`) reused by multiple icon sets.
 - `frontend/src/config/components/editor/PropertySourceSelector/propertySourceIcons.tsx` —
   one icon per `PropertySource` (`$static`, `$var`, `$if`, `$userGroups`, …),
@@ -494,7 +496,8 @@ panel:
   one icon per `ButtonAction['type']`, `ActionTypeBadge` renders it tinted via
   `--option-color` to the action's `ACTION_TYPE_TINT` color (see below).
 - `frontend/src/config/components/ui/actionIcons.tsx` — small generic action
-  glyphs (`ClearIcon`, `EditIcon`, `ChevronIcon`, `ExpandIcon`) used across
+  glyphs (`ClearIcon`, `EditIcon`, `TranslateIcon`, `ChevronIcon`, `ChevronDownIcon`,
+  `ExpandIcon`) used across
   `FieldActions` columns and expand affordances.
 
 ## Source Color Tokens

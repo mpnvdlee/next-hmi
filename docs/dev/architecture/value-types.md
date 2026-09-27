@@ -51,12 +51,15 @@ The types above are the *runtime* kinds. A field may also declare an **optional 
 | `String` | `page` | A dropdown of the project's **navigable** pages (stores the page id). The Dialogs folder is left out — nothing routes to one, so naming it would author a dead target; a page id already stored from there stays listed, marked *not navigable* |
 | `String` | `variables` | One row per variable key, each picked and reordered on its own; stored comma-separated. Like `actions`, the group takes no source pill — every row is its own property row |
 | `Float` | `percentage` | A 0–100 input with a `%` affix |
-| `Boolean` | `toggle` | A plain on/off switch (default) |
 | `Boolean` | `visibility` | A **Visible / Hidden** toggle |
 | `Boolean` | `enablement` | An **Enabled / Disabled** toggle |
 | `Boolean` | `wrap` | A **Wrap / No wrap** toggle |
+| `Boolean` | `show` | A **Show / Hide** toggle |
+| `Boolean` | `expansion` | An **Expanded / Collapsed** toggle |
+| `Boolean` | `collapse` | A **Collapsed / Expanded** toggle — `expansion` read from the other end, for a property that is `true` when collapsed |
+| `Boolean` | `onoff` | An **On / Off** toggle |
 
-A boolean format only relabels the two states (`true` shows as *Visible* / *Enabled* / *Wrap*, `false` as *Hidden* / *Disabled* / *No wrap*); the stored value is still `true` / `false`, and every boolean source still works unchanged.
+A boolean with no format gets a **Yes / No** toggle. A boolean format only relabels the two states (`BOOLEAN_FORMAT_LABELS` in `frontend/src/config/utils/renderSchemaField.tsx`, the `true` label first); the stored value is still `true` / `false`, and every boolean source still works unchanged.
 
 A value's source rules are decided by its **base type** — format is purely a UI hint. `option-list` is just "an array of a base type" with a list editor; it is not a separate type.
 
@@ -71,7 +74,7 @@ Two kinds of source, by where their type comes from:
 
 > **Source availability is decided by the field's *type* alone.** A source is offered only where its produced type is exactly the field's type — an `Integer` producer does not fit a `Float` field, a `Boolean` one not a `String` field, a `String` one not a `DateTime`, `Date` or `Time` field. The one exception is `Duration`, a number of seconds, which an `Integer` or `Float` producer also fills. There is no per-field allowlist, and a schema cannot hand-pick which sources its inputs accept. The field's `type` is the single gate for which sources appear.
 
-The scalar types derive that list from each source's produced type. The editor kinds are not scalars, so theirs is written out per kind in `frontend/src/hmi/utils/propertySourceRules.ts` — `image` and `video` share one list (`$static`, `$var`, `$urlParam`, `$if`, `$switch`, `$widgetProp`), `icon` adds `$page` to it, and `color` drops `$urlParam` from it. `item-list` (what a Repeater repeats over) takes `$static`, `$var`, `$http`, `$recipeList`, `$user` and `$widgetProp`. `$componentProp`, `$result` and `$repeatItem` are added on top by the editor wherever the surrounding scope offers them, on any type.
+The scalar types derive that list from each source's produced type. The editor kinds are not scalars, so theirs is written out per kind in `frontend/src/hmi/utils/propertySourceRules.ts` — `image` and `video` share one list (`$static`, `$var`, `$urlParam`, `$if`, `$switch`, `$widgetProp`), `icon` adds `$page` to it, and `color` drops `$urlParam` from it. `option-list` (a dropdown's options) takes `$static`, `$user`, `$var`, `$languages` and `$widgetProp`; `record-list` (a data grid's rows) takes `$var`, `$recipeList` and `$widgetProp`; `item-list` (what a Repeater repeats over) takes `$static`, `$var`, `$http`, `$recipeList`, `$user` and `$widgetProp`. `$componentProp`, `$result` and `$repeatItem` are added on top by the editor wherever the surrounding scope offers them, on any type.
 
 ### Flexible sources (fit any field)
 
@@ -113,8 +116,8 @@ Each of these only works in a field of the matching type.
 | `$pageIsActive` | Boolean | `{ $pageIsActive: { page? } }` | `true` when the target page is active |
 | `$languages` | String[] | `{ $languages: {} }` | The project's language list |
 | `$user`, username | String | `{ $user: { field } }` `field: username` | The logged-in user's name |
-| `$user`, groups | String | `{ $user: { field } }` `field: groups` | The logged-in user's group **labels, comma-joined** — `resolveUser` returns `groups.map(labelOf).join(', ')`, so this is one `String`, not a `String[]`. For membership tests use `$userGroups`, which is what the `visible` / `interactable` gate uses |
-| `$user`, userList | Record[] / String | `{ $user: { field } }` `field: userList` | Every username in the project. Its home is an **`option-list`** field, where it resolves to `{ label, value }` pairs; bound to a text field instead it joins the names with `", "`, since `ResolvedValue` cannot carry an array. The editor offers it on list and text fields, never on a number or boolean |
+| `$user`, groups | String / String[] | `{ $user: { field } }` `field: groups` | On a text field, the logged-in user's group **labels, comma-joined** into one `String`. On an **`option-list`** field, every group in the project as `{ label, value }` options, valued by group id. For membership tests use `$userGroups`, which is what the `visible` / `interactable` gate uses |
+| `$user`, userList | String[] / String | `{ $user: { field } }` `field: userList` | Every user in the project. On an **`option-list`** field it is the options, `{ label, value }` pairs that carry the username as both — `loginUser` signs in by username — and an `option-list` field's `$user` editor offers only `userList` and `groups`. Bound to a text field instead it joins the names with `", "`, since `ResolvedValue` cannot carry an array. The editor offers it on list and text fields, never on a number or boolean |
 | `$userGroups` | Boolean | `{ $userGroups: { groups } }` | `true` when the logged-in user is in one of the selected groups (empty `groups` = everyone). The source behind the standard `visible` / `interactable` group gate |
 | `$page`, id | String | `{ $page: { field, pageId? } }` `field: id` | The page's id. With no `pageId` this is the page **being rendered**, which inside a page overlay is not the route's — see [Page metadata in depth](#page-metadata-in-depth-page) |
 | `$page`, title | String | `{ $page: { field, pageId? } }` `field: title` | The page's title |
@@ -152,11 +155,12 @@ A datasource isn't a flat list — variables live in a tree. `$var` can point at
 The `$var` shape stays the same in every case:
 
 ```
-{ $var: { path, index? } }
+{ $var: { path, index?, repeatIndex? } }
 ```
 
 - `path` — `datasource:location`, where the location is slash-separated (`PLC:Motor/Speed`). The datasource name before the `:` identifies which connection (and whether it's OPC-UA or static).
 - `index` — optional array position. Present only when you pick one element of an array.
+- `repeatIndex` — optional; `true` takes the position from the surrounding Repeater copy instead (see [Repeater items in depth](#repeater-items-in-depth-repeatitem)).
 
 ### How each kind looks
 
@@ -208,7 +212,7 @@ The binding picker, the runtime overlay and the backend's `var-type` /
 - **The base type is exact.** A `Float` field takes no `Integer` variable and an `Integer` field no `Float`; a field that takes both lists both (`['float', 'integer']`).
 - **`color`, `icon`, `image` and `video` bind to a `String` variable** — the value is a CSS colour, an icon name or an asset path. A field that lists simple types beside the kind (`['image', 'string[]']`) binds to those instead. Kinds match case-insensitively, so a schema written in code as `'Color'` is still the colour kind. `option-list` binds to the arrays it lists and `item-list` to any array; `actions`, `widgets` and the other editor kinds bind no variable at all.
 - **A struct is checked member by member** (`structSatisfies`). Every `requiredFields` entry must exist — a disabled variable, or one gone from the server, is no member, since the pool serves neither; one with nested `requiredFields` must be a struct itself and satisfy them; one with a `type` must hold a variable that type accepts as a field's `type` (an editor kind such as `color` meaning `String`); one with `write: true` must be writable. A struct array is judged on one element: the bound one when `index` names an element that exists, otherwise the lowest-index element there is (arrays may count from 1). A member whose type only the runtime knows is taken on trust for its type, never for its access. A struct whose metadata lists no fields yet (an empty struct array) is accepted.
-- **A writing field needs a writable variable.** A field with `write: true` — or a required member with it — refuses a variable whose own `writable` flag is off. The variable metadata carries that flag (`false` when a variable never set it), and only `true` fills a writing field: a variable or member whose access is not stated is read-only, in the picker, the runtime overlay and the backend alike. A variable the registry has no entry for is not judged at all. A struct has no access of its own — its required members are judged instead. A Repeat item's index, and the element of a Repeater over anything but a variable, are never writable. The backend reports a broken access rule as `var-readonly`, naming the member for a struct, apart from a wrong type (`var-type` / `repeatitem-type`). Those are warnings; the write itself is refused at write time — `write_service` answers `read_only` for any variable whose own flag is not `true` (see [websocket.md](websocket.md#action-result-correlation)).
+- **A writing field needs a writable variable.** A field with `write: true` — or a required member with it — refuses a variable whose own `writable` flag is off. The variable metadata carries that flag (`false` when a variable never set it), and only `true` fills a writing field: a variable or member whose access is not stated is read-only, in the picker, the runtime overlay and the backend alike. A variable the registry has no entry for is not judged at all. A struct has no access of its own — its required members are judged instead. A Repeat item's index, and the element of a Repeater over anything but a variable, are never writable. The backend reports a broken access rule as `var-readonly`, naming the member for a struct, apart from a wrong type (`var-type` / `repeatitem-type`). Those are build diagnostics, which never block a save; the write itself is refused at write time — `write_service` answers `read_only` for any variable whose own flag is not `true` (see [websocket.md](websocket.md#action-result-correlation)).
 
 The picker's tree filter, its ✓/✗ drawer, the runtime overlay and the backend
 validator all run these checks, each with the members it has to hand — the
@@ -276,7 +280,8 @@ kind. An export that declares no type is a `String`.
 The backend judges a stored `$componentProp` / `$widgetProp` by the same rule
 (`backend/core/validation/component_property.py`, held to the TS by
 `componentPropFits.json` and `componentPropertySchemaField.json`). A
-`$componentProp` is read against the declarations of the scope it sits in —
+`$componentProp` where no inputs reach — on a navigable page, say — is
+`componentprop-no-scope` (a warning). Elsewhere it is read against the declarations of the scope it sits in —
 a component definition's own, or a Dialogs-folder page's merged with its
 enclosing groups' (innermost first, see
 [below](#pages-and-page-groups-declare-the-same-inputs)); a `a/b/c` path
@@ -322,7 +327,7 @@ The map is `OPCUA_TO_SIMPLE` in `backend/core/value_types.py`, mirrored in
 | *anything else* | `String` (fallback) |
 
 - **The datasources manager is where the tree lives.** Browsing or editing a datasource records, per leaf, its real `data_type`, whether it's `writable`, and an explicit `is_array` plus optional positive `array_length` for fixed arrays. Folders organise, folders-with-variables become structs, and the same scalar / array / struct / struct-array shapes described above are exactly what `$var` binds to.
-- **There are eight simple types, not five.** `VALUE_TYPES` is `Boolean`, `Integer`, `Float`, `String`, `DateTime`, `Date`, `Time`, `Duration` — `Date`, `Time` and `Duration` collapse from their own OPC-UA datatypes rather than riding on `DateTime`. `color`, `icon`, `image` and `video` are the exception: they have no OPC-UA datatype at all and exist only as field types, refined by the **field**, never by the variable. A variable drives one as a `String`.
+- **There are eight simple types.** `VALUE_TYPES` is `Boolean`, `Integer`, `Float`, `String`, `DateTime`, `Date`, `Time`, `Duration` — `Date`, `Time` and `Duration` collapse from their own OPC-UA datatypes rather than riding on `DateTime`. `color`, `icon`, `image` and `video` are the exception: they have no OPC-UA datatype at all and exist only as field types, refined by the **field**, never by the variable. A variable drives one as a `String`.
 - **The static datasource works in reverse.** It has no live server, so picking a simple type synthesises a *representative* OPC-UA type to store (`SIMPLE_TO_REPRESENTATIVE`): `Integer` → `Int32`, `Float` → `Double`, `Boolean` → `Boolean`, `String` → `String`, `DateTime` / `Date` / `Time` → `DateTime`, `Duration` → `Double`. The round trip is therefore lossy for `Date`, `Time` and `Duration` — a static `Date` reads back as `DateTime`.
 
 ---
@@ -444,7 +449,7 @@ a fixed `index`. `$repeatItem` and the write/toggle `repeatItem` target come
 from the picker's separate Repeat item mode (`repeatItem` option;
 `VariableBindingPicker/repeatItemRows.ts`), which lists only the copy's element
 and never the datasources — see `PickerExtras` in
-`PropertySourceEditor/editors/utils.ts`. The validator types a `$repeatItem`
+`frontend/src/config/store/domains/editorDomainStore.ts`. The validator types a `$repeatItem`
 against its field when the Repeater repeats over a known variable, or over a
 list whose values say what an element is (`repeatitem-type`), and the picker
 filters and marks the pick by the same types.
@@ -502,7 +507,7 @@ A component can declare **input properties** — values the parent fills in when
 
 Each input has a **type**, exactly like any other field. So an input can be a `String`, `Integer`, `Float`, … or a **struct** (an object with named members). It may also carry a `description` (one line shown under the field) and a `defaultValue`.
 
-The value an instance puts in an input is checked against that type the way a widget's property is against its schema: the backend reads each declaration as its schema field (`componentPropertyToSchemaField`, ported as `component_property.to_schema_field`) and runs the literal, `var-type`, `var-readonly` and `source-type` checks on it. None of these ran on instance values before, so a mismatched literal there is a `literal-type` diagnostic rather than a rejected save. A component whose declarations were not read is not typed.
+The value an instance puts in an input is checked against that type the way a widget's property is against its schema: the backend reads each declaration as its schema field (`componentPropertyToSchemaField`, ported as `component_property.to_schema_field`) and runs the literal, `var-type`, `var-readonly` and `source-type` checks on it. A mismatched literal there is a `literal-type` diagnostic, not a rejected save. A component whose declarations were not read is not typed.
 
 One declared type is not an input at all: `widgets` names a [slot](data-formats.md#component-slots). It holds no value, so `$componentProp` cannot read it and the binding picker never offers it; what it declares is where the *caller's widgets* go.
 
@@ -510,7 +515,7 @@ One declared type is not an input at all: `widgets` names a [slot](data-formats.
 
 Components are not the only thing that takes inputs. A page and a page group each carry a `componentProperties` map of the identical shape, and the widgets inside read it with `$componentProp` exactly as a component's children do — no separate source exists for them. What differs is who fills the values in: not a placement, but the action that opens the overlay. `openDialog` takes a `componentProperties` map, resolved against the opening widget's own scope before it is handed over. Only a node in the **Dialogs** root declares inputs — a navigable page has no action to fill them, which is why the sibling `openPageOverlay` carries no such map (see [data-formats.md](data-formats.md#config-file-v2--split-page-storage)). `openDialog` may name a page *or* a page group; a group opens its active child inside the group's header/footer chrome, which is what makes a parameterised tabbed modal one overlay rather than several.
 
-A page reached by ordinary navigation — a menu, a Tab Bar, a URL — is opened by no action, so it takes no inputs: `HmiView` renders the routed page through `PageGroupPageView` *without* `takesInputs`, and the whole declaration chain is then skipped. Nothing is handed in and no `defaultValue` is filled in either, so a `$componentProp` on a navigated page reads nothing. Navigation targets and URL parameters deliberately carry none. Values supplied to a page overlay belong to that overlay instance, so navigating to a sibling page inside the open overlay keeps them.
+A page reached by ordinary navigation — a menu, a Tab Bar, a URL — is opened by no action, so it takes no inputs: `HmiView` renders the routed page through `PageGroupPageView` *without* `takesInputs`, and the whole declaration chain is then skipped. Nothing is handed in and no `defaultValue` is filled in either, so a `$componentProp` on a navigated page reads nothing. Navigation targets and URL parameters deliberately carry none. Values supplied to a page overlay belong to that overlay instance, so navigating to a sibling page inside the open overlay keeps them. A Dialogs-folder node's own `events` (`onOpen` / `onClose`) run with the same values in scope, defaults filled in (`usePageEvents`), so an open event can write them to the machine — a Write Data Variable `value` may be a `$componentProp`.
 
 ### Defaults
 
@@ -621,8 +626,8 @@ Dialogs-folder page could never make it true.
 
 What the backend reports when a stored value does not fit its field
 (`backend/core/validation/structure.py`). All of them are build diagnostics:
-they mark the row and the warnings pill and never block a save. Two rejected
-writes remain, both older than these codes and unchanged by them: a bare
+they mark the row and the warnings pill and never block a save. Two writes
+are rejected outright instead: a bare
 literal of a type its field does not list when that field's first type is a
 scalar, and an action naming a page that does not exist in a field the widget's
 own schema (or the property name `actions`) marks as actions. Anything the validator cannot know (a datasource
@@ -635,13 +640,14 @@ exports) is skipped, never guessed.
 | `literal-format` | warning | A string that only fits as a `Date`, `DateTime`, `Time` or `Duration` does not read as one: ISO 8601 (`2026-06-16`, `2026-06-16T14:30:00Z`, `14:30:00`, `PT1H30M`), or a number of seconds for a `Duration`. Empty is unset, not malformed |
 | `source-type` | error | A fixed-type source its field's type does not offer, or a stored `field` choice that yields another type (see [Sources](#sources)) |
 | `var-index` | error | A bound `index` that names no element (see [Array fields](#array-fields)) |
+| `var-type` / `repeatitem-type` / `var-readonly` | error | A `$var` or `$repeatItem` whose variable does not fit the field, or is not writable where the field writes (see [Which variable fits a field](#which-variable-fits-a-field)) |
 | `componentprop-type` / `componentprop-unknown` | error / warning | See [Which variable fits a field](#which-variable-fits-a-field) |
 | `widgetprop-type` / `widgetprop-unknown` | error | See [Which variable fits a field](#which-variable-fits-a-field) |
 | `write-target-type` | error | A Write Data Variable or Toggle target the write path cannot write: a struct (a write addresses one variable — a whole array or one element of it — never a struct folder), a variable not known to be writable, or the Repeat item of a Repeater over a list rather than a variable |
 | `toggle-target-type` | error | A Toggle target that is not a single Boolean — a toggle reads the current value and inverts it |
 | `write-value-type` | error | A fixed Write Data Variable value (bare or `$static`) that `coerce_entry_write_value` in `backend/services/write_service.py` would reject against the target's entry — its OPC-UA type, array shape and fixed length, and `min` / `max` — worded as the editor's row words it (`writeCoercionMessages.json`). The entry is the live pool's when it serves the datasource, else the datasource file's |
 | `value-invalid` | error | A malformed source payload inside an action's field (`{ "$loc": 5 }`) — rejected elsewhere, reported here |
-| `action-page-unknown` | error | An action naming a page that does not exist, inside a component instance's property that only its declaration types as `actions`. The same action in a widget's `actions` field is still a rejected write, as it always was |
+| `action-page-unknown` | error | An action naming a page that does not exist, inside a component instance's property that only its declaration types as `actions`. The same action in a widget's `actions` field is a rejected write |
 
 **Values inside actions are values.** Every field of every action type is
 listed with what it is checked as in `ACTION_FIELDS`

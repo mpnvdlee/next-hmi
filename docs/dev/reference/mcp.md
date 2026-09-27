@@ -13,9 +13,10 @@ WebSocket broadcast bus with the existing REST API.
 
 ## Workspace model
 
-1. **Discover** — call `projects_list()` to get every project with its `id`,
-   `status` (running/stopped/…), and `mcpEnabled`; call `projects_get(project)` for
-   full detail (path, timestamps).
+1. **Discover** — call `projects_list(cursor?, limit?)` to get every project
+   with its `id`, `name`, `status` (running/stopped/starting/crashed), and
+   `mcpEnabled`; call `projects_get(project)` for full detail (path,
+   timestamps).
 2. **Select per call** — every other tool takes a required `project` argument
    (a project id). The project is *per-call context, not session state*: one
    session can act on several projects, and a project need not be running to be
@@ -58,8 +59,9 @@ The agent label that appears in audit broadcasts comes from, in order:
 
 1. The `x-mcp-agent` HTTP header (per-request override).
 2. The MCP `initialize` handshake's `clientInfo: { name, version }`, captured
-   on the session and formatted as `<name>@<version>` (or just `<name>` when
-   version is absent).
+   on the session and joined as `<name>@<version>` (or just `<name>` when
+   version is absent) before normalisation — which turns the `@` and any `.`
+   into `_`, so `Claude` version `1.0` is labelled `Claude_1_0`.
 3. Literal `"unknown"`.
 
 The resolved label is normalised server-side: illegal characters (anything outside `[A-Za-z0-9_\- ]`) are replaced with `_`, leading/trailing whitespace is stripped, and the result is truncated to 64 characters. It is
@@ -67,13 +69,12 @@ advisory only: the transport is gated by the manager session / bearer token,
 but any authenticated caller can set any label via `x-mcp-agent`, so treat
 audit logs as best-effort attribution.
 
-## Tools (v1)
+## Tools
 
-All tool names use underscore namespacing (decision #19). Every write tool
+All tool names use underscore namespacing. Every write tool
 accepts an optional `idempotency_key` (≤128 chars). Destructive ops are
 two-step: call once for a dry-run diff, then again with `confirm: true` to
-apply. Tool return shape is uniform `{ summary, result, diff?, ... }`
-(decision #21).
+apply. Tool return shape is uniform `{ summary, result, diff?, ... }`.
 
 Page-mutation tools (`pages_add_widget`, `pages_set_widget_property`,
 `pages_set_metadata`, `pages_delete_widget`) additionally include a
@@ -89,9 +90,9 @@ max 500). MCP resources are not exposed; clients that only surface tools
 (Claude's chat connector, several agent runners) still get full read access.
 
 ### Pages
-- `pages_list(cursor?, limit?)` — page-index summaries
+- `pages_list(cursor?, limit?)` — page-index summaries across both index roots; each item is `{ id, type, root }` (a group also carries `label`), with `type` `page` or `page-group` and `root` `pages` (the navigable tree) or `dialogs` (pages that only open as an overlay, the only ones that take input parameters)
 - `pages_get(page_id)` — full page JSON
-- `pages_create(title?, route?, layout?) -> { page_id }` — server derives a kebab slug from the title (e.g. `"My Page"` → `"my-page"`; conflicts get a `-N` suffix) and registers the page in `config.json`
+- `pages_create(title?, route?, layout?, root?) -> { page_id }` — server derives a kebab slug from the title (e.g. `"My Page"` → `"my-page"`; conflicts get a `-N` suffix) and appends the page to the top level of the `root` index in `config.json`: `pages` (default) or `dialogs`
 - `pages_delete(page_id, confirm?)` *destructive*
 - `pages_set_metadata(page_id, patch)` — JSON Merge Patch (RFC 7396)
 - `pages_add_widget(page_id, widget, parent_id?, index?|before_id?|after_id?)` — when `parent_id` is a `$component:` instance, the widget body may carry a top-level `slot` naming which of the definition's slots it fills; omitted, it lands in the first one and the response warns with `slot-unknown` if the name is unknown (see [Component slots](../architecture/data-formats.md#component-slots))
@@ -104,11 +105,11 @@ max 500). MCP resources are not exposed; clients that only surface tools
 - Datasource lifecycle (create / update settings / delete) is intentionally **not** exposed — manage from the UI editor or the REST API.
 
 ### Variables (semantic helpers only, no full-tree PUT)
-- `variables_list(cursor?, limit?)` — flat list across all datasources; each item carries `{ datasource, path, data_type, enabled }` with `data_type` as a simple type (`boolean`/`integer`/`float`/`string`/`datetime`, plus `[]` for arrays) and `path` as a `/`-separated tree-walk. The `data_type` filter accepts a simple type.
-- `variables_add(datasource, name, data_type, parent_path?, settings?)` — `data_type` is a simple type, persisted as its representative OPC-UA type (`integer`→`Int32`, `float`→`Double`, …). `name` becomes the variable's `display_name`; `parent_path` must address an existing folder (omit for root). `settings` may override defaults for the new entry — recognised keys: `writable` (bool), `value` (any), `node_id` (str, for OPC-UA sources), `array_length` (int), `enabled` (bool, default `true`), `min`/`max` (numeric range, numeric variables only).
+- `variables_list(datasource?, path_pattern?, data_type?, enabled?, cursor?, limit?)` — flat list across all datasources; each item carries `{ datasource, path, data_type, enabled }` with `data_type` as a simple type in canonical case (`Boolean`, `Integer`, `Float`, `String`, `DateTime`, `Date`, `Time`, `Duration`, plus `[]` for arrays) and `path` as a `/`-separated tree-walk. Filters combine with AND: `datasource` is an exact match, `path_pattern` an fnmatch glob against the path (`*` crosses `/`), `data_type` a simple or OPC-UA type compared case-insensitively on its simple type, `enabled` a boolean.
+- `variables_add(datasource, name, data_type, parent_path?, settings?)` — `data_type` is a simple type, persisted as its representative OPC-UA type (`integer`→`Int32`, `float`→`Double`, …). `name` becomes the variable's `display_name`; `parent_path` must address an existing folder (omit for root). The new entry is `writable` by default on a static datasource only. `settings` may override defaults for the new entry — recognised keys: `writable` (bool), `value` (any), `node_id` (str, for OPC-UA sources), `is_array` (bool) with optional `array_length` (positive int, only with `is_array`), `enabled` (bool, default `true`), `min`/`max` (numeric range, numeric variables only), `fields`. Anything else goes under an `extensions` object; other top-level keys, and the server-derived `present_on_server`, are rejected.
 - `variables_delete(datasource, path, confirm?)` *destructive* — `path` is the tree-walk.
-- `variables_set_property(datasource, path, patch)` — JSON Merge Patch over writable fields (e.g. `patch={"enabled": false}`, `patch={"writable": true}`). The structural keys `kind`, `display_name`, and `data_type` are server-managed and must not appear in `patch`.
-- Bulk ops (`variables_add_many`, `variables_import`) are intentionally deferred — see plan.
+- `variables_set_property(datasource, path, patch)` — JSON Merge Patch over the writable fields `node_id`, `is_array`, `array_length`, `enabled`, `writable`, `value`, `min`, `max`, `fields` and the `extensions` object (e.g. `patch={"enabled": false}`, `patch={"writable": true}`). The structural keys `kind`, `display_name`, and `data_type`, and `present_on_server`, must not appear in `patch`.
+- Bulk ops (`variables_add_many`, `variables_import`) are not exposed.
 
 ### Alarms
 - `alarms_get_config()` — full `alarms.json` document (`{ version, groups: [{ id, title, alarms: [...] }] }`)
@@ -118,8 +119,8 @@ max 500). MCP resources are not exposed; clients that only surface tools
 - Group lifecycle (`alarms_add_group` / `alarms_delete_group` / `alarms_set_group`) is intentionally **not** exposed — create/rename groups in the UI editor.
 
 ### Translations
-- `translations_list(cursor?, limit?)` — dictionary names
-- `translations_get(dict_name)` — full dictionary (languages + rows + revision)
+- `translations_list(cursor?, limit?)` — dictionaries, each `{ name, filename }`
+- `translations_get(name)` — full dictionary (languages + rows + revision)
 - `translations_add_language(dict_name, language_code)`
 - `translations_delete_language(dict_name, language_code, confirm?)` *destructive*
 - `translations_add_key(dict_name, key)`
@@ -135,7 +136,7 @@ max 500). MCP resources are not exposed; clients that only surface tools
 - `assets_delete(path, confirm?)` *destructive — refuses (in both dry-run and confirmed paths) if any page or component references the asset*
 
 ### Read-only domains
-- `components_list(cursor?, limit?)` / `components_get(component_id)` — custom component definitions (no source code)
+- `components_list(cursor?, limit?)` / `components_get(component_id)` — reusable component definitions (`components/`); a list item is `{ id, name }`, `components_get` returns the stored document. Custom widget source code is not exposed
 - `users_list(cursor?, limit?)` — narrow projection only: `{ id, display_name, roles, enabled }`. Never returns credentials.
 - `widgets_get_schemas()` — full widget-schema manifest (`{ version, builtin, custom }`); needed to know which widget `type` values are valid for `pages_add_widget`.
 
@@ -179,7 +180,7 @@ nothing to notify — the files are simply current for the next start. Shape:
   "artifact_type": "page",
   "artifact_ids": ["page-home"],
   "source": "mcp",
-  "agent_label": "Claude@1.0",
+  "agent_label": "Claude_1_0",
   "summary": "Added Container widget 'w_abc' to 'page-home'",
   "diff": [ /* RFC 6902 patch ops */ ]
 }
@@ -210,8 +211,8 @@ a transaction.
 - **Read does not imply writeable.** Pre-existing project data may fail the
   new strict validators on write-back; agents must expect 422s when
   round-tripping unmodified read output.
-- **Concurrent MCP writes are serialised per file**, not parallel
-  (decision #24). Multi-process deployments lose this guarantee since the
+- **Concurrent MCP writes are serialised per file**, not parallel.
+  Multi-process deployments lose this guarantee since the
   lock registry is in-memory and process-local.
 - **Asset uploads reject existing paths by default** — pass `overwrite: true`
   to replace. Overwrites bypass the ref-check but agents should expect
@@ -228,27 +229,29 @@ a transaction.
 
 ## Rollout
 
-1. Set `NEXTHMI_VALIDATION_SWEEP=on` (the default). On startup the server
-   walks pages and logs any new-validator findings as WARN.
+1. Set `NEXTHMI_VALIDATION_SWEEP=on` (the default). On startup each project
+   instance walks its pages and logs any validator findings as WARN under the
+   `nexthmi.validation_sweep` logger.
 
 ## Future protocol alignment
 
 The following deviations from canonical MCP practice are deliberate
 deferrals rather than oversights:
 
-- **OAuth 2.1** (decision #26): the endpoint is gated by the manager session
+- **OAuth 2.1**: the endpoint is gated by the manager session
   and bearer tokens (`Authorization: Bearer`), which covers headless clients;
   OAuth 2.1 remains the spec-canonical direction generic MCP clients (Claude
   Desktop, hosted runners) will eventually expect.
-- **Multi-process lock backend** (decision #24): the per-file `asyncio.Lock`
+- **Multi-process lock backend**: the per-file `asyncio.Lock`
   registry is in-memory and process-local; a multi-worker deployment would
   need a file-lock or shared primitive.
-- **Persisted idempotency cache** (decision #28): in-memory LRU; a richer
+- **Persisted idempotency cache**: in-memory LRU; a richer
   deployment might want a SQLite-backed cache that survives restarts.
-- **Bulk variables tools** (`variables_add_many`, `variables_import`): the
-  v1 cut exposes single-add/-delete only; bulk imports of OPC-UA subtrees
+- **Bulk variables tools** (`variables_add_many`, `variables_import`): only
+  single-add/-delete is exposed; bulk imports of OPC-UA subtrees
   are deferred along with their confirm-gating semantics.
 - **Side-by-side diff with three-button conflict resolution** in the
-  frontend modal: v1 ships a lightweight notification listing pending
-  changes; the full overwrite/apply/cancel flow requires per-artifact
-  dirty-state tracking that is wired up as a follow-up.
+  editor: an MCP-sourced `config_changed` raises a banner
+  (`ConfigUpdatedBanner`) offering *Reload page* or *Keep unsaved changes*;
+  a full overwrite/apply/cancel flow would need per-artifact dirty-state
+  tracking.

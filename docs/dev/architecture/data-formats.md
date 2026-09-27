@@ -33,6 +33,7 @@ A project is a self-contained folder anywhere on disk, registered in the runtime
     <pageId>.json         ← the same document, for a page of the Dialogs folder
   components/
     <componentId>.json    ← user-defined reusable component
+    <group>/<componentId>.json  ← one in a folder
   alarms.json             ← alarm definitions (groups + alarms)
   alarm_state.json        ← runtime alarm state (active + history)
   recipes.json            ← recipe dataset types (parameters + saved datasets)
@@ -92,8 +93,8 @@ Outside any project, the runtime keeps its own state:
   - Page document for one page of the navigable tree: its metadata and component tree
 - `<project>/dialogs/<pageId>.json`
   - The identical document for a page of the **Dialogs folder** — `config.json`'s second index root keeps its pages in their own directory
-- `<project>/components/<componentId>.json`
-  - User-defined reusable component: input properties + internal component tree
+- `<project>/components/<componentId>.json`, `<project>/components/<group>/<componentId>.json`
+  - User-defined reusable component: input properties + internal component tree. The id is the file stem and the group the folder; neither is stored inside the file
 - `<project>/alarms.json`
   - Alarm groups and definitions
 - `<project>/alarm_state.json`
@@ -110,7 +111,7 @@ Outside any project, the runtime keeps its own state:
   - users, groups, and the auto-login setting. A fresh seed carries the anonymous `guest` user and no other account, so a new project ships no credential and nothing gates it
   - credentials live in the server-managed `passwordHash` object `{ version: 1, algorithm: "pbkdf2-sha256", iterations: 200000, salt: "<hex>", digest: "<hex>" }`, while `password` stays `""`. Because hashes have a field of their own, a string in `password` is literal plaintext whatever it looks like, including one beginning with `$nexthmi$`; a valid markerless document is read as-is, never rewritten
   - every user id and username must be unique and name only declared groups, and a `passwordHash` may not sit alongside a non-empty `password`. Missing, unreadable, corrupt, or invariant-breaking user documents are credential errors and keep the project stopped (`core/users_document.py`)
-  - `settings` carries `autoLoginName` and nothing else. A document written before the never-enforced `configAccessGroups` was removed still carries the key; validation ignores it entirely — an old project must keep opening — and the next settings save drops it
+  - `settings` carries `autoLoginName` and nothing else. A stray `configAccessGroups` key in an older project's document is ignored by validation, so the project still opens, and the next settings save drops it
   - the editor keeps pending security edits in a separate global frontend draft and writes the complete document atomically only through **Save users**. API reads omit `passwordHash`, redact `password` to `""`, and expose only `passwordSet`; a non-empty password edit creates a new hash, and clients cannot submit `passwordHash`. Generic project Save, snapshots, and Undo/Redo never include it
 - `<project>/custom-widgets/*/`
   - custom component source and optional assets (compiled `index.js` lives in `<runtime_home>/.widget-build/<Name>/`, not here)
@@ -127,6 +128,23 @@ Outside any project, the runtime keeps its own state:
   - `lastMigration` — `{ fromVersion, toVersion, at, backup }`, written only when a migration actually ran. `backup` is the pre-migration zip of the whole project, `<project>/.backups/pre-migration-<stamp>-app-<release>.zip` (`null` on records predating the field). The record stays on disk but is read back only once, right after an upgrade, for a one-time notice — the Projects list never displays it. How the migration runs is in [backend.md](backend.md#project-format-migration)
 - `<project>/historian/`
   - historian runtime state (SQLite database + `config.json`). `config.json` travels with project pushes/pulls/zips; data files matching `*.db`, `*.db-wal`, `*.db-shm`, `*.sqlite`, `*.sqlite-journal` are stripped by `core.project_packer` so they stay installation-local.
+
+### Format versions
+
+This build writes format **9** (`PROJECT_FORMAT_VERSION`) and stamps
+`minAppVersion` `1.0.0` (`PROJECT_FORMAT_MIN_APP`) beside it. A project stamped
+lower is carried up through every step of `_STEPS` in
+`core/project_migrations.py`, in order; each one rewrites only the shape below
+and skips what it has already converted:
+
+| Step | Name | Module | What it rewrites |
+|---|---|---|---|
+| 4 → 7 | `retire-flex-and-collapse-padding` | `core/migration_size_modes.py`, then `core/migration_padding.py` | Widget `layout`s in `config.json`, `pages/` and `components/`: the raw flex keys (`basis`, `shrink`, `alignSelf`, a stale `grow`) become `widthMode` / `heightMode` or are dropped, as are `margin` and the container keys of a widget type that does not flow children, and the `padding` shorthand is split into `paddingTop` / `paddingRight` / `paddingBottom` / `paddingLeft`. A project stamped below 4 runs through this step too. Formats 5 and 6 were never stamped by a release and have no step of their own |
+| 7 → 8 | `dialogs-to-pages` | `core/migration_dialogs_folder.py` | Each inline entry of `config.json`'s `dialogs` list becomes an index node `{ id, type: "page" }` with its document in `dialogs/<id>.json` (title, `componentProperties`, both close flags written out, widgets as `sections.content` — more than one wrapped in a wrapping-row `Container`). In every stored action, `openDialog` renames `dialogId` to `pageId` (and gets `size: "auto"` when it had no size) and `closeDialog` becomes `closePageOverlay` |
+| 8 → 9 | `write-target-source` | `core/migration_write_targets.py` | Every `writeDataVariable` / `toggleDataVariable` swaps its `datasource` / `path` pair for one `target`, `{ "$var": { "path": "<datasource>:<path>" } }`; a pair with an empty half becomes no `target` |
+
+How a migration is staged, backed up and swapped in is in
+[backend.md](backend.md#project-format-migration).
 
 ## Config File (v2 — Split-Page Storage)
 
@@ -167,18 +185,20 @@ dashboard via `POST /api/projects/{id}/mcp` and reported by `projects_list`. A
 - `onUserLoggedIn`
 - `onUserLoggedOut`
 
-Index page node (no `children` key):
+Index page node — structural only. Saving the index strips everything else, so
+a page's title, icon and the rest of its metadata live in its page document:
 
 ```json
 {
   "id": "19ba0ff4-...",
-  "title": "Main",
-  "type": "page",
-  "icon": "home"
+  "type": "page"
 }
 ```
 
-Index page-group node (children are page references only):
+Index page-group node (children are page references only). A group has no
+document of its own, so its metadata — `title`, `icon`, `events`,
+`componentProperties`, `showChildPagesInMenu`, and its `header` / `footer`
+chrome widget arrays — stays here:
 
 ```json
 {
@@ -190,7 +210,7 @@ Index page-group node (children are page references only):
     "motorId": { "type": "String", "label": "Motor", "defaultValue": "M1" }
   },
   "children": [
-    { "id": "page-2", "title": "Sub Page", "type": "page" }
+    { "id": "page-2", "type": "page" }
   ]
 }
 ```
@@ -207,22 +227,41 @@ page of the Dialogs folder — one shape, two directories):
 ```json
 {
   "id": "19ba0ff4-...",
-  "children": [
-    {
-      "id": "comp-abc",
-      "type": "Button",
-      "name": "Start",
-      "properties": {},
-      "layout": {}
-    }
-  ]
+  "title": "Main",
+  "icon": "home",
+  "sections": {
+    "content": [
+      {
+        "id": "comp-abc",
+        "type": "Button",
+        "name": "Start",
+        "properties": {},
+        "layout": {}
+      }
+    ]
+  }
 }
 ```
+
+`sections` maps a section id to its widget array: `content` always, `header` /
+`footer` when `showHeader` / `showFooter` is on. Beside it the document keeps
+only the keys in `_PAGE_PERSISTED_FIELDS` (`api/config_api.py`) — `title`,
+`icon`, `description`, `breadcrumbLabel`, `hidden`, `role`, `order`, `route`,
+`layout`, `showHeader`, `showFooter`, `mainPadding`, `mainBackground`, `events`,
+`componentProperties`, `showCloseButton`, `closeOnBackgroundPress` — and drops
+any other key on save.
 
 A widget node carries `id`, `type`, `name`, `properties`, `layout`, optional
 `children`, and — only on a child of a `$component:` instance — an optional
 `slot` naming which of the definition's slots it fills (see
 [Component slots](#component-slots)).
+
+`layout` (`LayoutConfig` in `frontend/src/shared/types/config.ts`) holds a
+container's arrangement of its children — `direction`, `gap`, `wrap`, `align`,
+`justify`, `paddingTop` / `paddingRight` / `paddingBottom` / `paddingLeft`,
+`radius` — and the widget's own size: `widthMode` / `heightMode` (`hug`,
+`fill` or `fixed`), `width`, `height`, the `min*` / `max*` bounds, and `grow`,
+the Fill weight.
 
 ### Shell
 
@@ -278,12 +317,13 @@ key says. The AGPL notice beside it is edition-bound the same way, and no
 setting hides it (see `COMMERCIAL.md`).
 
 A page may carry `componentProperties`, the same `Record<string,
-ComponentPropertySchema>` interface a component declares. The
-`openDialog` action supplies the values, widgets inside read them with
-`$componentProp`, and a page reached by navigation falls back to each
-declaration's `defaultValue`. The field lives in `pages/<id>.json` like the rest
-of the page metadata; it is optional, so a project written before it existed
-reads back unchanged.
+ComponentPropertySchema>` interface a component declares. It is read only on a
+page of the Dialogs folder: the `openDialog` action supplies the values, each
+one it leaves out falls back to its declaration's `defaultValue`, and widgets
+inside read them with `$componentProp`. A page reached by navigation takes no
+inputs at all ([value-types.md](value-types.md#pages-and-page-groups-declare-the-same-inputs)).
+The field lives in the page document like the rest of the page metadata, and is
+optional.
 
 A page-group node may carry the identical `componentProperties` block, and
 `openDialog` may target a group id — its active child then renders inside
@@ -298,8 +338,10 @@ one's, and a value the action supplied beats them all
 and page-group nodes, each page's widgets in its own document under
 `dialogs/`. It is the **Dialogs folder**: the nodes in it are never navigated
 to, only opened by `openDialog` — `openPageOverlay` is the same modal over a
-node in the `pages` root, and takes no parameters. Nothing else distinguishes them, and a
-node moves between the two roots unchanged — apart from its document, which
+node in the `pages` root, and takes no parameters. An overlay action naming a
+node of the other root is an `overlay-wrong-root` error, and a menu item or
+`format: 'page'` field naming a Dialogs-folder page is `page-not-navigable`.
+A node moves between the two roots unchanged — apart from its document, which
 moves to the other directory with it (see below).
 
 Two optional keys are read only on a node in this root, on both kinds:
@@ -345,6 +387,49 @@ Localization references use the `$loc` source:
 }
 ```
 
+### Stored actions
+
+An action list is a JSON array of action objects, each discriminated by `type`
+(`ButtonAction` in `frontend/src/shared/types/config.ts`). Lists sit under a
+widget's `actions`-typed property, keyed by event (`{ "onPress": [...] }`), in
+a manual menu item, in a page or group's `events`, in `globalEvents`, and
+nested inside other actions (`onSuccess` / `onFailed` / `onSettled`, `then` /
+`else`, `onOk` / `onCancel`):
+
+```json
+[
+  { "type": "writeDataVariable",
+    "target": { "$var": { "path": "PLC:Motor1/Start" } },
+    "value": true,
+    "onFailed": [ { "type": "showToast", "message": "Write failed",
+                    "severity": "error", "discard": "auto" } ] },
+  { "type": "openDialog", "pageId": "confirm-stop",
+    "componentProperties": { "motorId": "M1" }, "size": "small" }
+]
+```
+
+| `type` | Fields |
+|---|---|
+| `openDialog` | `pageId` (a page or group of the Dialogs folder), `componentProperties` (input values), `size` (`auto` \| `small` \| `medium` \| `fullscreen` \| `fixed`), `placement`, `backdrop` (`dim` \| `none`), `width` / `height` (for `fixed`) |
+| `openPageOverlay` | as `openDialog`, on a node of the `pages` root, without `componentProperties` |
+| `closePageOverlay` | `pageId` — the overlay to close; empty closes the top-most |
+| `writeDataVariable` | `target`, `value` (a literal, a `$componentProp` or a `$repeatItem`), `onSuccess` / `onFailed` / `onSettled` |
+| `toggleDataVariable` | `target`, `onSuccess` / `onFailed` / `onSettled` |
+| `if` | `condition` (a Boolean property value), `then`, `else` |
+| `loginUser` | `username`, `password`, `onSuccess` / `onFailed` / `onSettled` |
+| `logoutUser` | `onSuccess` / `onFailed` / `onSettled` |
+| `recipeLoad` | `datasetId`, `verify`, `onSuccess` / `onFailed` / `onSettled` |
+| `recipeSave` | `datasetId` (absent = the loaded one), `onSuccess` / `onFailed` / `onSettled` |
+| `setLanguage` / `setActiveTheme` | `language` / `theme` |
+| `showAlert` | `title`, `description`, `cancelText`, `okText`, `dismissible`, `onCancel`, `onOk` |
+| `showToast` | `message`, `severity` (`info` \| `success` \| `warning` \| `error`), `discard` (`auto` \| `manual`), `duration` (ms) |
+
+A write or toggle `target` is a property source naming one variable — a `$var`,
+or inside a Repeater `{ "$repeatItem": { "member": "..." } }` — and is absent
+until one is picked. The backend walks every field through `ACTION_FIELDS`
+(`backend/core/validation/structure.py`); what each field is checked as is in
+[value-types.md](value-types.md#type-diagnostics).
+
 ## Theme Files
 
 A project holds multiple named themes under `<project>/themes/`, one
@@ -386,11 +471,11 @@ the `/api/themes` endpoints in [../reference/rest-api.md](../reference/rest-api.
   "version": 1,
   "groups": [
     {
-      "id": "<uuid>",
+      "id": "group",
       "title": "Group",
       "alarms": [
         {
-          "id": "<uuid>",
+          "id": "err",
           "code": "ERR",
           "level": "error",
           "title": { "$loc": "alarm.motor1" },
@@ -416,9 +501,9 @@ the `/api/themes` endpoints in [../reference/rest-api.md](../reference/rest-api.
 Trigger types:
 
 - `bool` — fires when the variable equals `on_true`
-- `value_range` — fires when the variable is outside `[min, max]`; both bounds may be plain numbers, `$static`, or `$var`
+- `value_range` — fires while the variable lies inside `[min, max]`. Each bound is a plain number or `$static`; a missing bound leaves that side open, and with both missing the alarm never fires
 
-`source_value` carries the `$var` binding for the monitored variable; `index` selects an array element. Title/description/image fields accept plain strings, `$static` (an image carries a `{ path }` payload), or `$loc` keys.
+Group and alarm ids are slugs the service layer assigns from the title or `code`. `source_value` carries the `$var` binding for the monitored variable; the binding's own `index` selects an array element. Title/description/image fields accept plain strings, `$static` (an image carries a `{ path }` payload), or `$loc` keys.
 
 `alarm_state.json` is owned by the backend and tracks runtime state:
 
@@ -475,12 +560,16 @@ loaded at once):
 
 ## Widget Files
 
-Each reusable component is stored at `<project>/components/<id>.json`:
+Each reusable component is stored at `<project>/components/<id>.json`, or
+`<project>/components/<group>/<id>.json` inside a folder. The id and group come
+from the path and are not written into the file:
 
 ```json
 {
-  "id": "<uuid>",
   "name": "MyWidget",
+  "description": "Motor faceplate",
+  "category": "Motors",
+  "icon": { "type": "builtin", "name": "engine" },
   "componentProperties": {
     "label": { "type": "string", "label": "Label", "defaultValue": "Motor" },
     "value": { "type": "float", "label": "Value", "description": "Speed in rpm" },
@@ -489,6 +578,11 @@ Each reusable component is stored at `<project>/components/<id>.json`:
   "children": [ /* WidgetConfig nodes; properties may use $componentProp but not $var */ ]
 }
 ```
+
+Only `name` is required (`ComponentDefinition` in `backend/models/component.py`,
+`extra="forbid"`). `description` and `category` feed the app-drawer card, `icon`
+is a `builtin` (`name`) or `custom` (`path`) icon value, and optional positive
+`width` / `height` fix the component editor's canvas size.
 
 Each entry of `componentProperties` carries `type` and `label`, plus optional `description` (one line shown under the field in the properties panel), `defaultValue`, `structSchema`, `write`, `options`, `display`, `optionType`, `placeholder`, `min`, `max`, `step` — and nothing else (`extra="forbid"`). `defaultValue` is real at runtime, not editor-only: `ComponentRenderer` fills it in for every property the instance leaves `undefined`, so the value the properties panel prints as the field's `· default` hint is the value `$componentProp` resolves to. An explicit `null` is a set value and does *not* fall back.
 
@@ -580,7 +674,7 @@ Leaf variables:
 
 ```json
 {
-  "type": "variable",
+  "kind": "variable",
   "node_id": "ns=2;s=Motor1.Speed",
   "display_name": "Speed",
   "data_type": "Float",
@@ -594,6 +688,7 @@ Leaf variables:
 
 Notes:
 
+- `kind` may be left out on a leaf: every node that is not a `folder` is read as a variable
 - `value` is used by static datasources
 - `writable` is optional and usually present after browse or manual editing
 - `min`/`max` are optional and only meaningful on numeric variables — configured from the datasource variable table (scalars and struct fields alike). Surfaced through `variable_metadata()` (top-level `min`/`max` for scalars, `fieldRanges: { field_name: { min?, max? } }` for structs) and exposed to custom widgets via the `useVariableMeta` SDK hook (see [../reference/custom-widgets.md](../reference/custom-widgets.md)).

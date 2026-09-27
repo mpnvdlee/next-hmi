@@ -11,7 +11,7 @@ The backend ships **two ASGI apps** built from the same package:
 
 The single-project app owns:
 
-- persisted files inside the project folder it is pinned to, located via `NEXTHMI_ACTIVE_PROJECT_PATH` — set by the supervisor for a managed instance, or self-pinned at startup by a standalone `uvicorn main:app` process (see **Bootstrap** below)
+- persisted files inside the project folder it is pinned to, located via `NEXTHMI_ACTIVE_PROJECT_PATH` — set by the supervisor for a managed instance, or self-pinned at startup by a standalone `uvicorn main:app` process (see [Startup And Shutdown](#startup-and-shutdown) below)
 - the project lifecycle API surface: list / create / locate / delete / export / import and authenticated manager-to-manager transfer
 - datasource lifecycle management
 - OPC-UA client and test-server orchestration
@@ -28,7 +28,7 @@ LAN peer discovery (mDNS) and every peer-transfer surface belong to the manager 
   - wires dependencies
   - registers routers
   - starts and stops background services
-  - mounts `/widgets`, `/widget-js`, `/external-libraries`, and `/assets`
+  - mounts `/widgets`, `/widget-js`, `/builtin-widgets-js`, `/external-libraries`, and `/assets`
 - `backend/core/runtime_home.py`
   - per-installation home directory (manifest, `.logs/`, `.widget-build/`, restart sentinel)
   - resolves from `NEXTHMI_DATA_DIR` → bootstrap config → platform default
@@ -37,21 +37,21 @@ LAN peer discovery (mDNS) and every peer-transfer surface belong to the manager 
   - per-project metadata helpers for the embedded `config.json` `project` block (`ensure_project_metadata()`)
   - slug + collision-suffix helpers for default project folder paths
 - `backend/core/storage.py`
-  - active-project path resolvers (`active_project_root()`, `active_assets_dir()`, `active_custom_widgets_dir()`, etc.) — re-read the manifest on every call
+  - active-project path resolvers (`active_project_root()`, `active_assets_dir()`, `active_custom_widgets_dir()`, etc.) — resolved on every call from a per-call `use_project()` scope or the `NEXTHMI_ACTIVE_PROJECT_PATH` pin (see [Persistence Layer](#persistence-layer))
   - runtime-home-anchored constants (`LOGS_DIR`, `WIDGET_BUILD_DIR`)
   - JSON and CSV persistence helpers
-  - `NoLiveProjectError` — raised by the active resolvers when no project is marked live; mapped to 409 `{code: "no_live_project"}` by the registered handler
+  - `NoLiveProjectError` — raised by the active resolvers when neither resolves a project; mapped to 409 `{code: "no_live_project"}` by the registered handler
 - `backend/core/project_packer.py`
   - one zip code path for export, import, and manager peer transfer — `pack_project()` / `unpack_project()` with symlink + traversal + size-cap guards
 - `backend/core/peer_discovery.py`
   - mDNS advertise/browse over `_nexthmi._tcp.local.`; per-process `runtimeId` so multiple ports on one host don't shadow each other. Started only by the manager.
 - `backend/core/exceptions.py`
-  - domain exception hierarchy (`NextHmiError`, `NotFoundError`, `ConflictError`, `ValidationError`, `InternalError`)
+  - domain exception hierarchy (`NextHmiError`, `NotFoundError`, `ConflictError`, `ValidationError`, `RateLimitError`, plus per-domain subclasses such as `ConfigValidationError` or `DatasourceConflictError`)
   - `register_exception_handlers(app)` — maps domain exceptions to consistent JSON error responses
 - `backend/core/passwords.py`
   - project-user credential verification: PBKDF2-HMAC-SHA256 (200 000 iterations) `passwordHash`, with a literal-plaintext `password` kept readable for legacy documents
   - an account with neither — `password: ""` and no hash, which is what the editor creates and what `guest` is permanently — never verifies against anything. It is an identity the runtime can hold (auto-login, logout), not one anybody can sign in as
-  - every credential check costs exactly one derivation, whatever it decides: a right or wrong password, a legacy plaintext compare, an unusable stored hash, an account with no credential (`verify_password`), and a username that matched nothing at all (`verify_absent_user`). Answering a miss early was a ~50x timing oracle over the roster
+  - every credential check costs exactly one derivation, whatever it decides: a right or wrong password, a legacy plaintext compare, an unusable stored hash, an account with no credential (`verify_password`), and a username that matched nothing at all (`verify_absent_user`). Answering a miss early would be a ~50x timing oracle over the roster
 - `backend/core/user_auth_throttle.py`
   - in-memory online-guessing throttle for the project-user credential path, consulted by `services/users_manager.authenticate` so the WebSocket `login` message and both REST Basic routes are covered at once
   - two tiers: five consecutive failures lock that username for 60 s; 60 failures inside one 60 s window (a flood that rotates usernames, which never meets the per-name counter) trip a 30 s cooldown across every name, bounding the PBKDF2 work an anonymous caller can buy on a panel PC
@@ -62,7 +62,7 @@ LAN peer discovery (mDNS) and every peer-transfer surface belong to the manager 
   - generic instance-start seam (`refusal(project_id)` asks each `register_guard()`-ed callback whether the supervisor may spawn a child, and returns the first refusal sentence); the public build registers no guards, so it always returns `None` here — runtime activation is an enterprise feature. Fails open on a raising guard
 - `backend/models/websocket.py`
   - TypedDict definitions for **part** of the WebSocket protocol — not all of it
-  - client→server: `SetContextMessage`, `WriteFieldMessage`, `LoginMessage`, `LogoutMessage`, `RequestIdentityMessage`
+  - client→server: `SetContextMessage`, `WriteFieldMessage`, `ToggleFieldMessage`, `LoginMessage`, `LogoutMessage`, `RequestIdentityMessage`
   - server→client: `VarSnapshotMessage`, `VarUpdateMessage`, `VarRemovedMessage`, `OpcuaStatusMessage`, `ContextReadyMessage`, `UserIdentityMessage`, `AuthErrorMessage`, `WriteResponseMessage`, `WriteErrorMessage`
   - **untyped** (constructed as plain dicts at the send site): `var_metadata`, the recipe family (`recipe_load` / `recipe_save` / `recipe_snapshot` / `recipe_update` / `recipe_response` / `recipe_error`), `alarm_snapshot`, `alarm_update`, `restarting`, `widget_updated`, `config_changed`
   - alarm broadcast types are documented inline in `services/alarm_manager.py` (`alarm_snapshot`, `alarm_update`)
@@ -71,7 +71,7 @@ LAN peer discovery (mDNS) and every peer-transfer surface belong to the manager 
   - `AlarmTrigger`, `AlarmDefinition`, `AlarmGroup`, `AlarmConfig`
   - `AlarmInstance`, `AlarmHistoryEntry`, `AlarmSummary`, `AlarmState`
 - `backend/models/component.py`
-  - `WidgetPropertySchema`, `ComponentDefinition`
+  - `ComponentPropertySchema`, `ComponentDefinition`
 - `backend/services/datasource_manager.py`
   - datasource registry
   - flattened variable lookup tables
@@ -204,14 +204,20 @@ current value. Every operator write reaches this one check: `write_field`,
   - alarm config CRUD, active/history/summary, single + all acknowledge
 - `backend/api/component_api.py`
   - widget definition CRUD
+- `backend/api/recipe_api.py`
+  - recipe config, loaded state, dataset download / upload
 - `backend/api/theme_api.py`
   - multi-theme CRUD + validation (`/api/themes`) and the default-theme pointer (`/api/default-theme`)
 - `backend/api/widgets_api.py`
-  - custom-component discovery metadata
+  - custom-widget discovery metadata, recompile, the widget-schema manifest, asset listing
 - `backend/api/system_api.py`
-  - process info, subscription status, restart, runtime home / default projects root
+  - process info, subscription status, restart, runtime home, logs; a read-only `manager_router` slice for the manager
 - `backend/api/users_api.py`
   - users, groups, and access settings
+- `backend/api/device_api.py`, `historian_api.py`, `http_source_api.py`, `thumbnail_api.py`
+  - requesting-client identification, historian config/query, the `$http` proxy, the editor's project thumbnail
+- `backend/api/internal_api.py`
+  - the loopback-only `POST /api/internal/reload` hook the manager calls after a workspace MCP write
 - `backend/api/projects_api.py` (not on a managed instance)
   - list / create / locate / delete / validate-path; export zip; import zip. `delete` refuses a project that is in the manifest `running` set. No push/pull here — that's `manager_peers_api.py`, manager-only. Mounted on the manager and on a standalone `uvicorn main:app`; a manager-spawned instance skips it, so the projects API is simply absent from the process that serves a live project.
 - `backend/api/supervisor_api.py` (manager only)
@@ -219,7 +225,11 @@ current value. Every operator write reaches this one check: `write_field`,
 - `backend/api/manager_auth_api.py` (manager only)
   - `GET /api/manager/auth/status`, `POST .../setup` (first-run password), `POST .../login`, `POST .../logout` — device-admin session cookie.
 - `backend/api/manager_peers_api.py` (manager only)
-  - manager discovery, device-admin pairing, hashed/revocable peer tokens, explicit source/destination transfer, target-root receive, collision policy, progress/cancellation, and idempotent retry. The only peer-transfer surface — no project instance mounts one.
+  - manager discovery, device-admin pairing, hashed/revocable peer tokens, peer certificate pins, explicit source/destination transfer, target-root receive, collision policy, progress/cancellation, and idempotent retry. The only peer-transfer surface — no project instance mounts one.
+- `backend/api/mcp_auth_api.py` (manager only)
+  - MCP bearer-token pairing, listing and revocation
+- `backend/api/tls_api.py`, `telemetry_api.py`, `docs_api.py` (manager only)
+  - device HTTPS settings, the usage-reporting switch, and `/help`
 
 ## Edition Seam
 
@@ -256,9 +266,9 @@ licence that lapses stops the next start, not a running line.
 
 The **manager** (`backend/manager.py`) is the ASGI app the launcher runs by default (*manager mode*). It is deliberately lightweight — it never imports a project's datasource/OPC-UA/WebSocket pipeline. Responsibilities:
 
-- **Auth gate** — an HTTP middleware (`_auth_gate`) requires a valid device-admin session cookie for every `/api/*` and `/editor/*` request, except `/api/manager/auth/*`, bearer-authenticated `/api/manager/peer/*`, and `/api/health`. `/runtime/*` is public for a deny-by-default allowlist of child routes a live view needs (`_RUNTIME_PUBLIC_ROUTES`) and gated for everything else; segments whose decoded forms contain a separator or a dot segment are refused before matching, so the gate cannot approve one route while the child serves another. Classification of the first segment reads the name underneath it — truncated at a NUL, cut at a `;` path parameter, with whitespace, control characters and a trailing dot trimmed, and a segment that leaves nothing behind skipped — because `api\x00`, `api;`, `api.`, `api ` and a leading `;/` are all the API subtree to a stack that normalizes differently from this one. The gate matches on `get_route_path(scope)`, not `request.url.path`, so a `root_path` mount cannot slip past it. The SPA shell + bundle stay public so the login screen can render. A rejected request answers `401 {"detail": …, "code": "manager_session_required"}`, except a top-level browser navigation to `/runtime/*` or `/editor/*`, which is redirected (303) to `/?signIn=<original path>` so it lands on the sign-in screen and is returned to its destination afterwards (`safe_sign_in_target` restricts the round-trip to same-origin project paths). The frontend keys its "signed out" overlay off that code — see [Frontend](frontend.md). Auth lives in `core/manager_auth.py`: a PBKDF2-HMAC-SHA256 password digest in `<runtime_home>/.manager-auth.json`, stateless HMAC-signed session tokens (cookie `nexthmi_manager_session`) that expire 24 h after sign-in (`SESSION_TTL_SECONDS`, which the cookie's `Max-Age` reads too) — an absolute lifetime, not an idle timeout, so nothing refreshes a token and an editor left open is signed out a day after its sign-in, and an in-memory login throttle (lock after 5 failures for 60 s → HTTP 429 `RateLimitError`).
+- **Auth gate** — an HTTP middleware (`_auth_gate`) requires a valid device-admin session cookie for every `/api/*` and `/editor/*` request (and for the manager's own `openapi.json` / `docs` / `redoc`), except `/api/manager/auth/*`, bearer-authenticated `/api/manager/peer/*`, `/api/manager/mcp/pair`, `/api/health`, and `/mcp`, which authenticates itself (session or MCP bearer token, `mcp_server/auth.py`). `/runtime/*` is public for a deny-by-default allowlist of child routes a live view needs (`_RUNTIME_PUBLIC_ROUTES`) and gated for everything else; segments whose decoded forms contain a separator or a dot segment are refused before matching, so the gate cannot approve one route while the child serves another. Classification of the first segment reads the name underneath it — truncated at a NUL, cut at a `;` path parameter, with whitespace, control characters and a trailing dot trimmed, and a segment that leaves nothing behind skipped — because `api\x00`, `api;`, `api.`, `api ` and a leading `;/` are all the API subtree to a stack that normalizes differently from this one. The gate matches on `get_route_path(scope)`, not `request.url.path`, so a `root_path` mount cannot slip past it. The SPA shell + bundle stay public so the login screen can render. A rejected request answers `401 {"detail": …, "code": "manager_session_required"}`, except a top-level browser navigation to `/runtime/*` or `/editor/*`, which is redirected (303) to `/?signIn=<original path>` so it lands on the sign-in screen and is returned to its destination afterwards (`safe_sign_in_target` restricts the round-trip to same-origin project paths). The frontend keys its "signed out" overlay off that code — see [Frontend](frontend.md). Auth lives in `core/manager_auth.py`: a PBKDF2-HMAC-SHA256 password digest in `<runtime_home>/.manager-auth.json`, stateless HMAC-signed session tokens (cookie `nexthmi_manager_session`) that expire 24 h after sign-in (`SESSION_TTL_SECONDS`, which the cookie's `Max-Age` reads too) — an absolute lifetime, not an idle timeout, so nothing refreshes a token and an editor left open is signed out a day after its sign-in, and an in-memory login throttle (lock after 5 failures for 60 s → HTTP 429 `RateLimitError`).
 - **Reverse proxy** — `GET/POST/... /runtime/{project_id}/{path}` (and the `/editor/{project_id}/...` alias) streams to the matching child over `httpx` (loopback `127.0.0.1:<port>` from `supervisor.port_for`); `/runtime/{id}/ws` / `/editor/{id}/ws` bridges the browser WebSocket to the child's `/ws`. Hop-by-hop headers are dropped and the manager session cookie is stripped before forwarding (children are trusted localhost processes). A request for a project that isn't running returns 503, and a request target `httpx` cannot build a URL from (a NUL inside a segment) returns 400 rather than an unhandled 500.
-- **Routers** — mounts the `manager_auth`, `supervisor`, `projects`, and `manager_peers` routers.
+- **Routers** — mounts the manager-auth, peer (public and session-gated), MCP-auth (public pairing and token management), supervisor, projects, thumbnail, system (read-only slice), TLS, and telemetry routers, `/help`, and the workspace MCP at `/mcp` (see [../reference/mcp.md](../reference/mcp.md)).
 - **Usage reporting** — `core/telemetry.py` starts a background task in the manager lifespan that POSTs an install-count ping (installation ID, version, edition, platform) at start-up and every 24 h. Best-effort by contract: failures are debug-logged and never retried. Off through `NEXTHMI_TELEMETRY=off` or the Settings switch; see the [Telemetry API](../reference/rest-api.md#telemetry-api).
 - **Manager SPA** — serves the same frontend bundle at the origin root with `mode="manager"` (the dashboard) and base `"/"`; project instances are served their HMI/config app under `/runtime/<slug>/` or `/editor/<slug>/` with `mode="instance"`.
 
@@ -269,7 +279,7 @@ The **supervisor** (`backend/services/supervisor.py`) is a singleton owned by th
 - persists the running set to the manifest (`running[]`) so `resume_all()` can bring projects back after a manager restart, re-binding the previous port when still free. `resume_all()` prunes any entry it cannot bring up — a missing project or folder, and a project `start()` refuses (pending format upgrade, unusable credentials, a start guard). Such a project has no instance at all, so an entry left behind would make the manifest claim it is up while the dashboard shows it `stopped` with Stop disabled and the delete guard refuses with "stop it first". Starting it once the refusal is cleared re-adds it.
 - `running_snapshot()` returns per-instance `{id, name, path, basePath, port, pid, status, startedAt, restarts, lastError}` for the dashboard. `status ∈ {starting, running, stopped, crashed}`.
 
-`backend/services/project_resume.py` (`prepare_running_set`) runs once in the manager lifespan before `resume_all()`: on a fresh install with no projects at all, it seeds the bundled project and leaves it stopped while operator-password setup is pending. Existing projects recorded in the running set are resumed, while an operator who deliberately stopped everything is respected.
+`backend/services/project_resume.py` (`prepare_running_set`) runs once in the manager lifespan before `resume_all()`: on a fresh install with no projects at all, it seeds the bundled project and adds it to the running set, unless its `users.json` does not read back as valid, which leaves it stopped. Existing projects recorded in the running set are resumed, while an operator who deliberately stopped everything is respected.
 
 ## Startup And Shutdown
 
@@ -310,12 +320,12 @@ Paths come from two sources, both in `backend/core/`:
   - `logs_dir()` / `widget_build_dir()` / `restart_sentinel_path()`
 - **Project-anchored** (`storage.py`) — `_active_project_path()` resolves on every call: a per-call `use_project()` scope (multi-project MCP) wins outright, else `NEXTHMI_ACTIVE_PROJECT_PATH` — set per child by the supervisor, or self-pinned by a standalone process at bootstrap — so N children each serve a different project in one runtime home:
   - `active_project_root()` — the project folder
-  - `active_datasources_dir()`, `active_pages_dir()`, `active_components_dir()` (widgets), `active_translations_dir()`
-  - `active_alarms_config_path()`, `active_alarm_state_path()`
-  - `active_custom_widgets_dir()`, `active_external_libraries_dir()`
-  - `active_assets_dir()`, `active_icons_dir()`, `active_images_dir()`
+  - `active_datasources_dir()`, `active_pages_dir()`, `active_dialogs_dir()`, `active_components_dir()` (reusable components), `active_themes_dir()`, `active_translations_dir()`
+  - `active_alarms_config_path()`, `active_alarm_state_path()`, `active_recipes_config_path()`, `active_recipe_state_path()`
+  - `active_custom_widgets_dir()`, `active_external_libraries_dir()`, `active_certs_dir()`
+  - `active_assets_dir()`, `active_icons_dir()`, `active_images_dir()`, `active_videos_dir()`
 
-`ensure_active_project_dirs()` creates the project subdirectories on first launch (and after any live-project switch). The runtime-home subdirectories (`.logs/`, `.widget-build/`) are created on first write.
+`ensure_active_project_dirs()` creates the project subdirectories at instance startup, before the format migration runs. The runtime-home subdirectories (`.logs/`, `.widget-build/`) are created on first write.
 
 `Default.csv` is seeded with an `en-EN` header on first run inside the live project's `translations/` folder. The backend uses atomic write helpers for both JSON and CSV files.
 
@@ -356,6 +366,7 @@ Current frontend producers:
 - `HmiView` sends `set_context` with active runtime page + open-overlay page context
 - `PreviewView` sends `set_context` with preview page/overlay context
 - `DatasourceVariableTable` sends `set_context` with explicit `priorityKeys`
+- `RecipeTable` sends `set_context` with explicit `priorityKeys` for a recipe type's parameters while its Live column is on
 
 `set_context` payload currently supports:
 
@@ -364,8 +375,9 @@ Current frontend producers:
 
 ## REST Surface
 
-The project instance mounts the config, datasource, alarm, widget, theme,
-system, users, historian, and recipe route groups. The complete
+The project instance mounts the config, datasource, alarm, recipe, device,
+system, users, widgets, theme, component, internal, historian, `$http` proxy,
+and thumbnail route groups, plus the projects routes when it runs standalone. The complete
 endpoint reference — paths, request/response shapes, and which routes live on the
 manager vs a project instance — is in [../reference/rest-api.md](../reference/rest-api.md).
 
@@ -375,17 +387,19 @@ The backend mounts these static routes in `main.py`:
 
 - `/widgets` -> `<live-project>/custom-widgets/` (CSS, fonts)
 - `/widget-js` -> `<runtime_home>/.widget-build/` (compiled JS, build artifacts)
+- `/builtin-widgets-js` -> the shipped built-in widget bundles (`$NEXTHMI_FRONTEND_DIST/builtin-widgets-js/`, or `frontend/public/builtin-widgets-js/` in a source checkout)
 - `/external-libraries` -> `<live-project>/external-libraries/`
 - `/assets` -> `<live-project>/assets/`
 
-The `/widget-js` route serves compiled `index.js`. Build status is read from `<runtime_home>/.widget-build/.build-status.json` by the widgets listing API.
+The `/widget-js` route serves compiled `index.js`. Build status is read from `<runtime_home>/.widget-build/.build-status.json` by the widgets listing API. A supervisor-spawned instance gets its own `<runtime_home>/.widget-build/<project-id>/` (and an `instances/<project-id>/` logs folder) through `NEXTHMI_WIDGET_BUILD_DIR` / `NEXTHMI_LOGS_DIR`, so two projects' custom widgets never share a build directory.
 
 Mounts are registered at module-import time against the project this instance is pinned to. Because each project runs in its own process, serving a different project is a matter of the supervisor starting another instance — not switching mounts inside a live process.
 
 ## Health And Restart
 
 - `GET /api/health` is a basic liveness check
-- `POST /api/system/restart` writes `<runtime_home>/.restart-pending`, broadcasts `{type: "restarting", reason}` to every `/ws` client, then raises `SIGTERM` so uvicorn's lifespan teardown runs cleanly. Uvicorn is given `timeout_graceful_shutdown` so a lingering connection cannot hold the process open — unbounded, a browser's pooled TLS socket held it for the full 30s of asyncio's `SSL_SHUTDOWN_TIMEOUT`, which is the grace timer's own floor. A grace timer applies the restart itself and then hard-exits if shutdown stalls anyway; hard-exiting without it skipped the re-exec and shut the device down instead of restarting it. In **manager mode** the launcher sees the sentinel and re-execs a fresh interpreter so device-level static mounts re-resolve. A **managed instance** that exits is simply respawned by the supervisor — it never owns the re-exec loop (crash recovery is the supervisor's job).
+- `POST /api/system/restart` is a project-instance route — the manager's read-only system slice leaves it out. It broadcasts `{type: "restarting", reason}` to every `/ws` client, then raises `SIGTERM` so uvicorn's lifespan teardown runs cleanly. It writes no restart sentinel: the instance shares the manager's runtime home, and a sentinel there would re-exec the manager on its next clean exit. Uvicorn is given `timeout_graceful_shutdown` so a lingering connection cannot hold the process open — unbounded, a browser's pooled TLS socket would hold it for the full 30s of asyncio's `SSL_SHUTDOWN_TIMEOUT`, which is the grace timer's own floor. If shutdown stalls anyway, a grace timer calls `apply_pending_restart` and then hard-exits; the launcher replaces that hook with its re-exec in the manager process, and in an instance it is a no-op. A **managed instance** never owns a re-exec loop: the supervisor respawns the exited child (`_handle_crash`, with its backoff and crash breaker).
+- The manager restarts itself only through `POST /api/system/tls/restart`: the launcher sees the sentinel after the clean exit and re-execs a fresh interpreter (`os.execv`) so device-level static mounts and the listener re-resolve; under `start-dev.py` the dev runner respawns it instead.
 
 ## Alarm Engine
 
@@ -453,12 +467,10 @@ left as clean as it started — the zip from step 1 is the only durable record.
 `main.py`'s lifespan logs the version span, the file count, the backup path and
 every step diagnostic under the `nexthmi.migration` logger.
 
-`_STEPS` currently holds two steps: 4 → 7, one combined step running
-`core/migration_size_modes.py` then `core/migration_padding.py` against the same
-staged copy, and 7 → 8 (`core/migration_dialogs_folder.py`), which turns every
-inline dialog into a page under the `dialogs` index root with its document in
-`dialogs/`, and rewrites the stored actions — `openDialog` keeps its name and
-renames `dialogId` to `pageId`, `closeDialog` becomes `closePageOverlay`.
+`PROJECT_FORMAT_VERSION` is `9`, stamped beside `PROJECT_FORMAT_MIN_APP`
+(`"1.0.0"`). What each of the three `_STEPS` rewrites on disk is in
+[data-formats.md](data-formats.md#format-versions).
+
 Adding a step and bumping the version is described in the module docstring; the
 release-time half is in
 [operations/release.md](../operations/release.md#project-format).
@@ -485,7 +497,7 @@ the manager's device-admin pairing.
 
 - custom-component discovery depends on files existing under `<live-project>/custom-widgets/`
 - language add/remove endpoints are hard-wired to `Default.csv`
-- WebSocket writes are handled through `write_field`; unknown client message types are ignored
+- WebSocket writes are handled through `write_field` and `toggle_field`; unknown client message types are ignored
 - alarm history is capped at 500 entries (oldest dropped)
 - static mounts (`/widgets`, `/widget-js`, `/external-libraries`, `/assets`) are bound to the pinned project at import time; serving a different project means the supervisor running another instance, not a mount switch
 - mDNS peer discovery degrades gracefully (manual entry still works) when `zeroconf` isn't installed or the network blocks multicast

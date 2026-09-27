@@ -41,9 +41,9 @@ Key subfolders:
 
 ## Routing
 
-`frontend/src/App.tsx` lazy-loads all route views. It first reads the runtime mode (`runtimeBase.getMode()`): when `mode === 'manager'` it renders `ManagerApp` (the dashboard) and the routes below never mount. Otherwise it renders the HMI/config app for whichever project this instance serves.
+`frontend/src/App.tsx` reads the runtime mode (`runtimeBase.getMode()`): when `mode === 'manager'` it renders `ManagerApp` (the dashboard) and the routes below never mount. Otherwise it renders `AppInner`, the HMI/config app for whichever project this instance serves. Both are `preloadableLazy` chunks (`shared/utils/settledLazy.ts`) shown through a plain spinner rather than a Suspense fallback, so a chunk already in memory renders in the same pass instead of paying React's 300 ms reveal throttle. `AppInner.tsx` declares the project routes and lazy-loads each route view.
 
-Both apps wrap their routes in `<BrowserRouter basename={routerBasename()}>` — the basename is `/` for the manager (origin root) and `/runtime/<slug>` or `/editor/<slug>` for a proxied project instance, so the same bundle routes correctly under either prefix. Project selection lives in the manager dashboard — the project app mounts no `/projects` route of its own. The `LiveProjectGate` short-circuits to "online" whenever the base path is not `/` (a managed instance is always pinned to its project).
+Both apps wrap their routes in `<BrowserRouter basename={routerBasename()}>` — the basename is `/` for the manager (origin root) and `/runtime/<slug>` or `/editor/<slug>` for a proxied project instance, so the same bundle routes correctly under either prefix. Project selection lives in the manager dashboard — the project app mounts no `/projects` route of its own. The route map follows `getArea()`: under `/editor/<slug>/` the config routes sit at the root (plus `/preview/:pageId`); under `/runtime/<slug>/` the `/config/*` routes are not mounted at all, because the manager serves that prefix without a device-admin session.
 
 Project (non-manager) routes:
 
@@ -82,7 +82,7 @@ For a project instance, `AppInner()` does three important things before renderin
 2. registers custom widgets via `loadCustomWidgets()` — a single `/api/widgets` fetch; the compiled modules themselves are imported lazily on first render
 3. loads reusable components via `loadComponents()`, registering each as a virtual component type `$component:<id>`; subsequent component-store changes re-run `registerComponents()`
 
-Route rendering is gated by `ComponentsReadyGate` until both load promises (custom widgets, components) settle.
+The HMI and preview routes are gated by `ComponentsReadyGate` until custom widgets, components, the theme tokens and the view's own chunk (`preload`) have all settled; config routes render immediately. The runtime route shows `BootSplash` while it waits.
 
 ## Shared Types
 
@@ -151,7 +151,7 @@ Manager store:
 
 Error handling notes:
 
-- `adminViewStore` sets an `error` string when loading component/subscription data fails.
+- `adminViewStore` logs a failed custom-widget or subscription load to the console, and keeps `runtimesError` / `recompileError` strings for the connected-runtimes list and a failed recompile.
 - datasource action/reconnect UI handlers log request failures instead of swallowing them silently.
 - datasource variable save registration re-throws failed save requests so `projectStore.saveAll()` can surface global save errors.
 
@@ -161,7 +161,7 @@ Error handling notes:
 
 `useConfig()` boots the config by fetching `/api/config/config` into `configStore`.
 
-The backend returns a v2 **page index** — page metadata and structure with no component children for pages. On success, `configStore` populates `pages` (with empty `children: []` arrays), `header`, `footer`, and `dialogs` (the second page tree, page children empty the same way).
+The backend returns a v2 **page index** — page metadata and structure with no widgets for pages. On success, `configStore` populates `pages` (each page's `sections` empty), `header`, `footer`, and `dialogs` (the second page tree, its pages' `sections` empty the same way).
 
 New state after bootstrap:
 
@@ -175,15 +175,15 @@ Component trees for individual pages are fetched on demand via `GET /api/config/
 `usePage(pageId)` (from `frontend/src/shared/hooks/useConfig.ts`) is the primary consumer. It:
 
 1. Checks whether `pageId` is already in `loadedPageIds`
-2. If not, calls `loadPageContent(pageId)` which fetches the page file and merges `children` into the page in the store
+2. If not, calls `loadPageContent(pageId)` which fetches the page file and merges its `sections` into the page in the store
 3. Marks the page as loaded in `loadedPageIds`
 
-Call sites:
+`usePages(pageIds)` does the same for a list. Call sites:
 
-- `HmiView` — calls `usePage(page?.id)` after resolving the active page
+- `HmiView` — calls `usePage(page?.id)` after resolving the active page, and `usePages()` for every open overlay's resolved page
 - `EditorView` — calls `usePage(previewAreaId)` for the currently previewed page
-- `LivePreview/index.tsx` — builds a `pageContent` map from all loaded pages and includes it in the `pages_update` postMessage to the preview iframe
-- `PreviewView.tsx` — receives `pageContent` in `pages_update` and merges loaded children into the page list before calling `setPages`
+- `LivePreview/previewSync.ts` — `buildPagesUpdate()` builds a `pageContent` map from all loaded pages and includes it in the `pages_update` postMessage to the preview iframe
+- `PreviewView.tsx` — receives `pageContent` in `pages_update` and merges loaded content into the page list before calling `setPages`
 
 ### Incremental Save
 
@@ -192,18 +192,22 @@ Call sites:
 1. `PUT /api/config/config` — saves the page index (page metadata only, no component children)
 2. For each `pageId` in `dirtyPageIds`: `PUT /api/config/{root}/{pageId}` — saves the page's component tree to its root's directory
 
-`dirtyPageIds` is cleared on success.
+Only the pages whose PUT succeeded leave `dirtyPageIds`; a page that failed, or was edited while the save was in flight, stays dirty.
 
 ### Dirty Tracking Rules
 
 | Action | Effect on dirty state |
 |---|---|
-| Page metadata change (title, icon, reorder) | No per-page dirty — index is always saved |
+| Page reorder or move (`reorderPages`, `movePageTo`, `reorderPageGroupChildren`) | No per-page dirty — index is always saved |
+| `updatePage` (title, icon, events, input parameters, …) | That page marked dirty — its file carries the `PAGE_SAVE_FIELDS` metadata |
 | `addPage`, `addPageToPageGroup` | New page marked loaded + dirty |
-| `deletePage` | Removed from `loadedPageIds` and `dirtyPageIds` |
-| `addPageGroupToPage`, `reorderPageChildren`, `addComponentToPage` | Specific page marked dirty |
-| `addComponentToContainer`, `addComponentToWidgetSlot`, `deleteComponent`, `duplicateComponent`, `moveNodeToPage/Container`, container `reorderChildren` | All currently loaded pages marked dirty |
-| `updateComponent` | Only the owning page marked dirty (uses `findOwningPage()`) |
+| `deletePage`, `deletePageGroup` | Removed (with every descendant page) from `loadedPageIds` and `dirtyPageIds` |
+| `reorderPageChildren`, `setPageSections`, `addComponentToPage`, `addComponentToPageSection` | Specific page marked dirty |
+| `addComponentToContainer`, `addComponentToWidgetSlot`, container `reorderChildren` | The page owning the container marked dirty (`findOwningPage()`) |
+| `deleteComponent(s)`, `duplicateComponent(s)`, `updateComponent(s)` | Only the pages the edit actually changed (`touchedPageIds` from `editAllAreas`) |
+| `moveWidgetTo`, `moveWidgetsTo` | The source page(s) and the target's owning page |
+
+Widgets outside any page — shell regions and page-group chrome — are saved by the index PUT.
 
 `useTranslations()` delegates loading to `translationStore`.
 
@@ -211,15 +215,20 @@ Call sites:
 
 The app opens one WebSocket per browser tab.
 
-`useWebSocket()` currently handles these inbound messages:
+`useWebSocket()` handles these inbound messages:
 
-- `var_snapshot`
-- `var_update`
+- `var_snapshot`, `var_update` — batched into `variableStore`
 - `var_removed`
+- `var_metadata` — variable shape metadata
+- `context_ready` — the ack of the latest `set_context`; an ack for a superseded context is dropped
 - `opcua_status`
 - `alarm_snapshot`, `alarm_update` — applied to `alarmStore`
+- `recipe_snapshot`, `recipe_update` — applied to `recipeStore`
 - `user_identity`, `auth_error`
-- `write_response`, `write_error` — routed to the async action dispatcher by `requestId`
+- `write_response`, `write_error`, `recipe_response`, `recipe_error` — routed to the async action dispatcher by `requestId`
+- `config_changed` — project files changed on disk
+- `widget_updated` — a custom widget was recompiled; `AppInner` reloads the page
+- `restarting` — ignored here; the projects view polls for it
 
 The full wire protocol these messages belong to is specified in [websocket.md](websocket.md).
 
@@ -242,16 +251,25 @@ Current producers:
   - sends `set_context` with preview page/overlay context
 - `DatasourceVariableTable`
   - sends `set_context` with `priorityKeys` for currently visible rows after scroll settle
+- `RecipeTable` (`config/components/recipes/RecipeTable/liveValues.ts`)
+  - sends `set_context` with `priorityKeys` for every bound recipe parameter while its Live column is on
 
 ### Page reveal and data settling
 
-Two questions that used to share one spinner are now separate.
+Two questions are kept separate: when a page is shown, and when its bindings
+are judged.
 
 **Reveal** is a config-and-code question. `PageGroupPageView` waits on the
 page's own widget *modules* (the registry's prefetch/warmup machinery) with a
-5-second safety valve, and the boot splash idle-warms the built-ins so a later
-navigation finds them in memory. A page's variables do not gate the reveal at
-all, so a slow OPC-UA read no longer stalls every navigation.
+5-second safety valve (`MODULES_WAIT_MS`). Once the operator runtime's first
+page has settled, `useProjectWidgetWarmup` warms the widget code of every other
+page in the project (with a 3 s fallback when no ack comes), so a first visit
+is as fast as a revisit; the editor's preview iframe instead idle-warms every
+built-in once `ComponentsReadyGate` opens. A module already in memory renders
+without suspending (`settledLazy`), and `useInlineSvg` keeps each recoloured
+custom SVG icon per URL for the rest of the page load, so a revisited page
+draws its icons on the first frame. A page's variables do not gate the reveal
+at all, so a slow OPC-UA read never stalls a navigation.
 
 **Marking** is a data question, and it can only start once data has stopped
 arriving. `DataSettleGate` + `useDataSettling` hold the binding overlays off a
@@ -281,15 +299,16 @@ page settled asks for variables of its own, so its resolved page id rides in
 `currentPageIds` and the `context_ready` ack echoes it: the overlay settles on
 that signal rather than inheriting the host page's already-closed window.
 
-`HmiView` keeps one runtime overlay stack, `openPageOverlayIds`. Each entry's
-`pageId` is the node the action targeted (a page *or* a page group) and is the
-overlay's identity; `activePageId` follows navigation inside it.
+The runtime keeps one overlay stack, `hmiStore.openPageOverlays`, opened by
+both `openDialog` and `openPageOverlay` and closed by `closePageOverlay`. Each
+entry's `pageId` is the node the action targeted (a page *or* a page group) and
+is the overlay's identity; `activePageId` follows navigation inside it.
 `useResolvedPageOverlays` resolves both against either page root, and it is the
 resolved *page* — never a group id — that is hydrated, sent in `set_context`
 and waited on by the settle gate.
 
-A press on the backdrop closes the top-most overlay, unless its node sets
-`closeOnBackgroundPress: false`.
+A press on the backdrop closes the top-most overlay, unless its node — a
+Dialogs-folder page or group — sets `closeOnBackgroundPress: false`.
 
 ## Component Registry
 
@@ -304,8 +323,10 @@ at build time by `npm run build:builtin-widgets`.
 filled at runtime: the built-in-widgets manifest at module eval, then a
 project's custom widgets and reusable components on top. A widget that renders
 other widgets itself — `NavigationMenu` (a page-tree menu with a footer slot),
-`ImageContainer` (children placed absolutely over a background image) and
-`ComponentSlot` (the component system's own machinery) — is authored against
+`ImageContainer` (children placed absolutely over a background image),
+`Repeater` (its children drawn once per array element, each copy in a
+`RepeatScope`) and `ComponentSlot` (the component system's own machinery) — is
+authored against
 the SDK's [composition primitives](../reference/custom-widgets.md#composition)
 like any other built-in widget. Like any built-in widget it arrives as a lazy
 module, so a shell region holding one paints a beat after the page around it.
@@ -316,8 +337,8 @@ artifacts: the per-widget modules under `frontend/public/builtin-widgets-js/<key
 (`index.js`, plus `style.css` and `fonts/` when the source has them) and the
 baked manifest — `frontend/src/generated/builtinWidgetsManifest.json` plus its
 `.editor.json` half. Compiling here rather than on project load is what lets a
-deployment without esbuild degrade exactly as it always did — a project's own
-widgets go uncompiled while the product's widgets still render.
+deployment without esbuild still render every product widget — only a
+project's own widgets go uncompiled.
 
 The baked manifest is tracked, and `npm run dev` and `npm run build` both
 regenerate it first, so its rows carry no wall-clock stamp: each row's `buildTs`
@@ -347,13 +368,15 @@ panel still see whole entries on their first paint. Backend readers see no
 split at all — `core.builtin_widgets_manifest` merges the pair back before
 config validation and the MCP tools ever look at a schema.
 
-Three manifest fields carry what a folder name and a schema cannot: `displayName`
+Four manifest fields carry what a folder name and a schema cannot: `displayName`
 is the palette/tree label when the type reads badly as one (`StretchSpacer` →
 `Stretch Spacer`), `hostsChildren` declares that nodes of the type carry a
-`children` array, and `flowsChildren` that those children are arranged with
-flexbox. All three are plain exports on the source, so they are open to project
-widgets on the same terms — together they are what lets a project ship its own
-container, which the product could not do before.
+`children` array, `flowsChildren` that those children are arranged with
+flexbox, and `repeatsChildren` names the `item-list` property the children are
+drawn once per element of (read through `repeatItemsKey` in
+`shared/utils/parentFlow.ts`; it is what scopes `$repeatItem`). All four are
+plain exports on the source, so they are open to project widgets on the same
+terms — together they are what lets a project ship its own container.
 
 `flowsChildren` is the narrower of the two container flags and the one the
 sizing model turns on: a child of a type that declares it has a resolvable main
@@ -391,16 +414,16 @@ The rendered catalog with every property is generated from this registry into
 inside a card that already draws one. An empty `title` additionally drops the
 header band rather than rendering a blank strip with a stray count chip.
 
-Everything else is a **custom component** — authored per project under `<project>/custom-widgets/` and compiled on save, not registered here. Input and display components (Dropdown, NumberInput, NumericStepper, StringInput, Switch, Gauge, HeaderTime, LedIndicator, LogoTitle, Trend, UserBadge, ValueDisplay, and the like) are built this way rather than as built-ins. Worked examples of each live in the private dev/test project (`project-testbench/custom-widgets/`, cloned in during development); `project-seed/` ships with an empty `custom-widgets/`, so a fresh project starts with the built-in registry above and whatever you author.
+The built-in catalog covers layout (`Container`, `Repeater`, `ImageContainer`, spacers, …), content (`Button`, `Label`, `Image`, `Video`, the alarm lists, charts, …), indicators, inputs (`Dropdown`, `NumberInput`, `StringInput`, `Switch`, …) and navigation — one folder per widget under `frontend/widgets/<Group>/`. Everything else is a **custom widget** — authored per project under `<project>/custom-widgets/` and compiled on save, not bundled with the product. Worked examples live in the private dev/test project (`project-testbench/custom-widgets/`, cloned in during development); `project-seed/` ships with an empty `custom-widgets/`, so a fresh project starts with the built-in catalog and whatever you author.
 
 Custom widgets are **registered from the manifest**, not from their modules.
 `loadCustomWidgets()` fetches `/api/widgets` — whose rows carry `schema`,
 `exportedProperties`, `category`, `description` and `icon` straight from the
 compiled `widget-schemas.json` (`CustomWidgetManifestEntry`) — and
 `registerCustomWidget()` builds one registry entry per row whose `component` is a
-`lazy()` that imports `/widget-js/<Name>/index.js` on first render (cache-busted
-by `buildTs`, which also identifies the build, so a recompile mints a fresh
-`lazy()`). The editor can therefore list, offer and validate a widget whose
+`settledLazy()` that imports `/widget-js/<Name>/index.js` on first render
+(cache-busted by `buildTs`, which also identifies the build, so a recompile
+mints a fresh one). The editor can therefore list, offer and validate a widget whose
 module has never been fetched, and a heavy widget costs nothing until it is on
 screen. Per-widget CSS is served from `/widgets/<Name>/style.css` and loads
 *with* the module, inside the same memoised loader: a surface that waits for a
@@ -418,10 +441,10 @@ component is `ComponentRenderer` and whose schema is derived from the
 definition's `componentProperties` via `componentPropertyToSchemaField()`. Each
 entry also carries `slots` — the slot names collected from the definition's tree
 by `collectSlotKeys()` (see [Component slots](#component-slots)). `slots` being
-present (even empty) is what marks an entry as a component instance, which three
-registry helpers read:
+present (even empty) is what marks an entry as a component instance. These
+helpers decide how a type's children are treated:
 
-- `isContainerHostType(type)` — anything whose manifest row declares `hostsChildren` (the built-in `Container` and `ImageContainer`, and any project widget that opts in), or any component with at least one slot; these host children in the editor tree
+- `isContainerHostType(type)` — anything whose manifest row declares `hostsChildren` (the built-in `Container`, `Repeater` and `ImageContainer`, and any project widget that opts in), or any component with at least one slot; these host children in the editor tree
 - `usesFlexLayout(type)` (in `shared/utils/parentFlow.ts`, not the registry — `WidgetRenderer` and the properties panel both read it from there) — anything whose manifest row declares `flowsChildren`; these give their children a main axis to size against
 - `hasSlotSections(type)` — more than one slot, so the editor addresses each slot separately (tree sections, Move dialog, preview insert target)
 - `placesOwnChildren(type)` — a `$component:` entry; `WidgetRenderer` skips building JSX children for it, because the instance places its children itself, per slot, from `childConfigs`
@@ -431,7 +454,7 @@ the saved definition from `componentStore` (or the draft when inside a preview
 iframe) and renders its tree, with three behaviours worth knowing:
 
 - **Declared defaults are filled in.** Every property the instance leaves `undefined` takes its `componentProperties[*].defaultValue` before the tree is rendered, so the panel's `· default` hint matches what `$componentProp` resolves to at runtime. An explicit `null` counts as set. The rule is not component-only: the helper is `withDeclaredDefaults` in `hmi/utils/componentPropResolution.ts`, and pages and page groups fill their declarations with it too. `ModalStack` publishes *only* the values the `openDialog` action supplied; `PageGroupPageView` layers the defaults under them, folding the declaration chain innermost-first (page, then its groups outward; a group's chrome band gets its own group chain without the page). That order is the whole precedence rule — supplied beats page default beats inner-group default beats outer-group default — and it only works in one place, which is why the merge does not also happen in `ModalStack`.
-- **Instance sizing folds onto the first root.** The self-sizing half of the instance's layout (`SELF_LAYOUT_KEYS` in `layoutUtils.ts` — `grow`, min/max sizes, `width`, `height`, `widthMode`, `heightMode`) is merged onto the definition's *first* root node rather than applied to a wrapper: a wrapper would re-parent the roots and break flex values authored against the real parent, and folding onto every root would multiply the sizing by their count. Direction, gap and padding describe the component's insides and stay with the definition — an instance never reads them, and the panel renders an instance in `leaf` mode, which has no row for one, so the baseline migration drops the container half of its stored layout outright. It does the same for every other non-`Container` node, on the same grounds: `containerLayoutProps` has exactly one caller, so an `ImageContainer` — which hosts children but pins them to image slots — reads those keys no more than an instance or a leaf does.
+- **Instance sizing folds onto the first root.** The self-sizing half of the instance's layout (`SELF_LAYOUT_KEYS` in `layoutUtils.ts` — `grow`, min/max sizes, `width`, `height`, `widthMode`, `heightMode`) is merged onto the definition's *first* root node rather than applied to a wrapper: a wrapper would re-parent the roots and break flex values authored against the real parent, and folding onto every root would multiply the sizing by their count. Direction, gap and padding describe the component's insides and stay with the definition — an instance never reads them, and the panel renders an instance in `leaf` mode, which has no row for one, so the baseline migration drops the container half of its stored layout outright. It does the same for every node whose type does not declare `flowsChildren`, on the same grounds: `containerLayoutProps` is the only reader of those keys and only a type declaring `flowsChildren` (`Container`, `Repeater`) calls it, so an `ImageContainer` — which hosts children but pins them to image slots — reads them no more than an instance or a leaf does.
 - **Slot content is published on context.** The instance's `childConfigs` are grouped by slot and provided on `ComponentSlotContext`; `DefinitionScopeContext` is set to `true` around the definition's own widgets.
 
 Children referencing `$componentProp` resolve against `InputScopeContext`,
@@ -460,7 +483,7 @@ Editor:
 
 - The widget tree renders one `TreeSection` per slot on an instance with more than one; a single-slot instance reads as a plain container.
 - A slot named by a `widgets` component property gets **no** row in the instance's properties panel: nothing is stored under `properties[key]`, so the slot's content is edited where the widgets themselves live — the widget tree and the preview. `groupSchemaKeys` (`frontend/src/config/utils/schemaGroups.ts`) drops `widgets` fields for every panel, and a section left empty by that drop is dropped with them. `registerComponents` still keeps such a property in the entry's `schema` only when a `ComponentSlot` names it — the schema entry feeds `SlotNameField` and the runtime, not a panel row.
-- Slot targets are addressed by the composite id `makeWidgetSlotId(widgetId, slot)` (`editorSentinels.ts`), used by the Move dialog, the preview's insert target, drag-and-drop drop ids, and `configStore.addComponentToWidgetSlot()` / `moveNodeToContainer(nodeId, targetId, slot)`. Moving a node *out* of a slot clears its tag rather than leaving a stale slot name behind.
+- Slot targets are addressed by the composite id `makeWidgetSlotId(widgetId, slot)` (`editorSentinels.ts`), used by the Move dialog, the preview's insert target and drag-and-drop drop ids; the store takes the slot explicitly, in `configStore.addComponentToWidgetSlot()` and in a `moveWidgetTo()` / `moveWidgetsTo()` target of `{ kind: 'container', containerId, slot }`. Moving a node *out* of a slot clears its tag rather than leaving a stale slot name behind.
 - Pasting next to a widget inside an instance inherits that widget's slot, since siblings from every slot share one flat `children` array.
 
 ## Property Types and Sources
@@ -477,23 +500,23 @@ Schema fields support extended metadata used by the editor and runtime:
 
 The property **sources** offered for a field are derived entirely from its `type` via `getAllowedPropertySources(fieldType)` — there is no per-field source allowlist.
 
-Source-capable field types are the value types plus the editor-only `option-list` kind:
+Source-capable field types (`SOURCE_CAPABLE_TYPES` in `hmi/utils/propertySourceRules.ts`) are the value types plus the editor kinds `color`, `icon`, `image`, `video`, `option-list`, `record-list` and `item-list`, whose source lists are curated per kind (`EDITOR_KIND_SOURCES`) rather than derived:
 
-- `option-list` — stores `{ label, value }[]`; supports `$static` (inline list editor), `$user` with `field: 'userList'` (all system users), `$var` (array variable binding filtered by listing array `type`s, e.g. `['option-list','string[]','integer[]']`), and `$languages` (resolves to all configured HMI languages as `{ label: code, value: code }` pairs)
+- `option-list` — stores `{ label, value }[]`; supports `$static` (inline list editor), `$user` with `field: 'userList'` (all project users, valued by username) or `field: 'groups'` (all user groups), `$var` (array variable binding filtered by listing array `type`s, e.g. `['option-list','string[]','integer[]']`), `$languages` (resolves to all configured HMI languages as `{ label: code, value: code }` pairs) and `$widgetProp`
 
 Editor implementation:
 
-- `PropertySourceSelector` controls the property source per field; the offered sources come from `getAllowedPropertySources(fieldType)` (derived from each source's `produces` metadata in `propertySourceRegistry.ts`), plus scope-injected sources (`$componentProp` inside a widget, on a widget whose owning page or one of its ancestor page-groups is in the Dialogs root and declares component properties, or on a widget in page-group chrome whose group chain declares some; `$result` inside an async-action handler)
+- `PropertySourceSelector` controls the property source per field; the offered sources come from `getAllowedPropertySources(fieldType)` (derived from each source's `produces` metadata in `propertySourceRegistry.ts`), plus scope-injected sources (`$componentProp` inside a component definition, on a widget whose owning page or one of its ancestor page-groups is in the Dialogs root and declares input parameters, or on a widget in page-group chrome whose group chain declares some; `$result` inside an async-action handler; `$repeatItem` inside a widget that declares `repeatsChildren`)
 - `PropertySourceEditor` renders source-specific editors
 - `visibilityEvaluator` controls conditional field visibility via `visibleWhen`
 - `TranslationInput` uses `{ "$loc": "key" }` for translation references
-- `renderSchemaField` (`frontend/src/config/utils/renderSchemaField.tsx`) — shared static field renderer used by both `PropertiesPanel` (component properties) and `LayoutFields` (layout panel); also applies the per-format editors (`select`/`direction`/`align`/`justify` button-groups, `multiline`/`password`/`length`/`spacing` inputs, `percentage` suffix, and the `visibility`/`enablement`/`wrap` boolean relabels)
+- `renderSchemaField` (`frontend/src/config/utils/renderSchemaField.tsx`) — shared static field renderer used by both `PropertiesPanel` (component properties) and `LayoutFields` (layout panel); also applies the per-format editors (`select`/`direction`/`align`/`justify` button-groups, the `page` picker, `multiline`/`password`/`url`/`length` inputs, `percentage` suffix, and the `visibility`/`enablement`/`wrap`/`show`/`expansion`/`collapse`/`onoff` boolean relabels)
 - `LayoutFields` (`frontend/src/config/components/ui/LayoutFields/index.tsx`) — all layout fields are declared as `SchemaField` definitions; the enum fields render as button groups — text labels (`display: 'button-text'`) except Direction, Align and Distribute, whose arrangements read better as glyphs (`display: 'button-icon'`). `containerDefaultTokens.ts` beside it exports `CONTAINER_DEFAULT_TOKENS` for panels that need the token list without the component
 - **The Layout section is three bespoke controls**, not one row per `LayoutConfig` key:
   - **Width/Height.** One mode row per axis (Hug/Fill/Fixed), and under it the row for whichever key that mode actually sizes the axis by: the axis's own length under `Fixed`, the `grow` weight under `Fill` on either axis (it is one shared key — both axes' Fill rows read and write it, though only whichever axis its parent actually treats as main ever renders by it), or a disabled dash under `Hug`, which sizes from neither. `sizeValueRows` picks between them. The panel needs no parent flow to decide this — it never learns which axis is main, so `schemaFor` gives both mode rows one neutral default hint (`hug`) instead of a main-axis-flavoured one and a cross-axis-flavoured one
     - A mode no read resolves — unset, a `$var`, a `$switch`, a mixed selection — shows the length *and* the weight, on either axis: either key may be the live one once it resolves, or once this axis turns out to be the one its parent treats as main, so `sizeModePatch` clears neither. Every other pick clears what it puts out of reach, since a key the runtime drops is one the panel has no row to show, revert or explain
     - **The runtime resolution is axis-neutral, not flow-aware.** `selfLayoutStyle` (`hmi/components/layoutUtils.ts`) reads a widget's own `widthMode`/`heightMode` — nothing about its parent — and emits `--w-*`/`--h-*` custom properties: a main-role triple (`--{w,h}-grow`/`-basis`/`-shrink`) and a cross-role pair (`--{w,h}-alignself-stretch`/`-notstretch`), written unconditionally under both possible roles since the widget itself has no idea which one applies. One CSS block in `hmi.css` ("Flow translation") picks the half that's actually live, off the flex *parent*'s own `data-flow-direction`/`data-flow-align` attributes (written by `containerLayoutProps`, same file) — so a `$var`/`$switch`-bound `direction` just works: the runtime resolves it like any other property source and writes the plain result into the attribute, and the CSS rule sees the same DOM state a literal `row`/`column` would have produced. No React context, no parent-flow resolution step, and no `· default` marking distinguishing main from cross — the panel genuinely does not know. `lengthSuppressed` (same file) is the one place `width`/`height` still depend on this axis's own mode: a literal Hug or Fill owns the length role instead, so a stored length is withheld from the style object rather than left to out-rank the `--w-*`/`--h-*` role CSS assigns it once this axis resolves to main — the one case this catches that the panel's own clear-on-pick (`sizeModePatch`) cannot is a `$var`/`$switch`-bound mode resolving to Fill over a length typed before the binding existed, since that never runs through the panel at all
-    - `grow` is the one layout key with no axis of its own — it is reachable from either axis's own literal `Fill` (`reachableSizeKeys`, now axis-blind: the panel doesn't know which is main either), so it gets one row of its own *below* both axis blocks rather than one inside each — a row per axis would render the same key, label and value twice and read as two independent per-axis weights. An axis whose own mode derives its length instead of storing one (`Hug` and `Fill` alike) shows the read-only dash naming that mode. `sizeModePatch` clears the weight only once *neither* axis's mode still reaches it, not the moment either one's own pick stops being `Fill`. An unresolvable other-axis mode (`$var`, a mixed selection) is read the same conservative way: `sizeModePatch` keeps `grow` rather than clear one that mode might still turn out to need. At render, `grow` only ever reaches CSS through `--w-grow`/`--h-grow` on the axis whose own mode is literally `Fill` — an axis left unset emits neither, so flipping a `Container`'s `direction` can put a live weight to sleep (its axis stops being main) but can never wake a dormant one on the *other* axis, since that axis's own mode decides its own vars independently of which one is main now. One shared key, no per-axis leak, and no flow-aware pruning in the store
+    - `grow` is the one layout key with no axis of its own — it is reachable from either axis's own literal `Fill` (`reachableSizeKeys`, axis-blind: the panel doesn't know which is main either), so it gets one row of its own *below* both axis blocks rather than one inside each — a row per axis would render the same key, label and value twice and read as two independent per-axis weights. An axis whose own mode derives its length instead of storing one (`Hug` and `Fill` alike) shows the read-only dash naming that mode. `sizeModePatch` clears the weight only once *neither* axis's mode still reaches it, not the moment either one's own pick stops being `Fill`. An unresolvable other-axis mode (`$var`, a mixed selection) is read the same conservative way: `sizeModePatch` keeps `grow` rather than clear one that mode might still turn out to need. At render, `grow` only ever reaches CSS through `--w-grow`/`--h-grow` on the axis whose own mode is literally `Fill` — an axis left unset emits neither, so flipping a `Container`'s `direction` can put a live weight to sleep (its axis stops being main) but can never wake a dormant one on the *other* axis, since that axis's own mode decides its own vars independently of which one is main now. One shared key, no per-axis leak, and no flow-aware pruning in the store
   - **Align / Distribute.** Two `display: 'button-icon'` rows, one per property: `align` (`align-items`, the cross axis) and `justify` (`justify-content`, the main axis). Both are plain `SchemaFieldRow`s — so the source pill, the mixed state, the default marking and the revert `×` all come for free — and only their *presentation* depends on `direction`: `schemaFor` rebuilds the options per render so each label names the position an author can see (Top/Middle/Bottom against Left/Center/Right) and each glyph is transposed to the axis in play. `alignIcons.ts` authors every glyph once along the horizontal and swaps x/y for the vertical. `stretch` is not cosmetic — it is the `align-items` default that makes a child's cross-axis `Fill` work with no `alignSelf`, which is why the cross-axis mode reads it, and why the unset Align row marks it rather than reading blank
   - **Padding.** Four plain length rows, one per side (`PADDING_FIELDS` in `LayoutFields/index.tsx`). Storage is the four `padding<Side>` keys and nothing else — `LayoutConfig` carries no `padding` shorthand, and there is no merged "all sides" control over the four either. Each side is an ordinary `SchemaFieldRow`, so it carries the same source pill, `$var` picker, Mixed state, themed default hint and revert `×` as every other layout row, and binds on its own rather than four-at-a-time
   - **No sub-groups.** Every row renders into one flat list in `FIELDS` declaration order — `wrap` beside the other flow rows, each bound under the axis it bounds. No nested `Advanced` section and no `advanced` flag on the field def: the list reads at a glance, and a bound behind a disclosure is one the author forgets is set
@@ -508,19 +531,19 @@ Editor implementation:
 
 Runtime implementation:
 
-- `frontend/src/hmi/utils/propertySourceEval.ts` evaluates all core property sources (`$static`, `$var`, `$loc`, `$urlParam`, `$pageIsActive`, `$if`, `$compare`, `$not`, `$formula`, `$random`, `$switch`, `$user`, `$device`, `$time`, `$widgetProp`, `$componentProp`, `$stringExpr`, `$alarmCount`, `$page`, `$viewport`, `$result`); icon and image values are plain `$static` payloads (`{ type, name }` / `{ path }`) resolved by the `$static` handler
-- `$result` is only meaningful inside async-action result handlers (`onSuccess` / `onFailed` / `onSettled` on `loginUser`, `logoutUser`, `writeDataVariable`, `toggleDataVariable`); `{ $result: 'field' }` reads the named field off the response payload (e.g. `reason`, `username`); outside that context, or for an unknown field, it resolves to `null`
+- `frontend/src/hmi/utils/propertySourceEval.ts` evaluates the scalar property sources through one `SOURCE_HANDLERS` map (`$static`, `$var`, `$loc`, `$urlParam`, `$pageIsActive`, `$if`, `$compare`, `$not`, `$formula`, `$random`, `$switch`, `$user`, `$userGroups`, `$device`, `$time`, `$widgetProp`, `$componentProp`, `$repeatItem`, `$result`, `$stringExpr`, `$http`, `$alarmCount`, `$recipe`, `$page`, `$viewport`); the list-valued `$languages` and `$recipeList` are resolved on the list paths (`useItemListProp`, `useRecordListProp`, the Dropdown's options) instead; icon and image values are plain `$static` payloads (`{ type, name }` / `{ path }`) resolved by the `$static` handler
+- `$result` is only meaningful inside async-action result handlers (`onSuccess` / `onFailed` / `onSettled` on `loginUser`, `logoutUser`, `writeDataVariable`, `toggleDataVariable`, `recipeLoad`, `recipeSave`); `{ $result: 'field' }` reads the named field off the response payload (e.g. `reason`, `username`); outside that context, or for an unknown field, it resolves to `null`
 - `$stringExpr` parses `{N}` placeholders inside a template, where `N` is a wildcard key. Placeholders may wrap the wildcard with chained transforms — `ToLower`, `ToUpper`, `Trim`, `Capitalize`, `Round`, `Round1`, `Round2` — applied inside-out
-- `$user` with `field: 'userList'` is component-resolved (only valid for `option-list` fields); `$languages` is also component-resolved
-- `$widgetProp` is resolved at component-tree render time by reading the current `WidgetContext`; it is never evaluated by `propertySourceEval.ts` and is forbidden outside a widget's internal tree
+- `$user` with `field: 'userList'` is list-valued: an `option-list` or `item-list` field resolves it to the project's users, while a scalar field gets the usernames joined. On an `option-list`, `field: 'groups'` lists every user group (the Dropdown resolves both itself); elsewhere it is the signed-in user's groups. `$languages` is likewise resolved by the widget
+- `$widgetProp` reads another widget's export from `widgetPropStore` through the eval context's `resolveComponentProp` (keyed by the exporting widget's id, and per copy inside a Repeater); `path` drills into a struct or array export
 - bad-quality and disconnected `$var` reads resolve to the field's fallback (not a crash); coercion between mismatched base types follows the rules in [value-types.md](value-types.md) (`frontend/src/hmi/utils/coercion.ts`)
 - `frontend/src/hmi/hooks/useEvalContext.ts` wires a reactive `EvaluationContext` (variable store, translation store, URL params, host and active page IDs) for use in HMI components. `$page` resolves the **host** page — `HostPageContext`, provided by a page's own content and by a page-group's chrome bands — so it reports the page being rendered even inside a page overlay, which renders a page without touching the URL. Outside any page (app shell regions) it falls back to the route's active page; the index route names no page in the URL, so that id falls back in turn to `resolvePageContext(pages)` — the same page `HmiView` picks, so neither `$page` nor `$pageIsActive` reports "no page" on the landing screen
 - Variable shape metadata and the binding-picker tree speak **value types** (`boolean`/`integer`/`float`/`string`/`datetime`, plus `[]` arrays and named structs); real OPC-UA types are converted to these at the two HMI boundaries (`DatasourceManager.variable_metadata` and `GET /api/datasources/{name}/variables`). The classifier and conversion live in `frontend/src/shared/utils/valueTypes.ts` (and `backend/core/value_types.py`).
 - `nodeVarType` and the array-shape helpers in `frontend/src/shared/types/` derive array types from `is_array`; an optional positive `array_length` records only a fixed size.
 - `layoutUtils` getters (`getPropString`, `getPropNumber`, `getPropBoolean`) accept an optional `EvaluationContext` to resolve property sources at render time
 - `layoutUtils` hooks (`usePropVar`, `usePropString`, `usePropNumber`, `usePropBoolean`, `usePropStruct`, `useCssVar`) call `useEvalContext()` internally and simplify the most common per-component patterns; prefer these over the plain getters inside component render functions
-- `frontend/src/hmi/utils/widgetActions.ts` centralizes action execution so components define actions and delegate runtime behavior to one executor; supported action types: `openDialog`, `openPageOverlay`, `closePageOverlay`, `writeDataVariable`, `toggleDataVariable`, `setLanguage`, `loginUser`, `logoutUser`, `showAlert`, `showToast`; `ActionsConfig` supports both `onPress` and `onChange` event keys; schema fields of type `actions` carry an optional `event` string to indicate which key is used
-- `loginUser`, `logoutUser`, `writeDataVariable` and `toggleDataVariable` are async — each generates a `requestId` per invocation, registers a pending entry with `frontend/src/hmi/utils/actionDispatcher.ts`, and the backend echoes the `requestId` on its response. On response, the dispatcher invokes the authored `onSuccess` or `onFailed` followed by `onSettled`, replaying the original firing site's `inputScopeProps` so nested `$widgetProp` references still resolve. Pending entries expire after 10 s as `reason: 'timeout'`, and flush as `reason: 'disconnected'` when the WebSocket closes (`useWebSocket.ts` → `flushAllAsDisconnected`). The outer action list is still fire-and-forget — sequencing across an async action must use its `onSuccess` slot, not list ordering
+- `frontend/src/hmi/utils/widgetActions.ts` centralizes action execution so components define actions and delegate runtime behavior to one executor; supported action types (`ButtonAction` in `shared/types/config.ts`): `openDialog`, `openPageOverlay`, `closePageOverlay`, `writeDataVariable`, `toggleDataVariable`, `if`, `setLanguage`, `setActiveTheme`, `loginUser`, `logoutUser`, `recipeLoad`, `recipeSave`, `showAlert`, `showToast`; `ActionsConfig` supports both `onPress` and `onChange` event keys; schema fields of type `actions` carry an optional `event` string to indicate which key is used
+- `loginUser`, `logoutUser`, `writeDataVariable`, `toggleDataVariable`, `recipeLoad` and `recipeSave` are async — each generates a `requestId` per invocation, registers a pending entry with `frontend/src/hmi/utils/actionDispatcher.ts`, and the backend echoes the `requestId` on its response. On response, the dispatcher invokes the authored `onSuccess` or `onFailed` followed by `onSettled`, replaying the original firing site's `inputScopeProps` so nested `$widgetProp` references still resolve. Pending entries expire after 10 s as `reason: 'timeout'`, and flush as `reason: 'disconnected'` when the WebSocket closes (`useWebSocket.ts` → `flushAllAsDisconnected`). The outer action list is still fire-and-forget — sequencing across an async action must use its `onSuccess` slot, not list ordering
 - `frontend/src/hmi/hooks/useGlobalEvents.ts` runs the configured `globalEvents` action arrays on app/page/locale/auth lifecycle (`onHmiLoaded`, `onPageLoaded`, `onLocaleChanged`, `onUserLoggedIn`, `onUserLoggedOut`)
 
 ## Runtime Views
@@ -542,9 +565,8 @@ Runtime implementation:
 
 It supports these special `pageId` values:
 
-- `__header__`
-- `__footer__`
-- the id of any page in the Dialogs root
+- `__header__`, `__footer__`, `__leftSidebar__`, `__rightSidebar__` — one shell region on its own
+- the id of any page or page group in the Dialogs root — drawn in a modal card, as an overlay shows it
 
 The `postMessage` payloads themselves live in
 `config/components/editor/LivePreview/previewSync.ts`, not in the components
@@ -574,9 +596,7 @@ derived secondaries, cross-tab sync, the shared primitives, and the
 per-component CSS rules.
 
 That document is the single home for all of it. Nothing about tokens or style
-conventions is restated here — an earlier copy in this file drifted until it
-claimed `config.css` was the only file in `config/styles/`, while theming.md
-correctly documented `config.tokens.css` sitting beside it.
+conventions is restated here, so the two cannot drift apart.
 
 ## Runtime SDK For Custom Components
 

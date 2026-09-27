@@ -13,8 +13,12 @@ broadcast/batching machinery is in `backend/services/websocket_manager.py`.
 A **project instance** (`backend/main.py`) owns `/ws`. Each browser tab opens one
 socket and keeps it alive for the app's lifetime. Through the manager front door
 the socket is reached at `/runtime/<slug>/ws` or `/editor/<slug>/ws`, which the
-manager proxies to the child's `/ws` (the manager session cookie authorizes the
-upgrade). A directly-run instance binds `127.0.0.1` and is unauthenticated.
+manager proxies to the child's `/ws`. Only the editor's socket needs a
+device-admin session cookie; the runtime socket is public, like the rest of the
+live view. The manager closes either upgrade with `1008` when the session is
+missing (editor) or the project's users document is unusable, and with `1011`
+when the project is not running. The child itself binds `127.0.0.1` and does
+not authenticate `/ws`.
 
 Inbound frames are capped at **64 KiB**; oversized or non-JSON frames are logged
 and dropped. Unknown client `type` values are ignored. Composite keys use the
@@ -95,7 +99,7 @@ leaving a half-initialised socket registered.
 | `opcua_status` | `{ type, datasource, connected }` | Per-datasource connection-state change. |
 | `alarm_snapshot` | `{ type, active: AlarmInstance[], summary: AlarmSummary }` | On connect. |
 | `alarm_update` | same shape as `alarm_snapshot`, `type: "alarm_update"` | On fire / clear / ack. |
-| `recipe_snapshot` | `{ type, config: RecipeConfig, loaded: { [typeId]: { datasetId, loadedAt } }, lastResult }` | On connect (recipes feature only). |
+| `recipe_snapshot` | `{ type, config: RecipeConfig, loaded: { [typeId]: { datasetId, loadedAt } }, lastResult }` | On connect. |
 | `recipe_update` | same shape as `recipe_snapshot`, `type: "recipe_update"` | On config change / download / upload. |
 | `recipe_response` | `{ type, requestId, result }` | A correlated `recipe_load` / `recipe_save` succeeded — `result` is the `DownloadResult` (load) or `{ datasetId }` (save). |
 | `recipe_error` | `{ type, requestId, reason }` | A correlated `recipe_load` / `recipe_save` failed. |
@@ -136,7 +140,9 @@ leaving a half-initialised socket registered.
 
   Current producers: `HmiView` (active page + open overlays), `PreviewView`
   (preview page/overlay context), `DatasourceVariableTable` (explicit
-  `priorityKeys` for visible rows after scroll settle).
+  `priorityKeys` for visible rows after scroll settle), `RecipeTable` (explicit
+  `priorityKeys` for a recipe type's bound parameters while its Live column is
+  on).
 
 - `write_field` — write a value to a variable.
 
@@ -144,24 +150,29 @@ leaving a half-initialised socket registered.
   {
     "type": "write_field",
     "datasource": "MyPLC",
-    "path": "Motor1/Command",
-    "field": "bValue",
-    "value": true,
+    "path": "Motor1",
+    "field": "Speed",
+    "value": 1200,
     "scope": "runtime:main",
     "requestId": "8f3c…"
   }
   ```
 
-  - `datasource`, `path`, and `value` are required (`value` must not be `null`).
-    `field` selects a struct field; omit it for a scalar.
-  - If the path ends with `[N]` the current array is read from cache, element `N`
-    is patched, and the full patched array is written.
+  - `datasource`, `path`, and `value` are required; a missing one is
+    `bad_request`, a present `null` value is `invalid_value`. `field` selects a
+    struct field; omit it for a scalar.
+  - The runtime's `writeDataVariable` action names its variable with one sourced
+    `target` (`{"$var": {"path": "<ds>:<path>", "index"?}}`); the client resolves
+    it into this `datasource` / `path` pair, an `index` becoming a `[N]` suffix.
+  - If the path ends with `[N]`, element `N` is patched into the current array
+    and the full patched array is written — the current value is a fresh node
+    read for OPC-UA, the in-memory cache for a static datasource.
   - Permission check: if the variable defines `interactableByGroups`, the scoped
     identity's groups must intersect that list.
-  - Values are coerced toward the target OPC-UA datatype (boolean, integer with
-    range check, float with finite check, string). Boolean strings accept
-    `true/false/1/0/on/off/yes/no`; integers reject out-of-range; floats reject
-    `NaN`/`inf`.
+  - Values are coerced per the
+    [OPC-UA write-coercion matrix](backend.md#opc-ua-write-coercion-matrix), then
+    refused as `read_only` unless the variable written is marked `writable: true`,
+    then checked against its `min`/`max`.
   - `static` datasources are updated in-process; OPC-UA datasources route through
     the pool engine.
   - `requestId` is optional. When supplied the backend replies with
@@ -180,7 +191,8 @@ leaving a half-initialised socket registered.
   }
   ```
 
-  - Same fields as `write_field` minus `value` and `field`. The backend reads
+  - Same fields as `write_field` minus `value` and `field`; the
+    `toggleDataVariable` action's `target` is resolved the same way. The backend reads
     the current value itself (a fresh node read for OPC-UA, the cache for a
     static datasource) and writes its inverse through `write_service.write_value`,
     so the permission check, range check, audit record and reply are the same
@@ -189,7 +201,7 @@ leaving a half-initialised socket registered.
     whose current value is not a boolean (never read, read failed) fails with
     `value_unavailable` and writes nothing.
 
-- `recipe_load` — download a saved dataset (recipes feature).
+- `recipe_load` — download a saved dataset.
 
   ```json
   { "type": "recipe_load", "datasetId": "espresso", "verify": true, "scope": "runtime:main", "requestId": "…" }
@@ -200,7 +212,7 @@ leaving a half-initialised socket registered.
   - Replies `recipe_response` (carrying the `DownloadResult`) or `recipe_error`
     when `requestId` is supplied; fire-and-forget otherwise.
 
-- `recipe_save` — upload live values into a dataset (recipes feature).
+- `recipe_save` — upload live values into a dataset.
 
   ```json
   { "type": "recipe_save", "datasetId": "espresso", "scope": "runtime:main", "requestId": "…" }
@@ -299,7 +311,7 @@ browser tabs can refetch or surface conflicts.
   "artifact_type": "page",
   "artifact_ids": ["page-home"],
   "source": "mcp",
-  "agent_label": "Claude@1.0",
+  "agent_label": "Claude_1_0",
   "summary": "Added Container widget 'w_abc' to 'page-home'",
   "diff": [ { "op": "add", "path": "/sections/content/0", "value": {} } ]
 }

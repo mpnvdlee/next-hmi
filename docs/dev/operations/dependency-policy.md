@@ -15,9 +15,8 @@ repository. Neither set is part of this AGPL tree.
 
 ## Package-managed dependencies
 
-`backend/requirements.txt` (pip) and `frontend/package.json` (npm) are covered
-by automated scanning, not by this table — their versions are pinned in those
-manifests directly.
+`backend/requirements.txt` (pip) and `frontend/package.json` (npm) pin their
+versions in those manifests directly and are covered by the scans below.
 
 ## Scan, report, and review cadence
 
