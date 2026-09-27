@@ -4,415 +4,279 @@ All notable changes to NEXT HMI are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-While the project is pre-1.0, minor versions may include breaking changes; these
-are always called out under a **Changed** or **Removed** heading.
+From 1.0.0 on, a patch release never makes a project unopenable: a change to the
+project file format ships only in a release whose minor or major number moves.
+Breaking changes are always called out under a **Changed** or **Removed**
+heading.
 
-## [1.0.0] - Unreleased
+## [1.0.0] - 2026-09-27
+
+The first stable release. Projects saved by a 0.0.1 release candidate are
+upgraded to file format 9 on first start, after you confirm it and a backup is
+taken — see **Changed** for what that rewrites.
 
 ### Added
 
-- **A Video widget plays recorded footage on a screen.** Putting a changeover
-  clip or a line-clearance procedure on a panel meant a Web Frame pointed at
-  something else that hosted the file. **Video** is a widget now: it takes a
-  file from the project or a URL, with the settings you would expect — autoplay
-  (muted, as every browser insists), loop, controls, fit, poster image, preload,
-  playback rate and volume — plus a **Play when** binding that starts and stops
-  it from a variable, **State** and **Current time** write-backs, and On Play /
-  Pause / Ended / Error actions. It plays recorded files: HLS playlists and RTSP
-  camera feeds are not streams it can open. A **Codec** setting and a second,
-  fallback source are there because H.265 does not decode everywhere — which
-  file to ship, and what the widget shows when the panel cannot play one, is in
+- **Repeater widget.** Draws its children once per element of an array — an
+  array tag, a typed-in list, an `$http` response, the saved recipes, or the
+  users or groups. A new **Repeat Item** source (`$repeatItem`) reads the
+  copy's element, a member of it, or its index; the variable picker's
+  **[#] this copy** row reads a second array at the same position. With a tag
+  as Items, a copy's inputs and write actions write back to their own element.
+  **Start at**, **Max items** and **Empty text** cover the rest. See
+  [Repeating widgets over an array](docs/user/properties.md#repeating-widgets-over-an-array-repeater).
+
+- **Video widget and an `assets/videos/` folder.** Plays `.mp4`, `.webm`,
+  `.m4v` and `.mov` files from the project or a URL, with autoplay, loop,
+  controls, fit, poster, playback rate and volume, a **Play when** binding,
+  **State** / **Current time** write-backs, On Play / Pause / Ended / Error
+  actions, and a fallback source for panels that cannot decode H.265. The
+  folder answers range requests, so scrubbing does not wait for the whole clip.
+  A `video` property type opens the same picker in custom widgets and
+  component inputs. Recorded files only — no HLS or RTSP streams — and MCP's
+  `assets_upload` still takes icons and images only. See
   [Files & assets](docs/user/files.md#video-files).
 
-- **Projects have an `assets/videos/` folder.** It sits beside `icons/` and
-  `images/` and works the same way: drop a `.mp4`, `.webm`, `.m4v` or `.mov` in
-  it — subfolders included — reload the editor tab, and pick the file. `.mkv` is
-  deliberately not offered; no browser plays it in a `<video>` element. The
-  folder is served read-only like the rest of `/assets/` and answers range
-  requests, so the operator can drag the scrub bar without waiting for the whole
-  clip. Over MCP `assets_list` reports videos and the delete guard protects
-  them, but `assets_upload` still takes icons and images only: its 5 MB payload
-  cap means nothing to a video, so clips are copied in or arrive with a project
-  import. See
-  [Files & assets](docs/user/files.md#where-each-kind-of-file-lives).
+- **New actions.** **If / Else** runs one of two action lists on a condition
+  ([Logic](docs/user/actions.md#logic)). **Toggle Boolean Variable** flips a
+  tag from its server-side value over a new `toggle_field` message, failing
+  with `value_unavailable` while no value is known
+  ([Machine actions](docs/user/actions.md#machine)). **Show Toast** gains a
+  `success` severity.
 
-- **A `video` property type.** A schema field typed `video` — on a built-in
-  widget, a custom widget, or a component input — opens the video picker and
-  stores the same small `{ path }` payload an `image` field does, from the same
-  sources.
+- **Page, page group and dialog events.** Page Open / Page Close (Group Open /
+  Group Close) run as the operator arrives and leaves. A dialog's events run
+  with its input parameters in scope, and **Write Data Variable** can take its
+  value from one. See [Page events](docs/user/actions.md#page-events).
 
-- **Every project row shows a picture of its main page.** The dashboard listed
-  projects as name, id, folder and status, which tells you nothing about which
-  screen set a row actually is — on an installation carrying five of them, the
-  only way to tell was to open each one. The editor now renders the project's
-  main page off-screen after each save and stores it as a thumbnail, and the row
-  shows it; a project that has never been saved gets a plain placeholder. The
-  capture runs after the save rather than inside it, so it can never delay or
-  fail one, and it drives the preview surface rather than the runtime — which
-  means a save does not fire `onHmiLoaded` and cannot write to a datasource as a
-  side effect. The picture is installation-local: it never travels with an
-  export, a zip, or a transfer. See
-  [Managing projects](docs/user/projects.md#the-manager-dashboard).
+- **`$not` and `$formula` sources.** `$not` inverts a boolean; `$formula`
+  computes a number with `+ - * /` and parentheses, such as `({1} - 32) / 1.8`,
+  and is empty when an input is missing or it divides by zero. See
+  [The sources](docs/user/properties.md#the-sources).
 
-- **Creating a project starts from a template.** **+ New project** now asks what
-  to start from before it asks where to put it. **Empty project** is the
-  previous behaviour, one blank page. **NEXT BREW example** installs a working
-  demo machine — eight pages plus two dialogs, a static datasource, alarms,
-  recipes, two themes, two languages and a five-step guided setup wizard —
-  which is the shortest path from installed to something to read. See
+- **Project templates.** **+ New project** asks what to start from: an empty
+  project, or the **NEXT BREW** demo machine — three pages, a Dialogs folder
+  with a sign-in dialog and a five-step setup wizard, a static datasource,
+  alarms, recipes, two themes and two languages. It ships the demo accounts
+  `brewer` and `barista`, whose passwords its sign-in dialog prints; change or
+  delete them before a project built from it leaves the test bench. See
   [How to create a project](docs/user/projects.md#how-to-create-a-project).
 
-- **The User Badge signs operators in and out.** The badge showed who was
-  signed in and nothing more, so every project rebuilt the same pair of Log in /
-  Log out buttons beside it, each gated on its own `$compare` against `guest`.
-  It now carries the affordance itself: a **Log in** button while the session is
-  the anonymous `guest`, the identity plus a sign-out button once it is not, and
-  an optional **On Press** for the identity. Each half appears only when you
-  give it actions to run, so a panel that never signs anyone out is unchanged.
-  The NEXT BREW example drops its own two buttons and wires the badge instead.
-  See [Sign in and out on a screen](docs/user/users.md#sign-in-and-out-on-a-screen).
+- **Project thumbnails on the dashboard.** The editor renders the main page
+  after each save — through the preview surface, so a save never fires
+  `onHmiLoaded` or writes to a datasource — and the project row shows it. The
+  picture never travels with an export or a transfer. See
+  [Managing projects](docs/user/projects.md#the-manager-dashboard).
 
-- **A secured OPC-UA connection can be set up without leaving the editor.**
-  Certificates had to exist before the connection did — generated with `openssl`
-  somewhere else and uploaded. **Generate certificate…** now writes a
-  self-signed RSA-2048 pair into the project's `certs/` folder and fills the
-  path fields in, and **Certificate info** reads one back: subject, fingerprint,
-  issue and expiry dates, subject alt names, self-signed or not, and whether it
-  is valid, inside the 90-day warning window, or already expired. Generating
-  again under the same name overwrites in place, so renewal is one click rather
-  than a folder of accumulating files. See
+- **OPC-UA certificates from the editor.** **Generate certificate…** writes a
+  self-signed RSA-2048 pair into the project's `certs/` folder and fills in
+  the paths; **Certificate info** shows subject, fingerprint, validity and
+  whether it expires within 90 days. Regenerating under the same name renews
+  in place. See
   [Secure the connection with certificates](docs/user/datasources.md#secure-the-connection-with-certificates).
 
-- **Connect and Disconnect are explicit on an OPC-UA datasource**, replacing a
-  single **Reconnect**. A connection stays down until you ask for it and stays
-  down after you disconnect, instead of retrying underneath you, and a failed
-  attempt prints the server's own reason under the status rather than leaving
-  you to read the log. See
+- **Explicit Connect and Disconnect on an OPC-UA datasource**, replacing
+  **Reconnect**. A connection stays down until you connect it, and a failed
+  attempt shows the server's reason under the status. See
   [Connect, disconnect, and see why it failed](docs/user/datasources.md#connect-disconnect-and-see-why-it-failed).
 
-- **The editor's top bar can transfer the open project.** Sending a project to
-  another device meant leaving the editor for the dashboard and finding the row
-  again. The bar now carries **Transfer**, opening the same dialog. What travels
-  is the project on disk, so the button stays disabled while there are unsaved
-  edits rather than silently sending the previous state. See
+- **Sign in and out from the User Badge.** It shows **Log in** for the
+  anonymous `guest` and a sign-out button once someone is signed in, each only
+  when you give it actions. See
+  [Sign in and out on a screen](docs/user/users.md#sign-in-and-out-on-a-screen).
+
+- **Transfer from the editor, with a dialog that explains itself.** The top
+  bar carries **Transfer** (disabled while edits are unsaved). A refusal names
+  its cause and fix — wrong peer password, pairing lockout, unresolved host,
+  closed port, TLS or pinned-certificate mismatch — and an id or folder
+  collision is detected before sending. A failed transfer can be retried and
+  resumes rather than starting over. See
   [Push & pull between devices](docs/user/projects.md#push--pull-between-devices).
 
-- **A transfer dialog that explains itself.** A refusal used to surface as the
-  backend's raw sentence. The dialog now names the cause and the fix — the
-  peer's device-admin password rather than this one's, a pairing lockout with
-  the countdown to wait out, a host name that did not resolve, an address
-  outside the trusted LAN, a port with nothing listening, a failed TLS
-  handshake, a peer certificate that no longer matches the pinned one — and
-  detects an id or folder collision *before* sending, offering the resolution
-  choices in place. Progress is named as it runs rather than shown as a bar.
+- **A plain-HTTP notice on the dashboard.** Above the project list, on the
+  settings page and on the sign-in screen, whenever the browser is not in a
+  secure context, with a link to **Settings → HTTPS**. It cannot be dismissed;
+  the operator runtime and the editor do not show it. See
+  [HTTPS](docs/user/install.md#https).
 
-- **The manager dashboard now says when it is serving without HTTPS.** Binding
-  every interface by default made plain HTTP a network exposure rather than a
-  local one, and the switch that fixes it sat in Settings with nothing pointing
-  at it. A notice now stands above the project list, on the settings page, and
-  on the sign-in screen — the one that matters most, since the device-admin
-  password typed into it is part of what crosses the wire in the clear. The
-  browser decides when it appears: a page served over HTTPS, or reached at
-  `localhost` / `127.0.0.1`, is a secure context and sees nothing; the same
-  install opened at `http://192.168.1.10:8000` is not, and gets the notice with
-  a link to **Settings → HTTPS**. It states the exposure instead of acting on
-  it — the same setup is routine on a sealed machine network and wrong on an
-  office LAN, and only the operator knows which one this is — and it cannot be
-  dismissed, because nothing has changed until HTTPS is on. The operator
-  runtime and the editor do not carry it; someone at a wall panel cannot act on
-  it. See [HTTPS](docs/user/install.md#https).
+- **Container Overflow.** Visible (the default), Clip or Scroll for children
+  that do not fit; Clip and Scroll need a Fixed or Fill size. See
+  [Container](docs/user/catalog.md#container).
 
-- **Catalog polish.** Trend Chart's Variables field picks a live variable
-  through a picker instead of a typed path; Page Navigator's Previous and Next
-  controls each gate on their own enabled condition; Button and Status Pill
-  both gained a corner-radius control; Value Display now accepts `Float` and
-  `Integer` only, the two types it actually renders; and a Navigation Menu with
-  no page in the tree naming it is no longer rendered as an empty shell. See
-  [Built-in widget catalog](docs/user/catalog.md).
+- **Dropdown options from the user list or user groups**, through the **User**
+  source's **All users** and **All user groups**. See
+  [Dropdown](docs/user/catalog.md#dropdown).
 
-### Removed
+- **Operator sign-in throttling.** Five wrong passwords for one username lock
+  it for a minute, and the login fails with `rate_limited`. An account with no
+  password can never be signed in as. See
+  [Add users and groups](docs/user/users.md#add-users-and-groups).
 
-- **Dialogs, as a separate kind of document.** A dialog was built like a page,
-  but was not one: it stored its widgets inline in `config.json`, carried its
-  own title and close settings, and only the **Open Dialog** action could show
-  it — so a screen authored as a page could not become a popup, and a popup
-  could not grow tabs, a header, or sub-pages without being rebuilt. The
-  **Dialogs** section of the page tree now holds ordinary **pages and page
-  groups**, and **Open Page Overlay** opens them. Everything a page has comes
-  with them: sections, page events, group chrome, the same canvas.
-  **Open Dialog** and **Close Dialog** are gone, along with the `DialogConfig`
-  shape and the `openDialogIds` field of the `set_context` / `context_ready`
-  websocket messages.
+- **Upgrades ask first.** **Start** on a project saved by an older build asks
+  for confirmation, zips the project into `.backups/` before rewriting
+  anything, and reports what changed. A project saved by a newer build shows
+  **Requires update** with the version it needs. See
+  [The Manager dashboard](docs/user/projects.md#the-manager-dashboard).
 
-  On disk, a Dialogs-folder page keeps its document in the project's own
-  `dialogs/` directory beside `pages/`, so the two kinds of screen stay
-  separable; the upgrade moves them there, and dragging a page between the
-  two sections moves its document with it.
+- **A startup banner that says what to do next** — numbered getting-started
+  steps, the running project, and clickable URLs, LAN addresses included. See
+  [Installing](docs/user/install.md#installing).
 
-  Existing projects are converted on first open, at project format 8: every
-  dialog becomes a page in the Dialogs folder with its widgets, its input
-  parameters and its close behaviour intact. A project is backed up before it
-  is migrated, as always. **Open Dialog** keeps its name and now names a page
-  rather than a dialog, so a hand-written custom widget that hard-codes one
-  only has to rename its `dialogId` field to `pageId`; **Close Dialog** becomes
-  **Close Dialog/Overlay** (`closePageOverlay`), the one action that closes
-  either kind.
+- **Composition primitives in the custom-widget SDK**: `renderWidget`,
+  `renderSlotWidgets`, `childConfigs`, `useComponentSlot`, `useIsPreview`,
+  `useActivePage`, `useAnchoredStyle` and `useCurrentUserGroups`. See
+  [Composition](docs/dev/reference/custom-widgets.md#composition).
 
-  Opening a screen over another is two actions, by which section it comes from.
-  **Open Dialog** lists the Dialogs folder and fills the target's input
-  parameters in. **Open Page As Overlay** lists the navigable pages and takes
-  none. Each picker therefore offers exactly the screens it can reach, and
-  moving a screen between the two sections is flagged by the warnings pill,
-  which names the action to switch to.
-
-  What is new rather than carried over: **input parameters** and the **Overlay**
-  settings (close button, close on backdrop) are declared on any page or page
-  group in the Dialogs folder, so a parameterised popup can now be a whole
-  tabbed page group. A page in the **Pages** section is a navigation
-  destination, so it declares neither — it can still be opened as an overlay,
-  taking no parameters and using the default close behaviour. See
-  [Pages & navigation](docs/user/pages.md#overlays-a-page-shown-on-top-of-the-current-screen).
-
-- **The per-project operator password prompt.** A project copied from the
-  bundled seed used to show **Set operator password** instead of Start, and
-  refused its runtime and editor until a device admin had minted that project's
-  `admin` account. The device-admin password already gates every `/runtime/` and
-  `/editor/` route, so the second credential locked a door that was locked, once
-  per project created. A new project now carries only the anonymous `guest` user
-  and opens as soon as it starts; add real accounts from the editor's **Users**
-  area when you want them. No template has ever shipped a usable credential, and
-  none does now.
-
-- **The "Config access — allowed groups" setting.** Users → Settings carried a
-  group picker documented as deciding who may open the editor. Nothing ever
-  read it: the editor has always been gated by the device-admin password alone,
-  so the setting promised a fence that did not exist — and the troubleshooting
-  guide sent you to it when the editor would not open. A project in the field
-  that still carries the key keeps opening; the key is ignored, and dropped the
-  next time users are saved.
+- **Catalog polish.** Trend Chart picks its variables through the picker; Page
+  Navigator's Previous and Next can each be relabelled, gated or hidden; Button
+  and Status Pill have a corner radius; Value Display accepts `Float` and
+  `Integer` only; a Navigation Menu no page names is not drawn as an empty
+  shell. See [Built-in widget catalog](docs/user/catalog.md).
 
 ### Changed
 
-- **New projects default to your Documents folder.** The runtime picked a
-  projects root for you on first launch — `<runtime_home>/Projects` — and
-  created the folder to go with it, so an installation that kept its projects
-  on a plant share still grew an empty `Projects` directory nobody asked for,
-  and the create dialog opened somewhere buried under the runtime's own
-  bookkeeping. The default is now your **Documents** folder: a place that
-  already exists, so nothing is created for it, and one you can find without
-  being told where to look. An existing install that still carries the
-  auto-written root is unpinned on the next start — the folder itself is left
-  alone, projects inside it stay registered where they are — while a root you
-  set yourself is untouched. Every create / import / pull dialog still lets you
-  type or browse anywhere. See
-  [Changing the default projects root](docs/user/install.md#changing-the-default-projects-root).
+- **Types match exactly.** A variable or source fits a field only when its type
+  is the field's type — an Integer tag no longer fills a Float field — except a
+  number filling a `Duration`. A field that takes several types lists them all,
+  and each slot inside a source has its own type. The backend applies the same
+  rules to saved projects, component inputs, `$componentProp` / `$widgetProp`
+  reads and every action field; a binding that no longer fits is flagged, not
+  rewritten. `getPropNumber` / `usePropNumber` accept a numeric string and no
+  longer round. See [The sources](docs/user/properties.md#the-sources) and
+  [The warnings pill](docs/user/diagnostics.md#the-warnings-pill).
 
-- **Layout sizing is Hug / Fill / Fixed, and the raw flex rows are gone.** The
-  Layout panel offered Basis, Grow, Shrink and Align self *alongside* a width
-  and a height, so the same question could be answered twice, in two
-  vocabularies, and the two could disagree — and the panel gave no hint which
-  one won. Width and Height are each one row now: a mode and, under **Fixed**, a
-  length. **Hug** is the content's own size, **Fill** takes what the parent has
-  left, and **Fill weight** — one number per widget, below both rows — splits
-  that leftover space between Fill siblings. Min/Max bounds sit under the axis
-  they bound, all rows visible rather than folded behind a disclosure. Authored
-  projects carrying the old keys keep working. See
-  [Layout](docs/user/layout.md#the-layout-fields).
+- **Read-only variables refuse writes.** A variable not marked writable — or
+  stating no access at all — rejects every write with a new `read_only` reason
+  before it reaches the PLC: control writes, write and toggle actions, recipe
+  downloads and `POST /api/datasources/write`. `var_metadata` carries
+  `writable`. See
+  [Write back to the machine](docs/user/subscribing.md#write-back-to-the-machine).
 
-- **A widget with no size of its own now hugs its content, not stretches to
-  fill.** Leaving a widget's Width or Height unset used to stretch it across
-  its parent's cross axis by default; it now hugs the size of its content
-  instead, matching the **Hug** / **Fill** / **Fixed** model everywhere else in
-  the Layout panel. This is a deliberate change, not a bug. **It changes how an
-  existing project renders:** a widget that relied on that stretch — because
-  its Width or Height was never explicitly set to **Fill** — can look smaller
-  or different the first time you open the project on this build. Open the
-  widget's **Layout** panel and set the affected axis to **Fill** to put it
-  back the way it was. See [Layout](docs/user/layout.md#the-layout-fields).
+- **Layout is Hug / Fill / Fixed.** Width and Height are one mode each, with a
+  length under Fixed and a **Fill weight** for sharing leftover space; Basis,
+  Grow, Shrink and Align self are gone and old keys are rewritten on first
+  open. **A widget with no size set now hugs its content instead of
+  stretching** — a widget that relied on the stretch needs its axis set to
+  **Fill**. A Navigation Menu sizes from the Layout panel like every other
+  widget. See [Layout](docs/user/layout.md#the-layout-fields).
 
-- **A Navigation Menu is sized from the Layout panel like every other widget.**
-  Its stylesheet pinned `width: 100%` plus fixed pixel widths for a menu placed
-  straight in a shell region, which outranked every Width the panel offered —
-  including the Hug it displayed as the default — so a menu in a container wider
-  than its labels kept the leftover space inside itself. The pins are gone and
-  the widget honours its layout properties.
+- **The Button binds a plain boolean**, written `true` on press, instead of a
+  `bVisible` / `bEnabled` / `bValue` struct. A Button still bound to a struct is
+  flagged: rebind **Variable** to `bValue`, and **Visible** / **Interactable**
+  to the other two if you used them. See [Button](docs/user/catalog.md#button).
 
-- **A page reveals when its widgets are ready, not when its data is.** A page
-  used to wait on config hydration and then paint as an empty shell while widget
-  modules loaded, and a slow OPC-UA read stalled every navigation. The reveal
-  now waits on the page's own widget modules, with a 5-second safety valve, and
-  the boot splash warms the built-ins so later navigations find them in memory.
-  Variables no longer gate it at all. Because data can now arrive after the
-  reveal, the binding overlay splits in two: **red** still means a binding that
-  does not resolve, and a new **amber** mark means a sound binding that no value
-  reached — shown only once the server has said it sent everything it could, so
-  a value still in flight is never flagged. See
+- **Write and toggle actions name their variable with one `target`** — a
+  `$var`, or a `$repeatItem` inside a Repeater — instead of `datasource` /
+  `path`. Projects are rewritten on first open; a custom widget that fires
+  either action must send `target`. See
+  [Machine actions](docs/user/actions.md#machine).
+
+- **Reachable on the network by default.** The manager binds every interface,
+  IPv4 and IPv6, and the banner prints the addresses to use under **On the
+  network**; the dev server does the same. On plain HTTP the device-admin
+  password, operator sign-ins and MCP tokens now cross the network — turn on
+  [HTTPS](docs/user/install.md#https) on a network you do not trust, or set
+  `NEXTHMI_HOST=127.0.0.1` for the old behaviour. Claim a fresh install right
+  away: until a device-admin password is set, whoever reaches the first-run
+  page sets it.
+
+- **Live screens need no password.** `/runtime/<slug>/` serves a deny-by-default
+  allowlist of what a live screen needs without the device-admin session; the
+  editor, dashboard, manager APIs and every write verb stay behind it. Restrict
+  a tag with `interactableByGroups`.
+
+- **`$http` reaches only the servers the project configures**, checked again on
+  every redirect (at most five, caller headers dropped cross-origin).
+
+- **Page reveal waits for the page's widgets, not its data**, with a 5-second
+  safety valve; the rest of the project's widget code loads after the first
+  page settles. The binding overlay adds an **amber** mark for a sound binding
+  no value has reached yet, and judges only the `$if` / `$switch` branch on
+  screen. See
   [The marks on a widget](docs/user/subscribing.md#the-marks-on-a-widget).
 
-- **A new widget arrives with Interactable already on `$userGroups`.** `visible`
-  came pre-wired to that source with an empty group list; `interactable` came
-  with nothing, so locking a control to a group meant switching its source by
-  hand first — the half an operator-facing project reaches for most. Both are
-  seeded now. Behaviour is unchanged: an empty group list is true for everyone.
+- **Faster boot.** Preloaded views, widgets and icons render in one pass: first
+  page on a LAN in about 230 ms cold and 140 ms cached, down from 800 and 700.
 
-- **An unavailable project explains itself at the URL you typed.** Opening
-  `/runtime/<id>/` or `/editor/<id>/` for an instance that is not running
-  redirected to the dashboard with the reason in a query string, so the URL was
-  lost along with the answer. The app now boots at that address and says which
-  it is — not running, crashed, folder missing, or no such project registered —
-  with the way back on the overlay.
+- **New projects default to your Documents folder**, and an auto-written
+  `<runtime_home>/Projects` root is unpinned on upgrade. See
+  [Changing the default projects root](docs/user/install.md#changing-the-default-projects-root).
 
-- **An import refuses an archive that carries no `users.json`.** A metadata
-  block alone does not prove an archive holds a project: a content-less folder
-  packed into a well-formed archive unpacked clean, registered, and then refused
-  to start, surfacing the failure well away from the transfer that caused it.
-  Unpack now also requires the one document the manager and the supervisor both
-  demand. Export is unchanged, so a damaged project can still be carried
-  elsewhere and repaired.
+- **Smaller changes.** A new widget arrives with Interactable on `$userGroups`,
+  like Visible. An unavailable project explains itself at the URL you opened. An
+  import refuses an archive without `users.json`. A Dropdown filled from the
+  user list is valued by username. `$page` inside an overlay answers for the
+  overlay's page. The device-admin session lasts 24 hours instead of a week.
+  `GET /api/projects` reports `credentialsStatus` / `credentialsError`. The dev
+  runner serves the app on `:8000` with the API on `:8001`, like a release
+  install. `sendWsMessage` in the SDK types only `write_field`, the one write
+  frame the backend accepts.
 
-- **The dev runner serves the app on `:8000`, the port a release install uses.**
-  `start-dev.py` ran Vite on `:5173` with the API on `:8000`, so every URL a
-  contributor held — a bookmark, a screenshot in an issue, a tablet's
-  home-screen shortcut, the address in a bug report — pointed at a different
-  port depending on whether it came from a checkout or an install, and the two
-  could not be compared without editing the address bar. Vite now owns `:8000`
-  and proxies to the API server next door on `:8001`, which is the same origin
-  split a release install resolves internally. Nothing about the packaged
-  runtime changed; this is the dev workflow catching up to it. A tool of your
-  own that pointed at `:5173` needs repointing, and `python start-dev.py --stop`
-  now frees `:8000`/`:8001` rather than `:8000`/`:5173`.
+- **Editor polish.** The properties header says whether the selection is a
+  widget or a component and links to the component's editor; **Browse
+  actions…** opens a searchable action catalog. See
+  [The action catalog](docs/user/actions.md#the-action-catalog).
 
+### Removed
 
-- **NEXT HMI is reachable on the network by default.** The manager used to bind
-  `127.0.0.1` and answer nobody but the machine it ran on, so a panel PC that
-  pinged fine was still a refused connection from every other machine until
-  someone found `NEXTHMI_HOST=0.0.0.0` — a variable with no UI and no flag
-  behind it. It now binds every interface, which is what the Docker image has
-  always done, and the startup banner prints the addresses to reach it at from
-  elsewhere — this machine's name and its address, under **On the network** —
-  beside the `localhost` rows for the browser sitting in front of it. The dev
-  server (`start-dev.py`) binds the same way, prints the same block, and
-  accepts any host name that resolves to it, so every adapter on a multi-homed
-  dev box reaches it.
+- **Dialogs as a separate kind of document.** The **Dialogs** section of the
+  page tree now holds ordinary pages and page groups, stored in the project's
+  `dialogs/` folder and served at `/api/config/dialogs/{id}`, with everything a
+  page has. **Open Dialog** (`openDialog`) opens one and fills its input
+  parameters; **Open Page As Overlay** opens a navigable page;
+  **Close Dialog/Overlay** (`closePageOverlay`, formerly `closeDialog`) closes
+  either. Input parameters resolve innermost-first and are read with
+  `$componentProp`. Existing dialogs and their actions are converted on first
+  open; a custom widget that fires `openDialog` renames `dialogId` to `pageId`.
+  `DialogConfig` and `set_context`'s `openDialogIds` are gone. See
+  [Pages & navigation](docs/user/pages.md#overlays-a-page-shown-on-top-of-the-current-screen).
 
-  **This changes an existing install on upgrade.** A deployment that relied on
-  the old default was unreachable from the network and is now reachable from it.
-  On an install that already has a device-admin password, nothing about who may
-  do what changed — that password gates the dashboard and every editor exactly
-  as before, `/mcp` still demands a session cookie or a bearer token, and a
-  running project's live screens were already open to anyone who could reach
-  the host. What changes is who can reach the host, and what that costs on
-  plain HTTP: the device-admin password, every operator sign-in and every MCP
-  token now cross the wire in the clear where they previously never left the
-  machine. Turn on [HTTPS](docs/user/install.md#https) if the network is not
-  one you trust, or set `NEXTHMI_HOST=127.0.0.1` to keep the old behaviour.
+- **Per-project operator passwords.** The device-admin password already gated
+  every runtime and editor, so the second credential and its
+  `POST /api/manager/projects/{id}/operator-setup` route are gone; an empty
+  project opens with only the `guest` user. The unused **Config access —
+  allowed groups** setting is gone too; the key is ignored and dropped on the
+  next save.
 
-  A **first boot with no password set yet** is the one case where reach and
-  authority are the same thing: the first-run page has nothing to authenticate
-  against and accepts whoever arrives first, and the manager advertises itself
-  over mDNS while it waits. Claim a fresh install right after starting it, or
-  start it with `NEXTHMI_HOST=127.0.0.1` until the password is in place.
+- **Margin and the `padding` shorthand.** Spacing between widgets comes from the
+  parent's **Gap** and **Padding**. The upgrade drops stored margins and logs a
+  `Migration note` for each. See [Padding](docs/user/layout.md#padding).
 
-- **A running project's live screens need no password.** `/runtime/<slug>/` is
-  now reachable without the device-admin session — an operator walks up to the
-  panel and works, which is what an HMI is for. The editor
-  (`/editor/<slug>/`), the dashboard and every manager API stay behind that
-  password, and it remains the only gate: there is no second credential.
-  Under `/runtime/` the manager serves a deny-by-default allowlist of exactly
-  what a live screen needs; every write verb, `api/datasources`,
-  `api/system/*`, `api/projects/*` and the instance's `openapi.json` still
-  require the session. Operating is open too — restrict a tag with
-  `interactableByGroups` on the variable if it should not be.
-- **`$http` may only reach servers the project itself configures.** The
-  outbound proxy behind an `$http` property source used to perform any http(s)
-  URL a caller named. It now refuses any origin that no `$http` source in the
-  project names, and re-runs that check on every redirect hop (capped at five,
-  caller headers dropped cross-origin). The allowlist can only be widened by
-  editing the project, so the device-admin password is what decides which
-  servers are reachable. Configure `http://localhost:9000` as a source and it
-  works; what nobody configured does not.
-- **`GET /api/projects` reports credential state as `credentialsStatus` /
-  `credentialsError`** (`ok` or `error`), replacing `operatorSetupRequired`,
-  `operatorSetupStatus` and `operatorSetupError`. A project whose `users.json`
-  is missing, unreadable, corrupt or structurally invalid still shows
-  **Credentials unavailable** and will not start.
-- **`POST /api/manager/projects/{id}/operator-setup` is gone.** Nothing consumes
-  a setup marker, and the `operatorSetup` key is ignored wherever an existing
-  project still carries one — it is dropped the next time users are saved.
+- **The per-page shell override.** Bind a region's **Enabled** to
+  `$pageIsActive` instead. See
+  [Persistent chrome: shell regions](docs/user/layout.md#persistent-chrome-shell-regions).
+
+- **The Min/Max columns of the variable table**, hidden for this release;
+  stored ranges are still enforced.
 
 ### Fixed
 
-- **Windows is a supported platform, not just an advertised one.** rc1 already
-  claimed a Windows binary, but neither the packaged build nor the test suite
-  worked on Windows itself, and the binary that did come out carried no app
-  icon. All three work now — the build, the test suite, and the icon on the
-  packaged `.exe` — which is what makes rc1's claim true.
-
-- **A component definition is covered by undo.** Editing a component's own
-  widgets and inputs used to sit outside the editor's undo stack, so a mistake
-  made while inside a component definition could not be undone the way every
-  other edit can — it now can. A `select` property can also declare options
-  beyond plain strings, a property can be given a default value at the moment
-  it is added instead of only afterward, that default is what an unset field
-  shows instead of a blank, and the outline marking an unfilled slot no longer
-  appears in the widget's UI preview. See
+- **Windows works**: the packaged build, the test suite and the app icon.
+- **Component definitions are covered by undo**, and a property's default shows
+  in an unset field. See
   [Passing values into components](docs/user/properties.md#passing-values-into-components).
-
-- **An absolute URL typed into an asset field stays one.** An image field read
-  anything that did not begin with `images/` as a filename inside that folder,
-  so pasting `https://example.com/logo.png` into one produced
-  `/assets/images/https://example.com/logo.png` and a broken image. `http(s):`,
-  `data:` and `blob:` values are passed through untouched now, in image and
-  video fields alike, and the diagnostics pill no longer reports one as a
-  missing asset. A path already rooted at `icons/` or `videos/` is likewise left
-  alone rather than being prefixed into `images/icons/…`; only a bare filename
-  still resolves inside `assets/images/`, which is what values stored before the
-  folder became part of the path look like.
-
-- **A stroke-outline SVG icon stays an outline.** Custom icon rendering deleted
-  every fill and stroke attribute and forced `fill: currentColor`, which assumed
-  an icon is a filled silhouette — so an outline asset (`fill="none"` plus a
-  stroke) lost its strokes and had its geometry filled in. Icon, Button and Menu
-  Toggle all share that path, so every outline asset broke the same way.
-  Concrete paint values are repointed at the widget's colour now, across
-  attributes, inline styles and `<style>` blocks, and `none` is left alone. See
-  [Files & assets](docs/user/files.md).
-
-- **Browser keychains stay out of a password field.** A String Input with
-  **Password field** ticked offered to save and auto-fill on a panel PC, where
-  the browser profile is shared by everyone who walks up to it.
-
-- **`http://localhost:8000` answers again.** Binding every interface was
-  spelled `0.0.0.0`, which is the *IPv4* wildcard — one AF_INET socket and
-  nothing on `::1`. Browsers resolve `localhost` to `::1` first, so the one URL
-  everyone types was refused while `127.0.0.1` worked, which reads as a broken
-  install rather than a bind that named a family. The default is the empty host
-  now, the one spelling that binds the AF_INET + AF_INET6 pair; `NEXTHMI_HOST`
-  still pins an install to a single interface, and the Docker image no longer
-  pins itself to IPv4 by setting the old default explicitly. The dev server
-  needed both halves separately: Vite binds dual-stack via `server.host: true`,
-  and `start-dev.py` passes uvicorn `::` because its `--reload` path binds
-  through `Config.bind_socket`, which opens an AF_INET socket unless the host
-  string carries a colon — the opposite spelling from the one the launcher's
-  non-reload path needs. Windows keeps its IPv4 bind there, where `::` would
-  trade one half of localhost for the other.
-
-- **A peer now advertises the address the banner told you to use.** mDNS
-  advertised whatever the machine's own name resolved to, which on a stock
-  Debian /etc/hosts is `127.0.1.1` and on a host with wired, wifi and a VPN
-  adapter is whichever interface the name happens to point at — not the
-  address the runtime is actually reachable at. A discovered peer could
-  therefore be dialled at an address the runtime never answered on. The
-  advertisement and the startup banner now both start from the bind host, so
-  they cannot disagree: pin `NEXTHMI_HOST` and both follow the pin, leave it
-  unset and both name the address the kernel routes off-box.
-
-- **A generated HTTPS certificate covers the device's network address.** The
-  banner prints that address under **On the network**, but the self-signed
-  certificate only carried it when the hostname happened to resolve to it — so
-  opening it over HTTPS gave an avoidable certificate warning. New certificates name it. An existing certificate is not rewritten:
-  use **Regenerate** under **Settings → HTTPS → Certificate**, which is also
-  what to do after the device's address changes.
+- **A component reading a member of a struct input shows its data** instead of
+  staying on *No data*, and a bound intermediate struct stays live.
+- **Outline SVG icons keep their strokes**, and a revisited page draws custom
+  icons at once. See [Files & assets](docs/user/files.md).
+- **An absolute URL in an asset field stays a URL.**
+- **A password field stays out of browser keychains.**
+- **mDNS advertises the address the banner prints**, and a generated HTTPS
+  certificate names that address.
+- **Turning HTTPS on or off reopens the page on the new address** once the
+  restart is done.
+- **A Dropdown lists an array another widget exports**, which the editor
+  already offered.
+- **An edited datasource's priority batch delay applies** without a restart.
+- **Restarting a project instance no longer re-launches the manager** the next
+  time it is stopped.
+- **MCP `assets_delete` refuses an asset a component still uses.**
+- **The Docker image reports its release** instead of `dev`.
+- **A datasource node without `kind` binds like a browsed one**, and an alarm
+  without a code has no empty brackets.
+- **Smaller fixes**: browser zoom on the config pages, the boot splash's first
+  frame, widget stylesheets loading with their code, and a superseded websocket
+  no longer disturbing the live one.
 
 ## [0.0.1-rc2] - 2026-08-29
 
