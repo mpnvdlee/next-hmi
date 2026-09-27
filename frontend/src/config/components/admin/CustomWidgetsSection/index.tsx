@@ -125,9 +125,7 @@ export default function CustomWidgetsSection({
                     <p className="cfg-admin-error-detail__token-hint">
                       This error references HMI token(s):{' '}
                       <code className="cfg-font-mono">{hmiVars.join(', ')}</code>.{' '}
-                      <Link to={`${editorPath('/admin')}#theme-tokens`}>
-                        Browse available tokens → Admin: Theme Tokens
-                      </Link>
+                      <Link to={editorPath('/theme')}>Browse available tokens → Themes</Link>
                     </p>
                   )}
                 </details>
