@@ -34,11 +34,11 @@ export function makeDefaultAction(
     case 'closePageOverlay':
       return { type: 'closePageOverlay' };
     case 'writeDataVariable':
-      return { type: 'writeDataVariable', datasource: '', path: '', value: '' };
+      return { type: 'writeDataVariable', value: '' };
     case 'if':
       return { type: 'if', condition: { $var: { path: '' } }, then: [], else: [] };
     case 'toggleDataVariable':
-      return { type: 'toggleDataVariable', datasource: '', path: '' };
+      return { type: 'toggleDataVariable' };
     case 'recipeLoad':
       return { type: 'recipeLoad', datasetId: { $static: '' }, verify: false };
     case 'recipeSave':

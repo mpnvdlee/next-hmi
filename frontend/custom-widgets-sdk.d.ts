@@ -128,6 +128,10 @@ interface VariableBinding {
   index?: number;
 }
 
+/** The variable a write or toggle action writes: a `$var`, or — inside a
+ *  Repeater — the copy's element (`member` of a struct element). */
+type WriteTarget = { $var: VariableBinding } | { $repeatItem: { member?: string } };
+
 /** Mirrors `EvaluationContext` in `hmi/utils/propertySourceEval.ts` — one resolver
  *  per property source. Everything is optional: a context that omits a resolver
  *  makes the matching source evaluate to absent. */
@@ -296,8 +300,8 @@ type ComponentAction =
     }
   | {
       type: 'toggleDataVariable';
-      datasource: string;
-      path: string;
+      /** `{ $var: { path: 'ds:path' } }`, or inside a Repeater the copy's element. */
+      target?: WriteTarget;
       onSuccess?: ComponentAction[];
       onFailed?: ComponentAction[];
       onSettled?: ComponentAction[];

@@ -21,10 +21,16 @@ import type {
   OverlaySize,
   PageNode,
   VariableBinding,
+  WriteTarget,
 } from '@shared/types/config';
+import { writeTargetAddress } from '@shared/types/config';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import { getWriteCoercionKind, type VariableWriteDescriptor } from '@config/utils/variableType';
-import { canonicalOpcuaWriteType, coerceOpcuaWrite } from '@shared/utils/opcuaWriteCoercion';
+import {
+  canonicalOpcuaWriteType,
+  coerceOpcuaWrite,
+  WRITE_COERCION_MESSAGES,
+} from '@shared/utils/opcuaWriteCoercion';
 import { isAnchoredPlacement } from '@shared/utils/anchorPosition';
 import { CollapsiblePropertyCard } from '../PropertySourceEditor/editors/shared';
 import { PickerField } from '../../ui/PathInputField';
@@ -538,7 +544,7 @@ const ClosePageOverlayEditor: EditorFor<'closePageOverlay'> = ({ action, ctx }) 
 
 const WriteDataVariableEditor: EditorFor<'writeDataVariable'> = ({ action, ctx }) => {
   // The backend anchors write-target diagnostics (unknown datasource/variable,
-  // test-server target) on the action's `datasource` slot — see
+  // test-server target) on the action's `target` slot — see
   // `_validate_write_target` in core/validation/structure.py.
   const widgetId = useContext(PanelScopeContext);
   const targetDiagnostic = useFieldDiagnostic(widgetId, [...ctx.path, 'datasource']);
@@ -615,7 +621,9 @@ const WriteDataVariableEditor: EditorFor<'writeDataVariable'> = ({ action, ctx }
           selection={{ path: [...ctx.path, 'value'], schema: valueSchema }}
           block={descriptor?.isArray && !descriptor.indexed}
           diagnostic={
-            validation?.ok === false ? { level: 'error', message: validation.reason } : undefined
+            validation?.ok === false
+              ? { level: 'error', message: WRITE_COERCION_MESSAGES[validation.reason] }
+              : undefined
           }
         >
           {descriptor?.isArray && !descriptor.indexed ? (
@@ -659,7 +667,7 @@ const WriteDataVariableEditor: EditorFor<'writeDataVariable'> = ({ action, ctx }
           )}
           {validation?.ok === false && (
             <span className="cfg-ds-props__error" role="alert">
-              {validation.reason}
+              {WRITE_COERCION_MESSAGES[validation.reason]}
             </span>
           )}
         </PropRow>

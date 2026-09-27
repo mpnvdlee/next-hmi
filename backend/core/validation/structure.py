@@ -3,11 +3,14 @@ from __future__ import annotations
 import json
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from datetime import time as time_of_day
 from pathlib import Path
 from typing import Any
+
+from models.datasource import is_subscribable
 
 from core.builtin_widgets_manifest import CatalogVersion, builtin_widgets_catalog
 from core.page_index import (
@@ -661,9 +664,13 @@ def _collect_component_interfaces() -> _ComponentInterfaces:
     return keys, slots
 
 
-_ds_scan_cache: tuple[
-    frozenset[tuple[str, int]], dict[str, dict[str, dict]], dict[str, str]
-] | None = None
+_Registry = dict[str, dict[str, dict]]
+_Writable = dict[str, dict[str, bool]]
+
+# datasource -> variable path -> the leaf as its datasource file declares it.
+_Entries = dict[str, dict[str, dict]]
+
+_ds_scan_cache: tuple[frozenset[tuple[str, int]], _Registry, _Writable, dict[str, str], _Entries] | None = None
 
 # variable_metadata() walks every subscribable variable across all datasources
 # under datasource_manager's lock — real cost on a live plant with many tags.
@@ -709,16 +716,62 @@ def _collect_datasource_registry() -> tuple[_Registry, _Writable]:
     except Exception:
         registry, writable = {}, {}
     if registry:
-        _live_registry_cache = (now, registry)
-        return registry
-    return _scan_datasources_from_disk()[0]
+        _live_registry_cache = (now, registry, writable)
+        return registry, writable
+    scanned = _scan_datasources_from_disk()
+    return scanned[0], scanned[1]
 
 
-def _walk_variable_tree(nodes: Any, prefix: str, out: dict[str, dict]) -> None:
-    """Recursively derive typed VarTypes from a datasource JSON's declared
-    ``variables`` tree (folders/variables, as authored — not the runtime
-    pool's resolved registry). Best-effort mirror of DatasourceEntry's own
-    folder/array-of-struct detection, precise enough for pre-pool validation."""
+def _element_order(name: str) -> int:
+    match = _ELEMENT_FOLDER.search(name)
+    return int(match.group(1)) if match else 0
+
+
+def _disk_struct_fields(children: list, path: str, is_array: bool, out: dict[str, dict]) -> list[str]:
+    """A folder's struct fields the way DatasourceEntry lists them: its leaf
+    children plus its sub-folders that are structs themselves; for an array,
+    its first element's fields. `out` must already hold the sub-folders."""
+    leaves = [
+        child["display_name"]
+        for child in children
+        if isinstance(child, dict)
+        and child.get("kind") != "folder"
+        and isinstance(child.get("display_name"), str)
+        and child["display_name"]
+    ]
+    # Folder names are kept as authored: an OPC-UA namespace folder may itself
+    # contain a `/`, so a name cannot be read back off its path.
+    folders = [
+        child["name"]
+        for child in children
+        if isinstance(child, dict)
+        and child.get("kind") == "folder"
+        and isinstance(child.get("name"), str)
+        and child["name"]
+    ]
+    if is_array:
+        elements = sorted(folders, key=_element_order)
+        first = out.get(f"{path}/{elements[0]}") if elements else None
+        if isinstance(first, dict) and first.get("kind") == "struct":
+            return list(first.get("fields") or [])
+        return leaves
+    nested = [name for name in folders if (out.get(f"{path}/{name}") or {}).get("kind") == "struct"]
+    return leaves + nested
+
+
+def _walk_variable_tree(
+    nodes: Any,
+    prefix: str,
+    out: dict[str, dict],
+    writable: dict[str, bool],
+    entries: dict[str, dict] | None = None,
+) -> None:
+    """Recursively derive typed VarTypes (into `out`) and leaf writability
+    (into `writable`) from a datasource JSON's declared ``variables`` tree
+    (folders/variables, as authored — not the runtime pool's resolved
+    registry). Mirrors DatasourceEntry's folder registry, so a folder is a
+    struct exactly when the live registry would list it, with the same
+    fields."""
     if not isinstance(nodes, list):
         return
     for node in nodes:
@@ -733,6 +786,7 @@ def _walk_variable_tree(nodes: Any, prefix: str, out: dict[str, dict]) -> None:
             children = node.get("children")
             if not isinstance(children, list):
                 continue
+            _walk_variable_tree(children, path, out, writable, entries)
             is_array = bool(node.get("is_array"))
             field_names = _disk_struct_fields(children, path, is_array, out)
             if field_names or is_array:
@@ -753,6 +807,9 @@ def _walk_variable_tree(nodes: Any, prefix: str, out: dict[str, dict]) -> None:
                 "is_array": bool(node.get("is_array")),
                 "array_length": node.get("array_length"),
             })
+            writable[path] = node.get("writable") is True
+            if entries is not None:
+                entries[path] = node
 
 
 def _scan_datasources_from_disk() -> tuple[_Registry, _Writable, dict[str, str]]:
@@ -775,6 +832,7 @@ def _scan_datasources_from_disk() -> tuple[_Registry, _Writable, dict[str, str]]
     registry: _Registry = {}
     writable: _Writable = {}
     ds_types: dict[str, str] = {}
+    entries: _Entries = {}
     for path in files:
         try:
             doc = read_json(path)
@@ -784,14 +842,45 @@ def _scan_datasources_from_disk() -> tuple[_Registry, _Writable, dict[str, str]]
         if not isinstance(name, str):
             name = path.stem
         types: dict[str, dict] = {}
+        access: dict[str, bool] = {}
+        leaves: dict[str, dict] = {}
         variables = doc.get("variables") if isinstance(doc, dict) else None
-        _walk_variable_tree(variables, "", types)
+        _walk_variable_tree(variables, "", types, access, leaves)
         registry[name] = types
+        writable[name] = access
+        entries[name] = leaves
         ds_type = doc.get("type") if isinstance(doc, dict) else None
         if isinstance(ds_type, str):
             ds_types[name] = ds_type
-    _ds_scan_cache = (fingerprint, registry, ds_types)
-    return registry, ds_types
+    _ds_scan_cache = (fingerprint, registry, writable, ds_types, entries)
+    return registry, writable, ds_types
+
+
+def _datasource_entry_lookup() -> Callable[[str, str], dict | None]:
+    """A variable's entry as ``write_service`` coerces a write against it: the
+    live pool's when it serves the datasource, else the datasource file's.
+
+    One per context: the disk declarations are resolved on first use and then
+    kept, so a page full of write actions does not re-stat every datasource
+    file per action on each debounced validate."""
+    disk: _Entries | None = None
+
+    def lookup(ds_name: str, var_path: str) -> dict | None:
+        nonlocal disk
+        try:
+            from services.datasource_manager import datasource_manager
+
+            if ds_name in datasource_manager.datasources:
+                entry = datasource_manager.get_entry(ds_name, var_path)
+                return entry if isinstance(entry, dict) else None
+        except Exception:
+            pass
+        if disk is None:
+            _scan_datasources_from_disk()
+            disk = _ds_scan_cache[4] if _ds_scan_cache is not None else {}
+        return (disk.get(ds_name) or {}).get(var_path)
+
+    return lookup
 
 
 def _collect_datasource_types() -> dict[str, str]:
@@ -948,6 +1037,15 @@ def build_context() -> ValidationContext:
         # Pages and page groups share one map: the overlay actions may target
         # either, and an id is only ever one of the two.
         page_property_keys=collect_page_property_keys(config, page_files),
+        component_properties=component_properties,
+        page_properties=collect_page_properties(config, page_files),
+        dialog_ancestors=collect_dialog_ancestors(config),
+        project_widgets={
+            **{f"page:{pid}": index for pid, index in page_widgets.items()},
+            **{f"component:{cid}": index for cid, index in component_widgets.items()},
+            **_config_widgets(config),
+        },
+        datasource_entry=_datasource_entry_lookup(),
         translation_keys=_collect_translation_keys(),
         user_groups=_collect_user_groups(),
         icon_assets=_collect_asset_names(active_icons_dir()),
@@ -1237,8 +1335,22 @@ def _report_struct_members(
         )
 
 
-def _validate_write_target(
-    action: dict, ctx: ValidationContext, path: str, report: ValidationReport
+@dataclass(frozen=True)
+class _WriteTarget:
+    """What a write/toggle action puts a value into, once resolved."""
+
+    ds_name: str
+    # Registry path of the variable written — the array itself for one of its
+    # elements.
+    key: str
+    # The type a written value must have: the element's for an indexed write.
+    element: dict
+    indexed: bool
+    subject: str
+
+
+def _check_write_target_type(
+    kind: str, target: _WriteTarget, ctx: ValidationContext, path: str, report: ValidationReport
 ) -> None:
     """A `writeDataVariable` / `toggleDataVariable` target is a flat
     datasource/path pair, not a `$var` payload, so it never reaches
@@ -1254,22 +1366,40 @@ def _validate_write_target(
             severity="warning",
             code="var-empty",
         )
-        return
+        return None
     if ds_name not in ctx.datasource_registry:
         report.warn(
             target_path, f"unknown datasource '{ds_name}'", severity="error", code="var-unknown"
         )
-        return
+        return None
     if _report_test_server_target(ds_name, ctx, target_path, report):
-        return
+        return None
     paths = ctx.datasource_registry[ds_name]
-    if paths and var_path not in paths and var_path.split("[")[0] not in paths:
+    key = var_path if var_path in paths else var_path.split("[")[0]
+    if paths and key not in paths:
         report.warn(
             target_path,
             f"unknown variable '{ds_name}:{var_path}'",
             severity="error",
             code="var-unknown",
         )
+        return None
+    var_type = paths.get(key)
+    index = ref.get("index") if isinstance(ref, dict) else None
+    if _report_bad_index(index, ds_name, key, var_type, target_path, report):
+        return None
+    if var_type is None:
+        return None
+    indexed = index is not None or key != var_path
+    written = _WriteTarget(
+        ds_name,
+        key,
+        vartype.element_of(var_type) if indexed else var_type,
+        indexed,
+        f"variable '{ds_name}:{var_path}'",
+    )
+    _check_write_target_type(kind, written, ctx, target_path, report)
+    return written
 
 
 _PAGE_TARGET_ACTIONS = frozenset(

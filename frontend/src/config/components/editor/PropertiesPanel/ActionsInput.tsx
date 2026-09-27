@@ -17,7 +17,8 @@ import {
 import { useConfigStore } from '@shared/store/configStore';
 import { flattenPageNodes, resolvePageTitle } from '@shared/utils/pageTree';
 import type { ActionsConfig, ButtonAction, VariableBinding } from '@shared/types/config';
-import { bindingParts } from '@shared/types/config';
+import { writeTargetAddress } from '@shared/types/config';
+import { varBindingOf } from '../bindingPickerUtils';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import Select from '@config/components/ui/Select';
 import { ClearIcon } from '@config/components/ui/actionIcons';
@@ -128,12 +129,13 @@ export default function ActionsInput({
     async function ensureDataTypes() {
       for (const action of actions) {
         if (action.type !== 'writeDataVariable' && action.type !== 'toggleDataVariable') continue;
-        if (!action.datasource || !action.path) continue;
+        const address = writeTargetAddress(action.target);
+        if (!address) continue;
 
-        const key = `${action.datasource}:${action.path}`;
+        const key = `${address.datasource}:${address.path}`;
         if (!writeDescriptorNeedsRefresh(dataTypes[key])) continue;
 
-        const descriptor = await loadVariableWriteDescriptor(action.datasource, action.path);
+        const descriptor = await loadVariableWriteDescriptor(address.datasource, address.path);
         if (cancelled || !descriptor) continue;
         setDataTypes((prev) => ({ ...prev, [key]: descriptor }));
       }
@@ -150,21 +152,24 @@ export default function ActionsInput({
 
   function openWriteVarPicker(actionIdx: number) {
     const current = actions[actionIdx];
+    // The picked element index is baked into the path as a `[N]` suffix — the
+    // same shape a migrated pair takes — so the path is also the picker's key.
+    const currentBinding =
+      current?.type === 'writeDataVariable' || current?.type === 'toggleDataVariable'
+        ? varBindingOf(current.target)
+        : undefined;
+    const pickedKey = (binding: VariableBinding, metadata?: BindingPickMetadata) =>
+      metadata?.index !== undefined ? `${binding.path}[${metadata.index}]` : binding.path;
     if (current?.type === 'toggleDataVariable') {
       openBindingPicker('', 'toggleDataVariable', {
-        currentBinding:
-          current.datasource && current.path
-            ? { path: `${current.datasource}:${current.path}` }
-            : undefined,
+        currentBinding,
         onPick: (binding: VariableBinding, metadata?: BindingPickMetadata) => {
-          const { datasource, location } = bindingParts(binding);
-          const targetPath =
-            metadata?.index !== undefined ? `${location}[${metadata.index}]` : location;
-          updateAction(actionIdx, { datasource, path: targetPath });
+          const key = pickedKey(binding, metadata);
+          updateAction(actionIdx, { target: { $var: { path: key } } });
           if (metadata?.dataType) {
             setDataTypes((prev) => ({
               ...prev,
-              [`${datasource}:${targetPath}`]: {
+              [key]: {
                 dataType: metadata.dataType!,
                 isArray: metadata.isArray === true,
                 complete: false,
@@ -176,12 +181,6 @@ export default function ActionsInput({
       });
       return;
     }
-    // The write target is stored as a flat datasource/path pair (index already
-    // baked into `path` as a `[N]` suffix), which is exactly the picker's key.
-    const currentBinding =
-      current?.type === 'writeDataVariable' && current.datasource && current.path
-        ? { path: `${current.datasource}:${current.path}` }
-        : undefined;
     openBindingPicker('', 'writeDataVariable', {
       currentBinding,
       onPick: (binding: VariableBinding, metadata?: BindingPickMetadata) => {
@@ -189,16 +188,13 @@ export default function ActionsInput({
         if (action && action.type === 'writeDataVariable') {
           const dataType = metadata?.dataType;
           const kind = getWriteCoercionKind(dataType);
-          const { datasource, location } = bindingParts(binding);
-          const targetPath =
-            metadata?.index !== undefined ? `${location}[${metadata.index}]` : location;
+          const key = pickedKey(binding, metadata);
           // Confirming the target the action already writes must not reset the
           // authored value — the picker now opens preselected, so a plain
           // Confirm is a no-op the user expects to change nothing.
-          const retargeted = action.datasource !== datasource || action.path !== targetPath;
+          const retargeted = varBindingOf(action.target)?.path !== key;
           updateAction(actionIdx, {
-            datasource,
-            path: targetPath,
+            target: { $var: { path: key } },
             ...(retargeted && {
               value:
                 metadata?.isArray && metadata.index === undefined
@@ -207,7 +203,6 @@ export default function ActionsInput({
             }),
           });
           if (dataType) {
-            const key = `${datasource}:${targetPath}`;
             setDataTypes((prev) => ({
               ...prev,
               [key]: {
@@ -333,8 +328,9 @@ function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets)
       const p = findOverlayTarget(overlayTargets, action.pageId)?.node;
       return p ? K('Close', resolvePageTitle(p.title), ' overlay') : K('Close top-most overlay');
     }
-    case 'writeDataVariable':
-      return action.datasource && action.path ? (
+    case 'writeDataVariable': {
+      const address = writeTargetAddress(action.target);
+      return address ? (
         // NBSP, not a plain space: a normal space is a wrap opportunity, so a
         // path too long to follow the keyword moves down whole and strands
         // "Write" alone on the first line. Glued, the keyword keeps the start
@@ -342,25 +338,28 @@ function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets)
         <>
           <Kw tint={tint}>Write</Kw>
           {'\u00a0'}
-          <BreakableToken text={`${action.datasource}:${action.path}`} />
+          <BreakableToken text={`${address.datasource}:${address.path}`} />
         </>
       ) : (
         K('Write data variable')
       );
+    }
     case 'if': {
       const condition = propertyValuePreview(action.condition, 'boolean');
       return condition !== '—' ? K('If', condition) : K('If condition');
     }
-    case 'toggleDataVariable':
-      return action.datasource && action.path ? (
+    case 'toggleDataVariable': {
+      const address = writeTargetAddress(action.target);
+      return address ? (
         <>
           <Kw tint={tint}>Toggle</Kw>
           {'\u00a0'}
-          <BreakableToken text={`${action.datasource}:${action.path}`} />
+          <BreakableToken text={`${address.datasource}:${address.path}`} />
         </>
       ) : (
         K('Toggle boolean variable')
       );
+    }
     case 'recipeLoad': {
       const dataset = propertyValuePreview(action.datasetId, 'string');
       return dataset !== '—' ? K('Load recipe', dataset) : K('Load recipe');
@@ -424,7 +423,7 @@ function ActionRow({
   openBindingPicker: ActionEditorCtx['openBindingPicker'];
   onUpdate: (patch: Partial<ButtonAction>) => void;
   onRemove: () => void;
-  onOpenWriteVarPicker: () => void;
+  onOpenWriteVarPicker: ActionEditorCtx['openWriteVarPicker'];
   resultFields?: string[];
 }) {
   const path = [...pathPrefix, eventKey, String(idx)];

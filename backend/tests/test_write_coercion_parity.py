@@ -63,3 +63,11 @@ def test_every_raw_type_in_shared_mapping_is_accepted() -> None:
     for canonical, raw_types in _load("opcuaWriteTypes.json").items():
         for raw_type in raw_types:
             coerce_entry_write_value(samples[canonical], {"data_type": raw_type})
+
+
+def test_coercion_messages_match_frontend() -> None:
+    """Same fixture drives opcuaWriteCoercion.test.ts — the backend's
+    write-value-type diagnostic words a rejection as the editor's row does."""
+    from services.write_service import COERCION_MESSAGES
+
+    assert _load("writeCoercionMessages.json") == COERCION_MESSAGES

@@ -7,7 +7,7 @@ A project's stamped format version lives at ``config.json``'s
 every project activation (see ``main.py``'s lifespan) because it is a no-op
 once a project is already stamped at ``PROJECT_FORMAT_VERSION``.
 
-``_STEPS`` holds two steps. The first, 4 → 7, rewrites stored layouts into
+``_STEPS`` holds three steps. The first, 4 → 7, rewrites stored layouts into
 the Hug/Fill/Fixed sizing model, retiring the raw flex keys and margin from
 authored projects (see ``core.migration_size_modes``), then collapses the
 `padding` shorthand into the four side keys it overlapped with (see
@@ -19,7 +19,9 @@ either in the wild, so they were retired and folded into this one combined
 step rather than kept as dead waypoints.) The second, 7 → 8, turns every
 dialog into a page in the Dialogs folder and rewrites the dialog actions into
 page-overlay actions, moving their documents into ``dialogs/``
-(see ``core.migration_dialogs_folder``).
+(see ``core.migration_dialogs_folder``). The third, 8 → 9, turns the
+``datasource``/``path`` pair a write or toggle action names its variable with
+into one sourced ``target`` (see ``core.migration_write_targets``).
 
 ``PROJECT_FORMAT_VERSION`` only ever counts up, including when steps are
 retired: the number is stamped into user data that travels between builds
@@ -34,9 +36,9 @@ no build can derive for a format that postdates it. Bump the two together,
 and only in a release whose minor or major moves: the published contract is
 that a patch update never makes a project unopenable. That rule governs
 released versions; a pre-release sorts below the release it is a candidate
-for, so ``1.0.0`` introducing formats 5 through 8 over the ``0.0.1-rc*`` line
+for, so ``1.0.0`` introducing formats 5 through 9 over the ``0.0.1-rc*`` line
 that carried 4 keeps the promise whole — "1.0.0 or newer" does exclude every
-rc, and no release ever stamped 5, 6 or 7 on its own. It is a display string
+rc, and no release ever stamped 5, 6, 7 or 8 on its own. It is a display string
 only — never parsed or compared. The integer stays the sole gate.
 
 Its absence carries meaning of its own: a project with no ``minAppVersion`` was
@@ -91,12 +93,14 @@ from core.migration_dialogs_folder import STEP_NAME as DIALOGS_FOLDER_STEP_NAME
 from core.migration_dialogs_folder import migrate_dialogs_folder
 from core.migration_padding import migrate_padding
 from core.migration_size_modes import migrate_size_modes
+from core.migration_write_targets import STEP_NAME as WRITE_TARGETS_STEP_NAME
+from core.migration_write_targets import migrate_write_targets
 from core.project_packer import BACKUPS_SUBDIR, pack_project, safe_filename
 from core.time_utils import iso_now
 from core.version import app_version
 
-PROJECT_FORMAT_VERSION = 8
-# The release that introduced format 8. See the module docstring; bump with it.
+PROJECT_FORMAT_VERSION = 9
+# The release that introduced format 9. See the module docstring; bump with it.
 PROJECT_FORMAT_MIN_APP = "1.0.0"
 
 @dataclass(frozen=True)
@@ -251,6 +255,13 @@ _STEPS: list[MigrationStep] = [
         name=DIALOGS_FOLDER_STEP_NAME,
         targets=("config", "pages", "dialogs", "components"),
         run=migrate_dialogs_folder,
+    ),
+    MigrationStep(
+        from_version=8,
+        to_version=9,
+        name=WRITE_TARGETS_STEP_NAME,
+        targets=("config", "pages", "dialogs", "components"),
+        run=migrate_write_targets,
     ),
 ]
 

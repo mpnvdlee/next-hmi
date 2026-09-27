@@ -364,7 +364,7 @@ def test_an_old_project_lands_with_its_documents_in_the_dialogs_directory(projec
     ]
 
 
-def test_the_coordinator_carries_a_format_7_project_to_8(project: Path) -> None:
+def test_the_coordinator_carries_a_format_7_project_to_current(project: Path) -> None:
     write_project_metadata(
         project,
         ProjectMetadata(id="proj", formatVersion=7, minAppVersion=pm.PROJECT_FORMAT_MIN_APP),
@@ -373,8 +373,8 @@ def test_the_coordinator_carries_a_format_7_project_to_8(project: Path) -> None:
     result = pm.run_baseline_migration(project)
 
     assert result.from_version == 7
-    assert result.to_version == 8
-    assert read_project_metadata(project).formatVersion == 8
+    assert result.to_version == pm.PROJECT_FORMAT_VERSION
+    assert read_project_metadata(project).formatVersion == pm.PROJECT_FORMAT_VERSION
     assert (project / "dialogs" / "motor-detail.json").exists()
     assert not (project / "pages" / "motor-detail.json").exists()
     assert _read(project / "config.json")["dialogs"][0] == {"id": "confirm", "type": "page"}

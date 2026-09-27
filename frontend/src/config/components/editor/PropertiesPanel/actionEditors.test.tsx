@@ -223,8 +223,7 @@ describe('writeDataVariable coercion editor', () => {
   it('keeps UInt64 values as strings beyond the JavaScript safe integer range', () => {
     const action: Extract<ButtonAction, { type: 'writeDataVariable' }> = {
       type: 'writeDataVariable',
-      datasource: 'PLC',
-      path: 'Counter',
+      target: { $var: { path: 'PLC:Counter' } },
       value: '18446744073709551615',
     };
     const ctx = makeCtx();
@@ -240,8 +239,7 @@ describe('writeDataVariable coercion editor', () => {
   it('represents arrays as JSON and surfaces the stable matrix reason', () => {
     const action: Extract<ButtonAction, { type: 'writeDataVariable' }> = {
       type: 'writeDataVariable',
-      datasource: 'PLC',
-      path: 'Steps',
+      target: { $var: { path: 'PLC:Steps' } },
       value: [1],
     };
     const ctx = makeCtx();
@@ -249,28 +247,30 @@ describe('writeDataVariable coercion editor', () => {
     const Editor = ACTION_EDITORS.writeDataVariable!;
     render(<Editor action={action} ctx={ctx} />);
     expect(screen.getByPlaceholderText('JSON array')).toHaveValue('[1]');
-    expect(screen.getByRole('alert')).toHaveTextContent('array_length_mismatch');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The array has the wrong number of elements.',
+    );
   });
 
   it('predicts backend rejection of a literal outside the configured min/max', () => {
     const action: Extract<ButtonAction, { type: 'writeDataVariable' }> = {
       type: 'writeDataVariable',
-      datasource: 'PLC',
-      path: 'Temp',
+      target: { $var: { path: 'PLC:Temp' } },
       value: 11,
     };
     const ctx = makeCtx();
     ctx.dataTypes['PLC:Temp'] = { dataType: 'Float', isArray: false, min: -20, max: 10 };
     const Editor = ACTION_EDITORS.writeDataVariable!;
     render(<Editor action={action} ctx={ctx} />);
-    expect(screen.getByRole('alert')).toHaveTextContent('value_out_of_range');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      "The value is outside the variable's configured range.",
+    );
   });
 
   it('accepts a literal within the configured min/max', () => {
     const action: Extract<ButtonAction, { type: 'writeDataVariable' }> = {
       type: 'writeDataVariable',
-      datasource: 'PLC',
-      path: 'Temp',
+      target: { $var: { path: 'PLC:Temp' } },
       value: 5,
     };
     const ctx = makeCtx();

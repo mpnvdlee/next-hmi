@@ -76,23 +76,23 @@ def test_var_test_server(ctx):
 def test_write_target_test_server(ctx):
     report = ValidationReport()
     _validate_action(
-        {"type": "writeDataVariable", "datasource": "Sim", "path": "Motor/Speed", "value": 1},
+        {"type": "writeDataVariable", "target": {"$var": {"path": "Sim:Motor/Speed"}}, "value": 1},
         ctx, "/a", report,
     )
     w = _warn(report)
     assert (w.code, w.severity) == ("var-test-server", "error")
-    assert w.path == "/a/datasource"
+    assert w.path == "/a/target"
 
 
 def test_write_target_unknown_variable(ctx):
     report = ValidationReport()
     _validate_action(
-        {"type": "writeDataVariable", "datasource": "PLC", "path": "Motor/Ghost", "value": 1},
+        {"type": "writeDataVariable", "target": {"$var": {"path": "PLC:Motor/Ghost"}}, "value": 1},
         ctx, "/a", report,
     )
     w = _warn(report)
     assert (w.code, w.severity) == ("var-unknown", "error")
-    assert w.path == "/a/datasource"
+    assert w.path == "/a/target"
 
 
 def test_write_target_incomplete(ctx):
@@ -105,11 +105,11 @@ def test_write_target_incomplete(ctx):
 def test_toggle_target_unknown_variable(ctx):
     report = ValidationReport()
     _validate_action(
-        {"type": "toggleDataVariable", "datasource": "PLC", "path": "Motor/Ghost"},
+        {"type": "toggleDataVariable", "target": {"$var": {"path": "PLC:Motor/Ghost"}}},
         ctx, "/a", report,
     )
     w = _warn(report)
-    assert (w.code, w.path) == ("var-unknown", "/a/datasource")
+    assert (w.code, w.path) == ("var-unknown", "/a/target")
 
 
 def test_toast_severity_invalid(ctx):
@@ -142,7 +142,7 @@ def test_toast_severity_valid_is_silent(ctx):
 def test_write_target_resolvable_is_silent(ctx):
     report = ValidationReport()
     _validate_action(
-        {"type": "writeDataVariable", "datasource": "PLC", "path": "Motor/Speed", "value": 1},
+        {"type": "writeDataVariable", "target": {"$var": {"path": "PLC:Motor/Speed"}}, "value": 1},
         ctx, "/a", report,
     )
     assert report.warnings == []
@@ -154,17 +154,16 @@ def test_write_target_in_result_handler(ctx):
     _validate_action(
         {
             "type": "writeDataVariable",
-            "datasource": "PLC",
-            "path": "Motor/Speed",
+            "target": {"$var": {"path": "PLC:Motor/Speed"}},
             "value": 1,
             "onSuccess": [
-                {"type": "writeDataVariable", "datasource": "Sim", "path": "Motor/Speed", "value": 2}
+                {"type": "writeDataVariable", "target": {"$var": {"path": "Sim:Motor/Speed"}}, "value": 2}
             ],
         },
         ctx, "/a", report,
     )
     w = _warn(report)
-    assert (w.code, w.path) == ("var-test-server", "/a/onSuccess/0/datasource")
+    assert (w.code, w.path) == ("var-test-server", "/a/onSuccess/0/target")
 
 
 def test_write_target_in_if_branch(ctx):
@@ -174,12 +173,12 @@ def test_write_target_in_if_branch(ctx):
             "type": "if",
             "condition": {"$var": {"path": "PLC:Motor/Speed"}},
             "then": [],
-            "else": [{"type": "toggleDataVariable", "datasource": "PLC", "path": "Motor/Ghost"}],
+            "else": [{"type": "toggleDataVariable", "target": {"$var": {"path": "PLC:Motor/Ghost"}}}],
         },
         ctx, "/a", report,
     )
     w = _warn(report)
-    assert (w.code, w.path) == ("var-unknown", "/a/else/0/datasource")
+    assert (w.code, w.path) == ("var-unknown", "/a/else/0/target")
 
 
 def test_write_target_in_alert_handler(ctx):
@@ -189,13 +188,13 @@ def test_write_target_in_alert_handler(ctx):
             "type": "showAlert",
             "title": "Confirm",
             "onOk": [
-                {"type": "writeDataVariable", "datasource": "Sim", "path": "Motor/Speed", "value": 2}
+                {"type": "writeDataVariable", "target": {"$var": {"path": "Sim:Motor/Speed"}}, "value": 2}
             ],
         },
         ctx, "/a", report,
     )
     w = _warn(report)
-    assert (w.code, w.path) == ("var-test-server", "/a/onOk/0/datasource")
+    assert (w.code, w.path) == ("var-test-server", "/a/onOk/0/target")
 
 
 def test_var_type(ctx):

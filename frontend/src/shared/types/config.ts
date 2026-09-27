@@ -66,6 +66,20 @@ export function bindingParts(b: VariableBinding | undefined | null): {
   return { datasource: path.slice(0, idx), location: path.slice(idx + 1) };
 }
 
+/** The datasource/path pair a write goes to, `[N]` added for one array slot.
+ *  Null until the target is a picked `$var` — an unpicked target, or a
+ *  `$repeatItem` outside a Repeater (inside one it is already a `$var`). */
+export function writeTargetAddress(target: unknown): { datasource: string; path: string } | null {
+  if (!target || typeof target !== 'object' || !('$var' in target)) return null;
+  const binding = (target as VarSource).$var;
+  const { datasource, location } = bindingParts(binding);
+  if (!datasource || !location) return null;
+  return {
+    datasource,
+    path: binding.index !== undefined ? `${location}[${binding.index}]` : location,
+  };
+}
+
 // Property source types
 
 /** Visibility condition for schema fields: shows/hides a field based on same-component property values */
@@ -295,6 +309,21 @@ export interface PageSource {
   };
 }
 
+/** $repeatItem: the element of the surrounding Repeater copy. `member` is a
+ *  slash-path into a struct or record element; `field: 'index'` reads the
+ *  element's 0-based position instead. */
+export interface RepeatItemSource {
+  $repeatItem: {
+    field?: 'value' | 'index';
+    member?: string;
+  };
+}
+
+/** The variable a write or toggle action writes: a `$var`, or — inside a
+ *  Repeater — the copy's element (`member` of a struct element), which becomes
+ *  that copy's `$var` before the action fires. */
+export type WriteTarget = VarSource | { $repeatItem: { member?: string } };
+
 /** Logical viewport size class. Driven by configurable breakpoints. */
 export type ViewportSize = 'phone' | 'tablet' | 'laptop';
 
@@ -511,8 +540,8 @@ export type ButtonAction =
   | { type: 'closePageOverlay'; pageId?: string }
   | {
       type: 'writeDataVariable';
-      datasource: string;
-      path: string;
+      /** Absent until a target is picked. */
+      target?: WriteTarget;
       /** A literal, or a dialog input parameter resolved when the action fires. */
       value: string | number | boolean | unknown[] | { $componentProp: string };
       onSuccess?: ButtonAction[];
@@ -529,8 +558,8 @@ export type ButtonAction =
     }
   | {
       type: 'toggleDataVariable';
-      datasource: string;
-      path: string;
+      /** Absent until a target is picked. */
+      target?: WriteTarget;
       onSuccess?: ButtonAction[];
       onFailed?: ButtonAction[];
       onSettled?: ButtonAction[];

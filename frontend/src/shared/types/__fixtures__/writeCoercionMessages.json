@@ -1,0 +1,19 @@
+{
+  "null_not_allowed": "A value is required.",
+  "unknown_type": "The target variable's type is not known.",
+  "scalar_required": "Expected a single value, not an array.",
+  "array_required": "Expected an array.",
+  "array_length_mismatch": "The array has the wrong number of elements.",
+  "invalid_boolean": "Expected a Boolean (true or false).",
+  "invalid_integer": "Expected an Integer.",
+  "integer_out_of_range": "The Integer is out of range for this variable.",
+  "lossy_conversion": "This number cannot be stored exactly in this variable.",
+  "invalid_float": "Expected a Float.",
+  "non_finite_float": "Expected a finite Float.",
+  "invalid_string": "Expected a String.",
+  "invalid_temporal": "Expected a DateTime, Date or Time in ISO format.",
+  "float_out_of_range": "The Float is out of range for this variable.",
+  "invalid_descriptor": "The target variable's type description is invalid.",
+  "array_index_out_of_bounds": "The element index is outside the array.",
+  "value_out_of_range": "The value is outside the variable's configured range."
+}

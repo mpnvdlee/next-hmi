@@ -89,7 +89,9 @@ async function settleProbes() {
 }
 
 const WRITE_ON_ERROR = {
-  onError: [{ type: 'writeDataVariable', datasource: 'plc', path: 'Video.Failed', value: true }],
+  onError: [
+    { type: 'writeDataVariable', target: { $var: { path: 'plc:Video.Failed' } }, value: true },
+  ],
 };
 
 describe('Video', () => {

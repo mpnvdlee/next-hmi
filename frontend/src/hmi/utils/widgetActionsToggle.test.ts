@@ -20,8 +20,7 @@ describe('toggleDataVariable dispatch', () => {
   it('sends toggle_field with no value — the server reads the current one', () => {
     const action: ButtonAction = {
       type: 'toggleDataVariable',
-      datasource: 'PLC',
-      path: 'Motor1/Run',
+      target: { $var: { path: 'PLC:Motor1/Run' } },
       onFailed: [],
     };
     executeWidgetActions([action], { scope: 'runtime' });
@@ -37,7 +36,7 @@ describe('toggleDataVariable dispatch', () => {
   });
 
   it('skips dispatch when no variable is bound', () => {
-    executeWidgetActions([{ type: 'toggleDataVariable', datasource: '', path: '' }], {});
+    executeWidgetActions([{ type: 'toggleDataVariable' }], {});
     expect(sendWsMessage).not.toHaveBeenCalled();
     expect(beginAsyncAction).not.toHaveBeenCalled();
   });
@@ -49,8 +48,7 @@ describe('writeDataVariable value resolution', () => {
       [
         {
           type: 'writeDataVariable',
-          datasource: 'Brew',
-          path: 'Wizard/CupCount',
+          target: { $var: { path: 'Brew:Wizard/CupCount' } },
           value: { $componentProp: 'startingCupCount' },
         },
       ],
@@ -63,7 +61,7 @@ describe('writeDataVariable value resolution', () => {
 
   it('sends a literal array untouched', () => {
     executeWidgetActions(
-      [{ type: 'writeDataVariable', datasource: 'PLC', path: 'Arr', value: [1, 2] }],
+      [{ type: 'writeDataVariable', target: { $var: { path: 'PLC:Arr' } }, value: [1, 2] }],
       { scope: 'runtime' },
     );
     expect(sendWsMessage).toHaveBeenCalledWith(expect.objectContaining({ value: [1, 2] }));
@@ -73,8 +71,7 @@ describe('writeDataVariable value resolution', () => {
 describe('if action', () => {
   const write = (path: string): ButtonAction => ({
     type: 'writeDataVariable',
-    datasource: 'PLC',
-    path,
+    target: { $var: { path: `PLC:${path}` } },
     value: 1,
   });
 

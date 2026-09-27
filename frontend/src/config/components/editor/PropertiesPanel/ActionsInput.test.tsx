@@ -403,8 +403,7 @@ describe('ActionsInput — write target', () => {
     const user = userEvent.setup();
     const write: ButtonAction = {
       type: 'writeDataVariable',
-      datasource: 'PLC',
-      path: 'Motor/Speed',
+      target: { $var: { path: 'PLC:Motor/Speed' } },
       value: 1,
     };
     render(<Harness onChangeSpy={vi.fn()} initial={{ onPress: [write] }} />);
@@ -423,8 +422,7 @@ describe('ActionsInput — write target', () => {
     const user = userEvent.setup();
     const write: ButtonAction = {
       type: 'writeDataVariable',
-      datasource: 'PLC',
-      path: 'Motor/Speed',
+      target: { $var: { path: 'PLC:Motor/Speed' } },
       value: 42,
     };
     render(<Harness onChangeSpy={onChangeSpy} initial={{ onPress: [write] }} />);
@@ -444,8 +442,7 @@ describe('ActionsInput — write target', () => {
     const user = userEvent.setup();
     const write: ButtonAction = {
       type: 'writeDataVariable',
-      datasource: 'PLC',
-      path: 'Motor/Speed',
+      target: { $var: { path: 'PLC:Motor/Speed' } },
       value: 42,
     };
     render(<Harness onChangeSpy={onChangeSpy} initial={{ onPress: [write] }} />);
@@ -457,7 +454,7 @@ describe('ActionsInput — write target', () => {
       .bindingPickerTarget?.onPick?.({ path: 'PLC:Motor/Torque' }, { dataType: 'Float' });
 
     expect(onChangeSpy).toHaveBeenLastCalledWith({
-      onPress: [{ ...write, path: 'Motor/Torque', value: 0 }],
+      onPress: [{ ...write, target: { $var: { path: 'PLC:Motor/Torque' } }, value: 0 }],
     });
   });
 
@@ -469,7 +466,7 @@ describe('ActionsInput — write target', () => {
           artifactKind: 'page',
           widgetId: 'btn-1',
           propKey: 'actions',
-          fieldPath: ['actions', 'onPress', '0', 'datasource'],
+          fieldPath: ['actions', 'onPress', '0', 'target'],
           code: 'var-test-server',
           severity: 'error',
           message: "datasource 'Sim' is an OPC-UA test server",
@@ -481,8 +478,7 @@ describe('ActionsInput — write target', () => {
     const user = userEvent.setup();
     const write: ButtonAction = {
       type: 'writeDataVariable',
-      datasource: 'Sim',
-      path: 'Motor/Speed',
+      target: { $var: { path: 'Sim:Motor/Speed' } },
       value: 1,
     };
     render(

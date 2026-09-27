@@ -1,4 +1,5 @@
 import type { AnchorRect, ButtonAction, OverlayPlacement } from '@shared/types/config';
+import { writeTargetAddress } from '@shared/types/config';
 import type { EvaluationContext, ResolvedValue } from '@hmi/utils/propertySourceEval';
 import { useVariableStore } from '@hmi/store/variableStore';
 import { evaluatePropertyValue } from '@hmi/utils/propertySourceEval';
@@ -97,14 +98,14 @@ export function executeWidgetActions(
     }
 
     if (action.type === 'writeDataVariable') {
-      if (!action.datasource || !action.path) continue;
+      const address = writeTargetAddress(action.target);
+      if (!address) continue;
       const requestId = beginAsyncAction(action, scope, inputScopeProps);
       sendWsMessage({
         type: 'write_field',
         ...(requestId && { requestId }),
         scope,
-        datasource: action.datasource,
-        path: action.path,
+        ...address,
         // A sourced value (a dialog's `$componentProp`, a `$var`) is resolved
         // here; the backend only coerces literals and rejects an object.
         value: hasPropertySourceKey(action.value)
@@ -115,14 +116,14 @@ export function executeWidgetActions(
     }
 
     if (action.type === 'toggleDataVariable') {
-      if (!action.datasource || !action.path) continue;
+      const address = writeTargetAddress(action.target);
+      if (!address) continue;
       const requestId = beginAsyncAction(action, scope, inputScopeProps);
       sendWsMessage({
         type: 'toggle_field',
         ...(requestId && { requestId }),
         scope,
-        datasource: action.datasource,
-        path: action.path,
+        ...address,
       });
       continue;
     }
