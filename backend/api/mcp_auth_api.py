@@ -1,4 +1,4 @@
-"""MCP bearer-token pairing, listing, and revocation (maintenance-backlog item 12).
+"""MCP bearer-token pairing, listing, and revocation.
 
 Mirrors ``api.manager_peers_api``'s peer-token pairing pattern: a token is
 minted once by presenting the device-admin password and is scoped — here to

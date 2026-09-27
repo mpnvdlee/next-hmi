@@ -281,7 +281,7 @@ export function arrayExpansionKey(v: PickerVariableEntry): string {
 
 /**
  * Resolve a selected composite key's raw path into the `{path, index}` shape
- * a `VariableBinding` uses (§10.5).
+ * a `VariableBinding` uses.
  *
  * Two unrelated encodings share the tree's "[N]" convention and must not be
  * conflated:

@@ -314,7 +314,7 @@ def test_handles_negative_numbers_and_unary_plus() -> None:
 
 
 def test_bigint_literal_suffix_is_stripped_not_a_crash() -> None:
-    """§8.1: a trailing BigInt `n` suffix must not raise a raw ValueError."""
+    """A trailing BigInt `n` suffix must not raise a raw ValueError."""
     out = _custom("export const schema = { min: 10n, max: 0x1An };")
     assert out["schema"] == {"min": 10, "max": 26}
 

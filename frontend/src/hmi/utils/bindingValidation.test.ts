@@ -41,7 +41,7 @@ function structArraySpec(overrides: Partial<BindingSpec> = {}): BindingSpec {
 }
 
 describe('checkBindingSpec', () => {
-  it('reports ok for an empty struct[] variable once metadata confirms the shape (§10.3)', () => {
+  it('reports ok for an empty struct[] variable once metadata confirms the shape', () => {
     const s = slice({ values: { 'PLC:Alarms': [] }, varMeta: { 'PLC:Alarms': meta(structArray) } });
     expect(checkBindingSpec(structArraySpec(), s, true)).toBe('ok');
   });
@@ -51,7 +51,7 @@ describe('checkBindingSpec', () => {
     expect(checkBindingSpec(structArraySpec(), s, true)).toBe('pending');
   });
 
-  it('agrees between the "no live data yet" and "live data present" checks for struct[] (§10.4)', () => {
+  it('agrees between the "no live data yet" and "live data present" checks for struct[]', () => {
     const spec = structArraySpec();
     const beforeData = slice({ varMeta: { 'PLC:Alarms': meta(structArray) } });
     const afterEmptyData = slice({
@@ -635,7 +635,7 @@ describe('aggregateBindingStatus', () => {
 });
 
 describe('createBindingStatusSelector', () => {
-  it('skips the O(n) recompute when a store update only touches a key nothing depends on (§7.5)', () => {
+  it('skips the O(n) recompute when a store update only touches a key nothing depends on', () => {
     const scalarMeta = meta({ kind: 'scalar', base: 'Float', array: false });
     const specA: BindingSpec = { id: 'PLC:A', accept: [] };
 

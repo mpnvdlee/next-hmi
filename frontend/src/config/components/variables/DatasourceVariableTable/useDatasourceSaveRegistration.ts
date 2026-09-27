@@ -22,7 +22,7 @@ export function useDatasourceSaveRegistration({
 }: Params) {
   const handleSave = useCallback(async () => {
     // Snapshot the tree actually being sent — `latestTree.current` may move
-    // on if the user keeps editing while the PUT is in flight (§3.1).
+    // on if the user keeps editing while the PUT is in flight.
     const sentTree = latestTree.current;
     try {
       await apiJson(`/api/datasources/${encodeURIComponent(dsName)}/variables`, {

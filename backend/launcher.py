@@ -32,7 +32,7 @@ from pathlib import Path
 
 
 def _prepend_lgpl_path() -> None:
-    """Put the bundled ``lgpl/`` directory on ``sys.path`` (release item 1a).
+    """Put the bundled ``lgpl/`` directory on ``sys.path``.
 
     ``asyncua`` (LGPL-3.0-or-later) and ``zeroconf`` (LGPL-2.1-or-later) ship as
     loose, replaceable package directories under ``lgpl/`` rather than inside
@@ -74,7 +74,7 @@ _MAX_PYTHON_EXCLUSIVE = (3, 15)
 
 
 def _require_supported_python() -> None:
-    """Refuse to start on an unsupported interpreter (release item 16).
+    """Refuse to start on an unsupported interpreter.
 
     Raises ``SystemExit`` with a legible message rather than letting the process
     fail deep inside a version-sensitive import. Called from ``main()``, so it

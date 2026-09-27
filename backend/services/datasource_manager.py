@@ -153,7 +153,7 @@ class DatasourceEntry:
     @staticmethod
     def _is_array_folder(node: dict) -> bool:
         """True when *node* is explicitly flagged as an array-of-struct folder
-        (`is_array` — see D-ARRAY.1/D-ARRAY.4). Child names still carry the
+        (`is_array`), never inferred from child names alone. Child names still carry the
         [N] index used to order/locate elements; bare "[N]" (OPC-UA style) or
         "Prefix[N]" (static-server style)."""
         return bool(node.get("is_array"))
@@ -161,8 +161,8 @@ class DatasourceEntry:
     @staticmethod
     def is_aggregate_boundary(fentry: dict) -> bool:
         """True when *fentry* (a ``folder_registry`` entry) is an opaque
-        traversal/broadcast boundary — currently only array-of-struct folders
-        (§10.2). The one flag this checks today (``_is_array``) is set by
+        traversal/broadcast boundary — currently only array-of-struct folders.
+        The one flag this checks today (``_is_array``) is set by
         ``_assemble_folder_entry``; centralised here so the three sites that
         need to stop at a boundary (``_wire_ancestor_map``,
         ``_build_folder_fields_snapshot_rec``, ``variable_metadata``) share one
@@ -497,7 +497,7 @@ class DatasourceManager:
         populated (when *folder_path* is given and the element folder is
         registered) so the caller can additionally cache/broadcast that one
         element under its own composite key — the per-element addressing
-        {path, index} bindings resolve to (§10.5) — alongside the aggregate.
+        {path, index} bindings resolve to — alongside the aggregate.
         For every other case they are ``None``.
 
         The in-place patch always happens — ``snapshot()`` serves folder
@@ -575,7 +575,7 @@ class DatasourceManager:
 
         Nested sub-struct fields are resolved recursively with no depth limit
         — the tree is user-authored and finite, so there's no infinite-
-        recursion risk (§1.7/§6.2).
+        recursion risk.
         """
         # ── Array-of-struct: return list of element snapshots ─────────────────
         if DatasourceEntry.is_aggregate_boundary(fentry):
@@ -963,7 +963,7 @@ class DatasourceManager:
 
         For an array-of-struct folder, also caches/broadcasts each element
         under its own composite key (mirrors the fast path in
-        ``update_struct_field`` — §10.5) so a ``{path, index}`` binding
+        ``update_struct_field``) so a ``{path, index}`` binding
         resolves per-element regardless of which write path touched it (this
         is the full-rebuild path used by static-datasource struct writes and
         by any OPC-UA leaf ``_node_to_field`` doesn't cover).
@@ -1024,7 +1024,7 @@ class DatasourceManager:
         an array-of-struct field, the touched element is additionally
         cached/broadcast under its own composite key (e.g. ``ds:Motors/[2]``)
         so a ``{path, index}`` binding on the array resolves per-element
-        instead of re-rendering on any element's change (§10.5).
+        instead of re-rendering on any element's change.
         """
         value = self._coerce(value)
         entry = self._get_datasource_entry(datasource)
@@ -1357,8 +1357,8 @@ def validate_static_data_types(variables: list[Any]) -> None:
     Only meaningful for ``static`` datasources: their runtime cache defaults
     come from ``DatasourceManager._STATIC_DEFAULTS``, so a type this table
     doesn't recognize (typo, unsupported name) would otherwise silently
-    default to ``0`` with no indication the declared type wasn't understood
-    (§1.6). Loading a legacy file with an unknown type still warns-and-loads
+    default to ``0`` with no indication the declared type wasn't understood.
+    Loading a legacy file with an unknown type still warns-and-loads
     via ``_static_default`` — this is the save-time reject.
     """
     for path, entry in flatten_with_paths(variables):

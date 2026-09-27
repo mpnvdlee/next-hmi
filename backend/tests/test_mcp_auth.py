@@ -1,4 +1,4 @@
-"""MCP transport authentication (maintenance-backlog item 12).
+"""MCP transport authentication.
 
 Covers ``core.mcp_tokens`` (issue/resolve/revoke/generation-binding),
 ``mcp_server.auth.require_mcp_access`` (the per-call project/access check),

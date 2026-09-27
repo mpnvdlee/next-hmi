@@ -20,7 +20,7 @@ export function useVariable(id: string): unknown {
  * For a `struct[]`-typed source, `index` resolves to the element's own
  * composite key (e.g. `ds:Motors/[2]`) rather than slicing the whole-array
  * value client-side — the backend caches/broadcasts each element under its
- * own key (§10.5), so this only re-renders when that one element changes,
+ * own key, so this only re-renders when that one element changes,
  * not on every element's update. Scalar arrays have no per-element backend
  * key, so `index` still slices the array value directly.
  *

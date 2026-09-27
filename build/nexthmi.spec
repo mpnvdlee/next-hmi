@@ -230,7 +230,7 @@ _collect_targets = [
     "tree_sitter_typescript",
 ]
 
-# --- LGPL components: shipped replaceable, never frozen (release item 1a) -----
+# --- LGPL components: shipped replaceable, never frozen ----------------------
 # asyncua (LGPL-3.0-or-later) is the OPC-UA client; zeroconf (LGPL-2.1-or-later)
 # powers LAN peer discovery. LGPL only permits a proprietary combined work if
 # the recipient can replace the LGPL component and relink — which a frozen PYZ

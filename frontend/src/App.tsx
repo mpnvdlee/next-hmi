@@ -7,7 +7,7 @@ import { preloadableLazy, type PreloadableLazy } from '@shared/utils/settledLazy
 
 // AppInner (HMI/editor routing, the widget registry, and everything they pull
 // in — including the recharts SDK loader) is lazy so a manager-mode session
-// never statically reaches it and never pays its bundle cost (backlog item 22).
+// never statically reaches it and never pays its bundle cost.
 const AppInner = preloadableLazy(() => import('./AppInner'));
 // The manager dashboard is the same SPA bundle served at the origin root
 // (window.__NEXTHMI_MODE__ === 'manager'); project instances are proxied under

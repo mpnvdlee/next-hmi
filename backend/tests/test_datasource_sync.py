@@ -1,4 +1,4 @@
-"""Tests for services.datasource_sync — subscription-delta backfill (§1.1)."""
+"""Tests for services.datasource_sync — subscription-delta backfill."""
 
 from dataclasses import dataclass, field
 from typing import Any

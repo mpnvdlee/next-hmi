@@ -183,7 +183,7 @@ export default function VariableBindingPicker() {
     if (wrapped.repeatIndex) return `${base}${REPEAT_INDEX_SUFFIX}`;
     if (wrapped.index === undefined) return base;
     // struct[] elements are addressed by folder path (".../[N]"), scalar
-    // arrays by a bracket suffix on the variable's own path (§10.5) —
+    // arrays by a bracket suffix on the variable's own path —
     // mirrors the encodings handleConfirm produces below.
     const baseType = useVariableStore.getState().varMeta[base]?.type;
     const isStructArray = baseType?.kind === 'struct' && baseType.array;

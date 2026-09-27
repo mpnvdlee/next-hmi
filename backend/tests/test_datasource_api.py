@@ -227,7 +227,7 @@ def test_put_datasource_rejects_invalid_type(ds_client):
 
 
 def test_put_datasource_rejects_unknown_data_type(ds_client):
-    """§1.6: an unrecognized data_type on a static datasource can't be saved."""
+    """An unrecognized data_type on a static datasource can't be saved."""
     client, manager = ds_client
     resp = client.put(
         "/api/datasources/plc1",
@@ -460,7 +460,7 @@ def test_rest_write_shares_envelope_coercion_and_group_permission(ds_client, mon
 
 
 def test_put_datasource_omitted_variables_preserves_existing_tree(ds_client):
-    """§1.5: a settings-only PUT (no `variables` key) must not wipe the tree."""
+    """A settings-only PUT (no `variables` key) must not wipe the tree."""
     client, manager = ds_client
     manager.save(
         "plc1",

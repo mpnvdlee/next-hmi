@@ -105,7 +105,7 @@ def test_base_path_for_defaults_to_runtime_alias() -> None:
     """The spawn-time default matches the primary /runtime/<slug>/ access path
     (not the removed /p/<id>/ alias) so a child's own generated absolute URLs
     are correct even before the manager's X-Forwarded-Prefix overrides it for
-    an /editor/<slug>/ hit (backlog R24/R51)."""
+    an /editor/<slug>/ hit."""
     assert supervisor_mod.base_path_for("plant-a") == "/runtime/plant-a/"
 
 

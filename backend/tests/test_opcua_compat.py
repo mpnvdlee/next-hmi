@@ -1,4 +1,4 @@
-"""Tests for opcua.compat: watchdog log demotion (§2.9) + asyncua serializer health."""
+"""Tests for opcua.compat: watchdog log demotion + asyncua serializer health."""
 
 import logging
 import socket

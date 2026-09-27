@@ -1,4 +1,4 @@
-"""Tests for the struct/array-of-struct single-field O(1) patch path (§2.7/§7.1).
+"""Tests for the struct/array-of-struct single-field O(1) patch path.
 
 Covers: _struct_field_routes() route computation, _setup_subscriptions()/
 set_priority_paths() actually populating _node_to_field (not just
@@ -213,7 +213,7 @@ async def test_setup_subscriptions_routes_struct_leaves_to_node_to_field():
 
 @pytest.mark.asyncio
 async def test_set_priority_paths_promote_routes_struct_leaves_to_node_to_field():
-    """§7.1 comment: disable_background_sync=True skips _setup_subscriptions'
+    """disable_background_sync=True skips _setup_subscriptions'
     population entirely, so promotion via set_priority_paths must wire the
     routing maps itself."""
     entry = DatasourceEntry(_array_of_struct_config())
@@ -290,7 +290,7 @@ def test_datachange_notification_uses_struct_field_patch_not_full_rebuild():
     # variable table's per-row "Show Live" column reads a struct leaf's live
     # value directly under its own key (not just the folder's aggregate
     # snapshot), and a {path, index} binding on the array resolves to the
-    # element's own key (§10.5).
+    # element's own key.
     assert broadcasts == [
         (leaf_key, True), (key, [{"bRaised": True}]), (elem_key, {"bRaised": True}),
     ]

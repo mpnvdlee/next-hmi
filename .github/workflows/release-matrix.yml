@@ -1,12 +1,12 @@
 name: Release readiness matrix
 
-# Required-platform validation for a public release (maintenance backlog item
-# 38). Every job below is either a real check or an intentionally failing
-# placeholder for backlog work that has not landed yet — a placeholder must
-# never be turned into `if: false` or otherwise skipped, since a required job
-# that goes quiet is exactly the silent-skip failure mode this workflow exists
-# to prevent. Replace a placeholder's body with real build/smoke logic when
-# its backlog item lands; nothing else in this file should need to change.
+# Required-platform validation for a public release. Every job below is
+# either a real check or an intentionally failing placeholder for a platform
+# check that has not landed yet — a placeholder must never be turned into
+# `if: false` or otherwise skipped, since a required job that goes quiet is
+# exactly the silent-skip failure mode this workflow exists to prevent.
+# Replace a placeholder's body with real build/smoke logic when its check
+# lands; nothing else in this file should need to change.
 
 on:
   workflow_dispatch:
@@ -64,7 +64,7 @@ jobs:
             printf '\nObject.assign(globalThis, { __nexthmiEnterpriseMarker: %s })\n' "'$ENTERPRISE_MARKER'"
           } > ../enterprise/frontend/registry.ts
       - run: npm run build
-      # Backlog item 22: hard-fails on the per-chunk size budget, on the named
+      # Hard-fails on the per-chunk size budget, on the named
       # route budgets, and on the per-widget/tree caps over the esbuild-built
       # dist/builtin-widgets-js/ modules.
       - run: npm run check:bundle-budget
@@ -97,7 +97,7 @@ jobs:
       - run: ruff check backend
       - run: pytest --cov=backend --cov-report=term-missing backend/tests
 
-  # ── Backlog item 32: Docker build + smoke test (one leg per native arch;
+  # ── Docker build + smoke test (one leg per native arch;
   #    no QEMU emulation here — these hosted runners are native x64/arm64) ──
 
   docker-linux-x64:
@@ -220,7 +220,7 @@ jobs:
   # manager container, and file-ownership behavior under a non-root
   # container user — the latter needs a Dockerfile change, not just a test.
 
-  # ── Backlog item 33 (macOS leg): portable macOS arm64 build + smoke test ──
+  # ── Portable macOS arm64 build + smoke test ──
 
   macos-arm64-portable:
     runs-on: macos-14

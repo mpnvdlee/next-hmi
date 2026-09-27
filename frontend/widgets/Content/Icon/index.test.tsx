@@ -19,7 +19,7 @@ describe('Icon', () => {
   it('renders a builtin icon by name', async () => {
     const { container } = renderIcon({ iconName: 'house', size: 32 });
 
-    // Builtin icon components are code-split (backlog item 22) — the icon
+    // Builtin icon components are code-split — the icon
     // resolves asynchronously behind a `Suspense fallback={null}` even when
     // its chunk is already cached. The lazy import pulls the whole
     // `phosphorIconComponents` module (all 59 icons); its first on-the-fly

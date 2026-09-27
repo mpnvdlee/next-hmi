@@ -367,7 +367,7 @@ def _sdk_name_collisions(js_source: str) -> list[str]:
     """SDK global names that are also declared locally in the compiled
     output. Such a declaration collides with the banner's
     ``const { Name } = window.__nextHMI__;`` and throws ``Identifier 'Name'
-    has already been declared`` at module-load time (§4.1)."""
+    has already been declared`` at module-load time."""
     declared = {m.group(1) for m in _TOP_LEVEL_DECL_RE.finditer(js_source)}
     return [name for name in SDK_NAMES if name in declared]
 
@@ -1113,7 +1113,7 @@ async def start_watcher(
             schema_ok = regenerate_widget_schemas(root)
         except Exception:
             # One bad file must not permanently kill hot-reload for every
-            # other widget (§8.1) — log and keep watching.
+            # other widget — log and keep watching.
             logger.exception(
                 "Widget watcher iteration failed for %s; hot-reload continues", touched,
             )

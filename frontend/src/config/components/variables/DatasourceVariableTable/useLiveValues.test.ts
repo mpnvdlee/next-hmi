@@ -56,7 +56,7 @@ describe('useLiveValues', () => {
     return rendered;
   }
 
-  it('does not trigger a read for a key belonging to a different datasource (§7.4)', async () => {
+  it('does not trigger a read for a key belonging to a different datasource', async () => {
     setup();
 
     act(() => {
@@ -67,7 +67,7 @@ describe('useLiveValues', () => {
     expect(rafSpy).not.toHaveBeenCalled();
   });
 
-  it('does not trigger a read for a key that is in the table but scrolled out of view (§7.4)', async () => {
+  it('does not trigger a read for a key that is in the table but scrolled out of view', async () => {
     setup();
 
     act(() => {
@@ -78,7 +78,7 @@ describe('useLiveValues', () => {
     expect(rafSpy).not.toHaveBeenCalled();
   });
 
-  it('does not trigger a read for an unrelated WebSocket disconnect flag (§7.4)', async () => {
+  it('does not trigger a read for an unrelated WebSocket disconnect flag', async () => {
     setup();
 
     act(() => {
@@ -89,7 +89,7 @@ describe('useLiveValues', () => {
     expect(rafSpy).not.toHaveBeenCalled();
   });
 
-  it('triggers a read and updates the value for a key in the visible rows (§7.4)', async () => {
+  it('triggers a read and updates the value for a key in the visible rows', async () => {
     const { result } = setup();
 
     act(() => {

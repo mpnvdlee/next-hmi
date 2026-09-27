@@ -8,7 +8,7 @@ export type IconComponent = LazyExoticComponent<Icon>;
 
 // Per-icon lazy wrappers, cached by id so repeated calls return the same
 // component reference (a fresh `lazy()` per render would remount/re-suspend
-// forever). Backlog item 22: `phosphorIconComponents.tsx` (all 130 builtin
+// forever). `phosphorIconComponents.tsx` (all 130 builtin
 // icons, ~94 kB gzip as the `vendor-icons` chunk) previously loaded as a
 // static import reachable from every route via this module. HMI runtime
 // consumers (Icon/Button/MenuToggleButton/NavigationMenu widgets, and the

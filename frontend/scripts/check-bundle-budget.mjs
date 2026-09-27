@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Backlog item 22: route-aware bundle-size budget, enforced in CI.
+// Route-aware bundle-size budget, enforced in CI.
 //
 // Reads dist/.vite/manifest.json (requires build.manifest: true), dist/_app/*
 // and dist/builtin-widgets-js/* to check three things:

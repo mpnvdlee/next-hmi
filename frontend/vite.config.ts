@@ -288,7 +288,7 @@ export default defineConfig({
     // backend's /assets mount (the live project's icons/images). Backend serves
     // /_app/* directly from dist/_app/ when NEXTHMI_FRONTEND_DIST is set.
     assetsDir: '_app',
-    // Consumed by scripts/check-bundle-budget.mjs (backlog item 22) to walk
+    // Consumed by scripts/check-bundle-budget.mjs to walk
     // each entry/route's real static-import closure and enforce size budgets.
     manifest: true,
     // vendor-charts sits just over the 500 kB default and is loaded on demand
@@ -307,8 +307,7 @@ export default defineConfig({
         // check correctly naming it 'vendor-react'. `codeSplitting.groups` is
         // rolldown's native replacement and supports an explicit `priority` so
         // higher-priority groups always claim their modules first regardless
-        // of which chunk's dependency graph reaches them first (see backlog
-        // item 22 for the trace that found this).
+        // of which chunk's dependency graph reaches them first.
         codeSplitting: {
           groups: [
             {

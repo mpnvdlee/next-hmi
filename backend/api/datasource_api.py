@@ -366,7 +366,7 @@ async def put_datasource(name: str, body: DatasourceUpsertBody) -> dict[str, Any
 
     Omitting ``variables`` from the body (e.g. a settings-only save from the
     properties panel) preserves the existing tree — see
-    ``DatasourceUpsertBody.to_storage_dict`` (§1.5).
+    ``DatasourceUpsertBody.to_storage_dict``.
     """
     old_entry = datasource_manager.get(name)
     existing_variables = old_entry.config.get("variables") if old_entry is not None else None

@@ -29,7 +29,7 @@ export function useDatasourceBrowse({ dsName, latestTree, applyTreeUpdate }: Par
       // browse was in flight — latestTree/applyTreeUpdate are shared across
       // datasources (the table isn't remounted per selection), so diffing
       // this datasource's server nodes against whatever tree happens to be
-      // loaded now would be nonsensical (§3.2).
+      // loaded now would be nonsensical.
       if (useVariablesDomainStore.getState().selectedName !== dsName) return;
 
       const items = root.show_root ? [root] : (root.children ?? []);

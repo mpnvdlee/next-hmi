@@ -333,7 +333,7 @@ async def test_static_fixed_array_rejects_wrong_length():
 
 @pytest.mark.asyncio
 async def test_static_indexed_write_rejected_out_of_bounds():
-    """§1.9: write_value rejects an out-of-bounds indexed write upstream,
+    """write_value rejects an out-of-bounds indexed write upstream,
     without ever reaching update_static_value."""
     dm = FakeStaticDM({"Steps": {"data_type": "integer", "writable": True, "is_array": True, "array_length": 3}})
     outcome = await write_service.write_value(dm, None, "DS", "Steps[5]", 9)

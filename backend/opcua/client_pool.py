@@ -445,7 +445,7 @@ class _DsSubHandler:
                 sc,
             )
             # Tracked (not pure fire-and-forget) so disconnect() can cancel it
-            # instead of leaving it to run against a torn-down engine (§2.5).
+            # instead of leaving it to run against a torn-down engine.
             self._engine._status_close_task = asyncio.create_task(self._engine._close_client())
 
 
@@ -532,11 +532,11 @@ class DatasourceOpcuaEngine:
         self._shutdown = False
         # In-flight close, so a status-change-triggered close and the
         # reconnect loop's own close coalesce into one execution instead of
-        # racing (§2.5).
+        # racing.
         self._close_task: asyncio.Task | None = None
         # The fire-and-forget task status_change_notification schedules —
         # tracked so disconnect() can cancel it instead of leaving it to run
-        # against a torn-down engine after shutdown (§2.5).
+        # against a torn-down engine after shutdown.
         self._status_close_task: asyncio.Task | None = None
         self._config: dict = {}
         self._datasource_manager = None
@@ -734,7 +734,7 @@ class DatasourceOpcuaEngine:
         Both the reconnect loop's own health-check close and the
         subscription status-change callback's close route through here — if
         one is already in flight, later callers await that same task instead
-        of each independently racing through teardown (§2.5).
+        of each independently racing through teardown.
         """
         if self._close_task is not None and not self._close_task.done():
             await self._close_task
@@ -762,7 +762,7 @@ class DatasourceOpcuaEngine:
             await self._status_callback(self.datasource_name, False)
 
     async def _reconnect_loop(self) -> None:
-        # §2.8: route through the same safe-fallback/clamp helper as the other
+        # Route through the same safe-fallback/clamp helper as the other
         # intervals — a blank/non-numeric value must not kill the reconnect
         # task, and 0/negative must not spin the loop without backoff.
         interval = get_config_float(self._config, "reconnect_interval_s", 5.0, minimum=1.0, maximum=300.0)
@@ -838,7 +838,7 @@ class DatasourceOpcuaEngine:
             # Subscription setup failed after a successful TCP connect. Reset
             # state so the reconnect loop's `if not self._connected` check
             # actually retries next iteration, instead of reporting a healthy
-            # connection with zero working subscriptions forever (§2.4).
+            # connection with zero working subscriptions forever.
             await self._close_client()
             raise
 
@@ -1249,7 +1249,7 @@ class DatasourceOpcuaEngine:
             # Already tracked (e.g. a reconnect's full resync racing an
             # independent enable-variable call) — reuse it instead of
             # creating a duplicate monitored item and leaking the existing
-            # handle, which would double-deliver every datachange (§2.3).
+            # handle, which would double-deliver every datachange.
             return
         try:
             node_id = var_entry.get("node_id", "")
@@ -1542,7 +1542,7 @@ class DatasourceOpcuaEngine:
 
             # 2. Bulk-subscribe to priority (one CreateMonitoredItems call) —
             # only once the background side is actually cleared, so a node is
-            # never live on both subscriptions at once (§2.2). On failure the
+            # never live on both subscriptions at once. On failure the
             # nodes simply stay on the background sub (no data loss) instead
             # of also landing on the priority sub.
             if bg_unsubscribe_ok:
@@ -1612,7 +1612,7 @@ class DatasourceOpcuaEngine:
 
         if demote_items or demote_paths_no_bg:
             # 1. Bulk-unsubscribe from priority. Don't discard tracking until
-            # the RPC actually succeeds (§2.1) — on failure the items stay
+            # the RPC actually succeeds — on failure the items stay
             # tracked as priority (retryable/cleanable later) and step 2 is
             # skipped so a node is never live on both subscriptions at once.
             demote_paths_all = [p for p, _ in demote_items] + list(demote_paths_no_bg)

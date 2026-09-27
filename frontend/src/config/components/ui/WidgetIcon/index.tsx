@@ -26,8 +26,8 @@ export default function WidgetIcon({ type, icon, size = 14, weight = 'regular' }
   const requestedIconId = requestedIcon.name;
   // Renders widget-tree/toolbar thumbnails synchronously across the config
   // UI (often many at once in a list) — imports the icon map directly rather
-  // than the lazy HMI-runtime accessor in phosphorIcons.tsx (backlog item 22)
-  // to avoid per-thumbnail Suspense flicker.
+  // than the lazy HMI-runtime accessor in phosphorIcons.tsx to avoid
+  // per-thumbnail Suspense flicker.
   const Icon =
     BUILTIN_ICON_COMPONENTS[requestedIconId] ??
     BUILTIN_ICON_COMPONENTS[DEFAULT_CUSTOM_WIDGET_ICON.name];

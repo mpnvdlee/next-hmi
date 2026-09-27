@@ -170,7 +170,7 @@ async def test_compile_entry_failure_records_status_without_raising(widget_works
 
 @pytest.mark.asyncio
 async def test_compile_entry_rejects_bare_react_import(widget_workspace):
-    """§4.1: a bare `import React from 'react'` must fail the compile with a
+    """A bare `import React from 'react'` must fail the compile with a
     descriptive error instead of producing a module that duplicate-declares
     `React` via the SDK banner and throws at load time."""
     src, build = widget_workspace["src"], widget_workspace["build"]
@@ -187,7 +187,7 @@ async def test_compile_entry_rejects_bare_react_import(widget_workspace):
 
 @pytest.mark.asyncio
 async def test_compile_entry_rejects_app_internal_import(widget_workspace):
-    """§4.1: unregistered app/package imports are rejected."""
+    """Unregistered app/package imports are rejected."""
     src, build = widget_workspace["src"], widget_workspace["build"]
     entry = _write_widget(src, "Inputs/Foo", APP_IMPORT_WIDGET)
 
@@ -217,7 +217,7 @@ async def test_compile_entry_preserves_registered_external_import(widget_workspa
 
 @pytest.mark.asyncio
 async def test_compile_entry_rejects_local_sdk_name_collision(widget_workspace):
-    """§4.1: a local declaration named after a reserved SDK global (e.g. a
+    """A local declaration named after a reserved SDK global (e.g. a
     helper called `parseVarKey`) must fail the compile instead of producing a
     module where the SDK banner's `const { parseVarKey } = ...` collides with
     it and throws `Identifier already declared` at load time."""
@@ -233,7 +233,7 @@ async def test_compile_entry_rejects_local_sdk_name_collision(widget_workspace):
 
 @pytest.mark.asyncio
 async def test_compile_entry_bundles_sibling_relative_import(widget_workspace):
-    """§4.2: a sibling helper file imported via a relative path must be
+    """A sibling helper file imported via a relative path must be
     bundled into the single compiled entry, not left as an unresolved
     import that 404s in the browser."""
     src, build = widget_workspace["src"], widget_workspace["build"]
@@ -1049,7 +1049,7 @@ async def test_watcher_does_not_re_admit_symlinked_entry(
 async def test_start_watcher_survives_unexpected_exception_in_one_iteration(
     widget_workspace, monkeypatch,
 ):
-    """§8.1: an unexpected failure in one watcher iteration (e.g. a bad schema
+    """An unexpected failure in one watcher iteration (e.g. a bad schema
     literal) must not permanently kill hot-reload for subsequent changes."""
     import watchfiles
 

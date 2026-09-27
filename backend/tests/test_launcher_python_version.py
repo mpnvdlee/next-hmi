@@ -1,6 +1,6 @@
 """``launcher._require_supported_python`` — the startup interpreter guard.
 
-Release item 16: the product refuses to run on an unsupported CPython instead of
+The product refuses to run on an unsupported CPython instead of
 failing deep inside a version-sensitive import. The supported range mirrors the
 README ("Python 3.14 (>=3.14.2, <3.15)"). Tested by faking ``sys.version_info``
 so it runs identically on any interpreter, including the stale 3.13 dev venv.

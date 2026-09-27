@@ -910,7 +910,7 @@ def test_bundled_help_is_reachable_without_a_trailing_slash(
 
 
 def test_legacy_p_prefix_routing_removed(client: TestClient) -> None:
-    """The legacy ``/p/<id>/`` alias (backlog R24/R51) is gone outright — no
+    """The legacy ``/p/<id>/`` alias is gone outright — no
     gating, no proxy, no redirect shim. A hit on it 404s like any other
     unmatched path, authenticated or not."""
     assert client.get("/p/ghost/api/health").status_code == 404

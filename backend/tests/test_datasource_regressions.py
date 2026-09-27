@@ -13,7 +13,7 @@ from services.datasource_manager import DatasourceEntry, DatasourceManager
 
 
 def test_indexed_write_rejected_out_of_bounds_for_fixed_array() -> None:
-    """§1.9: writing MyArray[10] on a fixed array_length=5 must be rejected,
+    """Writing MyArray[10] on a fixed array_length=5 must be rejected,
     leaving the cache untouched (not silently grown to 11 elements)."""
     config = {
         "name": "DS",
@@ -65,7 +65,7 @@ def test_indexed_write_grows_dynamic_array() -> None:
 
 
 def test_static_dynamic_array_defaults_to_empty_list() -> None:
-    """§1.8 / D-ARRAY.3: is_array with no fixed length defaults to [], not [0]."""
+    """is_array with no fixed length defaults to [], not [0]."""
     config = {
         "name": "DS",
         "type": "static",
@@ -107,7 +107,7 @@ def test_static_fixed_array_defaults_to_sized_zero_list() -> None:
 
 
 def test_save_disambiguates_filename_collisions(live_project_root: Path) -> None:
-    """§1.4: "PLC 1" and "PLC/1" both sanitize to "PLC_1" — must not collide."""
+    """"PLC 1" and "PLC/1" both sanitize to "PLC_1" — must not collide."""
     storage.active_datasources_dir().mkdir(parents=True, exist_ok=True)
     manager = DatasourceManager()
 
@@ -134,7 +134,7 @@ def test_save_reuses_same_filename_on_repeat_save(live_project_root: Path) -> No
 
 
 def test_unknown_data_type_defaults_to_zero_and_warns(caplog) -> None:
-    """§1.6: an unrecognized data_type still loads (resilience) but warns."""
+    """An unrecognized data_type still loads (resilience) but warns."""
     config = {
         "name": "DS",
         "type": "static",
@@ -152,7 +152,7 @@ def test_unknown_data_type_defaults_to_zero_and_warns(caplog) -> None:
 
 
 def test_apply_config_preserves_unchanged_static_values() -> None:
-    """§1.1: a save that changes an unrelated flag must not wipe runtime values."""
+    """A save that changes an unrelated flag must not wipe runtime values."""
     config = {
         "name": "DS",
         "type": "static",
@@ -230,7 +230,7 @@ def _array_of_struct_static_config() -> dict:
 
 
 def test_static_struct_array_write_broadcasts_element_key() -> None:
-    """§10.5: writing a struct field on a static array-of-struct element must
+    """Writing a struct field on a static array-of-struct element must
     also cache/broadcast that element under its own composite key (not just
     the array's aggregate), so a {path, index} binding on the array resolves
     to the touched element without depending on the whole-array reference."""

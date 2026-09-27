@@ -9,13 +9,11 @@ original inside ``use_project(project)``, authenticating/authorizing the call
 project's ``mcpEnabled`` flag is off — then registers it, in that final form,
 via the public ``MCPServer.tool()`` decorator.
 
-Item 13 of the maintenance backlog: earlier this module registered tools
-un-scoped first and rewrapped them in place by reaching into FastMCP's
-private tool-manager dict and hand-building its internal ``Tool``/
-``FuncMetadata`` objects. Registration now happens exactly once, already
-scoped, through ``server._PENDING_TOOLS`` (an application-owned queue) and
+Registration happens exactly once, already scoped, through
+``server._PENDING_TOOLS`` (an application-owned queue) and
 ``MCPServer.tool()`` (a public, documented API) — nothing here imports or
-mutates MCPServer's private storage. The wrapper's advertised signature is
+mutates MCPServer's private storage, such as FastMCP's tool-manager dict or
+its internal ``Tool``/``FuncMetadata`` objects. The wrapper's advertised signature is
 built by copying the original function's real ``inspect.Signature`` (so
 MCPServer's own signature-driven schema/output-model derivation produces the
 same result it always has) and appending ``project``; the wrapper itself

@@ -212,7 +212,7 @@ def test_array_of_nested_struct_snapshot():
 # ── Unbounded snapshot depth ─────────────────────────────────────────────────
 
 def test_snapshot_no_depth_limit():
-    """§1.7/§6.2: nesting deeper than the old 4-level cap resolves fully now."""
+    """Nesting six levels deep resolves fully — there is no depth cap."""
     # Build 6 levels of nesting: L0 > L1 > L2 > L3 > L4 > L5
     inner = _make_folder("L5", [_make_var("v")])
     for i in range(4, -1, -1):
@@ -323,8 +323,8 @@ def test_folder_with_only_non_indexed_subfolders_not_array():
 
 def test_indexed_named_children_without_is_array_flag_not_array():
     """A struct whose children incidentally look [N]-indexed is NOT struct[]
-    unless the folder itself carries is_array (D-ARRAY.4 — detection no longer
-    infers from child names alone)."""
+    unless the folder itself carries is_array — detection never infers it
+    from child names alone."""
     config = {
         "name": "DS",
         "type": "static",

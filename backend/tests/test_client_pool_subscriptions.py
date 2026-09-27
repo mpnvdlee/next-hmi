@@ -1,4 +1,4 @@
-"""Tests for DatasourceOpcuaEngine subscription-transition safety (§2.1-§2.3)."""
+"""Tests for DatasourceOpcuaEngine subscription-transition safety."""
 
 import asyncio
 from dataclasses import dataclass, field
@@ -83,7 +83,7 @@ def _make_engine(entry: _FakeDsEntry, *, priority_sub, background_sub) -> Dataso
     return engine
 
 
-# ── §2.2: promote (bg -> priority) must not double-subscribe ──────────────────
+# ── Promote (bg -> priority) must not double-subscribe ────────────────────────
 
 
 def test_promote_skipped_when_bg_unsubscribe_fails():
@@ -115,7 +115,7 @@ def test_promote_succeeds_when_bg_unsubscribe_succeeds():
     assert engine._priority_path_handles["A"] == [501]
 
 
-# ── §2.1: demote (priority -> bg) must not double-subscribe ───────────────────
+# ── Demote (priority -> bg) must not double-subscribe ─────────────────────────
 
 
 def test_demote_skipped_when_priority_unsubscribe_fails():
@@ -194,7 +194,7 @@ def test_concurrent_recomputes_do_not_double_subscribe_the_same_path():
     assert engine._priority_path_handles == {"A": [501]}
 
 
-# ── §2.3: _subscribe_path dedupe guard ─────────────────────────────────────────
+# ── _subscribe_path dedupe guard ───────────────────────────────────────────────
 
 
 def test_subscribe_path_skips_when_already_tracked():

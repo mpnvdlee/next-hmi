@@ -1,4 +1,4 @@
-"""Integrity checks for project-testbench's curated asset library (backlog #41).
+"""Integrity checks for project-testbench's curated asset library.
 
 ``assets/icons/`` and ``assets/images/`` are a curated picker catalog, kept
 available in the editor's asset picker even when no saved page currently

@@ -19,7 +19,7 @@ function makeArrayOfStructWithNestedFolder(): TreeNode[] {
 }
 
 describe('setFolderEnabledByIdentity', () => {
-  it('scopes the toggle to the exact path, not every same-named folder (§3.4)', () => {
+  it('scopes the toggle to the exact path, not every same-named folder', () => {
     const tree = makeArrayOfStructWithNestedFolder();
     const result = setFolderEnabledByIdentity(
       tree,
@@ -60,7 +60,7 @@ describe('setFolderEnabledByIdentity', () => {
 });
 
 describe('renameFolderCollapsedKeys', () => {
-  it('migrates the folder key and all descendant keys, leaving no stale entries (§3.5)', () => {
+  it('migrates the folder key and all descendant keys, leaving no stale entries', () => {
     const collapsed = new Set(['Motors', 'Motors/Diagnostics', 'Other']);
     const result = renameFolderCollapsedKeys(collapsed, 'Motors', 'Devices');
 

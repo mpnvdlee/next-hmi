@@ -203,9 +203,9 @@ export const useVariablesDomainStore = create<VariablesDomainStore>((set, get) =
       try {
         // The variable-table save (useDatasourceSaveRegistration) is the sole
         // writer of the variable tree via PUT /variables. Omit `variables`
-        // here entirely and rely on the backend preserving the existing tree
-        // (§1.5) — this is a settings-only save, so it can no longer race the
-        // table's own concurrent save with a stale snapshot (§8.2).
+        // here entirely and rely on the backend preserving the existing tree —
+        // this is a settings-only save, so it can no longer race the table's
+        // own concurrent save with a stale snapshot.
         const { variables: _variables, ...settingsOnly } = config;
         await apiJson(`/api/datasources/${encodeURIComponent(config.name)}`, {
           method: 'PUT',

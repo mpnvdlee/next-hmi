@@ -1,7 +1,7 @@
 """``launcher._prepend_lgpl_path`` — the runtime half of the LGPL carve-out.
 
 ``build/nexthmi.spec`` ships asyncua and zeroconf as loose directories under
-``lgpl/`` instead of inside the frozen archive (release item 1a). This function
+``lgpl/`` instead of inside the frozen archive. This function
 puts that directory back on ``sys.path`` before either package is imported, and
 fails legibly if a broken install dropped it.
 """

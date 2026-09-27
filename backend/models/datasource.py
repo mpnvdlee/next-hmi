@@ -31,7 +31,7 @@ class DatasourceUpsertBody(BaseModel):
     ``null``), meaning "leave the existing variable tree untouched" — only an
     explicit ``[]`` clears it. This lets a settings-only PUT (e.g. from the
     properties panel) omit ``variables`` entirely instead of persisting an
-    empty tree and silently wiping it (§1.5).
+    empty tree and silently wiping it.
     """
 
     type: DatasourceType

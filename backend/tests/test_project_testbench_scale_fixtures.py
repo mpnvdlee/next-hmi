@@ -1,4 +1,4 @@
-"""Integrity check for project-testbench's deliberate scale fixture (backlog #40).
+"""Integrity check for project-testbench's deliberate scale fixture.
 
 ``project-testbench/pages/testbindingpage.json`` is not duplication to
 compact — it's kept at its current size on purpose, to protect the
@@ -36,7 +36,7 @@ def test_testbindingpage_is_still_a_large_binding_fixture():
     )
     assert total >= MIN_TESTBINDINGPAGE_WIDGETS, (
         f"testbindingpage.json dropped to {total} widgets — it's a deliberate "
-        "many-simultaneous-bindings scale fixture (maintenance-backlog #40), not "
+        "many-simultaneous-bindings scale fixture, not "
         "duplication to compact. If this shrink was intentional, update "
         "MIN_TESTBINDINGPAGE_WIDGETS."
     )

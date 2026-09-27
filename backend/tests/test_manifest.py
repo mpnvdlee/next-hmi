@@ -402,7 +402,7 @@ def test_write_project_metadata_preserves_sibling_fields_it_does_not_model(tmp_p
     """Other writers (theme_manager's ``defaultTheme``) read-modify-write
     fields into the same ``project`` block directly, bypassing this model.
     A read/write round trip through ``ProjectMetadata`` must not clobber
-    them — regression for a real data-loss bug caught during backlog #20."""
+    them — regression for a real data-loss bug."""
     project_root = tmp_path / "proj"
     project_root.mkdir()
     config_path = project_root / "config.json"

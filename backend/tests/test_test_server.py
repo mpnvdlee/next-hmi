@@ -198,7 +198,7 @@ async def test_start_sanitizes_the_datasource_name_into_the_cert_path(monkeypatc
         await instance.stop()
 
 
-# ── _populate_nodes array encoding (§2.6 / D-ARRAY.3) ───────────────────────
+# ── _populate_nodes array encoding ──────────────────────────────────────────
 
 
 class _FakeUaNode:

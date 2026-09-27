@@ -21,7 +21,7 @@ const noopToggleFolder = () => {};
 const noopSetFolderEnabled = () => {};
 const noopRemoveNode = () => {};
 
-describe('FolderRowCells memoization (§7.2)', () => {
+describe('FolderRowCells memoization', () => {
   const folder: FolderEntry = {
     kind: 'folder',
     name: 'Motors',
@@ -179,7 +179,7 @@ describe('VariableRowCells min/max range editing', () => {
   });
 });
 
-describe('ArrayElementRowCells granular subscription (§7.3)', () => {
+describe('ArrayElementRowCells granular subscription', () => {
   const parent: VariableEntry = {
     kind: 'variable',
     display_name: 'Values',

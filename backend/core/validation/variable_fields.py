@@ -1,10 +1,9 @@
 """Shared writable-field policy for datasource variable-tree leaf nodes.
 
-Resolves maintenance-backlog item 11: MCP's variable patch tools
-(``variables_add``'s ``settings`` and ``variables_set_property``'s merge
-patch) previously rejected only three structural keys and accepted anything
-else without an allowlist, so a typo'd field name was silently accepted and
-persisted as dead weight instead of surfacing as an error.
+MCP's variable patch tools (``variables_add``'s ``settings`` and
+``variables_set_property``'s merge patch) check keys against this allowlist,
+so a typo'd field name surfaces as an error instead of being silently
+accepted and persisted as dead weight.
 
 Fields fall into three independently-documented classes:
 

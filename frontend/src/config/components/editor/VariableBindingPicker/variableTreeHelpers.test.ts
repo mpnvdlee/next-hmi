@@ -53,7 +53,7 @@ function dsTreeWith(...children: (PickerFolderEntry | PickerVariableEntry)[]): D
   return [{ kind: 'datasource', name: 'MyPLC', type: 'opcua-client', children }];
 }
 
-describe('resolveElementBinding (§10.5)', () => {
+describe('resolveElementBinding', () => {
   it('resolves a scalar-array element (no separator before the bracket)', () => {
     const result = resolveElementBinding('MyPLC', 'MyArray[2]', null, dsTreeWith(scalarArrayVar()));
     expect(result).toEqual({ path: 'MyArray', index: 2 });
@@ -92,7 +92,7 @@ describe('resolveElementBinding (§10.5)', () => {
 
   it('does not treat a plain struct folder as an array element even if it is bracket-named', () => {
     // A struct folder incidentally named "Line[2]" whose *parent* is not
-    // flagged is_array must not be misread as an array element (§10.1).
+    // flagged is_array must not be misread as an array element.
     const plainFolder: PickerFolderEntry = {
       kind: 'folder',
       name: 'Line[2]',

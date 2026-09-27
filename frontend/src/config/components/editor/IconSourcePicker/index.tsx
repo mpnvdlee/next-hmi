@@ -14,7 +14,7 @@ import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { BUILTIN_ICON_ALLOWLIST } from '@shared/config/iconAllowlist';
 // Renders the full builtin icon grid synchronously (no per-tile Suspense
 // flicker) — imports the icon map directly rather than the lazy HMI-runtime
-// accessor in phosphorIcons.tsx (backlog item 22).
+// accessor in phosphorIcons.tsx.
 import { BUILTIN_ICON_COMPONENTS } from '@shared/utils/phosphorIconComponents';
 import type { IconValue } from '@shared/types/config';
 import AssetPickerShell from '../AssetPickerShell';

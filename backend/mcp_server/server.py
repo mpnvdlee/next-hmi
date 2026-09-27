@@ -63,11 +63,11 @@ READ_TOOL_NAMES: set[str] = set()
 class PendingTool:
     """An un-scoped project tool queued for ``mcp_server.scoped`` to wrap.
 
-    Application-owned registry (item 13 of the maintenance backlog): tools/*.py
-    modules queue themselves here via ``register_tool``/``expose_read_tool``
-    instead of registering onto ``mcp_app`` directly, so the *only* function
-    that ever calls it is registered once, already project-scoped, via the
-    public ``MCPServer.tool()`` decorator — nothing reads or mutates MCPServer's
+    Application-owned registry: tools/*.py modules queue themselves here via
+    ``register_tool``/``expose_read_tool`` instead of registering onto
+    ``mcp_app`` directly, so the *only* function that ever calls it is
+    registered once, already project-scoped, via the public
+    ``MCPServer.tool()`` decorator — nothing reads or mutates MCPServer's
     private tool-manager storage to rewrap an existing registration.
     """
 
