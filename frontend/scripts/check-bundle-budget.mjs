@@ -103,8 +103,11 @@ const ROUTE_BUDGETS_GZIP = {
   // built-in lands its whole schema in this closure, and none of the
   // lazification paths above recover it — only splitting that manifest per
   // widget would. The rest is VideoSourcePicker and its icon, which ConfigShell
-  // imports statically like the other asset pickers.
-  editor: 340 * 1024,
+  // imports statically like the other asset pickers. Raised again from 340 kB
+  // for 1.0.0's editor features — the Repeater, the If / Else and Toggle
+  // actions, and the $not / $formula editors — to 400 kB, deliberately with
+  // headroom so the next few features do not each need a raise of their own.
+  editor: 400 * 1024,
   'chart-heavy-hmi': 350 * 1024,
 };
 const ROUTE_ENTRY_POINTS = {
