@@ -550,7 +550,7 @@ export type ButtonAction =
     }
   | {
       /** Runs `then` when `condition` evaluates truthy, `else` otherwise. The
-       *  condition is any property-source value — a `$var`, a `$compare`, … */
+       *  condition is a Boolean property-source value — a `$var`, a `$compare`, … */
       type: 'if';
       condition: unknown;
       then?: ButtonAction[];

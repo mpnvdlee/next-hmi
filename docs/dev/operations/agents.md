@@ -297,6 +297,18 @@ an action that crosses the wire also needs `onSuccess` / `onFailed` /
 `frontend/src/config/components/editor/PropertiesPanel/ActionsInput.tsx`
 (editor) → `backend/core/validation/structure.py` → `docs/user/actions.md`.
 
+Every field of every action type is listed, with what the backend checks it
+as, in `ACTION_FIELDS` (`structure.py`) and in the fixture
+`frontend/src/shared/types/__fixtures__/actionFields.json`. A new action type
+or field fails `actionFields.test.ts` (fixture against the union) and
+`test_structure_parity.py` (table against the fixture) until both name it: a
+type token (`String`, `Integer`, `Boolean`) for a value checked like a property
+of that type, or the role `_validate_action` handles by name (`page`, `inputs`,
+`target`, `writeValue`, `condition`, `actions`). The table also drives the
+walk — a field with the role `actions` is the nested list walked, one with
+`page` the page reference checked — so naming a new field there is all it
+takes for the backend to check it.
+
 ### Add a REST endpoint
 
 `backend/api/<domain>_api.py`, router mounted from `main.py` — or `manager.py` if

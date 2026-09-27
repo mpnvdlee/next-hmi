@@ -1402,11 +1402,171 @@ def _check_write_target_type(
     return written
 
 
-_PAGE_TARGET_ACTIONS = frozenset(
-    {"openPage", "openDialog", "openPageOverlay", "closePageOverlay", "navigateTo"}
-)
+def _validate_write_value(
+    action: dict,
+    written: _WriteTarget | None,
+    ctx: ValidationContext,
+    path: str,
+    report: ValidationReport,
+) -> None:
+    """A `writeDataVariable` value. A fixed one (bare or `$static`) is coerced
+    against the target's entry the way the write path will coerce it
+    (`write_service.coerce_entry_write_value`) — a value it would reject is
+    `write-value-type`, worded as the editor's row words it. A sourced one is
+    checked like any property, typed by the target."""
+    if "value" not in action:
+        return
+    value = action["value"]
+    value_path = f"{path}/value"
+    element = written.element if written is not None else None
+    schema = None
+    if element is not None and element.get("kind") == "scalar":
+        base = element.get("base")
+        schema = {"type": f"{base}[]" if element.get("array") else base}
+    wrapped = _has_property_source(value)
+    if wrapped and _property_source_key(value) != "$static":
+        _validate_action_value(value, schema, ctx, value_path, report)
+        return
+    if schema is None or written is None or ctx.datasource_entry is None:
+        return
+    entry = ctx.datasource_entry(written.ds_name, written.key)
+    if not isinstance(entry, dict):
+        return
+    from services.write_service import (
+        COERCION_INVALID_DESCRIPTOR,
+        COERCION_MESSAGES,
+        COERCION_UNKNOWN_TYPE,
+        REASON_VALUE_OUT_OF_RANGE,
+        WriteCoercionError,
+        coerce_entry_write_value,
+        value_out_of_range,
+    )
 
-_TOAST_SEVERITIES = frozenset({"info", "warning", "error"})
+    literal = value.get("$static") if wrapped else value
+    try:
+        coerced = coerce_entry_write_value(literal, entry, indexed=written.indexed)
+    except WriteCoercionError as err:
+        reason: str | None = err.reason
+    else:
+        reason = REASON_VALUE_OUT_OF_RANGE if value_out_of_range(coerced, entry) else None
+    # The entry's own type unknown to the write path: nothing to judge by.
+    if reason is None or reason in (COERCION_UNKNOWN_TYPE, COERCION_INVALID_DESCRIPTOR):
+        return
+    report.warn(
+        value_path,
+        f"the value does not fit {written.subject}: {COERCION_MESSAGES.get(reason, reason)}",
+        severity="error",
+        code="write-value-type",
+    )
+
+
+# Action types older files still hold, from before the ButtonAction union had
+# them: each names a page under `target` (or `pageId`).
+_LEGACY_PAGE_TARGET_ACTIONS = frozenset({"openPage", "navigateTo"})
+
+_TOAST_SEVERITIES = frozenset({"info", "success", "warning", "error"})
+
+# Every field of every `ButtonAction` variant (frontend/src/shared/types/
+# config.ts), with what it is checked as — mirroring the action editors in
+# PropertiesPanel/actionEditors.tsx. A type token (`String`, `Integer`,
+# `Boolean`) is a value checked like a property of that type; the rest are
+# roles `_validate_action` handles by name: `page` a page id, `inputs` the
+# openDialog input-parameter values, `target` a write target, `writeValue` the
+# value written into it, `actions` a nested action list. Held equal to frontend/src/shared/types/__fixtures__/
+# actionFields.json, which actionFields.test.ts holds to the union, so a new
+# action field fails a test until this table says how to check it.
+ACTION_FIELDS: dict[str, dict[str, str]] = {
+    "openDialog": {
+        "pageId": "page",
+        "componentProperties": "inputs",
+        "size": "String",
+        "placement": "String",
+        "backdrop": "String",
+        "width": "Integer",
+        "height": "Integer",
+    },
+    "openPageOverlay": {
+        "pageId": "page",
+        "size": "String",
+        "placement": "String",
+        "backdrop": "String",
+        "width": "Integer",
+        "height": "Integer",
+    },
+    "closePageOverlay": {"pageId": "page"},
+    "writeDataVariable": {
+        "target": "target",
+        "value": "writeValue",
+        "onSuccess": "actions",
+        "onFailed": "actions",
+        "onSettled": "actions",
+    },
+    "if": {"condition": "Boolean", "then": "actions", "else": "actions"},
+    "toggleDataVariable": {
+        "target": "target",
+        "onSuccess": "actions",
+        "onFailed": "actions",
+        "onSettled": "actions",
+    },
+    "loginUser": {
+        "username": "String",
+        "password": "String",
+        "onSuccess": "actions",
+        "onFailed": "actions",
+        "onSettled": "actions",
+    },
+    "logoutUser": {"onSuccess": "actions", "onFailed": "actions", "onSettled": "actions"},
+    "recipeLoad": {
+        "datasetId": "String",
+        "verify": "Boolean",
+        "onSuccess": "actions",
+        "onFailed": "actions",
+        "onSettled": "actions",
+    },
+    "recipeSave": {
+        "datasetId": "String",
+        "onSuccess": "actions",
+        "onFailed": "actions",
+        "onSettled": "actions",
+    },
+    "setLanguage": {"language": "String"},
+    "setActiveTheme": {"theme": "String"},
+    "showAlert": {
+        "title": "String",
+        "description": "String",
+        "cancelText": "String",
+        "okText": "String",
+        "dismissible": "Boolean",
+        "onCancel": "actions",
+        "onOk": "actions",
+    },
+    "showToast": {
+        "message": "String",
+        "severity": "String",
+        "discard": "String",
+        "duration": "Integer",
+    },
+}
+
+_ACTION_VALUE_SCHEMAS: dict[str, dict[str, str]] = {
+    "String": {"type": "string"},
+    "Integer": {"type": "integer"},
+    "Boolean": {"type": "boolean"},
+}
+
+
+def _validate_action_value(
+    value: Any, schema: dict | None, ctx: ValidationContext, path: str, report: ValidationReport
+) -> None:
+    """Check a value an action carries like a property value. None of these
+    were checked before, so nothing here blocks a save: a mismatched literal is
+    `literal-type`, and a malformed source payload `value-invalid`."""
+    scratch = ValidationReport()
+    soft = replace(ctx, literals_block=False) if ctx.literals_block else ctx
+    _validate_property_value(value, schema, soft, path, scratch)
+    report.warnings.extend(scratch.warnings)
+    for finding in scratch.findings:
+        report.warn(finding.path, finding.message, severity="error", code="value-invalid")
 
 
 def _check_overlay_root(
@@ -1443,7 +1603,16 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
         return
     kind = action.get("type") or action.get("action")
     if kind in ("writeDataVariable", "toggleDataVariable"):
-        _validate_write_target(action, ctx, path, report)
+        written = _validate_write_target(action, kind, ctx, path, report)
+        if kind == "writeDataVariable":
+            _validate_write_value(action, written, ctx, path, report)
+    fields = ACTION_FIELDS.get(kind) if isinstance(kind, str) else None
+    for name, role in (fields or {}).items():
+        if name not in action:
+            continue
+        schema = _ACTION_VALUE_SCHEMAS.get(role)
+        if schema is not None:
+            _validate_action_value(action[name], schema, ctx, f"{path}/{name}", report)
     if kind == "showToast":
         severity = action.get("severity")
         if isinstance(severity, str) and severity not in _TOAST_SEVERITIES:
@@ -1453,33 +1622,47 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
                 severity="error",
                 code="toast-severity-invalid",
             )
-    target = action.get("target") or action.get("pageId")
-    # closePageOverlay's pageId is optional (empty = close the topmost overlay),
-    # so only a named one is a reference.
-    names_target = isinstance(target, str) and (target != "" or kind != "closePageOverlay")
-    if kind in _PAGE_TARGET_ACTIONS and names_target:  # noqa: SIM102 -- no autofix offered, left as-is per the mechanical-only policy for this family
-        if target not in ctx.page_ids:
+    page_fields = [name for name, role in (fields or {}).items() if role == "page"]
+    if page_fields or kind in _LEGACY_PAGE_TARGET_ACTIONS:
+        # A file from before `pageId` names the page under `target`.
+        target = action.get("target") or next(
+            (action.get(name) for name in page_fields or ["pageId"]), None
+        )
+        # closePageOverlay's pageId is optional (empty = close the topmost
+        # overlay), so only a named one is a reference.
+        names_target = isinstance(target, str) and (target != "" or kind != "closePageOverlay")
+        if names_target and target not in ctx.page_ids:
             report.add(path, f"action target page '{target}' does not exist")
     page_id = action.get("pageId")
     if kind in ("openDialog", "openPageOverlay") and isinstance(page_id, str) and page_id:
         _check_overlay_root(kind, page_id, ctx, f"{path}/pageId", report)
     if kind == "openDialog" and isinstance(page_id, str) and page_id:
         declared = ctx.page_property_keys.get(page_id)
+        declarations = ctx.page_properties.get(page_id) or {}
         args = action.get("componentProperties")
-        if declared is not None and isinstance(args, dict):
+        if isinstance(args, dict):
             owner_label = f"page '{page_id}'"
-            for key in args:
-                if key not in declared:
-                    _warn_unknown_property(
-                        report, f"{path}/componentProperties/{key}", key, owner_label
-                    )
+            for key, arg in args.items():
+                arg_path = f"{path}/componentProperties/{key}"
+                if declared is not None and key not in declared:
+                    _warn_unknown_property(report, arg_path, key, owner_label)
+                # Resolved in the opening widget's own scope, typed by what the
+                # target declares.
+                decl = declarations.get(key)
+                schema = (
+                    component_property.to_schema_field(decl)
+                    if decl is not None and str(decl.get("type", "")).strip().lower() != "widgets"
+                    else None
+                )
+                _validate_action_value(arg, schema, ctx, arg_path, report)
     # Async actions nest follow-up lists (onSuccess/onFailed/onSettled),
-    # showAlert nests its button handlers and `if` its two branches; their
-    # targets deserve the same checks as a top-level action.
-    for slot in ("onSuccess", "onFailed", "onSettled", "onOk", "onCancel", "then", "else"):
-        nested = action.get(slot)
+    # showAlert nests its button handlers and `if` its two branches — every
+    # field the table calls `actions`; they get the same checks as a top-level
+    # action.
+    for name, role in (fields or {}).items():
+        nested = action.get(name) if role == "actions" else None
         if isinstance(nested, list):
-            validate_action_targets(nested, ctx, f"{path}/{slot}", report)
+            validate_action_targets(nested, ctx, f"{path}/{name}", report)
 
 
 def validate_action_targets(actions: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> None:

@@ -171,7 +171,7 @@ def test_write_target_in_if_branch(ctx):
     _validate_action(
         {
             "type": "if",
-            "condition": {"$var": {"path": "PLC:Motor/Speed"}},
+            "condition": {"$var": {"path": "PLC:Motor/Running"}},
             "then": [],
             "else": [{"type": "toggleDataVariable", "target": {"$var": {"path": "PLC:Motor/Ghost"}}}],
         },
@@ -379,6 +379,33 @@ def test_if_optional_slots_stay_silent(ctx):
         None, ctx, "/p", report,
     )
     assert report.warnings == []
+
+
+def _condition_codes(ctx, where: str, condition) -> list[str]:
+    report = ValidationReport()
+    if where == "action":
+        _validate_action({"type": "if", "condition": condition}, ctx, "/a", report)
+    elif where == "$if":
+        _validate_property_value(
+            {"$if": {"condition": condition, "true": 1, "false": 2}}, None, ctx, "/p", report,
+        )
+    else:
+        _validate_property_value({"$not": {"value": condition}}, None, ctx, "/p", report)
+    return [w.code for w in report.warnings]
+
+
+@pytest.mark.parametrize("where", ["action", "$if", "$not"])
+def test_condition_takes_a_boolean_not_any_value_truthiness(ctx, where):
+    assert _condition_codes(ctx, where, {"$var": {"path": "PLC:Motor/Running"}}) == []
+    assert _condition_codes(ctx, where, {"$var": {"path": "PLC:Motor/Speed"}}) == ["var-type"]
+
+
+@pytest.mark.parametrize("where", ["action", "$if", "$not"])
+def test_condition_compares_a_number_through_compare(ctx, where):
+    compare = {"$compare": {
+        "left": {"$var": {"path": "PLC:Motor/Speed"}}, "operator": ">", "right": 80,
+    }}
+    assert _condition_codes(ctx, where, compare) == []
 
 
 def test_compare_operand_empty(ctx):
