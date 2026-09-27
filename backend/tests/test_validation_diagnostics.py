@@ -111,11 +111,19 @@ def test_toggle_target_unknown_variable(ctx):
 def test_toast_severity_invalid(ctx):
     report = ValidationReport()
     _validate_action(
-        {"type": "showToast", "message": "hi", "severity": "success"}, ctx, "/a", report
+        {"type": "showToast", "message": "hi", "severity": "fatal"}, ctx, "/a", report
     )
     w = _warn(report)
     assert (w.code, w.severity) == ("toast-severity-invalid", "error")
     assert w.path == "/a/severity"
+
+
+def test_toast_severity_success_is_valid(ctx):
+    report = ValidationReport()
+    _validate_action(
+        {"type": "showToast", "message": "hi", "severity": "success"}, ctx, "/a", report
+    )
+    assert report.to_dict()["warnings"] == []
 
 
 def test_toast_severity_valid_is_silent(ctx):

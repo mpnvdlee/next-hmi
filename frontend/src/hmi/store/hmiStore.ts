@@ -77,7 +77,7 @@ export interface AlertEntry {
 export interface ToastEntry {
   id: string;
   message: string;
-  severity: 'info' | 'warning' | 'error';
+  severity: 'info' | 'success' | 'warning' | 'error';
   discard: 'auto' | 'manual';
   /** Auto-dismiss timeout in milliseconds (default 4000). */
   duration: number;

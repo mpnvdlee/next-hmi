@@ -22,6 +22,7 @@ function ConfigToast({ toast }: { toast: ToastEntry }) {
     >
       <span className="cfg-toast__icon" aria-hidden="true">
         {toast.severity === 'info' && '✓'}
+        {toast.severity === 'success' && '✓'}
         {toast.severity === 'warning' && '!'}
         {toast.severity === 'error' && '×'}
       </span>

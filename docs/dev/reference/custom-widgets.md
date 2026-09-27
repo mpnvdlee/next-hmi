@@ -634,7 +634,7 @@ Supported action types (see `frontend/src/config/components/editor/PropertiesPan
 - `setLanguage` — switches the active HMI language; the `language` property is resolved from component properties at runtime.
 - `loginUser` / `logoutUser` — scope-based authentication (the scope defaults to the current `useHmiScope()`).
 - `showAlert` — modal alert with `onCancel` / `onOk` nested action lists.
-- `showToast` — transient toast (`info` | `warning` | `error`); `discard: 'auto' | 'manual'` with optional `duration`.
+- `showToast` — transient toast (`info` | `success` | `warning` | `error`); `discard: 'auto' | 'manual'` with optional `duration`.
 
 If you accept multiple events (e.g. `onPress` and `onLongPress`), declare them via separate `actions` fields on the schema with distinct `event` keys — see the schema reference below.
 

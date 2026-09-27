@@ -346,7 +346,7 @@ type ComponentAction =
   | {
       type: 'showToast';
       message: unknown;
-      severity: 'info' | 'warning' | 'error';
+      severity: 'info' | 'success' | 'warning' | 'error';
       discard: 'auto' | 'manual';
       duration?: number;
     };

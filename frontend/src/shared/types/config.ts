@@ -585,7 +585,7 @@ export type ButtonAction =
       /** The message text (expression-capable: $static, $loc, $var) */
       message: unknown;
       /** Visual severity level */
-      severity: 'info' | 'warning' | 'error';
+      severity: 'info' | 'success' | 'warning' | 'error';
       /** 'auto' dismisses after duration ms; 'manual' requires user action */
       discard: 'auto' | 'manual';
       /** Auto-dismiss timeout in milliseconds (default 4000). Only used when discard is 'auto'. */

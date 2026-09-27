@@ -64,7 +64,7 @@ See [Users, groups & permissions](users.md#sign-in-and-out-on-a-screen) for the 
 | **Set Language** | Switches the interface language by code (`nl-NL`). See [Translations](translations.md). |
 | **Set Theme** | Switches the active theme by id — day/night buttons, or a per-line brand. See [Theming](theming.md). |
 | **Show Alert** | A modal with a **Title**, **Description**, and two buttons whose captions you set. **OK** and **Cancel** each run their own action list, which is how you gate a dangerous write behind a confirmation. `dismissible` decides whether clicking away counts as cancel. |
-| **Show Toast** | A transient message — **severity** `info` / `warning` / `error`, **discard** `auto` (after **duration**, 4000 ms by default) or `manual`. The message is a property, so `$loc` and `$var` work in it. |
+| **Show Toast** | A transient message — **severity** `info` / `success` / `warning` / `error`, **discard** `auto` (after **duration**, 4000 ms by default) or `manual`. The message is a property, so `$loc` and `$var` work in it. |
 
 ### Logic
 

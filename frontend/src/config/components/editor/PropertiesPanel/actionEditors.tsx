@@ -821,9 +821,10 @@ const ShowToastEditor: EditorFor<'showToast'> = ({ action, ctx }) => (
     <ActionFieldRow ctx={ctx} fieldKey="severity" schema={SEVERITY_SCHEMA} label="Severity">
       <Select
         value={action.severity}
-        onChange={(v) => ctx.update({ severity: v as 'info' | 'warning' | 'error' })}
+        onChange={(v) => ctx.update({ severity: v as 'info' | 'success' | 'warning' | 'error' })}
       >
         <option value="info">Info</option>
+        <option value="success">Success</option>
         <option value="warning">Warning</option>
         <option value="error">Error</option>
       </Select>
