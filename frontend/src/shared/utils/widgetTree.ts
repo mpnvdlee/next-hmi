@@ -73,11 +73,6 @@ export function findInPages(pages: PageNode[], id: string): FindInPagesResult {
   return walk(pages);
 }
 
-/** Top-level component list that contains the given component id. */
-export function findContainerComps(pages: PageNode[], id: string): WidgetConfig[] {
-  return findInPages(pages, id).container ?? [];
-}
-
 export function findComponentInPages(pages: PageNode[], id: string): WidgetConfig | null {
   return findInPages(pages, id).comp ?? null;
 }
