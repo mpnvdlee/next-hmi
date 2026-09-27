@@ -35,8 +35,7 @@ export const schema = {
   actions: { type: 'actions' as const, label: 'Actions' },
 };
 
-export const description =
-  'Runs actions and can write true to a bound boolean on press.';
+export const description = 'Runs actions and can write true to a bound boolean on press.';
 export const category = 'Content & controls';
 export const icon = { type: 'builtin', name: 'cursor-click' } as const;
 
@@ -76,10 +75,7 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   };
 
   return (
-    <div
-      className="hmi-component hmi-button"
-      style={style}
-    >
+    <div className="hmi-component hmi-button" style={style}>
       <button
         className={`hmi-button__btn${isOutline ? ' hmi-button__btn--outline' : ''}`}
         style={colorStyle}

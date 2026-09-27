@@ -351,24 +351,15 @@ function PageContent({ page, inputScope }: PageContentProps) {
             <Suspense fallback={<ContentSpinner />}>
               <ComponentSelfSuspenseContext.Provider value={false}>
                 {page.showHeader && (
-                  <header
-                    className="hmi-page__header"
-                    {...COLUMN_FLOW}
-                  >
+                  <header className="hmi-page__header" {...COLUMN_FLOW}>
                     {(sections.header ?? []).map(renderWidget)}
                   </header>
                 )}
-                <main
-                  className="hmi-page__content"
-                  {...COLUMN_FLOW}
-                >
+                <main className="hmi-page__content" {...COLUMN_FLOW}>
                   <WindowedContent items={sections.content ?? []} render={renderWidget} />
                 </main>
                 {page.showFooter && (
-                  <footer
-                    className="hmi-page__footer"
-                    {...COLUMN_FLOW}
-                  >
+                  <footer className="hmi-page__footer" {...COLUMN_FLOW}>
                     {(sections.footer ?? []).map(renderWidget)}
                   </footer>
                 )}

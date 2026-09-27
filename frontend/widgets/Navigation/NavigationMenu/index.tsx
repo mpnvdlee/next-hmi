@@ -519,8 +519,7 @@ export default function NavigationMenu({ properties, layout }: HmiWidgetProps = 
 
   function renderGroupRow(group: PageGroupConfig, depth: number): JSX.Element {
     const isActive =
-      activePageId !== null &&
-      (group.id === activePageId || activeGroupIds.includes(group.id));
+      activePageId !== null && (group.id === activePageId || activeGroupIds.includes(group.id));
     const expanded = isGroupExpanded(group);
 
     return (

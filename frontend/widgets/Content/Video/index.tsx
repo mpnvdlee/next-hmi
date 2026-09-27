@@ -413,7 +413,8 @@ export default function Video({ properties, layout }: HmiWidgetProps) {
   const loop = getPropBoolean(properties, 'loop', false, evalCtx);
   const controls = getPropBoolean(properties, 'controls', true, evalCtx);
   const playsInline = getPropBoolean(properties, 'playsInline', true, evalCtx);
-  const preload = getPropString(properties, 'preload', 'metadata', evalCtx) as 'none' | 'metadata' | 'auto';
+  const preload = getPropString(properties, 'preload', 'metadata', evalCtx) as
+    'none' | 'metadata' | 'auto';
   const playbackRate = getPropNumber(properties, 'playbackRate', 1, evalCtx);
   const volume = getPropNumber(properties, 'volume', 1, evalCtx);
   const pauseWhenHidden = getPropBoolean(properties, 'pauseWhenHidden', true, evalCtx);

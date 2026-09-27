@@ -94,10 +94,7 @@ export default function VariableListInput({
   // Sorted once per historian config, not on every panel keystroke — a
   // property write replaces the widget objects up the page path, so this
   // component re-renders on each one.
-  const tracked = useMemo(
-    () => (config ? Object.keys(config.variables).sort() : null),
-    [config],
-  );
+  const tracked = useMemo(() => (config ? Object.keys(config.variables).sort() : null), [config]);
 
   function commit(next: string[]) {
     setRows(next);
