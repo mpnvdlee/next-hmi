@@ -93,15 +93,22 @@ def collect_page_ids(nodes: list[Any]) -> set[str]:
     return ids
 
 
-def declared_property_keys(doc: Any) -> frozenset[str]:
-    """The property names a document's ``componentProperties`` block declares.
+def declared_properties(doc: Any) -> dict[str, dict[str, Any]]:
+    """A document's ``componentProperties`` block: name -> declaration.
 
     Shared by page groups (inline in ``config.json``) and pages (one JSON file
-    each), which declare the same interface under the same key.
+    each), which declare the same interface under the same key. A declaration
+    that is not an object is kept out — it declares no type to check against.
     """
-    if not isinstance(doc, dict):
-        return frozenset()
-    declared = doc.get("componentProperties")
+    declared = doc.get("componentProperties") if isinstance(doc, dict) else None
+    if not isinstance(declared, dict):
+        return {}
+    return {name: decl for name, decl in declared.items() if isinstance(decl, dict)}
+
+
+def declared_property_keys(doc: Any) -> frozenset[str]:
+    """The property names a document's ``componentProperties`` block declares."""
+    declared = doc.get("componentProperties") if isinstance(doc, dict) else None
     return frozenset(declared) if isinstance(declared, dict) else frozenset()
 
 
@@ -142,6 +149,33 @@ def collect_page_group_property_keys(nodes: list[Any]) -> dict[str, frozenset[st
         if isinstance(node_id, str) and node_id:
             keys[node_id] = declared_property_keys(node)
     return keys
+
+
+def collect_page_group_properties(nodes: list[Any]) -> dict[str, dict[str, dict[str, Any]]]:
+    """Page-group id -> its ``componentProperties`` declarations (see
+    ``collect_page_group_property_keys``)."""
+    declared: dict[str, dict[str, dict[str, Any]]] = {}
+    for node, _path in iter_page_groups(nodes):
+        node_id = node.get("id")
+        if isinstance(node_id, str) and node_id:
+            declared[node_id] = declared_properties(node)
+    return declared
+
+
+def collect_group_ancestors(
+    nodes: Any, enclosing: tuple[str, ...] = ()
+) -> dict[str, tuple[str, ...]]:
+    """Node id -> the ids of the page groups it nests in, innermost first."""
+    ancestors: dict[str, tuple[str, ...]] = {}
+    if not isinstance(nodes, list):
+        return ancestors
+    for node in nodes:
+        if not isinstance(node, dict) or not isinstance(node.get("id"), str):
+            continue
+        ancestors[node["id"]] = enclosing
+        if is_page_group(node):
+            ancestors.update(collect_group_ancestors(node.get("children"), (node["id"], *enclosing)))
+    return ancestors
 
 
 def contains_page(nodes: list[Any], page_id: str) -> bool:

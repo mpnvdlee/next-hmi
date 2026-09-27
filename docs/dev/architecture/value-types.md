@@ -323,6 +323,8 @@ A component can declare **input properties** — values the parent fills in when
 
 Each input has a **type**, exactly like any other field. So an input can be a `String`, `Integer`, `Float`, … or a **struct** (an object with named members). It may also carry a `description` (one line shown under the field) and a `defaultValue`.
 
+The value an instance puts in an input is checked against that type the way a widget's property is against its schema: the backend reads each declaration as its schema field (`componentPropertyToSchemaField`, ported as `component_property.to_schema_field`) and runs the literal, `var-type`, `var-readonly` and `source-type` checks on it. None of these ran on instance values before, so a mismatched literal there is a `literal-type` diagnostic rather than a rejected save. A component whose declarations were not read is not typed.
+
 One declared type is not an input at all: `widgets` names a [slot](data-formats.md#component-slots). It holds no value, so `$componentProp` cannot read it and the binding picker never offers it; what it declares is where the *caller's widgets* go.
 
 ### Pages and page groups declare the same inputs

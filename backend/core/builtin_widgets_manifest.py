@@ -183,7 +183,12 @@ def _read_catalog_entries(path: Path) -> dict[str, dict[str, Any]]:
         for optional in ("description", "icon"):
             if extra.get(optional) is not None:
                 entry[optional] = extra[optional]
-        for flag in ("hostsChildren", "flowsChildren"):
+        # The editor half lists a row's exports only when it has some, so with
+        # that half read, a row without them exports nothing.
+        if isinstance(editor_rows, dict):
+            exported = extra.get("exportedProperties")
+            entry["exportedProperties"] = exported if isinstance(exported, list) else []
+        for flag in ("hostsChildren", "flowsChildren", "repeatsChildren"):
             if row.get(flag) is not None:
                 entry[flag] = row[flag]
         entries[row["name"]] = entry

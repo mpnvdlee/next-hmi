@@ -51,9 +51,12 @@ from core.translations import (
 from core.validation import (
     ValidationReport,
     build_context,
+    collect_dialog_ancestors,
+    collect_page_properties,
     collect_page_property_keys,
     component_slot_property_gaps,
     component_undeclared_slots,
+    ctx_for_page_group,
     ctx_for_root,
     is_valid_dict_name,
     is_valid_page_id,
@@ -318,7 +321,9 @@ def _project_row(
     }
 
 
-def _validate_component_tree(component: Any, ctx: Any) -> ValidationReport:
+def _validate_component_tree(
+    component: Any, ctx: Any, component_id: str | None = None
+) -> ValidationReport:
     """Validate a reusable component's widget tree: the generic catalog checks
     (via `validate_widget_node`) plus component-specific rules — reusable
     components cannot bind directly to variables (must use `$componentProp`)
@@ -378,7 +383,7 @@ def _collect_page_group_diagnostics(
     """
     for node, _path in iter_page_groups(nodes):
         gid = node.get("id") if isinstance(node.get("id"), str) else None
-        report = validate_page_node_events(node, ctx)
+        report = validate_page_node_events(node, ctx_for_page_group(ctx, node))
         diagnostics.extend(
             _diagnostic_rows(report, artifact_kind="pageGroup", artifact_id=gid, draft=node)
         )
@@ -402,7 +407,7 @@ def _collect_component_diagnostics(ctx: Any, diagnostics: list[dict[str, Any]]) 
                 message="component definition must be an object", breadcrumb=f"Component: {artifact_id}",
             ))
             continue
-        report = _validate_component_tree(component, ctx)
+        report = _validate_component_tree(component, ctx, artifact_id)
         diagnostics.extend(
             _diagnostic_rows(report, artifact_kind="component", artifact_id=artifact_id, draft=component)
         )
@@ -798,6 +803,8 @@ async def put_config(body: dict) -> Any:
     ctx.navigable_page_ids = frozenset(collect_page_ids(root_nodes(payload, "pages")))
     ctx.dialogs_page_ids = frozenset(collect_page_ids(root_nodes(payload, "dialogs")))
     ctx.page_property_keys = collect_page_property_keys(payload)
+    ctx.page_properties = collect_page_properties(payload)
+    ctx.dialog_ancestors = collect_dialog_ancestors(payload)
     report = validate_config_areas(payload, ctx)
     if not report.ok:
         raise ConfigValidationError(report.to_message())
@@ -875,7 +882,7 @@ async def validate_draft(body: dict) -> Any:
         report = validate_global_events(draft, ctx)
         artifact_id = "globalEvents"
     else:  # component
-        report = _validate_component_tree(draft, ctx)
+        report = _validate_component_tree(draft, ctx, artifact_id)
 
     return {"diagnostics": _diagnostic_rows(report, artifact_kind=kind, artifact_id=artifact_id, draft=draft)}
 

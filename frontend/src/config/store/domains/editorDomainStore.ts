@@ -23,6 +23,8 @@ interface ComponentPropSource {
   fieldType?: string | string[];
   /** Required sub-fields for struct-type targets (from SchemaField.requiredFields) */
   requiredFields?: RequiredFieldEntry[];
+  /** The field writes its value back — a Float field then no longer takes an Integer. */
+  write?: boolean;
   /** Label shown in the picker header (e.g. the component schema field label) */
   label?: string;
   /** Called with the selected property key, or empty string for clear */
@@ -66,6 +68,8 @@ interface WidgetPropPickerOptions {
   fieldType?: string | string[];
   /** Required sub-fields for struct-type targets. */
   requiredFields?: RequiredFieldEntry[];
+  /** The bound property writes its value back. */
+  write?: boolean;
   /** Label shown in the picker header (the bound property's label). */
   label?: string;
   /** Clears the binding (mirrors the field's own clear action). */
@@ -230,6 +234,7 @@ export const useEditorDomainStore = create<EditorDomainStore>((set, get) => ({
         onPick,
         fieldType: options?.fieldType,
         requiredFields: options?.requiredFields,
+        write: options?.write,
         label: options?.label,
         onClear: options?.onClear,
         currentKey: options?.currentKey,

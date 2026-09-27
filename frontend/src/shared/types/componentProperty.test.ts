@@ -1,4 +1,18 @@
-import { componentPropertyToSchemaField, type ComponentPropertySchema } from './componentProperty';
+import {
+  componentPropFits,
+  componentPropVerdict,
+  structSchemaNodeFits,
+  structSchemaNodeVerdict,
+  type PropSlot,
+} from '@config/components/editor/VariableBindingPicker/componentPropHelpers';
+import fitsFixture from './__fixtures__/componentPropFits.json';
+import schemaFieldFixture from './__fixtures__/componentPropertySchemaField.json';
+import {
+  componentPropertyToSchemaField,
+  type ComponentPropertySchema,
+  type StructSchemaNode,
+  typeLabel,
+} from './componentProperty';
 
 describe('componentPropertyToSchemaField — select option types', () => {
   it('maps a select with no option type to a string dropdown, as it always has', () => {
@@ -65,5 +79,49 @@ describe('componentPropertyToSchemaField — select option types', () => {
     };
 
     expect(componentPropertyToSchemaField(prop)).not.toHaveProperty('optionType');
+  });
+});
+
+describe('typeLabel', () => {
+  it.each([
+    ['float', 'Float'],
+    ['integer[]', 'Integer[]'],
+    ['datetime', 'DateTime'],
+    ['struct', 'Struct'],
+    ['struct[]', 'Struct[]'],
+    ['select', 'Select (enum)'],
+    ['Double', 'Double'],
+    ['Motor', 'Motor'],
+  ])('shows %s as %s', (token, label) => {
+    expect(typeLabel(token)).toBe(label);
+  });
+});
+
+// Shared with backend/tests/test_structure_parity.py, which holds the backend's
+// port of both functions (core/validation/component_property.py) to them.
+describe('component property parity fixtures', () => {
+  it.each(schemaFieldFixture)('converts: $name', ({ input, output }) => {
+    expect(componentPropertyToSchemaField(input as ComponentPropertySchema)).toEqual(output);
+  });
+
+  it.each(
+    fitsFixture as {
+      name: string;
+      prop?: unknown;
+      node?: unknown;
+      slot: unknown;
+      fits: boolean;
+      verdict: { ok: boolean; reason?: string };
+    }[],
+  )('fits: $name', ({ prop, node, slot, fits, verdict }) => {
+    if (prop) {
+      expect(componentPropFits(prop as ComponentPropertySchema, slot as PropSlot)).toBe(fits);
+      expect(componentPropVerdict(prop as ComponentPropertySchema, slot as PropSlot)).toEqual(
+        verdict,
+      );
+    } else {
+      expect(structSchemaNodeFits(node as StructSchemaNode, slot as PropSlot)).toBe(fits);
+      expect(structSchemaNodeVerdict(node as StructSchemaNode, slot as PropSlot)).toEqual(verdict);
+    }
   });
 });

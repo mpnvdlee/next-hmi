@@ -12,8 +12,10 @@ from typing import Any
 from core.builtin_widgets_manifest import CatalogVersion, builtin_widgets_catalog
 from core.page_index import (
     INDEX_ROOTS,
+    collect_group_ancestors,
+    collect_page_group_properties,
     collect_page_group_property_keys,
-    declared_property_keys,
+    declared_properties,
     iter_page_groups,
     page_document_files,
     root_nodes,
@@ -33,7 +35,7 @@ from core.storage import (
 )
 from core.value_types import to_simple_type
 
-from . import vartype
+from . import component_property, source_rules, vartype
 from .ids import is_valid_page_id
 from .report import ValidationReport
 
@@ -162,6 +164,14 @@ class ValidationContext:
     # nodes take input parameters, so a node in the ``pages`` root maps to the
     # empty set whatever it stores.
     page_property_keys: dict[str, frozenset[str]] = field(default_factory=dict)
+    # The declarations behind ``component_property_keys`` / ``page_property_keys``
+    # (name -> ``componentProperties`` entry), for typing what fills or reads
+    # them. A missing id means the declarations are unknown — the type checks
+    # skip it.
+    component_properties: dict[str, dict[str, dict]] = field(default_factory=dict)
+    page_properties: dict[str, dict[str, dict]] = field(default_factory=dict)
+    # Dialogs-folder node id -> the page groups it nests in, innermost first.
+    dialog_ancestors: dict[str, tuple[str, ...]] = field(default_factory=dict)
     # False while walking a page that has no input scope (see
     # ``navigable_page_ids``); ``validate_page`` sets it on its own copy.
     input_scope: bool = True
@@ -178,6 +188,13 @@ class ValidationContext:
     # the same widget type repeatedly (e.g. every Button on a page), and the
     # result only depends on widget_type for the lifetime of this context.
     _declared_keys_cache: dict[str, frozenset[str]] = field(default_factory=dict, repr=False)
+    _component_schema_cache: dict[str, dict] = field(default_factory=dict, repr=False)
+
+    @property
+    def struct_elements(self) -> _StructElements:
+        if self._struct_elements is None or self._struct_elements.registry is not self.datasource_registry:
+            self._struct_elements = _StructElements(self.datasource_registry)
+        return self._struct_elements
 
     def widget_schema_for(self, widget_type: str) -> dict | None:
         """Field-level schema for ``widget_type``, or None if the type is unknown.
@@ -195,18 +212,38 @@ class ValidationContext:
             component_id = _component_id(widget_type)
             if self.component_ids and component_id not in self.component_ids:
                 return None
-            return {}
+            return self._component_schema(component_id)
         # Custom widgets take precedence over builtins of the same name, and a
         # name collision across custom-widget groups resolves to the last entry
         # in manifest order — both mirror the frontend loader, which overwrites
         # any registry entry sharing the widget's name and iterates groups in
         # the same (alphabetical) order the manifest is built in.
+        entry = self._widget_entry(widget_type)
+        return None if entry is None else entry.get("schema", {})
+
+    def _component_schema(self, component_id: str) -> dict:
+        """A component's declared properties as schema fields — what its
+        instances' values are checked against, as the instance panel edits them.
+        A slot (`widgets`) holds no value, so it is left out. Empty when the
+        declarations are unknown."""
+        cached = self._component_schema_cache.get(component_id)
+        if cached is None:
+            declared = self.component_properties.get(component_id) or {}
+            cached = {
+                name: component_property.to_schema_field(decl)
+                for name, decl in declared.items()
+                if str(decl.get("type", "")).strip().lower() != "widgets"
+            }
+            self._component_schema_cache[component_id] = cached
+        return cached
+
+    def _widget_entry(self, widget_type: str) -> dict | None:
         custom = self.widget_schemas.get("custom", {})
         # custom keys are "<Group>/<Name>" but widget types in pages are "<Name>".
         matched: dict | None = None
         for key, entry in custom.items():
             if key.split("/")[-1] == widget_type:
-                matched = entry.get("schema", {})
+                matched = entry
         if matched is not None:
             return matched
         builtin = self.widget_schemas.get("builtin", {})
@@ -326,29 +363,93 @@ def _page_stems(files: list[Path] | None = None) -> frozenset[str]:
     return frozenset(p.stem for p in (page_document_files() if files is None else files))
 
 
-_page_property_keys_cache: tuple[frozenset[tuple[str, int]], dict[str, frozenset[str]]] | None = None
+def _column_fields(properties: Any) -> tuple[str, ...]:
+    """The row fields a widget's `columns` property names — what the
+    `$widgetProp` picker offers below a `Struct` export (the grid convention:
+    each column's `value` is a row field)."""
+    columns = properties.get("columns") if isinstance(properties, dict) else None
+    if not isinstance(columns, list):
+        return ()
+    fields = (c.get("value") for c in columns if isinstance(c, dict))
+    return tuple(dict.fromkeys(f for f in fields if isinstance(f, str) and f))
 
 
-def _collect_page_file_property_keys(files: list[Path] | None = None) -> dict[str, frozenset[str]]:
-    """Page id (file stem) -> the property names its ``componentProperties`` declares.
+_WidgetIndex = dict[str, tuple[str, tuple[str, ...]]]
+
+
+def index_widgets(nodes: Any, out: _WidgetIndex | None = None) -> _WidgetIndex:
+    """Widget id -> (widget type, its column fields) for every node of a widget
+    tree — what a `$widgetProp` in the same artifact can name."""
+    if out is None:
+        out = {}
+    if not isinstance(nodes, list):
+        return out
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        wid, wtype = node.get("id"), node.get("type")
+        if isinstance(wid, str) and wid and isinstance(wtype, str) and wtype:
+            out.setdefault(wid, (wtype, _column_fields(node.get("properties"))))
+        index_widgets(node.get("children"), out)
+    return out
+
+
+def _page_widgets(page: Any) -> _WidgetIndex:
+    out: _WidgetIndex = {}
+    sections = page.get("sections") if isinstance(page, dict) else None
+    if isinstance(sections, dict):
+        for children in sections.values():
+            index_widgets(children, out)
+    return out
+
+
+def _config_widgets(config: Any) -> dict[str, _WidgetIndex]:
+    """The shell's widgets, and each page group's header/footer chrome, per
+    artifact (see ``ValidationContext.project_widgets``)."""
+    shell: _WidgetIndex = {}
+    for area in _SHELL_REGIONS:
+        index_widgets(config.get(area) if isinstance(config, dict) else None, shell)
+    out = {"shell": shell}
+    for root in INDEX_ROOTS:
+        for node, _path in iter_page_groups(root_nodes(config, root)):
+            gid = node.get("id")
+            if isinstance(gid, str) and gid:
+                chrome: _WidgetIndex = {}
+                for band in ("header", "footer"):
+                    index_widgets(node.get(band), chrome)
+                out[f"group:{gid}"] = chrome
+    return out
+
+
+# (property names, declarations, widget index) per page file id.
+_PageFileScan = tuple[dict[str, frozenset[str]], dict[str, dict[str, dict]], dict[str, _WidgetIndex]]
+
+_page_files_cache: tuple[frozenset[tuple[str, int]], _PageFileScan] | None = None
+
+
+def _scan_page_files(files: list[Path] | None = None) -> _PageFileScan:
+    """Page id (file stem) -> the property names its ``componentProperties``
+    declares, those declarations, and its widgets.
 
     Fingerprint-cached (name + mtime per file) like ``_collect_component_interfaces``
     — this opens every page file, and every debounced ``POST /api/config/validate``
     call rebuilds the context. ``files`` lets a caller that already listed the
     document directories pass the listing in rather than pay for a second one.
     """
-    global _page_property_keys_cache
+    global _page_files_cache
     if files is None:
         files = page_document_files()
     if not files:
-        _page_property_keys_cache = None
-        return {}
+        _page_files_cache = None
+        return {}, {}, {}
     # The path, not the bare name: the same id can only be in one directory, but
     # a move between them is a change this cache has to notice.
     fingerprint = frozenset((str(p), p.stat().st_mtime_ns) for p in files)
-    if _page_property_keys_cache is not None and _page_property_keys_cache[0] == fingerprint:
-        return _page_property_keys_cache[1]
+    if _page_files_cache is not None and _page_files_cache[0] == fingerprint:
+        return _page_files_cache[1]
     keys: dict[str, frozenset[str]] = {}
+    declarations: dict[str, dict[str, dict]] = {}
+    widgets: dict[str, _WidgetIndex] = {}
     for path in files:
         try:
             doc = read_json(path)
@@ -362,9 +463,18 @@ def _collect_page_file_property_keys(files: list[Path] | None = None) -> dict[st
             # empty set would flag every argument a caller passes to a page
             # whose file is merely malformed. Skip rather than false-positive.
             continue
-        keys[path.stem] = declared_property_keys(doc)
-    _page_property_keys_cache = (fingerprint, keys)
-    return keys
+        declared = doc.get("componentProperties")
+        keys[path.stem] = frozenset(declared) if isinstance(declared, dict) else frozenset()
+        declarations[path.stem] = declared_properties(doc)
+        widgets[path.stem] = _page_widgets(doc)
+    scan = (keys, declarations, widgets)
+    _page_files_cache = (fingerprint, scan)
+    return scan
+
+
+def _collect_page_file_property_keys(files: list[Path] | None = None) -> dict[str, frozenset[str]]:
+    """Page id (file stem) -> the property names its ``componentProperties`` declares."""
+    return _scan_page_files(files)[0]
 
 
 def collect_page_property_keys(
@@ -393,9 +503,43 @@ def collect_page_property_keys(
     return keys
 
 
-_ComponentInterfaces = tuple[dict[str, frozenset[str]], dict[str, frozenset[str]]]
+def collect_page_properties(
+    config: Any = None, files: list[Path] | None = None
+) -> dict[str, dict[str, dict]]:
+    """Page or page-group id -> its input-parameter declarations — the
+    declarations behind ``collect_page_property_keys``, resolved the same way."""
+    if config is None:
+        config = _read_config()
+    in_dialogs_folder = _index_collect_page_ids(root_nodes(config, "dialogs"))
+    declared: dict[str, dict[str, dict]] = {
+        page_id: {} for page_id in _index_collect_page_ids(root_nodes(config, "pages"))
+    }
+    declared.update(
+        (page_id, decls)
+        for page_id, decls in _scan_page_files(files)[1].items()
+        if page_id in in_dialogs_folder
+    )
+    declared.update(collect_page_group_properties(root_nodes(config, "dialogs")))
+    return declared
 
-_component_interface_cache: tuple[frozenset[tuple[str, int]], _ComponentInterfaces] | None = None
+
+def collect_dialog_ancestors(config: Any = None) -> dict[str, tuple[str, ...]]:
+    """Dialogs-folder node id -> the page groups it nests in, innermost first."""
+    if config is None:
+        config = _read_config()
+    return collect_group_ancestors(root_nodes(config, "dialogs"))
+
+
+_ComponentInterfaces = tuple[dict[str, frozenset[str]], dict[str, frozenset[str]]]
+# (property names, slot names, declarations, widget index) per component id.
+_ComponentScan = tuple[
+    dict[str, frozenset[str]],
+    dict[str, frozenset[str]],
+    dict[str, dict[str, dict]],
+    dict[str, _WidgetIndex],
+]
+
+_component_interface_cache: tuple[frozenset[tuple[str, int]], _ComponentScan] | None = None
 
 # Slot name a ComponentSlot falls back to when its ``slot`` property is blank.
 # Mirrors DEFAULT_SLOT_KEY in frontend/src/shared/utils/componentSlots.ts.
@@ -463,8 +607,9 @@ def component_undeclared_slots(component: Any) -> list[tuple[str, str]]:
     return [(path, key) for path, key in _slot_nodes(nodes) if key not in declared]
 
 
-def _collect_component_interfaces() -> _ComponentInterfaces:
-    """Component id (file stem) -> its declared property names, and -> its slot names.
+def _scan_components() -> _ComponentScan:
+    """Component id (file stem) -> its declared property names, its slot names,
+    its declarations and its widgets.
 
     Recursive: components live in nested group folders (``components/<group>/<id>.json``),
     so a flat glob would miss most of them. Fingerprint-cached (relative path +
@@ -475,7 +620,7 @@ def _collect_component_interfaces() -> _ComponentInterfaces:
     root = active_components_dir()
     if not root.exists():
         _component_interface_cache = None
-        return {}, {}
+        return {}, {}, {}, {}
     files = [
         p for p in root.rglob("*.json")
         if p.is_file() and not p.stem.startswith("__")
@@ -487,6 +632,8 @@ def _collect_component_interfaces() -> _ComponentInterfaces:
         return _component_interface_cache[1]
     keys: dict[str, frozenset[str]] = {}
     slots: dict[str, frozenset[str]] = {}
+    declarations: dict[str, dict[str, dict]] = {}
+    widgets: dict[str, _WidgetIndex] = {}
     for path in files:
         try:
             doc = read_json(path)
@@ -498,10 +645,19 @@ def _collect_component_interfaces() -> _ComponentInterfaces:
             continue
         declared = doc.get("componentProperties")
         keys[path.stem] = frozenset(declared) if isinstance(declared, dict) else frozenset()
+        declarations[path.stem] = declared_properties(doc)
         found: set[str] = set()
         _collect_slot_keys(doc.get("children"), found)
         slots[path.stem] = frozenset(found)
-    _component_interface_cache = (fingerprint, (keys, slots))
+        widgets[path.stem] = index_widgets(doc.get("children"))
+    scan = (keys, slots, declarations, widgets)
+    _component_interface_cache = (fingerprint, scan)
+    return scan
+
+
+def _collect_component_interfaces() -> _ComponentInterfaces:
+    """Component id (file stem) -> its declared property names, and -> its slot names."""
+    keys, slots, _declarations, _widgets = _scan_components()
     return keys, slots
 
 
@@ -766,13 +922,14 @@ def _collect_user_groups() -> frozenset[str]:
 
 def build_context() -> ValidationContext:
     """Snapshot the world for the duration of a single validation pass."""
-    component_property_keys, component_slots = _collect_component_interfaces()
+    component_property_keys, component_slots, component_properties, component_widgets = _scan_components()
     # One read and one walk per root: every page-id field below is derived from
     # the same index, and this runs on every debounced editor validate.
     config = _read_config()
-    # One listing of both document directories, shared by the two collectors
+    # One listing of both document directories, shared by the collectors
     # below — each would otherwise re-glob and re-stat every page file.
     page_files = page_document_files()
+    page_widgets = _scan_page_files(page_files)[2]
     navigable_page_ids = frozenset(_index_collect_page_ids(root_nodes(config, "pages")))
     dialogs_page_ids = frozenset(_index_collect_page_ids(root_nodes(config, "dialogs")))
     datasource_registry, datasource_writable = _collect_datasource_registry()
@@ -1550,6 +1707,8 @@ def _validate_property_value(
                 path, "component/property is empty",
                 severity="warning", code="widgetprop-empty",
             )
+        else:
+            _check_widget_prop(payload, schema_field, ctx, path, report)
     elif source_key == "$componentProp":
         if not isinstance(payload, str) or payload == "":
             report.warn(
@@ -1596,18 +1755,23 @@ def validate_widget_node(
             report.add(f"{path}/properties", "must be an object")
         else:
             declared = ctx.declared_property_keys(wtype, schema)
-            target = (
-                f"component '{_component_id(wtype)}'"
-                if wtype.startswith(_COMPONENT_TYPE_PREFIX)
-                else f"widget '{wtype}'"
-            )
+            is_instance = wtype.startswith(_COMPONENT_TYPE_PREFIX)
+            target = f"component '{_component_id(wtype)}'" if is_instance else f"widget '{wtype}'"
+            # An instance's values are typed by the component's declarations,
+            # which no check read before — a mismatch is a diagnostic there.
+            prop_ctx = replace(ctx, literals_block=False) if is_instance and ctx.literals_block else ctx
             for key, value in properties.items():
                 if declared is not None and key not in declared:
                     _warn_unknown_property(report, f"{path}/properties/{key}", key, target)
                 field_schema = schema.get(key) if isinstance(schema, dict) else None
-                _validate_property_value(value, field_schema, ctx, f"{path}/properties/{key}", report)
-                if key == "actions" or (isinstance(field_schema, dict) and field_schema.get("type") == "actions"):
-                    validate_action_targets(value, ctx, f"{path}/properties/{key}", report)
+                prop_path = f"{path}/properties/{key}"
+                _validate_property_value(value, field_schema, prop_ctx, prop_path, report)
+                if key == "actions" or (not is_instance and _is_actions_field(field_schema)):
+                    validate_action_targets(value, prop_ctx, prop_path, report)
+                elif _is_actions_field(field_schema):
+                    # Typed as actions only by the component's declaration, which
+                    # nothing walked before: a missing page is a diagnostic here.
+                    _validate_actions_softly(value, prop_ctx, prop_path, report)
     # Walk children
     for child_field in ("children",):
         children = node.get(child_field)
@@ -1616,6 +1780,23 @@ def validate_widget_node(
             for i, child in enumerate(children):
                 validate_widget_node(child, ctx, f"{path}/{child_field}/{i}", report)
     return report
+
+
+def _is_actions_field(field_schema: Any) -> bool:
+    return isinstance(field_schema, dict) and field_schema.get("type") == "actions"
+
+
+def _validate_actions_softly(
+    actions: Any, ctx: ValidationContext, path: str, report: ValidationReport
+) -> None:
+    """`validate_action_targets`, with what it would reject reported as
+    `action-page-unknown` instead — the one rejection it makes is a target page
+    that does not exist."""
+    scratch = ValidationReport()
+    validate_action_targets(actions, ctx, path, scratch)
+    report.warnings.extend(scratch.warnings)
+    for finding in scratch.findings:
+        report.warn(finding.path, finding.message, severity="error", code="action-page-unknown")
 
 
 def _validate_instance_slots(
@@ -1745,6 +1926,13 @@ def validate_page(page: Any, ctx: ValidationContext) -> ValidationReport:
         report.add("/id", "invalid page id")
     if pid in ctx.navigable_page_ids:
         ctx = ctx_for_root(ctx, "pages")
+    elif isinstance(pid, str) and pid in ctx.dialogs_page_ids and ctx.input_scope:
+        ctx = replace(ctx, input_schema=_input_scope(ctx, pid, declared_properties(page)))
+    ctx = replace(
+        ctx,
+        widget_index=_page_widgets(page),
+        artifact_key=f"page:{pid}" if isinstance(pid, str) else None,
+    )
     report.extend(validate_page_node_events(page, ctx))
     sections = page.get("sections")
     if sections is None:
@@ -1772,6 +1960,15 @@ def ctx_for_root(ctx: ValidationContext, root: str) -> ValidationContext:
     return ctx if root == "dialogs" else replace(ctx, input_scope=False)
 
 
+def ctx_for_page_group(ctx: ValidationContext, node: Any) -> ValidationContext:
+    """The context a page group's own events are walked in: a Dialogs-folder
+    group's input parameters are its declarations over its enclosing groups'."""
+    gid = node.get("id") if isinstance(node, dict) else None
+    if isinstance(gid, str) and gid in ctx.dialogs_page_ids and ctx.input_scope:
+        return replace(ctx, input_schema=_input_scope(ctx, gid, declared_properties(node)))
+    return ctx
+
+
 def validate_shell_areas(config: Any, ctx: ValidationContext) -> ValidationReport:
     """Validate the shell component arrays (header/footer/sidebars) and the
     project-wide shell region bindings. Paths are relative to `config` itself
@@ -1783,7 +1980,10 @@ def validate_shell_areas(config: Any, ctx: ValidationContext) -> ValidationRepor
         return report
     # A shell region renders around every page, so nothing supplies it input
     # parameters — same as a page outside the Dialogs folder.
-    ctx = replace(ctx, input_scope=False)
+    shell_widgets: _WidgetIndex = {}
+    for area in _SHELL_REGIONS:
+        index_widgets(config.get(area), shell_widgets)
+    ctx = replace(ctx, input_scope=False, widget_index=shell_widgets, artifact_key="shell")
     for area in _SHELL_REGIONS:
         _walk_widget_array(config.get(area), ctx, f"/{area}", report)
     validate_shell_regions(config.get("shell"), ctx, "/shell", report)
@@ -1857,4 +2057,6 @@ def _walk_page_group_events(
     events live on its own file and are walked by :func:`validate_page`.
     """
     for node, node_path in iter_page_groups(nodes, path):
-        report.extend(_reparented(validate_page_node_events(node, ctx), node_path))
+        report.extend(
+            _reparented(validate_page_node_events(node, ctx_for_page_group(ctx, node)), node_path)
+        )

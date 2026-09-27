@@ -80,8 +80,22 @@ def test_catalog_entries_merge_both_halves(published):
         },
         "description": "A box.",
         "icon": {"type": "builtin", "name": "square"},
+        # The editor half lists exports only for a widget that has some.
+        "exportedProperties": [],
         "hostsChildren": True,
     }
+
+
+def test_catalog_entries_carry_a_widgets_exports(published, monkeypatch):
+    """`$widgetProp` diagnostics resolve an export against this list."""
+    exports = [{"key": "selectedValue", "label": "Selected value", "type": "string"}]
+    rows = {"Layout/Box": {**EDITOR_ROWS["Layout/Box"], "exportedProperties": exports}}
+    builtin_widgets_manifest.editor_manifest_path(published / "manifest.json").write_text(
+        json.dumps(rows), encoding="utf-8"
+    )
+    monkeypatch.setattr(builtin_widgets_manifest, "_catalog_cache", None)
+
+    assert builtin_widgets_manifest.builtin_widgets_catalog_entries()["Box"]["exportedProperties"] == exports
 
 
 def test_catalog_entries_survive_a_missing_editor_half(published, monkeypatch):
@@ -94,6 +108,8 @@ def test_catalog_entries_survive_a_missing_editor_half(published, monkeypatch):
     entry = builtin_widgets_manifest.builtin_widgets_catalog_entries()["Box"]
     assert entry["schema"]["label"] == {"type": "string"}
     assert "description" not in entry
+    # Without the half that lists them, the exports are unknown, not none.
+    assert "exportedProperties" not in entry
 
 
 def test_catalog_version_turns_over_when_either_half_changes(published):

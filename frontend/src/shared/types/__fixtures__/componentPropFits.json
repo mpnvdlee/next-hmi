@@ -1,0 +1,639 @@
+[
+  {
+    "name": "integer property does not fit a float field",
+    "prop": {
+      "type": "integer",
+      "label": "N"
+    },
+    "slot": {
+      "fieldType": "float"
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "float property does not fit an integer field",
+    "prop": {
+      "type": "float",
+      "label": "F"
+    },
+    "slot": {
+      "fieldType": "Integer"
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "integer select fits an integer field",
+    "prop": {
+      "type": "select",
+      "label": "S",
+      "optionType": "integer"
+    },
+    "slot": {
+      "fieldType": "integer"
+    },
+    "fits": true,
+    "verdict": {
+      "ok": true
+    }
+  },
+  {
+    "name": "integer select does not fit a string field",
+    "prop": {
+      "type": "select",
+      "label": "S",
+      "optionType": "integer"
+    },
+    "slot": {
+      "fieldType": "string"
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "string select fits a string field",
+    "prop": {
+      "type": "select",
+      "label": "S"
+    },
+    "slot": {
+      "fieldType": "string"
+    },
+    "fits": true,
+    "verdict": {
+      "ok": true
+    }
+  },
+  {
+    "name": "color property does not fit a string field",
+    "prop": {
+      "type": "color",
+      "label": "C"
+    },
+    "slot": {
+      "fieldType": "string"
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "color property fits a color field",
+    "prop": {
+      "type": "color",
+      "label": "C"
+    },
+    "slot": {
+      "fieldType": "color"
+    },
+    "fits": true,
+    "verdict": {
+      "ok": true
+    }
+  },
+  {
+    "name": "string property fits an icon field",
+    "prop": {
+      "type": "string",
+      "label": "I"
+    },
+    "slot": {
+      "fieldType": "icon"
+    },
+    "fits": true,
+    "verdict": {
+      "ok": true
+    }
+  },
+  {
+    "name": "string property fits a union field",
+    "prop": {
+      "type": "string",
+      "label": "V"
+    },
+    "slot": {
+      "fieldType": ["integer", "string"]
+    },
+    "fits": true,
+    "verdict": {
+      "ok": true
+    }
+  },
+  {
+    "name": "boolean property does not fit a union of numbers",
+    "prop": {
+      "type": "boolean",
+      "label": "B"
+    },
+    "slot": {
+      "fieldType": ["integer", "float"]
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "string property does not fit an actions field",
+    "prop": {
+      "type": "string",
+      "label": "S"
+    },
+    "slot": {
+      "fieldType": "actions"
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "actions property fits an actions field",
+    "prop": {
+      "type": "actions",
+      "label": "A"
+    },
+    "slot": {
+      "fieldType": "actions"
+    },
+    "fits": true,
+    "verdict": {
+      "ok": true
+    }
+  },
+  {
+    "name": "array property fits its array field",
+    "prop": {
+      "type": "string[]",
+      "label": "T"
+    },
+    "slot": {
+      "fieldType": "string[]"
+    },
+    "fits": true,
+    "verdict": {
+      "ok": true
+    }
+  },
+  {
+    "name": "array property does not fit a scalar field",
+    "prop": {
+      "type": "string[]",
+      "label": "T"
+    },
+    "slot": {
+      "fieldType": "string"
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "struct property with the required members fits",
+    "prop": {
+      "type": "struct",
+      "label": "M",
+      "structSchema": [
+        {
+          "kind": "variable",
+          "name": "fValue",
+          "type": "Float"
+        },
+        {
+          "kind": "variable",
+          "name": "fSetpoint",
+          "type": "Float",
+          "write": true
+        }
+      ]
+    },
+    "slot": {
+      "fieldType": "struct",
+      "requiredFields": [
+        {
+          "name": "fValue",
+          "type": "Float"
+        },
+        {
+          "name": "fSetpoint",
+          "type": "Float",
+          "write": true
+        }
+      ]
+    },
+    "fits": true,
+    "verdict": {
+      "ok": true
+    }
+  },
+  {
+    "name": "struct property missing a member does not fit",
+    "prop": {
+      "type": "struct",
+      "label": "M",
+      "structSchema": [
+        {
+          "kind": "variable",
+          "name": "fValue",
+          "type": "Float"
+        }
+      ]
+    },
+    "slot": {
+      "fieldType": "struct",
+      "requiredFields": [
+        {
+          "name": "fValue"
+        },
+        {
+          "name": "bRunning"
+        }
+      ]
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "struct property with a read-only member does not fit a writing requirement",
+    "prop": {
+      "type": "struct",
+      "label": "M",
+      "structSchema": [
+        {
+          "kind": "variable",
+          "name": "fSetpoint",
+          "type": "Float"
+        }
+      ]
+    },
+    "slot": {
+      "fieldType": "struct",
+      "requiredFields": [
+        {
+          "name": "fSetpoint",
+          "type": "Float",
+          "write": true
+        }
+      ]
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "struct property with a mistyped member does not fit",
+    "prop": {
+      "type": "struct",
+      "label": "M",
+      "structSchema": [
+        {
+          "kind": "variable",
+          "name": "fValue",
+          "type": "String"
+        }
+      ]
+    },
+    "slot": {
+      "fieldType": "struct",
+      "requiredFields": [
+        {
+          "name": "fValue",
+          "type": "Float"
+        }
+      ]
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "struct property without a schema does not fit a field requiring members",
+    "prop": {
+      "type": "struct",
+      "label": "M"
+    },
+    "slot": {
+      "fieldType": "struct",
+      "requiredFields": [
+        {
+          "name": "fValue"
+        }
+      ]
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "struct property does not fit a string field",
+    "prop": {
+      "type": "struct",
+      "label": "M"
+    },
+    "slot": {
+      "fieldType": "string"
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "string property does not fit a struct field",
+    "prop": {
+      "type": "string",
+      "label": "S"
+    },
+    "slot": {
+      "fieldType": "struct"
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "any property fits an untyped field",
+    "prop": {
+      "type": "boolean",
+      "label": "B"
+    },
+    "slot": {
+      "fieldType": []
+    },
+    "fits": true,
+    "verdict": {
+      "ok": true
+    }
+  },
+  {
+    "name": "boolean node fits a boolean field",
+    "node": {
+      "kind": "variable",
+      "name": "b",
+      "type": "Boolean"
+    },
+    "slot": {
+      "fieldType": "boolean"
+    },
+    "fits": true,
+    "verdict": {
+      "ok": true
+    }
+  },
+  {
+    "name": "boolean node does not fit an integer field",
+    "node": {
+      "kind": "variable",
+      "name": "b",
+      "type": "Boolean"
+    },
+    "slot": {
+      "fieldType": "integer"
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "untyped node fits a string field",
+    "node": {
+      "kind": "variable",
+      "name": "x"
+    },
+    "slot": {
+      "fieldType": "string"
+    },
+    "fits": true,
+    "verdict": {
+      "ok": true
+    }
+  },
+  {
+    "name": "untyped node does not fit a struct-only field",
+    "node": {
+      "kind": "variable",
+      "name": "x"
+    },
+    "slot": {
+      "fieldType": "Motor"
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "folder node does not fit a string field",
+    "node": {
+      "kind": "folder",
+      "name": "st",
+      "children": [
+        {
+          "kind": "variable",
+          "name": "a",
+          "type": "Float"
+        }
+      ]
+    },
+    "slot": {
+      "fieldType": "string"
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "folder node fits a struct field with its members",
+    "node": {
+      "kind": "folder",
+      "name": "st",
+      "children": [
+        {
+          "kind": "variable",
+          "name": "a",
+          "type": "Float"
+        }
+      ]
+    },
+    "slot": {
+      "fieldType": "struct",
+      "requiredFields": [
+        {
+          "name": "a",
+          "type": "Float"
+        }
+      ]
+    },
+    "fits": true,
+    "verdict": {
+      "ok": true
+    }
+  },
+  {
+    "name": "array node fits its array field",
+    "node": {
+      "kind": "array",
+      "name": "a",
+      "type": "Float"
+    },
+    "slot": {
+      "fieldType": "float[]"
+    },
+    "fits": true,
+    "verdict": {
+      "ok": true
+    }
+  },
+  {
+    "name": "array node does not fit a scalar field",
+    "node": {
+      "kind": "array",
+      "name": "a",
+      "type": "Float"
+    },
+    "slot": {
+      "fieldType": "float"
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "integer node does not write into a float field",
+    "node": {
+      "kind": "variable",
+      "name": "n",
+      "type": "Integer",
+      "write": true
+    },
+    "slot": {
+      "fieldType": "float",
+      "write": true
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  },
+  {
+    "name": "writable property fits a writing field",
+    "prop": {
+      "type": "float",
+      "label": "S",
+      "write": true
+    },
+    "slot": {
+      "fieldType": "float",
+      "write": true
+    },
+    "fits": true,
+    "verdict": {
+      "ok": true
+    }
+  },
+  {
+    "name": "property not declared writable does not fill a writing field",
+    "prop": {
+      "type": "float",
+      "label": "S"
+    },
+    "slot": {
+      "fieldType": "float",
+      "write": true
+    },
+    "fits": true,
+    "verdict": {
+      "ok": false,
+      "reason": "Not declared writable"
+    }
+  },
+  {
+    "name": "writable node fits a writing field",
+    "node": {
+      "kind": "variable",
+      "name": "sp",
+      "type": "Float",
+      "write": true
+    },
+    "slot": {
+      "fieldType": "float",
+      "write": true
+    },
+    "fits": true,
+    "verdict": {
+      "ok": true
+    }
+  },
+  {
+    "name": "folder node does not fill a writing field",
+    "node": {
+      "kind": "folder",
+      "name": "st",
+      "children": []
+    },
+    "slot": {
+      "fieldType": "struct",
+      "write": true
+    },
+    "fits": true,
+    "verdict": {
+      "ok": false,
+      "reason": "Not declared writable"
+    }
+  },
+  {
+    "name": "a slot with no field type takes any property",
+    "prop": {
+      "type": "boolean",
+      "label": "B"
+    },
+    "slot": {},
+    "fits": true,
+    "verdict": {
+      "ok": true
+    }
+  },
+  {
+    "name": "a slot with no field type still asks for its members",
+    "prop": {
+      "type": "struct",
+      "label": "M",
+      "structSchema": [
+        {
+          "kind": "variable",
+          "name": "a",
+          "type": "Float"
+        }
+      ]
+    },
+    "slot": {
+      "requiredFields": [
+        {
+          "name": "b"
+        }
+      ]
+    },
+    "fits": false,
+    "verdict": {
+      "ok": false
+    }
+  }
+]

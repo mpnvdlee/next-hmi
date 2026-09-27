@@ -695,7 +695,7 @@ Compiled build artifacts are written to `<runtime_home>/.widget-build/` (outside
   - widget keys are normalized paths relative to the active project's `custom-widgets/` directory
 - `widget-schemas.json`
   - `{ "version": 2, "builtin": {}, "custom": { "<Name-or-Group/Name>": { … } } }` — the catalog manifest the compiler regenerates from every custom widget's source (`services/widget_schemas.py`, tree-sitter over `index.tsx`). `builtin` is always empty: the product's own widgets ship as the baked built-in-widgets manifest, which `core.validation.structure.load_widget_manifest` overlays onto this half at read time
-  - each entry carries `name`, `category`, `description`, `icon`, `schema` and `exportedProperties`; it is what `GET /api/widget-schemas`, `GET /api/widgets`, the MCP tools and backend validation all read
+  - each entry carries `name`, `category`, `description`, `icon`, `schema` and `exportedProperties` (written only for a widget that declares exports; the baked built-in manifest's editor half lists them the same way, and its reader gives every built-in row the list, empty when it has none); it is what `GET /api/widget-schemas`, `GET /api/widgets`, the MCP tools and backend validation all read
   - a widget whose exports cannot be reduced to literals gets `schemaError` and an empty `schema` instead of failing the whole run, so an unreadable widget costs only its own schema
 
 A sibling source folder such as `custom-widgets/_template/` can hold a starter

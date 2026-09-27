@@ -352,6 +352,8 @@ export interface ComponentPropMode {
   requiredNamesSet?: Set<string>;
   isStructTarget: boolean;
   typeIsOk: boolean | null;
+  /** Why a selection of the right type is still refused (its access). */
+  mismatchReason?: string;
   selectedItem: ComponentPropSelectedItem | null;
 }
 
@@ -393,8 +395,15 @@ function ComponentPropPanel({
   selectedKey: string | null;
   mode: ComponentPropMode;
 }) {
-  const { fieldType, requiredFields, requiredNamesSet, isStructTarget, typeIsOk, selectedItem } =
-    mode;
+  const {
+    fieldType,
+    requiredFields,
+    requiredNamesSet,
+    isStructTarget,
+    typeIsOk,
+    mismatchReason,
+    selectedItem,
+  } = mode;
   return (
     <div className="editor-binding-col2">
       <div className="editor-binding-right editor-binding-right--stacked">
@@ -410,7 +419,8 @@ function ComponentPropPanel({
                 <div className="editor-binding-children-group">
                   <RequiredFieldsTree
                     fields={requiredFields}
-                    propNodes={selectedItem?.structNodes ?? undefined}
+                    // Anything selected is judged field by field; a leaf offers none.
+                    propNodes={typeIsOk === null ? undefined : (selectedItem?.structNodes ?? [])}
                   />
                 </div>
               ) : null}
@@ -421,6 +431,9 @@ function ComponentPropPanel({
               <MatchSlot ok={typeIsOk} />
               {fieldType !== undefined && <TypeBadge type={formatTypeBadge(fieldType)} />}
             </div>
+          )}
+          {typeIsOk === false && mismatchReason && (
+            <div className="editor-binding-req-reason">{mismatchReason}</div>
           )}
         </div>
       </div>

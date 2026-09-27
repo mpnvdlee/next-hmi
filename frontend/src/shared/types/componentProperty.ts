@@ -133,7 +133,8 @@ function structSchemaToRequiredFields(nodes: StructSchemaNode[]): SchemaField['r
       };
     }
     const entry: Record<string, unknown> = { name: node.name };
-    if (node.type) entry.type = node.type;
+    // An array row holds a list of its `type`, which a scalar of it never fits.
+    if (node.type) entry.type = node.kind === 'array' ? `${node.type}[]` : node.type;
     if (node.write) entry.write = true;
     return entry as { name: string };
   });

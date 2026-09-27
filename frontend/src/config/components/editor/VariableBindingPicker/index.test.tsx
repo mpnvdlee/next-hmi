@@ -94,6 +94,7 @@ describe('VariableBindingPicker component-prop mode', () => {
         properties: {
           icon: { type: 'icon', label: 'Icon name' },
           label: { type: 'string', label: 'Label' },
+          running: { type: 'boolean', label: 'Running' },
         },
         fieldType: 'icon',
         label: 'Icon',
@@ -113,8 +114,9 @@ describe('VariableBindingPicker component-prop mode', () => {
     openComponentPropPicker();
     render(<VariableBindingPicker />);
 
-    // Source row + the one icon-typed property; `label` is filtered out by type.
-    expect(renderedRowCount()).toBe(2);
+    // Source row + the icon property and the String one an icon field binds, as
+    // a String variable would; `running` is filtered out by type.
+    expect(renderedRowCount()).toBe(3);
   });
 
   it('titles the drawer with the property being bound', () => {

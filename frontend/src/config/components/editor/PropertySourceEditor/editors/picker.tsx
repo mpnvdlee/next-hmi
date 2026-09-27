@@ -4,6 +4,7 @@ import { useComponentPropertySchema } from '../componentPropertySchemaContext';
 import { PickerField } from '../../../ui/PathInputField';
 import { ComponentPropPath } from '../../VariableBindingPicker/ComponentPropPath';
 import { widgetPropRowKey } from '../../WidgetPropPicker/rowKey';
+import { slotPropFilter, type SlotType } from './utils';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import type { WidgetPropSource } from '@shared/types/config';
 
@@ -47,8 +48,7 @@ export function WidgetPropEditor({
           (componentId, property, path) =>
             onChange({ $widgetProp: { componentId, property, ...(path ? { path } : {}) } }),
           {
-            fieldType: schema?.type,
-            requiredFields: schema?.requiredFields,
+            ...slotPropFilter(schema, slot),
             label: schema?.label,
             onClear: clear,
             currentKey:
@@ -100,8 +100,7 @@ export function ComponentPropEditor({
     openBindingPicker('', '$componentProp', {
       componentPropSource: {
         properties: ctx.properties,
-        fieldType: schema?.type,
-        requiredFields: schema?.requiredFields,
+        ...slotPropFilter(schema, slot),
         label: schema?.label,
         onPick: (key: string) => onChange(key ? { $componentProp: key } : undefined),
         currentKey: selectedKey || undefined,

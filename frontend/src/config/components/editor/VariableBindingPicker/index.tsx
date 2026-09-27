@@ -42,7 +42,7 @@ import { findComponentInPages } from '@shared/utils/widgetTree';
 import { allPageRootNodes } from '@shared/utils/pageTree';
 import { apiJson } from '@shared/utils/api';
 import { withDotSearchSeparators } from '@shared/utils/search';
-import type { StructSchemaNode } from '@shared/types/componentProperty';
+import type { ComponentPropertySchema, StructSchemaNode } from '@shared/types/componentProperty';
 import { rfName } from '../bindingPickerUtils';
 import {
   type DatasourceNode,
@@ -58,9 +58,9 @@ import {
 } from './variableTreeHelpers';
 import {
   buildComponentPropRows,
-  isCompatible,
-  isCompatibleFolderNode,
-  isCompatibleLeafNode,
+  componentPropVerdict,
+  propSlotOf,
+  structSchemaNodeVerdict,
 } from './componentPropHelpers';
 import { ComponentPropPath } from './ComponentPropPath';
 import RightPanel, { type ComponentPropMode, type VarMode } from './RightPanel';
@@ -71,6 +71,34 @@ type VariableEntry = PickerVariableEntry;
 /** Collapse key for the component-prop mode's single source row. Namespaced so it
  *  can never collide with a property key. */
 const COMPONENT_PROP_SOURCE_KEY = 'source:componentProps';
+
+/** A component-prop key resolved against the properties on offer: a top-level
+ *  property or a node inside a struct property's schema. */
+function componentPropItem(
+  properties: Record<string, ComponentPropertySchema>,
+  key: string,
+): ComponentPropSelectedItem | null {
+  const slashIdx = key.indexOf('/');
+  const propKey = slashIdx === -1 ? key : key.slice(0, slashIdx);
+  const propSchema = properties[propKey];
+  if (!propSchema) return null;
+  let node: StructSchemaNode | null = null;
+  if (slashIdx !== -1) {
+    let nodes = propSchema.structSchema ?? [];
+    for (const part of key.slice(slashIdx + 1).split('/')) {
+      node = nodes.find((n) => n.name === part) ?? null;
+      if (!node) return null;
+      nodes = node.children ?? [];
+    }
+  }
+  return {
+    propKey,
+    propSchema,
+    node,
+    structNodes: node ? (node.children ?? null) : (propSchema.structSchema ?? null),
+    displayLabel: <ComponentPropPath value={key} properties={properties} />,
+  };
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -349,7 +377,7 @@ export default function VariableBindingPicker() {
 
   const rows = useMemo((): RowItem[] => {
     if (isComponentPropMode && target?.componentPropSource) {
-      const { properties, fieldType, requiredFields } = target.componentPropSource;
+      const { properties, fieldType, requiredFields, write } = target.componentPropSource;
       const propRows = buildComponentPropRows(
         properties,
         fieldType,
@@ -357,7 +385,7 @@ export default function VariableBindingPicker() {
         search,
         showAll,
         collapsed,
-        { baseDepth: 1 },
+        { baseDepth: 1, write },
       );
       if (propRows.length === 0) return propRows;
       const source: RowItem = {
@@ -397,45 +425,6 @@ export default function VariableBindingPicker() {
     () => (!isComponentPropMode && selectedKey ? findRawFolder(dsTree, selectedKey) : null),
     [isComponentPropMode, dsTree, selectedKey],
   );
-
-  // Resolved selection for component-prop mode (top-level prop or nested struct node)
-  const componentPropSelectedItem = useMemo(() => {
-    if (!isComponentPropMode || !selectedKey || !target?.componentPropSource) return null;
-    const { properties } = target.componentPropSource;
-    const slashIdx = selectedKey.indexOf('/');
-    if (slashIdx === -1) {
-      const schema = properties[selectedKey];
-      return schema
-        ? {
-            propKey: selectedKey,
-            propSchema: schema,
-            node: null as StructSchemaNode | null,
-            structNodes: schema.structSchema ?? null,
-            displayLabel: <ComponentPropPath value={selectedKey} properties={properties} />,
-          }
-        : null;
-    }
-    const propKey = selectedKey.slice(0, slashIdx);
-    const subPath = selectedKey.slice(slashIdx + 1);
-    const propSchema = properties[propKey];
-    if (!propSchema) return null;
-    let nodes = propSchema.structSchema ?? [];
-    let node: StructSchemaNode | null = null;
-    for (const part of subPath.split('/')) {
-      node = nodes.find((n) => n.name === part) ?? null;
-      if (!node) return null;
-      nodes = node.children ?? [];
-    }
-    return node
-      ? {
-          propKey,
-          propSchema,
-          node,
-          structNodes: node.children ?? null,
-          displayLabel: <ComponentPropPath value={selectedKey} properties={properties} />,
-        }
-      : null;
-  }, [isComponentPropMode, target, selectedKey]);
 
   // Scroll container for the virtual list
   const listRef = useRef<HTMLDivElement>(null);
@@ -584,35 +573,46 @@ export default function VariableBindingPicker() {
     ? (target.componentPropSource?.label ?? target.propertyKey)
     : (target.filter?.label ?? schemaField?.label ?? target.propertyKey);
 
-  let componentPropMode: ComponentPropMode | null = null;
-  let varMode: VarMode | null = null;
-  let hasComponentPropTypeFilter = false;
-
-  if (isComponentPropMode) {
-    const fieldType = target.componentPropSource?.fieldType;
-    const requiredFields = target.componentPropSource?.requiredFields;
-    const isStructTarget = fieldType !== undefined && isStructType(primaryType(fieldType));
-    hasComponentPropTypeFilter = fieldType !== undefined;
-    const typeIsOk =
-      componentPropSelectedItem && fieldType !== undefined
-        ? componentPropSelectedItem.node
-          ? componentPropSelectedItem.node.kind === 'variable'
-            ? isCompatibleLeafNode(componentPropSelectedItem.node, fieldType)
-            : isCompatibleFolderNode(componentPropSelectedItem.node, fieldType, requiredFields)
-          : isCompatible(componentPropSelectedItem.propSchema, fieldType, requiredFields)
-        : null;
-    componentPropMode = {
-      fieldType,
-      requiredFields,
-      requiredNamesSet: requiredFields?.length ? new Set(requiredFields.map(rfName)) : undefined,
-      isStructTarget,
-      typeIsOk,
-      selectedItem: componentPropSelectedItem,
-    };
-  } else {
+  /** What the drawer shows for a key — the Required/Selected panes and the
+   *  ✓/✗ they carry. Judged for any key, not only the selected one, so a
+   *  double-click or Enter pick is held to the same verdict as Confirm. */
+  function modesFor(key: string | null): {
+    componentPropMode: ComponentPropMode | null;
+    varMode: VarMode | null;
+  } {
+    if (!target) return { componentPropMode: null, varMode: null };
+    if (target.componentPropSource) {
+      const { properties, fieldType, requiredFields, write } = target.componentPropSource;
+      const selectedItem = key ? componentPropItem(properties, key) : null;
+      const slot = propSlotOf(fieldType, requiredFields, write);
+      // Selected but not found (a property since removed) is a mismatch; an
+      // unconstrained field accepts whatever is picked.
+      const verdict = !selectedItem
+        ? { ok: false }
+        : !slot
+          ? { ok: true }
+          : selectedItem.node
+            ? structSchemaNodeVerdict(selectedItem.node, slot)
+            : componentPropVerdict(selectedItem.propSchema, slot);
+      const typeIsOk = key ? verdict.ok : null;
+      return {
+        componentPropMode: {
+          fieldType,
+          requiredFields,
+          requiredNamesSet: requiredFields?.length
+            ? new Set(requiredFields.map(rfName))
+            : undefined,
+          isStructTarget: fieldType !== undefined && isStructType(primaryType(fieldType)),
+          typeIsOk,
+          mismatchReason: key ? verdict.reason : undefined,
+          selectedItem,
+        },
+        varMode: null,
+      };
+    }
     const selectedVar =
       allVars.find((v) =>
-        v._datasource && v._path ? `${v._datasource}:${v._path}` === selectedKey : false,
+        v._datasource && v._path ? `${v._datasource}:${v._path}` === key : false,
       ) ?? null;
     const selectedParsed = selectedKey ? parseVarKey(selectedKey) : null;
     const elemSuffix = selectedParsed?.path.match(/^(.+)\[(\d+)\]$/) ?? null;
@@ -630,7 +630,7 @@ export default function VariableBindingPicker() {
       schemaField?.requiredFields !== undefined;
 
     let scalarIsValid: boolean | null = null;
-    if (!isStruct) {
+    if (key && !isStruct) {
       const varToCheck = selectedVar ?? selectedParentVar;
       if (varToCheck) {
         const allowed = schemaField?.type !== undefined ? acceptedValueTypes(schemaField.type) : [];

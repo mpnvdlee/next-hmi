@@ -27,9 +27,11 @@ import { GroupHeaderRow } from '../BindingPickerShell/rowParts';
 import { PickerRow, type RowContext } from '../VariableBindingPicker/rows';
 import {
   buildComponentPropRows,
-  isCompatible,
-  isCompatibleLeafNode,
+  componentPropVerdict,
   isStructTarget,
+  propSlotOf,
+  structSchemaNodeVerdict,
+  type PropVerdict,
 } from '../VariableBindingPicker/componentPropHelpers';
 import type { RowItem } from '../VariableBindingPicker/variableTreeHelpers';
 import RightPanel, {
@@ -66,9 +68,9 @@ function structFieldsFor(comp: ComponentOption, prop: ExportedProperty): Exporte
 
 /**
  * Adapt an exported property to the ComponentPropertySchema shape the shared
- * compatibility/row-building helpers understand. `isCompatible` / `isCompatibleLeafNode`
- * only read `type`/`write` on `variable` nodes and never descend into `children`, so
- * flattening the declared fields to childless variable nodes is a safe adapter.
+ * compatibility/row-building helpers understand, so an export is judged by the
+ * same `accepts` rule as a component property. An export's struct fields are
+ * flat, so they become childless variable nodes.
  */
 function adaptSchema(
   prop: ExportedProperty,
@@ -101,6 +103,7 @@ function buildWidgetPropRows(
   components: ComponentOption[],
   fieldType: string | string[] | undefined,
   requiredFields: RequiredFieldEntry[] | undefined,
+  write: boolean | undefined,
   search: string,
   showAll: boolean,
   collapsed: Set<string>,
@@ -129,6 +132,7 @@ function buildWidgetPropRows(
         keyPrefix: `${comp.id}${COMPOSITE_KEY_SEP}`,
         baseDepth: 1,
         searchPath: componentSearchPath,
+        write,
       },
     ) as PropOrFieldRow[];
 
@@ -178,21 +182,6 @@ export default function WidgetPropPicker() {
     row?.scrollIntoView({ block: 'center' });
   }, [open, currentKey]);
 
-  const pickAndClose = useCallback(
-    (key: string) => {
-      const sel = parseRowKey(key);
-      if (!sel || !target) return;
-      target.onPick(sel.componentId, sel.property, sel.path);
-      close();
-    },
-    [target, close],
-  );
-
-  const handleConfirm = useCallback(() => {
-    if (!selectedKey) return;
-    pickAndClose(selectedKey);
-  }, [selectedKey, pickAndClose]);
-
   const handleClear = useCallback(() => {
     if (!target?.onClear) return;
     target.onClear();
@@ -205,39 +194,44 @@ export default function WidgetPropPicker() {
 
   if (!open || !target) return null;
 
-  const { fieldType, requiredFields } = target;
+  const { fieldType, requiredFields, write } = target;
   const title = target.label;
+  const slot = propSlotOf(fieldType, requiredFields, write);
 
   const rows = buildWidgetPropRows(
     target.componentOptions,
     fieldType,
     requiredFields,
+    write,
     search,
     showAll,
     collapsed,
   );
 
-  // ── Right panel (shared with VariableBindingPicker's component-prop mode) ──
-  const sel = selectedKey ? parseRowKey(selectedKey) : null;
-  const selComp = sel
-    ? (target.componentOptions.find((c) => c.id === sel.componentId) ?? null)
-    : null;
-  const selProp =
-    selComp && sel
-      ? (selComp.exportedProperties.find((p) => p.key === sel.property) ?? null)
+  /** The row a key names and whether it fits the field — judged for any key,
+   *  so a double-click is held to the same ✓/✗ as Confirm. A key that no
+   *  longer names a component or property is a mismatch. */
+  function selectionFor(key: string | null): {
+    selectedItem: ComponentPropSelectedItem | null;
+    typeIsOk: boolean | null;
+    mismatchReason?: string;
+  } {
+    if (!target || !key) return { selectedItem: null, typeIsOk: null };
+    const sel = parseRowKey(key);
+    const selComp = sel
+      ? (target.componentOptions.find((c) => c.id === sel.componentId) ?? null)
       : null;
+    const selProp =
+      selComp && sel
+        ? (selComp.exportedProperties.find((p) => p.key === sel.property) ?? null)
+        : null;
+    if (!sel || !selComp || !selProp) return { selectedItem: null, typeIsOk: false };
 
-  const requiredNamesSet = requiredFields?.length ? new Set(requiredFields.map(rfName)) : undefined;
-  const isStructTargetVal = fieldType !== undefined && isStructTarget(fieldType);
-
-  let selectedItem: ComponentPropSelectedItem | null = null;
-  let typeIsOk: boolean | null = null;
-
-  if (selComp && selProp && sel) {
     const fields = structFieldsFor(selComp, selProp);
     const schema = adaptSchema(selProp, fields);
     const compLabel = selComp.name || selComp.type;
     let node: StructSchemaNode | null = null;
+    let verdict: PropVerdict;
     let displayLabel: ReactNode;
     if (sel.path) {
       const field = fields.find((f) => f.name === sel.path);
@@ -247,7 +241,7 @@ export default function WidgetPropPicker() {
         type: field?.type,
         write: field?.write,
       };
-      if (fieldType !== undefined) typeIsOk = isCompatibleLeafNode(node, fieldType);
+      verdict = slot ? structSchemaNodeVerdict(node, slot) : { ok: true };
       displayLabel = (
         <>
           <span className="cfg-component-prop-path__prefix">
@@ -257,7 +251,7 @@ export default function WidgetPropPicker() {
         </>
       );
     } else {
-      if (fieldType !== undefined) typeIsOk = isCompatible(schema, fieldType, requiredFields);
+      verdict = slot ? componentPropVerdict(schema, slot) : { ok: true };
       displayLabel = (
         <>
           <span className="cfg-component-prop-path__prefix">{compLabel} › </span>
@@ -265,21 +259,39 @@ export default function WidgetPropPicker() {
         </>
       );
     }
-    selectedItem = {
-      propKey: sel.property,
-      propSchema: schema,
-      node,
-      structNodes: sel.path ? null : (schema.structSchema ?? null),
-      displayLabel,
+    return {
+      selectedItem: {
+        propKey: sel.property,
+        propSchema: schema,
+        node,
+        structNodes: sel.path ? null : (schema.structSchema ?? null),
+        displayLabel,
+      },
+      typeIsOk: verdict.ok,
+      mismatchReason: verdict.reason,
     };
   }
 
+  function pickAndClose(key: string) {
+    const sel = parseRowKey(key);
+    if (!sel || !target || selectionFor(key).typeIsOk === false) return;
+    target.onPick(sel.componentId, sel.property, sel.path);
+    close();
+  }
+
+  function handleConfirm() {
+    if (selectedKey) pickAndClose(selectedKey);
+  }
+
+  // ── Right panel (shared with VariableBindingPicker's component-prop mode) ──
+  const { selectedItem, typeIsOk, mismatchReason } = selectionFor(selectedKey);
   const componentPropMode: ComponentPropMode = {
     fieldType,
     requiredFields,
-    requiredNamesSet,
-    isStructTarget: isStructTargetVal,
+    requiredNamesSet: requiredFields?.length ? new Set(requiredFields.map(rfName)) : undefined,
+    isStructTarget: fieldType !== undefined && isStructTarget(fieldType),
     typeIsOk,
+    mismatchReason,
     selectedItem,
   };
 
@@ -333,7 +345,7 @@ export default function WidgetPropPicker() {
       onClose={close}
       onConfirm={handleConfirm}
       onClear={target.onClear ? handleClear : undefined}
-      confirmDisabled={!selectedKey}
+      confirmDisabled={!selectedKey || typeIsOk === false}
       search={search}
       onSearchChange={setSearch}
       searchPlaceholder="Search components, properties or fields…"
