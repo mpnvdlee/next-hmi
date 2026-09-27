@@ -181,10 +181,11 @@ async def shutdown_after_response(reason: str) -> None:
 async def restart_backend(reason: str = "manual"):
     """Clean-restart the backend process.
 
-    1. Write the restart sentinel under the runtime home — the supervisor
-       (``launcher.py`` for binaries, ``start-dev.py`` for the dev runner) reads
-       this file after a clean exit to distinguish a requested restart from
-       a normal shutdown.
+    1. Outside a project instance, write the restart sentinel under the
+       runtime home — the supervisor (``launcher.py`` for binaries,
+       ``start-dev.py`` for the dev runner) reads this file after a clean exit
+       to distinguish a requested restart from a normal shutdown. An instance
+       needs none: the manager's supervisor respawns it.
     2. Broadcast ``{type: "restarting"}`` so clients can paint a
        "reconnecting…" banner before their socket closes.
     3. Signal ourselves with ``SIGTERM`` — uvicorn catches it and runs the
@@ -197,11 +198,18 @@ async def restart_backend(reason: str = "manual"):
     Returns 202 immediately so the caller can begin polling ``/api/system/info``
     for the new PID.
     """
-    try:
-        write_restart_sentinel(reason)
-    except OSError as exc:
-        logger.error("restart: failed to write sentinel: %s", exc)
-        raise HTTPException(status_code=500, detail="Could not write restart sentinel") from exc
+    # A project instance (served under a base path) shares the manager's runtime
+    # home, and the supervisor respawns it on any exit. The sentinel is the
+    # manager's: left there, it would re-exec the manager on its next clean
+    # exit instead of letting it stop.
+    if os.environ.get("NEXTHMI_BASE_PATH", "/") == "/":
+        try:
+            write_restart_sentinel(reason)
+        except OSError as exc:
+            logger.error("restart: failed to write sentinel: %s", exc)
+            raise HTTPException(
+                status_code=500, detail="Could not write restart sentinel"
+            ) from exc
 
     from services.websocket_manager import (
         websocket_manager,  # local import — avoids circular dep

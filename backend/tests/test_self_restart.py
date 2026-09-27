@@ -107,6 +107,19 @@ def test_restart_endpoint_writes_sentinel_and_returns_202(restart_app: FastAPI) 
     assert runtime_home.restart_sentinel_path().exists()
 
 
+def test_a_project_instance_restarts_without_the_managers_sentinel(
+    restart_app: FastAPI, monkeypatch
+) -> None:
+    """An instance shares the manager's runtime home, and the supervisor already
+    respawns any instance that exits. A sentinel there would re-exec the manager
+    on its next clean exit instead of letting it stop."""
+    monkeypatch.setenv("NEXTHMI_BASE_PATH", "/runtime/demo/")
+    with TestClient(restart_app) as client:
+        resp = client.post("/api/system/restart")
+    assert resp.status_code == 202
+    assert not runtime_home.restart_sentinel_path().exists()
+
+
 def test_restart_endpoint_accepts_custom_reason(restart_app: FastAPI) -> None:
     with TestClient(restart_app) as client:
         resp = client.post("/api/system/restart", params={"reason": "make-live"})
