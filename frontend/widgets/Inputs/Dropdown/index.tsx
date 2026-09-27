@@ -52,15 +52,33 @@ interface MenuKeyEvent {
   preventDefault(): void;
 }
 
+const NO_EXPORTED: unknown[] = [];
+
+function toEntries(list: unknown[]): ItemEntry[] {
+  return list.map((el) => {
+    if (el !== null && typeof el === 'object') {
+      const entry = el as Record<string, unknown>;
+      return {
+        label: String(entry.label ?? entry.value ?? ''),
+        value: String(entry.value ?? entry.label ?? ''),
+      };
+    }
+    const text = el === null || el === undefined ? '' : String(el);
+    return { label: text, value: text };
+  });
+}
+
 /** Resolve the `options` property to a usable ItemEntry array.
  *  Accepts: raw ItemEntry[] ($static), { $user: { field: 'userList' | 'groups' } },
- *  { $var: {...} } (array variable), or { $languages: {} } (language list). */
+ *  { $var: {...} } (array variable), { $languages: {} } (language list), or
+ *  { $widgetProp: {...} } (an array another widget exports, passed in resolved). */
 function resolveOptions(
   raw: unknown,
   users: UserEntry[],
   userGroups: Array<{ id: string; label: string }>,
   varValue: unknown,
   languages: Array<{ code: string }>,
+  exported: unknown[],
 ): ItemEntry[] {
   if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
     const obj = raw as Record<string, unknown>;
@@ -82,34 +100,14 @@ function resolveOptions(
       return languages.map((l) => ({ label: l.code, value: l.code }));
     }
     if ('$var' in obj) {
-      if (Array.isArray(varValue)) {
-        return varValue.map((el) => {
-          if (el !== null && typeof el === 'object') {
-            const entry = el as Record<string, unknown>;
-            return {
-              label: String(entry.label ?? entry.value ?? ''),
-              value: String(entry.value ?? entry.label ?? ''),
-            };
-          }
-          const text = el === null || el === undefined ? '' : String(el);
-          return { label: text, value: text };
-        });
-      }
-      return [];
+      return Array.isArray(varValue) ? toEntries(varValue) : [];
+    }
+    if ('$widgetProp' in obj) {
+      return toEntries(exported);
     }
   }
   if (Array.isArray(raw)) {
-    return raw.map((el) => {
-      if (el !== null && typeof el === 'object') {
-        const entry = el as Record<string, unknown>;
-        return {
-          label: String(entry.label ?? entry.value ?? ''),
-          value: String(entry.value ?? entry.label ?? ''),
-        };
-      }
-      const text = el === null || el === undefined ? '' : String(el);
-      return { label: text, value: text };
-    });
+    return toEntries(raw);
   }
   return [];
 }
@@ -148,13 +146,19 @@ export default function Dropdown({ id, properties, layout }: HmiWidgetProps) {
   const varBinding = (optionsRaw as { $var?: { path: string } } | undefined)?.$var ?? null;
   const varKey = varBinding?.path ?? '';
   const varValue = useVariable(varKey);
+  const isExport =
+    optionsRaw !== null && typeof optionsRaw === 'object' && '$widgetProp' in optionsRaw;
+  const exportedRaw = useRecordListProp(isExport ? properties : undefined, 'options');
+  // The hook hands back a fresh empty array on every render when there is
+  // nothing to read; one shared constant keeps the options memo stable.
+  const exported = exportedRaw.length > 0 ? exportedRaw : NO_EXPORTED;
 
   const options = useMemo(
     () =>
-      resolveOptions(optionsRaw, users, userGroups, varValue, languages).filter(
+      resolveOptions(optionsRaw, users, userGroups, varValue, languages, exported).filter(
         (option) => option.label.trim().length > 0,
       ),
-    [optionsRaw, users, userGroups, varValue, languages],
+    [optionsRaw, users, userGroups, varValue, languages, exported],
   );
   const menuOptions = useMemo(() => [{ label: '—', value: '' }, ...options], [options]);
   const selectedIndex = menuOptions.findIndex((option) => option.value === selected);

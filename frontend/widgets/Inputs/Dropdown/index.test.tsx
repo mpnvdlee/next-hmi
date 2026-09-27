@@ -60,6 +60,16 @@ describe('Dropdown', () => {
     expect(screen.getByRole('combobox')).toHaveTextContent('Fahrenheit');
   });
 
+  it('lists the options another widget exports', async () => {
+    const user = userEvent.setup();
+    useComponentPropStore.setState({ props: { source: { units: OPTIONS } } });
+    renderDropdown({ options: { $widgetProp: { componentId: 'source', property: 'units' } } });
+
+    await user.click(screen.getByRole('combobox'));
+
+    expect(screen.getByRole('option', { name: 'Fahrenheit' })).toBeInTheDocument();
+  });
+
   it('publishes the configured initial selection', () => {
     renderDropdown({ options: OPTIONS, selectedValue: 'C' });
 
