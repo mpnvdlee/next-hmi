@@ -10,6 +10,9 @@ tree-sitter
 tree-sitter-typescript
 zeroconf>=0.150.0
 httpx>=0.28.1
+# Verifies licence signatures in the enterprise edition, which is built from
+# this same venv with the private enterprise/ checkout cloned in. Nothing in
+# this repository imports it.
 PyNaCl>=1.6.2
 # Generates the manager's self-signed certificate when an operator turns on
 # HTTPS. Already present transitively via asyncua; pinned here as a direct
