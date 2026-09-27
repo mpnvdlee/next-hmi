@@ -69,6 +69,7 @@ Every name below is a global — no import, ever.
 - **Workspace data** — `useUsersData`, `useUserGroupsData`, `useLanguagesData`.
 - **Navigation** — `useNavigateToPage`, `usePageGroup`, `usePageTitle`, `useVisiblePages`.
 - **Actions** — `executeWidgetActions`.
+- **Repeating** — `useItemListProp`, `RepeatScope` and `useRepeatScope`, plus a `repeatsChildren` export naming the list property, so a widget of your own can draw its children once per element the way the [Repeater](properties.md#repeating-widgets-over-an-array-repeater) does.
 - **Recipes** — `useRecipeConfig`, `useRecipeState`, `recipeDownload`, `recipeUpload`.
 - **Icons** — `getBuiltinIconComponent`, `isBuiltinIconId`.
 - **Charts** — `Recharts` (`LineChart`, `XAxis`, …) for custom trends and plots.

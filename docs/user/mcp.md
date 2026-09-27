@@ -38,7 +38,7 @@ Pairing and every tool call name a project by **id**, not by its display name. T
 
 ### 3. Pair a token
 
-A headless client (an agent runner, a desktop assistant) has no manager session, so it authenticates with a bearer token. There is no button for this yet — mint one by presenting the **device-admin password**, the one you set on the dashboard at first launch (see [Managing projects](install.md#managing-projects)); it is the same password that unlocks the dashboard, not a project's operator password.
+A headless client (an agent runner, a desktop assistant) has no manager session, so it authenticates with a bearer token. Tokens are minted over the API, not from a button: present the **device-admin password**, the one you set on the dashboard at first launch (see [Managing projects](install.md#managing-projects)); it is the same password that unlocks the dashboard, not a project's operator password.
 
 ```bash
 curl -X POST http://localhost:8000/api/manager/mcp/pair \

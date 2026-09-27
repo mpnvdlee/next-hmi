@@ -15,7 +15,7 @@ Layout is flex-based, not pixel-nailed. You group widgets in containers, decide 
 
 Every widget's properties panel has a **Layout** section. It shows two groups: how this widget arranges *its children* (containers only), and how this widget *places itself* in its parent.
 
-**Arranging children** (the **Container** widget only) — Direction · Gap · Align · Padding · Radius. An **Image Container** hosts children too, but it pins them to points on the image rather than flowing them, so it has no row for any of these.
+**Arranging children** (a **Container** or a **Repeater** — the widgets that flow their children) — Direction · Gap · Wrap · Align · Distribute · Padding · Radius. An **Image Container** hosts children too, but it pins them to points on the image rather than flowing them, so it has no row for any of these.
 
 **Placing itself** — Width · Height.
 
@@ -23,7 +23,7 @@ Every widget's properties panel has a **Layout** section. It shows two groups: h
 
 Every row is on screen from the start; nothing is folded behind a disclosure. A max-width you set once and then cannot see is a max-width that quietly wins arguments you are not having.
 
-There is no row for the raw flex properties — no Basis, Grow, Shrink or Align self. Direction, Align and the two size modes cover what they covered, and a panel that offers both invites you to set the same thing twice and get a fight.
+There is no row for the raw flex properties — no Basis, Grow, Shrink or Align self. Direction, Align and the two size modes cover that ground, and a panel that offered both would invite you to set the same thing twice and get a fight.
 
 ![The Layout section for a Container: Width mode and Height mode as Hug / Fill / Fixed segmented buttons, each above its own length and Min/Max rows, with Fill weight at the bottom.](images/layout-panel.png)
 
@@ -46,6 +46,8 @@ Switching a mode to Hug or Fixed by hand only deletes the weight once no axis ca
 **Fill** is how you make a widget as big as possible without scrolling: set **Height: Fill** on the widget, and on every container between it and the page. One container left on Hug is enough to stop the chain — it sizes to its content and has no leftover height to hand down.
 
 **Hug** and **Fixed** hold their size when the container runs out of room: the container overflows rather than the widget being squeezed below the size you asked for. Only **Fill** gives space back, because giving space back is what it is for.
+
+What the overflow looks like is the Container's **Overflow** setting. **Visible** (the default) lets the children spill past its edge, **Clip** cuts them off at the edge, and **Scroll** keeps them reachable with a scrollbar. Clip and Scroll need a container with a bounded size — **Fixed** or **Fill**; a **Hug** container grows to fit its children, so there is nothing to clip.
 
 The mode you pick along the container's own direction is a different mechanism from the one across it — the editor picks the right one for you, which is the part that is easy to get wrong by hand.
 
@@ -121,6 +123,6 @@ Rather than maintaining separate designs, branch any property on the **viewport*
 
 A few patterns worth reaching for:
 
-- **Collapse the sidebar on small screens** — bind the region's **Overlay** and **Default state** to `$viewport`, and put a **Menu Toggle Button** in the header.
+- **Collapse the sidebar on small screens** — bind the region's **Overlay** and **Default state** to `$viewport`, and put a **Menu Toggle** in the header.
 - **Hide detail rather than shrink it** — bind a widget's `visible` to `$compare` against `$viewport`'s `width`. A cramped widget reads worse than an absent one.
 - **Scale, don't redesign, for an odd panel** — the shell's HMI scale factor handles a 7" panel or a 4K wall display without touching a single layout field.

@@ -43,7 +43,7 @@ The runtime turns failure into a defined visual state — never a stale value pa
 
 | Situation | Result |
 |---|---|
-| **Absent** | Source can't produce a value yet (no matching index, optional input not supplied) → the field uses its own fallback / placeholder. |
+| **Absent** | Source can't produce a value yet (no matching index, a struct member that isn't there at runtime, a parameter with no value and no default) → the field uses its own fallback / placeholder. |
 | **Bad quality** | The tag is connected but reported bad / uncertain / stale → the field shows its quality-degraded state (blank or dimmed). |
 | **Disconnected** | The datasource itself is down → treated as bad quality for every tag it owns. |
 
@@ -54,7 +54,7 @@ tells you where to look:
 
 | Mark | Means | Fix |
 |---|---|---|
-| **Red — wrong binding** | The binding itself doesn't resolve: a tag that no longer exists, a member that isn't on the struct, an index past the end of the array. | A configuration error — repair the binding. |
+| **Red — wrong binding** | The binding itself doesn't resolve: a tag that no longer exists, a member that isn't on the struct, an index past the end of the array, or a tag whose type doesn't fit the field. | A configuration error — repair the binding. |
 | **Amber — no data** | The binding is sound, but no value has arrived. | Look at the datasource, not the page — see [Connect, disconnect, and see why it failed](datasources.md#connect-disconnect-and-see-why-it-failed). |
 | **Dashed — disconnected** | The socket or the datasource is down, so every tag it owns is suspect. | Connectivity. Cached values are never passed off as live here. |
 
@@ -65,8 +65,12 @@ seconds rather than hiding the problem. Dialogs are judged on their own
 delivery, not the page's, so opening one doesn't inherit a window that already
 closed.
 
+Inside an `$if` or a `$switch`, only the branch on screen is judged. A tag in a
+branch that is not taken never marks the widget, so a value that is only shown
+in one state cannot flag the widget while the other state is showing.
+
 > [!NOTE]
-> **A slow tag no longer holds up the screen.** A page reveals once its widgets'
+> **A slow tag does not hold up the screen.** A page reveals once its widgets'
 > code has loaded — its *variables* are not part of that wait. A slow OPC-UA read
 > shows up as an amber mark on the one widget waiting for it, instead of stalling
 > the whole navigation.

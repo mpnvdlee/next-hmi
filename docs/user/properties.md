@@ -29,7 +29,7 @@ Any of these can also be an **array**. An optional *format* refines the editor w
 | `$if` | flexible | One of two values chosen by a condition. |
 | `$switch` | flexible | One of many values chosen by a key. |
 | `$widgetProp` | flexible | A value exported by a sibling widget on the page. |
-| `$componentProp` | flexible | A value passed in from outside — by the parent component, or by the action that opened this page as an overlay. |
+| `$componentProp` | flexible | A value passed in from outside — by the parent component, or by the **Open Dialog** action that opened this dialog. |
 | `$result` | flexible | A field of an action's result (in its handlers only). |
 | `$repeatItem` | flexible | The element a Repeater copy draws, one member of it, or its index (inside a Repeater only). |
 | `$http` | flexible | A value picked out of an HTTP API response. |
@@ -122,7 +122,9 @@ wildcard `1` a `$loc`. See [Translations](translations.md#use-a-translation-on-a
 
 ## Passing values into components
 
-A reusable **Component** declares **input properties** the parent fills in. Inside, children read them with `$componentProp` — the whole struct, or one member by slash-path (`sensor/fValue`). Required members must be supplied; optional ones fall back when absent. Sibling widgets can read each other's exported state with `$widgetProp`. This is how one "Motor" component drives many motors from different tags.
+A reusable **Component** declares **input properties** the parent fills in. Inside, children read them with `$componentProp` — the whole struct, or one member by slash-path (`sensor/fValue`). Every member a struct input declares is required: the instance's binding picker confirms only a struct variable that carries each of them with a fitting type, and write access where a member asks for it. A member can still be absent at runtime — a disabled leaf, a value not yet arrived — so the widgets inside should not depend on it being there. Sibling widgets can read each other's exported state with `$widgetProp`. This is how one "Motor" component drives many motors from different tags.
+
+Both reads are typed. The `$componentProp` and `$widgetProp` pickers judge each input or exported value against the field it would fill, exactly as the variable picker judges a tag — one that does not fit is marked ✗ and cannot be confirmed — and the value an instance puts into an input is checked against the input's type like any widget property. The warnings pill flags a stored read or value that does not fit.
 
 Each input can carry a **description** (one line shown under the field) and a **default value**, used wherever an instance leaves the property empty — the default is what the component really renders with, not just an editor hint.
 
@@ -155,7 +157,7 @@ A **Repeater** draws the widgets inside it once for every element of an array �
 
 1. **Pick the array** — Set the Repeater's **Items**: an array tag (`$var`), a list you type in, an API response that returns a list (`$http`), the saved recipes, or the users or user groups.
 2. **Design one copy** — Put the widgets for a single element inside the Repeater, laid out the way one element should look. The Repeater's **Layout** decides how the copies line up (row, column, wrapping, gap).
-3. **Bind to the element** — Inside, pick **Repeat Item** as a property's source and open its picker: the whole **Element**, one of its **members** (a struct field like `Speed`, or `label` / `value` of a typed-in list), or its **Index** (0 for the first). Like the variable picker it lists only what fits the property unless **Show all** is ticked. A typed-in list's members take their type from what you typed: text is a String, Yes/No a Boolean, a whole number an Integer and a number with decimals a Float — so a Float property takes a `value` column only once one of its numbers has decimals. With the **Variable** source instead, every array in the picker gets a **[#] this copy** row that reads that array at the copy's position, the way `[2]` reads element 2: names next to setpoints. Typing `PLC:Names[#]` does the same.
+3. **Bind to the element** — Inside, pick **Repeat Item** as a property's source and open its picker: the whole **Element**, one of its **members** (a struct field like `Speed`, or `label` / `value` of a typed-in list), or its **Index** (0 for the first). Like the variable picker it lists only what fits the property unless **Show all** is ticked. An API response or the saved recipes has a shape only the runtime knows, so for those you type the member's name into the field instead. A typed-in list's members take their type from what you typed: text is a String, Yes/No a Boolean, a whole number an Integer and a number with decimals a Float — so a Float property takes a `value` column only once one of its numbers has decimals. With the **Variable** source instead, every array in the picker gets a **[#] this copy** row that reads that array at the copy's position, the way `[2]` reads element 2: names next to setpoints. Typing `PLC:Names[#]` does the same.
 
 Each copy reads its own element. When Items is a tag, a copy's inputs write back to their own element too: a Switch bound to **Repeat Item** writes `Enables[3]` in the fourth copy, and **Write Data Variable** / **Toggle Boolean Variable** can switch their target to **Repeat Item**: always the copy's own element, or the member you pick of a struct element. Lists, API responses, recipes and users are read-only.
 
@@ -188,7 +190,7 @@ appears as soon as the request completes, and again on every refresh.
 
 ## Coercion, in short
 
-- `Integer` ↔ `Float` convert freely (Float → Integer rounds).
-- Numbers and booleans → `String` use the field's display format.
-- A `String` → number only if it parses cleanly, else *absent*.
-- Nonsense conversions (image → Float) are rejected by the editor at bind time — never at runtime.
+- **A variable must match the field's type exactly.** A `Float` field takes no `Integer` tag and a `String` field no `Boolean` one; the binding picker will not confirm a tag that does not fit. A field that takes either lists both types.
+- **A widget reading a number** takes a number as-is, and text only when it is a clean decimal number (`"42"`, `"-1.5"`); anything else is *absent* and the field falls back. Nothing is rounded.
+- **A widget reading text** turns a number or a boolean into its plain text (`3.5`, `true`); decimals and units are the widget's own formatting.
+- Impossible bindings (image → Float) are rejected by the editor at bind time — never at runtime.

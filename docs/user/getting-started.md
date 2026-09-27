@@ -48,8 +48,8 @@ and two languages — with nothing to wire up first.
 Open its runtime and try the things that are hard to picture from a
 description:
 
-1. **Sign in.** The header carries a [User Badge](users.md#sign-in-and-out-on-a-screen) reading **Log in**. The demo account is printed on the dialog itself — `brewer` / `espresso`.
-2. **Watch the Machine page change.** Signing in is not cosmetic. The setpoint steppers become operable — they are **Interactable** gated on the `admin` group — and a **Service** card appears that was hidden entirely, gated on **Visible**. While you are a guest, a caption sits in the card's place naming what is missing and why, so the mechanism is legible before you unlock it.
+1. **Sign in.** The header carries a [User Badge](users.md#sign-in-and-out-on-a-screen) reading **Log in**. The sign-in dialog lists the project's users in a dropdown, and the demo accounts are printed on the dialog itself — `brewer` / `espresso` (in the `admin` group) and `barista` / `latte` (an operator).
+2. **Watch the Machine page change.** Signing in as `brewer` is not cosmetic. The setpoint steppers become operable — they are **Interactable** gated on the `admin` group — and a **Service** card appears that was hidden entirely, gated on **Visible**. While you are a guest, a caption sits in the card's place naming what is missing and why, so the mechanism is legible before you unlock it. Sign in as `barista` instead and neither unlocks: an operator is not in `admin`.
 3. **Sign out again** from the same badge, and watch both go away.
 
 That is the whole of [users, groups and permissions](users.md) in one screen.
@@ -94,7 +94,7 @@ Work through it in the editor you opened above.
 
 1. **Add a Button** — Right-click the page → **Add Widget/Component…** → pick **Button**. Set its **Label** to `Start`.
 2. **Give it an action** — In the Button's **Actions** field, add an action and pick **Write Data Variable**.
-3. **Point the write at the tag** — Choose the target with the variable picker: `Demo` → `Running`. Set **Value** to `true`. Add a second Button labelled `Stop` writing `false` to the same tag.
+3. **Point the write at the tag** — Pick the action's **Variable** with the variable picker: `Demo` → `Running`. Set **Value** to `true`. Add a second Button labelled `Stop` writing `false` to the same tag.
 
 ### 5 · React to the value
 

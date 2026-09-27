@@ -89,6 +89,7 @@ stopped.
   .backups/               pre-upgrade project zips (installation-local)
   config.json             page tree + project metadata + global settings (incl. mcpEnabled)
   pages/                  one JSON per page
+  dialogs/                one JSON per page in the Dialogs folder
   datasources/            one JSON per datasource
   components/             reusable composite components
   translations/           semicolon-separated CSVs, one per group
@@ -103,6 +104,7 @@ stopped.
   assets/
     icons/                SVGs available to icon fields
     images/               images available to image fields
+    videos/               video files available to video fields
   certs/                  per-project OPC-UA client certs
   historian/              historian config + installation-local database
 ```
@@ -504,11 +506,15 @@ Existing volumes retain their current project credentials unchanged.
    - macOS: double-click `nexthmi.command`.
    - Windows: double-click `nexthmi.exe`.
 
-A terminal window opens, prints the banner, and stays in the foreground:
+A terminal window opens, prints the banner, and stays in the foreground.
 
 The banner shows the version, the runtime-home path, the address the default
 project answers on, and a link to the manager's project list (`/projects`) for
-reaching the others.
+reaching the others. Under **Getting started** it lists the first steps: open
+the project list in a browser, choose the device-admin password on the first
+visit (and sign in with it after that), then pick a project — **Open** runs it,
+**Open editor** lets you change it. In a terminal that supports it, every URL in
+the banner is a clickable link.
 
 Open the printed URL in a browser. Those rows name `localhost`, for the browser
 on this device. Under **On the network** stand the two addresses another
@@ -597,11 +603,6 @@ type or browse to a different destination, so a one-off elsewhere needs no
 configuration. To change the default permanently, stop the manager, add or
 edit `defaultProjectsRoot` in `<runtime_home>/projects.json`, and relaunch.
 
-Earlier builds wrote `<runtime_home>/Projects` into `projects.json` on first
-launch and created that folder. On upgrade, that auto-written value is removed
-so the Documents default applies; the folder and any projects registered inside
-it are left exactly where they are. A root you set yourself is never touched.
-
 ### Upgrading a binary install
 
 1. Download the new zip.
@@ -619,8 +620,8 @@ lives wherever the bootstrap file points.
 
 ### Limitations
 
-- macOS x64 builds are not currently produced. The MVP ships
-  `nexthmi-macos-arm64-<version>.zip` only.
+- The macOS build is Apple silicon only: `nexthmi-macos-arm64-<version>.zip`.
+  There is no Intel (x64) macOS build.
 - No auto-update. Operators check the release page for new versions.
 - No process-level service install — the binary runs in the foreground
   of whichever terminal launched it. If you want it persistent, wrap it

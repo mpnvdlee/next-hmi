@@ -107,6 +107,6 @@ Open the datasource and browse. Each variable is recorded with its real OPC-UA *
 | **Struct array** | A struct repeated N times. | the array of objects, or one struct |
 | **Folder** | Pure organisation (only folders inside). | not bindable |
 
-OPC-UA's many numeric types collapse to five simple ones at the HMI boundary — every `Int16/UInt32/…` becomes `Integer`, every `Float/Double` becomes `Float` — so a widget field never sees a wire type.
+OPC-UA's many data types collapse to eight simple ones at the HMI boundary — `Boolean`, `Integer`, `Float`, `String`, `DateTime`, `Date`, `Time` and `Duration`: every `Int16/UInt32/…` becomes `Integer`, every `Float/Double` becomes `Float` — so a widget field never sees a wire type. A tag binds only to a field of its own simple type; see [Coercion, in short](properties.md#coercion-in-short).
 
 Next: [bind and subscribe →](subscribing.md)

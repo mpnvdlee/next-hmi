@@ -19,7 +19,7 @@ Subfolders inside `assets/icons/`, `assets/images/` and `assets/videos/` are sca
 
 ## Add an image, an icon or a video
 
-There is no upload button in the editor today. Assets are added by putting the file in the folder:
+The editor has no upload button. Assets are added by putting the file in the folder:
 
 1. **Drop the file in** — copy your SVG into `<project>/assets/icons/`, your PNG/WebP into `<project>/assets/images/`, or your MP4/WebM into `<project>/assets/videos/`.
 2. **Reload the editor tab** — the picker reads `/api/assets` when it opens, so a refresh is enough; nothing needs restarting.

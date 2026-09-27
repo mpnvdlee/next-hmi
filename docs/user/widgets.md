@@ -7,7 +7,7 @@ Widgets are the pieces you drop on a page. This chapter covers placing them, mov
 1. **Open the picker** — Right-click a page or a container in the widget tree (or click the `+` on the row) and choose **Add Widget/Component…**. A searchable drawer opens with one card per type — icon, name and description — grouped by category, each badged **Built-in**, **Custom** or **Component**.
 2. **Pick a type** — Search by name or scan the categories, then click the card — say **Button** or **Icon**. It's inserted into the tree at the point you clicked and selected for you.
 3. **Position it in the tree** — Use **Move up** / **Move down** or drag the row to set stacking order, and drop it inside a **Container** to nest it. A placed **Component** that declares slots hosts widgets the same way — one group per slot in the tree ([slots →](properties.md#passing-widgets-into-a-component-slots)).
-4. **Configure it on the right** — The properties panel now lists exactly the fields this widget declares. Fill them in — many can be bound to live data instead of typed literally.
+4. **Configure it on the right** — The properties panel lists exactly the fields this widget declares. Fill them in — many can be bound to live data instead of typed literally. The panel header says what you selected — *Widget · Button*, or *Component · Motor* for a placed component, which links straight to that component in the **Components** area, where its own design is edited.
 
 > [!TIP]
 > **Don't know the name?** The picker searches names, types and descriptions, so typing part of what you're after is enough — the drawer is the only way to pick a type, so there are no sub-menus to scan.
@@ -24,20 +24,21 @@ Every widget declares a **schema** — the list of fields it exposes and the typ
 - a `color` field opens a color picker (with theme-token support),
 - an `icon` field opens the icon picker, an `image` field the asset picker,
 - a `select` shows a dropdown of allowed values,
-- a `struct` field (like a Button's bound variable) exposes its members to bind individually.
+- a `struct` field (like a Number Input's bound variable) binds a struct variable that carries every member the field asks for.
 
 Most fields also carry a small **source pill** — that's where a static value becomes a live binding. Full detail in [Dynamic properties](properties.md).
 
 ## Make controls do something: actions
 
-Interactive widgets (**Button**, **Menu Toggle**) have an **Actions** field holding a list that runs, top to bottom, when the control is pressed. The twelve action types cover four jobs:
+Interactive widgets (**Button**, **Menu Toggle**) have an **Actions** field holding a list that runs, top to bottom, when the control is pressed; others, such as a Dropdown's **On Change**, run one on their own event. The fourteen action types cover five jobs:
 
 - **Screens** — open or close a **dialog**, or open an ordinary page as a **page overlay**.
-- **Machine** — **write a variable** (set a coil, a mode, a setpoint), or **load / save a recipe**.
+- **Machine** — **write a variable** (set a coil, a mode, a setpoint), **toggle a Boolean**, or **load / save a recipe**.
 - **Session** — **log a user in or out**.
 - **Interface** — switch **language** or **theme**, raise a **toast**, or put a confirm **alert** in front of a dangerous write.
+- **Logic** — run one list or another on a condition with **If / Else**.
 
-The five that cross the wire carry `onSuccess` / `onFailed` / `onSettled` handler lists, whose actions can read the outcome with `$result`. Full catalog, fields and worked examples: [Actions & events](actions.md).
+The six that cross the wire carry `onSuccess` / `onFailed` / `onSettled` handler lists, whose actions can read the outcome with `$result`. Full catalog, fields and worked examples: [Actions & events](actions.md).
 
 > [!NOTE]
 > **Moving between pages is not an action.** Navigation widgets read the page tree instead — see [Pages & navigation](pages.md#give-operators-a-way-around).

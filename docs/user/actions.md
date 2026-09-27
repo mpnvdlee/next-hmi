@@ -4,7 +4,7 @@ A property answers *what a widget shows*. An **action** answers *what happens wh
 
 ## Where actions live
 
-- **On a widget** — **Button** and **Menu Toggle** carry an **Actions** field. The list runs top to bottom on **press**.
+- **On a widget** — **Button** and **Menu Toggle** carry an **Actions** field, and a **Navigation Menu** item can be an action item. The list runs top to bottom on **press**. Other widgets run lists on their own events: **On Change** on a Dropdown or Button Row, **On Sign In** / **On Sign Out** / **On Press** on a User Badge, **On Play** / **On Pause** / **On Ended** / **On Error** on a Video, **On Load** / **On Error** / **On Message** on a Web Frame.
 - **Inside another action** — an alert's **OK** / **Cancel** buttons, and the `onSuccess` / `onFailed` / `onSettled` handlers of the async actions below, are themselves action lists. Nesting is how a confirm-then-write flow is built.
 - **On the project** — the **Global Events** node in the editor tree runs actions at lifecycle moments rather than on a press. See [Global events](#global-events).
 - **On a page or page group** — an **Events** section in the node's properties runs actions as the operator arrives and leaves. See [Page events](#page-events).
@@ -43,7 +43,7 @@ Both open actions carry the presentation fields:
 
 | Action | Does |
 |---|---|
-| **Write Data Variable** | Pushes a value to a writable tag — a coil, a mode, a setpoint. Target is a datasource + path; the **value** is a fixed literal typed to match the tag (true/false, a number, text — or a JSON array for a whole-array tag). The value's source pill can take it from one of the dialog's input parameters instead (inside a dialog's own actions and events), or from the copy's element (inside a [Repeater](properties.md#repeating-widgets-over-an-array-repeater)). Inside a Repeater the **Variable** row's source pill switches the target to **Repeat Item**: the copy's own element, or — for a struct element — the member you pick. The server coerces it to the tag's data type on write, and refuses it with `read_only` when the tag is not writable. |
+| **Write Data Variable** | Pushes a value to a writable tag — a coil, a mode, a setpoint. The **Variable** row names the tag, picked from the variable picker; the **value** is a fixed literal typed to match the tag (true/false, a number, text — or a JSON array for a whole-array tag). The value's source pill can take it from one of the dialog's input parameters instead (inside a dialog's own actions and events), or from the copy's element (inside a [Repeater](properties.md#repeating-widgets-over-an-array-repeater)). Inside a Repeater the **Variable** row's source pill switches the target to **Repeat Item**: the copy's own element, or — for a struct element — the member you pick. The server coerces it to the tag's data type on write, and refuses it with `read_only` when the tag is not writable. |
 | **Toggle Boolean Variable** | Flips a writable Boolean tag — `true` becomes `false` and back. The server reads the tag's current value and writes the opposite, so a stale screen or a second panel cannot make it write the wrong state. Only Boolean variables can be picked. Fails with `value_unavailable` when the tag has no known value yet, and with `read_only` when it is not writable. |
 | **Recipe: Load** | Downloads a saved dataset into its variables. **Dataset** may be fixed or bound (a row id from a `$recipeList` grid). **Verify** reads the values back after writing and fails the action if they didn't take. A parameter bound to a variable that is not writable is skipped and listed in `failures` as `read_only`. |
 | **Recipe: Save** | Captures current live values into a dataset. Leave **Dataset** empty to update the one that is loaded. |
@@ -100,7 +100,7 @@ Button "Start"
 └─ Show Alert   title "Start line 3?"  ok "Start"  cancel "Cancel"
    └─ onOk
       └─ Write Data Variable   LinePLC:Line3/Start = true
-         ├─ onSuccess → Show Toast  "Line started"        severity info
+         ├─ onSuccess → Show Toast  "Line started"        severity success
          └─ onFailed  → Show Toast  { $result: "reason" }  severity error
 ```
 
@@ -130,11 +130,13 @@ They are scoped to the runtime that triggered them, so on a multi-panel installa
 | **Page Open** / **Group Open** | When the operator arrives at this node. |
 | **Page Close** / **Group Close** | When the operator leaves it. |
 
+In the **Dialogs** folder the same two events are labelled **Dialog Open** / **Dialog Close** and **Dialog Group Open** / **Dialog Group Close**.
+
 A **page** opens and closes on every arrival and departure — a subscribe-on-arrival, unsubscribe-on-exit pair, or a write that puts a machine into the mode the screen is for.
 
 A **page group** is entered and left as a whole. Moving between two pages inside the same group does not close it, so group-level actions are the place for setup that all its screens share rather than something each page repeats. Nested groups unwind in order: leaving a deep page closes the page, then the inner group, then the outer one; arriving opens them outermost-first.
 
-Reusing a page as a modal counts too — a page shown by **Open Dialog** or **Open Page As Overlay** fires its own Page Open and Page Close. Its groups are not entered, since nothing navigated into them. A dialog's events run with its **input parameters** in scope, so a Dialog Open can write the values it was opened with to the machine.
+Reusing a page as a modal counts too — a page shown by **Open Dialog** or **Open Page As Overlay** fires its own Open and Close events. Its groups are not entered, since nothing navigated into them. A dialog's events run with its **input parameters** in scope, so a Dialog Open can write the values it was opened with to the machine.
 
 Order across the two mechanisms is fixed: the project-wide `onPageLoaded` runs before the arriving page's own **Page Open**.
 

@@ -57,8 +57,8 @@ the badge usable on a panel that never signs anyone out:
 
 - **On Sign In** — the actions the Log in button runs. Usually a single **Open
   Dialog** pointing at your sign-in dialog.
-- **On Sign Out** — the actions the sign-out button runs. Usually just **Log out
-  user**.
+- **On Sign Out** — the actions the sign-out button runs. Usually just **Logout
+  User**.
 - **On Press** — optional, makes the identity itself pressable, for a profile or
   shift-handover dialog.
 
@@ -73,8 +73,8 @@ opening a login dialog for guests and calling `logoutUser` for everyone else.
 **Building the dialog itself.** The sign-in dialog behind the badge is layout
 like any other screen, wired with actions ([Actions](actions.md)):
 
-- **Log in** — a **Log in user** action whose **Username** and **Password** are bound to wherever the operator typed them (a String Input's `$widgetProp`, a component input, a `$static` for a fixed kiosk account). It runs asynchronously: use `onFailed` to show a toast on a wrong password, `onSuccess` to close the dialog.
-- **Log out** — a **Log out user** action drops the session back to the auto-login user.
+- **Log in** — a **Login User** action whose **Username** and **Password** are bound to wherever the operator typed them (a Dropdown's or String Input's `$widgetProp`, a component input, a `$static` for a fixed kiosk account). A Dropdown whose **Options** come from `$user` → **All users** offers every account by name and hands over the username, which is what Login User takes — the NEXT BREW sign-in dialog does exactly this. It runs asynchronously: use `onFailed` to show a toast on a wrong password, `onSuccess` to close the dialog.
+- **Log out** — a **Logout User** action drops the session back to the auto-login user.
 
 > [!TIP]
 > Tick **Password field** on the String Input holding the password so the entry
@@ -111,11 +111,11 @@ Whether the press *says* anything is a project-wide choice: the editor's **Setti
 
 Pick **Notification** for a panel where a small flash is easy to miss, **None** where a locked control should read as plain decoration.
 
-Two more sources read the identity directly, for labels and lists rather than gates: **`$user`** gives the signed-in **username** or their **groups** (and `userList`, every username in the project — the raw material for a user-picker screen).
+Two more sources read the identity directly, for labels and lists rather than gates: **`$user`** gives the signed-in **username** or their **groups** as text. On a list field — a Dropdown's **Options**, a Repeater's **Items** — it lists **All users** (each valued by username) or **All user groups** instead, the raw material for a user-picker screen.
 
 ## Enforcement, and where it really happens
 
-Hiding a button is presentation. The write itself is checked on the server: a datasource variable may carry an **`interactableByGroups`** list, and a write to it from a session outside those groups is refused with `permission_denied` — over the WebSocket and over REST alike. There is no editor field for it yet; set it on the variable entry in the datasource file (or via the datasource API) when a tag must be protected against more than a hidden button.
+Hiding a button is presentation. The write itself is checked on the server: a datasource variable may carry an **`interactableByGroups`** list, and a write to it from a session outside those groups is refused with `permission_denied` — over the WebSocket and over REST alike. The editor has no field for it; set it on the variable entry in the datasource file (or via the datasource API) when a tag must be protected against more than a hidden button.
 
 > [!WARNING]
 > **An empty list means *everyone*, not *nobody*.** `"interactableByGroups": []` reads the same as leaving the key out — the write is allowed. To lock a tag down, name the groups that may write it; there is no spelling that permits nobody at all. Note this reads the opposite way round to the group pickers elsewhere in the editor, where an empty selection means nobody.
@@ -139,7 +139,7 @@ Groups decide what a signed-in operator sees and may touch on the screens. They 
 > [!IMPORTANT]
 > **A running project's screens are open — no password at all.** `/runtime/<slug>/` is reachable by anyone who can reach the panel, which is what an HMI is for: an operator walks up and works. The device-admin password guards the editor and the dashboard, not the live view.
 >
-> That means operating is open too — pressing a button, changing a setpoint, writing a tag. To restrict a tag to certain groups, set `interactableByGroups` on the variable (see below); it is the only thing that limits what an operator may write, and it is opt-in per variable. Keep the runtime off untrusted networks — see [HTTPS](install.md#https).
+> That means operating is open too — pressing a button, changing a setpoint, writing a tag. To restrict a tag to certain groups, set `interactableByGroups` on the variable (see [Enforcement](#enforcement-and-where-it-really-happens)); it is the only thing that limits what an operator may write, and it is opt-in per variable. Keep the runtime off untrusted networks — see [HTTPS](install.md#https).
 
 A project copied from the seed ships **no accounts at all** beyond the anonymous `guest`, so there is no reusable credential to leak between installs and nothing to type before the project opens. Every real account is one you add here. See [Managing projects](projects.md#the-manager-dashboard).
 
