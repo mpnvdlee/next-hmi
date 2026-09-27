@@ -29,7 +29,7 @@ import { useThemeRuntimeStore } from '../store/themeRuntimeStore';
  *  over from Fixed would otherwise override a cross-axis Fill's `align-self:
  *  stretch` outright). The raw flex keys the pre-size-mode panel wrote —
  *  `basis`, `shrink`, `alignSelf` — are not here and not on `LayoutConfig`:
- *  the 4 → 5 migration drops all three from every node, including the ones it
+ *  the 4 → 7 migration drops all three from every node, including the ones it
  *  can read no axis for (`_drop_retired_keys`), and no project is served
  *  before `run_baseline_migration` has brought it to the current format. A
  *  stray one left in a hand-edited file emits nothing, same as `margin`. */
@@ -116,7 +116,7 @@ function axisFlowProps(
 
 /**
  * `grow` is the one field both the pre-size-mode raw shape and the size-mode
- * system author — a node the 4 → 5 migration could read no mode for keeps it
+ * system author — a node the 4 → 7 migration could read no mode for keeps it
  * raw, and the panel writes it as the Fill weight once any mode is literal.
  * The two can't be told apart from `layout.grow` alone, only from whether
  * *either* axis's mode is one this system recognises: a node with neither key
@@ -135,7 +135,7 @@ function usesSizeModes(layout: LayoutConfig): boolean {
 }
 
 /**
- * A node the 4 → 5 size-mode migration never rewrote: no literal mode on either
+ * A node the 4 → 7 size-mode migration never rewrote: no literal mode on either
  * axis, but a raw `grow`/`width`/`height` still sizing it. That migration
  * leaves this shape behind wherever it could not read which axis those keys
  * drove — a component-definition root whose instances sit under different

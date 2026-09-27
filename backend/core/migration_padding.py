@@ -1,4 +1,4 @@
-"""Format 5 → 6: collapse the `padding` shorthand into the four sides.
+"""Format 4 → 7, second half: collapse the `padding` shorthand into the four sides.
 
 The layout panel used to offer one merged padding row backed by five stored
 keys: a `padding` shorthand plus `paddingTop`/`paddingRight`/`paddingBottom`/
@@ -35,7 +35,7 @@ each side should get, so it is not parsed, and copying it onto every side
 verbatim — as an earlier version of this step did — carries the same risk a
 multi-value literal does, except silent, since nothing here can rule out a
 multi-value result at the far end of the binding. That case is dropped and
-reported, same as the 4 → 5 step reports the flex keys it cannot express under
+reported, same as the size-mode half reports the flex keys it cannot express under
 a mode: a key with no row is a key the panel can no longer show, edit or
 revert, so it does not get to linger.
 """

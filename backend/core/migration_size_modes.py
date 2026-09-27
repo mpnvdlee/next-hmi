@@ -1,4 +1,4 @@
-"""Format 4 → 5: rewrite authored layouts into the Hug/Fill/Fixed sizing model.
+"""Format 4 → 7, first half: rewrite authored layouts into the Hug/Fill/Fixed sizing model.
 
 The layout panel used to offer the raw flex four — ``basis``, ``grow``,
 ``shrink``, ``alignSelf`` — alongside Width and Height. It no longer does: a
@@ -90,7 +90,7 @@ _CONTAINER_KEYS = (
 )
 
 # How each shell region arranged the widgets dropped straight into it, at the
-# time of the 4 → 5 migration. Frozen history now, not a live twin of anything
+# time of the 4 → 7 migration. Frozen history now, not a live twin of anything
 # on the frontend: the editor and runtime used to resolve the mode rows against
 # a shared `parentFlow.ts` table this was cross-checked against
 # (`frontend/src/shared/types/__fixtures__/parentFlows.json`,

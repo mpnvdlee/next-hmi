@@ -59,7 +59,7 @@ export default function MultiSelectionBody({
   // The smaller field set unless every selection arranges its own children with
   // flex — offering container-only layout rows for a leaf would write properties
   // it cannot use. Hosting children is not the test (see `usesFlexLayout`), and
-  // the 4 → 5 migration drops those keys wherever this row would not offer them.
+  // the 4 → 7 migration drops those keys wherever this row would not offer them.
   const allContainers = comps.every((c) => usesFlexLayout(c.type));
   const leadLayout = comps[0].layout ?? {};
 
