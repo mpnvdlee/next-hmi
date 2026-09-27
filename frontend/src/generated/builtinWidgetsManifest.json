@@ -65,7 +65,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "3d6a1504b06f7775",
+    "buildTs": "f05857e62fbc01bc",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -87,22 +87,7 @@
         "type": "string"
       },
       "variable": {
-        "type": "struct",
-        "requiredFields": [
-          {
-            "name": "bVisible",
-            "type": "Boolean"
-          },
-          {
-            "name": "bEnabled",
-            "type": "Boolean"
-          },
-          {
-            "name": "bValue",
-            "type": "Boolean",
-            "write": true
-          }
-        ]
+        "type": "boolean"
       },
       "actions": {
         "type": "actions"

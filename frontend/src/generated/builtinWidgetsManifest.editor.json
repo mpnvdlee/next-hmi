@@ -91,7 +91,7 @@
     }
   },
   "Content/Button": {
-    "description": "Runs actions and can bind a writable boolean struct (bVisible / bEnabled / bValue).",
+    "description": "Runs actions and can write true to a bound boolean on press.",
     "icon": {
       "type": "builtin",
       "name": "cursor-click"
@@ -135,7 +135,8 @@
       },
       "variable": {
         "label": "Variable",
-        "description": "Optional struct driving the button from the PLC: bVisible and bEnabled gate it, bValue is written on press."
+        "description": "Optional boolean written true on press.",
+        "group": "Data"
       },
       "actions": {
         "label": "Actions"

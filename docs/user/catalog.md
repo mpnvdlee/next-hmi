@@ -110,7 +110,7 @@ Live active alarms, filterable by level, with acknowledgement.
 
 ### Button
 
-Runs actions and can bind a writable boolean struct (bVisible / bEnabled / bValue).
+Runs actions and can write true to a bound boolean on press.
 
 | Property | Label | Type |
 |---|---|---|
@@ -119,7 +119,7 @@ Runs actions and can bind a writable boolean struct (bVisible / bEnabled / bValu
 | `color` | Color | `color` |
 | `variant` | Style | `String` |
 | `radius` | Radius | `String` |
-| `variable` | Variable | `struct` |
+| `variable` | Variable | `Boolean` |
 | `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |

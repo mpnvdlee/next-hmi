@@ -85,8 +85,3 @@
   background: color-mix(in oklch, currentColor 12%, transparent);
   border-color: currentColor;
 }
-
-.hmi-button--disabled .hmi-button__btn {
-  opacity: 0.4;
-  cursor: not-allowed;
-}

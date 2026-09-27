@@ -55,7 +55,7 @@ describe('Button', () => {
     expect(el.style.getPropertyValue('--hmi-btn-radius')).toBe('');
   });
 
-  it('writes bValue on click when bound to a variable', async () => {
+  it('writes true on click when bound to a variable', async () => {
     const user = userEvent.setup();
     renderButton({ label: 'Start', variable: { $var: { path: 'PLC:Motor/Cmd' } } });
 
@@ -67,7 +67,6 @@ describe('Button', () => {
       scope: 'runtime:preview',
       datasource: 'PLC',
       path: 'Motor/Cmd',
-      field: 'bValue',
       value: true,
     });
     expect(sentFrame().requestId).toBeTruthy();
@@ -85,33 +84,6 @@ describe('Button', () => {
     expect(toasts).toHaveLength(1);
     expect(toasts[0].severity).toBe('error');
     expect(toasts[0].message).toMatch(/not allowed/i);
-  });
-
-  it('disables the button and ignores clicks when its bEnabled field is false', async () => {
-    useVariableStore.setState({
-      values: { 'PLC:Motor/Cmd': { bVisible: true, bEnabled: false } },
-    });
-    const user = userEvent.setup();
-    renderButton({ label: 'Start', variable: { $var: { path: 'PLC:Motor/Cmd' } } });
-
-    const btn = screen.getByRole('button', { name: 'Start' });
-    expect(btn).toBeDisabled();
-
-    await user.click(btn);
-
-    expect(sendWsMessage).not.toHaveBeenCalled();
-  });
-
-  it('renders nothing when its bVisible field is false', () => {
-    useVariableStore.setState({
-      values: { 'PLC:Motor/Cmd': { bVisible: false } },
-    });
-    const { container } = renderButton({
-      label: 'Start',
-      variable: { $var: { path: 'PLC:Motor/Cmd' } },
-    });
-
-    expect(container.firstChild).toBeNull();
   });
 
   it('applies an outline style with a transparent background and colored border/text', () => {
