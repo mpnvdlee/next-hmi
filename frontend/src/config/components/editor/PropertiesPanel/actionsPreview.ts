@@ -83,7 +83,7 @@ export const ACTION_TYPES = [
     type: 'showToast' as const,
     label: 'Show Toast',
     category: 'Interface',
-    description: 'Shows a transient message with an info, warning or error severity.',
+    description: 'Shows a transient message with an info, success, warning or error severity.',
   },
   {
     type: 'if' as const,
