@@ -7,15 +7,20 @@
  * - Falls back to `.hmi-unknown-widget` for unrecognised types.
  *
  * Binding-unavailable overlay:
- * - After the first `var_snapshot` from the server, any component whose
- *   VariableBinding(s) are absent from the variable store (disabled or
- *   not yet published by the PLC) gets a red-cross overlay.
+ * - A component whose VariableBinding(s) cannot be resolved is covered by a
+ *   marker: red cross for a binding that is wrong (unknown variable, wrong
+ *   type), amber for one that is only without data — the datasource is down,
+ *   or no value has ever arrived for it.
+ * - The amber ones wait for the surrounding `DataSettleGate`: a page renders
+ *   before its variables land, so nothing is marked until that load is over.
  *
  * Preview mode (set by PreviewContext):
  * - Wraps each component in `<div data-widget-id="..." className="hmi-preview-node">`.
  * - CSS sets `display: contents` on .hmi-preview-node so layout is unaffected.
  * - The PreviewView postMessage bridge then targets [data-widget-id] to apply
  *   `hmi-preview-node--selected` to the wrapper.
+ * - A Repeater copy past the first carries the template's ids too, so a click
+ *   on it selects the template, and `--ghost` dims it.
  */
 
 import './WidgetRenderer.css';
@@ -27,7 +32,8 @@ import { widgetRegistry, isContainerHostType, placesOwnChildren } from '../regis
 import { useHmiStore } from '../store/hmiStore';
 import { PreviewContext } from '@shared/context/PreviewContext';
 import { DefinitionScopeContext } from '../context/DefinitionScopeContext';
-import { useBindingStatus } from '../utils/bindingValidation';
+import { useRepeatScope } from '../context/RepeatScopeContext';
+import { useBindingStatus, type BindingStatus } from '../utils/bindingValidation';
 import { useResolvedProperties } from '../hooks/useResolvedProperties';
 import { useLiveScalars } from '../hooks/useLiveScalars';
 import { useTimeTick } from '../hooks/useTimeTick';
@@ -35,7 +41,12 @@ import { useHttpTick } from '../hooks/useHttpTick';
 import { extractVarKeys } from '../utils/extractVarKeys';
 import { usesTime } from '../utils/usesTime';
 import { usesHttp } from '../utils/usesHttp';
-import { layoutHasPropertySource, useResolvedLayout, usePropBoolean } from './layoutUtils';
+import {
+  layoutHasPropertySource,
+  useResolvedLayout,
+  usePropBoolean,
+  selfFlexChildStyle,
+} from './layoutUtils';
 
 // ── Per-component error boundary ──────────────────────────────────────────────
 
@@ -113,22 +124,25 @@ class WidgetErrorBoundary extends Component<EBProps, EBState> {
 
 const LOCKED_MESSAGE = 'Interaction not permitted';
 
+const BINDING_OVERLAY_LABELS: Record<Exclude<BindingStatus, 'ok'>, string> = {
+  disabled: 'Variable disabled',
+  disconnected: 'OPC UA disconnected',
+  nodata: 'No data',
+};
+
 /**
  * Build a flex-child style for the binding-unavailable wrapper.
  * The wrapper takes over the layout role normally played by .hmi-component,
- * so the component inside isn't a direct flex/grid child of the page.
+ * so the component inside isn't a direct flex/grid child of the page — but the
+ * component itself still renders inside it and still applies its own
+ * `width`/`height` from the same `layout`, so the wrapper takes only the
+ * flex-child fields (`selfFlexChildStyle`), never `width`/`height` — taking
+ * both would size the wrapper and the widget inside it independently, and a
+ * percentage width on the widget would overflow a wrapper sized by the same
+ * percentage of a *different* box (its own parent, not the widget's).
  */
 function wrapperStyle(layout?: LayoutConfig): CSSProperties {
-  return {
-    position: 'relative',
-    flexBasis: layout?.basis,
-    flexGrow: layout?.grow ?? 0,
-    flexShrink: layout?.shrink ?? 1,
-    alignSelf: layout?.alignSelf,
-    minWidth: layout?.minWidth,
-    maxWidth: layout?.maxWidth,
-    minHeight: layout?.minHeight,
-  };
+  return { position: 'relative', ...selfFlexChildStyle(layout) };
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -136,15 +150,20 @@ function wrapperStyle(layout?: LayoutConfig): CSSProperties {
 export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
   const isPreview = useContext(PreviewContext);
   const fromDefinition = useContext(DefinitionScopeContext);
+  const ghost = useRepeatScope()?.ghost === true;
   const entry = widgetRegistry[node.type];
 
   const isVisible = usePropBoolean(node.properties, 'visible', true);
   const isInteractable = usePropBoolean(node.properties, 'interactable', true);
 
-  const bindingStatus = useBindingStatus(node.properties, entry?.schema ?? {});
-
   // Resolve translation references in properties ({ "$loc": "key" }).
   const resolvedProperties = useResolvedProperties(node.properties);
+
+  // Status is read from the *resolved* properties: a widget inside a component
+  // definition binds through `$componentProp`, which only becomes the real
+  // `$var` here. Reading the raw node instead left every such widget — most of
+  // a component-built page — with no bindings to check and so never marked.
+  const bindingStatus = useBindingStatus(resolvedProperties, entry?.schema ?? {});
 
   // Granular live-value subscription: re-render this widget only when a `$var`
   // it actually references ticks. `resolvedProperties` already has any parent
@@ -211,8 +230,11 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
     ? undefined
     : node.children?.map((child) => <WidgetRenderer key={child.id} node={child} />);
 
-  // Build the rendered subtree from a (possibly resolved) layout. Layout values
-  // may carry property sources; they're resolved to plain values before use.
+  // Build the rendered subtree from a layout whose property sources are
+  // already resolved — each widget reads its own `widthMode`/`heightMode`
+  // straight off it, and `hmi.css`'s flow-translation block (fed by
+  // `selfLayoutStyle`) routes them against whichever axis the parent says is
+  // main, off that parent's own `data-flow-direction`/`data-flow-align`.
   const buildContent = (layout: LayoutConfig | undefined): ReactNode => {
     const comp = (
       <Comp
@@ -232,9 +254,7 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
           {comp}
           <div
             className={`hmi-binding-overlay hmi-binding-overlay--${bindingStatus}`}
-            aria-label={
-              bindingStatus === 'disconnected' ? 'OPC UA disconnected' : 'Variable disabled'
-            }
+            aria-label={BINDING_OVERLAY_LABELS[bindingStatus]}
           >
             <span className="hmi-binding-overlay__icon" aria-hidden="true" />
           </div>
@@ -265,7 +285,7 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
         data-widget-id={node.id}
         data-widget-type={node.type}
         data-widget-source={fromDefinition ? 'definition' : undefined}
-        className="hmi-preview-node"
+        className={ghost ? 'hmi-preview-node hmi-preview-node--ghost' : 'hmi-preview-node'}
       >
         {content}
       </div>

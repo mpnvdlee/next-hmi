@@ -107,6 +107,16 @@ def _hard_exit_grace_seconds() -> float:
     return max(_HARD_EXIT_GRACE_FLOOR_SECONDS, children * per_child + 10.0)
 
 
+def apply_pending_restart() -> bool:
+    """Re-exec into the pending restart. Replaced by the launcher at startup.
+
+    The default is a no-op because nothing else supervises this process: under
+    ``start-dev.py`` the dev runner reads the sentinel after the exit, and a
+    project instance never restarts itself.
+    """
+    return False
+
+
 def write_restart_sentinel(reason: str) -> None:
     """Drop the supervisor's restart marker. Atomic + crash-safe."""
     path = runtime_home.restart_sentinel_path()
@@ -156,6 +166,14 @@ async def shutdown_after_response(reason: str) -> None:
     grace = _hard_exit_grace_seconds()
     await asyncio.sleep(grace)
     logger.warning("restart: graceful shutdown exceeded %ss — hard exit", grace)
+    # A hard exit here used to end the restart: os._exit skips the launcher's
+    # sentinel re-exec, so the device shut down instead of coming back and the
+    # sentinel stayed on disk for the next process to trip over. Apply the
+    # restart ourselves before abandoning the process.
+    try:
+        apply_pending_restart()
+    except Exception:
+        logger.exception("restart: could not re-exec after the hard-exit grace")
     os._exit(0)
 
 
@@ -163,26 +181,35 @@ async def shutdown_after_response(reason: str) -> None:
 async def restart_backend(reason: str = "manual"):
     """Clean-restart the backend process.
 
-    1. Write the restart sentinel under the runtime home — the supervisor
-       (``launcher.py`` for binaries, ``start-dev.py`` for the dev runner) reads
-       this file after a clean exit to distinguish a requested restart from
-       a normal shutdown.
+    1. Outside a project instance, write the restart sentinel under the
+       runtime home — the supervisor (``launcher.py`` for binaries,
+       ``start-dev.py`` for the dev runner) reads this file after a clean exit
+       to distinguish a requested restart from a normal shutdown. An instance
+       needs none: the manager's supervisor respawns it.
     2. Broadcast ``{type: "restarting"}`` so clients can paint a
        "reconnecting…" banner before their socket closes.
     3. Signal ourselves with ``SIGTERM`` — uvicorn catches it and runs the
        lifespan shutdown (OPC-UA pool, WS connections, log flush).
-    4. As a safety net, fall back to ``os._exit(0)`` if lifespan teardown
-       hasn't completed within ``_hard_exit_grace_seconds()``. Without this
-       a stuck async task could pin the process forever.
+    4. As a safety net, apply the restart directly and fall back to
+       ``os._exit(0)`` if lifespan teardown hasn't completed within
+       ``_hard_exit_grace_seconds()``. Without this a stuck async task could
+       pin the process forever.
 
     Returns 202 immediately so the caller can begin polling ``/api/system/info``
     for the new PID.
     """
-    try:
-        write_restart_sentinel(reason)
-    except OSError as exc:
-        logger.error("restart: failed to write sentinel: %s", exc)
-        raise HTTPException(status_code=500, detail="Could not write restart sentinel") from exc
+    # A project instance (served under a base path) shares the manager's runtime
+    # home, and the supervisor respawns it on any exit. The sentinel is the
+    # manager's: left there, it would re-exec the manager on its next clean
+    # exit instead of letting it stop.
+    if os.environ.get("NEXTHMI_BASE_PATH", "/") == "/":
+        try:
+            write_restart_sentinel(reason)
+        except OSError as exc:
+            logger.error("restart: failed to write sentinel: %s", exc)
+            raise HTTPException(
+                status_code=500, detail="Could not write restart sentinel"
+            ) from exc
 
     from services.websocket_manager import (
         websocket_manager,  # local import — avoids circular dep

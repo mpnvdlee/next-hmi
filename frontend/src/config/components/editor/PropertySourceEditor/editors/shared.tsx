@@ -23,15 +23,17 @@ import type { PropertySource } from '../../propertyValueUtils';
 import { isRecord } from '@shared/types/propertyValueGuards';
 import PropertySourceEditor from '..';
 import { ParentPathContext, useParentPath, withSegs } from '../parentPathContext';
+import { SlotContext, useSlotType } from '../slotContext';
 import { primaryType } from '@shared/utils/valueTypes';
 import { useUsersDomainStore, type UserGroup } from '@config/store/domains/usersDomainStore';
 import { useConfigStore } from '@shared/store/configStore';
-import { flattenPages, resolvePageTitle } from '@shared/utils/pageTree';
+import { allPageRootNodes, flattenPages, resolvePageTitle } from '@shared/utils/pageTree';
 import {
   COMPARE_OPERAND_SCHEMA,
   OPERATORS,
   type Operator,
   type OpenBindingPicker,
+  type SlotType,
   wrapPicker,
 } from './utils';
 import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
@@ -88,6 +90,47 @@ interface PreviewLookups {
 
 const EMPTY_LOOKUPS: PreviewLookups = {};
 
+/**
+ * A `{n}`-placeholder template (`$stringExpr`, `$formula`) with each wildcard
+ * replaced by what it is bound to. Template syntax (braces, function names,
+ * operators) is the construct's own literal text, so it takes the tint — same
+ * rule as `if(`/`switch(`. What the wildcards resolve to is data, and renders
+ * plain.
+ */
+function templateNodes(
+  template: string,
+  wildcards: Record<string, unknown>,
+  tint: string,
+  depth: number,
+  lookups: PreviewLookups,
+): ReactNode {
+  let keyCounter = 0;
+  return substituteWildcards<ReactNode>(
+    template,
+    wildcards,
+    (wildcard) => (
+      <Fragment key={keyCounter++}>
+        {isRecord(wildcard) && '$var' in wildcard ? (
+          // A template concatenates several of these, so each bound path is
+          // shortened from the front — unlike a lone `$var` summary, which
+          // has the whole row to itself and stays complete.
+          <BreakableToken
+            text={shortenBindingPath(propertyValuePreview(wildcard, undefined, depth + 1))}
+          />
+        ) : (
+          previewNodes(wildcard, undefined, depth + 1, lookups)
+        )}
+      </Fragment>
+    ),
+    (text) => (
+      <Kw tint={tint} key={keyCounter++}>
+        {text}
+      </Kw>
+    ),
+    (parts) => <>{parts}</>,
+  );
+}
+
 function previewNodes(
   value: unknown,
   fieldType: string | undefined,
@@ -102,33 +145,24 @@ function previewNodes(
       { template?: string; wildcards?: Record<string, unknown> } | undefined;
     if (!se?.template || depth >= MAX_PREVIEW_DEPTH)
       return propertyValuePreview(value, fieldType, depth);
-    // Template syntax (braces, function names) is the construct's own literal
-    // text, so it takes the tint — same rule as `if(`/`switch(` below. What the
-    // wildcards resolve to is data, and renders plain.
-    let keyCounter = 0;
-    return substituteWildcards<ReactNode>(
-      se.template,
-      se.wildcards ?? {},
-      (wildcard) => (
-        <Fragment key={keyCounter++}>
-          {isRecord(wildcard) && '$var' in wildcard ? (
-            // A template concatenates several of these, so each bound path is
-            // shortened from the front — unlike a lone `$var` summary, which
-            // has the whole row to itself and stays complete.
-            <BreakableToken
-              text={shortenBindingPath(propertyValuePreview(wildcard, undefined, depth + 1))}
-            />
-          ) : (
-            previewNodes(wildcard, undefined, depth + 1, lookups)
-          )}
-        </Fragment>
-      ),
-      (text) => (
-        <Kw tint="stringExpr" key={keyCounter++}>
-          {text}
-        </Kw>
-      ),
-      (parts) => <>{parts}</>,
+    return templateNodes(se.template, se.wildcards ?? {}, 'stringExpr', depth, lookups);
+  }
+  if ('$formula' in value) {
+    const f = value.$formula as
+      { expression?: string; wildcards?: Record<string, unknown> } | undefined;
+    if (!f?.expression || depth >= MAX_PREVIEW_DEPTH)
+      return propertyValuePreview(value, fieldType, depth);
+    return templateNodes(f.expression, f.wildcards ?? {}, 'formula', depth, lookups);
+  }
+  if ('$not' in value) {
+    if (depth >= MAX_PREVIEW_DEPTH) return <Kw tint="not">not(…)</Kw>;
+    const n = value.$not as { value?: unknown } | undefined;
+    return (
+      <>
+        <Kw tint="not">not(</Kw>
+        {previewNodes(n?.value, undefined, depth + 1, lookups)}
+        <Kw tint="not">)</Kw>
+      </>
     );
   }
   if ('$userGroups' in value) {
@@ -270,6 +304,7 @@ export function CollapsedPreview({ value, fieldType }: { value: unknown; fieldTy
   const groups = useUsersDomainStore((s) => s.draft?.groups ?? s.data?.groups ?? EMPTY_GROUPS_LIST);
   const ensureGroupsLoaded = useUsersDomainStore((s) => s.ensureLoaded);
   const pages = useConfigStore((s) => s.pages);
+  const dialogs = useConfigStore((s) => s.dialogs);
   useEffect(() => {
     if (isRecord(value) && '$userGroups' in value) ensureGroupsLoaded();
   }, [value, ensureGroupsLoaded]);
@@ -278,8 +313,14 @@ export function CollapsedPreview({ value, fieldType }: { value: unknown; fieldTy
     [groups],
   );
   const pageTitles = useMemo(
-    () => Object.fromEntries(flattenPages(pages).map((p) => [p.id, resolvePageTitle(p.title)])),
-    [pages],
+    () =>
+      Object.fromEntries(
+        flattenPages(allPageRootNodes({ pages, dialogs })).map((p) => [
+          p.id,
+          resolvePageTitle(p.title),
+        ]),
+      ),
+    [pages, dialogs],
   );
   return (
     <PreviewText swatch={colorVal}>
@@ -319,6 +360,7 @@ export function CompareFields({
           value={left}
           onChange={onChangeLeft}
           schema={COMPARE_OPERAND_SCHEMA}
+          slot={true}
           onOpenBindingPicker={onOpenLeftPicker}
         />
       </ParentPathContext.Provider>
@@ -342,6 +384,7 @@ export function CompareFields({
           value={right}
           onChange={onChangeRight}
           schema={COMPARE_OPERAND_SCHEMA}
+          slot={true}
           onOpenBindingPicker={onOpenRightPicker}
         />
       </ParentPathContext.Provider>
@@ -360,6 +403,7 @@ export function CollapsiblePropertyCard({
   value,
   onChange,
   schema,
+  slot,
   forcedSources,
   includeStatic,
   onOpenBindingPicker,
@@ -377,6 +421,8 @@ export function CollapsiblePropertyCard({
   value: unknown;
   onChange: (v: unknown) => void;
   schema: SchemaField;
+  /** A nested slot's own type, when it is not the schema's — see `SlotType`. */
+  slot?: SlotType;
   forcedSources?: PropertySource[];
   includeStatic?: boolean;
   onOpenBindingPicker?: OpenBindingPicker;
@@ -389,6 +435,8 @@ export function CollapsiblePropertyCard({
   actions?: ReactNode;
 }) {
   const currentSource = getPropertySource(value) as PropertySource;
+  const inheritedSlot = useSlotType();
+  const effectiveSlot = slot ?? inheritedSlot;
   const path = useParentPath();
   const widgetId = useContext(PanelScopeContext);
   const diagnostic = useFieldDiagnostic(widgetId, path);
@@ -411,7 +459,7 @@ export function CollapsiblePropertyCard({
     <PropertySourceSelector
       value={value}
       onChange={onChange}
-      fieldType={fieldType}
+      fieldType={schema.type}
       defaultValue={schema.defaultValue}
       forcedSources={forcedSources}
       includeStatic={includeStatic}
@@ -421,18 +469,20 @@ export function CollapsiblePropertyCard({
   );
 
   const editor = (
-    <PropertySourceEditor
-      value={value}
-      onChange={onChange}
-      source={currentSource}
-      schema={schema}
-      onOpenBindingPicker={onOpenBindingPicker}
-      staticEditor={
-        currentSource === 'static'
-          ? (staticEditor ?? renderSchemaField(schema, value, onChange))
-          : undefined
-      }
-    />
+    <SlotContext.Provider value={effectiveSlot}>
+      <PropertySourceEditor
+        value={value}
+        onChange={onChange}
+        source={currentSource}
+        schema={schema}
+        onOpenBindingPicker={onOpenBindingPicker}
+        staticEditor={
+          currentSource === 'static'
+            ? (staticEditor ?? renderSchemaField(schema, value, onChange))
+            : undefined
+        }
+      />
+    </SlotContext.Provider>
   );
 
   return (
@@ -463,21 +513,25 @@ export function BranchEditor({
   value,
   onChange,
   schema,
+  slot,
   onOpenBindingPicker,
 }: {
   label: string;
   value: unknown;
   onChange: (v: unknown) => void;
   schema: SchemaField;
+  /** What this slot's picker lists when it is not what the property takes. */
+  slot?: SlotType;
   onOpenBindingPicker?: OpenBindingPicker;
 }) {
-  const branchPicker = wrapPicker(onOpenBindingPicker, (b) => onChange({ $var: b }), value);
+  const branchPicker = wrapPicker(onOpenBindingPicker, (b) => onChange({ $var: b }), value, slot);
   return (
     <CollapsiblePropertyCard
       title={label}
       value={value}
       onChange={onChange}
       schema={schema}
+      slot={slot}
       onOpenBindingPicker={branchPicker}
     />
   );
@@ -505,6 +559,7 @@ export function WildcardCard({
       value={value}
       onChange={onChange}
       schema={schema}
+      slot={true}
       forcedSources={forcedSources}
       includeStatic
       onOpenBindingPicker={onOpenBindingPicker}

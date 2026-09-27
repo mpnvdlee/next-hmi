@@ -3,12 +3,12 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { PageSpinner } from '@shared/components/Spinner';
 import { editorPath } from '@shared/utils/runtimeBase';
 import { clearThemePreview } from '@shared/utils/themeTokens';
-// Every config view renders below this router, so importing the stdlib
+// Every config view renders below this router, so importing the built-in-widgets
 // manifest's editor half here is what guarantees a whole schema — labels,
 // options, defaults — to the properties panel and the binding picker, whichever
 // view reaches them. It costs the HMI routes nothing: they never load this
 // module. The preview iframe route sits outside and needs none of it.
-import '@hmi/registry/stdlibEditorMetadata';
+import '@hmi/registry/builtinWidgetsEditorMetadata';
 import '../styles/config.css';
 
 // At module scope, not in an effect: this runs before any config view renders,

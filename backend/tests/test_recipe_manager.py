@@ -110,7 +110,7 @@ def test_assign_ids_backfills():
 
 @pytest.mark.asyncio
 async def test_download_success_records_loaded(mgr: RecipeManager):
-    dm = FakeStaticDM({"Temp": {"data_type": "float"}, "Grind": {"data_type": "integer"}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True}, "Grind": {"data_type": "integer", "writable": True}})
     mgr.set_datasource_manager(dm)
     mgr.set_config(RecipeConfig.model_validate(_config()))
     result = await mgr.download("espresso")
@@ -128,7 +128,7 @@ async def test_download_success_records_loaded(mgr: RecipeManager):
 
 @pytest.mark.asyncio
 async def test_download_keeps_loaded_at_per_dataset(mgr: RecipeManager):
-    dm = FakeStaticDM({"Temp": {"data_type": "float"}, "Grind": {"data_type": "integer"}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True}, "Grind": {"data_type": "integer", "writable": True}})
     mgr.set_datasource_manager(dm)
     cfg = _config()
     cfg["datasetTypes"][0]["datasets"].append(
@@ -150,7 +150,7 @@ async def test_download_keeps_loaded_at_per_dataset(mgr: RecipeManager):
 @pytest.mark.asyncio
 async def test_download_partial_on_unknown_variable(mgr: RecipeManager):
     # Grind path missing from registry → bad_path failure, Temp succeeds
-    dm = FakeStaticDM({"Temp": {"data_type": "float"}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True}})
     mgr.set_datasource_manager(dm)
     mgr.set_config(RecipeConfig.model_validate(_config()))
     result = await mgr.download("espresso")
@@ -174,7 +174,7 @@ async def test_download_failed_when_all_fail(mgr: RecipeManager):
 
 @pytest.mark.asyncio
 async def test_download_verify_mismatch(mgr: RecipeManager):
-    dm = FakeStaticDM({"Temp": {"data_type": "float"}, "Grind": {"data_type": "integer"}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True}, "Grind": {"data_type": "integer", "writable": True}})
     mgr.set_datasource_manager(dm)
     mgr.set_config(RecipeConfig.model_validate(_config()))
     # Verify should pass for static (cache updated on write)
@@ -192,7 +192,7 @@ async def test_download_unknown_dataset_returns_none(mgr: RecipeManager):
 
 @pytest.mark.asyncio
 async def test_upload_overwrites_in_place(mgr: RecipeManager):
-    dm = FakeStaticDM({"Temp": {"data_type": "float"}, "Grind": {"data_type": "integer"}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True}, "Grind": {"data_type": "integer", "writable": True}})
     dm.seed("DS", "Temp", 88.5)
     dm.seed("DS", "Grind", 7)
     mgr.set_datasource_manager(dm)
@@ -207,7 +207,7 @@ async def test_upload_overwrites_in_place(mgr: RecipeManager):
 
 @pytest.mark.asyncio
 async def test_download_array_write(mgr: RecipeManager):
-    dm = FakeStaticDM({"Steps": {"data_type": "integer", "is_array": True, "array_length": 3}})
+    dm = FakeStaticDM({"Steps": {"data_type": "integer", "writable": True, "is_array": True, "array_length": 3}})
     mgr.set_datasource_manager(dm)
     cfg = {
         "datasetTypes": [{
@@ -224,7 +224,7 @@ async def test_download_array_write(mgr: RecipeManager):
 
 @pytest.mark.asyncio
 async def test_download_permission_denied_skips_write(mgr: RecipeManager):
-    dm = FakeStaticDM({"Temp": {"data_type": "float"}, "Grind": {"data_type": "integer"}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True}, "Grind": {"data_type": "integer", "writable": True}})
     mgr.set_datasource_manager(dm)
     mgr.set_config(RecipeConfig.model_validate(_config()))
     # Deny writes to the Grind variable via the permission hook.
@@ -238,10 +238,21 @@ async def test_download_permission_denied_skips_write(mgr: RecipeManager):
 
 
 @pytest.mark.asyncio
+async def test_download_refuses_a_read_only_parameter(mgr: RecipeManager):
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True}, "Grind": {"data_type": "integer"}})
+    mgr.set_datasource_manager(dm)
+    mgr.set_config(RecipeConfig.model_validate(_config()))
+    result = await mgr.download("espresso")
+    assert result.result == "partial"
+    assert [(f.parameter_id, f.reason) for f in result.failures] == [("grind", "read_only")]
+    assert build_var_key("DS", "Grind") not in dm._entry.cache
+
+
+@pytest.mark.asyncio
 async def test_upload_keeps_previous_value_when_read_fails(mgr: RecipeManager):
     # Temp has a live value; Grind is absent from the cache so read_value returns
     # None — its previously-stored value must survive rather than becoming null.
-    dm = FakeStaticDM({"Temp": {"data_type": "float"}, "Grind": {"data_type": "integer"}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True}, "Grind": {"data_type": "integer", "writable": True}})
     dm.seed("DS", "Temp", 88.5)
     mgr.set_datasource_manager(dm)
     mgr.set_config(RecipeConfig.model_validate(_config()))
@@ -252,8 +263,26 @@ async def test_upload_keeps_previous_value_when_read_fails(mgr: RecipeManager):
 
 
 @pytest.mark.asyncio
+async def test_upload_permission_denied_keeps_previous_value(mgr: RecipeManager):
+    # Both variables have a fresh live value, but Grind's read is denied by the
+    # permission hook — its previously-stored value must survive, the same way
+    # a denied write is skipped on download.
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True}, "Grind": {"data_type": "integer", "writable": True}})
+    dm.seed("DS", "Temp", 88.5)
+    dm.seed("DS", "Grind", 9)
+    mgr.set_datasource_manager(dm)
+    mgr.set_config(RecipeConfig.model_validate(_config()))
+    cfg = await mgr.upload_into(
+        "espresso", username="op", permission_check=lambda ds, path: path != "Grind"
+    )
+    ds = cfg.dataset_types[0].datasets[0]
+    assert ds.values["temp"] == 88.5  # permitted read applied
+    assert ds.values["grind"] == 4  # denied read left untouched
+
+
+@pytest.mark.asyncio
 async def test_set_config_preserves_loaded_at(mgr: RecipeManager):
-    dm = FakeStaticDM({"Temp": {"data_type": "float"}, "Grind": {"data_type": "integer"}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True}, "Grind": {"data_type": "integer", "writable": True}})
     mgr.set_datasource_manager(dm)
     mgr.set_config(RecipeConfig.model_validate(_config()))
     await mgr.download("espresso")

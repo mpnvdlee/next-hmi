@@ -539,8 +539,15 @@
   background: var(--cfg-surface);
 }
 
-.cfg-prop-input--compact:focus {
+/* The standard 2px offset outline spills over the row rules of a dense table
+   and doubles up with the border; an inset ring stays inside the cell. The
+   doubled class outranks the generic `.cfg-prop-input:focus-visible` below. */
+.cfg-prop-input.cfg-prop-input--compact:focus,
+.cfg-prop-input.cfg-prop-input--compact:focus-visible {
+  outline: none;
+  border-color: var(--cfg-accent);
   background: var(--cfg-surface);
+  box-shadow: inset 0 0 0 1px var(--cfg-accent);
 }
 
 .cfg-prop-affix {
@@ -635,7 +642,10 @@
    suffixes would line up again. */
 .cfg-prop-input--hint::placeholder {
   color: var(--cfg-text-muted);
-  opacity: 1;
+  /* Italic alone reads as upright on a lone digit ("1") in most UI fonts — the
+     dip below is what actually reads as "not a committed value" at a glance. */
+  opacity: 0.6;
+  font-style: italic;
 }
 
 /* "not set" names a state instead of standing in for a value, so it steps down
@@ -657,9 +667,16 @@
 }
 
 @supports (field-sizing: content) {
+  /* `field-sizing: content` sizes whichever dimensions are `auto` — not just
+     width. `.cfg-prop-input`'s `height: auto` (FieldGroup/style.css) means a
+     browser implementing this (WebKit, confirmed) also auto-sizes the height
+     to the placeholder's own intrinsic box, which comes out a couple of px
+     taller than the row's fixed rhythm — the row grows only on the unset/
+     hint state. Pin height here so field-sizing only ever touches width. */
   .cfg-field-group__content .cfg-unset-hint-row .cfg-prop-input--hint {
     field-sizing: content;
     width: auto;
+    height: calc(var(--cfg-field-group-badge-size) - 4px);
   }
 }
 
@@ -673,11 +690,18 @@
 /* Holds its width — the control beside it is the one that gives way (it hugs
    its placeholder, or shrinks and ellipsises its own text). The clipping here
    is the last line of defence: without it an oversized suffix overflows the
-   content column and paints straight over the row's trailing buttons. */
+   content column and paints straight over the row's trailing buttons.
+   `line-height: 1` — this is the one element that only exists while a field
+   is unset (an explicit value has no suffix at all), and an unpinned `normal`
+   line-height is font/browser-metric-dependent; if it computes taller here
+   than the row's other children, the row's auto height grows to match, which
+   reads as "the box gets bigger when it falls back to a default." Pinning it
+   to the font size itself makes that impossible regardless of platform. */
 .cfg-unset-hint {
   flex: none;
   min-width: 0;
   font-size: var(--cfg-text-xs);
+  line-height: 1;
   color: var(--cfg-text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -823,6 +847,11 @@
   margin: 0 0 var(--cfg-space-2);
 }
 
+.cfg-prop-hint--error {
+  color: var(--cfg-danger-fg);
+  font-style: normal;
+}
+
 .cfg-result-editor {
   display: flex;
   flex-direction: column;
@@ -831,9 +860,9 @@
 }
 
 /* ── Segmented pill row — enum/boolean property fields rendered as a row of
-   pill buttons (Direction, Wrap, Visible, Align self, …). Content-hugging,
-   own border/radius per pill, wraps to a second line if the option set is
-   wide (e.g. Justify content). */
+   pill buttons (Direction, Wrap, Visible, Align, …). Content-hugging, own
+   border/radius per pill, wraps to a second line if the option set is wide
+   (e.g. Distribute's five icons on a narrow panel). */
 .cfg-seg-group {
   display: flex;
   flex-wrap: wrap;
@@ -859,6 +888,15 @@
     color 0.1s;
 }
 
+/* An icon option trades horizontal padding for glyph. The Layout panel's glyphs
+   are diagrams that have to be read, not badges, so they render at 20px and the
+   padding gives back the growth on each side — the button keeps the footprint it
+   had at the text-button padding, and its border sits close enough on every side
+   to be the container the arrangement is measured against. */
+.cfg-seg-btn:has(.cfg-seg-btn__icon) {
+  padding: 0 calc(var(--cfg-space-2) - 3.5px);
+}
+
 .cfg-seg-btn:hover {
   background: var(--cfg-surface-dark);
   color: var(--cfg-text);
@@ -880,8 +918,15 @@
 }
 
 /* A `button-icon` option's glyph — kept upright when the surrounding option
-   label is rendered from an entity/emoji that browsers italicise. */
+   label is rendered from an entity/emoji that browsers italicise, and laid out
+   as an *inline* flex box so the `<svg>` inside sits on no text baseline (the
+   Layout panel's glyphs are 20px in a 24px button, and baseline descender space
+   would push them off-centre) while the span itself stays in the button's inline
+   flow — a block here wraps the `default` tag onto a second, clipped line. */
 .cfg-seg-btn__icon {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
   font-style: normal;
 }
 
@@ -909,6 +954,13 @@
 }
 
 .cfg-section:last-child {
+  border-bottom: none;
+}
+
+/* A titled group nested inside an already-padded body (an action row's
+   fields): the title marks the group, the parent supplies the inset. */
+.cfg-section.cfg-section--flush {
+  padding: var(--cfg-space-2) 0 0;
   border-bottom: none;
 }
 
@@ -1614,7 +1666,10 @@
    its trigger is a compact "Add". A portaled popup takes the trigger's width,
    so it needs its own floor — content-sized, not a pixel guess — or every name
    ellipsizes. `min-width` wins over the width the popup sets inline. */
-.cfg-menu-items__add-popup {
+/* Both "Add" triggers are sized to the word "Add", and Select sizes its portaled
+   popup from the trigger — so the action/item labels need their own width. */
+.cfg-menu-items__add-popup,
+.cfg-editor-actions__add-popup {
   min-width: max-content;
 }
 
@@ -1681,11 +1736,36 @@
   color: var(--cfg-accent);
 }
 
-/* ── Error banner ──────────────────────────────────────────── */
-.cfg-error-banner {
-  color: var(--cfg-danger-fg);
-  background: var(--cfg-danger-bg-soft);
-  border: 1px solid var(--cfg-danger-border-soft);
+/* "Add" is the Select's placeholder, which would otherwise dim it. */
+.cfg-editor-actions__add .cfg-select__placeholder {
+  color: inherit;
+}
+
+/* The Add-action list mirrors the property-source popup: each row tints to its
+   action's color, and the browse row leads behind a rule. */
+.cfg-editor-actions__add-popup .cfg-select-popup__option {
+  gap: 10px;
+}
+
+.cfg-editor-actions__add-popup .cfg-select-popup__option--active {
+  background: color-mix(in srgb, var(--option-color, var(--cfg-accent)) 8%, var(--cfg-surface));
+}
+
+.cfg-editor-actions__add-popup .cfg-editor-actions__browse {
+  --option-color: var(--cfg-accent);
+  margin-bottom: 3px;
+  border-bottom: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius) var(--cfg-radius) 0 0;
+}
+
+.cfg-editor-actions__browse .cfg-source-pill__abbr {
+  color: var(--option-color);
+}
+
+/* ── Banners ───────────────────────────────────────────────── */
+.cfg-error-banner,
+.cfg-success-banner {
+  border: 1px solid transparent;
   border-radius: var(--cfg-radius);
   padding: 0.45rem 0.75rem;
   font-size: var(--cfg-font-size-base);
@@ -1693,14 +1773,33 @@
   flex-shrink: 0;
 }
 
-.cfg-ds-props__error {
+.cfg-error-banner {
   color: var(--cfg-danger-fg);
   background: var(--cfg-danger-bg-soft);
-  border: 1px solid var(--cfg-danger-border-soft);
-  border-radius: var(--cfg-radius);
-  padding: 0.45rem 0.75rem;
+  border-color: var(--cfg-danger-border-soft);
+}
+
+.cfg-success-banner {
+  color: var(--cfg-success-fg);
+  background: color-mix(in srgb, var(--cfg-success-fg) 8%, var(--cfg-surface));
+  border-color: color-mix(in srgb, var(--cfg-success-fg) 40%, var(--cfg-border));
+}
+
+.cfg-ds-props__status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cfg-space-1);
+}
+
+.cfg-ds-props__btn-group {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-2);
+}
+
+.cfg-ds-props__error {
+  color: var(--cfg-danger-fg);
   font-size: var(--cfg-font-size-base);
-  margin: 0.5rem 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2229,8 +2328,8 @@
   border: 3px solid var(--cfg-surface);
 }
 
-/* Dialog preview: modal card centered, no dark backdrop */
-.hmi-dialog-preview {
+/* Preview of a Dialogs-folder page: its overlay card centered, no dark backdrop */
+.hmi-overlay-preview {
   height: 100%;
   display: flex;
   align-items: center;

@@ -10,7 +10,7 @@ describe('useDatasourceBrowse', () => {
     useVariablesDomainStore.setState({ selectedName: null, pendingBrowse: {} });
   });
 
-  it('does not apply a diff or set pendingBrowse when the active datasource changed mid-browse (§3.2)', async () => {
+  it('does not apply a diff or set pendingBrowse when the active datasource changed mid-browse', async () => {
     useVariablesDomainStore.setState({ selectedName: 'A' });
 
     let resolveFetch!: (body: unknown) => void;

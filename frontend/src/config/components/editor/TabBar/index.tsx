@@ -39,13 +39,15 @@ function resolveTabInfo(
   const shell = SHELL_LABELS[tabId];
   if (shell) return shell;
 
-  const dialog = dialogs.find((d) => d.id === tabId);
-  if (dialog) return { label: dialog.title, icon: <Browsers size={ICON_SIZE} weight="regular" /> };
-
-  const page = findPageNodeById(pages, tabId);
+  // A Dialogs-folder page wears the overlay glyph, so its tab reads apart from a
+  // navigable page's.
+  const overlayPage = findPageNodeById(dialogs, tabId);
+  const page = overlayPage ?? findPageNodeById(pages, tabId);
   if (page) {
     const icon = isPageGroup(page) ? (
       <FolderSimple size={ICON_SIZE} weight="regular" />
+    ) : overlayPage ? (
+      <Browsers size={ICON_SIZE} weight="regular" />
     ) : (
       <File size={ICON_SIZE} weight="regular" />
     );

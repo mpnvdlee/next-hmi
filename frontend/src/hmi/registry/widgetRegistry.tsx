@@ -1,9 +1,11 @@
 /**
  * Widget registry — maps type id to canonical catalog metadata, renderer, and schema.
  *
- * Built-in components are eagerly imported at module load.
- * Custom components from the live project's custom-widgets/ folder are loaded lazily via
- * loadCustomWidgets(), called once at app startup.
+ * Nothing is imported eagerly and nothing is registered at module eval: every
+ * product widget is a built-in widget, registered lazily from the baked
+ * manifest (see `BUILTIN_WIDGETS_MANIFEST` below). Custom components from the
+ * live project's custom-widgets/ folder are loaded via loadCustomWidgets(),
+ * called once at app startup.
  *
  * Schema field types drive the editor Properties Panel (Phase 12).
  *
@@ -12,65 +14,129 @@
  * as documented in the architecture.
  */
 
-/* This is a registry of data + functions, not a component module — fast
- * refresh rules don't apply. */
-/* eslint-disable react-refresh/only-export-components */
-
-import { lazy, Suspense, type ComponentType } from 'react';
+import { Suspense, type ComponentType } from 'react';
+import { settledLazy } from '@shared/utils/settledLazy';
 import { useComponentSelfSuspense } from '../context/ComponentSuspenseContext';
 import type { HmiWidgetProps, IconValue, WidgetConfig } from '@shared/types/config';
 import type {
   SchemaField,
   RegistryEntry,
   CustomWidgetManifestEntry,
-  StdlibEditorEntry,
+  BuiltinWidgetEditorEntry,
 } from '@shared/types/widgetSchema';
 
 export type { CustomWidgetManifestEntry };
 import type { ComponentDefinition } from '@shared/types/componentTypes';
-import { wrapComponentWithStylesheet } from '@shared/hooks/useWidgetStylesheet';
-import { getWidgetJsPath } from '@shared/utils/widgetPaths';
+import { getWidgetJsPath, getWidgetStylePath } from '@shared/utils/widgetPaths';
+import { ensureStylesheet, releaseStylesheet } from '@shared/hooks/useStylesheet';
 import { loadWidgetModule } from '@shared/utils/widgetModuleLoader';
 import { componentPropertyToSchemaField } from '@shared/types/componentProperty';
-import { useComponentStore } from '@shared/store/componentStore';
+import { useComponentStore, componentChildren } from '@shared/store/componentStore';
 import { apiJson } from '@shared/utils/api';
 import { isIconValue } from '@shared/utils/iconValue';
 import { primaryType } from '@shared/utils/valueTypes';
+import { collectSlotKeys } from '@shared/utils/componentSlots';
+import { setFlowsChildren, setRepeatsChildren } from '@shared/utils/parentFlow';
 import { ensureRecharts } from '@shared/utils/rechartsLoader';
-// Product stdlib widgets: authored against the same SDK contract as a project's
-// custom widgets, but compiled at build time (`npm run build:stdlib`). The
-// manifest is imported statically rather than fetched so schemas and categories
-// are present at module eval — that is what keeps this registry synchronous and
-// the editor palette populated at first paint. Only the component modules load
-// lazily, from /stdlib-js/.
+// Product built-in widgets: the same SDK contract as a project's custom widgets,
+// compiled at build time (`npm run build:builtin-widgets`). Imported statically
+// rather than fetched, so schemas and categories are present at module eval and
+// only the component modules load lazily from /builtin-widgets-js/.
 //
-// This is the manifest's *runtime* half: the registration fields, plus each
-// schema field's `type` and `requiredFields`, which is all `useBindingStatus`
-// needs to raise the disconnected/disabled overlay. Labels, options, defaults,
-// descriptions and icons live in the `.editor.json` sibling, which only
-// `stdlibEditorMetadata.ts` imports — from `src/config/`, so an HMI route never
-// carries them. Every route reaches this module, so a byte here is a byte on
-// every page.
-import stdlibManifest from '../../generated/stdlibManifest.json';
+// The manifest's *runtime* half: registration fields plus each schema field's
+// `type`, `requiredFields` and `write`, all `useBindingStatus` needs. Labels,
+// options, defaults, descriptions and icons live in the `.editor.json` sibling,
+// imported only from `src/config/`. Every route reaches this module, so a byte
+// here is a byte on every page.
+import builtinWidgetsManifest from '../../generated/builtinWidgetsManifest.json';
+
+const COMPONENT_TYPE_PREFIX = '$component:';
+
+// What is known about one widget type's module, recorded at registration: the
+// memoised load (`lazy()` and every prefetch share the one import), whether it
+// has resolved — what lets a page gate its reveal on widget code having landed —
+// and whether pulling it drags the chart library in.
+//
+// One record rather than a map plus two parallel sets: a project widget
+// shadowing a built-in must report *its* answers, not the manifest's.
+interface WidgetModuleEntry {
+  load: () => Promise<ComponentType<HmiWidgetProps>>;
+  loaded: boolean;
+  /** The loaded component, so the widget's `lazy()` can render it without
+   *  suspending (see settledLazy). */
+  component?: ComponentType<HmiWidgetProps>;
+  /** Module reads `window.__nextHMI__.Recharts`. Kept out of the boot warm-up. */
+  usesRecharts: boolean;
+}
+const widgetModules = new Map<string, WidgetModuleEntry>();
+
+/** Memoise one module load under `type`, clearing the memo on failure so a
+ *  dropped fetch does not leave the type permanently "not loaded" — every page
+ *  holding it would then sit out the reveal gate's full timeout with no way
+ *  back short of a reload. */
+function registerWidgetModule(
+  type: string,
+  load: () => Promise<ComponentType<HmiWidgetProps>>,
+  usesRecharts = false,
+): void {
+  let pending: Promise<ComponentType<HmiWidgetProps>> | null = null;
+  const record: WidgetModuleEntry = {
+    loaded: false,
+    usesRecharts,
+    load: () =>
+      (pending ??= load().then(
+        (comp) => {
+          record.loaded = true;
+          record.component = comp;
+          return comp;
+        },
+        (err) => {
+          pending = null;
+          throw err;
+        },
+      )),
+  };
+  widgetModules.set(type, record);
+}
+
+/** Every `$component:x` instance renders through the one shared chunk, so they
+ *  all resolve to a single record keyed by the bare prefix. */
+function widgetModuleFor(type: string): WidgetModuleEntry | undefined {
+  return widgetModules.get(type.startsWith(COMPONENT_TYPE_PREFIX) ? COMPONENT_TYPE_PREFIX : type);
+}
+
+/** A type nothing registered has no module to wait for. */
+function moduleLoaded(type: string): boolean {
+  return widgetModuleFor(type)?.loaded ?? true;
+}
+
+registerWidgetModule(COMPONENT_TYPE_PREFIX, async () => {
+  const mod = await import('../components/ComponentRenderer');
+  return mod.default as unknown as ComponentType<HmiWidgetProps>;
+});
 
 // Deferred to break the circular import:
 //   widgetRegistry → ComponentRenderer → WidgetRenderer → widgetRegistry
 // React.lazy handles the Promise correctly and re-renders when ready.
-const LazyComponentRenderer = lazy(
-  () => import('../components/ComponentRenderer'),
+//
+// Registered in `widgetModules` under the bare `$component:` prefix like
+// any other type, so the prefetch shares the one import and `widgetModulesLoaded`
+// answers for it out of the same set — every `$component:x` instance draws
+// through this one chunk.
+const LazyComponentRenderer = settledLazy(
+  () => widgetModuleFor(COMPONENT_TYPE_PREFIX)!.component,
+  () => widgetModuleFor(COMPONENT_TYPE_PREFIX)!.load(),
 ) as ComponentType<HmiWidgetProps & { _widgetId: string }>;
-
-// ── Built-in components ────────────────────────────────────────────────────────
-import ComponentSlot from '../components/ComponentSlot';
-import { collectSlotKeys } from '../components/ComponentSlot/slotKey';
-import ImageContainer from '../components/ImageContainer';
-import NavigationMenu from '../components/NavigationMenu';
 
 // ── Shared schema fragments ───────────────────────────────────────────────────
 
 // Standard visibility gate present on every widget. Both fields are plain
 // booleans, expression-capable — switch either to the `$userGroups` source to
 // gate by user group (empty group list = everyone), or nest `$if` etc.
+//
+// The key set is pinned against `UNIVERSAL_PROPERTY_KEYS` (and through it the
+// backend's copy) by widgetRegistry.test.ts, so a gate property added here
+// reaches every reader of that list rather than only this one.
 export const VISIBILITY_SCHEMA: Record<string, SchemaField> = {
   visible: {
     type: 'Boolean',
@@ -88,214 +154,29 @@ export const VISIBILITY_SCHEMA: Record<string, SchemaField> = {
   },
 };
 
-// ── Registry (mutable — custom components are added at runtime) ───────────────
-export const widgetRegistry: Record<string, RegistryEntry> = {
-  ComponentSlot: {
-    name: 'Component Slot',
-    category: 'Layout & structure',
-    description:
-      'Marks where content the caller supplies is rendered. Put one in a reusable component and instances of it gain a named slot — in the widget tree, and in the properties panel when a "Widget slot" property names it.',
-    icon: { type: 'builtin', name: 'frame-corners' },
-    component: ComponentSlot,
-    schema: {
-      slot: {
-        type: 'slot',
-        label: 'Slot name',
-        // Literal, not DEFAULT_SLOT_KEY: the widget-schema extractor only
-        // inlines const literals declared in this file.
-        placeholder: 'content',
-        description:
-          'Names this slot — pick one of the component\'s "Widget slot" properties. Instances get that property as a row in their properties panel, and the widgets put there render here.',
-      },
-      ...VISIBILITY_SCHEMA,
-    },
-  },
-
-  ImageContainer: {
-    name: 'Image Container',
-    category: 'Layout & structure',
-    description:
-      'Places children at absolute spots over a background image. Collapses below a set width.',
-    icon: { type: 'builtin', name: 'frame-corners' },
-    component: ImageContainer,
-    schema: {
-      src: { type: 'image', label: 'Image', group: 'Image' },
-      alt: { type: 'String', label: 'Alt text', group: 'Image' },
-      fit: {
-        type: 'String',
-        format: 'select',
-        label: 'Fit',
-        group: 'Image',
-        defaultValue: 'contain',
-        options: [
-          { label: 'Contain', value: 'contain' },
-          { label: 'Cover', value: 'cover' },
-          { label: 'Fill', value: 'fill' },
-          { label: 'None', value: 'none' },
-          { label: 'Scale down', value: 'scale-down' },
-        ],
-      },
-      collapseBelow: {
-        type: 'Integer',
-        label: 'Collapse below (px)',
-        group: 'Responsive',
-        description:
-          'Below this width the image drops out and children stack in normal flow. 0 never collapses.',
-        defaultValue: 0,
-        min: 0,
-        max: 4096,
-        step: 1,
-      },
-      childPositions: { type: 'child-positions', label: 'Child placement', group: 'Children' },
-      ...VISIBILITY_SCHEMA,
-    },
-  },
-
-  NavigationMenu: {
-    name: 'Navigation Menu',
-    category: 'Navigation',
-    description: 'Sidebar or top-bar menu mirroring the page tree, with rich display options.',
-    icon: { type: 'builtin', name: 'sidebar-simple' },
-    component: NavigationMenu,
-    schema: {
-      mode: {
-        type: 'String',
-        format: 'select',
-        label: 'Mode',
-        group: 'Source',
-        defaultValue: 'auto',
-        options: [
-          { label: 'Auto (mirror page tree)', value: 'auto' },
-          { label: 'Manual (item list)', value: 'manual' },
-        ],
-      },
-      items: {
-        type: 'menu-items',
-        label: 'Items',
-        group: 'Source',
-        description: 'The entries the menu shows, in order. Manual mode only.',
-        visibleWhen: { property: 'mode', equals: 'manual' },
-      },
-      orientation: {
-        type: 'String',
-        format: 'select',
-        label: 'Orientation',
-        group: 'Layout',
-        defaultValue: 'vertical',
-        options: [
-          { label: 'Vertical (sidebar)', value: 'vertical' },
-          { label: 'Horizontal (top-bar)', value: 'horizontal' },
-        ],
-      },
-      display: {
-        type: 'String',
-        format: 'select',
-        label: 'Display',
-        group: 'Appearance',
-        defaultValue: 'icon-label',
-        options: [
-          { label: 'Icon + label', value: 'icon-label' },
-          { label: 'Icon only', value: 'icon-only' },
-          { label: 'Label only', value: 'label-only' },
-        ],
-      },
-      hierarchy: {
-        type: 'String',
-        format: 'select',
-        label: 'Hierarchy',
-        group: 'Source',
-        defaultValue: 'tree',
-        options: [
-          { label: 'Tree (groups expandable)', value: 'tree' },
-          { label: 'Flat (all groups flattened)', value: 'flat' },
-        ],
-      },
-      submenuMode: {
-        type: 'String',
-        format: 'select',
-        label: 'Submenu mode',
-        group: 'Layout',
-        defaultValue: 'auto',
-        options: [
-          { label: 'Auto', value: 'auto' },
-          { label: 'Flyout (overlay)', value: 'flyout' },
-          { label: 'Inline-expand (push siblings)', value: 'inline-expand' },
-        ],
-      },
-      iconStrategy: {
-        type: 'String',
-        format: 'select',
-        label: 'Icon strategy',
-        group: 'Appearance',
-        defaultValue: 'first-letter',
-        options: [
-          { label: 'Configured icon', value: 'configured' },
-          { label: 'First letter', value: 'first-letter' },
-          { label: 'None', value: 'none' },
-        ],
-      },
-      activeStyle: {
-        type: 'String',
-        format: 'select',
-        label: 'Active style',
-        group: 'Appearance',
-        defaultValue: 'left-border',
-        options: [
-          { label: 'Left border', value: 'left-border' },
-          { label: 'Background', value: 'background' },
-          { label: 'Underline', value: 'underline' },
-        ],
-      },
-      groupExpansion: {
-        type: 'String',
-        format: 'select',
-        label: 'Group expansion',
-        group: 'Behaviour',
-        defaultValue: 'auto',
-        options: [
-          { label: 'Auto (expand active branch)', value: 'auto' },
-          { label: 'All expanded', value: 'all-expanded' },
-          { label: 'All collapsed', value: 'all-collapsed' },
-          { label: 'Remember (persist per browser)', value: 'remember' },
-        ],
-      },
-      showSearch: {
-        type: 'Boolean',
-        format: 'show',
-        label: 'Show search',
-        defaultValue: false,
-        group: 'Behaviour',
-      },
-      collapsed: {
-        type: 'Boolean',
-        format: 'collapse',
-        label: 'Collapsed',
-        group: 'Layout',
-        defaultValue: false,
-      },
-      ...VISIBILITY_SCHEMA,
-    },
-  },
-};
+// ── Registry ─────────────────────────────────────────────────────────────────
+// Empty at module eval and filled at runtime: every product widget arrives from
+// the built-in-widgets manifest below, and a project's custom widgets and
+// reusable components register on top (`registerCustomWidget`,
+// `registerComponents`).
+export const widgetRegistry: Record<string, RegistryEntry> = {};
 
 // Through `unknown`: TypeScript infers the JSON as a union of per-widget object
 // literals whose `schema` shapes differ, so it never structurally matches the
-// entry type. stdlibManifest.test.ts is the guard that the file really has this
-// shape — it is generated by the build, not hand-written.
+// entry type. builtinWidgetsManifest.test.ts is the guard that the file really
+// has this shape — it is generated by the build, not hand-written.
 /** Types that declared `hostsChildren` on their manifest row. Mutable: project
  *  widgets register after boot, and a recompile re-registers. */
 const declaredHostTypes = new Set<string>();
 
-const STDLIB_WIDGETS = stdlibManifest as unknown as CustomWidgetManifestEntry[];
+const BUILTIN_WIDGETS_MANIFEST = builtinWidgetsManifest as unknown as CustomWidgetManifestEntry[];
 
 // ── Built-in type set (used by editor to separate built-in from custom in menus) ───
-// "Built-in" means product-shipped, whichever half of the product it comes from:
-// the entries compiled into this bundle above, plus the stdlib widgets compiled
-// at build time. A *project's* custom widgets are the ones this set excludes.
-export const BUILTIN_WIDGET_TYPES: ReadonlySet<string> = new Set([
-  ...Object.keys(widgetRegistry),
-  ...STDLIB_WIDGETS.map((entry) => entry.name),
-]);
+// "Built-in" means product-shipped: the built-in widgets compiled at build time.
+// A *project's* custom widgets are the ones this set excludes.
+export const BUILTIN_WIDGET_TYPES: ReadonlySet<string> = new Set(
+  BUILTIN_WIDGETS_MANIFEST.map((entry) => entry.name),
+);
 
 export const DEFAULT_COMPONENT_CATEGORY = 'Components';
 export const DEFAULT_WIDGET_CATEGORY = 'Other';
@@ -310,9 +191,10 @@ export const DEFAULT_CUSTOM_WIDGET_ICON = {
 
 // Registered here, at module eval, rather than from an async loader: every
 // consumer that reads this registry synchronously (WidgetRenderer, buildCatalog,
-// makeComponentOfType) must see the stdlib on the first render. `registerCustomWidget`
-// is a hoisted function declaration, and every const it closes over is defined above.
-for (const entry of STDLIB_WIDGETS) registerCustomWidget(entry);
+// makeComponentOfType) must see the built-in widgets on the first render.
+// `registerCustomWidget` is a hoisted function declaration, and every const it
+// closes over is defined above.
+for (const entry of BUILTIN_WIDGETS_MANIFEST) registerCustomWidget(entry);
 
 interface ResolvedWidgetMetadata {
   name: string;
@@ -339,16 +221,11 @@ export function resolveWidgetMetadata(type: string): ResolvedWidgetMetadata {
  *  recursion, move-target collection, clipboard dispatch. Does NOT imply container
  *  layout fields (flex/grid direction, gap, etc.) — that's still 'Container'-specific.
  *
- *  Compiled-in hosts are listed here; a manifest-registered widget declares it
- *  instead, with `export const hostsChildren = true`. That declaration is what
- *  lets the stdlib's Container host children, and it is open to project widgets
- *  on the same terms. */
-const CONTAINER_HOST_TYPES: ReadonlySet<string> = new Set(['ImageContainer']);
-
+ *  A widget declares this with `export const hostsChildren = true`, which is
+ *  what lets the built-in Container and ImageContainer host children — and is
+ *  open to project widgets on the same terms. */
 export function isContainerHostType(type: string): boolean {
-  return (
-    CONTAINER_HOST_TYPES.has(type) || declaredHostTypes.has(type) || widgetSlots(type).length > 0
-  );
+  return declaredHostTypes.has(type) || widgetSlots(type).length > 0;
 }
 
 // Shared so `widgetSlots` is allocation-free for the overwhelming majority of
@@ -392,16 +269,33 @@ export function placesOwnChildren(type: string): boolean {
 // `lazy()` that imports on first render. A project holding a widget that pulls
 // three.js therefore costs nothing until such a widget is actually on screen.
 //
-// The stylesheet is injected into <head> when the component first mounts and
-// removed when the last instance unmounts (reference-counted via useStylesheet).
+// The stylesheet loads with the module rather than on first mount, so a surface
+// that waits for the module has waited for the CSS too. It then keeps the
+// module's lifetime — in <head> for the session, since the module record stays
+// `loaded` and a revisited page is revealed at once — and only a recompile
+// drops it, once the build replacing it has landed.
+
+/** The build whose stylesheet each widget currently has in `<head>`. */
+const widgetStyleHrefs = new Map<string, string>();
+
+/** Pull in this build's stylesheet, then drop the build it supersedes — in that
+ *  order, so a recompile never leaves mounted instances unstyled in between. */
+async function adoptWidgetStylesheet(entry: CustomWidgetManifestEntry): Promise<void> {
+  const href = getWidgetStylePath(entry);
+  await ensureStylesheet(href);
+  const previous = widgetStyleHrefs.get(entry.name);
+  widgetStyleHrefs.set(entry.name, href);
+  if (previous !== undefined && previous !== href) releaseStylesheet(previous);
+}
 
 /** Build the registry entry for one manifest row, deferring its module. */
 export function registerCustomWidget(entry: CustomWidgetManifestEntry): void {
   // A custom widget still wins — projects may override a built-in on purpose —
   // but the swap used to be silent, and a page that reads as
-  // `"type": "PageTitle"` then renders something else entirely. Stdlib widgets
-  // are themselves part of that built-in set, so they never shadow anything.
-  if (entry.origin !== 'stdlib' && BUILTIN_WIDGET_TYPES.has(entry.name)) {
+  // `"type": "PageTitle"` then renders something else entirely. Built-in
+  // widgets are themselves part of that built-in set, so they never shadow
+  // anything.
+  if (entry.origin !== 'builtin' && BUILTIN_WIDGET_TYPES.has(entry.name)) {
     console.warn(
       `[NEXTHMI] Custom widget "${entry.key}" shadows the built-in "${entry.name}". ` +
         `Every "${entry.name}" node in this project renders the custom widget. ` +
@@ -431,26 +325,58 @@ export function registerCustomWidget(entry: CustomWidgetManifestEntry): void {
   // widget, so skip it when the build told us this module never mentions it.
   // Project widgets carry no such flag and keep waiting, as before.
   const needsRecharts = entry.usesRecharts !== false;
-  const LazyComp = lazy(async () => {
-    if (needsRecharts) await ensureRecharts();
-    const mod = await loadWidgetModule(getWidgetJsPath(entry));
-    if (!mod?.default) {
-      throw new Error(`custom widget "${entry.key}" has no default export`);
-    }
-    return { default: mod.default as ComponentType<HmiWidgetProps> };
-  }) as ComponentType<HmiWidgetProps>;
+  // One memoised load per registration, shared by the `lazy()` below and by
+  // `prefetchWidgetModules`. Re-registering (a recompile, with a new buildTs)
+  // mints a fresh one, so the previous build's "already loaded" mark goes with
+  // it — `memoiseModuleLoader` clears it.
+  registerWidgetModule(
+    entry.name,
+    async () => {
+      if (needsRecharts) await ensureRecharts();
+      // Both halves of the widget, under one "loaded". The stylesheet used to
+      // be injected by the widget's own mount, i.e. after the gate had
+      // revealed the page and the widget had painted — on a slow machine,
+      // visibly unstyled first. Folding it in here makes every reader of this
+      // record cover it: the page gate, the boot warm-up, and the `lazy()`
+      // below, which is what catches the widgets that mount after the reveal
+      // (WindowedContent scrolling one in, a `visible` gate opening, a
+      // recompile remounting one).
+      const [mod] = await Promise.all([
+        loadWidgetModule(getWidgetJsPath(entry)),
+        entry.hasStyle ? adoptWidgetStylesheet(entry) : undefined,
+      ]);
+      if (!mod?.default) {
+        throw new Error(`custom widget "${entry.key}" has no default export`);
+      }
+      return mod.default as ComponentType<HmiWidgetProps>;
+    },
+    needsRecharts,
+  );
+  const record = widgetModules.get(entry.name)!;
+  const LazyComp = settledLazy(
+    () => record.component,
+    record.load,
+  ) as ComponentType<HmiWidgetProps>;
 
   if (entry.hostsChildren) declaredHostTypes.add(entry.name);
   else declaredHostTypes.delete(entry.name);
-
-  const Wrapped: ComponentType<HmiWidgetProps> = entry.hasStyle
-    ? wrapComponentWithStylesheet(LazyComp, entry)
-    : LazyComp;
+  setFlowsChildren(entry.name, entry.flowsChildren === true);
+  setRepeatsChildren(entry.name, entry.repeatsChildren);
 
   function CustomWidgetEntry(props: HmiWidgetProps) {
+    // Always its own silent boundary, wherever the widget sits. The page gate
+    // (PageGroupPageView) prefetches a page's modules before revealing it, so
+    // this normally never shows; what it covers is every load that starts
+    // *after* the reveal — a widget the prefetch could not see (a component
+    // definition the store had not loaded yet), one whose first load rejected,
+    // one mounted later by a `visible` gate opening or WindowedContent
+    // scrolling it in, and the fresh `lazy` a `widget_updated` recompile mints
+    // under already-mounted instances. Letting any of those escalate to the
+    // content-area boundary would blank the whole page body — header, content
+    // and footer — to redraw one widget.
     return (
       <Suspense fallback={null}>
-        <Wrapped {...props} />
+        <LazyComp {...props} />
       </Suspense>
     );
   }
@@ -473,13 +399,171 @@ export function registerCustomWidget(entry: CustomWidgetManifestEntry): void {
   };
 }
 
+// ── Module prefetch ───────────────────────────────────────────────────────────
+// Every widget type is a `lazy()` that starts its import on first render, so a
+// page revealed the moment its config and variables land still has none of its
+// widget code in memory: it paints as an empty shell and grows as N module
+// round-trips return. The page gate (PageGroupPageView) therefore waits on the
+// modules too, and later navigations find them already there: the operator
+// runtime warms every module its project uses once the first page has settled
+// (`warmWidgetModules`), the editor preview warms the built-ins.
+
+// Memo for the top-level walk. The page gate asks the same question two or
+// three times per visit (a synchronous check, the prefetch, then a re-check on
+// each render until it latches) and the walk descends into every referenced
+// component definition, so the answer is worth keeping.
+//
+// Stamped with both component-store slices, not just the tree: a definition
+// that arrives after the first walk changes what a `$component:` instance
+// draws, and both slices are replaced wholesale on any edit, so an identity
+// check is enough to notice.
+interface TypeWalkMemo {
+  components: unknown;
+  draftComponents: unknown;
+  types: Set<string>;
+}
+const typeWalkMemo = new WeakMap<object, TypeWalkMemo>();
+
 /**
- * Fold the manifest's editor half back onto the stdlib entries registered above.
+ * Widget types this tree renders — descending through `children` AND into the
+ * definitions of `$component:` instances, whose widgets live in the component
+ * store rather than on the instance node.
+ */
+export function collectWidgetTypes(roots: WidgetConfig[]): Set<string> {
+  const store = useComponentStore.getState();
+  const cached = typeWalkMemo.get(roots);
+  if (
+    cached &&
+    cached.components === store.components &&
+    cached.draftComponents === store.draftComponents
+  ) {
+    return cached.types;
+  }
+  const types = walkWidgetTypes(roots, new Set(), new Set());
+  typeWalkMemo.set(roots, {
+    components: store.components,
+    draftComponents: store.draftComponents,
+    types,
+  });
+  return types;
+}
+
+function walkWidgetTypes(
+  roots: WidgetConfig[],
+  out: Set<string>,
+  seenComponents: Set<string>,
+): Set<string> {
+  for (const node of roots) {
+    if (typeof node.type !== 'string') continue;
+    out.add(node.type);
+    const kids = node.children as WidgetConfig[] | undefined;
+    if (kids) walkWidgetTypes(kids, out, seenComponents);
+    if (node.type.startsWith(COMPONENT_TYPE_PREFIX)) {
+      const name = node.type.slice(COMPONENT_TYPE_PREFIX.length);
+      if (seenComponents.has(name)) continue;
+      seenComponents.add(name);
+      const definition = componentChildren(name);
+      if (definition) walkWidgetTypes(definition, out, seenComponents);
+    }
+  }
+  return out;
+}
+
+/** True when every module this tree needs is in memory — i.e. rendering it now
+ *  suspends nothing. An unregistered type has no module to wait for. */
+export function widgetModulesLoaded(roots: WidgetConfig[]): boolean {
+  for (const type of collectWidgetTypes(roots)) {
+    if (!moduleLoaded(type)) return false;
+  }
+  return true;
+}
+
+/** Start every module this tree needs, resolving once they have all settled. A
+ *  module that fails to load resolves too — the caller is a reveal gate, and a
+ *  broken widget must not hold the page behind a spinner. */
+export function prefetchWidgetModules(roots: WidgetConfig[]): Promise<void> {
+  const pending: Promise<unknown>[] = [];
+  for (const type of collectWidgetTypes(roots)) {
+    const mod = widgetModuleFor(type);
+    if (mod) pending.push(mod.load());
+  }
+  return Promise.allSettled(pending).then(() => undefined);
+}
+
+/**
+ * Warm the product's built-in widget modules — small static files served from
+ * /builtin-widgets-js/ — during the boot splash, so a navigation later in the
+ * session finds them in memory instead of paying a round-trip per type at the
+ * page gate.
  *
- * Called at module eval from `stdlibEditorMetadata.ts`, which only `src/config/`
- * imports — so this runs before any editor surface renders, and never runs at
- * all on an HMI route. Nothing here is async: the palette's first paint already
- * has the descriptions and icons.
+ * The chart widgets are left out on purpose: their modules pull the chart
+ * library (see `needsRecharts`), which is exactly the cost the lazy registry
+ * exists to keep off a project that never draws a chart. A page holding one
+ * still prefetches it through `prefetchWidgetModules`.
+ */
+export function prefetchBuiltinWidgetModules(): Promise<void> {
+  const pending: Promise<unknown>[] = [widgetModuleFor(COMPONENT_TYPE_PREFIX)!.load()];
+  for (const type of BUILTIN_WIDGET_TYPES) {
+    const mod = widgetModules.get(type);
+    // The registration's own flag, not the manifest's: a project widget may
+    // shadow a built-in name, and it is that module we would be fetching.
+    if (mod && !mod.usesRecharts) pending.push(mod.load());
+  }
+  return Promise.allSettled(pending).then(() => undefined);
+}
+
+type IdleHandle = { cancel: () => void };
+
+function whenIdle(fn: () => void): IdleHandle {
+  if (typeof requestIdleCallback !== 'function') {
+    const t = setTimeout(fn, 50);
+    return { cancel: () => clearTimeout(t) };
+  }
+  const h = requestIdleCallback(fn, { timeout: 2000 });
+  return { cancel: () => cancelIdleCallback(h) };
+}
+
+/**
+ * Warm every module these trees need, one per idle period, so the first visit
+ * to a page finds its widget code already in memory. Returns a cancel.
+ *
+ * Unlike `prefetchBuiltinWidgetModules` this covers exactly what the trees
+ * render: project widgets (and the external libraries their imports pull in)
+ * and chart widgets included, built-ins the project never places left out.
+ * One at a time, because it runs while the operator is already using the
+ * page, and a burst would queue their own requests behind it.
+ */
+export function warmWidgetModules(roots: WidgetConfig[]): () => void {
+  const queue = [...collectWidgetTypes(roots)]
+    .map((type) => widgetModuleFor(type))
+    .filter((mod): mod is WidgetModuleEntry => mod !== undefined && !mod.loaded);
+  let cancelled = false;
+  let handle: IdleHandle | null = null;
+  const next = () => {
+    const mod = queue.shift();
+    if (cancelled || !mod) return;
+    void mod
+      .load()
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) handle = whenIdle(next);
+      });
+  };
+  handle = whenIdle(next);
+  return () => {
+    cancelled = true;
+    handle?.cancel();
+  };
+}
+
+/**
+ * Fold the manifest's editor half back onto the built-in entries registered
+ * above.
+ *
+ * Called at module eval from `builtinWidgetsEditorMetadata.ts`, which only
+ * `src/config/` imports — so this runs before any editor surface renders, and
+ * never runs at all on an HMI route. Nothing here is async: the palette's
+ * first paint already has the descriptions and icons.
  *
  * The visibility fields are skipped, and a field is *replaced* rather than
  * mutated in place. `VISIBILITY_SCHEMA` wins over a widget's own declaration in
@@ -487,8 +571,10 @@ export function registerCustomWidget(entry: CustomWidgetManifestEntry): void {
  * layering onto those two would both undo that precedence and write through to
  * every other widget.
  */
-export function applyStdlibEditorMetadata(byKey: Record<string, StdlibEditorEntry>): void {
-  for (const row of STDLIB_WIDGETS) {
+export function applyBuiltinWidgetsEditorMetadata(
+  byKey: Record<string, BuiltinWidgetEditorEntry>,
+): void {
+  for (const row of BUILTIN_WIDGETS_MANIFEST) {
     const half = byKey[row.key];
     const entry = half && widgetRegistry[row.name];
     if (!half || !entry) continue;
@@ -590,7 +676,7 @@ function makeStableComponentInstance(componentId: string): ComponentType<HmiWidg
   function ComponentInstance(props: HmiWidgetProps) {
     const selfBoundary = useComponentSelfSuspense();
     const instance = <LazyComponentRenderer {...props} _widgetId={componentId} />;
-    // Chrome/dialogs pop in silently via their own boundary. Page content sets
+    // Chrome pops in silently via its own boundary. Page content sets
     // the context to false so the load surfaces on the content-area spinner
     // (see PageGroupPageView) instead of a placeholder per component.
     return selfBoundary ? <Suspense fallback={null}>{instance}</Suspense> : instance;

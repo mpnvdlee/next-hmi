@@ -14,11 +14,17 @@ function project(overrides: Partial<ProjectEntry> = {}): ProjectEntry {
     addedAt: '2026-01-01T00:00:00Z',
     lastOpenedAt: null,
     status: 'present',
+    inProjectsRoot: true,
     isDefault: false,
     mcpEnabled: false,
-    operatorSetupRequired: false,
-    operatorSetupStatus: 'complete',
-    operatorSetupError: null,
+    credentialsStatus: 'ok',
+    credentialsError: null,
+    formatVersion: null,
+    minAppVersion: null,
+    needsUpgrade: false,
+    unsupportedFormat: false,
+    lastMigration: null,
+    thumbnailUpdatedAt: null,
     ...overrides,
   };
 }
@@ -424,7 +430,7 @@ describe('projects dashboard', () => {
     useProjectsStore.setState({ projects: [project()] });
     renderAt('/projects');
 
-    expect(within(row('Line 1')).getByText('p1')).toBeInTheDocument();
+    expect(within(row('Line 1')).getByText('[p1]')).toBeInTheDocument();
   });
 
   it('blocks Rename until the project is stopped', () => {
@@ -543,36 +549,218 @@ describe('projects dashboard', () => {
   });
 });
 
-describe('operator credential state', () => {
-  it('replaces the run controls with a setup prompt while credentials are missing', () => {
+describe('unavailable bounce', () => {
+  /** The manager 303s a `/runtime|editor/<id>/` navigation it cannot serve to
+   *  `/projects?unavailable=…`; the dashboard reads that off the real location,
+   *  not the router's, so the tests drive window.history directly. */
+  function landOn(search: string) {
+    window.history.replaceState({}, '', `/projects${search}`);
+    useProjectsStore.setState({ projects: [project()] });
+    renderAt('/projects');
+  }
+
+  afterEach(() => {
+    window.history.replaceState({}, '', '/');
+  });
+
+  it('says why a project could not be opened and clears the query', async () => {
+    landOn('?unavailable=p1&reason=stopped');
+
+    expect(
+      await screen.findByText(/Can't open .p1. — it is not running\. Start it first\./),
+    ).toBeInTheDocument();
+    expect(window.location.search).toBe('');
+  });
+
+  it.each([
+    ['unknown', /no project with that id is registered on this device\./],
+    ['missing', /its project folder is missing\./],
+    ['crashed', /the instance crashed\./],
+  ])('reports the %s reason the manager sent', async (reason, message) => {
+    landOn(`?unavailable=p1&reason=${reason}`);
+
+    expect(await screen.findByText(message)).toBeInTheDocument();
+  });
+
+  it('falls back to the stopped wording for a reason it does not know', async () => {
+    landOn('?unavailable=p1&reason=something-new');
+
+    expect(await screen.findByText(/it is not running\. Start it first\./)).toBeInTheDocument();
+  });
+
+  it('says nothing on a plain visit to the dashboard', () => {
+    landOn('');
+
+    expect(screen.queryByText(/Can't open/)).toBeNull();
+  });
+
+  it('dismisses the message', async () => {
+    landOn('?unavailable=p1&reason=stopped');
+    await screen.findByText(/Can't open/);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+    expect(screen.queryByText(/Can't open/)).toBeNull();
+  });
+});
+
+describe('project version / upgrade gate', () => {
+  it('opens an upgrade dialog instead of starting a project that needs one', async () => {
+    const start = vi.fn().mockResolvedValue(undefined);
+    stubManagerActions({ start });
     useProjectsStore.setState({
-      projects: [project({ operatorSetupRequired: true, operatorSetupStatus: 'required' })],
+      projects: [project({ needsUpgrade: true })],
     });
+    renderAt('/projects');
+
+    await userEvent.click(within(row('Line 1')).getByRole('button', { name: 'Start' }));
+
+    const dialog = within(await openModal());
+    expect(dialog.getByText(/needs to upgrade this project's file format/)).toBeInTheDocument();
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('confirms the upgrade, starts the project, and refreshes the list', async () => {
+    const start = vi.fn().mockResolvedValue(undefined);
+    const load = vi.fn().mockResolvedValue(undefined);
+    stubManagerActions({ start });
+    stubProjectsActions({ load });
+    useProjectsStore.setState({ projects: [project({ needsUpgrade: true })] });
+    renderAt('/projects');
+
+    await userEvent.click(within(row('Line 1')).getByRole('button', { name: 'Start' }));
+    const dialog = within(await openModal());
+    await userEvent.click(dialog.getByRole('button', { name: 'Upgrade & start' }));
+
+    await waitFor(() => expect(start).toHaveBeenCalledWith('p1', { confirmUpgrade: true }));
+    await waitFor(() => expect(load).toHaveBeenCalled());
+    await waitFor(() => expect(modal()).toBeNull());
+  });
+
+  it('cancels out of the upgrade dialog without starting the project', async () => {
+    const start = vi.fn().mockResolvedValue(undefined);
+    stubManagerActions({ start });
+    useProjectsStore.setState({ projects: [project({ needsUpgrade: true })] });
+    renderAt('/projects');
+
+    await userEvent.click(within(row('Line 1')).getByRole('button', { name: 'Start' }));
+    await userEvent.click(within(await openModal()).getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(modal()).toBeNull());
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('blocks starting a project newer than this build supports, naming the version needed', () => {
+    useProjectsStore.setState({
+      projects: [project({ unsupportedFormat: true, minAppVersion: '9.9.9' })],
+    });
+    renderAt('/projects');
+
+    expect(within(row('Line 1')).getByRole('button', { name: 'Requires update' })).toBeDisabled();
+    expect(within(row('Line 1')).getByText(/Needs NEXT HMI 9\.9\.9 or newer/)).toBeInTheDocument();
+  });
+
+  it('falls back to a generic note when the project carries no release stamp', () => {
+    useProjectsStore.setState({
+      projects: [project({ unsupportedFormat: true, minAppVersion: null })],
+    });
+    renderAt('/projects');
+
+    expect(
+      within(row('Line 1')).getByText(/Needs a newer version of NEXT HMI/),
+    ).toBeInTheDocument();
+  });
+
+  it('leaves the row clean when the format is supported', () => {
+    useProjectsStore.setState({ projects: [project({ minAppVersion: '9.9.9' })] });
+    renderAt('/projects');
+
+    expect(within(row('Line 1')).queryByText(/Needs NEXT HMI/)).toBeNull();
+  });
+
+  it('never shows a permanent per-row upgrade note, even for a project with migration history', () => {
+    useProjectsStore.setState({
+      projects: [
+        project({
+          lastMigration: {
+            fromVersion: 5,
+            toVersion: 6,
+            at: '2026-05-24T10:00:00Z',
+            backup: '/projects/line-1/.backups/pre-migration-20260524T100000Z-app-1.2.3.zip',
+          },
+        }),
+      ],
+    });
+    renderAt('/projects');
+
+    expect(screen.queryByText(/Upgraded from v5 to v6/)).toBeNull();
+  });
+
+  it('announces what changed once, right after an upgrade completes, dismissibly', async () => {
+    const start = vi.fn().mockResolvedValue(undefined);
+    // ProjectsPage reloads on mount too — only the reload the upgrade modal
+    // triggers (the second one) should reflect the migrated project.
+    let loadCalls = 0;
+    const load = vi.fn().mockImplementation(async () => {
+      loadCalls += 1;
+      if (loadCalls < 2) return;
+      useProjectsStore.setState({
+        projects: [
+          project({
+            needsUpgrade: false,
+            lastMigration: {
+              fromVersion: 4,
+              toVersion: 7,
+              at: '2026-05-24T10:00:00Z',
+              backup: '/projects/line-1/.backups/pre-migration-20260524T100000Z-app-1.2.3.zip',
+            },
+          }),
+        ],
+      });
+    });
+    stubManagerActions({ start });
+    stubProjectsActions({ load });
+    useProjectsStore.setState({ projects: [project({ needsUpgrade: true })] });
+    renderAt('/projects');
+
+    await userEvent.click(within(row('Line 1')).getByRole('button', { name: 'Start' }));
+    await userEvent.click(
+      within(await openModal()).getByRole('button', { name: 'Upgrade & start' }),
+    );
+
+    const notice = await screen.findByText(/Upgraded "Line 1" from v4 to v7/);
+    expect(notice).toHaveTextContent(
+      '/projects/line-1/.backups/pre-migration-20260524T100000Z-app-1.2.3.zip',
+    );
+    // Not a per-row detail — it's the page-level notice.
+    expect(row('Line 1')).not.toContainElement(notice);
+
+    await userEvent.click(
+      within(notice.closest('.projects-page__notice')!).getByRole('button', {
+        name: 'Dismiss',
+      }),
+    );
+    expect(screen.queryByText(/Upgraded "Line 1" from v4 to v7/)).toBeNull();
+  });
+});
+
+describe('operator credential state', () => {
+  it('offers the run controls on a project that has no operator account yet', () => {
+    useProjectsStore.setState({ projects: [project()] });
     renderAt('/projects');
 
     const projectRow = within(row('Line 1'));
-    expect(projectRow.getByRole('button', { name: 'Set operator password' })).toBeInTheDocument();
-    expect(projectRow.queryByRole('button', { name: 'Start' })).toBeNull();
-    expect(projectRow.getByRole('radio')).toBeDisabled();
-  });
-
-  it('opens the operator-setup dialog from the row prompt', async () => {
-    useProjectsStore.setState({
-      projects: [project({ operatorSetupRequired: true, operatorSetupStatus: 'required' })],
-    });
-    renderAt('/projects');
-
-    await userEvent.click(screen.getByRole('button', { name: 'Set operator password' }));
-
-    expect(within(await openModal()).getByText('Set operator password')).toBeInTheDocument();
+    expect(projectRow.getByRole('button', { name: 'Start' })).toBeInTheDocument();
+    expect(projectRow.queryByRole('button', { name: 'Set operator password' })).toBeNull();
+    expect(projectRow.getByRole('radio')).toBeEnabled();
   });
 
   it('reports an unreadable credential as a disabled row action carrying the reason', () => {
     useProjectsStore.setState({
       projects: [
         project({
-          operatorSetupStatus: 'error',
-          operatorSetupError: 'users.json is corrupt',
+          credentialsStatus: 'error',
+          credentialsError: 'users.json is corrupt',
         }),
       ],
     });
@@ -581,27 +769,6 @@ describe('operator credential state', () => {
     const button = within(row('Line 1')).getByRole('button', { name: 'Credentials unavailable' });
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute('title', 'users.json is corrupt');
-  });
-
-  it('auto-opens the setup dialog for the project named by ?operatorSetup', async () => {
-    window.history.replaceState({}, '', '/projects?operatorSetup=p1');
-    useProjectsStore.setState({
-      projects: [project({ operatorSetupRequired: true, operatorSetupStatus: 'required' })],
-    });
-    renderAt('/projects');
-
-    expect(within(await openModal()).getByText('Set operator password')).toBeInTheDocument();
-    expect(window.location.search).toBe('');
-  });
-
-  it('ignores ?operatorSetup for a project that no longer needs setup', async () => {
-    window.history.replaceState({}, '', '/projects?operatorSetup=p1');
-    useProjectsStore.setState({ projects: [project()] });
-    renderAt('/projects');
-
-    await waitFor(() => expect(screen.getByText('Line 1')).toBeInTheDocument());
-    expect(modal()).toBeNull();
-    window.history.replaceState({}, '', '/');
   });
 });
 
@@ -803,5 +970,67 @@ describe('security section', () => {
 
     expect(await screen.findByText('Wrong password')).toBeInTheDocument();
     expect(modal()).not.toBeNull();
+  });
+});
+
+// Only the two dashboard pages carry it: an operator at a wall panel cannot act
+// on it, so the runtime and the editor stay clear.
+describe('insecure-connection notice', () => {
+  const NOTICE = /serving over the network without HTTPS/i;
+
+  it('stands above the project list when the device answers on plain HTTP', async () => {
+    vi.stubGlobal('isSecureContext', false);
+
+    renderAt('/projects');
+
+    expect(await screen.findByText(NOTICE)).toBeInTheDocument();
+  });
+
+  it('stands on the settings page as well', async () => {
+    vi.stubGlobal('isSecureContext', false);
+
+    renderAt('/settings');
+
+    expect(await screen.findByText(NOTICE)).toBeInTheDocument();
+  });
+
+  // The gate is the screen the notice matters most on: the device-admin
+  // password typed into it is the exposure the sentence describes.
+  it('stands on the sign-in gate, which renders before any route does', () => {
+    vi.stubGlobal('isSecureContext', false);
+    useManagerStore.setState({ auth: 'needs-login' });
+
+    renderAt('/projects');
+
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.getByText(NOTICE)).toBeInTheDocument();
+  });
+
+  it('stands on the first-run setup gate too', () => {
+    vi.stubGlobal('isSecureContext', false);
+    useManagerStore.setState({ auth: 'needs-setup' });
+
+    renderAt('/projects');
+
+    expect(screen.getByRole('button', { name: 'Set password & continue' })).toBeInTheDocument();
+    expect(screen.getByText(NOTICE)).toBeInTheDocument();
+  });
+
+  it('drops the link on the settings page, where the HTTPS switch already is', async () => {
+    vi.stubGlobal('isSecureContext', false);
+
+    renderAt('/settings');
+
+    expect(await screen.findByText(NOTICE)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Turn on HTTPS in Settings' })).toBeNull();
+  });
+
+  it('is absent on a secure context', async () => {
+    vi.stubGlobal('isSecureContext', true);
+
+    renderAt('/projects');
+
+    expect(await screen.findByRole('button', { name: '+ New project' })).toBeInTheDocument();
+    expect(screen.queryByText(NOTICE)).toBeNull();
   });
 });

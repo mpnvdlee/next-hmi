@@ -56,10 +56,27 @@
     ]
   },
   {
+    "key": "$not",
+    "label": "Invert",
+    "description": "The opposite of a boolean value: true becomes false and false becomes true.",
+    "produces": [
+      "boolean"
+    ]
+  },
+  {
+    "key": "$formula",
+    "label": "Formula",
+    "description": "A number calculated from values with + − × ÷ and parentheses.",
+    "produces": [
+      "float"
+    ]
+  },
+  {
     "key": "$random",
     "label": "Random Value",
     "description": "A random number within a configured range.",
     "produces": [
+      "integer",
       "float"
     ]
   },
@@ -101,7 +118,10 @@
     "label": "Current Time",
     "description": "The current date and time in a chosen format.",
     "produces": [
-      "datetime"
+      "datetime",
+      "string",
+      "date",
+      "time"
     ]
   },
   {
@@ -164,7 +184,7 @@
   {
     "key": "$componentProp",
     "label": "Component Property",
-    "description": "A value passed in by the parent component or dialog.",
+    "description": "A value passed in by the parent component, or by the action that opened this page overlay.",
     "produces": [
       "any"
     ]
@@ -192,6 +212,14 @@
     "key": "$result",
     "label": "Action Result",
     "description": "A field returned by an action completion handler.",
+    "produces": [
+      "any"
+    ]
+  },
+  {
+    "key": "$repeatItem",
+    "label": "Repeat Item",
+    "description": "The element of the surrounding Repeater copy, one of its members, or its index.",
     "produces": [
       "any"
     ]

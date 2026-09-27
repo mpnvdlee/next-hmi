@@ -1,0 +1,34 @@
+{
+  "$page": {
+    "title": "string",
+    "breadcrumbLabel": "string",
+    "description": "string",
+    "icon": "string",
+    "id": "string",
+    "parentId": "string",
+    "pathString": "string",
+    "depth": "integer",
+    "pathSegments": "string[]"
+  },
+  "$viewport": {
+    "size": "string",
+    "orientation": "string",
+    "width": "integer",
+    "height": "integer"
+  },
+  "$recipe": {
+    "parametersChanged": "boolean",
+    "loaded": "boolean",
+    "activeName": "string"
+  },
+  "$user": {
+    "username": "string",
+    "userList": ["string[]", "string"],
+    "groups": ["string", "string[]"]
+  },
+  "$device": {
+    "hostname": "string",
+    "ipAddress": "string",
+    "macAddress": "string"
+  }
+}

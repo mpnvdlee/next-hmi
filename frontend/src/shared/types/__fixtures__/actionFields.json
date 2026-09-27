@@ -1,0 +1,72 @@
+{
+  "openDialog": {
+    "pageId": "page",
+    "componentProperties": "inputs",
+    "size": "String",
+    "placement": "String",
+    "backdrop": "String",
+    "width": "Integer",
+    "height": "Integer"
+  },
+  "openPageOverlay": {
+    "pageId": "page",
+    "size": "String",
+    "placement": "String",
+    "backdrop": "String",
+    "width": "Integer",
+    "height": "Integer"
+  },
+  "closePageOverlay": { "pageId": "page" },
+  "writeDataVariable": {
+    "target": "target",
+    "value": "writeValue",
+    "onSuccess": "actions",
+    "onFailed": "actions",
+    "onSettled": "actions"
+  },
+  "if": { "condition": "Boolean", "then": "actions", "else": "actions" },
+  "toggleDataVariable": {
+    "target": "target",
+    "onSuccess": "actions",
+    "onFailed": "actions",
+    "onSettled": "actions"
+  },
+  "loginUser": {
+    "username": "String",
+    "password": "String",
+    "onSuccess": "actions",
+    "onFailed": "actions",
+    "onSettled": "actions"
+  },
+  "logoutUser": { "onSuccess": "actions", "onFailed": "actions", "onSettled": "actions" },
+  "recipeLoad": {
+    "datasetId": "String",
+    "verify": "Boolean",
+    "onSuccess": "actions",
+    "onFailed": "actions",
+    "onSettled": "actions"
+  },
+  "recipeSave": {
+    "datasetId": "String",
+    "onSuccess": "actions",
+    "onFailed": "actions",
+    "onSettled": "actions"
+  },
+  "setLanguage": { "language": "String" },
+  "setActiveTheme": { "theme": "String" },
+  "showAlert": {
+    "title": "String",
+    "description": "String",
+    "cancelText": "String",
+    "okText": "String",
+    "dismissible": "Boolean",
+    "onCancel": "actions",
+    "onOk": "actions"
+  },
+  "showToast": {
+    "message": "String",
+    "severity": "String",
+    "discard": "String",
+    "duration": "Integer"
+  }
+}

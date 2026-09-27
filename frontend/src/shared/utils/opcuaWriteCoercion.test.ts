@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import coercionCases from '../types/__fixtures__/opcuaWriteCoercion.json';
 import typeFixture from '../types/__fixtures__/opcuaWriteTypes.json';
+import messageFixture from '../types/__fixtures__/writeCoercionMessages.json';
 import {
   canonicalOpcuaWriteType,
   coerceOpcuaWrite,
   OPCUA_WRITE_TYPE_MATRIX,
+  WRITE_COERCION_MESSAGES,
 } from './opcuaWriteCoercion';
 
 describe('OPC-UA write type matrix', () => {
@@ -110,5 +112,11 @@ describe('OPC-UA write type matrix', () => {
         }),
       ).toEqual({ ok: false, reason: 'value_out_of_range' });
     });
+  });
+});
+
+describe('WRITE_COERCION_MESSAGES', () => {
+  it('matches the fixture the backend reports a rejected write value with', () => {
+    expect(WRITE_COERCION_MESSAGES).toEqual(messageFixture);
   });
 });

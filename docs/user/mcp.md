@@ -13,9 +13,9 @@ One endpoint covers the whole installation:
 | HTTP (default) | `http://<manager-host>:8000/mcp/` |
 | [HTTPS](install.md#https) turned on | `https://<manager-host>:8443/mcp/` |
 
-**Either spelling works.** `/mcp/` is the canonical path; a bare `/mcp` is rewritten onto it rather than redirected, because most MCP clients do not follow redirects. On an older build that still redirects, use the trailing slash.
+**Either spelling works.** `/mcp/` is the canonical path; a bare `/mcp` is rewritten onto it rather than redirected, because most MCP clients do not follow redirects.
 
-**Client and manager on the same machine?** Then `<manager-host>` is `127.0.0.1` — the manager binds loopback only unless `NEXTHMI_HOST` says otherwise, so `http://127.0.0.1:8000/mcp/` is the whole endpoint. The `hmi.local` examples further down are for the case where the client sits on another machine.
+**Client and manager on the same machine?** Then `<manager-host>` is `127.0.0.1` and `http://127.0.0.1:8000/mcp/` is the whole endpoint. From another machine, use the manager's name or address — the manager binds every interface unless `NEXTHMI_HOST` says otherwise, and every request to `/mcp` has to carry a token either way. The `hmi.local` examples further down are for that case.
 
 > [!IMPORTANT]
 > With HTTPS on, port `8000` answers with a `307` redirect rather than the app — and most MCP clients do not follow redirects. Point the client at the HTTPS port directly. See [Ports](install.md#ports). If the certificate is the self-signed one the manager generated, the client must be told to trust it; a client that validates certificates will otherwise refuse to connect.
@@ -38,7 +38,7 @@ Pairing and every tool call name a project by **id**, not by its display name. T
 
 ### 3. Pair a token
 
-A headless client (an agent runner, a desktop assistant) has no manager session, so it authenticates with a bearer token. There is no button for this yet — mint one by presenting the **device-admin password**, the one you set on the dashboard at first launch (see [Managing projects](install.md#managing-projects)); it is the same password that unlocks the dashboard, not a project's operator password.
+A headless client (an agent runner, a desktop assistant) has no manager session, so it authenticates with a bearer token. Tokens are minted over the API, not from a button: present the **device-admin password**, the one you set on the dashboard at first launch (see [Managing projects](install.md#managing-projects)); it is the same password that unlocks the dashboard, not a project's operator password.
 
 ```bash
 curl -X POST http://localhost:8000/api/manager/mcp/pair \
@@ -153,7 +153,7 @@ They are ordinary instructions, not privileged calls — the agent still works t
 | *MCP writes are disabled for project '…'* | The token is fine, the project's **MCP enabled** tick is not. Step 1 above. |
 | *Project '…' not found* while pairing | The `projectId` isn't a registered project id — you probably sent the display name. Step 2 above. |
 | *Too many failed attempts. Try again in Ns.* | Wrong device-admin password on `/pair`; the same lockout that guards the dashboard login. Wait it out. |
-| `404` on `GET`, `405` on `POST`, or a bare `307` | The URL reached the router but not the transport — add the trailing slash (`/mcp/`). Older builds redirect instead of rewriting, and a proxy in front can rewrite the path too. |
+| `404` on `GET`, `405` on `POST`, or a bare `307` | The URL reached the router but not the transport — add the trailing slash (`/mcp/`). A proxy in front can rewrite the path too. |
 | Connection refused on `8443` | HTTPS was never turned on, so nothing listens there. Use the `8000` HTTP endpoint, or enable [HTTPS](install.md#https) first. |
 | Host name doesn't resolve at all | `hmi.local` needs mDNS on the *client* — Bonjour on Windows, `avahi` on Linux. Use the IP address or a `hosts` entry instead. |
 | Client cannot connect at all, no HTTP status | Usually the redirect or the certificate: HTTPS moves the app to `8443`, and a generated self-signed certificate isn't trusted by default. See the endpoint table above. |

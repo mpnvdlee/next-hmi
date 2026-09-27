@@ -277,6 +277,12 @@
   color: var(--cfg-danger);
 }
 
+/* Why a selection of the right type is refused anyway — its access. */
+.editor-binding-req-reason {
+  color: var(--cfg-danger);
+  font-size: var(--cfg-font-size-base);
+}
+
 .editor-binding-char-row--unused {
   opacity: 0.4;
 }

@@ -80,6 +80,7 @@ export function StringExprEditor({
           onOpenBindingPicker,
           (b) => updateWildcard(key, { $var: b }),
           wcValue,
+          true,
         );
 
         const path = withSegs(parent, '$stringExpr', 'wildcards', key);

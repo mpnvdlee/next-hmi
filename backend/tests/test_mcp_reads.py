@@ -46,11 +46,15 @@ def _isolated_workspace(monkeypatch, tmp_path: Path, live_project_root: Path):
 
 def test_pages_list_returns_summaries_from_index():
     (storage.active_config_dir() / "config.json").write_text(
-        json.dumps({"pages": [{"id": "page-home", "type": "page"}]}),
+        json.dumps({
+            "pages": [{"id": "page-home", "type": "page"}],
+            "dialogs": [{"id": "motor-detail", "type": "page"}],
+        }),
         encoding="utf-8",
     )
     result = pages_tools.pages_list()
-    assert {"id": "page-home", "type": "page"} in result["items"]
+    assert {"id": "page-home", "type": "page", "root": "pages"} in result["items"]
+    assert {"id": "motor-detail", "type": "page", "root": "dialogs"} in result["items"]
 
 
 def test_pages_list_handles_missing_config():

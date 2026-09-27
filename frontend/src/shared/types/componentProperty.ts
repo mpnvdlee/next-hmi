@@ -1,9 +1,10 @@
 /**
- * Component Property — declarative schema for a parameter that a widget or dialog
- * accepts from its caller. Resolved at runtime via `{ $componentProp: "key" }`.
+ * Component Property — declarative schema for a parameter that a component, page
+ * or page group accepts from its caller. Resolved at runtime via `{ $componentProp: "key" }`.
  */
 
 import type { SchemaField } from './widgetSchema';
+import { parseTypeToken } from './varType';
 
 /**
  * A node in the visual struct-schema tree editor.
@@ -22,7 +23,8 @@ export interface StructSchemaNode {
 }
 
 /**
- * Schema definition for a single component property declared by a widget or dialog.
+ * Schema definition for a single component property declared by a component, page
+ * or page group.
  *
  * Mirrors `SchemaField` minus the component-only fields (`event`, `visibleWhen`)
  * and `requiredFields` — for component properties, the rich `structSchema` tree is
@@ -35,7 +37,46 @@ export type ComponentPropertySchema = Omit<
 > & {
   /** Rich tree definition for struct-type properties, edited via StructSchemaModal. */
   structSchema?: StructSchemaNode[];
+  /** For a `select` property: what its options hold. Absent reads as `string`,
+   *  which is what every select stored before the others existed. */
+  optionType?: ComponentPropertyOptionType;
 };
+
+/** The value kinds a `select` property's options may hold. `loc` is a string
+ *  whose options are translations rather than literals. */
+export type ComponentPropertyOptionType = 'string' | 'integer' | 'float' | 'boolean' | 'loc';
+
+/** Base type each option kind resolves to — what source rules and the binding
+ *  picker follow once the editor-only `select` wrapper is gone. */
+const OPTION_TYPE_BASE: Record<ComponentPropertyOptionType, string> = {
+  string: 'string',
+  integer: 'integer',
+  float: 'float',
+  boolean: 'boolean',
+  loc: 'string',
+};
+
+/** What an option of each kind holds before anything is filled in. A list that
+ *  changes kind empties its rows to these, and a freshly added row starts on
+ *  one: `loc` has no blank literal at all — a translation is picked or absent. */
+export const OPTION_TYPE_EMPTY_VALUE: Record<
+  ComponentPropertyOptionType,
+  string | number | boolean | undefined
+> = {
+  string: '',
+  integer: 0,
+  float: 0,
+  boolean: false,
+  loc: undefined,
+};
+
+export const OPTION_TYPE_OPTIONS: { value: ComponentPropertyOptionType; label: string }[] = [
+  { value: 'string', label: 'String' },
+  { value: 'integer', label: 'Integer' },
+  { value: 'float', label: 'Float' },
+  { value: 'boolean', label: 'Boolean' },
+  { value: 'loc', label: 'Localisable text' },
+];
 
 export const VALUE_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: 'string', label: 'String' },
@@ -50,10 +91,32 @@ export const VALUE_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: 'select', label: 'Select (enum)' },
   { value: 'icon', label: 'Icon' },
   { value: 'image', label: 'Image' },
+  { value: 'video', label: 'Video' },
   { value: 'struct', label: 'Struct' },
   { value: 'actions', label: 'Actions' },
   { value: 'widgets', label: 'Widget slot' },
 ];
+
+/**
+ * A type token as the editor shows it — capitalised, whatever case it was
+ * authored in: `float` → `Float`, `string[]` → `String[]`, `struct` → `Struct`.
+ * A struct's own name (`Motor`) is shown as it is.
+ */
+export function typeLabel(token: string): string {
+  const array = token.endsWith('[]');
+  const bare = array ? token.slice(0, -2) : token;
+  const parsed = parseTypeToken(bare);
+  const label =
+    parsed.kind === 'scalar' && parsed.base
+      ? parsed.base
+      : (VALUE_TYPE_OPTIONS.find((o) => o.value === bare.toLowerCase())?.label ??
+        bare.charAt(0).toUpperCase() + bare.slice(1));
+  return array ? `${label}[]` : label;
+}
+
+/** Property types that never resolve to a single literal value, so they take
+ *  neither a write flag nor a default. */
+export const VALUELESS_PROPERTY_TYPES = new Set(['struct', 'actions', 'widgets']);
 
 /**
  * Recursively convert a StructSchemaNode tree to the RequiredFieldEntry array
@@ -70,7 +133,8 @@ function structSchemaToRequiredFields(nodes: StructSchemaNode[]): SchemaField['r
       };
     }
     const entry: Record<string, unknown> = { name: node.name };
-    if (node.type) entry.type = node.type;
+    // An array row holds a list of its `type`, which a scalar of it never fits.
+    if (node.type) entry.type = node.kind === 'array' ? `${node.type}[]` : node.type;
     if (node.write) entry.write = true;
     return entry as { name: string };
   });
@@ -78,7 +142,7 @@ function structSchemaToRequiredFields(nodes: StructSchemaNode[]): SchemaField['r
 
 /** Convert a ComponentPropertySchema to a SchemaField for the component registry / editors. */
 export function componentPropertyToSchemaField(prop: ComponentPropertySchema): SchemaField {
-  const { structSchema, ...rest } = prop;
+  const { structSchema, optionType, ...rest } = prop;
   // A widgets property resolves to no value at all — its content is the
   // instance's own children. Anything hand-edited onto it (a default, a write
   // flag) would otherwise reach `withDeclaredDefaults` and be injected as the
@@ -90,17 +154,18 @@ export function componentPropertyToSchemaField(prop: ComponentPropertySchema): S
     ...rest,
     requiredFields: structSchema?.length ? structSchemaToRequiredFields(structSchema) : undefined,
   };
-  // `select` is authoring sugar for a string with a dropdown editor; normalise it
-  // to the canonical base-type + format so source rules follow the base type.
+  // `select` is authoring sugar for a dropdown editor over an ordinary value;
+  // normalise it to the canonical base-type + format so source rules follow the
+  // base type rather than the editor control.
   if (field.type === 'select') {
-    field.type = 'string';
+    field.type = OPTION_TYPE_BASE[optionType ?? 'string'] ?? 'string';
     field.format = 'select';
   }
   return field;
 }
 
 /**
- * Rename references to a component-property key in a widget/dialog subtree.
+ * Rename references to a component-property key in a widget subtree.
  * Slash paths retain their suffix: `motor/speed` becomes `machine/speed`.
  */
 export function renameComponentPropertyReferences<T>(value: T, oldKey: string, newKey: string): T {

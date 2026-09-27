@@ -13,10 +13,14 @@
  * Style: zero style={} props. All classes are cfg-prop-* or editor-props-*.
  */
 
-import { useContext, useEffect, useMemo, useRef } from 'react';
+import { useContext, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useInRouterContext, useNavigate } from 'react-router-dom';
+import { editorPath } from '@shared/utils/runtimeBase';
+import { useComponentEditorStore } from '@config/store/componentEditorStore';
 import { FieldPathContext } from '../../ui/FieldGroup/fieldPathContext';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { useConfigStore } from '@shared/store/configStore';
+import RepeatEditorScopeProvider from '../PropertySourceEditor/RepeatEditorScopeProvider';
 import { findWidgetsByIds } from '@shared/store/configStoreHelpers';
 import { widgetRegistry } from '@hmi/registry/widgetRegistry';
 import {
@@ -31,15 +35,16 @@ import type {
   PageGroupConfig,
   WidgetConfig,
   LayoutConfig,
-  DialogConfig,
   GlobalEventsConfig,
   ActionsConfig,
+  PageEventsConfig,
   ShellConfig,
   ShellRegionConfig,
   ShellRegionId,
   LockedFeedback,
 } from '@shared/types/config';
 import { LOCKED_FEEDBACK_MODES } from '@shared/types/config';
+import type { ComponentPropertySchema } from '@shared/types/componentProperty';
 import PanelHeader from '../../ui/PanelHeader';
 import PropRow from '../../ui/PropRow';
 import PathInputField from '../../ui/PathInputField';
@@ -48,17 +53,24 @@ import TextField from '../../ui/TextField';
 import { LengthField } from '@config/utils/LengthField';
 import { groupSchemaKeys } from '@config/utils/schemaGroups';
 import { varBindingOf } from '../bindingPickerUtils';
+import { slotFilter } from '../PropertySourceEditor/editors/utils';
 import CollapsibleSection from '../../ui/CollapsibleSection';
 import BoolButtonGroup from '../../ui/BoolButtonGroup';
 import Select from '../../ui/Select';
 import SchemaFieldRow from '../../ui/SchemaFieldRow';
 import {
   findComponentById,
-  findContainerComps,
   findInPages,
+  type FindInPagesResult,
   flattenComponents,
+  isFound,
 } from '@shared/utils/widgetTree';
-import { findOwningPage, findPageById, resolvePageTitle } from '@shared/utils/pageTree';
+import {
+  allPageRootNodes,
+  findOwningPage,
+  findPageById,
+  resolvePageTitle,
+} from '@shared/utils/pageTree';
 import { usePanelDiagnostics, type DiagnosticsArtifact } from '@config/hooks/usePanelDiagnostics';
 import { isBuiltinIconId } from '@shared/utils/phosphorIcons';
 import { getEdition } from '@shared/utils/runtimeBase';
@@ -72,11 +84,12 @@ import ComponentPropertiesEditor from '../../componentProperties/ComponentProper
 import { ComponentPropertySchemaContext } from '../PropertySourceEditor/componentPropertySchemaContext';
 
 import { LayoutFields } from '../../ui/LayoutFields';
+import { usesFlexLayout } from '@shared/utils/parentFlow';
 import { CONTAINER_DEFAULT_TOKENS } from '../../ui/LayoutFields/containerDefaultTokens';
 import { parseTokenVar, usePanelTokenValues } from '@shared/utils/themeDefaultHint';
 import { WidgetOptionsContext } from '../WidgetOptionsContext';
 import type { ComponentOption } from '../WidgetOptionsContext';
-import { SOURCE_CAPABLE_TYPES } from '@hmi/utils/propertySourceRules';
+import { bindsVariable } from '@hmi/utils/propertySourceRules';
 import { primaryType } from '@shared/utils/valueTypes';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
 import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
@@ -84,15 +97,6 @@ import { detectCopyPasteKey } from '@shared/utils/domEvent';
 import { EDITOR_NODE_IDS } from '@shared/constants/editorSentinels';
 
 const SECTION_IDS = new Set<string>([EDITOR_NODE_IDS.PAGES, EDITOR_NODE_IDS.DIALOGS]);
-
-const SHELL_REGION_IDS: ShellRegionId[] = ['header', 'leftSidebar', 'rightSidebar', 'footer'];
-
-const SHELL_OVERRIDE_LABELS: Record<ShellRegionId, string> = {
-  header: 'Header',
-  leftSidebar: 'Left sidebar',
-  rightSidebar: 'Right sidebar',
-  footer: 'Footer',
-};
 
 /** Free-text asset path with the standard edit/clear affordances, so a URL stays
  *  typable without a bespoke button row. */
@@ -218,7 +222,9 @@ function PropertiesPanelBody() {
   const updateComponents = useConfigStore((s) => s.updateComponents);
   const updatePage = useConfigStore((s) => s.updatePage);
   const updatePageGroup = useConfigStore((s) => s.updatePageGroup);
-  const renameDialog = useConfigStore((s) => s.renameDialog);
+  // Both page-tree roots in one list: a page panel, a widget's owning page and
+  // its option list resolve the same way whichever root the page sits in.
+  const pageNodes = useMemo(() => allPageRootNodes({ pages, dialogs }), [pages, dialogs]);
 
   // Realtime build diagnostics for whichever artifact `selectedId` currently
   // resolves to — mirrors the branching below, but must run unconditionally
@@ -228,7 +234,7 @@ function PropertiesPanelBody() {
     [header, footer, leftSidebar, rightSidebar, shell],
   );
   // Reuses the previous {kind, draft} wrapper when both are unchanged, so an
-  // unrelated store update (e.g. editing a different page while this dialog's
+  // unrelated store update (e.g. editing a different page while this page's
   // panel is open) doesn't allocate a new object and re-trigger
   // usePanelDiagnostics' effect (keyed on referential identity) for content
   // that didn't actually change.
@@ -240,23 +246,17 @@ function PropertiesPanelBody() {
         next = { kind: 'globalEvents', id: 'globalEvents', draft: globalEvents };
       } else if (SHELL_AREA_PANELS[selectedId]) {
         next = { kind: 'shell', id: 'shell', draft: shellDraft };
+      } else if (
+        findComponentById(header, selectedId) ||
+        findComponentById(footer, selectedId) ||
+        findComponentById(leftSidebar, selectedId) ||
+        findComponentById(rightSidebar, selectedId)
+      ) {
+        next = { kind: 'shell', id: 'shell', draft: shellDraft };
       } else {
-        const dialog = dialogs.find(
-          (d) => d.id === selectedId || findComponentById(d.widgets, selectedId),
-        );
-        if (dialog) {
-          next = { kind: 'dialog', id: dialog.id, draft: dialog };
-        } else if (
-          findComponentById(header, selectedId) ||
-          findComponentById(footer, selectedId) ||
-          findComponentById(leftSidebar, selectedId) ||
-          findComponentById(rightSidebar, selectedId)
-        ) {
-          next = { kind: 'shell', id: 'shell', draft: shellDraft };
-        } else {
-          const owningPage = findPageById(pages, selectedId) ?? findOwningPage(pages, selectedId);
-          if (owningPage) next = { kind: 'page', id: owningPage.id, draft: owningPage };
-        }
+        const owningPage =
+          findPageById(pageNodes, selectedId) ?? findOwningPage(pageNodes, selectedId);
+        if (owningPage) next = { kind: 'page', id: owningPage.id, draft: owningPage };
       }
     }
     const prev = diagnosticsArtifactRef.current;
@@ -266,26 +266,29 @@ function PropertiesPanelBody() {
         : next;
     diagnosticsArtifactRef.current = stable;
     return stable;
-  }, [
-    selectedId,
-    dialogs,
-    header,
-    footer,
-    leftSidebar,
-    rightSidebar,
-    pages,
-    globalEvents,
-    shellDraft,
-  ]);
+  }, [selectedId, header, footer, leftSidebar, rightSidebar, pageNodes, globalEvents, shellDraft]);
   usePanelDiagnostics(diagnosticsArtifact);
 
   const headerOptions = useMemo(() => buildComponentOptions(header), [header]);
   const footerOptions = useMemo(() => buildComponentOptions(footer), [footer]);
   const leftSidebarOptions = useMemo(() => buildComponentOptions(leftSidebar), [leftSidebar]);
   const rightSidebarOptions = useMemo(() => buildComponentOptions(rightSidebar), [rightSidebar]);
+  // One walk answers every question the panel asks about the selection: which
+  // node it is, what contains it, and which root it lives under. Searching
+  // `pages` first then `dialogs` visits the same nodes in the same order as one
+  // walk over both roots, so the match is unchanged. This runs on every
+  // keystroke in the panel, and each walk descends every loaded page's widgets.
+  const selection = useMemo(() => {
+    if (!selectedId) return { hit: {} as FindInPagesResult, inDialogs: false };
+    const inPages = findInPages(pages, selectedId);
+    if (isFound(inPages)) return { hit: inPages, inDialogs: false };
+    const inDialogsRoot = findInPages(dialogs, selectedId);
+    return { hit: inDialogsRoot, inDialogs: isFound(inDialogsRoot) };
+  }, [pages, dialogs, selectedId]);
+
   const pageOptions = useMemo(
-    () => (selectedId ? buildComponentOptions(findContainerComps(pages, selectedId)) : []),
-    [pages, selectedId],
+    () => buildComponentOptions(selection.hit.container ?? []),
+    [selection],
   );
 
   const areas = useMemo(
@@ -357,21 +360,24 @@ function PropertiesPanelBody() {
     );
   }
 
-  // Dialog by id
-  const dialog = dialogs.find((p) => p.id === selectedId);
-  if (dialog) {
-    return <DialogPanel dialog={dialog} onRename={(title) => renameDialog(dialog.id, title)} />;
-  }
-
-  // Pages / components inside pages
-  const { page, pageGroup, comp: pageComp } = findInPages(pages, selectedId);
+  // Pages / components inside pages, in either root. Only the Dialogs folder's
+  // nodes take input parameters and have overlay settings of their own.
+  const { page, pageGroup, comp: pageComp, ownerPage, groupTrail } = selection.hit;
+  const inDialogs = selection.inDialogs;
   if (page) {
-    return <PagePanel page={page} onRename={(title) => updatePage(page.id, { title })} />;
+    return (
+      <PagePanel
+        page={page}
+        inDialogs={inDialogs}
+        onRename={(title) => updatePage(page.id, { title })}
+      />
+    );
   }
   if (pageGroup) {
     return (
       <PageGroupPanel
         pageGroup={pageGroup}
+        inDialogs={inDialogs}
         onRename={(title) => updatePageGroup(pageGroup.id, { title })}
       />
     );
@@ -379,7 +385,13 @@ function PropertiesPanelBody() {
   if (pageComp) {
     return (
       <WidgetOptionsContext.Provider value={pageOptions}>
-        <ComponentPanel key={pageComp.id} comp={pageComp} updateComponent={updateComponent} />
+        <PageComponentPropertyScope
+          page={ownerPage}
+          groupTrail={groupTrail}
+          takesInputs={inDialogs}
+        >
+          <ComponentPanel key={pageComp.id} comp={pageComp} updateComponent={updateComponent} />
+        </PageComponentPropertyScope>
       </WidgetOptionsContext.Provider>
     );
   }
@@ -432,81 +444,92 @@ function PropertiesPanelBody() {
     );
   }
 
-  // Components inside dialogs
-  for (const p of dialogs) {
-    const comp = findComponentById(p.widgets, selectedId);
-    if (comp) {
-      return <DialogComponentPanel dialog={p} comp={comp} updateComponent={updateComponent} />;
-    }
-  }
-
   return <div className="cfg-panel-empty">Component not found.</div>;
 }
 
-function DialogComponentPanel({
-  dialog,
-  comp,
-  updateComponent,
+/** Merge declarations from innermost scope outwards — the first chain entry to
+ *  declare a name owns it, matching what the runtime resolves. */
+function mergeDeclarations(
+  chain: (Record<string, ComponentPropertySchema> | undefined)[],
+): Record<string, ComponentPropertySchema> {
+  const merged: Record<string, ComponentPropertySchema> = {};
+  for (const declared of chain) {
+    for (const [key, schema] of Object.entries(declared ?? {})) {
+      if (!(key in merged)) merged[key] = schema;
+    }
+  }
+  return merged;
+}
+
+/**
+ * Publishes the input parameters a widget can actually read to the source
+ * picker, so it can bind `$componentProp`. That is the owning page's
+ * declarations over its ancestor page-groups' — page shadows group, inner group
+ * shadows outer. A widget in page-group chrome renders around pages rather than
+ * inside one, so it gets its group chain alone. Only the Dialogs folder's pages
+ * take input parameters, so anywhere else the scope is empty whatever the
+ * nodes declare.
+ *
+ * A scope that declares nothing publishes nothing: consumers key on the context
+ * being present, not on its contents, so an empty frame would offer
+ * `$componentProp` on every widget of every page and flip `SlotNameField`'s
+ * hint to the component-definition wording on pages that can never satisfy it.
+ */
+function PageComponentPropertyScope({
+  page,
+  groupTrail,
+  takesInputs,
+  children,
 }: {
-  dialog: DialogConfig;
-  comp: WidgetConfig;
-  updateComponent: (id: string, patch: Patch) => void;
+  page: PageConfig | undefined;
+  groupTrail: PageGroupConfig[] | undefined;
+  takesInputs: boolean;
+  children: ReactNode;
 }) {
-  const options = useMemo(() => buildComponentOptions(dialog.widgets), [dialog.widgets]);
-  const componentPropertySchemaValue = useMemo(
-    () => ({ properties: dialog.componentProperties ?? {} }),
-    [dialog.componentProperties],
-  );
+  const value = useMemo(() => {
+    if (!takesInputs) return null;
+    const declared = mergeDeclarations([
+      page?.componentProperties,
+      ...[...(groupTrail ?? [])].reverse().map((group) => group.componentProperties),
+    ]);
+    return Object.keys(declared).length > 0 ? { properties: declared } : null;
+  }, [page, groupTrail, takesInputs]);
   return (
-    <WidgetOptionsContext.Provider value={options}>
-      <ComponentPropertySchemaContext.Provider value={componentPropertySchemaValue}>
-        <FieldPathContext.Provider value={[dialog.title]}>
-          <ComponentPanel key={comp.id} comp={comp} updateComponent={updateComponent} />
-        </FieldPathContext.Provider>
-      </ComponentPropertySchemaContext.Provider>
-    </WidgetOptionsContext.Provider>
+    <ComponentPropertySchemaContext.Provider value={value}>
+      {children}
+    </ComponentPropertySchemaContext.Provider>
   );
 }
 
-// ── DialogPanel ───────────────────────────────────────────────────────────────
+// ── OverlaySection ───────────────────────────────────────────────────────────
+// How the overlay card of a Dialogs-folder page or group closes. The node the
+// Open Page Overlay action names decides it; absent means yes, as for any page
+// opened as an overlay.
 
-function DialogPanel({
-  dialog,
-  onRename,
+function OverlaySection({
+  node,
+  onPatch,
 }: {
-  dialog: DialogConfig;
-  onRename: (t: string) => void;
+  node: { showCloseButton?: boolean; closeOnBackgroundPress?: boolean };
+  onPatch: (patch: { showCloseButton?: boolean; closeOnBackgroundPress?: boolean }) => void;
 }) {
-  const updateDialog = useConfigStore((s) => s.updateDialog);
-
   return (
-    <FieldPathContext.Provider value={[dialog.title]}>
-      <PanelHeader kind="Dialog" name={dialog.title} />
-      <div className="cfg-section">
-        <div className="cfg-section__title">Dialog</div>
-        <PropRow label="Title" sourceless>
-          <TextField value={dialog.title} onCommit={onRename} />
-        </PropRow>
-        <PropRow label="Close on backdrop">
-          <BoolButtonGroup
-            value={dialog.closeOnBackgroundPress ?? false}
-            onChange={(v) => updateDialog(dialog.id, { closeOnBackgroundPress: v })}
-          />
-        </PropRow>
-        <PropRow label="Show close button">
-          <BoolButtonGroup
-            value={dialog.showCloseButton ?? false}
-            onChange={(v) => updateDialog(dialog.id, { showCloseButton: v })}
-            labels={['Show', 'Hide']}
-          />
-        </PropRow>
-      </div>
-      <ComponentPropertiesEditor
-        ownerName={dialog.title}
-        properties={dialog.componentProperties ?? {}}
-        onChange={(next) => updateDialog(dialog.id, { componentProperties: next })}
-      />
-    </FieldPathContext.Provider>
+    <div className="cfg-section">
+      <div className="cfg-section__title">Overlay</div>
+      <PropRow label="Show close button">
+        <BoolButtonGroup
+          value={node.showCloseButton !== false}
+          onChange={(v) => onPatch({ showCloseButton: v })}
+          labels={['Show', 'Hide']}
+        />
+      </PropRow>
+      <PropRow label="Close on backdrop">
+        <BoolButtonGroup
+          value={node.closeOnBackgroundPress !== false}
+          onChange={(v) => onPatch({ closeOnBackgroundPress: v })}
+        />
+      </PropRow>
+    </div>
   );
 }
 
@@ -517,7 +540,17 @@ const PAGE_TITLE_SCHEMA: SchemaField = {
   label: 'Title',
 };
 
-function PagePanel({ page, onRename }: { page: PageConfig; onRename: (t: string) => void }) {
+function PagePanel({
+  page,
+  inDialogs,
+  onRename,
+}: {
+  page: PageConfig;
+  /** In the Dialogs folder: overlay settings and input parameters instead of
+   *  the navigation-only metadata. */
+  inDialogs: boolean;
+  onRename: (t: string) => void;
+}) {
   const updatePage = useConfigStore((s) => s.updatePage);
   const setPageSections = useConfigStore((s) => s.setPageSections);
 
@@ -555,14 +588,11 @@ function PagePanel({ page, onRename }: { page: PageConfig; onRename: (t: string)
   }
 
   return (
-    // The page owns its shellOverride findings — the backend stamps the page id
-    // as their owner, since the override is edited here and not in the
-    // project-wide Shell area panel (see `_synthetic_owner`).
     <PanelScopeContext.Provider value={page.id}>
       <FieldPathContext.Provider value={[resolvePageTitle(page.title)]}>
-        <PanelHeader kind="Page" name={resolvePageTitle(page.title)} />
+        <PanelHeader kind={inDialogs ? 'Dialog' : 'Page'} name={resolvePageTitle(page.title)} />
         <div className="cfg-section">
-          <div className="cfg-section__title">Page</div>
+          <div className="cfg-section__title">{inDialogs ? 'Dialog' : 'Page'}</div>
           <SchemaFieldRow
             propKey="__title__"
             schema={PAGE_TITLE_SCHEMA}
@@ -588,12 +618,29 @@ function PagePanel({ page, onRename }: { page: PageConfig; onRename: (t: string)
             />
           </PropRow>
         </div>
-        <PageMetadataSection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
-        <MainSection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
-        <PageShellOverrideSection
-          override={page.shellOverride ?? {}}
-          onPatch={(patch) => updatePage(page.id, { shellOverride: patch })}
+        {inDialogs ? (
+          <OverlaySection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
+        ) : (
+          <>
+            <PageMetadataSection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
+            <MainSection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
+          </>
+        )}
+        <PageEventsSection
+          node={page}
+          kindLabel={inDialogs ? 'Dialog' : 'Page'}
+          inputs={inDialogs ? page.componentProperties : undefined}
+          onPatch={(patch) => updatePage(page.id, patch)}
         />
+        {inDialogs && (
+          <ComponentPropertiesEditor
+            ownerName={resolvePageTitle(page.title)}
+            title="Input Parameters"
+            itemNoun="input parameter"
+            properties={page.componentProperties ?? {}}
+            onChange={(next) => updatePage(page.id, { componentProperties: next })}
+          />
+        )}
       </FieldPathContext.Provider>
     </PanelScopeContext.Provider>
   );
@@ -620,52 +667,6 @@ function MainSection({
         <ColorInput value={node.mainBackground} onChange={(v) => onPatch({ mainBackground: v })} />
       </PropRow>
     </div>
-  );
-}
-
-function PageShellOverrideSection({
-  override,
-  onPatch,
-}: {
-  override: Partial<ShellConfig>;
-  onPatch: (next: Partial<ShellConfig> | undefined) => void;
-}) {
-  function patchRegion(id: ShellRegionId, regionPatch: Partial<ShellRegionConfig> | undefined) {
-    const current = override[id] ?? {};
-    const next: ShellRegionConfig = regionPatch ? { ...current, ...regionPatch } : {};
-    // Drop the region key entirely when its patch ends up empty so the
-    // saved config stays minimal.
-    const cleaned: ShellRegionConfig = Object.fromEntries(
-      Object.entries(next).filter(([, v]) => v !== undefined),
-    ) as ShellRegionConfig;
-    const merged: Partial<ShellConfig> = { ...override };
-    if (Object.keys(cleaned).length === 0) delete merged[id];
-    else merged[id] = cleaned;
-    onPatch(Object.keys(merged).length === 0 ? undefined : merged);
-  }
-
-  // One collapsed section per region rather than a flat list: the same field
-  // set as the Shell area panel, four times over, would bury the rest of the
-  // page panel. Collapsed, an overridden region still reads as such from its
-  // title.
-  return (
-    <>
-      {SHELL_REGION_IDS.map((id) => (
-        <CollapsibleSection
-          key={id}
-          title={`${SHELL_OVERRIDE_LABELS[id]} (this page only)`}
-          defaultCollapsed
-        >
-          <ShellRegionFields
-            id={id}
-            config={override[id] ?? {}}
-            onPatch={(patch) => patchRegion(id, patch)}
-            pathPrefix={[id]}
-            inheritable
-          />
-        </CollapsibleSection>
-      ))}
-    </>
   );
 }
 
@@ -765,41 +766,178 @@ function PageMetadataSection({
   );
 }
 
+// ── WidgetKind ───────────────────────────────────────────────────────────────
+// Whether the selection is a built-in/custom widget or an instance of a project
+// component — they edit in different places, and the panel alone does not say.
+
+const COMPONENT_TYPE_PREFIX = '$component:';
+
+function WidgetKind({ type, typeName }: { type: string; typeName: string }) {
+  // Unit tests mount the panel without a router; the link then degrades to text.
+  const routed = useInRouterContext();
+  if (!type.startsWith(COMPONENT_TYPE_PREFIX)) return <>Widget · {typeName}</>;
+  const componentId = type.slice(COMPONENT_TYPE_PREFIX.length);
+  return routed ? (
+    <ComponentLink componentId={componentId} typeName={typeName} />
+  ) : (
+    <>Component · {typeName}</>
+  );
+}
+
+function ComponentLink({ componentId, typeName }: { componentId: string; typeName: string }) {
+  const navigate = useNavigate();
+  return (
+    <button
+      type="button"
+      className="cfg-panel-header__type-link"
+      title="Open in the component editor"
+      onClick={() => {
+        navigate(editorPath('/components'));
+        useComponentEditorStore.getState().openTab(componentId);
+      }}
+    >
+      Component · {typeName} ↗
+    </button>
+  );
+}
+
+// ── PageEventsSection ────────────────────────────────────────────────────────
+// The lifecycle events a page or page-group node carries. Same wiring as
+// GlobalEventsPanel — an ActionsInput per event — but patched onto the node
+// instead of the singleton config.
+
+function PageEventsSection({
+  node,
+  kindLabel,
+  inputs,
+  onPatch,
+}: {
+  node: { events?: PageEventsConfig };
+  /** A Dialogs-folder node's input parameters — its event actions run with
+   *  them in scope, so their fields may read them. */
+  inputs?: Record<string, ComponentPropertySchema>;
+  /** 'Page' / 'Group', or 'Dialog' / 'Dialog Group' in the Dialogs folder —
+   *  the noun the event labels read with. */
+  kindLabel: string;
+  onPatch: (patch: Record<string, unknown>) => void;
+}) {
+  const events = node.events ?? {};
+
+  function handleChange(eventKey: keyof PageEventsConfig, value: unknown) {
+    const actions = (value as ActionsConfig | undefined)?.[eventKey];
+    const next: PageEventsConfig = { ...events };
+    // An empty list is the absence of a handler — drop the key rather than
+    // persisting `[]`, and drop `events` entirely once it holds nothing.
+    if (actions && actions.length > 0) next[eventKey] = actions;
+    else delete next[eventKey];
+    onPatch({ events: Object.keys(next).length > 0 ? next : undefined });
+  }
+
+  const inputScope = useMemo(
+    () => (inputs && Object.keys(inputs).length > 0 ? { properties: inputs } : null),
+    [inputs],
+  );
+
+  return (
+    <ComponentPropertySchemaContext.Provider value={inputScope}>
+      <div className="cfg-section">
+        <div className="cfg-section__title">Events</div>
+        {(
+          [
+            { eventKey: 'onOpen', label: `${kindLabel} Open` },
+            { eventKey: 'onClose', label: `${kindLabel} Close` },
+          ] as const
+        ).map(({ eventKey, label }) => (
+          <div className="cfg-field-group" key={eventKey}>
+            <ActionsInput
+              value={{ [eventKey]: events[eventKey] ?? [] } as ActionsConfig}
+              onChange={(v) => handleChange(eventKey, v)}
+              eventKey={eventKey}
+              eventLabel={label}
+              headerTitle={label}
+            />
+          </div>
+        ))}
+      </div>
+    </ComponentPropertySchemaContext.Provider>
+  );
+}
+
 function PageGroupPanel({
   pageGroup,
+  inDialogs,
   onRename,
 }: {
   pageGroup: PageGroupConfig;
+  /** In the Dialogs folder: overlay settings and input parameters instead of
+   *  the navigation-only metadata. */
+  inDialogs: boolean;
   onRename: (t: string) => void;
 }) {
   const updatePageGroup = useConfigStore((s) => s.updatePageGroup);
 
   return (
-    <FieldPathContext.Provider value={[resolvePageTitle(pageGroup.title)]}>
-      <PanelHeader kind="Page Group" name={resolvePageTitle(pageGroup.title)} />
-      <div className="cfg-section">
-        <div className="cfg-section__title">Page Group</div>
-        <SchemaFieldRow
-          propKey="__title__"
-          schema={PAGE_TITLE_SCHEMA}
-          sourceless
-          value={pageGroup.title}
-          onChange={(v) => onRename(v as string)}
+    // The group owns its event findings — the backend stamps the group id as
+    // their owner, the same way a page owns its own (see `_synthetic_owner`).
+    <PanelScopeContext.Provider value={pageGroup.id}>
+      <FieldPathContext.Provider value={[resolvePageTitle(pageGroup.title)]}>
+        <PanelHeader
+          kind={inDialogs ? 'Dialog Group' : 'Page Group'}
+          name={resolvePageTitle(pageGroup.title)}
         />
-        <PropRow label="Show child pages in menu">
-          <BoolButtonGroup
-            value={pageGroup.showChildPagesInMenu === true}
-            onChange={(v) => updatePageGroup(pageGroup.id, { showChildPagesInMenu: v })}
-            labels={['Show', 'Hide']}
+        <div className="cfg-section">
+          <div className="cfg-section__title">{inDialogs ? 'Dialog Group' : 'Page Group'}</div>
+          <SchemaFieldRow
+            propKey="__title__"
+            schema={PAGE_TITLE_SCHEMA}
+            sourceless
+            value={pageGroup.title}
+            onChange={(v) => onRename(v as string)}
           />
-        </PropRow>
-      </div>
-      <PageMetadataSection
-        node={pageGroup}
-        onPatch={(patch) => updatePageGroup(pageGroup.id, patch)}
-      />
-      <MainSection node={pageGroup} onPatch={(patch) => updatePageGroup(pageGroup.id, patch)} />
-    </FieldPathContext.Provider>
+          {!inDialogs && (
+            <PropRow label="Show child pages in menu">
+              <BoolButtonGroup
+                value={pageGroup.showChildPagesInMenu === true}
+                onChange={(v) => updatePageGroup(pageGroup.id, { showChildPagesInMenu: v })}
+                labels={['Show', 'Hide']}
+              />
+            </PropRow>
+          )}
+        </div>
+        {inDialogs ? (
+          <OverlaySection
+            node={pageGroup}
+            onPatch={(patch) => updatePageGroup(pageGroup.id, patch)}
+          />
+        ) : (
+          <>
+            <PageMetadataSection
+              node={pageGroup}
+              onPatch={(patch) => updatePageGroup(pageGroup.id, patch)}
+            />
+            <MainSection
+              node={pageGroup}
+              onPatch={(patch) => updatePageGroup(pageGroup.id, patch)}
+            />
+          </>
+        )}
+        <PageEventsSection
+          node={pageGroup}
+          kindLabel={inDialogs ? 'Dialog Group' : 'Group'}
+          inputs={inDialogs ? pageGroup.componentProperties : undefined}
+          onPatch={(patch) => updatePageGroup(pageGroup.id, patch)}
+        />
+        {inDialogs && (
+          <ComponentPropertiesEditor
+            ownerName={resolvePageTitle(pageGroup.title)}
+            title="Input Parameters"
+            itemNoun="input parameter"
+            properties={pageGroup.componentProperties ?? {}}
+            onChange={(next) => updatePageGroup(pageGroup.id, { componentProperties: next })}
+          />
+        )}
+      </FieldPathContext.Provider>
+    </PanelScopeContext.Provider>
   );
 }
 
@@ -826,7 +964,7 @@ function ComponentPanel({
   const schema = entry?.schema ?? {};
   const schemaKeys = Object.keys(schema);
   const schemaGroups = groupSchemaKeys(schema);
-  const isContainer = comp.type === 'Container';
+  const isContainer = usesFlexLayout(comp.type);
   const layout = comp.layout ?? {};
   const props = comp.properties ?? {};
 
@@ -856,22 +994,25 @@ function ComponentPanel({
       value={props[key]}
       onChange={(v) => patchProp(key, v)}
       onOpenPicker={
-        primaryType(schema[key].type).toLowerCase() === 'struct' ||
-        SOURCE_CAPABLE_TYPES.has(primaryType(schema[key].type).toLowerCase())
+        bindsVariable(primaryType(schema[key].type))
           ? // `currentBinding` arrives from whichever slot opened the picker — a
             // nested `$if` branch or `$switch` case names its own binding, which
             // the picker cannot read back off `comp.properties[key]`.
-            (onPick, currentBinding) =>
+            (onPick, currentBinding, slot, extras) =>
               openBindingPicker(comp.id, key, {
+                ...extras,
                 onPick,
                 currentBinding,
-                filter: {
-                  label: schema[key].label,
-                  type: schema[key].type,
-                  write: (schema[key] as { write?: boolean }).write,
-                  requiredFields: (schema[key] as { requiredFields?: RequiredFieldEntry[] })
-                    .requiredFields,
-                },
+                filter: slotFilter(
+                  {
+                    label: schema[key].label,
+                    type: schema[key].type,
+                    write: (schema[key] as { write?: boolean }).write,
+                    requiredFields: (schema[key] as { requiredFields?: RequiredFieldEntry[] })
+                      .requiredFields,
+                  },
+                  slot,
+                ),
               })
           : undefined
       }
@@ -886,6 +1027,11 @@ function ComponentPanel({
 
   const compRef = useRef(comp);
   compRef.current = comp;
+
+  // Read, not subscribed: the Repeater lookup below re-walks on `structureRev`.
+  const { pages, dialogs, header, footer, leftSidebar, rightSidebar } = useConfigStore.getState();
+  const repeatRoots = [pages, dialogs, header, footer, leftSidebar, rightSidebar];
+  const structureRev = useConfigStore((s) => s.structureRev);
 
   useCopyPasteShortcut((key, { path, schema: targetSchema }) => {
     const [topKey, ...subPath] = path;
@@ -935,38 +1081,44 @@ function ComponentPanel({
   });
 
   return (
-    <PanelScopeContext.Provider value={comp.id}>
-      <FieldPathContext.Provider value={[...parentPath, displayName]}>
-        <PanelHeader
-          icon={<WidgetIcon type={comp.type} size={18} />}
-          name={displayName}
-          kind={entry?.name ?? comp.type}
-        />
-
-        {/* ── Identity ─────────────────────────────────────────────────── */}
-        <CollapsibleSection title="Identity">
-          <PropRow label="Name" selection={{ path: ['__name__'], schema: NAME_SCHEMA }} sourceless>
-            <TextField value={comp.name} onCommit={patchName} />
-          </PropRow>
-        </CollapsibleSection>
-        {schemaGroups.map((group) => (
-          <CollapsibleSection key={group.title} title={group.title}>
-            {group.keys.map(renderSchemaRow)}
-          </CollapsibleSection>
-        ))}
-
-        {/* ── Layout ───────────────────────────────────────────────────── */}
-        <CollapsibleSection title="Layout">
-          <LayoutFields
-            mode={isContainer ? 'container' : 'leaf'}
-            layout={layout}
-            onChange={patchLayout}
-            componentId={comp.id}
-            tokenValues={tokenValues}
+    <RepeatEditorScopeProvider roots={repeatRoots} rev={structureRev} widgetId={comp.id}>
+      <PanelScopeContext.Provider value={comp.id}>
+        <FieldPathContext.Provider value={[...parentPath, displayName]}>
+          <PanelHeader
+            icon={<WidgetIcon type={comp.type} size={18} />}
+            name={displayName}
+            kind={<WidgetKind type={comp.type} typeName={entry?.name ?? comp.type} />}
           />
-        </CollapsibleSection>
-      </FieldPathContext.Provider>
-    </PanelScopeContext.Provider>
+
+          {/* ── Identity ─────────────────────────────────────────────────── */}
+          <CollapsibleSection title="Identity">
+            <PropRow
+              label="Name"
+              selection={{ path: ['__name__'], schema: NAME_SCHEMA }}
+              sourceless
+            >
+              <TextField value={comp.name} onCommit={patchName} />
+            </PropRow>
+          </CollapsibleSection>
+          {schemaGroups.map((group) => (
+            <CollapsibleSection key={group.title} title={group.title}>
+              {group.keys.map(renderSchemaRow)}
+            </CollapsibleSection>
+          ))}
+
+          {/* ── Layout ───────────────────────────────────────────────────── */}
+          <CollapsibleSection title="Layout">
+            <LayoutFields
+              mode={isContainer ? 'container' : 'leaf'}
+              layout={layout}
+              onChange={patchLayout}
+              componentId={comp.id}
+              tokenValues={tokenValues}
+            />
+          </CollapsibleSection>
+        </FieldPathContext.Provider>
+      </PanelScopeContext.Provider>
+    </RepeatEditorScopeProvider>
   );
 }
 
@@ -1229,71 +1381,51 @@ function blankToUndefined(v: unknown): unknown {
   return typeof v === 'string' && v.trim() === '' ? undefined : v;
 }
 
-/**
- * The bindable fields of one shell region. Shared by the project-wide Shell
- * area panel and a page's per-page override so the two can't drift.
- *
- * `pathPrefix` puts the region into each field's diagnostic/selection path.
- * The shell panel edits one region and leaves it empty; the override panel
- * edits all four in a single page panel and prefixes with the region id, which
- * is exactly the shape the backend reports (`/shellOverride/<region>/<field>`).
- */
+/** The bindable fields of one shell region, rendered by the Shell area panel. */
 function ShellRegionFields({
   id,
   config,
   onPatch,
-  pathPrefix = [],
-  inheritable = false,
 }: {
   id: ShellRegionId;
   config: ShellRegionConfig;
   onPatch: (patch: Partial<ShellRegionConfig>) => void;
-  pathPrefix?: string[];
-  /** True for the per-page override, where an unset field means "inherit the
-   *  project shell" rather than "take the built-in default". Values are then
-   *  stored as picked — collapsing a default back to `undefined` would make
-   *  the override unable to say `enabled: true` over a project-wide `false`. */
-  inheritable?: boolean;
 }) {
   const openBindingPicker = useEditorDomainStore((s) => s.openBindingPicker);
   const scope = useContext(PanelScopeContext);
-  const at = (key: string) => [...pathPrefix, key];
-  const defaultStateDiagnostic = useFieldDiagnostic(scope, at('defaultState'));
+  const defaultStateDiagnostic = useFieldDiagnostic(scope, ['defaultState']);
 
   // Synthetic id+key for the binding picker overlay. The picker uses these
   // strings only as a target identifier — there is no real component lookup.
-  const bindingTargetId = `__shell_${pathPrefix.join('_')}${id}__`;
+  const bindingTargetId = `__shell_${id}__`;
 
   return (
     <>
       <SchemaFieldRow
-        path={at('enabled')}
+        path={['enabled']}
         schema={SHELL_ENABLED_SCHEMA}
         value={config.enabled}
         // `true` is the default — store it as unset so the saved config stays
         // minimal and matches what the old static toggle wrote.
-        onChange={(v) => onPatch({ enabled: !inheritable && v === true ? undefined : v })}
-        onOpenPicker={(onPick, currentBinding) =>
+        onChange={(v) => onPatch({ enabled: v === true ? undefined : v })}
+        onOpenPicker={(onPick, currentBinding, slot) =>
           openBindingPicker(bindingTargetId, 'enabled', {
             onPick,
             currentBinding: currentBinding ?? varBindingOf(config.enabled),
-            filter: { label: 'Enabled', type: 'Boolean' },
+            filter: slotFilter({ label: 'Enabled', type: 'Boolean' }, slot),
           })
         }
       />
 
       <PropRow label="Default state" diagnostic={defaultStateDiagnostic}>
         <Select
-          value={config.defaultState ?? (inheritable ? '' : 'expanded')}
+          value={config.defaultState ?? 'expanded'}
           onChange={(v) =>
             onPatch({
               defaultState: (v as 'expanded' | 'collapsed' | 'hidden') || undefined,
             })
           }
         >
-          {/* Only the override can be cleared back to "unset" — the project
-              shell has no outer config to fall back to. */}
-          {inheritable && <option value="">inherit</option>}
           {SHELL_DEFAULT_STATES.map((state) => (
             <option key={state} value={state}>
               {state}
@@ -1303,87 +1435,87 @@ function ShellRegionFields({
       </PropRow>
 
       <SchemaFieldRow
-        path={at('expandedSize')}
+        path={['expandedSize']}
         schema={SHELL_EXPANDED_SIZE_SCHEMA}
         value={config.expandedSize}
         onChange={(v) => onPatch({ expandedSize: blankToUndefined(v) })}
-        onOpenPicker={(onPick, currentBinding) =>
+        onOpenPicker={(onPick, currentBinding, slot) =>
           openBindingPicker(bindingTargetId, 'expandedSize', {
             onPick,
             currentBinding: currentBinding ?? varBindingOf(config.expandedSize),
-            filter: { label: 'Expanded size', type: 'String' },
+            filter: slotFilter({ label: 'Expanded size', type: 'String' }, slot),
           })
         }
       />
 
       <SchemaFieldRow
-        path={at('collapsedSize')}
+        path={['collapsedSize']}
         schema={SHELL_COLLAPSED_SIZE_SCHEMAS[id === 'header' || id === 'footer' ? 'auto' : 'zero']}
         value={config.collapsedSize}
         onChange={(v) => onPatch({ collapsedSize: blankToUndefined(v) })}
-        onOpenPicker={(onPick, currentBinding) =>
+        onOpenPicker={(onPick, currentBinding, slot) =>
           openBindingPicker(bindingTargetId, 'collapsedSize', {
             onPick,
             currentBinding: currentBinding ?? varBindingOf(config.collapsedSize),
-            filter: { label: 'Collapsed size', type: 'String' },
+            filter: slotFilter({ label: 'Collapsed size', type: 'String' }, slot),
           })
         }
       />
 
       {(id === 'leftSidebar' || id === 'rightSidebar') && (
         <SchemaFieldRow
-          path={at('fullHeight')}
+          path={['fullHeight']}
           schema={SHELL_FULL_HEIGHT_SCHEMA}
           value={config.fullHeight}
-          onChange={(v) => onPatch({ fullHeight: !inheritable && v === false ? undefined : v })}
-          onOpenPicker={(onPick, currentBinding) =>
+          onChange={(v) => onPatch({ fullHeight: v === false ? undefined : v })}
+          onOpenPicker={(onPick, currentBinding, slot) =>
             openBindingPicker(bindingTargetId, 'fullHeight', {
               onPick,
               currentBinding: currentBinding ?? varBindingOf(config.fullHeight),
-              filter: { label: 'Full height', type: 'Boolean' },
+              filter: slotFilter({ label: 'Full height', type: 'Boolean' }, slot),
             })
           }
         />
       )}
 
       <SchemaFieldRow
-        path={at('background')}
+        path={['background']}
         schema={SHELL_BACKGROUND_SCHEMA}
         value={config.background}
         onChange={(v) => onPatch({ background: blankToUndefined(v) })}
-        onOpenPicker={(onPick, currentBinding) =>
+        onOpenPicker={(onPick, currentBinding, slot) =>
           openBindingPicker(bindingTargetId, 'background', {
             onPick,
             currentBinding: currentBinding ?? varBindingOf(config.background),
-            filter: { label: 'Background', type: 'Color' },
+            filter: slotFilter({ label: 'Background', type: 'Color' }, slot),
           })
         }
       />
 
       <SchemaFieldRow
-        path={at('expanded')}
+        path={['expanded']}
         schema={SHELL_EXPANDED_SCHEMA}
         value={config.expanded}
         onChange={(v) => onPatch({ expanded: v as ShellRegionConfig['expanded'] })}
-        onOpenPicker={(onPick, currentBinding) =>
+        onOpenPicker={(onPick, currentBinding, slot) =>
           openBindingPicker(bindingTargetId, 'expanded', {
             onPick,
             currentBinding: currentBinding ?? varBindingOf(config.expanded),
-            filter: { label: 'Expanded', type: 'Boolean' },
+            filter: slotFilter({ label: 'Expanded', type: 'Boolean' }, slot),
           })
         }
       />
 
       <SchemaFieldRow
-        path={at('overlay')}
+        path={['overlay']}
         schema={SHELL_OVERLAY_SCHEMA}
         value={config.overlay}
         onChange={(v) => onPatch({ overlay: v as ShellRegionConfig['overlay'] })}
-        onOpenPicker={(onPick, currentBinding) =>
+        onOpenPicker={(onPick, currentBinding, slot) =>
           openBindingPicker(bindingTargetId, 'overlay', {
             onPick,
             currentBinding: currentBinding ?? varBindingOf(config.overlay),
-            filter: { label: 'Overlay', type: 'Boolean' },
+            filter: slotFilter({ label: 'Overlay', type: 'Boolean' }, slot),
           })
         }
       />

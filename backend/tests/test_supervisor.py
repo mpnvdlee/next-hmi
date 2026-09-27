@@ -6,6 +6,7 @@ state machine, manifest bookkeeping, and crash handling deterministically.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 import threading
@@ -14,6 +15,7 @@ from pathlib import Path
 
 import pytest
 from core import manifest as manifest_mod
+from core import project_migrations as pm
 from core import runtime_home, start_guards
 from services import supervisor as supervisor_mod
 
@@ -57,9 +59,28 @@ class _FakeProc:
         self.returncode = -9
 
 
-def _register_project(home: Path, tmp_path: Path, *, name: str = "Plant") -> str:
+def _register_project(
+    home: Path,
+    tmp_path: Path,
+    *,
+    name: str = "Plant",
+    format_version: int | None = None,
+    min_app: str | None = pm.PROJECT_FORMAT_MIN_APP,
+) -> str:
+    """Register a startable project. Fully stamped by default — spawn/health/crash
+    tests aren't exercising the upgrade gate; pass ``format_version`` or
+    ``min_app=None`` to test that."""
     target = tmp_path / name
     metadata = manifest_mod.ensure_project_metadata(target, name=name)
+    metadata = metadata.model_copy(
+        update={
+            "formatVersion": format_version
+            if format_version is not None
+            else supervisor_mod.PROJECT_FORMAT_VERSION,
+            "minAppVersion": min_app,
+        }
+    )
+    manifest_mod.write_project_metadata(target, metadata)
     (target / "users.json").write_text(
         json.dumps({"settings": {}, "groups": [], "users": []}), encoding="utf-8"
     )
@@ -84,7 +105,7 @@ def test_base_path_for_defaults_to_runtime_alias() -> None:
     """The spawn-time default matches the primary /runtime/<slug>/ access path
     (not the removed /p/<id>/ alias) so a child's own generated absolute URLs
     are correct even before the manager's X-Forwarded-Prefix overrides it for
-    an /editor/<slug>/ hit (backlog R24/R51)."""
+    an /editor/<slug>/ hit."""
     assert supervisor_mod.base_path_for("plant-a") == "/runtime/plant-a/"
 
 
@@ -110,7 +131,7 @@ def test_start_and_stop_are_serialized_per_project(home: Path, monkeypatch) -> N
     release = threading.Event()
     order: list[str] = []
 
-    def starting(_project_id: str):
+    def starting(_project_id: str, **_kwargs):
         order.append("start-enter")
         entered.set()
         assert release.wait(5)
@@ -136,36 +157,35 @@ def test_start_and_stop_are_serialized_per_project(home: Path, monkeypatch) -> N
     assert order == ["start-enter", "start-exit", "stop"]
 
 
-def test_start_rejects_project_with_pending_operator_setup(
-    home: Path, tmp_path: Path
+def test_start_accepts_a_project_whose_only_user_is_guest(
+    home: Path, tmp_path: Path, monkeypatch
 ) -> None:
+    """A freshly seeded project carries no admin account and nothing gates it."""
     project_id = _register_project(home, tmp_path)
     project = manifest_mod.find_project(manifest_mod.load_manifest(), project_id)
     assert project is not None
     (Path(project.path) / "users.json").write_text(
         json.dumps(
-                {
-                    "settings": {},
-                    "groups": [
-                        {"id": "guest", "label": "Guest"},
-                        {"id": "admin", "label": "Admin"},
-                    ],
-                    "users": [
-                        {
-                            "id": "guest",
-                            "username": "guest",
-                            "password": "",
-                            "groups": ["guest"],
-                        }
-                    ],
-                    "operatorSetup": {"version": 1, "required": True},
+            {
+                "settings": {},
+                "groups": [
+                    {"id": "guest", "label": "Guest"},
+                    {"id": "admin", "label": "Admin"},
+                ],
+                "users": [
+                    {
+                        "id": "guest",
+                        "username": "guest",
+                        "password": "",
+                        "groups": ["guest"],
+                    }
+                ],
             }
         ),
         encoding="utf-8",
     )
 
-    with pytest.raises(ValueError, match="operator password"):
-        supervisor_mod.Supervisor().start(project_id)
+    assert _make_supervisor(monkeypatch, healthy=True).start(project_id)["status"] == "running"
 
 
 def test_start_rechecks_credentials_before_returning_running_instance(
@@ -187,6 +207,66 @@ def test_start_rechecks_credentials_before_returning_running_instance(
     (Path(project.path) / "users.json").unlink()
 
     with pytest.raises(ValueError, match=r"users\.json is missing"):
+        sup.start(project_id)
+
+
+def test_start_requires_confirm_upgrade_for_outdated_format(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    project_id = _register_project(home, tmp_path, format_version=0)
+    sup = _make_supervisor(monkeypatch, healthy=True)
+
+    with pytest.raises(ValueError, match="upgraded"):
+        sup.start(project_id)
+
+    snap = sup.start(project_id, confirm_upgrade=True)
+    assert snap["status"] == "running"
+
+
+def test_start_refuses_project_newer_than_this_build(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    project_id = _register_project(
+        home, tmp_path, format_version=supervisor_mod.PROJECT_FORMAT_VERSION + 1, min_app=None
+    )
+    sup = _make_supervisor(monkeypatch, healthy=True)
+
+    with pytest.raises(ValueError, match="requires a newer version"):
+        sup.start(project_id)
+    with pytest.raises(ValueError, match="requires a newer version"):
+        sup.start(project_id, confirm_upgrade=True)
+
+
+def test_start_refuses_a_current_project_carrying_no_release_stamp(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    """Its number says where it landed, not which build took it there."""
+    project_id = _register_project(home, tmp_path, min_app=None)
+    sup = _make_supervisor(monkeypatch, healthy=True)
+
+    with pytest.raises(ValueError, match="needs to be upgraded"):
+        sup.start(project_id)
+    assert sup.start(project_id, confirm_upgrade=True)["status"] == "running"
+
+
+def test_refusal_names_the_version_the_project_was_stamped_with(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    project_id = _register_project(
+        home, tmp_path, format_version=supervisor_mod.PROJECT_FORMAT_VERSION + 1
+    )
+    entry = manifest_mod.find_project(manifest_mod.load_manifest(), project_id)
+    assert entry is not None
+    root = Path(entry.path)
+    manifest_mod.write_project_metadata(
+        root,
+        manifest_mod.read_project_metadata(root).model_copy(
+            update={"minAppVersion": "9.9.9"}
+        ),
+    )
+    sup = _make_supervisor(monkeypatch, healthy=True)
+
+    with pytest.raises(ValueError, match=r"requires NEXT HMI 9\.9\.9 or newer"):
         sup.start(project_id)
 
 
@@ -258,6 +338,24 @@ class TestStartGuards:
         sup.resume_all()
 
         assert sup.running_snapshot() == []
+
+    def test_resume_keeps_the_running_set_when_a_guard_refusal_may_pass_later(
+        self, home: Path, tmp_path: Path, monkeypatch, refusing
+    ) -> None:
+        """Unlike a pending format upgrade, a guard's refusal is not something
+        the operator resolves in the Projects page — the enterprise activation
+        gate refuses every start on its own while a licence is lapsed, and
+        lifts itself the moment it is renewed. Pruning here erases the running
+        set for good: a reboot in that window would mean nothing comes back
+        once the licence is fixed, because nothing remembers what to restart."""
+        project_id = _register_project(home, tmp_path)
+        manifest_mod.upsert_running(project_id, 9001)
+        sup = _make_supervisor(monkeypatch, healthy=True)
+
+        sup.resume_all()
+
+        assert sup.running_snapshot() == []
+        assert manifest_mod.running_entry(manifest_mod.load_manifest(), project_id) is not None
 
     def test_a_crashed_instance_is_not_respawned(
         self, home: Path, tmp_path: Path, monkeypatch, refusing
@@ -353,6 +451,43 @@ def test_resume_all_prunes_missing_projects(home: Path, monkeypatch) -> None:
     assert manifest_mod.load_manifest().running == []
 
 
+def test_resume_reports_an_upgrade_pending_project_without_a_traceback(
+    home: Path, tmp_path: Path, monkeypatch, caplog
+) -> None:
+    """A project waiting on its upgrade confirmation is an operator's to-do, not
+    a supervisor fault — a traceback every boot would bury the real ones."""
+    project_id = _register_project(home, tmp_path, min_app=None)
+    manifest_mod.upsert_running(project_id, 9002)
+    sup = _make_supervisor(monkeypatch, healthy=True)
+
+    with caplog.at_level(logging.WARNING, logger="services.supervisor"):
+        sup.resume_all()
+
+    assert sup.running_snapshot() == []
+    records = [r for r in caplog.records if r.name == "services.supervisor"]
+    assert [r.levelno for r in records] == [logging.WARNING]
+    assert records[0].exc_info is None
+    assert project_id in records[0].getMessage()
+    assert "needs to be upgraded" in records[0].getMessage()
+
+
+def test_resume_prunes_a_project_it_refused_to_start(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    """A refusal leaves no instance, so the persisted running set must not keep
+    claiming the project is up: the dashboard would show it Stopped with Stop
+    disabled while the delete guard still read it as running — nothing the
+    operator could stop, and nothing they could remove."""
+    project_id = _register_project(home, tmp_path, min_app=None)
+    manifest_mod.upsert_running(project_id, None)
+    sup = _make_supervisor(monkeypatch, healthy=True)
+
+    sup.resume_all()
+
+    assert sup.running_snapshot() == []
+    assert manifest_mod.running_entry(manifest_mod.load_manifest(), project_id) is None
+
+
 # ── real-subprocess coverage ──────────────────────────────────────────────
 #
 # The tests above stub Popen entirely. These spawn an actual child process — a
@@ -435,6 +570,37 @@ def _fake_child_command(script: Path, marker: Path, *, ignore_sigterm=False, cra
     return build
 
 
+def _pid_alive(pid: int) -> bool:
+    """Portable liveness check.
+
+    ``os.kill(pid, 0)`` is the standard POSIX no-op-signal idiom for "does
+    this pid exist", but signal 0 isn't meaningful to Windows' emulation of
+    os.kill (it maps to CTRL_C_EVENT there) — it raises OSError instead of
+    either succeeding or raising ProcessLookupError.
+    """
+    if sys.platform == "win32":
+        import ctypes
+
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return False
+        try:
+            exit_code = ctypes.c_ulong()
+            ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code))
+            return exit_code.value == STILL_ACTIVE
+        finally:
+            ctypes.windll.kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 def _wait_until(predicate, *, timeout: float = 6.0, interval: float = 0.05) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -457,13 +623,12 @@ def test_real_subprocess_passes_health_and_stop_sends_sigterm(
     snap = sup.start(project_id)
     assert snap["status"] == "running"
     pid = snap["pid"]
-    assert pid and os.kill(pid, 0) is None  # really alive
+    assert pid and _pid_alive(pid)  # really alive
 
     stopped = sup.stop(project_id)
     assert stopped["status"] == "stopped"
     assert sup.is_fully_stopped(project_id)
-    with pytest.raises(ProcessLookupError):
-        os.kill(pid, 0)
+    assert not _pid_alive(pid)  # really dead
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="SIGTERM is not ignorable on Windows")

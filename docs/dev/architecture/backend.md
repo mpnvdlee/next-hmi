@@ -11,8 +11,8 @@ The backend ships **two ASGI apps** built from the same package:
 
 The single-project app owns:
 
-- persisted files inside the project folder it is pinned to, located via `NEXTHMI_ACTIVE_PROJECT_PATH` — set by the supervisor for a managed instance, or self-pinned at startup by a standalone `uvicorn main:app` process (see **Bootstrap** below)
-- the project lifecycle API surface: list / create / locate / delete / export / import and authenticated manager-to-manager transfer (`make-live` is retired — see below)
+- persisted files inside the project folder it is pinned to, located via `NEXTHMI_ACTIVE_PROJECT_PATH` — set by the supervisor for a managed instance, or self-pinned at startup by a standalone `uvicorn main:app` process (see [Startup And Shutdown](#startup-and-shutdown) below)
+- the project lifecycle API surface: list / create / locate / delete / export / import and authenticated manager-to-manager transfer
 - datasource lifecycle management
 - OPC-UA client and test-server orchestration
 - alarm trigger evaluation and active/history state
@@ -28,7 +28,7 @@ LAN peer discovery (mDNS) and every peer-transfer surface belong to the manager 
   - wires dependencies
   - registers routers
   - starts and stops background services
-  - mounts `/widgets`, `/widget-js`, `/external-libraries`, and `/assets`
+  - mounts `/widgets`, `/widget-js`, `/builtin-widgets-js`, `/external-libraries`, and `/assets`
 - `backend/core/runtime_home.py`
   - per-installation home directory (manifest, `.logs/`, `.widget-build/`, restart sentinel)
   - resolves from `NEXTHMI_DATA_DIR` → bootstrap config → platform default
@@ -37,24 +37,32 @@ LAN peer discovery (mDNS) and every peer-transfer surface belong to the manager 
   - per-project metadata helpers for the embedded `config.json` `project` block (`ensure_project_metadata()`)
   - slug + collision-suffix helpers for default project folder paths
 - `backend/core/storage.py`
-  - active-project path resolvers (`active_project_root()`, `active_assets_dir()`, `active_custom_widgets_dir()`, etc.) — re-read the manifest on every call
+  - active-project path resolvers (`active_project_root()`, `active_assets_dir()`, `active_custom_widgets_dir()`, etc.) — resolved on every call from a per-call `use_project()` scope or the `NEXTHMI_ACTIVE_PROJECT_PATH` pin (see [Persistence Layer](#persistence-layer))
   - runtime-home-anchored constants (`LOGS_DIR`, `WIDGET_BUILD_DIR`)
   - JSON and CSV persistence helpers
-  - `NoLiveProjectError` — raised by the active resolvers when no project is marked live; mapped to 409 `{code: "no_live_project"}` by the registered handler
+  - `NoLiveProjectError` — raised by the active resolvers when neither resolves a project; mapped to 409 `{code: "no_live_project"}` by the registered handler
 - `backend/core/project_packer.py`
   - one zip code path for export, import, and manager peer transfer — `pack_project()` / `unpack_project()` with symlink + traversal + size-cap guards
 - `backend/core/peer_discovery.py`
   - mDNS advertise/browse over `_nexthmi._tcp.local.`; per-process `runtimeId` so multiple ports on one host don't shadow each other. Started only by the manager.
 - `backend/core/exceptions.py`
-  - domain exception hierarchy (`NextHmiError`, `NotFoundError`, `ConflictError`, `ValidationError`, `InternalError`)
+  - domain exception hierarchy (`NextHmiError`, `NotFoundError`, `ConflictError`, `ValidationError`, `RateLimitError`, plus per-domain subclasses such as `ConfigValidationError` or `DatasourceConflictError`)
   - `register_exception_handlers(app)` — maps domain exceptions to consistent JSON error responses
+- `backend/core/passwords.py`
+  - project-user credential verification: PBKDF2-HMAC-SHA256 (200 000 iterations) `passwordHash`, with a literal-plaintext `password` kept readable for legacy documents
+  - an account with neither — `password: ""` and no hash, which is what the editor creates and what `guest` is permanently — never verifies against anything. It is an identity the runtime can hold (auto-login, logout), not one anybody can sign in as
+  - every credential check costs exactly one derivation, whatever it decides: a right or wrong password, a legacy plaintext compare, an unusable stored hash, an account with no credential (`verify_password`), and a username that matched nothing at all (`verify_absent_user`). Answering a miss early would be a ~50x timing oracle over the roster
+- `backend/core/user_auth_throttle.py`
+  - in-memory online-guessing throttle for the project-user credential path, consulted by `services/users_manager.authenticate` so the WebSocket `login` message and both REST Basic routes are covered at once
+  - two tiers: five consecutive failures lock that username for 60 s; 60 failures inside one 60 s window (a flood that rotates usernames, which never meets the per-name counter) trip a 30 s cooldown across every name, bounding the PBKDF2 work an anonymous caller can buy on a panel PC
+  - a lockout is reported by raising `RateLimitError` → HTTP `429` on REST, `auth_error` with `reason: "rate_limited"` on the socket
 - `backend/core/audit.py`
   - generic event-emission seam (`emit()` / `emit_async()` fan out to `register_listener()`-ed callbacks); the public build registers no listeners, so it is a no-op here — audit trail is an enterprise feature
 - `backend/core/start_guards.py`
   - generic instance-start seam (`refusal(project_id)` asks each `register_guard()`-ed callback whether the supervisor may spawn a child, and returns the first refusal sentence); the public build registers no guards, so it always returns `None` here — runtime activation is an enterprise feature. Fails open on a raising guard
 - `backend/models/websocket.py`
   - TypedDict definitions for **part** of the WebSocket protocol — not all of it
-  - client→server: `SetContextMessage`, `WriteFieldMessage`, `LoginMessage`, `LogoutMessage`, `RequestIdentityMessage`
+  - client→server: `SetContextMessage`, `WriteFieldMessage`, `ToggleFieldMessage`, `LoginMessage`, `LogoutMessage`, `RequestIdentityMessage`
   - server→client: `VarSnapshotMessage`, `VarUpdateMessage`, `VarRemovedMessage`, `OpcuaStatusMessage`, `ContextReadyMessage`, `UserIdentityMessage`, `AuthErrorMessage`, `WriteResponseMessage`, `WriteErrorMessage`
   - **untyped** (constructed as plain dicts at the send site): `var_metadata`, the recipe family (`recipe_load` / `recipe_save` / `recipe_snapshot` / `recipe_update` / `recipe_response` / `recipe_error`), `alarm_snapshot`, `alarm_update`, `restarting`, `widget_updated`, `config_changed`
   - alarm broadcast types are documented inline in `services/alarm_manager.py` (`alarm_snapshot`, `alarm_update`)
@@ -63,7 +71,7 @@ LAN peer discovery (mDNS) and every peer-transfer surface belong to the manager 
   - `AlarmTrigger`, `AlarmDefinition`, `AlarmGroup`, `AlarmConfig`
   - `AlarmInstance`, `AlarmHistoryEntry`, `AlarmSummary`, `AlarmState`
 - `backend/models/component.py`
-  - `WidgetPropertySchema`, `ComponentDefinition`
+  - `ComponentPropertySchema`, `ComponentDefinition`
 - `backend/services/datasource_manager.py`
   - datasource registry
   - flattened variable lookup tables
@@ -136,17 +144,13 @@ but writes reject them as `unknown_type`: their asyncua wire values require
 binary/UUID/NodeId objects that cannot be safely inferred from an operator
 string. Intentional contract additions are canonical `Integer`, `Date`, `Time`,
 and `Duration` writes plus the aliases `Int`, `Enumeration`, and `TimeSpan`. They are bounded
-by the matrix above; unknown raw types are intentionally no longer passed
-through. Existing valid boolean aliases, numeric strings, primitive-to-String
-conversion, ISO `DateTime`, raw integer types/ranges, exactly representable
-Float32 values, finite Float64 values, and persisted raw type loading remain
-compatible.
+by the matrix above; an unknown raw type is never passed through.
 
-The intentional safety rejections are present nulls, unsafe/lossy integer
+The deliberate safety rejections are present nulls, unsafe/lossy integer
 numbers, rounded or out-of-range Float32 values, malformed/non-finite numeric
 strings, scalar/array shape mismatches, invalid array descriptors, and unknown
-or unsupported raw types. These values previously reached dispatch and could
-be truncated, inferred as the wrong Variant type, or fail only inside asyncua.
+or unsupported raw types — each of which would otherwise be truncated,
+inferred as the wrong Variant type, or fail only inside asyncua.
 
 **Configured range enforcement.** After a numeric value survives the matrix
 above, `write_service.write_value` checks it against the variable's own
@@ -160,6 +164,13 @@ loads, and writes remain unenforced for that variable until an author corrects
 it. This range check is independent of the coercion matrix and surfaces its
 own stable REST/WebSocket reason, `value_out_of_range` (see
 [websocket.md](websocket.md) for the full reason table).
+
+**Access enforcement.** Between coercion and the range check,
+`write_service.write_value` refuses a variable whose own `writable` flag is not
+`true` as `read_only` — the flag of the array for an element write, of the
+member for a struct-field write. `toggle_value` checks it before reading the
+current value. Every operator write reaches this one check: `write_field`,
+`toggle_field`, `POST /api/datasources/write` and recipe downloads.
 
 - `backend/services/recipe_manager.py`
   - thread-safe singleton; persists config to `recipes.json` and the loaded-per-type pointer to `recipe_state.json`
@@ -184,7 +195,7 @@ own stable REST/WebSocket reason, `value_out_of_range` (see
   - thread-safe multi-theme persistence singleton + the default-theme pointer
   - methods: `list_ids()`, `list_all()`, `get()`, `save()`, `create()`, `delete()`, `get_default_id()`, `set_default_id()`
   - `save()` re-validates via `validate_theme()` before writing, so a domain-invalid theme is never persisted even though it is already structurally valid `ThemeConfig` by that point
-  - reads/writes `<live-project>/themes/<id>.json`; stores the default id in `config.json`'s `project.defaultTheme`. Seeds `themes/default.json` from defaults on first access if no theme exists yet — a theme file is read as-is, with no legacy shape and no read-time normalization
+  - reads/writes `<live-project>/themes/<id>.json`; stores the default id in `config.json`'s `project.defaultTheme`. Seeds `themes/default.json` from defaults on first access if no theme exists yet — a theme file is read as-is, with no read-time normalization
 - `backend/api/config_api.py`
   - pages, dictionaries, translations, languages, `globalEvents`
 - `backend/api/datasource_api.py`
@@ -193,22 +204,32 @@ own stable REST/WebSocket reason, `value_out_of_range` (see
   - alarm config CRUD, active/history/summary, single + all acknowledge
 - `backend/api/component_api.py`
   - widget definition CRUD
+- `backend/api/recipe_api.py`
+  - recipe config, loaded state, dataset download / upload
 - `backend/api/theme_api.py`
   - multi-theme CRUD + validation (`/api/themes`) and the default-theme pointer (`/api/default-theme`)
 - `backend/api/widgets_api.py`
-  - custom-component discovery metadata
+  - custom-widget discovery metadata, recompile, the widget-schema manifest, asset listing
 - `backend/api/system_api.py`
-  - process info, subscription status, restart, runtime home / default projects root
+  - process info, subscription status, restart, runtime home, logs; a read-only `manager_router` slice for the manager
 - `backend/api/users_api.py`
   - users, groups, and access settings
-- `backend/api/projects_api.py`
-  - list / create / locate / delete / validate-path; export zip; import zip. (`make-live` is removed — the supervisor's running set replaces the single-live model; `delete` now refuses a project that is in the manifest `running` set rather than the old single live project.) No push/pull here — that's `manager_peers_api.py`, manager-only.
+- `backend/api/device_api.py`, `historian_api.py`, `http_source_api.py`, `thumbnail_api.py`
+  - requesting-client identification, historian config/query, the `$http` proxy, the editor's project thumbnail
+- `backend/api/internal_api.py`
+  - the loopback-only `POST /api/internal/reload` hook the manager calls after a workspace MCP write
+- `backend/api/projects_api.py` (not on a managed instance)
+  - list / create / locate / delete / validate-path; export zip; import zip. `delete` refuses a project that is in the manifest `running` set. No push/pull here — that's `manager_peers_api.py`, manager-only. Mounted on the manager and on a standalone `uvicorn main:app`; a manager-spawned instance skips it, so the projects API is simply absent from the process that serves a live project.
 - `backend/api/supervisor_api.py` (manager only)
   - `GET /api/manager/running`, `POST /api/manager/projects/{id}/start`, `POST .../stop`, `GET .../status` — drive and report the per-project child processes.
 - `backend/api/manager_auth_api.py` (manager only)
   - `GET /api/manager/auth/status`, `POST .../setup` (first-run password), `POST .../login`, `POST .../logout` — device-admin session cookie.
 - `backend/api/manager_peers_api.py` (manager only)
-  - manager discovery, device-admin pairing, hashed/revocable peer tokens, explicit source/destination transfer, target-root receive, collision policy, progress/cancellation, and idempotent retry. The only peer-transfer surface — no project instance mounts one.
+  - manager discovery, device-admin pairing, hashed/revocable peer tokens, peer certificate pins, explicit source/destination transfer, target-root receive, collision policy, progress/cancellation, and idempotent retry. The only peer-transfer surface — no project instance mounts one.
+- `backend/api/mcp_auth_api.py` (manager only)
+  - MCP bearer-token pairing, listing and revocation
+- `backend/api/tls_api.py`, `telemetry_api.py`, `docs_api.py` (manager only)
+  - device HTTPS settings, the usage-reporting switch, and `/help`
 
 ## Edition Seam
 
@@ -245,9 +266,9 @@ licence that lapses stops the next start, not a running line.
 
 The **manager** (`backend/manager.py`) is the ASGI app the launcher runs by default (*manager mode*). It is deliberately lightweight — it never imports a project's datasource/OPC-UA/WebSocket pipeline. Responsibilities:
 
-- **Auth gate** — an HTTP middleware (`_auth_gate`) requires a valid device-admin session cookie for every `/api/*`, `/runtime/*`, and `/editor/*` request, except `/api/manager/auth/*`, bearer-authenticated `/api/manager/peer/*`, and `/api/health`. The SPA shell + bundle stay public so the login screen can render. A rejected request answers `401 {"detail": …, "code": "manager_session_required"}`, except a top-level browser navigation to `/runtime/*` or `/editor/*`, which is redirected (303) to `/?signIn=<original path>` so it lands on the sign-in screen and is returned to its destination afterwards (`safe_sign_in_target` restricts the round-trip to same-origin project paths). The frontend keys its "signed out" overlay off that code — see [Frontend](frontend.md). Auth lives in `core/manager_auth.py`: a PBKDF2-HMAC-SHA256 password digest in `<runtime_home>/.manager-auth.json`, stateless HMAC-signed session tokens (cookie `nexthmi_manager_session`), and an in-memory login throttle (lock after 5 failures for 60 s → HTTP 429 `RateLimitError`).
-- **Reverse proxy** — `GET/POST/... /runtime/{project_id}/{path}` (and the `/editor/{project_id}/...` alias) streams to the matching child over `httpx` (loopback `127.0.0.1:<port>` from `supervisor.port_for`); `/runtime/{id}/ws` / `/editor/{id}/ws` bridges the browser WebSocket to the child's `/ws`. Hop-by-hop headers are dropped and the manager session cookie is stripped before forwarding (children are trusted localhost processes). A request for a project that isn't running returns 503. (The legacy `/p/{id}/` alias was removed outright rather than deprecated for a compatibility period — backlog R24/R51.)
-- **Routers** — mounts the `manager_auth`, `supervisor`, `projects`, and `manager_peers` routers.
+- **Auth gate** — an HTTP middleware (`_auth_gate`) requires a valid device-admin session cookie for every `/api/*` and `/editor/*` request (and for the manager's own `openapi.json` / `docs` / `redoc`), except `/api/manager/auth/*`, bearer-authenticated `/api/manager/peer/*`, `/api/manager/mcp/pair`, `/api/health`, and `/mcp`, which authenticates itself (session or MCP bearer token, `mcp_server/auth.py`). `/runtime/*` is public for a deny-by-default allowlist of child routes a live view needs (`_RUNTIME_PUBLIC_ROUTES`) and gated for everything else; segments whose decoded forms contain a separator or a dot segment are refused before matching, so the gate cannot approve one route while the child serves another. Classification of the first segment reads the name underneath it — truncated at a NUL, cut at a `;` path parameter, with whitespace, control characters and a trailing dot trimmed, and a segment that leaves nothing behind skipped — because `api\x00`, `api;`, `api.`, `api ` and a leading `;/` are all the API subtree to a stack that normalizes differently from this one. The gate matches on `get_route_path(scope)`, not `request.url.path`, so a `root_path` mount cannot slip past it. The SPA shell + bundle stay public so the login screen can render. A rejected request answers `401 {"detail": …, "code": "manager_session_required"}`, except a top-level browser navigation to `/runtime/*` or `/editor/*`, which is redirected (303) to `/?signIn=<original path>` so it lands on the sign-in screen and is returned to its destination afterwards (`safe_sign_in_target` restricts the round-trip to same-origin project paths). The frontend keys its "signed out" overlay off that code — see [Frontend](frontend.md). Auth lives in `core/manager_auth.py`: a PBKDF2-HMAC-SHA256 password digest in `<runtime_home>/.manager-auth.json`, stateless HMAC-signed session tokens (cookie `nexthmi_manager_session`) that expire 24 h after sign-in (`SESSION_TTL_SECONDS`, which the cookie's `Max-Age` reads too) — an absolute lifetime, not an idle timeout, so nothing refreshes a token and an editor left open is signed out a day after its sign-in, and an in-memory login throttle (lock after 5 failures for 60 s → HTTP 429 `RateLimitError`).
+- **Reverse proxy** — `GET/POST/... /runtime/{project_id}/{path}` (and the `/editor/{project_id}/...` alias) streams to the matching child over `httpx` (loopback `127.0.0.1:<port>` from `supervisor.port_for`); `/runtime/{id}/ws` / `/editor/{id}/ws` bridges the browser WebSocket to the child's `/ws`. Hop-by-hop headers are dropped and the manager session cookie is stripped before forwarding (children are trusted localhost processes). A request for a project that isn't running returns 503, and a request target `httpx` cannot build a URL from (a NUL inside a segment) returns 400 rather than an unhandled 500.
+- **Routers** — mounts the manager-auth, peer (public and session-gated), MCP-auth (public pairing and token management), supervisor, projects, thumbnail, system (read-only slice), TLS, and telemetry routers, `/help`, and the workspace MCP at `/mcp` (see [../reference/mcp.md](../reference/mcp.md)).
 - **Usage reporting** — `core/telemetry.py` starts a background task in the manager lifespan that POSTs an install-count ping (installation ID, version, edition, platform) at start-up and every 24 h. Best-effort by contract: failures are debug-logged and never retried. Off through `NEXTHMI_TELEMETRY=off` or the Settings switch; see the [Telemetry API](../reference/rest-api.md#telemetry-api).
 - **Manager SPA** — serves the same frontend bundle at the origin root with `mode="manager"` (the dashboard) and base `"/"`; project instances are served their HMI/config app under `/runtime/<slug>/` or `/editor/<slug>/` with `mode="instance"`.
 
@@ -255,10 +276,10 @@ The **supervisor** (`backend/services/supervisor.py`) is a singleton owned by th
 
 - starts/stops one child process per running project (`launcher.py --serve-project <path> --base-path /runtime/<slug>/ --port <ephemeral>` in source; the frozen binary in a packaged build), each bound to `127.0.0.1`. The spawn-time default base path is `/runtime/<slug>/` — the manager's `X-Forwarded-Prefix` header overrides it when a request actually comes in through `/editor/<slug>/`.
 - health-checks a freshly started child (`/api/health`) before reporting it `running`; auto-restarts a child that exits unexpectedly with exponential backoff and a circuit breaker that flips it to `crashed` after >5 restarts in 60 s.
-- persists the running set to the manifest (`running[]`) so `resume_all()` can bring projects back after a manager restart, re-binding the previous port when still free.
+- persists the running set to the manifest (`running[]`) so `resume_all()` can bring projects back after a manager restart, re-binding the previous port when still free. `resume_all()` prunes any entry it cannot bring up — a missing project or folder, and a project `start()` refuses (pending format upgrade, unusable credentials, a start guard). Such a project has no instance at all, so an entry left behind would make the manifest claim it is up while the dashboard shows it `stopped` with Stop disabled and the delete guard refuses with "stop it first". Starting it once the refusal is cleared re-adds it.
 - `running_snapshot()` returns per-instance `{id, name, path, basePath, port, pid, status, startedAt, restarts, lastError}` for the dashboard. `status ∈ {starting, running, stopped, crashed}`.
 
-`backend/services/project_resume.py` (`prepare_running_set`) runs once in the manager lifespan before `resume_all()`: on a fresh install with no projects at all, it seeds the bundled project and leaves it stopped while operator-password setup is pending. Existing projects recorded in the running set are resumed, while an operator who deliberately stopped everything is respected.
+`backend/services/project_resume.py` (`prepare_running_set`) runs once in the manager lifespan before `resume_all()`: on a fresh install with no projects at all, it seeds the bundled project and adds it to the running set, unless its `users.json` does not read back as valid, which leaves it stopped. Existing projects recorded in the running set are resumed, while an operator who deliberately stopped everything is respected.
 
 ## Startup And Shutdown
 
@@ -267,13 +288,14 @@ The **manager** lifespan opens the proxy `httpx` client, runs `project_resume.pr
 In a **project instance** (`backend/main.py`), startup performs these steps:
 
 1. resolve the active project via `NEXTHMI_ACTIVE_PROJECT_PATH` — set by the supervisor when it pinned this instance, or self-pinned by this process after `project_bootstrap.ensure_default_project()` when running standalone (`uvicorn main:app` with no supervisor). In instance mode the default-project bootstrap is skipped (the supervisor already pinned a project; bootstrapping would pollute the shared manifest)
-2. load users; load alarm config + state; load the widget directory
-3. capture the running event loop (so sync handlers can schedule alarm broadcasts)
-4. load datasource JSON files from `<live-project>/datasources/`
-5. start the historian manager (registers its value listener, opens the SQLite db, starts the batch writer + retention loops). Failures are logged but don't abort startup. The historian starts before the broadcast loop so its value listener catches every emit.
-6. start configured test servers
-7. start configured OPC-UA clients
-8. start the WebSocket broadcast loop
+2. bring the project to this build's on-disk format — `project_migrations.run_baseline_migration()`, before anything reads project files (see [Project Format Migration](#project-format-migration))
+3. load users; load alarm config + state; load the widget directory
+4. capture the running event loop (so sync handlers can schedule alarm broadcasts)
+5. load datasource JSON files from `<live-project>/datasources/`
+6. start the historian manager (registers its value listener, opens the SQLite db, starts the batch writer + retention loops). Failures are logged but don't abort startup. The historian starts before the broadcast loop so its value listener catches every emit.
+7. start configured test servers
+8. start configured OPC-UA clients
+9. start the WebSocket broadcast loop
 
 A project instance never starts mDNS peer discovery — that, like every peer-transfer surface, belongs to the manager alone.
 
@@ -284,9 +306,9 @@ conditional mount of its own on top, from the private repository; see
 
 Shutdown cancels the broadcast loop, stops the historian manager (flushes the buffer, closes the db), and stops OPC-UA clients and test servers.
 
-A managed instance is always pinned to a project, so it never hits the "no project" path — nor does a standalone instance, since bootstrap self-pins `NEXTHMI_ACTIVE_PROJECT_PATH` before any request can be served. The resolvers still raise `NoLiveProjectError` (→ 409 `{code: "no_live_project"}`) if a process is ever started with neither the env var set nor bootstrap able to run (e.g. it was cleared after startup); the SPA renders a "no project on this server" card. Project selection and lifecycle now live in the manager dashboard, not an in-app `/projects` route.
+A managed instance is always pinned to a project, so it never hits the "no project" path — nor does a standalone instance, since bootstrap self-pins `NEXTHMI_ACTIVE_PROJECT_PATH` before any request can be served. The resolvers still raise `NoLiveProjectError` (→ 409 `{code: "no_live_project"}`) if a process is ever started with neither the env var set nor bootstrap able to run (e.g. it was cleared after startup); the SPA renders a "no project on this server" card. Project selection and lifecycle live in the manager dashboard; a project instance serves no projects view of its own.
 
-`alarm_manager` is registered as a `datasource_manager` value listener at module load, and its broadcast callback is bridged into the asyncio loop so ack endpoints (called from sync threadpool routes) can still emit `alarm_update` messages.
+`alarm_manager` is registered as a `datasource_manager` value listener at module load, and its broadcast callback is bridged into the asyncio loop so ack endpoints (called from sync threadpool routes) can still emit `alarm_update` messages. It also publishes its trigger keys via `set_interest_keys("alarms", …)` on every trigger-map rebuild. Only *folder composites* are gated on that registration — leaf keys reach every value listener regardless — so what it covers is a trigger addressing an array element by index (`DS:Motors` with `index: 2`), which reads the array folder's aggregate and would go quiet as soon as no client page bound it.
 
 ## Persistence Layer
 
@@ -298,12 +320,12 @@ Paths come from two sources, both in `backend/core/`:
   - `logs_dir()` / `widget_build_dir()` / `restart_sentinel_path()`
 - **Project-anchored** (`storage.py`) — `_active_project_path()` resolves on every call: a per-call `use_project()` scope (multi-project MCP) wins outright, else `NEXTHMI_ACTIVE_PROJECT_PATH` — set per child by the supervisor, or self-pinned by a standalone process at bootstrap — so N children each serve a different project in one runtime home:
   - `active_project_root()` — the project folder
-  - `active_datasources_dir()`, `active_pages_dir()`, `active_components_dir()` (widgets), `active_translations_dir()`
-  - `active_alarms_config_path()`, `active_alarm_state_path()`
-  - `active_custom_widgets_dir()`, `active_external_libraries_dir()`
-  - `active_assets_dir()`, `active_icons_dir()`, `active_images_dir()`
+  - `active_datasources_dir()`, `active_pages_dir()`, `active_dialogs_dir()`, `active_components_dir()` (reusable components), `active_themes_dir()`, `active_translations_dir()`
+  - `active_alarms_config_path()`, `active_alarm_state_path()`, `active_recipes_config_path()`, `active_recipe_state_path()`
+  - `active_custom_widgets_dir()`, `active_external_libraries_dir()`, `active_certs_dir()`
+  - `active_assets_dir()`, `active_icons_dir()`, `active_images_dir()`, `active_videos_dir()`
 
-`ensure_active_project_dirs()` creates the project subdirectories on first launch (and after any live-project switch). The runtime-home subdirectories (`.logs/`, `.widget-build/`) are created on first write.
+`ensure_active_project_dirs()` creates the project subdirectories at instance startup, before the format migration runs. The runtime-home subdirectories (`.logs/`, `.widget-build/`) are created on first write.
 
 `Default.csv` is seeded with an `en-EN` header on first run inside the live project's `translations/` folder. The backend uses atomic write helpers for both JSON and CSV files.
 
@@ -321,7 +343,9 @@ Important behaviors:
 - static datasource values are loaded directly into cache from the config file
 - folder variables are exposed as aggregate struct objects in addition to child scalar values
 - struct folders support nesting: child folders that are themselves structs are recorded as `_nested_fields` on the parent entry; the snapshot builder recursively assembles nested dicts
-- array-of-struct folders (children matching `[0]`, `[1]`, …) are detected during `_build_folder_maps()` and marked with `_is_array`, `_array_length`, and `_element_paths`; their snapshot is a list of dicts
+- array-of-struct folders (children matching `[0]`, `[1]`, …) are detected during `_build_folder_maps()` and marked with `_is_array`, `_array_length`, `_element_paths` and `_element_index` (the reverse map, so a leaf is placed into its element without scanning the array); their snapshot is a list of dicts
+- a leaf sits inside every one of its registered folder ancestors, and `ancestor_field_targets()` addresses each of them; a composite that is not already cached is either built whole from the child caches (when a client binds it) or left absent, never patched into existence from the one field that happened to change. An ancestor neither field encoding can address — a plain struct whose path to the leaf crosses an array element — is left out of the result rather than approximated, and is refreshed by the full rebuild instead
+- a folder composite is only put on the wire when something actually reads it: a client's active page binds the key (`set_client_page`) or a server-side consumer registered it (`set_interest_keys` — the alarm manager's trigger keys). The test is one lookup against a union kept in step by those two writers, not a scan per reader, since it runs once per ancestor per datachange. A composite nobody reads is still kept correct in the cache whenever it is already there — on both write paths, patched or rebuilt — because `snapshot()` and `set_context` serve cache entries verbatim; array elements are cached and emitted under their own composite keys either way, so `{path, index}` bindings are unaffected
 - `_wire_ancestor_map()` rewrites `_var_to_folder` so every leaf variable — including those inside nested sub-folders — maps to the topmost ancestor struct; this ensures a single datachange triggers a full re-snapshot of the entire aggregate
 - snapshot recursion follows the configured structure without a fixed depth limit
 - `snapshot()` returns enabled scalar values plus folder structs
@@ -339,20 +363,21 @@ Priority keys are grouped by datasource and forwarded to the matching OPC-UA eng
 
 Current frontend producers:
 
-- `HmiView` sends `set_context` with active runtime page/dialog/overlay-page context
-- `PreviewView` sends `set_context` with preview page/dialog context
+- `HmiView` sends `set_context` with active runtime page + open-overlay page context
+- `PreviewView` sends `set_context` with preview page/overlay context
 - `DatasourceVariableTable` sends `set_context` with explicit `priorityKeys`
+- `RecipeTable` sends `set_context` with explicit `priorityKeys` for a recipe type's parameters while its Live column is on
 
 `set_context` payload currently supports:
 
 - `currentPageIds` (overlay pages included — there is no separate key)
-- `openDialogIds`
 - `priorityKeys`
 
 ## REST Surface
 
-The project instance mounts the config, datasource, alarm, widget, theme,
-system, users, historian, and recipe route groups. The complete
+The project instance mounts the config, datasource, alarm, recipe, device,
+system, users, widgets, theme, component, internal, historian, `$http` proxy,
+and thumbnail route groups, plus the projects routes when it runs standalone. The complete
 endpoint reference — paths, request/response shapes, and which routes live on the
 manager vs a project instance — is in [../reference/rest-api.md](../reference/rest-api.md).
 
@@ -362,17 +387,19 @@ The backend mounts these static routes in `main.py`:
 
 - `/widgets` -> `<live-project>/custom-widgets/` (CSS, fonts)
 - `/widget-js` -> `<runtime_home>/.widget-build/` (compiled JS, build artifacts)
+- `/builtin-widgets-js` -> the shipped built-in widget bundles (`$NEXTHMI_FRONTEND_DIST/builtin-widgets-js/`, or `frontend/public/builtin-widgets-js/` in a source checkout)
 - `/external-libraries` -> `<live-project>/external-libraries/`
 - `/assets` -> `<live-project>/assets/`
 
-The `/widget-js` route serves compiled `index.js`. Build status is read from `<runtime_home>/.widget-build/.build-status.json` by the widgets listing API.
+The `/widget-js` route serves compiled `index.js`. Build status is read from `<runtime_home>/.widget-build/.build-status.json` by the widgets listing API. A supervisor-spawned instance gets its own `<runtime_home>/.widget-build/<project-id>/` (and an `instances/<project-id>/` logs folder) through `NEXTHMI_WIDGET_BUILD_DIR` / `NEXTHMI_LOGS_DIR`, so two projects' custom widgets never share a build directory.
 
 Mounts are registered at module-import time against the project this instance is pinned to. Because each project runs in its own process, serving a different project is a matter of the supervisor starting another instance — not switching mounts inside a live process.
 
 ## Health And Restart
 
 - `GET /api/health` is a basic liveness check
-- `POST /api/system/restart` writes `<runtime_home>/.restart-pending`, broadcasts `{type: "restarting", reason}` to every `/ws` client, then raises `SIGTERM` so uvicorn's lifespan teardown runs cleanly. A grace timer hard-exits if shutdown stalls. In **manager mode** the launcher sees the sentinel and re-execs a fresh interpreter so device-level static mounts re-resolve. A **managed instance** that exits is simply respawned by the supervisor — it never owns the re-exec loop (crash recovery is the supervisor's job).
+- `POST /api/system/restart` is a project-instance route — the manager's read-only system slice leaves it out. It broadcasts `{type: "restarting", reason}` to every `/ws` client, then raises `SIGTERM` so uvicorn's lifespan teardown runs cleanly. It writes no restart sentinel: the instance shares the manager's runtime home, and a sentinel there would re-exec the manager on its next clean exit. Uvicorn is given `timeout_graceful_shutdown` so a lingering connection cannot hold the process open — unbounded, a browser's pooled TLS socket would hold it for the full 30s of asyncio's `SSL_SHUTDOWN_TIMEOUT`, which is the grace timer's own floor. If shutdown stalls anyway, a grace timer calls `apply_pending_restart` and then hard-exits; the launcher replaces that hook with its re-exec in the manager process, and in an instance it is a no-op. A **managed instance** never owns a re-exec loop: the supervisor respawns the exited child (`_handle_crash`, with its backoff and crash breaker).
+- The manager restarts itself only through `POST /api/system/tls/restart`: the launcher sees the sentinel after the clean exit and re-execs a fresh interpreter (`os.execv`) so device-level static mounts and the listener re-resolve; under `start-dev.py` the dev runner respawns it instead.
 
 ## Alarm Engine
 
@@ -389,7 +416,7 @@ Mounts are registered at module-import time against the project this instance is
 
 ## Widget Storage
 
-Reusable components are individual JSON files under `active_components_dir()` (the live project's `components/`). A reusable component may use `$componentProp`, but it may not own a `$var` source anywhere below a child widget or a `componentProperties[*].defaultValue`. This rule is recursive through objects, lists, and mixed expression wrappers. Component create/update, build diagnostics, persisted-component reads, and every project archive import/push/pull use the same scanner. Rejections and diagnostics expose the exact escaped RFC 6901 source path ending in `/$var` (for example `/children/0/properties/text/$if/true/$var`); diagnostic `propKey` and `fieldPath` values are unescaped so editor fields containing `/` or `~` still attach correctly. Existing files are scanned before any component metadata migration. Binding-invalid files stay byte-for-byte unchanged, while malformed JSON, invalid UTF-8, unreadable files, and a non-directory `components` path fail closed with a stable `components/<file>.json#/: <reason>` error. The scanner rejects the `components` root, every descendant directory, and every candidate component file when it is a symlink or Windows reparse point. Files are opened no-follow where the platform supports it and checked by pre-open, opened-handle, and post-open identity before reading. Every mutation then uses `core/component_storage.py` rather than ordinary path writes. POSIX retains no-follow root/group directory descriptors and performs temp creation, write, fsync, replace, unlink, mkdir, and recursive removal relative to those descriptors. Windows pins the root and relevant directories with `CreateFileW(OPEN_REPARSE_POINT | BACKUP_SEMANTICS)` while omitting `FILE_SHARE_DELETE`; recursive deletion marks pinned leaf/directory handles with `FileDispositionInfoEx` (safe `FileDispositionInfo` fallback) before closing them. Missing platform primitives fail the operation closed. Metadata migration uses cached scan data, so post-validation root, group, or file swaps cannot redirect reads or writes outside the originally bound component tree. Imported projects are rejected and cleaned up before registration, including push and pull staging. The `project-seed` data here and the `project-testbench` data in the private dev/test repository were both scanned before enforcement and required no component-data changes. Nested reusable components remain prohibited, and names must be unique across all reusable components.
+Reusable components are individual JSON files under `active_components_dir()` (the live project's `components/`). A reusable component may use `$componentProp`, but it may not own a `$var` source anywhere below a child widget or a `componentProperties[*].defaultValue`. This rule is recursive through objects, lists, and mixed expression wrappers. Component create/update, build diagnostics, persisted-component reads, and every project archive import/push/pull use the same scanner. Rejections and diagnostics expose the exact escaped RFC 6901 source path ending in `/$var` (for example `/children/0/properties/text/$if/true/$var`); diagnostic `propKey` and `fieldPath` values are unescaped so editor fields containing `/` or `~` still attach correctly. Existing files are scanned before any component metadata migration. Binding-invalid files stay byte-for-byte unchanged, while malformed JSON, invalid UTF-8, unreadable files, and a non-directory `components` path fail closed with a stable `components/<file>.json#/: <reason>` error. The scanner rejects the `components` root, every descendant directory, and every candidate component file when it is a symlink or Windows reparse point. Files are opened no-follow where the platform supports it and checked by pre-open, opened-handle, and post-open identity before reading. Every mutation then uses `core/component_storage.py` rather than ordinary path writes. POSIX retains no-follow root/group directory descriptors and performs temp creation, write, fsync, replace, unlink, mkdir, and recursive removal relative to those descriptors. Windows pins the root and relevant directories with `CreateFileW(OPEN_REPARSE_POINT | BACKUP_SEMANTICS)` while omitting `FILE_SHARE_DELETE`; recursive deletion marks pinned leaf/directory handles with `FileDispositionInfoEx` (safe `FileDispositionInfo` fallback) before closing them. Missing platform primitives fail the operation closed. Metadata migration uses cached scan data, so post-validation root, group, or file swaps cannot redirect reads or writes outside the originally bound component tree. Imported projects are rejected and cleaned up before registration, including push and pull staging. Nested reusable components are prohibited, and names must be unique across all reusable components.
 
 Two component rules are advisory rather than blocking, both reported by `POST /api/config/validate`:
 
@@ -407,20 +434,59 @@ Errors still 422 with `to_message()` describing the head finding + count. Warnin
 - `GET /api/config/validate` returns advisory and blocking diagnostics for the persisted project. Realtime editor diagnostics use `POST /api/config/validate`; page/config write responses do not embed warning arrays.
 - MCP page-mutation tools (`pages_add_widget`, `pages_set_widget_property`, `pages_set_metadata`, `pages_delete_widget`) include the warnings array on their `applied_response`.
 
-Current downgrades (was 422, now warning): empty `$var.datasource`, empty `$var.path`, unknown datasource, unknown variable. Structural corruption (non-object `$var` payload) stays a hard error. Rationale: the editor produces empty bindings transiently while the user picks a datasource; the registry can grow at runtime (late OPC-UA pools, project imports); the frontend resolver returns null for unresolved bindings.
+Advisory rather than blocking: empty `$var.datasource`, empty `$var.path`, unknown datasource, unknown variable. Structural corruption (non-object `$var` payload) is a hard error. Rationale: the editor produces empty bindings transiently while the user picks a datasource; the registry can grow at runtime (late OPC-UA pools, project imports); the frontend resolver returns null for unresolved bindings.
+
+## Project Format Migration
+
+`core/project_migrations.py` brings a project up to this build's on-disk
+format. `run_baseline_migration()` is the single entry point and is safe on
+every activation — it is a no-op once the project is stamped at
+`PROJECT_FORMAT_VERSION` *and* carries a `minAppVersion` (see
+[data-formats.md](data-formats.md#what-lives-where) for both fields). A
+project stamped newer raises `UnsupportedProjectFormatError`; the supervisor
+turns that into a start refusal naming the version the project needs and the
+version this build is.
+
+The run order is fixed:
+
+1. **Zip the whole project** into `<project>/.backups/`, streamed to a
+   `.partial` sibling and renamed only once complete. A project that cannot be
+   zipped is not migrated — the archive is written first and a failure there
+   aborts with nothing touched.
+2. **Stage** each target a pending step names (`_TARGET_PATHS`: `config.json`,
+   `pages`, `dialogs`, `components`, `datasources`, `themes`): the real path is
+   moved aside and a copy of it becomes what steps mutate.
+3. **Run** every pending step against the staged copies.
+4. **Swap** each staged target into place, then stamp `formatVersion` /
+   `minAppVersion` and write `lastMigration`.
+
+A step failure restores the moved-aside originals and raises
+`MigrationFailedError`. The moved-aside copies are internal scaffolding,
+deleted on the success and failure paths alike, so a migrated project root is
+left as clean as it started — the zip from step 1 is the only durable record.
+`main.py`'s lifespan logs the version span, the file count, the backup path and
+every step diagnostic under the `nexthmi.migration` logger.
+
+`PROJECT_FORMAT_VERSION` is `9`, stamped beside `PROJECT_FORMAT_MIN_APP`
+(`"1.0.0"`). What each of the three `_STEPS` rewrites on disk is in
+[data-formats.md](data-formats.md#format-versions).
+
+Adding a step and bumping the version is described in the module docstring; the
+release-time half is in
+[operations/release.md](../operations/release.md#project-format).
 
 ## Project Export Filtering
 
 `core/project_packer.py` excludes generated state from project zips. Two layers:
 
-- `_SKIP_TOPLEVEL` — directories never descended (`widget-build`, `.widget-build`).
+- `_SKIP_TOPLEVEL` — directories never descended (`widget-build`, `.widget-build`, `.backups`). The last holds the pre-migration zips: skipping it keeps one installation's backup history out of every archive, and stops each backup nesting the ones before it.
 - `_HISTORIAN_LOCAL_SUFFIXES` — file suffixes stripped only inside `historian/` (`.db`, `.db-wal`, `.db-shm`, `.sqlite`, `.sqlite-journal`). The Historian `config.json` still ships — receivers need to know which variables to log, what retention to apply — but the on-disk database doesn't.
 
 ## LAN Peer Transfer
 
 See [reference/peer-transfer.md](../reference/peer-transfer.md) — trust
 model, staging/atomic-commit/journaling/reconciliation, collision policies,
-and the Windows weaker-guarantee note all live there now.
+and the Windows weaker-guarantee note all live there.
 
 Export and import (`projects_api.py`) share the same zip code path
 (`core/project_packer.py`) as manager peer transfer. There is no unauthenticated
@@ -431,7 +497,7 @@ the manager's device-admin pairing.
 
 - custom-component discovery depends on files existing under `<live-project>/custom-widgets/`
 - language add/remove endpoints are hard-wired to `Default.csv`
-- WebSocket writes are handled through `write_field`; unknown client message types are ignored
+- WebSocket writes are handled through `write_field` and `toggle_field`; unknown client message types are ignored
 - alarm history is capped at 500 entries (oldest dropped)
 - static mounts (`/widgets`, `/widget-js`, `/external-libraries`, `/assets`) are bound to the pinned project at import time; serving a different project means the supervisor running another instance, not a mount switch
 - mDNS peer discovery degrades gracefully (manual entry still works) when `zeroconf` isn't installed or the network blocks multicast

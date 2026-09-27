@@ -13,8 +13,12 @@ broadcast/batching machinery is in `backend/services/websocket_manager.py`.
 A **project instance** (`backend/main.py`) owns `/ws`. Each browser tab opens one
 socket and keeps it alive for the app's lifetime. Through the manager front door
 the socket is reached at `/runtime/<slug>/ws` or `/editor/<slug>/ws`, which the
-manager proxies to the child's `/ws` (the manager session cookie authorizes the
-upgrade). A directly-run instance binds `127.0.0.1` and is unauthenticated.
+manager proxies to the child's `/ws`. Only the editor's socket needs a
+device-admin session cookie; the runtime socket is public, like the rest of the
+live view. The manager closes either upgrade with `1008` when the session is
+missing (editor) or the project's users document is unusable, and with `1011`
+when the project is not running. The child itself binds `127.0.0.1` and does
+not authenticate `/ws`.
 
 Inbound frames are capped at **64 KiB**; oversized or non-JSON frames are logged
 and dropped. Unknown client `type` values are ignored. Composite keys use the
@@ -41,15 +45,37 @@ On accept, the backend sends, in order:
    {
      "type": "var_metadata",
      "meta": {
+       "MyPLC:Motor1/Speed": {
+         "type": { "kind": "scalar", "base": "Float", "array": false },
+         "min": 0,
+         "max": 3000,
+         "writable": true
+       },
+       "MyPLC:Setpoints": {
+         "type": { "kind": "scalar", "base": "Integer", "array": true, "length": 5 },
+         "writable": false
+       },
        "MyPLC:Motor1": {
-         "kind": "scalar | struct | struct[]",
-         "data_type": "boolean | integer | float | string | datetime | <…>[] | <StructName>[]",
-         "array_length": 5,
-         "fields": ["bValue", "sUnit", "..."]
+         "type": { "kind": "struct", "name": "Motor1", "array": false, "fields": ["Speed", "sUnit", "Limits"] },
+         "fieldRanges": { "Speed": { "min": 0, "max": 3000 } }
        }
      }
    }
    ```
+
+   Every enabled leaf still present on the server, and every struct folder,
+   has its own key, so a struct's members (`MyPLC:Motor1/Speed`, the nested
+   `MyPLC:Motor1/Limits`) can be looked up beside it. A struct's `fields`
+   lists all its leaves — disabled ones too — and its nested structs; a struct
+   array's are those of its lowest-index element. `type` is the
+   canonical `VarType` (`frontend/src/shared/types/varType.ts`). `min`/`max`
+   appear on a scalar with a configured range, `fieldRanges` on a struct.
+   `writable` is on every scalar: the variable's own `writable` flag (an
+   OPC-UA node's access level as browsed, the authored flag on a static or
+   test-server variable), `false` when unset. The runtime binding check reads
+   it for a `write: true` field and for a struct field's `write: true`
+   members, and the write path refuses a write to a variable where it is not
+   `true` (`read_only`, below).
 
 3. Chunked `var_update` messages with the full cached value snapshot (500
    entries per chunk, yielding the event loop between chunks).
@@ -73,18 +99,18 @@ leaving a half-initialised socket registered.
 | `opcua_status` | `{ type, datasource, connected }` | Per-datasource connection-state change. |
 | `alarm_snapshot` | `{ type, active: AlarmInstance[], summary: AlarmSummary }` | On connect. |
 | `alarm_update` | same shape as `alarm_snapshot`, `type: "alarm_update"` | On fire / clear / ack. |
-| `recipe_snapshot` | `{ type, config: RecipeConfig, loaded: { [typeId]: { datasetId, loadedAt } }, lastResult }` | On connect (recipes feature only). |
+| `recipe_snapshot` | `{ type, config: RecipeConfig, loaded: { [typeId]: { datasetId, loadedAt } }, lastResult }` | On connect. |
 | `recipe_update` | same shape as `recipe_snapshot`, `type: "recipe_update"` | On config change / download / upload. |
 | `recipe_response` | `{ type, requestId, result }` | A correlated `recipe_load` / `recipe_save` succeeded — `result` is the `DownloadResult` (load) or `{ datasetId }` (save). |
 | `recipe_error` | `{ type, requestId, reason }` | A correlated `recipe_load` / `recipe_save` failed. |
 | `user_identity` | `{ type, scope, username, groups, groupLabels }` | After `login`, `logout`, or `request_identity`. |
-| `auth_error` | `{ type, scope, reason }` | Failed `login`. `reason` is currently always `"invalid_credentials"`. |
-| `write_response` | `{ type, requestId, datasource, path }` | A correlated `write_field` succeeded — see [Action result correlation](#action-result-correlation). |
-| `write_error` | `{ type, requestId, datasource, path, reason }` | A correlated `write_field` failed. |
+| `auth_error` | `{ type, scope, reason }` | Failed `login`. `reason` is `"invalid_credentials"`, or `"rate_limited"` while the credential throttle is holding this username off. |
+| `write_response` | `{ type, requestId, datasource, path }` | A correlated `write_field` or `toggle_field` succeeded — see [Action result correlation](#action-result-correlation). |
+| `write_error` | `{ type, requestId, datasource, path, reason }` | A correlated `write_field` or `toggle_field` failed. |
 | `restarting` | `{ type, reason }` | Right before the backend SIGTERMs itself for `POST /api/system/restart`. Clients disconnect and poll `/api/system/info` for the new process. |
 | `widget_updated` | `{ type, key, name, ts, schema_ok }` | A custom widget recompiled or was deleted; `key` is its normalized path relative to `custom-widgets/`. |
 | `config_changed` | see [config_changed](#config_changed) | After every MCP- or REST-driven config write. |
-| `context_ready` | `{ type, currentPageIds: [string, ...] }` | Reply to `set_context`: every variable requested for `currentPageIds` has been sent, from cache and/or a fresh OPC-UA read. Lets the client reveal a newly navigated page once its own data has actually arrived instead of guessing from the connection-lifetime `var_snapshot` flag. The client should ignore any `context_ready` whose page-set doesn't match its most recently sent `set_context` (a superseded navigation's background prefetch can still land late). |
+| `context_ready` | `{ type, currentPageIds: [string, ...] }` | Reply to `set_context`: every variable requested for `currentPageIds` has been sent, from cache and/or a fresh OPC-UA read. The id list is echoed verbatim, so an overlay — whose resolved page id is in that list — settles on this ack rather than on the grace timer. The client does **not** hold the page for it — a page renders as soon as its config and widget modules are in memory — it uses the ack to decide when a binding that still has no value is genuinely without data, and only then marks it (amber "no data" overlay). A page whose ack never arrives falls back to a 3 s grace. The client should ignore any `context_ready` whose page-set doesn't match its most recently sent `set_context` (a superseded navigation's background prefetch can still land late, and opening an overlay resends the context with its page appended). |
 
 > Auto-login (`request_identity`) never carries a `requestId` in its
 > `user_identity`, so the client dispatcher does not confuse it with a `login`
@@ -92,31 +118,31 @@ leaving a half-initialised socket registered.
 
 ## Client → server messages
 
-- `set_context` — update active page / dialog context for fast-subscription
+- `set_context` — update active page / overlay context for fast-subscription
   priority and prime the per-client priority set.
 
   ```json
   {
     "type": "set_context",
-    "currentPageIds": ["home"],
-    "openDialogIds": ["confirmDialog"],
+    "currentPageIds": ["home", "motor-detail"],
     "priorityKeys": ["MyPLC:Motor1"]
   }
   ```
 
-  - `currentPageIds` is the only page-context key read. The older
-    `currentPageId` (single string) and `openOverlayPageIds` (array) were
-    removed, not deprecated — a frame still sending either carries no page
-    context and its bindings are never primed.
-  - Hard caps: `currentPageIds` ≤ 2000, `openDialogIds` ≤ 2000, `priorityKeys`
+  - `currentPageIds` is the only page-context key read. A frame sending
+    anything else in its place carries no page context, and its bindings are
+    never primed.
+  - Hard caps: `currentPageIds` ≤ 2000, `priorityKeys`
     ≤ 5000. Excess entries are dropped silently.
   - The backend resolves bindings from the runtime pages config (walking nested
     `$if` / `$switch` / `$compare` expressions for `$var` references) and updates
     OPC-UA fast subscriptions accordingly.
 
-  Current producers: `HmiView` (active page + dialog context), `PreviewView`
-  (preview page/dialog context), `DatasourceVariableTable` (explicit
-  `priorityKeys` for visible rows after scroll settle).
+  Current producers: `HmiView` (active page + open overlays), `PreviewView`
+  (preview page/overlay context), `DatasourceVariableTable` (explicit
+  `priorityKeys` for visible rows after scroll settle), `RecipeTable` (explicit
+  `priorityKeys` for a recipe type's bound parameters while its Live column is
+  on).
 
 - `write_field` — write a value to a variable.
 
@@ -124,31 +150,58 @@ leaving a half-initialised socket registered.
   {
     "type": "write_field",
     "datasource": "MyPLC",
-    "path": "Motor1/Command",
-    "field": "bValue",
-    "value": true,
+    "path": "Motor1",
+    "field": "Speed",
+    "value": 1200,
     "scope": "runtime:main",
     "requestId": "8f3c…"
   }
   ```
 
-  - `datasource`, `path`, and `value` are required (`value` must not be `null`).
-    `field` selects a struct field; omit it for a scalar.
-  - If the path ends with `[N]` the current array is read from cache, element `N`
-    is patched, and the full patched array is written.
+  - `datasource`, `path`, and `value` are required; a missing one is
+    `bad_request`, a present `null` value is `invalid_value`. `field` selects a
+    struct field; omit it for a scalar.
+  - The runtime's `writeDataVariable` action names its variable with one sourced
+    `target` (`{"$var": {"path": "<ds>:<path>", "index"?}}`); the client resolves
+    it into this `datasource` / `path` pair, an `index` becoming a `[N]` suffix.
+  - If the path ends with `[N]`, element `N` is patched into the current array
+    and the full patched array is written — the current value is a fresh node
+    read for OPC-UA, the in-memory cache for a static datasource.
   - Permission check: if the variable defines `interactableByGroups`, the scoped
     identity's groups must intersect that list.
-  - Values are coerced toward the target OPC-UA datatype (boolean, integer with
-    range check, float with finite check, string). Boolean strings accept
-    `true/false/1/0/on/off/yes/no`; integers reject out-of-range; floats reject
-    `NaN`/`inf`.
+  - Values are coerced per the
+    [OPC-UA write-coercion matrix](backend.md#opc-ua-write-coercion-matrix), then
+    refused as `read_only` unless the variable written is marked `writable: true`,
+    then checked against its `min`/`max`.
   - `static` datasources are updated in-process; OPC-UA datasources route through
     the pool engine.
   - `requestId` is optional. When supplied the backend replies with
     `write_response` / `write_error` (see below); when omitted the write is
     fire-and-forget with no response.
 
-- `recipe_load` — download a saved dataset (recipes feature).
+- `toggle_field` — invert a Boolean variable.
+
+  ```json
+  {
+    "type": "toggle_field",
+    "datasource": "MyPLC",
+    "path": "Motor1/Run",
+    "scope": "runtime:main",
+    "requestId": "8f3c…"
+  }
+  ```
+
+  - Same fields as `write_field` minus `value` and `field`; the
+    `toggleDataVariable` action's `target` is resolved the same way. The backend reads
+    the current value itself (a fresh node read for OPC-UA, the cache for a
+    static datasource) and writes its inverse through `write_service.write_value`,
+    so the permission check, range check, audit record and reply are the same
+    as a `write_field`. The client never sends the value: its copy may be stale.
+  - A variable whose `data_type` is not Boolean fails with `invalid_value`; one
+    whose current value is not a boolean (never read, read failed) fails with
+    `value_unavailable` and writes nothing.
+
+- `recipe_load` — download a saved dataset.
 
   ```json
   { "type": "recipe_load", "datasetId": "espresso", "verify": true, "scope": "runtime:main", "requestId": "…" }
@@ -159,7 +212,7 @@ leaving a half-initialised socket registered.
   - Replies `recipe_response` (carrying the `DownloadResult`) or `recipe_error`
     when `requestId` is supplied; fire-and-forget otherwise.
 
-- `recipe_save` — upload live values into a dataset (recipes feature).
+- `recipe_save` — upload live values into a dataset.
 
   ```json
   { "type": "recipe_save", "datasetId": "espresso", "scope": "runtime:main", "requestId": "…" }
@@ -200,7 +253,7 @@ message to be ignored silently.
 
 ## Action result correlation
 
-Client-fired async actions (`login`, `logout`, `write_field`, `recipe_load`,
+Client-fired async actions (`login`, `logout`, `write_field`, `toggle_field`, `recipe_load`,
 `recipe_save`) accept an optional `requestId` (UUID). When supplied, the backend
 echoes it on the corresponding response so the frontend dispatcher
 (`frontend/src/hmi/utils/actionDispatcher.ts`) can fire the authored
@@ -209,30 +262,35 @@ echoes it on the corresponding response so the frontend dispatcher
 - `login` → `user_identity` (success) or `auth_error` (failure); both echo
   `requestId`.
 - `logout` → `user_identity` (guest) with the echoed `requestId`.
-- `write_field` → `write_response` on success, `write_error` on failure.
+- `write_field` / `toggle_field` → `write_response` on success, `write_error` on failure.
 - `recipe_load` / `recipe_save` → `recipe_response` on success (with the
   `DownloadResult` exposed as `$result` in handlers), `recipe_error` on failure.
 
-Every deterministic failure path in `_handle_write_field` emits a `write_error`
+Every deterministic failure path in `_handle_write_field` and `_handle_toggle_field` emits a `write_error`
 immediately, so the client never waits out the 10 s timeout. Reason codes are a
 stable contract the frontend `$switch`es on:
 
 | Reason | Meaning |
 | --- | --- |
-| `invalid_credentials` | Login: username/password mismatch |
+| `invalid_credentials` | Login: username/password mismatch — including every account with no password set, which can never be signed in as |
+| `rate_limited`        | Login: too many failed attempts for this username (or across all of them); the right password is refused too until the lockout expires. `users_manager.authenticate` raises `RateLimitError`, which the REST credential routes answer as HTTP `429` |
 | `permission_denied`   | Write: client's group is not in the variable's `interactableByGroups` |
 | `bad_request`         | Write: missing required field in the request payload |
 | `bad_path`            | Write: datasource/path is unknown to the registry |
 | `bad_field`           | Write: field cannot be resolved to an OPC-UA node id |
 | `invalid_value`       | Write: value cannot be coerced to the variable's data type |
 | `value_out_of_range`  | Write: coerced numeric value falls outside the variable's persisted `min`/`max` |
+| `read_only`           | Write / toggle: the variable written — for an element, its array; for a struct field, that member — does not have `writable: true`. Nothing is written |
 | `opcua_unreachable`   | Write: no engine for the datasource (not yet connected, or static-only) |
 | `write_failed`        | Write: the OPC-UA `write_node` call raised |
 | `array_index_out_of_bounds` | Write: an indexed write exceeds a fixed array's declared length |
 | `array_state_unavailable` | Write: indexed array state is missing/stale, so siblings cannot be preserved safely |
+| `value_unavailable` | Toggle: the variable's current value is not a known boolean, so there is nothing to invert |
 | `verify_mismatch` | Write: `verify` was requested, the write itself succeeded, but reading the value back did not match what was written. Only reachable when the caller opts in — `recipe_load` with `verify: true` is the one producer today; `write_field` never sets it |
 
 `invalid_value` follows the documented [OPC-UA write-coercion matrix](backend.md#opc-ua-write-coercion-matrix). The REST variable-write endpoint uses project-user HTTP Basic credentials, then calls the same request parser, `interactableByGroups` permission helper, coercer, and dispatcher.
+
+`read_only` is checked in `write_service.write_value` (and before the read in `toggle_value`), so the WebSocket, REST and recipe-download writes refuse it alike; a recipe download reports it per parameter in `failures`. It comes after `bad_path`, `array_index_out_of_bounds`, `bad_field` and `invalid_value` — a whole-struct payload stays `invalid_value` — and before `value_out_of_range`. A variable that states no access at all is read-only, the same reading the editor and the runtime overlay give it.
 
 `value_out_of_range` is checked only after coercion succeeds, against the variable's own (or, for a struct field, that field's own) persisted `min`/`max` — a hard operator-write constraint enforced identically for REST, WebSocket, and recipe writes since all three share `write_service.write_value`. A whole-array write is rejected if any element is out of range; an indexed element write is checked the same way. A persisted `min > max` is a contract violation, not a range: it is left unenforced (the write proceeds as if no range were configured) and logged once as a warning when the datasource loads.
 
@@ -253,7 +311,7 @@ browser tabs can refetch or surface conflicts.
   "artifact_type": "page",
   "artifact_ids": ["page-home"],
   "source": "mcp",
-  "agent_label": "Claude@1.0",
+  "agent_label": "Claude_1_0",
   "summary": "Added Container widget 'w_abc' to 'page-home'",
   "diff": [ { "op": "add", "path": "/sections/content/0", "value": {} } ]
 }

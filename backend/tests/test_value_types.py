@@ -123,3 +123,15 @@ def test_simplify_variable_tree_does_not_mutate_input():
     tree = [{"kind": "variable", "display_name": "Flag", "data_type": "Bool"}]
     simplify_variable_tree(tree)
     assert tree[0]["data_type"] == "Bool"
+
+
+def test_simplify_variable_tree_converts_variables_without_kind():
+    tree = [
+        {
+            "kind": "folder",
+            "name": "Kpi",
+            "children": [{"display_name": "Oee", "data_type": "Double"}],
+        },
+    ]
+    out = simplify_variable_tree(tree)
+    assert out[0]["children"][0]["data_type"] == "Float"

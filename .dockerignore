@@ -12,11 +12,11 @@ backend/widget-build/
 backend/__pycache__/
 **/__pycache__/
 **/*.pyc
-
-user-workspace/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.coverage
 
 dist/
-build/binary-out/
 
 **/*.log
 .DS_Store

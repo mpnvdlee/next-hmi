@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { apiJson } from '@shared/utils/api';
+import { managerApiJson } from '@shared/utils/api';
 import { getArea, projectSlug } from '@shared/utils/runtimeBase';
 import LogoMark from '@shared/components/LogoMark';
 import './style.css';
@@ -58,11 +58,13 @@ export default function AppTopBarNav() {
   }, [open]);
 
   // In the editor the page title is the project's name, which the API carries
-  // keyed by slug; on the manager pages it is derived from the path below.
+  // keyed by slug; on the manager pages it is derived from the path below. The
+  // manifest is the manager's, at the origin root — the instance this document
+  // is proxied from does not serve the projects API.
   useEffect(() => {
     if (area !== 'editor' || !slug) return;
     let active = true;
-    apiJson<ProjectsResponse>('/api/projects')
+    managerApiJson<ProjectsResponse>('/api/projects')
       .then((r) => {
         if (!active) return;
         setProjectName(r.projects?.find((p) => p.id === slug)?.name ?? null);

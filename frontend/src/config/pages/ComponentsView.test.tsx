@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { registerComponents } from '@hmi/registry/widgetRegistry';
 import { makeWidgetSlotId } from '@shared/constants/editorSentinels';
 import { useComponentStore } from '@shared/store/componentStore';
+import { useProjectStore } from '@shared/store/projectStore';
 import { clearCut, pendingCut, setCut } from '../components/editor/WidgetTree/cutState';
 import { useComponentEditorStore } from '../store/componentEditorStore';
 import { useProjectDiagnosticsStore } from '@config/hooks/useProjectDiagnostics';
@@ -71,6 +72,7 @@ beforeEach(() => {
     vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ diagnostics: [] }) }),
   );
   useProjectDiagnosticsStore.setState({ swept: null, loading: false });
+  useProjectStore.setState({ past: [], future: [], dirty: false });
   useComponentStore.setState({
     components: [definition('A', ['a1', 'a2']), definition('B', ['b1', 'b2'])],
     folders: [],
@@ -293,5 +295,54 @@ describe('ComponentsView shift-range selection', () => {
     fireEvent.click(row('a1'), { shiftKey: true });
 
     expect(useComponentEditorStore.getState().selectedIds).toEqual(['a1']);
+  });
+});
+
+describe('ComponentsView undo history', () => {
+  it('records a structural edit as one step that undo rolls back', () => {
+    // a2 stays selected so the mocked single-widget panel doesn't also render
+    // the text "a1" that `row` looks for.
+    useComponentEditorStore.setState({
+      selectedIds: ['a2'],
+      selectedId: 'a2',
+      selectionAnchorId: 'a2',
+    });
+
+    render(<ComponentsView />);
+    fireEvent.contextMenu(row('a1'));
+    fireEvent.click(screen.getByText('Delete'));
+
+    expect(
+      (useComponentStore.getState().draftComponents.A.children as { id: string }[]).map(
+        (c) => c.id,
+      ),
+    ).toEqual(['a2']);
+    expect(useProjectStore.getState().past).toHaveLength(1);
+
+    useProjectStore.getState().undo();
+
+    // The step was taken before the write, so the draft is gone entirely and the
+    // definition renders from the saved list again.
+    expect(useComponentStore.getState().draftComponents).toEqual({});
+  });
+
+  it('coalesces a burst of property writes into one step', () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_000);
+    try {
+      useComponentEditorStore.setState({
+        selectedIds: ['a1', 'a2'],
+        selectedId: 'a2',
+        selectionAnchorId: 'a1',
+      });
+
+      render(<ComponentsView />);
+      fireEvent.click(screen.getByText('rename both'));
+      fireEvent.click(screen.getByText('rename both'));
+      fireEvent.click(screen.getByText('rename both'));
+
+      expect(useProjectStore.getState().past).toHaveLength(1);
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 });

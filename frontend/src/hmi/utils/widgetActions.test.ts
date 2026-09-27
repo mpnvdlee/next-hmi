@@ -12,7 +12,7 @@ function anchorElement(rect: Partial<DOMRect>): HTMLElement {
 
 describe('executeWidgetActions — anchored placement', () => {
   beforeEach(() => {
-    useHmiStore.setState({ openDialogs: [], openPageOverlays: [] });
+    useHmiStore.setState({ openPageOverlays: [] });
   });
 
   it('captures the trigger rect for an anchored page overlay', () => {
@@ -62,19 +62,48 @@ describe('executeWidgetActions — anchored placement', () => {
 
     expect(useHmiStore.getState().openPageOverlays[0].anchorRect).toBeUndefined();
   });
+});
 
-  it('captures the trigger rect for an anchored dialog', () => {
+describe('executeWidgetActions — openDialog component properties', () => {
+  beforeEach(() => {
+    useHmiStore.setState({ openPageOverlays: [] });
+  });
+
+  it('stores the values the action supplies', () => {
     const action: ButtonAction = {
       type: 'openDialog',
-      dialogId: 'd1',
-      placement: 'trigger-right',
+      pageId: 'p1',
+      componentProperties: { motorId: 'M7', speed: { $var: { path: 'PLC:Speed' } } },
     };
-    executeWidgetActions([action], {
-      anchorEl: anchorElement({ top: 5, left: 5, right: 55, bottom: 25, width: 50, height: 20 }),
-    });
+    executeWidgetActions([action], {});
 
-    const entry = useHmiStore.getState().openDialogs[0];
-    expect(entry.placement).toBe('trigger-right');
-    expect(entry.anchorRect).toMatchObject({ top: 5, left: 5, width: 50, height: 20 });
+    expect(useHmiStore.getState().openPageOverlays[0].componentProperties).toEqual({
+      motorId: 'M7',
+      speed: { $var: { path: 'PLC:Speed' } },
+    });
+  });
+
+  it('forwards the firing site’s own props through a $componentProp value', () => {
+    // An overlay opened from inside a component passes its own input along.
+    const action: ButtonAction = {
+      type: 'openDialog',
+      pageId: 'p1',
+      componentProperties: { motorId: { $componentProp: 'machine' } },
+    };
+    executeWidgetActions([action], { evalCtx: { inputScopeProps: { machine: 'M9' } } });
+
+    expect(useHmiStore.getState().openPageOverlays[0].componentProperties).toEqual({
+      motorId: 'M9',
+    });
+  });
+
+  it('defaults to an empty map when the action carries none', () => {
+    executeWidgetActions([{ type: 'openDialog', pageId: 'p1' }], {});
+    expect(useHmiStore.getState().openPageOverlays[0].componentProperties).toEqual({});
+  });
+
+  it('passes none for a page opened as an overlay, which declares none', () => {
+    executeWidgetActions([{ type: 'openPageOverlay', pageId: 'p1' }], {});
+    expect(useHmiStore.getState().openPageOverlays[0].componentProperties).toEqual({});
   });
 });

@@ -35,7 +35,7 @@ def apply_asyncua_watchdog_log_patch() -> None:
                 # configured at level=ERROR would silently drop the record
                 # instead of seeing it (as WARNING, without the traceback).
                 # Leaving levelno at ERROR keeps it passing every handler's
-                # threshold while still rendering as WARNING (§2.9).
+                # threshold while still rendering as WARNING.
                 record.levelname = "WARNING"
                 record.exc_info = None
                 record.exc_text = None

@@ -29,7 +29,7 @@ describe('Button', () => {
     vi.clearAllMocks();
     __resetForTests();
     useVariableStore.setState({ values: {}, varMeta: {} });
-    useHmiStore.setState({ openDialogs: [], openPageOverlays: [], pendingToasts: [] });
+    useHmiStore.setState({ openPageOverlays: [], pendingToasts: [] });
   });
 
   afterEach(() => {
@@ -41,7 +41,21 @@ describe('Button', () => {
     expect(screen.getByRole('button', { name: 'Start Motor' })).toBeInTheDocument();
   });
 
-  it('writes bValue on click when bound to a variable', async () => {
+  it('emits the radius override as a custom property, not a literal style', () => {
+    const { container } = renderButton({ label: 'Stop', radius: '2px' });
+    const el = container.firstElementChild as HTMLElement;
+
+    expect(el.style.getPropertyValue('--hmi-btn-radius')).toBe('2px');
+  });
+
+  it('leaves the radius override unset when no radius is configured', () => {
+    const { container } = renderButton({ label: 'Stop' });
+    const el = container.firstElementChild as HTMLElement;
+
+    expect(el.style.getPropertyValue('--hmi-btn-radius')).toBe('');
+  });
+
+  it('writes true on click when bound to a variable', async () => {
     const user = userEvent.setup();
     renderButton({ label: 'Start', variable: { $var: { path: 'PLC:Motor/Cmd' } } });
 
@@ -53,7 +67,6 @@ describe('Button', () => {
       scope: 'runtime:preview',
       datasource: 'PLC',
       path: 'Motor/Cmd',
-      field: 'bValue',
       value: true,
     });
     expect(sentFrame().requestId).toBeTruthy();
@@ -71,33 +84,6 @@ describe('Button', () => {
     expect(toasts).toHaveLength(1);
     expect(toasts[0].severity).toBe('error');
     expect(toasts[0].message).toMatch(/not allowed/i);
-  });
-
-  it('disables the button and ignores clicks when its bEnabled field is false', async () => {
-    useVariableStore.setState({
-      values: { 'PLC:Motor/Cmd': { bVisible: true, bEnabled: false } },
-    });
-    const user = userEvent.setup();
-    renderButton({ label: 'Start', variable: { $var: { path: 'PLC:Motor/Cmd' } } });
-
-    const btn = screen.getByRole('button', { name: 'Start' });
-    expect(btn).toBeDisabled();
-
-    await user.click(btn);
-
-    expect(sendWsMessage).not.toHaveBeenCalled();
-  });
-
-  it('renders nothing when its bVisible field is false', () => {
-    useVariableStore.setState({
-      values: { 'PLC:Motor/Cmd': { bVisible: false } },
-    });
-    const { container } = renderButton({
-      label: 'Start',
-      variable: { $var: { path: 'PLC:Motor/Cmd' } },
-    });
-
-    expect(container.firstChild).toBeNull();
   });
 
   it('applies an outline style with a transparent background and colored border/text', () => {
@@ -120,11 +106,11 @@ describe('Button', () => {
     const user = userEvent.setup();
     renderButton({
       label: 'Open',
-      actions: { onPress: [{ type: 'openDialog', dialogId: 'settings' }] },
+      actions: { onPress: [{ type: 'openPageOverlay', pageId: 'settings' }] },
     });
 
     await user.click(screen.getByRole('button', { name: 'Open' }));
 
-    expect(useHmiStore.getState().openDialogs.map((d) => d.id)).toContain('settings');
+    expect(useHmiStore.getState().openPageOverlays.map((o) => o.pageId)).toContain('settings');
   });
 });

@@ -94,7 +94,6 @@ interface LayoutConfig {
   justify?: string;
 
   // Container — inner spacing
-  padding?: string;
   paddingTop?: string;
   paddingRight?: string;
   paddingBottom?: string;
@@ -105,31 +104,35 @@ interface LayoutConfig {
   radius?: string;
 
   // Self — sizing
+  /** How the widget sizes itself on this axis: 'hug' | 'fill' | 'fixed' (or a
+   *  property source). Spread `selfLayoutStyle(layout)` and it is applied for
+   *  you — no need to read this directly. */
+  widthMode?: string;
+  heightMode?: string;
   width?: string;
   height?: string;
   minWidth?: string;
   maxWidth?: string;
   minHeight?: string;
+  maxHeight?: string;
 
   // Self — flex placement
-  alignSelf?: string;
-  basis?: string;
+  /** Fill weight, authored by the panel when a mode is Fill. A node carrying
+   *  no size mode at all keeps it as a plain `flex-grow`. */
   grow?: number;
-  shrink?: number;
-
-  // Self — spacing
-  margin?: string;
-  marginTop?: string;
-  marginRight?: string;
-  marginBottom?: string;
-  marginLeft?: string;
 }
 
 interface VariableBinding {
   /** Composite "datasource:location" key, e.g. "MyPLC:Motor1/Speed". */
   path: string;
   index?: number;
+  /** Take `index` from the surrounding Repeater copy instead. */
+  repeatIndex?: boolean;
 }
+
+/** The variable a write or toggle action writes: a `$var`, or — inside a
+ *  Repeater — the copy's element (`member` of a struct element). */
+type WriteTarget = { $var: VariableBinding } | { $repeatItem: { member?: string } };
 
 /** Mirrors `EvaluationContext` in `hmi/utils/propertySourceEval.ts` — one resolver
  *  per property source. Everything is optional: a context that omits a resolver
@@ -164,6 +167,10 @@ interface EvaluationContext {
   /** Backend response exposed to onSuccess / onFailed / onSettled handlers via
    *  `$result`. Absent in every other context. */
   resultValue?: Record<string, unknown>;
+  /** The surrounding Repeater copy's `$repeatItem`, resolved to its concrete source. */
+  resolveRepeatItem?: (payload: unknown) => unknown;
+  /** The surrounding Repeater copy's element index. */
+  repeatIndex?: number;
 }
 
 interface PagePathSegment {
@@ -212,6 +219,35 @@ interface HmiWidgetProps {
   properties?: Record<string, unknown>;
   layout?: LayoutConfig;
   children?: unknown;
+  /** This widget's own child nodes, unrendered — only for a widget that
+   *  declares `hostsChildren`. Take `children` unless you need per-child
+   *  metadata (an id-keyed position, say); those are already rendered and
+   *  cheaper. Place these yourself with `renderWidget`. */
+  childConfigs?: WidgetConfig[];
+}
+
+/** One node of the persisted widget tree, as `childConfigs`, a `widgets`
+ *  property and `useComponentSlot` hand it over. Pass it to `renderWidget`
+ *  rather than reading `type` and rendering it yourself. */
+interface WidgetConfig {
+  id: string;
+  type: string;
+  name: string;
+  layout?: LayoutConfig;
+  properties?: Record<string, unknown>;
+  children?: WidgetConfig[];
+  /** Only meaningful on a child of a component instance: which of the
+   *  definition's slots this widget fills. Absent means the first slot. */
+  slot?: string;
+}
+
+interface AnchorRect {
+  top: number;
+  left: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
 }
 
 type OverlaySize = 'auto' | 'small' | 'medium' | 'fullscreen' | 'fixed';
@@ -230,7 +266,7 @@ type OverlayBackdrop = 'dim' | 'none';
 type ComponentAction =
   | {
       type: 'openDialog';
-      dialogId: string;
+      pageId: string;
       componentProperties?: Record<string, unknown>;
       size?: OverlaySize;
       placement?: OverlayPlacement;
@@ -240,7 +276,6 @@ type ComponentAction =
       /** Height in pixels — only relevant when size is 'fixed'. */
       height?: number;
     }
-  | { type: 'closeDialog'; dialogId?: string }
   | {
       type: 'openPageOverlay';
       pageId: string;
@@ -255,9 +290,25 @@ type ComponentAction =
   | { type: 'closePageOverlay'; pageId?: string }
   | {
       type: 'writeDataVariable';
-      datasource: string;
-      path: string;
-      value: string | number | boolean;
+      /** `{ $var: { path: 'ds:path' } }`, or inside a Repeater the copy's element. */
+      target?: WriteTarget;
+      /** A literal, a dialog input parameter, or the Repeater copy's element. */
+      value: string | number | boolean | unknown[] | { $componentProp: string } | RepeatItemSource;
+      onSuccess?: ComponentAction[];
+      onFailed?: ComponentAction[];
+      onSettled?: ComponentAction[];
+    }
+  | {
+      type: 'if';
+      /** Any property-source value; `then` runs when it evaluates truthy. */
+      condition: unknown;
+      then?: ComponentAction[];
+      else?: ComponentAction[];
+    }
+  | {
+      type: 'toggleDataVariable';
+      /** `{ $var: { path: 'ds:path' } }`, or inside a Repeater the copy's element. */
+      target?: WriteTarget;
       onSuccess?: ComponentAction[];
       onFailed?: ComponentAction[];
       onSettled?: ComponentAction[];
@@ -306,7 +357,7 @@ type ComponentAction =
   | {
       type: 'showToast';
       message: unknown;
-      severity: 'info' | 'warning' | 'error';
+      severity: 'info' | 'success' | 'warning' | 'error';
       discard: 'auto' | 'manual';
       duration?: number;
     };
@@ -315,8 +366,8 @@ type ComponentAction =
  * A field's `type` is a value type (`boolean` | `integer` | `float` |
  * `string` | `datetime` | `date` | `time` | `duration`), one of their arrays
  * (`'float[]'` …), a named struct (`'struct'`, `'Alarms[]'`, …), or an
- * editor-only kind (`color` | `icon` | `image` | `option-list` |
- * `record-list` | `actions` | `groups` | `image-indicators` |
+ * editor-only kind (`color` | `icon` | `image` | `video` | `option-list` |
+ * `record-list` | `item-list` | `actions` | `groups` | `image-indicators` |
  * `child-positions` | `page-group`). It may also be a list — the first entry
  * drives the editor control, the rest form the variable-binding filter (e.g.
  * `['float','integer','boolean']` or `['option-list','string[]','integer[]']`).
@@ -353,7 +404,11 @@ interface SchemaField {
       }
   )[];
   write?: boolean;
-  options?: { label: string; value: string | number | boolean; icon?: string }[];
+  options?: {
+    label: string;
+    value?: string | number | boolean | { $loc: string };
+    icon?: string;
+  }[];
   /** Only with `format: 'select'`: how the options render. */
   display?: 'auto' | 'dropdown' | 'button-text' | 'button-icon';
   /** For a `color` field: the theme token (e.g. `--hmi-accent`) an unset value
@@ -361,6 +416,10 @@ interface SchemaField {
   defaultToken?: string;
   /** Conditional visibility — a condition or an AND-joined array, referencing sibling keys. */
   visibleWhen?: unknown;
+  /** For a `format: 'variables'` field: when it passes, the picker offers only
+   *  the variables the historian records. Same shape and evaluation as
+   *  `visibleWhen`. */
+  recordedWhen?: unknown;
   event?: string;
 }
 
@@ -418,6 +477,8 @@ interface VarMeta {
   /** Configured numeric range — scalar variables only. */
   min?: number;
   max?: number;
+  /** Whether the variable accepts writes — scalar variables only. */
+  writable?: boolean;
   /** Configured numeric range per field — structs only. */
   fieldRanges?: Record<string, { min?: number; max?: number }>;
 }
@@ -427,7 +488,7 @@ declare function useVariableMeta(key: string): VarMeta | undefined;
  *  a `requestId` the backend emits no `write_response` / `write_error`, so a
  *  rejected write is invisible to the operator. */
 declare function sendWsMessage(msg: {
-  type: 'write' | 'write_field';
+  type: 'write_field';
   requestId?: string;
   scope?: string;
   datasource: string;
@@ -639,6 +700,89 @@ declare function usePageTitle(title: PageTitle): string;
 declare function resolvePageTitle(title: PageTitle): string;
 declare function useNavigateToPage(): (pageId: string) => void;
 declare function useVisiblePages(): PageNode[];
+/** Group ids of the signed-in user, `[]` when nobody is. The group source
+ *  behind `useVisiblePages`' role filter — use it, not
+ *  `useEvalContext().resolveUserGroups()`, to reapply that filter to nested
+ *  levels of the page tree: the eval context answers `['guest']` for an
+ *  anonymous viewer, which would list pages the top level hides. */
+declare function useCurrentUserGroups(): readonly string[];
+
+interface ActivePage {
+  /** Page id in the URL. `null` on a route that names none, where the runtime
+   *  falls back to the first page — which `pageId` then reports. May name a
+   *  *group* rather than a page. */
+  requestedId: string | null;
+  /** The page actually on screen, after a group resolves to its active child. */
+  pageId: string | null;
+  /** Ids of the page groups the active page sits inside, outermost first.
+   *  Empty for a top-level page. */
+  groupIds: readonly string[];
+}
+/** Where the runtime currently is in the page tree — for a widget that marks an
+ *  active entry. Resolved against the whole tree, hidden pages included, so an
+ *  unlisted page still marks its ancestors. */
+declare function useActivePage(): ActivePage;
+
+// ── Composition ───────────────────────────────────────────────────────────────
+// For a widget that places other widgets itself. Prefer the `children` prop:
+// the renderer hands those over already rendered, and a widget that only needs
+// them in order (a row, a card, a grid) should declare `hostsChildren` plus
+// `flowsChildren` and lay `children` out with CSS. Reach for these when the widget needs to decide
+// *where* each node goes, or to render a node that is not its own child.
+
+/** Render one widget node — from `childConfigs`, from a `widgets`-typed
+ *  property, or from `useComponentSlot`. */
+declare function renderWidget(node: WidgetConfig): JSX.Element;
+/** Render the nodes a caller put in one of this instance's slots. Keeps them in
+ *  the caller's editing scope, so the editor selects them where they were
+ *  authored rather than resolving out to the instance. */
+declare function renderSlotWidgets(nodes: WidgetConfig[]): JSX.Element;
+/** The widgets a caller placed in the named slot of the component instance being
+ *  rendered, or `[]` outside an instance / for a slot nobody filled. */
+declare function useComponentSlot(slot: string): WidgetConfig[];
+/** True while rendering inside a component instance somebody placed, false while
+ *  the components editor renders a definition on its own canvas. Pair it with
+ *  `useIsPreview` to keep an authoring affordance out of the page preview. */
+declare function useIsComponentInstance(): boolean;
+
+/** `$repeatItem`: the surrounding Repeater copy's element, one member of it,
+ *  or its 0-based index. */
+interface RepeatItemSource {
+  $repeatItem: { field?: 'value' | 'index'; member?: string };
+}
+
+/** One Repeater copy, as published to the widgets inside it. */
+interface RepeatScopeValue {
+  /** 0-based position of this copy's element in the full items array. */
+  index: number;
+  /** The element itself — a scalar, a record, or a struct's field map. */
+  item: unknown;
+  /** Composite key of the `$var` array the items came from; absent otherwise. */
+  arrayKey?: string;
+  /** The items are a struct-array variable. */
+  structArray?: boolean;
+  /** Unique per copy across nested Repeaters. */
+  key: string;
+  /** The first copy drawn — the one a reader outside the Repeater sees. */
+  first: boolean;
+  /** An editor-canvas copy past the first: drawn for context, never edited. */
+  ghost?: boolean;
+}
+/** The innermost Repeater copy around the caller, or `null` outside one. */
+declare function useRepeatScope(): RepeatScopeValue | null;
+/** Publish one Repeater copy to `children`. Keep `value` stable per copy, and
+ *  declare `export const repeatsChildren = '<item-list prop>'` on the widget. */
+declare function RepeatScope(props: { value: RepeatScopeValue; children?: unknown }): JSX.Element;
+/** True inside the editor's preview pane, false in the operator runtime — for an
+ *  authoring-only affordance the operator must never see. */
+declare function useIsPreview(): boolean;
+/** Position a panel against a trigger's anchor rect: renders at the raw offset,
+ *  then clamps itself into the viewport once measured. Attach the ref to the
+ *  panel and the style to the same element. Pass `null` when unanchored. */
+declare function useAnchoredStyle(
+  rect: AnchorRect | null | undefined,
+  placement: OverlayPlacement | null | undefined,
+): [{ current: HTMLDivElement | null }, Record<string, string | number>];
 
 interface PhosphorIconProps {
   size?: number | string;
@@ -650,7 +794,7 @@ interface PhosphorIconProps {
  * A built-in icon — not a plain component. It is a `React.lazy` wrapper: the
  * icon set is fetched on first render, so rendering one *outside* a
  * `React.Suspense` boundary throws a promise instead of drawing anything.
- * Every use looks like the stdlib widgets' (`Icon`, `Button`, `Tab Bar`, …):
+ * Every use looks like the built-in widgets' (`Icon`, `Button`, `Tab Bar`, …):
  *
  *     <React.Suspense fallback={null}>
  *       <IconComp size={20} weight="regular" />
@@ -685,6 +829,16 @@ declare function useInlineSvg(url: string | null | undefined): string;
 /** Prefixes an absolute app path with the instance base, so a URL still
  *  resolves when the project is proxied under /runtime/<slug>/ or /editor/<slug>/. */
 declare function withBase(path: string): string;
+/**
+ * Resolves an asset-field value to something `<img src>`/`<video src>` can load.
+ *
+ * A `$static` payload already arrives as a full `/assets/…` url, but a `$var`
+ * or `$urlParam` on the same field delivers the stored path verbatim — and a
+ * project-relative `images/logo.png` would otherwise resolve against the page
+ * url. A path rooted at `images/`, `icons/` or `videos/` is prefixed; anything
+ * absolute, rooted or remote passes through, as does a bare filename.
+ */
+declare function assetSrc(value: string): string;
 /** What `apiJson` throws when the backend answers non-2xx: `message` is the
  *  response body's `detail` (or `HTTP <status>` when it carried none), `status`
  *  the HTTP status, `code` the body's machine-readable `code` when it had one. */
@@ -708,13 +862,37 @@ declare function apiJson<T = unknown>(
 declare function selfLayoutStyle(
   layout?: LayoutConfig,
 ): Record<string, string | number> | undefined;
-/** The `--container-*` half of a layout, for a widget that declares
- *  `hostsChildren` and lays its children out itself. Pair it with a stylesheet
- *  that resets every `--container-*` it reads to `initial`, or a nested host
- *  inherits its parent's direction and gap. */
-declare function containerLayoutStyle(
-  layout?: LayoutConfig,
-): Record<string, string | number> | undefined;
+/** The `--container-*` half of a layout, plus the `data-flow-direction`/
+ *  `data-flow-align` attributes that tell each child's own `widthMode`/
+ *  `heightMode` which screen axis is main, for a widget that declares
+ *  `hostsChildren` and lays its children out itself. Declare `flowsChildren`
+ *  alongside it: that is what tells the editor and the runtime those children
+ *  have a main axis, so each gets Hug/Fill/Fixed rows and resolves its size
+ *  modes against this widget rather than an unrelated ancestor. Spread the
+ *  whole returned object onto the element that is actually `display: flex` —
+ *  it must carry `hmi-component` (or `hmi-container`), which is where the
+ *  shared layout barrier resets every `--container-*` and `--w-*`/`--h-*` —
+ *  without it a nested host inherits its parent's direction and gap. A host
+ *  split across two elements can destructure instead: `style` onto the outer,
+ *  class-carrying one, and the two `data-flow-*` fields onto the inner one
+ *  that actually flexes — `--container-*` still reaches the inner element by
+ *  ordinary CSS inheritance from the outer, so only the outer needs the class.
+ *  The built-in `Container` does this (`.hmi-container` / `.hmi-container__content`),
+ *  with one more wrinkle worth copying: it strips `style`'s four padding
+ *  longhands off the outer element before applying it and reapplies them to
+ *  its inner content (and title, if any) instead. The outer is also whatever
+ *  a Fill-mode ancestor gives `flex-grow`/`flex-basis: 0`, and a border-box
+ *  element's own padding sets a floor under that math — a weight-2 Fill child
+ *  stops landing at a clean 2x split next to weight-1 siblings the moment its
+ *  own padding differs from theirs (as it will whenever one sibling picks up
+ *  a padding-free wrapper, e.g. `WidgetRenderer`'s binding/lock overlay). A
+ *  widget with its own padding-bearing children should move that padding down
+ *  a level the same way, past whichever element carries the Fill sizing. */
+declare function containerLayoutProps(layout?: LayoutConfig): {
+  style: Record<string, string | number>;
+  'data-flow-direction': 'row' | 'column';
+  'data-flow-align': string;
+};
 declare function widgetColorStyle(color: string | undefined): Record<string, string>;
 
 declare function bindingKey(binding: VariableBinding | unknown): string;
@@ -727,6 +905,9 @@ declare function getPropString(
   evalCtx?: EvaluationContext,
 ): string;
 
+/** A number, or a string that is a clean decimal number (`"42"`, `" -1.5 "`) —
+ *  read as-is, never rounded for an integer field. Anything else returns
+ *  `fallback` (default `0`). */
 declare function getPropNumber(
   properties: Record<string, unknown> | undefined,
   key: string,
@@ -759,6 +940,7 @@ declare function usePropString(
   fallback?: string,
 ): string;
 
+/** `getPropNumber` with the eval context supplied — same string parsing. */
 declare function usePropNumber(
   properties: Record<string, unknown> | undefined,
   key: string,
@@ -785,6 +967,25 @@ declare function useRecordListProp(
   properties: Record<string, unknown> | undefined,
   key: string,
 ): unknown[];
+
+/** What an `item-list` property repeats over, and where its elements live. */
+interface ItemList {
+  items: unknown[];
+  /** Composite key of the bound array variable; absent for every other source. */
+  arrayKey?: string;
+  /** The bound variable is a struct array — each member is its own leaf. */
+  structArray: boolean;
+}
+
+/**
+ * Read an `item-list` property — any array from any source that can produce
+ * one (`$static`, a scalar or struct `$var` array, `$http` returning a JSON
+ * array, `$recipeList`, `$user` users/groups, `$widgetProp`).
+ */
+declare function useItemListProp(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+): ItemList;
 
 declare function useCssVar(varName: string, fallback: string): string;
 

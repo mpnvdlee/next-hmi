@@ -2,7 +2,12 @@ import './style.css';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useConfigStore } from '@shared/store/configStore';
-import { findPageById, resolvePageTitle } from '@shared/utils/pageTree';
+import {
+  allPageRootNodes,
+  findPageById,
+  findPageGroupById,
+  resolvePageTitle,
+} from '@shared/utils/pageTree';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { useComponentEditorStore } from '@config/store/componentEditorStore';
 import { EDITOR_NODE_IDS } from '@shared/constants/editorSentinels';
@@ -20,13 +25,18 @@ import CloseButton from '@shared/components/CloseButton';
 function artifactLabel(d: Diagnostic): string {
   switch (d.artifactKind) {
     case 'page': {
+      // Both roots: a page of the Dialogs folder reports as a `page` too.
       const page = d.artifactId
-        ? findPageById(useConfigStore.getState().pages, d.artifactId)
+        ? findPageById(allPageRootNodes(useConfigStore.getState()), d.artifactId)
         : undefined;
       return page ? resolvePageTitle(page.title) : (d.artifactId ?? 'Page');
     }
-    case 'dialog':
-      return `Dialog: ${d.artifactId ?? '?'}`;
+    case 'pageGroup': {
+      const group = d.artifactId
+        ? findPageGroupById(allPageRootNodes(useConfigStore.getState()), d.artifactId)
+        : undefined;
+      return `Page group: ${group ? resolvePageTitle(group.title) : (d.artifactId ?? '?')}`;
+    }
     case 'shell':
       return 'Shell';
     case 'globalEvents':
@@ -81,10 +91,11 @@ async function selectDiagnostic(d: Diagnostic, navigate: (to: string) => void) {
       editor.setSelected(d.widgetId ?? d.artifactId);
       return;
     }
-    case 'dialog':
+    case 'pageGroup':
+      // The group node is a row in the page tree; selecting it opens its panel,
+      // Events section and all.
       if (!d.artifactId) return;
-      editor.previewPage(d.artifactId);
-      editor.setSelected(d.widgetId ?? d.artifactId);
+      editor.setSelected(d.artifactId);
       return;
     case 'shell':
       editor.setSelected(d.widgetId ?? resolveShellAreaId(d.widgetId));

@@ -162,6 +162,8 @@ export default function ShellRegion({ id, config, children, focused }: Props) {
       }
       data-region={id}
       data-collapsed={!expanded ? 'true' : 'false'}
+      data-flow-direction={isVertical ? 'column' : 'row'}
+      data-flow-align={isVertical ? 'flex-start' : 'center'}
       style={style}
     >
       {children}
@@ -227,6 +229,8 @@ function OverlayLayer({
         className={`${styles.region} ${styles[`region-${id}`] ?? ''} ${styles.overlay}`}
         data-region={id}
         data-overlay="true"
+        data-flow-direction={isVertical ? 'column' : 'row'}
+        data-flow-align={isVertical ? 'flex-start' : 'center'}
         style={panelStyle}
       >
         {children}

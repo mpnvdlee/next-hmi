@@ -51,13 +51,14 @@
 
 .project-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 10rem minmax(0, 1fr) auto;
   gap: var(--cfg-space-3) var(--cfg-space-4);
   align-items: center;
   padding: var(--cfg-space-4) var(--cfg-space-5);
   border: 1px solid var(--cfg-border);
   border-radius: var(--cfg-radius);
   background: var(--cfg-surface);
+  min-height: 6rem;
 }
 
 .project-row--live {
@@ -93,11 +94,8 @@
 .project-row__id {
   font-family: var(--cfg-font-mono);
   font-size: var(--cfg-text-xs, var(--cfg-text-sm));
+  font-weight: var(--cfg-fw-normal);
   color: var(--cfg-text-muted);
-  padding: 0 var(--cfg-space-2);
-  border: 1px solid var(--cfg-border);
-  border-radius: var(--cfg-radius-sm);
-  background: color-mix(in srgb, var(--cfg-surface-dark) 55%, var(--cfg-surface));
   word-break: break-all;
 }
 
@@ -116,12 +114,15 @@
   justify-content: flex-end;
 }
 
-.projects-page__error {
-  padding: var(--cfg-space-3) var(--cfg-space-4);
-  border: 1px solid color-mix(in srgb, var(--cfg-danger, crimson) 50%, var(--cfg-border));
-  border-radius: var(--cfg-radius);
-  background: color-mix(in srgb, var(--cfg-danger, crimson) 6%, var(--cfg-surface));
-  color: var(--cfg-text);
+/* Both ride on the config banner classes (config.css) for the box and the type
+   scale — restating them here is what left this page's banners at the browser's
+   default 16px while everything around them sat at 13px. The page's own flex gap
+   owns the spacing between blocks, so the banner's margin comes off — carrying
+   the base class too, since config.css ships in its own chunk that can load
+   after this one and would otherwise win on order. */
+.cfg-error-banner.projects-page__error,
+.cfg-success-banner.projects-page__notice {
+  margin-bottom: 0;
 }
 
 @media (max-width: 720px) {

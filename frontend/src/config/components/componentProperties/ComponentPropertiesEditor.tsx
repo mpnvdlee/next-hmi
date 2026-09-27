@@ -3,11 +3,16 @@ import './componentProperty.css';
 import '../editor/BindingPickerShell/style.css';
 import {
   componentPropertyToSchemaField,
+  OPTION_TYPE_EMPTY_VALUE,
+  OPTION_TYPE_OPTIONS,
+  typeLabel,
+  VALUELESS_PROPERTY_TYPES,
+  type ComponentPropertyOptionType,
   type ComponentPropertySchema,
   type StructSchemaNode,
 } from '@shared/types/componentProperty';
-import { primaryType } from '@shared/utils/valueTypes';
-import { renderSchemaField } from '../../utils/renderSchemaField';
+import { primaryType, typeList } from '@shared/utils/valueTypes';
+import { hasOptionValue, renderSchemaField, selectOptionKey } from '../../utils/renderSchemaField';
 import PropRow from '../ui/PropRow';
 import FieldGroup from '../ui/FieldGroup';
 import AddButton from '../ui/AddButton';
@@ -16,22 +21,32 @@ import { ClearIcon, EditIcon } from '../ui/actionIcons';
 import propertySourceIcons from '../editor/PropertySourceSelector/propertySourceIcons';
 import { KindLabel, PreviewText } from '../editor/PropertySourceEditor/editors/shared';
 import RequiredFieldsTree from '../editor/VariableBindingPicker/RequiredFieldsTree';
-import ItemsInput, { type ItemEntry } from '../editor/ItemsInput';
+import Select from '../ui/Select';
+import ItemsInput from '../editor/ItemsInput';
 import { PropertyModal } from './PropertyModal';
 import { StructSchemaModal } from './StructSchemaModal';
-
-/** Property types that never resolve to a single literal value, so they take
- *  neither a write flag nor a default. */
-const VALUELESS_TYPES = new Set(['struct', 'actions', 'widgets']);
 
 interface Props {
   properties: Record<string, ComponentPropertySchema>;
   /** Name of the component or dialog these properties belong to. */
   ownerName?: string;
+  /** What this interface is called where it is being edited. A component
+   *  declares *component properties* a placement fills; a page in the Dialogs
+   *  folder declares *input parameters* the opening action fills — same shape,
+   *  two names, and each surface uses the one its own docs and diagnostics do. */
+  title?: string;
+  /** Singular form of `title`, for the add and delete controls. */
+  itemNoun?: string;
   onChange: (next: Record<string, ComponentPropertySchema>) => void;
 }
 
-export default function ComponentPropertiesEditor({ properties, ownerName, onChange }: Props) {
+export default function ComponentPropertiesEditor({
+  properties,
+  ownerName,
+  title = 'Component Properties',
+  itemNoun = 'component property',
+  onChange,
+}: Props) {
   const [addingProp, setAddingProp] = useState(false);
   const [editingStructKey, setEditingStructKey] = useState<string | null>(null);
   // Expansion lives here, keyed by property key, so the row a property was just
@@ -40,12 +55,13 @@ export default function ComponentPropertiesEditor({ properties, ownerName, onCha
 
   const propertyEntries = Object.entries(properties);
 
-  function handleAddProperty(key: string, label: string, type: string) {
+  function handleAddProperty(key: string, label: string, type: string, defaultValue?: unknown) {
     if (properties[key]) return;
     const newProp: ComponentPropertySchema = {
       type,
       label,
       ...(type === 'struct' ? { structSchema: [] } : {}),
+      ...(defaultValue !== undefined ? { defaultValue } : {}),
     };
     onChange({ ...properties, [key]: newProp });
     setExpandedKeys((prev) => ({ ...prev, [key]: true }));
@@ -75,12 +91,12 @@ export default function ComponentPropertiesEditor({ properties, ownerName, onCha
     <>
       <div className="cfg-section">
         <div className="cfg-component-props__title-row">
-          <span className="cfg-section__title">Component Properties</span>
-          <AddButton title="Add component property" onClick={() => setAddingProp(true)} />
+          <span className="cfg-section__title">{title}</span>
+          <AddButton title={`Add ${itemNoun}`} onClick={() => setAddingProp(true)} />
         </div>
 
         {propertyEntries.length === 0 && (
-          <div className="cfg-prop-hint cfg-component-prop-empty">No component properties yet.</div>
+          <div className="cfg-prop-hint cfg-component-prop-empty">No {itemNoun}s yet.</div>
         )}
 
         {propertyEntries.map(([key, schema]) => (
@@ -136,6 +152,32 @@ function ComponentPropertyRow({
   onExpandedChange: (expanded: boolean) => void;
 }) {
   const primary = primaryType(schema.type);
+  const optionType = schema.optionType ?? 'string';
+
+  function changeOptionType(next: ComponentPropertyOptionType) {
+    // The labels are the author's work, so the rows stay — but a value written
+    // for the old kind describes nothing under the new one, and a leftover
+    // string where the list now promises a number is worse than a blank.
+    const options = (schema.options ?? []).map((option) => ({
+      ...option,
+      value: OPTION_TYPE_EMPTY_VALUE[next],
+    }));
+    // Only an option the pickers actually offer can keep the default alive —
+    // a blanked row holds nothing, and its key is `''`, which an empty-string
+    // default would otherwise match all the way into a translation list.
+    const defaultStillOffered = options.some(
+      (option) =>
+        hasOptionValue(option.value) &&
+        selectOptionKey(option.value) === selectOptionKey(schema.defaultValue),
+    );
+    onChange({
+      // Absent reads as `string`, which keeps an ordinary select's file as it
+      // was written before the other kinds existed.
+      optionType: next === 'string' ? undefined : next,
+      options,
+      ...(defaultStillOffered ? {} : { defaultValue: undefined }),
+    });
+  }
 
   return (
     <FieldGroup
@@ -162,7 +204,7 @@ function ComponentPropertyRow({
           be typed into reads as a broken input. */}
       <StatedRow label="Key">{propKey}</StatedRow>
 
-      <StatedRow label="Type">{schema.type}</StatedRow>
+      <StatedRow label="Type">{typeList(schema.type).map(typeLabel).join(', ')}</StatedRow>
 
       {primary === 'struct' && (
         <PropRow
@@ -211,7 +253,7 @@ function ComponentPropertyRow({
       {/* A struct declares write access per field, and an actions or widgets
           property binds no variable at all — for everything else the flag is what
           limits the picker to writable variables (see VariableBindingPicker). */}
-      {!VALUELESS_TYPES.has(primary) && (
+      {!VALUELESS_PROPERTY_TYPES.has(primary) && (
         <PropRow
           label="Write access"
           description="Only allow binding to a variable the component may write."
@@ -225,18 +267,39 @@ function ComponentPropertyRow({
       )}
 
       {primary === 'select' && (
-        <PropRow label="Options" block sourceless>
-          <ItemsInput
-            value={(schema.options ?? []) as ItemEntry[]}
-            onChange={(opts) => onChange({ options: opts })}
-          />
-        </PropRow>
+        <>
+          <PropRow
+            label="Option values"
+            description="What each option holds, and so what the property resolves to."
+            tier={2}
+            sourceless
+          >
+            <Select
+              value={optionType}
+              onChange={(next) => changeOptionType(next as ComponentPropertyOptionType)}
+            >
+              {OPTION_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </PropRow>
+
+          <PropRow label="Options" block sourceless>
+            <ItemsInput
+              valueType={optionType}
+              value={schema.options ?? []}
+              onChange={(options) => onChange({ options })}
+            />
+          </PropRow>
+        </>
       )}
 
       {/* These have no single literal to fall back to — a struct resolves to a
           variable subtree, an actions list to handlers, a widgets property to
           whatever the caller drops in the slot. */}
-      {!VALUELESS_TYPES.has(primary) && (
+      {!VALUELESS_PROPERTY_TYPES.has(primary) && (
         <PropRow
           label="Default value"
           description="Used wherever an instance leaves this property unset."

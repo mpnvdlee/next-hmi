@@ -8,15 +8,13 @@ import type {
   PageConfig,
   PageGroupConfig,
   PageGroupChild,
-  DialogConfig,
 } from '@shared/types/config';
-export type ClipboardNodeKind = 'widget' | 'page' | 'page-group' | 'dialog';
+export type ClipboardNodeKind = 'widget' | 'page' | 'page-group';
 
 export type ClipboardNode =
   | { kind: 'widget'; node: WidgetConfig }
   | { kind: 'page'; node: PageConfig }
-  | { kind: 'page-group'; node: PageGroupConfig }
-  | { kind: 'dialog'; node: DialogConfig };
+  | { kind: 'page-group'; node: PageGroupConfig };
 
 /** Several nodes copied at once. A single node still writes its bare JSON, so the
  *  common case stays readable and interchangeable with older builds. */
@@ -47,7 +45,6 @@ const KIND_LABEL: Record<ClipboardNodeKind, string> = {
   widget: 'component',
   page: 'page',
   'page-group': 'page group',
-  dialog: 'dialog',
 };
 
 function describe(entry: ClipboardEntry): string {
@@ -83,14 +80,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function classify(parsed: unknown): ClipboardNodeKind | null {
   if (!isRecord(parsed)) return null;
-  if (typeof parsed.title === 'string' && Array.isArray(parsed.widgets)) return 'dialog';
   if (parsed.type === 'page-group' && Array.isArray(parsed.children)) return 'page-group';
   if (isRecord(parsed.sections)) return 'page';
   if (
     typeof parsed.type === 'string' &&
     typeof parsed.name === 'string' &&
-    !('sections' in parsed) &&
-    !('widgets' in parsed)
+    !('sections' in parsed)
   ) {
     return 'widget';
   }
@@ -191,17 +186,6 @@ function regenPageGroup(group: PageGroupConfig, taken: Set<string>): PageGroupCo
   };
 }
 
-function regenDialog(dialog: DialogConfig, taken: Set<string>): DialogConfig {
-  const id = takeSlugId(dialog.title || 'dialog', taken);
-  return {
-    ...dialog,
-    id,
-    widgets: Array.isArray(dialog.widgets)
-      ? dialog.widgets.map((w) => deepCloneComponent(w, taken))
-      : [],
-  };
-}
-
 export function regenerateIds(entry: ClipboardEntry, taken: Set<string>): ClipboardEntry {
   switch (entry.kind) {
     // One shared `taken` across the batch, or two clones can be handed the same id.
@@ -216,8 +200,6 @@ export function regenerateIds(entry: ClipboardEntry, taken: Set<string>): Clipbo
       return { kind: 'page', node: regenPage(entry.node, taken) };
     case 'page-group':
       return { kind: 'page-group', node: regenPageGroup(entry.node, taken) };
-    case 'dialog':
-      return { kind: 'dialog', node: regenDialog(entry.node, taken) };
   }
 }
 

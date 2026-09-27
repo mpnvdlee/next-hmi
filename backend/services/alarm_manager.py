@@ -159,6 +159,21 @@ class AlarmManager:
                     continue
                 key = build_var_key(ds, path)
                 self._trigger_map.setdefault(key, []).append((alarm, group))
+        self._publish_interest_keys()
+
+    def _publish_interest_keys(self) -> None:
+        """Tell the datasource manager which keys this manager reads.
+
+        Leaf keys are broadcast to value listeners regardless, so what this
+        actually covers is a trigger bound to a *folder composite* — an alarm
+        addressing one array element (`DS:Motors` with `index: 2`) reads the
+        array folder's aggregate, and that aggregate is only put on the wire
+        for keys someone is known to read. Without this, such an alarm stops
+        evaluating the moment no client page happens to bind the array.
+        """
+        from services.datasource_manager import datasource_manager
+
+        datasource_manager.set_interest_keys("alarms", set(self._trigger_map))
 
     # ── Active alarms & history ───────────────────────────────────────────────
 

@@ -14,6 +14,20 @@
 }
 
 /* ── auth ─────────────────────────────────────────────────── */
+.mgr-auth-card__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-3);
+}
+
+/* Sized here rather than by the mark: the card is the only surface that shows
+   it at heading scale, between the 28px top bar and the 40px boot splash. */
+.mgr-auth-card__logo {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
 .mgr-auth-card__subtitle {
   margin: 0;
   font-size: var(--cfg-text-sm);
@@ -86,4 +100,29 @@
 .mgr-mcp-toggle input:disabled,
 .mgr-default-toggle input:disabled {
   cursor: not-allowed;
+}
+
+/* The row's grid gives this cell a fixed 10rem track; sizing the picture from
+   its own aspect-ratio instead would let the 960px-wide PNG size the `auto`
+   track and swallow the whole row. */
+.project-thumb {
+  align-self: stretch;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface-raised);
+}
+
+.project-thumb--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.project-thumb__initial {
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-text-lg);
+  font-weight: var(--cfg-fw-bold);
 }

@@ -25,7 +25,10 @@ export default function CollapsibleSection({ title, defaultCollapsed, children }
         onClick={() => setStored(collapsed)}
         aria-expanded={!collapsed}
       >
-        <span className={`cfg-section__arrow${collapsed ? '' : ' cfg-section__arrow--open'}`}>
+        <span
+          className={`cfg-section__arrow${collapsed ? '' : ' cfg-section__arrow--open'}`}
+          aria-hidden
+        >
           ▶
         </span>
         <span className="cfg-section__title">{title}</span>

@@ -1,0 +1,541 @@
+{
+  "id": "about",
+  "title": "About this demo",
+  "showCloseButton": true,
+  "closeOnBackgroundPress": true,
+  "sections": {
+    "content": [
+      {
+        "id": "about-root",
+        "type": "Container",
+        "name": "About",
+        "properties": {
+          "visible": true,
+          "showWhenEmpty": true,
+          "background": "transparent"
+        },
+        "layout": {
+          "direction": "column",
+          "gap": "18px",
+          "wrap": false,
+          "align": "stretch",
+          "justify": "flex-start",
+          "radius": "0",
+          "width": "100%",
+          "widthMode": "fixed",
+          "heightMode": "hug",
+          "paddingTop": "24px",
+          "paddingRight": "24px",
+          "paddingBottom": "24px",
+          "paddingLeft": "24px"
+        },
+        "children": [
+          {
+            "id": "about-head",
+            "type": "Container",
+            "name": "Head",
+            "properties": {
+              "visible": true,
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "row",
+              "gap": "12px",
+              "wrap": false,
+              "align": "center",
+              "justify": "flex-start",
+              "radius": "0",
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "paddingTop": "0",
+              "paddingRight": "0",
+              "paddingBottom": "0",
+              "paddingLeft": "0"
+            },
+            "children": [
+              {
+                "id": "about-logo",
+                "type": "Icon",
+                "name": "Logo",
+                "properties": {
+                  "iconName": {
+                    "$static": {
+                      "type": "custom",
+                      "path": "icons/cup.svg"
+                    }
+                  },
+                  "size": 28,
+                  "color": "var(--hmi-accent)",
+                  "chrome": false
+                },
+                "layout": {
+                  "widthMode": "hug",
+                  "heightMode": "hug"
+                }
+              },
+              {
+                "id": "about-title",
+                "type": "Container",
+                "name": "Title",
+                "properties": {
+                  "visible": true,
+                  "showWhenEmpty": true,
+                  "background": "transparent"
+                },
+                "layout": {
+                  "direction": "column",
+                  "gap": "0",
+                  "wrap": false,
+                  "align": "stretch",
+                  "justify": "flex-start",
+                  "radius": "0",
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "grow": 1,
+                  "paddingTop": "0",
+                  "paddingRight": "0",
+                  "paddingBottom": "0",
+                  "paddingLeft": "0"
+                },
+                "children": [
+                  {
+                    "id": "about-h",
+                    "type": "Label",
+                    "name": "about-h",
+                    "properties": {
+                      "typography": "heading",
+                      "text": {
+                        "$loc": "NEXT BREW"
+                      }
+                    },
+                    "layout": {
+                      "widthMode": "fill",
+                      "heightMode": "hug"
+                    }
+                  },
+                  {
+                    "id": "about-s",
+                    "type": "Label",
+                    "name": "about-s",
+                    "properties": {
+                      "typography": "caption",
+                      "text": {
+                        "$loc": "A demo espresso machine, built entirely in the editor."
+                      },
+                      "color": "var(--hmi-text-muted)"
+                    },
+                    "layout": {
+                      "widthMode": "fill",
+                      "heightMode": "hug"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "about-rule-1",
+            "type": "Separator",
+            "name": "Divider",
+            "properties": {
+              "orientation": "horizontal",
+              "thickness": 1,
+              "color": "var(--hmi-border)",
+              "inset": 0
+            },
+            "layout": {
+              "widthMode": "fill",
+              "heightMode": "hug"
+            }
+          },
+          {
+            "id": "about-intro",
+            "type": "Label",
+            "name": "about-intro",
+            "properties": {
+              "typography": "body",
+              "text": {
+                "$loc": "Nothing here talks to real hardware. The variables live in a static datasource, so every value starts where the project put it and only moves when you move it. That is the point — open the Machine page and drive it."
+              },
+              "wrap": "wrap"
+            },
+            "layout": {
+              "widthMode": "fill",
+              "heightMode": "hug"
+            }
+          },
+          {
+            "id": "about-rule-2",
+            "type": "Separator",
+            "name": "Divider",
+            "properties": {
+              "orientation": "horizontal",
+              "thickness": 1,
+              "color": "var(--hmi-border)",
+              "inset": 0
+            },
+            "layout": {
+              "widthMode": "fill",
+              "heightMode": "hug"
+            }
+          },
+          {
+            "id": "about-p",
+            "type": "Container",
+            "name": "Pages & shell",
+            "properties": {
+              "visible": true,
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "column",
+              "gap": "2px",
+              "wrap": false,
+              "align": "stretch",
+              "justify": "flex-start",
+              "radius": "0",
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "paddingTop": "0",
+              "paddingRight": "0",
+              "paddingBottom": "0",
+              "paddingLeft": "0"
+            },
+            "children": [
+              {
+                "id": "about-p-t",
+                "type": "Label",
+                "name": "about-p-t",
+                "properties": {
+                  "typography": "label",
+                  "text": {
+                    "$loc": "Pages & shell"
+                  },
+                  "color": "var(--hmi-accent)"
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              },
+              {
+                "id": "about-p-b",
+                "type": "Label",
+                "name": "about-p-b",
+                "properties": {
+                  "typography": "body",
+                  "text": {
+                    "$loc": "Two groups, eight pages plus two dialogs, a sign-in header and a five-step wizard. This panel is a dialog — for a page overlay, try Peek at the alarms on the Machine page."
+                  },
+                  "wrap": "wrap",
+                  "color": "var(--hmi-text-muted)"
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              }
+            ]
+          },
+          {
+            "id": "about-d",
+            "type": "Container",
+            "name": "Data & bindings",
+            "properties": {
+              "visible": true,
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "column",
+              "gap": "2px",
+              "wrap": false,
+              "align": "stretch",
+              "justify": "flex-start",
+              "radius": "0",
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "paddingTop": "0",
+              "paddingRight": "0",
+              "paddingBottom": "0",
+              "paddingLeft": "0"
+            },
+            "children": [
+              {
+                "id": "about-d-t",
+                "type": "Label",
+                "name": "about-d-t",
+                "properties": {
+                  "typography": "label",
+                  "text": {
+                    "$loc": "Data & bindings"
+                  },
+                  "color": "var(--hmi-accent)"
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              },
+              {
+                "id": "about-d-b",
+                "type": "Label",
+                "name": "about-d-b",
+                "properties": {
+                  "typography": "body",
+                  "text": {
+                    "$loc": "One static datasource. Every reading is a $var binding, and the status pill and tile tones are computed with $if and $compare."
+                  },
+                  "wrap": "wrap",
+                  "color": "var(--hmi-text-muted)"
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              }
+            ]
+          },
+          {
+            "id": "about-a",
+            "type": "Container",
+            "name": "Actions",
+            "properties": {
+              "visible": true,
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "column",
+              "gap": "2px",
+              "wrap": false,
+              "align": "stretch",
+              "justify": "flex-start",
+              "radius": "0",
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "paddingTop": "0",
+              "paddingRight": "0",
+              "paddingBottom": "0",
+              "paddingLeft": "0"
+            },
+            "children": [
+              {
+                "id": "about-a-t",
+                "type": "Label",
+                "name": "about-a-t",
+                "properties": {
+                  "typography": "label",
+                  "text": {
+                    "$loc": "Actions"
+                  },
+                  "color": "var(--hmi-accent)"
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              },
+              {
+                "id": "about-a-b",
+                "type": "Label",
+                "name": "about-a-b",
+                "properties": {
+                  "typography": "body",
+                  "text": {
+                    "$loc": "Brew now confirms with an alert, then writes a variable and reports back with a toast."
+                  },
+                  "wrap": "wrap",
+                  "color": "var(--hmi-text-muted)"
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              }
+            ]
+          },
+          {
+            "id": "about-r",
+            "type": "Container",
+            "name": "Recipes",
+            "properties": {
+              "visible": true,
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "column",
+              "gap": "2px",
+              "wrap": false,
+              "align": "stretch",
+              "justify": "flex-start",
+              "radius": "0",
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "paddingTop": "0",
+              "paddingRight": "0",
+              "paddingBottom": "0",
+              "paddingLeft": "0"
+            },
+            "children": [
+              {
+                "id": "about-r-t",
+                "type": "Label",
+                "name": "about-r-t",
+                "properties": {
+                  "typography": "label",
+                  "text": {
+                    "$loc": "Recipes"
+                  },
+                  "color": "var(--hmi-accent)"
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              },
+              {
+                "id": "about-r-b",
+                "type": "Label",
+                "name": "about-r-b",
+                "properties": {
+                  "typography": "body",
+                  "text": {
+                    "$loc": "Three drinks. Loading one writes six variables at once and verifies them."
+                  },
+                  "wrap": "wrap",
+                  "color": "var(--hmi-text-muted)"
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              }
+            ]
+          },
+          {
+            "id": "about-al",
+            "type": "Container",
+            "name": "Alarms",
+            "properties": {
+              "visible": true,
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "column",
+              "gap": "2px",
+              "wrap": false,
+              "align": "stretch",
+              "justify": "flex-start",
+              "radius": "0",
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "paddingTop": "0",
+              "paddingRight": "0",
+              "paddingBottom": "0",
+              "paddingLeft": "0"
+            },
+            "children": [
+              {
+                "id": "about-al-t",
+                "type": "Label",
+                "name": "about-al-t",
+                "properties": {
+                  "typography": "label",
+                  "text": {
+                    "$loc": "Alarms"
+                  },
+                  "color": "var(--hmi-accent)"
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              },
+              {
+                "id": "about-al-b",
+                "type": "Label",
+                "name": "about-al-b",
+                "properties": {
+                  "typography": "body",
+                  "text": {
+                    "$loc": "Four definitions — two on value ranges, one low-level, one boolean. Trip them from the Machine page."
+                  },
+                  "wrap": "wrap",
+                  "color": "var(--hmi-text-muted)"
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              }
+            ]
+          },
+          {
+            "id": "about-t",
+            "type": "Container",
+            "name": "Themes & translations",
+            "properties": {
+              "visible": true,
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "column",
+              "gap": "2px",
+              "wrap": false,
+              "align": "stretch",
+              "justify": "flex-start",
+              "radius": "0",
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "paddingTop": "0",
+              "paddingRight": "0",
+              "paddingBottom": "0",
+              "paddingLeft": "0"
+            },
+            "children": [
+              {
+                "id": "about-t-t",
+                "type": "Label",
+                "name": "about-t-t",
+                "properties": {
+                  "typography": "label",
+                  "text": {
+                    "$loc": "Themes & translations"
+                  },
+                  "color": "var(--hmi-accent)"
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              },
+              {
+                "id": "about-t-b",
+                "type": "Label",
+                "name": "about-t-b",
+                "properties": {
+                  "typography": "body",
+                  "text": {
+                    "$loc": "Two themes and two languages, both switched from the header."
+                  },
+                  "wrap": "wrap",
+                  "color": "var(--hmi-text-muted)"
+                },
+                "layout": {
+                  "widthMode": "fill",
+                  "heightMode": "hug"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

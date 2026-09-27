@@ -63,14 +63,15 @@ lines each. The zip also carries the full guide as an offline HTML site in
 
 There is no portable Linux build; on Linux, use Docker.
 
-### First launch — two passwords, then you are in
+### First launch — one password, then you are in
 
 1. Set the **device-admin password** on the manager dashboard. It gates the
-   installation.
-2. On the seeded project, choose **Set operator password** — that creates the
-   project's own `admin` account for the HMI. Nothing ships with a default
-   operator credential.
-3. **Start** the project, then open its runtime or its editor.
+   whole installation — the dashboard, and every project's runtime and editor.
+2. **Start** the seeded project, then open its runtime or its editor.
+
+A new project carries no accounts of its own beyond the anonymous `guest`, and
+nothing ships with a default credential. Add real users when you want them,
+from the editor's **Users** area.
 
 Full install reference — runtime home, HTTPS, environment variables, upgrades:
 [`docs/user/install.md`](docs/user/install.md).
@@ -118,7 +119,7 @@ the editor that builds them. Click any shot for full size.
 </tr>
 </table>
 
-The longer walkthrough — the editor, the property panel and its 23 sources, the
+The longer walkthrough — the editor, the property panel and its 27 sources, the
 OPC-UA wizard, recipes, translations and theming — is at
 **[next-hmi.com/tour](https://next-hmi.com/tour)**.
 
@@ -133,7 +134,7 @@ OPC-UA wizard, recipes, translations and theming — is at
   browses, viewport-aware so the tags on screen update first.
 - **Git-native projects** — every artifact is JSON or CSV on disk, so your
   change control already works and a project moves as a folder or a zip.
-- **Property sources** — 23 composable sources (`$var`, `$if`, `$switch`,
+- **Property sources** — 27 composable sources (`$var`, `$if`, `$switch`,
   `$loc`, `$viewport`, …) that nest, so no property needs a script.
 - **Custom widgets** — drop a `.tsx` into `custom-widgets/` and it hot-compiles.
   No Node toolchain, no rebuild of the core.
@@ -173,10 +174,11 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r backend/requirements.txt
 cd frontend && npm install && cd ..
 
-python start-dev.py       # backend :8000, Vite with HMR :5173
+python start-dev.py       # app on :8000 (Vite with HMR), API on :8001
 ```
 
-Stop with `python start-dev.py --stop` or Ctrl-C. Tests and linters:
+Stop with Ctrl-C, or `python start-dev.py --stop` to free `:8000`/`:8001` from
+another shell. Tests and linters:
 `pytest backend/tests`, `ruff check backend`, and `npm test` / `npm run lint` /
 `npm run build` from `frontend/`.
 
@@ -217,6 +219,6 @@ custom widgets — is your own work and is not covered by the copyleft; that is
 written down in [LICENSE-EXCEPTION.md](LICENSE-EXCEPTION.md) rather than left to
 interpretation. Hand a build to someone outside your organisation and the AGPL
 asks you to offer them the corresponding source; a
-[commercial licence](COMMERCIAL.md) at €100 per shipped unit is the alternative
+[commercial licence](COMMERCIAL.md) is the alternative
 to doing that. A separate proprietary enterprise build adds an audit trail for
 regulated plants — see [next-hmi.com/licensing](https://next-hmi.com/licensing).

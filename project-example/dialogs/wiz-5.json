@@ -1,0 +1,268 @@
+{
+  "id": "wiz-5",
+  "title": {
+    "$loc": "Review and start"
+  },
+  "description": "The summary, and the button that starts the machine.",
+  "showHeader": false,
+  "mainBackground": "var(--hmi-bg)",
+  "sections": {
+    "content": [
+      {
+        "id": "wiz-5-root",
+        "type": "Container",
+        "name": "Wizard step",
+        "properties": {
+          "showWhenEmpty": true,
+          "background": "transparent"
+        },
+        "layout": {
+          "direction": "column",
+          "gap": "16px",
+          "wrap": false,
+          "align": "stretch",
+          "justify": "flex-start",
+          "widthMode": "fill",
+          "heightMode": "fixed",
+          "paddingTop": "16px",
+          "paddingRight": "16px",
+          "paddingBottom": "16px",
+          "paddingLeft": "16px",
+          "height": "430px"
+        },
+        "children": [
+          {
+            "id": "wiz-5-card",
+            "type": "$component:card",
+            "name": "Review and start",
+            "properties": {
+              "title": {
+                "$loc": "Review and start"
+              },
+              "showTitle": false
+            },
+            "layout": {
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "minWidth": "0"
+            },
+            "children": [
+              {
+                "id": "wiz-5-card-body",
+                "type": "Container",
+                "name": "Body",
+                "properties": {
+                  "showWhenEmpty": true,
+                  "background": "transparent"
+                },
+                "layout": {
+                  "direction": "column",
+                  "gap": "12px",
+                  "wrap": false,
+                  "align": "stretch",
+                  "justify": "flex-start",
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "paddingTop": "14px",
+                  "paddingRight": "18px",
+                  "paddingBottom": "18px",
+                  "paddingLeft": "18px"
+                },
+                "children": [
+                  {
+                    "id": "wiz-5-summary",
+                    "type": "Label",
+                    "name": "Summary",
+                    "properties": {
+                      "text": {
+                        "$stringExpr": {
+                          "template": "{1} — {2} {3}",
+                          "wildcards": {
+                            "1": {
+                              "$switch": {
+                                "value": {
+                                  "$var": {
+                                    "path": "Brew:Wizard/BeanType"
+                                  }
+                                },
+                                "cases": [
+                                  {
+                                    "when": "espresso",
+                                    "then": {
+                                      "$loc": "Espresso"
+                                    }
+                                  },
+                                  {
+                                    "when": "filter",
+                                    "then": {
+                                      "$loc": "Filter"
+                                    }
+                                  },
+                                  {
+                                    "when": "decaf",
+                                    "then": {
+                                      "$loc": "Decaf"
+                                    }
+                                  }
+                                ],
+                                "default": {
+                                  "$loc": "No beans"
+                                }
+                              }
+                            },
+                            "2": {
+                              "$var": {
+                                "path": "Brew:Wizard/CupCount"
+                              }
+                            },
+                            "3": {
+                              "$loc": "Cups"
+                            }
+                          }
+                        }
+                      },
+                      "typography": "subheading"
+                    },
+                    "layout": {
+                      "widthMode": "fill",
+                      "heightMode": "hug"
+                    }
+                  },
+                  {
+                    "id": "wiz-5-note",
+                    "type": "Label",
+                    "name": "Note",
+                    "properties": {
+                      "text": {
+                        "$loc": "Starting runs the group head until you press Stop on the Brew page."
+                      },
+                      "typography": "caption",
+                      "color": "var(--hmi-text-muted)"
+                    },
+                    "layout": {
+                      "widthMode": "fill",
+                      "heightMode": "hug"
+                    }
+                  },
+                  {
+                    "id": "wiz-5-sep",
+                    "type": "Separator",
+                    "name": "Separator",
+                    "properties": {},
+                    "layout": {
+                      "widthMode": "fill",
+                      "heightMode": "hug"
+                    }
+                  },
+                  {
+                    "id": "wiz-5-start",
+                    "type": "Button",
+                    "name": "Start brewing",
+                    "properties": {
+                      "label": {
+                        "$loc": "Start brewing"
+                      },
+                      "iconName": {
+                        "$static": {
+                          "type": "builtin",
+                          "name": "play"
+                        }
+                      },
+                      "variant": "solid",
+                      "actions": {
+                        "onPress": [
+                          {
+                            "type": "showAlert",
+                            "title": {
+                              "$loc": "Start brewing?"
+                            },
+                            "description": {
+                              "$loc": "The group head will run until you press Stop."
+                            },
+                            "okText": {
+                              "$loc": "Brew"
+                            },
+                            "cancelText": {
+                              "$loc": "Cancel"
+                            },
+                            "dismissible": true,
+                            "onOk": [
+                              {
+                                "type": "writeDataVariable",
+                                "target": {
+                                  "$var": {
+                                    "path": "Brew:Machine/Brewing"
+                                  }
+                                },
+                                "value": true,
+                                "onSuccess": [
+                                  {
+                                    "type": "showToast",
+                                    "message": {
+                                      "$loc": "Brewing started."
+                                    },
+                                    "severity": "info",
+                                    "discard": "auto",
+                                    "duration": 3000
+                                  },
+                                  {
+                                    "type": "closePageOverlay"
+                                  }
+                                ],
+                                "onFailed": [
+                                  {
+                                    "type": "showToast",
+                                    "message": {
+                                      "$stringExpr": {
+                                        "template": "{1}: {2}",
+                                        "wildcards": {
+                                          "1": {
+                                            "$loc": "Could not start"
+                                          },
+                                          "2": {
+                                            "$result": "reason"
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "severity": "error",
+                                    "discard": "auto",
+                                    "duration": 4000
+                                  }
+                                ]
+                              }
+                            ],
+                            "onCancel": []
+                          }
+                        ]
+                      }
+                    },
+                    "layout": {
+                      "widthMode": "hug",
+                      "heightMode": "hug"
+                    }
+                  }
+                ],
+                "slot": "body"
+              }
+            ]
+          },
+          {
+            "id": "wiz-5-push",
+            "type": "StretchSpacer",
+            "name": "Push",
+            "properties": {
+              "mode": "ratio",
+              "ratio": 1
+            },
+            "layout": {
+              "grow": 1,
+              "widthMode": "fill",
+              "heightMode": "fill"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

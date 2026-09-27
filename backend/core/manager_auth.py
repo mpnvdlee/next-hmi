@@ -26,7 +26,10 @@ from core import runtime_home
 from core.storage import write_text_atomic
 
 SESSION_COOKIE = "nexthmi_manager_session"
-_DEFAULT_TTL_SECONDS = 7 * 24 * 3600
+# Absolute lifetime from sign-in, not an idle timeout: nothing refreshes the
+# token, so a browser left signed in on the plant floor stops being a key
+# within a day whether or not it was used.
+SESSION_TTL_SECONDS = 24 * 3600
 _PBKDF2_ITERATIONS = 200_000
 _AUTH_FILENAME = ".manager-auth.json"
 
@@ -145,7 +148,7 @@ def _b64decode(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + padding)
 
 
-def issue_token(ttl_seconds: int = _DEFAULT_TTL_SECONDS) -> str:
+def issue_token(ttl_seconds: int = SESSION_TTL_SECONDS) -> str:
     """Mint a signed session token. Caller must have verified the password."""
     secret = _secret()
     if secret is None:

@@ -1,12 +1,12 @@
 import type { HmiWidgetProps, WidgetConfig } from '@shared/types/config';
-import type { ComponentPropertySchema } from '@shared/types/componentProperty';
 import { memo, useContext, useMemo } from 'react';
 import { useComponentStore, selectComponentById } from '@shared/store/componentStore';
 import { InputScopeContext } from '../context/InputScopeContext';
+import { withDeclaredDefaults } from '../utils/componentPropResolution';
 import { ComponentSlotContext } from '../context/ComponentSlotContext';
 import { DefinitionScopeContext } from '../context/DefinitionScopeContext';
 import { PreviewContext } from '@shared/context/PreviewContext';
-import { collectSlotKeys, groupChildrenBySlot } from './ComponentSlot/slotKey';
+import { collectSlotKeys, groupChildrenBySlot } from '@shared/utils/componentSlots';
 import { SELF_LAYOUT_KEYS } from './layoutUtils';
 import WidgetRenderer from './WidgetRenderer';
 
@@ -68,39 +68,15 @@ function ComponentRenderer({
 }
 
 /**
- * Fill in the declared default for every property the instance left unset.
- *
- * Without this a default is a lie: the properties panel prints it as the field's
- * `· default` hint and the components editor's preview mocks it in, while the
- * real page resolves `$componentProp` to nothing and the widget reading it
- * renders blank.
- *
- * `null` is a set value (an author clearing a field on purpose), so only
- * `undefined` falls through to the default.
- */
-function withDeclaredDefaults(
-  properties: Record<string, unknown> | undefined,
-  declared: Record<string, ComponentPropertySchema> | undefined,
-): Record<string, unknown> {
-  const merged = { ...(properties ?? {}) };
-  for (const [key, schema] of Object.entries(declared ?? {})) {
-    if (merged[key] === undefined && schema?.defaultValue !== undefined) {
-      merged[key] = schema.defaultValue;
-    }
-  }
-  return merged;
-}
-
-/**
  * Fold the instance's own sizing onto the definition's first root node.
  *
- * The instance is a widget in its parent's layout, so `grow`, `basis`, `width`
- * and friends set on the `$component:` node have to reach the DOM — otherwise an
- * author sizing an instance in the editor sees nothing happen. They are merged
- * onto the root rather than applied to a wrapper element: a wrapper re-parents
- * the roots into a box of its own, so flex properties authored against a row
- * parent start resolving against a column and a `basis: 0` root collapses to
- * zero height.
+ * The instance is a widget in its parent's layout, so `widthMode`, `grow`,
+ * `width` and friends set on the `$component:` node have to reach the DOM —
+ * otherwise an author sizing an instance in the editor sees nothing happen. They
+ * are merged onto the root rather than applied to a wrapper element: a wrapper
+ * re-parents the roots into a box of its own, so flex properties authored
+ * against a row parent start resolving against a column and a Fill root
+ * collapses to zero height.
  *
  * Only the first root takes them. A definition with several roots renders as
  * several siblings, and folding onto each would multiply the instance's sizing

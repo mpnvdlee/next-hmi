@@ -135,6 +135,7 @@ export function HttpEditor({
           onOpenBindingPicker,
           (b) => patch({ wildcards: { ...wildcards, [key]: { $var: b } } }),
           wcValue,
+          true,
         );
 
         const path = withSegs(parent, '$http', 'wildcards', key);

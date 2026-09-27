@@ -7,10 +7,15 @@ import type {
   WidgetConfig,
 } from '@shared/types/config';
 import { structVarDefault } from '@hmi/utils/bindingValidation';
-import { SOURCE_CAPABLE_TYPES } from '@hmi/utils/propertySourceRules';
+import { SOURCE_CAPABLE_TYPES, bindsVariable } from '@hmi/utils/propertySourceRules';
 import { primaryType, isStructType } from '@shared/utils/valueTypes';
 import { evaluateVisibility } from '../../../utils/visibilityEvaluator';
-import { renderSchemaField } from '../../../utils/renderSchemaField';
+import {
+  hasOptionValue,
+  renderSchemaField,
+  selectOptionKey,
+} from '../../../utils/renderSchemaField';
+import { hasPropertySourceKey, isLocSource } from '@shared/types/propertyValueGuards';
 import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
 import { useContext } from 'react';
@@ -25,6 +30,7 @@ import GroupsField from '../GroupsField';
 import ImageIndicatorsEditor from '../../editor/ImageIndicatorsEditor';
 import ChildPositionsEditor from '../../editor/ChildPositionsEditor';
 import ItemsInput, { type ItemEntry } from '../../editor/ItemsInput';
+import VariableListInput from '../../editor/VariableListInput';
 import PageGroupSelect from '../PageGroupSelect';
 import PropRow from '../PropRow';
 import FieldGroup from '../FieldGroup';
@@ -204,25 +210,52 @@ export default function SchemaFieldRow({
   // empty tier-3 box. Source-capable types (scalars, `record-list`, …) keep their
   // own editors, so they are excluded even though `record-list` is struct-like.
   const isStruct = isStructType(fieldType) && !isSourceCapable;
+  // The row's own union — exported as `bindsVariable` so the panels that decide
+  // whether to *offer* the picker ask exactly the question this row answers.
+  const hasSourcePill = bindsVariable(fieldType);
+  // A value the schema itself lists as an option is a static pick, whatever it
+  // looks like. Options may hold translations (`{ $loc }`), and reading one as
+  // a property source would swap the restricted dropdown for the free
+  // translation picker — the unrestricted choice the option list exists to
+  // replace. Only the *detected* source changes; the pill still offers the rest.
+  //
+  // `$loc` is the one source an option may legitimately be. Any other source
+  // object stays a real binding even when an option happens to hold the same
+  // shape — the backend takes `options` as free-form dicts, so hand-written or
+  // MCP-written JSON can declare one, and swallowing it would strand the row
+  // without the editor that binding needs.
+  // Keyed once, not once per option: `selectOptionKey` is a `JSON.stringify`
+  // whenever the value is an object, which `{ $loc }` — the case this exists
+  // for — always is.
+  const valueKey = selectOptionKey(effectiveValue);
+  const declaresValueAsOption =
+    (!hasPropertySourceKey(effectiveValue) || isLocSource(effectiveValue)) &&
+    (schema.options ?? []).some(
+      (option) => hasOptionValue(option.value) && selectOptionKey(option.value) === valueKey,
+    );
   const detectedSource = mixed
     ? mixed.source
-    : isSourceCapable || isStruct
-      ? (getPropertySource(effectiveValue) as PropertySource | null)
+    : hasSourcePill
+      ? declaresValueAsOption
+        ? 'static'
+        : (getPropertySource(effectiveValue) as PropertySource | null)
       : null;
   const currentSource = isSourceCapable ? detectedSource : null;
 
   // Struct fields default to $var, but when authoring inside a component-property
-  // scope (widget or dialog) the user can bind via $componentProp instead. The
+  // scope (widget or dialog) the user can bind via $componentProp instead, and
+  // inside a Repeater via $repeatItem. The
   // body editor and source pill stay in sync via the detected source.
   const structSource: PropertySource =
-    isStruct && detectedSource === '$componentProp' ? '$componentProp' : '$var';
+    isStruct && (detectedSource === '$componentProp' || detectedSource === '$repeatItem')
+      ? detectedSource
+      : '$var';
   const structValueForEditor = isStruct
     ? structSource === '$var'
       ? structVarDefault(effectiveValue)
       : effectiveValue
     : undefined;
 
-  const hasSourcePill = isSourceCapable || isStruct;
   const titleText =
     fieldType === 'actions' && schema.label === 'Actions' ? 'On Pressed' : schema.label;
 
@@ -241,6 +274,26 @@ export default function SchemaFieldRow({
           headerTitle={titleText}
           description={schema.description}
           pathPrefix={path}
+        />
+      </div>
+    );
+  }
+
+  // A variable list has no single value of its own to badge/summarize/collapse
+  // either — each entry is its own row, so it takes the same plain-header shape
+  // as an action list. Which variables its rows may name is decided by a sibling
+  // property, which only this row is handed.
+  if (schema.format === 'variables') {
+    return (
+      <div className="cfg-field-group">
+        <VariableListInput
+          value={value}
+          onChange={onChange}
+          label={titleText}
+          description={schema.description}
+          recordedOnly={
+            schema.recordedWhen ? evaluateVisibility(schema.recordedWhen, allProperties) : false
+          }
         />
       </div>
     );
@@ -266,7 +319,7 @@ export default function SchemaFieldRow({
     <PropertySourceSelector
       value={isStruct ? structValueForEditor : effectiveValue}
       onChange={onChange}
-      fieldType={fieldType}
+      fieldType={schema.type}
       defaultValue={schema.defaultValue}
       forcedSources={isStruct ? (['$var'] as PropertySource[]) : undefined}
       includeStatic={!isStruct && fieldType !== 'record-list'}
@@ -277,6 +330,11 @@ export default function SchemaFieldRow({
       // from the raw values, where an unbound widget reads as `static` — a source
       // this row does not even offer.
       mixed={isStruct && mixed ? { source: structSource } : mixed}
+      // The row has already decided which source it renders. The pill must
+      // badge and switch against that same decision: picking the source already
+      // in effect is a no-op, while a pill that read the value's shape instead
+      // would treat it as a switch and overwrite the value with a fresh default.
+      source={isStruct ? structSource : (detectedSource ?? undefined)}
       compact
     />
   ) : (
@@ -298,7 +356,7 @@ export default function SchemaFieldRow({
           schema={schema}
           staticEditor={
             currentSource === 'static' ? (
-              fieldType === 'option-list' ? (
+              fieldType === 'option-list' || fieldType === 'item-list' ? (
                 <ItemsInput
                   value={effectiveValue as ItemEntry[] | undefined}
                   onChange={onChange as (v: ItemEntry[]) => void}

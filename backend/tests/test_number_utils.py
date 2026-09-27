@@ -1,5 +1,5 @@
-"""Tests for core.number_utils.get_config_float (§2.8 exercises this via
-DatasourceOpcuaEngine._reconnect_loop's reconnect_interval_s)."""
+"""Tests for core.number_utils.get_config_float, which
+DatasourceOpcuaEngine._reconnect_loop uses for reconnect_interval_s."""
 
 from core.number_utils import get_config_float
 

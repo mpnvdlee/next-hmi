@@ -412,6 +412,75 @@ describe('propertySourceEval', () => {
     });
   });
 
+  describe('$not wrapper', () => {
+    it('inverts a boolean', () => {
+      expect(evaluatePropertyValue({ $not: { value: true } }, mockContext)).toBe(false);
+      expect(
+        evaluatePropertyValue({ $not: { value: { $var: { path: 'PLC1:Status' } } } }, mockContext),
+      ).toBe(false);
+    });
+
+    it('treats a number as a 0/1 flag', () => {
+      expect(evaluatePropertyValue({ $not: { value: 0 } }, mockContext)).toBe(true);
+      expect(evaluatePropertyValue({ $not: { value: 3 } }, mockContext)).toBe(false);
+    });
+
+    it('inverts a nested comparison', () => {
+      expect(
+        evaluatePropertyValue(
+          { $not: { value: { $compare: { left: 5, operator: '>', right: 3 } } } },
+          mockContext,
+        ),
+      ).toBe(false);
+    });
+
+    it('returns null for a missing or non-boolean value', () => {
+      expect(
+        evaluatePropertyValue({ $not: { value: { $var: { path: 'PLC1:Nope' } } } }, mockContext),
+      ).toBeNull();
+      expect(evaluatePropertyValue({ $not: { value: 'yes' } }, mockContext)).toBeNull();
+    });
+  });
+
+  describe('$formula wrapper', () => {
+    const formula = (expression: string, wildcards: Record<string, unknown> = {}) =>
+      evaluatePropertyValue({ $formula: { expression, wildcards } }, mockContext);
+
+    it('applies operator precedence and parentheses', () => {
+      expect(formula('1 + 2 * 3')).toBe(7);
+      expect(formula('(1 + 2) * 3')).toBe(9);
+      expect(formula('10 - 4 - 3')).toBe(3);
+      expect(formula('-2 * -(3 + 1)')).toBe(8);
+      expect(formula('.5 * 4')).toBe(2);
+    });
+
+    it('fills placeholders from wildcards, including nested sources', () => {
+      expect(formula('{1} * 1.8 + 32', { 1: { $var: { path: 'PLC1:Temperature' } } })).toBeCloseTo(
+        107.6,
+      );
+      expect(formula('{1} + {2}', { 1: '2.5', 2: true })).toBe(3.5);
+      expect(
+        formula('{1} / 2', { 1: { $formula: { expression: '{1} * 2', wildcards: { 1: 5 } } } }),
+      ).toBe(5);
+    });
+
+    it('returns null for division by zero', () => {
+      expect(formula('{1} / {2}', { 1: 10, 2: 0 })).toBeNull();
+    });
+
+    it('returns null when a placeholder has no numeric value', () => {
+      expect(formula('{1} + 1', {})).toBeNull();
+      expect(formula('{1} + 1', { 1: 'abc' })).toBeNull();
+      expect(formula('{1} + 1', { 1: { $var: { path: 'PLC1:Nope' } } })).toBeNull();
+    });
+
+    it('returns null for an empty or malformed expression', () => {
+      for (const bad of ['', '   ', '1 +', '(1 + 2', '1 2', '1 ^ 2', '{a} + 1', '2 * * 3']) {
+        expect(formula(bad)).toBeNull();
+      }
+    });
+  });
+
   describe('$random wrapper', () => {
     it('generates random number within range', () => {
       const result = evaluatePropertyValue(

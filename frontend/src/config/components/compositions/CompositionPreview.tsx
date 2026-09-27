@@ -36,7 +36,7 @@ interface CompositionPreviewProps {
   /** A canvas click, with its modifiers. Ctrl/cmd extends the selection; there is
    *  no canvas equivalent of a shift range, so `range` is never set here. */
   onSelect: (id: string | null, mods: SelectionModifiers) => void;
-  onUpdate: (patch: Partial<ComponentDefinition>) => void;
+  onUpdate: (patch: Partial<ComponentDefinition>, history?: 'step' | 'coalesce') => void;
   /** Context-menu verb, dispatched by ComponentsView like the tree's. */
   onAction: (action: string, nodeId: string, kind: NodeKind) => void;
 }
@@ -144,14 +144,16 @@ export default function CompositionPreview({
     '--component-preview-height': `${previewHeight}px`,
   };
 
+  // Dragged via the number input's spinner or typed digit by digit; the
+  // throttle folds a burst of them into at most one undo step per window.
   function updateDimension(dimension: 'width' | 'height', value: string) {
     if (value === '') {
-      onUpdate({ [dimension]: null });
+      onUpdate({ [dimension]: null }, 'coalesce');
       return;
     }
     const parsed = Number(value);
     if (Number.isInteger(parsed) && parsed > 0) {
-      onUpdate({ [dimension]: parsed });
+      onUpdate({ [dimension]: parsed }, 'coalesce');
     }
   }
 
@@ -197,7 +199,18 @@ export default function CompositionPreview({
         onContextMenu={handleContextMenu}
       >
         <div className="widget-preview-wrapper" style={wrapperStyle}>
-          <div ref={canvasRef} className="widget-preview-canvas">
+          {/* `data-flow-*` matches this element's own CSS (`display: flex;
+              flex-direction: column`, default `align-items: stretch`) — it is
+              the actual, direct flex parent of the mapped roots below (every
+              Provider in between renders no DOM node of its own), so the
+              root widgets' Hug/Fill/Fixed resolves against the canvas the
+              same way any other flex host's children do. */}
+          <div
+            ref={canvasRef}
+            className="widget-preview-canvas"
+            data-flow-direction="column"
+            data-flow-align="stretch"
+          >
             <HmiScopeContext.Provider value="runtime:widget-preview">
               <InputScopeContext.Provider value={inputScopeValue}>
                 <PreviewContext.Provider value={true}>

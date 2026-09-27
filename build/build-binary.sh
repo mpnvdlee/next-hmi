@@ -11,7 +11,7 @@
 # and for ee, the same under nexthmi-enterprise/.
 #
 # Prerequisites: Python 3.14 with the project's deps + pyinstaller
-# installed in the active venv, Node 20+ on PATH, esbuild installed
+# installed in the active venv, Node 20.11+ on PATH, esbuild installed
 # globally via npm. PyInstaller can't cross-compile, so run on the host
 # whose OS/arch you want to produce.
 set -euo pipefail
@@ -141,6 +141,19 @@ if [ "$OS_TAG" = "macos" ]; then
 cd "$(dirname "$0")" && ./nexthmi
 CMD
   chmod +x "$OUTPUT_DIR/nexthmi.command"
+fi
+
+# 5b. Icon assets. Windows carries its icon inside the executable (see the
+#     spec), but neither of these platforms has anywhere to put one: a bare
+#     Mach-O has no icon slot, and Linux reads icons from a .desktop entry. So
+#     ship the files loose. The .icns is inert until someone wraps the build in
+#     a .app; the PNGs back the .desktop template staged next to them.
+if [ "$OS_TAG" = "macos" ]; then
+  cp "$REPO_ROOT/build/icons/nexthmi.icns" "$OUTPUT_DIR/nexthmi.icns"
+else
+  mkdir -p "$OUTPUT_DIR/icons"
+  cp "$REPO_ROOT"/build/icons/nexthmi-*.png "$OUTPUT_DIR/icons/"
+  cp "$REPO_ROOT/build/nexthmi.desktop.in" "$OUTPUT_DIR/nexthmi.desktop"
 fi
 
 echo "$VERSION" > "$OUTPUT_DIR/version.txt"

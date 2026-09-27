@@ -1,0 +1,59 @@
+{
+  "settings": {
+    "autoLoginName": "guest"
+  },
+  "groups": [
+    {
+      "id": "guest",
+      "label": "Guests"
+    },
+    {
+      "id": "admin",
+      "label": "Administrators"
+    },
+    {
+      "id": "operator",
+      "label": "Operators"
+    }
+  ],
+  "users": [
+    {
+      "id": "guest",
+      "username": "guest",
+      "password": "",
+      "groups": [
+        "guest"
+      ]
+    },
+    {
+      "id": "brewer",
+      "username": "brewer",
+      "password": "",
+      "passwordHash": {
+        "version": 1,
+        "algorithm": "pbkdf2-sha256",
+        "iterations": 200000,
+        "salt": "54db4baac309d82f58f1286221d7b0c3",
+        "digest": "a7874f84a1ba761aaa808f94f86f34f978cb8842164897ff31a0a7abcaedf6cf"
+      },
+      "groups": [
+        "admin"
+      ]
+    },
+    {
+      "id": "barista",
+      "username": "barista",
+      "password": "",
+      "passwordHash": {
+        "version": 1,
+        "algorithm": "pbkdf2-sha256",
+        "iterations": 200000,
+        "salt": "6aa0d4948c09acf89052e5a9880d3de5",
+        "digest": "be67e8b4dd34ab17d8acee6ebf1aad62d051f46603e23fb81769339cd951cf40"
+      },
+      "groups": [
+        "operator"
+      ]
+    }
+  ]
+}

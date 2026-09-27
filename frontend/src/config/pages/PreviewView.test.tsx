@@ -1,4 +1,4 @@
-// Renders real stdlib widgets (Label); bind the SDK and resolve their modules.
+// Renders real built-in widgets (Label); bind the SDK and resolve their modules.
 import '../../../widgets/testSdk';
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -9,6 +9,20 @@ import { registerComponents } from '@hmi/registry/widgetRegistry';
 import type { ComponentDefinition } from '@shared/types/componentTypes';
 import type { PageNode } from '@shared/types/config';
 import PreviewView from './PreviewView';
+
+// Records every `pageId` PreviewView hands the settle gate, across every
+// render — including the one before PageGroupPageView's own effect replaces a
+// page-group route with its resolved child, which is the render that exposes
+// a gate keyed on the group id rather than on what `set_context` actually sent.
+const settleGatePageIds: (string | undefined)[] = [];
+vi.mock('@hmi/components/DataSettleGate', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@hmi/components/DataSettleGate')>();
+  const RecordingPageDataSettleGate: typeof actual.PageDataSettleGate = (props) => {
+    settleGatePageIds.push(props.pageId);
+    return <actual.PageDataSettleGate {...props} />;
+  };
+  return { ...actual, PageDataSettleGate: RecordingPageDataSettleGate };
+});
 
 const ORIGIN = window.location.origin;
 
@@ -118,14 +132,19 @@ describe('PreviewView — outbound protocol', () => {
     expect(postMessage).toHaveBeenCalledWith({ type: 'preview_location', pageId: 'page1' }, ORIGIN);
   });
 
-  it('reports component_clicked with pathIds when a rendered widget is pressed', () => {
+  it('reports component_clicked with pathIds when a rendered widget is pressed', async () => {
     // Config mode disables plain 'click' entirely (previewInteractionGuard
     // swallows it) and reports selection from 'pointerdown' instead — see
     // previewInteractionGuard.ts.
     const postMessage = vi.spyOn(window, 'postMessage');
     const { container } = renderPreview();
-    const wrapper = container.querySelector('[data-widget-id="comp-1"]') as HTMLElement;
-    expect(wrapper).toBeInTheDocument();
+    // The page gate holds its content until the widget's module has landed, so
+    // the first render of a type this suite has not loaded yet is async.
+    const wrapper = await waitFor(() => {
+      const el = container.querySelector('[data-widget-id="comp-1"]');
+      expect(el).toBeInTheDocument();
+      return el as HTMLElement;
+    });
 
     fireEvent.pointerDown(wrapper);
 
@@ -185,13 +204,16 @@ describe('PreviewView — outbound protocol', () => {
 describe('PreviewView — inbound protocol / origin checks', () => {
   beforeEach(() => setupStores([BUTTON_PAGE]));
 
-  it('applies the selection highlight to the matching widget wrapper', () => {
+  it('applies the selection highlight to the matching widget wrapper', async () => {
     const { container } = renderPreview();
     act(() => {
       dispatchFromParent({ type: 'set_selected', ids: ['comp-1'], lead: 'comp-1' });
     });
-    const wrapper = container.querySelector('[data-widget-id="comp-1"]') as HTMLElement;
-    expect(wrapper).toHaveClass('hmi-preview-node--selected');
+    await waitFor(() => {
+      expect(container.querySelector('[data-widget-id="comp-1"]')).toHaveClass(
+        'hmi-preview-node--selected',
+      );
+    });
   });
 
   it('highlights every id of a multi-selection', () => {
@@ -463,5 +485,37 @@ describe('PreviewView — page-group selection highlighting', () => {
     act(() => dispatchFromParent({ type: 'set_selected', ids: [], lead: null }));
 
     expect(document.querySelector('.hmi-page-group--selected')).toBeNull();
+  });
+});
+
+describe('PreviewView — settle gate on a page-group route', () => {
+  beforeEach(() => {
+    settleGatePageIds.length = 0;
+    setupStores(GROUP_PAGES);
+    useVariableStore.setState({ contextReadyPageIds: ['page1'] });
+  });
+
+  it('keys the settle gate on the resolved child, not the group the route names', () => {
+    // PageGroupPageView's own effect replaces a group route with its resolved
+    // child on the very next render, which would mask the bug if only the
+    // settled DOM were checked — the first (pre-replace) call is what exposes
+    // a gate still keyed on the group id `context_ready` never echoes.
+    renderPreview('grp1');
+    expect(settleGatePageIds[0]).toBe('page1');
+  });
+});
+
+describe('PreviewView — empty shell regions', () => {
+  beforeEach(() => setupStores([BUTTON_PAGE]));
+
+  it('leaves an empty left sidebar out of the layout instead of conjuring a navigation menu', () => {
+    // A new project starts with every shell region empty. Nothing may appear
+    // there that the page tree does not name: a widget with no node behind it
+    // is one the editor cannot select, move or delete. With no content the
+    // region drops out entirely rather than reserving width for a menu.
+    const { container } = renderPreview();
+
+    expect(container.querySelector('[data-region="leftSidebar"]')).toBeNull();
+    expect(container.querySelector('.hmi-navmenu')).toBeNull();
   });
 });

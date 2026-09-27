@@ -10,7 +10,7 @@
  */
 
 import type { RequiredFieldEntry } from './widgetSchema';
-import { VALUE_TYPES } from '../utils/valueTypes';
+import { VALUE_TYPES, acceptedValueTypes } from '../utils/valueTypes';
 
 type SimpleBase = (typeof VALUE_TYPES)[number];
 
@@ -68,7 +68,8 @@ function fieldName(f: RequiredFieldEntry): string {
  *
  * Struct field-shape is decided from metadata `fields`, never a live value's
  * runtime shape, so an empty `struct[]` (zero elements, no field info yet) is
- * still accepted.
+ * still accepted. Only the required *names* are checked here; `structSatisfies`
+ * checks each member's type and access.
  */
 export function accepts(a: AcceptType, v: VarType, requiredFields?: RequiredFieldEntry[]): boolean {
   if (a.array !== v.array) return false;
@@ -87,6 +88,56 @@ export function accepts(a: AcceptType, v: VarType, requiredFields?: RequiredFiel
  */
 export function nodeAcceptsOrElement(a: AcceptType, v: VarType): boolean {
   return accepts(a, v) || (!a.array && v.array && accepts(a, elementOf(v)));
+}
+
+/** One member of a struct, as far as the caller knows it. */
+export interface StructMember {
+  /** Absent when only the runtime knows the member's type. */
+  type?: VarType;
+  writable?: boolean;
+}
+
+/** A struct's member at a slash-joined path below it (`limits/fMax`);
+ *  `undefined` when the struct has no such member. */
+export type StructMemberLookup = (path: string) => StructMember | undefined;
+
+/**
+ * Whether a struct offers every required field: each must exist; one with
+ * nested `requiredFields` must be a struct itself and satisfy them in turn; one
+ * with a `type` must hold a type that type would accept as a field's
+ * (`acceptedValueTypes`, so an editor kind like `color` means `String`); one
+ * with `write` must be writable. A member whose type is unknown is taken on
+ * trust for its type, never for its access.
+ *
+ * Picker, runtime and backend all decide a struct binding through this one
+ * rule, each supplying the members from what it has — a tree, the variable
+ * metadata, the validator's registry.
+ */
+export function structSatisfies(
+  requiredFields: RequiredFieldEntry[],
+  member: StructMemberLookup,
+  prefix = '',
+): boolean {
+  return requiredFields.every((f) => {
+    const path = `${prefix}${fieldName(f)}`;
+    const found = member(path);
+    if (!found) return false;
+    if (typeof f === 'string') return true;
+    if (f.requiredFields?.length) {
+      if (found.type && found.type.kind !== 'struct') return false;
+      return structSatisfies(f.requiredFields, member, `${path}/`);
+    }
+    const accepted = f.type ? acceptedValueTypes(f.type) : [];
+    const memberType = found.type;
+    if (
+      memberType &&
+      accepted.length > 0 &&
+      !accepted.some((t) => accepts(parseTypeToken(t), memberType))
+    ) {
+      return false;
+    }
+    return !f.write || found.writable === true;
+  });
 }
 
 /** Minimal datasource-node shape needed to derive a VarType. */
@@ -117,4 +168,52 @@ export function nodeVarType(n: VarTypeNode): VarType {
 export function formatVarType(t: VarType): string {
   const name = t.kind === 'scalar' ? t.base : t.name;
   return t.array ? `${name}[]` : name;
+}
+
+function literalBase(value: unknown): SimpleBase | null {
+  if (typeof value === 'boolean') return 'Boolean';
+  if (typeof value === 'string') return 'String';
+  if (typeof value === 'number') return Number.isInteger(value) ? 'Integer' : 'Float';
+  return null;
+}
+
+function commonBase(values: readonly unknown[]): SimpleBase | null {
+  const bases = new Set(values.map(literalBase));
+  if (bases.size === 2 && bases.has('Integer') && bases.has('Float')) return 'Float';
+  return bases.size === 1 ? [...bases][0] : null;
+}
+
+/** What one element of a literal list is, as far as its values say. */
+export interface ListItemTypes {
+  element: VarType | null;
+  members: Record<string, VarType>;
+}
+
+/**
+ * Type a literal list's element from its values: a list of records is a struct
+ * whose fields are every key any record has; a member — or a list of scalars —
+ * is typed when all its values share one simple type (whole and fractional
+ * numbers together make a Float). Anything else is unknown: `null`, or a member
+ * left out — records with no keys at all too. Mirrors `vartype.list_item_types`
+ * (parity: listItemTypes.json).
+ */
+export function listItemTypes(items: unknown): ListItemTypes {
+  if (!Array.isArray(items) || items.length === 0) return { element: null, members: {} };
+  const isRecordItem = (item: unknown): item is Record<string, unknown> =>
+    typeof item === 'object' && item !== null && !Array.isArray(item);
+  if (items.every(isRecordItem)) {
+    const fields: string[] = [];
+    for (const item of items) {
+      for (const key of Object.keys(item)) if (!fields.includes(key)) fields.push(key);
+    }
+    if (fields.length === 0) return { element: null, members: {} };
+    const members: Record<string, VarType> = {};
+    for (const name of fields) {
+      const base = commonBase(items.filter((item) => name in item).map((item) => item[name]));
+      if (base) members[name] = { kind: 'scalar', base, array: false };
+    }
+    return { element: { kind: 'struct', name: 'Struct', fields, array: false }, members };
+  }
+  const base = commonBase(items);
+  return { element: base ? { kind: 'scalar', base, array: false } : null, members: {} };
 }

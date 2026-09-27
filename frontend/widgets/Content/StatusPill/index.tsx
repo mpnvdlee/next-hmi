@@ -34,6 +34,13 @@ export const schema = {
     group: 'Appearance',
     description: 'Shown when the dot is not pulsing.',
   },
+  radius: {
+    type: 'string' as const,
+    format: 'length' as const,
+    label: 'Radius',
+    defaultToken: '--hmi-radius-full',
+    group: 'Appearance',
+  },
 };
 
 export const displayName = 'Status Pill';
@@ -52,13 +59,16 @@ export default function StatusPill({ properties, layout }: HmiWidgetProps) {
   const tone = TONES.indexOf(toneRaw) === -1 ? 'neutral' : toneRaw;
   const pulse = getPropBoolean(properties, 'pulse', false, evalCtx);
   const iconName = getPropString(properties, 'iconName', '', evalCtx);
+  const radius = getPropString(properties, 'radius', '', evalCtx);
   const IconComp = iconName && isBuiltinIconId(iconName) ? getBuiltinIconComponent(iconName) : null;
 
+  // A custom property rather than a literal inline `borderRadius`, so an unset
+  // value keeps the fully-round default in the stylesheet.
+  const style: Record<string, string | number> = { ...selfLayoutStyle(layout) };
+  if (radius) style['--hmi-status-pill-radius'] = radius;
+
   return (
-    <div
-      className={`hmi-component hmi-status-pill hmi-status-pill--${tone}`}
-      style={selfLayoutStyle(layout)}
-    >
+    <div className={`hmi-component hmi-status-pill hmi-status-pill--${tone}`} style={style}>
       {pulse ? (
         <i className="hmi-status-pill__dot" aria-hidden="true" />
       ) : IconComp ? (

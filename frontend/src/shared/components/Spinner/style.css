@@ -12,8 +12,13 @@
   --_accent: var(--hmi-accent, #4f46e5);
 }
 
+/* Both carry a literal fallback because both are painted before the stylesheet
+   that defines their token: --hmi-* is written to the document by the theme
+   load, and --cfg-* ships in a lazy CSS chunk while this rule is in the entry
+   bundle. Without it the boot spinner computes to currentColor — near-black —
+   for as long as that chunk is in flight. Keep the two values identical. */
 .app-spinner--cfg {
-  --_accent: var(--cfg-accent);
+  --_accent: var(--cfg-accent, #4f46e5);
 }
 
 .app-spinner--sm {

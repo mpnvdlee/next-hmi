@@ -68,7 +68,7 @@ def test_projects_present_but_none_running_stays_empty(home: Path, tmp_path: Pat
     assert manifest_mod.load_manifest().running == []
 
 
-def test_fresh_seed_awaits_operator_setup_before_auto_start(
+def test_fresh_seed_auto_starts(
     home: Path, monkeypatch, tmp_path: Path
 ) -> None:
     target = tmp_path / "Default-Project"
@@ -89,7 +89,6 @@ def test_fresh_seed_awaits_operator_setup_before_auto_start(
                         "groups": ["guest"],
                     }
                 ],
-                "operatorSetup": {"version": 1, "required": True},
             }
         ),
         encoding="utf-8",
@@ -112,4 +111,4 @@ def test_fresh_seed_awaits_operator_setup_before_auto_start(
     project_resume.prepare_running_set()
 
     persisted = manifest_mod.load_manifest()
-    assert persisted.running == []
+    assert [entry.id for entry in persisted.running] == ["seed-pending"]

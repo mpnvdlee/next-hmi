@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { sendWsMessage } from '@hmi/hooks/useWebSocket';
 
 function sendPriorityContext(priorityKeys: string[]) {
-  sendWsMessage({ type: 'set_context', currentPageIds: [], openDialogIds: [], priorityKeys });
+  sendWsMessage({ type: 'set_context', currentPageIds: [], priorityKeys });
 }
 
 /**

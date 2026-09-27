@@ -24,6 +24,8 @@ interface Props {
   actions?: ReactNode;
   /** Server build-diagnostic for this row (see `usePanelDiagnostics`). */
   diagnostic?: { level: 'error' | 'warning'; message: string; nested?: boolean };
+  /** Replaces the static badge — a source pill for a row that takes more than one. */
+  badge?: ReactNode;
 }
 
 /** Thin `FieldGroup` wrapper — the default shape for a single plain property row. */
@@ -37,6 +39,7 @@ export default function PropRow({
   block,
   actions,
   diagnostic,
+  badge,
 }: Props) {
   return (
     <FieldGroup
@@ -45,7 +48,9 @@ export default function PropRow({
       tier={tier}
       selection={selection}
       sourceless={sourceless}
-      badge={sourceless ? undefined : <PropertySourceBadge source="static" variant="cap" />}
+      badge={
+        sourceless ? undefined : (badge ?? <PropertySourceBadge source="static" variant="cap" />)
+      }
       block={block}
       actions={actions}
       diagnostic={diagnostic}

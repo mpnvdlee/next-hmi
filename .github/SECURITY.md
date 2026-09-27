@@ -60,6 +60,7 @@ check whether the behaviour is in scope:
   design, not a low-privilege one. See
   [docs/dev/reference/custom-widgets.md](../docs/dev/reference/custom-widgets.md#security-editor-access-is-code-execution).
 - Misconfiguration explicitly warned against in the deployment docs (for
-  example serving over plain HTTP on `0.0.0.0`, or setting
-  `NEXTHMI_FORWARDED_ALLOW_IPS=*` on an untrusted network) is a deployment
-  error, not a vulnerability in the software.
+  example leaving HTTPS off on a network other people can reach — the manager
+  binds every interface by default and says so when it serves plain HTTP — or
+  setting `NEXTHMI_FORWARDED_ALLOW_IPS=*` on an untrusted network) is a
+  deployment error, not a vulnerability in the software.

@@ -18,7 +18,8 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROJECT_TESTBENCH = REPO_ROOT / "project-testbench"
 PROJECT_SEED = REPO_ROOT / "project-seed"
-PROJECT_ROOTS = (PROJECT_TESTBENCH, PROJECT_SEED)
+PROJECT_EXAMPLE = REPO_ROOT / "project-example"
+PROJECT_ROOTS = (PROJECT_TESTBENCH, PROJECT_SEED, PROJECT_EXAMPLE)
 
 # Raw OPC-UA type literals with no value-type name — these must never appear in
 # HMI config / widget schemas (a value type is the only datatype a schema speaks).

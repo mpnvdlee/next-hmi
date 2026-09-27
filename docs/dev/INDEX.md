@@ -17,7 +17,7 @@ Building dashboards rather than working on NEXT HMI itself? Read the
 |---|---|
 | [architecture/overview.md](architecture/overview.md) | System map and cross-domain flow; manager + per-project instance model; links to every focused doc |
 | [architecture/backend.md](architecture/backend.md) | Manager front door + supervisor/reverse proxy, single-project app, OPC-UA client pool, alarm + recipe + widget managers, shared write service, persistence, startup/shutdown |
-| [architecture/frontend.md](architecture/frontend.md) | Manager dashboard, runtime base path, component registry and the compiled built-in widget stdlib, widget rendering, variable hooks, editor UI, routing, state |
+| [architecture/frontend.md](architecture/frontend.md) | Manager dashboard, runtime base path, component registry and the compiled built-in widget catalog, widget rendering, variable hooks, editor UI, routing, state |
 | [architecture/data-formats.md](architecture/data-formats.md) | On-disk layout (project + runtime home), manifest, and every persisted file format (config, pages, alarms, recipes, widgets, theme, datasources, translations) |
 | [architecture/value-types.md](architecture/value-types.md) | **Canonical** property value model — types, formats, sources (`$`-wrappers), `$var` tree, OPC-UA type collapse, resolution & coercion, component inputs |
 | [architecture/websocket.md](architecture/websocket.md) | **Canonical** `/ws` protocol — handshake, server/client messages, async-action result correlation, `config_changed` |

@@ -11,12 +11,13 @@ from core.exceptions import (
     ConfigNotFoundError,
     ConfigValidationError,
 )
+from core.page_index import page_document_files
 from core.storage import (
     active_assets_dir,
-    active_components_dir,
     active_icons_dir,
     active_images_dir,
-    active_pages_dir,
+    active_videos_dir,
+    component_files,
     read_json,
     write_bytes_atomic,
     write_text_atomic,
@@ -31,7 +32,7 @@ from ..write_helpers import emit_change
 _NAME_RE = re.compile(r"^[A-Za-z0-9_\-.]+$")
 _MAX_SVG_BYTES = 5 * 1024 * 1024
 _MAX_IMAGE_BYTES = 5 * 1024 * 1024
-_ASSET_REF_TYPES = frozenset({"image", "icon"})
+_ASSET_REF_TYPES = frozenset({"image", "icon", "video"})
 
 # SVG payloads are rendered inline in the HMI; strip the elements/attrs that
 # would let an uploaded asset run script in the host page.
@@ -134,7 +135,8 @@ def _asset_referenced(asset_path: str) -> bool:
     """Schema-aware reference check across pages and reusable components."""
     from core.validation.structure import load_widget_manifest
     schemas = load_widget_manifest()
-    for path in active_pages_dir().glob("*.json"):
+    page_documents = page_document_files(skip_internal=False)
+    for path in page_documents:
         try:
             doc = read_json(path)
         except Exception:
@@ -146,13 +148,13 @@ def _asset_referenced(asset_path: str) -> bool:
                     for child in children:
                         if _walk_widget_node(child, asset_path, schemas):
                             return True
-    for path in active_components_dir().glob("*.json"):
+    for path, _group in component_files():
         try:
             doc = read_json(path)
         except Exception:
             continue
-        tree = doc.get("tree", []) if isinstance(doc, dict) else []
-        for node in tree if isinstance(tree, list) else []:
+        children = doc.get("children", []) if isinstance(doc, dict) else []
+        for node in children if isinstance(children, list) else []:
             if _walk_widget_node(node, asset_path, schemas):
                 return True
     return False
@@ -163,6 +165,7 @@ def _list_items() -> list[tuple[str, str, dict]]:
     for asset_dir, asset_type in (
         (active_icons_dir(), "icon"),
         (active_images_dir(), "image"),
+        (active_videos_dir(), "video"),
     ):
         if not asset_dir.exists():
             continue

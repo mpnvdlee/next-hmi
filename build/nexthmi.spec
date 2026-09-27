@@ -18,6 +18,7 @@
 # edition; see "Frontend bundle" below.
 # noqa: E501 — PyInstaller's spec format is permissive about line length.
 
+import json
 import os
 import re
 import sys
@@ -75,6 +76,38 @@ if not (frontend_dist / "index.html").is_file():
         f"No SPA bundle at {frontend_dist} — run the frontend build first "
         "(build/build-binary.sh does this for you)."
     )
+
+# The baked built-in-widgets manifest rides *inside* the bundle (vite copies
+# public/builtin-widgets-js into dist/), and a packaged runtime has no second
+# source for it: core.builtin_widgets_manifest falls back to
+# frontend/src/generated/, which no build ships. Every product widget is a
+# built-in widget, so a bundle without this file yields a binary whose
+# validator knows no widget types at all and refuses every page save —
+# silently, and only in the packaged artifact. Two ways to get there without
+# touching this spec: `npm run build:app` (which skips build:builtin-widgets),
+# and a dist/ left over from an older tree. Both are cheap to catch here and
+# expensive to diagnose in the field.
+_builtin_widgets_manifest = frontend_dist / "builtin-widgets-js" / "manifest.json"
+for _half in (
+    _builtin_widgets_manifest,
+    _builtin_widgets_manifest.with_name("manifest.editor.json"),
+):
+    if not _half.is_file():
+        raise SystemExit(
+            f"No baked built-in-widgets manifest at {_half} — the bundle must come "
+            "from `npm run build` (which runs build:builtin-widgets first), not "
+            "`npm run build:app`."
+        )
+try:
+    _builtin_widgets_rows = json.loads(_builtin_widgets_manifest.read_text(encoding="utf-8"))
+except ValueError as err:
+    raise SystemExit(f"{_builtin_widgets_manifest} is not valid JSON: {err}") from err
+if not isinstance(_builtin_widgets_rows, list) or not _builtin_widgets_rows:
+    raise SystemExit(
+        f"{_builtin_widgets_manifest} lists no widgets — the built-in-widgets compile "
+        "produced an empty catalog, so this binary would reject every widget on save."
+    )
+print(f"[spec] built-in-widgets catalog: {len(_builtin_widgets_rows)} widget(s)")
 
 _class_selector = re.compile(r"\.(-?[_a-zA-Z][\w-]{5,})")
 
@@ -135,6 +168,7 @@ elif _stamped is None:
 datas: list[tuple[str, str]] = [
     (str(frontend_dist), "frontend/dist"),
     (str(repo_root / "project-seed"), "project-seed"),
+    (str(repo_root / "project-example"), "project-example"),
     # Theme defaults are shared between the SPA's Theme Editor and the
     # backend's pydantic validation models; models/theme.py reads it via
     # sys._MEIPASS when frozen.
@@ -196,7 +230,7 @@ _collect_targets = [
     "tree_sitter_typescript",
 ]
 
-# --- LGPL components: shipped replaceable, never frozen (release item 1a) -----
+# --- LGPL components: shipped replaceable, never frozen ----------------------
 # asyncua (LGPL-3.0-or-later) is the OPC-UA client; zeroconf (LGPL-2.1-or-later)
 # powers LAN peer discovery. LGPL only permits a proprietary combined work if
 # the recipient can replace the LGPL component and relink — which a frozen PYZ
@@ -292,6 +326,14 @@ a = Analysis(  # noqa: F821
         "pytest",
         "test",
         "tests",
+        # A dependency's hook declares tzdata as a hidden import, so every build
+        # warns that it is missing. Nothing here resolves IANA zone names (no
+        # zoneinfo, no pytz anywhere in backend/), and tzdata is not installed,
+        # so it is already absent from the artifact — naming it here only stops
+        # PyInstaller looking, and stops the warning reading like a real gap.
+        # Revisit if anything ever calls ZoneInfo(): Windows ships no system tz
+        # database, so that would need tzdata as a real runtime dependency.
+        "tzdata",
         *edition_excludes,
     ],
     noarchive=False,
@@ -320,6 +362,17 @@ a.pure = [entry for entry in a.pure if not _is_lgpl(entry[0])]
 a.binaries = [entry for entry in a.binaries if not _is_lgpl(entry[0])]
 a.datas = [entry for entry in a.datas if not _is_lgpl(entry[0])]
 
+# --- Application icon --------------------------------------------------------
+# Windows stamps the .ico into the executable's resource section, so this is
+# what Explorer, the taskbar and Alt-Tab show. PyInstaller only consumes an icon
+# on macOS when it emits a .app bundle, which this console build deliberately
+# does not: a .app swallows stdout, and the startup banner naming the runtime
+# home and the URL is the one thing an operator needs to see. The .icns and the
+# PNG set ship loose in the output folder instead (build-binary.sh), where the
+# .icns is ready for a future bundle and the PNGs back a Linux .desktop entry.
+# Regenerate all of them with build/icons/render-icons.py.
+_exe_icon = str(repo_root / "build" / "icons" / "nexthmi.ico") if sys.platform == "win32" else None
+
 pyz = PYZ(a.pure)  # noqa: F821
 
 exe = EXE(  # noqa: F821
@@ -338,6 +391,7 @@ exe = EXE(  # noqa: F821
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=_exe_icon,
 )
 
 # Distinct output folders per edition. One spec produces two artifacts under two

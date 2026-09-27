@@ -35,8 +35,10 @@ const PHASE_LABELS: Record<BootPhase, string> = {
  * back. Not a licence check — a project setting the oss build has no surface
  * for and no reader of.
  *
- * Branding is held back until the project config has loaded, so a white-labelled
- * project never flashes the NEXT HMI mark on its way up.
+ * The edition is a build global, known before the first frame, so the public
+ * build — which ignores `shell.bootLogo` — paints its branding and notice
+ * immediately. Only `ee` waits for the project config: it may white-label the
+ * screen, and the product mark must not flash ahead of the project's own logo.
  */
 export default function BootSplash({ phase }: { phase: BootPhase }) {
   const configLoaded = useConfigStore((s) => s.loaded);
@@ -49,23 +51,22 @@ export default function BootSplash({ phase }: { phase: BootPhase }) {
 
   const isEE = getEdition() === 'ee';
   const logoUrl = isEE && bootLogo ? imageBodyToUrl({ path: bootLogo }) : null;
-  const showAgplNotice = configLoaded && !isEE;
+  const showProductBrand = !logoUrl && (!isEE || configLoaded);
+  const showAgplNotice = !isEE;
 
   return (
     <div className="hmi-boot-splash" role="status" aria-live="polite">
       <div className="hmi-boot-splash__panel">
         <div className="hmi-boot-splash__brand">
-          {configLoaded &&
-            (logoUrl ? (
-              <img className="hmi-boot-splash__logo" src={logoUrl} alt="" />
-            ) : (
-              <>
-                <LogoMark className="hmi-boot-splash__mark" />
-                <span className="hmi-boot-splash__title">
-                  <span className="hmi-boot-splash__title-next">NEXT</span> HMI
-                </span>
-              </>
-            ))}
+          {logoUrl && <img className="hmi-boot-splash__logo" src={logoUrl} alt="" />}
+          {showProductBrand && (
+            <>
+              <LogoMark className="hmi-boot-splash__mark" />
+              <span className="hmi-boot-splash__title">
+                <span className="hmi-boot-splash__title-next">NEXT</span> HMI
+              </span>
+            </>
+          )}
           <span className="hmi-boot-splash__version">v{getVersion()}</span>
         </div>
 

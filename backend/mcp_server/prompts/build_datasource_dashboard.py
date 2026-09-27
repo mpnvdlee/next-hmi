@@ -25,7 +25,7 @@ def build_datasource_dashboard(
         "use the returned `page_id` for the next steps.\n"
         f"5. For each chosen variable, call `pages_add_widget(project='{project}', "
         "...)` with an appropriate widget type "
-        "(e.g. Button for booleans with a `bValue` write field, ImageContainer for graphics).\n"
-        "6. Bind each widget's `variable` struct or scalar property to `$var: { path: 'datasource:location' }`.\n"
+        "(e.g. a Button whose `variable` is a Boolean written true on press, ImageContainer for graphics).\n"
+        "6. Bind each widget's `variable` property to `$var: { path: 'datasource:location' }`.\n"
         f"7. Call `pages_get(project='{project}', page_id=...)` to verify the layout.\n"
     )

@@ -12,8 +12,10 @@ import { create } from 'zustand';
 
 interface ComponentPropStore {
   props: Record<string, Record<string, unknown>>;
-  setComponentProp: (componentId: string, key: string, value: unknown) => void;
-  clearComponentProps: (componentId: string) => void;
+  /** Several ids are written in one update — a Repeater copy publishes under
+   *  its scoped id and, for the first copy, the bare id too. */
+  setComponentProp: (componentId: string | readonly string[], key: string, value: unknown) => void;
+  clearComponentProps: (componentId: string | readonly string[]) => void;
 }
 
 /**
@@ -45,29 +47,31 @@ function valuesEqual(a: unknown, b: unknown): boolean {
   );
 }
 
+function idList(componentId: string | readonly string[]): readonly string[] {
+  return typeof componentId === 'string' ? [componentId] : componentId;
+}
+
 export const useComponentPropStore = create<ComponentPropStore>((set) => ({
   props: {},
 
   setComponentProp: (componentId, key, value) =>
     set((state) => {
-      const existing = state.props[componentId];
-      if (existing && key in existing && valuesEqual(existing[key], value)) {
-        return state; // unchanged value — keep `props` reference stable
-      }
-      return {
-        props: {
-          ...state.props,
-          [componentId]: {
-            ...existing,
-            [key]: value,
-          },
-        },
-      };
+      const changed = idList(componentId).filter((id) => {
+        const existing = state.props[id];
+        return !(existing && key in existing && valuesEqual(existing[key], value));
+      });
+      if (changed.length === 0) return state; // unchanged value — keep `props` reference stable
+      const props = { ...state.props };
+      for (const id of changed) props[id] = { ...props[id], [key]: value };
+      return { props };
     }),
 
   clearComponentProps: (componentId) =>
     set((state) => {
-      const { [componentId]: _removed, ...rest } = state.props;
-      return { props: rest };
+      const present = idList(componentId).filter((id) => id in state.props);
+      if (present.length === 0) return state;
+      const props = { ...state.props };
+      for (const id of present) delete props[id];
+      return { props };
     }),
 }));

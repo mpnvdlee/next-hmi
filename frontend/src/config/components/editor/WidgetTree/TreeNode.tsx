@@ -7,7 +7,7 @@ import {
   resolveWidgetMetadata,
   widgetSlots,
 } from '@hmi/registry/widgetRegistry';
-import { groupChildrenBySlot, slotLabel } from '@hmi/components/ComponentSlot/slotKey';
+import { groupChildrenBySlot, slotLabel } from '@shared/utils/componentSlots';
 import {
   makeWidgetSlotId,
   widgetSlotEmptyDropId,

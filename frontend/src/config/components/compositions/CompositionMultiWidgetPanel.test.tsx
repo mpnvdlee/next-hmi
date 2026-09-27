@@ -60,6 +60,6 @@ describe('CompositionMultiWidgetPanel', () => {
     const { container } = setup([widget('a'), widget('b')]);
 
     expect(container.querySelector('.cfg-section__title')).toBeInTheDocument();
-    expect(container.querySelector('.cfg-section__header')).not.toBeInTheDocument();
+    expect(container.querySelector('.cfg-section > .cfg-section__header')).not.toBeInTheDocument();
   });
 });

@@ -3,6 +3,13 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import type { RowItem } from '@config/components/ui/datasourceTreeHelpers';
 import { filterTree, flattenForRender } from '@config/components/ui/datasourceTreeHelpers';
 
+/**
+ * Min/Max range editing is fully built (see `RangeCells` in rowRenderers.tsx)
+ * but hidden from the table for this release. Flip to true to bring the
+ * columns back.
+ */
+export const SHOW_RANGE_COLUMNS = false;
+
 interface Params {
   tree: Parameters<typeof filterTree>[0];
   filter: string;
@@ -40,7 +47,10 @@ export function useDatasourceTableRows({
   });
 
   const colsTmpl = useMemo(() => {
-    const base = '44px minmax(120px, 1.5fr) 140px 90px 64px 64px' + (showLive ? ' 270px' : '');
+    const base =
+      '44px minmax(120px, 1.5fr) 140px 90px' +
+      (SHOW_RANGE_COLUMNS ? ' 64px 64px' : '') +
+      (showLive ? ' 270px' : '');
     return base + (isEditable ? ' 36px' : '');
   }, [showLive, isEditable]);
 

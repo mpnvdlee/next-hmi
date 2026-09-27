@@ -1,7 +1,7 @@
 /**
  * Action result dispatcher.
  *
- * Async actions (loginUser, logoutUser, writeDataVariable) carry an optional
+ * Async actions (loginUser, logoutUser, writeDataVariable, toggleDataVariable) carry an optional
  * `onSuccess` / `onFailed` / `onSettled` list of follow-up actions. When such
  * an action is fired, `executeWidgetActions` calls `registerPending` here with
  * a freshly-generated requestId; the backend echoes the requestId on its

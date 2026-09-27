@@ -64,7 +64,14 @@ describe('custom-widgets-sdk.d.ts action drift', () => {
   const componentActionVariants = parseVariants(SDK_DTS_PATH, 'type ComponentAction =');
 
   it('parsed at least the known ButtonAction variants', () => {
-    expect(buttonActionVariants.size).toBeGreaterThanOrEqual(13);
+    // Floor is the real variant count (config.ts currently declares 12:
+    // openDialog, openPageOverlay, closePageOverlay, writeDataVariable,
+    // recipeLoad, recipeSave, loginUser, logoutUser, setLanguage,
+    // setActiveTheme, showAlert, showToast) — this guards the regex-based
+    // parser itself against silently under-matching, independent of the parity
+    // checks below, which only compare the two files' output to each other and
+    // would not notice both sides losing the same variants.
+    expect(buttonActionVariants.size).toBeGreaterThanOrEqual(12);
   });
 
   it('declares the same action variant names as ButtonAction', () => {

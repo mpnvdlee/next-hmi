@@ -48,6 +48,20 @@ describe('StatusPill', () => {
     expect(container.querySelector('i')).toBeNull();
   }, 15000);
 
+  it('emits the radius override as a custom property, not a literal style', () => {
+    const { container } = renderPill({ text: 'Idle', radius: '4px' });
+    const el = container.firstElementChild as HTMLElement;
+
+    expect(el.style.getPropertyValue('--hmi-status-pill-radius')).toBe('4px');
+  });
+
+  it('leaves the radius override unset when no radius is configured', () => {
+    const { container } = renderPill({ text: 'Idle' });
+    const el = container.firstElementChild as HTMLElement;
+
+    expect(el.style.getPropertyValue('--hmi-status-pill-radius')).toBe('');
+  });
+
   it('applies the tone class matching the tone property', () => {
     const { container } = renderPill({ text: 'Fault', tone: 'fault' });
     expect(container.querySelector('.hmi-status-pill')?.className).toContain(

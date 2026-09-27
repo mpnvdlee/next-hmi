@@ -84,6 +84,13 @@ beforeEach(() => {
   registerFake('MultiStruct', {
     alarms: { type: 'Alarms[]', label: 'Alarms' },
   });
+  registerFake('SingleStruct', {
+    zones: {
+      type: 'struct[]',
+      label: 'Zones',
+      requiredFields: [{ name: 'temp', type: 'Float' }],
+    },
+  });
 });
 
 describe('PropertiesPanel multi-selection', () => {
@@ -272,5 +279,22 @@ describe('PropertiesPanel multi-selection', () => {
 
     expect(screen.queryByText('2 components')).not.toBeInTheDocument();
     expect(screen.getByText('Identity')).toBeInTheDocument();
+  });
+
+  // The single-widget panel gated the picker on a literal `'struct'`, so a
+  // `struct[]` row drew as a binding row with no picker to open — losing both
+  // its `✎` and its `×`.
+  it('offers the binding picker on a struct[] row under a single selection', () => {
+    setup([widget('a', 'SingleStruct')], ['a']);
+
+    fireEvent.click(screen.getByTitle('Change variable binding'));
+
+    const target = useEditorDomainStore.getState().bindingPickerTarget;
+    expect(target?.componentId).toBe('a');
+    expect(target?.propertyKey).toBe('zones');
+    expect(target?.filter).toMatchObject({
+      type: 'struct[]',
+      requiredFields: [{ name: 'temp', type: 'Float' }],
+    });
   });
 });

@@ -1,4 +1,4 @@
-﻿"""Datasource configuration models.
+"""Datasource configuration models.
 
 Variable/struct tree node array encoding: ``is_array`` (bool) marks a node as
 an array; ``array_length`` is meaningful only when ``is_array`` is true — a
@@ -31,7 +31,7 @@ class DatasourceUpsertBody(BaseModel):
     ``null``), meaning "leave the existing variable tree untouched" — only an
     explicit ``[]`` clears it. This lets a settings-only PUT (e.g. from the
     properties panel) omit ``variables`` entirely instead of persisting an
-    empty tree and silently wiping it (§1.5).
+    empty tree and silently wiping it.
     """
 
     type: DatasourceType
@@ -103,6 +103,47 @@ class CertUploadResult(BaseModel):
     """Body for POST /api/datasources/certs — the stored file's project-relative path."""
 
     path: str
+
+
+class CertGenerateBody(BaseModel):
+    """Body for POST /api/datasources/certs/generate."""
+
+    name: str = "client"
+    common_name: str = ""
+    validity_days: int = Field(default=3650, ge=1, le=36500)
+
+
+class CertGenerateResult(BaseModel):
+    """Body for POST /api/datasources/certs/generate — the generated pair's paths."""
+
+    client_certificate: str
+    client_private_key: str
+
+
+class CertInfo(BaseModel):
+    """Body for GET /api/datasources/certs/info — a stored certificate's validity.
+
+    ``readable`` is false when the path holds no certificate this process can
+    parse (missing file, a private key, a typo'd path); every other field is
+    then unset and the editor shows the lifecycle as unknown.
+
+    camelCase where the two models above are snake_case: those carry the
+    persisted datasource-settings keys the wizard writes back
+    (``client_certificate`` / ``client_private_key``), while nothing here has an
+    on-disk counterpart — it is read straight into TypeScript's
+    ``CertificateInfo``.
+    """
+
+    readable: bool
+    subject: str = ""
+    fingerprint: str = ""
+    issuedAt: str = ""
+    expiresAt: str = ""
+    expiresInDays: int = 0
+    expired: bool = False
+    expiring: bool = False
+    selfSigned: bool = False
+    names: list[str] = Field(default_factory=list)
 
 
 # ── Path helpers ──────────────────────────────────────────────────────────────

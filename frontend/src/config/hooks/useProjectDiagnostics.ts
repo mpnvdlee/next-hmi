@@ -22,7 +22,7 @@ import { useProjectStore } from '@shared/store/projectStore';
 import { useConfigStore } from '@shared/store/configStore';
 import { findComponentById } from '@shared/utils/widgetTree';
 import { EDITOR_NODE_IDS } from '@shared/constants/editorSentinels';
-import type { PageGroupConfig, WidgetConfig } from '@shared/types/config';
+import type { PageGroupConfig, PageNode, WidgetConfig } from '@shared/types/config';
 import { isPageGroup } from '@shared/utils/pageTree';
 import {
   diagnosticArtifactKey,
@@ -92,9 +92,6 @@ interface MergedDiagnostics {
   byWidget: Map<string, DiagnosticSeverity>;
   /** Worst severity per `kind:id` artifact, covering everything inside it. */
   byArtifact: Map<string, DiagnosticSeverity>;
-  /** Worst severity per artifact *kind*, for the tree's collapsed Pages /
-   *  Dialogs section rows — with those shut, nothing else would show. */
-  byKind: Map<string, DiagnosticSeverity>;
 }
 
 // Every tree row asks for the same derivation, so it is computed once per
@@ -131,16 +128,14 @@ function mergeDiagnostics(
 
   const byWidget = new Map<string, DiagnosticSeverity>();
   const byArtifact = new Map<string, DiagnosticSeverity>();
-  const byKind = new Map<string, DiagnosticSeverity>();
   let errorCount = 0;
   for (const d of all) {
     if (d.severity === 'error') errorCount += 1;
     if (d.widgetId) mark(byWidget, d.widgetId, d.severity);
     mark(byArtifact, diagnosticArtifactKey(d.artifactKind, d.artifactId), d.severity);
-    mark(byKind, d.artifactKind, d.severity);
   }
 
-  const value: MergedDiagnostics = { all, errorCount, byWidget, byArtifact, byKind };
+  const value: MergedDiagnostics = { all, errorCount, byWidget, byArtifact };
   mergeCache = { swept, live, liveKey, value };
   return value;
 }
@@ -158,7 +153,7 @@ export function useWidgetSeverities(): Map<string, DiagnosticSeverity> {
   return useMergedDiagnostics().byWidget;
 }
 
-/** Worst severity anywhere inside one artifact, for its page/dialog tree row. */
+/** Worst severity anywhere inside one artifact, for its page tree row. */
 export function useArtifactSeverity(
   kind: string,
   id: string | null,
@@ -187,6 +182,28 @@ export function pageGroupSeverity(
     if (childSeverity) severity = worse(severity, childSeverity);
     if (severity === 'error') return 'error';
   }
+  return severity;
+}
+
+/** Worst severity across one page-tree root — every node at any depth, groups'
+ *  own findings (their lifecycle events) included — for the collapsed Pages /
+ *  Dialogs section rows, which with the section shut are the only thing that
+ *  can show it. */
+export function pageRootSeverity(
+  nodes: PageNode[],
+  byArtifact: Map<string, DiagnosticSeverity>,
+): DiagnosticSeverity | undefined {
+  if (byArtifact.size === 0) return undefined;
+  let severity: DiagnosticSeverity | undefined;
+  const walk = (node: PageNode): void => {
+    if (severity === 'error') return;
+    const own = byArtifact.get(
+      diagnosticArtifactKey(isPageGroup(node) ? 'pageGroup' : 'page', node.id),
+    );
+    if (own) severity = worse(severity, own);
+    if (isPageGroup(node)) node.children.forEach(walk);
+  };
+  nodes.forEach(walk);
   return severity;
 }
 

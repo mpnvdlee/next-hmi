@@ -1,6 +1,15 @@
 import { create } from 'zustand';
-import { apiErrorFrom, apiJson, isApiError } from '@shared/utils/api';
+import { apiErrorFrom, apiJson, errorMessage, managerApiJson } from '@shared/utils/api';
 import { withBase } from '@shared/utils/runtimeBase';
+
+export interface ProjectMigrationRecord {
+  fromVersion: number;
+  toVersion: number;
+  at: string;
+  /** Zip of the whole project taken before the migration touched anything.
+   *  Null on a record written before this replaced the per-target backup map. */
+  backup: string | null;
+}
 
 export interface ProjectEntry {
   id: string;
@@ -9,16 +18,37 @@ export interface ProjectEntry {
   addedAt: string;
   lastOpenedAt: string | null;
   status: 'present' | 'missing';
+  /** Whether `path` is a direct child of the projects root — the only place a
+   * peer transfer can ever install. Computed by the backend, which is the
+   * only side that knows the root resolved the way `path` was stored. */
+  inProjectsRoot: boolean;
   /** The project the origin root (`/`) resolves to. Chosen on the Projects page. */
   isDefault: boolean;
   /** Whether the workspace MCP may write to this project. Controlled from the
    * manager dashboard; the per-project admin page no longer owns this. */
   mcpEnabled: boolean;
-  /** Fresh seeded projects remain inaccessible until the manager creates the
-   * initial admin operator credential. */
-  operatorSetupRequired: boolean;
-  operatorSetupStatus: 'required' | 'complete' | 'error';
-  operatorSetupError: string | null;
+  /** Whether the project's `users.json` is readable and well-formed. A project
+   * whose document is broken cannot be started until it is repaired on disk. */
+  credentialsStatus: 'ok' | 'error';
+  credentialsError: string | null;
+  /** The project's on-disk schema version — null when `status` is `missing`. */
+  formatVersion: number | null;
+  /** The release that stamped `formatVersion`, so a build too old to open this
+   * project can name the version the operator needs. Null when the stamping
+   * build predated the field. Display only — never parsed or compared. */
+  minAppVersion: string | null;
+  /** `formatVersion` is behind this build's baseline; starting it needs the
+   * operator to confirm an upgrade first. */
+  needsUpgrade: boolean;
+  /** `formatVersion` is newer than this build supports; it cannot be started
+   * until the application is updated. */
+  unsupportedFormat: boolean;
+  /** Set once this project has actually been migrated; kept around (even
+   * after it is no longer the current format) as a pointer to the backup. */
+  lastMigration: ProjectMigrationRecord | null;
+  /** When the project's main-page thumbnail was last rasterised, or null if
+   * the project has never been saved and so has no thumbnail yet. */
+  thumbnailUpdatedAt: string | null;
 }
 
 export type PeerScheme = 'http' | 'https';
@@ -73,10 +103,31 @@ export interface BrowseDirResponse {
   hasConfigJson: boolean;
 }
 
-interface PeerTransferStatus {
+/** One project a paired peer is willing to name, as that peer describes it. */
+export interface PeerProject {
+  id: string;
+  name: string;
+  folder: string;
+  running: boolean;
+  /**
+   * Whether `folder` is a folder in the peer's *projects root*. Only the peer
+   * knows where its root is, and a transfer can only ever install into it —
+   * so a project registered anywhere else neither clashes with an incoming
+   * folder nor can be replaced by one. Absent from a peer predating the field.
+   */
+  inProjectsRoot?: boolean;
+}
+
+export interface PeerTransferStatus {
   transferId: string;
   phase: string;
-  status: 'active' | 'complete' | 'error' | 'cancelled';
+  /** The phase that was running when it failed; `phase` holds the outcome. */
+  failedPhase?: string | null;
+  // The last two only ever reach a client that is *installing*: the pull
+  // journal and the receiver's own status endpoint produce them. A sender's
+  // journal never leaves active/complete/error/cancelled.
+  status:
+    'active' | 'complete' | 'error' | 'cancelled' | 'applied_pending_start' | 'recovery_required';
   bytesDone: number;
   bytesTotal: number;
   message?: string | null;
@@ -96,13 +147,12 @@ interface ProjectsStore {
   load(): Promise<void>;
   loadRuntimeHome(): Promise<void>;
   setDefault(id: string): Promise<void>;
-  setupOperatorPassword(id: string, password: string): Promise<void>;
   validatePath(path: string): Promise<ValidatePathResponse>;
   browseDir(path?: string): Promise<BrowseDirResponse>;
   // Mutation actions throw on failure — callers (modals) display the error
   // locally. The store-level `error` is reserved for load failures shown in
   // the page header.
-  createProject(name: string, path: string): Promise<ProjectEntry>;
+  createProject(name: string, path: string, template?: 'empty' | 'example'): Promise<ProjectEntry>;
   registerExisting(path: string, name?: string): Promise<ProjectEntry>;
   locate(id: string, path: string): Promise<ProjectEntry>;
   renameProject(id: string, patch: { name?: string; id?: string }): Promise<ProjectEntry>;
@@ -124,7 +174,7 @@ interface ProjectsStore {
     port: number,
     token: string,
     scheme?: PeerScheme,
-  ): Promise<Array<{ id: string; name: string; folder: string; running: boolean }>>;
+  ): Promise<PeerProject[]>;
   beginPeerTransfer(args: {
     sourceProjectId: string;
     destinationProjectId: string;
@@ -159,8 +209,10 @@ interface ProjectsStore {
 }
 
 export function describeError(e: unknown): string {
-  if (isApiError(e)) return e.message;
-  return e instanceof Error ? e.message : String(e);
+  // `errorMessage` already maps a failed `fetch`'s bare TypeError to
+  // something an operator can read; duplicating that mapping here is how a
+  // raw "Failed to fetch" reached the transfer failure panel.
+  return errorMessage(e);
 }
 
 export const useProjectsStore = create<ProjectsStore>((set, get) => ({
@@ -197,19 +249,6 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
     }
   },
 
-  setupOperatorPassword: async (id: string, password: string) => {
-    set({ busyProjectId: id });
-    try {
-      await apiJson(`/api/manager/projects/${encodeURIComponent(id)}/operator-setup`, {
-        method: 'POST',
-        body: { password },
-      });
-      await get().load();
-    } finally {
-      set({ busyProjectId: null });
-    }
-  },
-
   loadRuntimeHome: async () => {
     try {
       const info = await apiJson<RuntimeHomeInfo>('/api/projects/_runtime-home');
@@ -236,10 +275,10 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
     return apiJson<BrowseDirResponse>(`/api/projects/browse-dir${query}`);
   },
 
-  createProject: async (name: string, path: string) => {
+  createProject: async (name: string, path: string, template: 'empty' | 'example' = 'empty') => {
     const entry = await apiJson<ProjectEntry>('/api/projects', {
       method: 'POST',
-      body: { name, path },
+      body: { name, path, template },
     });
     await get().load();
     return entry;
@@ -319,7 +358,7 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
 
   loadPeers: async () => {
     try {
-      return await apiJson<PeerListResponse>('/api/manager/peers/discovered');
+      return await managerApiJson<PeerListResponse>('/api/manager/peers/discovered');
     } catch (e) {
       console.warn('[projectsStore] loadPeers failed:', e);
       return null;
@@ -327,56 +366,60 @@ export const useProjectsStore = create<ProjectsStore>((set, get) => ({
   },
 
   addManualPeer: async (host: string, port: number, name?: string, scheme: PeerScheme = 'http') => {
-    await apiJson('/api/manager/peers/manual', {
+    await managerApiJson('/api/manager/peers/manual', {
       method: 'POST',
       body: { host, port, name, scheme },
     });
   },
 
   removeManualPeer: async (host: string, port: number) => {
-    await apiJson(`/api/manager/peers/manual?host=${encodeURIComponent(host)}&port=${port}`, {
-      method: 'DELETE',
-    });
+    await managerApiJson(
+      `/api/manager/peers/manual?host=${encodeURIComponent(host)}&port=${port}`,
+      {
+        method: 'DELETE',
+      },
+    );
   },
 
   forgetPeerCertificate: async (host: string, port: number) => {
-    await apiJson(`/api/manager/peers/trust?host=${encodeURIComponent(host)}&port=${port}`, {
+    await managerApiJson(`/api/manager/peers/trust?host=${encodeURIComponent(host)}&port=${port}`, {
       method: 'DELETE',
     });
   },
 
   pairPeer: async (host, port, password, scheme: PeerScheme = 'http') =>
-    apiJson<{ token: string; certificateFingerprint?: string }>('/api/manager/peer-pair', {
+    managerApiJson<{ token: string; certificateFingerprint?: string }>('/api/manager/peer-pair', {
       method: 'POST',
       body: { host, port, password, scheme },
     }),
 
   listPeerProjects: async (host, port, token, scheme: PeerScheme = 'http') => {
-    const result = await apiJson<{
-      projects: Array<{ id: string; name: string; folder: string; running: boolean }>;
-    }>('/api/manager/peer-projects', { method: 'POST', body: { host, port, token, scheme } });
+    const result = await managerApiJson<{ projects: PeerProject[] }>('/api/manager/peer-projects', {
+      method: 'POST',
+      body: { host, port, token, scheme },
+    });
     return result.projects;
   },
 
   beginPeerTransfer: async (args) =>
-    apiJson<PeerTransferStatus>('/api/manager/transfers', { method: 'POST', body: args }),
+    managerApiJson<PeerTransferStatus>('/api/manager/transfers', { method: 'POST', body: args }),
 
   getPeerTransfer: async (transferId) =>
-    apiJson<PeerTransferStatus>(`/api/manager/transfers/${encodeURIComponent(transferId)}`),
+    managerApiJson<PeerTransferStatus>(`/api/manager/transfers/${encodeURIComponent(transferId)}`),
 
   cancelPeerTransfer: async (transferId) =>
-    apiJson<PeerTransferStatus>(`/api/manager/transfers/${encodeURIComponent(transferId)}`, {
+    managerApiJson<PeerTransferStatus>(`/api/manager/transfers/${encodeURIComponent(transferId)}`, {
       method: 'DELETE',
     }),
 
   beginPeerPull: async (args) =>
-    apiJson<PeerTransferStatus>('/api/manager/pulls', { method: 'POST', body: args }),
+    managerApiJson<PeerTransferStatus>('/api/manager/pulls', { method: 'POST', body: args }),
 
   getPeerPull: async (transferId) =>
-    apiJson<PeerTransferStatus>(`/api/manager/pulls/${encodeURIComponent(transferId)}`),
+    managerApiJson<PeerTransferStatus>(`/api/manager/pulls/${encodeURIComponent(transferId)}`),
 
   cancelPeerPull: async (transferId) =>
-    apiJson<PeerTransferStatus>(`/api/manager/pulls/${encodeURIComponent(transferId)}`, {
+    managerApiJson<PeerTransferStatus>(`/api/manager/pulls/${encodeURIComponent(transferId)}`, {
       method: 'DELETE',
     }),
 

@@ -46,6 +46,8 @@ describe('RightPanel — var-mode scalar', () => {
       rawSelectedFolder: null,
       scalarIsValid: true,
       isStruct: false,
+      pendingSelection: false,
+      strictFolderSelectable: true,
     };
     render(
       <RightPanel
@@ -76,6 +78,8 @@ describe('RightPanel — var-mode scalar', () => {
       rawSelectedFolder: null,
       scalarIsValid: true,
       isStruct: false,
+      pendingSelection: false,
+      strictFolderSelectable: true,
     };
     render(
       <RightPanel
@@ -108,6 +112,8 @@ describe('RightPanel — var-mode struct (nested binding preview)', () => {
       rawSelectedFolder: folder,
       scalarIsValid: null,
       isStruct: true,
+      pendingSelection: false,
+      strictFolderSelectable: true,
     };
     render(
       <RightPanel
@@ -148,6 +154,8 @@ describe('RightPanel — var-mode struct (nested binding preview)', () => {
       rawSelectedFolder: folder,
       scalarIsValid: null,
       isStruct: true,
+      pendingSelection: false,
+      strictFolderSelectable: true,
     };
     render(
       <RightPanel
@@ -199,6 +207,7 @@ describe('RightPanel — component-prop mode', () => {
         propSchema: { type: 'struct', label: 'Position', structSchema: structNodes },
         node: null,
         structNodes,
+        parentPath: '',
         displayLabel: 'position',
       },
     };
@@ -218,5 +227,179 @@ describe('RightPanel — component-prop mode', () => {
     // in requiredFields -> unused.
     const nestedRow = selected.getByText('Nested').closest('div');
     expect(nestedRow?.className).toContain('editor-binding-char-row--unused');
+  });
+});
+
+describe('RightPanel — the verdict beside Required', () => {
+  function verdict(): string | null {
+    const header = requiredPane().querySelector('.editor-binding-req-row');
+    return header?.querySelector('.editor-binding-char-row__match-slot')?.textContent ?? null;
+  }
+
+  function varMode(overrides: Partial<VarMode>): VarMode {
+    return {
+      schemaField: { type: 'Float' },
+      selectedVar: null,
+      selectedParentVar: null,
+      rawSelectedFolder: null,
+      scalarIsValid: null,
+      isStruct: false,
+      pendingSelection: false,
+      strictFolderSelectable: false,
+      ...overrides,
+    };
+  }
+
+  const STRUCT_FIELD = { label: 'Motor', type: 'struct', requiredFields: ['Speed'] };
+
+  it('shows none while nothing is selected', () => {
+    render(
+      <RightPanel
+        pickerTitle="Speed"
+        selectedKey={null}
+        varMode={varMode({})}
+        componentPropMode={null}
+      />,
+    );
+    expect(verdict()).toBeNull();
+  });
+
+  it('marks a binding that no longer exists, once its datasource has loaded', () => {
+    render(
+      <RightPanel
+        pickerTitle="Speed"
+        selectedKey="PLC:Gone"
+        varMode={varMode({ scalarIsValid: false })}
+        componentPropMode={null}
+      />,
+    );
+    expect(verdict()).toBe('✗');
+    expect(within(selectedPane()).getByText('Not found')).toBeInTheDocument();
+  });
+
+  it('shows the struct header verdict for a matching folder', () => {
+    const folder: PickerFolderEntry = {
+      kind: 'folder',
+      name: 'Motor',
+      _path: 'Motor',
+      _datasource: 'PLC',
+      children: [scalarVar({ display_name: 'Speed', _path: 'Motor/Speed' })],
+    };
+    render(
+      <RightPanel
+        pickerTitle="Motor"
+        selectedKey="PLC:Motor"
+        varMode={varMode({
+          schemaField: STRUCT_FIELD,
+          isStruct: true,
+          rawSelectedFolder: folder,
+          strictFolderSelectable: true,
+        })}
+        componentPropMode={null}
+      />,
+    );
+    expect(verdict()).toBe('✓');
+  });
+
+  it('marks the struct header and every field when a scalar is picked for a struct', () => {
+    render(
+      <RightPanel
+        pickerTitle="Motor"
+        selectedKey="PLC:Speed"
+        varMode={varMode({ schemaField: STRUCT_FIELD, isStruct: true, selectedVar: scalarVar() })}
+        componentPropMode={null}
+      />,
+    );
+    expect(verdict()).toBe('✗');
+    expect(within(requiredPane()).getAllByText('✗')).toHaveLength(2);
+  });
+
+  it('judges a Repeat item element by its members', () => {
+    render(
+      <RightPanel
+        pickerTitle="Motor"
+        selectedKey="#repeat:element"
+        varMode={varMode({
+          schemaField: STRUCT_FIELD,
+          isStruct: true,
+          repeatSelected: {
+            label: 'Repeat item › Element',
+            writable: true,
+            fields: { Speed: scalarVar({ display_name: 'Speed' }) },
+          },
+        })}
+        componentPropMode={null}
+      />,
+    );
+    expect(verdict()).toBe('✓');
+  });
+
+  it('shows none for a struct selection whose datasource is still loading', () => {
+    render(
+      <RightPanel
+        pickerTitle="Motor"
+        selectedKey="PLC:Motor"
+        varMode={varMode({ schemaField: STRUCT_FIELD, isStruct: true, pendingSelection: true })}
+        componentPropMode={null}
+      />,
+    );
+    expect(verdict()).toBeNull();
+  });
+
+  it('judges every field of a struct component property, even for a leaf pick', () => {
+    const mode: ComponentPropMode = {
+      fieldType: 'struct',
+      requiredFields: ['Speed'],
+      isStructTarget: true,
+      typeIsOk: false,
+      selectedItem: {
+        propKey: 'label',
+        propSchema: { type: 'string', label: 'Label' },
+        node: null,
+        structNodes: null,
+        parentPath: '',
+        displayLabel: 'Label',
+      },
+    };
+    render(
+      <RightPanel
+        pickerTitle="Motor"
+        selectedKey="label"
+        varMode={null}
+        componentPropMode={mode}
+      />,
+    );
+    expect(within(requiredPane()).getAllByText('✗')).toHaveLength(2);
+  });
+
+  it('shows a nested member under its parent path, name on its own row', () => {
+    const mode: ComponentPropMode = {
+      fieldType: 'boolean',
+      isStructTarget: false,
+      typeIsOk: true,
+      selectedItem: {
+        propKey: 'sensor',
+        propSchema: { type: 'struct', label: 'sensorRR' },
+        node: { kind: 'variable', name: 'bVisible', type: 'boolean', write: false },
+        structNodes: null,
+        parentPath: 'sensorRR › stSignalFiltered',
+        displayLabel: 'bVisible',
+      },
+    };
+    render(
+      <RightPanel
+        pickerTitle="Variable"
+        selectedKey="sensor/stSignalFiltered/bVisible"
+        varMode={null}
+        componentPropMode={mode}
+      />,
+    );
+    const pane = selectedPane();
+    expect(pane.querySelector('.editor-binding-folder-path')).toHaveTextContent(
+      'sensorRR › stSignalFiltered',
+    );
+    const row = pane.querySelector('.editor-binding-req-row--parent') as HTMLElement;
+    expect(within(row).getByText('bVisible')).toHaveClass('editor-binding-req-row__name');
+    expect(within(row).getByText('RO')).toBeInTheDocument();
   });
 });

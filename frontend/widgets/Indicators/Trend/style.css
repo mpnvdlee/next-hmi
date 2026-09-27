@@ -1,6 +1,7 @@
-/* Chained with the global `.hmi-component`, which sets its own min-width from
-   `--self-min-width` — the two-class selector wins on specificity rather than
-   on stylesheet order, which a runtime-injected sheet cannot rely on. */
+/* Chained with the global `.hmi-component`, whose own `min-width: 0` default
+   this two-class selector wins over on specificity rather than on stylesheet
+   order, which a runtime-injected sheet cannot rely on — an author's own
+   `minWidth` still wins over both, since `selfLayoutStyle` sets it inline. */
 .hmi-component.hmi-trend {
   display: flex;
   flex-direction: column;

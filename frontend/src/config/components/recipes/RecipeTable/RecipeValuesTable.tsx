@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { typeLabel } from '@shared/types/componentProperty';
 import type { RecipeDataset, RecipeDatasetType } from '@shared/types/recipe';
 import { isArrayDataType } from '@shared/types/recipe';
 import { useRecipeConfigStore } from '@config/store/recipeConfigStore';
@@ -145,7 +146,7 @@ export default function RecipeValuesTable({ type, dataset, filter, showLive }: P
                     <SearchHighlight text={param.label || 'Untitled parameter'} />
                   </td>
                   <td className="cfg-td cfg-recipe-td--type">
-                    <SearchHighlight text={param.dataType} />
+                    <SearchHighlight text={typeLabel(param.dataType)} />
                   </td>
                   <td className="cfg-td">
                     <ValueCell

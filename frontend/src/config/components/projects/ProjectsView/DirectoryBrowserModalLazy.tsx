@@ -1,6 +1,6 @@
 import { lazy, Suspense, type ComponentProps } from 'react';
 
-// Lazy boundary for the directory browser (backlog item 22). DirectoryBrowserModal
+// Lazy boundary for the directory browser. DirectoryBrowserModal
 // statically imports @phosphor-icons/react, and the manualChunks config groups
 // every phosphor icon into one ~50 kB gzip `vendor-icons` chunk — so a single
 // static edge to it pulls the whole chunk into a route's static closure. This

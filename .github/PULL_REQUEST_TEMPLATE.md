@@ -14,6 +14,6 @@ Closes #
 - [ ] Change is scoped — no unrelated refactors.
 - [ ] `pytest backend/tests` passes (if backend touched).
 - [ ] `ruff check backend` passes (if backend touched).
-- [ ] `npm test`, `npm run lint`, `npm run format:check`, `npm run build` pass (if frontend touched).
+- [ ] `npm test -- --run`, `npm run lint`, `npm run format:check`, `npm run build`, `npm run check:bundle-budget` pass (if frontend touched).
 - [ ] New behaviour is covered by tests.
 - [ ] Commits are signed off (`git commit -s`) and I agree to the [Contributor License Agreement](../blob/main/.github/CLA.md) for this and my future contributions.

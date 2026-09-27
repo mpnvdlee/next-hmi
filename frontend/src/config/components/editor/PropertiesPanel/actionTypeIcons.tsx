@@ -1,28 +1,21 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import type { ButtonAction } from '@shared/types/config';
 import Icon, { LinkGlyphPaths, GlobeGlyphPaths } from '../../ui/glyphIcon';
-import { ACTION_TYPE_TINT } from './actionsPreview';
+import { actionTypeColorStyle } from './actionsPreview';
 
 /** One hand-authored inline SVG glyph per action type, same visual language as
- *  the property-source badges. See `glyphIcon.tsx`. openDialog/closeDialog/
- *  writeDataVariable use the 24×24 glyphs from the property-panel design
- *  sandbox; the rest still use the original 16×16 set. */
+ *  the property-source badges. See `glyphIcon.tsx`. writeDataVariable uses the
+ *  24×24 glyph from the property-panel design sandbox; the rest still use the
+ *  original 16×16 set. */
 
 type ActionType = ButtonAction['type'];
 
 const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
-  // Dialog with a title bar.
+  // A modal card centred on a screen.
   openDialog: (
-    <Icon viewBox="0 0 24 24" strokeWidth={2}>
-      <rect x="4" y="5" width="16" height="14" rx="2" />
-      <path d="M4 9h16" />
-    </Icon>
-  ),
-  // Same dialog, a close bar through the middle.
-  closeDialog: (
-    <Icon viewBox="0 0 24 24" strokeWidth={2}>
-      <rect x="4" y="5" width="16" height="14" rx="2" />
-      <path d="M9 12h6" />
+    <Icon>
+      <rect x="1.5" y="2.5" width="13" height="11" rx="1" />
+      <rect x="4.5" y="5.5" width="7" height="5" rx="1" />
     </Icon>
   ),
   // Two overlapping pages.
@@ -44,6 +37,21 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
   writeDataVariable: (
     <Icon viewBox="0 0 24 24" strokeWidth={2}>
       <LinkGlyphPaths />
+    </Icon>
+  ),
+  // A path forking in two — one branch or the other.
+  if: (
+    <Icon>
+      <path d="M8 13.5 v-5" />
+      <path d="M8 8.5 L3.5 3.5 M8 8.5 L12.5 3.5" />
+      <path d="M3.5 6 v-2.5 h2.5 M12.5 6 v-2.5 h-2.5" />
+    </Icon>
+  ),
+  // Two opposed arrows — flips a flag.
+  toggleDataVariable: (
+    <Icon>
+      <path d="M2.5 5.5 h10 M10 3 l2.5 2.5 L10 8" />
+      <path d="M13.5 10.5 h-10 M6 8 l-2.5 2.5 L6 13" />
     </Icon>
   ),
   // Tray, arrow down — load into the form.
@@ -108,13 +116,29 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
   ),
 };
 
-export function ActionTypeBadge({ type }: { type: ActionType }) {
+/** 'cap' (default) fills a `FieldGroup` badge slot; 'pill' is the inline chip the
+ *  property-source popup and browse drawer use, and sits beside a visible label
+ *  that already names it. */
+export function ActionTypeBadge({
+  type,
+  variant = 'cap',
+}: {
+  type: ActionType;
+  variant?: 'cap' | 'pill';
+}) {
+  if (variant === 'pill') {
+    return (
+      <span
+        className="cfg-source-pill__abbr cfg-property-source-badge"
+        style={actionTypeColorStyle(type)}
+        aria-hidden="true"
+      >
+        {ACTION_TYPE_ICON[type]}
+      </span>
+    );
+  }
   return (
-    <span
-      className="cfg-field-group__badge-cap"
-      title={type}
-      style={{ '--option-color': `var(--cfg-source-${ACTION_TYPE_TINT[type]})` } as CSSProperties}
-    >
+    <span className="cfg-field-group__badge-cap" title={type} style={actionTypeColorStyle(type)}>
       {ACTION_TYPE_ICON[type]}
     </span>
   );

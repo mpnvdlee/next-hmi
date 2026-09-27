@@ -20,7 +20,15 @@ function project(): AllAreas {
     footer: [],
     leftSidebar: [],
     rightSidebar: [],
-    dialogs: [{ id: 'dlg', title: 'Dialog', widgets: [] }],
+    dialogs: [
+      { id: 'dlg', type: 'page', title: 'Dialog', sections: { content: [] } },
+      {
+        id: 'dlg-group',
+        type: 'page-group',
+        title: 'Dialog group',
+        children: [{ id: 'dlg-2', type: 'page', title: 'Tab', sections: { content: [] } }],
+      },
+    ],
     pages: [
       {
         id: 'page-1',
@@ -142,12 +150,45 @@ describe('resolveDropTarget', () => {
     });
   });
 
-  it('drops a widget onto a dialog row into that dialog', () => {
-    expect(resolveDropTarget(project(), 'a', 'dlg', 'middle')).toEqual({
+  it('drops a widget onto a Dialogs-folder page row into that page', () => {
+    expect(resolveDropTarget(project(), 'a', 'dlg', 'middle')).toMatchObject({
       kind: 'widget',
       nodeId: 'a',
-      target: { kind: 'dialog', dialogId: 'dlg' },
+      target: { kind: 'page-section', pageId: 'dlg', sectionId: 'content' },
     });
+  });
+
+  it('moves a page across the two roots', () => {
+    expect(resolveDropTarget(project(), 'page-1', 'dlg-group', 'middle')).toEqual({
+      kind: 'page',
+      nodeId: 'page-1',
+      groupId: 'dlg-group',
+      root: 'dialogs',
+    });
+    expect(resolveDropTarget(project(), 'page-1', 'dlg', 'top')).toEqual({
+      kind: 'page',
+      nodeId: 'page-1',
+      groupId: null,
+      root: 'dialogs',
+      index: 0,
+      beside: true,
+    });
+    expect(resolveDropTarget(project(), 'dlg', '__pages__', 'middle')).toEqual({
+      kind: 'page',
+      nodeId: 'dlg',
+      groupId: null,
+      root: 'pages',
+    });
+    expect(resolveDropTarget(project(), 'page-1', '__dialogs__', 'middle')).toEqual({
+      kind: 'page',
+      nodeId: 'page-1',
+      groupId: null,
+      root: 'dialogs',
+    });
+  });
+
+  it('refuses a widget dropped on a root section row', () => {
+    expect(resolveDropTarget(project(), 'a', '__dialogs__', 'middle')).toBeNull();
   });
 
   it('moves a page into a group, and beside a page', () => {
@@ -155,11 +196,13 @@ describe('resolveDropTarget', () => {
       kind: 'page',
       nodeId: 'page-1',
       groupId: 'group-1',
+      root: 'pages',
     });
     expect(resolveDropTarget(project(), 'page-1', 'page-2', 'bottom')).toEqual({
       kind: 'page',
       nodeId: 'page-1',
       groupId: 'group-1',
+      root: 'pages',
       index: 1,
       beside: true,
     });

@@ -26,6 +26,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+from core import net
 from core.manifest import PeerScheme
 
 logger = logging.getLogger(__name__)
@@ -72,10 +73,7 @@ def _own_scheme() -> PeerScheme:
 
 
 def _safe_hostname() -> str:
-    try:
-        return socket.gethostname() or "nexthmi"
-    except OSError:
-        return "nexthmi"
+    return net.hostname() or "nexthmi"
 
 
 def _slug(name: str) -> str:
@@ -120,14 +118,10 @@ class PeerDiscovery:
 
         hostname = host_label or _safe_hostname()
         service_name = f"{_slug(hostname)}-{self._runtime_id[:6]}.{SERVICE_TYPE}"
-        try:
-            local_addr = socket.gethostbyname(socket.gethostname())
-        except OSError:
-            local_addr = "127.0.0.1"
-        try:
-            packed = socket.inet_aton(local_addr)
-        except OSError:
-            packed = socket.inet_aton("127.0.0.1")
+        # The same resolver the startup banner prints from, binding included:
+        # advertising anything else publishes an address this runtime does not
+        # answer on, and the peer that dials it waits out a connect timeout.
+        packed = socket.inet_aton(net.advertised_address())
 
         self._service_info = ServiceInfo(
             type_=SERVICE_TYPE,

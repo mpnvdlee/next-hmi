@@ -29,6 +29,94 @@
         ]
       },
       {
+        "type": "Container",
+        "name": "Container",
+        "description": "Groups and lays out child widgets in a row or column. Hosts other widgets.",
+        "props": [
+          {
+            "key": "title",
+            "label": "Title",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "showWhenEmpty",
+            "label": "Show when empty",
+            "type": "Boolean",
+            "group": "Content",
+            "defaultValue": false
+          },
+          {
+            "key": "overflow",
+            "label": "Overflow",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "visible"
+          },
+          {
+            "key": "background",
+            "label": "Background",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "border",
+            "label": "Border",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "none"
+          },
+          {
+            "key": "shadow",
+            "label": "Shadow",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "none"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "FixedSpacer",
+        "name": "Fixed Spacer",
+        "description": "A precise pixel gap between widgets.",
+        "props": [
+          {
+            "key": "size",
+            "label": "Size (px)",
+            "type": "Integer",
+            "defaultValue": 8
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
         "type": "ImageContainer",
         "name": "Image Container",
         "description": "Places children at absolute spots over a background image. Collapses below a set width.",
@@ -82,69 +170,35 @@
         ]
       },
       {
-        "type": "Container",
-        "name": "Container",
-        "description": "Groups and lays out child widgets in a row or column. Hosts other widgets.",
+        "type": "Repeater",
+        "name": "Repeater",
+        "description": "Draws its child widgets once per element of an array, each copy bound to its own element.",
         "props": [
           {
-            "key": "title",
-            "label": "Title",
-            "type": "String",
+            "key": "items",
+            "label": "Items",
+            "type": "item-list",
             "group": "Content"
           },
           {
-            "key": "showWhenEmpty",
-            "label": "Show when empty",
-            "type": "Boolean",
-            "group": "Content",
-            "defaultValue": false
-          },
-          {
-            "key": "background",
-            "label": "Background",
-            "type": "color",
-            "group": "Appearance"
-          },
-          {
-            "key": "border",
-            "label": "Border",
-            "type": "String",
-            "group": "Appearance",
-            "defaultValue": "none"
-          },
-          {
-            "key": "shadow",
-            "label": "Shadow",
-            "type": "String",
-            "group": "Appearance",
-            "defaultValue": "none"
-          },
-          {
-            "key": "visible",
-            "label": "Visible",
-            "type": "Boolean",
-            "group": "Visibility",
-            "defaultValue": true
-          },
-          {
-            "key": "interactable",
-            "label": "Interactable",
-            "type": "Boolean",
-            "group": "Visibility",
-            "defaultValue": true
-          }
-        ]
-      },
-      {
-        "type": "FixedSpacer",
-        "name": "Fixed Spacer",
-        "description": "A precise pixel gap between widgets.",
-        "props": [
-          {
-            "key": "size",
-            "label": "Size (px)",
+            "key": "startOffset",
+            "label": "Start at",
             "type": "Integer",
-            "defaultValue": 8
+            "group": "Content",
+            "defaultValue": 0
+          },
+          {
+            "key": "maxItems",
+            "label": "Max items",
+            "type": "Integer",
+            "group": "Content",
+            "defaultValue": 0
+          },
+          {
+            "key": "emptyText",
+            "label": "Empty text",
+            "type": "String",
+            "group": "Content"
           },
           {
             "key": "visible",
@@ -337,7 +391,7 @@
       {
         "type": "Button",
         "name": "Button",
-        "description": "Runs actions and can bind a writable boolean struct (bVisible / bEnabled / bValue).",
+        "description": "Runs actions and can write true to a bound boolean on press.",
         "props": [
           {
             "key": "label",
@@ -366,9 +420,16 @@
             "defaultValue": "solid"
           },
           {
+            "key": "radius",
+            "label": "Radius",
+            "type": "String",
+            "group": "Appearance"
+          },
+          {
             "key": "variable",
             "label": "Variable",
-            "type": "struct"
+            "type": "Boolean",
+            "group": "Data"
           },
           {
             "key": "actions",
@@ -699,6 +760,12 @@
             "group": "Appearance"
           },
           {
+            "key": "radius",
+            "label": "Radius",
+            "type": "String",
+            "group": "Appearance"
+          },
+          {
             "key": "visible",
             "label": "Visible",
             "type": "Boolean",
@@ -792,7 +859,7 @@
       {
         "type": "UserBadge",
         "name": "User Badge",
-        "description": "Shows the currently signed-in user as an initialled badge.",
+        "description": "Shows the signed-in user as an initialled badge, with optional sign-in and sign-out affordances.",
         "props": [
           {
             "key": "usernameText",
@@ -807,8 +874,282 @@
             "group": "Content"
           },
           {
+            "key": "signInLabel",
+            "label": "Sign-in label",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "Log in"
+          },
+          {
+            "key": "showGroups",
+            "label": "Show groups",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": true
+          },
+          {
+            "key": "signInIcon",
+            "label": "Sign-in icon",
+            "type": "icon",
+            "group": "Appearance"
+          },
+          {
+            "key": "signOutIcon",
+            "label": "Sign-out icon",
+            "type": "icon",
+            "group": "Appearance"
+          },
+          {
+            "key": "radius",
+            "label": "Radius",
+            "type": "String",
+            "group": "Appearance"
+          },
+          {
             "key": "actions",
             "label": "On Press",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "onSignIn",
+            "label": "On Sign In",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "onSignOut",
+            "label": "On Sign Out",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "Video",
+        "name": "Video",
+        "description": "Plays a recorded video from a project asset or a URL.",
+        "props": [
+          {
+            "key": "sourceMode",
+            "label": "Source",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "asset"
+          },
+          {
+            "key": "asset",
+            "label": "Video asset",
+            "type": "video",
+            "group": "Content"
+          },
+          {
+            "key": "url",
+            "label": "Video URL",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "codec",
+            "label": "Codec",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "auto"
+          },
+          {
+            "key": "codecString",
+            "label": "Codec string override",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "fallbackMode",
+            "label": "Fallback source",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "asset"
+          },
+          {
+            "key": "fallbackAsset",
+            "label": "Fallback video asset",
+            "type": "video",
+            "group": "Content"
+          },
+          {
+            "key": "fallbackUrl",
+            "label": "Fallback video URL",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "fallbackCodec",
+            "label": "Fallback codec",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "auto"
+          },
+          {
+            "key": "fallbackCodecString",
+            "label": "Fallback codec string override",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "poster",
+            "label": "Poster image",
+            "type": "image",
+            "group": "Content"
+          },
+          {
+            "key": "autoplay",
+            "label": "Autoplay",
+            "type": "Boolean",
+            "group": "Playback",
+            "defaultValue": false
+          },
+          {
+            "key": "muted",
+            "label": "Muted",
+            "type": "Boolean",
+            "group": "Playback",
+            "defaultValue": true
+          },
+          {
+            "key": "loop",
+            "label": "Loop",
+            "type": "Boolean",
+            "group": "Playback",
+            "defaultValue": false
+          },
+          {
+            "key": "controls",
+            "label": "Show controls",
+            "type": "Boolean",
+            "group": "Playback",
+            "defaultValue": true
+          },
+          {
+            "key": "playsInline",
+            "label": "Play inline",
+            "type": "Boolean",
+            "group": "Playback",
+            "defaultValue": true
+          },
+          {
+            "key": "preload",
+            "label": "Preload",
+            "type": "String",
+            "group": "Playback",
+            "defaultValue": "metadata"
+          },
+          {
+            "key": "playbackRate",
+            "label": "Playback rate",
+            "type": "Float",
+            "group": "Playback",
+            "defaultValue": 1
+          },
+          {
+            "key": "volume",
+            "label": "Volume",
+            "type": "Float",
+            "group": "Playback",
+            "defaultValue": 1
+          },
+          {
+            "key": "pauseWhenHidden",
+            "label": "Pause when hidden",
+            "type": "Boolean",
+            "group": "Playback",
+            "defaultValue": true
+          },
+          {
+            "key": "fit",
+            "label": "Fit",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "contain"
+          },
+          {
+            "key": "backgroundColor",
+            "label": "Background color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "cornerRadius",
+            "label": "Corner radius",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "none"
+          },
+          {
+            "key": "borderStyle",
+            "label": "Border",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "none"
+          },
+          {
+            "key": "showDiagnostics",
+            "label": "Show diagnostics",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": false
+          },
+          {
+            "key": "playWhen",
+            "label": "Play when",
+            "type": "Boolean",
+            "group": "Data"
+          },
+          {
+            "key": "stateVariable",
+            "label": "State variable",
+            "type": "String",
+            "group": "Data"
+          },
+          {
+            "key": "currentTimeVariable",
+            "label": "Current time variable",
+            "type": "String",
+            "group": "Data"
+          },
+          {
+            "key": "onPlay",
+            "label": "On Play",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "onPause",
+            "label": "On Pause",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "onEnded",
+            "label": "On Ended",
+            "type": "actions",
+            "group": "Actions"
+          },
+          {
+            "key": "onError",
+            "label": "On Error",
             "type": "actions",
             "group": "Actions"
           },
@@ -1862,7 +2203,7 @@
           {
             "key": "variable",
             "label": "Value",
-            "type": "Float | Integer | Boolean",
+            "type": "Float | Integer",
             "group": "Data"
           },
           {
@@ -1905,103 +2246,6 @@
   {
     "category": "Navigation",
     "widgets": [
-      {
-        "type": "NavigationMenu",
-        "name": "Navigation Menu",
-        "description": "Sidebar or top-bar menu mirroring the page tree, with rich display options.",
-        "props": [
-          {
-            "key": "mode",
-            "label": "Mode",
-            "type": "String",
-            "group": "Source",
-            "defaultValue": "auto"
-          },
-          {
-            "key": "items",
-            "label": "Items",
-            "type": "menu-items",
-            "group": "Source"
-          },
-          {
-            "key": "orientation",
-            "label": "Orientation",
-            "type": "String",
-            "group": "Layout",
-            "defaultValue": "vertical"
-          },
-          {
-            "key": "display",
-            "label": "Display",
-            "type": "String",
-            "group": "Appearance",
-            "defaultValue": "icon-label"
-          },
-          {
-            "key": "hierarchy",
-            "label": "Hierarchy",
-            "type": "String",
-            "group": "Source",
-            "defaultValue": "tree"
-          },
-          {
-            "key": "submenuMode",
-            "label": "Submenu mode",
-            "type": "String",
-            "group": "Layout",
-            "defaultValue": "auto"
-          },
-          {
-            "key": "iconStrategy",
-            "label": "Icon strategy",
-            "type": "String",
-            "group": "Appearance",
-            "defaultValue": "first-letter"
-          },
-          {
-            "key": "activeStyle",
-            "label": "Active style",
-            "type": "String",
-            "group": "Appearance",
-            "defaultValue": "left-border"
-          },
-          {
-            "key": "groupExpansion",
-            "label": "Group expansion",
-            "type": "String",
-            "group": "Behaviour",
-            "defaultValue": "auto"
-          },
-          {
-            "key": "showSearch",
-            "label": "Show search",
-            "type": "Boolean",
-            "group": "Behaviour",
-            "defaultValue": false
-          },
-          {
-            "key": "collapsed",
-            "label": "Collapsed",
-            "type": "Boolean",
-            "group": "Layout",
-            "defaultValue": false
-          },
-          {
-            "key": "visible",
-            "label": "Visible",
-            "type": "Boolean",
-            "group": "Visibility",
-            "defaultValue": true
-          },
-          {
-            "key": "interactable",
-            "label": "Interactable",
-            "type": "Boolean",
-            "group": "Visibility",
-            "defaultValue": true
-          }
-        ]
-      },
       {
         "type": "Breadcrumb",
         "name": "Breadcrumb",
@@ -2124,14 +2368,151 @@
         ]
       },
       {
+        "type": "NavigationMenu",
+        "name": "Navigation Menu",
+        "description": "Sidebar or top-bar menu mirroring the page tree, with rich display options.",
+        "props": [
+          {
+            "key": "mode",
+            "label": "Mode",
+            "type": "String",
+            "group": "Source",
+            "defaultValue": "auto"
+          },
+          {
+            "key": "items",
+            "label": "Items",
+            "type": "menu-items",
+            "group": "Source"
+          },
+          {
+            "key": "orientation",
+            "label": "Orientation",
+            "type": "String",
+            "group": "Layout",
+            "defaultValue": "vertical"
+          },
+          {
+            "key": "display",
+            "label": "Display",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "icon-label"
+          },
+          {
+            "key": "hierarchy",
+            "label": "Hierarchy",
+            "type": "String",
+            "group": "Source",
+            "defaultValue": "tree"
+          },
+          {
+            "key": "submenuMode",
+            "label": "Submenu mode",
+            "type": "String",
+            "group": "Layout",
+            "defaultValue": "auto"
+          },
+          {
+            "key": "iconStrategy",
+            "label": "Icon strategy",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "first-letter"
+          },
+          {
+            "key": "activeStyle",
+            "label": "Active style",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "left-border"
+          },
+          {
+            "key": "groupExpansion",
+            "label": "Group expansion",
+            "type": "String",
+            "group": "Behaviour",
+            "defaultValue": "auto"
+          },
+          {
+            "key": "showSearch",
+            "label": "Show search",
+            "type": "Boolean",
+            "group": "Behaviour",
+            "defaultValue": false
+          },
+          {
+            "key": "collapsed",
+            "label": "Collapsed",
+            "type": "Boolean",
+            "group": "Layout",
+            "defaultValue": false
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
         "type": "PageNavigator",
         "name": "Page Navigator",
-        "description": "Previous / next controls stepping through a page group.",
+        "description": "Previous / next controls stepping through a page group. Either control can be relabelled, gated on a condition, or hidden.",
         "props": [
           {
             "key": "groupId",
             "label": "Target group",
             "type": "page-group"
+          },
+          {
+            "key": "previousLabel",
+            "label": "Previous label",
+            "type": "String",
+            "defaultValue": "← Previous"
+          },
+          {
+            "key": "nextLabel",
+            "label": "Next label",
+            "type": "String",
+            "defaultValue": "Next →"
+          },
+          {
+            "key": "showPrevious",
+            "label": "Show previous",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": true
+          },
+          {
+            "key": "showNext",
+            "label": "Show next",
+            "type": "Boolean",
+            "group": "Appearance",
+            "defaultValue": true
+          },
+          {
+            "key": "prevEnabled",
+            "label": "Previous enabled",
+            "type": "Boolean",
+            "group": "Behaviour",
+            "defaultValue": true
+          },
+          {
+            "key": "nextEnabled",
+            "label": "Next enabled",
+            "type": "Boolean",
+            "group": "Behaviour",
+            "defaultValue": true
           },
           {
             "key": "visible",

@@ -7,6 +7,7 @@ import Button from '../../ui/Button';
 import BoolButtonGroup from '../../ui/BoolButtonGroup';
 import EndpointDiscovery from './EndpointDiscovery';
 import ConnectionTest from './ConnectionTest';
+import CertificateControls from '../CertificateControls';
 
 /** Uploads one client cert / private key / server cert file for the secure
  *  connection step. Called immediately on file selection (not on submit) so
@@ -176,8 +177,24 @@ export default function OpcuaConnectionWizard({
       password: authMode === 'login' ? password : '',
       security_policy: securityPolicy || 'NoSecurity',
       security_mode: securityMode,
+      client_certificate: secureEnabled ? clientCertificate : '',
+      client_private_key: secureEnabled ? clientPrivateKey : '',
+      client_private_key_password: secureEnabled ? clientPrivateKeyPassword : '',
+      server_certificate: secureEnabled ? serverCertificate : '',
     }),
-    [serverUrl, authMode, username, password, securityPolicy, securityMode],
+    [
+      serverUrl,
+      authMode,
+      username,
+      password,
+      securityPolicy,
+      securityMode,
+      secureEnabled,
+      clientCertificate,
+      clientPrivateKey,
+      clientPrivateKeyPassword,
+      serverCertificate,
+    ],
   );
 
   const canNext =
@@ -361,6 +378,15 @@ export default function OpcuaConnectionWizard({
 
             {secureEnabled && (
               <>
+                <CertificateControls
+                  baseName={trimmedName}
+                  path={clientCertificate}
+                  onGenerated={(paths) => {
+                    setClientCertificate(paths.client_certificate);
+                    setClientPrivateKey(paths.client_private_key);
+                    setClientPrivateKeyPassword('');
+                  }}
+                />
                 <CertFileField
                   label="Client Certificate"
                   value={clientCertificate}

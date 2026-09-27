@@ -107,12 +107,9 @@ describe('custom-widget SDK declarations', () => {
  */
 const MIRRORED: { name: string; module: string; omit?: string[] }[] = [
   { name: 'LayoutConfig', module: 'shared/types/config.ts' },
-  {
-    name: 'HmiWidgetProps',
-    module: 'shared/types/config.ts',
-    // Built-in containers only — see the field's comment in the source.
-    omit: ['childConfigs'],
-  },
+  { name: 'HmiWidgetProps', module: 'shared/types/config.ts' },
+  { name: 'WidgetConfig', module: 'shared/types/config.ts' },
+  { name: 'AnchorRect', module: 'shared/types/config.ts' },
   { name: 'VariableBinding', module: 'shared/types/config.ts' },
   { name: 'WriteVariableOptions', module: 'hmi/hooks/useWriteVariable.ts' },
   { name: 'WriteVariable', module: 'hmi/hooks/useWriteVariable.ts' },
@@ -125,6 +122,8 @@ const MIRRORED: { name: string; module: string; omit?: string[] }[] = [
   { name: 'EvaluationContext', module: 'hmi/utils/propertySourceEval.ts' },
   { name: 'AlarmInstance', module: 'shared/types/alarm.ts' },
   { name: 'AlarmSummary', module: 'shared/types/alarm.ts' },
+  { name: 'ItemList', module: 'hmi/components/layoutUtils.ts' },
+  { name: 'RepeatScopeValue', module: 'hmi/context/RepeatScopeContext.ts' },
 ];
 
 describe.each(MIRRORED)('$name mirrors its source interface', ({ name, module, omit }) => {

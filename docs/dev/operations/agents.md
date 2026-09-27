@@ -83,7 +83,7 @@ npm run build                         # tsc + vite build; the type check
 | Changed | Also run |
 |---|---|
 | A built-in widget's registry entry or schema | `npm run docs:widgets` — regenerates `docs/user/catalog.md`, `docs/user/generated/widgets.json`, `docs/user/generated/property-sources.json`; commit them |
-| Anything under `frontend/widgets/` | `npm run build:stdlib` then `npm run docs:widgets`; commit both regenerated halves of `frontend/src/generated/stdlibManifest.json` (`.json` + `.editor.json`) and the catalog. `npx tsc -p frontend/tsconfig.stdlib.json` type-checks the sources against the SDK declarations. `npm run check:bundle-budget` from `frontend/` after `npm run build` — a per-PR gate: 32 kB raw / 10 kB gzip per widget and 96 kB gzip across the tree, counting every file the widget publishes (`index.js`, `style.css`, and a `fonts/` directory if it ships one) |
+| Anything under `frontend/widgets/` | `npm run build:builtin-widgets` then `npm run docs:widgets`; commit both regenerated halves of `frontend/src/generated/builtinWidgetsManifest.json` (`.json` + `.editor.json`) and the catalog. `npx tsc -p frontend/tsconfig.builtin-widgets.json` type-checks the sources against the SDK declarations. `npm run check:bundle-budget` from `frontend/` after `npm run build` — a per-PR gate: 32 kB raw / 10 kB gzip per widget and 104 kB gzip across the tree, counting every file the widget publishes (`index.js`, `style.css`, and a `fonts/` directory if it ships one) |
 | A property source | `npm run docs:widgets` (the source table is generated too) + backend validation tests |
 | Anything under `project-testbench/` diagnostics | `pytest backend/tests/test_project_testbench_diagnostics.py` — a golden snapshot; a new finding must be regenerated deliberately |
 | The user guide | `python build/render-docs.py <outdir> 0.0.0` — the rendered guide must build, and must load no resource from another host: an offline render fetches nothing at all, a `--web` one only the Google Fonts stylesheet. Hyperlinks in the prose may point anywhere |
@@ -92,13 +92,14 @@ npm run build                         # tsc + vite build; the type check
 Two drift guards run in the normal frontend suite.
 `frontend/src/hmi/registry/widgetMetadata.docs.test.ts` fails when the generated
 docs no longer match the registry, and `npm run docs:widgets` is the only
-sanctioned way to rewrite them. `stdlibManifest.test.ts` fails when
-`src/generated/stdlibManifest{,.editor}.json` no longer matches what
+sanctioned way to rewrite them. `builtinWidgetsManifest.test.ts` fails when
+`src/generated/builtinWidgetsManifest{,.editor}.json` no longer matches what
 `frontend/widgets/` compiles to — it re-runs the real compiler into a scratch
 directory rather than re-deriving schemas in TypeScript, and skips only where
-that compiler cannot run. Regenerate with `npm run build:stdlib`. The docs guard
-reads the baked manifest, so a stale manifest agrees with stale docs: it is the
-manifest guard, not the docs one, that catches an edited widget schema.
+that compiler cannot run. Regenerate with `npm run build:builtin-widgets`. The
+docs guard reads the baked manifest, so a stale manifest agrees with stale
+docs: it is the manifest guard, not the docs one, that catches an edited
+widget schema.
 
 ## Repo layout
 
@@ -110,13 +111,14 @@ manifest guard, not the docs one, that catches an edited widget schema.
   operator runtime, `src/config/` the config UI shell, `src/shared/` what both
   use. Path aliases `@hmi`, `@config`, `@shared`. `vite.config.ts` also hosts the
   custom-component compiler plugin. `widgets/` holds the product widgets
-  authored against the custom-widget SDK and compiled at build time — see the
-  README there. Module map:
+  authored against the custom-widget SDK and compiled at build time — see
+  [Component Registry](../architecture/frontend.md#component-registry) and
+  [Add a built-in widget](#add-a-built-in-widget). Module map:
   [../architecture/frontend.md](../architecture/frontend.md).
 - `project-testbench/` — the dev/test project: real example content, intentional
-  diagnostic findings, deliberate scale fixtures. Lives in the private enterprise
-  repo and is cloned in here for dev — gitignored (root-anchored
-  `/project-testbench/`), same pattern as `enterprise/`. When present it is the
+  diagnostic findings, deliberate scale fixtures. Lives in its own private
+  repository (`next-hmi-testbench`) and is cloned in here for dev — gitignored
+  (root-anchored `/project-testbench/`), same pattern as `enterprise/`. When present it is the
   auto-bootstrapped live project in dev; when absent the backend bootstrap seeds
   a fresh `Default-Project/` from `project-seed/`. Never included in Docker or
   portable-executable builds — in production the operator creates projects
@@ -124,6 +126,29 @@ manifest guard, not the docs one, that catches an edited widget schema.
 - `project-seed/` — the clean, customer-facing template, no intentional
   diagnostics. Packaged into binary/Docker builds, used by the launcher on first
   run and by the projects API when creating a fresh project.
+- `project-example/` — the "NEXT BREW" demo template offered alongside
+  `project-seed/` at project creation (`template: "example"`): three pages, a
+  static datasource, alarms, recipes, two themes and two languages.
+
+  A shipped template must carry no identity: no `project` metadata block
+  (`ensure_project_metadata` reuses an id it finds on disk, so every project
+  made from the template would share one UUID).
+
+  Credentials split the two templates. `project-seed/` carries none — it ships
+  the anonymous `guest` and nothing else, so an operator's own projects start
+  with no reusable secret. `project-example/` ships two demo accounts,
+  `brewer` and `barista`, in different groups, because its sign-in dialog
+  demonstrates nothing without a login to use and two of them show the user
+  list and group gating at work. What must never ship is a hash whose
+  plaintext lives nowhere: that clones a dead account into every project made
+  from the template. The demo accounts are safe precisely because the dialog
+  prints their passwords on screen, and the guard pins each shipped hash to
+  its printed password.
+
+  `test_example_template_ships_without_project_metadata`,
+  `test_seed_template_ships_without_credentials` and
+  `test_example_template_ships_only_the_documented_demo_accounts` in
+  `backend/tests/test_projects_api.py` guard the shipped files against it.
 - `<runtime_home>/` — per-installation state outside the repo: `projects.json`
   manifest, `.logs/`, `.widget-build/`, `tls/`. Resolution order under
   [hard rules](#hard-rules).
@@ -186,16 +211,19 @@ Inline styles and property parsing are in [Hard rules](#hard-rules). Beyond thos
 
 Every property has a **type** (`String`, `Integer`, `Float`, `Boolean`,
 `DateTime`, …) and a **source**. The canonical sources are: `$static`, `$var`,
-`$loc`, `$if`, `$switch`, `$compare`, `$random`, `$user`, `$userGroups`,
+`$loc`, `$if`, `$switch`, `$compare`, `$not`, `$formula`, `$random`, `$user`, `$userGroups`,
 `$device`, `$time`, `$urlParam`, `$pageIsActive`, `$widgetProp`,
 `$componentProp`, `$languages`, `$stringExpr`, `$http`, `$alarmCount`,
-`$recipe`, `$recipeList`, `$page`, `$viewport`, `$result`.
+`$recipe`, `$recipeList`, `$page`, `$viewport`, `$result`, `$repeatItem`.
 
 Icons and images are plain `$static` values carrying a structured payload
-(`{ type, name }` / `{ path }`). `$componentProp` (formerly `$inputProp`) reads a
-value passed in by the parent component or dialog; `$widgetProp` reads a property
-exported by a sibling component. `$result` exists only inside an async action's
-`onSuccess` / `onFailed` / `onSettled` handlers.
+(`{ type, name }` / `{ path }`). `$componentProp` reads a value passed in by the
+parent component, or an input parameter the Open Dialog action filled in for
+the dialog page it sits in; `$widgetProp` reads a property exported by a
+sibling component.
+`$result` exists only inside an async action's `onSuccess` / `onFailed` /
+`onSettled` handlers. `$repeatItem` reads the element of the surrounding Repeater
+copy.
 
 Canonical model: [../architecture/value-types.md](../architecture/value-types.md).
 
@@ -205,47 +233,43 @@ Exact touchpoints for the changes that come up most. Every path is repo-relative
 
 ### Add a built-in widget
 
-Two shapes. **Prefer a stdlib widget** — same authoring contract as project
-content, so it can later be forked into a project unchanged. Reach for a
-compiled-in widget only when the thing genuinely needs the app graph: rendering
-child widgets, the router, or a store.
-
-**Stdlib widget** (`frontend/widgets/<Group>/<Name>/`):
+A **built-in widget** in `frontend/widgets/<Group>/<Name>/`, authored against
+the same SDK contract as project content, so it can later be forked into a
+project unchanged.
 
 1. `index.tsx` + optional `style.css`, authored against the custom-widget SDK —
    no imports, every helper an ambient global from `window.__nextHMI__`
    ([../reference/custom-widgets.md](../reference/custom-widgets.md)). Export
    `schema`, `description`, `category`, `icon`; `VISIBILITY_SCHEMA` is merged
    automatically. Add `displayName` when the folder name reads badly as a label
-   (`StretchSpacer` → `Stretch Spacer`), and `hostsChildren = true` if its nodes
-   carry a `children` array. Plain global class names, not CSS modules —
+   (`StretchSpacer` → `Stretch Spacer`), `hostsChildren = true` if its nodes
+   carry a `children` array, and `flowsChildren = true` on top of that if it
+   lays those children out with flexbox — that is what gives each of them a main
+   axis for the Layout panel's Hug/Fill/Fixed rows. Plain global class names, not CSS modules —
    chain them with `.hmi-component` (`.hmi-component.hmi-foo`) wherever the rule
    overrides something that base class sets, since a runtime-injected sheet
    cannot rely on stylesheet order.
 2. `index.test.tsx` beside it, starting `import '../../testSdk';` — that binds
    the SDK globals. It is deliberately not in `src/test-setup.ts`: pulling the
    app graph into every test file defeats `vi.mock` in unrelated suites.
-   Resolving a stdlib module *URL* to its source is separate and automatic —
+   Resolving a built-in module *URL* to its source is separate and automatic —
    `vitest.config.ts` aliases `@shared/utils/widgetModuleLoader` to the
    widgets copy, so a test that renders one through the registry needs
    no setup at all.
-3. `npm run build:stdlib` (also run by `dev` and `build`), then commit both
-   regenerated halves of `frontend/src/generated/stdlibManifest.json`.
+3. `npm run build:builtin-widgets` (also run by `dev` and `build`), then commit
+   both regenerated halves of `frontend/src/generated/builtinWidgetsManifest.json`.
 4. `npm run docs:widgets`, then commit the regenerated catalog.
 
-Only three widgets are still compiled in — `ImageContainer`, `ComponentSlot`
-and `NavigationMenu` — each because it renders other widgets itself.
+A widget that places other widgets itself — at positions of its own choosing, or
+one it did not receive as a child — uses the SDK's composition primitives
+(`renderWidget`, `renderSlotWidgets`, `useComponentSlot`, `childConfigs`); see
+[Composition](../reference/custom-widgets.md#composition). `NavigationMenu` and
+`ImageContainer` are the worked examples.
 
-**Compiled-in widget** (`frontend/src/hmi/components/<Name>/`):
-
-1. Component + `index.module.css`.
-2. `frontend/src/hmi/registry/widgetRegistry.tsx` — register with `name`,
-   `category`, `description`, `icon`, `component`, `schema`. The category string
-   groups it in the Add-widget menu and in the published catalog.
-3. Spread `selfLayoutStyle(layout)` on the outer element so the editor's layout
-   fields apply.
-4. A test beside the component.
-5. `npm run docs:widgets`, then commit the regenerated catalog.
+Every widget the runtime paints comes from a node in the page tree. Nothing is
+rendered outside it — a widget with no node behind it is one the editor cannot
+select, move or delete, so a project that wants navigation adds a
+`NavigationMenu` to a shell region like any other widget.
 
 ### Add a property source
 
@@ -256,8 +280,10 @@ validates it, both doc trees describe it.
 2. `frontend/src/hmi/utils/propertySourceRegistry.ts` — descriptor: label,
    produced value type, default-value factory, content tier.
 3. `frontend/src/hmi/utils/propertySourceEval.ts` — evaluation.
-4. `frontend/src/config/components/editor/PropertySourceEditor/editors/<name>.tsx`
-   plus its registration in that folder's `index.tsx`, and an icon in
+4. An editor under `frontend/src/config/components/editor/PropertySourceEditor/editors/`
+   — its own file, or beside its relatives (`conditional.tsx` holds `$if`,
+   `$compare`, `$not`, `$switch`; `leaf.tsx` the one-control sources) —
+   registered in `PropertySourceEditor/index.tsx`, and an icon in
    `PropertySourceSelector/propertySourceIcons.tsx`.
 5. `backend/core/validation/structure.py` — add the key to
    `PROPERTY_SOURCE_KEYS` and a validation branch, so the warnings pill and the
@@ -266,18 +292,34 @@ validates it, both doc trees describe it.
    (canonical) and the source table in `docs/user/properties.md`.
 7. `npm run docs:widgets`.
 
-`$http` is the most recent worked example — grep it across those files for the
-full set, including the `useHttpTick` / `httpSourceStore` plumbing an
-asynchronous source needs.
+`$formula` is a recent synchronous worked example; `$http` is the
+asynchronous one — grep it across those files for the full set, including the
+`useHttpTick` / `httpSourceStore` plumbing an asynchronous source needs.
 
 ### Add an action type
 
-`frontend/src/shared/types/config.ts` (`ButtonAction` union) →
+`frontend/src/shared/types/config.ts` (`ButtonAction` union) and its
+`ComponentAction` mirror in `frontend/custom-widgets-sdk.d.ts` →
 `frontend/src/hmi/utils/widgetActions.ts` and `actionDispatcher.ts` (execution;
 an action that crosses the wire also needs `onSuccess` / `onFailed` /
 `onSettled` and a `$result` shape) →
-`frontend/src/config/components/editor/PropertiesPanel/ActionsInput.tsx`
-(editor) → `backend/core/validation/structure.py` → `docs/user/actions.md`.
+`frontend/src/config/components/editor/PropertiesPanel/` (editor:
+`ActionsInput.tsx`, the field editor in `actionEditors.tsx`, the default in
+`actionMutations.ts`, the icon in `actionTypeIcons.tsx`, the catalog entry,
+label and tint in `actionsPreview.ts`) →
+`backend/core/validation/structure.py` → `docs/user/actions.md`.
+
+Every field of every action type is listed, with what the backend checks it
+as, in `ACTION_FIELDS` (`structure.py`) and in the fixture
+`frontend/src/shared/types/__fixtures__/actionFields.json`. A new action type
+or field fails `actionFields.test.ts` (fixture against the union) and
+`test_structure_parity.py` (table against the fixture) until both name it: a
+type token (`String`, `Integer`, `Boolean`) for a value checked like a property
+of that type, or the role `_validate_action` handles by name (`page`, `inputs`,
+`target`, `writeValue`, `actions`). The table also drives the
+walk — a field with the role `actions` is the nested list walked, one with
+`page` the page reference checked — so naming a new field there is all it
+takes for the backend to check it.
 
 ### Add a REST endpoint
 
@@ -297,6 +339,23 @@ manager-only. Pydantic models in `backend/models/`. Document it in
 4. Tests under `backend/tests/test_mcp_*.py`; catalog entry in
    [../reference/mcp.md](../reference/mcp.md), user-visible limits in
    `docs/user/mcp.md`.
+
+### Change a project's on-disk format
+
+Any change that makes an existing project file unreadable needs a migration
+step, or projects in the field break silently.
+
+1. Write the step's rewrite rules in their own `backend/core/migration_*.py`
+   module, then append a `MigrationStep` to `_STEPS` in
+   `backend/core/project_migrations.py` and bump `PROJECT_FORMAT_VERSION` to its
+   `to_version`. The coordinator's behaviour is in
+   [../architecture/backend.md](../architecture/backend.md#project-format-migration).
+2. Steps must be re-runnable — a project with no `minAppVersion` is replayed
+   through the whole chain — so each one skips what it has already converted.
+3. Tests under `backend/tests/test_project_migrations.py`; describe the changed
+   file shape in [../architecture/data-formats.md](../architecture/data-formats.md).
+4. The release that ships it must bump `PROJECT_FORMAT_MIN_APP` and move the
+   minor or major — see [release.md](release.md#project-format).
 
 ### Change a WebSocket message
 
@@ -320,7 +379,7 @@ Use the `component-author` subagent; see
 ## Running the app
 
 ```bash
-python start-dev.py           # backend :8000 + frontend :5173
+python start-dev.py           # app (Vite) :8000, API :8001
 python start-dev.py --stop
 ```
 
@@ -328,11 +387,15 @@ Backend uses the venv at repo root, frontend uses `frontend/node_modules`. To ru
 them separately:
 
 ```bash
-source .venv/bin/activate && uvicorn main:app --reload --app-dir backend
+source .venv/bin/activate && uvicorn manager:app --reload --app-dir backend --port 8001
 cd frontend && npm run dev
 ```
 
-Local dev manager sign-in password: `dev`. For a visual check of a frontend
+The backend process is the manager (`manager.py`); it starts one `main.py`
+instance per running project (`services/supervisor.py`, through
+`launcher.py --serve-project`).
+
+Local dev device-admin password: `dev`. For a visual check of a frontend
 change use the `visual-check` skill rather than describing what the screen
 probably looks like.
 
@@ -347,8 +410,9 @@ probably looks like.
 
 ## MCP surface
 
-The manager hosts one workspace MCP server at `/mcp` exposing pages, datasources,
-variables, alarms, translations and assets across *every* project. A client calls
+The manager hosts one workspace MCP server at `/mcp` exposing pages, components,
+datasources, variables, alarms, translations, assets, users and widget schemas
+across *every* project. A client calls
 `projects_list` to discover projects, then passes a `project` id to every other
 tool. Writes are gated per project by the dashboard's **MCP enabled** toggle and
 by the token's scope; project lifecycle (start, stop, create, delete) is never

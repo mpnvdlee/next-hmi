@@ -3,10 +3,12 @@ import { useEffect } from 'react';
 const ZOOM_KEYS = new Set(['+', '-', '=', '0']);
 
 /** Blocks browser-native pinch/ctrl-wheel zoom and the Ctrl/Cmd +/-/0 zoom
- *  shortcuts, plus Safari's non-standard gesture events. Config surfaces and
- *  the live preview provide their own scaling controls, so an accidental
- *  trackpad pinch or Ctrl+wheel must not fight that with a second, browser-level
- *  zoom on top. Normal (non-ctrl) wheel scrolling is left untouched. */
+ *  shortcuts, plus Safari's non-standard gesture events. Used by the runtime
+ *  HMI view (a fixed-size display) and the live-preview iframe, which forwards
+ *  its own Ctrl+±/0 shortcuts to the editor's scaling control — either way an
+ *  accidental trackpad pinch or Ctrl+wheel must not fight that with a second,
+ *  browser-level zoom on top. Config/editor pages leave browser zoom alone.
+ *  Normal (non-ctrl) wheel scrolling is left untouched. */
 export function useDisableBrowserZoom() {
   useEffect(() => {
     function handleWheel(e: WheelEvent) {

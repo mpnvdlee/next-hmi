@@ -158,7 +158,7 @@ def test_component_manager_scans_invalid_binding_before_metadata_migration(
 
 
 def test_component_manager_rejects_symlinked_components_root_without_external_read(
-    widget_client, tmp_path: Path, caplog,
+    widget_client, tmp_path: Path, caplog, require_symlinks,
 ):
     components = storage.active_components_dir()
     components.rmdir()
@@ -167,10 +167,7 @@ def test_component_manager_rejects_symlinked_components_root_without_external_re
     external = outside / "legacy.json"
     original = b'{"id":"outside","name":"Outside","icon":"gauge","children":[]}'
     external.write_bytes(original)
-    try:
-        components.symlink_to(outside, target_is_directory=True)
-    except OSError as exc:
-        pytest.skip(f"directory symlinks unavailable: {exc}")
+    components.symlink_to(outside, target_is_directory=True)
 
     component_manager_module.component_manager.load()
 
@@ -182,16 +179,13 @@ def test_component_manager_rejects_symlinked_components_root_without_external_re
 
 
 def test_component_manager_rejects_symlinked_component_file_without_external_read(
-    widget_client, tmp_path: Path, caplog,
+    widget_client, tmp_path: Path, caplog, require_symlinks,
 ):
     external = tmp_path / "outside-component.json"
     original = b'{"id":"outside","name":"Outside","icon":"gauge","children":[]}'
     external.write_bytes(original)
     linked = storage.active_components_dir() / "linked.json"
-    try:
-        linked.symlink_to(external)
-    except OSError as exc:
-        pytest.skip(f"file symlinks unavailable: {exc}")
+    linked.symlink_to(external)
 
     component_manager_module.component_manager.load()
 
@@ -203,7 +197,7 @@ def test_component_manager_rejects_symlinked_component_file_without_external_rea
 
 
 def test_component_metadata_migration_rejects_file_swapped_to_symlink_after_scan(
-    widget_client, tmp_path: Path, caplog, monkeypatch,
+    widget_client, tmp_path: Path, caplog, monkeypatch, require_symlinks,
 ):
     component = storage.active_components_dir() / "legacy.json"
     component.write_bytes(
@@ -222,10 +216,7 @@ def test_component_metadata_migration_rejects_file_swapped_to_symlink_after_scan
         nonlocal swapped
         if operation == "migrate" and not swapped:
             component.unlink()
-            try:
-                component.symlink_to(external)
-            except OSError as exc:
-                pytest.skip(f"file symlinks unavailable: {exc}")
+            component.symlink_to(external)
             swapped = True
 
     monkeypatch.setattr(
@@ -251,6 +242,7 @@ def test_component_mutations_stay_bound_when_root_is_swapped_after_validation(
     tmp_path: Path,
     monkeypatch,
     operation_family: str,
+    require_symlinks,
 ):
     components = storage.active_components_dir()
     component_id: str | None = None
@@ -277,10 +269,9 @@ def test_component_mutations_stay_bound_when_root_is_swapped_after_validation(
         if operation != operation_family or swapped:
             return
         components.rename(bound)
-        try:
-            components.symlink_to(outside, target_is_directory=True)
-        except OSError as exc:
-            pytest.skip(f"directory symlinks unavailable: {exc}")
+        # Symlink support was probed (and skipped on if unavailable) in the
+        # test's own frame above — this call is expected to succeed.
+        components.symlink_to(outside, target_is_directory=True)
         swapped = True
 
     monkeypatch.setattr(component_storage_module, "BOUND_MUTATION_HOOK", swap_root)
@@ -320,7 +311,7 @@ def test_component_mutations_stay_bound_when_root_is_swapped_after_validation(
 
 
 def test_component_create_stays_bound_when_group_is_swapped_after_validation(
-    widget_client, tmp_path: Path, monkeypatch,
+    widget_client, tmp_path: Path, monkeypatch, require_symlinks,
 ):
     widget_client.post("/api/components/folders", json={"name": "Group"})
     group = storage.active_components_dir() / "Group"
@@ -334,10 +325,9 @@ def test_component_create_stays_bound_when_group_is_swapped_after_validation(
         if operation != "create" or group.is_symlink():
             return
         group.rename(bound)
-        try:
-            group.symlink_to(outside, target_is_directory=True)
-        except OSError as exc:
-            pytest.skip(f"directory symlinks unavailable: {exc}")
+        # Symlink support was probed (and skipped on if unavailable) in the
+        # test's own frame above — this call is expected to succeed.
+        group.symlink_to(outside, target_is_directory=True)
 
     monkeypatch.setattr(component_storage_module, "BOUND_MUTATION_HOOK", swap_group)
 
@@ -924,3 +914,69 @@ def test_component_property_description_defaults_to_none():
         children=[],
     )
     assert definition.componentProperties["title"].description is None
+
+
+def test_select_property_option_type_round_trips(widget_client):
+    """A `select` property's options may hold numbers, booleans or translations.
+    The model forbids extra keys, so an undeclared `optionType` would take the
+    whole component down on save rather than dropping one field."""
+    body = {
+        "name": "TypedSelect",
+        "componentProperties": {
+            "size": {
+                "type": "select",
+                "label": "Size",
+                "optionType": "integer",
+                "options": [{"label": "Small", "value": 10}, {"label": "Large", "value": 20}],
+                "defaultValue": 10,
+            },
+            "caption": {
+                "type": "select",
+                "label": "Caption",
+                "optionType": "loc",
+                "options": [{"label": "Running", "value": {"$loc": "status.running"}}],
+            },
+        },
+        "children": [],
+    }
+
+    created = widget_client.post("/api/components", json=body)
+    assert created.status_code == 200
+
+    component_id = created.json()["id"]
+    loaded = widget_client.get(f"/api/components/{component_id}").json()
+    properties = loaded["componentProperties"]
+    assert properties["size"]["optionType"] == "integer"
+    assert properties["size"]["options"] == [
+        {"label": "Small", "value": 10},
+        {"label": "Large", "value": 20},
+    ]
+    assert properties["caption"]["optionType"] == "loc"
+    assert properties["caption"]["options"] == [
+        {"label": "Running", "value": {"$loc": "status.running"}}
+    ]
+
+    persisted = storage.read_json(storage.active_components_dir() / f"{component_id}.json")
+    assert persisted["componentProperties"]["size"]["optionType"] == "integer"
+
+
+def test_select_property_without_an_option_type_stays_absent(widget_client):
+    """Every select written before the other kinds existed carries no
+    `optionType`; reading one back must not invent a value for it."""
+    body = {
+        "name": "PlainSelect",
+        "componentProperties": {
+            "mode": {
+                "type": "select",
+                "label": "Mode",
+                "options": [{"label": "Auto", "value": "auto"}],
+            }
+        },
+        "children": [],
+    }
+
+    created = widget_client.post("/api/components", json=body)
+    assert created.status_code == 200
+
+    loaded = widget_client.get(f"/api/components/{created.json()['id']}").json()
+    assert loaded["componentProperties"]["mode"]["optionType"] is None

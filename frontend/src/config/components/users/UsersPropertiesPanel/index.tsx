@@ -37,14 +37,7 @@ export default function UsersPropertiesPanel({
   }
 
   if (selection.type === 'settings') {
-    return (
-      <SettingsPanel
-        settings={doc.settings}
-        groups={doc.groups}
-        users={doc.users}
-        onChange={onPatchSettings}
-      />
-    );
+    return <SettingsPanel settings={doc.settings} users={doc.users} onChange={onPatchSettings} />;
   }
 
   if (selection.type === 'group') {
@@ -66,12 +59,10 @@ export default function UsersPropertiesPanel({
 
 function SettingsPanel({
   settings,
-  groups,
   users,
   onChange,
 }: {
   settings: UsersSettings;
-  groups: UserGroup[];
   users: UserRecord[];
   onChange(s: UsersSettings): void;
 }) {
@@ -93,34 +84,6 @@ function SettingsPanel({
             ))}
           </Select>
         </PropRow>
-      </div>
-
-      <div className="cfg-section">
-        <div className="cfg-section__title">Config Access</div>
-        <FieldGroup
-          label="Allowed groups"
-          description="Users must belong to at least one of these groups to access the config."
-          tier={3}
-          badge={<PropertySourceBadge source="static" variant="cap" />}
-          summary={
-            <GroupsSummary
-              value={settings.configAccessGroups}
-              options={groups}
-              emptyLabel="nobody"
-            />
-          }
-          kindLabel={<KindLabel>Groups</KindLabel>}
-          drawerTitle="Allowed groups"
-        >
-          <GroupsEditor
-            value={settings.configAccessGroups}
-            options={groups}
-            showIds
-            onChange={(v) =>
-              onChange({ ...settings, configAccessGroups: Array.isArray(v) ? (v as string[]) : [] })
-            }
-          />
-        </FieldGroup>
       </div>
     </div>
   );

@@ -1,15 +1,15 @@
 import { isContainerHostType, resolveWidgetMetadata } from '@hmi/registry/widgetRegistry';
 import type {
   WidgetConfig,
-  DialogConfig,
   PageConfig,
   PageGroupConfig,
   PageNode,
   ShellRegionId,
 } from '@shared/types/config';
 import { SHELL_REGION_IDS } from '@shared/types/config';
-import { isPageGroup } from '@shared/utils/pageTree';
+import { allPageRootNodes, isPageGroup } from '@shared/utils/pageTree';
 import { slugId } from '@shared/utils/id';
+import { mapPreserving } from '@shared/store/configStoreHelpers';
 
 export function makeDefaultPage(taken: Iterable<string> = []): PageConfig {
   return {
@@ -30,15 +30,15 @@ export function makeDefaultPageGroup(taken: Iterable<string> = []): PageGroupCon
   };
 }
 
-export function makeDefaultDialog(taken: Iterable<string> = []): DialogConfig {
-  return { id: slugId('New Dialog', taken), title: 'New Dialog', widgets: [] };
-}
-
-/** Every newly placed widget gets a `visible` property wired to the
- *  `$userGroups` source with an empty group list — visible to everyone by
- *  default, but one click away from gating by user group. */
+/** Every newly placed widget gets its `visible` and `interactable` properties
+ *  wired to the `$userGroups` source with an empty group list — visible and
+ *  operable for everyone by default, but one click away from gating by user
+ *  group. */
 function defaultVisibility(): Record<string, unknown> {
-  return { visible: { $userGroups: { groups: [] } } };
+  return {
+    visible: { $userGroups: { groups: [] } },
+    interactable: { $userGroups: { groups: [] } },
+  };
 }
 
 export function makeDefaultContainer(taken: Iterable<string> = []): WidgetConfig {
@@ -72,12 +72,11 @@ export function mapAllComponents(
   components: WidgetConfig[],
   fn: (c: WidgetConfig) => WidgetConfig,
 ): WidgetConfig[] {
-  return components.map((c) => {
+  return mapPreserving(components, (c) => {
     const updated = fn(c);
-    if (updated.children) {
-      return { ...updated, children: mapAllComponents(updated.children as WidgetConfig[], fn) };
-    }
-    return updated;
+    if (!updated.children) return updated;
+    const children = mapAllComponents(updated.children as WidgetConfig[], fn);
+    return children === updated.children ? updated : { ...updated, children };
   });
 }
 
@@ -95,12 +94,12 @@ export function removeComponentById(components: WidgetConfig[], id: string): Wid
 /**
  * Locates the immediate parent of a widget by id, returning enough context to
  * place a sibling next to it. The parent may be a container widget, a shell
- * region, a dialog, a page section, or a page-group header/footer array.
+ * region, a page section, or a page-group header/footer array — in either
+ * page-tree root.
  */
 export type WidgetParentInfo =
   | { kind: 'container'; parentId: string; siblings: WidgetConfig[]; index: number }
   | { kind: 'shell-area'; region: ShellRegionId; siblings: WidgetConfig[]; index: number }
-  | { kind: 'dialog'; dialogId: string; siblings: WidgetConfig[]; index: number }
   | {
       kind: 'page-section';
       pageId: string;
@@ -122,7 +121,18 @@ interface ProjectState {
   leftSidebar: WidgetConfig[];
   rightSidebar: WidgetConfig[];
   pages: PageNode[];
-  dialogs: DialogConfig[];
+  dialogs: PageNode[];
+}
+
+/** {@link findContainerParent}'s hit as the `container` variant — the same four
+ *  fields whichever area the walk found it in. */
+function containerInfo(found: { container: WidgetConfig; index: number }): WidgetParentInfo {
+  return {
+    kind: 'container',
+    parentId: found.container.id,
+    siblings: found.container.children ?? [],
+    index: found.index,
+  };
 }
 
 function findContainerParent(
@@ -149,14 +159,7 @@ function findInPageNode(node: PageNode, id: string): WidgetParentInfo | null {
         return { kind: 'page-group-chrome', groupId: node.id, area, siblings: arr, index: idx };
       }
       const inContainer = findContainerParent(arr, id);
-      if (inContainer) {
-        return {
-          kind: 'container',
-          parentId: inContainer.container.id,
-          siblings: inContainer.container.children ?? [],
-          index: inContainer.index,
-        };
-      }
+      if (inContainer) return containerInfo(inContainer);
     }
     for (const child of node.children) {
       const r = findInPageNode(child, id);
@@ -177,14 +180,7 @@ function findInPageNode(node: PageNode, id: string): WidgetParentInfo | null {
       };
     }
     const inContainer = findContainerParent(widgets, id);
-    if (inContainer) {
-      return {
-        kind: 'container',
-        parentId: inContainer.container.id,
-        siblings: inContainer.container.children ?? [],
-        index: inContainer.index,
-      };
-    }
+    if (inContainer) return containerInfo(inContainer);
   }
   return null;
 }
@@ -197,31 +193,9 @@ export function findParentInfo(state: ProjectState, id: string): WidgetParentInf
       return { kind: 'shell-area', region, siblings: arr, index: idx };
     }
     const inContainer = findContainerParent(arr, id);
-    if (inContainer) {
-      return {
-        kind: 'container',
-        parentId: inContainer.container.id,
-        siblings: inContainer.container.children ?? [],
-        index: inContainer.index,
-      };
-    }
+    if (inContainer) return containerInfo(inContainer);
   }
-  for (const dialog of state.dialogs) {
-    const idx = dialog.widgets.findIndex((w) => w.id === id);
-    if (idx !== -1) {
-      return { kind: 'dialog', dialogId: dialog.id, siblings: dialog.widgets, index: idx };
-    }
-    const inContainer = findContainerParent(dialog.widgets, id);
-    if (inContainer) {
-      return {
-        kind: 'container',
-        parentId: inContainer.container.id,
-        siblings: inContainer.container.children ?? [],
-        index: inContainer.index,
-      };
-    }
-  }
-  for (const node of state.pages) {
+  for (const node of allPageRootNodes(state)) {
     const r = findInPageNode(node, id);
     if (r) return r;
   }

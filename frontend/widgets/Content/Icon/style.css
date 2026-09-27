@@ -35,13 +35,10 @@
   line-height: 0;
 }
 
-.hmi-icon__svg svg,
-.hmi-icon__svg path,
-.hmi-icon__svg rect,
-.hmi-icon__svg circle,
-.hmi-icon__svg ellipse,
-.hmi-icon__svg polygon,
-.hmi-icon__svg polyline,
-.hmi-icon__svg line {
-  fill: currentColor;
+/* No `fill` rule here on purpose: CSS outranks the SVG presentation attributes
+   `useInlineSvg` writes, so filling shapes from the sheet would paint over the
+   `fill="none"` that makes an outline icon an outline. */
+.hmi-icon__svg svg {
+  width: 100%;
+  height: 100%;
 }

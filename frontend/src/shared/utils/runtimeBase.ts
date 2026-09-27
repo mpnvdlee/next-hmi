@@ -125,3 +125,16 @@ export function wsUrl(path = '/ws'): string {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${proto}//${window.location.host}${withBase(path)}`;
 }
+
+/**
+ * Whether this document is served in the clear over the network.
+ *
+ * `isSecureContext` is the browser's own verdict and is exactly the question
+ * being asked: true for HTTPS and for `localhost`/`127.0.0.1` over plain HTTP,
+ * false only for something like `http://192.168.1.10:8000`. Environments that
+ * never define it at all (jsdom) state no verdict, so only an explicit `false`
+ * counts — a warning nobody can act on is worse than no warning.
+ */
+export function isInsecureOrigin(): boolean {
+  return typeof window !== 'undefined' && window.isSecureContext === false;
+}

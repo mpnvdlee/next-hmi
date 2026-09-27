@@ -14,32 +14,34 @@ import ComponentPropertiesEditor from '../componentProperties/ComponentPropertie
 
 interface Props {
   component: ComponentDefinition;
-  onUpdate: (patch: Partial<ComponentDefinition>) => void;
+  onUpdate: (patch: Partial<ComponentDefinition>, history?: 'step' | 'coalesce') => void;
 }
 
 export default function CompositionSchemaEditor({ component, onUpdate }: Props) {
   const openAssetPicker = useEditorDomainStore((state) => state.openAssetPicker);
 
+  // These three write per keystroke; the throttle folds a burst of them into
+  // at most one undo step per window.
   function handleRename(name: string) {
-    onUpdate({ name });
+    onUpdate({ name }, 'coalesce');
   }
 
   function handleDescriptionChange(value: string) {
-    onUpdate({ description: value || null });
+    onUpdate({ description: value || null }, 'coalesce');
   }
 
   function handleCategoryChange(value: string) {
-    onUpdate({ category: value || null });
+    onUpdate({ category: value || null }, 'coalesce');
   }
 
   function handlePickIcon() {
-    openAssetPicker('icon', (icon) => onUpdate({ icon }), 'Icon');
+    openAssetPicker('icon', (icon) => onUpdate({ icon }, 'step'), 'Icon');
   }
 
   const iconName = component.icon ? iconValueLabel(component.icon) : '';
 
   function handlePropertiesChange(next: Record<string, ComponentPropertySchema>) {
-    onUpdate({ componentProperties: next });
+    onUpdate({ componentProperties: next }, 'step');
   }
 
   return (
@@ -90,7 +92,7 @@ export default function CompositionSchemaEditor({ component, onUpdate }: Props) 
             }
             pickTitle="Choose icon"
             onPick={handlePickIcon}
-            onClear={component.icon ? () => onUpdate({ icon: null }) : undefined}
+            onClear={component.icon ? () => onUpdate({ icon: null }, 'step') : undefined}
           />
         </PropRow>
       </div>

@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   editorPath,
   getBasePath,
   getMode,
+  isInsecureOrigin,
   routerBasename,
   stripBase,
   withBase,
@@ -16,7 +17,10 @@ function setRuntime(base: string | undefined, mode?: string) {
   else (window as { __NEXTHMI_MODE__?: string }).__NEXTHMI_MODE__ = mode;
 }
 
-afterEach(() => setRuntime(undefined, undefined));
+afterEach(() => {
+  setRuntime(undefined, undefined);
+  vi.unstubAllGlobals();
+});
 
 describe('runtimeBase defaults (dev / no injection)', () => {
   it('defaults to root + instance', () => {
@@ -75,5 +79,27 @@ describe('manager mode', () => {
     setRuntime('/', 'manager');
     expect(getMode()).toBe('manager');
     expect(routerBasename()).toBe('');
+  });
+});
+
+describe('insecure origin', () => {
+  it('stays quiet on a secure context — HTTPS, or loopback over plain HTTP', () => {
+    vi.stubGlobal('isSecureContext', true);
+    expect(isInsecureOrigin()).toBe(false);
+  });
+
+  it('reports plain HTTP on a network address', () => {
+    vi.stubGlobal('isSecureContext', false);
+    expect(isInsecureOrigin()).toBe(true);
+  });
+
+  // Stubbed rather than left to jsdom's silence: jsdom happens not to implement
+  // the property, but one that started to would report `true` for its
+  // `http://localhost/` default and this would pass for the wrong reason.
+  it('reports nothing where the browser states no verdict', () => {
+    vi.stubGlobal('isSecureContext', undefined);
+
+    expect(window.isSecureContext).toBeUndefined();
+    expect(isInsecureOrigin()).toBe(false);
   });
 });

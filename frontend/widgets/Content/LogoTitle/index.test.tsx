@@ -37,6 +37,20 @@ describe('LogoTitle', () => {
     expect(container.querySelector('img')?.getAttribute('src')).toBe('/assets/logo.svg');
   });
 
+  it('roots a bound logo path under /assets, the way a $static payload arrives', () => {
+    // A $var or $urlParam on the asset field delivers the stored path verbatim;
+    // in `src` a project-relative one would resolve against the page url.
+    const { container } = renderLogoTitle({ logoUrl: 'images/logo.svg' });
+
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('/assets/images/logo.svg');
+  });
+
+  it('leaves an already-resolved logo url alone', () => {
+    const { container } = renderLogoTitle({ logoUrl: { $static: { path: 'images/logo.svg' } } });
+
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('/assets/images/logo.svg');
+  });
+
   it('omits the image and the subtitle when neither is configured', () => {
     const { container } = renderLogoTitle({ title: 'Aquavane' });
 

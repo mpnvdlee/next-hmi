@@ -15,6 +15,7 @@ class FakeRecipeManager:
         self.downloaded: list[tuple[str, bool]] = []
         self.permission_checks: list[Any] = []
         self.uploaded: list[tuple[str, str]] = []
+        self.upload_permission_checks: list[Any] = []
         self.state: dict[str, LoadedDataset] = {}
         self.download_result: DownloadResult | None = DownloadResult(
             result="success", datasetId="d1", written=1, total=1,
@@ -26,8 +27,9 @@ class FakeRecipeManager:
         self.permission_checks.append(permission_check)
         return self.download_result
 
-    async def upload_into(self, dataset_id: str, *, username: str = ""):
+    async def upload_into(self, dataset_id: str, *, username: str = "", permission_check=None):
         self.uploaded.append((dataset_id, username))
+        self.upload_permission_checks.append(permission_check)
         return self.upload_result
 
     def get_state(self) -> dict[str, LoadedDataset]:
@@ -97,6 +99,17 @@ def test_recipe_save_uses_username_from_scope():
     })))
     assert rm.uploaded == [("d1", "op")]
     assert ws.messages[-1]["type"] == "recipe_response"
+
+
+def test_recipe_save_forwards_permission_check_from_scope():
+    rm = FakeRecipeManager()
+    manager, _ws = _make_manager(rm)
+    asyncio.run(manager.handle_message("c1", _json({
+        "type": "recipe_save", "datasetId": "d1", "scope": "runtime", "requestId": "r8",
+    })))
+    # Upload reads live values into the stored dataset — the same per-variable
+    # ACL recipe_load's download applies must gate that read too.
+    assert callable(rm.upload_permission_checks[-1])
 
 
 def test_recipe_save_omitted_id_uses_single_loaded():

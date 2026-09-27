@@ -36,3 +36,7 @@ Architecture and behaviour: `docs/dev/INDEX.md`. Operator-facing guide: `docs/us
 - Prefer editing existing files; never create docs (`*.md`) unless asked.
 - No comments unless they explain a non-obvious *why*.
 - Commit only when explicitly asked.
+- Never put Claude references in a commit or pull request — no session/run IDs, no
+  `Generated with Claude Code`, no `Co-Authored-By: Claude`, no claude.ai/claude.com
+  links. Same for branch names, tags and committed files. The commit message and the
+  PR body describe the change, nothing else.

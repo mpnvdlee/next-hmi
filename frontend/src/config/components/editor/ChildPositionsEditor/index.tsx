@@ -8,7 +8,7 @@ import {
   indexPositions,
   pruneOrphanPositions,
   resolveMarkerLabel,
-} from '@hmi/components/ImageContainer/positions';
+} from '@shared/utils/childPositions';
 import ModalShell, { ModalCloseButton } from '@config/components/ui/ModalShell';
 import '../markerEditor.css';
 import './style.css';

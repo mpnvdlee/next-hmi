@@ -4,7 +4,7 @@
  * The backend (`core/validation/structure.py`) is the single source of
  * validation truth — this hook only fetches its verdict and paints it. Call
  * `usePanelDiagnostics` once, near the top of whichever panel currently owns
- * the open artifact (page/dialog/shell/globalEvents/component), passing a
+ * the open artifact (page/shell/globalEvents/component), passing a
  * *memoized* `DiagnosticsArtifact` (stable by reference unless the draft
  * actually changed — the effect depends on it by identity, not deep-equality,
  * so an unmemoized literal would re-fetch on every render). `SchemaFieldRow`
@@ -34,7 +34,7 @@ export interface Diagnostic {
   nested: boolean;
 }
 
-type ValidateKind = 'page' | 'dialog' | 'shell' | 'globalEvents' | 'component';
+type ValidateKind = 'page' | 'shell' | 'globalEvents' | 'component';
 
 export interface DiagnosticsArtifact {
   kind: ValidateKind;
@@ -42,7 +42,7 @@ export interface DiagnosticsArtifact {
    *  rows. Lets the project-wide sweep swap its saved-on-disk rows for this
    *  live verdict — see `useProjectDiagnostics`. */
   id: string | null;
-  // Whatever page/dialog/component config object the artifact's editor
+  // Whatever page/component config object the artifact's editor
   // panel already holds in the store — validated as posted, unsaved edits
   // included.
   draft: object;

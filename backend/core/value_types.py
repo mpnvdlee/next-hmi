@@ -120,7 +120,7 @@ def representative_opcua_type(simple_type: Any) -> str:
 def simplify_variable_tree(nodes: Any) -> list:
     """Recursively convert a datasource variable tree to simple types.
 
-    For each ``kind == "variable"`` node, ``data_type`` is converted to the
+    For each non-folder node (``kind`` is optional on variables), ``data_type`` is converted to the
     element simple type (no ``[]`` suffix); ``is_array``/``array_length`` are
     preserved as sibling fields (via the shallow node copy). Folders pass
     through. Does not mutate the input.
@@ -133,7 +133,7 @@ def simplify_variable_tree(nodes: Any) -> list:
             out.append(node)
             continue
         new_node = dict(node)
-        if node.get("kind") == "variable":
+        if node.get("kind") != "folder":
             new_node["data_type"] = to_simple_type(
                 node.get("data_type", ""),
                 as_array_suffix=False,

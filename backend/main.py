@@ -16,6 +16,7 @@ from api.projects_api import router as projects_router
 from api.recipe_api import router as recipe_router
 from api.system_api import router as system_router
 from api.theme_api import router as theme_router
+from api.thumbnail_api import instance_router as thumbnail_router
 from api.users_api import router as users_router
 from api.widgets_api import router as widgets_router
 from core import project_bootstrap
@@ -144,17 +145,18 @@ def _run_validation_sweep() -> None:
         return
     log = logging.getLogger("nexthmi.validation_sweep")
     try:
-        from core.storage import active_pages_dir, read_json
+        from core.page_index import page_document_files
+        from core.storage import read_json
         from core.validation import build_context, validate_page
     except Exception as exc:
         log.warning("validation sweep skipped: %s", exc)
         return
-    pages_dir = active_pages_dir()
-    if not pages_dir.exists():
+    documents = page_document_files(skip_internal=False)
+    if not documents:
         return
     ctx = build_context()
     findings_total = 0
-    for path in pages_dir.glob("*.json"):
+    for path in documents:
         if path.stem.startswith("__"):
             continue
         try:
@@ -185,7 +187,22 @@ async def lifespan(app: FastAPI):
     # Check (and stamp) the live project's on-disk format before anything
     # reads it — datasource_manager.load_all() below assumes the current
     # baseline, and a project stamped newer than this build is rejected here.
-    run_baseline_migration(active_project_root())
+    migration = run_baseline_migration(active_project_root())
+    if migration.files_changed or migration.diagnostics:
+        # A step that rewrites project files has to say so somewhere the author
+        # can find it: the diagnostics name every value it could not express and
+        # every one whose meaning it changed, and the backup it leaves behind is
+        # the only way back.
+        log = logging.getLogger("nexthmi.migration")
+        log.warning(
+            "Project migrated %d -> %d: %d file(s) rewritten. Pre-migration backup: %s",
+            migration.from_version,
+            migration.to_version,
+            len(migration.files_changed),
+            migration.backup or "none",
+        )
+        for note in migration.diagnostics:
+            log.warning("Migration note: %s", note)
     users_manager.load_or_create()
     alarm_manager.load()
     recipe_manager.load()
@@ -246,7 +263,7 @@ register_exception_handlers(app)
 
 
 # NOTE: every top-level route lives under one of /api/, /ws, /mcp, or a
-# /widgets, /widget-js, /stdlib-js, /external-libraries, /assets, /_app static mount.
+# /widgets, /widget-js, /builtin-widgets-js, /external-libraries, /assets, /_app static mount.
 # When adding a new top-level route or mount outside those prefixes, also
 # add its first path segment to ``_SPA_EXCLUDED_SEGMENTS`` below — otherwise
 # the SPA catch-all will swallow it and return index.html for a typo'd URL.
@@ -260,11 +277,19 @@ app.include_router(users_router)
 app.include_router(widgets_router)
 app.include_router(theme_router)
 app.include_router(component_router)
-app.include_router(projects_router)
+# Projects are the manager's business: a running instance has no reason to list,
+# create, rename, delete or export the projects beside it, and browse-dir walks
+# the whole host filesystem. Instances bind loopback with no auth of their own,
+# so anything on the box could reach it directly — not serving it is stronger
+# than gating it at the proxy. A standalone ``uvicorn main:app`` has no manager
+# to ask, so there it stays mounted.
+if not _INSTANCE_MODE:
+    app.include_router(projects_router)
 # Loopback-only reload hook the manager calls after a workspace MCP write.
 app.include_router(internal_router)
 app.include_router(historian_router)
 app.include_router(http_source_router)
+app.include_router(thumbnail_router)
 
 # Static mounts for live-project content. ``follow_symlink=False`` prevents a
 # symlink in user-controlled content (e.g. ``ln -s / mylib`` inside
@@ -286,25 +311,29 @@ _widget_build_dir = WIDGET_BUILD_DIR
 _widget_build_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/widget-js", StaticFiles(directory=str(_widget_build_dir), follow_symlink=False), name="widget-js")
 
-# Product stdlib widgets: compiled at build time and shipped with the frontend,
-# unlike /widget-js which is project content compiled on load. Served here rather
-# than from Vite's public/ dir because Vite appends `?import` to every dynamic
-# import (`__vite__injectQuery`, which `@vite-ignore` does not suppress) and then
-# 500s on a path it owns itself. Behind the same proxy hop /widget-js already
-# takes, a StaticFiles mount simply ignores the query.
-_stdlib_dist_env = os.environ.get("NEXTHMI_FRONTEND_DIST")
-_stdlib_js_dir = (
-    Path(_stdlib_dist_env).resolve() / "stdlib-js"
-    if _stdlib_dist_env
-    else repo_root() / "frontend" / "public" / "stdlib-js"
+# Product built-in widgets: compiled at build time and shipped with the
+# frontend, unlike /widget-js which is project content compiled on load. Served
+# here rather than from Vite's public/ dir because Vite appends `?import` to
+# every dynamic import (`__vite__injectQuery`, which `@vite-ignore` does not
+# suppress) and then 500s on a path it owns itself. Behind the same proxy hop
+# /widget-js already takes, a StaticFiles mount simply ignores the query.
+_builtin_widgets_dist_env = os.environ.get("NEXTHMI_FRONTEND_DIST")
+_builtin_widgets_js_dir = (
+    Path(_builtin_widgets_dist_env).resolve() / "builtin-widgets-js"
+    if _builtin_widgets_dist_env
+    else repo_root() / "frontend" / "public" / "builtin-widgets-js"
 )
-# Created, not probed: `npm run dev` runs `build:stdlib` while this module is
-# already importing, so a mount guarded on the directory existing loses the race
-# on a fresh clone and every stdlib module 404s until the backend is restarted.
-# An empty directory 404s per file instead, and starts serving the moment
-# esbuild fills it.
-_stdlib_js_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/stdlib-js", StaticFiles(directory=str(_stdlib_js_dir), follow_symlink=False), name="stdlib-js")
+# Created, not probed: `npm run dev` runs `build:builtin-widgets` while this
+# module is already importing, so a mount guarded on the directory existing
+# loses the race on a fresh clone and every built-in module 404s until the
+# backend is restarted. An empty directory 404s per file instead, and starts
+# serving the moment esbuild fills it.
+_builtin_widgets_js_dir.mkdir(parents=True, exist_ok=True)
+app.mount(
+    "/builtin-widgets-js",
+    StaticFiles(directory=str(_builtin_widgets_js_dir), follow_symlink=False),
+    name="builtin-widgets-js",
+)
 
 _external_libraries_dir = active_external_libraries_dir()
 _external_libraries_dir.mkdir(parents=True, exist_ok=True)
@@ -353,7 +382,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 # ── SPA serving (production runtime only) ───────────────────────────────────
 # Mounted iff NEXTHMI_FRONTEND_DIST is set. In dev the env var is unset and
-# Vite serves the SPA on :5173 with /api proxied to the backend — none of the
+# Vite serves the SPA on :8000 with /api proxied to the backend — none of the
 # routes below register. The catch-all is registered LAST so explicit API
 # routes, websocket, and static mounts win on path-prefix collisions.
 
@@ -432,7 +461,7 @@ if _frontend_dist_env:
         "_app",
         "widgets",
         "widget-js",
-        "stdlib-js",
+        "builtin-widgets-js",
         "external-libraries",
         "assets",
         "docs",

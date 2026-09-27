@@ -128,8 +128,8 @@
   overflow: hidden;
 }
 
-/* Dialog preview: no device frame — the modal card provides its own chrome
-   directly on the checkerboard backdrop. */
+/* Dialogs-folder preview: no device frame — the overlay's modal card provides
+   its own chrome directly on the checkerboard backdrop. */
 .editor-preview-wrapper--frameless {
   box-shadow: none;
   border-radius: 0;

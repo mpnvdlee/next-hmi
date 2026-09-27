@@ -1,12 +1,12 @@
 /**
  * The runtime SDK exposed on `window.__nextHMI__`.
  *
- * Pre-compiled widget modules — a project's custom widgets and the product
- * stdlib alike — read their React instance and every app helper off this
- * object rather than bundling their own copies.
+ * Pre-compiled widget modules — a project's custom widgets and the product's
+ * built-in widgets alike — read their React instance and every app helper off
+ * this object rather than bundling their own copies.
  *
- * Split out of main.tsx so the stdlib test harness can install the same SDK the
- * app installs (widgets/testSdk.ts — deliberately not src/test-setup.ts;
+ * Split out of main.tsx so the built-in-widgets test harness can install the
+ * same SDK the app installs (widgets/testSdk.ts — deliberately not src/test-setup.ts;
  * see the comment there). Building a second copy for tests would add a fourth
  * place for the contract to drift, on top of nextHmiSdkNames.ts, this file and
  * custom-widgets-sdk.d.ts.
@@ -25,7 +25,7 @@ import { sendWsMessage } from '@hmi/hooks/useWebSocket';
 import { useHmiScope } from '@hmi/context/HmiScopeContext';
 import {
   selfLayoutStyle,
-  containerLayoutStyle,
+  containerLayoutProps,
   widgetColorStyle,
   getPropString,
   getPropNumber,
@@ -38,6 +38,7 @@ import {
   usePropBoolean,
   usePropStruct,
   useRecordListProp,
+  useItemListProp,
   useCssVar,
 } from '@hmi/components/layoutUtils';
 import { useVariable, useBindingValue, useVariableMeta } from '@hmi/hooks/useVariable';
@@ -53,7 +54,7 @@ import {
   recipeUpload,
 } from '@hmi/hooks/useRecipeSdk';
 import { useNavigateToPage } from '@hmi/hooks/useNavigateToPage';
-import { useVisiblePages } from '@hmi/hooks/useVisiblePages';
+import { useCurrentUserGroups, useVisiblePages } from '@hmi/hooks/useVisiblePages';
 import { useActiveAlarms } from '@hmi/hooks/useActiveAlarms';
 import {
   getBuiltinIconComponent,
@@ -62,6 +63,7 @@ import {
 } from '@shared/utils/phosphorIcons';
 import { useInlineSvg } from '@hmi/utils/useInlineSvg';
 import { withBase } from '@shared/utils/runtimeBase';
+import { assetSrc } from '@shared/utils/imageAsset';
 import { apiJson, isApiError } from '@shared/utils/api';
 import { useLanguageSelection } from '@hmi/hooks/useLanguageSelection';
 import { useAlarmSummary } from '@hmi/hooks/useAlarmSummary';
@@ -84,6 +86,13 @@ import { parseVarKey } from '@shared/types/datasource';
 import { VirtualKeyboard } from '@shared/components/VirtualKeyboard';
 import { VirtualNumpad } from '@shared/components/VirtualNumpad';
 import CloseButton from '@shared/components/CloseButton';
+import { renderWidget, renderSlotWidgets } from '@hmi/components/renderRegion';
+import { useComponentSlot, useIsComponentInstance } from '@hmi/context/ComponentSlotContext';
+import { useRepeatScope } from '@hmi/context/RepeatScopeContext';
+import { RepeatScope } from '@hmi/components/RepeatScope';
+import { useIsPreview } from '@shared/context/PreviewContext';
+import { useActivePage } from '@hmi/hooks/useActivePage';
+import { useAnchoredStyle } from '@shared/hooks/useAnchoredStyle';
 import { SDK_NAMES } from '@shared/utils/nextHmiSdkNames';
 
 export const nextHmiSdk = {
@@ -99,7 +108,7 @@ export const nextHmiSdk = {
   sendWsMessage,
   useHmiScope,
   selfLayoutStyle,
-  containerLayoutStyle,
+  containerLayoutProps,
   widgetColorStyle,
   bindingKey,
   parseVarKey,
@@ -114,6 +123,7 @@ export const nextHmiSdk = {
   usePropBoolean,
   usePropStruct,
   useRecordListProp,
+  useItemListProp,
   useCssVar,
   useVariable,
   useBindingValue,
@@ -128,6 +138,7 @@ export const nextHmiSdk = {
   resolvePageTitle,
   useNavigateToPage,
   useVisiblePages,
+  useCurrentUserGroups,
   useActiveAlarms,
   useAlarmSummary,
   useAlarmText,
@@ -144,6 +155,7 @@ export const nextHmiSdk = {
   isCustomIconAssetPath,
   useInlineSvg,
   withBase,
+  assetSrc,
   apiJson,
   isApiError,
   executeWidgetActions,
@@ -159,6 +171,15 @@ export const nextHmiSdk = {
   VirtualNumpad,
   CloseButton,
   useWriteVariable,
+  renderWidget,
+  renderSlotWidgets,
+  useComponentSlot,
+  useIsComponentInstance,
+  useRepeatScope,
+  RepeatScope,
+  useIsPreview,
+  useActivePage,
+  useAnchoredStyle,
 };
 
 declare global {
@@ -182,9 +203,9 @@ _assertSdkContract<_SdkContract_ExtraInAssignment>();
 /**
  * Publish the SDK on `window`.
  *
- * Called once at boot from main.tsx, and again from the test harness so a stdlib
- * widget source — which references these names as free identifiers, exactly as
- * its compiled form does — can be imported directly by a unit test.
+ * Called once at boot from main.tsx, and again from the test harness so a
+ * built-in widget source — which references these names as free identifiers,
+ * exactly as its compiled form does — can be imported directly by a unit test.
  */
 export function installNextHmiSdk(): void {
   window.__nextHMI__ = nextHmiSdk;

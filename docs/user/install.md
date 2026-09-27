@@ -75,18 +75,21 @@ that path from a source checkout too — read the startup banner's
 
 The runtime home path is read-only from the UI — to move it, edit the env
 var or the bootstrap file and restart. `defaultProjectsRoot` (where new,
-imported and pulled projects land by default) is seeded to
-`<runtime_home>/Projects` on first run and is likewise not editable from the
-UI; every dialog that creates a project lets you type or browse to a
-different folder, and a permanent change means editing `projects.json` while
-the manager is stopped.
+imported and pulled projects land by default) is unset out of the box and
+resolves to your **Documents** folder (`%USERPROFILE%\Documents` on Windows);
+nothing is created for it. It is likewise not editable from the UI; every
+dialog that creates a project lets you type or browse to a different folder,
+and a permanent change means editing `projects.json` while the manager is
+stopped.
 
 ### Project folder
 
 ```
 <project>/
+  .backups/               pre-upgrade project zips (installation-local)
   config.json             page tree + project metadata + global settings (incl. mcpEnabled)
   pages/                  one JSON per page
+  dialogs/                one JSON per page in the Dialogs folder
   datasources/            one JSON per datasource
   components/             reusable composite components
   translations/           semicolon-separated CSVs, one per group
@@ -101,13 +104,15 @@ the manager is stopped.
   assets/
     icons/                SVGs available to icon fields
     images/               images available to image fields
+    videos/               video files available to video fields
   certs/                  per-project OPC-UA client certs
   historian/              historian config + installation-local database
 ```
 
 The backend creates any missing folders on startup. Everything in this
-tree is treated as user state — schema migrations are handled in code,
-but project folders are never overwritten by an upgrade.
+tree is user state: an application upgrade never overwrites it. A project
+written by an older build is brought to the current file format on request,
+after a backup — see [Managing projects](projects.md#the-manager-dashboard).
 
 ## Managing projects
 
@@ -117,17 +122,27 @@ password) is the operator surface:
 - **First-run setup** — on first launch the dashboard asks you to set a
   device-admin password. It is stored hashed in
   `<runtime_home>/.manager-auth.json` and gates every subsequent visit.
-- **Fresh-project operator setup** — every project copied from the bundled seed
-  is marked **Set operator password**. An authenticated device manager must
-  choose the password for that project's `admin` HMI account before the manager
-  opens its runtime or editor. This project credential is separate from the
-  device-admin password; the seed contains no reusable operator password.
+  Signing in lasts a day, counted from the moment you sign in and not from
+  your last click: after that the dashboard asks for the password again, and
+  an editor left open on the panel shows **Signed out** until someone does.
+- **Project credentials** — a project brings its own `users.json` and nothing
+  else gates it: a project copied from the bundled seed holds only the
+  anonymous `guest` user, so it starts and opens with no password of its own.
+  A project whose `users.json` is missing, unreadable or corrupt shows
+  **Credentials unavailable** and will not start until the file is repaired.
+- **What the password does and does not cover** — the device-admin password
+  gates the dashboard and every project's **editor** (`/editor/<slug>/`). A
+  running project's **live screens** (`/runtime/<slug>/`) are open to anyone who
+  can reach the host, deliberately: that is what an operator panel is. Operating
+  is open too, unless a variable carries `interactableByGroups`
+  (see [Users, groups & permissions](users.md)). The install answers on every
+  interface by default, so put the manager on a trusted network and use
+  [HTTPS](#https) where it is not.
 - **Start / Stop** — bring a project up or down. A running project gets
   its own backend instance and becomes reachable at `/runtime/<slug>/`
   (and `/editor/<slug>/`); the set of running projects is remembered and
-  auto-resumed after a restart.
-  This replaces the old single "make live" switch — multiple projects run
-  side by side with no global downtime.
+  auto-resumed after a restart. Projects run side by side — starting or
+  stopping one never touches another.
 - **+ New project** — create at an absolute path, seeded from the bundled
   template.
 - **⊕ Add existing** — register a project folder that is already on disk (a
@@ -203,10 +218,23 @@ To turn it off, either:
 
 ## HTTPS
 
-The manager serves plain HTTP by default, which is fine while it stays on
-loopback. The moment `NEXTHMI_HOST=0.0.0.0` puts the dashboard on a network,
-the device-admin password, the operator password, and every project edit
-cross the wire in the clear.
+The manager binds every interface by default and serves plain HTTP, so out of
+the box the device-admin password, every operator sign-in, and every project
+edit cross the wire in the clear. A password still gates the dashboard and
+every editor — that part does not depend on the binding — but anyone who can
+watch the network reads it on its way past. Turn HTTPS on unless the network
+is one you trust, or pin the install to `NEXTHMI_HOST=127.0.0.1` and reach it
+some other way.
+
+The dashboard says so itself while that is the case. Open it at an address that
+is neither HTTPS nor `localhost` and a notice stands above the project list, on
+the settings page, and on the sign-in screen, linking to the switch. It follows
+the address in your URL bar rather than where the server runs — the same
+distinction the browser makes in [What plain HTTP costs the
+browser](#what-plain-http-costs-the-browser) below — so reaching a networked
+install from the machine it runs on shows nothing, while reaching it from a
+laptop shows the notice. The operator runtime and the editor stay quiet: it is
+addressed to whoever can act on it.
 
 Only the manager terminates TLS. Project children are spawned on loopback and
 reached over plain HTTP by the in-process proxy, so nothing else needs
@@ -281,9 +309,10 @@ moving it would break the port mapping the operator already published.
 1. Pick **HTTPS** on the protocol switch.
 2. Under **Certificate**, keep *Generated for this device* — the manager
    creates a self-signed certificate covering `localhost`, this host's name,
-   and its addresses — or choose *My own certificate* and upload a PEM
-   certificate and unencrypted PEM private key. Mismatched or passphrase-
-   protected keys are rejected at upload, not at the next startup.
+   and its addresses, including the one it is routed to on the network — or
+   choose *My own certificate* and upload a PEM certificate and
+   unencrypted PEM private key. Mismatched or passphrase-protected keys are
+   rejected at upload, not at the next startup.
 3. The manager stops running projects, restarts, and the page reopens itself
    on the new protocol — on port 8443, see [Ports](#ports) above. Projects
    resume on their own.
@@ -295,6 +324,13 @@ are written `0600`.
 A generated certificate is not signed by any authority, so browsers warn once
 per machine until someone accepts it. That warning is the cost of not needing a
 CA; the connection is encrypted either way, which a plain-HTTP one is not.
+
+It also names the addresses the device had when it was generated. If the device
+later answers on a different one — a new DHCP lease, a move to another network
+— the warning comes back for the address URL, and **Regenerate** under
+**Certificate** issues a fresh one for the address it has now. A static address
+or a DHCP reservation avoids the round trip. An already-generated certificate is
+never rewritten on its own.
 
 Upload your own key only over an HTTPS page — the UI warns when the page is on
 HTTP, since the key would otherwise cross the network in the clear. Turn on
@@ -317,7 +353,6 @@ bind:
 ```bash
 export NEXTHMI_SSL_CERTFILE=/etc/nexthmi/tls/fullchain.pem
 export NEXTHMI_SSL_KEYFILE=/etc/nexthmi/tls/privkey.pem
-export NEXTHMI_HOST=0.0.0.0
 ./nexthmi
 ```
 
@@ -330,11 +365,12 @@ uploaded certificate, re-upload it and pick the protocol again).
 
 ### Behind a terminating proxy
 
-Caddy, nginx, or Traefik in front of a loopback-bound manager is the better
-option where one already exists: it handles renewal, and the manager keeps
-its default `127.0.0.1` binding. Leave `NEXTHMI_SSL_*` unset and have the
-proxy send `X-Forwarded-Proto`. A proxy on the same host is trusted out of
-the box; one on another host needs its address allow-listed:
+Caddy, nginx, or Traefik in front of the manager is the better option where
+one already exists: it handles renewal. Set `NEXTHMI_HOST=127.0.0.1` so the
+manager answers the proxy alone and nothing reaches it directly, leave
+`NEXTHMI_SSL_*` unset, and have the proxy send `X-Forwarded-Proto`. A proxy
+on the same host is trusted out of the box; one on another host needs its
+address allow-listed:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -401,10 +437,8 @@ docker run --rm -p 8000:8000 -v "$PWD/project-data:/data" nexthmi
 
 Open <http://localhost:8000> and set the device-admin password when the
 manager dashboard prompts. On first boot the bundled seed project is
-registered but remains stopped. Choose **Set operator password** on that project,
-then start and open its HMI or editor. If the browser or container stops before
-that save succeeds, setup remains incomplete and is offered again after restart;
-the password is not partially installed.
+registered and started; open its HMI or editor from the dashboard. The project
+needs no password of its own.
 
 Reaching the container from another machine works the same way, with one
 exception: `http://192.168.1.10:8000` is not a secure context, so the browser
@@ -435,6 +469,7 @@ manual `host:port` entries.
 | `NEXTHMI_WIDGET_BUILD_DIR` | `<runtime_home>/.widget-build` | Compiled custom-widget output. |
 | `NEXTHMI_VALIDATION_SWEEP` | `on` | Set to `off` to skip the startup page-validation sweep. |
 | `NEXTHMI_TELEMETRY` | `on` | Set to `off` to stop the install-count ping and make the Settings switch read-only. See [Usage reporting](#usage-reporting). |
+| `NEXTHMI_HOST` | unset | Address the manager binds. Every interface, IPv4 and IPv6, by default; set `127.0.0.1` to answer this machine only — a reverse proxy on it, or nothing at all. Setting `0.0.0.0` binds IPv4 alone, which refuses `http://localhost:8000`. See [HTTPS](#https). |
 | `NEXTHMI_SSL_CERTFILE` / `NEXTHMI_SSL_KEYFILE` | unset | Serve HTTPS from the manager itself, overriding Settings → HTTPS. See [HTTPS](#https). |
 | `NEXTHMI_FORWARDED_ALLOW_IPS` | `127.0.0.1` | Proxy addresses whose `X-Forwarded-*` headers are trusted. |
 | `NEXTHMI_MAX_PROJECT_ZIP_MB` | `500` | Cap for zip uploads (export / import / push / pull). Oversize archives are rejected before any bytes hit disk. |
@@ -456,8 +491,8 @@ build.
 
 If you delete `./project-data/` (or point the volume at a fresh
 directory), the manager reseeds from the image's bundled seed project on
-the next start and registers it. A fresh device-admin password
-and a separate operator password for the seeded project are required again.
+the next start and registers it. A fresh device-admin password is required again,
+and the reseeded project starts out with only its `guest` user.
 Existing volumes retain their current project credentials unchanged.
 
 ## Mac / Windows portable binaries
@@ -471,19 +506,35 @@ Existing volumes retain their current project credentials unchanged.
    - macOS: double-click `nexthmi.command`.
    - Windows: double-click `nexthmi.exe`.
 
-A terminal window opens, prints the banner, and stays in the foreground:
+A terminal window opens, prints the banner, and stays in the foreground.
 
-The banner shows the version, runtime-home path, browser URL, and log path.
+The banner shows the version, the runtime-home path, the address the default
+project answers on, and a link to the manager's project list (`/projects`) for
+reaching the others. Under **Getting started** it lists the first steps: open
+the project list in a browser, choose the device-admin password on the first
+visit (and sign in with it after that), then pick a project — **Open** runs it,
+**Open editor** lets you change it. In a terminal that supports it, every URL in
+the banner is a clickable link.
 
-Open the printed URL in any browser. Portable installs bind to loopback by
-default; set `NEXTHMI_HOST=0.0.0.0` explicitly when LAN access is intended.
+Open the printed URL in a browser. Those rows name `localhost`, for the browser
+on this device. Under **On the network** stand the two addresses another
+machine types instead — this device's name, and its address for a network whose
+name resolution does not carry it — because an install binds every interface by
+default. Set `NEXTHMI_HOST=127.0.0.1` to keep it to this machine only, and the
+network block goes with it: nothing else is answering. See [HTTPS](#https)
+before putting an install on a network you do not control.
 
-On the first launch, set the device-admin password, then choose **Set operator
-password** on the seeded project. The latter creates that project's `admin` HMI
-account and unlocks its runtime and editor routes. Closing the manager before
-completion leaves the project pending for the next launch. Projects from an
-older install have no pending marker, so upgrades preserve their existing
-users and passwords byte-for-byte.
+On the first launch, set the device-admin password. That is the only credential
+the install asks for: the seeded project holds only its `guest` user and opens
+straight away. Upgrades preserve an existing project's users and passwords
+byte-for-byte.
+
+**Do it straight away.** Until that password exists there is nothing to check a
+request against, so the first-run page accepts whoever reaches it first — this
+machine or any other on the network — and the install advertises itself over
+mDNS the whole time it waits. The window is short and it is yours to close:
+claim the install right after the first start, or bring it up with
+`NEXTHMI_HOST=127.0.0.1` and lift that once the password is set.
 
 To stop: focus the terminal window and press Ctrl-C — uvicorn's
 lifespan shutdown runs and the OPC-UA pool closes cleanly.
@@ -515,8 +566,11 @@ Then re-launch `nexthmi.command`. (Alternative: right-click the file →
 **Windows** — SmartScreen shows *"Windows protected your PC."* Click
 *"More info"* → *"Run anyway."*
 
-We skip code signing until distribution demand justifies the Apple
-Developer Program + Authenticode cost.
+The public builds are not code-signed, and that is the arrangement rather
+than a gap waiting to be filled: a signed build is part of what a
+[commercial licence](../../COMMERCIAL.md#signing) buys. It changes nothing
+about what this build does — the prompts above are a one-time step, not a
+limitation.
 
 ### Changing the runtime home
 
@@ -540,13 +594,14 @@ so it's always present after the platform default kicks in.
 ### Changing the default projects root
 
 `defaultProjectsRoot` in `projects.json` governs where new / imported /
-pulled projects land by default. It is written once, at first run, as
-`<runtime_home>/Projects`, and neither it nor the runtime home is editable
-from the UI — **Settings → Runtime home** displays the runtime home path
-read-only. Every create / import / pull dialog lets you type or browse to a
-different destination, so a one-off elsewhere needs no configuration. To
-change the default permanently, stop the manager, edit
-`defaultProjectsRoot` in `<runtime_home>/projects.json`, and relaunch.
+pulled projects land by default. Out of the box it is absent, and resolves to
+your **Documents** folder — a place that already exists, so the runtime never
+creates a folder to hold projects you may keep elsewhere. Neither it nor the
+runtime home is editable from the UI — **Settings → Runtime home** displays
+the runtime home path read-only. Every create / import / pull dialog lets you
+type or browse to a different destination, so a one-off elsewhere needs no
+configuration. To change the default permanently, stop the manager, add or
+edit `defaultProjectsRoot` in `<runtime_home>/projects.json`, and relaunch.
 
 ### Upgrading a binary install
 
@@ -565,8 +620,8 @@ lives wherever the bootstrap file points.
 
 ### Limitations
 
-- macOS x64 builds are not currently produced. The MVP ships
-  `nexthmi-macos-arm64-<version>.zip` only.
+- The macOS build is Apple silicon only: `nexthmi-macos-arm64-<version>.zip`.
+  There is no Intel (x64) macOS build.
 - No auto-update. Operators check the release page for new versions.
 - No process-level service install — the binary runs in the foreground
   of whichever terminal launched it. If you want it persistent, wrap it

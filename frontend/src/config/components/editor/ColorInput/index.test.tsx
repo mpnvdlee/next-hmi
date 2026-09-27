@@ -18,6 +18,19 @@ describe('ColorInput', () => {
     expect(screen.getByText('· default')).toHaveClass('cfg-unset-hint');
   });
 
+  it('names a literal fallback color, previewing it on the popup Default row', async () => {
+    const user = userEvent.setup();
+    render(<ColorInput value={undefined} onChange={vi.fn()} defaultColor="#2D9CFF" />);
+    expect(screen.getByText('Electric Blue')).toBeInTheDocument();
+    expect(screen.getByText('· default')).toHaveClass('cfg-unset-hint');
+
+    await user.click(screen.getByTitle('Falls back to #2D9CFF'));
+    const row = screen.getByRole('button', { name: /^Default/ });
+    expect(row).toHaveTextContent('Electric Blue · #2D9CFF');
+    const swatch = row.querySelector('.cfg-color-picker__swatch') as HTMLElement;
+    expect(swatch).not.toHaveClass('cfg-color-picker__swatch--default');
+  });
+
   it('opens the popup listing theme colors and suggested colors', async () => {
     const user = userEvent.setup();
     render(<ColorInput value={undefined} onChange={vi.fn()} />);

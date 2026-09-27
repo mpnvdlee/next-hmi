@@ -1,11 +1,11 @@
 import type {
   WidgetConfig,
-  DialogConfig,
   PageConfig,
   PageGroupChild,
   PageGroupConfig,
   PageNode,
 } from '../types/config';
+import { SHELL_REGION_IDS } from '../types/config';
 import {
   getPageChildren,
   mapPageSections,
@@ -127,14 +127,15 @@ export function toIndexNodes(nodes: PageNode[]): unknown[] {
   });
 }
 
-/** Shape accepted by mapAllAreas — a subset of ConfigStore. */
+/** Shape accepted by mapAllAreas — a subset of ConfigStore. `pages` and
+ *  `dialogs` are the two roots of the page tree. */
 export interface AllAreas {
   pages: PageNode[];
   header: WidgetConfig[];
   footer: WidgetConfig[];
   leftSidebar: WidgetConfig[];
   rightSidebar: WidgetConfig[];
-  dialogs: DialogConfig[];
+  dialogs: PageNode[];
 }
 
 /** Apply a component-list mapper across ALL areas simultaneously. */
@@ -142,22 +143,26 @@ export function mapAllAreas(
   s: AllAreas,
   mapFn: (components: WidgetConfig[]) => WidgetConfig[],
 ): AllAreas {
-  const pagesWithMappedSections = mapPages(s.pages, (page) => ({
-    ...page,
-    sections: replacePageSectionWidgets(page, mapFn(getPageChildren(page))),
-  }));
+  const mapRoot = (nodes: PageNode[]): PageNode[] =>
+    mapPageGroupChrome(
+      mapPages(nodes, (page) => ({
+        ...page,
+        sections: replacePageSectionWidgets(page, mapFn(getPageChildren(page))),
+      })),
+      mapFn,
+    );
   return {
-    pages: mapPageGroupChrome(pagesWithMappedSections, mapFn),
+    pages: mapRoot(s.pages),
     header: mapFn(s.header),
     footer: mapFn(s.footer),
     leftSidebar: mapFn(s.leftSidebar),
     rightSidebar: mapFn(s.rightSidebar),
-    dialogs: s.dialogs.map((pop) => ({ ...pop, widgets: mapFn(pop.widgets) })),
+    dialogs: mapRoot(s.dialogs),
   };
 }
 
 /** Map a list, handing back the input array when every entry came out identical. */
-function mapPreserving<T>(list: T[], fn: (item: T) => T): T[] {
+export function mapPreserving<T>(list: T[], fn: (item: T) => T): T[] {
   let changed = false;
   const next = list.map((item) => {
     const mapped = fn(item);
@@ -171,17 +176,23 @@ function mapPreserving<T>(list: T[], fn: (item: T) => T): T[] {
  * One widget-list edit applied to every area in a single pass, reporting the pages
  * whose content actually changed.
  *
- * Differs from `mapAllAreas` in what it leaves alone: a page, group, dialog or shell
- * array the edit did not touch comes back as the very same object, so a batch write
- * that reaches one page hands React one changed page rather than a whole new project.
- * That also makes the dirty-page bookkeeping fall out of the walk, instead of costing
- * a `findOwningPage` sweep per id. `edit` must return the array it was given when it
- * changes nothing — `pruneWidgets` and `duplicateWidgets` both do.
+ * Differs from `mapAllAreas` in what it leaves alone: the patch object itself, and
+ * any page, group or shell array the edit did not touch, come back as the
+ * very same objects — so a batch write that reaches one page hands React one changed
+ * page rather than a whole new project, and a write that changes nothing re-renders
+ * no subscriber at all. That also makes the dirty-page bookkeeping fall out of the
+ * walk, instead of costing a `findOwningPage` sweep per id. `edit` must return the
+ * array it was given when it changes nothing — `pruneWidgets` and `duplicateWidgets`
+ * both do.
+ *
+ * Written against a partial so it can also sit inside `_setTree`, which is handed
+ * one key some writes and six others; an area the patch does not carry is not
+ * visited and not invented.
  */
-export function editAllAreas(
-  s: AllAreas,
+export function editAllAreas<T extends Partial<AllAreas>>(
+  s: T,
   edit: (widgets: WidgetConfig[]) => WidgetConfig[],
-): { areas: AllAreas; touchedPageIds: string[] } {
+): { areas: T; touchedPageIds: string[] } {
   const touchedPageIds: string[] = [];
 
   const editPage = (page: PageConfig): PageConfig => {
@@ -209,23 +220,23 @@ export function editAllAreas(
     return next;
   };
 
-  return {
-    areas: {
-      pages: mapPreserving(s.pages, editNode),
-      header: edit(s.header),
-      footer: edit(s.footer),
-      leftSidebar: edit(s.leftSidebar),
-      rightSidebar: edit(s.rightSidebar),
-      dialogs: mapPreserving(s.dialogs, (dialog) => {
-        const widgets = edit(dialog.widgets);
-        return widgets === dialog.widgets ? dialog : { ...dialog, widgets };
-      }),
-    },
-    touchedPageIds,
+  let areas = s;
+  const replace = <K extends keyof AllAreas>(key: K, value: AllAreas[K]): void => {
+    if (value === s[key]) return;
+    if (areas === s) areas = { ...s };
+    (areas as AllAreas)[key] = value;
   };
+
+  for (const region of SHELL_REGION_IDS) {
+    const widgets = s[region];
+    if (widgets !== undefined) replace(region, edit(widgets));
+  }
+  if (s.pages !== undefined) replace('pages', mapPreserving(s.pages, editNode));
+  if (s.dialogs !== undefined) replace('dialogs', mapPreserving(s.dialogs, editNode));
+  return { areas, touchedPageIds };
 }
 
-/** Collect every id used across a project: pages, page-groups, dialogs, and all widgets. */
+/** Collect every id used across a project: pages and page-groups of both roots, and all widgets. */
 export function collectAllIds(s: AllAreas): Set<string> {
   const acc = new Set<string>();
   const walkNode = (node: PageNode): void => {
@@ -239,15 +250,52 @@ export function collectAllIds(s: AllAreas): Set<string> {
     }
   };
   s.pages.forEach(walkNode);
+  s.dialogs.forEach(walkNode);
   collectWidgetIds(s.header, acc);
   collectWidgetIds(s.footer, acc);
   collectWidgetIds(s.leftSidebar, acc);
   collectWidgetIds(s.rightSidebar, acc);
-  for (const dialog of s.dialogs) {
-    acc.add(dialog.id);
-    collectWidgetIds(dialog.widgets, acc);
-  }
   return acc;
+}
+
+/**
+ * Every widget in the project — shell regions, then both page-tree roots — depth first.
+ *
+ * The one place the area order and the page-group recursion are written down, so
+ * a new area reaches every caller at once. Returning `true` from *visit* stops
+ * the walk: a caller that has found what it needs pays for no more of the tree.
+ */
+export function forEachProjectWidget(
+  s: AllAreas,
+  visit: (widget: WidgetConfig) => boolean | void,
+): void {
+  let stop = false;
+  const walk = (widgets: WidgetConfig[] | undefined): void => {
+    for (const widget of widgets ?? []) {
+      if (stop) return;
+      if (visit(widget) === true) {
+        stop = true;
+        return;
+      }
+      walk(widget.children as WidgetConfig[] | undefined);
+    }
+  };
+  const walkNode = (node: PageNode): void => {
+    if (stop) return;
+    if (isPageGroup(node)) {
+      walk(node.header);
+      walk(node.footer);
+      node.children.forEach(walkNode);
+    } else {
+      for (const widgets of Object.values(node.sections)) walk(widgets);
+    }
+  };
+  walk(s.header);
+  walk(s.footer);
+  walk(s.leftSidebar);
+  walk(s.rightSidebar);
+  s.pages.forEach(walkNode);
+  s.dialogs.forEach(walkNode);
 }
 
 /**
@@ -262,29 +310,11 @@ export function collectAllIds(s: AllAreas): Set<string> {
  */
 export function findWidgetsByIds(s: AllAreas, ids: ReadonlySet<string>): Map<string, WidgetConfig> {
   const found = new Map<string, WidgetConfig>();
-  const walk = (widgets: WidgetConfig[] | undefined): void => {
-    for (const widget of widgets ?? []) {
-      if (found.size === ids.size) return;
-      if (ids.has(widget.id)) found.set(widget.id, widget);
-      walk(widget.children as WidgetConfig[] | undefined);
-    }
-  };
-  const walkNode = (node: PageNode): void => {
-    if (found.size === ids.size) return;
-    if (isPageGroup(node)) {
-      walk(node.header);
-      walk(node.footer);
-      node.children.forEach(walkNode);
-    } else {
-      for (const widgets of Object.values(node.sections)) walk(widgets);
-    }
-  };
-  walk(s.header);
-  walk(s.footer);
-  walk(s.leftSidebar);
-  walk(s.rightSidebar);
-  s.pages.forEach(walkNode);
-  for (const dialog of s.dialogs) walk(dialog.widgets);
+  if (ids.size === 0) return found;
+  forEachProjectWidget(s, (widget) => {
+    if (ids.has(widget.id)) found.set(widget.id, widget);
+    return found.size === ids.size;
+  });
   return found;
 }
 

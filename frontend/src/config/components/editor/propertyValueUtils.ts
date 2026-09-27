@@ -139,7 +139,8 @@ export function substituteWildcards<T>(
 export function propertyValuePreview(value: unknown, fieldType?: string, depth = 0): string {
   if (value === null || value === undefined || value === '') return '—';
   if (Array.isArray(value)) {
-    if (fieldType === 'option-list') return `${value.length} item${value.length === 1 ? '' : 's'}`;
+    if (fieldType === 'option-list' || fieldType === 'item-list')
+      return `${value.length} item${value.length === 1 ? '' : 's'}`;
     if (fieldType === 'image-indicators')
       return `${value.length} indicator${value.length === 1 ? '' : 's'}`;
     if (fieldType === 'child-positions')
@@ -255,6 +256,20 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
       shortenBindingPath(propertyValuePreview(v, undefined, depth + 1)),
     );
   }
+  if (key === '$formula') {
+    const f = obj.$formula as
+      { expression?: string; wildcards?: Record<string, unknown> } | undefined;
+    if (!f?.expression) return 'formula(…)';
+    if (depth >= MAX_PREVIEW_DEPTH) return f.expression;
+    return substituteWildcards(f.expression, f.wildcards ?? {}, (v) =>
+      shortenBindingPath(propertyValuePreview(v, undefined, depth + 1)),
+    );
+  }
+  if (key === '$not') {
+    const n = obj.$not as { value?: unknown } | undefined;
+    if (!n || depth >= MAX_PREVIEW_DEPTH) return 'not(…)';
+    return `not(${propertyValuePreview(n.value, undefined, depth + 1)})`;
+  }
   if (key === '$alarmCount') {
     const ac = obj.$alarmCount as { filter?: string } | undefined;
     return ac?.filter ? `alarms(${ac.filter})` : 'alarms(…)';
@@ -262,6 +277,11 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
   if (key === '$componentProp') {
     const propKey = obj.$componentProp;
     return typeof propKey === 'string' && propKey ? propKey : '(component prop)';
+  }
+  if (key === '$repeatItem') {
+    const r = obj.$repeatItem as { field?: string; member?: string } | undefined;
+    if (r?.field === 'index') return 'item index';
+    return r?.member ? `item.${r.member}` : 'item';
   }
   if (key === '$result') {
     const field = obj.$result;
@@ -275,14 +295,24 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
 }
 
 /**
+ * The payload inside a `{ $static: T }` wrapper, left as itself; a bare value is
+ * returned unchanged. The one place the wrapper shape is read — a `{ $loc }`
+ * option has to compare as the object it is, and the editors that need the
+ * payload rather than a string would otherwise each test the `$` key by hand.
+ */
+export function unwrapStatic(value: unknown): unknown {
+  if (value !== null && typeof value === 'object' && '$static' in (value as object)) {
+    return (value as Record<string, unknown>).$static;
+  }
+  return value;
+}
+
+/**
  * Extract a value from a plain primitive or `{ $static: T }` source, stringified.
  * Returns `fallback` (default `''`) when the value is null/undefined — suitable for
  * controlled `<input>` values regardless of the underlying type.
  */
 export function getStaticString(value: unknown, fallback = ''): string {
-  if (value == null) return fallback;
-  if (typeof value === 'object' && '$static' in (value as Record<string, unknown>)) {
-    return String((value as Record<string, unknown>).$static ?? fallback);
-  }
-  return String(value);
+  const inner = unwrapStatic(value);
+  return inner == null ? fallback : String(inner);
 }

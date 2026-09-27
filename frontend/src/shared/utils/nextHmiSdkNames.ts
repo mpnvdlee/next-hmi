@@ -27,7 +27,7 @@
  * "Runtime SDK" section). Bump on any removed/renamed name or incompatible
  * signature/return-shape change; additive-only changes don't need a bump.
  */
-export const SDK_VERSION = 1;
+export const SDK_VERSION = 2;
 
 export const SDK_NAMES = [
   'React',
@@ -42,7 +42,7 @@ export const SDK_NAMES = [
   'sendWsMessage',
   'useHmiScope',
   'selfLayoutStyle',
-  'containerLayoutStyle',
+  'containerLayoutProps',
   'widgetColorStyle',
   'bindingKey',
   'parseVarKey',
@@ -57,6 +57,7 @@ export const SDK_NAMES = [
   'usePropBoolean',
   'usePropStruct',
   'useRecordListProp',
+  'useItemListProp',
   'useCssVar',
   'useVariable',
   'useBindingValue',
@@ -71,6 +72,7 @@ export const SDK_NAMES = [
   'resolvePageTitle',
   'useNavigateToPage',
   'useVisiblePages',
+  'useCurrentUserGroups',
   'useActiveAlarms',
   'useAlarmSummary',
   'useAlarmText',
@@ -87,6 +89,7 @@ export const SDK_NAMES = [
   'isCustomIconAssetPath',
   'useInlineSvg',
   'withBase',
+  'assetSrc',
   'apiJson',
   'isApiError',
   'executeWidgetActions',
@@ -99,4 +102,18 @@ export const SDK_NAMES = [
   'VirtualNumpad',
   'CloseButton',
   'useWriteVariable',
+  // Composition primitives: what a widget needs to place other widgets itself
+  // rather than take the pre-rendered `children` prop. Used by built-in
+  // widgets like any other widget. (No apostrophes in this block — the parser
+  // in backend/tests/test_widget_compiler_sdk_names.py reads quotes, not
+  // comments.)
+  'renderWidget',
+  'renderSlotWidgets',
+  'useComponentSlot',
+  'useIsComponentInstance',
+  'useRepeatScope',
+  'RepeatScope',
+  'useIsPreview',
+  'useActivePage',
+  'useAnchoredStyle',
 ] as const;

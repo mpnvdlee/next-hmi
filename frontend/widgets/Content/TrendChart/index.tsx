@@ -15,10 +15,16 @@ export const schema = {
   },
   variables: {
     type: 'string' as const,
+    format: 'variables' as const,
     label: 'Variables',
     group: 'Data',
-    description:
-      'Comma-separated variable paths, e.g. testserver:Motor1/Speed, testserver:Motor1/Temperature.',
+    description: 'One line per variable, drawn — and coloured — in this order.',
+    // Recorded mode can only draw what the historian stores, so the picker is
+    // its tracked list. Live mode buffers values off the connection, so it
+    // offers the whole variable tree. Gated against 'live' for the same reason
+    // the visibility rules below are: the editor reads the stored property and
+    // knows nothing of the 'history' default.
+    recordedWhen: { property: 'source', notEquals: 'live' },
   },
   timeRange: {
     type: 'string' as const,
@@ -124,6 +130,17 @@ const TIME_RANGES: Record<string, { label: string; ms: number }> = {
   '7d': { label: '7 days', ms: 604800000 },
   '30d': { label: '30 days', ms: 2592000000 },
 };
+
+// Built once: `toLocaleTimeString` with options constructs a fresh formatter
+// on every call, and the axis formats every tick on every render — that alone
+// was most of the chart's first-mount cost.
+const TICK_SECONDS = new Intl.DateTimeFormat([], {
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+});
+const TICK_MINUTES = new Intl.DateTimeFormat([], { hour: '2-digit', minute: '2-digit' });
+const TICK_DAYS = new Intl.DateTimeFormat([], { month: 'short', day: 'numeric' });
 
 interface SeriesPoint {
   t: number;
@@ -307,21 +324,11 @@ export default function TrendChart({ properties, layout }: HmiWidgetProps) {
 
   const formatTime = useCallback(
     (ts: number) => {
-      const d = new Date(ts);
       // A live buffer spans minutes, not hours: minute resolution would label
       // every tick identically.
-      if (isLive) {
-        return d.toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        });
-      }
+      if (isLive) return TICK_SECONDS.format(ts);
       const rangeMs = TIME_RANGES[timeRange]?.ms || 3600000;
-      if (rangeMs <= 86400000) {
-        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      }
-      return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      return (rangeMs <= 86400000 ? TICK_MINUTES : TICK_DAYS).format(ts);
     },
     [timeRange, isLive],
   );

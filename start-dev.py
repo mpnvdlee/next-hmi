@@ -10,8 +10,9 @@ Usage:
     python start-dev.py --edition ee  # serve manager_enterprise:app instead of
                                        # manager:app, and build the frontend
                                        # against the enterprise @enterprise
-                                       # registry. Requires enterprise/ (see D6
-                                       # in docs/operations/monetization-model.md).
+                                       # registry. Requires enterprise/ — a
+                                       # checkout of the private
+                                       # nexthmi-enterprise repo, symlinked in.
 """
 
 import argparse
@@ -36,13 +37,19 @@ VENV_PYTHON = (
     else ROOT / ".venv" / "bin" / "python"
 )
 
-BACKEND_PORT = 8000
-FRONTEND_PORT = 5173
+# The app is on :8000 in dev exactly as it is in a release install, where the
+# manager serves the built SPA and its own API from one origin. A bookmark, a
+# screenshot, a tablet's home-screen shortcut and a bug report therefore carry
+# between a checkout and an install unchanged. Vite takes that port and the API
+# server moves next door; the proxy in vite.config.ts stitches the two back
+# into one origin, which is what made :5173 avoidable in the first place.
+FRONTEND_PORT = 8000
+BACKEND_PORT = 8001
 
 # Make `backend/` importable so we can share the banner module with launcher.py.
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
-from core import runtime_home, tls_settings  # noqa: E402
+from core import net, runtime_home, tls_settings  # noqa: E402
 from core.banner import BannerFields, print_banner  # noqa: E402
 
 
@@ -154,8 +161,7 @@ def _check_enterprise() -> None:
         sys.exit(
             f"--edition ee but {ENTERPRISE_BACKEND_DIR}/manager_enterprise.py is "
             "missing — symlink enterprise/ to a checkout of the private "
-            "nexthmi-enterprise repo (see docs/operations/monetization-model.md, "
-            "decision D6)."
+            "nexthmi-enterprise repo."
         )
     if not (ENTERPRISE_DIR / "frontend" / "registry.ts").is_file():
         sys.exit(f"--edition ee but {ENTERPRISE_DIR}/frontend/registry.ts is missing.")
@@ -178,13 +184,34 @@ def _resolve_tls() -> tls_settings.TlsPaths | None:
 
     Same resolution the launcher does, so a device that serves HTTPS as a
     binary serves it in dev too — otherwise the toggle silently does nothing
-    here and the developer chases a connection reset on :5173.
+    here and the developer chases a connection reset on the app port.
     """
     try:
         return tls_settings.resolve(runtime_home.runtime_home_path())
     except Exception as exc:
         print(f"  WARNING: TLS is enabled but unusable ({exc}) — serving plain HTTP")
         return None
+
+
+def _reload_bind_host(host: str) -> str:
+    """*host*, spelled the way uvicorn's ``--reload`` path can actually bind it.
+
+    That path goes through ``Config.bind_socket``, which opens one AF_INET
+    socket unless the host string contains a colon — so the dual-stack empty
+    host binds IPv4 alone and ``http://localhost:8000`` is refused, `localhost`
+    being ``::1`` to a browser. The IPv6 wildcard gets an AF_INET6 socket and
+    POSIX leaves ``IPV6_V6ONLY`` off it, so that one answers both families.
+
+    Windows defaults that option *on*, where the swap would trade one half of
+    localhost for the other, so it keeps the IPv4 bind it already had. A pinned
+    NEXTHMI_HOST is passed through untouched.
+
+    The launcher's non-reload path wants the opposite string and is left alone
+    — see ``core.net.DEFAULT_HOST`` for why the empty host is right there.
+    """
+    if host or IS_WINDOWS:
+        return host
+    return "::"
 
 
 def _spawn_backend(
@@ -194,15 +221,29 @@ def _spawn_backend(
     # per running project; Vite proxies /p/<id>/* to the manager (see
     # frontend/vite.config.ts). Open the FRONTEND URL — the SPA renders the
     # manager dashboard at the root and proxied project instances under /p/<id>/.
-    # Loopback only: the workspace /mcp endpoint is unauthenticated, so the host
-    # binding is its security boundary (see backend/manager.py mount comment).
+    # Bound exactly as a real install is, so dev behaves like the thing being
+    # built and a tablet on the bench can reach it. The workspace /mcp endpoint
+    # authenticates every request itself — a manager session cookie or an MCP
+    # bearer token, see backend/mcp_server/auth.py — so the binding was never
+    # what protected it.
+    #
+    # Vite is the part that widens: /@fs serves its root — frontend/, including
+    # node_modules — to anyone who can reach the app port, with no authentication.
+    # That root is also the whole of it: everything above and beside it, the
+    # repo root, backend/ and the entire live project tree alike, is refused.
+    # NEXTHMI_HOST=127.0.0.1 pins both servers back to loopback.
     module = "manager_enterprise:app" if edition == "ee" else "manager:app"
     backend_cmd = [
         python_exe, "-m", "uvicorn", module, "--reload",
-        "--host", "127.0.0.1", "--port", str(BACKEND_PORT),
+        "--host", _reload_bind_host(net.resolve_bind_host()), "--port", str(BACKEND_PORT),
     ]
     env = dict(os.environ)
     env["NEXTHMI_EDITION"] = edition
+    # Only the launcher exports this in packaged mode, so mDNS fell back to its
+    # 8000 default and advertised a port nothing serves here — peers pointed at
+    # the Vite app instead of the API. supervisor pops it for children, so a
+    # project instance still never inherits the manager's port.
+    env["NEXTHMI_PORT"] = str(BACKEND_PORT)
     if edition == "ee":
         # manager_enterprise.py lives outside backend/ (cwd), so it needs its
         # own entry on the import path. --reload-dir: by default uvicorn only
@@ -256,6 +297,12 @@ def _spawn_frontend(
     # alias target — the empty core stub for oss, enterprise/frontend/registry.ts
     # for ee.
     env["NEXTHMI_EDITION"] = edition
+    # Both ports come from here, not from a second copy in vite.config.ts: the
+    # two have to agree, and a proxy aimed at Vite's own port is a request loop
+    # rather than a connection error. The config carries the same defaults for
+    # a bare `npm run dev`.
+    env["NEXTHMI_DEV_PORT"] = str(FRONTEND_PORT)
+    env["NEXTHMI_DEV_API_PORT"] = str(BACKEND_PORT)
     if tls is not None:
         env["NEXTHMI_DEV_TLS_CERT"] = str(tls.certfile)
         env["NEXTHMI_DEV_TLS_KEY"] = str(tls.keyfile)
@@ -266,7 +313,7 @@ def _spawn_frontend(
     frontend_cmd = ["npm.cmd" if IS_WINDOWS else "npm", "run", "dev"]
     # npm is a shim that execs Vite as a grandchild and does not forward
     # SIGTERM to it, so terminating the npm process alone orphans a Vite still
-    # holding :5173. Its own process group makes the whole tree killable — see
+    # holding the app port. Its own process group makes the whole tree killable — see
     # _terminate_frontend.
     group = {"start_new_session": True} if not IS_WINDOWS else {}
     if quiet:
@@ -285,7 +332,7 @@ def _spawn_frontend(
 def _terminate_frontend(proc: subprocess.Popen) -> None:
     """Stop Vite and everything npm spawned under it.
 
-    An orphaned Vite keeps :5173 bound, so the replacement silently lands on
+    An orphaned Vite keeps the app port bound, so the replacement silently lands on
     :5174 while the browser still talks to the old one — with the old proxy
     target and the old protocol.
     """
@@ -331,12 +378,21 @@ def start(*, quiet: bool, edition: str) -> None:
     if edition == "ee":
         print("[dev] edition: ee (manager_enterprise:app)", flush=True)
 
+    # Loopback for the browser on this machine, and under it the two ways the
+    # bench tablet reaches the same servers. Both ports get a row: :8000 is the
+    # app and leads, :8001 is the API a device may want to hit directly —
+    # neither is guessable from the other's row.
+    bind_host = net.resolve_bind_host()
     print_banner(
         "dev",
         BannerFields(
             runtime_home=runtime_home.runtime_home_path(),
-            open_url=f"{scheme}://localhost:{BACKEND_PORT}",
-            frontend_url=f"{scheme}://localhost:{FRONTEND_PORT}",
+            open_url=net.display_url(scheme, bind_host, BACKEND_PORT),
+            frontend_url=net.display_url(scheme, bind_host, FRONTEND_PORT),
+            network_urls=(
+                tuple(net.network_urls(scheme, bind_host, FRONTEND_PORT)),
+                tuple(net.network_urls(scheme, bind_host, BACKEND_PORT)),
+            ),
         ),
     )
 
@@ -366,7 +422,7 @@ def start(*, quiet: bool, edition: str) -> None:
                     scheme = "https" if tls is not None else "http"
                     print(
                         f"[dev] protocol changed to {scheme} — restarting Vite; "
-                        f"reload {scheme}://localhost:{FRONTEND_PORT}",
+                        f"reload {net.display_url(scheme, bind_host, FRONTEND_PORT)}",
                         flush=True,
                     )
                     _terminate_frontend(frontend_proc)

@@ -1,0 +1,162 @@
+{
+  "name": "Metric Row",
+  "description": "A label, a reading and a thin bar — the repeating row inside the boiler card.",
+  "category": "Brew",
+  "icon": {
+    "type": "builtin",
+    "name": "rows"
+  },
+  "componentProperties": {
+    "label": {
+      "type": "string",
+      "label": "Label"
+    },
+    "text": {
+      "type": "string",
+      "label": "Reading",
+      "description": "Already formatted. Build it on the instance with $stringExpr — a $componentProp nested inside another source stops updating."
+    },
+    "value": {
+      "type": "float",
+      "label": "Value",
+      "description": "Drives the bar."
+    },
+    "max": {
+      "type": "float",
+      "label": "Range maximum",
+      "defaultValue": 100
+    },
+    "color": {
+      "type": "color",
+      "label": "Bar colour",
+      "defaultValue": "var(--hmi-accent)"
+    }
+  },
+  "children": [
+    {
+      "id": "mr",
+      "type": "Container",
+      "name": "Metric row",
+      "properties": {
+        "visible": true,
+        "showWhenEmpty": true,
+        "background": "transparent"
+      },
+      "layout": {
+        "direction": "column",
+        "gap": "6px",
+        "wrap": false,
+        "align": "stretch",
+        "justify": "flex-start",
+        "radius": "0",
+        "widthMode": "fill",
+        "heightMode": "hug",
+        "paddingTop": "0",
+        "paddingRight": "0",
+        "paddingBottom": "0",
+        "paddingLeft": "0"
+      },
+      "children": [
+        {
+          "id": "mr-top",
+          "type": "Container",
+          "name": "Top",
+          "properties": {
+            "visible": true,
+            "showWhenEmpty": true,
+            "background": "transparent"
+          },
+          "layout": {
+            "direction": "row",
+            "gap": "8px",
+            "wrap": false,
+            "align": "baseline",
+            "justify": "flex-start",
+            "radius": "0",
+            "widthMode": "fill",
+            "heightMode": "hug",
+            "paddingTop": "0",
+            "paddingRight": "0",
+            "paddingBottom": "0",
+            "paddingLeft": "0"
+          },
+          "children": [
+            {
+              "id": "mr-label",
+              "type": "Label",
+              "name": "mr-label",
+              "properties": {
+                "typography": "caption",
+                "text": {
+                  "$componentProp": "label"
+                },
+                "color": "var(--hmi-text-muted)"
+              },
+              "layout": {
+                "widthMode": "hug",
+                "heightMode": "hug"
+              }
+            },
+            {
+              "id": "mr-sp",
+              "type": "StretchSpacer",
+              "name": "Spacer",
+              "properties": {
+                "mode": "ratio",
+                "ratio": 1
+              },
+              "layout": {
+                "grow": 1,
+                "widthMode": "fill",
+                "heightMode": "hug",
+                "minWidth": "auto"
+              }
+            },
+            {
+              "id": "mr-text",
+              "type": "Label",
+              "name": "mr-text",
+              "properties": {
+                "typography": "body",
+                "text": {
+                  "$componentProp": "text"
+                },
+                "weight": 650
+              },
+              "layout": {
+                "widthMode": "hug",
+                "heightMode": "hug"
+              }
+            }
+          ]
+        },
+        {
+          "id": "mr-bar",
+          "type": "ProgressBar",
+          "name": "Bar",
+          "properties": {
+            "variable": {
+              "$componentProp": "value"
+            },
+            "min": 0,
+            "max": {
+              "$componentProp": "max"
+            },
+            "showValue": false,
+            "showPercent": false,
+            "barHeight": 6,
+            "dense": true,
+            "color": {
+              "$componentProp": "color"
+            }
+          },
+          "layout": {
+            "width": "100%",
+            "widthMode": "fixed",
+            "heightMode": "hug"
+          }
+        }
+      ]
+    }
+  ]
+}

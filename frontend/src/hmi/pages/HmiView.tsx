@@ -4,7 +4,9 @@ import { useDeferredValue, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useConfig, usePage, usePages } from '@shared/hooks/useConfig';
 import { useTranslations } from '@shared/hooks/useTranslations';
+import { useDisableBrowserZoom } from '@shared/hooks/useDisableBrowserZoom';
 import { useConfigStore } from '@shared/store/configStore';
+import { useComponentStore } from '@shared/store/componentStore';
 import { useHmiStore } from '../store/hmiStore';
 import { sendWsMessage } from '../hooks/useWebSocket';
 import { useVariableStore } from '../store/variableStore';
@@ -12,13 +14,12 @@ import { resolveMainStyle, resolvePageContext } from '@shared/utils/pageTree';
 import { getPageChildren } from '@shared/utils/pageContent';
 import { randomUuid } from '@shared/utils/id';
 import { HmiScopeContext } from '../context/HmiScopeContext';
-import { useResolvedDialogs, useResolvedPageOverlays } from '../hooks/useOpenOverlays';
-import NavigationMenu from '../components/NavigationMenu';
+import { useResolvedPageOverlays } from '../hooks/useOpenOverlays';
 import { renderRegionChildren } from '../components/renderRegion';
 import ShellRegion from '../components/ShellRegion';
 import { useSidebarFullHeight } from '../components/ShellRegion/useSidebarFullHeight';
 import PageGroupPageView from '../components/PageGroupPageView';
-import { SHELL_REGION_IDS, type ShellConfig, type ShellRegionConfig } from '@shared/types/config';
+import type { ShellConfig, ShellRegionConfig } from '@shared/types/config';
 import type { CSSWithVars } from '@shared/types/style';
 import { ModalStack } from '../components/ModalStack';
 import { AlertModal } from '../components/AlertModal';
@@ -26,14 +27,18 @@ import { HmiToastStack } from '../components/ToastStack';
 import AlarmPopup from '../components/AlarmPopup';
 import { FullscreenPrompt } from '../components/FullscreenPrompt';
 import BootSplash from '../components/BootSplash';
+import { PageDataSettleGate } from '../components/DataSettleGate';
 import { markBooted, useBootHold } from '../components/BootSplash/bootHold';
 import { collectComponentPriorityKeys } from '../components/layoutUtils';
 import { ContentSpinner } from '@shared/components/Spinner';
 import { useGlobalEvents } from '../hooks/useGlobalEvents';
+import { usePageEvents } from '../hooks/usePageEvents';
+import { useProjectWidgetWarmup } from '../hooks/useProjectWidgetWarmup';
 
 export default function HmiView() {
   useConfig();
   useTranslations();
+  useDisableBrowserZoom();
 
   // Theme loading and cross-tab theme-save sync are owned by AppInner, which
   // starts them before any view mounts.
@@ -47,6 +52,9 @@ export default function HmiView() {
   const scope = `runtime:${hmiKeyRef.current}`;
 
   useGlobalEvents(scope);
+  // After useGlobalEvents deliberately: effects run in declaration order, so
+  // the project-wide onPageLoaded fires before the page's own onOpen.
+  usePageEvents(scope);
 
   const { id } = useParams<{ id: string }>();
   // Render the (potentially heavy) page from a deferred id so switching pages
@@ -64,7 +72,6 @@ export default function HmiView() {
   const shell = useConfigStore((s) => s.shell);
   const configLoaded = useConfigStore((s) => s.loaded);
   const wsConnected = useVariableStore((s) => s.wsConnected);
-  const openDialogEntries = useHmiStore((s) => s.openDialogs);
   const openPageOverlayEntries = useHmiStore((s) => s.openPageOverlays);
 
   // Boot screen minimum. Paid once per page load — every open and refresh of
@@ -77,12 +84,14 @@ export default function HmiView() {
   // Resolve the current page from the index first, then hydrate its content.
   const { page, pageGroups } = resolvePageContext(pages, id);
   usePage(page?.id);
-  // Derive overlay IDs first so usePages can use them.
-  const openPageOverlayIds = openPageOverlayEntries.map((e) => e.pageId);
+  useProjectWidgetWarmup(configLoaded && !bootHold ? page?.id : undefined);
+  const openPageOverlays = useResolvedPageOverlays();
+  // The *resolved* page of each overlay, never the raw target: an overlay may
+  // name a page group, which has no page file to hydrate and no id the backend
+  // would echo back — the page inside it is what both of those need.
+  const openPageOverlayIds = openPageOverlays.flatMap((item) => (item.page ? [item.page.id] : []));
   // Hydrate content for every open overlay page so their component children are available.
   usePages(openPageOverlayIds);
-  const openDialogs = useResolvedDialogs().map((d) => d.dialog);
-  const openPageOverlays = useResolvedPageOverlays();
 
   // Request auto-login identity for this scope when WS connects (or reconnects).
   useEffect(() => {
@@ -94,6 +103,9 @@ export default function HmiView() {
   // nested expressions (for example $if/$switch/$compare) are included.
   // Additionally, derive explicit priorityKeys from the in-memory component
   // tree so the backend subscribes variables even before config is saved to disk.
+  // Component definitions load asynchronously; the priority keys a
+  // `$component:` instance derives from its definition only exist once it has.
+  const componentDefinitions = useComponentStore((s) => s.components);
   useEffect(() => {
     if (!wsConnected) return;
 
@@ -108,40 +120,33 @@ export default function HmiView() {
       ...footer,
       ...leftSidebar,
       ...rightSidebar,
-      ...openPageOverlays.flatMap((item) => getPageChildren(item.page)),
-      ...openDialogs.flatMap((d) => d.widgets),
+      ...openPageOverlays.flatMap((item) => (item.page ? getPageChildren(item.page) : [])),
     ];
     const priorityKeys = collectComponentPriorityKeys(components);
 
-    sendWsMessage({
-      type: 'set_context',
-      currentPageIds,
-      openDialogIds: openDialogEntries.map((d) => d.id),
-      priorityKeys,
-    });
-    // page, header, footer, openDialogs, openPageOverlays are intentionally
+    sendWsMessage({ type: 'set_context', currentPageIds, priorityKeys });
+    // page, header, footer, openPageOverlays are intentionally
     // omitted from deps: page?.id already re-triggers on navigation, and we
     // do NOT want to re-send set_context on every component edit in the
     // config editor while the HMI view is active.
     // openPageOverlayEntries (Zustand state) changes reference only when overlays
     // are actually added/removed, avoiding spurious re-fires.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wsConnected, page?.id, openDialogEntries, openPageOverlayEntries]);
+  }, [wsConnected, page?.id, openPageOverlayEntries, componentDefinitions]);
 
   // Clear this client's runtime context only on true unmount (navigating away
   // from the HMI view entirely). Deliberately a separate, empty-deps effect:
   // folding this into the effect above would fire its cleanup — and so this
   // "clear" send — before every re-run, doubling the set_context traffic (and
   // the backend's OPC-UA priority-subscription recompute) on every ordinary
-  // page navigation or dialog/overlay toggle.
+  // page navigation or overlay toggle.
   useEffect(() => {
     return () => {
-      sendWsMessage({ type: 'set_context', currentPageIds: [], openDialogIds: [] });
+      sendWsMessage({ type: 'set_context', currentPageIds: [] });
     };
   }, []);
 
-  // Merge per-page override on top of the project shell.
-  const resolvedShell: ShellConfig = mergeShell(shell, page?.shellOverride);
+  const resolvedShell: ShellConfig = shell ?? {};
   const mainStyle: CSSWithVars = resolveMainStyle(pageGroups, page);
   // `--hmi-scale` drives `.hmi-root`'s `zoom` (hmi.css) — CSS `zoom`
   // participates in box sizing AND propagates to position:fixed descendants
@@ -154,8 +159,6 @@ export default function HmiView() {
       : {};
   const rootClassName = `hmi-root${resolvedShell.showScrollbars ? ' hmi-root--scrollbars' : ''}`;
 
-  // When leftSidebar is empty, fall back to the built-in NavigationMenu so the
-  // zero-config runtime keeps a navigation surface.
   const headerCfg: ShellRegionConfig = resolvedShell.header ?? {};
   const footerCfg: ShellRegionConfig = resolvedShell.footer ?? {};
   const leftSidebarCfg: ShellRegionConfig = resolvedShell.leftSidebar ?? {};
@@ -163,7 +166,7 @@ export default function HmiView() {
 
   const headerContent = renderRegionChildren(header);
   const footerContent = renderRegionChildren(footer);
-  const leftSidebarContent = renderRegionChildren(leftSidebar, <NavigationMenu />);
+  const leftSidebarContent = renderRegionChildren(leftSidebar);
   const rightSidebarContent = renderRegionChildren(rightSidebar);
 
   const {
@@ -207,58 +210,46 @@ export default function HmiView() {
     return <BootSplash phase={configLoaded ? 'ready' : 'config'} />;
   }
 
+  // One gate over the whole runtime: the shell regions, the page, and the
+  // overlays portalled out of it all read their variables from the same
+  // `set_context`, so they settle together on its ack. Nothing under here
+  // wears a "no data" mark until that lands (or the grace expires) — the page
+  // itself is on screen long before, unblocked by the datasource.
   return (
     <HmiScopeContext.Provider value={scope}>
-      <div className={rootClassName} style={rootStyle}>
-        <div className={`hmi-layout${hasFullHeightSidebar ? ' hmi-layout--row' : ''}`}>
-          {leftFullHeight && leftSidebarRegion}
-          <div className="hmi-layout__column">
-            <ShellRegion id="header" config={headerCfg}>
-              {headerContent}
-            </ShellRegion>
-            <div className="hmi-body">
-              {!leftFullHeight && leftSidebarRegion}
-              <main className="hmi-main" style={mainStyle}>
-                {pageView}
-                {pageSwitching && (
-                  <div className="hmi-page-pending" aria-hidden>
-                    <ContentSpinner />
-                  </div>
-                )}
-              </main>
-              {!rightFullHeight && rightSidebarRegion}
+      <PageDataSettleGate pageId={page?.id}>
+        <div className={rootClassName} style={rootStyle}>
+          <div className={`hmi-layout${hasFullHeightSidebar ? ' hmi-layout--row' : ''}`}>
+            {leftFullHeight && leftSidebarRegion}
+            <div className="hmi-layout__column">
+              <ShellRegion id="header" config={headerCfg}>
+                {headerContent}
+              </ShellRegion>
+              <div className="hmi-body">
+                {!leftFullHeight && leftSidebarRegion}
+                <main className="hmi-main" style={mainStyle}>
+                  {pageView}
+                  {pageSwitching && (
+                    <div className="hmi-page-pending" aria-hidden>
+                      <ContentSpinner />
+                    </div>
+                  )}
+                </main>
+                {!rightFullHeight && rightSidebarRegion}
+              </div>
+              <ShellRegion id="footer" config={footerCfg}>
+                {footerContent}
+              </ShellRegion>
             </div>
-            <ShellRegion id="footer" config={footerCfg}>
-              {footerContent}
-            </ShellRegion>
+            {rightFullHeight && rightSidebarRegion}
+            <ModalStack />
           </div>
-          {rightFullHeight && rightSidebarRegion}
-          <ModalStack />
+          <AlertModal scope={scope} />
+          <HmiToastStack />
+          <AlarmPopup />
+          <FullscreenPrompt />
         </div>
-        <AlertModal scope={scope} />
-        <HmiToastStack />
-        <AlarmPopup />
-        <FullscreenPrompt />
-      </div>
+      </PageDataSettleGate>
     </HmiScopeContext.Provider>
   );
-}
-
-/**
- * Deep-merge a per-page ShellConfig override on top of the project ShellConfig.
- * Each region merges field-by-field so an override patch like
- * `{ leftSidebar: { defaultState: 'hidden' } }` keeps the project's other
- * region settings (expandedSize, overlay, …) intact.
- */
-function mergeShell(
-  base: ShellConfig | undefined,
-  override: Partial<ShellConfig> | undefined,
-): ShellConfig {
-  if (!override) return base ?? {};
-  const out: ShellConfig = { ...base };
-  for (const id of SHELL_REGION_IDS) {
-    if (override[id] === undefined) continue;
-    out[id] = { ...(base?.[id] ?? {}), ...override[id] };
-  }
-  return out;
 }

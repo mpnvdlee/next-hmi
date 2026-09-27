@@ -43,8 +43,17 @@ export interface SchemaField {
   requiredFields?: RequiredFieldEntry[];
   /** When true, variable picker only shows writable variables. */
   write?: boolean;
-  /** For a `format: 'select'` field: the list of options shown in the dropdown */
-  options?: { label: string; value: string | number | boolean; icon?: string }[];
+  /** For a `format: 'select'` field: the list of options shown in the dropdown.
+   *  A `{ $loc }` value makes the option itself a translation, so the dropdown
+   *  offers translated captions without opening the free translation picker.
+   *  `value` is absent on a row still being authored — the options list is
+   *  edited label-first, and an unwritten value does not survive `JSON` — so
+   *  such a row is offered nowhere until it holds something. */
+  options?: {
+    label: string;
+    value?: string | number | boolean | { $loc: string };
+    icon?: string;
+  }[];
   /** For a `format: 'select'` field: display mode for options (auto | dropdown | button-text | button-icon) */
   display?: 'auto' | 'dropdown' | 'button-text' | 'button-icon';
   /** Hint text shown inside an empty input (string, integer/float, icon, image fields) */
@@ -56,8 +65,14 @@ export interface SchemaField {
   /** Optional format refining a base type — a UI-only hint that upgrades the
    *  editor without changing the value's base type (so source rules are still
    *  decided by the base type). Open-ended; recognised values include
-   *  `url`, `multiline`, `select`, `password` (string) and `percentage` (float). */
+   *  `url`, `multiline`, `select`, `password`, `variables` (string) and
+   *  `percentage` (float). */
   format?: string;
+  /** For a `format: 'variables'` field: while this condition holds, the picker
+   *  offers only the variables the historian records. Omitted or failing, it
+   *  offers the whole variable tree. Same shape and evaluation as
+   *  {@link SchemaField.visibleWhen}. */
+  recordedWhen?: VisibilityCondition | VisibilityCondition[];
   /** For 'actions' type: the ActionsConfig event key this field edits (defaults to 'onPress'). */
   event?: string;
   /** Conditional visibility: field only shown when condition(s) pass.
@@ -119,36 +134,46 @@ export interface CustomWidgetManifestEntry {
   schemaError?: string | null;
   /** Where the compiled module is served from. Absent (or 'project') means the
    *  live project's custom-widgets/, compiled on load and fetched from
-   *  /widget-js/. 'stdlib' means a product widget compiled at build time and
-   *  fetched from /stdlib-js/. */
+   *  /widget-js/. 'builtin' means a product widget compiled at build time and
+   *  fetched from /builtin-widgets-js/. */
   origin?: WidgetOrigin | null;
   /** Declared by `export const hostsChildren = true`: nodes of this type carry
    *  a `children` array and the editor treats them as containers — drop target,
    *  collapse toggle, tree recursion, move target. The component receives the
    *  rendered children as its `children` prop. */
   hostsChildren?: boolean | null;
+  /** Declared by `export const flowsChildren = true`: this type arranges its
+   *  children with flexbox (`containerLayoutProps`), so each of them has a main
+   *  axis to size Hug/Fill/Fixed against. Narrower than `hostsChildren` — an
+   *  `ImageContainer` hosts children but pins them to slots. Read through
+   *  `usesFlexLayout` in `shared/utils/parentFlow.ts`. */
+  flowsChildren?: boolean | null;
+  /** Declared by `export const repeatsChildren = '<prop>'`: this type draws its
+   *  children once per element of that `item-list` property, each copy a repeat
+   *  scope. Read through `repeatItemsKey` in `shared/utils/parentFlow.ts`. */
+  repeatsChildren?: string | null;
   /** Whether the compiled module references the Recharts SDK global. Only
    *  those modules need it populated before import, so the chart library stays
-   *  out of first paint on pages that have no chart. Baked by the stdlib build;
-   *  absent for project widgets, which conservatively always wait. */
+   *  out of first paint on pages that have no chart. Baked by the built-in-widgets
+   *  build; absent for project widgets, which conservatively always wait. */
   usesRecharts?: boolean | null;
 }
 
-export type WidgetOrigin = 'project' | 'stdlib';
+export type WidgetOrigin = 'project' | 'builtin';
 
 /**
- * One stdlib widget's editor-only half of the baked manifest, keyed by the
+ * One built-in widget's editor-only half of the baked manifest, keyed by the
  * row's `key`.
  *
  * The compiler writes the manifest as two files (see
- * `generate_stdlib_manifest`): a runtime half every route's static-import
- * closure carries, and this half, imported only from `src/config/` so it lands
- * in the editor's chunk. Both are static imports — an editor surface reads a
- * whole `RegistryEntry` on its first render, an HMI page never fetches these
- * bytes at all. A field absent here simply had nothing beyond `type` /
- * `requiredFields` to say.
+ * `generate_builtin_widgets_manifest`): a runtime half every route's
+ * static-import closure carries, and this half, imported only from
+ * `src/config/` so it lands in the editor's chunk. Both are static imports —
+ * an editor surface reads a whole `RegistryEntry` on its first render, an HMI
+ * page never fetches these bytes at all. A field absent here simply had
+ * nothing beyond `type` / `requiredFields` / `write` to say.
  */
-export interface StdlibEditorEntry {
+export interface BuiltinWidgetEditorEntry {
   description?: string | null;
   icon?: unknown;
   exportedProperties?: ExportedProperty[] | null;

@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 const MIN_SPLASH_MS = 2000;
 
 // Module load is the earliest wall-clock we can attribute to this page load.
-const BOOT_STARTED_AT = Date.now();
+let bootStartedAt = Date.now();
 
 // Deliberately module state, not sessionStorage: it resets with the page, so
 // the splash replays on every load and reload of the HMI, and is skipped only
@@ -23,9 +23,18 @@ export function markBooted(): void {
   booted = true;
 }
 
-/** Test-only: forget that this page load already booted. */
+/**
+ * Test-only: forget that this page load already booted, and restart the floor
+ * from now.
+ *
+ * Both halves are page-load state, so both have to go. Resetting only `booted`
+ * would leave the floor counting from module import, which makes the remaining
+ * hold depend on how long the suite took to reach the test — a full run under
+ * load spends it before the first assertion.
+ */
 export function resetBootHold(): void {
   booted = false;
+  bootStartedAt = Date.now();
 }
 
 /**
@@ -40,7 +49,7 @@ export function useBootHold(): boolean {
 
   useEffect(() => {
     if (floorDone) return;
-    const remaining = MIN_SPLASH_MS - (Date.now() - BOOT_STARTED_AT);
+    const remaining = MIN_SPLASH_MS - (Date.now() - bootStartedAt);
     if (remaining <= 0) {
       setFloorDone(true);
       return;

@@ -1,0 +1,221 @@
+[
+  {
+    "name": "empty list",
+    "items": [],
+    "element": null,
+    "members": {}
+  },
+  {
+    "name": "not a list",
+    "items": "not a list",
+    "element": null,
+    "members": {}
+  },
+  {
+    "name": "whole numbers",
+    "items": [1, 2, 3],
+    "element": {
+      "kind": "scalar",
+      "base": "Integer",
+      "array": false
+    },
+    "members": {}
+  },
+  {
+    "name": "whole and fractional numbers",
+    "items": [1, 2.5],
+    "element": {
+      "kind": "scalar",
+      "base": "Float",
+      "array": false
+    },
+    "members": {}
+  },
+  {
+    "name": "strings",
+    "items": ["a", "b"],
+    "element": {
+      "kind": "scalar",
+      "base": "String",
+      "array": false
+    },
+    "members": {}
+  },
+  {
+    "name": "booleans",
+    "items": [true, false],
+    "element": {
+      "kind": "scalar",
+      "base": "Boolean",
+      "array": false
+    },
+    "members": {}
+  },
+  {
+    "name": "number and string",
+    "items": [1, "a"],
+    "element": null,
+    "members": {}
+  },
+  {
+    "name": "boolean and number",
+    "items": [true, 1],
+    "element": null,
+    "members": {}
+  },
+  {
+    "name": "null",
+    "items": [null],
+    "element": null,
+    "members": {}
+  },
+  {
+    "name": "record and scalar",
+    "items": [
+      {
+        "a": 1
+      },
+      2
+    ],
+    "element": null,
+    "members": {}
+  },
+  {
+    "name": "nested lists",
+    "items": [[1], [2]],
+    "element": null,
+    "members": {}
+  },
+  {
+    "name": "label/value records",
+    "items": [
+      {
+        "label": "Low",
+        "value": 1
+      },
+      {
+        "label": "High",
+        "value": 2
+      }
+    ],
+    "element": {
+      "kind": "struct",
+      "name": "Struct",
+      "fields": ["label", "value"],
+      "array": false
+    },
+    "members": {
+      "label": {
+        "kind": "scalar",
+        "base": "String",
+        "array": false
+      },
+      "value": {
+        "kind": "scalar",
+        "base": "Integer",
+        "array": false
+      }
+    }
+  },
+  {
+    "name": "records with mixed members",
+    "items": [
+      {
+        "label": "a",
+        "value": "x",
+        "on": true
+      },
+      {
+        "label": "b",
+        "value": 2,
+        "speed": 1.5
+      },
+      {
+        "label": "c",
+        "speed": 3,
+        "unit": {
+          "$loc": "rpm"
+        }
+      }
+    ],
+    "element": {
+      "kind": "struct",
+      "name": "Struct",
+      "fields": ["label", "value", "on", "speed", "unit"],
+      "array": false
+    },
+    "members": {
+      "label": {
+        "kind": "scalar",
+        "base": "String",
+        "array": false
+      },
+      "on": {
+        "kind": "scalar",
+        "base": "Boolean",
+        "array": false
+      },
+      "speed": {
+        "kind": "scalar",
+        "base": "Float",
+        "array": false
+      }
+    }
+  },
+  {
+    "name": "records with no keys",
+    "items": [{}],
+    "element": null,
+    "members": {}
+  },
+  {
+    "name": "several records with no keys",
+    "items": [{}, {}],
+    "element": null,
+    "members": {}
+  },
+  {
+    "name": "whole number written with a fraction",
+    "items": [2.0],
+    "element": {
+      "kind": "scalar",
+      "base": "Integer",
+      "array": false
+    },
+    "members": {}
+  },
+  {
+    "name": "whole number written with a fraction and a fractional one",
+    "items": [2.0, 2.5],
+    "element": {
+      "kind": "scalar",
+      "base": "Float",
+      "array": false
+    },
+    "members": {}
+  },
+  {
+    "name": "record member written with a fraction",
+    "items": [
+      {
+        "speed": 2.0
+      },
+      {
+        "speed": 3
+      }
+    ],
+    "element": {
+      "kind": "struct",
+      "name": "Struct",
+      "fields": ["speed"],
+      "array": false
+    },
+    "members": {
+      "speed": {
+        "kind": "scalar",
+        "base": "Integer",
+        "array": false
+      }
+    }
+  }
+]

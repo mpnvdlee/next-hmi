@@ -41,7 +41,7 @@ Need translated text with live values beside it? Combine the two: **`$stringExpr
 Three ways, pick whichever suits the panel:
 
 - **Language Switcher widget** — drop it in a shell region and it lists the configured languages with a label of your choosing. See the [catalog](catalog.md#language-switcher).
-- **Set language action** — a **Set language** action on any button, with the code either fixed (a flag button per language) or bound. See [Actions](actions.md#interface).
+- **Set Language action** — a **Set Language** action on any button, with the code either fixed (a flag button per language) or bound. See [Actions](actions.md#interface).
 - **`$languages` source** — the list of configured language codes as a `String[]`, for building your own picker in a custom widget.
 
 Whichever you use, the change is instant and project-wide within that runtime — no reload, no navigation.

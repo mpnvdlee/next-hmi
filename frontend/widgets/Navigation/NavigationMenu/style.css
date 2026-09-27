@@ -1,0 +1,362 @@
+/* No width here on purpose. The root carries `.hmi-component` and
+   `selfLayoutStyle()`, so the menu sizes from the Layout panel like every other
+   widget — including the Hug the panel shows as the default, which a hard
+   `width: 100%` used to override whatever the author (or their container's
+   Align) asked for. */
+.hmi-navmenu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-tight);
+  background: transparent;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex-shrink: 0;
+  transition: width 0.2s ease;
+}
+
+/* Sidebar chrome for a menu dropped straight into a shell region — a region
+   renders its widgets as its own DOM children, so this is the bare "menu is
+   the sidebar" shape. Chrome only: the width that used to live here pinned the
+   box against the Layout panel, which is the one thing this widget must not
+   do. */
+[data-region] > .hmi-navmenu {
+  background: var(--hmi-surface);
+  border-right: 1px solid var(--hmi-border);
+}
+
+.hmi-navmenu__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 36px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--hmi-border);
+  color: var(--hmi-text-muted);
+  cursor: pointer;
+  font-size: var(--hmi-type-subheading-size);
+  flex-shrink: 0;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+
+.hmi-navmenu__toggle:hover {
+  background: var(--hmi-surface-3);
+  color: var(--hmi-text);
+}
+
+.hmi-navmenu__toggle:active {
+  background: var(--hmi-accent-soft);
+}
+
+.hmi-navmenu__toggle:focus-visible,
+.hmi-navmenu__link:focus-visible,
+.hmi-navmenu__expand:focus-visible {
+  outline: 2px solid var(--hmi-accent);
+  outline-offset: -2px;
+}
+
+.hmi-navmenu__link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--hmi-space-md);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--hmi-space-md);
+  border: none;
+  border-radius: var(--hmi-radius-sm);
+  background: none;
+  color: var(--hmi-text-2);
+  text-decoration: none;
+  text-align: left;
+  font-size: var(--hmi-type-body-size);
+  font-weight: var(--hmi-type-subheading-weight);
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--hmi-motion-fast) ease,
+    color var(--hmi-motion-fast) ease;
+}
+
+.hmi-navmenu__group-row {
+  display: flex;
+  align-items: stretch;
+}
+
+.hmi-navmenu__group-row .hmi-navmenu__link {
+  flex: 1;
+}
+
+.hmi-navmenu__expand {
+  width: 28px;
+  border: none;
+  border-left: 1px solid var(--hmi-border);
+  background: none;
+  color: var(--hmi-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+
+.hmi-navmenu__expand:hover {
+  background: var(--hmi-surface-3);
+  color: var(--hmi-text);
+}
+
+.hmi-navmenu__expand:active {
+  background: var(--hmi-accent-soft);
+}
+
+.hmi-navmenu__link--child {
+  --hmi-menu-depth-indent: 1;
+  padding-left: calc(var(--hmi-space-md) + (var(--hmi-menu-depth-indent) * var(--hmi-space-lg)));
+}
+
+.hmi-navmenu__link--child[data-depth='1'] {
+  --hmi-menu-depth-indent: 1;
+}
+
+.hmi-navmenu__link--child[data-depth='2'] {
+  --hmi-menu-depth-indent: 2;
+}
+
+.hmi-navmenu__link--child[data-depth='3'] {
+  --hmi-menu-depth-indent: 3;
+}
+
+.hmi-navmenu__link--child[data-depth='4'] {
+  --hmi-menu-depth-indent: 4;
+}
+
+.hmi-navmenu__link--child[data-depth='5'] {
+  --hmi-menu-depth-indent: 5;
+}
+
+.hmi-navmenu--collapsed .hmi-navmenu__link {
+  justify-content: center;
+  padding: var(--hmi-space-md) 0;
+}
+
+.hmi-navmenu--collapsed .hmi-navmenu__expand,
+.hmi-navmenu--collapsed .hmi-navmenu__section {
+  display: none;
+}
+
+.hmi-navmenu__link:hover {
+  background: var(--hmi-surface-3);
+  color: var(--hmi-text);
+}
+
+.hmi-navmenu__link:active {
+  background: var(--hmi-accent-soft);
+}
+
+.hmi-navmenu__link--active {
+  color: var(--hmi-accent-ink);
+  background: var(--hmi-accent-soft);
+}
+
+/* Left-border variant: a bar inset from the pill's rounded corners rather than
+   a border, which would square the row off. */
+.hmi-navmenu__link--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: var(--hmi-space-md);
+  bottom: var(--hmi-space-md);
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--hmi-accent);
+}
+
+.hmi-navmenu__link--active:hover {
+  background: var(--hmi-accent-soft);
+  color: var(--hmi-accent-ink);
+}
+
+.hmi-navmenu__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 21px;
+  height: 21px;
+  color: currentcolor;
+  flex-shrink: 0;
+}
+
+/* The `first-letter` icon strategy has no glyph to lean on, so the initial
+   keeps the tile treatment. */
+.hmi-navmenu__icon--letter {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--hmi-radius-sm);
+  background: var(--hmi-surface-3);
+  color: var(--hmi-text-2);
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-heading-weight);
+  transition:
+    background var(--hmi-motion-fast) ease,
+    color var(--hmi-motion-fast) ease;
+}
+
+.hmi-navmenu__link--active .hmi-navmenu__icon--letter {
+  background: var(--hmi-accent);
+  color: var(--hmi-accent-on);
+}
+
+.hmi-navmenu__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+  opacity: 1;
+  transition:
+    max-width 0.2s ease,
+    opacity 0.15s ease;
+  flex: 1;
+}
+
+.hmi-navmenu--collapsed .hmi-navmenu__title {
+  max-width: 0;
+  opacity: 0;
+}
+
+/* ── Active style variants ─────────────────────────────────────────────── */
+.hmi-navmenu__link--active-bg {
+  background: var(--hmi-accent-soft);
+}
+
+.hmi-navmenu__link--active-underline {
+  background: transparent;
+  box-shadow: inset 0 -2px 0 0 var(--hmi-accent);
+}
+
+.hmi-navmenu__link--active-bg::before,
+.hmi-navmenu__link--active-underline::before {
+  display: none;
+}
+
+/* ── Horizontal orientation (top-bar layout) ───────────────────────────── */
+.hmi-navmenu--horizontal {
+  flex-direction: row;
+  height: auto;
+  align-items: stretch;
+  border-right: none;
+  border-bottom: 1px solid var(--hmi-border);
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.hmi-navmenu--horizontal .hmi-navmenu__link {
+  width: auto;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  min-height: 36px;
+  padding: var(--hmi-space-sm) var(--hmi-space-lg);
+}
+
+.hmi-navmenu--horizontal .hmi-navmenu__link--active {
+  border-bottom-color: var(--hmi-accent);
+}
+
+.hmi-navmenu--horizontal .hmi-navmenu__link--active::before,
+.hmi-navmenu__flyout .hmi-navmenu__link--active::before {
+  display: none;
+}
+
+.hmi-navmenu--horizontal .hmi-navmenu__group-row {
+  align-items: center;
+}
+
+.hmi-navmenu--horizontal .hmi-navmenu__expand {
+  border-left: none;
+}
+
+/* ── Search box ────────────────────────────────────────────────────────── */
+.hmi-navmenu__search {
+  margin: var(--hmi-space-snug) var(--hmi-space-sm) var(--hmi-space-tight);
+  height: 28px;
+  padding: 0 var(--hmi-space-sm);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius-sm);
+  background: var(--hmi-surface-2);
+  color: var(--hmi-text);
+  font-size: var(--hmi-type-caption-size);
+}
+
+.hmi-navmenu__search:focus {
+  outline: none;
+  border-color: var(--hmi-accent);
+}
+
+/* ── Manual-mode item types ────────────────────────────────────────────── */
+.hmi-navmenu__divider {
+  height: 1px;
+  margin: var(--hmi-space-snug) var(--hmi-space-md);
+  background: var(--hmi-border);
+}
+
+.hmi-navmenu__section {
+  padding: var(--hmi-space-md) var(--hmi-space-md) var(--hmi-space-snug);
+  font-family: var(--hmi-type-label-font);
+  font-size: var(--hmi-type-label-size);
+  font-weight: var(--hmi-type-label-weight);
+  color: var(--hmi-text-4);
+  text-transform: var(--hmi-type-label-transform);
+  letter-spacing: var(--hmi-type-label-tracking);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* ── Flyout submenu panel ──────────────────────────────────────────────── */
+.hmi-navmenu__flyout {
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: var(--hmi-space-tight) 0;
+  background: var(--hmi-surface);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius);
+  box-shadow: var(--hmi-modal-shadow);
+  z-index: var(--hmi-z-popup);
+}
+
+.hmi-navmenu__flyout .hmi-navmenu__link {
+  border-radius: 0;
+}
+
+/* ── Footer slot (renders at the bottom of the menu) ───────────────────── */
+.hmi-navmenu__footer {
+  margin-top: auto;
+  padding: var(--hmi-space-sm) var(--hmi-space-sm) var(--hmi-space-md);
+  border-top: 1px solid var(--hmi-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-snug);
+}
+
+/* Chrome only, for the same reason as the rule above: the width the sidebar
+   used to pin at each breakpoint is the author's to set from the Layout panel.
+   Leaving those pins behind is what made a region-hosted menu hug above
+   1024px and then jump to a hard 176px below it. */
+@media (max-width: 768px) {
+  [data-region] > .hmi-navmenu {
+    max-height: 220px;
+    border-right: none;
+    border-bottom: 1px solid var(--hmi-border);
+  }
+
+  [data-region] > .hmi-navmenu.hmi-navmenu--collapsed {
+    max-height: 42px;
+    overflow: hidden;
+  }
+
+  .hmi-navmenu__toggle {
+    height: 42px;
+  }
+}

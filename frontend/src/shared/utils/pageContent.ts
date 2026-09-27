@@ -30,7 +30,7 @@ export function mapPageSections(
  *
  * Differs from `replacePageSectionWidgets`, which slices positionally using
  * previous section sizes — that variant is for operations that don't preserve
- * widget identity through the call (e.g. `moveNodeToContainer`).
+ * widget identity through the call (e.g. `mapAllAreas`).
  */
 export function distributeToSections(
   page: PageConfig,
@@ -69,7 +69,7 @@ export function appendToSection(
  * section keys/order. Slices positionally: section i takes its previous size's
  * worth of widgets, and the last section absorbs any excess.
  *
- * Used by `configStore.reorderChildren`, `moveNodeToContainer`, and `_mapAllAreas`
+ * Used by `configStore.reorderChildren` and `mapAllAreas`
  * — call sites where the input list is the *new* flat content for the page and
  * the prior id→section map can't be trusted (widgets may have moved into the
  * page from elsewhere). Use `distributeToSections` instead when the input

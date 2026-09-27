@@ -37,7 +37,7 @@ describe('ButtonRow', () => {
     vi.clearAllMocks();
     __resetForTests();
     useVariableStore.setState({ values: {}, varMeta: {} });
-    useHmiStore.setState({ openDialogs: [], pendingToasts: [] });
+    useHmiStore.setState({ openPageOverlays: [], pendingToasts: [] });
     useComponentPropStore.setState({ props: {} });
   });
 
@@ -101,12 +101,12 @@ describe('ButtonRow', () => {
     const user = userEvent.setup();
     renderRow({
       options: OPTIONS,
-      onChange: { onChange: [{ type: 'openDialog', dialogId: 'confirm' }] },
+      onChange: { onChange: [{ type: 'openPageOverlay', pageId: 'confirm' }] },
     });
 
     await user.click(screen.getByRole('button', { name: 'Manual' }));
 
-    expect(useHmiStore.getState().openDialogs.map((d) => d.id)).toContain('confirm');
+    expect(useHmiStore.getState().openPageOverlays.map((o) => o.pageId)).toContain('confirm');
   });
 
   it('ignores clicks while disabled', async () => {

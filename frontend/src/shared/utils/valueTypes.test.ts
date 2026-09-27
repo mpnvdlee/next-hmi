@@ -13,13 +13,43 @@ import {
   primaryType,
   acceptedValueTypes,
   EDITOR_KINDS,
+  ITEM_LIST_ACCEPTS,
 } from './valueTypes';
 import editorKindsFixture from '../types/__fixtures__/editorKinds.json';
+import itemListAcceptsFixture from '../types/__fixtures__/itemListAccepts.json';
+import editorKindAcceptsFixture from '../types/__fixtures__/editorKindAccepts.json';
 
 describe('EDITOR_KINDS', () => {
   it('matches the shared fixture also read by backend/core/validation/structure.py', () => {
     expect([...EDITOR_KINDS]).toEqual(editorKindsFixture);
   });
+});
+
+describe('item-list', () => {
+  it('matches the shared fixture also read by backend/core/validation/structure.py', () => {
+    expect([...ITEM_LIST_ACCEPTS]).toEqual(itemListAcceptsFixture);
+  });
+
+  it('accepts every array without the field listing them', () => {
+    expect(acceptedValueTypes('item-list')).toEqual([...ITEM_LIST_ACCEPTS]);
+    expect(acceptedValueTypes(['item-list', 'Float[]'])).toEqual([
+      'Float[]',
+      ...ITEM_LIST_ACCEPTS.filter((t) => t !== 'Float[]'),
+    ]);
+  });
+});
+
+describe('editor-kind binding accepts', () => {
+  // Same fixture drives backend/tests/test_structure_parity.py.
+  for (const c of editorKindAcceptsFixture as {
+    name: string;
+    type: string | string[];
+    accepts: string[];
+  }[]) {
+    it(c.name, () => {
+      expect(acceptedValueTypes(c.type)).toEqual(c.accepts);
+    });
+  }
 });
 
 describe('toSimpleType', () => {
@@ -98,12 +128,14 @@ describe('classifier', () => {
     expect(isEditorKind('color')).toBe(true);
     expect(isEditorKind('option-list')).toBe(true);
     expect(isEditorKind('integer')).toBe(false);
+    expect(isEditorKind('Color')).toBe(true);
     // A named struct is neither scalar nor editor kind.
     expect(isStructType('Alarms[]')).toBe(true);
     expect(isStructType('Motor')).toBe(true);
     expect(isStructType('struct')).toBe(true);
     expect(isStructType('float')).toBe(false);
     expect(isStructType('color')).toBe(false);
+    expect(isStructType('Color')).toBe(false);
   });
 
   it('isNumericType', () => {
@@ -125,7 +157,8 @@ describe('classifier', () => {
       'string[]',
       'integer[]',
     ]);
-    expect(acceptedValueTypes('color')).toEqual([]);
+    expect(acceptedValueTypes('color')).toEqual(['String']);
+    expect(acceptedValueTypes('actions')).toEqual([]);
     expect(acceptedValueTypes(['float', 'integer', 'boolean'])).toEqual([
       'float',
       'integer',

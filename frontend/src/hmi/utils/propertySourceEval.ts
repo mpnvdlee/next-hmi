@@ -7,6 +7,7 @@ import { imageBodyToUrl } from '@shared/utils/imageAsset';
 import { withBase } from '@shared/utils/runtimeBase';
 import { resolveComponentPropKey } from './componentPropResolution';
 import { toNumber } from './coercion';
+import { evaluateFormula, parseFormula } from './formula';
 
 /**
  * Evaluates `$`-prefixed property sources. The dispatch table at
@@ -56,8 +57,8 @@ export interface EvaluationContext {
    */
   resolveHttpRequest?: (spec: HttpRequestSpec) => HttpEntry | undefined;
   /**
-   * Innermost input scope (widget/dialog) at the read site. Drives `$componentProp`
-   * resolution: top-level references in component property
+   * Innermost input scope (component instance/page overlay) at the read site.
+   * Drives `$componentProp` resolution: top-level references in component property
    * bags are pre-resolved by `useResolvedProperties`; this is what catches
    * references nested inside other sources and inside action payloads.
    */
@@ -69,6 +70,14 @@ export interface EvaluationContext {
    * `$result` source resolves to `null` then).
    */
   resultValue?: Record<string, unknown>;
+  /**
+   * The surrounding Repeater copy, when there is one. Widget properties have
+   * their repeat references substituted before they get here (see
+   * `useResolvedProperties`); this catches the rest — values read straight off
+   * an eval context, like an action's payload.
+   */
+  resolveRepeatItem?: (payload: unknown) => unknown;
+  repeatIndex?: number;
 }
 
 const MAX_SOURCE_RECURSION_DEPTH = 64;
@@ -88,6 +97,8 @@ const SOURCE_HANDLERS: Record<string, SourceHandler> = {
   $pageIsActive: (payload, ctx) => evaluatePageIsActive(payload, ctx),
   $if: (payload, ctx, d) => evaluateIf(payload, ctx, d),
   $compare: (payload, ctx, d) => evaluateCompare(payload, ctx, d),
+  $not: (payload, ctx, d) => evaluateNot(payload, ctx, d),
+  $formula: (payload, ctx, d) => evaluateFormulaSource(payload, ctx, d),
   $random: (payload) => evaluateRandom(payload),
   $switch: (payload, ctx, d) => evaluateSwitch(payload, ctx, d),
   $user: (payload, ctx) => evaluateUser(payload, ctx),
@@ -96,6 +107,10 @@ const SOURCE_HANDLERS: Record<string, SourceHandler> = {
   $time: (payload, ctx) => evaluateTime(payload, ctx),
   $widgetProp: (payload, ctx) => evaluateWidgetProp(payload, ctx),
   $componentProp: (payload, ctx, depth) => evaluateComponentProp(payload, ctx, depth),
+  $repeatItem: (payload, ctx, depth) =>
+    ctx.resolveRepeatItem
+      ? evaluatePropertyValueInternal(ctx.resolveRepeatItem(payload), ctx, depth)
+      : null,
   $result: (payload, ctx) => evaluateResult(payload, ctx),
   $stringExpr: (payload, ctx, d) => evaluateStringExpr(payload, ctx, d),
   $http: (payload, ctx, d) => evaluateHttp(payload, ctx, d),
@@ -159,8 +174,9 @@ function evaluatePropertyValueInternal(
 
 /**
  * Looks up `payload` against `context.inputScopeProps` (published by the
- * surrounding widget/dialog) and recursively evaluates the result, so a `$var`
- * parent or a `key/sub/path` extension resolves to a live value.
+ * surrounding component instance/page overlay) and recursively evaluates the
+ * result, so a `$var` parent or a `key/sub/path` extension resolves to a live
+ * value.
  */
 function evaluateComponentProp(
   payload: unknown,
@@ -198,7 +214,12 @@ function evaluateVar(varObj: unknown, context: EvaluationContext): ResolvedValue
 
   const v = varObj as Record<string, unknown>;
   const composite = v.path as string | undefined;
-  const index = typeof v.index === 'number' ? v.index : undefined;
+  const index =
+    v.repeatIndex === true
+      ? context.repeatIndex
+      : typeof v.index === 'number'
+        ? v.index
+        : undefined;
 
   if (!composite || !context.resolveVariable) {
     return null;
@@ -268,19 +289,33 @@ function evaluatePageIsActive(pageObj: unknown, context: EvaluationContext): Res
   return context.isPageActive(targetId);
 }
 
+/**
+ * The raw result a `$if` / `$switch` picks in `context` — the branch the
+ * evaluator goes on to evaluate — or `undefined` when `value` is neither
+ * source, or picks a branch that is not there.
+ */
+export function takenBranch(value: unknown, context: EvaluationContext = {}): unknown {
+  if (!isRecord(value)) return undefined;
+  const sourceKey = Object.keys(value).find((k) => k.startsWith('$'));
+  const depth = MAX_SOURCE_RECURSION_DEPTH - 1;
+  if (sourceKey === '$if') return pickIfBranch(value.$if, context, depth);
+  if (sourceKey === '$switch') return pickSwitchBranch(value.$switch, context, depth);
+  return undefined;
+}
+
+function pickIfBranch(ifObj: unknown, context: EvaluationContext, depth: number): unknown {
+  if (typeof ifObj !== 'object' || ifObj === null) return undefined;
+  const i = ifObj as Record<string, unknown>;
+  // Evaluate condition and coerce to boolean
+  const condResult = evaluatePropertyValueInternal(i.condition, context, depth);
+  return condResult ? i.true : i.false;
+}
+
 function evaluateIf(ifObj: unknown, context: EvaluationContext, depth: number): ResolvedValue {
   if (typeof ifObj !== 'object' || ifObj === null) {
     return null;
   }
-
-  const i = ifObj as Record<string, unknown>;
-  const condition = i.condition;
-  const trueValue = i.true;
-  const falseValue = i.false;
-
-  // Evaluate condition and coerce to boolean
-  const condResult = evaluatePropertyValueInternal(condition, context, depth);
-  return evaluatePropertyValueInternal(condResult ? trueValue : falseValue, context, depth);
+  return evaluatePropertyValueInternal(pickIfBranch(ifObj, context, depth), context, depth);
 }
 
 /**
@@ -340,6 +375,29 @@ function evaluateCompare(
   }
 }
 
+function evaluateNot(payload: unknown, context: EvaluationContext, depth: number): ResolvedValue {
+  if (!isRecord(payload)) return null;
+  const value = evaluatePropertyValueInternal(payload.value, context, depth);
+  if (typeof value === 'boolean') return !value;
+  // PLCs often expose a flag as a 0/1 integer.
+  if (typeof value === 'number' && !isNaN(value)) return value === 0;
+  return null;
+}
+
+function evaluateFormulaSource(
+  payload: unknown,
+  context: EvaluationContext,
+  depth: number,
+): ResolvedValue {
+  if (!isRecord(payload) || typeof payload.expression !== 'string') return null;
+  const node = parseFormula(payload.expression);
+  if (!node) return null;
+  const wildcards = wildcardsOf(payload);
+  return evaluateFormula(node, (key) =>
+    toNumber(evaluatePropertyValueInternal(wildcards[key], context, depth)),
+  );
+}
+
 function evaluateRandom(randObj: unknown): ResolvedValue {
   if (typeof randObj !== 'object' || randObj === null) {
     return null;
@@ -359,6 +417,22 @@ function evaluateRandom(randObj: unknown): ResolvedValue {
   return integer ? Math.round(value) : value;
 }
 
+function pickSwitchBranch(switchObj: unknown, context: EvaluationContext, depth: number): unknown {
+  if (typeof switchObj !== 'object' || switchObj === null) return undefined;
+  const s = switchObj as Record<string, unknown>;
+  const switchValue = evaluatePropertyValueInternal(s.value, context, depth);
+  const cases = (s.cases ?? []) as Array<Record<string, unknown>>;
+
+  // Find matching case (numeric coercion: 5 matches "5")
+  for (const c of cases) {
+    const caseValue = evaluatePropertyValueInternal(c.when, context, depth);
+    if (looseEquals(caseValue, switchValue)) return c.then;
+  }
+
+  // No match — return default
+  return s.default;
+}
+
 function evaluateSwitch(
   switchObj: unknown,
   context: EvaluationContext,
@@ -367,22 +441,7 @@ function evaluateSwitch(
   if (typeof switchObj !== 'object' || switchObj === null) {
     return null;
   }
-
-  const s = switchObj as Record<string, unknown>;
-  const switchValue = evaluatePropertyValueInternal(s.value, context, depth);
-  const cases = (s.cases ?? []) as Array<Record<string, unknown>>;
-  const defaultValue = s.default;
-
-  // Find matching case (numeric coercion: 5 matches "5")
-  for (const c of cases) {
-    const caseValue = evaluatePropertyValueInternal(c.when, context, depth);
-    if (looseEquals(caseValue, switchValue)) {
-      return evaluatePropertyValueInternal(c.then, context, depth);
-    }
-  }
-
-  // No match — return default
-  return evaluatePropertyValueInternal(defaultValue, context, depth);
+  return evaluatePropertyValueInternal(pickSwitchBranch(switchObj, context, depth), context, depth);
 }
 
 function evaluateWidgetProp(propObj: unknown, context: EvaluationContext): ResolvedValue {

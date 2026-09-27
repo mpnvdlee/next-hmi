@@ -35,10 +35,12 @@ The two runtime operations are **download** — writing a dataset's values to th
 
 The two operations are ordinary [actions](actions.md#machine) — put **Recipe: Load** and **Recipe: Save** on a Button, with the dataset either fixed or bound, and `onSuccess` / `onFailed` handlers to tell the operator how it went. **Verify** on a load reads the values back and fails the action if they didn't take.
 
-What has no built-in widget is the *selection* UI — the grid of saved datasets — because what a recipe screen should look like varies too much between plants. Build that as a [custom widget](custom-widgets.md), which is a short job with the pieces the SDK hands you:
+There is no dedicated recipe-picker widget, because what a recipe screen should look like varies too much between plants. Build the list of saved datasets from a [Repeater](properties.md#repeating-widgets-over-an-array-repeater) instead: set its **Items** to the saved recipes and lay out one row. Each row's element carries `id`, `name`, `description` and `lastLoaded`; type the member into a **Repeat Item** field — Labels showing `name` and `description`, and a Button whose **Recipe: Load** takes its **Dataset** from `id`. Read **`$recipe`** beside it for the loaded recipe's name, or to flag *Parameters changed*.
+
+For a screen that needs more than that, write a [custom widget](custom-widgets.md) — a short job with the pieces the SDK hands you:
 
 - Bind a `record-list` field to the **`$recipeList`** source for the grid of saved datasets.
 - Read state with **`$recipe`** — *Loaded recipe name* (`activeName`), *Is loaded* (`loaded`), or *Parameters changed* (`parametersChanged`, true when live values have drifted from the loaded set).
 - Call **`recipeDownload(datasetId)`** and **`recipeUpload(datasetId)`** from your buttons, and read the configuration with `useRecipeConfig` / `useRecipeState`.
 
-The same two operations are also available over REST at `POST /api/recipes/datasets/{id}/download` and `/upload`, which is the route to take from an external MES or scheduler.
+The same two operations are also available over REST at `POST /api/recipes/datasets/{id}/download` and `/upload`, which is the route to take from an external MES or scheduler. A download honours the same per-variable write permissions as a button does: a parameter bound to a variable you [restricted to a group](users.md) is skipped with `permission_denied` unless the request carries the credentials of a user in that group.

@@ -11,7 +11,11 @@ Hardened against zip-bomb size exhaustion (cap via
 absolute-path entries, and symlink members.
 
 ``widget-build/`` is intentionally skipped during pack — the receiver
-rebuilds it from sources after applying the archive.
+rebuilds it from sources after applying the archive. So is ``.backups/``,
+where ``core.project_migrations`` writes its pre-migration zips: those are one
+installation's history of the project rather than part of it, and packing them
+would nest every past backup inside every later one. So is ``certs/``, which
+holds an OPC-UA private key.
 """
 from __future__ import annotations
 
@@ -42,8 +46,28 @@ ProgressCallback = Callable[[int, int], None]
 DEFAULT_MAX_ZIP_MB = 500
 _CHUNK = 64 * 1024
 
+# Where core.project_migrations leaves its pre-migration zips. Defined here
+# because this is the module that has to skip it.
+BACKUPS_SUBDIR = ".backups"
+
+# The OPC-UA certificate folder. Skipped during pack: it holds the client's
+# *private key*, which a project zip reaches every export, template and peer
+# transfer with. Excluded wholesale rather than by filename, because an
+# operator-uploaded key keeps whatever name it was uploaded under. The client
+# pair regenerates on the receiver's first connect, and a per-installation
+# certificate identity is what a PLC's trust list wants anyway.
+CERTS_SUBDIR = "certs"
+
 # Folder names skipped during pack — relative to the project root.
-_SKIP_TOPLEVEL = frozenset({"widget-build", ".widget-build"})
+_SKIP_TOPLEVEL = frozenset(
+    {"widget-build", ".widget-build", BACKUPS_SUBDIR, CERTS_SUBDIR}
+)
+
+# The credentials document the manager and supervisor both require before they
+# will open a project. Enforced on unpack only: exporting a damaged project so
+# it can be repaired elsewhere stays possible, installing one that could never
+# start does not.
+USERS_FILENAME = "users.json"
 
 # Historian state files that are installation-local and should not travel with
 # a pushed/exported project. Matched by suffix anywhere under ``historian/``.
@@ -83,7 +107,7 @@ def max_zip_bytes() -> int:
 
 
 def _iter_pack_files(project_root: Path) -> Iterable[Path]:
-    """Walk the project tree, pruning ``widget-build/`` and skipping symlinks."""
+    """Walk the project tree, pruning ``_SKIP_TOPLEVEL`` and skipping symlinks."""
     for root, dirs, files in os.walk(project_root, followlinks=False):
         root_path = Path(root)
         rel_root = root_path.relative_to(project_root)
@@ -110,7 +134,8 @@ def pack_project(
     """Stream the project tree into ``output`` as a zip.
 
     ``ensure_project_metadata`` is called first so a never-registered project
-    still ships with a stable id. Skips ``widget-build/`` and symlinks.
+    still ships with a stable id. Skips ``widget-build/``, ``.backups/``,
+    ``certs/`` and symlinks.
     """
     if not project_root.is_dir():
         raise FileNotFoundError(f"Project root does not exist: {project_root}")
@@ -175,7 +200,9 @@ def unpack_project(
     The destination is created if missing. Raises ``UnsafeArchiveError`` on
     path traversal, symlink members, or size cap exceeded. Returns the parsed
     project metadata after extraction; raises if the archive's
-    ``config.json`` lacks a ``project`` block.
+    ``config.json`` lacks a ``project`` block, or if it carries no
+    ``users.json`` — ``pack_project`` mints metadata for a content-less folder,
+    so the metadata block alone does not prove the archive holds a project.
     """
     destination.mkdir(parents=True, exist_ok=True)
     destination_resolved = destination.resolve()
@@ -228,6 +255,11 @@ def unpack_project(
         raise UnsafeArchiveError(
             f"Unpacked archive at {destination} has no project metadata "
             f"(missing or empty `project` block in {PROJECT_CONFIG_FILENAME}).",
+        )
+    if not (destination / USERS_FILENAME).is_file():
+        raise UnsafeArchiveError(
+            f"Archive carries no {USERS_FILENAME}, so the project has no "
+            "credentials and could not be started once installed.",
         )
     try:
         violations = scan_project_component_bindings(destination)

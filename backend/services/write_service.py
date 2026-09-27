@@ -6,11 +6,14 @@ coerce → dispatch → write implementation. Handles scalars *and* whole-array
 values, static and OPC-UA datasources, optional verify read-back, and returns a
 structured :class:`WriteOutcome` with an error reason on failure.
 
-Permission checks are intentionally *not* here — they depend on per-client
-identity and stay with the caller (the WebSocket handler / recipe WS handler).
-Auditing sits with them for the same reason, and one more: a recipe download
-reaches this module with no operator behind it, so a record emitted here could
-not say who to attribute the write to.
+The one *rule* every write caller applies — ``write_permitted``, and the
+``write_permission_gate`` that binds it to an identity for a whole recipe
+download — lives here so the callers cannot drift apart. Resolving *which*
+identity is still theirs: it comes from a per-connection session (the WebSocket
+handlers) or from credentials on a request (the REST write endpoints), neither
+of which this module can see. Auditing sits with them for the same reason, and
+one more: a recipe download reaches this module with no operator behind it, so a
+record emitted here could not say who to attribute the write to.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from __future__ import annotations
 import math
 import re
 import struct
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
@@ -38,6 +42,8 @@ REASON_VERIFY_MISMATCH = "verify_mismatch"
 REASON_ARRAY_INDEX_OUT_OF_BOUNDS = "array_index_out_of_bounds"
 REASON_ARRAY_STATE_UNAVAILABLE = "array_state_unavailable"
 REASON_VALUE_OUT_OF_RANGE = "value_out_of_range"
+REASON_VALUE_UNAVAILABLE = "value_unavailable"
+REASON_READ_ONLY = "read_only"
 
 
 @dataclass
@@ -68,6 +74,24 @@ def parse_write_request(payload: Any) -> tuple[str, str, str | None, Any] | None
     return datasource, path, field, payload["value"]
 
 
+def parse_toggle_request(payload: Any) -> tuple[str, str] | None:
+    """Validate a toggle envelope — a write that carries no value of its own."""
+    if not isinstance(payload, dict):
+        return None
+    datasource = payload.get("datasource")
+    path = payload.get("path")
+    if (
+        not isinstance(datasource, str)
+        or not datasource.strip()
+        or datasource != datasource.strip()
+        or not isinstance(path, str)
+        or not path.strip()
+        or path != path.strip()
+    ):
+        return None
+    return datasource, path
+
+
 def write_permitted(identity: Any, entry_data: Any) -> bool:
     """Apply the one identity/group rule used by every operator write caller."""
     if not isinstance(entry_data, dict):
@@ -79,6 +103,28 @@ def write_permitted(identity: Any, entry_data: Any) -> bool:
     user_groups = {group for group in groups if isinstance(group, str)}
     allowed_groups = {group for group in interactable_groups if isinstance(group, str)}
     return bool(user_groups & allowed_groups)
+
+
+def write_permission_gate(
+    identity: Any, datasource_manager: Any,
+) -> Callable[[str, str], bool]:
+    """Bind one identity to the per-variable ACL, as ``(datasource, path) -> bool``.
+
+    The shape ``recipe_manager.download`` takes as ``permission_check``. Both
+    download entry points build their gate here — the WebSocket ``recipeLoad``
+    handler and ``POST /api/recipes/datasets/{id}/download`` — so the two cannot
+    drift into enforcing different rules on the same write.
+    """
+
+    def permitted(ds_name: str, base_path: str) -> bool:
+        entry_data = (
+            datasource_manager.get_entry(ds_name, base_path)
+            if datasource_manager is not None
+            else None
+        )
+        return write_permitted(identity, entry_data)
+
+    return permitted
 
 
 def array_registry_path(path: str) -> str:
@@ -156,6 +202,52 @@ COERCION_INVALID_STRING = "invalid_string"
 COERCION_INVALID_TEMPORAL = "invalid_temporal"
 COERCION_FLOAT_RANGE = "float_out_of_range"
 COERCION_INVALID_DESCRIPTOR = "invalid_descriptor"
+
+# What the editor tells an author about a rejected value, per reason. Mirrors
+# WRITE_COERCION_MESSAGES in frontend/src/shared/utils/opcuaWriteCoercion.ts
+# (parity: writeCoercionMessages.json).
+COERCION_MESSAGES: dict[str, str] = {
+    COERCION_NULL_NOT_ALLOWED: "A value is required.",
+    COERCION_UNKNOWN_TYPE: "The target variable's type is not known.",
+    COERCION_SCALAR_REQUIRED: "Expected a single value, not an array.",
+    COERCION_ARRAY_REQUIRED: "Expected an array.",
+    COERCION_ARRAY_LENGTH: "The array has the wrong number of elements.",
+    COERCION_INVALID_BOOLEAN: "Expected a Boolean (true or false).",
+    COERCION_INVALID_INTEGER: "Expected an Integer.",
+    COERCION_INTEGER_RANGE: "The Integer is out of range for this variable.",
+    COERCION_LOSSY: "This number cannot be stored exactly in this variable.",
+    COERCION_INVALID_FLOAT: "Expected a Float.",
+    COERCION_NON_FINITE: "Expected a finite Float.",
+    COERCION_INVALID_STRING: "Expected a String.",
+    COERCION_INVALID_TEMPORAL: "Expected a DateTime, Date or Time in ISO format.",
+    COERCION_FLOAT_RANGE: "The Float is out of range for this variable.",
+    COERCION_INVALID_DESCRIPTOR: "The target variable's type description is invalid.",
+    REASON_ARRAY_INDEX_OUT_OF_BOUNDS: "The element index is outside the array.",
+    REASON_VALUE_OUT_OF_RANGE: "The value is outside the variable's configured range.",
+}
+
+
+def canonical_data_type(data_type: Any) -> str | None:
+    """The write path's name for a variable's OPC-UA type (`int16`, `boolean`,
+    …), or None for a type it cannot write."""
+    return _CANONICAL_TYPE_ALIASES.get(data_type.strip().lower()) if isinstance(data_type, str) else None
+
+
+def value_out_of_range(value: Any, entry_data: dict[str, Any]) -> bool:
+    """Whether a coerced value falls outside the entry's configured min/max —
+    the check ``write_value`` applies after coercion."""
+    bounds = _range_bounds(entry_data)
+    if bounds is None:
+        return False
+    values = value if isinstance(value, list) else [value]
+    return not all(_in_range(v, bounds) for v in values)
+
+
+def is_writable(entry_data: dict[str, Any]) -> bool:
+    """Whether a variable accepts writes: its own ``writable`` flag, and only
+    when it says so — the same reading the variable metadata gives the editor
+    and the runtime binding check."""
+    return entry_data.get("writable") is True
 
 
 class WriteCoercionError(ValueError):
@@ -512,7 +604,9 @@ async def write_value(
 ) -> WriteOutcome:
     """Coerce and write *value* to ``ds_name:path``.
 
-    Static datasources are updated in memory; OPC-UA datasources are written via
+    The variable actually written — the element's array, the struct member —
+    must be writable; one that is not is refused as ``read_only``. Static
+    datasources are updated in memory; OPC-UA datasources are written via
     the pool engine. When *verify* is set, the value is read back and compared
     for exact equality (per-element for arrays).
     """
@@ -544,11 +638,11 @@ async def write_value(
     except ValueError:
         return WriteOutcome(False, REASON_INVALID_VALUE)
 
-    bounds = _range_bounds(coercion_entry)
-    if bounds is not None:
-        checked_values = coerced if isinstance(coerced, list) else [coerced]
-        if not all(_in_range(v, bounds) for v in checked_values):
-            return WriteOutcome(False, REASON_VALUE_OUT_OF_RANGE)
+    if not is_writable(coercion_entry):
+        return WriteOutcome(False, REASON_READ_ONLY)
+
+    if value_out_of_range(coerced, coercion_entry):
+        return WriteOutcome(False, REASON_VALUE_OUT_OF_RANGE)
 
     ds_entry = datasource_manager.get(ds_name)
     if index_match is not None and ds_entry is not None and ds_entry.ds_type == "static":
@@ -620,6 +714,35 @@ async def write_value(
             return WriteOutcome(False, REASON_VERIFY_MISMATCH)
 
     return WriteOutcome(True)
+
+
+async def toggle_value(
+    datasource_manager: Any,
+    opcua_pool: Any,
+    ds_name: str,
+    path: str,
+) -> tuple[WriteOutcome, bool | None]:
+    """Invert a Boolean variable and return the outcome plus the value written.
+
+    The current value is read here, on the server, rather than sent by the
+    client: an operator panel's copy can be stale (a reconnect, a second panel,
+    a slow subscription), and toggling from it would write the wrong state.
+    """
+    if datasource_manager is None:
+        return WriteOutcome(False, REASON_OPCUA_UNREACHABLE), None
+    entry_data = datasource_manager.get_entry(ds_name, _ARRAY_INDEX_RE.sub("", path))
+    if entry_data is None:
+        return WriteOutcome(False, REASON_BAD_PATH), None
+    data_type = entry_data.get("data_type")
+    if not isinstance(data_type, str) or _CANONICAL_TYPE_ALIASES.get(data_type.strip().lower()) != "boolean":
+        return WriteOutcome(False, REASON_INVALID_VALUE), None
+    if not is_writable(entry_data):
+        return WriteOutcome(False, REASON_READ_ONLY), None
+    current = await read_value(datasource_manager, opcua_pool, ds_name, path)
+    if not isinstance(current, bool):
+        return WriteOutcome(False, REASON_VALUE_UNAVAILABLE), None
+    target = not current
+    return await write_value(datasource_manager, opcua_pool, ds_name, path, target), target
 
 
 async def read_value(

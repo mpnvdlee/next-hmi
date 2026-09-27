@@ -1,0 +1,20 @@
+# Linux desktop entry for NEXT HMI. The build stages this beside the binary as
+# nexthmi.desktop; nothing installs it, because the operator chooses where the
+# folder lives. To get a menu entry and the icon, replace @INSTALL_DIR@ below
+# with the absolute path of this folder and copy the file to
+# ~/.local/share/applications/ (or /usr/share/applications for all users).
+#
+#   sed -i "s|@INSTALL_DIR@|$PWD|g" nexthmi.desktop
+#   cp nexthmi.desktop ~/.local/share/applications/
+#
+# Terminal=true is deliberate: nexthmi is a console server, and the startup
+# banner names the runtime home and the URL the operator needs.
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=NEXT HMI
+Comment=Browser-based HMI with OPC-UA connectivity
+Exec=@INSTALL_DIR@/nexthmi
+Icon=@INSTALL_DIR@/icons/nexthmi-256.png
+Terminal=true
+Categories=Development;Engineering;

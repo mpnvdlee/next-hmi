@@ -24,7 +24,9 @@ export const EDITOR_KINDS = [
   'color',
   'icon',
   'image',
+  'video',
   'option-list',
+  'item-list',
   'actions',
   'groups',
   'image-indicators',
@@ -133,7 +135,9 @@ export const isNumericType = (t: string): boolean => {
 export const baseType = (t: string): string => (t.endsWith('[]') ? t.slice(0, -2) : t);
 export const isArrayType = (t: string): boolean => t.endsWith('[]');
 export const isScalarType = (t: string): boolean => baseType(t).toLowerCase() in CANONICAL_BY_LOWER;
-export const isEditorKind = (t: string): boolean => (EDITOR_KINDS as readonly string[]).includes(t);
+/** Case-insensitive: a schema written in code may spell a kind `'Color'`. */
+export const isEditorKind = (t: string): boolean =>
+  (EDITOR_KINDS as readonly string[]).includes(t.toLowerCase());
 /** A named struct (or array of named struct): not a simple type, not an editor kind. */
 export const isStructType = (t: string): boolean => !isScalarType(t) && !isEditorKind(t);
 
@@ -141,5 +145,27 @@ export const isStructType = (t: string): boolean => !isScalarType(t) && !isEdito
 export const typeList = (t: string | string[]): string[] => (Array.isArray(t) ? t : [t]);
 // Primary entry drives the *editor control*; all non-editor entries form the *binding filter*.
 export const primaryType = (t: string | string[]): string => typeList(t)[0];
-export const acceptedValueTypes = (t: string | string[]): string[] =>
-  typeList(t).filter((x) => !isEditorKind(x));
+/** What an `item-list` field binds to: any array. A field declares just the
+ *  kind, so a custom widget's list cannot miss an element type. Mirrored by
+ *  `_ITEM_LIST_ACCEPTS` in backend/core/validation/structure.py. */
+export const ITEM_LIST_ACCEPTS: readonly string[] = [
+  ...VALUE_TYPES.map((t) => `${t}[]`),
+  'Struct[]',
+];
+/** Editor kinds whose value is a string (a CSS colour, an icon name, an asset
+ *  path), so a `String` variable can drive them. Mirrored by
+ *  `_STRING_BOUND_KINDS` in backend/core/validation/structure.py. */
+const STRING_BOUND_KINDS: readonly string[] = ['color', 'icon', 'image', 'video'];
+/** A field's variable-binding filter: its non-editor types, plus what its
+ *  editor kinds bind to. Empty means any variable fits. Parity with the
+ *  backend: editorKindAccepts.json. */
+export const acceptedValueTypes = (t: string | string[]): string[] => {
+  const list = typeList(t);
+  const kinds = list.filter(isEditorKind).map((x) => x.toLowerCase());
+  const accepted = list.filter((x) => !isEditorKind(x));
+  if (kinds.some((k) => STRING_BOUND_KINDS.includes(k)) && !accepted.some(isScalarType)) {
+    accepted.push('String');
+  }
+  if (!kinds.includes('item-list')) return accepted;
+  return [...accepted, ...ITEM_LIST_ACCEPTS.filter((x) => !accepted.includes(x))];
+};

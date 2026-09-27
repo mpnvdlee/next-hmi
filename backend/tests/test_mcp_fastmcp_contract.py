@@ -1,4 +1,4 @@
-"""FastMCP public-API dependency contract (maintenance-backlog item 13).
+"""FastMCP public-API dependency contract.
 
 Pins the supported ``mcp`` (FastMCP) version and asserts that
 ``mcp_server.scoped`` — the project-scoping layer — registers tools using only

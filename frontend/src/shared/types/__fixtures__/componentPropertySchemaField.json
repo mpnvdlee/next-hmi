@@ -1,0 +1,239 @@
+[
+  {
+    "name": "plain string keeps its attributes",
+    "input": {
+      "type": "string",
+      "label": "Title",
+      "defaultValue": "Pump",
+      "description": "Shown on top"
+    },
+    "output": {
+      "type": "string",
+      "label": "Title",
+      "defaultValue": "Pump",
+      "description": "Shown on top"
+    }
+  },
+  {
+    "name": "writing float",
+    "input": {
+      "type": "float",
+      "label": "Setpoint",
+      "write": true,
+      "min": 0,
+      "max": 100
+    },
+    "output": {
+      "type": "float",
+      "label": "Setpoint",
+      "write": true,
+      "min": 0,
+      "max": 100
+    }
+  },
+  {
+    "name": "select without an option type is a string dropdown",
+    "input": {
+      "type": "select",
+      "label": "Mode",
+      "options": [
+        {
+          "label": "Auto",
+          "value": "auto"
+        }
+      ]
+    },
+    "output": {
+      "type": "string",
+      "label": "Mode",
+      "options": [
+        {
+          "label": "Auto",
+          "value": "auto"
+        }
+      ],
+      "format": "select"
+    }
+  },
+  {
+    "name": "integer select",
+    "input": {
+      "type": "select",
+      "label": "Size",
+      "optionType": "integer",
+      "options": [
+        {
+          "label": "Small",
+          "value": 10
+        }
+      ]
+    },
+    "output": {
+      "type": "integer",
+      "label": "Size",
+      "options": [
+        {
+          "label": "Small",
+          "value": 10
+        }
+      ],
+      "format": "select"
+    }
+  },
+  {
+    "name": "boolean select",
+    "input": {
+      "type": "select",
+      "label": "Direction",
+      "optionType": "boolean"
+    },
+    "output": {
+      "type": "boolean",
+      "label": "Direction",
+      "format": "select"
+    }
+  },
+  {
+    "name": "loc select resolves to string",
+    "input": {
+      "type": "select",
+      "label": "Caption",
+      "optionType": "loc"
+    },
+    "output": {
+      "type": "string",
+      "label": "Caption",
+      "format": "select"
+    }
+  },
+  {
+    "name": "struct schema becomes required fields",
+    "input": {
+      "type": "struct",
+      "label": "Motor",
+      "structSchema": [
+        {
+          "kind": "variable",
+          "name": "fValue",
+          "type": "Float"
+        },
+        {
+          "kind": "variable",
+          "name": "fSetpoint",
+          "type": "Float",
+          "write": true
+        },
+        {
+          "kind": "variable",
+          "name": "sName"
+        },
+        {
+          "kind": "array",
+          "name": "aHistory",
+          "type": "Float"
+        },
+        {
+          "kind": "folder",
+          "name": "stLimits",
+          "children": [
+            {
+              "kind": "variable",
+              "name": "fMax",
+              "type": "Float"
+            }
+          ]
+        },
+        {
+          "kind": "folder",
+          "name": "stEmpty"
+        }
+      ]
+    },
+    "output": {
+      "type": "struct",
+      "label": "Motor",
+      "requiredFields": [
+        {
+          "name": "fValue",
+          "type": "Float"
+        },
+        {
+          "name": "fSetpoint",
+          "type": "Float",
+          "write": true
+        },
+        {
+          "name": "sName"
+        },
+        {
+          "name": "aHistory",
+          "type": "Float[]"
+        },
+        {
+          "name": "stLimits",
+          "requiredFields": [
+            {
+              "name": "fMax",
+              "type": "Float"
+            }
+          ]
+        },
+        {
+          "name": "stEmpty",
+          "requiredFields": []
+        }
+      ]
+    }
+  },
+  {
+    "name": "struct without a schema has no required fields",
+    "input": {
+      "type": "struct",
+      "label": "Anything",
+      "structSchema": []
+    },
+    "output": {
+      "type": "struct",
+      "label": "Anything"
+    }
+  },
+  {
+    "name": "widgets drops everything but its labels",
+    "input": {
+      "type": "widgets",
+      "label": "Body",
+      "description": "Slot",
+      "group": "Layout",
+      "defaultValue": "x",
+      "write": true
+    },
+    "output": {
+      "type": "widgets",
+      "label": "Body",
+      "description": "Slot",
+      "group": "Layout"
+    }
+  },
+  {
+    "name": "array type passes through",
+    "input": {
+      "type": "string[]",
+      "label": "Tags"
+    },
+    "output": {
+      "type": "string[]",
+      "label": "Tags"
+    }
+  },
+  {
+    "name": "actions pass through",
+    "input": {
+      "type": "actions",
+      "label": "On press"
+    },
+    "output": {
+      "type": "actions",
+      "label": "On press"
+    }
+  }
+]

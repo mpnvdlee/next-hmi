@@ -6,8 +6,10 @@ import BoolButtonGroup from '../../../ui/BoolButtonGroup';
 import Select from '../../../ui/Select';
 import PageSelect from '../../../ui/PageSelect';
 import GroupsEditor from '../../PropertiesPanel/GroupsEditor';
-import PathInputField from '../../../ui/PathInputField';
+import PathInputField, { PickerField } from '../../../ui/PathInputField';
+import { REPEAT_INDEX_SUFFIX, repeatPickLabel } from '../../VariableBindingPicker/repeatItemRows';
 import { useResultFields } from '../resultFieldsContext';
+import { useRepeatEditorScope } from '../repeatScopeContext';
 import { varBindingOf } from '../../bindingPickerUtils';
 import type { OpenBindingPicker } from './utils';
 import type {
@@ -17,20 +19,44 @@ import type {
   PageIsActiveSource,
   PageSource,
   RandomSource,
+  RepeatItemSource,
   TimeSource,
   UrlParamSource,
   UserGroupsSource,
   UserSource,
+  VariableBinding,
   VarSource,
   ViewportSource,
 } from '@shared/types/config';
 import { useRecipeConfigStore } from '@config/store/recipeConfigStore';
+import { sourceFieldFits, type FieldSelectingSource } from '@hmi/utils/propertySourceRegistry';
 
 /** Parse a typed `datasource:location[n]` string into a VariableBinding. */
 function parseVarPathInput(text: string): { path: string; index?: number } {
   const trimmed = text.trim();
   const m = trimmed.match(/^(.*)\[(\d+)\]$/);
   return m ? { path: m[1], index: parseInt(m[2], 10) } : { path: trimmed };
+}
+
+/**
+ * The choices of a source's `field` selector that fit the field it sits in.
+ * The stored choice stays listed even when it does not fit — marked, so an
+ * existing value never changes by itself. No `fieldType` lists them all.
+ */
+function fittingFieldOptions<T extends string>(
+  source: FieldSelectingSource,
+  options: readonly { value: T; label: string }[],
+  current: string | undefined,
+  fieldType: string | readonly string[] | undefined,
+): { value: T; label: string }[] {
+  if (!fieldType) return [...options];
+  return options.flatMap((o) =>
+    sourceFieldFits(source, o.value, fieldType)
+      ? [o]
+      : o.value === current
+        ? [{ value: o.value, label: `${o.label} (does not fit this field)` }]
+        : [],
+  );
 }
 
 /**
@@ -47,29 +73,110 @@ export function VarEditor({
   onChange: (v: unknown) => void;
   onOpenBindingPicker?: OpenBindingPicker;
 }) {
+  const repeatScope = useRepeatEditorScope();
   const varObj = (value as VarSource)?.$var ?? { path: '' };
   const basePath = varObj.path ?? '';
-  const committedText =
-    basePath && varObj.index !== undefined ? `${basePath}[${varObj.index}]` : basePath;
+  const repeatIndex = varObj.repeatIndex === true;
+  const committedText = !basePath
+    ? ''
+    : repeatIndex
+      ? `${basePath}${REPEAT_INDEX_SUFFIX}`
+      : varObj.index !== undefined
+        ? `${basePath}[${varObj.index}]`
+        : basePath;
 
   return (
     <PathInputField
       value={committedText}
-      placeholder="datasource:location"
+      placeholder={
+        repeatScope ? `datasource:location${REPEAT_INDEX_SUFFIX}` : 'datasource:location'
+      }
       titleFromDraft
       onCommit={(text) => {
-        const parsed = parseVarPathInput(text);
-        if (parsed.path === basePath && parsed.index === varObj.index) return;
-        onChange({ $var: parsed });
+        const trimmed = text.trim();
+        const next: VariableBinding = trimmed.endsWith(REPEAT_INDEX_SUFFIX)
+          ? { path: trimmed.slice(0, -REPEAT_INDEX_SUFFIX.length), repeatIndex: true }
+          : parseVarPathInput(text);
+        if (
+          next.path === basePath &&
+          next.index === varObj.index &&
+          next.repeatIndex === varObj.repeatIndex
+        )
+          return;
+        onChange({ $var: next });
       }}
       pickTitle="Change variable binding"
       // This field is the innermost slot that knows its own binding, so it names
       // the preselect outright rather than letting an enclosing `wrapPicker`
       // guess from a composite value.
       onPick={
-        onOpenBindingPicker ? () => onOpenBindingPicker(undefined, varBindingOf(value)) : undefined
+        onOpenBindingPicker
+          ? () =>
+              onOpenBindingPicker(
+                undefined,
+                varBindingOf(value),
+                undefined,
+                repeatScope ? { repeatIndex: true } : undefined,
+              )
+          : undefined
       }
       onClear={onOpenBindingPicker && committedText ? () => onChange(undefined) : undefined}
+    />
+  );
+}
+
+/** `$repeatItem` — one line like a variable binding, picked in the binding
+ *  picker beside the variables. Outside a Repeater the validator warns. */
+export function RepeatItemEditor({
+  value,
+  onChange,
+  onOpenBindingPicker,
+}: {
+  value: unknown;
+  onChange: (v: unknown) => void;
+  onOpenBindingPicker?: OpenBindingPicker;
+}) {
+  const scope = useRepeatEditorScope();
+  const obj = (value as RepeatItemSource)?.$repeatItem ?? {};
+  const pick: RepeatItemSource['$repeatItem'] =
+    obj.field === 'index'
+      ? { field: 'index' }
+      : { field: 'value', ...(obj.member && { member: obj.member }) };
+  const openPicker =
+    scope && onOpenBindingPicker
+      ? () =>
+          onOpenBindingPicker(undefined, undefined, undefined, {
+            repeatItem: {
+              scope,
+              current: pick,
+              onPick: (next) => onChange({ $repeatItem: next }),
+            },
+          })
+      : undefined;
+
+  // An element whose shape only the runtime knows (an API response) lists no
+  // members to pick, so its member path is typed here instead.
+  if (scope?.members === null && pick.field === 'value') {
+    return (
+      <PathInputField
+        value={pick.member ?? ''}
+        placeholder="Whole element — or a member, e.g. name"
+        titleFromDraft
+        onCommit={(text) =>
+          onChange({
+            $repeatItem: text.trim() ? { field: 'value', member: text.trim() } : { field: 'value' },
+          })
+        }
+        pickTitle="Change binding"
+        onPick={openPicker}
+      />
+    );
+  }
+  return (
+    <PickerField
+      displayText={repeatPickLabel(pick)}
+      pickTitle="Change binding"
+      onPick={openPicker}
     />
   );
 }
@@ -196,14 +303,40 @@ export function RandomEditor({
   );
 }
 
+const USER_FIELD_OPTIONS = [
+  { value: 'username', label: 'username' },
+  { value: 'groups', label: 'groups' },
+  { value: 'userList', label: 'User list' },
+] as const;
+
 export function UserFieldEditor({
   value,
   onChange,
+  listOnly = false,
+  fieldType,
 }: {
   value: unknown;
   onChange: (v: unknown) => void;
+  /** An option-list field takes a list, so only the list-valued fields apply. */
+  listOnly?: boolean;
+  /** The type(s) the field takes; lists only the choices that fit one. */
+  fieldType?: string | readonly string[];
 }) {
-  const userObj = (value as UserSource)?.$user ?? { field: 'username' };
+  const userObj = (value as UserSource)?.$user ?? { field: listOnly ? 'userList' : 'username' };
+
+  if (listOnly) {
+    return (
+      <PropRow label="List" description="Fills the options from the project's users or groups.">
+        <Select
+          value={userObj.field === 'groups' ? 'groups' : 'userList'}
+          onChange={(v) => onChange({ $user: { field: v } })}
+        >
+          <option value="userList">All users</option>
+          <option value="groups">All user groups</option>
+        </Select>
+      </PropRow>
+    );
+  }
 
   return (
     <>
@@ -212,9 +345,16 @@ export function UserFieldEditor({
           value={userObj.field ?? 'username'}
           onChange={(v) => onChange({ $user: { field: v } })}
         >
-          <option value="username">username</option>
-          <option value="groups">groups</option>
-          <option value="userList">User list</option>
+          {fittingFieldOptions(
+            '$user',
+            USER_FIELD_OPTIONS,
+            userObj.field ?? 'username',
+            fieldType,
+          ).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
         </Select>
       </PropRow>
     </>
@@ -242,12 +382,21 @@ export function UserGroupsEditor({
   );
 }
 
+const DEVICE_FIELD_OPTIONS = [
+  { value: 'hostname', label: 'Hostname' },
+  { value: 'ipAddress', label: 'IP address' },
+  { value: 'macAddress', label: 'MAC address' },
+] as const;
+
 export function DeviceFieldEditor({
   value,
   onChange,
+  fieldType,
 }: {
   value: unknown;
   onChange: (v: unknown) => void;
+  /** The type(s) the field takes; lists only the choices that fit one. */
+  fieldType?: string | readonly string[];
 }) {
   const deviceObj = (value as DeviceSource)?.$device ?? { field: 'hostname' as const };
 
@@ -258,9 +407,16 @@ export function DeviceFieldEditor({
           value={deviceObj.field ?? 'hostname'}
           onChange={(v) => onChange({ $device: { field: v as DeviceSource['$device']['field'] } })}
         >
-          <option value="hostname">Hostname</option>
-          <option value="ipAddress">IP address</option>
-          <option value="macAddress">MAC address</option>
+          {fittingFieldOptions(
+            '$device',
+            DEVICE_FIELD_OPTIONS,
+            deviceObj.field ?? 'hostname',
+            fieldType,
+          ).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
         </Select>
       </PropRow>
     </>
@@ -332,9 +488,12 @@ const PAGE_FIELD_OPTIONS: { value: PageField; label: string }[] = [
 export function PageEditor({
   value,
   onChange,
+  fieldType,
 }: {
   value: unknown;
   onChange: (v: unknown) => void;
+  /** The type(s) the field takes; lists only the choices that fit one. */
+  fieldType?: string | readonly string[];
 }) {
   const obj = (value as PageSource)?.$page ?? { field: 'title' as const };
   const isPathString = obj.field === 'pathString';
@@ -349,11 +508,13 @@ export function PageEditor({
           value={obj.field ?? 'title'}
           onChange={(v) => onChange({ $page: { ...obj, field: v as PageField } })}
         >
-          {PAGE_FIELD_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
+          {fittingFieldOptions('$page', PAGE_FIELD_OPTIONS, obj.field ?? 'title', fieldType).map(
+            (o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ),
+          )}
         </Select>
       </PropRow>
       <PropRow label="Page">
@@ -361,6 +522,9 @@ export function PageEditor({
           value={obj.pageId ?? ''}
           onChange={(v) => onChange({ $page: { ...obj, pageId: v } })}
           emptyLabel="(Current active page)"
+          // Reads a page rather than going to it, and resolves against both
+          // roots — a Dialogs-folder page has a title and a path to report.
+          include="all"
         />
       </PropRow>
       {isPathString && (
@@ -393,9 +557,12 @@ const VIEWPORT_FIELD_OPTIONS: {
 export function ViewportEditor({
   value,
   onChange,
+  fieldType,
 }: {
   value: unknown;
   onChange: (v: unknown) => void;
+  /** The type(s) the field takes; lists only the choices that fit one. */
+  fieldType?: string | readonly string[];
 }) {
   const obj = (value as ViewportSource)?.$viewport ?? { field: 'size' as const };
   return (
@@ -407,7 +574,12 @@ export function ViewportEditor({
             onChange({ $viewport: { field: v as 'size' | 'width' | 'height' | 'orientation' } })
           }
         >
-          {VIEWPORT_FIELD_OPTIONS.map((o) => (
+          {fittingFieldOptions(
+            '$viewport',
+            VIEWPORT_FIELD_OPTIONS,
+            obj.field ?? 'size',
+            fieldType,
+          ).map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
             </option>
@@ -456,9 +628,12 @@ const RECIPE_FIELD_OPTIONS = [
 export function RecipeEditor({
   value,
   onChange,
+  fieldType,
 }: {
   value: unknown;
   onChange: (v: unknown) => void;
+  /** The type(s) the field takes; lists only the choices that fit one. */
+  fieldType?: string | readonly string[];
 }) {
   const config = useRecipeConfigStore((s) => s.config);
   const load = useRecipeConfigStore((s) => s.load);
@@ -489,7 +664,12 @@ export function RecipeEditor({
           value={obj.field ?? 'parametersChanged'}
           onChange={(v) => onChange({ $recipe: { ...obj, field: v } })}
         >
-          {RECIPE_FIELD_OPTIONS.map((opt) => (
+          {fittingFieldOptions(
+            '$recipe',
+            RECIPE_FIELD_OPTIONS,
+            obj.field ?? 'parametersChanged',
+            fieldType,
+          ).map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>

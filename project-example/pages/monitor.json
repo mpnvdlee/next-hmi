@@ -1,0 +1,286 @@
+{
+  "id": "monitor",
+  "title": {
+    "$loc": "Monitor"
+  },
+  "icon": "chart-line",
+  "description": "Alarms and recorded trends",
+  "showHeader": false,
+  "mainBackground": "var(--hmi-bg)",
+  "sections": {
+    "content": [
+      {
+        "id": "mon-root",
+        "type": "Container",
+        "name": "Page",
+        "properties": {
+          "visible": true,
+          "showWhenEmpty": true,
+          "background": "transparent"
+        },
+        "layout": {
+          "direction": "column",
+          "gap": "18px",
+          "wrap": false,
+          "align": "stretch",
+          "justify": "flex-start",
+          "radius": "0",
+          "width": "100%",
+          "widthMode": "fixed",
+          "heightMode": "hug",
+          "paddingTop": "20px",
+          "paddingRight": "20px",
+          "paddingBottom": "20px",
+          "paddingLeft": "20px"
+        },
+        "children": [
+          {
+            "id": "mon-history",
+            "type": "$component:card",
+            "name": "mon-history",
+            "properties": {
+              "title": {
+                "$loc": "Recorded history"
+              },
+              "showTitle": true
+            },
+            "layout": {
+              "widthMode": "fill",
+              "heightMode": "hug"
+            },
+            "children": [
+              {
+                "id": "mon-history-note",
+                "type": "Label",
+                "name": "mon-history-note",
+                "properties": {
+                  "typography": "code",
+                  "text": {
+                    "$loc": "historian · 24 h retention"
+                  },
+                  "color": "var(--hmi-text-muted)"
+                },
+                "layout": {
+                  "widthMode": "hug",
+                  "heightMode": "hug"
+                },
+                "slot": "action"
+              },
+              {
+                "id": "mon-history-body",
+                "type": "Container",
+                "name": "Body",
+                "properties": {
+                  "visible": true,
+                  "showWhenEmpty": true,
+                  "background": "transparent"
+                },
+                "layout": {
+                  "direction": "column",
+                  "gap": "10px",
+                  "wrap": false,
+                  "align": "stretch",
+                  "justify": "flex-start",
+                  "radius": "0",
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "paddingTop": "8px",
+                  "paddingRight": "18px",
+                  "paddingBottom": "18px",
+                  "paddingLeft": "18px"
+                },
+                "children": [
+                  {
+                    "id": "mon-chart",
+                    "type": "TrendChart",
+                    "name": "Boiler & pressure",
+                    "properties": {
+                      "source": "history",
+                      "variables": "Brew:Boiler/Temp, Brew:Pump/Pressure",
+                      "timeRange": "15m",
+                      "refreshInterval": 5,
+                      "showControls": true
+                    },
+                    "layout": {
+                      "width": "100%",
+                      "height": "300px",
+                      "widthMode": "fixed",
+                      "heightMode": "fixed"
+                    }
+                  },
+                  {
+                    "id": "mon-history-hint",
+                    "type": "Label",
+                    "name": "mon-history-hint",
+                    "properties": {
+                      "typography": "caption",
+                      "text": {
+                        "$loc": "Samples land here as you move the setpoints on the Machine page."
+                      },
+                      "color": "var(--hmi-text-muted)",
+                      "wrap": "wrap"
+                    },
+                    "layout": {
+                      "widthMode": "fill",
+                      "heightMode": "hug"
+                    }
+                  }
+                ],
+                "slot": "body"
+              }
+            ]
+          },
+          {
+            "id": "mon-row-2",
+            "type": "Container",
+            "name": "Row",
+            "properties": {
+              "visible": true,
+              "showWhenEmpty": true,
+              "background": "transparent"
+            },
+            "layout": {
+              "direction": "row",
+              "gap": "18px",
+              "wrap": true,
+              "align": "stretch",
+              "justify": "flex-start",
+              "radius": "0",
+              "widthMode": "fill",
+              "heightMode": "hug",
+              "paddingTop": "0",
+              "paddingRight": "0",
+              "paddingBottom": "0",
+              "paddingLeft": "0"
+            },
+            "children": [
+              {
+                "id": "mon-active",
+                "type": "$component:card",
+                "name": "mon-active",
+                "properties": {
+                  "title": {
+                    "$loc": "Active alarms"
+                  },
+                  "showTitle": true
+                },
+                "layout": {
+                  "grow": 1.2,
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "minWidth": "360px"
+                },
+                "children": [
+                  {
+                    "id": "mon-active-body",
+                    "type": "Container",
+                    "name": "Body",
+                    "properties": {
+                      "visible": true,
+                      "showWhenEmpty": true,
+                      "background": "transparent"
+                    },
+                    "layout": {
+                      "direction": "column",
+                      "gap": "0",
+                      "wrap": false,
+                      "align": "stretch",
+                      "justify": "flex-start",
+                      "radius": "0",
+                      "widthMode": "fill",
+                      "heightMode": "hug",
+                      "paddingTop": "8px",
+                      "paddingRight": "18px",
+                      "paddingBottom": "18px",
+                      "paddingLeft": "18px"
+                    },
+                    "children": [
+                      {
+                        "id": "mon-alarms",
+                        "type": "AlarmListManaged",
+                        "name": "Active",
+                        "properties": {
+                          "filterLevel": "",
+                          "chrome": false
+                        },
+                        "layout": {
+                          "width": "100%",
+                          "height": "320px",
+                          "widthMode": "fixed",
+                          "heightMode": "fixed"
+                        }
+                      }
+                    ],
+                    "slot": "body"
+                  }
+                ]
+              },
+              {
+                "id": "mon-log",
+                "type": "$component:card",
+                "name": "mon-log",
+                "properties": {
+                  "title": {
+                    "$loc": "Alarm history"
+                  },
+                  "showTitle": true
+                },
+                "layout": {
+                  "grow": 1,
+                  "widthMode": "fill",
+                  "heightMode": "hug",
+                  "minWidth": "320px"
+                },
+                "children": [
+                  {
+                    "id": "mon-log-body",
+                    "type": "Container",
+                    "name": "Body",
+                    "properties": {
+                      "visible": true,
+                      "showWhenEmpty": true,
+                      "background": "transparent"
+                    },
+                    "layout": {
+                      "direction": "column",
+                      "gap": "0",
+                      "wrap": false,
+                      "align": "stretch",
+                      "justify": "flex-start",
+                      "radius": "0",
+                      "widthMode": "fill",
+                      "heightMode": "hug",
+                      "paddingTop": "8px",
+                      "paddingRight": "18px",
+                      "paddingBottom": "18px",
+                      "paddingLeft": "18px"
+                    },
+                    "children": [
+                      {
+                        "id": "mon-log-list",
+                        "type": "AlarmHistoryList",
+                        "name": "History",
+                        "properties": {
+                          "maxRows": 30,
+                          "filterLevel": "",
+                          "chrome": false
+                        },
+                        "layout": {
+                          "width": "100%",
+                          "height": "320px",
+                          "widthMode": "fixed",
+                          "heightMode": "fixed"
+                        }
+                      }
+                    ],
+                    "slot": "body"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

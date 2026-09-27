@@ -5,22 +5,11 @@ import { widgetRegistry } from '@hmi/registry/widgetRegistry';
 import type { HmiWidgetProps } from '@shared/types/config';
 import { buildCatalog, CATEGORY_ORDER } from '../catalog';
 import WidgetSelector from '../index';
+import { stubIntersectionObserver } from '../../../../../test-setup';
 
 const Noop: ComponentType<HmiWidgetProps> = () => null;
 
-beforeAll(() => {
-  // jsdom lacks IntersectionObserver; the drawer's scroll-spy sets one up on mount.
-  class IntersectionObserverStub {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-    takeRecords() {
-      return [];
-    }
-  }
-  // @ts-expect-error assigning a test stub
-  global.IntersectionObserver = IntersectionObserverStub;
-});
+beforeAll(stubIntersectionObserver);
 
 afterEach(cleanup);
 

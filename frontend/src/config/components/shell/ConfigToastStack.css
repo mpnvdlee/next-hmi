@@ -38,6 +38,12 @@
   border-left-color: var(--cfg-accent);
 }
 
+.cfg-toast--success {
+  border-left-color: var(--cfg-success);
+  background: var(--cfg-success-bg-soft);
+  color: var(--cfg-success-fg);
+}
+
 .cfg-toast--warning {
   border-color: var(--cfg-warning-border);
   border-left-color: var(--cfg-warning-strong);
@@ -65,6 +71,11 @@
   font-size: 0.72rem;
   font-weight: var(--cfg-fw-bold);
   line-height: 1;
+}
+
+.cfg-toast--success .cfg-toast__icon {
+  background: color-mix(in srgb, var(--cfg-success) 16%, var(--cfg-success-bg-soft));
+  color: var(--cfg-success-fg);
 }
 
 .cfg-toast--warning .cfg-toast__icon {

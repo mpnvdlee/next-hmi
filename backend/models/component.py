@@ -10,7 +10,8 @@ NonEmptyText = Annotated[str, StringConstraints(strip_whitespace=True, min_lengt
 
 
 class ComponentPropertySchema(BaseModel):
-    """Schema definition for a property declared by a reusable component or dialog."""
+    """Schema definition for a property declared by a reusable component, or
+    for an input parameter declared by a page or page group."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -28,6 +29,9 @@ class ComponentPropertySchema(BaseModel):
     # For select type
     options: list[dict[str, Any]] = Field(default_factory=list)
     display: str | None = None
+    # What the options hold: string | integer | float | boolean | loc. Absent
+    # reads as string, which is what every select stored before the rest existed.
+    optionType: str | None = None
     # For string / number / url
     placeholder: str | None = None
     min: float | None = None

@@ -3,10 +3,26 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import HttpsSection, { type TlsCertificate, type TlsStatus } from './index';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+/** A poll answered by something that is up. */
+function answering() {
+  return { headers: new Headers() };
+}
+
+const refused = new Error('connection refused');
+
+/** Fake timers, so a wait measured in seconds does not cost the suite seconds. */
+function withFakeTimers() {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  return userEvent.setup({ advanceTimers: vi.advanceTimersByTime, delay: null });
+}
 
 /** Put the page on a known origin and capture where it reopens itself. */
-function stubLocation(href: string) {
+function stubLocation(href: string, fetchStub?: ReturnType<typeof vi.fn>) {
   const url = new URL(href);
   const replace = vi.fn();
   vi.stubGlobal('location', {
@@ -17,8 +33,18 @@ function stubLocation(href: string) {
     pathname: url.pathname,
     replace,
   });
-  // The restart poll waits for the current listener to stop answering.
-  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('connection refused')));
+  // The restart polls wait for the current listener to stop answering, then —
+  // when the page stays on a port that comes back — for it to answer again.
+  // Keyed off which poll is asking rather than call order: a poll still running
+  // from the previous test would otherwise eat the first answer meant for this
+  // one, and the two phases would swap.
+  vi.stubGlobal(
+    'fetch',
+    fetchStub ??
+      vi.fn((_url: string, init?: RequestInit) =>
+        init?.redirect === 'manual' ? Promise.resolve(answering()) : Promise.reject(refused),
+      ),
+  );
   return replace;
 }
 
@@ -52,6 +78,7 @@ function status(overrides: Partial<TlsStatus> = {}): TlsStatus {
 function renderSection(overrides: Partial<TlsStatus> | null, handlers = {}) {
   const props = {
     status: overrides === null ? null : status(overrides),
+    runningProjectCount: 0,
     onLoad: vi.fn().mockResolvedValue(undefined),
     onApply: vi.fn().mockResolvedValue(undefined),
     onRegenerate: vi.fn().mockResolvedValue(undefined),
@@ -91,27 +118,90 @@ describe('HttpsSection', () => {
     await userEvent.click(screen.getByRole('button', { name: 'HTTPS' }));
 
     expect(screen.getByText('https://panel:8443/config/admin')).toBeInTheDocument();
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('https://panel:8443/config/admin'));
+    // Two polls: the old listener going down, then :8000 answering as the
+    // redirector once the replacement process is up.
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('https://panel:8443/config/admin'), {
+      timeout: 3000,
+    });
   });
 
   it('reopens the page on the HTTP port when HTTPS is switched off', async () => {
+    const user = withFakeTimers();
     const replace = stubLocation('https://panel:8443/config/admin');
-    renderSection({ enabled: true, httpPort: 8000, httpsPort: 8443 });
+    renderSection({ enabled: true, httpPort: 8000, httpsPort: 8443 }, { runningProjectCount: 0 });
 
-    await userEvent.click(screen.getByRole('button', { name: 'HTTP' }));
+    await user.click(screen.getByRole('button', { name: 'HTTP' }));
+    await vi.advanceTimersByTimeAsync(60_000);
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith('http://panel:8000/config/admin'));
+    expect(replace).toHaveBeenCalledWith('http://panel:8000/config/admin');
+  });
+
+  it('waits on its own spinner while the app moves to the HTTP port', async () => {
+    // An https: page may not fetch an http: origin — mixed content blocks it —
+    // so there is no poll that could tell this page when :8000 is serving. The
+    // page outlives its own listener, though, so it can do the waiting itself
+    // instead of handing the browser to a page served from a port that is in
+    // the middle of being restarted.
+    const user = withFakeTimers();
+    const replace = stubLocation('https://panel:8443/config/admin');
+    renderSection({ enabled: true, httpPort: 8000, httpsPort: 8443 }, { runningProjectCount: 0 });
+
+    await user.click(screen.getByRole('button', { name: 'HTTP' }));
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(screen.getByText('http://panel:8000/config/admin')).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(replace).toHaveBeenCalledWith('http://panel:8000/config/admin');
+  });
+
+  it('scales the blind wait with the running-project count this page already has', async () => {
+    // The backend side of this restart is not flat either: teardown runs one
+    // project at a time (`_hard_exit_grace_seconds` in system_api.py) and the
+    // replacement only binds once `supervisor.resume_all` has brought every
+    // one of them back. A guess sized for zero projects reopens this page on
+    // a port nothing is listening on yet once a few are running.
+    const user = withFakeTimers();
+    const replace = stubLocation('https://panel:8443/config/admin');
+    renderSection({ enabled: true, httpPort: 8000, httpsPort: 8443 }, { runningProjectCount: 3 });
+
+    await user.click(screen.getByRole('button', { name: 'HTTP' }));
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(replace).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(replace).toHaveBeenCalledWith('http://panel:8000/config/admin');
+  });
+
+  it('waits for the HTTP port to answer again before leaving for HTTPS', async () => {
+    // Nothing is on :8443 until the replacement process binds it, so the page
+    // stays put until :8000 — back as the redirector — answers.
+    const poll = vi
+      .fn()
+      .mockRejectedValueOnce(refused)
+      .mockRejectedValueOnce(refused)
+      .mockResolvedValue(answering());
+    const replace = stubLocation('http://panel:8000/config/admin', poll);
+    renderSection({ httpPort: 8000, httpsPort: 8443 });
+
+    await userEvent.click(screen.getByRole('button', { name: 'HTTPS' }));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('https://panel:8443/config/admin'), {
+      timeout: 3000,
+    });
+    expect(poll.mock.calls.length).toBeGreaterThan(1);
   });
 
   it('keeps the port when the listener is rebound in place', async () => {
-    // start-dev.py reports neither port: Vite owns :5173 and rebinds it.
-    const replace = stubLocation('http://localhost:5173/config/admin');
+    // start-dev.py reports neither port: Vite owns :8000 and rebinds it.
+    const replace = stubLocation('http://localhost:8000/config/admin');
     renderSection({ httpPort: null, httpsPort: null });
 
     await userEvent.click(screen.getByRole('button', { name: 'HTTPS' }));
 
     await waitFor(() =>
-      expect(replace).toHaveBeenCalledWith('https://localhost:5173/config/admin'),
+      expect(replace).toHaveBeenCalledWith('https://localhost:8000/config/admin'),
     );
   });
 

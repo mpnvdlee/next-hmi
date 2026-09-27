@@ -3,14 +3,27 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import type { VariableBinding } from '@shared/types/config';
-import { CompareEditor, IfEditor, SwitchEditor } from './conditional';
+import { CompareEditor, IfEditor, NotEditor, SwitchEditor } from './conditional';
 import type { OpenBindingPicker } from './utils';
+import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
+import { ComponentPropertySchemaContext } from '../componentPropertySchemaContext';
 
 // jsdom doesn't implement scrollIntoView; Select's popup calls it to keep the
 // active option in view once opened.
 Element.prototype.scrollIntoView = vi.fn();
 
 const STRING_SCHEMA: SchemaField = { type: 'string', label: 'Value' };
+const FLOAT_SCHEMA: SchemaField = { type: 'Float', label: 'Speed' };
+const UNBOUND = { $var: { path: '' } };
+
+/** The slot type a `✎` click hands the opener — the picker's third argument. */
+function pickerSlot(open: ReturnType<typeof vi.fn>, label: string): unknown {
+  open.mockClear();
+  fireEvent.click(
+    within(fieldGroup(label)).getByRole('button', { name: 'Change variable binding' }),
+  );
+  return open.mock.calls[0][2];
+}
 
 /** Scope a query to the `.cfg-field-group` owning a given slot label
  *  (Condition / When True / Expression / …), same pattern as
@@ -161,6 +174,21 @@ describe('IfEditor', () => {
     expect(onOpenBindingPicker.mock.calls[0][1]).toBeUndefined();
   });
 
+  it("opens the condition's picker on Boolean and the branches' on the field's", () => {
+    const open = vi.fn();
+    render(
+      <Harness
+        initial={{ $if: { condition: UNBOUND, true: UNBOUND, false: UNBOUND } }}
+        onChange={vi.fn()}
+        schema={FLOAT_SCHEMA}
+        onOpenBindingPicker={open}
+      />,
+    );
+    expect(pickerSlot(open, 'Condition')).toEqual({ type: 'Boolean' });
+    expect(pickerSlot(open, 'When True')).toBeUndefined();
+    expect(pickerSlot(open, 'When False')).toBeUndefined();
+  });
+
   it('does not crash and recovers to the default shape when given a malformed $if payload', () => {
     const onChange = vi.fn();
     render(<Harness initial={{ $if: null }} onChange={onChange} schema={STRING_SCHEMA} />);
@@ -262,6 +290,19 @@ describe('CompareEditor', () => {
       within(fieldGroup('That value')).getByRole('button', { name: 'Change variable binding' }),
     );
     expect(onOpenBindingPicker.mock.calls[1][1]).toEqual({ path: 'PLC:Limit' });
+  });
+
+  it('opens both operand pickers on any type', () => {
+    const open = vi.fn();
+    render(
+      <Harness
+        initial={{ $compare: { left: UNBOUND, operator: '>', right: UNBOUND } }}
+        onChange={vi.fn()}
+        onOpenBindingPicker={open}
+      />,
+    );
+    expect(pickerSlot(open, 'This value')).toBe(true);
+    expect(pickerSlot(open, 'That value')).toBe(true);
   });
 
   it('recovers gracefully from a malformed $compare payload, falling back to the default shape', () => {
@@ -399,8 +440,91 @@ describe('SwitchEditor', () => {
     });
   });
 
+  it("opens the expression's and a case's When picker on any type, Then and Default on the field's", async () => {
+    const open = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <SwitchEditor
+        value={{
+          $switch: { value: UNBOUND, cases: [{ when: UNBOUND, then: UNBOUND }], default: UNBOUND },
+        }}
+        onChange={vi.fn()}
+        schema={FLOAT_SCHEMA}
+        onOpenBindingPicker={open}
+      />,
+    );
+    expect(pickerSlot(open, 'Expression')).toBe(true);
+    expect(pickerSlot(open, 'Default')).toBeUndefined();
+    await user.click(screen.getByRole('button', { name: 'Expand' }));
+    expect(pickerSlot(open, 'When')).toBe(true);
+    expect(pickerSlot(open, 'Then')).toBeUndefined();
+  });
+
   it('recovers gracefully from a malformed $switch payload, falling back to the default shape', () => {
     render(<SwitchEditor value={{ $switch: null }} onChange={vi.fn()} schema={STRING_SCHEMA} />);
     expect(screen.getByText('No cases yet')).toBeInTheDocument();
+  });
+});
+
+describe('NotEditor', () => {
+  it('opens the picker on Boolean', () => {
+    const open = vi.fn();
+    render(
+      <NotEditor
+        value={{ $not: { value: UNBOUND } }}
+        onChange={vi.fn()}
+        onOpenBindingPicker={open}
+      />,
+    );
+    expect(pickerSlot(open, 'Invert this value')).toEqual({ type: 'Boolean' });
+  });
+});
+
+describe('component and exported properties inside a nested slot', () => {
+  const PROPS = { properties: { speed: { type: 'float', label: 'Speed' } } };
+
+  afterEach(() => useEditorDomainStore.getState().closeBindingPicker());
+
+  // Each test holds one `$componentProp`, so its picker button is the only one.
+  function pickComponentProp() {
+    fireEvent.click(screen.getByRole('button', { name: 'Select component property' }));
+    return useEditorDomainStore.getState().bindingPickerTarget?.componentPropSource;
+  }
+
+  it('lists every property for a comparison operand', () => {
+    render(
+      <ComponentPropertySchemaContext.Provider value={PROPS}>
+        <CompareEditor
+          value={{ $compare: { left: { $componentProp: '' }, operator: '>', right: 50 } }}
+          onChange={vi.fn()}
+        />
+      </ComponentPropertySchemaContext.Provider>,
+    );
+    const source = pickComponentProp();
+    expect(source?.fieldType).toBeUndefined();
+    expect(source?.write).toBeUndefined();
+  });
+
+  it("gives a branch the type of the slot it sits in, not its placeholder schema's", () => {
+    render(
+      <ComponentPropertySchemaContext.Provider value={PROPS}>
+        <IfEditor
+          value={{
+            $if: {
+              condition: {
+                $if: { condition: true, true: { $componentProp: '' }, false: false },
+              },
+              true: 0,
+              false: 0,
+            },
+          }}
+          onChange={vi.fn()}
+          schema={{ ...FLOAT_SCHEMA, write: true }}
+        />
+      </ComponentPropertySchemaContext.Provider>,
+    );
+    // The inner $if sits in the outer condition, so its branch takes a Boolean.
+    fireEvent.click(screen.getAllByTitle('Expand in drawer')[0]);
+    expect(pickComponentProp()?.fieldType).toBe('Boolean');
   });
 });

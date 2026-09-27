@@ -1,9 +1,9 @@
 import { useMemo, type ComponentType, type ReactNode } from 'react';
-import { isContainerHostType, widgetRegistry } from '@hmi/registry/widgetRegistry';
-import { SOURCE_CAPABLE_TYPES } from '@hmi/utils/propertySourceRules';
+import { widgetRegistry } from '@hmi/registry/widgetRegistry';
+import { bindsVariable } from '@hmi/utils/propertySourceRules';
 import type { LayoutConfig, WidgetConfig } from '@shared/types/config';
 import type { RequiredFieldEntry } from '@shared/types/widgetSchema';
-import { isStructType, primaryType } from '@shared/utils/valueTypes';
+import { primaryType } from '@shared/utils/valueTypes';
 import { parseTokenVar, usePanelTokenValues } from '@shared/utils/themeDefaultHint';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
@@ -13,7 +13,9 @@ import PanelHeader from '../../ui/PanelHeader';
 import SchemaFieldRow from '../../ui/SchemaFieldRow';
 import WidgetIcon from '../../ui/WidgetIcon';
 import { LayoutFields } from '../../ui/LayoutFields';
+import { slotFilter } from '../PropertySourceEditor/editors/utils';
 import { CONTAINER_DEFAULT_TOKENS } from '../../ui/LayoutFields/containerDefaultTokens';
+import { usesFlexLayout } from '@shared/utils/parentFlow';
 import { commonSchemaOf } from './commonSchema';
 import { mixedLayoutMap, multiValueOf } from './multiValue';
 
@@ -54,9 +56,11 @@ export default function MultiSelectionBody({
   const { keys, schema } = useMemo(() => commonSchemaOf(comps), [comps]);
   const schemaGroups = useMemo(() => groupSchemaKeys(schema), [schema]);
   const mixedLayout = useMemo(() => mixedLayoutMap(comps), [comps]);
-  // The smaller field set unless every selection is a container — offering
-  // container-only layout rows for a leaf would write properties it cannot use.
-  const allContainers = comps.every((c) => isContainerHostType(c.type));
+  // The smaller field set unless every selection arranges its own children with
+  // flex — offering container-only layout rows for a leaf would write properties
+  // it cannot use. Hosting children is not the test (see `usesFlexLayout`), and
+  // the 4 → 7 migration drops those keys wherever this row would not offer them.
+  const allContainers = comps.every((c) => usesFlexLayout(c.type));
   const leadLayout = comps[0].layout ?? {};
 
   const tokenValues = usePanelTokenValues([
@@ -81,12 +85,7 @@ export default function MultiSelectionBody({
     const field = schema[key];
     const value = multiValueOf(comps, key);
     const fieldType = primaryType(field.type).toLowerCase();
-    // The same test `SchemaFieldRow` draws the row with (`isStructType` for a
-    // struct row, `SOURCE_CAPABLE_TYPES` for a sourced one). A literal `'struct'`
-    // here would leave a named struct — `Alarms[]`, a custom widget's declared
-    // type — rendered as a binding row whose `✎` is missing under multi-selection
-    // but present under single.
-    const sourced = isStructType(fieldType) || SOURCE_CAPABLE_TYPES.has(fieldType);
+    const sourced = bindsVariable(fieldType);
     return (
       <SchemaFieldRow
         key={key}
@@ -106,17 +105,20 @@ export default function MultiSelectionBody({
               // fallback writes to that one lead id — so it gets a writer that
               // fans out, landing a picked (or cleared) binding wherever a typed
               // edit would.
-              (onPick, currentBinding) =>
+              (onPick, currentBinding, slot) =>
                 openBindingPicker(comps[0].id, key, {
                   onPick: onPick ?? ((binding) => patchProp(key, { $var: binding })),
                   currentBinding,
-                  filter: {
-                    label: field.label,
-                    type: field.type,
-                    write: (field as { write?: boolean }).write,
-                    requiredFields: (field as { requiredFields?: RequiredFieldEntry[] })
-                      .requiredFields,
-                  },
+                  filter: slotFilter(
+                    {
+                      label: field.label,
+                      type: field.type,
+                      write: (field as { write?: boolean }).write,
+                      requiredFields: (field as { requiredFields?: RequiredFieldEntry[] })
+                        .requiredFields,
+                    },
+                    slot,
+                  ),
                 })
             : undefined
         }

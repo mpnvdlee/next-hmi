@@ -264,13 +264,23 @@ class RecipeManager:
 
     # ── Upload (read live values into a dataset, overwrite in place) ───────────
 
-    async def upload_into(self, dataset_id: str, *, username: str = "") -> RecipeConfig | None:
+    async def upload_into(
+        self,
+        dataset_id: str,
+        *,
+        username: str = "",
+        permission_check: Callable[[str, str], bool] | None = None,
+    ) -> RecipeConfig | None:
         """Read current live values for a dataset's type and overwrite the
         dataset's stored values in place. Returns None when the id is unknown.
 
         A parameter whose live value can't be read (``read_value`` returns None)
         keeps its previously-stored value rather than being overwritten with
-        null, so a transient read blip doesn't corrupt the saved dataset."""
+        null, so a transient read blip doesn't corrupt the saved dataset. A
+        parameter ``permission_check`` denies is treated the same way — see
+        ``write_service.write_permission_gate``, the same per-variable ACL
+        ``download`` applies to its writes.
+        """
         async with self._op_lock:
             with self._lock:
                 located = self._locate(dataset_id)
@@ -283,6 +293,8 @@ class RecipeManager:
             for param in params:
                 ds_name, path = param.resolve_datasource_path()
                 if not ds_name or not path:
+                    continue
+                if permission_check is not None and not permission_check(ds_name, path):
                     continue
                 idx = param.resolve_index()
                 read_path = f"{path}[{idx}]" if idx is not None else path

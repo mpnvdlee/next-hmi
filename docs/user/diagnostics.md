@@ -18,7 +18,7 @@ This is the panel that answers "why is my tag not updating?" — if the path is 
 
 Every widget found in the project's `custom-widgets/` folder, with its build **Status** (OK / failed / unknown), whether it has CSS, and when it was compiled. **Recompile** one, or **Recompile all** — the route out of a stale build after editing files on disk. A failed build shows the compiler's own error message. See [Building your own widgets](custom-widgets.md).
 
-A third state sits between the two: **No schema**. The widget compiled and renders fine, but its `schema` / `exportedProperties` exports could not be read, so the editor offers no property fields and no exported properties for it. The message underneath says why. Other widgets are unaffected — one unreadable widget no longer costs the rest their schemas.
+A third state sits between the two: **No schema**. The widget compiled and renders fine, but its `schema` / `exportedProperties` exports could not be read, so the editor offers no property fields and no exported properties for it. The message underneath says why. Other widgets are unaffected — an unreadable widget costs only its own schema.
 
 ### Connected Runtimes
 
@@ -40,7 +40,7 @@ Sign in to the manager dashboard and open **Settings** — this is installation-
 
 The editor header runs a project-wide validation pass and shows a pill with the findings. Click it for the list; click a finding to jump straight to the widget, page, component, translation or custom widget it belongs to.
 
-It reports things that are wrong but not fatal — a `$var` binding that names a variable no datasource offers, an alarm with no source value, a recipe parameter that is unbound, a user in a group that no longer exists, a historian setting out of range, a custom widget that failed to compile. Saving is never blocked: a half-built screen is a normal state mid-edit.
+It reports things that are wrong but not fatal — a `$var` binding that names a variable no datasource offers, a variable or source whose type doesn't fit the field, a write aimed at a variable that isn't writable, an alarm with no source value, a recipe parameter that is unbound, a user in a group that no longer exists, a historian setting out of range, a custom widget that failed to compile. Saving is never blocked: a half-built screen is a normal state mid-edit.
 
 Two findings are specific to reusable components:
 
@@ -54,17 +54,21 @@ Two findings are specific to reusable components:
 
 **A bound field is blank or dimmed.** The runtime distinguishes three failure states, and they mean different things — *absent* (the source can't produce a value yet), *bad quality* (connected but the tag reports bad/uncertain/stale), and *disconnected* (the whole datasource is down, which degrades every tag it owns). The table in [Binding & subscribing](subscribing.md#what-happens-when-data-goes-bad) says which is which.
 
+**A widget carries a coloured mark.** Read the colour before you read the binding: **red** is a binding that doesn't resolve — a configuration error on the page — while **amber** is a sound binding that no value reached, which points at the datasource instead. [The marks on a widget](subscribing.md#the-marks-on-a-widget) has the full set.
+
+**Opening a project URL says the project is unavailable.** The URL you typed stays put and the overlay names the cause: it is **not running** (start it from the projects page), the instance **crashed** (start it again to see the failure), its **folder is missing** (use **Locate…**), or **no project with that id** is registered on this device. The way back to the projects page is on the overlay.
+
 **A value never updates, and never goes bad either.** Check **Fast Subscriptions**: a tag that appears nowhere is not subscribed. Common causes: the variable is not enabled in the datasource's variable table, the binding points at a path that was renamed on the PLC (the browse-diff banner in the Datasources area flags this), or the widget binding it is not on a visible page.
 
-**A write is rejected.** The reason code tells you which layer refused: `permission_denied` (the signed-in user's groups are outside the variable's allowed set — see [Users](users.md#enforcement-and-where-it-really-happens)), `opcua_unreachable`, `write_failed`, `invalid_value`, `bad_path`. Attach an `onFailed` handler with a **Show Toast** of `{ $result: "reason" }` and the panel tells the operator directly — see [Actions](actions.md#async-actions-and-result).
+**A write is rejected.** The reason code tells you which layer refused: `read_only` (the variable is not marked writable in the datasource — the server sends nothing to the machine), `permission_denied` (the signed-in user's groups are outside the variable's allowed set — see [Users](users.md#enforcement-and-where-it-really-happens)), `opcua_unreachable`, `write_failed`, `invalid_value`, `bad_path`. Attach an `onFailed` handler with a **Show Toast** of `{ $result: "reason" }` and the panel tells the operator directly — see [Actions](actions.md#async-actions-and-result).
 
-**Copy and paste in the editor say the clipboard needs HTTPS.** `navigator.clipboard` is one of the browser APIs that exist only in a secure context — HTTPS, or `localhost`. Reaching the installation at a plain-HTTP LAN address (`http://192.168.1.10:8000`) removes it outright, so no permission prompt can restore it; serve the installation over [HTTPS](install.md#https) instead, or open it on the host at `localhost`. The full rule and what else it touches is in [What plain HTTP costs the browser](install.md#what-plain-http-costs-the-browser). On builds before v0.0.1, the same rule blanked the HMI Live View entirely — upgrade if you are seeing a white page there.
+**Copy and paste in the editor say the clipboard needs HTTPS.** `navigator.clipboard` is one of the browser APIs that exist only in a secure context — HTTPS, or `localhost`. Reaching the installation at a plain-HTTP LAN address (`http://192.168.1.10:8000`) removes it outright, so no permission prompt can restore it; serve the installation over [HTTPS](install.md#https) instead, or open it on the host at `localhost`. The full rule and what else it touches is in [What plain HTTP costs the browser](install.md#what-plain-http-costs-the-browser).
 
 **A custom widget doesn't appear, or renders the old version.** Check its status in **Custom Widgets** and hit **Recompile**. A widget whose source imports React or an app helper will not build — the SDK globals are the only allowed route.
 
 **Nothing on the page reacts after editing files on disk.** The editor and runtime react to saves made *through* the app. If you edited a page, component or datasource file directly on disk, restart the backend so it re-reads them.
 
-**The editor won't open for a user.** Editor access is a group test — **Users → Settings → Config access**. A user outside those groups gets no editor, by design.
+**The editor won't open.** Editor access is not a group test, and no account in **Users** grants or withholds it. The editor sits behind the installation's **device-admin password** — the same one that unlocks the Manager dashboard — so whoever needs the editor needs that password. See [Users](users.md#how-this-relates-to-the-device-admin-password).
 
 **A save reports a failure.** Saves are per-area, and a failure names the area that refused rather than silently dropping the whole batch. Translations in particular refuse a save that would overwrite someone else's newer edit; reload and re-apply.
 

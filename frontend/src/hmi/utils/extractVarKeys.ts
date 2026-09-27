@@ -14,3 +14,18 @@ import { analyzePropertyValue } from './analyzePropertyValue';
 export function extractVarKeys(value: unknown): readonly string[] {
   return analyzePropertyValue(value).varKeys;
 }
+
+/**
+ * The subset of {@link extractVarKeys} the render actually reads — the losing
+ * branches of `$if` / `$switch` dropped, their discriminants kept. Used by the
+ * binding overlay, which must only mark a variable the viewer can see.
+ */
+export function extractRenderedVarKeys(value: unknown): readonly string[] {
+  return analyzePropertyValue(value).renderedVarKeys;
+}
+
+/** Whether `value` holds a `$if` / `$switch` anywhere — a branch whose taken
+ *  side only an eval context can name. */
+export function usesBranch(value: unknown): boolean {
+  return analyzePropertyValue(value).usesBranch;
+}

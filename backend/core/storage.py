@@ -22,6 +22,7 @@ import io
 import json
 import logging
 import os
+import sys
 import tempfile
 import threading
 import time
@@ -114,21 +115,34 @@ BUILD_STATUS_PATH = WIDGET_BUILD_DIR / ".build-status.json"
 
 # ── Source-tree-anchored paths (frozen at import) ─────────────────────────────
 # Derived from this file's own location, so it can only change by moving this
-# file — frozen at import like the runtime-home constants above.
+# file — frozen at import like the runtime-home constants above. A PyInstaller
+# build seals this module inside the archive, where that walk lands above the
+# extracted tree, so the bundle root stands in for the checkout there: the spec
+# ships the frontend files the backend reads at their checkout-relative paths
+# under ``sys._MEIPASS``, same contract as ``models/theme.py``.
 
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
+def _resolve_repo_root() -> Path:
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        return Path(meipass).resolve()
+    return Path(__file__).resolve().parent.parent.parent
+
+
+_REPO_ROOT = _resolve_repo_root()
 
 
 def repo_root() -> Path:
     """The checkout / install root: the folder that holds ``backend/``.
 
-    Every reader of the frontend source tree (the ``/stdlib-js`` mount, the
-    baked stdlib manifest, the built-in widget registry) resolves through this
-    so the ``parents[]`` depth is one fact in one place. Those readers degrade
-    silently when the path is wrong — an empty catalog, an absent mount — so
+    Every reader of the frontend source tree (the ``/builtin-widgets-js`` mount,
+    the baked built-in-widgets manifest, the built-in widget registry) resolves
+    through this so the ``parents[]`` depth is one fact in one place. Those readers degrade
+    silently when the path is wrong — an empty catalog, an absent mount, a
+    built-in widget the validator then rejects as an unknown type — so
     hand-rolling the derivation per call site is how it breaks. A packaged
-    runtime has no ``frontend/`` under this root at all; those callers check
-    ``NEXTHMI_FRONTEND_DIST`` first.
+    runtime holds only the frontend files its build ships under this root;
+    callers whose file isn't one of them check ``NEXTHMI_FRONTEND_DIST`` first.
     """
     return _REPO_ROOT
 
@@ -187,6 +201,10 @@ def active_images_dir() -> Path:
     return active_assets_dir() / "images"
 
 
+def active_videos_dir() -> Path:
+    return active_assets_dir() / "videos"
+
+
 def active_config_dir() -> Path:
     return active_project_root()
 
@@ -197,6 +215,13 @@ def active_datasources_dir() -> Path:
 
 def active_pages_dir() -> Path:
     return active_project_root() / "pages"
+
+
+def active_dialogs_dir() -> Path:
+    """Page documents of the Dialogs folder — the index's second root keeps its
+    pages in their own directory, so a project's navigable screens and its
+    overlays are separable on disk."""
+    return active_project_root() / "dialogs"
 
 
 def active_translations_dir() -> Path:
@@ -253,11 +278,12 @@ def ensure_active_project_dirs() -> None:
     active_external_libraries_dir().mkdir(parents=True, exist_ok=True)
     active_certs_dir().mkdir(parents=True, exist_ok=True)
     WIDGET_BUILD_DIR.mkdir(parents=True, exist_ok=True)
-    for sub in ("datasources", "pages", "translations", "components"):
+    for sub in ("datasources", "pages", "dialogs", "translations", "components"):
         (project_root / sub).mkdir(parents=True, exist_ok=True)
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     active_icons_dir().mkdir(parents=True, exist_ok=True)
     active_images_dir().mkdir(parents=True, exist_ok=True)
+    active_videos_dir().mkdir(parents=True, exist_ok=True)
 
     # Translation baseline so the language APIs work on first launch.
     default_csv = active_translations_dir() / "Default.csv"
@@ -336,6 +362,20 @@ def write_json(path: str | Path, data: Any) -> None:
             if tmp_path is not None and tmp_path.exists():
                 tmp_path.unlink(missing_ok=True)
             raise
+
+
+def move_file(src: str | Path, dst: str | Path) -> None:
+    """Move a document to another directory, atomically within the project.
+
+    A page whose index root changes has to take its file with it (see
+    ``PUT /api/config/config``): a copy-then-delete would leave two documents
+    for one id if the delete failed, so this is one ``os.replace`` under the
+    same lock the writers take.
+    """
+    src_path, dst_path = Path(src), Path(dst)
+    with _lock:
+        dst_path.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(src_path, dst_path)
 
 
 def write_text_atomic(path: str | Path, data: str, encoding: str = "utf-8") -> None:

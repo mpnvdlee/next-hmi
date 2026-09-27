@@ -10,7 +10,7 @@
  *   hits the right backend.
  */
 
-import { withBase } from './runtimeBase';
+import { getArea, withBase } from './runtimeBase';
 
 class ApiError extends Error {
   readonly status: number;
@@ -46,6 +46,22 @@ export function setSessionExpiredHandler(handler: (() => void) | null): void {
   sessionExpiredHandler = handler;
 }
 
+let projectUnavailableHandler: (() => void) | null = null;
+
+/**
+ * Register the one place that reacts to the project's backend not being there.
+ *
+ * The manager answers 503 for every call under a `/runtime|editor/<slug>/`
+ * prefix whose instance is not running, so without a central signal the app
+ * renders an empty project with no explanation — the same failure mode
+ * `setSessionExpiredHandler` exists for. The handler confirms *why* with the
+ * manager before showing anything; a 503 alone also covers an instance that is
+ * still starting.
+ */
+export function setProjectUnavailableHandler(handler: (() => void) | null): void {
+  projectUnavailableHandler = handler;
+}
+
 export async function apiErrorFrom(res: Response): Promise<ApiError> {
   let detail: string | undefined;
   let code: string | null = null;
@@ -56,7 +72,13 @@ export async function apiErrorFrom(res: Response): Promise<ApiError> {
   } catch {
     // body wasn't JSON — fall through to HTTP code
   }
-  if (res.status === 401 && code === MANAGER_SESSION_REQUIRED) sessionExpiredHandler?.();
+  // A live view is public: it never held a manager session to lose, so this 401
+  // means a call reached past the public runtime surface — not a signed-out
+  // operator. Suppressed here rather than at the call sites because
+  // `nextHmiSdk` hands `apiJson` to custom widgets, which can call any path.
+  if (res.status === 401 && code === MANAGER_SESSION_REQUIRED && getArea() !== 'runtime')
+    sessionExpiredHandler?.();
+  if (res.status === 503) projectUnavailableHandler?.();
   return new ApiError(detail ?? `HTTP ${res.status}`, res.status, code);
 }
 
@@ -73,18 +95,37 @@ export function errorMessage(err: unknown): string {
   return String(err);
 }
 
-export async function apiJson<T = unknown>(
-  url: string,
-  options?: { method?: string; body?: unknown; signal?: AbortSignal },
-): Promise<T> {
+interface JsonOptions {
+  method?: string;
+  body?: unknown;
+  signal?: AbortSignal;
+}
+
+async function requestJson<T>(url: string, options: JsonOptions | undefined): Promise<T> {
   const { method = 'GET', body, signal } = options ?? {};
   const init: RequestInit = { method, signal };
   if (body !== undefined) {
     init.headers = { 'Content-Type': 'application/json' };
     init.body = JSON.stringify(body);
   }
-  const res = await fetch(withBase(url), init);
+  const res = await fetch(url, init);
   if (!res.ok) throw await apiErrorFrom(res);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+export async function apiJson<T = unknown>(url: string, options?: JsonOptions): Promise<T> {
+  return requestJson<T>(withBase(url), options);
+}
+
+/**
+ * `apiJson` for an endpoint only the manager serves.
+ *
+ * `/api/manager/*` lives on the manager at the origin root. A project instance
+ * proxied under `/runtime/<slug>/` or `/editor/<slug>/` serves no manager API,
+ * so base-prefixing these URLs would route them into the child instance and
+ * 404. The manager session cookie is same-origin, so it rides along either way.
+ */
+export async function managerApiJson<T = unknown>(url: string, options?: JsonOptions): Promise<T> {
+  return requestJson<T>(url, options);
 }

@@ -7,7 +7,7 @@ import { evaluateVisibility } from '@config/utils/visibilityEvaluator';
 import type { VisibilityCondition } from '@shared/types/config';
 import TrendChart, { schema } from './index';
 
-// A stdlib widget reads the chart library off the SDK global, not from a module
+// A built-in widget reads the chart library off the SDK global, not from a module
 // import, so `vi.mock('recharts')` would never be consulted. Overwrite the
 // global instead — the slot `ensureRecharts()` fills in the app. Stubbing rather
 // than loading the real library is deliberate: jsdom measures
@@ -159,8 +159,10 @@ describe('TrendChart', () => {
     );
     const { container } = renderTrendChart({ variables: 'PLC:Temp' });
     await waitFor(() => expect(screen.getByTestId('line-chart')).toBeInTheDocument());
-    // Without `hmi-component` nothing consumes the --self-* custom properties
-    // selfLayoutStyle() writes, so every Layout-panel field is silently dead.
+    // Without `hmi-component` an unset Layout-panel field falls back to the
+    // browser's own initial value instead of the hmi default (0 min-width,
+    // say) — a field the author did set still applies either way, since
+    // selfLayoutStyle() writes it as a direct inline property.
     expect(container.firstChild).toHaveClass('hmi-component', 'hmi-trend-chart');
   });
 

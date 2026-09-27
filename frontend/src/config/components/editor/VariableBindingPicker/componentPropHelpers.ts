@@ -1,16 +1,36 @@
-import type { StructSchemaNode, ComponentPropertySchema } from '@shared/types/componentProperty';
+import {
+  componentPropertyToSchemaField,
+  type ComponentPropertySchema,
+  type StructSchemaNode,
+} from '@shared/types/componentProperty';
+import { accepts, parseTypeToken, structSatisfies, type VarType } from '@shared/types/varType';
 import { type RequiredFieldEntry } from '../bindingPickerUtils';
-import { structSchemaMatchesRequired } from './helpers';
+import { declaredVarType, structSchemaLookup, structSchemaNodeVarType } from './helpers';
 import type { RowItem } from './variableTreeHelpers';
-import { isStructType, primaryType, typeList } from '@shared/utils/valueTypes';
+import {
+  acceptedValueTypes,
+  isEditorKind,
+  isStructType,
+  primaryType,
+  typeList,
+} from '@shared/utils/valueTypes';
 import { matchesSearchWords } from '@shared/utils/search';
 
-/** Lowercase tokens for a merged type; 'select' provides a string value. */
-function typeTokens(t: string | string[]): string[] {
-  return typeList(t).map((x) => {
-    const lower = x.toLowerCase();
-    return lower === 'select' ? 'string' : lower;
-  });
+/** Split a component-property key into its muted breadcrumb (`''` for a
+ *  top-level property) and the leaf label. */
+export function splitComponentPropPath(
+  value: string,
+  properties: Record<string, ComponentPropertySchema>,
+): { parentPath: string; leaf: string } {
+  const slashIdx = value.indexOf('/');
+  if (slashIdx === -1) return { parentPath: '', leaf: properties[value]?.label ?? value };
+  const propKey = value.slice(0, slashIdx);
+  const segments = value.slice(slashIdx + 1).split('/');
+  const prefix = properties[propKey]?.label ?? propKey;
+  return {
+    parentPath: [prefix, ...segments.slice(0, -1)].join(' › '),
+    leaf: segments[segments.length - 1],
+  };
 }
 
 /** True when a field's merged type expects a struct binding. */
@@ -18,68 +38,114 @@ export function isStructTarget(fieldType: string | string[]): boolean {
   return isStructType(primaryType(fieldType));
 }
 
-/** Returns true when a component property is compatible with a component schema field. */
-export function isCompatible(
-  prop: ComponentPropertySchema,
-  fieldType: string | string[],
-  requiredFields?: RequiredFieldEntry[],
-): boolean {
-  if (isStructTarget(fieldType)) {
-    if (!isStructType(primaryType(prop.type))) return false;
-    if (
-      requiredFields?.length &&
-      (!prop.structSchema || !structSchemaMatchesRequired(prop.structSchema, requiredFields))
-    ) {
-      return false;
-    }
-    return true;
-  }
-  const fieldTokens = typeTokens(fieldType);
-  const propTokens = typeTokens(prop.type);
-  return fieldTokens.some((f) => propTokens.includes(f));
+/** The field a component property, an exported property or one of their
+ *  struct fields is bound to. No `fieldType` takes any type. */
+export interface PropSlot {
+  fieldType?: string | string[];
+  requiredFields?: RequiredFieldEntry[];
+  /** The field writes its value back. */
+  write?: boolean;
 }
 
-export function isCompatibleFolderNode(
-  node: StructSchemaNode,
-  fieldType: string | string[],
-  requiredFields?: RequiredFieldEntry[],
+/** Whether a property fits a field, and why not when the reason is not the
+ *  type the drawer already shows beside it. */
+export interface PropVerdict {
+  ok: boolean;
+  reason?: string;
+}
+
+/** A writing field refuses a property that does not say it can be written. */
+const NOT_WRITABLE: PropVerdict = { ok: false, reason: 'Not declared writable' };
+
+/**
+ * Whether a value declared as `token` (typed `type`, members `members`) is of
+ * a type the slot takes — through `accepts` over the slot's
+ * `acceptedValueTypes`, the rule the variable tree uses, so a component
+ * property and a variable of the same type fit the same fields. An editor-kind
+ * value fits only a slot of that kind; an untyped value is taken on trust,
+ * except by a slot that takes structs alone. Access is judged apart, so a
+ * property of the right type is listed and marked rather than hidden.
+ */
+function declaredFits(
+  token: string | undefined,
+  type: VarType | undefined,
+  members: StructSchemaNode[] | undefined,
+  slot: PropSlot,
 ): boolean {
-  if (!isStructTarget(fieldType)) return false;
-  if (node.kind !== 'folder' && node.kind !== 'array') return false;
+  if (slot.fieldType === undefined && !slot.requiredFields?.length) return true;
+  const fieldType = slot.fieldType ?? [];
+  const kinds = typeList(fieldType).filter(isEditorKind);
+  if (token !== undefined && isEditorKind(token)) {
+    return kinds.some((k) => k.toLowerCase() === token.toLowerCase());
+  }
+  const allowed = acceptedValueTypes(fieldType);
+  if (allowed.length === 0 && kinds.length > 0) return false;
+  if (!type) return allowed.length === 0 || !allowed.every(isStructType);
+  if (
+    allowed.length > 0 &&
+    !allowed.some((t) => accepts(parseTypeToken(t), type, slot.requiredFields))
+  ) {
+    return false;
+  }
   return (
-    !requiredFields?.length || structSchemaMatchesRequired(node.children ?? [], requiredFields)
+    type.kind !== 'struct' ||
+    !slot.requiredFields?.length ||
+    structSatisfies(slot.requiredFields, structSchemaLookup(members ?? []))
   );
 }
 
-export function isCompatibleLeafNode(
-  node: StructSchemaNode,
-  fieldType: string | string[],
-): boolean {
-  if (isStructTarget(fieldType)) return false;
-  if (node.kind !== 'variable') return false;
-  if (node.type) {
-    const fieldTokens = typeTokens(fieldType);
-    return fieldTokens.includes(node.type.toLowerCase());
-  }
-  return true;
+/** Whether a component property is of a type the field takes — its
+ *  schema-field form, so a `select` is judged by the type its options hold.
+ *  What the list shows without **Show all**. */
+export function componentPropFits(prop: ComponentPropertySchema, slot: PropSlot): boolean {
+  const token = primaryType(componentPropertyToSchemaField(prop).type);
+  const fields = (prop.structSchema ?? []).map((n) => n.name);
+  return declaredFits(token, declaredVarType(token, fields), prop.structSchema, slot);
 }
 
-function hasCompatibleDescendant(
-  nodes: StructSchemaNode[],
-  fieldType: string | string[],
-  requiredFields?: RequiredFieldEntry[],
-): boolean {
-  for (const node of nodes) {
-    if (node.kind === 'variable' && isCompatibleLeafNode(node, fieldType)) return true;
-    if (
-      (node.kind === 'folder' || node.kind === 'array') &&
-      isCompatibleFolderNode(node, fieldType, requiredFields)
-    )
-      return true;
-    if (node.children?.length && hasCompatibleDescendant(node.children, fieldType, requiredFields))
-      return true;
-  }
-  return false;
+/** Whether one field of a struct property is of a type the field takes. */
+export function structSchemaNodeFits(node: StructSchemaNode, slot: PropSlot): boolean {
+  return declaredFits(
+    node.kind === 'variable' ? node.type : undefined,
+    structSchemaNodeVarType(node),
+    node.children,
+    slot,
+  );
+}
+
+/** The drawer's verdict on a component property: its type, and — for a
+ *  writing field — its own `write` flag. */
+export function componentPropVerdict(prop: ComponentPropertySchema, slot: PropSlot): PropVerdict {
+  if (!componentPropFits(prop, slot)) return { ok: false };
+  return slot.write && prop.write !== true ? NOT_WRITABLE : { ok: true };
+}
+
+/** The drawer's verdict on one field of a struct property: only a variable
+ *  row that says `write: true` can be written. */
+export function structSchemaNodeVerdict(node: StructSchemaNode, slot: PropSlot): PropVerdict {
+  if (!structSchemaNodeFits(node, slot)) return { ok: false };
+  return slot.write && !(node.kind === 'variable' && node.write === true)
+    ? NOT_WRITABLE
+    : { ok: true };
+}
+
+/** The slot a picker judges by, or none when the field constrains nothing. */
+export function propSlotOf(
+  fieldType: string | string[] | undefined,
+  requiredFields: RequiredFieldEntry[] | undefined,
+  write: boolean | undefined,
+): PropSlot | null {
+  return fieldType !== undefined || requiredFields?.length || write
+    ? { fieldType, requiredFields, write }
+    : null;
+}
+
+function hasCompatibleDescendant(nodes: StructSchemaNode[], slot: PropSlot): boolean {
+  return nodes.some(
+    (node) =>
+      structSchemaNodeFits(node, slot) ||
+      (!!node.children?.length && hasCompatibleDescendant(node.children, slot)),
+  );
 }
 
 function nodePathMatches(nodes: StructSchemaNode[], query: string, ancestorPath: string): boolean {
@@ -102,6 +168,8 @@ interface BuildComponentPropRowsOptions {
   baseDepth?: number;
   /** Searchable parent path, such as the owning widget label/id. */
   searchPath?: string;
+  /** The bound field writes its value back. */
+  write?: boolean;
 }
 
 /**
@@ -134,12 +202,13 @@ export function buildComponentPropRows(
     // pointed at it resolves to nothing forever — not even under "show all".
     if (primaryType(schema.type).toLowerCase() === 'widgets') continue;
     if (!showAll && fieldType !== undefined) {
-      const directlyOk = isCompatible(schema, fieldType, requiredFields);
+      const slot = { fieldType, requiredFields, write: options?.write };
+      const directlyOk = componentPropFits(schema, slot);
       if (!directlyOk) {
         const hasDesc =
           isStructType(primaryType(schema.type)) &&
           !!schema.structSchema?.length &&
-          hasCompatibleDescendant(schema.structSchema, fieldType, requiredFields);
+          hasCompatibleDescendant(schema.structSchema, slot);
         if (!hasDesc) continue;
       }
     }

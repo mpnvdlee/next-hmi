@@ -19,7 +19,7 @@ describe('Icon', () => {
   it('renders a builtin icon by name', async () => {
     const { container } = renderIcon({ iconName: 'house', size: 32 });
 
-    // Builtin icon components are code-split (backlog item 22) — the icon
+    // Builtin icon components are code-split — the icon
     // resolves asynchronously behind a `Suspense fallback={null}` even when
     // its chunk is already cached. The lazy import pulls the whole
     // `phosphorIconComponents` module (all 59 icons); its first on-the-fly
@@ -51,7 +51,7 @@ describe('Icon', () => {
   it('renders a custom SVG asset with colors stripped and currentColor injected', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({ text: async () => '<svg stroke="blue"><path/></svg>' }),
+      vi.fn().mockResolvedValue({ ok: true, text: async () => '<svg stroke="blue"><path/></svg>' }),
     );
     const { container } = renderIcon({ iconName: '/assets/icons/gauge.svg', color: '#0000ff' });
 

@@ -244,9 +244,9 @@
 /* ── Connection test ────────────────────────────────────────────────────── */
 .ds-wizard__test {
   display: flex;
-  align-items: center;
-  gap: var(--cfg-space-3);
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--cfg-space-2);
 }
 
 .ds-wizard__test-result {

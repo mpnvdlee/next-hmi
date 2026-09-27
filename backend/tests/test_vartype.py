@@ -4,19 +4,18 @@ from pathlib import Path
 import pytest
 from core.validation import vartype
 
-FIXTURE_PATH = (
+FIXTURES_DIR = (
     Path(__file__).resolve().parents[2]
     / "frontend"
     / "src"
     / "shared"
     / "types"
     / "__fixtures__"
-    / "varTypeAccepts.json"
 )
 
 
-def _load_cases() -> list[dict]:
-    return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+def _load_cases(name: str = "varTypeAccepts.json") -> list[dict]:
+    return json.loads((FIXTURES_DIR / name).read_text(encoding="utf-8"))
 
 
 @pytest.mark.parametrize("case", _load_cases(), ids=lambda c: c["name"])
@@ -30,6 +29,21 @@ def test_accepts_parity(case: dict) -> None:
         for token in case["acceptTokens"]
     )
     assert result == case["expected"]
+
+
+@pytest.mark.parametrize("case", _load_cases("structSatisfies.json"), ids=lambda c: c["name"])
+def test_struct_satisfies_parity(case: dict) -> None:
+    """Same fixture drives frontend/src/shared/types/varType.test.ts."""
+    members = case["members"]
+    assert vartype.struct_satisfies(case["requiredFields"], members.get) == case["expected"]
+
+
+@pytest.mark.parametrize("case", _load_cases("listItemTypes.json"), ids=lambda c: c["name"])
+def test_list_item_types_parity(case: dict) -> None:
+    """Same fixture drives frontend/src/shared/types/varType.test.ts."""
+    element, members = vartype.list_item_types(case["items"])
+    assert element == case["element"]
+    assert members == case["members"]
 
 
 def test_parse_type_token_scalar_and_array() -> None:

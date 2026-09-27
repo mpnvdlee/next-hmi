@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { useVariableStore } from '@hmi/store/variableStore';
 import Trend from './index';
 
-// A stdlib widget reads the chart library off the SDK global, not from a module
+// A built-in widget reads the chart library off the SDK global, not from a module
 // import, so `vi.mock('recharts')` would never be consulted. Overwrite the
 // global instead — jsdom measures ResponsiveContainer at 0×0, so the real
 // library would render no chart for the assertions to look at.

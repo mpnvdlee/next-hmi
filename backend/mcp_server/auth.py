@@ -39,10 +39,13 @@ Threat model:
 * **Audit logging** — every write is attributed to a caller-supplied
   ``X-Mcp-Agent`` label (``mcp_server.agent_label``) and published as a
   diffed ``emit_change`` event visible to every connected WebSocket client.
-* **Exposure** — the transport binds to loopback by default (``NEXTHMI_HOST``
-  in ``launcher.py``); running it reachable on a trusted LAN is an accepted
-  risk, matching the same disposition already documented for peer transfer,
-  never a silent default.
+* **Exposure** — the transport binds every interface by default
+  (``core.net.resolve_bind_host``), so the checks above are the boundary
+  rather than a second layer behind one. A request arriving over the network
+  is refused by exactly what refuses a loopback one. What the default does
+  cost is confidentiality: on plain HTTP a bearer token travels in the clear
+  and anyone on the path can lift it, so an untrusted network needs HTTPS
+  (``NEXTHMI_SSL_*`` or Settings → HTTPS) and not merely a password.
 """
 
 from __future__ import annotations

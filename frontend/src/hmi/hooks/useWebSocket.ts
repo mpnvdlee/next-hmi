@@ -125,13 +125,15 @@ let _pendingSnapshot = false;
 // corresponding values (see backend _handle_set_context), so queuing it
 // through this same buffer guarantees the store's scalars/structs are already
 // updated by the time a consumer sees contextReadyPageIds include a page.
-let _pendingContextReady: string[] | null = null;
+let _pendingContextReady: { pageIds: string[] } | null = null;
 // Normalized page-set of the most recent set_context we actually sent. Used to
 // drop stale context_ready acks: a superseded navigation's background OPC-UA
 // prefetch can land after we've already moved on, and applying its ack would
-// drop the current page from contextReadyPageIds and flash it back to its
-// spinner. The backend echoes currentPageIds verbatim, so matching on them
+// drop the current surface from contextReadyPageIds and flash it back to its
+// spinner. The backend echoes the id list verbatim, so matching on it
 // identifies the ack's originating set_context without a wire-level token.
+// Opening or closing a page overlay changes that list too, since the overlay's
+// page is sent alongside the routed one.
 let _lastSentContextKey: string | null = null;
 let _flushRaf: number | null = null;
 let _flushFns: {
@@ -155,7 +157,7 @@ function flushPendingVarUpdates(): void {
     else _flushFns.applyBatch.current(values);
   }
   if (wasSnapshot) _flushFns.markSnapshotReceived.current();
-  if (contextReady) _flushFns.setContextReady.current(contextReady);
+  if (contextReady) _flushFns.setContextReady.current(contextReady.pageIds);
 }
 
 function enqueueVarUpdate(
@@ -176,8 +178,8 @@ function enqueueVarUpdate(
   }
 }
 
-/** Order-independent key of a set_context / context_ready page-set. */
-function contextPageKey(ids: unknown): string {
+/** Order-independent key of one id list. */
+function idListKey(ids: unknown): string {
   if (!Array.isArray(ids)) return '';
   return ids
     .filter((id): id is string => typeof id === 'string' && id.length > 0)
@@ -186,7 +188,7 @@ function contextPageKey(ids: unknown): string {
 }
 
 function enqueueContextReady(currentPageIds: string[]): void {
-  _pendingContextReady = currentPageIds;
+  _pendingContextReady = { pageIds: currentPageIds };
   if (_flushRaf === null) {
     _flushRaf = requestAnimationFrame(flushPendingVarUpdates);
   }
@@ -213,7 +215,7 @@ export function sendWsMessage(msg: unknown): void {
       msg !== null &&
       (msg as { type?: unknown }).type === 'set_context'
     ) {
-      _lastSentContextKey = contextPageKey((msg as { currentPageIds?: unknown }).currentPageIds);
+      _lastSentContextKey = idListKey((msg as { currentPageIds?: unknown }).currentPageIds);
     }
     _ws.send(JSON.stringify(msg));
   }
@@ -324,7 +326,7 @@ export function useWebSocket(): void {
             const readyPageIds = Array.isArray(msg.currentPageIds) ? msg.currentPageIds : [];
             // Drop acks from a superseded set_context (see _lastSentContextKey)
             // so a late prefetch can't flash the current page back to a spinner.
-            if (contextPageKey(readyPageIds) === _lastSentContextKey) {
+            if (idListKey(readyPageIds) === _lastSentContextKey) {
               enqueueContextReady(readyPageIds);
             }
             return;
@@ -408,7 +410,20 @@ export function useWebSocket(): void {
       };
 
       ws.onclose = () => {
-        if (_ws === ws) _ws = null; // don't clobber a newer instance
+        // A socket a newer one already replaced — the StrictMode remount aborts
+        // the first handshake, and that abort's close event can land after the
+        // replacement has opened. Its death says nothing about the connection
+        // the app is actually on, and marking it down here left every bound
+        // widget under the disconnected overlay for the rest of the page load:
+        // nothing fires `onopen` again, and a healthy socket schedules no
+        // reconnect to clear it.
+        //
+        // The effect cleanup takes the same branch: it nulls `_ws` before
+        // calling close(), so none of the teardown below runs for it. That is
+        // deliberate — only the root `AppInner` unmounts, and the cleanup
+        // flushes the in-flight actions itself.
+        if (_ws !== ws) return;
+        _ws = null;
         setWsConnectedRef.current(false);
         clearOpcuaConnectedRef.current(); // backend is unreachable, OPC-UA state unknown
         // Fail any in-flight action requests — backend responses can no longer

@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { useConfigStore } from '@shared/store/configStore';
 import { usePanelExpansionStore } from '@config/store/panelExpansionStore';
-import { flattenPages } from '@shared/utils/pageTree';
+import { flattenPageNodes } from '@shared/utils/pageTree';
 import type { ActionsConfig, ButtonAction } from '@shared/types/config';
 import { ACTION_TYPES } from './actionsPreview';
 import { makeDefaultAction } from './actionMutations';
@@ -12,6 +12,7 @@ import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
 import { usePanelDiagnostics } from '@config/hooks/usePanelDiagnostics';
 import { apiJson } from '@shared/utils/api';
+import { stubIntersectionObserver } from '../../../../test-setup';
 
 vi.mock('@shared/utils/api', () => ({ apiJson: vi.fn() }));
 const mockedApiJson = vi.mocked(apiJson);
@@ -28,11 +29,12 @@ Element.prototype.scrollIntoView = vi.fn();
 function setupStores() {
   useConfigStore.setState({
     dialogs: [
-      { id: 'dlg1', title: 'Settings', widgets: [] },
+      { id: 'dlg1', title: 'Settings', type: 'page', sections: { content: [] } },
       {
         id: 'dlg2',
         title: 'Confirm',
-        widgets: [],
+        type: 'page',
+        sections: { content: [] },
         componentProperties: { motorId: { type: 'string', label: 'Motor ID' } },
       },
     ],
@@ -42,6 +44,13 @@ function setupStores() {
     ],
   });
   usePanelExpansionStore.setState({ expanded: {} });
+}
+
+/** Overlay targets built the same way `ActionsInput` builds them, for
+ *  computing the same default payload `makeDefaultAction` would return. */
+function overlayTargetsFromStore() {
+  const { dialogs, pages } = useConfigStore.getState();
+  return { dialogs: flattenPageNodes(dialogs), pages: flattenPageNodes(pages) };
 }
 
 function fieldGroup(label: string): HTMLElement {
@@ -115,62 +124,118 @@ describe('ActionsInput — full discriminator sweep', () => {
       render(<Harness onChangeSpy={onChangeSpy} />);
       await pick(user, screen.getByRole('combobox'), label);
 
-      const { dialogs, pages } = useConfigStore.getState();
-      const expected = makeDefaultAction(type, { dialogs, allPages: flattenPages(pages) });
+      const expected = makeDefaultAction(type, { overlayTargets: overlayTargetsFromStore() });
       expect(onChangeSpy).toHaveBeenCalledWith({ onPress: [expected] });
     },
   );
 });
 
-describe('ActionsInput — dialog/page routing', () => {
+describe('ActionsInput — browse drawer', () => {
   beforeEach(setupStores);
 
-  it('openDialog: routes to the selected dialog and edits its declared component properties', async () => {
+  beforeAll(stubIntersectionObserver);
+
+  it('leads the Add dropdown with a browse row that opens the categorised drawer', async () => {
+    const user = userEvent.setup();
+    render(<Harness onChangeSpy={vi.fn()} />);
+    await user.click(screen.getByRole('combobox'));
+
+    const [first] = screen.getAllByRole('option');
+    expect(first).toHaveAccessibleName('Browse actions…');
+    await user.click(first);
+
+    expect(screen.getByRole('heading', { name: /Add action/ })).toBeInTheDocument();
+    for (const category of ['Screens', 'Machine', 'Session', 'Interface']) {
+      expect(screen.getByRole('button', { name: category })).toBeInTheDocument();
+    }
+  });
+
+  it('adds the action picked in the drawer and closes it', async () => {
+    const onChangeSpy = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onChangeSpy={onChangeSpy} />);
+    await pick(user, screen.getByRole('combobox'), 'Browse actions…');
+    await user.click(screen.getByRole('button', { name: /Show Toast/ }));
+
+    expect(onChangeSpy).toHaveBeenCalledWith({
+      onPress: [makeDefaultAction('showToast', { overlayTargets: overlayTargetsFromStore() })],
+    });
+    expect(screen.queryByRole('heading', { name: /Add action/ })).not.toBeInTheDocument();
+  });
+
+  it('adds the top search match when Enter is pressed', async () => {
+    const onChangeSpy = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onChangeSpy={onChangeSpy} />);
+    await pick(user, screen.getByRole('combobox'), 'Browse actions…');
+
+    const search = screen.getByRole('searchbox', { name: 'Search actions' });
+    fireEvent.change(search, { target: { value: 'theme' } });
+    fireEvent.keyDown(search, { key: 'Enter' });
+
+    expect(onChangeSpy).toHaveBeenCalledWith({
+      onPress: [expect.objectContaining({ type: 'setActiveTheme' })],
+    });
+  });
+});
+
+describe('ActionsInput — page-overlay routing', () => {
+  beforeEach(setupStores);
+
+  it('openDialog: defaults to the first Dialogs-folder page and edits its declared input parameters', async () => {
     const onChangeSpy = vi.fn();
     const user = userEvent.setup();
     render(<Harness onChangeSpy={onChangeSpy} />);
     await pick(user, screen.getByRole('combobox'), 'Open Dialog');
 
-    // Defaults to the first dialog.
     expect(onChangeSpy).toHaveBeenLastCalledWith({
-      onPress: [{ type: 'openDialog', dialogId: 'dlg1', componentProperties: {} }],
+      onPress: [
+        {
+          type: 'openDialog',
+          pageId: 'dlg1',
+          componentProperties: {},
+          size: 'medium',
+          placement: 'center',
+        },
+      ],
     });
 
     await pick(user, within(fieldGroup('Dialog')).getByRole('combobox'), 'Confirm');
     expect(onChangeSpy).toHaveBeenLastCalledWith({
-      onPress: [{ type: 'openDialog', dialogId: 'dlg2', componentProperties: {} }],
+      onPress: [
+        {
+          type: 'openDialog',
+          pageId: 'dlg2',
+          componentProperties: {},
+          size: 'medium',
+          placement: 'center',
+        },
+      ],
     });
 
-    // dlg2 declares a "Motor ID" component property — edit it through its own row.
+    // dlg2 declares a "Motor ID" input parameter — edit it through its own row.
     fireEvent.change(within(fieldGroup('Motor ID')).getByRole('textbox'), {
       target: { value: 'M1' },
     });
     expect(onChangeSpy).toHaveBeenLastCalledWith({
-      onPress: [{ type: 'openDialog', dialogId: 'dlg2', componentProperties: { motorId: 'M1' } }],
+      onPress: [
+        {
+          type: 'openDialog',
+          pageId: 'dlg2',
+          componentProperties: { motorId: 'M1' },
+          size: 'medium',
+          placement: 'center',
+        },
+      ],
     });
   });
 
-  it('closeDialog: defaults to top-most and can target a specific dialog, then clear back to top-most', async () => {
+  it('openPageOverlay: defaults to the first navigable page and takes no input parameters', async () => {
     const onChangeSpy = vi.fn();
     const user = userEvent.setup();
     render(<Harness onChangeSpy={onChangeSpy} />);
-    await pick(user, screen.getByRole('combobox'), 'Close Dialog');
-    expect(onChangeSpy).toHaveBeenLastCalledWith({ onPress: [{ type: 'closeDialog' }] });
+    await pick(user, screen.getByRole('combobox'), 'Open Page As Overlay');
 
-    await pick(user, within(fieldGroup('Dialog')).getByRole('combobox'), 'Settings');
-    expect(onChangeSpy).toHaveBeenLastCalledWith({
-      onPress: [{ type: 'closeDialog', dialogId: 'dlg1' }],
-    });
-
-    await pick(user, within(fieldGroup('Dialog')).getByRole('combobox'), 'Top-most dialog');
-    expect(onChangeSpy).toHaveBeenLastCalledWith({ onPress: [{ type: 'closeDialog' }] });
-  });
-
-  it('openPageOverlay: routes to the selected page with default medium/center layout', async () => {
-    const onChangeSpy = vi.fn();
-    const user = userEvent.setup();
-    render(<Harness onChangeSpy={onChangeSpy} />);
-    await pick(user, screen.getByRole('combobox'), 'Open Page Overlay');
     expect(onChangeSpy).toHaveBeenLastCalledWith({
       onPress: [{ type: 'openPageOverlay', pageId: 'page1', size: 'medium', placement: 'center' }],
     });
@@ -179,13 +244,14 @@ describe('ActionsInput — dialog/page routing', () => {
     expect(onChangeSpy).toHaveBeenLastCalledWith({
       onPress: [{ type: 'openPageOverlay', pageId: 'page2', size: 'medium', placement: 'center' }],
     });
+    expect(screen.queryByText('Input Parameters')).not.toBeInTheDocument();
   });
 
   it('closePageOverlay: defaults to top-most overlay and can target a specific page', async () => {
     const onChangeSpy = vi.fn();
     const user = userEvent.setup();
     render(<Harness onChangeSpy={onChangeSpy} />);
-    await pick(user, screen.getByRole('combobox'), 'Close Page Overlay');
+    await pick(user, screen.getByRole('combobox'), 'Close Dialog/Overlay');
     expect(onChangeSpy).toHaveBeenLastCalledWith({ onPress: [{ type: 'closePageOverlay' }] });
 
     await pick(user, within(fieldGroup('Page')).getByRole('combobox'), 'Home');
@@ -337,8 +403,7 @@ describe('ActionsInput — write target', () => {
     const user = userEvent.setup();
     const write: ButtonAction = {
       type: 'writeDataVariable',
-      datasource: 'PLC',
-      path: 'Motor/Speed',
+      target: { $var: { path: 'PLC:Motor/Speed' } },
       value: 1,
     };
     render(<Harness onChangeSpy={vi.fn()} initial={{ onPress: [write] }} />);
@@ -357,8 +422,7 @@ describe('ActionsInput — write target', () => {
     const user = userEvent.setup();
     const write: ButtonAction = {
       type: 'writeDataVariable',
-      datasource: 'PLC',
-      path: 'Motor/Speed',
+      target: { $var: { path: 'PLC:Motor/Speed' } },
       value: 42,
     };
     render(<Harness onChangeSpy={onChangeSpy} initial={{ onPress: [write] }} />);
@@ -378,8 +442,7 @@ describe('ActionsInput — write target', () => {
     const user = userEvent.setup();
     const write: ButtonAction = {
       type: 'writeDataVariable',
-      datasource: 'PLC',
-      path: 'Motor/Speed',
+      target: { $var: { path: 'PLC:Motor/Speed' } },
       value: 42,
     };
     render(<Harness onChangeSpy={onChangeSpy} initial={{ onPress: [write] }} />);
@@ -391,7 +454,7 @@ describe('ActionsInput — write target', () => {
       .bindingPickerTarget?.onPick?.({ path: 'PLC:Motor/Torque' }, { dataType: 'Float' });
 
     expect(onChangeSpy).toHaveBeenLastCalledWith({
-      onPress: [{ ...write, path: 'Motor/Torque', value: 0 }],
+      onPress: [{ ...write, target: { $var: { path: 'PLC:Motor/Torque' } }, value: 0 }],
     });
   });
 
@@ -403,7 +466,7 @@ describe('ActionsInput — write target', () => {
           artifactKind: 'page',
           widgetId: 'btn-1',
           propKey: 'actions',
-          fieldPath: ['actions', 'onPress', '0', 'datasource'],
+          fieldPath: ['actions', 'onPress', '0', 'target'],
           code: 'var-test-server',
           severity: 'error',
           message: "datasource 'Sim' is an OPC-UA test server",
@@ -415,8 +478,7 @@ describe('ActionsInput — write target', () => {
     const user = userEvent.setup();
     const write: ButtonAction = {
       type: 'writeDataVariable',
-      datasource: 'Sim',
-      path: 'Motor/Speed',
+      target: { $var: { path: 'Sim:Motor/Speed' } },
       value: 1,
     };
     render(

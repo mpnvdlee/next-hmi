@@ -1,5 +1,12 @@
 import { create } from 'zustand';
-import type { IconValue, ImageValue, VariableBinding } from '@shared/types/config';
+import type {
+  IconValue,
+  ImageValue,
+  RepeatItemSource,
+  VideoValue,
+  VariableBinding,
+} from '@shared/types/config';
+import type { RepeatEditorScope } from '@config/components/editor/PropertySourceEditor/repeatScopeContext';
 import type { ComponentOption } from '@config/components/editor/WidgetOptionsContext';
 import type { ComponentPropertySchema } from '@shared/types/componentProperty';
 import type { RequiredFieldEntry, SchemaField } from '@shared/types/widgetSchema';
@@ -23,6 +30,8 @@ interface ComponentPropSource {
   fieldType?: string | string[];
   /** Required sub-fields for struct-type targets (from SchemaField.requiredFields) */
   requiredFields?: RequiredFieldEntry[];
+  /** The field writes its value back — a Float field then no longer takes an Integer. */
+  write?: boolean;
   /** Label shown in the picker header (e.g. the component schema field label) */
   label?: string;
   /** Called with the selected property key, or empty string for clear */
@@ -31,7 +40,27 @@ interface ComponentPropSource {
   currentKey?: string;
 }
 
-interface BindingPickerOptions {
+export type RepeatItemPick = RepeatItemSource['$repeatItem'];
+
+/** Opens the picker on the surrounding Repeater copy's element instead of the datasources. */
+export interface RepeatItemPickerOptions {
+  scope: RepeatEditorScope;
+  /** What the field reads from the copy today — preselected when the picker opens. */
+  current?: RepeatItemPick;
+  onPick: (pick: RepeatItemPick) => void;
+  /** A write target: the element or one of its members, never the index. */
+  writeTarget?: boolean;
+}
+
+/** Picker extras a property slot passes through untouched: `repeatItem` opens the
+ *  picker on the surrounding Repeater copy's element instead of the datasources,
+ *  `repeatIndex` adds the copy's own `[#]` element under every array. */
+export interface PickerExtras {
+  repeatItem?: RepeatItemPickerOptions;
+  repeatIndex?: boolean;
+}
+
+interface BindingPickerOptions extends PickerExtras {
   /** Called when a variable binding is picked (var mode only) */
   onPick?: (binding: VariableBinding, metadata?: BindingPickMetadata) => void;
   /** Merged-type/requiredFields filter for the variable tree (var mode only) */
@@ -51,13 +80,9 @@ interface BindingPickerOptions {
   currentBinding?: VariableBinding;
 }
 
-interface BindingPickerTarget {
+interface BindingPickerTarget extends BindingPickerOptions {
   componentId: string;
   propertyKey: string;
-  filter?: BindingPickerOptions['filter'];
-  onPick?: (binding: VariableBinding, metadata?: BindingPickMetadata) => void;
-  componentPropSource?: ComponentPropSource;
-  currentBinding?: VariableBinding;
 }
 
 /** Optional target-type context so the widget-prop picker can validate and preview. */
@@ -66,6 +91,8 @@ interface WidgetPropPickerOptions {
   fieldType?: string | string[];
   /** Required sub-fields for struct-type targets. */
   requiredFields?: RequiredFieldEntry[];
+  /** The bound property writes its value back. */
+  write?: boolean;
   /** Label shown in the picker header (the bound property's label). */
   label?: string;
   /** Clears the binding (mirrors the field's own clear action). */
@@ -82,12 +109,14 @@ interface WidgetPropPickerTarget extends WidgetPropPickerOptions {
 
 type AssetPickerTarget =
   | { type: 'icon'; onPick: (value: IconValue) => void; label?: string }
-  | { type: 'image'; onPick: (value: ImageValue) => void; label?: string };
+  | { type: 'image'; onPick: (value: ImageValue) => void; label?: string }
+  | { type: 'video'; onPick: (value: VideoValue) => void; label?: string };
 
 /** `label` names the property being set — the picker shows it before its own action. */
 interface OpenAssetPicker {
   (type: 'icon', onPick: (value: IconValue) => void, label?: string): void;
   (type: 'image', onPick: (value: ImageValue) => void, label?: string): void;
+  (type: 'video', onPick: (value: VideoValue) => void, label?: string): void;
 }
 
 interface EditorDomainStore {
@@ -207,14 +236,7 @@ export const useEditorDomainStore = create<EditorDomainStore>((set, get) => ({
   openBindingPicker: (componentId, propertyKey, options) =>
     set({
       bindingPickerOpen: true,
-      bindingPickerTarget: {
-        componentId,
-        propertyKey,
-        onPick: options?.onPick,
-        filter: options?.filter,
-        componentPropSource: options?.componentPropSource,
-        currentBinding: options?.currentBinding,
-      },
+      bindingPickerTarget: { ...options, componentId, propertyKey },
     }),
   closeBindingPicker: () => set({ bindingPickerOpen: false, bindingPickerTarget: null }),
 
@@ -228,6 +250,7 @@ export const useEditorDomainStore = create<EditorDomainStore>((set, get) => ({
         onPick,
         fieldType: options?.fieldType,
         requiredFields: options?.requiredFields,
+        write: options?.write,
         label: options?.label,
         onClear: options?.onClear,
         currentKey: options?.currentKey,

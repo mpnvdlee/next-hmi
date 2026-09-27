@@ -9,6 +9,7 @@ from core.storage import (
     active_custom_widgets_dir,
     active_icons_dir,
     active_images_dir,
+    active_videos_dir,
 )
 from core.validation.structure import load_widget_manifest
 from fastapi import APIRouter, Request
@@ -19,6 +20,8 @@ router = APIRouter()
 # Allowed asset types per subfolder
 _ICON_EXTENSIONS = {".svg"}
 _IMAGE_EXTENSIONS = {".png", ".webp", ".jpg", ".jpeg", ".gif", ".svg"}
+# .mkv is deliberately absent: an HTML <video> element never plays it.
+_VIDEO_EXTENSIONS = {".mp4", ".webm", ".m4v", ".mov"}
 
 
 def _scan_assets(root: Path, subfolder: str, extensions: set[str], asset_type: str) -> list[dict]:
@@ -43,14 +46,15 @@ def _scan_assets(root: Path, subfolder: str, extensions: set[str], asset_type: s
 @router.get("/api/assets")
 async def list_assets() -> list[dict]:
     """
-    List custom icons and images from the live project's assets/icons and assets/images folders,
-    including any nested subfolders.
-    Returns: [{ name, path, type ('icon'|'image'), mime, size }]
+    List custom icons, images and videos from the live project's assets/icons, assets/images
+    and assets/videos folders, including any nested subfolders.
+    Returns: [{ name, path, type ('icon'|'image'|'video'), mime, size }]
     All paths are relative to the assets root so they can be used as /assets/{path}.
     """
     result: list[dict] = []
     result.extend(_scan_assets(active_icons_dir(), "icons", _ICON_EXTENSIONS, "icon"))
     result.extend(_scan_assets(active_images_dir(), "images", _IMAGE_EXTENSIONS, "image"))
+    result.extend(_scan_assets(active_videos_dir(), "videos", _VIDEO_EXTENSIONS, "video"))
     return result
 
 
@@ -100,6 +104,8 @@ async def list_components() -> list[dict]:
             "buildTs": status.get("ts") if status else None,
             "displayName": metadata.get("displayName"),
             "hostsChildren": metadata.get("hostsChildren"),
+            "flowsChildren": metadata.get("flowsChildren"),
+            "repeatsChildren": metadata.get("repeatsChildren"),
             "category": metadata.get("category"),
             "description": metadata.get("description"),
             "icon": metadata.get("icon"),
@@ -159,11 +165,11 @@ async def get_widget_schemas() -> dict:
     widget property writes.
 
     Read through the shared loader rather than the file, so the response carries
-    the same stdlib-overlaid ``builtin`` map the validators see. The overlay is
-    the reason there is no ``widget-schemas.json`` existence check here: stdlib
-    widgets ship with the product, so a runtime home that has never compiled
-    still has a catalog to serve. Only a manifest with nothing in either map —
-    no stdlib build, no compile — is a 404.
+    the same built-in-overlaid ``builtin`` map the validators see. The overlay
+    is the reason there is no ``widget-schemas.json`` existence check here:
+    built-in widgets ship with the product, so a runtime home that has never
+    compiled still has a catalog to serve. Only a manifest with nothing in
+    either map — no built-in-widgets build, no compile — is a 404.
     """
     manifest = load_widget_manifest()
     if not manifest.get("builtin") and not manifest.get("custom"):

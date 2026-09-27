@@ -25,6 +25,7 @@ function Toast({ toast }: { toast: ToastEntry }) {
     >
       <span className="hmi-toast__icon" aria-hidden="true">
         {toast.severity === 'info' && '●'}
+        {toast.severity === 'success' && '✓'}
         {toast.severity === 'warning' && '▲'}
         {toast.severity === 'error' && '✕'}
       </span>

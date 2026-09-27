@@ -1,11 +1,9 @@
 /* ── Component render error (error boundary fallback) ──────── */
 .hmi-widget-error {
-  /* Self-layout barrier — this fallback stands in for a widget root but does
-     not carry `.hmi-component`, so it needs its own reset. See hmi.css. */
-  --self-basis: initial;
-  --self-grow: initial;
-  --self-shrink: initial;
-
+  /* Stands in for a widget root but does not carry `.hmi-component` and never
+     receives a `selfLayoutStyle()` — it is a static fallback with nothing to
+     size against, so these are plain values rather than an inline-overridable
+     default. */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -17,9 +15,9 @@
   font-family: var(--hmi-type-body-font);
   opacity: 0.9;
   cursor: help;
-  flex-basis: var(--self-basis, auto);
-  flex-grow: var(--self-grow, 0);
-  flex-shrink: var(--self-shrink, 1);
+  flex-basis: auto;
+  flex-grow: 0;
+  flex-shrink: 1;
 }
 
 /* ── Unknown component fallback ──────────────────────────────── */
@@ -36,6 +34,13 @@
 /* ── Preview node — wraps every component in preview mode ───── */
 .hmi-preview-node {
   display: contents;
+}
+
+/* A Repeater copy past the first: the template's widgets drawn again for
+ * context. Dimmed at its outermost node only — opacity already carries down to
+ * everything inside, and applying it again per level would compound. */
+.hmi-preview-node--ghost:not(.hmi-preview-node--ghost .hmi-preview-node--ghost) > * {
+  opacity: 0.5;
 }
 
 /* Disable interactive chart elements in preview so clicks select the component */
@@ -71,7 +76,11 @@
   overflow: hidden;
 }
 
-/* Base overlay — layout only */
+/* Base overlay — layout only.
+ * The ring is an `outline` drawn inward, the same construction as the editor
+ * selection ring above, so the two land on the same rect and agree at the
+ * corners. A `border` here carried its own `--hmi-radius`, which rounded the
+ * overlay against a square selection ring. */
 .hmi-binding-overlay {
   position: absolute;
   inset: 0;
@@ -80,7 +89,7 @@
   align-items: center;
   justify-content: center;
   gap: 0.25rem;
-  border-radius: var(--hmi-radius);
+  outline-offset: -2px;
   pointer-events: none;
   z-index: 10;
 }
@@ -88,13 +97,35 @@
 /* Variable disabled (in snapshot but not present) — solid red */
 .hmi-binding-overlay--disabled {
   background: var(--hmi-binding-disabled-bg);
-  border: 2px solid var(--hmi-binding-disabled-border);
+  outline: 2px solid var(--hmi-binding-disabled-border);
 }
 
 /* OPC UA / backend disconnected — dashed amber */
 .hmi-binding-overlay--disconnected {
   background: var(--hmi-binding-disconnected-bg);
-  border: 2px dashed var(--hmi-binding-disconnected-border);
+  outline: 2px dashed var(--hmi-binding-disconnected-border);
+}
+
+/* Binding sound, no value ever delivered — dashed amber, same family as
+   disconnected: both mean "no data", neither means "wrong". */
+.hmi-binding-overlay--nodata {
+  background: var(--hmi-binding-nodata-bg);
+  outline: 2px dashed var(--hmi-binding-nodata-border);
+}
+
+/* Selected outranks marked. The overlay is a positioned child of the wrapper,
+   so it paints above the wrapper's selection ring and its own ring hid it —
+   the selected widget stopped reading as selected the moment it was marked.
+   When this widget is the selected one the overlay carries the selection ring
+   instead: same rect, so nothing shifts, and the tint and icon still say what
+   is wrong. Scoped with `>` so a marked *child* of a selected container keeps
+   its own ring. */
+.hmi-preview-node--selected > .hmi-binding-wrapper > .hmi-binding-overlay,
+.hmi-preview-node--selected[data-widget-type^='$component:']
+  > .hmi-preview-node
+  > .hmi-binding-wrapper
+  > .hmi-binding-overlay {
+  outline: 2px solid var(--hmi-editor-selection);
 }
 
 /* Shared icon base */
@@ -127,13 +158,40 @@
   transform: translate(-50%, -50%) rotate(-45deg);
 }
 
-/* Disconnected icon: WiFi-off symbol (SVG background) */
+/* No-data icon: an amber ⊖ — a slot with nothing in it, not a fault. Drawn from
+   the two pseudo-elements rather than an SVG so it follows the token. */
+.hmi-binding-overlay--nodata .hmi-binding-overlay__icon::before,
+.hmi-binding-overlay--nodata .hmi-binding-overlay__icon::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.hmi-binding-overlay--nodata .hmi-binding-overlay__icon::before {
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 0.18rem solid var(--hmi-binding-nodata-icon);
+  border-radius: 50%;
+}
+
+.hmi-binding-overlay--nodata .hmi-binding-overlay__icon::after {
+  width: 0.85rem;
+  height: 0.18rem;
+  background: var(--hmi-binding-nodata-icon);
+  border-radius: 2px;
+}
+
+/* Disconnected icon: a WiFi-off symbol, painted as a mask over the token
+   rather than as a coloured SVG — a hex baked into the data URI meant retuning
+   `--hmi-binding-disconnected-icon` moved the no-data glyph and left this one
+   behind. The stroke colour below is only the mask's alpha channel. */
 .hmi-binding-overlay--disconnected .hmi-binding-overlay__icon {
-  background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23eab308" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20" stroke-width="3"/><line x1="2" y1="2" x2="22" y2="22" stroke-width="2.5"/></svg>');
-  background-size: contain;
-  background-repeat: no-repeat;
-  background-position: center;
-  opacity: 0.85;
+  --hmi-disconnected-glyph: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20" stroke-width="3"/><line x1="2" y1="2" x2="22" y2="22" stroke-width="2.5"/></svg>');
+  background-color: var(--hmi-binding-disconnected-icon);
+  -webkit-mask: var(--hmi-disconnected-glyph) center / contain no-repeat;
+  mask: var(--hmi-disconnected-glyph) center / contain no-repeat;
 }
 
 .hmi-binding-overlay--disconnected .hmi-binding-overlay__icon::before,

@@ -17,11 +17,11 @@ export type SelectionScope =
   | { kind: 'single'; id: string }
   /** Two or more ids, every one of them a widget. Comps are in document order. */
   | { kind: 'multi-widget'; ids: string[]; comps: WidgetConfig[] }
-  /** Two or more ids where at least one is not a widget (a page, dialog, section…). */
+  /** Two or more ids where at least one is not a widget (a page, a section…). */
   | { kind: 'multi-mixed'; ids: string[] };
 
 interface WidgetIndex {
-  /** Every widget id in editor-tree document order: shell regions, pages, dialogs. */
+  /** Every widget id in editor-tree document order: shell regions, Pages, Dialogs. */
   order: string[];
   parentOf: Map<string, string | null>;
   compOf: Map<string, WidgetConfig>;
@@ -56,7 +56,7 @@ function indexWidgets(p: AllAreas): WidgetIndex {
 
   for (const region of SHELL_REGION_IDS) walk(p[region], null);
   walkPages(p.pages);
-  for (const dialog of p.dialogs) walk(dialog.widgets, null);
+  walkPages(p.dialogs);
 
   return { order, parentOf, compOf };
 }
@@ -131,7 +131,7 @@ export function verbTargets(selectedIds: string[], nodeId: string, p: AllAreas):
 
 /**
  * Whether a Ctrl/Cmd-click on `candidateId` should extend the selection rather than
- * replace it. Only widgets group together — clicking a page, dialog or section row
+ * replace it. Only widgets group together — clicking a page or section row
  * always starts over.
  */
 export function canExtendWith(ids: string[], candidateId: string, p: AllAreas): boolean {

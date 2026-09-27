@@ -14,7 +14,8 @@ import {
   rfNestedFields,
   type RequiredFieldEntry,
 } from '../bindingPickerUtils';
-import { structSchemaMatchesRequired } from './helpers';
+import { structSatisfies } from '@shared/types/varType';
+import { formatTypeBadge, structSchemaLookup } from './helpers';
 
 export default function RequiredFieldsTree({
   fields,
@@ -32,22 +33,23 @@ export default function RequiredFieldsTree({
         const needsWrite = rfNeedsWrite(f);
         const matchNode = propNodes?.find((n) => n.name === name);
         const showSlot = propNodes !== undefined;
+        // The same member rule the variable tree applies, so a struct property
+        // and a struct variable fit the same fields.
+        const isMatched = structSatisfies([f], structSchemaLookup(propNodes ?? []));
         if (nested?.length) {
           const subNodes =
             matchNode?.kind === 'folder' || matchNode?.kind === 'array'
               ? (matchNode.children ?? [])
               : undefined;
-          const folderMatched =
-            matchNode !== undefined && structSchemaMatchesRequired(subNodes ?? [], nested);
           return (
             <div key={`${name}-${i}`}>
               <div className="editor-binding-req-row editor-binding-req-row--folder">
                 <span className="editor-binding-req-row__name">{name}</span>
                 {showSlot && (
                   <span
-                    className={`editor-binding-char-row__match-slot${folderMatched ? '' : ' editor-binding-char-row__match-slot--mismatch'}`}
+                    className={`editor-binding-char-row__match-slot${isMatched ? '' : ' editor-binding-char-row__match-slot--mismatch'}`}
                   >
-                    {folderMatched ? '✓' : '✗'}
+                    {isMatched ? '✓' : '✗'}
                   </span>
                 )}
               </div>
@@ -57,12 +59,6 @@ export default function RequiredFieldsTree({
             </div>
           );
         }
-        const typeMatches =
-          !expectedType ||
-          !matchNode?.type ||
-          matchNode.type.toLowerCase() === expectedType.toLowerCase();
-        const accessGood = !needsWrite || matchNode?.write === true;
-        const isMatched = matchNode !== undefined && typeMatches && accessGood;
         return (
           <div key={`${name}-${i}`} className="editor-binding-req-row">
             <span className="editor-binding-req-row__name">{name}</span>
@@ -73,7 +69,9 @@ export default function RequiredFieldsTree({
                 {isMatched ? '✓' : '✗'}
               </span>
             )}
-            <span className="editor-binding-char-row__type">{expectedType ?? '—'}</span>
+            <span className="editor-binding-char-row__type">
+              {expectedType ? formatTypeBadge(expectedType) : '—'}
+            </span>
             {needsWrite ? (
               <AccessBadge writable={true} />
             ) : (

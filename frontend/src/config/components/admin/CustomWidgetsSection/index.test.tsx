@@ -161,7 +161,7 @@ describe('CustomWidgetsSection', () => {
     expect(screen.getByText('--hmi-accent, --hmi-bg-2')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Browse available tokens/ })).toHaveAttribute(
       'href',
-      '/config/admin#theme-tokens',
+      '/config/theme',
     );
   });
 

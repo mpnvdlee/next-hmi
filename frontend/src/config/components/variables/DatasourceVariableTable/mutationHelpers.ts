@@ -226,7 +226,7 @@ export function renameFolderInTree(
 /**
  * Renaming a folder changes the path-chain keys `collapsed` uses for its own
  * key and every descendant's key, so those keys must be migrated alongside
- * the tree mutation above or they go stale (§3.5).
+ * the tree mutation above or they go stale.
  */
 export function renameFolderCollapsedKeys(
   collapsed: Set<string>,
@@ -278,7 +278,7 @@ export function removeNodeByPath(tree: TreeNode[], path: string): TreeNode[] {
  * Toggle `enabled` for every variable under the folder at `path`. Matching by
  * `(node_id ?? name)` across the whole tree would also flip every other
  * same-named folder (e.g. a nested "Config" folder inside every element of
- * an array-of-struct) — path scoping fixes that (§3.4). `node_id` is
+ * an array-of-struct) — path scoping fixes that. `node_id` is
  * preferred when present since it's the globally unique OPC-UA identifier.
  */
 export function setFolderEnabledByIdentity(

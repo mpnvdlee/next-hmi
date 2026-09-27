@@ -3,10 +3,10 @@
 ``project-testbench`` intentionally keeps a handful of draft/nonexistent
 variable bindings (an unknown icon, an unbound switch, and the
 ``LegacyPLC:StructTest`` binding repeated across the 163-widget scale-fixture
-page — see maintenance-backlog #40) to exercise the editor's diagnostics UI.
+page) to exercise the editor's diagnostics UI.
 This runs the same whole-project sweep as ``GET /api/config/validate``
 against the real ``project-testbench/`` tree and asserts the result against a
-checked-in golden list (backlog #39): a new, unapproved diagnostic finding
+checked-in golden list: a new, unapproved diagnostic finding
 fails this test, while the currently-known/intentional ones are allowed.
 
 Adding a genuinely new intentional finding to project-testbench means
@@ -75,6 +75,5 @@ def test_project_testbench_diagnostics_match_golden_snapshot(testbench_diagnosti
         "project-testbench's diagnostics changed. If this is a new, "
         "unapproved finding, fix the binding instead of updating the golden "
         "file. If it's a deliberate new/changed intentional finding, "
-        f"regenerate {GOLDEN_PATH} and record it in "
-        "docs/operations/maintenance-backlog.md #39."
+        f"regenerate {GOLDEN_PATH} deliberately."
     )

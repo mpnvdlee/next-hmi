@@ -29,7 +29,7 @@ describe('useVariable', () => {
   });
 });
 
-describe('useBindingValue (§10.5 struct[] index resolution)', () => {
+describe('useBindingValue (struct[] index resolution)', () => {
   beforeEach(() => {
     useVariableStore.setState({ values: {}, varMeta: {} });
   });

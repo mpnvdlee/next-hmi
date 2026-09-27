@@ -3,8 +3,10 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useManagerStore, type InstanceSnapshot } from './managerStore';
 import { useProjectsStore, describeError, type ProjectEntry } from '@config/store/projectsStore';
 import { safeSignInTarget } from '@shared/store/sessionStore';
+import { getVersion } from '@shared/utils/runtimeBase';
 import { useDocumentTitle } from '@shared/hooks/useDocumentTitle';
 import AppTopBarNav from '@shared/components/AppTopBarNav';
+import LogoMark from '@shared/components/LogoMark';
 import Spinner from '@shared/components/Spinner';
 import '@config/styles/config.css';
 import '@config/components/shell/ConfigTopBar/style.css';
@@ -15,19 +17,24 @@ import '@config/components/projects/ProjectsView/projectForm.css';
 import './manager.css';
 import Button from '@config/components/ui/Button';
 import CreateProjectModal from '@config/components/projects/ProjectsView/CreateProjectModal';
+import NewProjectTemplateModal, {
+  type ProjectTemplate,
+} from '@config/components/projects/ProjectsView/NewProjectTemplateModal';
 import AddExistingProjectModal from '@config/components/projects/ProjectsView/AddExistingProjectModal';
 import ImportProjectModal from '@config/components/projects/ProjectsView/ImportProjectModal';
 import RemoveProjectModal from '@config/components/projects/ProjectsView/RemoveProjectModal';
 import RenameProjectModal from '@config/components/projects/ProjectsView/RenameProjectModal';
 import LocateProjectModal from '@config/components/projects/ProjectsView/LocateProjectModal';
-import OperatorSetupModal from '@config/components/projects/ProjectsView/OperatorSetupModal';
+import UpgradeProjectModal from '@config/components/projects/ProjectsView/UpgradeProjectModal';
 import PeerTransferModal from '@config/components/projects/ProjectsView/PeerTransferModal';
 import SystemInfoSection from '@config/components/admin/SystemInfoSection';
 import RuntimeHomeSection from '@config/components/admin/RuntimeHomeSection';
 import LogsSection from '@config/components/admin/LogsSection';
 import LogViewerModal from '@config/components/admin/LogViewerModal';
+import ProjectThumbnail from './ProjectThumbnail';
 import SecuritySection from '@config/components/admin/SecuritySection';
 import HttpsSection from '@config/components/admin/HttpsSection';
+import InsecureConnectionNotice from '@config/components/admin/InsecureConnectionNotice';
 import TelemetrySection from '@config/components/admin/TelemetrySection';
 import { enterpriseAppGates, enterpriseSettingsPanels } from '@enterprise';
 
@@ -198,10 +205,16 @@ function AuthGate({ mode }: { mode: 'needs-setup' | 'needs-login' }) {
   return (
     <div className="mgr-center">
       <form className="name-modal" onSubmit={submit}>
-        <h1 className="name-modal__title">NEXT HMI</h1>
+        <div className="mgr-auth-card__brand">
+          <LogoMark className="mgr-auth-card__logo" />
+          <h1 className="name-modal__title">NEXT HMI</h1>
+        </div>
         <p className="mgr-auth-card__subtitle">
           {isSetup ? 'Set a device-admin password to secure the manager.' : 'Manager sign-in'}
         </p>
+        {/* The password about to be typed here is the exposure the notice
+            names, so the gate carries it ahead of the field itself. */}
+        <InsecureConnectionNotice />
         <div className="cfg-security-form">
           <label className="project-form__field">
             <span className="project-form__label">Password</span>
@@ -263,9 +276,20 @@ function statusLabel(project: ProjectEntry, inst: InstanceSnapshot | undefined):
   return STATUS_LABELS[inst.status];
 }
 
+/** Why a project stamped by a newer build cannot start here, naming the version
+ * the operator needs. `minAppVersion` is absent on projects stamped before
+ * builds recorded it — then all we can honestly say is "newer". */
+function unsupportedFormatNote(project: ProjectEntry): string {
+  const needed = project.minAppVersion
+    ? `NEXT HMI ${project.minAppVersion} or newer`
+    : 'a newer version of NEXT HMI';
+  return `Needs ${needed} — this machine runs ${getVersion()}.`;
+}
+
 type Dialog =
   | { kind: 'none' }
-  | { kind: 'create' }
+  | { kind: 'choose-template' }
+  | { kind: 'create'; template: ProjectTemplate }
   | { kind: 'add-existing' }
   | { kind: 'import' }
   | { kind: 'remove'; entry: ProjectEntry }
@@ -273,7 +297,7 @@ type Dialog =
   | { kind: 'locate'; entry: ProjectEntry }
   | { kind: 'transfer'; entry: ProjectEntry }
   | { kind: 'pull' }
-  | { kind: 'operator-setup'; entry: ProjectEntry };
+  | { kind: 'upgrade'; entry: ProjectEntry };
 
 function ProjectsPage() {
   useDocumentTitle('Projects');
@@ -290,6 +314,10 @@ function ProjectsPage() {
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
+  // One-time notice shown right after a project finishes upgrading — not a
+  // persisted/always-shown row detail, just this page's acknowledgment of
+  // what the confirm-and-upgrade flow just did.
+  const [rowNotice, setRowNotice] = useState<string | null>(null);
   const [dialog, setDialog] = useState<Dialog>({ kind: 'none' });
 
   const runningLocalProjectIds = useMemo(
@@ -327,17 +355,6 @@ function ProjectsPage() {
     window.history.replaceState({}, '', rest ? `/projects?${rest}` : '/projects');
   }, []);
 
-  useEffect(() => {
-    const requestedId = new URLSearchParams(window.location.search).get('operatorSetup');
-    if (!requestedId) return;
-    const entry = projects.find(
-      (project) => project.id === requestedId && project.operatorSetupRequired,
-    );
-    if (!entry) return;
-    setDialog({ kind: 'operator-setup', entry });
-    window.history.replaceState({}, '', '/projects');
-  }, [projects]);
-
   const act = useCallback(async (id: string, fn: (id: string) => Promise<void>) => {
     setBusyId(id);
     setRowError(null);
@@ -367,6 +384,7 @@ function ProjectsPage() {
     <>
       <div className="projects-page">
         <div className="projects-page__inner">
+          <InsecureConnectionNotice />
           <header className="projects-page__header">
             <div className="projects-page__actions">
               <Button variant="default" onClick={() => setDialog({ kind: 'import' })}>
@@ -378,16 +396,25 @@ function ProjectsPage() {
               <Button variant="default" onClick={() => setDialog({ kind: 'pull' })}>
                 ⇩ Pull from peer
               </Button>
-              <Button variant="primary" onClick={() => setDialog({ kind: 'create' })}>
+              <Button variant="primary" onClick={() => setDialog({ kind: 'choose-template' })}>
                 + New project
               </Button>
             </div>
           </header>
 
           {rowError && (
-            <div className="projects-page__error">
+            <div className="cfg-error-banner projects-page__error">
               <span>{rowError}</span>{' '}
               <Button variant="ghost" size="sm" onClick={() => setRowError(null)}>
+                Dismiss
+              </Button>
+            </div>
+          )}
+
+          {rowNotice && (
+            <div className="cfg-success-banner projects-page__notice">
+              <span>{rowNotice}</span>{' '}
+              <Button variant="ghost" size="sm" onClick={() => setRowNotice(null)}>
                 Dismiss
               </Button>
             </div>
@@ -415,15 +442,18 @@ function ProjectsPage() {
                       .filter(Boolean)
                       .join(' ')}
                   >
+                    <ProjectThumbnail id={p.id} name={p.name} updatedAt={p.thumbnailUpdatedAt} />
                     <div className="project-row__body">
                       <div className="project-row__title-line">
-                        <span className="project-row__name">{p.name}</span>
-                        <code
-                          className="project-row__id"
-                          title="Project id — addresses this project in its URLs and in MCP token scopes"
-                        >
-                          {p.id}
-                        </code>
+                        <span className="project-row__name">
+                          {p.name}{' '}
+                          <code
+                            className="project-row__id"
+                            title="Project id — addresses this project in its URLs and in MCP token scopes"
+                          >
+                            [{p.id}]
+                          </code>
+                        </span>
                         <span className={`mgr-status mgr-status--${inst?.status ?? 'stopped'}`}>
                           {statusLabel(p, inst)}
                         </span>
@@ -431,6 +461,9 @@ function ProjectsPage() {
                       <code className="project-row__path">{p.path}</code>
                       {inst?.lastError && (
                         <span className="mgr-status__error">{inst.lastError}</span>
+                      )}
+                      {p.unsupportedFormat && (
+                        <span className="mgr-status__error">{unsupportedFormatNote(p)}</span>
                       )}
                       <div className="project-row__toggles">
                         <label
@@ -444,11 +477,11 @@ function ProjectsPage() {
                             disabled={
                               busyId === p.id ||
                               p.status === 'missing' ||
-                              p.operatorSetupStatus !== 'complete'
+                              p.credentialsStatus === 'error'
                             }
                             onChange={() => makeDefault(p)}
                           />
-                          <span>{p.isDefault ? 'Default project' : 'Set as default'}</span>
+                          <span>Set as default</span>
                         </label>
                         <label
                           className="mgr-mcp-toggle"
@@ -465,23 +498,14 @@ function ProjectsPage() {
                       </div>
                     </div>
                     <div className="project-row__actions">
-                      {p.operatorSetupStatus === 'error' ? (
+                      {p.credentialsStatus === 'error' ? (
                         <Button
                           variant="default"
                           size="sm"
                           disabled
-                          title={p.operatorSetupError ?? 'Project credentials are unavailable'}
+                          title={p.credentialsError ?? 'Project credentials are unavailable'}
                         >
                           Credentials unavailable
-                        </Button>
-                      ) : p.operatorSetupRequired ? (
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          disabled={busyId === p.id || p.status === 'missing'}
-                          onClick={() => setDialog({ kind: 'operator-setup', entry: p })}
-                        >
-                          Set operator password
                         </Button>
                       ) : running ? (
                         <>
@@ -500,12 +524,20 @@ function ProjectsPage() {
                             Open editor
                           </Button>
                         </>
+                      ) : p.unsupportedFormat ? (
+                        <Button variant="default" size="sm" disabled>
+                          Requires update
+                        </Button>
                       ) : (
                         <Button
                           variant="default"
                           size="sm"
                           disabled={busyId === p.id || transient || p.status === 'missing'}
-                          onClick={() => act(p.id, start)}
+                          onClick={() =>
+                            p.needsUpgrade
+                              ? setDialog({ kind: 'upgrade', entry: p })
+                              : act(p.id, start)
+                          }
                         >
                           {busyId === p.id ? '…' : 'Start'}
                         </Button>
@@ -576,11 +608,18 @@ function ProjectsPage() {
         </div>
       </div>
 
+      {dialog.kind === 'choose-template' && (
+        <NewProjectTemplateModal
+          onCancel={closeDialog}
+          onChoose={(template) => setDialog({ kind: 'create', template })}
+        />
+      )}
       {dialog.kind === 'create' && (
         <CreateProjectModal
           defaultRoot={defaultRoot}
+          template={dialog.template}
           onCancel={closeDialog}
-          onCreated={(entry) => setDialog({ kind: 'operator-setup', entry })}
+          onCreated={closeDialog}
         />
       )}
       {dialog.kind === 'add-existing' && (
@@ -611,8 +650,22 @@ function ProjectsPage() {
           onLocated={closeDialog}
         />
       )}
-      {dialog.kind === 'operator-setup' && (
-        <OperatorSetupModal entry={dialog.entry} onCompleted={closeDialog} />
+      {dialog.kind === 'upgrade' && (
+        <UpgradeProjectModal
+          entry={dialog.entry}
+          start={start}
+          onCancel={closeDialog}
+          onUpgraded={(migration) => {
+            const name = dialog.entry.name;
+            closeDialog();
+            if (migration) {
+              setRowNotice(
+                `Upgraded "${name}" from v${migration.fromVersion} to v${migration.toVersion}. ` +
+                  `Backup: ${migration.backup ?? 'none'}`,
+              );
+            }
+          }}
+        />
       )}
       {dialog.kind === 'transfer' && (
         <PeerTransferModal
@@ -656,24 +709,37 @@ function SettingsPage() {
   const telemetry = useManagerStore((s) => s.telemetry);
   const loadTelemetry = useManagerStore((s) => s.loadTelemetry);
   const applyTelemetry = useManagerStore((s) => s.applyTelemetry);
+  const instances = useManagerStore((s) => s.instances);
+  const refreshRunning = useManagerStore((s) => s.refreshRunning);
   const [logsOpen, setLogsOpen] = useState(false);
 
   useEffect(() => {
     void loadSystemInfo();
     void loadRuntimeHome();
+    void refreshRunning();
     const infoId = setInterval(loadSystemInfo, 5000);
     return () => clearInterval(infoId);
-  }, [loadSystemInfo, loadRuntimeHome]);
+  }, [loadSystemInfo, loadRuntimeHome, refreshRunning]);
+
+  // The HTTPS restart's blind-wait guess is sized off this — a project has to
+  // come all the way back down and up again before the replacement listener
+  // answers, so a stale count here would undersize the wait.
+  const runningProjectCount = useMemo(
+    () => Object.values(instances).filter((inst) => inst.status === 'running').length,
+    [instances],
+  );
 
   return (
     <div className="projects-page">
       <div className="projects-page__inner">
+        <InsecureConnectionNotice />
         <SystemInfoSection info={systemInfo} />
         <RuntimeHomeSection status={runtimeHome ? { path: runtimeHome } : null} />
         <LogsSection onOpen={() => setLogsOpen(true)} />
         <SecuritySection onChangePassword={changePassword} />
         <HttpsSection
           status={tls}
+          runningProjectCount={runningProjectCount}
           onLoad={loadTls}
           onApply={applyTls}
           onRegenerate={regenerateTlsCertificate}

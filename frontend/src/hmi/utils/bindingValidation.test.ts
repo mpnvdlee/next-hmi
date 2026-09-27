@@ -1,11 +1,13 @@
 import {
   aggregateBindingStatus,
   checkBindingSpec,
+  extractBindingSpecs,
   createBindingStatusSelector,
   type BindingSpec,
   type BindingStoreSlice,
 } from './bindingValidation';
 import type { VarMeta } from '../store/variableStore';
+import type { EvaluationContext, ResolvedValue } from './propertySourceEval';
 import type { VarType } from '@shared/types/varType';
 
 function slice(overrides: Partial<BindingStoreSlice> = {}): BindingStoreSlice {
@@ -15,7 +17,6 @@ function slice(overrides: Partial<BindingStoreSlice> = {}): BindingStoreSlice {
     metadataReceived: true,
     wsConnected: true,
     opcuaConnected: {},
-    snapshotReceived: true,
     ...overrides,
   };
 }
@@ -40,7 +41,7 @@ function structArraySpec(overrides: Partial<BindingSpec> = {}): BindingSpec {
 }
 
 describe('checkBindingSpec', () => {
-  it('reports ok for an empty struct[] variable once metadata confirms the shape (§10.3)', () => {
+  it('reports ok for an empty struct[] variable once metadata confirms the shape', () => {
     const s = slice({ values: { 'PLC:Alarms': [] }, varMeta: { 'PLC:Alarms': meta(structArray) } });
     expect(checkBindingSpec(structArraySpec(), s, true)).toBe('ok');
   });
@@ -50,7 +51,7 @@ describe('checkBindingSpec', () => {
     expect(checkBindingSpec(structArraySpec(), s, true)).toBe('pending');
   });
 
-  it('agrees between the "no live data yet" and "live data present" checks for struct[] (§10.4)', () => {
+  it('agrees between the "no live data yet" and "live data present" checks for struct[]', () => {
     const spec = structArraySpec();
     const beforeData = slice({ varMeta: { 'PLC:Alarms': meta(structArray) } });
     const afterEmptyData = slice({
@@ -204,6 +205,400 @@ describe('checkBindingSpec', () => {
   });
 });
 
+describe('checkBindingSpec — base types and struct members', () => {
+  const integer: VarType = { kind: 'scalar', base: 'Integer', array: false };
+  const float: VarType = { kind: 'scalar', base: 'Float', array: false };
+  const floatSlot = [{ kind: 'scalar', base: 'Float', array: false }] as const;
+
+  it('keeps an Integer variable out of a Float slot', () => {
+    const s = slice({ values: { 'PLC:Count': 3 }, varMeta: { 'PLC:Count': meta(integer) } });
+    expect(checkBindingSpec({ id: 'PLC:Count', accept: [...floatSlot] }, s, true)).toBe('invalid');
+  });
+
+  const motor: VarType = { kind: 'struct', name: 'Motor', array: false, fields: ['Speed', 'Name'] };
+  const motorMeta = {
+    'PLC:Motor': meta(motor),
+    'PLC:Motor/Speed': meta(float, { writable: true }),
+    'PLC:Motor/Name': meta({ kind: 'scalar', base: 'String', array: false }, { writable: false }),
+  };
+  const motorSpec = (requiredFields: BindingSpec['requiredFields']): BindingSpec => ({
+    id: 'PLC:Motor',
+    accept: [{ kind: 'struct', array: false }],
+    requiredFields,
+  });
+
+  it("checks a struct's members for type and access, not just their names", () => {
+    const s = slice({ values: { 'PLC:Motor': {} }, varMeta: motorMeta });
+    expect(
+      checkBindingSpec(motorSpec([{ name: 'Speed', type: 'Float', write: true }]), s, true),
+    ).toBe('ok');
+    expect(checkBindingSpec(motorSpec([{ name: 'Name', type: 'Float' }]), s, true)).toBe('invalid');
+    expect(checkBindingSpec(motorSpec([{ name: 'Name', write: true }]), s, true)).toBe('invalid');
+  });
+
+  const motors: VarType = { ...motor, name: 'Motors', array: true };
+  const writtenSpeed = [{ name: 'Speed', write: true }];
+  const motorsMeta = (first: number) => ({
+    'PLC:Motors': meta(motors),
+    [`PLC:Motors/Line[${first}]/Speed`]: meta(float, { writable: false }),
+    [`PLC:Motors/Line[${first}]/Name`]: meta(float),
+    [`PLC:Motors/Line[${first + 1}]/Speed`]: meta(float, { writable: true }),
+    [`PLC:Motors/Line[${first + 1}]/Name`]: meta(float),
+  });
+  const wholeSpec: BindingSpec = {
+    id: 'PLC:Motors',
+    accept: [{ kind: 'struct', array: true }],
+    requiredFields: writtenSpeed,
+  };
+  const elementSpec = (index: number): BindingSpec => ({
+    id: 'PLC:Motors',
+    index,
+    accept: [{ kind: 'struct', array: false }],
+    requiredFields: writtenSpeed,
+  });
+
+  it("judges a struct array's members on the bound element, else the lowest one", () => {
+    const s = slice({
+      values: {
+        'PLC:Motors': [],
+        'PLC:Motors/[0]': {},
+        'PLC:Motors/[1]': {},
+        'PLC:Motors/[7]': {},
+      },
+      varMeta: motorsMeta(0),
+    });
+    // Line[0] — read-only Speed — whatever the folder prefix; Line[1] writable.
+    expect(checkBindingSpec(wholeSpec, s, true)).toBe('invalid');
+    expect(checkBindingSpec(elementSpec(0), s, true)).toBe('invalid');
+    expect(checkBindingSpec(elementSpec(1), s, true)).toBe('ok');
+    // An index with no element of its own falls back to the lowest.
+    expect(checkBindingSpec(elementSpec(7), s, true)).toBe('invalid');
+  });
+
+  it('judges a struct array that counts from 1', () => {
+    const s = slice({ values: { 'PLC:Motors': [] }, varMeta: motorsMeta(1) });
+    expect(checkBindingSpec(wholeSpec, s, true)).toBe('invalid');
+  });
+
+  it('fails a writing field unless the variable is known to be writable', () => {
+    const speed = (writable?: boolean) =>
+      slice({
+        values: { 'PLC:Speed': 1 },
+        varMeta: { 'PLC:Speed': meta(float, writable === undefined ? {} : { writable }) },
+      });
+    const written: BindingSpec = { id: 'PLC:Speed', accept: [...floatSlot], write: true };
+    expect(checkBindingSpec(written, speed(false), true)).toBe('invalid');
+    expect(checkBindingSpec({ ...written, write: undefined }, speed(false), true)).toBe('ok');
+    expect(checkBindingSpec(written, speed(true), true)).toBe('ok');
+    // Access the metadata does not state is read-only, as the picker and backend read it.
+    expect(checkBindingSpec(written, speed(), true)).toBe('invalid');
+  });
+
+  it('judges a struct on a writing field by its members, not its own access', () => {
+    const written = motorSpec([{ name: 'Speed', write: true }]);
+    const s = slice({ values: { 'PLC:Motor': {} }, varMeta: motorMeta });
+    expect(checkBindingSpec({ ...written, write: true }, s, true)).toBe('ok');
+    const nameWritten = motorSpec([{ name: 'Name', write: true }]);
+    expect(checkBindingSpec({ ...nameWritten, write: true }, s, true)).toBe('invalid');
+  });
+
+  it('re-judges a struct when only its member metadata changes', () => {
+    const selector = createBindingStatusSelector([motorSpec([{ name: 'Name', write: true }])]);
+    const base = slice({ values: { 'PLC:Motor': {} }, varMeta: motorMeta });
+    expect(selector(base)).toBe('disabled');
+    const nameWritable = {
+      ...motorMeta,
+      'PLC:Motor/Name': { ...motorMeta['PLC:Motor/Name'], writable: true },
+    };
+    expect(selector({ ...base, varMeta: nameWritable })).toBe('ok');
+  });
+});
+
+describe('extractBindingSpecs', () => {
+  it("carries the field's write flag onto the spec", () => {
+    const [spec] = extractBindingSpecs(
+      { setpoint: { $var: { path: 'PLC:Setpoint' } } },
+      { setpoint: { type: 'float', write: true } },
+    );
+    expect(spec).toMatchObject({ id: 'PLC:Setpoint', write: true });
+  });
+
+  it('picks up a $var nested in an expression, with no type constraint of its own', () => {
+    const specs = extractBindingSpecs(
+      {
+        value: {
+          $stringExpr: {
+            template: '{1}',
+            wildcards: { 1: { $var: { path: 'PLC:Tanks/T1Volume' } } },
+          },
+        },
+      },
+      { value: { type: 'string' } },
+    );
+    expect(specs).toEqual([{ id: 'PLC:Tanks/T1Volume', accept: [] }]);
+  });
+
+  it('does not list a variable twice when a slot also binds it directly', () => {
+    const specs = extractBindingSpecs(
+      {
+        level: { $var: { path: 'PLC:Speed' } },
+        label: {
+          $stringExpr: { template: '{1}', wildcards: { 1: { $var: { path: 'PLC:Speed' } } } },
+        },
+      },
+      { level: { type: 'number' } },
+    );
+    expect(specs.map((spec) => spec.id)).toEqual(['PLC:Speed']);
+  });
+
+  it('checks an $if discriminant but not the branch that lost', () => {
+    const specs = extractBindingSpecs(
+      {
+        label: {
+          $if: {
+            condition: { $var: { path: 'PLC:Running' } },
+            true: { $var: { path: 'PLC:Rpm' } },
+            false: { $var: { path: 'PLC:Spare' } },
+          },
+        },
+      },
+      { label: { type: 'string' } },
+    );
+    // The condition is read on every render; at most one of the two results is
+    // ever on screen, so neither can be said to be missing.
+    expect(specs.map((spec) => spec.id)).toEqual(['PLC:Running']);
+  });
+
+  it('checks a $switch discriminant and its cases, not their results', () => {
+    const specs = extractBindingSpecs(
+      {
+        label: {
+          $switch: {
+            value: { $var: { path: 'PLC:Mode' } },
+            cases: [
+              { when: { $var: { path: 'PLC:ManualMode' } }, then: { $var: { path: 'PLC:A' } } },
+            ],
+            default: { $var: { path: 'PLC:B' } },
+          },
+        },
+      },
+      { label: { type: 'string' } },
+    );
+    expect(specs.map((spec) => spec.id).sort()).toEqual(['PLC:ManualMode', 'PLC:Mode']);
+  });
+
+  describe('with the branch the render takes', () => {
+    const values: Record<string, unknown> = {};
+    const ctx: EvaluationContext = {
+      resolveVariable: (ds, path) => (values[`${ds}:${path}`] ?? null) as ResolvedValue,
+    };
+    const running = {
+      $if: {
+        condition: { $var: { path: 'PLC:Running' } },
+        true: { $var: { path: 'PLC:Rpm' } },
+        false: { $var: { path: 'PLC:Spare' } },
+      },
+    };
+
+    it('types an $if result against the field, and only the result it takes', () => {
+      values['PLC:Running'] = true;
+      const specs = extractBindingSpecs(
+        { level: running },
+        { level: { type: 'float', write: true } },
+        ctx,
+      );
+      expect(specs).toEqual([
+        {
+          id: 'PLC:Rpm',
+          index: undefined,
+          accept: [{ kind: 'scalar', base: 'Float', array: false }],
+          requiredFields: undefined,
+          write: true,
+        },
+        { id: 'PLC:Running', accept: [] },
+      ]);
+      values['PLC:Running'] = false;
+      expect(
+        extractBindingSpecs({ level: running }, { level: { type: 'float' } }, ctx)[0],
+      ).toMatchObject({
+        id: 'PLC:Spare',
+        accept: [{ kind: 'scalar', base: 'Float', array: false }],
+      });
+    });
+
+    it('follows a $switch case into a nested $if, and falls back to its default', () => {
+      values['PLC:Mode'] = 2;
+      values['PLC:Running'] = true;
+      const level = {
+        $switch: {
+          value: { $var: { path: 'PLC:Mode' } },
+          cases: [{ when: 2, then: running }],
+          default: { $var: { path: 'PLC:Idle', index: 1 } },
+        },
+      };
+      const schema = { level: { type: 'float' } };
+      // The nested `$if`'s condition sits in the taken `then`, so it is read too.
+      expect(extractBindingSpecs({ level }, schema, ctx).map((s) => s.id)).toEqual([
+        'PLC:Rpm',
+        'PLC:Mode',
+        'PLC:Running',
+      ]);
+      values['PLC:Mode'] = 3;
+      expect(extractBindingSpecs({ level }, schema, ctx)[0]).toMatchObject({
+        id: 'PLC:Idle',
+        index: 1,
+        accept: [{ kind: 'scalar', base: 'Float', array: false }],
+      });
+    });
+
+    it('lets the typed spec win over the same variable used as the condition', () => {
+      values['PLC:Running'] = true;
+      const specs = extractBindingSpecs(
+        {
+          label: {
+            $if: {
+              condition: { $var: { path: 'PLC:Running' } },
+              true: { $var: { path: 'PLC:Running' } },
+            },
+          },
+        },
+        { label: { type: 'boolean' } },
+        ctx,
+      );
+      expect(specs).toHaveLength(1);
+      expect(specs[0]).toMatchObject({
+        id: 'PLC:Running',
+        accept: [{ kind: 'scalar', base: 'Boolean' }],
+      });
+    });
+
+    it('resolves a $componentProp result through the input scope', () => {
+      values['PLC:Running'] = false;
+      const specs = extractBindingSpecs(
+        {
+          level: {
+            $if: {
+              condition: { $var: { path: 'PLC:Running' } },
+              false: { $componentProp: 'speed' },
+            },
+          },
+        },
+        { level: { type: 'float' } },
+        { ...ctx, inputScopeProps: { speed: { $var: { path: 'PLC:Speed' } } } },
+      );
+      expect(specs[0]).toMatchObject({ id: 'PLC:Speed' });
+    });
+
+    it('checks the variables of a taken result that is not a whole $var for presence', () => {
+      values['PLC:Running'] = true;
+      const wildcard = (path: string) => ({
+        $stringExpr: { template: '{1}', wildcards: { 1: { $var: { path } } } },
+      });
+      const label = {
+        $if: {
+          condition: { $var: { path: 'PLC:Running' } },
+          true: wildcard('PLC:Rpm'),
+          false: wildcard('PLC:Spare'),
+        },
+      };
+      const specs = extractBindingSpecs({ label }, { label: { type: 'string' } }, ctx);
+      // The losing `false` stays out; the template on screen has no slot to type.
+      expect(specs).toEqual([
+        { id: 'PLC:Running', accept: [] },
+        { id: 'PLC:Rpm', accept: [] },
+      ]);
+    });
+
+    it('reads the taken side of a branch nested inside a template', () => {
+      values['PLC:Running'] = false;
+      const specs = extractBindingSpecs(
+        {
+          label: {
+            $formula: {
+              expression: '{1} * 2',
+              wildcards: {
+                1: {
+                  $if: {
+                    condition: { $var: { path: 'PLC:Running' } },
+                    true: { $var: { path: 'PLC:Rpm' } },
+                    false: { $var: { path: 'PLC:Spare' } },
+                  },
+                },
+              },
+            },
+          },
+        },
+        { label: { type: 'float' } },
+        ctx,
+      );
+      expect(specs).toEqual([
+        { id: 'PLC:Running', accept: [] },
+        { id: 'PLC:Spare', accept: [] },
+      ]);
+    });
+
+    it('still ignores branches that only gate visibility or fire on press', () => {
+      values['PLC:Running'] = true;
+      const specs = extractBindingSpecs(
+        { visible: running, onPress: running },
+        { onPress: { type: 'actions' } },
+        ctx,
+      );
+      expect(specs).toEqual([]);
+    });
+  });
+
+  it('ignores variables that only gate visibility or only fire on press', () => {
+    const compare = (path: string) => ({
+      $compare: { left: { $var: { path } }, operator: '>', right: 0 },
+    });
+    const specs = extractBindingSpecs(
+      {
+        visible: compare('PLC:ShowIt'),
+        interactable: compare('PLC:Enabled'),
+        onPress: { events: [{ params: { value: compare('PLC:Cmd') } }] },
+      },
+      { onPress: { type: 'actions' } },
+    );
+    // None of the three is something the widget is *showing* — marking it for
+    // them would put an overlay on a widget that renders correctly.
+    expect(specs).toEqual([]);
+  });
+
+  it('ignores a visibility gate even when its whole value collapses to a plain $var', () => {
+    // `visible: { $componentProp: … }` resolves to a plain `$var` once the
+    // instance supplies one — the direct getPropBinding match above the nested
+    // walk must not pick that up either, or a resolved gate would out-mark
+    // itself despite the check above.
+    expect(extractBindingSpecs({ visible: { $var: { path: 'PLC:ShowIt' } } }, {})).toEqual([]);
+  });
+
+  it('claims nothing for a property the schema does not declare', () => {
+    // `registerCustomWidget` registers a widget whose exports could not be read
+    // (`schemaError`) with only the visibility gates, so every property on it
+    // lands here with no field — `actions` included. Harvesting those would put
+    // an amber "no data" mark on a widget that renders and works, for a
+    // variable only its press handler writes.
+    const specs = extractBindingSpecs(
+      {
+        onPress: {
+          events: [
+            {
+              params: {
+                value: {
+                  $compare: { left: { $var: { path: 'PLC:Cmd' } }, operator: '>', right: 0 },
+                },
+              },
+            },
+          ],
+        },
+      },
+      {},
+    );
+    expect(specs).toEqual([]);
+  });
+});
+
 describe('aggregateBindingStatus', () => {
   const spec: BindingSpec = { id: 'PLC:Speed', accept: [] };
   const cached = slice({
@@ -222,10 +617,25 @@ describe('aggregateBindingStatus', () => {
       'disconnected',
     );
   });
+
+  it('reports a sound binding with no value as nodata, not as a broken one', () => {
+    const noValue = slice({
+      varMeta: { 'PLC:Speed': meta({ kind: 'scalar', base: 'Float', array: false }) },
+    });
+    expect(aggregateBindingStatus([spec], noValue)).toBe('nodata');
+  });
+
+  it('keeps the red overlay for a variable no datasource knows', () => {
+    expect(aggregateBindingStatus([spec], slice())).toBe('disabled');
+  });
+
+  it('says nodata before the metadata has landed — nothing is known to be wrong yet', () => {
+    expect(aggregateBindingStatus([spec], slice({ metadataReceived: false }))).toBe('nodata');
+  });
 });
 
 describe('createBindingStatusSelector', () => {
-  it('skips the O(n) recompute when a store update only touches a key nothing depends on (§7.5)', () => {
+  it('skips the O(n) recompute when a store update only touches a key nothing depends on', () => {
     const scalarMeta = meta({ kind: 'scalar', base: 'Float', array: false });
     const specA: BindingSpec = { id: 'PLC:A', accept: [] };
 
@@ -286,7 +696,8 @@ describe('createBindingStatusSelector', () => {
       varMeta: { 'PLC:Alarms': meta(structArray) },
     });
 
-    expect(selector(base)).toBe('disabled');
+    // The element key has not been delivered yet — no data, not a bad binding.
+    expect(selector(base)).toBe('nodata');
     expect(
       selector({
         ...base,

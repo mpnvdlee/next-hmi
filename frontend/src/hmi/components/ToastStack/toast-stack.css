@@ -53,6 +53,16 @@
   color: var(--hmi-info);
 }
 
+.hmi-toast--success {
+  background: color-mix(in oklch, var(--hmi-surface) 95%, var(--hmi-ok));
+  border-color: color-mix(in srgb, var(--hmi-ok) 45%, var(--hmi-border));
+  color: var(--hmi-text);
+}
+
+.hmi-toast--success .hmi-toast__icon {
+  color: var(--hmi-ok);
+}
+
 .hmi-toast--warning {
   background: color-mix(in oklch, var(--hmi-surface) 94%, var(--hmi-warn));
   border-color: var(--hmi-warn);

@@ -39,7 +39,7 @@ def _set_session_cookie(request: Request, response: Response, token: str) -> Non
         samesite="lax",
         secure=_is_secure(request),
         path="/",
-        max_age=7 * 24 * 3600,
+        max_age=manager_auth.SESSION_TTL_SECONDS,
     )
 
 

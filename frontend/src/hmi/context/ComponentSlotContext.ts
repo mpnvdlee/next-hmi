@@ -15,3 +15,15 @@ export const ComponentSlotContext = createContext<Record<string, WidgetConfig[]>
 export function useComponentSlot(key: string): WidgetConfig[] {
   return useContext(ComponentSlotContext)?.[key] ?? [];
 }
+
+/**
+ * True while rendering anywhere inside a placed component instance — the
+ * provider above is mounted by `ComponentRenderer` and by nothing else.
+ *
+ * The one place a definition renders *without* an instance around it is the
+ * components editor's canvas, which is what lets a widget tell "I am being
+ * authored" from "I am running as part of someone's page".
+ */
+export function useIsComponentInstance(): boolean {
+  return useContext(ComponentSlotContext) !== null;
+}

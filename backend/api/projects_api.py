@@ -12,19 +12,21 @@ import tempfile
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from core import mcp_tokens, operator_setup, runtime_home
+from core import mcp_tokens, runtime_home, users_document
 from core.exceptions import ConflictError, NotFoundError, ValidationError
 from core.manifest import (
     ManifestV1,
     ProjectEntry,
     ProjectMetadata,
+    default_projects_root,
     ensure_project_metadata,
     find_project,
     load_manifest,
     manifest_transaction,
     project_mcp_enabled,
+    read_project_config,
     read_project_metadata,
     running_entry,
     save_manifest,
@@ -33,24 +35,34 @@ from core.manifest import (
     validate_project_id,
     write_project_metadata,
 )
-from core.project_migrations import PROJECT_FORMAT_VERSION
+from core.project_bootstrap import bundled_template_dir, copy_template_into
+from core.project_migrations import (
+    PROJECT_FORMAT_VERSION,
+    needs_migration,
+    stamp_current_format,
+)
 from core.project_packer import (
     UnsafeArchiveError,
     pack_project,
     safe_filename,
     unpack_project,
 )
+from core.storage import repo_root
 from core.time_utils import iso_now
 from fastapi import APIRouter, File, Form, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from api.thumbnail_api import delete_thumbnail, thumbnail_path, thumbnail_updated_at
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
-_REPO_ROOT = Path(__file__).parent.parent.parent
-_SEED_DIR_CANDIDATES = (_REPO_ROOT / "project-seed", _REPO_ROOT / "backend" / "project-seed")
+_TEMPLATE_DIRNAMES: dict[str, str] = {
+    "empty": "project-seed",
+    "example": "project-example",
+}
 
 
 # ── request / response models ────────────────────────────────────────────────
@@ -59,6 +71,7 @@ _SEED_DIR_CANDIDATES = (_REPO_ROOT / "project-seed", _REPO_ROOT / "backend" / "p
 class CreateProjectBody(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     path: str = Field(min_length=1)
+    template: Literal["empty", "example"] = "empty"
 
 
 class LocateProjectBody(BaseModel):
@@ -84,29 +97,26 @@ class ValidatePathBody(BaseModel):
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 
-def _seed_dir() -> Path | None:
-    for candidate in _SEED_DIR_CANDIDATES:
-        if candidate.is_dir():
-            return candidate
-    return None
+def _template_dir(template: str) -> Path | None:
+    """The bundled folder behind a ``template`` name, or ``None`` if unbundled."""
+    dirname = _TEMPLATE_DIRNAMES.get(template)
+    if dirname is None:
+        return None
+    return bundled_template_dir(repo_root(), dirname)
 
 
-def _copy_seed_into(target: Path) -> None:
-    seed = _seed_dir()
-    if seed is None:
-        # Empty project — caller is creating from scratch; create the minimal
-        # folder skeleton so ``ensure_active_project_dirs`` has something to
-        # work with when this project becomes live.
+def _copy_template_into(target: Path, template: str) -> None:
+    source = _template_dir(template)
+    if source is None:
+        # Only the empty template may be absent — a build without the bundled
+        # seed still has to be able to create a project.
+        if template != "empty":
+            raise ValidationError(f"Project template '{template}' is not bundled with this build")
         target.mkdir(parents=True, exist_ok=True)
         for sub in ("assets", "certs", "custom-widgets", "external-libraries"):
             (target / sub).mkdir(parents=True, exist_ok=True)
         return
-    for entry in seed.iterdir():
-        dest = target / entry.name
-        if entry.is_dir():
-            shutil.copytree(entry, dest, dirs_exist_ok=True)
-        else:
-            shutil.copy2(entry, dest)
+    copy_template_into(source, target)
 
 
 def _resolve_path(raw: str) -> Path:
@@ -122,21 +132,66 @@ def _path_status(raw_path: str) -> str:
     return "present" if path.is_dir() else "missing"
 
 
-def _entry_dict(entry: ProjectEntry, *, default_id: str | None = None) -> dict[str, Any]:
-    setup_state = operator_setup.state(Path(entry.path).expanduser())
+def _entry_dict(entry: ProjectEntry, manifest: ManifestV1) -> dict[str, Any]:
+    """One project's row for the dashboard. Both manifest-wide facts it needs —
+    the default project and the projects root — are read off the manifest the
+    caller already holds, rather than threaded in beside it."""
+    root = default_projects_root(manifest)
+    path = Path(entry.path).expanduser()
+    users_state = users_document.state(path)
+    status = _path_status(entry.path)
+    config = read_project_config(path) if status == "present" else None
+    metadata = read_project_metadata(path, config) if status == "present" else None
+    format_version = metadata.formatVersion if metadata is not None else None
+    unsupported = format_version is not None and format_version > PROJECT_FORMAT_VERSION
+    needs_upgrade = metadata is not None and not unsupported and needs_migration(metadata)
     return {
         "id": entry.id,
         "name": entry.name,
         "path": entry.path,
+        # Resolved the same way `path` was stored (see `_resolve_path`), against
+        # a root resolved the same way — see `default_projects_root` — so a
+        # symlink anywhere above the root can't make an in-root project read as
+        # outside it. The peer-transfer modal used to re-derive this itself
+        # from `defaultProjectsRoot` and a project's raw path; this is that
+        # same fact, computed once, correctly, on the side that actually knows
+        # the root.
+        "inProjectsRoot": path.resolve().parent == root,
         "addedAt": entry.addedAt,
         "lastOpenedAt": entry.lastOpenedAt,
-        "status": _path_status(entry.path),
-        "isDefault": entry.id == default_id,
-        "mcpEnabled": project_mcp_enabled(Path(entry.path).expanduser()),
-        "operatorSetupRequired": setup_state.status is operator_setup.SetupStatus.REQUIRED,
-        "operatorSetupStatus": setup_state.status.value,
-        "operatorSetupError": setup_state.error,
+        "status": status,
+        "isDefault": entry.id == manifest.defaultProjectId,
+        "mcpEnabled": project_mcp_enabled(path, config),
+        "credentialsStatus": "ok" if users_state.valid else "error",
+        "credentialsError": users_state.error,
+        "formatVersion": format_version,
+        "minAppVersion": metadata.minAppVersion if metadata is not None else None,
+        "needsUpgrade": needs_upgrade,
+        "unsupportedFormat": unsupported,
+        "lastMigration": (
+            metadata.lastMigration.model_dump(mode="json")
+            if metadata is not None and metadata.lastMigration is not None
+            else None
+        ),
+        "thumbnailUpdatedAt": thumbnail_updated_at(entry.id),
     }
+
+
+def _ensure_default_root_ready(target: Path) -> None:
+    """Create the advertised default projects root before something lands in it.
+
+    Docker and headless Linux have no ``~/Documents``, so the create dialog's
+    own pre-filled default is a path whose parent is missing and
+    ``_validate_destination`` rejects it. The peer-transfer path already grows
+    the root before writing into it (``manager_peers_api._root``); this is the
+    same fix for the create path. Only a target actually inside the root does
+    anything — reading the root (``list_projects`` / ``_runtime-home``) must
+    keep creating nothing, and a target chosen elsewhere on disk must keep
+    failing on its own missing parent rather than have this conjure it up.
+    """
+    root = default_projects_root(load_manifest())
+    if target.is_relative_to(root):
+        root.mkdir(parents=True, exist_ok=True)
 
 
 def _validate_destination(target: Path, *, must_be_empty: bool) -> None:
@@ -181,6 +236,16 @@ def _move_runtime_state(old_id: str, new_id: str) -> None:
         except OSError:
             logger.warning(
                 "Could not move %s to %s after the project id changed", source, destination,
+            )
+
+    old_thumbnail, new_thumbnail = thumbnail_path(old_id), thumbnail_path(new_id)
+    if old_thumbnail.is_file() and not new_thumbnail.exists():
+        try:
+            old_thumbnail.rename(new_thumbnail)
+        except OSError:
+            logger.warning(
+                "Could not move %s to %s after the project id changed",
+                old_thumbnail, new_thumbnail,
             )
 
 
@@ -399,14 +464,21 @@ def _register_imported_project(
 
 @router.get("")
 def list_projects() -> dict[str, Any]:
-    """Manifest entries + computed ``status`` (`present` | `missing`) and ``isDefault``."""
+    """Manifest entries + computed ``status`` (`present` | `missing`) and ``isDefault``.
+
+    ``defaultProjectsRoot`` is the *resolved* root, not the raw manifest string
+    — the same value ``_runtime-home`` reports. The browser compares project
+    paths against it to tell an in-root project from one registered elsewhere,
+    and a ``~``-relative, relative or absent setting would make every project
+    look like it sits outside the root.
+    """
     manifest = load_manifest()
+    root = default_projects_root(manifest)
     return {
         "defaultProjectId": manifest.defaultProjectId,
-        "defaultProjectsRoot": manifest.defaultProjectsRoot,
+        "defaultProjectsRoot": str(root),
         "projects": [
-            _entry_dict(entry, default_id=manifest.defaultProjectId)
-            for entry in manifest.projects
+            _entry_dict(entry, manifest) for entry in manifest.projects
         ],
     }
 
@@ -443,7 +515,7 @@ def set_default(project_id: str) -> dict[str, Any]:
         entry = _require_entry(manifest, project_id)
         manifest.defaultProjectId = entry.id
         save_manifest(manifest)
-    return _entry_dict(entry, default_id=entry.id)
+    return _entry_dict(entry, manifest)
 
 
 @router.patch("/{project_id}")
@@ -467,7 +539,7 @@ def update_project(project_id: str, body: UpdateProjectBody) -> dict[str, Any]:
     with manifest_transaction() as manifest:
         entry = _require_entry(manifest, project_id)
         if new_name is None and (new_id is None or new_id == entry.id):
-            return _entry_dict(entry, default_id=manifest.defaultProjectId)
+            return _entry_dict(entry, manifest)
         if running_entry(manifest, entry.id) is not None:
             raise ConflictError("Cannot rename a running project. Stop it first.")
 
@@ -512,7 +584,7 @@ def update_project(project_id: str, body: UpdateProjectBody) -> dict[str, Any]:
         write_project_metadata(target, metadata.model_copy(update=updates))
 
     logger.info("Renamed project '%s' to '%s' (%s)", old_id, entry.name, entry.id)
-    return _entry_dict(entry, default_id=manifest.defaultProjectId)
+    return _entry_dict(entry, manifest)
 
 
 @router.post("/validate-path")
@@ -602,7 +674,7 @@ def browse_dir(path: str | None = Query(default=None)) -> dict[str, Any]:
 
 @router.post("", status_code=201)
 def create_project(body: CreateProjectBody) -> dict[str, Any]:
-    """Seed a new project folder from ``project-seed/`` and add it to the manifest.
+    """Seed a new project folder from ``body.template`` and add it to the manifest.
 
     The target must not exist OR must be an empty directory. We seed into the
     directory and write a fresh ``project`` metadata block with a UUID into
@@ -621,18 +693,19 @@ def create_project(body: CreateProjectBody) -> dict[str, Any]:
             "add the existing project instead of creating it again.",
         )
 
+    _ensure_default_root_ready(target)
     _validate_destination(target, must_be_empty=True)
     target.mkdir(parents=True, exist_ok=True)
 
     try:
-        _copy_seed_into(target)
+        _copy_template_into(target, body.template)
     except OSError as exc:
         raise ValidationError(f"Failed to seed project at {target}: {exc}") from exc
 
     metadata = ensure_project_metadata(target, name=name)
     # Freshly seeded from project-seed/, which is already canonical, so stamp
     # it here rather than leaving it for the next activation.
-    metadata = metadata.model_copy(update={"formatVersion": PROJECT_FORMAT_VERSION})
+    metadata = stamp_current_format(metadata)
     write_project_metadata(target, metadata)
     with manifest_transaction() as manifest:
         if find_project(manifest, metadata.id) is not None:
@@ -650,7 +723,7 @@ def create_project(body: CreateProjectBody) -> dict[str, Any]:
         manifest.projects.append(entry)
         save_manifest(manifest)
     logger.info("Created project '%s' (%s) at %s", name, metadata.id, target)
-    return _entry_dict(entry)
+    return _entry_dict(entry, manifest)
 
 
 @router.post("/register", status_code=201)
@@ -687,7 +760,7 @@ def register_existing_project(body: RegisterProjectBody) -> dict[str, Any]:
         save_manifest(manifest)
     set_project_metadata_name(target, display_name)
     logger.info("Registered existing project '%s' (%s) at %s", display_name, metadata.id, target)
-    return _entry_dict(entry)
+    return _entry_dict(entry, manifest)
 
 
 @router.post("/{project_id}/locate")
@@ -710,7 +783,7 @@ def locate(project_id: str, body: LocateProjectBody) -> dict[str, Any]:
             )
         entry.path = str(target)
         save_manifest(manifest)
-    return _entry_dict(entry)
+    return _entry_dict(entry, manifest)
 
 
 @router.delete("/{project_id}", status_code=200)
@@ -750,19 +823,18 @@ def delete(project_id: str, deleteFolder: bool = False) -> dict[str, Any]:
 
         manifest.projects = [p for p in manifest.projects if p.id != entry.id]
         save_manifest(manifest)
+    delete_thumbnail(entry.id)
     logger.info("Removed project '%s' (%s) from manifest", entry.name, entry.id)
     return {"id": entry.id, "deletedFolder": bool(deleteFolder)}
 
 
 @router.get("/_runtime-home")
 def runtime_home_info() -> dict[str, Any]:
-    """Read-only helper used by the create dialog to suggest a default path."""
+    """Default paths for the settings page."""
     manifest = load_manifest()
-    home = runtime_home.runtime_home_path()
-    default_root = manifest.defaultProjectsRoot or str(home / "Projects")
     return {
-        "runtimeHome": str(home),
-        "defaultProjectsRoot": default_root,
+        "runtimeHome": str(runtime_home.runtime_home_path()),
+        "defaultProjectsRoot": str(default_projects_root(manifest)),
     }
 
 
@@ -845,4 +917,4 @@ async def import_project(
         ),
     )
     logger.info("Imported project '%s' (%s) at %s", entry.name, metadata.id, target)
-    return _entry_dict(entry)
+    return _entry_dict(entry, _manifest)

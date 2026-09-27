@@ -1,10 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
+import { preloadableLazy } from '@shared/utils/settledLazy';
 import { Routes, Route } from 'react-router-dom';
 import { useWebSocket } from '@hmi/hooks/useWebSocket';
 import { subscribeWidgetUpdated } from '@shared/events/widgetUpdatedBus';
 import {
   loadCustomWidgets,
   loadComponents,
+  prefetchBuiltinWidgetModules,
   registerComponents,
 } from '@hmi/registry/widgetRegistry';
 import { useDeviceInfoStore } from '@hmi/store/deviceInfoStore';
@@ -17,14 +19,15 @@ import {
   LS_THEME_SAVED,
 } from '@shared/utils/themeTokens';
 import { useDocumentChrome } from '@shared/hooks/useDocumentChrome';
-import { useDisableBrowserZoom } from '@shared/hooks/useDisableBrowserZoom';
 import { registerActionRunner } from '@hmi/utils/actionDispatcher';
 import { executeWidgetActions } from '@hmi/utils/widgetActions';
 import Spinner, { PageSpinner } from '@shared/components/Spinner';
 import BootSplash from '@hmi/components/BootSplash';
 import SessionExpiredOverlay from '@shared/components/SessionExpiredOverlay';
-import { setSessionExpiredHandler } from '@shared/utils/api';
+import ProjectUnavailableOverlay from '@shared/components/ProjectUnavailableOverlay';
+import { setProjectUnavailableHandler, setSessionExpiredHandler } from '@shared/utils/api';
 import { useSessionStore } from '@shared/store/sessionStore';
+import { useProjectAvailabilityStore } from '@shared/store/projectAvailabilityStore';
 import { getArea } from '@shared/utils/runtimeBase';
 
 // Wire the dispatcher → widgetActions runner once at module load. This breaks
@@ -39,6 +42,12 @@ registerActionRunner(executeWidgetActions);
 // screen. Registered at module scope so the fetches below are already covered.
 setSessionExpiredHandler(() => useSessionStore.getState().markManagerSessionExpired());
 
+// Same seam for the other way a project document ends up with no backend: the
+// manager served this page itself because the instance behind the URL isn't
+// running, so every call 503s. The store confirms the reason with the manager
+// before blocking — a 503 also covers an instance that is merely still starting.
+setProjectUnavailableHandler(() => void useProjectAvailabilityStore.getState().resolve());
+
 // Ask for the project's themes as this module evaluates — the earliest point
 // the app exists at all. The request then flies in parallel with the view
 // chunks and the component registry instead of waiting for a view to mount, so
@@ -52,14 +61,30 @@ void ensureThemeTokens();
  *
  * `splash` opts into the full boot screen (branding, version, progress,
  * attribution). Only the operator runtime gets it — the editor's live-preview
- * iframe keeps the bare spinner.
+ * iframe keeps the bare spinner. Both wear the app palette: the project theme
+ * does not exist until /api/themes lands, and in the preview iframe a Themes
+ * draft repaints it once more after that, so a boot surface drawn from it
+ * changes colour twice on the way up.
+ *
+ * Exported for its own test: a gate that never opens leaves the boot screen up
+ * forever, which is worth pinning without standing up the whole route tree.
  */
-function ComponentsReadyGate({
+export function ComponentsReadyGate({
   children,
   splash = false,
+  preload,
+  warmBuiltins = true,
 }: {
   children: React.ReactNode;
   splash?: boolean;
+  /** Warm every built-in widget module once open. The operator runtime turns
+   *  this off: it warms what the project actually uses instead
+   *  (useProjectWidgetWarmup), once its first page has settled. */
+  warmBuiltins?: boolean;
+  /** The lazy chunk `children` renders. Awaited with the rest, so opening the
+   *  gate hands straight to the view instead of dropping onto the route-level
+   *  Suspense fallback for the length of one more round-trip. */
+  preload?: () => Promise<unknown>;
 }) {
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -67,34 +92,60 @@ function ComponentsReadyGate({
     // the first painted frame is already themed instead of flashing the
     // built-in fallback palette. It resolves either way, so a backend that is
     // still coming up delays nothing here.
-    Promise.all([loadCustomWidgets(), loadComponents(), ensureThemeTokens()]).then(() =>
-      setReady(true),
+    Promise.all([loadCustomWidgets(), loadComponents(), ensureThemeTokens(), preload?.()]).then(
+      () => setReady(true),
+      // Nothing in here may hold the splash. `preload` is a route chunk, and a
+      // stale hash after a redeploy rejects it — the route's own Suspense and
+      // error boundary behind this gate are where that belongs, not a boot
+      // screen that never goes away.
+      () => setReady(true),
     );
-  }, []);
+  }, [preload]);
+
+  // Warm the rest of the built-in widget modules once the gate has opened, and
+  // only when the browser is idle. They are wanted by the *next* navigation,
+  // never by this one — the page's own gate fetches what it renders — and
+  // firing them during boot puts ~36 requests ahead of the config, theme and
+  // WebSocket traffic in the same connection pool, which delays the variables
+  // enough that a page can reveal before they land and paint every bound widget
+  // with the disconnected overlay.
+  useEffect(() => {
+    if (!ready || !warmBuiltins) return;
+    if (typeof requestIdleCallback !== 'function') {
+      const t = setTimeout(() => void prefetchBuiltinWidgetModules(), 2000);
+      return () => clearTimeout(t);
+    }
+    const handle = requestIdleCallback(() => void prefetchBuiltinWidgetModules(), {
+      timeout: 10000,
+    });
+    return () => cancelIdleCallback(handle);
+  }, [ready, warmBuiltins]);
   if (!ready) {
     return splash ? (
       <BootSplash phase="components" />
     ) : (
       <div className="hmi-boot-loading">
-        <Spinner />
+        <Spinner variant="cfg" />
       </div>
     );
   }
   return <>{children}</>;
 }
 
-// Lazy imports so each view's CSS is only loaded when the route is visited
-const HmiView = lazy(() => import('@hmi/pages/HmiView'));
+// Lazy imports so each view's CSS is only loaded when the route is visited.
+// The gate awaits the same chunk through `preload`, so by the time it opens the
+// view renders without suspending — a fallback here would hold the reveal for
+// React's 300 ms throttle (see settledLazy).
+const HmiView = preloadableLazy(() => import('@hmi/pages/HmiView'));
 const ConfigRoutes = lazy(() => import('@config/pages/ConfigRoutes'));
 // Preview route — loaded inside the editor live-preview iframe
-const PreviewView = lazy(() => import('@config/pages/PreviewView'));
+const PreviewView = preloadableLazy(() => import('@config/pages/PreviewView'));
 
 export default function AppInner() {
   // Start the WebSocket connection once for the lifetime of the app.
   // Placing it here (inside BrowserRouter) keeps it alive across all routes.
   useWebSocket();
   useDocumentChrome();
-  useDisableBrowserZoom();
 
   // Cache client device info once per session for the $device expression source.
   useEffect(() => {
@@ -145,60 +196,61 @@ export default function AppInner() {
     });
   }, []);
 
+  // The boot screen is one continuous surface: the gate holds it while the
+  // components, themes and the view's own chunk load, and this boundary keeps
+  // it up if that chunk is somehow still in flight — HmiView raises the same
+  // splash again for the config phase, so anything else here reads as the
+  // screen blinking between two palettes on the way up.
+  const hmiRoute = (
+    <Suspense fallback={<BootSplash phase="components" />}>
+      <ComponentsReadyGate splash preload={HmiView.preload} warmBuiltins={false}>
+        <HmiView />
+      </ComponentsReadyGate>
+    </Suspense>
+  );
+  // Hoisted for the same reason as `hmiRoute`: both route maps below mount the
+  // preview, and a change made to one copy only is invisible until the editor's
+  // live preview behaves differently from the standalone one.
+  const previewRoute = (
+    <ComponentsReadyGate preload={PreviewView.preload}>
+      <PreviewView />
+    </ComponentsReadyGate>
+  );
+
   // The /editor/<slug>/ base picks the editor up-front so its root lands on the
   // editor (not the runtime that the bare "/" route renders). Every other base —
-  // the /runtime/<slug>/ alias and dev "/" — shares the runtime route map; its
-  // extra /config and /preview routes simply never match under a
-  // /runtime/<slug>/ URL.
+  // the /runtime/<slug>/ alias and dev "/" — shares the runtime route map.
+  //
+  // /config is dropped from that map under /runtime/<slug>/ only: the manager
+  // serves that prefix without a device-admin session, so mounting the editor
+  // there would render an editor shell to an anonymous visitor (whose writes the
+  // gate refuses anyway — an editor that cannot save). It must stay for
+  // `getArea() === null`, which is dev "/" and a bare instance, where
+  // `editorPath()` still emits /config/... and it is the only way in.
   const routes =
     getArea() === 'editor' ? (
       <Routes>
-        <Route
-          path="/preview/:pageId"
-          element={
-            <ComponentsReadyGate>
-              <PreviewView />
-            </ComponentsReadyGate>
-          }
-        />
+        <Route path="/preview/:pageId" element={previewRoute} />
         <Route path="/*" element={<ConfigRoutes />} />
       </Routes>
     ) : (
       <Routes>
-        <Route
-          path="/"
-          element={
-            <ComponentsReadyGate splash>
-              <HmiView />
-            </ComponentsReadyGate>
-          }
-        />
-        <Route
-          path="/pages/:id"
-          element={
-            <ComponentsReadyGate splash>
-              <HmiView />
-            </ComponentsReadyGate>
-          }
-        />
-        <Route path="/config/*" element={<ConfigRoutes />} />
-        <Route
-          path="/preview/:pageId"
-          element={
-            <ComponentsReadyGate>
-              <PreviewView />
-            </ComponentsReadyGate>
-          }
-        />
+        <Route path="/" element={hmiRoute} />
+        <Route path="/pages/:id" element={hmiRoute} />
+        {getArea() !== 'runtime' && <Route path="/config/*" element={<ConfigRoutes />} />}
+        <Route path="/preview/:pageId" element={previewRoute} />
       </Routes>
     );
 
   return (
     <>
-      <Suspense fallback={<PageSpinner variant={getArea() === 'editor' ? 'cfg' : 'hmi'} />}>
-        {routes}
-      </Suspense>
+      {/* Every route behind this boundary opens on a product surface — the boot
+          splash, the editor shell, the config pages — so the fallback wears the
+          app palette. The project's own accent belongs to HMI content, and
+          showing it here only reads as a colour flip a moment later. */}
+      <Suspense fallback={<PageSpinner variant="cfg" />}>{routes}</Suspense>
       <SessionExpiredOverlay />
+      <ProjectUnavailableOverlay />
     </>
   );
 }

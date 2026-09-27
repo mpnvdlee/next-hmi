@@ -1,5 +1,7 @@
 import type { AnchorRect, ButtonAction, OverlayPlacement } from '@shared/types/config';
-import type { EvaluationContext } from '@hmi/utils/propertySourceEval';
+import { writeTargetAddress } from '@shared/types/config';
+import type { EvaluationContext, ResolvedValue } from '@hmi/utils/propertySourceEval';
+import { useVariableStore } from '@hmi/store/variableStore';
 import { evaluatePropertyValue } from '@hmi/utils/propertySourceEval';
 import { isAnchoredPlacement } from '@shared/utils/anchorPosition';
 import { resolveComponentPropValue } from '@hmi/utils/componentPropResolution';
@@ -8,6 +10,7 @@ import { useHmiStore } from '@hmi/store/hmiStore';
 import { useThemeRuntimeStore } from '@hmi/store/themeRuntimeStore';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { randomUuid } from '@shared/utils/id';
+import { hasPropertySourceKey } from '@shared/types/propertyValueGuards';
 import { beginAsyncAction } from '@hmi/utils/actionDispatcher';
 
 interface ActionContext {
@@ -36,6 +39,11 @@ function anchorRectFor(
   };
 }
 
+function readStoredVariable(datasource: string, path: string): ResolvedValue {
+  const value = useVariableStore.getState().values[`${datasource}:${path}`];
+  return (value !== undefined ? value : null) as ResolvedValue;
+}
+
 export function executeWidgetActions(
   actions: ButtonAction[] | undefined,
   context: ActionContext = {},
@@ -46,34 +54,21 @@ export function executeWidgetActions(
   const inputScopeProps = evalCtx.inputScopeProps;
 
   for (const action of actions) {
-    if (action.type === 'openDialog') {
-      const resolved = action.componentProperties
+    if (action.type === 'openDialog' || action.type === 'openPageOverlay') {
+      // Only a Dialogs-folder node declares input parameters, so only
+      // `openDialog` carries values to resolve against the opener's scope.
+      const supplied = action.type === 'openDialog' ? action.componentProperties : undefined;
+      const resolvedPageProps = supplied
         ? Object.fromEntries(
-            Object.entries(action.componentProperties).map(([k, v]) => [
+            Object.entries(supplied).map(([k, v]) => [
               k,
               resolveComponentPropValue(v, inputScopeProps),
             ]),
           )
-        : undefined;
-      useHmiStore.getState().openDialog(action.dialogId, resolved, {
-        size: action.size ?? 'auto',
-        placement: action.placement,
-        width: action.width,
-        height: action.height,
-        backdrop: action.backdrop,
-        anchorRect: anchorRectFor(action.placement, anchorEl),
-      });
-      continue;
-    }
-
-    if (action.type === 'closeDialog') {
-      useHmiStore.getState().closeDialog(action.dialogId);
-      continue;
-    }
-
-    if (action.type === 'openPageOverlay') {
+        : {};
       useHmiStore.getState().openPageOverlay({
         pageId: action.pageId,
+        componentProperties: resolvedPageProps,
         size: action.size ?? 'medium',
         placement: action.placement ?? 'center',
         width: action.width,
@@ -84,21 +79,51 @@ export function executeWidgetActions(
       continue;
     }
 
+    if (action.type === 'if') {
+      // Page and global events fire outside any widget, so their context has
+      // no variable reader of its own; the condition reads the live store.
+      const conditionCtx: EvaluationContext = evalCtx.resolveVariable
+        ? evalCtx
+        : { ...evalCtx, resolveVariable: readStoredVariable };
+      const branch = evaluatePropertyValue(action.condition, conditionCtx)
+        ? action.then
+        : action.else;
+      executeWidgetActions(branch, context);
+      continue;
+    }
+
     if (action.type === 'closePageOverlay') {
       useHmiStore.getState().closePageOverlay(action.pageId);
       continue;
     }
 
     if (action.type === 'writeDataVariable') {
-      if (!action.datasource || !action.path) continue;
+      const address = writeTargetAddress(action.target);
+      if (!address) continue;
       const requestId = beginAsyncAction(action, scope, inputScopeProps);
       sendWsMessage({
         type: 'write_field',
         ...(requestId && { requestId }),
         scope,
-        datasource: action.datasource,
-        path: action.path,
-        value: action.value,
+        ...address,
+        // A sourced value (a dialog's `$componentProp`, a `$var`) is resolved
+        // here; the backend only coerces literals and rejects an object.
+        value: hasPropertySourceKey(action.value)
+          ? evaluatePropertyValue(action.value, evalCtx)
+          : action.value,
+      });
+      continue;
+    }
+
+    if (action.type === 'toggleDataVariable') {
+      const address = writeTargetAddress(action.target);
+      if (!address) continue;
+      const requestId = beginAsyncAction(action, scope, inputScopeProps);
+      sendWsMessage({
+        type: 'toggle_field',
+        ...(requestId && { requestId }),
+        scope,
+        ...address,
       });
       continue;
     }

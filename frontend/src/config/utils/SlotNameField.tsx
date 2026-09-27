@@ -1,6 +1,6 @@
 import Select from '@config/components/ui/Select';
 import { useComponentPropertySchema } from '@config/components/editor/PropertySourceEditor/componentPropertySchemaContext';
-import { DEFAULT_SLOT_KEY } from '@hmi/components/ComponentSlot/slotKey';
+import { DEFAULT_SLOT_KEY } from '@shared/utils/componentSlots';
 import { primaryType } from '@shared/utils/valueTypes';
 
 /**

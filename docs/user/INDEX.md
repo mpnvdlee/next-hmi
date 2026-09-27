@@ -9,7 +9,7 @@ alarms, recipes, the historian, users and custom widgets.
 | Page | What it covers |
 |---|---|
 | [Overview](overview.md) | The mental model — runtime and editor together, a project is a folder, every property can bind, one socket for data |
-| [Getting started](getting-started.md) | Choosing how to run it, the first run step by step, and a ten-minute walkthrough that builds a working screen with no PLC |
+| [Getting started](getting-started.md) | Choosing how to run it, the first run step by step, a tour of the NEXT BREW example, and a ten-minute walkthrough that builds a working screen with no PLC |
 | [Installing and running](install.md) | Docker and portable-binary installation, HTTPS, the on-disk model |
 | [Managing projects](projects.md) | What's in a project folder, the Manager dashboard, downloading, uploading, adding and removing projects |
 | [Files & assets](files.md) | Images, icons, third-party libraries — where they live and how to add them |
@@ -29,8 +29,8 @@ alarms, recipes, the historian, users and custom widgets.
 
 | Page | What it covers |
 |---|---|
-| [Connecting to data](datasources.md) | The OPC-UA wizard, and designing offline with a static datasource |
-| [Binding & subscribing](subscribing.md) | How a bound value reaches the screen, and what a subscription costs |
+| [Connecting to data](datasources.md) | The OPC-UA wizard, certificates and connect/disconnect, and designing offline with a static datasource |
+| [Binding & subscribing](subscribing.md) | How a bound value reaches the screen, what a subscription costs, and what the marks on a widget mean |
 | [Dynamic properties](properties.md) | Type vs. source, the value types, every source, and how they nest |
 | [Historian & trends](historian.md) | Recording tag history, sampling and retention, and plotting it |
 
@@ -48,7 +48,7 @@ alarms, recipes, the historian, users and custom widgets.
 
 | Page | What it covers |
 |---|---|
-| [Users, groups & permissions](users.md) | Accounts and groups, signing in, gating what each role sees and may change |
+| [Users, groups & permissions](users.md) | Accounts and groups, the User Badge, gating what each role sees and may change |
 | [Diagnostics & troubleshooting](diagnostics.md) | The Admin area, the manager's Settings page, the warnings pill, and the common symptoms |
 | [AI agents over MCP](mcp.md) | Letting an assistant read and edit a project — enabling it, tokens, connecting a client, the starter prompts, and the limits |
 

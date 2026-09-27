@@ -1,6 +1,7 @@
 import {
   resolveElementBinding,
   rowSelectionKey,
+  typeFilter,
   type DatasourceNode,
   type RowItem,
 } from './variableTreeHelpers';
@@ -8,6 +9,7 @@ import type {
   PickerFolderEntry,
   PickerVariableEntry,
 } from '@config/components/ui/datasourceTreeHelpers';
+import type { RequiredFieldEntry } from '@shared/types/widgetSchema';
 
 function scalarArrayVar(): PickerVariableEntry {
   return {
@@ -51,7 +53,7 @@ function dsTreeWith(...children: (PickerFolderEntry | PickerVariableEntry)[]): D
   return [{ kind: 'datasource', name: 'MyPLC', type: 'opcua-client', children }];
 }
 
-describe('resolveElementBinding (§10.5)', () => {
+describe('resolveElementBinding', () => {
   it('resolves a scalar-array element (no separator before the bracket)', () => {
     const result = resolveElementBinding('MyPLC', 'MyArray[2]', null, dsTreeWith(scalarArrayVar()));
     expect(result).toEqual({ path: 'MyArray', index: 2 });
@@ -90,7 +92,7 @@ describe('resolveElementBinding (§10.5)', () => {
 
   it('does not treat a plain struct folder as an array element even if it is bracket-named', () => {
     // A struct folder incidentally named "Line[2]" whose *parent* is not
-    // flagged is_array must not be misread as an array element (§10.1).
+    // flagged is_array must not be misread as an array element.
     const plainFolder: PickerFolderEntry = {
       kind: 'folder',
       name: 'Line[2]',
@@ -173,5 +175,72 @@ describe('rowSelectionKey', () => {
   it('returns null for a datasource header row', () => {
     const item: RowItem = { kind: 'datasource', node: dsTreeWith()[0], depth: 0 };
     expect(rowSelectionKey(item)).toBeNull();
+  });
+});
+
+describe('typeFilter', () => {
+  const leaf = (display_name: string, data_type: string, writable = true): PickerVariableEntry => ({
+    kind: 'variable',
+    display_name,
+    data_type,
+    enabled: true,
+    writable,
+  });
+  const folder = (
+    name: string,
+    children: (PickerFolderEntry | PickerVariableEntry)[],
+  ): PickerFolderEntry => ({
+    kind: 'folder',
+    name,
+    children,
+  });
+  const names = (nodes: (PickerFolderEntry | PickerVariableEntry)[]) =>
+    nodes.map((n) => ('display_name' in n ? n.display_name : `${n.name}/`));
+
+  it('keeps an Integer variable out of a Float field', () => {
+    const tree = [leaf('Speed', 'Float'), leaf('Count', 'Integer'), leaf('Run', 'Boolean')];
+    expect(names(typeFilter(tree, { type: 'Float' }))).toEqual(['Speed']);
+  });
+
+  it('lists no variable of unknown access for a writing field', () => {
+    const unknown = { ...leaf('Setpoint', 'Float'), writable: undefined };
+    const tree = [leaf('Speed', 'Float'), unknown, leaf('SpeedRO', 'Float', false)];
+    expect(names(typeFilter(tree, { type: 'Float', write: true }))).toEqual(['Speed']);
+    expect(names(typeFilter(tree, { type: 'Float' }))).toEqual(['Speed', 'Setpoint', 'SpeedRO']);
+  });
+
+  it('binds a colour field to String variables only', () => {
+    const tree = [leaf('Label', 'String'), leaf('Speed', 'Float')];
+    expect(names(typeFilter(tree, { type: 'Color' }))).toEqual(['Label']);
+  });
+
+  it('reads a struct array counting from 1 off its lowest element', () => {
+    const lines: PickerFolderEntry = {
+      ...folder('Lines', [
+        folder('Line[2]', [leaf('Speed', 'Float', false)]),
+        folder('Line[1]', [leaf('Speed', 'Float')]),
+      ]),
+      is_array: true,
+    };
+    const selectable = (requiredFields: RequiredFieldEntry[]) =>
+      (typeFilter([lines], { type: 'Motor[]', requiredFields })[0] as PickerFolderEntry | undefined)
+        ?.selectable === true;
+    expect(selectable([{ name: 'Speed', write: true }])).toBe(true);
+    expect(selectable([{ name: 'Speed', type: 'Boolean' }])).toBe(false);
+  });
+
+  it('offers a struct folder only when its members fit — as the drawer judges it', () => {
+    const tree = [
+      folder('Motor', [leaf('Speed', 'Float'), leaf('Name', 'String')]),
+      folder('MotorRO', [leaf('Speed', 'Float', false), leaf('Name', 'String')]),
+      folder('Mistyped', [leaf('Speed', 'String'), leaf('Name', 'String')]),
+    ];
+    const selectable = (requiredFields: RequiredFieldEntry[]) =>
+      (typeFilter(tree, { type: 'Motor', requiredFields }) as PickerFolderEntry[])
+        .filter((f) => f.selectable)
+        .map((f) => f.name);
+    expect(selectable(['Speed'])).toEqual(['Motor', 'MotorRO', 'Mistyped']);
+    expect(selectable([{ name: 'Speed', type: 'Float' }])).toEqual(['Motor', 'MotorRO']);
+    expect(selectable([{ name: 'Speed', write: true }])).toEqual(['Motor', 'Mistyped']);
   });
 });

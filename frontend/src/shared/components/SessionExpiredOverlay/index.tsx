@@ -1,4 +1,4 @@
-import './style.css';
+import '@shared/styles/blockingOverlay.css';
 import Button from '@config/components/ui/Button';
 import { useSessionStore, managerSignInUrl } from '@shared/store/sessionStore';
 
@@ -18,12 +18,12 @@ export default function SessionExpiredOverlay() {
   if (!expired) return null;
   return (
     <div
-      className="session-expired"
+      className="blocking-overlay"
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="session-expired-title"
     >
-      <div className="name-modal session-expired__dialog">
+      <div className="name-modal blocking-overlay__dialog">
         <h2 className="name-modal__title" id="session-expired-title">
           Signed out
         </h2>

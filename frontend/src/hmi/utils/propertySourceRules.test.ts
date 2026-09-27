@@ -1,8 +1,16 @@
+import sourceOffersFixture from '@shared/types/__fixtures__/sourceOffers.json';
+import {
+  PROPERTY_SOURCES,
+  SCALAR_FIELD_TYPES,
+  producedFits,
+  type ProducedValueType,
+} from './propertySourceRegistry';
 import {
   getDefaultPropertySources,
   getAllowedPropertySources,
   isPropertySourceAllowed,
   PROPERTY_SOURCE_KEYS,
+  SOURCE_CAPABLE_TYPES,
 } from './propertySourceRules';
 
 describe('propertySourceRules', () => {
@@ -30,6 +38,38 @@ describe('propertySourceRules', () => {
     expect(sources).toContain('$pageIsActive');
     expect(sources).not.toContain('$random');
     expect(sources).not.toContain('$loc');
+  });
+
+  it('offers a field-selecting source where one of its choices fits', () => {
+    expect(getDefaultPropertySources('integer')).toContain('$page');
+    expect(getDefaultPropertySources('integer')).toContain('$viewport');
+    expect(getDefaultPropertySources('boolean')).toContain('$recipe');
+    expect(getDefaultPropertySources('boolean')).not.toContain('$page');
+    expect(getDefaultPropertySources('boolean')).not.toContain('$viewport');
+    expect(getDefaultPropertySources('integer')).not.toContain('$user');
+    expect(getDefaultPropertySources('integer')).not.toContain('$device');
+  });
+
+  it('offers a source only where its produced type is the field type', () => {
+    expect(getDefaultPropertySources('integer')).not.toContain('$formula');
+    expect(getDefaultPropertySources('float')).not.toContain('$alarmCount');
+    expect(getDefaultPropertySources('string')).not.toContain('$compare');
+    expect(getDefaultPropertySources('datetime')).not.toContain('$stringExpr');
+    expect(getDefaultPropertySources('datetime')).toContain('$time');
+    expect(getDefaultPropertySources('integer')).toContain('$random');
+  });
+
+  it('offers a number-producing source on a duration field', () => {
+    const sources = getDefaultPropertySources('duration');
+    expect(sources).toContain('$formula');
+    expect(sources).toContain('$alarmCount');
+    expect(sources).not.toContain('$stringExpr');
+  });
+
+  it('offers a video field the same sources as an image field', () => {
+    expect(getDefaultPropertySources('video')).toEqual(getDefaultPropertySources('image'));
+    expect(getDefaultPropertySources('video')).toContain('$static');
+    expect(getDefaultPropertySources('video')).toContain('$urlParam');
   });
 
   it('returns empty for non-value-source types', () => {
@@ -77,8 +117,8 @@ describe('propertySourceRules', () => {
     }
   });
 
-  it('contains all 24 valid source types', () => {
-    expect(PROPERTY_SOURCE_KEYS).toHaveLength(24);
+  it('contains all 27 valid source types', () => {
+    expect(PROPERTY_SOURCE_KEYS).toHaveLength(27);
     expect(PROPERTY_SOURCE_KEYS).toContain('$static');
     expect(PROPERTY_SOURCE_KEYS).toContain('$var');
     expect(PROPERTY_SOURCE_KEYS).toContain('$loc');
@@ -86,6 +126,8 @@ describe('propertySourceRules', () => {
     expect(PROPERTY_SOURCE_KEYS).toContain('$pageIsActive');
     expect(PROPERTY_SOURCE_KEYS).toContain('$if');
     expect(PROPERTY_SOURCE_KEYS).toContain('$compare');
+    expect(PROPERTY_SOURCE_KEYS).toContain('$not');
+    expect(PROPERTY_SOURCE_KEYS).toContain('$formula');
     expect(PROPERTY_SOURCE_KEYS).toContain('$random');
     expect(PROPERTY_SOURCE_KEYS).toContain('$switch');
     expect(PROPERTY_SOURCE_KEYS).toContain('$user');
@@ -103,5 +145,47 @@ describe('propertySourceRules', () => {
     expect(PROPERTY_SOURCE_KEYS).toContain('$recipeList');
     expect(PROPERTY_SOURCE_KEYS).toContain('$componentProp');
     expect(PROPERTY_SOURCE_KEYS).toContain('$result');
+  });
+});
+
+describe('source offers fixture', () => {
+  // The backend's source-type diagnostic reads the same matrix
+  // (backend/core/validation/source_rules.py, test_structure_parity.py).
+  it('lists the sources every source-capable type offers', () => {
+    expect(
+      Object.fromEntries([...SOURCE_CAPABLE_TYPES].map((t) => [t, getDefaultPropertySources(t)])),
+    ).toEqual(sourceOffersFixture.offers);
+  });
+
+  it('offers on a union field every source any of its types offers', () => {
+    for (const c of sourceOffersFixture.unionOffers) {
+      expect(getAllowedPropertySources(c.fieldType), c.fieldType.join(' | ')).toEqual(c.offers);
+    }
+  });
+
+  it('allows a source on a union field when any of its types offers it', () => {
+    expect(isPropertySourceAllowed(['float', 'integer'], '$alarmCount').valid).toBe(true);
+    expect(isPropertySourceAllowed('float', '$alarmCount').valid).toBe(false);
+  });
+
+  it("lists every source's produced types", () => {
+    expect(
+      Object.fromEntries(
+        PROPERTY_SOURCE_KEYS.map((k) => [
+          k,
+          PROPERTY_SOURCES[k === '$static' ? 'static' : k].produces,
+        ]),
+      ),
+    ).toEqual(sourceOffersFixture.produces);
+  });
+
+  it('fits a produced type to the same scalar type only, a number to a duration too', () => {
+    const fits = Object.fromEntries(
+      Object.keys(sourceOffersFixture.fits).map((p) => [
+        p,
+        SCALAR_FIELD_TYPES.filter((t) => producedFits(p as ProducedValueType, t)),
+      ]),
+    );
+    expect(fits).toEqual(sourceOffersFixture.fits);
   });
 });

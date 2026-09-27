@@ -1,15 +1,9 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import PropertySourceSelector from './index';
+import { stubIntersectionObserver } from '../../../../test-setup';
 
-beforeAll(() => {
-  class IntersectionObserverStub {
-    observe() {}
-    disconnect() {}
-  }
-  // @ts-expect-error assigning a test stub
-  global.IntersectionObserver = IntersectionObserverStub;
-});
+beforeAll(stubIntersectionObserver);
 
 describe('PropertySourceSelector', () => {
   it('opens the property-source drawer from the question-mark dropdown action', () => {
@@ -98,5 +92,20 @@ describe('PropertySourceSelector', () => {
     expect(screen.getByRole('button', { name: /If Condition/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Comparison/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Static Value/ })).not.toBeInTheDocument();
+  });
+
+  it('offers on a union field the sources any of its types takes', () => {
+    const onChange = vi.fn();
+    render(
+      <PropertySourceSelector value={0} onChange={onChange} fieldType={['float', 'integer']} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Static/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Browse property sources/ }));
+
+    // Integer producers alongside the Float ones.
+    expect(screen.getByRole('button', { name: /Formula/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Viewport/ }));
+    expect(onChange).toHaveBeenCalledWith({ $viewport: { field: 'width' } });
   });
 });

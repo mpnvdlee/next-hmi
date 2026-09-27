@@ -30,8 +30,13 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 from core import audit
+from core.exceptions import RateLimitError
 from core.number_utils import get_config_float
-from core.storage import active_config_dir, active_pages_dir, read_json
+from core.page_index import INDEX_ROOTS, page_document_dir, root_nodes
+from core.storage import (
+    active_config_dir,
+    read_json,
+)
 from fastapi import WebSocket
 from models.datasource import build_var_key, parse_var_key
 from models.websocket import (
@@ -39,6 +44,7 @@ from models.websocket import (
     LogoutMessage,
     RequestIdentityMessage,
     SetContextMessage,
+    ToggleFieldMessage,
     WriteFieldMessage,
     build_auth_error,
     build_user_identity,
@@ -49,7 +55,6 @@ from models.websocket import (
 from services import write_service
 
 logger = logging.getLogger(__name__)
-_MAX_DIALOG_IDS = 2000
 
 
 def _config_path():
@@ -66,6 +71,7 @@ _ARRAY_INDEX_RE = re.compile(r"\[(\d+)\]$")
 # messages. Frontend action-result handlers $switch on these strings, so they
 # are a stable contract — do not rename without a coordinated frontend change.
 REASON_INVALID_CREDENTIALS = "invalid_credentials"
+REASON_RATE_LIMITED = "rate_limited"
 REASON_PERMISSION_DENIED = "permission_denied"
 REASON_BAD_REQUEST = "bad_request"
 
@@ -106,8 +112,10 @@ class WebSocketManager:
         self._client_users: dict[str, dict[str, dict[str, Any]]] = {}
         # Per-client connection timestamps: client_id -> ISO string
         self._client_connected_at: dict[str, str] = {}
-        # Cached priority batch delay per datasource name (invalidated on config change)
-        self._priority_delay_cache: dict[str, float] = {}
+        # Priority batch delay per datasource name, beside the entry it was read
+        # from: an edited or reloaded datasource is a new entry object, so a
+        # stale value is recognised without the datasource side reporting it.
+        self._priority_delay_cache: dict[str, tuple[Any, float]] = {}
         # Coalesced background priority recompute (see schedule_priority_recompute)
         self._priority_recompute_task: asyncio.Task | None = None
         self._priority_recompute_rerun = False
@@ -166,13 +174,6 @@ class WebSocketManager:
             if not self._priority_recompute_rerun:
                 return
             self._priority_recompute_rerun = False
-
-    def invalidate_priority_delay_cache(self, ds_name: str | None = None) -> None:
-        """Clear cached priority batch delay. Call after datasource config changes."""
-        if ds_name is not None:
-            self._priority_delay_cache.pop(ds_name, None)
-        else:
-            self._priority_delay_cache.clear()
 
     # -- Enqueue (called from datasource_manager, possibly from another thread) --
 
@@ -236,13 +237,13 @@ class WebSocketManager:
         if self._datasource_manager is None:
             return 10.0
         ds_name, _path = parse_var_key(key)
-        cached = self._priority_delay_cache.get(ds_name)
-        if cached is not None:
-            return cached
         entry = self._datasource_manager.get(ds_name)
+        cached = self._priority_delay_cache.get(ds_name)
+        if cached is not None and cached[0] is entry:
+            return cached[1]
         settings = entry.config.get("settings", {}) if entry is not None else {}
         value = get_config_float(settings, "priority_ws_batch_ms", 10.0, minimum=0.0, maximum=1000.0)
-        self._priority_delay_cache[ds_name] = value
+        self._priority_delay_cache[ds_name] = (entry, value)
         return value
 
     async def _broadcast(self, payload: dict) -> None:
@@ -458,6 +459,8 @@ class WebSocketManager:
             await self._handle_set_context(client_id, cast(SetContextMessage, msg))
         elif msg_type == "write_field":
             await self._handle_write_field(client_id, cast(WriteFieldMessage, msg))
+        elif msg_type == "toggle_field":
+            await self._handle_toggle_field(client_id, cast(ToggleFieldMessage, msg))
         elif msg_type == "recipe_load":
             await self._handle_recipe_load(client_id, msg)
         elif msg_type == "recipe_save":
@@ -534,11 +537,9 @@ class WebSocketManager:
         if self._datasource_manager is None or self._opcua_pool is None:
             return
         current_page_ids = _resolve_current_page_ids(msg)
-        open_dialog_ids = _coerce_non_empty_str_list(msg.get("openDialogIds"), _MAX_DIALOG_IDS)
         explicit_priority_keys = _extract_explicit_priority_keys(msg)
         composite_keys = _resolve_context_composite_keys(
             current_page_ids=current_page_ids,
-            open_dialog_ids=open_dialog_ids,
             explicit_priority_keys=explicit_priority_keys,
         )
         sent_keys = await self._send_cached_values(client_id, composite_keys)
@@ -580,11 +581,49 @@ class WebSocketManager:
             return
 
         ds_name, path, field, value = write_request
+        await self._checked_write(client_id, msg, ds_name, path, field=field, value=value)
+
+    async def _handle_toggle_field(self, client_id: str, msg: ToggleFieldMessage) -> None:
+        """Invert a Boolean variable. Same permission check, audit and
+        `write_response` / `write_error` contract as `_handle_write_field`; the
+        value written is read on the server, never taken from the client."""
+        request_id = msg.get("requestId")
+
+        if self._datasource_manager is None:
+            await self._send_write_result(
+                client_id, request_id, "", "", write_service.REASON_OPCUA_UNREACHABLE
+            )
+            return
+
+        target = write_service.parse_toggle_request(msg)
+        if target is None:
+            logger.warning("toggle_field: missing datasource/path in %s", msg)
+            ds_name = str(msg.get("datasource", ""))
+            path = str(msg.get("path", ""))
+            await self._send_write_result(client_id, request_id, ds_name, path, REASON_BAD_REQUEST)
+            return
+
+        ds_name, path = target
+        await self._checked_write(client_id, msg, ds_name, path, toggle=True)
+
+    async def _checked_write(
+        self,
+        client_id: str,
+        msg: WriteFieldMessage | ToggleFieldMessage,
+        ds_name: str,
+        path: str,
+        *,
+        field: str | None = None,
+        value: Any = None,
+        toggle: bool = False,
+    ) -> None:
+        """Resolve, permission-check, write (or toggle), audit and respond."""
+        request_id = msg.get("requestId")
         registry_path = _ARRAY_INDEX_RE.sub("", path)
 
         entry_data = self._datasource_manager.get_entry(ds_name, registry_path)
         if entry_data is None:
-            logger.warning("write_field: unknown %s:%s", ds_name, path)
+            logger.warning("%s: unknown %s:%s", msg.get("type"), ds_name, path)
             await self._send_write_result(
                 client_id, request_id, ds_name, path, write_service.REASON_BAD_PATH
             )
@@ -592,15 +631,20 @@ class WebSocketManager:
 
         scope = msg.get("scope", "")
         if not self._check_write_permitted(client_id, scope, entry_data):
-            logger.warning("write_field denied for %s:%s (scope=%s)", ds_name, path, scope)
+            logger.warning("%s denied for %s:%s (scope=%s)", msg.get("type"), ds_name, path, scope)
             await self._send_write_result(client_id, request_id, ds_name, path, REASON_PERMISSION_DENIED)
             return
 
-        outcome = await write_service.write_value(
-            self._datasource_manager, self._opcua_pool, ds_name, path, value, field=field,
-        )
+        if toggle:
+            outcome, value = await write_service.toggle_value(
+                self._datasource_manager, self._opcua_pool, ds_name, path,
+            )
+        else:
+            outcome = await write_service.write_value(
+                self._datasource_manager, self._opcua_pool, ds_name, path, value, field=field,
+            )
         if not outcome.ok:
-            logger.warning("write_field %s:%s.%s failed: %s", ds_name, path, field, outcome.reason)
+            logger.warning("%s %s:%s.%s failed: %s", msg.get("type"), ds_name, path, field, outcome.reason)
         else:
             # Moving a setpoint is the most consequential thing an operator does
             # here, and it is one of the few actions with an actor the server
@@ -642,14 +686,14 @@ class WebSocketManager:
         verify = bool(msg.get("verify", False))
         scope = msg.get("scope", "")
 
-        def _permitted(ds_name: str, base_path: str) -> bool:
-            dm = self._datasource_manager
-            entry_data = dm.get_entry(ds_name, base_path) if dm is not None else None
-            return self._check_write_permitted(client_id, scope, entry_data)
-
+        identity = self._client_users.get(client_id, {}).get(scope) if scope else None
         try:
             result = await self._recipe_manager.download(
-                dataset_id, verify=verify, permission_check=_permitted,
+                dataset_id,
+                verify=verify,
+                permission_check=write_service.write_permission_gate(
+                    identity, self._datasource_manager,
+                ),
             )
         except Exception:
             logger.exception("recipe_load failed for dataset %s", dataset_id)
@@ -687,7 +731,13 @@ class WebSocketManager:
         identity = self._client_users.get(client_id, {}).get(scope) if scope else None
         username = identity.get("username", "") if isinstance(identity, dict) else ""
         try:
-            config = await self._recipe_manager.upload_into(dataset_id, username=username)
+            config = await self._recipe_manager.upload_into(
+                dataset_id,
+                username=username,
+                permission_check=write_service.write_permission_gate(
+                    identity, self._datasource_manager,
+                ),
+            )
         except Exception:
             logger.exception("recipe_save failed for dataset %s", dataset_id)
             await self._send_recipe_result(client_id, request_id, None, "upload_failed")
@@ -812,7 +862,18 @@ class WebSocketManager:
         from services import users_manager
         if client_id not in self._connections:
             return
-        authenticated = await users_manager.authenticate(username, password)
+        # This socket is on the public runtime prefix, so the throttle in
+        # ``users_manager.authenticate`` is the only thing metering guesses
+        # here. It reports a lockout by raising; say so rather than letting the
+        # operator read "wrong password" for a minute after the fifth typo.
+        try:
+            authenticated = await users_manager.authenticate(username, password)
+        except RateLimitError:
+            await self._safe_send_json(
+                client_id,
+                build_auth_error(scope, REASON_RATE_LIMITED, request_id=request_id),
+            )
+            return
         if authenticated is None:
             await self._safe_send_json(
                 client_id,
@@ -929,7 +990,10 @@ class WebSocketManager:
             return
 
     async def _send_uncached_values_then_ready(
-        self, client_id: str, composite_keys: set[str], current_page_ids: list[str]
+        self,
+        client_id: str,
+        composite_keys: set[str],
+        current_page_ids: list[str],
     ) -> None:
         """Background continuation of `_handle_set_context`'s fire-and-forget
         OPC-UA prefetch: once the uncached reads land (or fail), tell the
@@ -942,12 +1006,21 @@ class WebSocketManager:
         """Tell the client every variable requested by this set_context has
         been sent (from cache and/or freshly read). The client uses this to
         reveal a newly navigated page once its own data has actually arrived,
-        instead of a session-wide "a snapshot landed at some point" flag."""
+        instead of a session-wide "a snapshot landed at some point" flag.
+
+        The page ids are echoed so each surface — the routed page and every
+        open page overlay — can recognise the ack for its own id and settle on
+        it rather than on a timer."""
         ws = self._connections.get(client_id)
         if ws is None:
             return
         try:
-            await ws.send_text(json.dumps({"type": "context_ready", "currentPageIds": current_page_ids}))
+            await ws.send_text(
+                json.dumps({
+                    "type": "context_ready",
+                    "currentPageIds": current_page_ids,
+                })
+            )
         except Exception:
             self._connections.pop(client_id, None)
 
@@ -1017,12 +1090,11 @@ def _get_runtime_pages_config() -> dict | None:
 def _resolve_context_composite_keys(
     *,
     current_page_ids: list[str],
-    open_dialog_ids: list[str],
     explicit_priority_keys: set[str],
 ) -> set[str]:
     # Datasource live-values can drive fast-subscriptions using explicit
-    # priority keys without any page/dialog context.
-    if not current_page_ids and not open_dialog_ids:
+    # priority keys without any page context.
+    if not current_page_ids:
         return set(explicit_priority_keys)
 
     pages_config = _get_runtime_pages_config()
@@ -1032,7 +1104,6 @@ def _resolve_context_composite_keys(
     composite_keys = _collect_from_runtime_pages_config(
         pages_config,
         current_page_ids=current_page_ids,
-        open_dialog_ids=open_dialog_ids,
     )
     composite_keys.update(explicit_priority_keys)
     return composite_keys
@@ -1048,13 +1119,11 @@ def _collect_context_composite_keys(
     raw_pages_config: dict,
     *,
     current_page_ids: list[str],
-    open_dialog_ids: list[str],
 ) -> set[str]:
     """Collect all variable keys for the current runtime context (raw input)."""
     return _collect_from_runtime_pages_config(
         _to_runtime_pages_config(raw_pages_config),
         current_page_ids=current_page_ids,
-        open_dialog_ids=open_dialog_ids,
     )
 
 
@@ -1062,28 +1131,20 @@ def _collect_from_runtime_pages_config(
     pages_config: dict,
     *,
     current_page_ids: list[str],
-    open_dialog_ids: list[str],
 ) -> set[str]:
-    """Collect variable keys from a pages_config already in runtime shape."""
+    """Collect variable keys from a pages_config already in runtime shape.
+
+    A current page id may name a page in either index root: the routed page
+    lives under ``pages``, an open page overlay under either one."""
     keys: set[str] = set()
 
     _walk_components(pages_config.get("header", []), keys)
     _walk_components(pages_config.get("footer", []), keys)
 
     for page_id in current_page_ids:
-        _collect_active_scope_composite_keys(pages_config.get("pages", []), page_id, keys)
-
-    if open_dialog_ids:
-        dialogs = pages_config.get("dialogs", [])
-        dialog_map = {
-            dialog.get("id"): dialog
-            for dialog in dialogs
-            if isinstance(dialog, dict) and isinstance(dialog.get("id"), str)
-        }
-        for dialog_id in open_dialog_ids:
-            dialog = dialog_map.get(dialog_id)
-            if isinstance(dialog, dict):
-                _walk_components(dialog.get("widgets", []), keys)
+        for root in INDEX_ROOTS:
+            if _collect_active_scope_composite_keys(pages_config.get(root, []), page_id, keys):
+                break
 
     return keys
 
@@ -1164,36 +1225,57 @@ def _is_page_group_node(node: Any) -> bool:
 def _to_runtime_pages_config(raw: dict) -> dict:
     if not isinstance(raw, dict):
         return {"pages": [], "header": [], "footer": [], "dialogs": []}
-    pages   = v if isinstance(v := raw.get("pages"),   list) else []
     header  = v if isinstance(v := raw.get("header"),  list) else []
     footer  = v if isinstance(v := raw.get("footer"),  list) else []
-    dialogs = v if isinstance(v := raw.get("dialogs"), list) else []
 
     return {
-        "pages": [_to_runtime_page_node(node) for node in pages if isinstance(node, dict)],
+        **{
+            root: [
+                _to_runtime_page_node(node, root)
+                for node in root_nodes(raw, root)
+                if isinstance(node, dict)
+            ]
+            for root in INDEX_ROOTS
+        },
         "header": [node for node in header if isinstance(node, dict)],
         "footer": [node for node in footer if isinstance(node, dict)],
-        "dialogs": [node for node in dialogs if isinstance(node, dict)],
     }
 
 
-def _load_page_file_children(page_id: str) -> list[dict]:
-    """Load component children for a leaf page from its per-page file (v2 split-page storage)."""
+def _load_page_file_children(page_id: str, root: str) -> list[dict]:
+    """Load a leaf page's widgets from its document — every section's array,
+    since a page document keeps its widgets in a ``sections`` map.
+
+    The directory comes from the index root the node was found under, never from
+    a search: a leftover ``pages/<id>.json`` beside the real ``dialogs/<id>.json``
+    would otherwise decide what the operator sees, and an unreadable document in
+    one root would silently serve the other root's.
+    """
     try:
-        data = read_json(active_pages_dir() / f"{page_id}.json")
+        data: Any = read_json(page_document_dir(root) / f"{page_id}.json")
     except Exception:
+        # Includes a runtime with no live project, where the resolver itself
+        # raises — the same "no document" answer.
         return []
-    children = data.get("children", []) if isinstance(data, dict) else []
-    return [c for c in children if isinstance(c, dict)]
+    sections = data.get("sections") if isinstance(data, dict) else None
+    if not isinstance(sections, dict):
+        return []
+    return [
+        widget
+        for widgets in sections.values()
+        if isinstance(widgets, list)
+        for widget in widgets
+        if isinstance(widget, dict)
+    ]
 
 
-def _to_runtime_page_node(node: dict) -> dict:
+def _to_runtime_page_node(node: dict, root: str) -> dict:
     if _is_page_group_node(node):
         return {
             **{k: v for k, v in node.items() if k != "children"},
             "type": "page-group",
             "children": [
-                _to_runtime_page_node(child)
+                _to_runtime_page_node(child, root)
                 for child in _iter_dict_children(node.get("children", []))
             ],
         }
@@ -1204,11 +1286,11 @@ def _to_runtime_page_node(node: dict) -> dict:
     raw_children = _iter_dict_children(node.get("children", []))
     if not raw_children:
         page_id = node.get("id", "")
-        raw_children = _load_page_file_children(page_id) if page_id else []
+        raw_children = _load_page_file_children(page_id, root) if page_id else []
     children: list[dict] = []
     for child in raw_children:
         if _is_page_group_node(child):
-            children.append(_to_runtime_page_node(child))
+            children.append(_to_runtime_page_node(child, root))
         else:
             children.append(child)
 

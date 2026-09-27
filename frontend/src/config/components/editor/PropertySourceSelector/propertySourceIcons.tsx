@@ -62,6 +62,25 @@ const ICONS: Record<PropertySource, ReactNode> = {
       <path d="M5 8h4M15 8h4M9 3h6" />
     </Icon>
   ),
+  // $not — a toggle whose knob has flipped sides.
+  $not: (
+    <Icon viewBox="0 0 24 24" strokeWidth={2}>
+      <rect x="2" y="7" width="20" height="10" rx="5" />
+      <circle cx="16" cy="12" r="2.5" fill="currentColor" stroke="none" />
+      <path d="M4 3l16 18" />
+    </Icon>
+  ),
+  // $formula — the four operators as a calculator keypad.
+  $formula: (
+    <Icon viewBox="0 0 24 24" strokeWidth={2}>
+      <path d="M7 4v6M4 7h6" />
+      <path d="M14 7h6" />
+      <path d="M4.5 14.5l5 5M9.5 14.5l-5 5" />
+      <path d="M14 17h6" />
+      <circle cx="17" cy="14" r="1" fill="currentColor" stroke="none" />
+      <circle cx="17" cy="20" r="1" fill="currentColor" stroke="none" />
+    </Icon>
+  ),
   // $random — die face.
   $random: (
     <Icon viewBox="0 0 24 24" strokeWidth={2}>
@@ -190,6 +209,14 @@ const ICONS: Record<PropertySource, ReactNode> = {
     <Icon>
       <path d="M6 4.5 L2.5 8 L6 11.5" />
       <path d="M2.5 8 h7.5 a3 3 0 0 0 3 -3 v-1.5" />
+    </Icon>
+  ),
+  // $repeatItem — three rows, one picked out.
+  $repeatItem: (
+    <Icon>
+      <rect x="2.5" y="2.5" width="11" height="3" rx="0.5" />
+      <rect x="2.5" y="6.5" width="11" height="3" rx="0.5" fill="currentColor" />
+      <rect x="2.5" y="10.5" width="11" height="3" rx="0.5" />
     </Icon>
   ),
 };

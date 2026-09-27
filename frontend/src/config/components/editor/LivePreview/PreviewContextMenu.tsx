@@ -18,7 +18,7 @@ interface Props {
 
 /** Right-click menu for the live preview. Adding targets the container that will
  *  hold the new widget; Copy and Delete act on the widget that was clicked. The
- *  tree keeps the rest (renaming, moving, page and dialog level actions). */
+ *  tree keeps the rest (renaming, moving, page level actions). */
 export default function PreviewContextMenu({ x, y, target, widget, onClose, onAction }: Props) {
   const run = (action: string) => {
     onAction(action);

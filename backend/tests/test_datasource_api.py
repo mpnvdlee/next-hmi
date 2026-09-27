@@ -1,8 +1,14 @@
 """Tests for datasource_api CRUD routes."""
+import asyncio
+import json
+import sys
+import time
+from contextlib import suppress
 from pathlib import Path
 
 import api.datasource_api as datasource_api_module
 import core.storage as storage
+import httpx
 import pytest
 from core.exceptions import register_exception_handlers
 from fastapi import FastAPI
@@ -221,7 +227,7 @@ def test_put_datasource_rejects_invalid_type(ds_client):
 
 
 def test_put_datasource_rejects_unknown_data_type(ds_client):
-    """§1.6: an unrecognized data_type on a static datasource can't be saved."""
+    """An unrecognized data_type on a static datasource can't be saved."""
     client, manager = ds_client
     resp = client.put(
         "/api/datasources/plc1",
@@ -318,6 +324,81 @@ def test_rest_write_requires_project_user_credentials(ds_client):
     assert response.json()["detail"] == "invalid_credentials"
 
 
+def _restricted_setpoint(manager, groups: list[str]) -> dict:
+    manager.save(
+        "plc1",
+        {
+            "name": "plc1",
+            "type": "static",
+            "variables": [
+                {
+                    "kind": "variable",
+                    "display_name": "Setpoint",
+                    "data_type": "Int16",
+                    "enabled": True,
+                    "interactableByGroups": groups,
+                }
+            ],
+        },
+    )
+    return {"datasource": "plc1", "path": "Setpoint", "value": 42}
+
+
+def _write_project_users(root: Path, *extra: dict) -> None:
+    root.joinpath("users.json").write_text(
+        json.dumps(
+            {
+                "settings": {"autoLoginName": "guest"},
+                "groups": [
+                    {"id": "guest", "label": "Guest"},
+                    {"id": "engineer", "label": "Engineer"},
+                ],
+                "users": [
+                    {"id": "guest", "username": "guest", "password": "", "groups": ["guest"]},
+                    *extra,
+                ],
+            }
+        )
+    )
+
+
+def test_rest_write_refuses_an_account_with_no_password(ds_client, live_project_root: Path):
+    """``interactableByGroups`` is the only per-tag restriction an anonymous
+    operator faces on the public runtime prefix, and ``Basic bGluZWJvc3M6`` —
+    a real username with an empty password — walked straight through it."""
+    client, manager = ds_client
+    payload = _restricted_setpoint(manager, ["engineer"])
+    _write_project_users(
+        live_project_root,
+        {"id": "u-lb", "username": "lineboss", "password": "", "groups": ["engineer", "guest"]},
+    )
+
+    anonymous = client.post("/api/datasources/write", json=payload)
+    assert anonymous.status_code == 401
+
+    response = client.post("/api/datasources/write", json=payload, auth=("lineboss", ""))
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid_credentials"
+
+
+def test_rest_write_throttles_repeated_credential_failures(ds_client, live_project_root: Path):
+    """Nothing counted failures on a route reachable with no session at all,
+    and each attempt costs a 200 000-iteration PBKDF2."""
+    client, manager = ds_client
+    payload = _restricted_setpoint(manager, ["engineer"])
+    _write_project_users(
+        live_project_root,
+        {"id": "u-lb", "username": "lineboss", "password": "", "groups": ["engineer", "guest"]},
+    )
+
+    for _ in range(5):
+        attempt = client.post("/api/datasources/write", json=payload, auth=("lineboss", "guess"))
+        assert attempt.status_code == 401
+
+    locked = client.post("/api/datasources/write", json=payload, auth=("lineboss", "guess"))
+    assert locked.status_code == 429
+
+
 def test_rest_write_shares_envelope_coercion_and_group_permission(ds_client, monkeypatch):
     client, manager = ds_client
     manager.save(
@@ -331,8 +412,15 @@ def test_rest_write_shares_envelope_coercion_and_group_permission(ds_client, mon
                     "display_name": "Count",
                     "data_type": "Int16",
                     "enabled": True,
+                    "writable": True,
                     "interactableByGroups": ["operator"],
-                }
+                },
+                {
+                    "kind": "variable",
+                    "display_name": "Status",
+                    "data_type": "Int16",
+                    "enabled": True,
+                },
             ],
         },
     )
@@ -364,10 +452,15 @@ def test_rest_write_shares_envelope_coercion_and_group_permission(ds_client, mon
         "ok": False,
         "reason": "bad_request",
     }
+    read_only = {"datasource": "plc1", "path": "Status", "value": 1}
+    assert client.post(url, json=read_only, auth=("operator", "secret")).json() == {
+        "ok": False,
+        "reason": "read_only",
+    }
 
 
 def test_put_datasource_omitted_variables_preserves_existing_tree(ds_client):
-    """§1.5: a settings-only PUT (no `variables` key) must not wipe the tree."""
+    """A settings-only PUT (no `variables` key) must not wipe the tree."""
     client, manager = ds_client
     manager.save(
         "plc1",
@@ -429,12 +522,52 @@ def test_delete_datasource_not_found(ds_client):
 # ── POST /{name}/stop ─────────────────────────────────────────────────────────
 
 
-def test_stop_non_test_server_returns_422(ds_client):
+def test_stop_static_datasource_returns_422(ds_client):
     client, manager = ds_client
     manager.save("plc1", {"name": "plc1", "type": "static", "variables": []})
     resp = client.post("/api/datasources/plc1/stop")
     assert resp.status_code == 422
-    assert "test server" in resp.json()["detail"].lower()
+    assert "OPC-UA" in resp.json()["detail"]
+
+
+def test_stop_opcua_client_disconnects(ds_client, monkeypatch):
+    client, manager = ds_client
+    manager.save(
+        "plc1",
+        {"name": "plc1", "type": "opcua-client", "settings": {"server_url": "opc.tcp://x"}},
+    )
+
+    stopped = []
+
+    class _FakePool:
+        async def stop(self, name):
+            stopped.append(name)
+
+    monkeypatch.setattr(datasource_api_module, "_opcua_pool", _FakePool())
+    resp = client.post("/api/datasources/plc1/stop")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "disconnected"}
+    assert stopped == ["plc1"]
+
+
+def test_start_opcua_client_connects(ds_client, monkeypatch):
+    client, manager = ds_client
+    manager.save(
+        "plc1",
+        {"name": "plc1", "type": "opcua-client", "settings": {"server_url": "opc.tcp://x"}},
+    )
+
+    started = []
+
+    class _FakePool:
+        async def start(self, name, settings):
+            started.append((name, settings))
+
+    monkeypatch.setattr(datasource_api_module, "_opcua_pool", _FakePool())
+    resp = client.post("/api/datasources/plc1/start")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "connected"}
+    assert started == [("plc1", {"server_url": "opc.tcp://x"})]
 
 
 # ── GET /{name}/browse — non-OPC-UA returns 422 ───────────────────────────────
@@ -527,3 +660,221 @@ def test_sanitize_cert_filename_rejects_dot_variants_falls_back_for_empty():
         _sanitize_cert_filename(".")
     with pytest.raises(DatasourceValidationError):
         _sanitize_cert_filename("..")
+
+
+# ── POST /certs/generate ───────────────────────────────────────────────────────
+
+
+def test_generate_certificate_writes_project_relative_pair(ds_client, live_project_root: Path):
+    client, _ = ds_client
+    resp = client.post("/api/datasources/certs/generate", json={"name": "my-plc"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["client_certificate"] == "certs/my-plc-cert.der"
+    assert body["client_private_key"] == "certs/my-plc-key.pem"
+
+    cert = live_project_root / "certs" / "my-plc-cert.der"
+    key = live_project_root / "certs" / "my-plc-key.pem"
+    assert cert.exists() and key.exists()
+    if sys.platform != "win32":
+        # os.chmod on Windows can't restrict to owner-only; NTFS ACLs would be
+        # needed for that guarantee there. See core/tls_settings.py's
+        # documented weaker guarantee for the same platform gap.
+        assert (key.stat().st_mode & 0o777) == 0o600
+    from cryptography import x509
+
+    assert x509.load_der_x509_certificate(cert.read_bytes())
+
+
+def test_generate_certificate_regenerates_same_path(ds_client, live_project_root: Path):
+    client, _ = ds_client
+    first = client.post("/api/datasources/certs/generate", json={"name": "my-plc"}).json()
+    cert_path = live_project_root / first["client_certificate"]
+    key_path = live_project_root / first["client_private_key"]
+    first_cert_bytes = cert_path.read_bytes()
+    first_key_bytes = key_path.read_bytes()
+
+    second = client.post("/api/datasources/certs/generate", json={"name": "my-plc"}).json()
+
+    assert second["client_certificate"] == first["client_certificate"]
+    assert second["client_private_key"] == first["client_private_key"]
+    assert cert_path.read_bytes() != first_cert_bytes
+    assert key_path.read_bytes() != first_key_bytes
+
+
+def test_generate_certificate_defaults_name_when_blank(ds_client):
+    client, _ = ds_client
+    resp = client.post("/api/datasources/certs/generate", json={"name": ""})
+    assert resp.status_code == 200
+    assert resp.json()["client_certificate"] == "certs/client-cert.der"
+
+
+def test_generate_certificate_honours_common_name_and_validity(
+    ds_client, live_project_root: Path
+):
+    client, _ = ds_client
+    resp = client.post(
+        "/api/datasources/certs/generate",
+        json={"name": "my-plc", "common_name": "plant-a-plc", "validity_days": 30},
+    )
+    assert resp.status_code == 200
+
+    info = client.get(
+        "/api/datasources/certs/info",
+        params={"path": resp.json()["client_certificate"]},
+    ).json()
+    assert "plant-a-plc" in info["subject"]
+    assert 28 <= info["expiresInDays"] <= 30
+
+
+def test_generate_certificate_rejects_out_of_range_validity(ds_client):
+    client, _ = ds_client
+    resp = client.post(
+        "/api/datasources/certs/generate", json={"name": "my-plc", "validity_days": 0}
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_generating_a_certificate_does_not_block_the_event_loop(
+    monkeypatch, live_project_root: Path
+):
+    """RSA-2048 keygen plus the cert/key writes happen inside this handler —
+    on a project instance the same loop drives the OPC-UA and WebSocket
+    variable pipeline, so running that synchronously would stall both for as
+    long as generation takes (~100-300ms). A concurrent coroutine's heartbeat
+    has to keep ticking while generation is in flight, which only happens if
+    the work actually left the loop."""
+    storage.active_datasources_dir().mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(datasource_api_module, "_opcua_pool", None)
+    monkeypatch.setattr(datasource_api_module, "_test_server_pool", None)
+    monkeypatch.setattr(datasource_api_module, "datasource_manager", DatasourceManager())
+
+    def slow_generate(cert_path: str, key_path: str, **_kwargs: object) -> None:
+        time.sleep(0.3)
+        Path(cert_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(cert_path).write_bytes(b"cert")
+        Path(key_path).write_bytes(b"key")
+
+    monkeypatch.setattr(
+        datasource_api_module, "generate_self_signed_client_certificate", slow_generate
+    )
+
+    ticks = 0
+
+    async def heartbeat() -> None:
+        nonlocal ticks
+        while True:
+            await asyncio.sleep(0.02)
+            ticks += 1
+
+    from api.datasource_api import router
+
+    test_app = FastAPI()
+    register_exception_handlers(test_app)
+    test_app.include_router(router)
+
+    hb = asyncio.create_task(heartbeat())
+    try:
+        transport = httpx.ASGITransport(app=test_app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+            resp = await ac.post("/api/datasources/certs/generate", json={"name": "my-plc"})
+    finally:
+        hb.cancel()
+        with suppress(asyncio.CancelledError):
+            await hb
+
+    assert resp.status_code == 200
+    assert ticks >= 5
+
+
+# ── GET /certs/info ────────────────────────────────────────────────────────────
+
+
+def test_certificate_info_describes_a_generated_pair(ds_client):
+    client, _ = ds_client
+    generated = client.post("/api/datasources/certs/generate", json={"name": "my-plc"}).json()
+
+    resp = client.get(
+        "/api/datasources/certs/info", params={"path": generated["client_certificate"]}
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["readable"] is True
+    assert body["expired"] is False and body["expiring"] is False
+    assert body["expiresInDays"] > 3000
+    assert body["selfSigned"] is True
+    assert "webhmi-opc-client" in body["subject"]
+    assert body["expiresAt"]
+
+
+def test_certificate_info_reports_a_missing_file_as_unreadable(ds_client):
+    client, _ = ds_client
+    resp = client.get("/api/datasources/certs/info", params={"path": "certs/absent.pem"})
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "readable": False,
+        "subject": "",
+        "fingerprint": "",
+        "issuedAt": "",
+        "expiresAt": "",
+        "expiresInDays": 0,
+        "expired": False,
+        "expiring": False,
+        "selfSigned": False,
+        "names": [],
+    }
+
+
+def test_certificate_info_reports_a_private_key_as_unreadable(ds_client):
+    """The path field is free text — pointing it at the key is a typo, not a fault."""
+    client, _ = ds_client
+    generated = client.post("/api/datasources/certs/generate", json={"name": "my-plc"}).json()
+
+    resp = client.get(
+        "/api/datasources/certs/info", params={"path": generated["client_private_key"]}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["readable"] is False
+
+
+def test_certificate_info_never_escapes_the_certs_directory(ds_client, live_project_root: Path):
+    (live_project_root / "secret.pem").write_bytes(b"-----BEGIN CERTIFICATE-----\n")
+
+    client, _ = ds_client
+    resp = client.get("/api/datasources/certs/info", params={"path": "../secret.pem"})
+
+    assert resp.status_code == 200
+    assert resp.json()["readable"] is False
+
+
+# ── Connection-status error surfacing ──────────────────────────────────────────
+
+
+def test_list_datasources_surfaces_opcua_client_connect_error(ds_client, monkeypatch):
+    """A real OPC-UA datasource that failed to connect must report why in the
+    summary the sidebar reads, the same way a test-server datasource already
+    does via its own pool."""
+    client, manager = ds_client
+    manager.save(
+        "plc1",
+        {"name": "plc1", "type": "opcua-client", "settings": {"server_url": "opc.tcp://x"}},
+    )
+
+    class _FakeEngine:
+        connected = False
+        error = "Connection timed out"
+
+    class _FakePool:
+        def get(self, name):
+            return _FakeEngine() if name == "plc1" else None
+
+    monkeypatch.setattr(datasource_api_module, "_opcua_pool", _FakePool())
+    resp = client.get("/api/datasources")
+
+    assert resp.status_code == 200
+    item = resp.json()[0]
+    assert item["connected"] is False
+    assert item["error"] == "Connection timed out"

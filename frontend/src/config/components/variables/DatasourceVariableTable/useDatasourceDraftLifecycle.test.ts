@@ -65,7 +65,7 @@ describe('useDatasourceDraftLifecycle', () => {
     expect(result.current.collapsed).toEqual(new Set(['Folder1']));
   });
 
-  it('hydrates the tree from a saved varsDraft and marks the config dirty (§ draft restore)', () => {
+  it('hydrates the tree from a saved varsDraft and marks the config dirty', () => {
     const ds = makeDatasource();
     const draftTree: TreeNode[] = [
       { kind: 'variable', display_name: 'DraftedVar', data_type: 'Float', enabled: true },

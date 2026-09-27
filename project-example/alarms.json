@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "id": "espresso",
+      "title": "Espresso machine",
+      "alarms": [
+        {
+          "id": "boiler-over-temp",
+          "code": "E-101",
+          "level": "error",
+          "title": {
+            "$loc": "Boiler over-temperature"
+          },
+          "description": "The boiler is above its 96 °C safety ceiling. Brewing at this temperature scorches the grounds.",
+          "image": "",
+          "auto_popup": true,
+          "resolutions": [
+            "Lower the boiler temperature on the Machine page.",
+            "Check the setpoint — it should sit between 88 and 96 °C."
+          ],
+          "trigger": {
+            "type": "value_range",
+            "source_value": {
+              "$var": {
+                "path": "Brew:Boiler/Temp"
+              }
+            },
+            "min": 96.1,
+            "max": 200,
+            "on_true": true
+          },
+          "ack_groups": []
+        },
+        {
+          "id": "pump-over-pressure",
+          "code": "W-201",
+          "level": "warning",
+          "title": {
+            "$loc": "Pump pressure high"
+          },
+          "description": "Pump pressure is above 11 bar. The puck is probably tamped too hard or the grind is too fine.",
+          "image": "",
+          "auto_popup": false,
+          "resolutions": [
+            "Coarsen the grind one step.",
+            "Lower the pump pressure on the Machine page."
+          ],
+          "trigger": {
+            "type": "value_range",
+            "source_value": {
+              "$var": {
+                "path": "Brew:Pump/Pressure"
+              }
+            },
+            "min": 11.1,
+            "max": 50,
+            "on_true": true
+          },
+          "ack_groups": []
+        },
+        {
+          "id": "water-tank-low",
+          "code": "W-202",
+          "level": "warning",
+          "title": {
+            "$loc": "Water tank low"
+          },
+          "description": "Less than 15 % of the water tank is left. The next few shots will run short.",
+          "image": "",
+          "auto_popup": false,
+          "resolutions": [
+            "Refill the tank on the Machine page."
+          ],
+          "trigger": {
+            "type": "value_range",
+            "source_value": {
+              "$var": {
+                "path": "Brew:Tank/WaterLevel"
+              }
+            },
+            "min": 0.1,
+            "max": 15,
+            "on_true": true
+          },
+          "ack_groups": []
+        },
+        {
+          "id": "grounds-drawer-full",
+          "code": "I-301",
+          "level": "info",
+          "title": {
+            "$loc": "Grounds drawer full"
+          },
+          "description": "The spent-puck drawer needs emptying before the next batch.",
+          "image": "",
+          "auto_popup": false,
+          "resolutions": [
+            "Empty the drawer, then clear the switch on the Machine page."
+          ],
+          "trigger": {
+            "type": "bool",
+            "source_value": {
+              "$var": {
+                "path": "Brew:Waste/DrawerFull"
+              }
+            },
+            "min": null,
+            "max": null,
+            "on_true": true
+          },
+          "ack_groups": []
+        }
+      ]
+    }
+  ]
+}

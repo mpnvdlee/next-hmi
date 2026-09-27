@@ -40,6 +40,7 @@ from typing import Any, BinaryIO, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator
 
+from core import bootstrap, runtime_home
 from core.runtime_home import manifest_path
 from core.time_utils import iso_now
 
@@ -155,8 +156,15 @@ def _acquire_file_lock(handle: BinaryIO) -> None:
     if os.name == "nt":
         import msvcrt
 
-        handle.seek(0)
-        if handle.read(1) == b"":
+        # Windows locking is mandatory, not advisory: a concurrent holder of
+        # byte 0's exclusive lock makes a plain read() of it raise
+        # PermissionError instead of blocking. Check emptiness via seek/tell
+        # (position-only, never touches the locked byte) so a losing racer
+        # doesn't crash — it just skips the redundant write and goes on to the
+        # lock below, which (unlike the flock branch) retries for ~10 s and then
+        # raises rather than waiting indefinitely.
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
             handle.seek(0)
             handle.write(b"\0")
             handle.flush()
@@ -478,6 +486,64 @@ def default_project(manifest: ManifestV1) -> ProjectEntry | None:
     return find_project(manifest, manifest.defaultProjectId)
 
 
+def configured_projects_root(manifest: ManifestV1) -> Path:
+    """The projects-root setting exactly as configured, symlinks untouched.
+
+    ``defaultProjectsRoot`` is a raw operator string: it may be ``~``-relative,
+    relative to the process CWD, or absent entirely — this only expands and
+    absolutises it. Callers that must tell "the root itself is a symlink"
+    (refused) apart from "a symlink merely sits somewhere above the root"
+    (fine — see ``default_projects_root``) check ``is_symlink()`` on this
+    value rather than that one.
+    """
+    raw = manifest.defaultProjectsRoot
+    root = (
+        Path(raw).expanduser()
+        if raw and raw.strip()
+        else bootstrap.platform_documents_dir()
+    )
+    return root.absolute()
+
+
+def default_projects_root(manifest: ManifestV1) -> Path:
+    """Where new and incoming projects land, resolved the one way everyone must.
+
+    Every caller that compares a project's path against the root — the
+    peer-transfer install rule, the API that tells the browser what the root
+    is — has to resolve it identically, or a project inside the root reads as
+    outside it. A project's own path is stored symlink-resolved (see
+    ``projects_api._resolve_path``), so the root has to be too: an unrelated
+    symlink anywhere above the root would otherwise make every project inside
+    it compare unequal to its own parent.
+
+    Unset, it is the user's Documents folder: a place that already exists and
+    that a non-technical operator can find, rather than a folder the runtime
+    has to conjure up inside its own bookkeeping directory.
+    """
+    return configured_projects_root(manifest).resolve()
+
+
+def drop_auto_seeded_projects_root() -> str | None:
+    """Unpin a projects root that an older first-run bootstrap wrote for itself.
+
+    Until this build, first run stamped ``<runtime_home>/Projects`` into the
+    manifest and created the folder. That was never an operator choice, so an
+    upgrade must not keep honouring it — clearing the key lets the resolver
+    fall through to the user's Documents folder. A root pointing anywhere else
+    is a real setting and is left alone. Returns the value dropped, if any.
+    """
+    with manifest_transaction() as manifest:
+        raw = manifest.defaultProjectsRoot
+        if not raw or not raw.strip():
+            return None
+        legacy = (runtime_home.runtime_home_path() / "Projects").absolute()
+        if Path(raw).expanduser().absolute() != legacy:
+            return None
+        manifest.defaultProjectsRoot = None
+        save_manifest(manifest)
+        return raw
+
+
 # ── running set (supervisor) ─────────────────────────────────────────────────
 
 
@@ -519,6 +585,23 @@ def remove_running(project_id: str) -> None:
 # ── per-project metadata (embedded in config.json) ───────────────────────────
 
 
+class ProjectMigrationRecord(BaseModel):
+    """The last time ``run_baseline_migration`` actually rewrote this project.
+
+    ``backup`` is the zip of the whole project taken before anything was
+    touched — see ``core.project_migrations._write_backup_zip``. ``None`` on a
+    record written before this field replaced the per-target ``backups`` map,
+    whose paths no longer exist to point at.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    fromVersion: int
+    toVersion: int
+    at: str
+    backup: str | None = None
+
+
 class ProjectMetadata(BaseModel):
     # Other writers (e.g. theme_manager._set_default_raw's ``defaultTheme``)
     # read-modify-write sibling fields directly into the same ``project``
@@ -533,6 +616,16 @@ class ProjectMetadata(BaseModel):
     # 0 = unstamped (every project predating this field reads as 0). See
     # core.project_migrations.PROJECT_FORMAT_VERSION.
     formatVersion: int = 0
+    # The release that introduced `formatVersion`, stamped beside it so a build
+    # too old to open this project can name the version the operator needs.
+    # None = written by a build predating this field. Display only — the
+    # integer above is what actually gates opening a project.
+    minAppVersion: str | None = None
+    # Set only when a format migration actually ran; left in place afterwards
+    # (never cleared) so the manager can read back what just happened and
+    # show it once, right after the upgrade — not a permanently-displayed
+    # project detail.
+    lastMigration: ProjectMigrationRecord | None = None
 
     _validate_id = field_validator("id")(validate_project_id)
 
@@ -580,9 +673,23 @@ def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
         raise
 
 
-def read_project_metadata(project_root: Path) -> ProjectMetadata | None:
-    """Read the ``project`` block from ``config.json``."""
-    config = _read_config_json(project_config_path(project_root))
+def read_project_config(project_root: Path) -> dict[str, Any] | None:
+    """A project's whole ``config.json``, for a caller that wants more than one
+    field off it. ``None`` on a missing or unparseable file."""
+    return _read_config_json(project_config_path(project_root))
+
+
+def read_project_metadata(
+    project_root: Path, config: dict[str, Any] | None = None
+) -> ProjectMetadata | None:
+    """Read the ``project`` block from ``config.json``.
+
+    *config* lets a caller that has already read the file pass it in — the
+    project listing reads several fields off one project and would otherwise
+    parse the largest file in the project once per field.
+    """
+    if config is None:
+        config = read_project_config(project_root)
     if config is None:
         return None
     block = config.get(PROJECT_METADATA_KEY)
@@ -606,7 +713,7 @@ def write_project_metadata(project_root: Path, metadata: ProjectMetadata) -> Non
         _atomic_write_json(path, config)
 
 
-def project_mcp_enabled(project_root: Path) -> bool:
+def project_mcp_enabled(project_root: Path, config: dict[str, Any] | None = None) -> bool:
     """Whether the workspace MCP may write to this project, read straight off
     ``config.json``.
 
@@ -614,7 +721,8 @@ def project_mcp_enabled(project_root: Path) -> bool:
     which means a *stopped* project's flag is still authoritative. Missing file /
     field / any non-``true`` value resolves to ``False`` (closed by default).
     """
-    config = _read_config_json(project_config_path(project_root))
+    if config is None:
+        config = read_project_config(project_root)
     return isinstance(config, dict) and config.get("mcpEnabled") is True
 
 

@@ -139,7 +139,7 @@ type IconComponent = Icon;
 // Phosphor library down to just the icons the app actually uses — the whole
 // set is ~5 MB, this allowlisted subset is ~94 kB gzip.
 //
-// This module is its own chunk (backlog item 22). `phosphorIcons.tsx`'s HMI
+// This module is its own chunk. `phosphorIcons.tsx`'s HMI
 // runtime accessor (`getBuiltinIconComponent`) reaches it via a per-icon
 // dynamic `import()`, so a route only pulls the vendor-icons chunk once a
 // widget actually renders a builtin icon. Editor authoring surfaces

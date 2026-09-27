@@ -20,7 +20,9 @@ function project(): AllAreas {
     footer: [],
     leftSidebar: [],
     rightSidebar: [],
-    dialogs: [{ id: 'dlg', title: 'Dialog', widgets: [widget('dlg-btn')] }],
+    dialogs: [
+      { id: 'dlg', type: 'page', title: 'Dialog', sections: { content: [widget('dlg-btn')] } },
+    ],
     pages: [
       {
         id: 'page-1',
@@ -56,7 +58,7 @@ describe('orderIdsByTree', () => {
     expect(orderIdsByTree(['page-1', 'a', 'dlg'], project())).toEqual(['a']);
   });
 
-  it('covers shell, page-group chrome, nested pages and dialogs', () => {
+  it('covers shell, page-group chrome, nested pages and the Dialogs folder', () => {
     const ids = ['dlg-btn', 'c', 'group-btn', 'head-btn'];
     expect(orderIdsByTree(ids, project())).toEqual(['head-btn', 'group-btn', 'c', 'dlg-btn']);
   });
@@ -107,7 +109,8 @@ describe('canExtendWith', () => {
     expect(canExtendWith([], 'a', project())).toBe(true);
   });
 
-  it('refuses a page, dialog or section row', () => {
+  it('refuses a page or section row', () => {
+    expect(canExtendWith(['a'], 'dlg', project())).toBe(false);
     expect(canExtendWith(['a'], 'page-1', project())).toBe(false);
     expect(canExtendWith(['a'], '__header__', project())).toBe(false);
   });

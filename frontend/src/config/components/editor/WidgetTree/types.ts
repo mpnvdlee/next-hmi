@@ -6,7 +6,7 @@ export type NodeKind =
   | 'page-group'
   | 'page-group-section'
   | 'pages-root'
-  | 'dialog-page'
+  | 'dialogs-root'
   | 'area'
   | 'container'
   /** One named slot of a reusable-component instance. */

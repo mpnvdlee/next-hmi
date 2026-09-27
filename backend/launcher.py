@@ -11,8 +11,8 @@ needs to influence those paths has to do so *before* the first import. The
 launcher is the place that runs early enough to do that.
 
 The plain dev workflow (``python start-dev.py``) does **not** go through this
-module — it starts uvicorn directly against ``manager:app`` so Vite-on-:5173
-keeps working unchanged.
+module — it starts uvicorn directly against ``manager:app`` on :8001, behind
+the Vite dev server that owns :8000.
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ from pathlib import Path
 
 
 def _prepend_lgpl_path() -> None:
-    """Put the bundled ``lgpl/`` directory on ``sys.path`` (release item 1a).
+    """Put the bundled ``lgpl/`` directory on ``sys.path``.
 
     ``asyncua`` (LGPL-3.0-or-later) and ``zeroconf`` (LGPL-2.1-or-later) ship as
     loose, replaceable package directories under ``lgpl/`` rather than inside
@@ -74,7 +74,7 @@ _MAX_PYTHON_EXCLUSIVE = (3, 15)
 
 
 def _require_supported_python() -> None:
-    """Refuse to start on an unsupported interpreter (release item 16).
+    """Refuse to start on an unsupported interpreter.
 
     Raises ``SystemExit`` with a legible message rather than letting the process
     fail deep inside a version-sensitive import. Called from ``main()``, so it
@@ -133,6 +133,19 @@ def _read_version() -> str:
     return app_version()
 
 
+def _netstat_port(address: str) -> int | None:
+    """Port out of a ``netstat`` address column, or ``None`` if there is none.
+
+    Splitting on the *last* colon is what separates ``[fe80::8000:1a2b]:139``
+    from a listener on 8000: the hex groups of an IPv6 address spell the same
+    digits as a port, and only the final colon tells the two apart.
+    """
+    _, sep, tail = address.rpartition(":")
+    if not sep or not tail.isdigit():
+        return None
+    return int(tail)
+
+
 def _processes_on_port(port: int) -> list[tuple[int, str]]:
     """Best-effort list of (pid, process_name) LISTENING on *port*.
 
@@ -149,10 +162,22 @@ def _processes_on_port(port: int) -> list[tuple[int, str]]:
             return []
         pids: set[int] = set()
         for line in net.splitlines():
-            if f":{port}" in line and "LISTENING" in line:
-                parts = line.split()
-                with contextlib.suppress(ValueError):
-                    pids.add(int(parts[-1]))
+            # Column-exact, not a substring scan of the whole line: a plain
+            # `":{port}" in line` matches the Foreign Address column too, and
+            # offers the operator an unrelated PID to kill.
+            parts = line.split()
+            if len(parts) < 4 or parts[0].upper() != "TCP" or _netstat_port(parts[1]) != port:
+                continue
+            # A listener's Foreign Address is the wildcard on port 0; every
+            # connected state carries a real peer port. Reading that rather
+            # than the State column keeps this working on a localized Windows,
+            # where the word is LUISTEREN or ABHÖREN — and where a translated
+            # state of two words would shift every column behind it, which is
+            # also why the PID is taken from the end of the row.
+            if _netstat_port(parts[2]) != 0:
+                continue
+            with contextlib.suppress(ValueError):
+                pids.add(int(parts[-1]))
         out: list[tuple[int, str]] = []
         for pid in pids:
             name = "unknown"
@@ -193,26 +218,64 @@ def _processes_on_port(port: int) -> list[tuple[int, str]]:
     return out
 
 
-def _kill_pid(pid: int) -> bool:
+def _kill_pid(pid: int) -> str | None:
+    """Terminate *pid*; ``None`` on success, else the reason it failed.
+
+    The reason is returned rather than swallowed because this runs on an
+    operator's machine with no log to inspect afterwards: "access is denied"
+    (an elevated or other-user process) and "no such process" (a PID that was
+    already gone) need completely different responses, and a bare ``False``
+    makes them indistinguishable on screen.
+    """
     try:
         if sys.platform == "win32":
-            return subprocess.call(
+            done = subprocess.run(
                 ["taskkill", "/F", "/PID", str(pid)],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            ) == 0
+                capture_output=True, text=True,
+            )
+            if done.returncode == 0:
+                return None
+            detail = (done.stderr or done.stdout or "").strip().splitlines()
+            return detail[0] if detail else f"taskkill exited {done.returncode}"
         os.kill(pid, signal.SIGTERM)
-        return True
-    except Exception:
-        return False
+        return None
+    except Exception as exc:
+        return str(exc) or exc.__class__.__name__
 
 
-def _wait_port_free(port: int, deadline_sec: float = 5.0) -> bool:
+def _wait_port_free(host: str, port: int, deadline_sec: float = 5.0) -> bool:
+    """Poll until *port* can actually be bound again, or the deadline passes.
+
+    Bindability is the condition that matters, and it lags the process table:
+    ``taskkill`` returns as soon as the kill is queued, so the listener can be
+    gone from ``netstat`` while the socket is still being torn down. Checking
+    bindability once at that moment reports a successful kill as a failure.
+    """
     end = time.monotonic() + deadline_sec
-    while time.monotonic() < end:
-        if not _processes_on_port(port):
+    while True:
+        if not _processes_on_port(port) and _port_bindable(host, port):
             return True
+        if time.monotonic() >= end:
+            return False
         time.sleep(0.1)
-    return not _processes_on_port(port)
+
+
+def _bind_targets(host: str) -> list[tuple[socket.AddressFamily, str]]:
+    """(family, address) pairs the real server would bind for *host*.
+
+    Mirrors ``asyncio.base_events.create_server``'s own split — the code path
+    ``launcher._serve`` actually runs through (``uvicorn.run()`` with no
+    ``reload``/``workers``, so no ``Config.bind_socket()`` involved): the empty
+    host (``core.net.DEFAULT_HOST``, the default) is dual-stack and gets one
+    AF_INET and one AF_INET6 socket, while a host string containing ``:`` is an
+    IPv6 literal and gets AF_INET6 alone. A single AF_INET probe on ``0.0.0.0``
+    made an IPv6-only occupant of the port read as free.
+    """
+    if host == "":
+        return [(socket.AF_INET, "0.0.0.0"), (socket.AF_INET6, "::")]
+    if ":" in host:
+        return [(socket.AF_INET6, host)]
+    return [(socket.AF_INET, host)]
 
 
 def _port_bindable(host: str, port: int) -> bool:
@@ -221,11 +284,38 @@ def _port_bindable(host: str, port: int) -> bool:
     ``_processes_on_port`` only sees LISTEN sockets; this catches the rarer
     case where the port is reserved by the OS but no userspace listener shows.
     """
-    bind_host = host if host else "0.0.0.0"
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.bind((bind_host, port))
+        for family, addr in _bind_targets(host):
+            with socket.socket(family, socket.SOCK_STREAM) as s:
+                if family == socket.AF_INET6 and hasattr(socket, "IPPROTO_IPV6"):
+                    # asyncio sets this on the AF_INET6 socket of a dual-stack
+                    # bind so it doesn't also cover the AF_INET space the other
+                    # socket already owns; without it here, binding "::" first
+                    # could itself claim the port out from under the AF_INET
+                    # probe that follows, on a platform where V6ONLY defaults
+                    # off.
+                    s.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+                if sys.platform == "win32":
+                    # Not SO_REUSEADDR: on Windows that option grants the
+                    # opposite of what POSIX gives it — it lets a socket bind a
+                    # port another one is *actively* using, so setting it here
+                    # would answer "free" for the exact conflict this probe
+                    # exists to catch. But plain no-option Windows bind already
+                    # permits stacking on an active listener too — that
+                    # exclusivity has to be asked for explicitly, with
+                    # SO_EXCLUSIVEADDRUSE, which is what "no option at all"
+                    # (the previous state here) failed to do.
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+                else:
+                    # Matches what our own listener will do: uvicorn's
+                    # non-reload bind (``launcher._serve`` -> ``uvicorn.run()``)
+                    # goes through asyncio's ``create_server``, which defaults
+                    # ``reuse_address`` to True on POSIX. Without it here, a
+                    # port this same probe just released reads as busy for the
+                    # TIME_WAIT interval even though the real server would take
+                    # it immediately.
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind((addr, port))
         return True
     except OSError:
         return False
@@ -273,12 +363,28 @@ def _resolve_port_conflict(host: str, port: int) -> int | None:
         if choice in {"1", "continue"}:
             return port
         if choice in {"2", "kill"}:
-            for pid, _ in occupants:
-                if not _kill_pid(pid):
-                    print(f"  Failed to terminate PID {pid}")
-            if _wait_port_free(port) and _port_bindable(host, port):
+            # Re-scan: the opening listing is stale by now. A second [2] after a
+            # partial kill would otherwise keep firing at PIDs that are already
+            # gone while the process actually holding the port is never touched.
+            occupants = _processes_on_port(port)
+            if not occupants and _port_bindable(host, port):
+                return port
+            for pid, name in occupants:
+                reason = _kill_pid(pid)
+                if reason is not None:
+                    print(f"  Failed to terminate {name} (PID {pid}): {reason}")
+            if _wait_port_free(host, port):
                 return port
             print(f"  Port {port} still in use after kill.")
+            holders = _processes_on_port(port)
+            if holders:
+                for pid, name in holders:
+                    print(f"    - still listening: {name} (PID {pid})")
+            else:
+                # Nothing is listening yet the socket refuses to bind: an OS-level
+                # reservation (Hyper-V/WSL dynamic port range, http.sys) rather
+                # than a process the operator can kill. [3] is the way out.
+                print("    - no process holds it; the port is reserved by the OS.")
             continue
         if choice in {"3", "next"}:
             nxt = _next_free_port(host, port + 1)
@@ -301,6 +407,25 @@ def _restart_argv() -> list[str]:
     the stray positional on the way back up.
     """
     return sys.argv[1:] if getattr(sys, "frozen", False) else sys.argv
+
+
+def _apply_pending_restart() -> bool:
+    """Re-exec if a restart sentinel is waiting. Returns only when none was.
+
+    Re-exec rather than return, so static mounts and the TLS decision are made
+    fresh. The sentinel is cleared first: a replacement process that still saw
+    it would restart again on its own next clean exit.
+    """
+    from core import runtime_home
+
+    sentinel = runtime_home.restart_sentinel_path()
+    if not sentinel.exists():
+        return False
+    with contextlib.suppress(OSError):
+        sentinel.unlink()
+    logger.info("Restart sentinel present — re-executing launcher")
+    os.execv(sys.executable, [sys.executable, *_restart_argv()])
+    return True  # pragma: no cover - execv does not return
 
 
 class TlsConfigError(Exception):
@@ -440,6 +565,27 @@ def _https_redirect_app(https_port: int):
     return app
 
 
+def _port_accepting(host: str, port: int, timeout: float = 0.25) -> bool:
+    """True iff something accepts a TCP connection on (host, port) right now.
+
+    The inverse of ``_port_bindable``: that one asks whether we could take the
+    port, this one whether the thing that took it is ready to be talked to.
+    """
+    from core import net
+
+    target = net.LOOPBACK if net.is_wildcard(host) else host
+    try:
+        with socket.create_connection((target, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+# Giving up and redirecting anyway beats leaving the HTTP port dark forever,
+# and by this point a listener that has not appeared is not going to.
+_REDIRECTOR_WAIT_SECONDS = 120.0
+
+
 def _start_https_redirector(host: str, port: int, https_port: int):
     """Serve the redirect app on *port* in a background thread.
 
@@ -447,6 +593,14 @@ def _start_https_redirector(host: str, port: int, https_port: int):
     keeps owning SIGINT/SIGTERM. Returns the server and its thread so the
     caller can stop it before re-execing — the listening socket has to be
     released or the replacement process cannot rebind it.
+
+    Held back until the port it redirects *at* actually accepts. Uvicorn binds
+    only after lifespan startup, and the manager's startup resumes every
+    running project first — seconds during which this thread would already be
+    answering, on a port whose whole job is to say "the app is over there". A
+    page waiting out a protocol switch reads that as the replacement being up
+    and reopens itself on an HTTPS port nothing is listening on yet, which is
+    the "page not found until you reload" the operator sees.
     """
     import uvicorn
 
@@ -458,7 +612,25 @@ def _start_https_redirector(host: str, port: int, https_port: int):
         access_log=False,
         lifespan="off",
     ))
-    thread = threading.Thread(target=server.run, daemon=True, name="https-redirect")
+
+    def serve_once_the_target_answers() -> None:
+        deadline = time.monotonic() + _REDIRECTOR_WAIT_SECONDS
+        while not server.should_exit and not _port_accepting(host, https_port):
+            if time.monotonic() >= deadline:
+                logger.warning(
+                    "https-redirect: %s never started accepting; redirecting anyway",
+                    https_port,
+                )
+                break
+            time.sleep(0.1)
+        # A shutdown during the wait has no socket to release, so there is
+        # nothing for the caller's join to wait on — just don't start.
+        if not server.should_exit:
+            server.run()
+
+    thread = threading.Thread(
+        target=serve_once_the_target_answers, daemon=True, name="https-redirect"
+    )
     thread.start()
     return server, thread
 
@@ -486,6 +658,22 @@ def _absorb_uvicorns_signal_reraise():
         signal.signal(signal.SIGTERM, previous)
 
 
+# How long uvicorn may wait for open connections before it stops waiting.
+#
+# Left unset it waits forever, and over TLS that is not theoretical: a browser
+# keeps its keep-alive sockets pooled after navigating away, and closing an
+# asyncio SSL transport blocks on the peer's ``close_notify`` for
+# ``asyncio.constants.SSL_SHUTDOWN_TIMEOUT`` — 30s, which is also the floor of
+# the restart backstop in ``system_api``. Turning HTTPS off therefore lost that
+# race every time: the backstop hard-exited the process a fraction of a second
+# before the shutdown could finish, taking the sentinel re-exec with it, and the
+# operator had to start the runtime by hand to get HTTP back.
+#
+# The lifespan teardown that stops project children runs *after* this timeout
+# and is not bounded by it, so a shutdown with work to do still gets its time.
+GRACEFUL_SHUTDOWN_SECONDS = 5.0
+
+
 def _serve(app, host: str, port: int, verbose: bool, **uvicorn_kwargs) -> None:
     import uvicorn
 
@@ -495,6 +683,7 @@ def _serve(app, host: str, port: int, verbose: bool, **uvicorn_kwargs) -> None:
         port=port,
         log_level="info" if verbose else "warning",
         access_log=verbose,
+        timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_SECONDS,
         **uvicorn_kwargs,
     )
 
@@ -566,18 +755,22 @@ def _load_manager_app():
 
 def _run_manager(data_dir: Path, args: argparse.Namespace) -> int:
     """Manager mode (default) — supervisor + reverse proxy front door."""
+    from core import net
     from core.logging_setup import configure_logging
     configure_logging(verbose=args.verbose)
 
     app = _load_manager_app()
 
-    # Loopback by default. The workspace /mcp endpoint authenticates every
-    # request (manager session or MCP bearer token, see mcp_server.auth), but
-    # without NEXTHMI_SSL_* it's still plain HTTP — binding off-host accepts a
-    # trusted-LAN interception risk rather than a silent one. Set
-    # NEXTHMI_HOST=0.0.0.0 explicitly to reach the manager dashboard from other
-    # machines.
-    host = os.environ.get("NEXTHMI_HOST", "127.0.0.1")
+    # Reachable by default: a panel is opened from the machines around it, and
+    # an install that answered only itself read as broken from every one of
+    # them. Authentication is the boundary — the dashboard, every editor route
+    # and /mcp each demand a credential whichever interface the request came in
+    # on, and none of that changed with the binding. What did change is
+    # confidentiality: without NEXTHMI_SSL_* or Settings → HTTPS this is plain
+    # HTTP, so those credentials cross the wire in the clear. Turn HTTPS on
+    # wherever the network is not trusted. NEXTHMI_HOST=127.0.0.1 pins an
+    # install back to loopback.
+    host = net.resolve_bind_host()
     port = args.port or int(os.environ.get("NEXTHMI_PORT", "8000"))
 
     try:
@@ -652,26 +845,31 @@ def _run_manager(data_dir: Path, args: argparse.Namespace) -> int:
 
     app_port = https_port if split_ports else port
     scheme = "https" if tls else "http"
-    open_host = "127.0.0.1" if host in {"0.0.0.0", ""} else host
-    open_url = f"{scheme}://{open_host}:{app_port}"
+    open_url = net.display_url(scheme, host, app_port)
     print_banner(
         "runtime",
         BannerFields(
             runtime_home=data_dir,
             open_url=open_url,
+            network_urls=(tuple(net.network_urls(scheme, host, app_port)),),
             version=_read_version(),
         ),
     )
     redirector = redirector_thread = None
     if split_ports:
         redirector, redirector_thread = _start_https_redirector(host, port, https_port)
-        print(f"  http://{open_host}:{port} redirects here.")
+        print(f"  {net.display_url('http', host, port)} redirects here.")
         print()
     if expiry_warning is not None:
         print(f"  {expiry_warning}")
         print()
 
-    from core import runtime_home
+    # The backstop that abandons a stalled teardown calls os._exit, which skips
+    # everything below — including the re-exec. Hand it the re-exec so a restart
+    # that overruns still restarts instead of shutting the device down.
+    from api import system_api
+
+    system_api.apply_pending_restart = _apply_pending_restart
 
     with _absorb_uvicorns_signal_reraise():
         _serve(app, host=host, port=app_port, verbose=args.verbose, **serve_kwargs)
@@ -681,14 +879,8 @@ def _run_manager(data_dir: Path, args: argparse.Namespace) -> int:
         redirector_thread.join(timeout=5.0)
 
     # Self-restart loop: the manager's device-level /api/system/restart leaves a
-    # sentinel behind on clean exit. Re-exec a fresh interpreter so static
-    # mounts re-resolve.
-    sentinel = runtime_home.restart_sentinel_path()
-    if sentinel.exists():
-        with contextlib.suppress(OSError):
-            sentinel.unlink()
-        logger.info("Restart sentinel present — re-executing launcher")
-        os.execv(sys.executable, [sys.executable, *_restart_argv()])
+    # sentinel behind on clean exit.
+    _apply_pending_restart()
     return 0
 
 

@@ -55,6 +55,7 @@ const TOAST_DURATION_MS = 4000;
 
 const FAILURE_MESSAGES: Record<string, string> = {
   permission_denied: 'You are not allowed to change this value',
+  read_only: 'Variable is read-only',
   value_out_of_range: 'Value is outside the allowed range',
   integer_out_of_range: 'Value is outside the allowed range',
   float_out_of_range: 'Value is outside the allowed range',

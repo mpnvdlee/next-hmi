@@ -39,7 +39,7 @@ interface ImageIndicator {
 
 export default function Image({ properties, layout }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
-  const src = getPropString(properties, 'src', '', evalCtx);
+  const src = assetSrc(getPropString(properties, 'src', '', evalCtx));
   const alt = getPropString(properties, 'alt', '', evalCtx);
   const fit = getPropString(properties, 'fit', 'contain', evalCtx) as ObjectFit;
   const indicators = (

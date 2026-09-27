@@ -21,7 +21,7 @@ const noopToggleFolder = () => {};
 const noopSetFolderEnabled = () => {};
 const noopRemoveNode = () => {};
 
-describe('FolderRowCells memoization (§7.2)', () => {
+describe('FolderRowCells memoization', () => {
   const folder: FolderEntry = {
     kind: 'folder',
     name: 'Motors',
@@ -179,7 +179,7 @@ describe('VariableRowCells min/max range editing', () => {
   });
 });
 
-describe('ArrayElementRowCells granular subscription (§7.3)', () => {
+describe('ArrayElementRowCells granular subscription', () => {
   const parent: VariableEntry = {
     kind: 'variable',
     display_name: 'Values',
@@ -244,5 +244,79 @@ describe('ArrayElementRowCells granular subscription (§7.3)', () => {
     });
 
     expect(renderCounts).toEqual({ 0: 1, 1: 2, 2: 1 });
+  });
+});
+
+describe('live-value cell writes', () => {
+  const scalar: VariableEntry = {
+    kind: 'variable',
+    display_name: 'Speed',
+    data_type: 'Double',
+    enabled: true,
+  };
+
+  function renderScalar(entry: VariableEntry) {
+    return render(
+      <VariableRowCells
+        entry={entry}
+        depth={0}
+        path="Speed"
+        dsName="Local"
+        dsType="static"
+        showLive
+        isEditable
+        rangeEditable={false}
+        showRange={false}
+        liveValues={{ 'Local:Speed': '1' }}
+        onUpdateVar={() => {}}
+        onRemoveNode={() => {}}
+      />,
+    );
+  }
+
+  function renderElement(parent: VariableEntry) {
+    return render(
+      <ArrayElementRowCells
+        parent={parent}
+        index={0}
+        depth={1}
+        path="Values"
+        dsName="Local"
+        dsType="static"
+        showLive
+        isEditable
+        showRange={false}
+      />,
+    );
+  }
+
+  const writableCell = (container: HTMLElement) =>
+    container.querySelector('.cfg-vtable-cell--writable');
+
+  // The backend refuses a write to a variable that is not writable
+  // (`read_only`), whatever datasource it lives in — an editable tree does
+  // not make its variables writable.
+  it('offers no write on an editable datasource variable that is not writable', () => {
+    expect(writableCell(renderScalar(scalar).container)).toBeNull();
+    expect(writableCell(renderScalar({ ...scalar, writable: false }).container)).toBeNull();
+  });
+
+  it('offers a write on a writable variable', () => {
+    const { container } = renderScalar({ ...scalar, writable: true });
+    const cell = writableCell(container);
+    expect(cell).not.toBeNull();
+    fireEvent.click(cell!);
+    expect(container.querySelector('.cfg-var-write-input')).not.toBeNull();
+  });
+
+  it('offers an element write only when the array is writable', () => {
+    const parent: VariableEntry = {
+      ...scalar,
+      display_name: 'Values',
+      is_array: true,
+      array_length: 2,
+    };
+    expect(writableCell(renderElement(parent).container)).toBeNull();
+    expect(writableCell(renderElement({ ...parent, writable: true }).container)).not.toBeNull();
   });
 });

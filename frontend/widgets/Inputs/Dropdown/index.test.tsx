@@ -32,7 +32,7 @@ describe('Dropdown', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     __resetForTests();
-    useHmiStore.setState({ openDialogs: [], pendingToasts: [] });
+    useHmiStore.setState({ openPageOverlays: [], pendingToasts: [] });
     useComponentPropStore.setState({ props: {} });
   });
 
@@ -60,6 +60,16 @@ describe('Dropdown', () => {
     expect(screen.getByRole('combobox')).toHaveTextContent('Fahrenheit');
   });
 
+  it('lists the options another widget exports', async () => {
+    const user = userEvent.setup();
+    useComponentPropStore.setState({ props: { source: { units: OPTIONS } } });
+    renderDropdown({ options: { $widgetProp: { componentId: 'source', property: 'units' } } });
+
+    await user.click(screen.getByRole('combobox'));
+
+    expect(screen.getByRole('option', { name: 'Fahrenheit' })).toBeInTheDocument();
+  });
+
   it('publishes the configured initial selection', () => {
     renderDropdown({ options: OPTIONS, selectedValue: 'C' });
 
@@ -80,13 +90,13 @@ describe('Dropdown', () => {
     const user = userEvent.setup();
     renderDropdown({
       options: OPTIONS,
-      onChange: { onChange: [{ type: 'openDialog', dialogId: 'units-help' }] },
+      onChange: { onChange: [{ type: 'openPageOverlay', pageId: 'units-help' }] },
     });
 
     await user.click(screen.getByRole('combobox'));
     await user.click(screen.getByRole('option', { name: 'Celsius' }));
 
-    expect(useHmiStore.getState().openDialogs.map((d) => d.id)).toContain('units-help');
+    expect(useHmiStore.getState().openPageOverlays.map((o) => o.pageId)).toContain('units-help');
   });
 
   it('drops a selection the options list no longer offers', () => {

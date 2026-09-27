@@ -17,7 +17,7 @@ describe('useDatasourceSaveRegistration', () => {
     vi.unstubAllGlobals();
   });
 
-  it('keeps a newer edit and stays dirty when it lands during an in-flight save (§3.1)', async () => {
+  it('keeps a newer edit and stays dirty when it lands during an in-flight save', async () => {
     let resolveFetch!: () => void;
     const fetchMock = vi.fn(
       () =>

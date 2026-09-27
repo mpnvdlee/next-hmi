@@ -7,6 +7,7 @@ skip — local dev should `npm install` once in frontend/ to satisfy this.
 """
 import json
 import shutil
+import sys
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import core.storage as storage
@@ -169,7 +170,7 @@ async def test_compile_entry_failure_records_status_without_raising(widget_works
 
 @pytest.mark.asyncio
 async def test_compile_entry_rejects_bare_react_import(widget_workspace):
-    """§4.1: a bare `import React from 'react'` must fail the compile with a
+    """A bare `import React from 'react'` must fail the compile with a
     descriptive error instead of producing a module that duplicate-declares
     `React` via the SDK banner and throws at load time."""
     src, build = widget_workspace["src"], widget_workspace["build"]
@@ -186,7 +187,7 @@ async def test_compile_entry_rejects_bare_react_import(widget_workspace):
 
 @pytest.mark.asyncio
 async def test_compile_entry_rejects_app_internal_import(widget_workspace):
-    """§4.1: unregistered app/package imports are rejected."""
+    """Unregistered app/package imports are rejected."""
     src, build = widget_workspace["src"], widget_workspace["build"]
     entry = _write_widget(src, "Inputs/Foo", APP_IMPORT_WIDGET)
 
@@ -216,7 +217,7 @@ async def test_compile_entry_preserves_registered_external_import(widget_workspa
 
 @pytest.mark.asyncio
 async def test_compile_entry_rejects_local_sdk_name_collision(widget_workspace):
-    """§4.1: a local declaration named after a reserved SDK global (e.g. a
+    """A local declaration named after a reserved SDK global (e.g. a
     helper called `parseVarKey`) must fail the compile instead of producing a
     module where the SDK banner's `const { parseVarKey } = ...` collides with
     it and throws `Identifier already declared` at load time."""
@@ -232,7 +233,7 @@ async def test_compile_entry_rejects_local_sdk_name_collision(widget_workspace):
 
 @pytest.mark.asyncio
 async def test_compile_entry_bundles_sibling_relative_import(widget_workspace):
-    """§4.2: a sibling helper file imported via a relative path must be
+    """A sibling helper file imported via a relative path must be
     bundled into the single compiled entry, not left as an unresolved
     import that 404s in the browser."""
     src, build = widget_workspace["src"], widget_workspace["build"]
@@ -348,7 +349,7 @@ def test_find_entries_skips_dotfiles_and_underscored_dirs(widget_workspace):
 
     entries = widget_compiler.find_entries()
 
-    rel = sorted(str(e.relative_to(src)) for e in entries)
+    rel = sorted(e.relative_to(src).as_posix() for e in entries)
     assert rel == ["Inputs/Foo/index.tsx"]
 
 
@@ -397,9 +398,17 @@ def test_canonical_widget_key_rejects_path_and_url_aliases(widget_workspace, key
 def test_discovery_skips_unsafe_or_ambiguous_widget_segments(widget_workspace):
     src = widget_workspace["src"]
     _write_widget(src, "Inputs/Good_Name-2", GOOD_WIDGET)
-    _write_widget(src, r"Inputs\Backslash", GOOD_WIDGET)
+    if sys.platform != "win32":
+        # A literal backslash in one path segment only stays one segment on
+        # POSIX; pathlib's Windows flavour treats \ as a separator too, so
+        # this would silently create Inputs/Backslash instead of the single
+        # ambiguous segment the test means to exercise.
+        _write_widget(src, r"Inputs\Backslash", GOOD_WIDGET)
     _write_widget(src, "Inputs/Encoded%2FName", GOOD_WIDGET)
-    _write_widget(src, "Inputs/Query?Name", GOOD_WIDGET)
+    if sys.platform != "win32":
+        # '?' is a reserved character in Windows filenames — mkdir fails
+        # outright, so there's no way to construct this fixture there.
+        _write_widget(src, "Inputs/Query?Name", GOOD_WIDGET)
     _write_widget(src, "Inputs/Fullwidth／Name", GOOD_WIDGET)  # noqa: RUF001 -- fullwidth-slash confusable, deliberately testing rejection of the lookalike as a path separator
     _write_widget(src, "Space Group/Name", GOOD_WIDGET)
 
@@ -425,16 +434,13 @@ def test_casefold_colliding_source_keys_are_both_rejected(widget_workspace):
     assert widget_compiler._exclude_casefold_collisions([upper, lower], src) == []
 
 
-def test_discovery_rejects_file_and_parent_directory_symlinks(widget_workspace):
+def test_discovery_rejects_file_and_parent_directory_symlinks(widget_workspace, require_symlinks):
     src = widget_workspace["src"]
     target_file = src.parent / "target.tsx"
     target_file.write_text(GOOD_WIDGET, encoding="utf-8")
     file_link = src / "Inputs" / "FileLink" / "index.tsx"
     file_link.parent.mkdir(parents=True)
-    try:
-        file_link.symlink_to(target_file)
-    except OSError as err:
-        pytest.skip(f"symlinks unavailable: {err}")
+    file_link.symlink_to(target_file)
 
     target_group = src.parent / "target-group"
     _write_widget(target_group, "DirectoryLink", GOOD_WIDGET)
@@ -451,16 +457,13 @@ def test_discovery_rejects_file_and_parent_directory_symlinks(widget_workspace):
 
 
 @pytest.mark.asyncio
-async def test_compile_entry_refuses_symlink_omitted_by_discovery(widget_workspace):
+async def test_compile_entry_refuses_symlink_omitted_by_discovery(widget_workspace, require_symlinks):
     src, build = widget_workspace["src"], widget_workspace["build"]
     target = src.parent / "target.tsx"
     target.write_text(GOOD_WIDGET, encoding="utf-8")
     linked_entry = src / "Inputs" / "Linked" / "index.tsx"
     linked_entry.parent.mkdir(parents=True)
-    try:
-        linked_entry.symlink_to(target)
-    except OSError as err:
-        pytest.skip(f"symlinks unavailable: {err}")
+    linked_entry.symlink_to(target)
 
     assert await widget_compiler.compile_entry(linked_entry, src) is False
     assert not (build / "Inputs" / "Linked" / "index.js").exists()
@@ -582,6 +585,10 @@ def test_regenerate_widget_schemas_writes_manifest(widget_workspace):
     assert manifest["custom"]["Inputs/Foo"]["name"] == "Foo"
     assert manifest["custom"]["Inputs/Foo"]["category"] == "Inputs"
     assert manifest["custom"]["Inputs/Foo"]["schema"]["label"]["type"] == "string"
+    # No product widget lands here: the built-in-widgets build ships a baked
+    # manifest of its own, which `load_widget_manifest` overlays onto this half
+    # at read time.
+    assert manifest["builtin"] == {}
 
 
 CHART_WIDGET = """\
@@ -596,7 +603,8 @@ export default function Chart() {
 async def test_redirected_out_dir_leaves_the_default_build_root_untouched(
     widget_workspace, tmp_path
 ):
-    """The stdlib build compiles a different source tree into its own build root.
+    """The built-in-widgets build compiles a different source tree into its own
+    build root.
 
     Nothing it writes may land in the runtime-home cache — that is the whole
     reason ``out_dir`` exists, and the reason each target owns its status map.
@@ -605,23 +613,23 @@ async def test_redirected_out_dir_leaves_the_default_build_root_untouched(
     _write_widget(src, "Inputs/Project", GOOD_WIDGET)
     await widget_compiler.compile_all()
 
-    stdlib_src = tmp_path / "widgets"
-    stdlib_out = tmp_path / "stdlib-build"
-    stdlib_src.mkdir()
-    _write_widget(stdlib_src, "Layout/Stdlib", GOOD_WIDGET)
+    builtin_widgets_src = tmp_path / "widgets"
+    builtin_widgets_out = tmp_path / "builtin-widgets-build"
+    builtin_widgets_src.mkdir()
+    _write_widget(builtin_widgets_src, "Layout/Builtin", GOOD_WIDGET)
 
-    assert await widget_compiler.compile_all(stdlib_src, stdlib_out) is True
+    assert await widget_compiler.compile_all(builtin_widgets_src, builtin_widgets_out) is True
 
-    assert (stdlib_out / "Layout" / "Stdlib" / "index.js").is_file()
+    assert (builtin_widgets_out / "Layout" / "Builtin" / "index.js").is_file()
     assert not (build / "Layout").exists()
-    assert not (stdlib_out / "Inputs").exists()
+    assert not (builtin_widgets_out / "Inputs").exists()
 
     default_status = json.loads((build / ".build-status.json").read_text(encoding="utf-8"))
-    stdlib_status = json.loads(
-        (stdlib_out / ".build-status.json").read_text(encoding="utf-8")
+    builtin_widgets_status = json.loads(
+        (builtin_widgets_out / ".build-status.json").read_text(encoding="utf-8")
     )
     assert set(default_status["widgets"]) == {"Inputs/Project"}
-    assert set(stdlib_status["widgets"]) == {"Layout/Stdlib"}
+    assert set(builtin_widgets_status["widgets"]) == {"Layout/Builtin"}
 
 
 @pytest.mark.asyncio
@@ -680,7 +688,7 @@ async def test_compile_records_whether_a_module_references_recharts(
 
 
 @pytest.mark.asyncio
-async def test_generate_stdlib_manifest_emits_rows_the_frontend_registers(
+async def test_generate_builtin_widgets_manifest_emits_rows_the_frontend_registers(
     widget_workspace, tmp_path
 ):
     src, build = widget_workspace["src"], widget_workspace["build"]
@@ -695,10 +703,10 @@ async def test_generate_stdlib_manifest_emits_rows_the_frontend_registers(
     )
     (src / "Layout" / "Box" / "style.css").write_text(".box {}", encoding="utf-8")
 
-    manifest_path = tmp_path / "stdlibManifest.json"
+    manifest_path = tmp_path / "builtinWidgetsManifest.json"
     assert await widget_compiler.compile_all() is True
     assert widget_compiler.regenerate_widget_schemas() is True
-    assert widget_compiler.generate_stdlib_manifest(manifest_path) is True
+    assert widget_compiler.generate_builtin_widgets_manifest(manifest_path) is True
 
     rows = {row["key"]: row for row in json.loads(manifest_path.read_text(encoding="utf-8"))}
     assert list(rows) == sorted(rows), "rows must be key-sorted for a stable artifact"
@@ -706,7 +714,7 @@ async def test_generate_stdlib_manifest_emits_rows_the_frontend_registers(
     box = rows["Layout/Box"]
     assert box["name"] == "Box"
     assert box["group"] == "Layout"
-    assert box["origin"] == "stdlib"
+    assert box["origin"] == "builtin"
     assert box["displayName"] == "A Box"
     assert box["hostsChildren"] is True
     assert box["hasStyle"] is True
@@ -722,13 +730,14 @@ async def test_generate_stdlib_manifest_emits_rows_the_frontend_registers(
 
 
 @pytest.mark.asyncio
-async def test_generate_stdlib_manifest_splits_the_editor_half_out(
+async def test_generate_builtin_widgets_manifest_splits_the_editor_half_out(
     widget_workspace, tmp_path
 ):
     """The runtime half rides in every route's entry chunk, so it must carry
-    only what a rendering page reads: the registration fields, plus the `type`
-    and `requiredFields` `useBindingStatus` validates a binding against. The
-    editor half holds the rest and is imported only from ``src/config/``."""
+    only what a rendering page reads: the registration fields, plus the `type`,
+    `requiredFields` and `write` `useBindingStatus` validates a binding
+    against. The editor half holds the rest and is imported only from
+    ``src/config/``."""
     src = widget_workspace["src"]
     _write_widget(
         src,
@@ -738,14 +747,15 @@ async def test_generate_stdlib_manifest_splits_the_editor_half_out(
         "export const schema = {\n"
         "  label: { type: 'string' as const, label: 'Label', defaultValue: 'hi' },\n"
         "  motor: { type: 'struct' as const, label: 'Motor', requiredFields: ['run'] },\n"
+        "  setpoint: { type: 'float' as const, label: 'Setpoint', write: true },\n"
         "};\n"
         "export default function Box() { return null; }\n",
     )
 
-    manifest_path = tmp_path / "stdlibManifest.json"
+    manifest_path = tmp_path / "builtinWidgetsManifest.json"
     assert await widget_compiler.compile_all() is True
     assert widget_compiler.regenerate_widget_schemas() is True
-    assert widget_compiler.generate_stdlib_manifest(manifest_path) is True
+    assert widget_compiler.generate_builtin_widgets_manifest(manifest_path) is True
 
     row = json.loads(manifest_path.read_text(encoding="utf-8"))[0]
     assert "description" not in row
@@ -754,9 +764,10 @@ async def test_generate_stdlib_manifest_splits_the_editor_half_out(
     assert row["schema"] == {
         "label": {"type": "string"},
         "motor": {"type": "struct", "requiredFields": ["run"]},
+        "setpoint": {"type": "float", "write": True},
     }
 
-    editor_path = tmp_path / "stdlibManifest.editor.json"
+    editor_path = tmp_path / "builtinWidgetsManifest.editor.json"
     half = json.loads(editor_path.read_text(encoding="utf-8"))["Layout/Box"]
     assert half["description"] == "A box."
     assert half["icon"] == {"type": "builtin", "name": "square"}
@@ -765,11 +776,12 @@ async def test_generate_stdlib_manifest_splits_the_editor_half_out(
     assert half["schema"] == {
         "label": {"label": "Label", "defaultValue": "hi"},
         "motor": {"label": "Motor"},
+        "setpoint": {"label": "Setpoint"},
     }
 
 
 @pytest.mark.asyncio
-async def test_stdlib_manifest_is_byte_identical_across_a_no_op_rebuild(
+async def test_builtin_widgets_manifest_is_byte_identical_across_a_no_op_rebuild(
     widget_workspace, tmp_path
 ):
     """The manifest is tracked in git and regenerated by every ``npm run dev``,
@@ -779,14 +791,14 @@ async def test_stdlib_manifest_is_byte_identical_across_a_no_op_rebuild(
     _write_widget(src, "Layout/Box", GOOD_WIDGET)
     stylesheet = src / "Layout" / "Box" / "style.css"
     stylesheet.write_text(".box {}", encoding="utf-8")
-    manifest_path = tmp_path / "stdlibManifest.json"
+    manifest_path = tmp_path / "builtinWidgetsManifest.json"
 
-    editor_path = tmp_path / "stdlibManifest.editor.json"
+    editor_path = tmp_path / "builtinWidgetsManifest.editor.json"
 
     async def rebuild() -> bytes:
         assert await widget_compiler.compile_all() is True
         assert widget_compiler.regenerate_widget_schemas() is True
-        assert widget_compiler.generate_stdlib_manifest(manifest_path) is True
+        assert widget_compiler.generate_builtin_widgets_manifest(manifest_path) is True
         # Both halves are tracked, so both have to be stable.
         return manifest_path.read_bytes() + editor_path.read_bytes()
 
@@ -809,7 +821,7 @@ async def test_stdlib_manifest_is_byte_identical_across_a_no_op_rebuild(
 
 
 @pytest.mark.asyncio
-async def test_publish_stdlib_assets_copies_only_what_a_browser_fetches(
+async def test_publish_builtin_widgets_assets_copies_only_what_a_browser_fetches(
     widget_workspace, tmp_path
 ):
     src, build = widget_workspace["src"], widget_workspace["build"]
@@ -819,13 +831,13 @@ async def test_publish_stdlib_assets_copies_only_what_a_browser_fetches(
     (src / "Layout" / "Box" / "fonts" / "face.woff2").write_bytes(b"font")
     _write_widget(src, "Content/Plain", GOOD_WIDGET)
 
-    manifest_path = tmp_path / "stdlibManifest.json"
-    publish_dir = tmp_path / "public" / "stdlib-js"
+    manifest_path = tmp_path / "builtinWidgetsManifest.json"
+    publish_dir = tmp_path / "public" / "builtin-widgets-js"
     await widget_compiler.compile_all()
     widget_compiler.regenerate_widget_schemas()
-    widget_compiler.generate_stdlib_manifest(manifest_path)
+    widget_compiler.generate_builtin_widgets_manifest(manifest_path)
 
-    assert widget_compiler.publish_stdlib_assets(publish_dir, manifest_path=manifest_path)
+    assert widget_compiler.publish_builtin_widgets_assets(publish_dir, manifest_path=manifest_path)
 
     assert (publish_dir / "Layout" / "Box" / "index.js").is_file()
     assert (publish_dir / "Layout" / "Box" / "style.css").is_file()
@@ -845,28 +857,28 @@ async def test_publish_stdlib_assets_copies_only_what_a_browser_fetches(
     # A stale publish dir is replaced, not merged into.
     (publish_dir / "Gone").mkdir()
     (publish_dir / "Gone" / "index.js").write_text("stale", encoding="utf-8")
-    assert widget_compiler.publish_stdlib_assets(publish_dir, manifest_path=manifest_path)
+    assert widget_compiler.publish_builtin_widgets_assets(publish_dir, manifest_path=manifest_path)
     assert not (publish_dir / "Gone").exists()
 
     assert build.is_dir()
 
 
 @pytest.mark.asyncio
-async def test_publish_stdlib_assets_fails_loudly_on_a_missing_artifact(
+async def test_publish_builtin_widgets_assets_fails_loudly_on_a_missing_artifact(
     widget_workspace, tmp_path
 ):
-    """A stdlib widget that didn't compile is a product defect — publishing a
+    """A built-in widget that didn't compile is a product defect — publishing a
     catalog with a hole in it must fail the build rather than ship it."""
     src, build = widget_workspace["src"], widget_workspace["build"]
     _write_widget(src, "Layout/Box", GOOD_WIDGET)
     await widget_compiler.compile_all()
     (build / "Layout" / "Box" / "index.js").unlink()
 
-    assert widget_compiler.publish_stdlib_assets(tmp_path / "stdlib-js") is False
+    assert widget_compiler.publish_builtin_widgets_assets(tmp_path / "builtin-widgets-js") is False
 
 
 @pytest.mark.asyncio
-async def test_publish_stdlib_assets_skips_a_widget_that_failed_to_compile(
+async def test_publish_builtin_widgets_assets_skips_a_widget_that_failed_to_compile(
     widget_workspace, tmp_path
 ):
     """An incremental build over an existing build root still holds the previous
@@ -882,19 +894,20 @@ async def test_publish_stdlib_assets_skips_a_widget_that_failed_to_compile(
     assert await widget_compiler.compile_all() is False
     assert (build / "Layout" / "Box" / "index.js").is_file()
 
-    publish_dir = tmp_path / "public" / "stdlib-js"
-    assert widget_compiler.publish_stdlib_assets(publish_dir) is False
+    publish_dir = tmp_path / "public" / "builtin-widgets-js"
+    assert widget_compiler.publish_builtin_widgets_assets(publish_dir) is False
     assert not (publish_dir / "Layout" / "Box").exists()
     # One broken widget must not block the rest of the tree.
     assert (publish_dir / "Content" / "Plain" / "index.js").is_file()
 
 
-def test_publish_stdlib_assets_refuses_a_directory_it_does_not_own(
+def test_publish_builtin_widgets_assets_refuses_a_directory_it_does_not_own(
     widget_workspace, tmp_path,
 ):
     """The publish root is emptied before it is refilled, and it arrives from a
     CLI flag. ``--publish-dir frontend/public`` — one segment short of
-    ``frontend/public/stdlib-js`` — must not delete the public asset tree."""
+    ``frontend/public/builtin-widgets-js`` — must not delete the public asset
+    tree."""
     src = widget_workspace["src"]
     _write_widget(src, "Layout/Box", GOOD_WIDGET)
     public = tmp_path / "public"
@@ -902,7 +915,7 @@ def test_publish_stdlib_assets_refuses_a_directory_it_does_not_own(
     bystander = public / "fonts" / "inter.woff2"
     bystander.write_bytes(b"font")
 
-    assert widget_compiler.publish_stdlib_assets(public) is False
+    assert widget_compiler.publish_builtin_widgets_assets(public) is False
     assert bystander.is_file(), "a mistyped publish root must not be deleted"
 
 
@@ -914,16 +927,16 @@ def test_run_once_does_not_publish_when_the_manifest_failed(
     runtime validate pages against schemas from a build that no longer exists."""
     src, build = widget_workspace["src"], widget_workspace["build"]
     _write_widget(src, "Layout/Box", GOOD_WIDGET)
-    publish_dir = tmp_path / "public" / "stdlib-js"
+    publish_dir = tmp_path / "public" / "builtin-widgets-js"
     publish_dir.mkdir(parents=True)
     previously_published = publish_dir / "manifest.json"
     previously_published.write_text("[]", encoding="utf-8")
 
     monkeypatch.setattr(
-        widget_compiler, "generate_stdlib_manifest", lambda *args, **kwargs: False
+        widget_compiler, "generate_builtin_widgets_manifest", lambda *args, **kwargs: False
     )
     code = widget_compiler._run_once(
-        src, build, tmp_path / "stdlibManifest.json", publish_dir
+        src, build, tmp_path / "builtinWidgetsManifest.json", publish_dir
     )
 
     assert code == 1
@@ -1004,7 +1017,9 @@ def test_collect_touched_entries_groups_changes_to_their_index_tsx(widget_worksp
 
 
 @pytest.mark.asyncio
-async def test_watcher_does_not_re_admit_symlinked_entry(widget_workspace, monkeypatch):
+async def test_watcher_does_not_re_admit_symlinked_entry(
+    widget_workspace, monkeypatch, require_symlinks
+):
     import watchfiles
 
     src, build = widget_workspace["src"], widget_workspace["build"]
@@ -1012,10 +1027,7 @@ async def test_watcher_does_not_re_admit_symlinked_entry(widget_workspace, monke
     target.write_text(GOOD_WIDGET, encoding="utf-8")
     linked_entry = src / "Inputs" / "Linked" / "index.tsx"
     linked_entry.parent.mkdir(parents=True)
-    try:
-        linked_entry.symlink_to(target)
-    except OSError as err:
-        pytest.skip(f"symlinks unavailable: {err}")
+    linked_entry.symlink_to(target)
 
     async def fake_awatch(_root, recursive=True):
         yield {(1, str(linked_entry))}
@@ -1037,7 +1049,7 @@ async def test_watcher_does_not_re_admit_symlinked_entry(widget_workspace, monke
 async def test_start_watcher_survives_unexpected_exception_in_one_iteration(
     widget_workspace, monkeypatch,
 ):
-    """§8.1: an unexpected failure in one watcher iteration (e.g. a bad schema
+    """An unexpected failure in one watcher iteration (e.g. a bad schema
     literal) must not permanently kill hot-reload for subsequent changes."""
     import watchfiles
 

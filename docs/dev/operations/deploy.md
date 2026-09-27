@@ -21,9 +21,11 @@ Its security model assumes it sits on a **trusted OT/plant network**.
   device-admin surface can, once past the password, drive the connected PLCs.
   Perimeter isolation is the primary control; the application's own passwords
   are the second layer, not the first.
-- **Serve over HTTPS the moment it leaves loopback.** On plain HTTP the
-  device-admin password, operator passwords, and every project edit cross the
-  wire in the clear. See [HTTPS](../../user/install.md#https).
+- **Serve over HTTPS.** The manager binds every interface by default, and on
+  plain HTTP the device-admin password, project users' passwords, and every
+  project edit cross the wire in the clear. See
+  [HTTPS](../../user/install.md#https); `NEXTHMI_HOST=127.0.0.1` is the other
+  way out, for an install that is only ever reached through a proxy.
 - **Reach it through a reverse proxy or VPN, not by widening the app.** If the
   UI must be reachable from another origin, put a reverse proxy in front that
   serves the app on a single origin — do not reconfigure the backend for
@@ -46,7 +48,7 @@ terminating proxy](../../user/install.md#behind-a-terminating-proxy)).
 ## MCP
 
 MCP is a single **workspace** endpoint hosted by the manager at the origin
-`/mcp` (child instances no longer serve it). One AI client connects there and
+`/mcp` — child instances serve none. One AI client connects there and
 addresses any project by id; see [../reference/mcp.md](../reference/mcp.md) for the tool catalog.
 
 Two independent controls:

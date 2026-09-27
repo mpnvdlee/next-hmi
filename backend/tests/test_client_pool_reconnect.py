@@ -1,4 +1,4 @@
-"""Tests for DatasourceOpcuaEngine connect/reconnect state handling (§2.4, §2.5)."""
+"""Tests for DatasourceOpcuaEngine connect/reconnect state handling."""
 
 import asyncio
 
@@ -33,7 +33,7 @@ class _FakeAsyncuaClient:
 
 @pytest.mark.asyncio
 async def test_do_connect_resets_connected_state_on_subscription_setup_failure(monkeypatch):
-    """§2.4: a failure in _setup_subscriptions must reset _connected so the
+    """A failure in _setup_subscriptions must reset _connected so the
     reconnect loop actually retries instead of reporting a healthy connection
     with zero working subscriptions forever."""
     monkeypatch.setattr(client_pool_module, "Client", lambda url: _FakeAsyncuaClient(url))
@@ -63,7 +63,7 @@ async def test_do_connect_resets_connected_state_on_subscription_setup_failure(m
     assert call_count == 2
 
 
-# ── §2.5: concurrent close calls coalesce; disconnect() cancels the status task
+# ── Concurrent close calls coalesce; disconnect() cancels the status task
 
 
 @pytest.mark.asyncio
@@ -118,7 +118,7 @@ async def test_disconnect_cancels_pending_status_close_task():
     assert engine._connected is False
 
 
-# ── §2.8: reconnect_interval_s validated/clamped like the other intervals ─────
+# ── reconnect_interval_s validated/clamped like the other intervals ───────────
 
 
 @pytest.mark.asyncio

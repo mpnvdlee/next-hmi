@@ -5,7 +5,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { useConfigStore } from '@shared/store/configStore';
-import type { WidgetConfig, PageConfig } from '@shared/types/config';
+import type { WidgetConfig, PageConfig, PageRoot } from '@shared/types/config';
 import { getPageChildren } from '@shared/utils/pageContent';
 import {
   pageHasExplicitSections,
@@ -37,6 +37,8 @@ interface TreePageProps {
   onEditChange: (value: string) => void;
   onEditCommit: (pageId: string) => void;
   depth?: number;
+  /** The page-tree root this page sits in — the region its selection reports. */
+  root?: PageRoot;
 }
 
 export default function TreePage({
@@ -49,6 +51,7 @@ export default function TreePage({
   onEditChange,
   onEditCommit,
   depth = 1,
+  root = 'pages',
 }: TreePageProps) {
   const selectedId = useEditorDomainStore((s) => s.selectedId);
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({
@@ -129,7 +132,7 @@ export default function TreePage({
         }
         onSelect={() => {
           const store = useEditorDomainStore.getState();
-          store.setSelected(page.id, 'pages');
+          store.setSelected(page.id, root);
           store.previewPage(page.id);
         }}
         onDoubleClick={() => useEditorDomainStore.getState().openTab(page.id)}

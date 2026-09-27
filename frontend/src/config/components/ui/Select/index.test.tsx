@@ -162,6 +162,37 @@ describe('Select', () => {
     });
   });
 
+  it("leaves an aria-hidden decoration out of an option's typeahead string", () => {
+    render(
+      <Select value="" onChange={vi.fn()} aria-label="Fruit">
+        <option value="browse">
+          <span aria-hidden="true">?</span>
+          Browse actions…
+        </option>
+      </Select>,
+    );
+    fireEvent.click(trigger());
+
+    fireEvent.keyDown(trigger(), { key: 'b' });
+
+    expect(trigger()).toHaveAttribute('aria-activedescendant', expect.stringContaining('-opt-0'));
+  });
+
+  it('keeps the outer heading when one optgroup nests inside another', () => {
+    render(
+      <Select value="" onChange={vi.fn()} aria-label="Fruit">
+        <optgroup label="Dialogs">
+          <optgroup label="Motors">
+            <option value="m1">Motor detail</option>
+          </optgroup>
+        </optgroup>
+      </Select>,
+    );
+    fireEvent.click(trigger());
+
+    expect(screen.getByText('Dialogs → Motors')).toBeInTheDocument();
+  });
+
   it('confirms a click on an enabled option and moves focus back to the trigger', () => {
     const onChange = vi.fn();
     render(<Fixture value="apple" onChange={onChange} />);

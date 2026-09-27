@@ -59,7 +59,7 @@ resolution.
 
 Files in a component folder:
 
-- `index.tsx` — authoring source. Exports the default React component and optionally `schema`, `exportedProperties`, `displayName`, `description`, `category`, `icon`, and `hostsChildren`.
+- `index.tsx` — authoring source. Exports the default React component and optionally `schema`, `exportedProperties`, `displayName`, `description`, `category`, `icon`, `hostsChildren`, `flowsChildren` and `repeatsChildren` (see [Schema](#schema)).
 - `style.css` — optional stylesheet, served from `/widgets/<Name>/style.css`.
 - `fonts/` — optional font assets, served from `/widgets/<Name>/fonts/...`.
 
@@ -74,15 +74,15 @@ Folders or files whose name starts with `.` or `_` are ignored by both the compi
 The compiler lives in `backend/services/widget_compiler.py` and runs in both dev and packaged installs. Behaviour:
 
 - Scans `<project>/custom-widgets/*/index.tsx` (and `*/<Group>/<Name>/index.tsx`) at backend startup.
-- Recompiles individual files on `add` / `change` events via `watchfiles`; emits a `widget_updated` message over the `/ws` WebSocket so the running app re-imports without a full reload.
+- Recompiles a widget via `watchfiles` whenever anything inside its folder changes, and prunes the build status of a widget whose folder is gone; either way it emits a `widget_updated` message over the `/ws` WebSocket, and the running app reloads the page to pick the new build up.
 - Writes the compiled `index.js` to `<runtime_home>/.widget-build/<Name>/index.js` (or `…/<Group>/<Name>/index.js`).
 - Tracks success/error by canonical widget identity in `<runtime_home>/.widget-build/.build-status.json`. The version-2 file is `{ "version": 2, "widgets": { "<Group>/<Name>": { ... } } }`; `/api/widgets` surfaces each matching entry as `buildOk`, `buildError`, and `buildTs`.
-- Regenerates `<runtime_home>/.widget-build/widget-schemas.json` — the catalog manifest built from the built-in registry plus every custom widget's `schema`, `exportedProperties`, `category`, `description` and `icon`, extracted from the source with tree-sitter (`backend/services/widget_schemas.py`).
+- Regenerates `<runtime_home>/.widget-build/widget-schemas.json` — the catalog manifest built from every custom widget's `schema`, `exportedProperties`, `category`, `description` and `icon`, extracted from the source with tree-sitter (`backend/services/widget_schemas.py`). The product's own widgets are not in it: they ship as the baked built-in-widgets manifest instead.
 
 A failed compile leaves the previous `index.js` in place, which is deliberate
 for a project widget: a broken edit keeps the last good module serving to the
-live HMI instead of blanking the operator's screen. The stdlib half does not
-get that latitude — `publish_stdlib_assets` reads `.build-status.json` from
+live HMI instead of blanking the operator's screen. The built-in half does not
+get that latitude — `publish_builtin_widgets_assets` reads `.build-status.json` from
 disk and skips any widget whose row is not `ok`, so a broken build never
 publishes yesterday's artifact under a source that no longer matches it. One
 broken widget does not stop the rest of the tree publishing, and the run still
@@ -106,14 +106,15 @@ Widgets** table shows a **No schema** badge with the message, and
 `loadCustomWidgets()` registers from `GET /api/widgets` alone: the schema,
 catalog metadata and exported properties all ride on the manifest, so the editor
 can list, offer and validate a widget without its module being fetched. Each
-entry's compiled module is a `lazy()` that imports on first render
+entry's compiled module is a `settledLazy()` (a `lazy()` that renders without
+suspending once the module is in memory) that imports on first render
 (cache-busted by `buildTs`, which also gives the build its identity — a
-recompile mints a fresh `lazy()` rather than reusing the resolved old module).
+recompile mints a fresh one rather than reusing the resolved old module).
 A project holding a widget that pulls a heavy dependency therefore costs nothing
 until such a widget is actually on screen.
 
 A custom widget whose leaf name collides with a built-in still wins — projects
-may override one on purpose — but registration now logs a warning naming both,
+may override one on purpose — but registration logs a warning naming both,
 because the swap is otherwise invisible in a page that reads as `"type":
 "PageTitle"` and renders something else.
 
@@ -146,7 +147,7 @@ The whitelist is whole-word matched against `frontend/src/shared/utils/nextHmiSd
 
 - Write components in `index.tsx`.
 - Do not import React, hooks, or internal app helpers — use the SDK globals listed below.
-- Use `selfLayoutStyle(layout)` on the outermost wrapper so the editor's layout fields (basis/grow/min-size/etc.) take effect.
+- Use `selfLayoutStyle(layout)` on the outermost wrapper so the editor's layout fields (Width/Height mode, Fill weight, min/max size, etc.) take effect.
 - Use `widgetColorStyle(color)` when a schema `color` field should override a default theme color.
 - Type declarations for the SDK live in `frontend/custom-widgets-sdk.d.ts`; copy or reference it from your project's `tsconfig` to get editor completion.
 
@@ -168,7 +169,7 @@ export default function MyWidget({ properties, layout }: HmiWidgetProps) {
 
 The canonical list of names exposed on `window.__nextHMI__` lives in `frontend/src/shared/utils/nextHmiSdkNames.ts`. Type signatures are in `frontend/custom-widgets-sdk.d.ts`.
 
-**SDK version:** `SDK_VERSION` in `nextHmiSdkNames.ts` (currently `1`) is versioned independently of the app itself. Bump it whenever an existing name is removed or renamed, or an existing function's signature or return shape changes incompatibly; a purely additive change (a new name) doesn't require a bump. Nothing reads this at runtime today — it exists so this doc, commit messages, and widget authors have one unambiguous number to reference for compatibility.
+**SDK version:** `SDK_VERSION` in `nextHmiSdkNames.ts` (currently `2`) is versioned independently of the app itself. Bump it whenever an existing name is removed or renamed, or an existing function's signature or return shape changes incompatibly; a purely additive change (a new name) doesn't require a bump. Nothing reads this at runtime today — it exists so this doc, commit messages, and widget authors have one unambiguous number to reference for compatibility.
 
 ### React primitives
 
@@ -181,12 +182,12 @@ The canonical list of names exposed on `window.__nextHMI__` lives in `frontend/s
 - `useVariable(key)` — subscribe to a single composite-key scalar variable.
 - `useBindingValue(binding)` — same, but takes a `VariableBinding` (or `undefined`).
 - `useStructVariable(key)` — subscribe to a struct (returns `Record<string, unknown>`) or an array-of-struct (returns `unknown[]`).
-- `useVariableMeta(key)` — subscribe to `{ type, min?, max?, fieldRanges? }`. `type` is the canonical scalar/struct `VarType` with `array: boolean` and an optional fixed `length`; `min`/`max` apply to scalar numeric variables and `fieldRanges` carries per-field struct ranges. Returns `undefined` if the key isn't known.
-- `useEvalContext()` — returns the active `EvaluationContext` used to resolve `$var` / `$loc` / `$urlParam` / `$user` / `$device` / `$time` / `$pageIsActive` / `$random` / `$if` / `$compare` / `$switch` / `$widgetProp` / `$componentProp` / `$stringExpr` / `$alarmCount` / `$page` / `$viewport` / `$result` property sources. The full source/type model is in [../architecture/value-types.md](../architecture/value-types.md).
+- `useVariableMeta(key)` — subscribe to `{ type, min?, max?, writable?, fieldRanges? }`. `type` is the canonical scalar/struct `VarType` with `array: boolean` and an optional fixed `length`; `min`/`max` apply to scalar numeric variables, `writable` says whether a scalar variable accepts writes, and `fieldRanges` carries per-field struct ranges. Returns `undefined` if the key isn't known.
+- `useEvalContext()` — returns the active `EvaluationContext` used to resolve `$var` / `$loc` / `$urlParam` / `$user` / `$userGroups` / `$device` / `$time` / `$pageIsActive` / `$random` / `$if` / `$compare` / `$not` / `$formula` / `$switch` / `$widgetProp` / `$componentProp` / `$repeatItem` / `$stringExpr` / `$http` / `$alarmCount` / `$recipe` / `$page` / `$viewport` / `$result` property sources. The full source/type model is in [../architecture/value-types.md](../architecture/value-types.md).
 - `bindingKey(binding)` — composes a `"datasource:path"` key from a `VariableBinding`.
 - `parseVarKey(key)` — splits `"datasource:path"` back into `{ datasource, path }`.
 - `useWriteVariable(properties, propKey, options?)` — returns `(value, opts?) => void`, the supported way to write a bound variable. See [Writing values](#writing-values).
-- `sendWsMessage(msg)` — sends a raw frame on the shared WebSocket; supports `type: 'write_field'`; the older `'write'` type was removed and is now dropped as an unknown message. For variable writes use `useWriteVariable` instead — it correlates the response, which a hand-built frame does not.
+- `sendWsMessage(msg)` — sends a raw frame on the shared WebSocket; the one write frame the backend accepts is `type: 'write_field'`. For variable writes use `useWriteVariable` instead — it correlates the response, which a hand-built frame does not.
 - `useHmiScope()` — returns the active runtime scope id (e.g. `runtime:main`), useful as the `scope` field on `write_field`.
 
 ### Property resolvers
@@ -194,11 +195,12 @@ The canonical list of names exposed on `window.__nextHMI__` lives in `frontend/s
 Hook variants (call internally `useEvalContext()`; safe to use inside a component body):
 
 - `usePropString(props, key, fallback?)`
-- `usePropNumber(props, key, fallback?)`
+- `usePropNumber(props, key, fallback?)` — a string that is a clean decimal number (`"42"`) reads as that number, never rounded; any other non-number returns `fallback`.
 - `usePropBoolean(props, key, fallback?)`
 - `usePropVar(props, key)` — resolves either a `$var` binding (including array-element bindings with an `index`) or a static / expression value; returns `unknown`.
 - `usePropStruct(props, key)` — for struct properties; returns the live struct (or array for an array struct `type` like `'struct[]'`).
 - `useRecordListProp(props, key)` — for a `record-list` property (array of records); resolves a `$var` struct-array binding, the `$recipeList` value source, a `$widgetProp` export, or a static array, and returns `unknown[]`.
+- `useItemListProp(props, key)` — for an `item-list` property (any array); resolves a scalar or struct `$var` array, a static list, an `$http` JSON-array pick, `$recipeList`, `$user` users/groups or a `$widgetProp` export, and returns `{ items, arrayKey?, structArray }` — `arrayKey` is set only for a `$var` array, which is what makes its elements writable.
 
 Non-hook variants (safe in event handlers, action callbacks, utilities — accept an optional `evalCtx`):
 
@@ -215,8 +217,9 @@ Non-hook variants (safe in event handlers, action callbacks, utilities — accep
 - `useUsersData()` → `Array<{ id, username }>` — used by `option-list` fields with `$user / field: 'userList'`.
 - `useUserGroupsData()` → `Array<{ id, label }>` — all configured groups, used by `option-list` fields with `$user / field: 'groups'`.
 - `useLanguagesData()` → `Array<{ code }>` — used by `option-list` fields with `$languages`.
-- `useLanguageSelection()` → `{ activeLanguage, setActiveLanguage }` — the active interface language and the setter that changes it. The other half of `useLanguagesData`, for shipping your own language picker; calling the setter re-runs every `$loc` source in the app. The stdlib `Language Switcher` is the two combined.
+- `useLanguageSelection()` → `{ activeLanguage, setActiveLanguage }` — the active interface language and the setter that changes it. The other half of `useLanguagesData`, for shipping your own language picker; calling the setter re-runs every `$loc` source in the app. The built-in `Language Switcher` is the two combined.
 - `useVisiblePages()` → `PageNode[]` — the currently visible page index tree (respects `hidden` and role filters).
+- `useCurrentUserGroups()` → `readonly string[]` — group ids of the signed-in user, `[]` when nobody is. The group source behind `useVisiblePages`' role filter — use it, not `useEvalContext().resolveUserGroups()`, to reapply that filter at a nested level of the page tree: the eval context answers `['guest']` for an anonymous viewer, which would list pages the top level hides.
 
 ### Recipes
 
@@ -231,7 +234,7 @@ To list saved recipes in a widget, bind a `record-list` property to the
 ### Alarms
 
 Active alarms and their counts are pushed over the WebSocket; acknowledgement
-and history go over REST. The stdlib `Alarm List` and `Alarm History` widgets
+and history go over REST. The built-in `Alarm List` and `Alarm History` widgets
 (`frontend/widgets/Content/AlarmListManaged`, `…/AlarmHistoryList`) are the
 worked examples.
 
@@ -272,30 +275,92 @@ SDK hook: fetch `/api/alarms/history` with `apiJson`, as `Alarm History` does.
 
 - `usePageGroup(groupId?)` — returns the active `PageGroupStackEntry` (`{ group, activePage, onNavigate }`) for the given group, or the innermost group when `groupId` is omitted; `null` when no group is in scope.
 - `usePageTitle(title)` — resolves a `PageTitle` (`string | { $static } | { $loc }`) to a plain string, subscribing to translation-store changes so locale switches re-render.
-- `resolvePageTitle(title)` — the non-hook form of the same resolution, for titles you resolve where a hook can't be called: inside a `.map()` over `group.children`, a comparator, an event handler. It reads the same translations but subscribes to nothing, so a component whose labels come only from this will keep the language it mounted with. Call `usePageTitle` once in the same component (or on the page title) when the labels have to follow a locale switch. The stdlib `Tab Bar` uses it per child; `NavigationMenu` does the same for its tree.
-- `useNavigateToPage()` — returns a `(pageId: string) => void` that navigates to `/pages/<pageId>`.
+- `resolvePageTitle(title)` — the non-hook form of the same resolution, for titles you resolve where a hook can't be called: inside a `.map()` over `group.children`, a comparator, an event handler. It reads the same translations but subscribes to nothing, so a component whose labels come only from this will keep the language it mounted with. Call `usePageTitle` once in the same component (or on the page title) when the labels have to follow a locale switch. The built-in `Tab Bar` uses it per child; `NavigationMenu` does the same for its tree.
+- `useNavigateToPage()` — returns a `(pageId: string) => void` that navigates to `/pages/<pageId>`, or to `/preview/<pageId>` inside the editor's preview pane.
+- `useActivePage()` → `{ requestedId, pageId, groupIds }` — where the runtime currently is in the page tree, for a widget that marks an active entry. `requestedId` is the id in the URL and may name a *group*; `pageId` is the page actually on screen after a group resolves to its child; `groupIds` is the trail of groups above it, outermost first, empty for a top-level page. Resolved against the whole tree, hidden and role-gated pages included — a page the menu will not list can still be the one on screen, and reporting nothing for it would unmark every ancestor. The built-in `Navigation Menu` drives all three of its active states off this.
+
+### Composition
+
+Most widgets that hold other widgets need nothing from this section: declare
+`hostsChildren = true` and the renderer hands the children over in the
+`children` prop, already rendered, for CSS to lay out (the built-in `Container`
+does exactly that). Reach for the primitives below only when the widget has to
+decide *where* each node goes, or to render a node that is not its own child.
+
+- `childConfigs` — a prop, not a global: this widget's own child nodes,
+  unrendered, populated for any type that declares `hostsChildren`. Each is a
+  `WidgetConfig` (`id`, `type`, `name`, `properties`, `layout`, `children`,
+  `slot`), so per-child metadata keyed by id — a saved position, say — resolves.
+  Prefer `children` when order is all you need; those are already rendered and
+  cheaper.
+- `renderWidget(node)` — renders one such node. Pass it a `WidgetConfig` from
+  `childConfigs`, from a `widgets`-typed property, or from `useComponentSlot`.
+  The node goes through the normal renderer, so it keeps its own visibility gate,
+  binding overlay and error boundary.
+- `useComponentSlot(slot)` → `WidgetConfig[]` — the widgets a *caller* placed in
+  the named slot of the component instance being rendered. `[]` outside an
+  instance, or for a slot nobody filled.
+- `renderSlotWidgets(nodes)` — renders those, keeping them in the caller's
+  editing scope so the editor selects them where they were authored rather than
+  resolving out to the instance. Use it instead of mapping `renderWidget` over
+  slot content.
+- `useIsPreview()` → `boolean` — `true` inside the editor's preview pane, `false`
+  in the operator runtime. For an authoring-only affordance the operator must
+  never see.
+- `useIsComponentInstance()` → `boolean` — `true` while rendering inside a
+  component instance somebody placed, `false` while the components editor renders
+  a definition on its own canvas. Pair it with `useIsPreview` to keep an
+  affordance on that canvas only: `ComponentSlot` outlines an unfilled slot with
+  the two, so the author can see the hole they are filling while the UI preview
+  and the operator show the page as it really is.
+- `RepeatScope({ value, children })` and `useRepeatScope()` — publish one copy of
+  a repeated subtree, and read the innermost one. `value` is
+  `{ index, item, arrayKey?, structArray?, key, first, ghost? }`; inside it,
+  `$repeatItem`, `$var` with `repeatIndex` and `$widgetProp` resolve per copy
+  (see [Repeater items in depth](../architecture/value-types.md#repeater-items-in-depth-repeatitem)).
+  Keep each `value` referentially stable, and make `key` unique across nested
+  scopes by prefixing the outer scope's `key`. Declare `repeatsChildren` too, or
+  the editor won't offer Repeat item inside the widget and the validator flags
+  it as out of scope. `Repeater` is the worked example.
+- `useAnchoredStyle(rect, placement)` → `[ref, style]` — positions a panel
+  against a trigger's `AnchorRect`: renders at the raw offset, then clamps itself
+  into the viewport once measured. Attach the ref and the style to the same
+  element, and pass `null` when the panel is not anchored. `Navigation Menu`
+  positions its flyout submenu with it.
+
+Worked examples, all three built-in widgets: `Navigation Menu`
+(`renderWidget` for its footer slot, `useActivePage`, `useAnchoredStyle`),
+`Image Container` (`childConfigs` + `renderWidget`, one child per saved
+position) and `Component Slot` (`useComponentSlot` + `renderSlotWidgets` +
+`useIsPreview` + `useIsComponentInstance`).
+
+A widget that re-enters the renderer can, in principle, render itself: nothing
+stops a node whose subtree names its own type, and the recursion is yours to
+bound. The editor's tree cannot place such a cycle, so this only arrives through
+hand-edited JSON or a `widgets` property wired to an ancestor.
 
 ### Actions and other helpers
 
-- `executeWidgetActions(actions, ctx?)` — runs an action array through the shared action pipeline. Optional `ctx` accepts `{ scope?, evalCtx? }` so you can run actions in a non-default scope or with a custom evaluation context.
+- `executeWidgetActions(actions, ctx?)` — runs an action array through the shared action pipeline. Optional `ctx` accepts `{ scope?, evalCtx?, anchorEl? }` so you can run actions in a non-default scope or with a custom evaluation context; `anchorEl` is the element that fired the action, which a `trigger-*` overlay placement opens against.
 - `selfLayoutStyle(layout)` — converts the editor's layout config into a `style` object for the wrapper.
-- `containerLayoutStyle(layout)` — the `--container-*` half of the same layout, for a widget that declares `hostsChildren` and places its children itself. Pair it with a stylesheet resetting every `--container-*` it reads to `initial` — see the `hostsChildren` note under [Schema](#schema).
+- `containerLayoutProps(layout)` — the `--container-*` half of the same layout, plus the `data-flow-direction`/`data-flow-align` attributes that tell each child's own `widthMode`/`heightMode` which screen axis is main, for a widget that declares `hostsChildren` and places its children itself. Returns `{ style, 'data-flow-direction', 'data-flow-align' }` — spread the whole object onto whichever element is actually `display: flex`. That element must carry `hmi-component` (or `hmi-container`), which is where the shared layout barrier resets every `--container-*` and `--w-*`/`--h-*`. A host split across two elements can destructure instead — `style` onto the outer, class-carrying element and the two `data-flow-*` fields onto the inner one that actually flexes, since `--container-*` still reaches the inner element by ordinary CSS inheritance — see the `hostsChildren` note under [Schema](#schema). `style` still carries the four padding longhands (`paddingTop`/`Right`/`Bottom`/`Left`) if the layout sets them — a widget with its own padding should usually peel those back off before applying `style` to the flex-item element and reapply them one level in, the way `Container` does (see the note there): that element is also whatever a Fill-mode ancestor gives `flex-grow`/`flex-basis: 0`, and a border-box element's own padding sets a floor under that math, skewing a configured Fill weight — worse, *inconsistently*, whenever a sibling picks up a padding-free wrapper (e.g. `WidgetRenderer`'s binding/lock overlay) and this widget doesn't.
 - `widgetColorStyle(color)` — converts a hex / theme-token / `var(--…)` color string into a `style` object that sets the element's `backgroundColor`. Returns `{}` when the color is unset, so the element falls through to its CSS theme token (e.g. `background: var(--hmi-accent)`) and re-skins with the theme.
 - `useCssVar(name, fallback)` — reads a CSS custom property from the document root, subscribing to theme changes.
-- `withBase(path)` — prefixes a root-relative app path with the instance base, so the URL still resolves when the project is proxied under `/runtime/<slug>/` or `/editor/<slug>/`. Idempotent, and a no-op at the root base. Apply it to any URL you hand to `fetch`, an `<img src>` or an `<a href>` — the stdlib `Trend Chart` wraps its `/api/historian/query` fetch in it.
-- `apiJson(url, options?)` → `Promise<T | undefined>` — the JSON API client: applies `withBase`, sets the JSON content type and serialises `options.body`, returns the parsed body, and throws on any non-2xx. `options` is `{ method?, body?, signal? }`. A `204 No Content` resolves `undefined`, which is why the declared type is `T | undefined` and not `T` — guard or default it (`?? []`) as the stdlib `Alarm History` widget does around its `/api/alarms/history` poll.
+- `withBase(path)` — prefixes a root-relative app path with the instance base, so the URL still resolves when the project is proxied under `/runtime/<slug>/` or `/editor/<slug>/`. Idempotent, and a no-op at the root base. Apply it to any URL you hand to `fetch`, an `<img src>` or an `<a href>` — the built-in `Trend Chart` wraps its `/api/historian/query` fetch in it.
+- `assetSrc(value)` — resolves an `image` / `video` field's value to a URL an `<img src>` or `<video src>` can load. A `$static` pick already arrives as a full `/assets/…` URL, but a `$var` or `$urlParam` on the same field delivers the stored path verbatim; a path rooted at `images/`, `icons/` or `videos/` becomes `withBase('/assets/<path>')`, anything absolute, rooted or remote passes through. The built-in `Image` and `Video` widgets run every source through it.
+- `apiJson(url, options?)` → `Promise<T | undefined>` — the JSON API client: applies `withBase`, sets the JSON content type and serialises `options.body`, returns the parsed body, and throws on any non-2xx. `options` is `{ method?, body?, signal? }`. A `204 No Content` resolves `undefined`, which is why the declared type is `T | undefined` and not `T` — guard or default it (`?? []`) as the built-in `Alarm History` widget does around its `/api/alarms/history` poll.
 - `isApiError(value)` — narrows a caught value to `ApiError`: `message` is the backend's `detail` (or `HTTP <status>`), plus `status` and the body's `code` when it carried one. Use it rather than reading `status` off whatever you caught — a request that never reached the backend rejects with a plain `TypeError`, which carries neither field.
 
 ### Icons
 
 An `icon` property holds either a built-in id or a workspace SVG path, so a
-widget that renders one branches on both pairs below — as the stdlib `Icon`,
+widget that renders one branches on both pairs below — as the built-in `Icon`,
 `Button` and `Menu Toggle` widgets do.
 
 - `isBuiltinIconId(value)` — `true` if the string is a built-in Phosphor icon id (allowlisted).
-- `getBuiltinIconComponent(iconId)` — returns the `PhosphorIconComponent` for that id, or `null`. It is not a plain component: the icon set is fetched on first render, so rendering one outside a `React.Suspense` boundary throws a promise instead of drawing anything. Wrap the tag — `<React.Suspense fallback={null}><IconComp size={20} weight="regular" /></React.Suspense>` — as every stdlib widget that draws an icon does.
+- `getBuiltinIconComponent(iconId)` — returns the `PhosphorIconComponent` for that id, or `null`. It is not a plain component: the icon set is fetched on first render, so rendering one outside a `React.Suspense` boundary throws a promise instead of drawing anything. Wrap the tag — `<React.Suspense fallback={null}><IconComp size={20} weight="regular" /></React.Suspense>` — as every built-in widget that draws an icon does.
 - `isCustomIconAssetPath(value)` — `true` if the string points at a workspace SVG (`/assets/icons/…`) instead. Base-prefix aware, so it still matches under a proxied `/runtime/<slug>/` mount.
-- `useInlineSvg(url)` → `string` — fetches that SVG and returns its markup *rewritten for tinting*: every hardcoded `fill` / `stroke` / `color` attribute is stripped and `currentColor` forced, so the icon inherits the CSS `color` of its parent instead of shipping its own. That is a one-way trip — a multi-colour asset comes back monochrome and stroke-drawn artwork comes back unstroked, so fetch the file yourself (through `withBase`) when it has to keep its own palette. Returns `''` for a null/empty url, while the fetch is in flight, and when the fetch fails; the three are indistinguishable, so treat `''` as "nothing to draw" rather than as a loading state. Render the result with `dangerouslySetInnerHTML` — the markup comes from the project's own asset folder, which is already a trusted, editor-writable surface.
+- `useInlineSvg(url)` → `string` — fetches that SVG and returns its markup *rewritten for tinting*: every `fill` / `stroke` paint (attribute or CSS declaration) is repointed at `currentColor`, a `color` attribute is dropped, and a root that declares no fill gets `fill="currentColor"`, so the icon inherits the CSS `color` of its parent instead of shipping its own. Fills stay fills and strokes stay strokes, and a paint of `none` is kept, so an outline icon stays an outline. That is still a one-way trip — a multi-colour asset comes back monochrome, so fetch the file yourself (through `withBase`) when it has to keep its own palette. The rewritten markup is kept per URL for the rest of the page load (cleared when an asset changes), so a later mount draws it on its first render and icons mounting together share one fetch. Returns `''` for a null/empty url, while the first fetch is in flight, and when the fetch fails; the three are indistinguishable, so treat `''` as "nothing to draw" rather than as a loading state. Render the result with `dangerouslySetInnerHTML` — the markup comes from the project's own asset folder, which is already a trusted, editor-writable surface.
 
 ### Virtual input
 
@@ -350,9 +415,8 @@ default) and that manifest's default project, else its only project, else
 ```
 
 If a bare specifier fails with `Failed to resolve module specifier "x"` while
-the file plainly exists, check that line first — it used to be hardcoded to
-`<repo>/project-testbench/`, so a live project anywhere else produced an empty
-map while the backend served `/external-libraries/` perfectly well.
+the file plainly exists, check that line first: an import map built against a
+different project than the one serving `/external-libraries/` comes out empty.
 
 **TypeScript completion** is opt-in. Add a `paths` entry to your project's `tsconfig.json` pointing at the library's `.d.ts` files (typically downloaded alongside the JS bundle).
 
@@ -459,7 +523,7 @@ At runtime, the backend returns the nested shape as a nested object:
 
 Nesting is recursive — sub-struct entries can themselves contain `requiredFields`.
 
-The binding picker matches the nested shape: it verifies that the selected struct folder contains a child folder named `limits` with the required scalar children `fMin` and `fMax`.
+The binding picker matches the nested shape: it verifies that the selected struct folder contains a child folder named `limits` with the required children `fMin` and `fMax`.
 
 #### Array-of-struct bindings
 
@@ -473,7 +537,7 @@ motors: {
 }
 ```
 
-The `requiredFields` describe the shape of each array element. The binding picker shows only folders whose children are all `[N]`-indexed sub-folders, and validates that the first element `[0]` contains the required fields.
+The `requiredFields` describe the shape of each array element. The binding picker shows only folders whose children are all `[N]`-indexed sub-folders, and validates that the lowest-index element (`[0]`, or `[1]` for an array counting from 1) satisfies the required fields; the runtime and the editor's warnings judge the bound element, or that same lowest-index one when none is bound.
 
 At runtime, the backend returns a JSON array:
 
@@ -575,13 +639,18 @@ export default function MyActionButton({ properties, layout }: HmiWidgetProps) {
 
 Supported action types (see `frontend/src/config/components/editor/PropertiesPanel/actionsPreview.ts` for the canonical list):
 
-- `openDialog` / `closeDialog`
-- `openPageOverlay` / `closePageOverlay`
-- `writeDataVariable` — `{ datasource, path, value }`; value may be a literal or a `$var` / `$static` source resolved at run time.
+- `openDialog` (a Dialogs-folder node, with `componentProperties`) / `openPageOverlay` (a node in the `pages` root) / `closePageOverlay` (either)
+- `writeDataVariable` — `{ target, value }`; `target` is `{ $var: { path: 'ds:path' } }`, or inside a Repeater `{ $repeatItem: { member? } }` for the copy's element; value is a literal (`string | number | boolean`, or an array for a whole-array target), or a property source (`$componentProp`, `$var`, …) evaluated when the action fires.
+- `toggleDataVariable` — `{ target }`, the same shape; inverts a Boolean variable from its current server-side value.
+- `if` — `{ condition, then, else }`; evaluates `condition` (any property-source value, e.g. a `$var` or `$compare`) and runs the `then` or `else` action list.
 - `setLanguage` — switches the active HMI language; the `language` property is resolved from component properties at runtime.
+- `setActiveTheme` — switches the runtime theme for this session; `theme` resolves to a theme id.
 - `loginUser` / `logoutUser` — scope-based authentication (the scope defaults to the current `useHmiScope()`).
+- `recipeLoad` (`{ datasetId, verify? }`) / `recipeSave` (`{ datasetId? }`) — download a recipe dataset to its variables, or save the live values into one.
+
+`writeDataVariable`, `toggleDataVariable`, `loginUser`, `logoutUser`, `recipeLoad` and `recipeSave` are asynchronous: each takes optional `onSuccess` / `onFailed` / `onSettled` action lists that run when the backend answers (or the request times out), and inside those lists `$result` reads fields off the response.
 - `showAlert` — modal alert with `onCancel` / `onOk` nested action lists.
-- `showToast` — transient toast (`info` | `warning` | `error`); `discard: 'auto' | 'manual'` with optional `duration`.
+- `showToast` — transient toast (`info` | `success` | `warning` | `error`); `discard: 'auto' | 'manual'` with optional `duration`.
 
 If you accept multiple events (e.g. `onPress` and `onLongPress`), declare them via separate `actions` fields on the schema with distinct `event` keys — see the schema reference below.
 
@@ -632,8 +701,8 @@ rather than in a parenthetical.
 
 `group` files a property under a named section in the properties panel. Fields
 with no `group` share one **Properties** section, in declaration order — so a
-schema that declares none looks exactly as it always has. Group a schema once it
-grows past a handful of properties:
+schema that declares none gets one flat section. Group a schema once it grows
+past a handful of properties:
 
 ```ts
 export const schema: Record<string, SchemaField> = {
@@ -647,9 +716,11 @@ Every widget — built-in and custom — is automatically given two standard boo
 
 Optional sibling exports:
 
-- `exportedProperties: ExportedProperty[]` — declares which runtime values this component publishes for sibling components to consume via `$widgetProp`. Extracted into the schema manifest like `schema`, so the editor's `$widgetProp` picker lists them without loading the module; it must be an array of objects each with a non-empty `key`, or the widget lands in the manifest with a `schemaError`.
+- `exportedProperties: ExportedProperty[]` — declares which runtime values this component publishes for sibling components to consume via `$widgetProp`. Extracted into the schema manifest like `schema`, so the editor's `$widgetProp` picker lists them without loading the module, and backend validation checks a `$widgetProp` read against them (`widgetprop-unknown` / `widgetprop-type`, see [value-types.md](../architecture/value-types.md#type-diagnostics)); it must be an array of objects each with a non-empty `key`, or the widget lands in the manifest with a `schemaError`.
 - `displayName: string` — the label shown in the palette, the widget tree and the properties panel header. The folder name stays the widget *type* that page files reference; export this when that type reads badly as a label, since a folder name cannot carry spaces (`StretchSpacer` → `Stretch Spacer`). Defaults to the folder name.
-- `hostsChildren: boolean` — declares that nodes of this type carry a `children` array. The editor then treats the widget as a container (drop target, collapse toggle, tree recursion, move target) and the renderer hands the already-rendered children in as the component's `children` prop. Read them with `React.Children`, and place them with `containerLayoutStyle(layout)` — pair that with a stylesheet resetting every `--container-*` it reads to `initial`, or a nested host inherits its parent's direction and gap. The stdlib `Container` is the worked example.
+- `hostsChildren: boolean` — declares that nodes of this type carry a `children` array. The editor then treats the widget as a container (drop target, collapse toggle, tree recursion, move target) and the renderer hands the already-rendered children in as the component's `children` prop. Read them with `React.Children`, and place them with `containerLayoutProps(layout)` on the element that is actually `display: flex` — that element must carry `hmi-component` (or `hmi-container`), which is where the shared layout barrier in `hmi.css` resets every `--container-*` and `--w-*`/`--h-*`, and without it a nested host inherits its parent's direction and gap. The built-in `Container` is the worked example for the **split** form of this: its actual flex parent is `.hmi-container__content`, an inner element that carries neither class — only the outer `.hmi-container` does, and `--container-*` reaches the inner element by ordinary CSS inheritance, so only the class-carrying element needs it. `Container` also keeps its own configured padding off that outer element entirely, applying it instead to `.hmi-container__content` (and `.hmi-container__title`, when there is one) — see `containerLayoutProps` above for why.
+- `flowsChildren: boolean` — declares that those children are laid out with flexbox, off `containerLayoutProps`. Narrower than `hostsChildren`, and only meaningful with it: a host that pins its children to fixed slots (the built-in `ImageContainer`) hosts without flowing. Declaring it is what gives each child a resolvable main axis: the Layout panel offers them Hug/Fill/Fixed against it, and `hmi.css`'s flow-translation block reads each child's own axis-neutral `widthMode`/`heightMode` intent against whichever screen axis this host's own `data-flow-direction` says is main. Without it, a child's Fill/Hug intent applies against whatever ancestor is actually its flex parent, which may not be this one. Set it on any widget that arranges children in order (a row, a card, a grid).
+- `repeatsChildren: string` — names the widget's `item-list` property when it draws its children once per element of it, each copy inside a `RepeatScope`. The editor offers the Repeat item source, and the `[#]` element, to widgets inside it, typed against that property's binding; the validator accepts `$repeatItem` there and nowhere else. Omit it on any widget that does not repeat.
 - `category: string` — the card category. Defaults to the widget's source folder, or `Other` for a flat widget.
 - `description: string` — a one-line summary shown on the widget's card in the editor's widget selector (the drawer opened via **Add Widget/Component…** on the tree context menu).
 - `icon: IconValue` — a structured built-in or custom icon, using the same value produced by the editor's icon picker. A built-in icon is `{ type: 'builtin', name: '<allowlist-id>' }`; a workspace SVG is `{ type: 'custom', path: 'icons/<file>.svg' }`. When omitted, custom widgets fall back to a generic puzzle-piece icon.
@@ -657,6 +728,7 @@ Optional sibling exports:
 ```tsx
 export const displayName = 'Analog Gauge';
 export const hostsChildren = false; // omit unless the widget hosts children
+export const flowsChildren = false; // and this too, if it flexes them
 export const category = 'Process';
 export const description = 'A round analog gauge with min/max and a value binding.';
 export const icon = { type: 'builtin', name: 'gauge' } as const;
@@ -664,7 +736,9 @@ export const icon = { type: 'builtin', name: 'gauge' } as const;
 
 ### Field-type reference
 
-A field's `type` is a **simple datatype** (`boolean`, `integer`, `float`, `string`, `datetime`, `date`, `time`, `duration`), one of their arrays (`'float[]'`, `'string[]'`, …), a **named struct** (`'struct'`, `'Alarms[]'`, …), or an **editor-only kind** (`color`, `icon`, `image`, `option-list`, `actions`, …). It may also be a **list** — the first entry drives the editor control, the rest form the variable-binding filter (e.g. `['float','integer','boolean']`, or `['option-list','string[]','integer[]']`). The types themselves, their bindable sources, and the full source model are specified in [../architecture/value-types.md](../architecture/value-types.md); the table below maps each `type` to the hook a custom component reads it with.
+A field's `type` is a **simple datatype** (`boolean`, `integer`, `float`, `string`, `datetime`, `date`, `time`, `duration`), one of their arrays (`'float[]'`, `'string[]'`, …), a **named struct** (`'struct'`, `'Alarms[]'`, …), or an **editor-only kind** (`color`, `icon`, `image`, `video`, `option-list`, `item-list`, `actions`, …). Tokens are case-insensitive. It may also be a **list** — the first entry drives the editor control, the rest form the variable-binding filter (e.g. `['float','integer','boolean']`, or `['option-list','string[]','integer[]']`). An `item-list` field binds to any array on its own — declare just `'item-list'`. A `color`, `icon`, `image` or `video` field binds to a `string` variable unless it lists simple types of its own; the other editor kinds bind no variable.
+
+A variable fits a token when its array-ness and base type match exactly — a `float` field takes no `integer` variable; list both to take either. The full rule set is in [../architecture/value-types.md](../architecture/value-types.md#which-variable-fits-a-field). The types themselves, their bindable sources, and the full source model are specified in [../architecture/value-types.md](../architecture/value-types.md); the table below maps each `type` to the hook a custom component reads it with.
 
 | `type`              | Read with                                  |
 |---------------------|--------------------------------------------|
@@ -678,8 +752,10 @@ A field's `type` is a **simple datatype** (`boolean`, `integer`, `float`, `strin
 | `color`             | `usePropString` (CSS color string)         |
 | `icon`              | `usePropString` + icon helpers             |
 | `image`             | `usePropString`                            |
+| `video`             | `usePropString`                            |
 | `struct`            | `usePropStruct` (or `useStructVariable`)   |
 | `option-list`       | inspect `properties.<key>` directly        |
+| `item-list`         | `useItemListProp`                          |
 | `actions`           | `executeWidgetActions(props[key][event])`  |
 | `groups`            | read `properties.<key>` as `string[]`      |
 | `image-indicators`  | consumed by `ImageIndicators` widget       |
@@ -689,20 +765,21 @@ A field's `type` is a **simple datatype** (`boolean`, `integer`, `float`, `strin
 
 All optional unless marked **required**.
 
-- `format` — refines a base type to upgrade its editor without changing the value; source rules still follow the **base type**. The full per-type format catalog (`string`: `url`/`multiline`/`password`/`select`/`length`/`spacing`/`direction`/`align`/`justify`/`page`; `float`: `percentage`; `boolean`: `toggle`/`visibility`/`enablement`/`wrap`) is in [../architecture/value-types.md](../architecture/value-types.md).
+- `format` — refines a base type to upgrade its editor without changing the value; source rules still follow the **base type**. The full per-type format catalog (`string`: `url`/`multiline`/`password`/`select`/`length`/`direction`/`align`/`justify`/`page`/`variables`; `float`: `percentage`; `boolean`: `visibility`/`enablement`/`wrap`/`show`/`expansion`/`collapse`/`onoff`) is in [../architecture/value-types.md](../architecture/value-types.md).
 - `defaultValue` — value the editor inserts when the field is added or reset.
-- `placeholder` — empty-state hint (used by `string`, `integer`/`float`, `icon`, `image` inputs).
+- `placeholder` — empty-state hint (used by `string` and `integer`/`float` inputs; the asset pickers hardcode their own).
 - `min`, `max`, `step` — numeric input constraints (`integer` / `float`).
 - The variable picker filter is the `type` itself: list non-editor entries (e.g. `['float','integer']`, `'string[]'`) restrict which variables can be bound. There is no separate `dataType` field.
-
-The value types and the full source model are specified in [../architecture/value-types.md](../architecture/value-types.md).
-- `write: true` — restrict the picker to writable variables.
-- The set of property **sources** offered for a field is determined entirely by its `type` — there is no per-field source allowlist. A source appears wherever its produced type matches the field.
+- `write: true` — restrict the picker to writable variables: only one whose metadata says `writable: true`, so one that states no access counts as read-only. A read-only variable bound anyway raises the runtime's red overlay and a `var-readonly` warning, and the backend refuses every write to it with `read_only`.
+- The set of property **sources** offered for a field is determined entirely by its `type` — there is no per-field source allowlist. A source appears only where its produced type is exactly the field's type; the one exception is a `Duration` field, which a number-producing source also fills.
 - `visibleWhen` — conditional visibility. A `VisibilityCondition` or an `AND`-joined array; conditions reference sibling property keys in the same schema.
 - `event` — only for `actions`: the key used to store the action array within the property value (default `'onPress'`).
 - `options` — **required** for `format: 'select'`; array of `{ label, value, icon? }`.
 - `display` — only with `format: 'select'`: `'auto' | 'dropdown' | 'button-text' | 'button-icon'`. `'auto'` picks button-icon when every option has an icon, otherwise dropdown.
+- `recordedWhen` — only with `format: 'variables'`: a `VisibilityCondition` (or `AND`-joined array) that, while it holds, narrows the picker to the variables the historian records. Omitted, the field picks from the whole variable tree.
 - `requiredFields` — only for `struct`. See below.
+
+The value types and the full source model are specified in [../architecture/value-types.md](../architecture/value-types.md).
 
 ### Struct details
 
@@ -711,8 +788,10 @@ The value types and the full source model are specified in [../architecture/valu
 - a plain string — the child field must exist (read-only).
 - an object — `{ name, write?, type?, requiredFields? }`.
   - `write: true` requires that the picked field be writable.
-  - `type` restricts the simple datatype of that child (e.g. `'float'`).
+  - `type` restricts the datatype of that child (e.g. `'float'`), under the same rules as a field's `type`.
   - Nested `requiredFields` recursively constrain sub-folders, enabling nested-struct matching.
+
+The picker, the runtime binding check and the editor's warnings all hold a bound struct to every one of these — name, type, access and nesting — against the same element of a struct array, so a struct the picker offers (without **Show all**) is one the page accepts. A disabled member, or one gone from the server, counts as missing.
 
 Set an array struct `type` (`'struct[]'`, or a named array struct like `'Alarms[]'`) on the field itself to require an array-of-struct folder (children must be `[0]`, `[1]`, …). The `requiredFields` then describe the shape of each element. At runtime the value is a JSON array (`unknown[]`), accessed via `usePropStruct` or the explicit `useStructVariable(key)` for write-back.
 
@@ -722,10 +801,10 @@ Set an array struct `type` (`'struct[]'`, or a named array struct like `'Alarms[
 |--------------|----------------------------------------------|---------------------------------------------------------------------|
 | `$static`    | inline list editor                           | `properties.<key].$static` → `[{label, value}, ...]`                |
 | `$var`       | binding picker (list array `type`s, e.g. `'string[]'`, to restrict to array variables) | live array variable value via `useStructVariable` / `useVariable`   |
-| `$user`      | field selector (`userList` or `groups`)      | `userList`: `useUsersData()` → `{ label: username, value: userId }`; `groups`: `useUserGroupsData()` → `{ label, value: groupId }` list |
+| `$user`      | field selector (`userList` or `groups`)      | `userList`: `useUsersData()` → `{ label: username, value: username }` (valued by username, which is what `loginUser` takes); `groups`: `useUserGroupsData()` → `{ label, value: groupId }` list |
 | `$languages` | no parameters                                | `useLanguagesData()` → `{ label: code, value: code }` list          |
 
-All four sources are offered automatically for an `option-list` field. At runtime, branch on which source key is present in `properties.<key>`.
+All four sources are offered automatically for an `option-list` field, and so is `$widgetProp` (another widget's exported list, `{ $widgetProp: { componentId, property, path? } }`) — `usePropVar(properties, key)` returns the exported value for it; the built-in `Dropdown` does not resolve this source. At runtime, branch on which source key is present in `properties.<key>`.
 
 ### Property sources
 
@@ -736,11 +815,10 @@ The full catalog of canonical `$`-keyed property sources — each source's shape
 - prefer `hmi-<name>` class prefixes
 - keep component-specific CSS in `style.css`
 - use HMI theme tokens (see table below) for all colors, typography, spacing, and state styling
-- to explore all tokens interactively: open **Config → Admin → Theme Tokens** — searchable, with copy button and current computed value
-- the authoritative token source is `frontend/src/shared/themeDefaults.json` (default values) and `frontend/src/shared/utils/themeTokens.ts` (`THEME_TOKENS` registry: CSS var, JSON path, label, description, sample usage)
+- the authoritative token source is `frontend/src/shared/themeDefaults.json` (default values) and `frontend/src/shared/utils/themeTokens.ts` (`THEME_TOKENS` registry: CSS var, theme JSON path, section, editor input type, label)
 - in addition to the editable primaries, custom components can use derived secondary tokens (`--hmi-surface-2/3`, `--hmi-text-2/3/4`, `--hmi-border-strong`, `--hmi-accent-soft/ink/on`, `--hmi-{ok,warn,fault}-soft`) and shared primitive utility classes (`.hmi-pill`, `.hmi-kicker`, `.hmi-readout`, `.hmi-live-dot`, `.hmi-bar`); see [theming.md](theming.md)
 
-> **Discovering tokens:** In the running app, navigate to **Config → Admin → Theme Tokens**. Every token shows its CSS variable, what it controls, and where in the theme JSON it comes from.
+> **Discovering tokens:** the editable tokens are the ones the **Themes** editor (`/config/theme`) lists, by label; [theming.md](theming.md) maps each to its CSS variable and theme JSON path.
 
 ### Copy-paste quickstart
 
@@ -798,12 +876,10 @@ A minimal component that respects the active theme:
 | Default transition | `--hmi-motion-base` (static, not editable) |
 
 > The colors, typography and spacing/radius/shadow tokens above are **editable in
-> Config → Theme Editor**. Motion (`--hmi-motion-*`) is a static constant.
+> the Themes editor**. Motion (`--hmi-motion-*`) is a static constant.
 >
-> **The back-compat aliases were removed.** `--hmi-font`, `--hmi-text-sm`,
-> `--hmi-space-3`, `--hmi-shadow-md` and the rest of that set no longer resolve —
-> a widget still using one silently loses the declaration. See the mapping table
-> in [theming.md](theming.md#removed-the-back-compat-aliases).
+> Only the tokens in [theming.md](theming.md#theme-tokens) resolve — a widget
+> using any other `--hmi-*` name silently loses that declaration.
 
 ### Full token reference
 
@@ -814,9 +890,9 @@ primitive classes are documented once in
 
 ## Existing examples
 
-The repository ships several reference components under `<project>/custom-widgets/`; browse the directory tree (or `GET /api/widgets`) for the up-to-date list. Common groups today include `Inputs/` (Dropdown, NumberInput, NumericStepper, StringInput, Switch), `Other/` (Gauge, HeaderTime, LedIndicator, LogoTitle, Trend, UserBadge, ValueDisplay, and more), and `Navigation/` (PageHeader, PageMenu, SidebarMenu).
+Every built-in widget under `frontend/widgets/<Group>/<Name>/` is written against this same SDK and folder contract, so the product catalog is the largest set of worked examples: `Layout/Container` and `Layout/Repeater` for hosts, `Inputs/Dropdown` for an `option-list`, `Content/Video` for assets and write-backs, and so on.
 
-Start from `_template/` if you need a new component scaffold.
+A fresh project's `custom-widgets/` is empty. The private dev/test project (`project-testbench/custom-widgets/`, cloned in during development) carries project-level examples — `Examples/` (a three.js scene, a uPlot chart, both through `external-libraries/`), `Navigation/` (PageHeader, PageMenu, SidebarMenu) and `Other/` (AlarmList, HeaderTime, StatusIndicator); browse its tree (or `GET /api/widgets`) for the up-to-date list, and start from its `_template/` for a new scaffold.
 
 ## Testing
 

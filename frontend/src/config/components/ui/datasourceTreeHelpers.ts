@@ -110,6 +110,9 @@ export function parseApiTree(nodes: unknown[], datasource: string, prefix = ''):
         is_array,
         array_length,
         enabled: (n as Record<string, unknown>).enabled === true,
+        ...((n as Record<string, unknown>).present_on_server === false && {
+          present_on_server: false,
+        }),
         writable,
         fields,
         _datasource: datasource,
@@ -208,7 +211,7 @@ export function collectFolderKeys(nodes: TreeNode[], prefix = ''): string[] {
  * Update the variable at `path`. Array-of-struct elements share identical
  * field names across elements (e.g. every element has a field "Field1"), so
  * matching by `path` (not `display_name`) is required to scope the patch to
- * exactly one element instead of every same-named sibling (§3.3). `node_id`
+ * exactly one element instead of every same-named sibling. `node_id`
  * is preferred when present since it's the globally unique OPC-UA identifier.
  */
 export function updateVarInTree(

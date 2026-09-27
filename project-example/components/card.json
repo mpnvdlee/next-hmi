@@ -1,0 +1,144 @@
+{
+  "name": "Card",
+  "description": "The standard surface: border, shadow, an optional title row with a trailing action, and a body the caller fills.",
+  "category": "Brew",
+  "icon": {
+    "type": "builtin",
+    "name": "square"
+  },
+  "componentProperties": {
+    "title": {
+      "type": "string",
+      "label": "Title",
+      "description": "Shown in the title row. Leave the row off for a bare surface."
+    },
+    "showTitle": {
+      "type": "boolean",
+      "label": "Show title row",
+      "description": "An empty string is truthy, so the row needs its own flag.",
+      "defaultValue": true
+    },
+    "action": {
+      "type": "widgets",
+      "label": "Action",
+      "description": "Sits at the end of the title row."
+    },
+    "body": {
+      "type": "widgets",
+      "label": "Body",
+      "description": "The card's content."
+    }
+  },
+  "children": [
+    {
+      "id": "card",
+      "type": "Container",
+      "name": "Card",
+      "properties": {
+        "visible": true,
+        "showWhenEmpty": true,
+        "background": "var(--hmi-surface)",
+        "border": "1px solid var(--hmi-border)",
+        "shadow": "var(--hmi-shadow)"
+      },
+      "layout": {
+        "direction": "column",
+        "gap": "0",
+        "wrap": false,
+        "align": "stretch",
+        "justify": "flex-start",
+        "radius": "var(--hmi-radius-lg)",
+        "grow": 1,
+        "minWidth": "0",
+        "paddingTop": "0",
+        "paddingRight": "0",
+        "paddingBottom": "0",
+        "paddingLeft": "0"
+      },
+      "children": [
+        {
+          "id": "card-head",
+          "type": "Container",
+          "name": "Title row",
+          "properties": {
+            "visible": {
+              "$componentProp": "showTitle"
+            },
+            "showWhenEmpty": true,
+            "background": "transparent"
+          },
+          "layout": {
+            "direction": "row",
+            "gap": "10px",
+            "wrap": false,
+            "align": "center",
+            "justify": "flex-start",
+            "radius": "0",
+            "heightMode": "hug",
+            "widthMode": "fill",
+            "paddingTop": "16px",
+            "paddingRight": "18px",
+            "paddingBottom": "0",
+            "paddingLeft": "18px"
+          },
+          "children": [
+            {
+              "id": "card-title",
+              "type": "Label",
+              "name": "card-title",
+              "properties": {
+                "typography": "subheading",
+                "text": {
+                  "$componentProp": "title"
+                }
+              },
+              "layout": {
+                "widthMode": "hug",
+                "heightMode": "hug"
+              }
+            },
+            {
+              "id": "card-head-sp",
+              "type": "StretchSpacer",
+              "name": "Spacer",
+              "properties": {
+                "mode": "ratio",
+                "ratio": 1
+              },
+              "layout": {
+                "grow": 1,
+                "widthMode": "fill",
+                "heightMode": "hug",
+                "minWidth": "auto"
+              }
+            },
+            {
+              "id": "card-head-slot",
+              "type": "ComponentSlot",
+              "name": "Action",
+              "properties": {
+                "slot": "action"
+              },
+              "layout": {
+                "widthMode": "hug",
+                "heightMode": "hug"
+              }
+            }
+          ]
+        },
+        {
+          "id": "card-body-slot",
+          "type": "ComponentSlot",
+          "name": "Body",
+          "properties": {
+            "slot": "body"
+          },
+          "layout": {
+            "widthMode": "fill",
+            "heightMode": "hug"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -3,27 +3,42 @@ from __future__ import annotations
 import json
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
+from datetime import date, datetime
+from datetime import time as time_of_day
+from pathlib import Path
 from typing import Any
 
-from core.page_index import collect_dialog_ids, collect_dialog_property_keys
+from models.datasource import is_subscribable
+
+from core.builtin_widgets_manifest import CatalogVersion, builtin_widgets_catalog
+from core.page_index import (
+    INDEX_ROOTS,
+    collect_group_ancestors,
+    collect_page_group_properties,
+    collect_page_group_property_keys,
+    declared_properties,
+    iter_page_groups,
+    page_document_files,
+    root_nodes,
+)
 from core.page_index import collect_page_ids as _index_collect_page_ids
-from core.stdlib_manifest import CatalogVersion, stdlib_catalog
 from core.storage import (
     WIDGET_BUILD_DIR,
     active_components_dir,
     active_config_dir,
     active_icons_dir,
     active_images_dir,
-    active_pages_dir,
     active_project_root,
     active_translations_dir,
+    active_videos_dir,
     read_csv,
     read_json,
 )
 from core.value_types import to_simple_type
 
-from . import vartype
+from . import component_property, source_rules, vartype
 from .ids import is_valid_page_id
 from .report import ValidationReport
 
@@ -37,6 +52,8 @@ PROPERTY_SOURCE_KEYS = frozenset({
     "$if",
     "$switch",
     "$compare",
+    "$not",
+    "$formula",
     "$random",
     "$user",
     "$userGroups",
@@ -55,6 +72,7 @@ PROPERTY_SOURCE_KEYS = frozenset({
     "$result",
     "$recipe",
     "$recipeList",
+    "$repeatItem",
 })
 
 # Atomic schema field types that admit type checking on static literals.
@@ -72,12 +90,29 @@ _ATOMIC_TYPE_CHECKS = {
     "duration": (str, int, float),
 }
 
+# A value's type as the editor names it — capitalised like every type the
+# editor shows ("Float", "Boolean").
+_PY_TYPE_LABELS = {
+    "bool": "Boolean",
+    "int": "Integer",
+    "float": "Float",
+    "str": "String",
+    "list": "Array",
+    "dict": "Object",
+}
+
+
+def _type_label(field_type: str) -> str:
+    return vartype.known_base(field_type) or field_type[:1].upper() + field_type[1:]
+
+
 # Property keys every widget node accepts regardless of its declared schema.
 # WidgetRenderer reads them straight off `node.properties` before it consults the
 # registry entry, so they are honoured on custom widgets and `$component:`
 # instances too — neither of which carries them in its schema. Mirrors
-# VISIBILITY_SCHEMA in frontend/src/hmi/registry/widgetRegistry.tsx; parity is
-# fixture-tested in test_structure_parity.py.
+# VISIBILITY_SCHEMA in frontend/src/hmi/registry/widgetRegistry.tsx, which the
+# registry merges into every widget; parity is fixture-tested in
+# test_structure_parity.py.
 _UNIVERSAL_PROPERTY_KEYS: frozenset[str] = frozenset({"visible", "interactable"})
 
 _COMPONENT_TYPE_PREFIX = "$component:"
@@ -95,6 +130,11 @@ class ValidationContext:
     # existence/type checks are skipped for it, mirroring the pre-typed
     # behaviour (best-effort, never false-positives a fresh/unstarted pool).
     datasource_registry: dict[str, dict[str, dict]] = field(default_factory=dict)
+    # datasource -> scalar variable path -> writable, from the same source as
+    # the registry. Only `True` makes a variable writable: one the registry
+    # knows but this map does not — or a datasource missing here altogether —
+    # is read-only, as the binding picker reads it.
+    datasource_writable: dict[str, dict[str, bool]] = field(default_factory=dict)
     # datasource -> declared type ('opcua-client' | 'static' | 'opcua-test-server').
     # A test server is a simulator the product *serves*, never a binding target:
     # bindings must go through an opcua-client pointed at it (see validate_var_ref).
@@ -105,9 +145,17 @@ class ValidationContext:
     # than reporting every group as unknown.
     user_groups: frozenset[str] = field(default_factory=frozenset)
     page_ids: set[str] = field(default_factory=set)
+    # Ids of the nodes in the navigable ``pages`` root of the index. A page
+    # there has no input scope: only the Dialogs folder's pages take input
+    # parameters, so a ``$componentProp`` on one of these reads nothing.
+    navigable_page_ids: frozenset[str] = field(default_factory=frozenset)
+    # Ids of the nodes in the ``dialogs`` root. Nothing routes to one, so a
+    # field that *navigates* — a menu item, a `format: 'page'` property —
+    # naming one points at a screen the runtime will never show. Empty when the
+    # index wasn't read, which skips the check rather than flagging every page.
+    dialogs_page_ids: frozenset[str] = field(default_factory=frozenset)
     component_ids: set[str] = field(default_factory=set)
-    dialog_ids: set[str] = field(default_factory=set)
-    # Component/dialog id -> the property names its interface declares. A missing
+    # Component id -> the property names its interface declares. A missing
     # id means the interface wasn't collected (fresh checkout / deploy runtime) —
     # best-effort, skip rather than false-positive an unknown-property warning.
     component_property_keys: dict[str, frozenset[str]] = field(default_factory=dict)
@@ -115,18 +163,73 @@ class ValidationContext:
     # of an instance carries the slot it fills; a name not in this set means the
     # definition dropped that slot and the child now renders in the first one.
     component_slots: dict[str, frozenset[str]] = field(default_factory=dict)
-    dialog_property_keys: dict[str, frozenset[str]] = field(default_factory=dict)
+    # Page *or page-group* id -> the property names its ``componentProperties``
+    # declares, which the openDialog action fills. Only the Dialogs folder's
+    # nodes take input parameters, so a node in the ``pages`` root maps to the
+    # empty set whatever it stores.
+    page_property_keys: dict[str, frozenset[str]] = field(default_factory=dict)
+    # The declarations behind ``component_property_keys`` / ``page_property_keys``
+    # (name -> ``componentProperties`` entry), for typing what fills or reads
+    # them. A missing id means the declarations are unknown — the type checks
+    # skip it.
+    component_properties: dict[str, dict[str, dict]] = field(default_factory=dict)
+    page_properties: dict[str, dict[str, dict]] = field(default_factory=dict)
+    # Dialogs-folder node id -> the page groups it nests in, innermost first.
+    dialog_ancestors: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # False while walking a page that has no input scope (see
+    # ``navigable_page_ids``); ``validate_page`` sets it on its own copy.
+    input_scope: bool = True
+    # The input parameters a `$componentProp` reads in the scope being walked
+    # (name -> declaration), innermost declaration winning. None where the scope
+    # is not known, which skips `componentprop-type` / `componentprop-unknown`.
+    input_schema: dict[str, dict] | None = None
+    # False where a mismatched literal is a diagnostic rather than a rejected
+    # write: values whose type was never checked before (a component instance's
+    # properties, an action's fields).
+    literals_block: bool = True
+    # Widget id -> (widget type, the column keys it offers as struct fields) for
+    # the artifact being walked, and the same per saved artifact of the project
+    # ("page:<id>", "component:<id>", "shell", "group:<id>"). A `$widgetProp`
+    # names a widget found in the first, else in any other than `artifact_key`
+    # (whose saved copy the draft replaces). No local index skips the check.
+    widget_index: dict[str, tuple[str, tuple[str, ...]]] | None = None
+    project_widgets: dict[str, dict[str, tuple[str, tuple[str, ...]]]] = field(default_factory=dict)
+    artifact_key: str | None = None
+    # (datasource, variable path) -> the variable's entry as the write path
+    # coerces against it (`data_type`, `is_array`, `array_length`, `min`,
+    # `max`): the live pool's, else the datasource file's. None skips
+    # `write-value-type`.
+    datasource_entry: Callable[[str, str], dict | None] | None = field(default=None, repr=False)
+    # True while walking the children of a Repeater: only there does
+    # `$repeatItem` (or a Repeat-item write target) have an element to read.
+    repeat_scope: bool = False
+    # The innermost Repeater's `items` value, for typing a `$repeatItem` against
+    # its field. None where the items are unknown (a component definition).
+    repeat_items: Any = None
+    # Element folders of the registry's struct arrays, for judging a binding's
+    # required members against one element. build_context shares the index
+    # cached with the registry; a hand-built context indexes its own.
+    _struct_elements: _StructElements | None = field(default=None, repr=False)
     # Keys of the active (Default) translation dictionary.
     translation_keys: frozenset[str] = field(default_factory=frozenset)
     # Curated built-in icon ids — mirrors frontend/src/shared/config/iconAllowlist.ts.
     builtin_icons: frozenset[str] = field(default_factory=lambda: _BUILTIN_ICON_IDS)
-    # Relative asset paths ("icons/<name>" / "images/<name>") under the active project.
+    # Relative asset paths ("icons/<name>" / "images/<name>" / "videos/<name>")
+    # under the active project.
     icon_assets: frozenset[str] = field(default_factory=frozenset)
     image_assets: frozenset[str] = field(default_factory=frozenset)
+    video_assets: frozenset[str] = field(default_factory=frozenset)
     # declared_property_keys() memo, keyed by widget type — a node walk resolves
     # the same widget type repeatedly (e.g. every Button on a page), and the
     # result only depends on widget_type for the lifetime of this context.
     _declared_keys_cache: dict[str, frozenset[str]] = field(default_factory=dict, repr=False)
+    _component_schema_cache: dict[str, dict] = field(default_factory=dict, repr=False)
+
+    @property
+    def struct_elements(self) -> _StructElements:
+        if self._struct_elements is None or self._struct_elements.registry is not self.datasource_registry:
+            self._struct_elements = _StructElements(self.datasource_registry)
+        return self._struct_elements
 
     def widget_schema_for(self, widget_type: str) -> dict | None:
         """Field-level schema for ``widget_type``, or None if the type is unknown.
@@ -144,24 +247,75 @@ class ValidationContext:
             component_id = _component_id(widget_type)
             if self.component_ids and component_id not in self.component_ids:
                 return None
-            return {}
+            return self._component_schema(component_id)
         # Custom widgets take precedence over builtins of the same name, and a
         # name collision across custom-widget groups resolves to the last entry
         # in manifest order — both mirror the frontend loader, which overwrites
         # any registry entry sharing the widget's name and iterates groups in
         # the same (alphabetical) order the manifest is built in.
+        entry = self._widget_entry(widget_type)
+        return None if entry is None else entry.get("schema", {})
+
+    def _component_schema(self, component_id: str) -> dict:
+        """A component's declared properties as schema fields — what its
+        instances' values are checked against, as the instance panel edits them.
+        A slot (`widgets`) holds no value, so it is left out. Empty when the
+        declarations are unknown."""
+        cached = self._component_schema_cache.get(component_id)
+        if cached is None:
+            declared = self.component_properties.get(component_id) or {}
+            cached = {
+                name: component_property.to_schema_field(decl)
+                for name, decl in declared.items()
+                if str(decl.get("type", "")).strip().lower() != "widgets"
+            }
+            self._component_schema_cache[component_id] = cached
+        return cached
+
+    def _widget_entry(self, widget_type: str) -> dict | None:
         custom = self.widget_schemas.get("custom", {})
         # custom keys are "<Group>/<Name>" but widget types in pages are "<Name>".
         matched: dict | None = None
         for key, entry in custom.items():
             if key.split("/")[-1] == widget_type:
-                matched = entry.get("schema", {})
+                matched = entry
         if matched is not None:
             return matched
-        builtin = self.widget_schemas.get("builtin", {})
-        if widget_type in builtin:
-            return builtin[widget_type].get("schema", {})
-        return None
+        return self.widget_schemas.get("builtin", {}).get(widget_type)
+
+    def widget_exports(self, widget_type: str) -> list[dict] | None:
+        """The properties a widget type exports to `$widgetProp`, or None when
+        they are not known: a component, an unknown type, a custom widget whose
+        schema could not be extracted, or a row that carries no export list.
+
+        A built-in's list wins whenever the catalog has one, as a built-in wins
+        a name clash in ``load_widget_manifest``: a `widget-schemas.json` left
+        in the runtime home can still hold a custom row for a widget that has
+        since become a built-in. The custom-widget extractor writes a list only
+        for a widget that declares exports, and an older build may lack it
+        altogether, so a custom row without one is not taken to export nothing."""
+        if widget_type.startswith(_COMPONENT_TYPE_PREFIX):
+            return None
+        builtin = self.widget_schemas.get("builtin", {}).get(widget_type)
+        if isinstance(builtin, dict) and isinstance(builtin.get("exportedProperties"), list):
+            entry: dict | None = builtin
+        else:
+            entry = self._widget_entry(widget_type)
+        if not isinstance(entry, dict) or entry.get("schemaError"):
+            return None
+        exported = entry.get("exportedProperties")
+        if not isinstance(exported, list):
+            return None
+        return [e for e in exported if isinstance(e, dict) and isinstance(e.get("key"), str)]
+
+    def repeat_items_key(self, widget_type: str) -> str | None:
+        """The item-list property a type declares with `repeatsChildren`: its
+        children are drawn once per element, each copy a repeat scope."""
+        if widget_type.startswith(_COMPONENT_TYPE_PREFIX):
+            return None
+        entry = self._widget_entry(widget_type)
+        key = entry.get("repeatsChildren") if isinstance(entry, dict) else None
+        return key if isinstance(key, str) and key else None
 
     def declared_property_keys(self, widget_type: str, schema: dict) -> frozenset[str] | None:
         """Property names the target's interface declares, or None when no
@@ -198,29 +352,29 @@ def load_widget_manifest() -> dict:
     fresh checkouts where Vite hasn't run; validators degrade to type-existence
     checks only.
 
-    Stdlib widgets are overlaid onto ``builtin`` here rather than baked into
+    Built-in widgets are overlaid onto ``builtin`` here rather than baked into
     ``widget-schemas.json`` by the compiler. They ship with the product, so they
     have to be visible even in a runtime home that has never compiled — and
     keeping them out of the file leaves it describing exactly what that compile
     produced.
 
-    Stdlib wins a name clash. The stdlib manifest is built from, and ships with,
-    the running bundle; ``widget-schemas.json`` lives in the runtime home and
-    survives upgrades, so it can still describe a registry entry for a widget
-    that has since moved out to the stdlib. Letting that stale row win would
-    shadow the shipped widget with an older schema.
+    A built-in widget wins a name clash. The built-in-widgets manifest is built
+    from, and ships with, the running bundle; ``widget-schemas.json`` lives in
+    the runtime home and survives upgrades, so it can still describe a registry
+    entry for a widget that has since moved to the built-in catalog. Letting
+    that stale row win would shadow the shipped widget with an older schema.
 
     Cached on both inputs' mtimes — every page-write validation reads this, so
-    the stdlib catalog and its version come back from one call rather than
+    the built-in catalog and its version come back from one call rather than
     re-resolving the manifest path and re-stat'ing both halves per lookup.
     """
     global _manifest_cache
-    stdlib_version, stdlib_entries = stdlib_catalog()
+    builtin_widgets_version, builtin_widgets_entries = builtin_widgets_catalog()
     try:
         mtime = WIDGET_SCHEMAS_PATH.stat().st_mtime_ns
     except FileNotFoundError:
         mtime = 0
-    key = (mtime, stdlib_version)
+    key = (mtime, builtin_widgets_version)
     if _manifest_cache is not None and _manifest_cache[0] == key:
         return _manifest_cache[1]
 
@@ -238,7 +392,7 @@ def load_widget_manifest() -> dict:
         **manifest,
         "builtin": {
             **(builtin if isinstance(builtin, dict) else {}),
-            **stdlib_entries,
+            **builtin_widgets_entries,
         },
     }
     _manifest_cache = (key, merged)
@@ -247,8 +401,8 @@ def load_widget_manifest() -> dict:
 
 # config.json is read once and cached by mtime, so a single build_context() — and a
 # multi-page save batch, which never rewrites config.json — parses it at most once;
-# both page-group ids and dialog ids derive from this one read. Process-local, like
-# the manifest/datasource caches above.
+# the page-group ids and both index roots derive from this one read. Process-local,
+# like the manifest/datasource caches above.
 _config_cache: tuple[int, dict] | None = None
 
 
@@ -271,29 +425,190 @@ def _read_config() -> dict:
     return doc
 
 
-def _page_stems() -> frozenset[str]:
-    pages_dir = active_pages_dir()
-    if not pages_dir.exists():
-        return frozenset()
-    return frozenset(
-        p.stem for p in pages_dir.glob("*.json") if not p.stem.startswith("__")
+def _page_stems(files: list[Path] | None = None) -> frozenset[str]:
+    return frozenset(p.stem for p in (page_document_files() if files is None else files))
+
+
+def _column_fields(properties: Any) -> tuple[str, ...]:
+    """The row fields a widget's `columns` property names — what the
+    `$widgetProp` picker offers below a `Struct` export (the grid convention:
+    each column's `value` is a row field)."""
+    columns = properties.get("columns") if isinstance(properties, dict) else None
+    if not isinstance(columns, list):
+        return ()
+    fields = (c.get("value") for c in columns if isinstance(c, dict))
+    return tuple(dict.fromkeys(f for f in fields if isinstance(f, str) and f))
+
+
+_WidgetIndex = dict[str, tuple[str, tuple[str, ...]]]
+
+
+def index_widgets(nodes: Any, out: _WidgetIndex | None = None) -> _WidgetIndex:
+    """Widget id -> (widget type, its column fields) for every node of a widget
+    tree — what a `$widgetProp` in the same artifact can name."""
+    if out is None:
+        out = {}
+    if not isinstance(nodes, list):
+        return out
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        wid, wtype = node.get("id"), node.get("type")
+        if isinstance(wid, str) and wid and isinstance(wtype, str) and wtype:
+            out.setdefault(wid, (wtype, _column_fields(node.get("properties"))))
+        index_widgets(node.get("children"), out)
+    return out
+
+
+def _page_widgets(page: Any) -> _WidgetIndex:
+    out: _WidgetIndex = {}
+    sections = page.get("sections") if isinstance(page, dict) else None
+    if isinstance(sections, dict):
+        for children in sections.values():
+            index_widgets(children, out)
+    return out
+
+
+def _config_widgets(config: Any) -> dict[str, _WidgetIndex]:
+    """The shell's widgets, and each page group's header/footer chrome, per
+    artifact (see ``ValidationContext.project_widgets``)."""
+    shell: _WidgetIndex = {}
+    for area in _SHELL_REGIONS:
+        index_widgets(config.get(area) if isinstance(config, dict) else None, shell)
+    out = {"shell": shell}
+    for root in INDEX_ROOTS:
+        for node, _path in iter_page_groups(root_nodes(config, root)):
+            gid = node.get("id")
+            if isinstance(gid, str) and gid:
+                chrome: _WidgetIndex = {}
+                for band in ("header", "footer"):
+                    index_widgets(node.get(band), chrome)
+                out[f"group:{gid}"] = chrome
+    return out
+
+
+# (property names, declarations, widget index) per page file id.
+_PageFileScan = tuple[dict[str, frozenset[str]], dict[str, dict[str, dict]], dict[str, _WidgetIndex]]
+
+_page_files_cache: tuple[frozenset[tuple[str, int]], _PageFileScan] | None = None
+
+
+def _scan_page_files(files: list[Path] | None = None) -> _PageFileScan:
+    """Page id (file stem) -> the property names its ``componentProperties``
+    declares, those declarations, and its widgets.
+
+    Fingerprint-cached (name + mtime per file) like ``_collect_component_interfaces``
+    — this opens every page file, and every debounced ``POST /api/config/validate``
+    call rebuilds the context. ``files`` lets a caller that already listed the
+    document directories pass the listing in rather than pay for a second one.
+    """
+    global _page_files_cache
+    if files is None:
+        files = page_document_files()
+    if not files:
+        _page_files_cache = None
+        return {}, {}, {}
+    # The path, not the bare name: the same id can only be in one directory, but
+    # a move between them is a change this cache has to notice.
+    fingerprint = frozenset((str(p), p.stat().st_mtime_ns) for p in files)
+    if _page_files_cache is not None and _page_files_cache[0] == fingerprint:
+        return _page_files_cache[1]
+    keys: dict[str, frozenset[str]] = {}
+    declarations: dict[str, dict[str, dict]] = {}
+    widgets: dict[str, _WidgetIndex] = {}
+    for path in files:
+        try:
+            doc = read_json(path)
+        except Exception:
+            # A hand-edited page must not break an advisory sweep; the page API
+            # reports its own parse errors.
+            continue
+        if not isinstance(doc, dict):
+            # Leave the id uncollected rather than collecting it as declaring
+            # nothing: `declared is not None` is what gates the check, so an
+            # empty set would flag every argument a caller passes to a page
+            # whose file is merely malformed. Skip rather than false-positive.
+            continue
+        declared = doc.get("componentProperties")
+        keys[path.stem] = frozenset(declared) if isinstance(declared, dict) else frozenset()
+        declarations[path.stem] = declared_properties(doc)
+        widgets[path.stem] = _page_widgets(doc)
+    scan = (keys, declarations, widgets)
+    _page_files_cache = (fingerprint, scan)
+    return scan
+
+
+def _collect_page_file_property_keys(files: list[Path] | None = None) -> dict[str, frozenset[str]]:
+    """Page id (file stem) -> the property names its ``componentProperties`` declares."""
+    return _scan_page_files(files)[0]
+
+
+def collect_page_property_keys(
+    config: Any = None, files: list[Path] | None = None
+) -> dict[str, frozenset[str]]:
+    """Page or page-group id -> its declared input parameters (see
+    ``ValidationContext.page_property_keys``).
+
+    Defaults to the on-disk index; a caller validating an unsaved index body
+    (``PUT /api/config``'s payload, which may move a node between roots) passes
+    it here instead so ids are resolved against the roots it assigns, not the
+    index this same request is about to replace.
+    """
+    if config is None:
+        config = _read_config()
+    in_dialogs_folder = _index_collect_page_ids(root_nodes(config, "dialogs"))
+    keys: dict[str, frozenset[str]] = dict.fromkeys(
+        _index_collect_page_ids(root_nodes(config, "pages")), frozenset()
     )
+    keys.update(
+        (page_id, declared)
+        for page_id, declared in _collect_page_file_property_keys(files).items()
+        if page_id in in_dialogs_folder
+    )
+    keys.update(collect_page_group_property_keys(root_nodes(config, "dialogs")))
+    return keys
 
 
-def _collect_page_ids() -> set[str]:
-    # Page ids = page-file stems union page-group ids from the config index.
-    pages = _read_config().get("pages")
-    ids: set[str] = set(_page_stems())
-    ids |= _index_collect_page_ids(pages if isinstance(pages, list) else [])
-    return ids
+def collect_page_properties(
+    config: Any = None, files: list[Path] | None = None
+) -> dict[str, dict[str, dict]]:
+    """Page or page-group id -> its input-parameter declarations — the
+    declarations behind ``collect_page_property_keys``, resolved the same way."""
+    if config is None:
+        config = _read_config()
+    in_dialogs_folder = _index_collect_page_ids(root_nodes(config, "dialogs"))
+    declared: dict[str, dict[str, dict]] = {
+        page_id: {} for page_id in _index_collect_page_ids(root_nodes(config, "pages"))
+    }
+    declared.update(
+        (page_id, decls)
+        for page_id, decls in _scan_page_files(files)[1].items()
+        if page_id in in_dialogs_folder
+    )
+    declared.update(collect_page_group_properties(root_nodes(config, "dialogs")))
+    return declared
+
+
+def collect_dialog_ancestors(config: Any = None) -> dict[str, tuple[str, ...]]:
+    """Dialogs-folder node id -> the page groups it nests in, innermost first."""
+    if config is None:
+        config = _read_config()
+    return collect_group_ancestors(root_nodes(config, "dialogs"))
 
 
 _ComponentInterfaces = tuple[dict[str, frozenset[str]], dict[str, frozenset[str]]]
+# (property names, slot names, declarations, widget index) per component id.
+_ComponentScan = tuple[
+    dict[str, frozenset[str]],
+    dict[str, frozenset[str]],
+    dict[str, dict[str, dict]],
+    dict[str, _WidgetIndex],
+]
 
-_component_interface_cache: tuple[frozenset[tuple[str, int]], _ComponentInterfaces] | None = None
+_component_interface_cache: tuple[frozenset[tuple[str, int]], _ComponentScan] | None = None
 
 # Slot name a ComponentSlot falls back to when its ``slot`` property is blank.
-# Mirrors DEFAULT_SLOT_KEY in frontend/src/hmi/components/ComponentSlot/slotKey.ts.
+# Mirrors DEFAULT_SLOT_KEY in frontend/src/shared/utils/componentSlots.ts.
 _DEFAULT_SLOT_KEY = "content"
 
 
@@ -358,8 +673,9 @@ def component_undeclared_slots(component: Any) -> list[tuple[str, str]]:
     return [(path, key) for path, key in _slot_nodes(nodes) if key not in declared]
 
 
-def _collect_component_interfaces() -> _ComponentInterfaces:
-    """Component id (file stem) -> its declared property names, and -> its slot names.
+def _scan_components() -> _ComponentScan:
+    """Component id (file stem) -> its declared property names, its slot names,
+    its declarations and its widgets.
 
     Recursive: components live in nested group folders (``components/<group>/<id>.json``),
     so a flat glob would miss most of them. Fingerprint-cached (relative path +
@@ -370,7 +686,7 @@ def _collect_component_interfaces() -> _ComponentInterfaces:
     root = active_components_dir()
     if not root.exists():
         _component_interface_cache = None
-        return {}, {}
+        return {}, {}, {}, {}
     files = [
         p for p in root.rglob("*.json")
         if p.is_file() and not p.stem.startswith("__")
@@ -382,6 +698,8 @@ def _collect_component_interfaces() -> _ComponentInterfaces:
         return _component_interface_cache[1]
     keys: dict[str, frozenset[str]] = {}
     slots: dict[str, frozenset[str]] = {}
+    declarations: dict[str, dict[str, dict]] = {}
+    widgets: dict[str, _WidgetIndex] = {}
     for path in files:
         try:
             doc = read_json(path)
@@ -393,26 +711,29 @@ def _collect_component_interfaces() -> _ComponentInterfaces:
             continue
         declared = doc.get("componentProperties")
         keys[path.stem] = frozenset(declared) if isinstance(declared, dict) else frozenset()
+        declarations[path.stem] = declared_properties(doc)
         found: set[str] = set()
         _collect_slot_keys(doc.get("children"), found)
         slots[path.stem] = frozenset(found)
-    _component_interface_cache = (fingerprint, (keys, slots))
+        widgets[path.stem] = index_widgets(doc.get("children"))
+    scan = (keys, slots, declarations, widgets)
+    _component_interface_cache = (fingerprint, scan)
+    return scan
+
+
+def _collect_component_interfaces() -> _ComponentInterfaces:
+    """Component id (file stem) -> its declared property names, and -> its slot names."""
+    keys, slots, _declarations, _widgets = _scan_components()
     return keys, slots
 
 
-def _collect_dialog_ids() -> set[str]:
-    dialogs = _read_config().get("dialogs")
-    return collect_dialog_ids(dialogs if isinstance(dialogs, list) else [])
+_Registry = dict[str, dict[str, dict]]
+_Writable = dict[str, dict[str, bool]]
 
+# datasource -> variable path -> the leaf as its datasource file declares it.
+_Entries = dict[str, dict[str, dict]]
 
-def _collect_dialog_property_keys() -> dict[str, frozenset[str]]:
-    dialogs = _read_config().get("dialogs")
-    return collect_dialog_property_keys(dialogs if isinstance(dialogs, list) else [])
-
-
-_ds_scan_cache: tuple[
-    frozenset[tuple[str, int]], dict[str, dict[str, dict]], dict[str, str]
-] | None = None
+_ds_scan_cache: tuple[frozenset[tuple[str, int]], _Registry, _Writable, dict[str, str], _Entries] | None = None
 
 # variable_metadata() walks every subscribable variable across all datasources
 # under datasource_manager's lock — real cost on a live plant with many tags.
@@ -420,11 +741,12 @@ _ds_scan_cache: tuple[
 # thus this) once per debounced keystroke, so a short TTL collapses a burst of
 # rapid edits into one recompute instead of re-walking the pool per keystroke.
 _LIVE_REGISTRY_TTL_S = 0.25
-_live_registry_cache: tuple[float, dict[str, dict[str, dict]]] | None = None
+_live_registry_cache: tuple[float, _Registry, _Writable] | None = None
 
 
-def _collect_datasource_registry() -> dict[str, dict[str, dict]]:
-    """Best-effort: query the running datasource_manager for typed variables.
+def _collect_datasource_registry() -> tuple[_Registry, _Writable]:
+    """Best-effort: query the running datasource_manager for typed variables
+    and their writability.
 
     ``variable_metadata()`` already emits VarType-shaped dicts (kind/base/
     array/length or kind/name/array/fields) — the exact JSON shape
@@ -438,8 +760,9 @@ def _collect_datasource_registry() -> dict[str, dict[str, dict]]:
     global _live_registry_cache
     now = time.monotonic()
     if _live_registry_cache is not None and now - _live_registry_cache[0] < _LIVE_REGISTRY_TTL_S:
-        return _live_registry_cache[1]
-    registry: dict[str, dict[str, dict]] = {}
+        return _live_registry_cache[1], _live_registry_cache[2]
+    registry: _Registry = {}
+    writable: _Writable = {}
     try:
         from models.datasource import parse_var_key
         from services.datasource_manager import datasource_manager
@@ -451,26 +774,74 @@ def _collect_datasource_registry() -> dict[str, dict[str, dict]]:
             var_type = meta.get("type") if isinstance(meta, dict) else None
             if isinstance(var_type, dict):
                 registry.setdefault(ds_name, {})[var_path] = var_type
+                if isinstance(meta.get("writable"), bool):
+                    writable.setdefault(ds_name, {})[var_path] = meta["writable"]
     except Exception:
-        registry = {}
+        registry, writable = {}, {}
     if registry:
-        _live_registry_cache = (now, registry)
-        return registry
-    return _scan_datasources_from_disk()[0]
+        _live_registry_cache = (now, registry, writable)
+        return registry, writable
+    scanned = _scan_datasources_from_disk()
+    return scanned[0], scanned[1]
 
 
-def _walk_variable_tree(nodes: Any, prefix: str, out: dict[str, dict]) -> None:
-    """Recursively derive typed VarTypes from a datasource JSON's declared
-    ``variables`` tree (folders/variables, as authored — not the runtime
-    pool's resolved registry). Best-effort mirror of DatasourceEntry's own
-    folder/array-of-struct detection, precise enough for pre-pool validation."""
+def _element_order(name: str) -> int:
+    match = _ELEMENT_FOLDER.search(name)
+    return int(match.group(1)) if match else 0
+
+
+def _disk_struct_fields(children: list, path: str, is_array: bool, out: dict[str, dict]) -> list[str]:
+    """A folder's struct fields the way DatasourceEntry lists them: its leaf
+    children plus its sub-folders that are structs themselves; for an array,
+    its first element's fields. `out` must already hold the sub-folders."""
+    leaves = [
+        child["display_name"]
+        for child in children
+        if isinstance(child, dict)
+        and child.get("kind") != "folder"
+        and isinstance(child.get("display_name"), str)
+        and child["display_name"]
+    ]
+    # Folder names are kept as authored: an OPC-UA namespace folder may itself
+    # contain a `/`, so a name cannot be read back off its path.
+    folders = [
+        child["name"]
+        for child in children
+        if isinstance(child, dict)
+        and child.get("kind") == "folder"
+        and isinstance(child.get("name"), str)
+        and child["name"]
+    ]
+    if is_array:
+        elements = sorted(folders, key=_element_order)
+        first = out.get(f"{path}/{elements[0]}") if elements else None
+        if isinstance(first, dict) and first.get("kind") == "struct":
+            return list(first.get("fields") or [])
+        return leaves
+    nested = [name for name in folders if (out.get(f"{path}/{name}") or {}).get("kind") == "struct"]
+    return leaves + nested
+
+
+def _walk_variable_tree(
+    nodes: Any,
+    prefix: str,
+    out: dict[str, dict],
+    writable: dict[str, bool],
+    entries: dict[str, dict] | None = None,
+) -> None:
+    """Recursively derive typed VarTypes (into `out`) and leaf writability
+    (into `writable`) from a datasource JSON's declared ``variables`` tree
+    (folders/variables, as authored — not the runtime pool's resolved
+    registry). Mirrors DatasourceEntry's folder registry, so a folder is a
+    struct exactly when the live registry would list it, with the same
+    fields."""
     if not isinstance(nodes, list):
         return
     for node in nodes:
         if not isinstance(node, dict):
             continue
         kind = node.get("kind")
-        name = node.get("display_name") if kind == "variable" else node.get("name")
+        name = node.get("name") if kind == "folder" else node.get("display_name")
         if not isinstance(name, str) or not name:
             continue
         path = f"{prefix}/{name}" if prefix else name
@@ -478,14 +849,9 @@ def _walk_variable_tree(nodes: Any, prefix: str, out: dict[str, dict]) -> None:
             children = node.get("children")
             if not isinstance(children, list):
                 continue
+            _walk_variable_tree(children, path, out, writable, entries)
             is_array = bool(node.get("is_array"))
-            field_names = [
-                child.get("display_name")
-                for child in children
-                if isinstance(child, dict)
-                and child.get("kind") == "variable"
-                and isinstance(child.get("display_name"), str)
-            ]
+            field_names = _disk_struct_fields(children, path, is_array, out)
             if field_names or is_array:
                 out[path] = vartype.node_var_type({
                     "data_type": "struct",
@@ -493,8 +859,10 @@ def _walk_variable_tree(nodes: Any, prefix: str, out: dict[str, dict]) -> None:
                     "array_length": node.get("array_length"),
                     "fields": field_names,
                 })
-            _walk_variable_tree(children, path, out)
-        elif kind == "variable":
+        elif is_subscribable(node):
+            # A disabled or stale leaf is no variable the pool serves, so the
+            # live registry leaves it out; it still counts among its struct's
+            # fields (see _disk_struct_fields), as it does there.
             raw_type = node.get("data_type")
             simple = to_simple_type(raw_type, as_array_suffix=False) if isinstance(raw_type, str) else "String"
             out[path] = vartype.node_var_type({
@@ -502,26 +870,32 @@ def _walk_variable_tree(nodes: Any, prefix: str, out: dict[str, dict]) -> None:
                 "is_array": bool(node.get("is_array")),
                 "array_length": node.get("array_length"),
             })
+            writable[path] = node.get("writable") is True
+            if entries is not None:
+                entries[path] = node
 
 
-def _scan_datasources_from_disk() -> tuple[dict[str, dict[str, dict]], dict[str, str]]:
-    """(variable registry, declared datasource type) per datasource, from the
-    project's ``datasources/*.json`` — one mtime-keyed scan feeds both."""
+def _scan_datasources_from_disk() -> tuple[_Registry, _Writable, dict[str, str]]:
+    """(variable registry, leaf writability, declared datasource type) per
+    datasource, from the project's ``datasources/*.json`` — one mtime-keyed
+    scan feeds all three."""
     global _ds_scan_cache
     from core.storage import active_datasources_dir
 
     datasources_dir = active_datasources_dir()
     if not datasources_dir.exists():
         _ds_scan_cache = None
-        return {}, {}
+        return {}, {}, {}
     files = sorted(datasources_dir.glob("*.json"))
     fingerprint = frozenset(
         (str(p), p.stat().st_mtime_ns) for p in files
     )
     if _ds_scan_cache is not None and _ds_scan_cache[0] == fingerprint:
-        return _ds_scan_cache[1], _ds_scan_cache[2]
-    registry: dict[str, dict[str, dict]] = {}
+        return _ds_scan_cache[1], _ds_scan_cache[2], _ds_scan_cache[3]
+    registry: _Registry = {}
+    writable: _Writable = {}
     ds_types: dict[str, str] = {}
+    entries: _Entries = {}
     for path in files:
         try:
             doc = read_json(path)
@@ -531,14 +905,45 @@ def _scan_datasources_from_disk() -> tuple[dict[str, dict[str, dict]], dict[str,
         if not isinstance(name, str):
             name = path.stem
         types: dict[str, dict] = {}
+        access: dict[str, bool] = {}
+        leaves: dict[str, dict] = {}
         variables = doc.get("variables") if isinstance(doc, dict) else None
-        _walk_variable_tree(variables, "", types)
+        _walk_variable_tree(variables, "", types, access, leaves)
         registry[name] = types
+        writable[name] = access
+        entries[name] = leaves
         ds_type = doc.get("type") if isinstance(doc, dict) else None
         if isinstance(ds_type, str):
             ds_types[name] = ds_type
-    _ds_scan_cache = (fingerprint, registry, ds_types)
-    return registry, ds_types
+    _ds_scan_cache = (fingerprint, registry, writable, ds_types, entries)
+    return registry, writable, ds_types
+
+
+def _datasource_entry_lookup() -> Callable[[str, str], dict | None]:
+    """A variable's entry as ``write_service`` coerces a write against it: the
+    live pool's when it serves the datasource, else the datasource file's.
+
+    One per context: the disk declarations are resolved on first use and then
+    kept, so a page full of write actions does not re-stat every datasource
+    file per action on each debounced validate."""
+    disk: _Entries | None = None
+
+    def lookup(ds_name: str, var_path: str) -> dict | None:
+        nonlocal disk
+        try:
+            from services.datasource_manager import datasource_manager
+
+            if ds_name in datasource_manager.datasources:
+                entry = datasource_manager.get_entry(ds_name, var_path)
+                return entry if isinstance(entry, dict) else None
+        except Exception:
+            pass
+        if disk is None:
+            _scan_datasources_from_disk()
+            disk = _ds_scan_cache[4] if _ds_scan_cache is not None else {}
+        return (disk.get(ds_name) or {}).get(var_path)
+
+    return lookup
 
 
 def _collect_datasource_types() -> dict[str, str]:
@@ -556,7 +961,7 @@ def _collect_datasource_types() -> dict[str, str]:
         live = {}
     if live:
         return live
-    return _scan_datasources_from_disk()[1]
+    return _scan_datasources_from_disk()[2]
 
 
 # Curated built-in icon ids — mirrors frontend/src/shared/config/iconAllowlist.ts
@@ -619,21 +1024,33 @@ _asset_names_cache: dict[str, tuple[frozenset[tuple[str, int]], frozenset[str]]]
 
 
 def _collect_asset_names(asset_dir) -> frozenset[str]:
-    """Relative asset paths under ``asset_dir``, fingerprint-cached (name +
-    mtime per file) like ``_scan_datasources_from_disk`` — this runs on every
-    debounced ``POST /api/config/validate`` call otherwise."""
+    """Relative asset paths under ``asset_dir``, including nested subfolders,
+    fingerprint-cached (relative path + mtime per file) like
+    ``_collect_component_interfaces`` — this runs on every debounced
+    ``POST /api/config/validate`` call otherwise. ``/api/assets`` and the asset
+    pickers walk subfolders the same way (``rglob``), so this has to match or
+    a page referencing a nested asset gets rejected as unknown."""
     if not asset_dir.exists():
         _asset_names_cache.pop(str(asset_dir), None)
         return frozenset()
-    files = list(asset_dir.iterdir())
-    fingerprint = frozenset((p.name, p.stat().st_mtime_ns) for p in files if p.is_file())
+    files = [p for p in asset_dir.rglob("*") if p.is_file()]
+    fingerprint = frozenset(
+        (p.relative_to(asset_dir).as_posix(), p.stat().st_mtime_ns) for p in files
+    )
     cache_key = str(asset_dir)
     cached = _asset_names_cache.get(cache_key)
     if cached is not None and cached[0] == fingerprint:
         return cached[1]
-    names = frozenset(f"{asset_dir.name}/{name}" for name, _ in fingerprint)
+    names = frozenset(f"{asset_dir.name}/{rel}" for rel, _ in fingerprint)
     _asset_names_cache[cache_key] = (fingerprint, names)
     return names
+
+
+def _is_absolute_asset_url(value: Any) -> bool:
+    """An image/video field may hold a remote URL instead of a workspace path —
+    ``imageAssetUrl`` passes those through untouched. Nothing on disk can
+    confirm one, so it is not a missing asset."""
+    return isinstance(value, str) and value.lower().startswith(("http://", "https://", "data:", "blob:"))
 
 
 def _collect_user_groups() -> frozenset[str]:
@@ -657,21 +1074,46 @@ def _collect_user_groups() -> frozenset[str]:
 
 def build_context() -> ValidationContext:
     """Snapshot the world for the duration of a single validation pass."""
-    component_property_keys, component_slots = _collect_component_interfaces()
+    component_property_keys, component_slots, component_properties, component_widgets = _scan_components()
+    # One read and one walk per root: every page-id field below is derived from
+    # the same index, and this runs on every debounced editor validate.
+    config = _read_config()
+    # One listing of both document directories, shared by the collectors
+    # below — each would otherwise re-glob and re-stat every page file.
+    page_files = page_document_files()
+    page_widgets = _scan_page_files(page_files)[2]
+    navigable_page_ids = frozenset(_index_collect_page_ids(root_nodes(config, "pages")))
+    dialogs_page_ids = frozenset(_index_collect_page_ids(root_nodes(config, "dialogs")))
+    datasource_registry, datasource_writable = _collect_datasource_registry()
     return ValidationContext(
         widget_schemas=load_widget_manifest(),
-        datasource_registry=_collect_datasource_registry(),
+        datasource_registry=datasource_registry,
+        datasource_writable=datasource_writable,
+        _struct_elements=_struct_elements_for(datasource_registry),
         datasource_types=_collect_datasource_types(),
-        page_ids=_collect_page_ids(),
+        page_ids=set(_page_stems(page_files)) | navigable_page_ids | dialogs_page_ids,
+        navigable_page_ids=navigable_page_ids,
+        dialogs_page_ids=dialogs_page_ids,
         component_ids=set(component_property_keys),
         component_property_keys=component_property_keys,
         component_slots=component_slots,
-        dialog_ids=_collect_dialog_ids(),
-        dialog_property_keys=_collect_dialog_property_keys(),
+        # Pages and page groups share one map: the overlay actions may target
+        # either, and an id is only ever one of the two.
+        page_property_keys=collect_page_property_keys(config, page_files),
+        component_properties=component_properties,
+        page_properties=collect_page_properties(config, page_files),
+        dialog_ancestors=collect_dialog_ancestors(config),
+        project_widgets={
+            **{f"page:{pid}": index for pid, index in page_widgets.items()},
+            **{f"component:{cid}": index for cid, index in component_widgets.items()},
+            **_config_widgets(config),
+        },
+        datasource_entry=_datasource_entry_lookup(),
         translation_keys=_collect_translation_keys(),
         user_groups=_collect_user_groups(),
         icon_assets=_collect_asset_names(active_icons_dir()),
         image_assets=_collect_asset_names(active_images_dir()),
+        video_assets=_collect_asset_names(active_videos_dir()),
     )
 
 
@@ -691,32 +1133,12 @@ def _property_source_key(value: dict) -> str:
     return ""
 
 
-# Editor-kind schema tokens — never a binding-filter type, so they're excluded
-# from the accept-type list a $var/$componentProp value is checked against.
-# Mirrors frontend/src/shared/utils/valueTypes.ts EDITOR_KINDS — parity is
-# enforced by test_structure_parity.py / valueTypes.test.ts against the shared
-# frontend/src/shared/types/__fixtures__/editorKinds.json fixture.
-_EDITOR_KINDS: frozenset[str] = frozenset({
-    "color", "icon", "image", "option-list", "actions", "groups",
-    "image-indicators", "child-positions", "menu-items", "page-group", "slot",
-    "widgets", "_action",
-})
-
-
 def _accept_types_for_schema(schema_field: dict | None) -> list[dict]:
-    """A schema field's binding-filter tokens (its `type`, minus editor kinds),
-    parsed into AcceptType specs. Empty = no type constraint (skip the check)."""
+    """A schema field's binding-filter tokens parsed into AcceptType specs.
+    Empty = no type constraint (skip the check)."""
     if not isinstance(schema_field, dict):
         return []
-    field_type = schema_field.get("type")
-    if field_type is None:
-        return []
-    tokens = field_type if isinstance(field_type, list) else [field_type]
-    return [
-        vartype.parse_type_token(token)
-        for token in tokens
-        if isinstance(token, str) and token not in _EDITOR_KINDS
-    ]
+    return vartype.accept_types(schema_field.get("type"))
 
 
 def _report_test_server_target(
@@ -783,54 +1205,758 @@ def validate_var_ref(
             return
         resolved_key = base
     var_type = paths.get(resolved_key) if paths else None
+    if ref.get("repeatIndex") is not True and _report_bad_index(
+        ref.get("index"), ds_name, resolved_key, var_type, path, report
+    ):
+        return
     if var_type is None:
         return  # registry not (yet) populated for this path — best-effort, skip type check
-    accept = _accept_types_for_schema(schema_field)
-    if not accept:
-        return
     required_fields = schema_field.get("requiredFields") if isinstance(schema_field, dict) else None
-    element = vartype.element_of(var_type) if ref.get("index") is not None else var_type
-    if not any(vartype.accepts(a, element, required_fields) for a in accept):
+    write = isinstance(schema_field, dict) and schema_field.get("write") is True
+    indexed = ref.get("index") is not None or ref.get("repeatIndex") is True
+    element = vartype.element_of(var_type) if indexed else var_type
+    subject = f"variable '{ds_name}:{var_path}'"
+    accept = _accept_types_for_schema(schema_field)
+    if accept and not any(vartype.accepts(a, element, required_fields) for a in accept):
+        report.warn(
+            path, f"{subject} type is incompatible with this field", severity="error", code="var-type"
+        )
+        return
+    if accept and element.get("kind") == "struct":
+        base = (
+            _element_path(ctx, ds_name, resolved_key, ref.get("index"))
+            if var_type.get("array")
+            else resolved_key
+        )
+        _report_struct_members(
+            ctx, ds_name, base, element, required_fields, path, report, subject, "var-type"
+        )
+    elif write and _read_only(ctx, ds_name, resolved_key):
         report.warn(
             path,
-            f"variable '{ds_name}:{var_path}' type is incompatible with this field",
+            f"{subject} is read-only, and this field writes to it",
             severity="error",
-            code="var-type",
+            code="var-readonly",
         )
 
 
-def _validate_write_target(
-    action: dict, ctx: ValidationContext, path: str, report: ValidationReport
+def _report_bad_index(
+    index: Any,
+    ds_name: str,
+    key: str,
+    var_type: dict | None,
+    path: str,
+    report: ValidationReport,
+) -> bool:
+    """Flag an `index` that names no element: not a whole number, negative,
+    on a variable that is no array, or past the array's fixed length. An
+    unknown variable type only gets the shape checks. True when something was
+    reported."""
+    if index is None:
+        return False
+    # JSON has one number type; the runtime reads `2.0` as element 2.
+    if isinstance(index, float) and index.is_integer():
+        index = int(index)
+    subject = f"variable '{ds_name}:{key}'"
+    if isinstance(index, bool) or not isinstance(index, int):
+        problem = f"index {json.dumps(index)} is not a whole number"
+    elif index < 0:
+        problem = f"index {index} is negative"
+    elif var_type is None:
+        return False
+    elif not var_type.get("array"):
+        problem = f"{subject} is not an array, so index {index} names no element"
+    else:
+        length = var_type.get("length")
+        if not (isinstance(length, int) and length > 0 and index >= length):
+            return False
+        problem = f"index {index} is outside {subject} (length {length})"
+    report.warn(path, problem, severity="error", code="var-index")
+    return True
+
+
+_ELEMENT_FOLDER = re.compile(r"\[(\d+)\]$")
+
+
+def _index_struct_elements(paths: dict[str, dict]) -> dict[str, dict[int, str]]:
+    """Array path -> element index -> element folder, for every struct array in
+    one datasource's registry. An element is the folder right below the array
+    whose name ends in `[N]` — `[2]`, or `Line[2]` from a static server — the
+    reading the runtime's `structElementPath` gives it."""
+    arrays = {
+        key
+        for key, var_type in paths.items()
+        if isinstance(var_type, dict) and var_type.get("kind") == "struct" and var_type.get("array")
+    }
+    index: dict[str, dict[int, str]] = {}
+    if not arrays:
+        return index
+    # Both registries list an element folder under its own key, so the keys
+    # ending in `]` are nearly always enough and cheap to pick out.
+    for key in paths:
+        if not key.endswith("]"):
+            continue
+        parent, _, name = key.rpartition("/")
+        match = _ELEMENT_FOLDER.search(name)
+        if match and parent in arrays:
+            index.setdefault(parent, {})[int(match.group(1))] = key
+    unlisted = arrays - index.keys()
+    if not unlisted:
+        return index
+    # An element folder that only shows through its members' keys.
+    for key in paths:
+        if "]/" not in key:
+            continue
+        parts = key.split("/")
+        for depth in range(1, len(parts) - 1):
+            parent = "/".join(parts[:depth])
+            match = _ELEMENT_FOLDER.search(parts[depth]) if parent in unlisted else None
+            if match:
+                index.setdefault(parent, {})[int(match.group(1))] = f"{parent}/{parts[depth]}"
+    return index
+
+
+class _StructElements:
+    """The element folders of a registry's struct arrays, indexed per
+    datasource on first use. Built once per registry and reused for as long as
+    that registry is cached, so no binding pays for a scan of it."""
+
+    def __init__(self, registry: _Registry) -> None:
+        self.registry = registry
+        self._by_ds: dict[str, dict[str, dict[int, str]]] = {}
+
+    def of(self, ds_name: str, array_path: str) -> dict[int, str]:
+        by_array = self._by_ds.get(ds_name)
+        if by_array is None:
+            by_array = self._by_ds[ds_name] = _index_struct_elements(
+                self.registry.get(ds_name) or {}
+            )
+        return by_array.get(array_path, {})
+
+
+_struct_elements_cache: _StructElements | None = None
+
+
+def _struct_elements_for(registry: _Registry) -> _StructElements:
+    """The element index of `registry`, kept alongside the live-pool and disk
+    registry caches: those hand back the same registry object until it is
+    rebuilt, and the index follows it."""
+    global _struct_elements_cache
+    if _struct_elements_cache is None or _struct_elements_cache.registry is not registry:
+        _struct_elements_cache = _StructElements(registry)
+    return _struct_elements_cache
+
+
+def _element_path(ctx: ValidationContext, ds_name: str, array_path: str, index: Any) -> str | None:
+    """The element folder a struct-array binding is judged on: the bound
+    element when an index is bound and exists, otherwise the lowest-index
+    element — the rule `checkBindingSpec` applies at runtime."""
+    elements = ctx.struct_elements.of(ds_name, array_path)
+    if not elements:
+        return None
+    if isinstance(index, int) and not isinstance(index, bool) and index in elements:
+        return elements[index]
+    return elements[min(elements)]
+
+
+def _writable(ctx: ValidationContext, ds_name: str, key: str) -> bool:
+    return (ctx.datasource_writable.get(ds_name) or {}).get(key) is True
+
+
+def _read_only(ctx: ValidationContext, ds_name: str, key: str) -> bool:
+    """Whether a writing field fails on the variable at `key`: unless the
+    registry says it is writable it is read-only, as the picker reads it. A
+    struct has no access of its own — its members are judged one by one."""
+    var_type = (ctx.datasource_registry.get(ds_name) or {}).get(key)
+    if isinstance(var_type, dict) and var_type.get("kind") == "struct":
+        return False
+    return not _writable(ctx, ds_name, key)
+
+
+def _report_struct_members(
+    ctx: ValidationContext,
+    ds_name: str,
+    base: str | None,
+    struct_type: dict,
+    required_fields: Any,
+    path: str,
+    report: ValidationReport,
+    subject: str,
+    type_code: str,
 ) -> None:
-    """`writeDataVariable`'s target is a flat datasource/path pair, not a `$var`
-    payload, so it never reaches validate_var_ref — check it here against the
-    same registry. Diagnostics anchor on `<action>/datasource`, which the
-    property panel maps back to the action's Variable row."""
-    ds_name = action.get("datasource")
-    var_path = action.get("path")
-    target_path = f"{path}/datasource"
-    if not isinstance(ds_name, str) or not ds_name or not isinstance(var_path, str) or not var_path:
+    """Judge the struct at `base` against the field's required members
+    (`vartype.struct_mismatches`) and report the first failure: a missing or
+    mistyped member under `type_code`, read-only ones under `var-readonly`.
+    Silent when there is nothing to judge — no required fields, or a struct
+    whose members are not known yet."""
+    if (
+        base is None
+        or not isinstance(required_fields, list)
+        or not required_fields
+        or not struct_type.get("fields")
+    ):
+        return
+    paths = ctx.datasource_registry.get(ds_name) or {}
+
+    def lookup(member_path: str) -> dict | None:
+        key = f"{base}/{member_path}"
+        member_type = paths.get(key)
+        if member_type is None:
+            return None
+        return {"type": member_type, "writable": _writable(ctx, ds_name, key)}
+
+    _report_member_failures(
+        vartype.struct_mismatches(required_fields, lookup), path, report, subject, type_code
+    )
+
+
+def _report_member_failures(
+    failures: list[tuple[str, str]],
+    path: str,
+    report: ValidationReport,
+    subject: str,
+    type_code: str,
+) -> None:
+    wrong = [(member, why) for member, why in failures if why != "read-only"]
+    if wrong:
+        member, why = wrong[0]
+        detail = "is missing" if why == "missing" else "has the wrong type"
+        report.warn(
+            path,
+            f"{subject} does not fit this field: member '{member}' {detail}",
+            severity="error",
+            code=type_code,
+        )
+    elif failures:
+        names = ", ".join(f"'{member}'" for member, _ in failures)
+        noun = "member" if len(failures) == 1 else "members"
+        verb = "is" if len(failures) == 1 else "are"
+        report.warn(
+            path,
+            f"{noun} {names} of {subject} {verb} read-only, and this field writes to it",
+            severity="error",
+            code="var-readonly",
+        )
+
+
+def _repeat_items_source(ctx: ValidationContext) -> tuple[str, str] | None:
+    """(datasource, array path) of the variable the innermost Repeater repeats
+    over, when it repeats over one."""
+    items = ctx.repeat_items
+    ref = items.get("$var") if isinstance(items, dict) else None
+    composite = ref.get("path") if isinstance(ref, dict) else None
+    if not isinstance(composite, str) or ":" not in composite:
+        return None
+    ds_name, _, var_path = composite.partition(":")
+    return ds_name, var_path
+
+
+def _repeat_item_read(payload: dict, ctx: ValidationContext) -> tuple[str, str, dict] | None:
+    """(datasource, registry key, VarType) of the variable a `$repeatItem`
+    reads, when the Repeater repeats over a variable the registry knows: the
+    array itself for a scalar element, the element folder for a struct one, the
+    member below it for a member. None when only the runtime knows."""
+    source = _repeat_items_source(ctx)
+    if source is None:
+        return None
+    ds_name, var_path = source
+    paths = ctx.datasource_registry.get(ds_name) or {}
+    array_type = paths.get(var_path)
+    if not isinstance(array_type, dict) or not array_type.get("array"):
+        return None
+    member = payload.get("member")
+    if array_type.get("kind") != "struct":
+        return None if member else (ds_name, var_path, vartype.element_of(array_type))
+    element = _element_path(ctx, ds_name, var_path, None)
+    if element is None:
+        return None
+    if not member:
+        return ds_name, element, vartype.element_of(array_type)
+    member_type = paths.get(f"{element}/{member}")
+    return (ds_name, f"{element}/{member}", member_type) if isinstance(member_type, dict) else None
+
+
+# Item-list sources whose elements are values, never variables: a copy has no
+# variable behind its element to write back to.
+_VALUE_LIST_SOURCES = frozenset({"$static", "$user", "$http", "$recipeList", "$widgetProp"})
+_USER_LIST_FIELDS = frozenset({"userList", "groups"})
+_STRING = {"kind": "scalar", "base": "String", "array": False}
+_LABEL_VALUE_RECORD: tuple[dict, dict[str, dict]] = (
+    {"kind": "struct", "name": "Struct", "array": False, "fields": ["label", "value"]},
+    {"label": _STRING, "value": _STRING},
+)
+
+
+def _repeats_values(ctx: ValidationContext) -> bool:
+    """Whether the innermost Repeater repeats over a list of values rather
+    than a variable — so its element cannot be written."""
+    items = ctx.repeat_items
+    return isinstance(items, list) or (
+        isinstance(items, dict) and _property_source_key(items) in _VALUE_LIST_SOURCES
+    )
+
+
+def _repeat_list_types(ctx: ValidationContext) -> tuple[dict | None, dict[str, dict]] | None:
+    """(element type, member types) of the list the innermost Repeater repeats
+    over, when the list is known here: a literal or `$static` one typed by its
+    values, a `$user` user or group list as `{ label, value }` strings. None
+    for a variable, and for a list only the runtime has (`$http`,
+    `$recipeList`, `$widgetProp`)."""
+    items = ctx.repeat_items
+    if isinstance(items, dict) and "$static" in items:
+        items = items["$static"]
+    elif isinstance(items, dict) and isinstance(items.get("$user"), dict):
+        return _LABEL_VALUE_RECORD if items["$user"].get("field") in _USER_LIST_FIELDS else None
+    if not isinstance(items, list):
+        return None
+    # An empty list has no values to type it by: it offers the `{ label,
+    # value }` members the list editor writes, as the picker does.
+    return vartype.list_item_types(items) if items else (_LABEL_VALUE_RECORD[0], {})
+
+
+def _list_item_read(member: Any, listed: tuple[dict | None, dict[str, dict]]) -> dict | None:
+    """The type a `$repeatItem` pick reads off a known list's element; None
+    where the values do not say."""
+    element, members = listed
+    if not member:
+        return element
+    return members.get(member) if element is not None and element.get("kind") == "struct" else None
+
+
+def _check_repeat_item_type(
+    payload: dict,
+    ctx: ValidationContext,
+    path: str,
+    report: ValidationReport,
+    schema_field: dict | None,
+) -> None:
+    member = payload.get("member")
+    is_index = payload.get("field") == "index"
+    listed = None
+    if is_index:
+        read = None
+        item_type: dict | None = {"kind": "scalar", "base": "Integer", "array": False}
+    else:
+        read = _repeat_item_read(payload, ctx)
+        listed = None if read else _repeat_list_types(ctx)
+        item_type = read[2] if read else _list_item_read(member, listed) if listed else None
+    required_fields = schema_field.get("requiredFields") if isinstance(schema_field, dict) else None
+    write = isinstance(schema_field, dict) and schema_field.get("write") is True
+    if is_index:
+        subject = "the Repeat item's index"
+    else:
+        subject = f"the Repeat item's member '{member}'" if member else "the Repeat item"
+    accept = _accept_types_for_schema(schema_field)
+    if (
+        item_type is not None
+        and accept
+        and not any(vartype.accepts(a, item_type, required_fields) for a in accept)
+    ):
+        report.warn(
+            path,
+            "the Repeat item's type is incompatible with this field",
+            severity="error",
+            code="repeatitem-type",
+        )
+        return
+    if read is not None:
+        ds_name, key, _ = read
+        if accept and item_type.get("kind") == "struct":
+            base = _element_path(ctx, ds_name, key, None) if item_type.get("array") else key
+            _report_struct_members(
+                ctx, ds_name, base, item_type, required_fields, path, report, subject, "repeatitem-type"
+            )
+        elif write and _read_only(ctx, ds_name, key):
+            report.warn(
+                path,
+                f"{subject} is read-only, and this field writes to it",
+                severity="error",
+                code="var-readonly",
+            )
+        return
+    if (
+        accept
+        and item_type is not None
+        and item_type.get("kind") == "struct"
+        and isinstance(required_fields, list)
+        and required_fields
+    ):
+        fields = item_type.get("fields") or []
+        members = listed[1] if listed else {}
+
+        # A record's values carry no nested structure the picker could show,
+        # so a path below a member is missing here as it is there.
+        def lookup(member_path: str) -> dict | None:
+            if "/" in member_path or member_path not in fields:
+                return None
+            return {"type": members.get(member_path), "writable": False}
+
+        failures = vartype.struct_mismatches(required_fields, lookup)
+        if write:
+            failures = [f for f in failures if f[1] != "read-only"]
+        if failures:
+            _report_member_failures(failures, path, report, subject, "repeatitem-type")
+            return
+    if write and (is_index or _repeats_values(ctx)):
+        report.warn(
+            path,
+            f"{subject} is read-only, and this field writes to it",
+            severity="error",
+            code="var-readonly",
+        )
+
+
+@dataclass(frozen=True)
+class _WriteTarget:
+    """What a write/toggle action puts a value into, once resolved."""
+
+    ds_name: str
+    # Registry path of the variable written — the array itself for one of its
+    # elements.
+    key: str
+    # The type a written value must have: the element's for an indexed write.
+    element: dict
+    indexed: bool
+    subject: str
+
+
+def _check_write_target_type(
+    kind: str, target: _WriteTarget, ctx: ValidationContext, path: str, report: ValidationReport
+) -> None:
+    """A write needs one variable it can put a value into: the write path
+    addresses a leaf (a whole array, or one element of it), never a struct
+    folder; a toggle reads and inverts a single Boolean."""
+    element = target.element
+    if element.get("kind") == "struct":
+        report.warn(
+            path,
+            f"{target.subject} is a struct — a write needs one variable, so pick one of its members",
+            severity="error",
+            code="write-target-type",
+        )
+        return
+    if kind == "toggleDataVariable":
+        problem = _toggle_type_problem(target, ctx)
+        if problem is not None:
+            report.warn(
+                path,
+                f"{target.subject} {problem} — a toggle can only invert a Boolean",
+                severity="error",
+                code="toggle-target-type",
+            )
+            return
+    if _read_only(ctx, target.ds_name, target.key):
+        report.warn(
+            path,
+            f"{target.subject} is read-only, so this action cannot write it",
+            severity="error",
+            code="write-target-type",
+        )
+
+
+def _toggle_type_problem(target: _WriteTarget, ctx: ValidationContext) -> str | None:
+    """Why a toggle cannot invert its target, or None. Judged on the entry's
+    own OPC-UA type where it is known — the registry collapses a type it does
+    not know (a Variant, a LocalizedText) to String — else on the registry's."""
+    if target.element.get("array"):
+        return "is an array"
+    entry = ctx.datasource_entry(target.ds_name, target.key) if ctx.datasource_entry else None
+    raw = entry.get("data_type") if isinstance(entry, dict) else None
+    if isinstance(raw, str) and raw:
+        from services.write_service import canonical_data_type
+
+        canonical = canonical_data_type(raw)
+        if canonical == "boolean":
+            return None
+        return f"has the type '{raw}', unknown to the write path" if canonical is None else f"is a {raw}"
+    return None if target.element.get("base") == "Boolean" else "is not a Boolean"
+
+
+def _repeat_write_target(target: dict, ctx: ValidationContext) -> _WriteTarget | None:
+    """The variable a Repeat-item target writes, when the Repeater repeats over
+    a variable the registry knows."""
+    payload = target.get("$repeatItem")
+    member = payload.get("member") if isinstance(payload, dict) else None
+    member = member if isinstance(member, str) and member else None
+    read = _repeat_item_read({"member": member} if member else {}, ctx)
+    source = _repeat_items_source(ctx)
+    if read is None or source is None:
+        return None
+    ds_name, key, element = read
+    subject = f"the Repeat item's member '{member}'" if member else "the Repeat item"
+    return _WriteTarget(ds_name, key, element, key == source[1], subject)
+
+
+def _validate_write_target(
+    action: dict, kind: str, ctx: ValidationContext, path: str, report: ValidationReport
+) -> _WriteTarget | None:
+    """A `writeDataVariable` / `toggleDataVariable` target: a `$var`, or —
+    inside a Repeater — the copy's `$repeatItem`. Diagnostics anchor on
+    `<action>/target`, which the property panel maps back to the action's
+    target row. Returns what the action writes, when the registry knows it."""
+    target = action.get("target")
+    target_path = f"{path}/target"
+    if isinstance(target, dict) and "$repeatItem" in target:
+        if not ctx.repeat_scope:
+            report.warn(
+                target_path,
+                "the Repeat item target writes nothing here — it only has an "
+                "element inside a Repeater",
+                severity="warning",
+                code="repeatitem-no-scope",
+            )
+            return None
+        written = _repeat_write_target(target, ctx)
+        if written is not None:
+            _check_write_target_type(kind, written, ctx, target_path, report)
+        elif _repeats_values(ctx):
+            report.warn(
+                target_path,
+                "the Repeat item is a value from a list, not a variable, so this "
+                "action cannot write it",
+                severity="error",
+                code="write-target-type",
+            )
+        return written
+    ref = target.get("$var") if isinstance(target, dict) else None
+    composite = ref.get("path") if isinstance(ref, dict) else None
+    ds_name, _, var_path = composite.partition(":") if isinstance(composite, str) else ("", "", "")
+    if not ds_name or not var_path:
         report.warn(
             target_path,
             "write target is incomplete (no variable bound)",
             severity="warning",
             code="var-empty",
         )
-        return
+        return None
     if ds_name not in ctx.datasource_registry:
         report.warn(
             target_path, f"unknown datasource '{ds_name}'", severity="error", code="var-unknown"
         )
-        return
+        return None
     if _report_test_server_target(ds_name, ctx, target_path, report):
-        return
+        return None
     paths = ctx.datasource_registry[ds_name]
-    if paths and var_path not in paths and var_path.split("[")[0] not in paths:
+    key = var_path if var_path in paths else var_path.split("[")[0]
+    if paths and key not in paths:
         report.warn(
             target_path,
             f"unknown variable '{ds_name}:{var_path}'",
             severity="error",
             code="var-unknown",
+        )
+        return None
+    var_type = paths.get(key)
+    index = ref.get("index") if isinstance(ref, dict) else None
+    if _report_bad_index(index, ds_name, key, var_type, target_path, report):
+        return None
+    if var_type is None:
+        return None
+    indexed = index is not None or key != var_path
+    written = _WriteTarget(
+        ds_name,
+        key,
+        vartype.element_of(var_type) if indexed else var_type,
+        indexed,
+        f"variable '{ds_name}:{var_path}'",
+    )
+    _check_write_target_type(kind, written, ctx, target_path, report)
+    return written
+
+
+def _validate_write_value(
+    action: dict,
+    written: _WriteTarget | None,
+    ctx: ValidationContext,
+    path: str,
+    report: ValidationReport,
+) -> None:
+    """A `writeDataVariable` value. A fixed one (bare or `$static`) is coerced
+    against the target's entry the way the write path will coerce it
+    (`write_service.coerce_entry_write_value`) — a value it would reject is
+    `write-value-type`, worded as the editor's row words it. A sourced one is
+    checked like any property, typed by the target."""
+    if "value" not in action:
+        return
+    value = action["value"]
+    value_path = f"{path}/value"
+    element = written.element if written is not None else None
+    schema = None
+    if element is not None and element.get("kind") == "scalar":
+        base = element.get("base")
+        schema = {"type": f"{base}[]" if element.get("array") else base}
+    wrapped = _has_property_source(value)
+    if wrapped and _property_source_key(value) != "$static":
+        _validate_action_value(value, schema, ctx, value_path, report)
+        return
+    if schema is None or written is None or ctx.datasource_entry is None:
+        return
+    entry = ctx.datasource_entry(written.ds_name, written.key)
+    if not isinstance(entry, dict):
+        return
+    from services.write_service import (
+        COERCION_INVALID_DESCRIPTOR,
+        COERCION_MESSAGES,
+        COERCION_UNKNOWN_TYPE,
+        REASON_VALUE_OUT_OF_RANGE,
+        WriteCoercionError,
+        coerce_entry_write_value,
+        value_out_of_range,
+    )
+
+    literal = value.get("$static") if wrapped else value
+    try:
+        coerced = coerce_entry_write_value(literal, entry, indexed=written.indexed)
+    except WriteCoercionError as err:
+        reason: str | None = err.reason
+    else:
+        reason = REASON_VALUE_OUT_OF_RANGE if value_out_of_range(coerced, entry) else None
+    # The entry's own type unknown to the write path: nothing to judge by.
+    if reason is None or reason in (COERCION_UNKNOWN_TYPE, COERCION_INVALID_DESCRIPTOR):
+        return
+    report.warn(
+        value_path,
+        f"the value does not fit {written.subject}: {COERCION_MESSAGES.get(reason, reason)}",
+        severity="error",
+        code="write-value-type",
+    )
+
+
+# Action types older files still hold, from before the ButtonAction union had
+# them: each names a page under `target` (or `pageId`).
+_LEGACY_PAGE_TARGET_ACTIONS = frozenset({"openPage", "navigateTo"})
+
+_TOAST_SEVERITIES = frozenset({"info", "success", "warning", "error"})
+
+# Every field of every `ButtonAction` variant (frontend/src/shared/types/
+# config.ts), with what it is checked as — mirroring the action editors in
+# PropertiesPanel/actionEditors.tsx. A type token (`String`, `Integer`,
+# `Boolean`) is a value checked like a property of that type; the rest are
+# roles `_validate_action` handles by name: `page` a page id, `inputs` the
+# openDialog input-parameter values, `target` a write target, `writeValue` the
+# value written into it, `actions` a nested action list. Held equal to frontend/src/shared/types/__fixtures__/
+# actionFields.json, which actionFields.test.ts holds to the union, so a new
+# action field fails a test until this table says how to check it.
+ACTION_FIELDS: dict[str, dict[str, str]] = {
+    "openDialog": {
+        "pageId": "page",
+        "componentProperties": "inputs",
+        "size": "String",
+        "placement": "String",
+        "backdrop": "String",
+        "width": "Integer",
+        "height": "Integer",
+    },
+    "openPageOverlay": {
+        "pageId": "page",
+        "size": "String",
+        "placement": "String",
+        "backdrop": "String",
+        "width": "Integer",
+        "height": "Integer",
+    },
+    "closePageOverlay": {"pageId": "page"},
+    "writeDataVariable": {
+        "target": "target",
+        "value": "writeValue",
+        "onSuccess": "actions",
+        "onFailed": "actions",
+        "onSettled": "actions",
+    },
+    "if": {"condition": "Boolean", "then": "actions", "else": "actions"},
+    "toggleDataVariable": {
+        "target": "target",
+        "onSuccess": "actions",
+        "onFailed": "actions",
+        "onSettled": "actions",
+    },
+    "loginUser": {
+        "username": "String",
+        "password": "String",
+        "onSuccess": "actions",
+        "onFailed": "actions",
+        "onSettled": "actions",
+    },
+    "logoutUser": {"onSuccess": "actions", "onFailed": "actions", "onSettled": "actions"},
+    "recipeLoad": {
+        "datasetId": "String",
+        "verify": "Boolean",
+        "onSuccess": "actions",
+        "onFailed": "actions",
+        "onSettled": "actions",
+    },
+    "recipeSave": {
+        "datasetId": "String",
+        "onSuccess": "actions",
+        "onFailed": "actions",
+        "onSettled": "actions",
+    },
+    "setLanguage": {"language": "String"},
+    "setActiveTheme": {"theme": "String"},
+    "showAlert": {
+        "title": "String",
+        "description": "String",
+        "cancelText": "String",
+        "okText": "String",
+        "dismissible": "Boolean",
+        "onCancel": "actions",
+        "onOk": "actions",
+    },
+    "showToast": {
+        "message": "String",
+        "severity": "String",
+        "discard": "String",
+        "duration": "Integer",
+    },
+}
+
+_ACTION_VALUE_SCHEMAS: dict[str, dict[str, str]] = {
+    "String": {"type": "string"},
+    "Integer": {"type": "integer"},
+    "Boolean": {"type": "boolean"},
+}
+
+
+def _validate_action_value(
+    value: Any, schema: dict | None, ctx: ValidationContext, path: str, report: ValidationReport
+) -> None:
+    """Check a value an action carries like a property value. None of these
+    were checked before, so nothing here blocks a save: a mismatched literal is
+    `literal-type`, and a malformed source payload `value-invalid`."""
+    scratch = ValidationReport()
+    soft = replace(ctx, literals_block=False) if ctx.literals_block else ctx
+    _validate_property_value(value, schema, soft, path, scratch)
+    report.warnings.extend(scratch.warnings)
+    for finding in scratch.findings:
+        report.warn(finding.path, finding.message, severity="error", code="value-invalid")
+
+
+def _check_overlay_root(
+    kind: str, page_id: str, ctx: ValidationContext, path: str, report: ValidationReport
+) -> None:
+    """Flag an overlay action naming a target from the other page-tree root.
+
+    Each open action offers one root — Open Dialog the Dialogs folder, Open Page
+    As Overlay the navigable ``pages`` — so a target that has since moved across
+    still exists, and would otherwise pass silently while its picker shows blank.
+    Both tests are positive membership, so an unread index skips the check
+    instead of flagging everything.
+    """
+    if kind == "openDialog" and page_id in ctx.navigable_page_ids:
+        report.warn(
+            path,
+            f"page '{page_id}' is not in the Dialogs folder — open it with "
+            "Open Page As Overlay instead",
+            severity="error",
+            code="overlay-wrong-root",
+        )
+    elif kind == "openPageOverlay" and page_id in ctx.dialogs_page_ids:
+        report.warn(
+            path,
+            f"page '{page_id}' is in the Dialogs folder — open it with Open Dialog "
+            "instead, which passes its input parameters",
+            severity="error",
+            code="overlay-wrong-root",
         )
 
 
@@ -838,33 +1964,67 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
     if not isinstance(action, dict):
         return
     kind = action.get("type") or action.get("action")
-    if kind == "writeDataVariable":
-        _validate_write_target(action, ctx, path, report)
-    target = action.get("target") or action.get("pageId")
-    if kind in {"openPage", "openPageOverlay", "navigateTo"} and isinstance(target, str):  # noqa: SIM102 -- no autofix offered, left as-is per the mechanical-only policy for this family
-        if target not in ctx.page_ids:
+    if kind in ("writeDataVariable", "toggleDataVariable"):
+        written = _validate_write_target(action, kind, ctx, path, report)
+        if kind == "writeDataVariable":
+            _validate_write_value(action, written, ctx, path, report)
+    fields = ACTION_FIELDS.get(kind) if isinstance(kind, str) else None
+    for name, role in (fields or {}).items():
+        if name not in action:
+            continue
+        schema = _ACTION_VALUE_SCHEMAS.get(role)
+        if schema is not None:
+            _validate_action_value(action[name], schema, ctx, f"{path}/{name}", report)
+    if kind == "showToast":
+        severity = action.get("severity")
+        if isinstance(severity, str) and severity not in _TOAST_SEVERITIES:
+            report.warn(
+                f"{path}/severity",
+                f"unknown toast severity '{severity}'",
+                severity="error",
+                code="toast-severity-invalid",
+            )
+    page_fields = [name for name, role in (fields or {}).items() if role == "page"]
+    if page_fields or kind in _LEGACY_PAGE_TARGET_ACTIONS:
+        # A file from before `pageId` names the page under `target`.
+        target = action.get("target") or next(
+            (action.get(name) for name in page_fields or ["pageId"]), None
+        )
+        # closePageOverlay's pageId is optional (empty = close the topmost
+        # overlay), so only a named one is a reference.
+        names_target = isinstance(target, str) and (target != "" or kind != "closePageOverlay")
+        if names_target and target not in ctx.page_ids:
             report.add(path, f"action target page '{target}' does not exist")
-    # closeDialog's dialogId is optional (empty = close the topmost dialog); only
-    # validate it when the action actually names a dialog.
-    dialog_id = action.get("dialogId")
-    if kind in {"openDialog", "closeDialog"} and isinstance(dialog_id, str) and dialog_id:  # noqa: SIM102 -- no autofix offered, left as-is per the mechanical-only policy for this family
-        if dialog_id not in ctx.dialog_ids:
-            report.add(path, f"action target dialog '{dialog_id}' does not exist")
-    if kind == "openDialog" and isinstance(dialog_id, str) and dialog_id:
-        declared = ctx.dialog_property_keys.get(dialog_id)
+    page_id = action.get("pageId")
+    if kind in ("openDialog", "openPageOverlay") and isinstance(page_id, str) and page_id:
+        _check_overlay_root(kind, page_id, ctx, f"{path}/pageId", report)
+    if kind == "openDialog" and isinstance(page_id, str) and page_id:
+        declared = ctx.page_property_keys.get(page_id)
+        declarations = ctx.page_properties.get(page_id) or {}
         args = action.get("componentProperties")
-        if declared is not None and isinstance(args, dict):
-            target = f"dialog '{dialog_id}'"
-            for key in args:
-                if key not in declared:
-                    _warn_unknown_property(report, f"{path}/componentProperties/{key}", key, target)
-    # Async actions nest follow-up lists (onSuccess/onFailed/onSettled) and
-    # showAlert nests its button handlers; their targets deserve the same checks
-    # as a top-level action.
-    for slot in ("onSuccess", "onFailed", "onSettled", "onOk", "onCancel"):
-        nested = action.get(slot)
+        if isinstance(args, dict):
+            owner_label = f"page '{page_id}'"
+            for key, arg in args.items():
+                arg_path = f"{path}/componentProperties/{key}"
+                if declared is not None and key not in declared:
+                    _warn_unknown_property(report, arg_path, key, owner_label)
+                # Resolved in the opening widget's own scope, typed by what the
+                # target declares.
+                decl = declarations.get(key)
+                schema = (
+                    component_property.to_schema_field(decl)
+                    if decl is not None and str(decl.get("type", "")).strip().lower() != "widgets"
+                    else None
+                )
+                _validate_action_value(arg, schema, ctx, arg_path, report)
+    # Async actions nest follow-up lists (onSuccess/onFailed/onSettled),
+    # showAlert nests its button handlers and `if` its two branches — every
+    # field the table calls `actions`; they get the same checks as a top-level
+    # action.
+    for name, role in (fields or {}).items():
+        nested = action.get(name) if role == "actions" else None
         if isinstance(nested, list):
-            validate_action_targets(nested, ctx, f"{path}/{slot}", report)
+            validate_action_targets(nested, ctx, f"{path}/{name}", report)
 
 
 def validate_action_targets(actions: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> None:
@@ -883,6 +2043,68 @@ def validate_action_targets(actions: Any, ctx: ValidationContext, path: str, rep
 
 
 _WILDCARD_RE = re.compile(r"\{([^{}]*)\}")
+
+# `$formula` grammar, mirrored from frontend/src/hmi/utils/formula.ts:
+#   expr := term (("+" | "-") term)*     term := unary (("*" | "/") unary)*
+#   unary := ("-" | "+") unary | primary  primary := number | "{n}" | "(" expr ")"
+_FORMULA_TOKEN_RE = re.compile(r"\s*(?:(\d+(?:\.\d*)?|\.\d+)|\{\s*(\d+)\s*\}|([-+*/()]))")
+
+
+def _formula_is_valid(expression: str) -> bool:
+    """Whether `expression` parses as a `$formula` — syntax only; the runtime
+    still yields null for an unbound placeholder or a division by zero."""
+    tokens: list[str] = []
+    src = expression.rstrip()
+    pos = 0
+    while pos < len(src):
+        m = _FORMULA_TOKEN_RE.match(src, pos)
+        if not m:
+            return False
+        tokens.append(m.group(3) or "n")
+        pos = m.end()
+    if not tokens:
+        return False
+
+    i = 0
+
+    def expr() -> bool:
+        nonlocal i
+        if not term():
+            return False
+        while i < len(tokens) and tokens[i] in "+-":
+            i += 1
+            if not term():
+                return False
+        return True
+
+    def term() -> bool:
+        nonlocal i
+        if not unary():
+            return False
+        while i < len(tokens) and tokens[i] in "*/":
+            i += 1
+            if not unary():
+                return False
+        return True
+
+    def unary() -> bool:
+        nonlocal i
+        while i < len(tokens) and tokens[i] in "+-":
+            i += 1
+        if i >= len(tokens):
+            return False
+        if tokens[i] == "n":
+            i += 1
+            return True
+        if tokens[i] != "(":
+            return False
+        i += 1
+        if not expr() or i >= len(tokens) or tokens[i] != ")":
+            return False
+        i += 1
+        return True
+
+    return expr() and i == len(tokens)
 
 
 def _is_unset(value: Any) -> bool:
@@ -928,6 +2150,11 @@ def _validate_wildcards(
             _validate_property_value(wildcard_value, None, ctx, wildcard_path, report)
 
 
+# What an `$if` condition and a `$not` operand take: a Boolean, not any value's
+# truthiness (the editor's BOOLEAN_SLOT).
+_CONDITION_SCHEMA: dict[str, str] = {"type": "boolean"}
+
+
 def _validate_slot(
     value: Any,
     schema_field: dict | None,
@@ -949,6 +2176,350 @@ def _validate_slot(
     _validate_property_value(value, schema_field, ctx, path, report)
 
 
+def _static_page_id(value: Any) -> str | None:
+    """The page id a field holds, written either bare or wrapped in `$static`.
+    Anything else (a live binding, a nested source) names no page up front."""
+    if isinstance(value, str):
+        return value or None
+    if isinstance(value, dict) and set(value.keys()) == {"$static"}:
+        inner = value.get("$static")
+        return inner if isinstance(inner, str) and inner else None
+    return None
+
+
+def _check_navigable(page_id: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> None:
+    """Flag a navigation target sitting in the Dialogs folder. Only the overlay
+    actions reach those, so a menu item or `format: 'page'` field naming one
+    goes nowhere — the runtime resolves the route against the `pages` root
+    alone and renders its empty state."""
+    pid = _static_page_id(page_id)
+    if pid is not None and pid in ctx.dialogs_page_ids:
+        report.warn(
+            path,
+            f"page '{pid}' is in the Dialogs folder — nothing navigates to it, "
+            "so this target opens nothing",
+            severity="error", code="page-not-navigable",
+        )
+
+
+def _validate_menu_items(items: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> None:
+    """Walk a NavigationMenu's manual item list for targets it cannot reach.
+    Recursive — a `submenu` item carries its own list."""
+    if not isinstance(items, list):
+        return
+    for i, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") == "page-link":
+            _check_navigable(item.get("pageId"), ctx, f"{path}/{i}/pageId", report)
+        elif item.get("type") == "submenu":
+            _validate_menu_items(item.get("items"), ctx, f"{path}/{i}/items", report)
+
+
+_TEMPORAL_TYPES = frozenset({"datetime", "date", "time", "duration"})
+# ISO 8601 duration (`PT1H30M`, `P2DT4H`, `-PT5S`).
+_ISO_DURATION_RE = re.compile(
+    r"-?P(?=\d|T\d)(?:\d+(?:[.,]\d+)?Y)?(?:\d+(?:[.,]\d+)?M)?(?:\d+(?:[.,]\d+)?W)?"
+    r"(?:\d+(?:[.,]\d+)?D)?(?:T(?=\d)(?:\d+(?:[.,]\d+)?H)?(?:\d+(?:[.,]\d+)?M)?(?:\d+(?:[.,]\d+)?S)?)?"
+)
+_NUMBER_RE = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
+_TEMPORAL_LABELS = {"datetime": "DateTime", "date": "Date", "time": "Time", "duration": "Duration"}
+
+
+def _type_tokens(schema_field: dict | None) -> list[str]:
+    field_type = schema_field.get("type") if isinstance(schema_field, dict) else None
+    listed = field_type if isinstance(field_type, list) else [field_type]
+    return [t.lower() for t in listed if isinstance(t, str)]
+
+
+def _literal_matches(value: Any, token: str) -> bool:
+    # bool is a subclass of int; it is no number here.
+    if token in ("integer", "float", "duration") and isinstance(value, bool):
+        return False
+    return isinstance(value, _ATOMIC_TYPE_CHECKS[token])
+
+
+def _temporal_ok(value: str, token: str) -> bool:
+    """Whether a string reads as the ISO form of a temporal type. Empty is
+    unset, not malformed. A Duration is ISO or a plain number of seconds."""
+    if value == "":
+        return True
+    if token == "duration":
+        return bool(_ISO_DURATION_RE.fullmatch(value) or _NUMBER_RE.fullmatch(value.strip()))
+    parse = {"date": date.fromisoformat, "datetime": datetime.fromisoformat, "time": time_of_day.fromisoformat}
+    try:
+        parse[token](value)
+    except ValueError:
+        return False
+    return True
+
+
+def _check_literal(
+    value: Any,
+    schema_field: dict | None,
+    ctx: ValidationContext,
+    path: str,
+    report: ValidationReport,
+    *,
+    wrapped: bool,
+) -> None:
+    """Type-check a fixed value — bare, or the payload of a `$static` (`wrapped`).
+
+    It fits when it matches any scalar type the field lists, not only the
+    first; an array fits an `X[]` the field lists when every element is an X.
+    A bare scalar that fits nothing is a rejected write, as it always was,
+    unless the context says otherwise (`literals_block`); a `$static` payload
+    or an array element that fits nothing is `literal-type`. A string that
+    only fits as a Date, DateTime, Time or Duration but does not read as one
+    is `literal-format`.
+    """
+    tokens = _type_tokens(schema_field)
+    if not tokens or value is None:
+        return
+    # The first token decides the field's editor, and whether its literal is
+    # checked at all — an `option-list` whose binding filter lists `string[]`
+    # holds `{label, value}` rows, not strings; the others only widen what fits.
+    first_scalar = tokens[0] in _ATOMIC_TYPE_CHECKS
+    if not first_scalar and tokens[0].removesuffix("[]") not in _ATOMIC_TYPE_CHECKS:
+        return
+    if isinstance(value, list):
+        elements = [t[:-2] for t in tokens if t.endswith("[]") and t[:-2] in _ATOMIC_TYPE_CHECKS]
+        if elements:
+            fitting = [t for t in elements if all(_literal_matches(v, t) for v in value)]
+            if not fitting:
+                labels = " or ".join(f"{_type_label(t)}[]" for t in elements)
+                report.warn(
+                    path,
+                    f"expected {labels}: an element is of another type",
+                    severity="error",
+                    code="literal-type",
+                )
+            else:
+                _check_temporal_format(value, fitting, path, report)
+            return
+    scalars = [t for t in tokens if t in _ATOMIC_TYPE_CHECKS]
+    if not scalars:
+        return
+    matching = [t for t in scalars if _literal_matches(value, t)]
+    if not matching:
+        got = _PY_TYPE_LABELS.get(type(value).__name__, type(value).__name__)
+        message = f"expected {' or '.join(_type_label(t) for t in scalars)}, got {got}"
+        # Only a field whose first type is a scalar ever rejected a literal; a
+        # scalar in one that leads with an array type was never checked.
+        if ctx.literals_block and not wrapped and first_scalar:
+            report.add(path, message)
+        else:
+            report.warn(path, message, severity="error", code="literal-type")
+        return
+    _check_temporal_format([value], matching, path, report)
+
+
+def _check_temporal_format(
+    values: list, matching: list[str], path: str, report: ValidationReport
+) -> None:
+    if not all(t in _TEMPORAL_TYPES for t in matching):
+        return
+    for value in values:
+        if isinstance(value, str) and not any(_temporal_ok(value, t) for t in matching):
+            label = " or ".join(_TEMPORAL_LABELS[t] for t in matching)
+            report.warn(
+                path,
+                f"'{value}' is not an ISO {label}",
+                severity="warning",
+                code="literal-format",
+            )
+            return
+
+
+def _check_source_type(
+    source_key: str, payload: Any, schema_field: dict | None, path: str, report: ValidationReport
+) -> None:
+    """Flag a fixed-type source the field's type does not offer, or whose
+    stored `field` choice yields a type the field does not take — the rule the
+    editor's source menu and Field dropdown apply (`source_rules`)."""
+    if not isinstance(schema_field, dict):
+        return
+    field_type = schema_field.get("type")
+    why = source_rules.source_type_mismatch(source_key, payload, field_type)
+    if why is None:
+        return
+    tokens = [t for t in _type_tokens(schema_field) if t in source_rules.SOURCE_CAPABLE_TYPES]
+    target = f"this {_type_label(tokens[0])} field" if tokens else "this field"
+    if why == "field":
+        choice = payload.get("field") if isinstance(payload, dict) else None
+        message = f"{source_key} field '{choice}' does not give a value {target} takes"
+    else:
+        message = f"{source_key} does not give a value {target} takes"
+    report.warn(path, message, severity="error", code="source-type")
+
+
+def _input_scope(ctx: ValidationContext, node_id: str, own: dict[str, dict]) -> dict[str, dict]:
+    """The input parameters a Dialogs-folder node's widgets read: its own
+    declarations over its enclosing groups', innermost winning."""
+    chain = [own, *(ctx.page_properties.get(g) or {} for g in ctx.dialog_ancestors.get(node_id, ()))]
+    merged: dict[str, dict] = {}
+    for declarations in reversed(chain):
+        merged.update(declarations)
+    return merged
+
+
+def _report_prop_verdict(
+    why: str | None, subject: str, code: str, path: str, report: ValidationReport
+) -> None:
+    if why == "type":
+        report.warn(path, f"{subject} does not fit this field", severity="error", code=code)
+    elif why == "read-only":
+        report.warn(
+            path,
+            f"{subject} is not declared writable, and this field writes to it",
+            severity="error",
+            code=code,
+        )
+
+
+def _check_component_prop(
+    name: str, schema_field: dict | None, ctx: ValidationContext, path: str, report: ValidationReport
+) -> None:
+    """Type a `$componentProp` read against the declaration it names in the
+    scope being walked (`ctx.input_schema`), as the picker judges it."""
+    inputs = ctx.input_schema
+    if inputs is None:
+        return
+    key, _, member = name.partition("/")
+    decl = inputs.get(key)
+    if not isinstance(decl, dict):
+        report.warn(
+            path,
+            f"input parameter '{key}' is not declared here",
+            severity="warning",
+            code="componentprop-unknown",
+        )
+        return
+    if str(decl.get("type", "")).strip().lower() == "widgets":
+        report.warn(
+            path,
+            f"input parameter '{key}' is a widget slot — it holds no value to read",
+            severity="error",
+            code="componentprop-type",
+        )
+        return
+    subject = f"input parameter '{name}'"
+    if not member:
+        if isinstance(schema_field, dict):
+            _report_prop_verdict(
+                component_property.declaration_verdict(decl, schema_field),
+                subject, "componentprop-type", path, report,
+            )
+        return
+    if not decl.get("structSchema"):
+        return
+    known, node = component_property.member_node(decl, member)
+    if not known:
+        report.warn(
+            path,
+            f"input parameter '{key}' declares no member '{member}'",
+            severity="warning",
+            code="componentprop-unknown",
+        )
+    elif node is not None and isinstance(schema_field, dict):
+        _report_prop_verdict(
+            component_property.node_verdict(node, schema_field),
+            subject, "componentprop-type", path, report,
+        )
+
+
+_WidgetEntry = tuple[str, tuple[str, ...]]
+
+
+def _widget_candidates(ctx: ValidationContext, widget_id: str) -> list[_WidgetEntry]:
+    """The widgets a `$widgetProp` id can name: the one in the artifact being
+    walked, else every widget of that id elsewhere in the project — ids are
+    unique within one tree only, so another page or component can reuse one."""
+    # A Repeater copy publishes under `<id>@<copy>` as well as the bare id.
+    bare = widget_id.split("@", 1)[0]
+    local = ctx.widget_index or {}
+    if bare in local:
+        return [local[bare]]
+    return [
+        index[bare]
+        for key, index in ctx.project_widgets.items()
+        if key != ctx.artifact_key and bare in index
+    ]
+
+
+def _widget_prop_problem(
+    widget_id: str,
+    found: _WidgetEntry,
+    payload: dict,
+    schema_field: dict | None,
+    ctx: ValidationContext,
+) -> tuple[str, str] | None:
+    """(code, message) for what is wrong with reading `payload` off one
+    candidate widget, or None when it reads fine — or cannot be judged."""
+    prop_name = payload.get("property")
+    widget_type, columns = found
+    exports = ctx.widget_exports(widget_type)
+    if exports is None:
+        return None
+    export = next((e for e in exports if e.get("key") == prop_name), None)
+    if export is None:
+        return "widgetprop-unknown", f"widget '{widget_id}' ({widget_type}) does not export '{prop_name}'"
+    if not isinstance(schema_field, dict):
+        return None
+    fields: list[dict] = []
+    if export.get("type") == "Struct":
+        declared = export.get("structSchema")
+        fields = [f for f in declared if isinstance(f, dict)] if isinstance(declared, list) else []
+        names = {f.get("name") for f in fields}
+        fields += [{"name": c} for c in columns if c not in names]
+
+    def as_node(f: dict) -> dict:
+        node = {"kind": "variable", "name": f.get("name")}
+        node.update({k: f[k] for k in ("type", "write") if f.get(k) is not None})
+        return node
+
+    sub = payload.get("path")
+    subject = f"exported property '{widget_id}.{prop_name}'"
+    if isinstance(sub, str) and sub:
+        field_decl = next((f for f in fields if f.get("name") == sub), {"name": sub})
+        why = component_property.node_verdict(as_node(field_decl), schema_field)
+        subject = f"exported property '{widget_id}.{prop_name}/{sub}'"
+    else:
+        adapted: dict[str, Any] = {"type": export.get("type") or "string"}
+        if fields:
+            adapted["structSchema"] = [as_node(f) for f in fields]
+        why = component_property.declaration_verdict(adapted, schema_field)
+    if why == "read-only":
+        return "widgetprop-type", f"{subject} cannot be written, and this field writes to it"
+    if why == "type":
+        return "widgetprop-type", f"{subject} does not fit this field"
+    return None
+
+
+def _check_widget_prop(
+    payload: dict, schema_field: dict | None, ctx: ValidationContext, path: str, report: ValidationReport
+) -> None:
+    """Resolve a `$widgetProp` to the widget and export it names, and type it
+    as the `$widgetProp` picker does (an untyped export is a String; a `path`
+    into a `Struct` export is its declared field, else untyped). Where the id
+    names several widgets elsewhere in the project, one that reads fine is
+    enough; only when none does is the first one's problem reported."""
+    if ctx.widget_index is None:
+        return
+    widget_id = str(payload.get("componentId"))
+    candidates = _widget_candidates(ctx, widget_id)
+    if not candidates:
+        report.warn(
+            path, f"widget '{widget_id}' does not exist", severity="error", code="widgetprop-unknown"
+        )
+        return
+    problems = [_widget_prop_problem(widget_id, c, payload, schema_field, ctx) for c in candidates]
+    if any(problem is None for problem in problems):
+        return
+    code, message = problems[0]
+    report.warn(path, message, severity="error", code=code)
+
+
 def _validate_property_value(
     value: Any,
     schema_field: dict | None,
@@ -956,38 +2527,40 @@ def _validate_property_value(
     path: str,
     report: ValidationReport,
 ) -> None:
-    # Mirrors frontend primaryType(): the first token drives the editor/literal
-    # type; the full token list (see _accept_types_for_schema) is only used for
-    # the $var binding-filter check below.
+    # Mirrors frontend primaryType(): the first token drives the editor (and
+    # the asset checks below); the full token list is what a literal
+    # (`_check_literal`) and a binding (`_accept_types_for_schema`) may fit.
     field_type = schema_field.get("type") if isinstance(schema_field, dict) else None
     if isinstance(field_type, list):
         field_type = field_type[0] if field_type else None
     field_type = field_type.lower() if isinstance(field_type, str) else None
 
+    if isinstance(schema_field, dict) and schema_field.get("format") == "page":
+        _check_navigable(value, ctx, path, report)
+    elif field_type == "menu-items":
+        _validate_menu_items(value, ctx, path, report)
+
     if not _has_property_source(value):
-        # Static literal — type-check against schema.
-        expected = _ATOMIC_TYPE_CHECKS.get(field_type) if field_type is not None else None
-        if expected is None:
-            return
-        if field_type in ("integer", "float") and isinstance(value, bool):
-            # bool is a subclass of int; reject it for numeric fields
-            report.add(path, f"expected {field_type}, got boolean")
-            return
-        if field_type == "duration" and isinstance(value, bool):
-            report.add(path, "expected duration, got boolean")
-            return
-        if not isinstance(value, expected) and value is not None:
-            report.add(path, f"expected {field_type}, got {type(value).__name__}")
+        _check_literal(value, schema_field, ctx, path, report, wrapped=False)
         return
     # Sourced value — recurse into its payload.
     if not isinstance(value, dict):
         return
     source_key = _property_source_key(value)
     payload = value.get(source_key)
+    _check_source_type(source_key, payload, schema_field, path, report)
     if source_key == "$var":
         validate_var_ref(payload, ctx, path, report, schema_field)
+        if isinstance(payload, dict) and payload.get("repeatIndex") is True and not ctx.repeat_scope:
+            report.warn(
+                path,
+                "the Repeat index has no Repeater copy here — the binding reads the whole array",
+                severity="warning", code="repeatitem-no-scope",
+            )
     elif source_key == "$static":
-        if field_type == "icon" and isinstance(payload, dict):
+        if not isinstance(payload, dict):
+            _check_literal(payload, schema_field, ctx, path, report, wrapped=True)
+        elif field_type == "icon":
             icon_type = payload.get("type")
             if icon_type == "builtin":
                 name = payload.get("name")
@@ -997,10 +2570,18 @@ def _validate_property_value(
                 icon_path = payload.get("path")
                 if not isinstance(icon_path, str) or icon_path not in ctx.icon_assets:
                     report.warn(path, f"unknown icon asset '{icon_path}'", severity="error", code="icon-unknown")
-        elif field_type == "image" and isinstance(payload, dict):
+        elif field_type == "image":
             image_path = payload.get("path")
-            if not isinstance(image_path, str) or image_path not in ctx.image_assets:
+            if not _is_absolute_asset_url(image_path) and (
+                not isinstance(image_path, str) or image_path not in ctx.image_assets
+            ):
                 report.warn(path, f"unknown image asset '{image_path}'", severity="error", code="image-unknown")
+        elif field_type == "video":
+            video_path = payload.get("path")
+            if not _is_absolute_asset_url(video_path) and (
+                not isinstance(video_path, str) or video_path not in ctx.video_assets
+            ):
+                report.warn(path, f"unknown video asset '{video_path}'", severity="error", code="video-unknown")
     elif source_key == "$loc":
         # Runtime resolver (frontend/src/hmi/utils/propertySourceEval.ts:evaluateLoc) only
         # accepts a string payload; any other shape silently resolves to null at render.
@@ -1012,7 +2593,7 @@ def _validate_property_value(
             report.warn(path, f"unknown translation key '{payload}'", severity="error", code="loc-unknown")
     elif source_key == "$if" and isinstance(payload, dict):
         _validate_slot(
-            payload.get("condition"), None, ctx, f"{path}/$if/condition", report,
+            payload.get("condition"), _CONDITION_SCHEMA, ctx, f"{path}/$if/condition", report,
             code="if-condition-empty", message="condition is unset",
         )
         _validate_slot(payload.get("true"), schema_field, ctx, f"{path}/$if/true", report)
@@ -1048,6 +2629,25 @@ def _validate_property_value(
             payload.get("right"), None, ctx, f"{path}/$compare/right", report,
             code="compare-operand-empty", message="right operand is unset",
         )
+    elif source_key == "$not" and isinstance(payload, dict):
+        _validate_slot(
+            payload.get("value"), _CONDITION_SCHEMA, ctx, f"{path}/$not/value", report,
+            code="not-value-empty", message="value to invert is unset",
+        )
+    elif source_key == "$formula" and isinstance(payload, dict):
+        expression = payload.get("expression")
+        if not isinstance(expression, str) or expression.strip() == "":
+            report.warn(
+                f"{path}/$formula/expression", "formula is empty",
+                severity="warning", code="formula-empty",
+            )
+        elif not _formula_is_valid(expression):
+            report.warn(
+                f"{path}/$formula/expression", f"formula '{expression}' is not valid",
+                severity="error", code="formula-invalid",
+            )
+        else:
+            _validate_wildcards([expression], payload, "$formula", ctx, path, report)
     elif source_key == "$stringExpr" and isinstance(payload, dict):
         template = payload.get("template")
         if not isinstance(template, str) or template == "":
@@ -1092,13 +2692,39 @@ def _validate_property_value(
                 path, "component/property is empty",
                 severity="warning", code="widgetprop-empty",
             )
+        else:
+            _check_widget_prop(payload, schema_field, ctx, path, report)
     elif source_key == "$componentProp":
         if not isinstance(payload, str) or payload == "":
             report.warn(
                 path, "property name is empty",
                 severity="warning", code="componentprop-empty",
             )
-    elif source_key == "$recipe" and isinstance(payload, dict):  # noqa: SIM102 -- no autofix offered, left as-is per the mechanical-only policy for this family
+        elif not ctx.input_scope:
+            report.warn(
+                path,
+                f"input parameter '{payload}' reads nothing here — only pages in "
+                "the Dialogs folder take input parameters",
+                severity="warning", code="componentprop-no-scope",
+            )
+        else:
+            _check_component_prop(payload, schema_field, ctx, path, report)
+    elif source_key == "$repeatItem":
+        if not isinstance(payload, dict):
+            report.add(path, "$repeatItem payload must be an object")
+        elif payload.get("field", "value") not in ("value", "index"):
+            report.add(f"{path}/$repeatItem/field", "field must be 'value' or 'index'")
+        elif not isinstance(payload.get("member", ""), str):
+            report.add(f"{path}/$repeatItem/member", "member must be a string")
+        elif not ctx.repeat_scope:
+            report.warn(
+                path,
+                "the Repeat item reads nothing here — it only has an element inside a Repeater",
+                severity="warning", code="repeatitem-no-scope",
+            )
+        else:
+            _check_repeat_item_type(payload, ctx, path, report, schema_field)
+    elif source_key == "$recipe" and isinstance(payload, dict):
         if not payload.get("type"):
             report.warn(
                 f"{path}/$recipe/type", "recipe type is empty",
@@ -1131,26 +2757,62 @@ def validate_widget_node(
             report.add(f"{path}/properties", "must be an object")
         else:
             declared = ctx.declared_property_keys(wtype, schema)
-            target = (
-                f"component '{_component_id(wtype)}'"
-                if wtype.startswith(_COMPONENT_TYPE_PREFIX)
-                else f"widget '{wtype}'"
-            )
+            is_instance = wtype.startswith(_COMPONENT_TYPE_PREFIX)
+            target = f"component '{_component_id(wtype)}'" if is_instance else f"widget '{wtype}'"
+            # An instance's values are typed by the component's declarations,
+            # which no check read before — a mismatch is a diagnostic there.
+            prop_ctx = replace(ctx, literals_block=False) if is_instance and ctx.literals_block else ctx
             for key, value in properties.items():
                 if declared is not None and key not in declared:
                     _warn_unknown_property(report, f"{path}/properties/{key}", key, target)
                 field_schema = schema.get(key) if isinstance(schema, dict) else None
-                _validate_property_value(value, field_schema, ctx, f"{path}/properties/{key}", report)
-                if key == "actions" or (isinstance(field_schema, dict) and field_schema.get("type") == "actions"):
-                    validate_action_targets(value, ctx, f"{path}/properties/{key}", report)
+                prop_path = f"{path}/properties/{key}"
+                _validate_property_value(value, field_schema, prop_ctx, prop_path, report)
+                if key == "actions" or (not is_instance and _is_actions_field(field_schema)):
+                    validate_action_targets(value, prop_ctx, prop_path, report)
+                elif _is_actions_field(field_schema):
+                    # Typed as actions only by the component's declaration, which
+                    # nothing walked before: a missing page is a diagnostic here.
+                    _validate_actions_softly(value, prop_ctx, prop_path, report)
     # Walk children
+    child_ctx = ctx
+    items_key = ctx.repeat_items_key(wtype)
+    if items_key is not None:
+        items = properties.get(items_key) if isinstance(properties, dict) else None
+        child_ctx = replace(ctx, repeat_scope=True, repeat_items=items)
+    if wtype.startswith(_COMPONENT_TYPE_PREFIX):
+        # An instance's children are its slot content, which renders inside the
+        # instance (ComponentRenderer's InputScopeContext) — a `$componentProp`
+        # there reads the component's inputs, not the caller's.
+        child_ctx = replace(
+            child_ctx,
+            input_scope=True,
+            input_schema=ctx.component_properties.get(_component_id(wtype)),
+        )
     for child_field in ("children",):
         children = node.get(child_field)
         if isinstance(children, list):
             _validate_instance_slots(wtype, children, ctx, f"{path}/{child_field}", report)
             for i, child in enumerate(children):
-                validate_widget_node(child, ctx, f"{path}/{child_field}/{i}", report)
+                validate_widget_node(child, child_ctx, f"{path}/{child_field}/{i}", report)
     return report
+
+
+def _is_actions_field(field_schema: Any) -> bool:
+    return isinstance(field_schema, dict) and field_schema.get("type") == "actions"
+
+
+def _validate_actions_softly(
+    actions: Any, ctx: ValidationContext, path: str, report: ValidationReport
+) -> None:
+    """`validate_action_targets`, with what it would reject reported as
+    `action-page-unknown` instead — the one rejection it makes is a target page
+    that does not exist."""
+    scratch = ValidationReport()
+    validate_action_targets(actions, ctx, path, scratch)
+    report.warnings.extend(scratch.warnings)
+    for finding in scratch.findings:
+        report.warn(finding.path, finding.message, severity="error", code="action-page-unknown")
 
 
 def _validate_instance_slots(
@@ -1237,7 +2899,7 @@ validate_property_value = _validate_property_value
 def validate_shell_regions(
     shell_like: Any, ctx: ValidationContext, base_path: str, report: ValidationReport
 ) -> None:
-    """Validate the bindable fields on a ShellConfig / per-page shellOverride."""
+    """Validate the bindable fields on a ShellConfig."""
     if not isinstance(shell_like, dict):
         return
     for region in _SHELL_REGIONS:
@@ -1268,8 +2930,8 @@ def validate_page(page: Any, ctx: ValidationContext) -> ValidationReport:
     """Top-level walker for a page document.
 
     Pages have a ``sections`` map (``{ "content": [...], "footer": [...] }``)
-    whose values are widget-node arrays, plus an optional ``shellOverride`` whose
-    region configs carry bindable ($var) fields.
+    whose values are widget-node arrays, plus an optional ``events`` map of
+    lifecycle action lists.
     """
     report = ValidationReport()
     if not isinstance(page, dict):
@@ -1278,7 +2940,16 @@ def validate_page(page: Any, ctx: ValidationContext) -> ValidationReport:
     pid = page.get("id")
     if pid is not None and not is_valid_page_id(pid):
         report.add("/id", "invalid page id")
-    validate_shell_regions(page.get("shellOverride"), ctx, "/shellOverride", report)
+    if pid in ctx.navigable_page_ids:
+        ctx = ctx_for_root(ctx, "pages")
+    elif isinstance(pid, str) and pid in ctx.dialogs_page_ids and ctx.input_scope:
+        ctx = replace(ctx, input_schema=_input_scope(ctx, pid, declared_properties(page)))
+    ctx = replace(
+        ctx,
+        widget_index=_page_widgets(page),
+        artifact_key=f"page:{pid}" if isinstance(pid, str) else None,
+    )
+    report.extend(validate_page_node_events(page, ctx))
     sections = page.get("sections")
     if sections is None:
         return report
@@ -1294,6 +2965,26 @@ def validate_page(page: Any, ctx: ValidationContext) -> ValidationReport:
     return report
 
 
+def ctx_for_root(ctx: ValidationContext, root: str) -> ValidationContext:
+    """Narrow a validation context to one index root.
+
+    Only the Dialogs folder's nodes take input parameters, so anything under
+    the navigable root is walked without an input scope — a `$componentProp`
+    read there earns the same componentprop-no-scope warning wherever the walk
+    starts from.
+    """
+    return ctx if root == "dialogs" else replace(ctx, input_scope=False)
+
+
+def ctx_for_page_group(ctx: ValidationContext, node: Any) -> ValidationContext:
+    """The context a page group's own events are walked in: a Dialogs-folder
+    group's input parameters are its declarations over its enclosing groups'."""
+    gid = node.get("id") if isinstance(node, dict) else None
+    if isinstance(gid, str) and gid in ctx.dialogs_page_ids and ctx.input_scope:
+        return replace(ctx, input_schema=_input_scope(ctx, gid, declared_properties(node)))
+    return ctx
+
+
 def validate_shell_areas(config: Any, ctx: ValidationContext) -> ValidationReport:
     """Validate the shell component arrays (header/footer/sidebars) and the
     project-wide shell region bindings. Paths are relative to `config` itself
@@ -1303,19 +2994,15 @@ def validate_shell_areas(config: Any, ctx: ValidationContext) -> ValidationRepor
     report = ValidationReport()
     if not isinstance(config, dict):
         return report
+    # A shell region renders around every page, so nothing supplies it input
+    # parameters — same as a page outside the Dialogs folder.
+    shell_widgets: _WidgetIndex = {}
+    for area in _SHELL_REGIONS:
+        index_widgets(config.get(area), shell_widgets)
+    ctx = replace(ctx, input_scope=False, widget_index=shell_widgets, artifact_key="shell")
     for area in _SHELL_REGIONS:
         _walk_widget_array(config.get(area), ctx, f"/{area}", report)
     validate_shell_regions(config.get("shell"), ctx, "/shell", report)
-    return report
-
-
-def validate_dialog(dialog: Any, ctx: ValidationContext) -> ValidationReport:
-    """Validate a single dialog's widget tree. Paths are relative to `dialog`
-    itself (``/widgets/0/...``)."""
-    report = ValidationReport()
-    if not isinstance(dialog, dict):
-        return report
-    _walk_widget_array(dialog.get("widgets"), ctx, "/widgets", report)
     return report
 
 
@@ -1323,16 +3010,28 @@ def validate_global_events(events: Any, ctx: ValidationContext) -> ValidationRep
     """Validate the action targets in a ``globalEvents`` map. Paths are
     relative to `events` itself (``/onLoad/0``)."""
     report = ValidationReport()
+    # Project-wide handlers run outside every page, so nothing supplies them
+    # input parameters.
+    ctx = replace(ctx, input_scope=False)
     if isinstance(events, dict):
         for event_name, actions in events.items():
             validate_action_targets(actions, ctx, f"/{event_name}", report)
     return report
 
 
+def validate_page_node_events(node: Any, ctx: ValidationContext) -> ValidationReport:
+    """Validate the action targets in a page or page-group node's ``events``
+    map. Paths are relative to the node itself (``/events/onOpen/0``)."""
+    report = ValidationReport()
+    if isinstance(node, dict):
+        validate_action_targets(node.get("events"), ctx, "/events", report)
+    return report
+
+
 def _reparented(report: ValidationReport, prefix: str) -> ValidationReport:
     """Copy `report` with `prefix` prepended to every finding/warning path —
-    lets a validator written against its own artifact root (`/widgets/0/...`)
-    be reused at the path it lives under in a larger document (`/dialogs/x/...`)."""
+    lets a validator written against its own artifact root (`/events/onOpen/0`)
+    be reused at the path it lives under in a larger document (`/pages/x/...`)."""
     out = ValidationReport()
     out.findings = [replace(f, path=f"{prefix}{f.path}") for f in report.findings]
     out.warnings = [replace(w, path=f"{prefix}{w.path}") for w in report.warnings]
@@ -1344,10 +3043,11 @@ def validate_config_areas(config: Any, ctx: ValidationContext) -> ValidationRepo
 
     Mirrors :func:`validate_page` for the non-page surfaces persisted by
     ``PUT /api/config/config``: the shell component arrays (header/footer/
-    sidebars), each dialog's widget tree, the project-wide shell region bindings,
-    and the action targets in ``globalEvents``. Findings block the write;
-    warnings ride along in the success response. Reuses :func:`validate_dialog`
-    and :func:`validate_global_events` — the same walkers the realtime
+    sidebars), the project-wide shell region bindings, the action targets in
+    ``globalEvents``, and the lifecycle events on the page-group nodes of both
+    index roots. Findings block the write; warnings ride along in the success
+    response. Reuses :func:`validate_global_events` and
+    :func:`validate_page_node_events` — the same walkers the realtime
     ``POST /api/config/validate`` endpoint uses per-artifact — reparented onto
     this document's paths.
     """
@@ -1355,13 +3055,24 @@ def validate_config_areas(config: Any, ctx: ValidationContext) -> ValidationRepo
     if not isinstance(config, dict):
         return report
     report.extend(validate_shell_areas(config, ctx))
-    dialogs = config.get("dialogs")
-    if isinstance(dialogs, list):
-        for dialog in dialogs:
-            if not isinstance(dialog, dict):
-                continue
-            did = dialog.get("id")
-            label = did if isinstance(did, str) and did else "?"
-            report.extend(_reparented(validate_dialog(dialog, ctx), f"/dialogs/{label}"))
     report.extend(_reparented(validate_global_events(config.get("globalEvents"), ctx), "/globalEvents"))
+    for root in INDEX_ROOTS:
+        _walk_page_group_events(
+            root_nodes(config, root), ctx_for_root(ctx, root), f"/{root}", report
+        )
     return report
+
+
+def _walk_page_group_events(
+    nodes: list[Any], ctx: ValidationContext, path: str, report: ValidationReport
+) -> None:
+    """Walk the page index for page-group lifecycle events.
+
+    A group keeps its ``events`` in the index, so the config document is the
+    only place they can be validated. Plain page nodes are skipped — a page's
+    events live on its own file and are walked by :func:`validate_page`.
+    """
+    for node, node_path in iter_page_groups(nodes, path):
+        report.extend(
+            _reparented(validate_page_node_events(node, ctx_for_page_group(ctx, node)), node_path)
+        )

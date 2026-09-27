@@ -16,7 +16,8 @@ import { isStructType, primaryType } from '@shared/utils/valueTypes';
 import { arrayBadgeSuffix, isArrayShape } from '@shared/types/arrayShape';
 import { ToggleSlot, EmptyToggleSlot, GroupHeaderRow } from '../BindingPickerShell/rowParts';
 import { formatTypeBadge } from './helpers';
-import { folderKey, arrayExpansionKey, type RowItem } from './variableTreeHelpers';
+import { folderKey, arrayExpansionKey, rowSelectionKey, type RowItem } from './variableTreeHelpers';
+import { REPEAT_INDEX_SUFFIX } from './repeatItemRows';
 
 export interface RowContext {
   rowStyle: CSSProperties;
@@ -115,7 +116,7 @@ function ComponentPropNodeRow({
       </span>
       {isLeaf && (
         <span className="editor-binding-char-row__type cfg-text-truncate">
-          <SearchHighlight text={node.type ?? '—'} />
+          <SearchHighlight text={node.type ? formatTypeBadge(node.type) : '—'} />
         </span>
       )}
       {isLeaf && <AccessBadge writable={node.write === true} />}
@@ -189,28 +190,33 @@ function FolderRow({ item, ctx }: { item: Extract<RowItem, 'folder'>; ctx: RowCo
   );
 }
 
+/** `[n]` under an array, or — inside a Repeater — `[#]`, this copy's own element. */
 function ArrayElementRow({
   item,
   ctx,
 }: {
-  item: Extract<RowItem, 'array-element'>;
+  item: Extract<RowItem, 'array-element' | 'repeat-element'>;
   ctx: RowContext;
 }) {
   const { rowStyle, selectedKey, selectKey } = ctx;
   const parent = item.parent as PickerVariableEntry;
-  const elemKey = `${parent._datasource ?? ''}:${parent._path ?? parent.display_name}[${item.index}]`;
+  const elemKey = rowSelectionKey(item);
   const isSelected = elemKey === selectedKey;
+  const isRepeat = item.kind === 'repeat-element';
   return (
     <div
       className={`editor-binding-item editor-binding-item--array-element${isSelected ? ' editor-binding-item--selected' : ''}`}
       style={rowStyle}
-      onClick={() => selectKey(elemKey)}
+      onClick={() => elemKey && selectKey(elemKey)}
+      title={isRepeat ? "The element at this Repeater copy's own index" : undefined}
     >
       <EmptyToggleSlot />
-      <span className="cfg-text-truncate editor-binding-item__name">[{item.index}]</span>
+      <span className="cfg-text-truncate editor-binding-item__name">
+        {isRepeat ? `${REPEAT_INDEX_SUFFIX} this copy` : `[${item.index}]`}
+      </span>
       {parent.data_type && (
         <span className="editor-binding-char-row__type cfg-text-truncate">
-          <SearchHighlight text={parent.data_type} />
+          <SearchHighlight text={formatTypeBadge(parent.data_type)} />
         </span>
       )}
       <AccessBadge writable={parent.writable} />
@@ -249,7 +255,7 @@ function VariableRow({ item, ctx }: { item: Extract<RowItem, 'variable'>; ctx: R
       </span>
       {v.data_type && (
         <span className="editor-binding-char-row__type cfg-text-truncate">
-          <SearchHighlight text={v.data_type} />
+          <SearchHighlight text={formatTypeBadge(v.data_type)} />
           {arrayBadgeSuffix(v)}
         </span>
       )}
@@ -271,6 +277,7 @@ export function PickerRow({ item, ctx }: { item: RowItem; ctx: RowContext }) {
     case 'folder':
       return <FolderRow item={item} ctx={ctx} />;
     case 'array-element':
+    case 'repeat-element':
       return <ArrayElementRow item={item} ctx={ctx} />;
     case 'variable':
       return <VariableRow item={item} ctx={ctx} />;

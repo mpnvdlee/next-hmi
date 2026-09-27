@@ -1,4 +1,11 @@
-import { useContext, useEffect, useState, type ComponentType, type ReactNode } from 'react';
+import {
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from 'react';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import type { BindingPickMetadata } from '@config/store/domains/editorDomainStore';
 import {
@@ -8,15 +15,10 @@ import {
   writeDescriptorNeedsRefresh,
 } from '@config/utils/variableType';
 import { useConfigStore } from '@shared/store/configStore';
-import { flattenPages, resolvePageTitle } from '@shared/utils/pageTree';
-import type {
-  ActionsConfig,
-  ButtonAction,
-  DialogConfig,
-  PageConfig,
-  VariableBinding,
-} from '@shared/types/config';
-import { bindingParts } from '@shared/types/config';
+import { flattenPageNodes, resolvePageTitle } from '@shared/utils/pageTree';
+import type { ActionsConfig, ButtonAction, VariableBinding } from '@shared/types/config';
+import { writeTargetAddress } from '@shared/types/config';
+import { varBindingOf } from '../bindingPickerUtils';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import Select from '@config/components/ui/Select';
 import { ClearIcon } from '@config/components/ui/actionIcons';
@@ -26,9 +28,22 @@ import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
 import { BreakableToken, Kw, KindLabel, PreviewText } from '../PropertySourceEditor/editors/shared';
 import { propertyValuePreview } from '../propertyValueUtils';
 import { ActionTypeBadge } from './actionTypeIcons';
-import { ACTION_TYPES, ACTION_TYPE_TINT, actionTypeLabel } from './actionsPreview';
+import {
+  ACTION_TYPES,
+  ACTION_TYPE_TINT,
+  actionTypeColorStyle,
+  actionTypeLabel,
+} from './actionsPreview';
 import { getDefaultValueForKind, makeDefaultAction } from './actionMutations';
-import { ACTION_EDITORS, type ActionEditorCtx } from './actionEditors';
+import {
+  ACTION_EDITORS,
+  findOverlayTarget,
+  type ActionEditorCtx,
+  type OverlayTargets,
+} from './actionEditors';
+import ActionTypeDrawer from './ActionTypeDrawer';
+
+const BROWSE_ACTIONS = '__browse';
 
 interface Props {
   value: ActionsConfig | undefined;
@@ -67,11 +82,21 @@ export default function ActionsInput({
 }: Props) {
   const pages = useConfigStore((s) => s.pages);
   const dialogs = useConfigStore((s) => s.dialogs);
-  const allPages = flattenPages(pages);
+  // Each overlay action names a page or a page group: Open Dialog from the
+  // Dialogs root, Open Page As Overlay from `pages`, Close Dialog/Overlay from
+  // either.
+  // Memoised: this renders once per action field — and the page-events section
+  // adds two more per page panel — so an unmemoised pair of full page-tree
+  // flattens would run on every keystroke, times the number of mounted rows.
+  const overlayTargets: OverlayTargets = useMemo(
+    () => ({ dialogs: flattenPageNodes(dialogs), pages: flattenPageNodes(pages) }),
+    [dialogs, pages],
+  );
   const openBindingPicker = useEditorDomainStore((s) => s.openBindingPicker);
   const actions =
     (value as Record<string, ButtonAction[] | undefined> | undefined)?.[eventKey] ?? [];
   const [dataTypes, setDataTypes] = useState<Record<string, VariableWriteDescriptor>>({});
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const scope = useContext(PanelScopeContext);
   const setPanelExpanded = usePanelExpansionStore((s) => s.setExpanded);
 
@@ -80,7 +105,7 @@ export default function ActionsInput({
   }
 
   function addAction(type: string) {
-    const next = makeDefaultAction(type, { dialogs, allPages });
+    const next = makeDefaultAction(type, { overlayTargets });
     if (!next) return;
     const idx = actions.length;
     update([...actions, next]);
@@ -103,13 +128,14 @@ export default function ActionsInput({
 
     async function ensureDataTypes() {
       for (const action of actions) {
-        if (action.type !== 'writeDataVariable') continue;
-        if (!action.datasource || !action.path) continue;
+        if (action.type !== 'writeDataVariable' && action.type !== 'toggleDataVariable') continue;
+        const address = writeTargetAddress(action.target);
+        if (!address) continue;
 
-        const key = `${action.datasource}:${action.path}`;
+        const key = `${address.datasource}:${address.path}`;
         if (!writeDescriptorNeedsRefresh(dataTypes[key])) continue;
 
-        const descriptor = await loadVariableWriteDescriptor(action.datasource, action.path);
+        const descriptor = await loadVariableWriteDescriptor(address.datasource, address.path);
         if (cancelled || !descriptor) continue;
         setDataTypes((prev) => ({ ...prev, [key]: descriptor }));
       }
@@ -126,12 +152,35 @@ export default function ActionsInput({
 
   function openWriteVarPicker(actionIdx: number) {
     const current = actions[actionIdx];
-    // The write target is stored as a flat datasource/path pair (index already
-    // baked into `path` as a `[N]` suffix), which is exactly the picker's key.
+    // The picked element index is baked into the path as a `[N]` suffix — the
+    // same shape a migrated pair takes — so the path is also the picker's key.
     const currentBinding =
-      current?.type === 'writeDataVariable' && current.datasource && current.path
-        ? { path: `${current.datasource}:${current.path}` }
+      current?.type === 'writeDataVariable' || current?.type === 'toggleDataVariable'
+        ? varBindingOf(current.target)
         : undefined;
+    const pickedKey = (binding: VariableBinding, metadata?: BindingPickMetadata) =>
+      metadata?.index !== undefined ? `${binding.path}[${metadata.index}]` : binding.path;
+    if (current?.type === 'toggleDataVariable') {
+      openBindingPicker('', 'toggleDataVariable', {
+        currentBinding,
+        onPick: (binding: VariableBinding, metadata?: BindingPickMetadata) => {
+          const key = pickedKey(binding, metadata);
+          updateAction(actionIdx, { target: { $var: { path: key } } });
+          if (metadata?.dataType) {
+            setDataTypes((prev) => ({
+              ...prev,
+              [key]: {
+                dataType: metadata.dataType!,
+                isArray: metadata.isArray === true,
+                complete: false,
+              },
+            }));
+          }
+        },
+        filter: { label: 'Toggle target', write: true, type: ['Boolean'] },
+      });
+      return;
+    }
     openBindingPicker('', 'writeDataVariable', {
       currentBinding,
       onPick: (binding: VariableBinding, metadata?: BindingPickMetadata) => {
@@ -139,16 +188,13 @@ export default function ActionsInput({
         if (action && action.type === 'writeDataVariable') {
           const dataType = metadata?.dataType;
           const kind = getWriteCoercionKind(dataType);
-          const { datasource, location } = bindingParts(binding);
-          const targetPath =
-            metadata?.index !== undefined ? `${location}[${metadata.index}]` : location;
+          const key = pickedKey(binding, metadata);
           // Confirming the target the action already writes must not reset the
           // authored value — the picker now opens preselected, so a plain
           // Confirm is a no-op the user expects to change nothing.
-          const retargeted = action.datasource !== datasource || action.path !== targetPath;
+          const retargeted = varBindingOf(action.target)?.path !== key;
           updateAction(actionIdx, {
-            datasource,
-            path: targetPath,
+            target: { $var: { path: key } },
             ...(retargeted && {
               value:
                 metadata?.isArray && metadata.index === undefined
@@ -157,7 +203,6 @@ export default function ActionsInput({
             }),
           });
           if (dataType) {
-            const key = `${datasource}:${targetPath}`;
             setDataTypes((prev) => ({
               ...prev,
               [key]: {
@@ -184,17 +229,28 @@ export default function ActionsInput({
 
   const effectivePathPrefix = pathPrefix ?? [];
 
+  // "Add" is the placeholder, not an option, so the browse row leads the list
+  // the way it leads the property-source popup.
   const addControl = (
     <Select
       className="cfg-editor-actions__add"
+      popupClassName="cfg-editor-actions__add-popup"
       value=""
+      placeholder="Add"
       onChange={(v) => {
-        if (v) addAction(v);
+        if (v === BROWSE_ACTIONS) setDrawerOpen(true);
+        else if (v) addAction(v);
       }}
     >
-      <option value="">Add</option>
+      <option value={BROWSE_ACTIONS} className="cfg-editor-actions__browse">
+        <span className="cfg-source-pill__abbr" aria-hidden="true">
+          ?
+        </span>
+        Browse actions…
+      </option>
       {ACTION_TYPES.map((t) => (
-        <option key={t.type} value={t.type}>
+        <option key={t.type} value={t.type} style={actionTypeColorStyle(t.type)}>
+          <ActionTypeBadge type={t.type} variant="pill" />
           {t.label}
         </option>
       ))}
@@ -219,8 +275,7 @@ export default function ActionsInput({
           idx={idx}
           pathPrefix={effectivePathPrefix}
           eventKey={eventKey}
-          dialogs={dialogs}
-          allPages={allPages}
+          overlayTargets={overlayTargets}
           dataTypes={dataTypes}
           openBindingPicker={openBindingPicker}
           onUpdate={(patch) => updateAction(idx, patch)}
@@ -230,6 +285,16 @@ export default function ActionsInput({
         />
       ))}
       {headerTitle === undefined && addControl}
+      {drawerOpen && (
+        <ActionTypeDrawer
+          label={headerTitle ?? eventLabel}
+          onClose={() => setDrawerOpen(false)}
+          onSelect={(type) => {
+            addAction(type);
+            setDrawerOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -237,13 +302,9 @@ export default function ActionsInput({
 /** One-line collapsed summary per action type — shown when the row's
  *  tier-3 FieldGroup is collapsed, same role as CollapsedPreview for
  *  expression fields. */
-function actionSummaryText(
-  action: ButtonAction,
-  dialogs: DialogConfig[],
-  allPages: PageConfig[],
-): ReactNode {
+function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets): ReactNode {
   const tint = ACTION_TYPE_TINT[action.type];
-  // Keyword renders in the action's tint; a named value (dialog title, dataset
+  // Keyword renders in the action's tint; a named value (page title, dataset
   // id, username, …) is user data, not a keyword, so it stays plain — same
   // split property previews make between structural words and interpolated
   // values (see previewNodes).
@@ -256,23 +317,20 @@ function actionSummaryText(
   );
   switch (action.type) {
     case 'openDialog': {
-      const d = dialogs.find((x) => x.id === action.dialogId);
-      return d ? K('Open', d.title) : K('Open dialog');
-    }
-    case 'closeDialog': {
-      const d = dialogs.find((x) => x.id === action.dialogId);
-      return d ? K('Close', d.title) : K('Close top-most dialog');
+      const p = findOverlayTarget(overlayTargets, action.pageId)?.node;
+      return p ? K('Open dialog', resolvePageTitle(p.title)) : K('Open dialog');
     }
     case 'openPageOverlay': {
-      const p = allPages.find((x) => x.id === action.pageId);
+      const p = findOverlayTarget(overlayTargets, action.pageId)?.node;
       return p ? K('Open', resolvePageTitle(p.title), ' overlay') : K('Open page overlay');
     }
     case 'closePageOverlay': {
-      const p = allPages.find((x) => x.id === action.pageId);
+      const p = findOverlayTarget(overlayTargets, action.pageId)?.node;
       return p ? K('Close', resolvePageTitle(p.title), ' overlay') : K('Close top-most overlay');
     }
-    case 'writeDataVariable':
-      return action.datasource && action.path ? (
+    case 'writeDataVariable': {
+      const address = writeTargetAddress(action.target);
+      return address ? (
         // NBSP, not a plain space: a normal space is a wrap opportunity, so a
         // path too long to follow the keyword moves down whole and strands
         // "Write" alone on the first line. Glued, the keyword keeps the start
@@ -280,11 +338,28 @@ function actionSummaryText(
         <>
           <Kw tint={tint}>Write</Kw>
           {'\u00a0'}
-          <BreakableToken text={`${action.datasource}:${action.path}`} />
+          <BreakableToken text={`${address.datasource}:${address.path}`} />
         </>
       ) : (
         K('Write data variable')
       );
+    }
+    case 'if': {
+      const condition = propertyValuePreview(action.condition, 'boolean');
+      return condition !== '—' ? K('If', condition) : K('If condition');
+    }
+    case 'toggleDataVariable': {
+      const address = writeTargetAddress(action.target);
+      return address ? (
+        <>
+          <Kw tint={tint}>Toggle</Kw>
+          {'\u00a0'}
+          <BreakableToken text={`${address.datasource}:${address.path}`} />
+        </>
+      ) : (
+        K('Toggle boolean variable')
+      );
+    }
     case 'recipeLoad': {
       const dataset = propertyValuePreview(action.datasetId, 'string');
       return dataset !== '—' ? K('Load recipe', dataset) : K('Load recipe');
@@ -331,8 +406,7 @@ function ActionRow({
   idx,
   pathPrefix,
   eventKey,
-  dialogs,
-  allPages,
+  overlayTargets,
   dataTypes,
   openBindingPicker,
   onUpdate,
@@ -344,13 +418,12 @@ function ActionRow({
   idx: number;
   pathPrefix: string[];
   eventKey: string;
-  dialogs: DialogConfig[];
-  allPages: PageConfig[];
+  overlayTargets: OverlayTargets;
   dataTypes: Record<string, VariableWriteDescriptor>;
   openBindingPicker: ActionEditorCtx['openBindingPicker'];
   onUpdate: (patch: Partial<ButtonAction>) => void;
   onRemove: () => void;
-  onOpenWriteVarPicker: () => void;
+  onOpenWriteVarPicker: ActionEditorCtx['openWriteVarPicker'];
   resultFields?: string[];
 }) {
   const path = [...pathPrefix, eventKey, String(idx)];
@@ -367,8 +440,7 @@ function ActionRow({
 
   const ctx: ActionEditorCtx = {
     update: onUpdate,
-    dialogs,
-    allPages,
+    overlayTargets,
     dataTypes,
     openBindingPicker,
     openWriteVarPicker: onOpenWriteVarPicker,
@@ -385,7 +457,7 @@ function ActionRow({
       drawerTitle={actionLabel}
       badge={<ActionTypeBadge type={action.type} />}
       kindLabel={<KindLabel>{actionLabel}</KindLabel>}
-      summary={<PreviewText>{actionSummaryText(action, dialogs, allPages)}</PreviewText>}
+      summary={<PreviewText>{actionSummaryText(action, overlayTargets)}</PreviewText>}
       actions={
         <button
           className="cfg-row-action-btn cfg-row-action-btn--stretch"

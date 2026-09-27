@@ -36,6 +36,7 @@ _DEV_RUNTIME_HOME = _REPO_ROOT / ".dev-runtime-home"
 MANIFEST_FILENAME = "projects.json"
 LOGS_SUBDIR = ".logs"
 WIDGET_BUILD_SUBDIR = ".widget-build"
+THUMBNAILS_SUBDIR = ".thumbnails"
 RESTART_SENTINEL_FILENAME = ".restart-pending"
 
 
@@ -88,6 +89,10 @@ def widget_build_dir() -> Path:
     if env_value:
         return Path(env_value).expanduser()
     return runtime_home_path() / WIDGET_BUILD_SUBDIR
+
+
+def thumbnails_dir() -> Path:
+    return runtime_home_path() / THUMBNAILS_SUBDIR
 
 
 def restart_sentinel_path() -> Path:

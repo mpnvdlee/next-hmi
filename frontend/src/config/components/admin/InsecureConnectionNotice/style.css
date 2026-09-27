@@ -1,0 +1,25 @@
+.cfg-insecure-notice {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--cfg-space-1) var(--cfg-space-3);
+  padding: var(--cfg-space-2) var(--cfg-space-4);
+  border: 1px solid var(--cfg-warning-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-warning-bg);
+  color: var(--cfg-warning-fg);
+  font-size: var(--cfg-text-sm);
+  line-height: 1.45;
+}
+
+.cfg-insecure-notice__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.cfg-insecure-notice__link {
+  color: inherit;
+  font-weight: var(--cfg-fw-bold);
+  text-decoration: underline;
+  white-space: nowrap;
+}

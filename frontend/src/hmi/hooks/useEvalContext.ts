@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useVariableStore } from '../store/variableStore';
 import { useTranslationStore } from '@shared/store/translationStore';
@@ -7,13 +7,21 @@ import { useUsersData } from './useUsersData';
 import { useHmiScope } from '../context/HmiScopeContext';
 import { useHostPageId } from '../context/HostPageContext';
 import { useInputScope } from '../context/InputScopeContext';
+import { useRepeatScope } from '../context/RepeatScopeContext';
+import { resolveRepeatItem } from '../utils/repeatItemResolution';
+import { scopedWidgetId } from './usePublishWidgetProp';
 import { useComponentPropStore } from '../store/widgetPropStore';
 import { useAlarmStore } from '../store/alarmStore';
 import { useRecipeStore } from '../store/recipeStore';
 import { useDeviceInfoStore } from '../store/deviceInfoStore';
 import { readHttpSource } from '../store/httpSourceStore';
 import { useConfigStore } from '@shared/store/configStore';
-import { findPagePath, resolvePageContext, resolvePageTitle } from '@shared/utils/pageTree';
+import {
+  allPageRootNodes,
+  findPagePath,
+  resolvePageContext,
+  resolvePageTitle,
+} from '@shared/utils/pageTree';
 import type { PagePathSegment } from '@shared/types/config';
 import type { EvaluationContext, ResolvedValue } from '../utils/propertySourceEval';
 import { useViewport, getViewportSnapshot } from './useViewport';
@@ -36,6 +44,7 @@ export function useEvalContext(): EvaluationContext {
   const scope = useHmiScope();
   const hostPageIdFromContext = useHostPageId();
   const inputScopeProps = useInputScope()?.properties;
+  const repeatScope = useRepeatScope();
   const currentUsersByScope = useHmiStore((s) => s.currentUsersByScope);
   // The project's account list, for `$user` with `field: 'userList'` — distinct
   // from `currentUsersByScope`, which is only who is signed in per scope.
@@ -49,6 +58,13 @@ export function useEvalContext(): EvaluationContext {
   // via getState()/getViewportSnapshot() inside resolvers — keeps the evalCtx
   // reference stable so downstream useMemos don't invalidate on every tick.
   const pages = useConfigStore((s) => s.pages);
+  // Subscribed so a title or breadcrumb edit in the Dialogs folder reaches the
+  // widgets bound to `$page`, and held in a ref so the resolvers below read the
+  // current roots without the memo having to churn on every page edit — the
+  // same split the other resolvers make with `getState()`.
+  const dialogs = useConfigStore((s) => s.dialogs);
+  const pageRootsRef = useRef({ pages, dialogs });
+  pageRootsRef.current = { pages, dialogs };
   useViewport();
 
   const activePageId = useMemo(() => {
@@ -109,7 +125,7 @@ export function useEvalContext(): EvaluationContext {
         },
 
         resolveComponentProp: (componentId, property): ResolvedValue => {
-          const val = widgetProps[componentId]?.[property];
+          const val = exportsFor(widgetProps, componentId, repeatScope?.key)?.[property];
           return (val !== undefined ? val : null) as ResolvedValue;
         },
 
@@ -120,19 +136,24 @@ export function useEvalContext(): EvaluationContext {
         resolveRecipeList: (typeId) => useRecipeStore.getState().getList(typeId),
 
         resolvePagePath: (pageId) => {
-          const target = pageId ?? activePageId;
+          const target = pageId ?? hostPageId;
           if (!target) return [];
-          const trail = findPagePath(useConfigStore.getState().pages, target);
+          // Both roots: an overlay of the Dialogs folder publishes its own page
+          // as the host, and that page is not in the navigable tree.
+          const trail = findPagePath(allPageRootNodes(pageRootsRef.current), target);
           return trail.map((n) => ({
             id: n.id,
             label: pageBreadcrumbLabel(n) ?? resolvePageTitle(n.title),
           }));
         },
 
+        // Defaults to the page being rendered, not the route's: a page overlay
+        // renders a page without touching the URL, so keying on the route would
+        // report the host page behind the overlay throughout it.
         resolvePage: (field, pageId, separator): ResolvedValue => {
-          const target = pageId ?? activePageId;
+          const target = pageId ?? hostPageId;
           if (!target) return null;
-          const trail = findPagePath(useConfigStore.getState().pages, target);
+          const trail = findPagePath(allPageRootNodes(pageRootsRef.current), target);
           if (trail.length === 0) return null;
           const node = trail[trail.length - 1];
           const meta = node as unknown as Record<string, unknown>;
@@ -191,6 +212,12 @@ export function useEvalContext(): EvaluationContext {
         resolveHttpRequest: (spec) => readHttpSource(spec),
 
         inputScopeProps,
+
+        ...(repeatScope && {
+          repeatIndex: repeatScope.index,
+          resolveRepeatItem: (payload: unknown) =>
+            resolveRepeatItem(payload, repeatScope, useVariableStore.getState().varMeta),
+        }),
       };
     },
     // activeLanguage/translations/alarmSummary/recipe* force memo invalidation
@@ -206,6 +233,7 @@ export function useEvalContext(): EvaluationContext {
       location,
       scope,
       inputScopeProps,
+      repeatScope,
       currentUsersByScope,
       allUsernames,
       widgetProps,
@@ -217,6 +245,28 @@ export function useEvalContext(): EvaluationContext {
       hostPageId,
     ],
   );
+}
+
+/**
+ * A widget's exports as seen from inside a Repeater copy: the same copy's first,
+ * then each enclosing copy's (a sibling of an inner Repeater lives in the outer
+ * copy), and only then the bare id a widget outside every Repeater publishes.
+ * Keyed on whether the widget published at all, so a copy whose sibling has not
+ * published yet reads nothing rather than another copy's value.
+ */
+function exportsFor(
+  widgetProps: Record<string, Record<string, unknown>>,
+  componentId: string,
+  repeatKey: string | undefined,
+): Record<string, unknown> | undefined {
+  let key = repeatKey;
+  while (key) {
+    const scoped = widgetProps[scopedWidgetId(componentId, key)];
+    if (scoped) return scoped;
+    const slash = key.lastIndexOf('/');
+    key = slash >= 0 ? key.slice(0, slash) : undefined;
+  }
+  return widgetProps[componentId];
 }
 
 function pageBreadcrumbLabel(node: object): string | null {

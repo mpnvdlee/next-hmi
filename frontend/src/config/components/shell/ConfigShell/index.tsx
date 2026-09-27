@@ -2,10 +2,12 @@ import './style.css';
 import { useEffect, useMemo } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import { useProjectStore } from '@shared/store/projectStore';
+import { captureThumbnail } from '@config/thumbnails/captureThumbnail';
 import VariableBindingPicker from '@config/components/editor/VariableBindingPicker';
 import WidgetPropPicker from '@config/components/editor/WidgetPropPicker';
 import IconSourcePicker from '@config/components/editor/IconSourcePicker';
 import ImageSourcePicker from '@config/components/editor/ImageSourcePicker';
+import VideoSourcePicker from '@config/components/editor/VideoSourcePicker';
 import { ConfigToastStack } from '../ConfigToastStack';
 import { ConfigUpdatedBanner } from '../ConfigUpdatedBanner';
 import ConfigTopBar from '../ConfigTopBar';
@@ -25,6 +27,7 @@ import {
 } from '@phosphor-icons/react';
 import { useUsersDomainStore } from '@config/store/domains/usersDomainStore';
 import { useSaveErrorToast } from './useSaveErrorToast';
+import TransferProjectButton from './TransferProjectButton';
 import Button from '@config/components/ui/Button';
 
 interface NavItem {
@@ -133,6 +136,12 @@ export default function ConfigShell() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [dirty, saving, canUndo, canRedo, undo, redo, saveAll]);
 
+  useEffect(() => {
+    const { registerAfterSave, unregisterAfterSave } = useProjectStore.getState();
+    registerAfterSave('thumbnail', captureThumbnail);
+    return () => unregisterAfterSave('thumbnail');
+  }, []);
+
   return (
     <div className="cfg-shell">
       <ConfigTopBar
@@ -195,9 +204,7 @@ export default function ConfigShell() {
         >
           ↗ Live View
         </button>
-        {/* Push-to-peer is deferred: the peers API still assumes a single
-            "live project" per side and needs reworking for the running-set
-            model (manager-to-manager, explicit per-project selection). */}
+        <TransferProjectButton />
       </ConfigTopBar>
 
       <ConfigUpdatedBanner />
@@ -227,6 +234,7 @@ export default function ConfigShell() {
       <WidgetPropPicker />
       <IconSourcePicker />
       <ImageSourcePicker />
+      <VideoSourcePicker />
       <ConfigToastStack />
     </div>
   );

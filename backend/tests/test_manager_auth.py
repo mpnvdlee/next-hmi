@@ -1,6 +1,8 @@
 """Device-admin password + session token unit tests."""
 from __future__ import annotations
 
+import base64
+import json
 import time
 from pathlib import Path
 
@@ -35,6 +37,19 @@ def test_expired_token_rejected() -> None:
     manager_auth.set_password("pw")
     token = manager_auth.issue_token(ttl_seconds=-1)
     assert manager_auth.verify_token(token) is False
+
+
+def _token_exp(token: str) -> int:
+    payload = token.split(".", 1)[0]
+    raw = base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4))
+    return int(json.loads(raw)["exp"])
+
+
+def test_default_session_expires_after_a_day() -> None:
+    manager_auth.set_password("pw")
+    before = int(time.time())
+    exp = _token_exp(manager_auth.issue_token())
+    assert before + 24 * 3600 <= exp <= int(time.time()) + 24 * 3600
 
 
 def test_rotating_password_invalidates_tokens() -> None:

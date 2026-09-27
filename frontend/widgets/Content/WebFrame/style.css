@@ -1,14 +1,16 @@
-/* Chained with the global `.hmi-component`, which sets font-family and resolves
-   min-height from the author's `--self-min-height`. The two-class selector wins
-   on specificity rather than on stylesheet order, which a runtime-injected
-   sheet cannot rely on; `var(--self-min-height, …)` keeps the configured
-   minimum in charge and supplies 200px only as its fallback. */
+/* Chained with the global `.hmi-component`, which sets font-family and, on the
+   same selector, the shared `min-height: 0` default. The two-class selector
+   here wins on specificity rather than on stylesheet order, which a
+   runtime-injected sheet cannot rely on, so this 200px fallback applies
+   instead — but only while nothing inline sets `min-height`: `selfLayoutStyle`
+   writes the author's own `minHeight` directly, and inline always outranks
+   both class rules regardless of specificity. */
 .hmi-component.hmi-webframe {
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background: var(--hmi-webframe-bg, var(--hmi-bg));
-  min-height: var(--self-min-height, 200px);
+  min-height: 200px;
 }
 
 .hmi-webframe--border-subtle {

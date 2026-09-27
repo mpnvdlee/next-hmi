@@ -18,9 +18,41 @@ from typing import Any
 
 from asyncua import Server, ua
 from core.exceptions import DatasourceConflictError
+from core.project_packer import safe_filename
+from core.storage import active_certs_dir
 from core.value_types import is_array_shape, is_fixed_array
 
+from opcua.client_pool import (
+    SECURE_POLICY_NAMES,
+    SECURITY_MODES,
+    ensure_client_certificate,
+)
+
 logger = logging.getLogger(__name__)
+
+
+def _resolve_security_policies(raw: Any) -> list[ua.SecurityPolicyType]:
+    """Turn a ``security_policies`` setting into asyncua policy enum members.
+
+    Each entry is ``"<Policy>/<Mode>"``, allowlisted against the same names a
+    real ``opcua-client`` datasource may request, so every policy an engineer
+    can pick can also be exercised locally.
+
+    NoSecurity is always included — the internally paired OPC-UA client (and
+    any plain test client) relies on it regardless of which extra secured
+    endpoints a datasource opts into. Malformed or unsupported entries are
+    skipped rather than failing the server start, same as a hand-edited
+    ``sim_min``/``sim_max``.
+    """
+    policies = [ua.SecurityPolicyType.NoSecurity]
+    for entry in raw or []:
+        policy_name, _, mode_name = str(entry or "").partition("/")
+        if policy_name not in SECURE_POLICY_NAMES or mode_name not in SECURITY_MODES:
+            continue
+        member = getattr(ua.SecurityPolicyType, f"{policy_name}_{mode_name}", None)
+        if member is not None and member not in policies:
+            policies.append(member)
+    return policies
 
 
 def _start_error_message(port: int, exc: Exception) -> str:
@@ -151,7 +183,21 @@ class TestServerInstance:
         endpoint = f"opc.tcp://0.0.0.0:{port}{endpoint_path}"
         server.set_endpoint(endpoint)
         server.set_server_name(f"NEXT HMI Test Server - {self.name}")
-        server.set_security_policy([ua.SecurityPolicyType.NoSecurity])
+
+        security_policies = _resolve_security_policies(settings.get("security_policies"))
+        server.set_security_policy(security_policies)
+        if len(security_policies) > 1:
+            # The datasource name reaches the filesystem here; FastAPI's {name}
+            # blocks "/" but not "\\", so an unsanitized name steers the pair
+            # out of certs/ on Windows.
+            base = safe_filename(self.name)
+            cert_path = active_certs_dir() / f"test-server-{base}-cert.pem"
+            key_path = active_certs_dir() / f"test-server-{base}-key.pem"
+            ensure_client_certificate(
+                str(cert_path), str(key_path), common_name=f"nexthmi-test-server-{self.name}",
+            )
+            await server.load_certificate(str(cert_path))
+            await server.load_private_key(str(key_path))
 
         uri = f"http://nexthmi.local/test/{self.name}"
         idx = await server.register_namespace(uri)

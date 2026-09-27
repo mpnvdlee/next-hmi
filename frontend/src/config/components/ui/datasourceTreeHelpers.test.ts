@@ -19,7 +19,7 @@ function makeArrayOfStructTree(): TreeNode[] {
 }
 
 describe('updateVarInTree', () => {
-  it('scopes the patch to the exact path, not every same-named sibling (§3.3)', () => {
+  it('scopes the patch to the exact path, not every same-named sibling', () => {
     const tree = makeArrayOfStructTree();
     const result = updateVarInTree(tree, 'Arr/[1]/Field1', undefined, { enabled: false });
 

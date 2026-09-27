@@ -405,10 +405,80 @@
   font-style: italic;
 }
 
+/* ── Asset list (VideoSourcePicker): no thumbnails exist, so rows carry the
+   name, its folder and its size instead of a tile. ── */
+.cfg-asset-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-1);
+}
+
+.cfg-asset-picker-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, auto) auto;
+  align-items: center;
+  gap: var(--cfg-space-2);
+  width: 100%;
+  padding: var(--cfg-space-2) var(--cfg-space-3);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface);
+  border: 1px solid color-mix(in srgb, var(--cfg-border) 84%, var(--cfg-surface));
+  cursor: pointer;
+  color: var(--cfg-text);
+  font-family: var(--cfg-font);
+  font-size: var(--cfg-text-sm);
+  text-align: left;
+  transition:
+    background var(--cfg-motion-fast) var(--cfg-ease-standard),
+    border-color var(--cfg-motion-fast) var(--cfg-ease-standard);
+}
+
+.cfg-asset-picker-row:hover {
+  background: color-mix(in srgb, var(--cfg-accent) 12%, var(--cfg-surface));
+  border-color: color-mix(in srgb, var(--cfg-accent) 42%, var(--cfg-border));
+}
+
+.cfg-asset-picker-row--selected {
+  background: color-mix(in srgb, var(--cfg-accent) 20%, var(--cfg-surface));
+  border-color: var(--cfg-accent);
+  outline: 2px solid var(--cfg-accent);
+  outline-offset: 1px;
+}
+
+.cfg-asset-picker-row--folder {
+  color: var(--cfg-text-muted);
+}
+
+.cfg-asset-picker-row--folder:hover {
+  color: var(--cfg-accent);
+}
+
+.cfg-asset-picker-row__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfg-asset-picker-row__folder {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-text-xs);
+}
+
+.cfg-asset-picker-row__size {
+  color: var(--cfg-text-muted);
+  font-size: var(--cfg-text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .cfg-asset-picker-zoom:focus-visible,
 .cfg-asset-picker-tab:focus-visible,
 .cfg-asset-picker-icon-btn:focus-visible,
-.cfg-asset-picker-img-btn:focus-visible {
+.cfg-asset-picker-img-btn:focus-visible,
+.cfg-asset-picker-row:focus-visible {
   outline: var(--cfg-focus-outline);
   outline-offset: var(--cfg-focus-offset);
 }

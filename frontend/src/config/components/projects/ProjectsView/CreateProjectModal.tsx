@@ -7,14 +7,16 @@ import { describeError, useProjectsStore } from '@config/store/projectsStore';
 import type { ProjectEntry } from '@config/store/projectsStore';
 import { joinPath, slugify } from '@shared/utils/paths';
 import { useDestinationPathValidation } from '../useDestinationPathValidation';
+import type { ProjectTemplate } from './NewProjectTemplateModal';
 
 interface Props {
   defaultRoot: string | null;
+  template: ProjectTemplate;
   onCancel(): void;
   onCreated(entry: ProjectEntry): void;
 }
 
-export default function CreateProjectModal({ defaultRoot, onCancel, onCreated }: Props) {
+export default function CreateProjectModal({ defaultRoot, template, onCancel, onCreated }: Props) {
   const create = useProjectsStore((s) => s.createProject);
 
   const [name, setName] = useState('');
@@ -48,7 +50,7 @@ export default function CreateProjectModal({ defaultRoot, onCancel, onCreated }:
     setSubmitting(true);
     setError(null);
     try {
-      const entry = await create(name.trim(), fullPath);
+      const entry = await create(name.trim(), fullPath, template);
       onCreated(entry);
     } catch (e) {
       setError(describeError(e));

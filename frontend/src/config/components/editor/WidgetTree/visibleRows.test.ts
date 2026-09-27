@@ -1,5 +1,5 @@
 import { EDITOR_NODE_IDS, makePageSectionId } from '@shared/constants/editorSentinels';
-import type { DialogConfig, PageNode, ShellRegionId, WidgetConfig } from '@shared/types/config';
+import type { PageNode, ShellRegionId, WidgetConfig } from '@shared/types/config';
 import { flattenVisibleRows, rowsBetween, type VisibleRowsInput } from './visibleRows';
 
 const widget = (id: string, children?: WidgetConfig[]): WidgetConfig => ({
@@ -25,7 +25,9 @@ const pages: PageNode[] = [
   },
 ];
 
-const dialogs: DialogConfig[] = [{ id: 'dlg', title: 'Dialog', widgets: [widget('dlg-btn')] }];
+const dialogs: PageNode[] = [
+  { id: 'dlg', type: 'page', title: 'Dialog', sections: { content: [widget('dlg-btn')] } },
+];
 
 const shell: Record<ShellRegionId, WidgetConfig[]> = {
   header: [widget('head-btn')],
@@ -64,7 +66,7 @@ function input(overrides: Partial<VisibleRowsInput> = {}): VisibleRowsInput {
 const ids = (rows: { id: string }[]) => rows.map((r) => r.id);
 
 describe('flattenVisibleRows', () => {
-  it('walks settings, events, shell, pages and dialogs in render order', () => {
+  it('walks settings, events, shell, pages and the Dialogs folder in render order', () => {
     expect(ids(flattenVisibleRows(input()))).toEqual([
       EDITOR_NODE_IDS.SETTINGS,
       EDITOR_NODE_IDS.EVENTS,

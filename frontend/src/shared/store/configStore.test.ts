@@ -38,7 +38,7 @@ describe('configStore', () => {
                 type: 'Button',
                 name: 'Button 1',
                 properties: { label: 'Start', color: '#111111' },
-                layout: { basis: '10rem', grow: 0 },
+                layout: { width: '10rem', grow: 0 },
               },
             ],
           },
@@ -71,7 +71,7 @@ describe('configStore', () => {
     const component = widgets.find((w) => w.id === 'comp-1');
     expect(component?.name).toBe('Run Button');
     expect(component?.properties).toEqual({ label: 'Run', color: '#111111' });
-    expect(component?.layout).toEqual({ basis: '10rem', grow: 1 });
+    expect(component?.layout).toEqual({ width: '10rem', grow: 1 });
   });
 
   describe('updateComponents', () => {
@@ -156,6 +156,97 @@ describe('configStore', () => {
     });
   });
 
+  /**
+   * `grow` used to need a store-level sweep to stay clear of a stranded state
+   * whenever a write moved a widget's flow — a `Container`'s own `direction`,
+   * or a reparent. That invariant now lives at the edges instead: the panel's
+   * own mode picker (`sizeModePatch`) decides, from the flow it can see,
+   * whether a stored `grow` still has a row anywhere to show it; the runtime
+   * doesn't decide the axis at all any more — it emits `grow` as the
+   * axis-neutral `--w-grow`/`--h-grow` custom properties `selfLayoutStyle`
+   * writes, and a CSS translation block in `hmi.css` picks whichever one
+   * applies from the flex parent's own `data-flow-direction`. The store
+   * itself just persists whatever layout it is given, flow-unaware — these
+   * tests pin that down.
+   */
+  describe('grow persists across flow changes', () => {
+    /** Fill along Width, Hug along Height: the weight is live under a row
+     *  parent and inert the moment Height becomes the main axis — but nothing
+     *  in the store sweeps it for that any more, so it stays either way. */
+    const filler = () => ({
+      id: 'kid',
+      name: 'kid',
+      type: 'Button',
+      layout: { widthMode: 'fill', heightMode: 'hug', grow: 2 },
+    });
+    const growOfKid = () => {
+      const page = useConfigStore.getState().pages[0];
+      const widgets = page && 'sections' in page ? Object.values(page.sections).flat() : [];
+      const find = (list: typeof widgets): (typeof widgets)[number] | undefined => {
+        for (const widget of list) {
+          if (widget.id === 'kid') return widget;
+          const hit = find(widget.children ?? []);
+          if (hit) return hit;
+        }
+      };
+      return find(widgets)?.layout?.grow;
+    };
+
+    beforeEach(() => {
+      useConfigStore.setState({
+        pages: [
+          {
+            id: 'page-1',
+            type: 'page',
+            title: 'Page 1',
+            sections: {
+              main: [
+                {
+                  id: 'row',
+                  name: 'row',
+                  type: 'Container',
+                  layout: { direction: 'row' },
+                  children: [filler()],
+                },
+                {
+                  id: 'col',
+                  name: 'col',
+                  type: 'Container',
+                  layout: { direction: 'column' },
+                  children: [],
+                },
+              ],
+            },
+          },
+        ],
+        loadedPageIds: new Set(['page-1']),
+        dirtyPageIds: new Set(),
+      });
+    });
+
+    it('keeps a weight the widget still has a row for', () => {
+      expect(growOfKid()).toBe(2);
+    });
+
+    it('is left alone when the parent container flips direction under it', () => {
+      useConfigStore.getState().updateComponent('row', { layout: { direction: 'column' } });
+
+      expect(growOfKid()).toBe(2);
+    });
+
+    it('is left alone when the widget is moved into a container that flows the other way', () => {
+      useConfigStore.getState().moveWidgetTo('kid', { kind: 'container', containerId: 'col' });
+
+      expect(growOfKid()).toBe(2);
+    });
+
+    it('is left alone for a layout write that cannot move a flow', () => {
+      useConfigStore.getState().updateComponent('row', { layout: { gap: '8px' } });
+
+      expect(growOfKid()).toBe(2);
+    });
+  });
+
   describe('structureRev', () => {
     const rev = () => useConfigStore.getState().structureRev;
 
@@ -182,7 +273,7 @@ describe('configStore', () => {
         ],
         header: [{ id: 'head', type: 'Button', name: 'Head' }],
         footer: [],
-        dialogs: [{ id: 'dlg', title: 'Dialog', widgets: [] }],
+        dialogs: [{ id: 'dlg', type: 'page', title: 'Dialog', sections: { main: [] } }],
         loadedPageIds: new Set(['page-1']),
         dirtyPageIds: new Set(),
       });
@@ -207,8 +298,8 @@ describe('configStore', () => {
         () => useConfigStore.getState().addComponentToArea('header', newBtn()),
       ],
       [
-        'addComponentToDialog',
-        () => useConfigStore.getState().addComponentToDialog('dlg', newBtn()),
+        'addComponentToPage in the Dialogs folder',
+        () => useConfigStore.getState().addComponentToPage('dlg', newBtn()),
       ],
       [
         'addComponentToContainer',
@@ -293,10 +384,17 @@ describe('configStore', () => {
           useConfigStore.getState().reorderPages([...useConfigStore.getState().pages].reverse()),
       ],
       [
-        'addDialog',
-        () => useConfigStore.getState().addDialog({ id: 'dlg-2', title: 'D2', widgets: [] }),
+        'addPage to the Dialogs folder',
+        () =>
+          useConfigStore
+            .getState()
+            .addPage({ id: 'dlg-2', type: 'page', title: 'D2', sections: {} }, 'dialogs'),
       ],
-      ['deleteDialog', () => useConfigStore.getState().deleteDialog('dlg')],
+      ['deletePage in the Dialogs folder', () => useConfigStore.getState().deletePage('dlg')],
+      [
+        'movePageTo across roots',
+        () => useConfigStore.getState().movePageTo('page-1', null, 0, 'dialogs'),
+      ],
       // The paste path splices into page-group chrome through updatePageGroup.
       [
         'updatePageGroup with chrome widgets',
@@ -361,10 +459,9 @@ describe('configStore', () => {
         () => useConfigStore.getState().updateComponent('one', { layout: { grow: 1 } }),
       ],
       ['updatePage', () => useConfigStore.getState().updatePage('page-1', { title: 'Renamed' })],
-      ['renameDialog', () => useConfigStore.getState().renameDialog('dlg', 'Renamed')],
       [
-        'updateDialog',
-        () => useConfigStore.getState().updateDialog('dlg', { showCloseButton: true }),
+        'updatePage in the Dialogs folder',
+        () => useConfigStore.getState().updatePage('dlg', { showCloseButton: false }),
       ],
       ['updateShell', () => useConfigStore.getState().updateShell({ hmiScale: 2 })],
       ['updateGlobalEvents', () => useConfigStore.getState().updateGlobalEvents({})],
@@ -489,7 +586,7 @@ describe('configStore', () => {
           ...s.pages,
           { id: 'page-2', type: 'page', title: 'Page 2', sections: { main: [] } },
         ],
-        dialogs: [{ id: 'dlg', title: 'Dialog', widgets: [] }],
+        dialogs: [{ id: 'dlg', type: 'page', title: 'Dialog', sections: { main: [] } }],
         footer: [],
       }));
       const before = useConfigStore.getState();
@@ -510,7 +607,7 @@ describe('configStore', () => {
           ...s.pages,
           { id: 'page-2', type: 'page', title: 'Page 2', sections: { main: [] } },
         ],
-        dialogs: [{ id: 'dlg', title: 'Dialog', widgets: [] }],
+        dialogs: [{ id: 'dlg', type: 'page', title: 'Dialog', sections: { main: [] } }],
       }));
       const before = useConfigStore.getState();
       const boxBefore = pageWidgets(before, 'page-1').find((w) => w.id === 'box');
@@ -530,7 +627,7 @@ describe('configStore', () => {
           ...s.pages,
           { id: 'page-2', type: 'page', title: 'Page 2', sections: { main: [] } },
         ],
-        dialogs: [{ id: 'dlg', title: 'Dialog', widgets: [] }],
+        dialogs: [{ id: 'dlg', type: 'page', title: 'Dialog', sections: { main: [] } }],
       }));
       const before = useConfigStore.getState();
 
@@ -763,6 +860,39 @@ describe('configStore', () => {
     expect(useConfigStore.getState().dirtyPageIds.size).toBe(0);
   });
 
+  it('saves the Dialogs folder as index nodes and its dirty pages as page files', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+    vi.stubGlobal('fetch', fetchSpy);
+    useConfigStore.getState().addPage(
+      {
+        id: 'dlg-1',
+        type: 'page',
+        title: 'Confirm',
+        sections: { content: [] },
+        showCloseButton: false,
+      },
+      'dialogs',
+    );
+
+    expect(await useConfigStore.getState().saveConfigToBackend()).toBe(true);
+
+    const indexCall = fetchSpy.mock.calls.find((call) => call[0] === '/api/config/config');
+    expect(JSON.parse(indexCall?.[1]?.body as string).dialogs).toEqual([
+      { id: 'dlg-1', type: 'page' },
+    ]);
+    // The Dialogs folder keeps its documents in their own directory, so the URL
+    // names that root rather than `pages`.
+    expect(
+      fetchSpy.mock.calls.find((call) => call[0] === '/api/config/pages/dlg-1'),
+    ).toBeUndefined();
+    const pageCall = fetchSpy.mock.calls.find((call) => call[0] === '/api/config/dialogs/dlg-1');
+    expect(JSON.parse(pageCall?.[1]?.body as string)).toMatchObject({
+      title: 'Confirm',
+      showCloseButton: false,
+      sections: { content: [] },
+    });
+  });
+
   it('does not fail the save when the config response carries advisory warnings', async () => {
     // Advisory issues (e.g. unknown $var datasource) never block a write —
     // the PUT response no longer even carries a `warnings` field (see
@@ -855,6 +985,28 @@ describe('configStore', () => {
     const sections = firstPage && 'sections' in firstPage ? firstPage.sections : undefined;
     expect(sections?.main).toEqual(children);
     expect(useConfigStore.getState().loadedPageIds.has('page-1')).toBe(true);
+  });
+
+  it('loadPageContent reads a Dialogs-folder page from that root\u2019s endpoint', async () => {
+    // Each root keeps its documents in its own directory, and the URL names
+    // which — reading a Dialogs page from /pages would hand back an empty stub.
+    const children = [{ id: 'ok', type: 'Button', name: 'OK', properties: {}, layout: {} }];
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'dlg-1', sections: { content: children } }),
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    useConfigStore.setState({
+      dialogs: [{ id: 'dlg-1', type: 'page', title: 'Confirm', sections: { content: [] } }],
+      loadedPageIds: new Set(),
+      dirtyPageIds: new Set(),
+    });
+
+    await useConfigStore.getState().loadPageContent('dlg-1');
+
+    expect(fetchSpy.mock.calls[0][0]).toBe('/api/config/dialogs/dlg-1');
+    const page = useConfigStore.getState().dialogs[0];
+    expect(page.type === 'page' ? page.sections.content : []).toEqual(children);
   });
 
   it('loadPageContent falls back to an empty content section for the missing-page stub', async () => {
@@ -1024,6 +1176,35 @@ describe('configStore', () => {
     useConfigStore.getState().moveWidgetTo('comp-1', { kind: 'shell-area', region: 'header' });
 
     expect(useProjectStore.getState().dirty).toBe(true);
+  });
+
+  it('moves a page between the Pages tree and the Dialogs folder', () => {
+    useConfigStore.getState().setDialogs([]);
+
+    useConfigStore.getState().movePageTo('page-1', null, 0, 'dialogs');
+    expect(useConfigStore.getState().pages.some((node) => node.id === 'page-1')).toBe(false);
+    expect(useConfigStore.getState().dialogs.map((node) => node.id)).toEqual(['page-1']);
+
+    useConfigStore.getState().movePageTo('page-1', null, undefined, 'pages');
+    expect(useConfigStore.getState().dialogs).toEqual([]);
+    expect(useConfigStore.getState().pages.some((node) => node.id === 'page-1')).toBe(true);
+  });
+
+  it('edits a Dialogs-folder page through the page actions', () => {
+    useConfigStore
+      .getState()
+      .addPage(
+        { id: 'dlg-1', type: 'page', title: 'Confirm', sections: { content: [] } },
+        'dialogs',
+      );
+    useConfigStore.getState().updatePage('dlg-1', { closeOnBackgroundPress: false });
+    useConfigStore.getState().addComponentToPage('dlg-1', { id: 'ok', type: 'Button', name: 'OK' });
+
+    const page = useConfigStore.getState().dialogs[0];
+    expect(page.type === 'page' ? page.sections.content.map((w) => w.id) : []).toEqual(['ok']);
+    expect(page.closeOnBackgroundPress).toBe(false);
+    expect(useConfigStore.getState().dirtyPageIds.has('dlg-1')).toBe(true);
+    expect(useConfigStore.getState().pages.some((node) => node.id === 'dlg-1')).toBe(false);
   });
 
   it('refuses to move a page group into its own descendant', () => {
