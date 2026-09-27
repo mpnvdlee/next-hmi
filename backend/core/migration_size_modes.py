@@ -125,6 +125,9 @@ _PAGE_FLOW: _Flow = (_PAGE_AXIS, "stretch")
 # A definition's roots are placed by whatever hosts the instance, so they get no
 # axis of their own; everything below them does.
 _COMPONENT_ROOT_FLOW: _Flow = (None, "stretch")
+# An instance's own children render inside the definition's ComponentSlot, which
+# is a stretching column whatever the definition (`ComponentSlot/index.tsx`).
+_SLOT_FLOW: _Flow = ("column", "stretch")
 
 
 @dataclass(frozen=True)
@@ -197,6 +200,8 @@ def _child_axis(node: dict[str, Any], types: _WidgetTypes) -> str | None:
 
 def _child_flow(node: dict[str, Any], types: _WidgetTypes) -> _Flow:
     """The `(axis, align)` *node*'s own children are laid out under."""
+    if str(node.get("type") or "").startswith("$component:"):
+        return _SLOT_FLOW
     layout = node.get("layout")
     child_align = layout.get("align") if isinstance(layout, dict) else None
     child_align = child_align if isinstance(child_align, str) and child_align != "" else "stretch"

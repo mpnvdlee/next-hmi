@@ -1086,6 +1086,25 @@ def test_the_step_is_idempotent(project: Path) -> None:
     assert result.files_changed == []
 
 
+def test_an_instance_child_is_moded_against_the_slot_column(project: Path) -> None:
+    """An instance's own children render inside the definition's ComponentSlot,
+    which is always a stretching column. Left axis-less they get no mode, the
+    runtime defaults both axes to Hug, and a row that stretched across the card
+    shrinks to its content."""
+    card = {"id": "card", "type": "$component:card", "layout": {}}
+    card["children"] = [
+        {**_node("row", direction="row", grow=0, shrink=0, basis="auto"), "slot": "body"}
+    ]
+    (project / "pages" / "p.json").write_text(json.dumps({"sections": {"content": [card]}}))
+
+    migrate_size_modes(_paths(project), project)
+
+    page = json.loads((project / "pages" / "p.json").read_text())
+    row = page["sections"]["content"][0]["children"][0]["layout"]
+    assert row["heightMode"] == "hug"
+    assert row["widthMode"] == "fill"
+
+
 @pytest.mark.parametrize(
     "basis, floored",
     [("100px", True), ("50%", True), (None, True), ("0", False)],
