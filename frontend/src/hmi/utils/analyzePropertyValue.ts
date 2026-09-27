@@ -12,8 +12,9 @@ import {
  *    `$compare` / `$stringExpr` and other sources, arrays, and plain objects),
  *  - the subset of those keys the render actually *reads* (see
  *    `renderedVarKeys` below),
- *  - whether a `$time` source appears anywhere inside it, and
- *  - whether an `$http` source appears anywhere inside it.
+ *  - whether a `$time` source appears anywhere inside it,
+ *  - whether an `$http` source appears anywhere inside it, and
+ *  - whether a `$if` / `$switch` appears anywhere inside it.
  *
  * `extractVarKeys`, `extractRenderedVarKeys`, `usesTime` and `usesHttp` are thin
  * accessors over this, so a widget that needs several of them (WidgetRenderer)
@@ -34,7 +35,8 @@ interface PropertyValueAnalysis {
   varKeys: readonly string[];
   /** The keys above minus the ones sitting in a branch that lost: the result
    *  slots of `$if` and `$switch` are alternatives, and at most one of them is
-   *  on screen, so none of them can be said to be missing. Their discriminants
+   *  on screen, so a static walk cannot say any is missing (the overlay picks
+   *  the taken one itself, with an eval context). Their discriminants
    *  — the condition, the switch value, each `when` — are read on every render
    *  and stay in. Drives the binding overlay, which must only mark a variable
    *  the viewer is actually looking at; the subscription uses `varKeys`, since a
@@ -42,11 +44,15 @@ interface PropertyValueAnalysis {
   renderedVarKeys: readonly string[];
   usesTime: boolean;
   usesHttp: boolean;
+  /** Lets the binding overlay skip its per-render branch walk for a value with
+   *  no branch to take — the common case. */
+  usesBranch: boolean;
 }
 
 interface WalkState {
   usesTime: boolean;
   usesHttp: boolean;
+  usesBranch: boolean;
 }
 
 const EMPTY_KEYS: readonly string[] = Object.freeze([]);
@@ -55,6 +61,7 @@ const EMPTY: PropertyValueAnalysis = Object.freeze({
   renderedVarKeys: EMPTY_KEYS,
   usesTime: false,
   usesHttp: false,
+  usesBranch: false,
 });
 const cache = new WeakMap<object, PropertyValueAnalysis>();
 
@@ -66,16 +73,17 @@ export function analyzePropertyValue(value: unknown): PropertyValueAnalysis {
   const keys: string[] = [];
   const seen = new Set<string>();
   const rendered = new Set<string>();
-  const state: WalkState = { usesTime: false, usesHttp: false };
+  const state: WalkState = { usesTime: false, usesHttp: false, usesBranch: false };
   walk(value, keys, seen, rendered, state, true);
 
   const result: PropertyValueAnalysis =
-    keys.length || state.usesTime || state.usesHttp
+    keys.length || state.usesTime || state.usesHttp || state.usesBranch
       ? {
           varKeys: keys.length ? keys : EMPTY_KEYS,
           renderedVarKeys: rendered.size ? keys.filter((key) => rendered.has(key)) : EMPTY_KEYS,
           usesTime: state.usesTime,
           usesHttp: state.usesHttp,
+          usesBranch: state.usesBranch,
         }
       : EMPTY;
   cache.set(value, result);
@@ -118,6 +126,7 @@ function walk(
   // `$if` / `$switch` results are alternatives: still subscribed to (the branch
   // taken can change), but only the discriminants are read on every render.
   const record = value as Record<string, unknown>;
+  if (isRecord(record.$if) || isRecord(record.$switch)) state.usesBranch = true;
   const ifSource = record.$if;
   if (onScreen && isRecord(ifSource)) {
     walk(ifSource.condition, keys, seen, rendered, state, true);

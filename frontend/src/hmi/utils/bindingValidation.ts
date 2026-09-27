@@ -9,15 +9,17 @@
  */
 
 import { getPropBinding } from '../components/layoutUtils';
-import { extractRenderedVarKeys } from './extractVarKeys';
+import { extractRenderedVarKeys, usesBranch } from './extractVarKeys';
 import { isVisibilityGateProperty } from '@shared/types/universalWidgetProperties';
-import { bindingKey } from '@shared/types/config';
+import { bindingKey, type VariableBinding } from '@shared/types/config';
+import { getVarBinding, isRecord, isVarSource } from '@shared/types/propertyValueGuards';
 import type { RequiredFieldEntry } from '@shared/types/widgetSchema';
 import { accepts, elementOf, parseTypeToken, type AcceptType } from '@shared/types/varType';
 import { acceptedValueTypes } from '@shared/utils/valueTypes';
 import { useVariableStore } from '../store/variableStore';
 import type { VarMeta } from '../store/variableStore';
 import { useDataSettling } from '../context/DataSettleContext';
+import { useEvalContext } from '../hooks/useEvalContext';
 import { useMemo } from 'react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -66,20 +68,44 @@ export type BindingStatus = 'ok' | 'disabled' | 'disconnected' | 'nodata';
  * Convert a component's property map + schema into per-field BindingSpecs.
  *
  * A property whose whole value is a `$var` is type-checked against its schema
- * slot. Every *other* variable the widget puts on screen — nested in a
- * `$stringExpr` template, a `$compare` operand — is checked for presence only:
- * it has no slot, so no declared type, but a widget showing a dead variable
- * still has to say so.
+ * slot, and so is the `$var` a `$if` / `$switch` result lands on — `evalContext`
+ * picks the branch, as the render does. Every *other* variable the widget puts
+ * on screen — a condition, a `$stringExpr` wildcard, a `$compare` operand, one
+ * inside a taken result that is not a plain `$var` — is checked for presence
+ * only: it has no slot, so no declared type, but a widget showing a dead
+ * variable still has to say so.
  *
- * "On screen" is the limit, drawn by `extractRenderedVarKeys`: a variable that
- * only appears in an action payload, a `visible` condition, or a losing
- * `$if`/`$switch` branch would be a mark with no referent.
+ * "On screen" is the limit: a variable that only appears in an action payload,
+ * a `visible` condition, or a losing `$if`/`$switch` branch would be a mark with
+ * no referent. Without an `evalContext` no branch is known to win, so every
+ * branch result is left out (`extractRenderedVarKeys`).
  */
 export function extractBindingSpecs(
   properties: Record<string, unknown> | undefined,
-  schema: Record<string, { type: string | string[]; requiredFields?: RequiredFieldEntry[] }>,
+  schema: Record<string, BindingSchemaField>,
+  evalContext?: EvaluationContext,
 ): BindingSpec[] {
   if (!properties) return [];
+  return buildBindingSpecs(
+    properties,
+    schema,
+    evalContext ? takenBranchReads(properties, schema, evalContext) : undefined,
+  );
+}
+
+/** What the branches of one property read in the current render: the `$var`
+ *  its result chain lands on, if any, and every variable on screen with only
+ *  the losing branches dropped. */
+interface TakenBranchRead {
+  binding?: VariableBinding;
+  rendered: string[];
+}
+
+function buildBindingSpecs(
+  properties: Record<string, unknown>,
+  schema: Record<string, BindingSchemaField>,
+  taken: Map<string, TakenBranchRead> | undefined,
+): BindingSpec[] {
   const specs: BindingSpec[] = [];
   const covered = new Set<string>();
   const nested = new Set<string>();
@@ -90,7 +116,8 @@ export function extractBindingSpecs(
     // more than the nested walk (gated by `isRenderedProperty` below) does.
     if (isVisibilityGateProperty(key)) continue;
     const field = schema[key];
-    const b = getPropBinding(properties, key);
+    const read = taken?.get(key);
+    const b = getPropBinding(properties, key) ?? read?.binding;
     const id = b ? bindingKey(b) : '';
     if (b && id) {
       covered.add(id);
@@ -99,16 +126,111 @@ export function extractBindingSpecs(
         index: b.index,
         accept: acceptTypes(field?.type),
         requiredFields: field?.requiredFields,
+        ...(field?.write === true && { write: true }),
       });
     }
     if (!isRenderedProperty(key, field)) continue;
-    for (const nestedId of extractRenderedVarKeys(properties[key])) nested.add(nestedId);
+    for (const nestedId of read?.rendered ?? extractRenderedVarKeys(properties[key])) {
+      nested.add(nestedId);
+    }
   }
   for (const id of nested) {
     if (covered.has(id)) continue;
     specs.push({ id, accept: [] });
   }
   return specs;
+}
+
+// The evaluator's own recursion cap (`MAX_SOURCE_RECURSION_DEPTH`).
+const MAX_BRANCH_DEPTH = 64;
+
+/**
+ * For each rendered property holding a `$if` / `$switch`, what the current
+ * render reads through it (`TakenBranchRead`). A taken result is followed the
+ * way the evaluator follows it, `$componentProp` included, so a result chain
+ * `$switch` → `$if` → `$var` types that `$var` and checks both discriminants.
+ */
+function takenBranchReads(
+  properties: Record<string, unknown>,
+  schema: Record<string, BindingSchemaField>,
+  evalContext: EvaluationContext,
+): Map<string, TakenBranchRead> {
+  const out = new Map<string, TakenBranchRead>();
+  for (const [key, value] of Object.entries(properties)) {
+    if (!isRenderedProperty(key, schema[key]) || !usesBranch(value)) continue;
+    const rendered = new Set<string>();
+    collectRenderedVarKeys(value, evalContext, rendered, MAX_BRANCH_DEPTH);
+    const read: TakenBranchRead = { rendered: Array.from(rendered) };
+    const binding = getVarBinding(takenResult(value, evalContext));
+    if (binding) read.binding = binding;
+    out.set(key, read);
+  }
+  return out;
+}
+
+/** The `$var`-or-other value a `$if` / `$switch` result chain lands on, or
+ *  `undefined` when `value` is no branch source. */
+function takenResult(value: unknown, evalContext: EvaluationContext): unknown {
+  let result = takenBranch(value, evalContext);
+  if (result === undefined) return undefined;
+  for (let depth = 0; depth < MAX_BRANCH_DEPTH; depth++) {
+    result = resolveComponentPropValue(result, evalContext.inputScopeProps);
+    const next = takenBranch(result, evalContext);
+    if (next === undefined) return result;
+    result = next;
+  }
+  return undefined;
+}
+
+/** `extractRenderedVarKeys` with the branch the render takes kept: at each
+ *  `$if` / `$switch` the discriminants are read as there, then the taken result
+ *  (through a `$componentProp`) instead of none. */
+function collectRenderedVarKeys(
+  value: unknown,
+  evalContext: EvaluationContext,
+  out: Set<string>,
+  depth: number,
+): void {
+  if (depth <= 0 || value === null || typeof value !== 'object') return;
+  if (Array.isArray(value)) {
+    for (const el of value) collectRenderedVarKeys(el, evalContext, out, depth - 1);
+    return;
+  }
+  if (isVarSource(value)) {
+    if (value.$var.path) out.add(value.$var.path);
+    return;
+  }
+  const record = value as Record<string, unknown>;
+  const ifSource = record.$if;
+  const switchSource = record.$switch;
+  if (isRecord(ifSource) || isRecord(switchSource)) {
+    if (isRecord(ifSource)) {
+      collectRenderedVarKeys(ifSource.condition, evalContext, out, depth - 1);
+    } else if (isRecord(switchSource)) {
+      collectRenderedVarKeys(switchSource.value, evalContext, out, depth - 1);
+      if (Array.isArray(switchSource.cases)) {
+        for (const entry of switchSource.cases) {
+          if (isRecord(entry)) collectRenderedVarKeys(entry.when, evalContext, out, depth - 1);
+        }
+      }
+    }
+    const taken = takenBranch(record, evalContext);
+    const result = resolveComponentPropValue(taken, evalContext.inputScopeProps);
+    collectRenderedVarKeys(result, evalContext, out, depth - 1);
+    return;
+  }
+  for (const v of Object.values(record)) collectRenderedVarKeys(v, evalContext, out, depth - 1);
+}
+
+/** Identity of what `takenBranchReads` found, so a hook can rebuild its specs
+ *  exactly when a branch flips to read something else. */
+function takenBranchSignature(taken: Map<string, TakenBranchRead>): string {
+  let sig = '';
+  for (const [key, { binding, rendered }] of taken) {
+    const typed = binding ? `${bindingKey(binding)}[${binding.index ?? ''}]` : '';
+    sig += `${key}=${typed}:${rendered.join(',')};`;
+  }
+  return sig;
 }
 
 /** Whether a property's variables reach the screen at all. An `actions` payload
@@ -288,7 +410,16 @@ export function useBindingStatus(
   properties: Record<string, unknown> | undefined,
   schema: Record<string, BindingSchemaField>,
 ): BindingStatus {
-  const bindingSpecs = useMemo(() => extractBindingSpecs(properties, schema), [properties, schema]);
+  const evalCtx = useEvalContext();
+  const taken = properties ? takenBranchReads(properties, schema, evalCtx) : undefined;
+  const branchSig = taken ? takenBranchSignature(taken) : '';
+  const bindingSpecs = useMemo(
+    () => (properties ? buildBindingSpecs(properties, schema, taken) : []),
+    // `taken` is a fresh map every render; `branchSig` changes exactly when what
+    // it holds does, so keying on it keeps the selector across ticks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [properties, schema, branchSig],
+  );
   const selector = useMemo(() => createBindingStatusSelector(bindingSpecs), [bindingSpecs]);
   const status = useVariableStore(selector);
   const settling = useDataSettling();

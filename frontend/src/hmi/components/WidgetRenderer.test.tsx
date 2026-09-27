@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import type { ShellConfig } from '@shared/types/config';
@@ -185,6 +185,47 @@ describe('WidgetRenderer', () => {
       );
 
       expect(container.querySelector('.hmi-binding-overlay--disabled')).not.toBeNull();
+    });
+
+    it('types the $if result on screen against the field, and re-judges when it flips', async () => {
+      const scalar = (base: 'Boolean' | 'String') => ({
+        type: { kind: 'scalar' as const, base, array: false },
+      });
+      useVariableStore.setState({
+        values: { 'PLC:Detail': true, 'PLC:Status': {}, 'PLC:Name': 'Pump 1' },
+        varMeta: {
+          'PLC:Detail': scalar('Boolean'),
+          'PLC:Status': { type: { kind: 'struct', name: 'Status', array: false, fields: [] } },
+          'PLC:Name': scalar('String'),
+        },
+        metadataReceived: true,
+        snapshotReceived: true,
+        wsConnected: true,
+        opcuaConnected: {},
+      });
+
+      const { container } = renderNode({
+        id: 'label',
+        type: 'LabeledProbe',
+        name: 'Label',
+        properties: {
+          label: 'Pump',
+          value: {
+            $if: {
+              condition: { $var: { path: 'PLC:Detail' } },
+              true: { $var: { path: 'PLC:Status' } },
+              false: { $var: { path: 'PLC:Name' } },
+            },
+          },
+        },
+      });
+      // A struct in a string slot is wrong only while it is the branch on screen.
+      expect(container.querySelector('.hmi-binding-overlay--disabled')).not.toBeNull();
+
+      await act(async () => {
+        useVariableStore.setState((s) => ({ values: { ...s.values, 'PLC:Detail': false } }));
+      });
+      expect(container.querySelector('.hmi-binding-overlay')).toBeNull();
     });
 
     it('renders no overlay when there is no bound variable', () => {

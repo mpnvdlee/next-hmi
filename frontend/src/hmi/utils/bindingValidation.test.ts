@@ -7,6 +7,7 @@ import {
   type BindingStoreSlice,
 } from './bindingValidation';
 import type { VarMeta } from '../store/variableStore';
+import type { EvaluationContext, ResolvedValue } from './propertySourceEval';
 import type { VarType } from '@shared/types/varType';
 
 function slice(overrides: Partial<BindingStoreSlice> = {}): BindingStoreSlice {
@@ -205,6 +206,14 @@ describe('checkBindingSpec', () => {
 });
 
 describe('extractBindingSpecs', () => {
+  it("carries the field's write flag onto the spec", () => {
+    const [spec] = extractBindingSpecs(
+      { setpoint: { $var: { path: 'PLC:Setpoint' } } },
+      { setpoint: { type: 'float', write: true } },
+    );
+    expect(spec).toMatchObject({ id: 'PLC:Setpoint', write: true });
+  });
+
   it('picks up a $var nested in an expression, with no type constraint of its own', () => {
     const specs = extractBindingSpecs(
       {
@@ -267,6 +276,167 @@ describe('extractBindingSpecs', () => {
       { label: { type: 'string' } },
     );
     expect(specs.map((spec) => spec.id).sort()).toEqual(['PLC:ManualMode', 'PLC:Mode']);
+  });
+
+  describe('with the branch the render takes', () => {
+    const values: Record<string, unknown> = {};
+    const ctx: EvaluationContext = {
+      resolveVariable: (ds, path) => (values[`${ds}:${path}`] ?? null) as ResolvedValue,
+    };
+    const running = {
+      $if: {
+        condition: { $var: { path: 'PLC:Running' } },
+        true: { $var: { path: 'PLC:Rpm' } },
+        false: { $var: { path: 'PLC:Spare' } },
+      },
+    };
+
+    it('types an $if result against the field, and only the result it takes', () => {
+      values['PLC:Running'] = true;
+      const specs = extractBindingSpecs(
+        { level: running },
+        { level: { type: 'float', write: true } },
+        ctx,
+      );
+      expect(specs).toEqual([
+        {
+          id: 'PLC:Rpm',
+          index: undefined,
+          accept: [{ kind: 'scalar', base: 'Float', array: false }],
+          requiredFields: undefined,
+          write: true,
+        },
+        { id: 'PLC:Running', accept: [] },
+      ]);
+      values['PLC:Running'] = false;
+      expect(
+        extractBindingSpecs({ level: running }, { level: { type: 'float' } }, ctx)[0],
+      ).toMatchObject({
+        id: 'PLC:Spare',
+        accept: [{ kind: 'scalar', base: 'Float', array: false }],
+      });
+    });
+
+    it('follows a $switch case into a nested $if, and falls back to its default', () => {
+      values['PLC:Mode'] = 2;
+      values['PLC:Running'] = true;
+      const level = {
+        $switch: {
+          value: { $var: { path: 'PLC:Mode' } },
+          cases: [{ when: 2, then: running }],
+          default: { $var: { path: 'PLC:Idle', index: 1 } },
+        },
+      };
+      const schema = { level: { type: 'float' } };
+      // The nested `$if`'s condition sits in the taken `then`, so it is read too.
+      expect(extractBindingSpecs({ level }, schema, ctx).map((s) => s.id)).toEqual([
+        'PLC:Rpm',
+        'PLC:Mode',
+        'PLC:Running',
+      ]);
+      values['PLC:Mode'] = 3;
+      expect(extractBindingSpecs({ level }, schema, ctx)[0]).toMatchObject({
+        id: 'PLC:Idle',
+        index: 1,
+        accept: [{ kind: 'scalar', base: 'Float', array: false }],
+      });
+    });
+
+    it('lets the typed spec win over the same variable used as the condition', () => {
+      values['PLC:Running'] = true;
+      const specs = extractBindingSpecs(
+        {
+          label: {
+            $if: {
+              condition: { $var: { path: 'PLC:Running' } },
+              true: { $var: { path: 'PLC:Running' } },
+            },
+          },
+        },
+        { label: { type: 'boolean' } },
+        ctx,
+      );
+      expect(specs).toHaveLength(1);
+      expect(specs[0]).toMatchObject({
+        id: 'PLC:Running',
+        accept: [{ kind: 'scalar', base: 'Boolean' }],
+      });
+    });
+
+    it('resolves a $componentProp result through the input scope', () => {
+      values['PLC:Running'] = false;
+      const specs = extractBindingSpecs(
+        {
+          level: {
+            $if: {
+              condition: { $var: { path: 'PLC:Running' } },
+              false: { $componentProp: 'speed' },
+            },
+          },
+        },
+        { level: { type: 'float' } },
+        { ...ctx, inputScopeProps: { speed: { $var: { path: 'PLC:Speed' } } } },
+      );
+      expect(specs[0]).toMatchObject({ id: 'PLC:Speed' });
+    });
+
+    it('checks the variables of a taken result that is not a whole $var for presence', () => {
+      values['PLC:Running'] = true;
+      const wildcard = (path: string) => ({
+        $stringExpr: { template: '{1}', wildcards: { 1: { $var: { path } } } },
+      });
+      const label = {
+        $if: {
+          condition: { $var: { path: 'PLC:Running' } },
+          true: wildcard('PLC:Rpm'),
+          false: wildcard('PLC:Spare'),
+        },
+      };
+      const specs = extractBindingSpecs({ label }, { label: { type: 'string' } }, ctx);
+      // The losing `false` stays out; the template on screen has no slot to type.
+      expect(specs).toEqual([
+        { id: 'PLC:Running', accept: [] },
+        { id: 'PLC:Rpm', accept: [] },
+      ]);
+    });
+
+    it('reads the taken side of a branch nested inside a template', () => {
+      values['PLC:Running'] = false;
+      const specs = extractBindingSpecs(
+        {
+          label: {
+            $formula: {
+              expression: '{1} * 2',
+              wildcards: {
+                1: {
+                  $if: {
+                    condition: { $var: { path: 'PLC:Running' } },
+                    true: { $var: { path: 'PLC:Rpm' } },
+                    false: { $var: { path: 'PLC:Spare' } },
+                  },
+                },
+              },
+            },
+          },
+        },
+        { label: { type: 'float' } },
+        ctx,
+      );
+      expect(specs).toEqual([
+        { id: 'PLC:Running', accept: [] },
+        { id: 'PLC:Spare', accept: [] },
+      ]);
+    });
+
+    it('still ignores branches that only gate visibility or fire on press', () => {
+      values['PLC:Running'] = true;
+      const specs = extractBindingSpecs(
+        { visible: running, onPress: running },
+        { onPress: { type: 'actions' } },
+        ctx,
+      );
+      expect(specs).toEqual([]);
+    });
   });
 
   it('ignores variables that only gate visibility or only fire on press', () => {

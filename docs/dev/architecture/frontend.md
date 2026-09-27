@@ -267,10 +267,16 @@ one's verdict.
 `disconnected` (socket or datasource down, authoritative even while values
 remain cached), `disabled` (a binding that does not resolve, drawn red),
 `nodata` (sound binding, no value, drawn amber) or `ok`.
-`extractRenderedVarKeys` narrows the overlay to variables actually on screen —
-dropping the losing branch of an `$if`/`$switch` and any property that is
-visibility-only or an actions payload — so a `$stringExpr` is covered without
-over-marking on unrelated variables. An overlay opened long after its host
+The overlay judges only variables actually on screen: a property that is
+visibility-only or an actions payload is skipped, and at every `$if`/`$switch`,
+at any depth, the branches that lost are dropped — the winner is picked with the
+render's own eval context (`useBindingStatus` → `extractBindingSpecs`), and a
+property with no branch keeps the memoised static walk, `extractRenderedVarKeys`.
+A whole-value `$var` and the `$var` a `$if`/`$switch` result chain lands on are
+typed against the field; every other variable on screen — a condition, a
+`$stringExpr` wildcard, anything in a taken result that is not a plain `$var` —
+is checked for presence only, so a template is covered without over-marking on
+unrelated variables. An overlay opened long after its host
 page settled asks for variables of its own, so its resolved page id rides in
 `currentPageIds` and the `context_ready` ack echoes it: the overlay settles on
 that signal rather than inheriting the host page's already-closed window.

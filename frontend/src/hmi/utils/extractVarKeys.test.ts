@@ -1,4 +1,4 @@
-import { extractVarKeys } from './extractVarKeys';
+import { extractVarKeys, usesBranch } from './extractVarKeys';
 
 const v = (path: string, index?: number) => ({
   $var: index === undefined ? { path } : { path, index },
@@ -64,5 +64,18 @@ describe('extractVarKeys', () => {
   it('returns a stable reference for the same input object (memoised)', () => {
     const props = { value: v('PLC:a') };
     expect(extractVarKeys(props)).toBe(extractVarKeys(props));
+  });
+});
+
+describe('usesBranch', () => {
+  it('finds a $if or $switch at any depth, even one reading no variable', () => {
+    expect(usesBranch({ $if: { condition: true, true: { $componentProp: 'a' } } })).toBe(true);
+    expect(
+      usesBranch({ $stringExpr: { template: '{1}', wildcards: { 1: { $switch: { value: 1 } } } } }),
+    ).toBe(true);
+    expect(usesBranch({ $stringExpr: { template: '{1}', wildcards: { 1: v('PLC:a') } } })).toBe(
+      false,
+    );
+    expect(usesBranch(v('PLC:a'))).toBe(false);
   });
 });

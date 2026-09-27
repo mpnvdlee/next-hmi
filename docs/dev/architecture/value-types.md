@@ -230,10 +230,11 @@ A source doesn't always produce a clean value. Three things can go wrong, and ea
 
 **Coercion.** A source's base type should match the field's base type. When they differ, the widget's read (`getPropString` / `getPropNumber` / `getPropBoolean` in `frontend/src/hmi/components/layoutUtils.ts`, and their `useProp*` hooks) decides:
 
-- `Integer`/`Float` → `String` and `Boolean` → `String` coerce with the field's display format.
-- `Integer` and `Float` interconvert freely (`Float` → `Integer` rounds; `Integer` → `Float` is exact).
-- `String` → `Integer`/`Float` coerces only if it parses cleanly; otherwise it's *absent*.
-- Mismatches with no sensible coercion (e.g. `image` → `Float`) are rejected by the editor at bind time, not at runtime.
+- A **number read** takes a number as-is, and a string only when it is a clean decimal number — `"42"`, `" -1.5 "`, `"2e3"`, the same grammar the OPC-UA write path accepts. Anything else (`""`, `"12px"`, `"0x10"`, `"Infinity"`, a boolean) is *absent* and the field falls back. Nothing is rounded: an `Integer` field that reads `2.5` gets `2.5`. `Integer` → `Float` is exact.
+- A **string read** turns a number or boolean into its plain text (`"3.5"`, `"true"`); formatting such as decimals is the widget's own.
+- A **boolean read** takes a boolean as-is and a number as non-zero = `true`. A string is trimmed and lower-cased: `true` / `yes` / `on` / `1` read `true`, `false` / `no` / `off` / `0` read `false`, and `""` reads `true`. Any other value — another non-empty string, an object — is truthy (`Boolean(value)`); only an absent value takes the fallback.
+- `usePropVar` returns the raw value and coerces nothing.
+- A *variable* binding is stricter than any of this: no pair of base types crosses — see [Which variable fits a field](#which-variable-fits-a-field). The binding picker will not confirm a variable that does not fit; one that reaches a page anyway (a hand-edited file, a variable whose type changed) gets a `var-type` diagnostic from the backend and the red overlay at runtime. The overlay types a whole-value `$var` and the `$var` a `$if` / `$switch` result lands on — the branch on screen, picked as the render picks it. Every other variable on screen — a condition, a template or formula wildcard, anything inside a taken result that is not a plain `$var` — is checked for presence only; a losing branch is not judged at all.
 
 Rule of thumb: **the editor prevents impossible bindings; the runtime turns the still-possible failures (absent / bad quality) into the field's fallback, never a crash.**
 

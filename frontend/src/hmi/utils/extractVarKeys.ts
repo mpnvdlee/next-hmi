@@ -23,3 +23,9 @@ export function extractVarKeys(value: unknown): readonly string[] {
 export function extractRenderedVarKeys(value: unknown): readonly string[] {
   return analyzePropertyValue(value).renderedVarKeys;
 }
+
+/** Whether `value` holds a `$if` / `$switch` anywhere — a branch whose taken
+ *  side only an eval context can name. */
+export function usesBranch(value: unknown): boolean {
+  return analyzePropertyValue(value).usesBranch;
+}

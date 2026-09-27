@@ -272,19 +272,33 @@ function evaluatePageIsActive(pageObj: unknown, context: EvaluationContext): Res
   return context.isPageActive(targetId);
 }
 
+/**
+ * The raw result a `$if` / `$switch` picks in `context` — the branch the
+ * evaluator goes on to evaluate — or `undefined` when `value` is neither
+ * source, or picks a branch that is not there.
+ */
+export function takenBranch(value: unknown, context: EvaluationContext = {}): unknown {
+  if (!isRecord(value)) return undefined;
+  const sourceKey = Object.keys(value).find((k) => k.startsWith('$'));
+  const depth = MAX_SOURCE_RECURSION_DEPTH - 1;
+  if (sourceKey === '$if') return pickIfBranch(value.$if, context, depth);
+  if (sourceKey === '$switch') return pickSwitchBranch(value.$switch, context, depth);
+  return undefined;
+}
+
+function pickIfBranch(ifObj: unknown, context: EvaluationContext, depth: number): unknown {
+  if (typeof ifObj !== 'object' || ifObj === null) return undefined;
+  const i = ifObj as Record<string, unknown>;
+  // Evaluate condition and coerce to boolean
+  const condResult = evaluatePropertyValueInternal(i.condition, context, depth);
+  return condResult ? i.true : i.false;
+}
+
 function evaluateIf(ifObj: unknown, context: EvaluationContext, depth: number): ResolvedValue {
   if (typeof ifObj !== 'object' || ifObj === null) {
     return null;
   }
-
-  const i = ifObj as Record<string, unknown>;
-  const condition = i.condition;
-  const trueValue = i.true;
-  const falseValue = i.false;
-
-  // Evaluate condition and coerce to boolean
-  const condResult = evaluatePropertyValueInternal(condition, context, depth);
-  return evaluatePropertyValueInternal(condResult ? trueValue : falseValue, context, depth);
+  return evaluatePropertyValueInternal(pickIfBranch(ifObj, context, depth), context, depth);
 }
 
 /**
@@ -386,6 +400,22 @@ function evaluateRandom(randObj: unknown): ResolvedValue {
   return integer ? Math.round(value) : value;
 }
 
+function pickSwitchBranch(switchObj: unknown, context: EvaluationContext, depth: number): unknown {
+  if (typeof switchObj !== 'object' || switchObj === null) return undefined;
+  const s = switchObj as Record<string, unknown>;
+  const switchValue = evaluatePropertyValueInternal(s.value, context, depth);
+  const cases = (s.cases ?? []) as Array<Record<string, unknown>>;
+
+  // Find matching case (numeric coercion: 5 matches "5")
+  for (const c of cases) {
+    const caseValue = evaluatePropertyValueInternal(c.when, context, depth);
+    if (looseEquals(caseValue, switchValue)) return c.then;
+  }
+
+  // No match — return default
+  return s.default;
+}
+
 function evaluateSwitch(
   switchObj: unknown,
   context: EvaluationContext,
@@ -394,22 +424,7 @@ function evaluateSwitch(
   if (typeof switchObj !== 'object' || switchObj === null) {
     return null;
   }
-
-  const s = switchObj as Record<string, unknown>;
-  const switchValue = evaluatePropertyValueInternal(s.value, context, depth);
-  const cases = (s.cases ?? []) as Array<Record<string, unknown>>;
-  const defaultValue = s.default;
-
-  // Find matching case (numeric coercion: 5 matches "5")
-  for (const c of cases) {
-    const caseValue = evaluatePropertyValueInternal(c.when, context, depth);
-    if (looseEquals(caseValue, switchValue)) {
-      return evaluatePropertyValueInternal(c.then, context, depth);
-    }
-  }
-
-  // No match — return default
-  return evaluatePropertyValueInternal(defaultValue, context, depth);
+  return evaluatePropertyValueInternal(pickSwitchBranch(switchObj, context, depth), context, depth);
 }
 
 function evaluateWidgetProp(propObj: unknown, context: EvaluationContext): ResolvedValue {
