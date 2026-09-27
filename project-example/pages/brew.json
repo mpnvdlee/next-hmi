@@ -662,8 +662,11 @@
                                     "onOk": [
                                       {
                                         "type": "writeDataVariable",
-                                        "datasource": "Brew",
-                                        "path": "Machine/Brewing",
+                                        "target": {
+                                          "$var": {
+                                            "path": "Brew:Machine/Brewing"
+                                          }
+                                        },
                                         "value": true,
                                         "onSuccess": [
                                           {
@@ -741,8 +744,11 @@
                                 "onPress": [
                                   {
                                     "type": "writeDataVariable",
-                                    "datasource": "Brew",
-                                    "path": "Machine/Brewing",
+                                    "target": {
+                                      "$var": {
+                                        "path": "Brew:Machine/Brewing"
+                                      }
+                                    },
                                     "value": false
                                   },
                                   {

@@ -854,8 +854,11 @@
         "onOpen": [
           {
             "type": "writeDataVariable",
-            "datasource": "Brew",
-            "path": "Wizard/BeanType",
+            "target": {
+              "$var": {
+                "path": "Brew:Wizard/BeanType"
+              }
+            },
             "value": {
               "$componentProp": "startingBeanType"
             },
@@ -883,8 +886,11 @@
           },
           {
             "type": "writeDataVariable",
-            "datasource": "Brew",
-            "path": "Wizard/CupCount",
+            "target": {
+              "$var": {
+                "path": "Brew:Wizard/CupCount"
+              }
+            },
             "value": {
               "$componentProp": "startingCupCount"
             },
@@ -1088,80 +1094,119 @@
     "onHmiLoaded": [
       {
         "type": "writeDataVariable",
-        "datasource": "Brew",
-        "path": "Machine/Power",
+        "target": {
+          "$var": {
+            "path": "Brew:Machine/Power"
+          }
+        },
         "value": true
       },
       {
         "type": "writeDataVariable",
-        "datasource": "Brew",
-        "path": "Machine/Brewing",
+        "target": {
+          "$var": {
+            "path": "Brew:Machine/Brewing"
+          }
+        },
         "value": false
       },
       {
         "type": "writeDataVariable",
-        "datasource": "Brew",
-        "path": "Boiler/Temp",
+        "target": {
+          "$var": {
+            "path": "Brew:Boiler/Temp"
+          }
+        },
         "value": 92.5
       },
       {
         "type": "writeDataVariable",
-        "datasource": "Brew",
-        "path": "Boiler/Setpoint",
+        "target": {
+          "$var": {
+            "path": "Brew:Boiler/Setpoint"
+          }
+        },
         "value": 93
       },
       {
         "type": "writeDataVariable",
-        "datasource": "Brew",
-        "path": "Pump/Pressure",
+        "target": {
+          "$var": {
+            "path": "Brew:Pump/Pressure"
+          }
+        },
         "value": 9
       },
       {
         "type": "writeDataVariable",
-        "datasource": "Brew",
-        "path": "Hopper/BeanLevel",
+        "target": {
+          "$var": {
+            "path": "Brew:Hopper/BeanLevel"
+          }
+        },
         "value": 62
       },
       {
         "type": "writeDataVariable",
-        "datasource": "Brew",
-        "path": "Hopper/Dose",
+        "target": {
+          "$var": {
+            "path": "Brew:Hopper/Dose"
+          }
+        },
         "value": 18
       },
       {
         "type": "writeDataVariable",
-        "datasource": "Brew",
-        "path": "Hopper/Grind",
+        "target": {
+          "$var": {
+            "path": "Brew:Hopper/Grind"
+          }
+        },
         "value": "medium"
       },
       {
         "type": "writeDataVariable",
-        "datasource": "Brew",
-        "path": "Tank/WaterLevel",
+        "target": {
+          "$var": {
+            "path": "Brew:Tank/WaterLevel"
+          }
+        },
         "value": 78
       },
       {
         "type": "writeDataVariable",
-        "datasource": "Brew",
-        "path": "Waste/DrawerFull",
+        "target": {
+          "$var": {
+            "path": "Brew:Waste/DrawerFull"
+          }
+        },
         "value": false
       },
       {
         "type": "writeDataVariable",
-        "datasource": "Brew",
-        "path": "Counters/CupsToday",
+        "target": {
+          "$var": {
+            "path": "Brew:Counters/CupsToday"
+          }
+        },
         "value": 3
       },
       {
         "type": "writeDataVariable",
-        "datasource": "Brew",
-        "path": "Counters/ShotTime",
+        "target": {
+          "$var": {
+            "path": "Brew:Counters/ShotTime"
+          }
+        },
         "value": 27.5
       },
       {
         "type": "writeDataVariable",
-        "datasource": "Brew",
-        "path": "Drink/Name",
+        "target": {
+          "$var": {
+            "path": "Brew:Drink/Name"
+          }
+        },
         "value": "Espresso"
       },
       {

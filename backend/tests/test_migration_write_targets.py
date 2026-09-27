@@ -2,6 +2,7 @@
 into one sourced ``target``."""
 
 import json
+import shutil
 from pathlib import Path
 
 import core.project_migrations as pm
@@ -151,3 +152,19 @@ def test_the_coordinator_carries_a_format_8_project_to_9(project: Path) -> None:
     assert _read(project / "config.json")["globalEvents"]["onStart"][0]["target"] == {
         "$var": {"path": "PLC:Run"}
     }
+
+
+@pytest.mark.parametrize("template", ["project-seed", "project-example"])
+def test_bundled_templates_are_already_in_the_current_format(template: str, tmp_path: Path) -> None:
+    """A new project is stamped current straight from its template, never
+    migrated, so a template this step would still change would ship broken."""
+    source = Path(__file__).resolve().parents[2] / template
+    for name in ("config.json", "pages", "dialogs", "components"):
+        if (source / name).is_dir():
+            shutil.copytree(source / name, tmp_path / name)
+        elif (source / name).exists():
+            shutil.copy2(source / name, tmp_path / name)
+
+    result = migrate_write_targets(_staged(tmp_path), tmp_path)
+
+    assert result.files_changed == []
