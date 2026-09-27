@@ -14,12 +14,6 @@ dist-ssr
 *.tsbuildinfo
 .ruff_cache
 
-# Playwright (backlog item 37)
-test-results
-playwright-report
-blob-report
-playwright/.cache
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

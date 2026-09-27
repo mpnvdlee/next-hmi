@@ -102,14 +102,5 @@ export default tseslint.config(
       globals: globals.node,
     },
   },
-  {
-    files: ['e2e/**/*.ts', 'playwright.config.ts'],
-    languageOptions: {
-      globals: globals.node,
-    },
-    rules: {
-      'import/no-restricted-paths': 'off',
-    },
-  },
   eslintConfigPrettier,
 )
