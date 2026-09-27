@@ -17,7 +17,7 @@
  * grouping, which VariableBindingPicker's component-prop mode doesn't have.
  */
 
-import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { useToggleSet } from '@shared/hooks/useToggleSet';
@@ -232,7 +232,8 @@ export default function WidgetPropPicker() {
     const compLabel = selComp.name || selComp.type;
     let node: StructSchemaNode | null = null;
     let verdict: PropVerdict;
-    let displayLabel: ReactNode;
+    let parentPath: string;
+    let displayLabel: string;
     if (sel.path) {
       const field = fields.find((f) => f.name === sel.path);
       node = {
@@ -242,22 +243,12 @@ export default function WidgetPropPicker() {
         write: field?.write,
       };
       verdict = slot ? structSchemaNodeVerdict(node, slot) : { ok: true };
-      displayLabel = (
-        <>
-          <span className="cfg-component-prop-path__prefix">
-            {compLabel} › {selProp.label} ›{' '}
-          </span>
-          <strong>{node.name}</strong>
-        </>
-      );
+      parentPath = `${compLabel} › ${selProp.label}`;
+      displayLabel = node.name;
     } else {
       verdict = slot ? componentPropVerdict(schema, slot) : { ok: true };
-      displayLabel = (
-        <>
-          <span className="cfg-component-prop-path__prefix">{compLabel} › </span>
-          <strong>{selProp.label}</strong>
-        </>
-      );
+      parentPath = compLabel;
+      displayLabel = selProp.label;
     }
     return {
       selectedItem: {
@@ -265,6 +256,7 @@ export default function WidgetPropPicker() {
         propSchema: schema,
         node,
         structNodes: sel.path ? null : (schema.structSchema ?? null),
+        parentPath,
         displayLabel,
       },
       typeIsOk: verdict.ok,

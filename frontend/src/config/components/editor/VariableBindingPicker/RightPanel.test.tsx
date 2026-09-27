@@ -207,6 +207,7 @@ describe('RightPanel — component-prop mode', () => {
         propSchema: { type: 'struct', label: 'Position', structSchema: structNodes },
         node: null,
         structNodes,
+        parentPath: '',
         displayLabel: 'position',
       },
     };
@@ -356,6 +357,7 @@ describe('RightPanel — the verdict beside Required', () => {
         propSchema: { type: 'string', label: 'Label' },
         node: null,
         structNodes: null,
+        parentPath: '',
         displayLabel: 'Label',
       },
     };
@@ -368,5 +370,36 @@ describe('RightPanel — the verdict beside Required', () => {
       />,
     );
     expect(within(requiredPane()).getAllByText('✗')).toHaveLength(2);
+  });
+
+  it('shows a nested member under its parent path, name on its own row', () => {
+    const mode: ComponentPropMode = {
+      fieldType: 'boolean',
+      isStructTarget: false,
+      typeIsOk: true,
+      selectedItem: {
+        propKey: 'sensor',
+        propSchema: { type: 'struct', label: 'sensorRR' },
+        node: { kind: 'variable', name: 'bVisible', type: 'boolean', write: false },
+        structNodes: null,
+        parentPath: 'sensorRR › stSignalFiltered',
+        displayLabel: 'bVisible',
+      },
+    };
+    render(
+      <RightPanel
+        pickerTitle="Variable"
+        selectedKey="sensor/stSignalFiltered/bVisible"
+        varMode={null}
+        componentPropMode={mode}
+      />,
+    );
+    const pane = selectedPane();
+    expect(pane.querySelector('.editor-binding-folder-path')).toHaveTextContent(
+      'sensorRR › stSignalFiltered',
+    );
+    const row = pane.querySelector('.editor-binding-req-row--parent') as HTMLElement;
+    expect(within(row).getByText('bVisible')).toHaveClass('editor-binding-req-row__name');
+    expect(within(row).getByText('RO')).toBeInTheDocument();
   });
 });

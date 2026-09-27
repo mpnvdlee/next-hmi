@@ -66,9 +66,9 @@ import {
   buildComponentPropRows,
   componentPropVerdict,
   propSlotOf,
+  splitComponentPropPath,
   structSchemaNodeVerdict,
 } from './componentPropHelpers';
-import { ComponentPropPath } from './ComponentPropPath';
 import RightPanel, {
   type ComponentPropMode,
   type ComponentPropSelectedItem,
@@ -116,12 +116,14 @@ function componentPropItem(
       nodes = node.children ?? [];
     }
   }
+  const { parentPath, leaf } = splitComponentPropPath(key, properties);
   return {
     propKey,
     propSchema,
     node,
     structNodes: node ? (node.children ?? null) : (propSchema.structSchema ?? null),
-    displayLabel: <ComponentPropPath value={key} properties={properties} />,
+    parentPath,
+    displayLabel: leaf,
   };
 }
 

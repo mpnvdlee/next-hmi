@@ -16,6 +16,23 @@ import {
 } from '@shared/utils/valueTypes';
 import { matchesSearchWords } from '@shared/utils/search';
 
+/** Split a component-property key into its muted breadcrumb (`''` for a
+ *  top-level property) and the leaf label. */
+export function splitComponentPropPath(
+  value: string,
+  properties: Record<string, ComponentPropertySchema>,
+): { parentPath: string; leaf: string } {
+  const slashIdx = value.indexOf('/');
+  if (slashIdx === -1) return { parentPath: '', leaf: properties[value]?.label ?? value };
+  const propKey = value.slice(0, slashIdx);
+  const segments = value.slice(slashIdx + 1).split('/');
+  const prefix = properties[propKey]?.label ?? propKey;
+  return {
+    parentPath: [prefix, ...segments.slice(0, -1)].join(' › '),
+    leaf: segments[segments.length - 1],
+  };
+}
+
 /** True when a field's merged type expects a struct binding. */
 export function isStructTarget(fieldType: string | string[]): boolean {
   return isStructType(primaryType(fieldType));

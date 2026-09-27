@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import type { ComponentPropertySchema } from '@shared/types/componentProperty';
+import { splitComponentPropPath } from './componentPropHelpers';
 
 interface Props {
   /** Property key, possibly nested (e.g. "motor/stSignalRaw"). */
@@ -21,31 +22,21 @@ export function ComponentPropPath({
 }: Props): ReactElement | null {
   if (!value) return null;
 
-  const slashIdx = value.indexOf('/');
-  if (slashIdx === -1) {
-    const prop = properties[value];
-    const label = prop?.label ?? value;
+  const { parentPath, leaf } = splitComponentPropPath(value, properties);
+  if (!parentPath) {
     return (
       <>
-        <strong>{label}</strong>
-        {withKeySuffix && prop && (
+        <strong>{leaf}</strong>
+        {withKeySuffix && properties[value] && (
           <span className="cfg-component-prop-path__suffix"> ({value})</span>
         )}
       </>
     );
   }
 
-  const propKey = value.slice(0, slashIdx);
-  const subPath = value.slice(slashIdx + 1);
-  const prefix = properties[propKey]?.label ?? propKey;
-  const segments = subPath.split('/');
-  const leaf = segments[segments.length - 1];
-  const middle = segments.slice(0, -1);
-  const prefixText = [prefix, ...middle].join(' › ');
-
   return (
     <>
-      <span className="cfg-component-prop-path__prefix">{prefixText} › </span>
+      <span className="cfg-component-prop-path__prefix">{parentPath} › </span>
       <strong>{leaf}</strong>
       {withKeySuffix && <span className="cfg-component-prop-path__suffix"> ({value})</span>}
     </>

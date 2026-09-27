@@ -334,6 +334,8 @@ export interface ComponentPropSelectedItem {
   propSchema: ComponentPropertySchema;
   node: StructSchemaNode | null;
   structNodes: StructSchemaNode[] | null;
+  /** Breadcrumb above the selected row; `''` for a top-level property. */
+  parentPath: string;
   displayLabel: ReactNode;
 }
 
@@ -458,6 +460,11 @@ function ComponentPropPanel({
         <div className="editor-binding-characteristics">
           {selectedItem && selectedKey ? (
             <>
+              {selectedItem.parentPath && (
+                <span className="editor-binding-char-row__type editor-binding-folder-path">
+                  {selectedItem.parentPath}
+                </span>
+              )}
               <div className="editor-binding-req-row editor-binding-req-row--parent">
                 <span className="editor-binding-req-row__name">{selectedItem.displayLabel}</span>
                 {!isStructTarget && !selectedItem.node && (
