@@ -112,8 +112,10 @@ class WebSocketManager:
         self._client_users: dict[str, dict[str, dict[str, Any]]] = {}
         # Per-client connection timestamps: client_id -> ISO string
         self._client_connected_at: dict[str, str] = {}
-        # Cached priority batch delay per datasource name (invalidated on config change)
-        self._priority_delay_cache: dict[str, float] = {}
+        # Priority batch delay per datasource name, beside the entry it was read
+        # from: an edited or reloaded datasource is a new entry object, so a
+        # stale value is recognised without the datasource side reporting it.
+        self._priority_delay_cache: dict[str, tuple[Any, float]] = {}
         # Coalesced background priority recompute (see schedule_priority_recompute)
         self._priority_recompute_task: asyncio.Task | None = None
         self._priority_recompute_rerun = False
@@ -172,13 +174,6 @@ class WebSocketManager:
             if not self._priority_recompute_rerun:
                 return
             self._priority_recompute_rerun = False
-
-    def invalidate_priority_delay_cache(self, ds_name: str | None = None) -> None:
-        """Clear cached priority batch delay. Call after datasource config changes."""
-        if ds_name is not None:
-            self._priority_delay_cache.pop(ds_name, None)
-        else:
-            self._priority_delay_cache.clear()
 
     # -- Enqueue (called from datasource_manager, possibly from another thread) --
 
@@ -242,13 +237,13 @@ class WebSocketManager:
         if self._datasource_manager is None:
             return 10.0
         ds_name, _path = parse_var_key(key)
-        cached = self._priority_delay_cache.get(ds_name)
-        if cached is not None:
-            return cached
         entry = self._datasource_manager.get(ds_name)
+        cached = self._priority_delay_cache.get(ds_name)
+        if cached is not None and cached[0] is entry:
+            return cached[1]
         settings = entry.config.get("settings", {}) if entry is not None else {}
         value = get_config_float(settings, "priority_ws_batch_ms", 10.0, minimum=0.0, maximum=1000.0)
-        self._priority_delay_cache[ds_name] = value
+        self._priority_delay_cache[ds_name] = (entry, value)
         return value
 
     async def _broadcast(self, payload: dict) -> None:

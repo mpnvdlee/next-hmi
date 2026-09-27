@@ -5,7 +5,13 @@ from pathlib import Path
 import core.storage as storage_module
 import pytest
 import services.websocket_manager as websocket_manager_module
-from conftest import FakeDatasourceManager, FakeEngine, FakePool, FakeWebSocket
+from conftest import (
+    FakeDatasourceEntry,
+    FakeDatasourceManager,
+    FakeEngine,
+    FakePool,
+    FakeWebSocket,
+)
 from services.websocket_manager import (
     MAX_EXTRACT_BINDING_DEPTH,
     WebSocketManager,
@@ -118,6 +124,19 @@ def test_priority_batch_delay_uses_datasource_setting() -> None:
     manager.set_datasource_manager(FakeDatasourceManager())
 
     assert manager._priority_batch_delay_ms_for_key("DS:Cached") == 7
+
+
+def test_priority_batch_delay_follows_an_edited_datasource() -> None:
+    datasource_manager = FakeDatasourceManager()
+    manager = WebSocketManager()
+    manager.set_datasource_manager(datasource_manager)
+    assert manager._priority_batch_delay_ms_for_key("DS:Cached") == 7
+
+    datasource_manager.datasources["DS"] = FakeDatasourceEntry(
+        config={"settings": {"priority_ws_batch_ms": 25}}
+    )
+
+    assert manager._priority_batch_delay_ms_for_key("DS:Cached") == 25
 
 
 def test_extract_variable_keys_handles_nested_if() -> None:
