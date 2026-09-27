@@ -65,7 +65,7 @@ def test_validate_widget_node_type_mismatch(ctx):
         ctx,
     )
     assert not report.ok
-    assert "expected string" in report.findings[0].message
+    assert "expected String, got Integer" in report.findings[0].message
 
 
 def test_validate_widget_node_accepts_recipe_binding(ctx):

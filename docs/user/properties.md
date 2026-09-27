@@ -20,7 +20,7 @@ Any of these can also be an **array**. An optional *format* refines the editor w
 
 ## The sources
 
-**Flexible** sources carry whatever type the field needs, so they fit almost anywhere. **Fixed-type** sources each produce one specific type and appear only where it fits.
+**Flexible** sources carry whatever type the field needs, so they fit almost anywhere. **Fixed-type** sources each produce one specific type and appear only on a property of exactly that type — a Float source is not offered on an Integer property, a Boolean one not on a String property. The one exception: a number also fills a `Duration`. A property that takes more than one type — a value that may be a Float or an Integer — offers every source that fits one of them.
 
 | Source | Produces | Gives you |
 |---|---|---|
@@ -35,12 +35,14 @@ Any of these can also be an **array**. An optional *format* refines the editor w
 | `$loc` · `$stringExpr` | String | Translated text, or a template like `Tank {1} of {2}`. |
 | `$compare` · `$not` · `$pageIsActive` · `$userGroups` | Boolean | A comparison result, the opposite of another boolean, whether a page is active, or whether the signed-in user is in one of the listed groups. |
 | `$formula` | Float | A number calculated from other values, like `({1} - 32) / 1.8` — `+ - * /` and parentheses. Empty when an input is missing or you divide by zero. |
-| `$user` | String / String[] | The signed-in user's name, or their groups. |
+| `$user` | String / String[] | The signed-in user's name or groups, or the list of all users. |
 | `$device` · `$urlParam` | String | This machine's identity (hostname, IP, MAC), or a parameter from the page URL. |
 | `$viewport` | String / Integer | Screen size class, orientation, width, height. |
-| `$time` · `$random` · `$alarmCount` | DateTime / Float / Integer | The clock, a random number, a live alarm count. |
+| `$time` · `$random` · `$alarmCount` | DateTime, Date, Time or String / Integer or Float / Integer | The clock as text in the format you pick, a random number, a live alarm count. |
 | `$page` · `$languages` | String / Integer / String[] | Page metadata, and the configured language list. |
 | `$recipe` · `$recipeList` | String / Boolean / Record[] | Recipe state, and the saved-recipe grid. |
+
+A source with a **Field** choice — Page, Viewport, Recipe, User, Device — lists only the fields that fit the property: on a whole-number property Page offers just **Depth**, Viewport just **Width** and **Height**.
 
 ## They nest — a worked example
 

@@ -4,6 +4,7 @@
  */
 
 import type { SchemaField } from './widgetSchema';
+import { parseTypeToken } from './varType';
 
 /**
  * A node in the visual struct-schema tree editor.
@@ -95,6 +96,23 @@ export const VALUE_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: 'actions', label: 'Actions' },
   { value: 'widgets', label: 'Widget slot' },
 ];
+
+/**
+ * A type token as the editor shows it — capitalised, whatever case it was
+ * authored in: `float` → `Float`, `string[]` → `String[]`, `struct` → `Struct`.
+ * A struct's own name (`Motor`) is shown as it is.
+ */
+export function typeLabel(token: string): string {
+  const array = token.endsWith('[]');
+  const bare = array ? token.slice(0, -2) : token;
+  const parsed = parseTypeToken(bare);
+  const label =
+    parsed.kind === 'scalar' && parsed.base
+      ? parsed.base
+      : (VALUE_TYPE_OPTIONS.find((o) => o.value === bare.toLowerCase())?.label ??
+        bare.charAt(0).toUpperCase() + bare.slice(1));
+  return array ? `${label}[]` : label;
+}
 
 /** Property types that never resolve to a single literal value, so they take
  *  neither a write flag nor a default. */

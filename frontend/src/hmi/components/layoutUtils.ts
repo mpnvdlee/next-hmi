@@ -7,6 +7,7 @@ import {
 } from '@shared/types/config';
 import type { CSSWithVars } from '@shared/types/style';
 import { getVarBinding, hasPropertySourceKey, isRecord } from '@shared/types/propertyValueGuards';
+import { DECIMAL_NUMBER_RE } from '@shared/utils/opcuaWriteCoercion';
 import { evaluatePropertyValue, type EvaluationContext } from '../utils/propertySourceEval';
 import { extractVarKeys } from '../utils/extractVarKeys';
 import { resolveComponentPropValue, withDeclaredDefaults } from '../utils/componentPropResolution';
@@ -422,7 +423,23 @@ export function getPropString(
   return String(v);
 }
 
-/** Safely read a number property. Returns fallback (default 0) when absent or wrong type. */
+// The OPC-UA write path's decimal grammar, so a value that reads as a number
+// here would also be accepted when written back: no hex, no `Infinity`, no
+// trailing unit.
+function readNumber(value: unknown, fallback: number): number {
+  if (typeof value === 'number') return isNaN(value) ? fallback : value;
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  if (!DECIMAL_NUMBER_RE.test(trimmed)) return fallback;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+/**
+ * Safely read a number property. A string that is a clean decimal number (`"42"`,
+ * `" -1.5 "`, `"2e3"`) reads as that number, unrounded even for an integer
+ * field; anything else that is not a number returns fallback (default 0).
+ */
 export function getPropNumber(
   properties: Record<string, unknown> | undefined,
   key: string,
@@ -430,13 +447,7 @@ export function getPropNumber(
   evalContext?: EvaluationContext,
 ): number {
   const v = properties?.[key];
-  if (evalContext) {
-    const evaluated = evaluatePropertyValue(v, evalContext);
-    if (typeof evaluated === 'number' && !isNaN(evaluated)) return evaluated;
-    return fallback;
-  }
-  if (typeof v === 'number' && !isNaN(v)) return v;
-  return fallback;
+  return readNumber(evalContext ? evaluatePropertyValue(v, evalContext) : v, fallback);
 }
 
 function coerceBoolean(value: unknown, fallback: boolean): boolean {

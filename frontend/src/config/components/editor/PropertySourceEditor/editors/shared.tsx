@@ -450,7 +450,7 @@ export function CollapsiblePropertyCard({
     <PropertySourceSelector
       value={value}
       onChange={onChange}
-      fieldType={fieldType}
+      fieldType={schema.type}
       defaultValue={schema.defaultValue}
       forcedSources={forcedSources}
       includeStatic={includeStatic}

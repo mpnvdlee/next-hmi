@@ -86,7 +86,7 @@ describe('RecipeTable — schema', () => {
     expect(
       within(row).getByText('plc:Boiler/Temp', { selector: '.cfg-recipe-var-path' }),
     ).toBeInTheDocument();
-    expect(within(row).getByText('float')).toBeInTheDocument();
+    expect(within(row).getByText('Float')).toBeInTheDocument();
   });
 
   it('flags a parameter that is bound to no variable', () => {

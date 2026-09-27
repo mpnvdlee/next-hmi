@@ -424,6 +424,97 @@ def test_variable_metadata_array_of_struct_uses_folder_name():
     assert meta["name"] == "Alarms"
 
 
+def test_variable_metadata_scalars_carry_writable():
+    config = {
+        "name": "DS",
+        "type": "opcua-client",
+        "variables": [
+            _make_var("Setpoint", writable=True),
+            _make_var("Actual"),
+            {"display_name": "Unflagged", "data_type": "Float", "enabled": True},
+            _make_folder("Motor", [_make_var("Speed", writable=True)]),
+        ],
+    }
+    mgr = DatasourceManager()
+    mgr.datasources["DS"] = DatasourceEntry(config)
+    meta = mgr.variable_metadata()
+    assert meta[build_var_key("DS", "Setpoint")]["writable"] is True
+    assert meta[build_var_key("DS", "Actual")]["writable"] is False
+    assert meta[build_var_key("DS", "Unflagged")]["writable"] is False
+    assert meta[build_var_key("DS", "Motor/Speed")]["writable"] is True
+    assert "writable" not in meta[build_var_key("DS", "Motor")]
+
+
+def test_disk_scan_registry_matches_the_live_registry():
+    """The validator's pre-pool registry (a scan of the datasource file) must
+    type every struct exactly as ``variable_metadata()`` will once the pool
+    runs, nested structs and array elements included, or a nested required
+    field reads as missing until the pool starts."""
+    from core.validation.structure import _walk_variable_tree
+
+    variables = [
+        _make_folder("Root", [
+            _make_var("Speed", writable=True),
+            _make_var("Off", enabled=False, writable=True),
+            {**_make_var("Gone", writable=True), "present_on_server": False},
+            _make_folder("Limits", [_make_var("Min"), _make_var("Max")]),
+            _make_folder("Organising", [_make_folder("Deeper", [_make_var("Leaf")])]),
+            _make_folder("Empty", []),
+        ]),
+        _make_folder("OnlyFolders", [_make_folder("Inner", [_make_var("x")])]),
+        _make_folder("Namespaces", [_make_folder("http://opcfoundation.org/UA/", [_make_var("Id")])]),
+        _make_folder("Motors", [
+            _make_folder("Line[1]", [_make_var("Speed"), _make_folder("Io", [_make_var("On")])]),
+            _make_folder("Line[0]", [_make_var("Speed"), _make_folder("Io", [_make_var("On")])]),
+        ], is_array=True),
+    ]
+    mgr = DatasourceManager()
+    mgr.datasources["DS"] = DatasourceEntry({"name": "DS", "type": "static", "variables": variables})
+    live = {
+        key.split(":", 1)[1]: meta for key, meta in mgr.variable_metadata().items()
+    }
+    disk: dict = {}
+    writable: dict = {}
+    _walk_variable_tree(variables, "", disk, writable)
+
+    def shape(var_type: dict) -> dict:
+        # The struct name is presentation — no check reads it.
+        return {k: v for k, v in var_type.items() if k != "name"}
+
+    assert {path: shape(meta["type"]) for path, meta in live.items()} == {
+        path: shape(var_type) for path, var_type in disk.items()
+    }
+    # A disabled or stale leaf is still one of its struct's fields, but no
+    # variable of its own — on either side.
+    assert disk["Root"]["fields"] == ["Speed", "Off", "Gone", "Limits", "Organising"]
+    assert "Root/Off" not in disk and "Root/Gone" not in disk
+    assert disk["Motors"]["fields"] == ["Speed", "Io"]
+    assert writable == {path: meta["writable"] for path, meta in live.items() if "writable" in meta}
+
+
+def test_validator_reads_writability_off_the_live_pool(monkeypatch):
+    import services.datasource_manager as datasource_module
+    from core.validation import structure
+
+    mgr = DatasourceManager()
+    mgr.datasources["DS"] = DatasourceEntry({
+        "name": "DS",
+        "type": "opcua-client",
+        "variables": [
+            _make_var("Setpoint", writable=True),
+            _make_var("Actual"),
+            _make_folder("Motor", [_make_var("Speed", writable=True)]),
+        ],
+    })
+    monkeypatch.setattr(datasource_module, "datasource_manager", mgr)
+    monkeypatch.setattr(structure, "_live_registry_cache", None)
+
+    registry, writable = structure._collect_datasource_registry()
+
+    assert registry["DS"]["Motor"]["kind"] == "struct"
+    assert writable == {"DS": {"Setpoint": True, "Actual": False, "Motor/Speed": True}}
+
+
 # ── min/max range metadata ────────────────────────────────────────────────────
 
 

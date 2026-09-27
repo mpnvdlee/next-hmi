@@ -12,7 +12,6 @@ import type {
   PickerTreeNode,
 } from '@config/components/ui/datasourceTreeHelpers';
 import { isFolder } from '@shared/types/datasource';
-import { accepts, nodeVarType, parseTypeToken } from '@shared/types/varType';
 import { acceptedValueTypes } from '@shared/utils/valueTypes';
 import { arrayBadgeSuffix } from '@shared/types/arrayShape';
 import type { StructSchemaNode, ComponentPropertySchema } from '@shared/types/componentProperty';
@@ -46,18 +45,11 @@ function splitPath(path: string): { parentPath: string; varName: string } {
     : { parentPath: path.slice(0, slash), varName: path.slice(slash + 1) };
 }
 
-// Schema tokens are authored in any case ('float'); show the canonical simple
-// type ('Float') so the row matches the selected variable's type beside it.
-function acceptedTypeLabel(token: string): string {
-  const a = parseTypeToken(token);
-  return a.kind === 'scalar' ? `${a.base}${a.array ? '[]' : ''}` : token;
-}
-
 // No accepted value type means the slot is unconstrained, the same rule
 // `scalarIsValid` applies.
 function acceptedValueTypeLabels(type: string | string[] | undefined): string {
   const accepted = type !== undefined ? acceptedValueTypes(type) : [];
-  return accepted.length > 0 ? accepted.map(acceptedTypeLabel).join(' / ') : 'Any';
+  return accepted.length > 0 ? accepted.map(typeLabel).join(' / ') : 'Any';
 }
 
 function FolderPathBadge({ ds, parentPath }: { ds?: string; parentPath: string }) {
@@ -78,8 +70,8 @@ function SelectedVarRow({ entry, elementIndex }: { entry: VariableEntry; element
   const displayName = elementIndex !== undefined ? `${varName}[${elementIndex}]` : varName;
   const typeText =
     elementIndex !== undefined
-      ? (entry.data_type ?? '—')
-      : `${entry.data_type ?? '—'}${arrayBadgeSuffix(entry)}`;
+      ? formatTypeBadge(entry.data_type ?? '—')
+      : `${formatTypeBadge(entry.data_type ?? '—')}${arrayBadgeSuffix(entry)}`;
   return (
     <>
       <FolderPathBadge ds={entry._datasource} parentPath={parentPath} />
@@ -166,7 +158,7 @@ function FolderChildrenTree({
           >
             <span className="editor-binding-char-row__name">{n.display_name}</span>
             <span className="editor-binding-char-row__type">
-              {n.data_type}
+              {formatTypeBadge(n.data_type)}
               {arrayBadgeSuffix(n)}
             </span>
             <AccessBadge writable={n.writable} />
@@ -251,7 +243,7 @@ function RequiredFieldTree({
               </span>
             )}
             <span className="editor-binding-char-row__type">
-              {expectedType ?? matched?.data_type ?? '—'}
+              {formatTypeBadge(expectedType || matched?.data_type || '—')}
             </span>
             {needsWrite ? (
               <AccessBadge writable={true} />
@@ -262,6 +254,18 @@ function RequiredFieldTree({
         );
       })}
     </>
+  );
+}
+
+/** ✓ or ✗ once something is selected; nothing while nothing is. */
+function MatchSlot({ ok }: { ok: boolean | null }) {
+  if (ok === null) return null;
+  return (
+    <span
+      className={`editor-binding-char-row__match-slot${ok ? '' : ' editor-binding-char-row__match-slot--mismatch'}`}
+    >
+      {ok ? '✓' : '✗'}
+    </span>
   );
 }
 
@@ -303,7 +307,9 @@ function StructSchemaTree({
             className={`editor-binding-char-row${isUnused ? ' editor-binding-char-row--unused' : ''}`}
           >
             <span className="editor-binding-char-row__name">{n.name}</span>
-            {n.type && <span className="editor-binding-char-row__type">{n.type}</span>}
+            {n.type && (
+              <span className="editor-binding-char-row__type">{formatTypeBadge(n.type)}</span>
+            )}
             {n.write !== undefined && <AccessBadge writable={n.write} />}
           </div>
         );
@@ -398,13 +404,7 @@ function ComponentPropPanel({
             <>
               <div className="editor-binding-req-row editor-binding-req-row--parent">
                 <span className="editor-binding-req-row__name">{pickerTitle}</span>
-                {typeIsOk !== null && (
-                  <span
-                    className={`editor-binding-char-row__match-slot${typeIsOk ? '' : ' editor-binding-char-row__match-slot--mismatch'}`}
-                  >
-                    {typeIsOk ? '✓' : '✗'}
-                  </span>
-                )}
+                <MatchSlot ok={typeIsOk} />
               </div>
               {requiredFields?.length ? (
                 <div className="editor-binding-children-group">
@@ -418,13 +418,7 @@ function ComponentPropPanel({
           ) : (
             <div className="editor-binding-req-row">
               <span className="editor-binding-req-row__name">{pickerTitle}</span>
-              {typeIsOk !== null && (
-                <span
-                  className={`editor-binding-char-row__match-slot${typeIsOk ? '' : ' editor-binding-char-row__match-slot--mismatch'}`}
-                >
-                  {typeIsOk ? '✓' : '✗'}
-                </span>
-              )}
+              <MatchSlot ok={typeIsOk} />
               {fieldType !== undefined && <TypeBadge type={formatTypeBadge(fieldType)} />}
             </div>
           )}
@@ -442,7 +436,9 @@ function ComponentPropPanel({
                 )}
                 {selectedItem.node?.kind === 'variable' && (
                   <>
-                    {selectedItem.node.type && <TypeBadge type={selectedItem.node.type} />}
+                    {selectedItem.node.type && (
+                      <TypeBadge type={formatTypeBadge(selectedItem.node.type)} />
+                    )}
                     <AccessBadge writable={selectedItem.node.write} />
                   </>
                 )}
@@ -534,13 +530,7 @@ function VarScalarPanel({ pickerTitle, mode }: { pickerTitle: string; mode: VarM
             <span className="editor-binding-req-row__name">
               {schemaField?.label ?? pickerTitle}
             </span>
-            {scalarIsValid !== null && (
-              <span
-                className={`editor-binding-char-row__match-slot${scalarIsValid ? '' : ' editor-binding-char-row__match-slot--mismatch'}`}
-              >
-                {scalarIsValid ? '✓' : '✗'}
-              </span>
-            )}
+            <MatchSlot ok={scalarIsValid} />
             <span className="editor-binding-char-row__type">
               {acceptedValueTypeLabels(schemaField?.type)}
             </span>

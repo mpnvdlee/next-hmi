@@ -865,6 +865,9 @@ declare function getPropString(
   evalCtx?: EvaluationContext,
 ): string;
 
+/** A number, or a string that is a clean decimal number (`"42"`, `" -1.5 "`) —
+ *  read as-is, never rounded for an integer field. Anything else returns
+ *  `fallback` (default `0`). */
 declare function getPropNumber(
   properties: Record<string, unknown> | undefined,
   key: string,
@@ -897,6 +900,7 @@ declare function usePropString(
   fallback?: string,
 ): string;
 
+/** `getPropNumber` with the eval context supplied — same string parsing. */
 declare function usePropNumber(
   properties: Record<string, unknown> | undefined,
   key: string,

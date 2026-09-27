@@ -1,0 +1,32 @@
+[
+  { "name": "color binds a String", "type": "color", "accepts": ["String"] },
+  { "name": "icon binds a String", "type": "icon", "accepts": ["String"] },
+  { "name": "image binds a String", "type": "image", "accepts": ["String"] },
+  { "name": "video binds a String", "type": "video", "accepts": ["String"] },
+  { "name": "kinds match case-insensitively", "type": "Color", "accepts": ["String"] },
+  {
+    "name": "a listed simple type replaces the String default",
+    "type": ["color", "integer"],
+    "accepts": ["integer"]
+  },
+  {
+    "name": "a listed simple array replaces the String default",
+    "type": ["image", "string[]"],
+    "accepts": ["string[]"]
+  },
+  {
+    "name": "a listed struct adds to the String default",
+    "type": ["icon", "Motor"],
+    "accepts": ["Motor", "String"]
+  },
+  {
+    "name": "option-list keeps its own listed arrays",
+    "type": ["option-list", "string[]", "integer[]"],
+    "accepts": ["string[]", "integer[]"]
+  },
+  { "name": "option-list alone is unconstrained", "type": "option-list", "accepts": [] },
+  { "name": "actions stay unconstrained", "type": "actions", "accepts": [] },
+  { "name": "widgets stay unconstrained", "type": "widgets", "accepts": [] },
+  { "name": "groups stay unconstrained", "type": "groups", "accepts": [] },
+  { "name": "a simple type is its own filter", "type": "Float", "accepts": ["Float"] }
+]

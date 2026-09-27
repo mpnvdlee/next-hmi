@@ -76,6 +76,7 @@
     "label": "Random Value",
     "description": "A random number within a configured range.",
     "produces": [
+      "integer",
       "float"
     ]
   },
@@ -117,7 +118,10 @@
     "label": "Current Time",
     "description": "The current date and time in a chosen format.",
     "produces": [
-      "datetime"
+      "datetime",
+      "string",
+      "date",
+      "time"
     ]
   },
   {

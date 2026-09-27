@@ -1,0 +1,323 @@
+{
+  "produces": {
+    "$static": ["any"],
+    "$var": ["any"],
+    "$loc": ["string"],
+    "$urlParam": ["string"],
+    "$pageIsActive": ["boolean"],
+    "$if": ["any"],
+    "$compare": ["boolean"],
+    "$not": ["boolean"],
+    "$formula": ["float"],
+    "$random": ["integer", "float"],
+    "$switch": ["any"],
+    "$user": ["string", "string[]"],
+    "$userGroups": ["boolean"],
+    "$device": ["string"],
+    "$time": ["datetime", "string", "date", "time"],
+    "$widgetProp": ["any"],
+    "$languages": ["string[]"],
+    "$stringExpr": ["string"],
+    "$http": ["any"],
+    "$alarmCount": ["integer"],
+    "$recipe": ["boolean", "string"],
+    "$recipeList": ["record-list"],
+    "$componentProp": ["any"],
+    "$page": ["string", "integer", "string[]"],
+    "$viewport": ["string", "integer"],
+    "$result": ["any"],
+    "$repeatItem": ["any"]
+  },
+  "offers": {
+    "string": [
+      "$static",
+      "$var",
+      "$loc",
+      "$urlParam",
+      "$if",
+      "$switch",
+      "$user",
+      "$device",
+      "$time",
+      "$widgetProp",
+      "$stringExpr",
+      "$http",
+      "$recipe",
+      "$page",
+      "$viewport"
+    ],
+    "datetime": ["$static", "$var", "$if", "$switch", "$time", "$widgetProp", "$http"],
+    "date": ["$static", "$var", "$if", "$switch", "$time", "$widgetProp", "$http"],
+    "time": ["$static", "$var", "$if", "$switch", "$time", "$widgetProp", "$http"],
+    "duration": [
+      "$static",
+      "$var",
+      "$if",
+      "$formula",
+      "$random",
+      "$switch",
+      "$widgetProp",
+      "$http",
+      "$alarmCount",
+      "$page",
+      "$viewport"
+    ],
+    "integer": [
+      "$static",
+      "$var",
+      "$if",
+      "$random",
+      "$switch",
+      "$widgetProp",
+      "$http",
+      "$alarmCount",
+      "$page",
+      "$viewport"
+    ],
+    "float": ["$static", "$var", "$if", "$formula", "$random", "$switch", "$widgetProp", "$http"],
+    "boolean": [
+      "$static",
+      "$var",
+      "$pageIsActive",
+      "$if",
+      "$compare",
+      "$not",
+      "$switch",
+      "$userGroups",
+      "$widgetProp",
+      "$http",
+      "$recipe"
+    ],
+    "color": ["$static", "$var", "$if", "$switch", "$widgetProp"],
+    "icon": ["$static", "$var", "$urlParam", "$if", "$switch", "$page", "$widgetProp"],
+    "image": ["$static", "$var", "$urlParam", "$if", "$switch", "$widgetProp"],
+    "video": ["$static", "$var", "$urlParam", "$if", "$switch", "$widgetProp"],
+    "option-list": ["$static", "$user", "$var", "$languages", "$widgetProp"],
+    "record-list": ["$var", "$recipeList", "$widgetProp"],
+    "item-list": ["$static", "$var", "$http", "$recipeList", "$user", "$widgetProp"]
+  },
+  "fits": {
+    "any": ["string", "datetime", "date", "time", "duration", "integer", "float", "boolean"],
+    "string": ["string"],
+    "integer": ["duration", "integer"],
+    "float": ["duration", "float"],
+    "boolean": ["boolean"],
+    "datetime": ["datetime"],
+    "date": ["date"],
+    "time": ["time"],
+    "string[]": [],
+    "record-list": []
+  },
+  "fieldFits": [
+    {
+      "source": "$page",
+      "field": "depth",
+      "fieldType": "Integer",
+      "fits": true
+    },
+    {
+      "source": "$page",
+      "field": "depth",
+      "fieldType": "Float",
+      "fits": false
+    },
+    {
+      "source": "$page",
+      "field": "depth",
+      "fieldType": "Duration",
+      "fits": true
+    },
+    {
+      "source": "$page",
+      "field": "title",
+      "fieldType": "Integer",
+      "fits": false
+    },
+    {
+      "source": "$page",
+      "field": "title",
+      "fieldType": "String",
+      "fits": true
+    },
+    {
+      "source": "$page",
+      "field": "title",
+      "fieldType": "DateTime",
+      "fits": false
+    },
+    {
+      "source": "$page",
+      "field": "icon",
+      "fieldType": "icon",
+      "fits": true
+    },
+    {
+      "source": "$page",
+      "field": "depth",
+      "fieldType": "icon",
+      "fits": false
+    },
+    {
+      "source": "$viewport",
+      "field": "width",
+      "fieldType": "integer",
+      "fits": true
+    },
+    {
+      "source": "$viewport",
+      "field": "width",
+      "fieldType": "float",
+      "fits": false
+    },
+    {
+      "source": "$viewport",
+      "field": "size",
+      "fieldType": "integer",
+      "fits": false
+    },
+    {
+      "source": "$recipe",
+      "field": "loaded",
+      "fieldType": "Boolean",
+      "fits": true
+    },
+    {
+      "source": "$recipe",
+      "field": "loaded",
+      "fieldType": "String",
+      "fits": false
+    },
+    {
+      "source": "$recipe",
+      "field": "activeName",
+      "fieldType": "Boolean",
+      "fits": false
+    },
+    {
+      "source": "$user",
+      "field": "userList",
+      "fieldType": "String",
+      "fits": true
+    },
+    {
+      "source": "$user",
+      "field": "userList",
+      "fieldType": "Integer",
+      "fits": false
+    },
+    {
+      "source": "$user",
+      "field": "userList",
+      "fieldType": "option-list",
+      "fits": true
+    },
+    {
+      "source": "$user",
+      "field": "username",
+      "fieldType": "option-list",
+      "fits": false
+    },
+    {
+      "source": "$user",
+      "field": "groups",
+      "fieldType": "option-list",
+      "fits": true
+    },
+    {
+      "source": "$device",
+      "field": "hostname",
+      "fieldType": "Time",
+      "fits": false
+    },
+    {
+      "source": "$page",
+      "field": "nonsense",
+      "fieldType": "String",
+      "fits": false
+    },
+    {
+      "source": "$viewport",
+      "field": "width",
+      "fieldType": ["float", "integer"],
+      "fits": true
+    },
+    {
+      "source": "$page",
+      "field": "depth",
+      "fieldType": ["Float", "Integer"],
+      "fits": true
+    },
+    {
+      "source": "$page",
+      "field": "title",
+      "fieldType": ["float", "integer"],
+      "fits": false
+    },
+    {
+      "source": "$viewport",
+      "field": "size",
+      "fieldType": ["integer", "string"],
+      "fits": true
+    }
+  ],
+  "unionOffers": [
+    {
+      "fieldType": ["float", "integer"],
+      "offers": [
+        "$static",
+        "$var",
+        "$if",
+        "$formula",
+        "$random",
+        "$switch",
+        "$widgetProp",
+        "$http",
+        "$alarmCount",
+        "$page",
+        "$viewport"
+      ]
+    },
+    {
+      "fieldType": ["String", "Integer"],
+      "offers": [
+        "$static",
+        "$var",
+        "$loc",
+        "$urlParam",
+        "$if",
+        "$switch",
+        "$user",
+        "$device",
+        "$time",
+        "$widgetProp",
+        "$stringExpr",
+        "$http",
+        "$recipe",
+        "$page",
+        "$viewport",
+        "$random",
+        "$alarmCount"
+      ]
+    },
+    {
+      "fieldType": ["struct", "boolean"],
+      "offers": [
+        "$static",
+        "$var",
+        "$pageIsActive",
+        "$if",
+        "$compare",
+        "$not",
+        "$switch",
+        "$userGroups",
+        "$widgetProp",
+        "$http",
+        "$recipe"
+      ]
+    },
+    {
+      "fieldType": ["struct"],
+      "offers": []
+    }
+  ]
+}

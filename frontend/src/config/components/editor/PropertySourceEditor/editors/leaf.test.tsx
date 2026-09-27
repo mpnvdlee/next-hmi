@@ -2,7 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useConfigStore } from '@shared/store/configStore';
-import { PageEditor, PageIsActiveEditor, VarEditor } from './leaf';
+import { useRecipeConfigStore } from '@config/store/recipeConfigStore';
+import {
+  PageEditor,
+  PageIsActiveEditor,
+  RecipeEditor,
+  UserFieldEditor,
+  VarEditor,
+  ViewportEditor,
+} from './leaf';
 
 describe('VarEditor', () => {
   it('shows the composite path with index suffix', () => {
@@ -124,5 +132,82 @@ describe('page pickers', () => {
     await userEvent.click(screen.getByRole('combobox'));
 
     expect(screen.getAllByRole('option').map((o) => o.textContent)).not.toContain('Motor detail');
+  });
+});
+
+describe('field choices that fit the field', () => {
+  Element.prototype.scrollIntoView = vi.fn();
+
+  async function fieldOptions(): Promise<string[]> {
+    await userEvent.click(screen.getAllByRole('combobox')[0]);
+    return screen.getAllByRole('option').map((o) => o.textContent ?? '');
+  }
+
+  it('lists only the page fields an Integer field takes', async () => {
+    render(
+      <PageEditor value={{ $page: { field: 'depth' } }} onChange={vi.fn()} fieldType="Integer" />,
+    );
+    expect(await fieldOptions()).toEqual(['Depth']);
+  });
+
+  it('keeps a stored choice that does not fit, marked', async () => {
+    render(
+      <PageEditor value={{ $page: { field: 'title' } }} onChange={vi.fn()} fieldType="Integer" />,
+    );
+    expect(await fieldOptions()).toEqual(['Title (does not fit this field)', 'Depth']);
+  });
+
+  it('lists the page fields any type of a union field takes', async () => {
+    render(
+      <PageEditor
+        value={{ $page: { field: 'depth' } }}
+        onChange={vi.fn()}
+        fieldType={['Float', 'Integer']}
+      />,
+    );
+    expect(await fieldOptions()).toEqual(['Depth']);
+  });
+
+  it('lists every choice for a slot that takes any type', async () => {
+    render(<ViewportEditor value={{ $viewport: { field: 'size' } }} onChange={vi.fn()} />);
+    expect(await fieldOptions()).toHaveLength(4);
+  });
+
+  it('lists the number-valued viewport fields for an Integer field', async () => {
+    render(
+      <ViewportEditor
+        value={{ $viewport: { field: 'width' } }}
+        onChange={vi.fn()}
+        fieldType="integer"
+      />,
+    );
+    expect(await fieldOptions()).toEqual(['Width (px)', 'Height (px)']);
+  });
+
+  it('lists the boolean recipe fields for a Boolean field', async () => {
+    useRecipeConfigStore.setState({ load: async () => {} });
+    render(
+      <RecipeEditor
+        value={{ $recipe: { type: '', field: 'loaded' } }}
+        onChange={vi.fn()}
+        fieldType="Boolean"
+      />,
+    );
+    await userEvent.click(screen.getAllByRole('combobox')[1]);
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Is loaded',
+      'Parameters changed',
+    ]);
+  });
+
+  it('lists the user list on a String field, which joins the names', async () => {
+    render(
+      <UserFieldEditor
+        value={{ $user: { field: 'username' } }}
+        onChange={vi.fn()}
+        fieldType="String"
+      />,
+    );
+    expect(await fieldOptions()).toEqual(['username', 'groups', 'User list']);
   });
 });

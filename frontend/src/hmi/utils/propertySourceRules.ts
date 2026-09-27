@@ -8,45 +8,29 @@
 import {
   PROPERTY_SOURCES,
   PROPERTY_SOURCE_KEYS,
+  SCALAR_FIELD_TYPES,
   isPropertySourceKey,
+  producedFits,
 } from './propertySourceRegistry';
-import type { ProducedValueType, PropertySourceKey } from './propertySourceRegistry';
+import type { PropertySourceKey } from './propertySourceRegistry';
 import { isStructType } from '@shared/utils/valueTypes';
 
 export { PROPERTY_SOURCE_KEYS };
 
-// Scalar field-type families. A source is offered on a scalar field when one of
-// the types it *produces* fits the field's family — there is no hand-maintained
-// per-field allowlist; the matrix below is derived from each source's `produces`.
-const TEXT_TYPES = new Set(['string', 'datetime', 'date', 'time']);
-const NUMERIC_TYPES = new Set(['integer', 'float', 'duration']);
-const SCALAR_FIELD_TYPES = [
-  'string',
-  'datetime',
-  'date',
-  'time',
-  'duration',
-  'integer',
-  'float',
-  'boolean',
-];
+// A source is offered on a scalar field when one of the types it *produces*
+// fits the field's family (`producedFits`) — there is no hand-maintained
+// per-field allowlist; the matrix below is derived from each source's
+// `produces`. A source with an inner `field` selector produces what its
+// choices do (`SOURCE_FIELD_PRODUCES`), so it is offered where one of them fits.
 
 // Scope-injected sources: availability is decided by ambient editor scope
 // (component-property scope / action-result handler), not by the field's type,
 // so they are added by PropertySourceSelector — never by the type matrix.
-export const SCOPE_SOURCES = new Set<PropertySourceKey>(['$componentProp', '$result']);
-
-/** Whether a produced base type fits a scalar field type (offer-time gate). */
-function producedFits(produced: ProducedValueType, fieldType: string): boolean {
-  if (produced === 'any') return true;
-  // array producers are gated by the editor-kind lists, never scalar fields
-  if (produced === 'string[]' || produced === 'record-list') return false;
-  if ((produced === 'integer' || produced === 'float') && NUMERIC_TYPES.has(fieldType)) return true;
-  if ((produced === 'string' || produced === 'datetime') && TEXT_TYPES.has(fieldType)) return true;
-  // booleans render as text too, so boolean producers serve text fields as well
-  if (produced === 'boolean' && (fieldType === 'boolean' || TEXT_TYPES.has(fieldType))) return true;
-  return false;
-}
+export const SCOPE_SOURCES = new Set<PropertySourceKey>([
+  '$componentProp',
+  '$result',
+  '$repeatItem',
+]);
 
 /** Sources offered on a scalar field, derived from each source's produced type(s). */
 function deriveScalarSources(fieldType: string): PropertySourceKey[] {
@@ -122,15 +106,23 @@ export function getDefaultPropertySources(fieldType: string): PropertySourceKey[
 }
 
 /**
- * Determine the allowed property sources for a field, decided by its type alone.
- * Returns an empty array for non-source-capable types (struct, actions).
+ * Determine the allowed property sources for a field, decided by its type alone:
+ * for a union (`['float', 'integer']`), every source any of its source-capable
+ * types offers, as the backend's `source_type_mismatch` accepts. Returns an
+ * empty array for non-source-capable types (struct, actions).
  */
-export function getAllowedPropertySources(fieldType: string): PropertySourceKey[] {
-  if (!SOURCE_CAPABLE_TYPES.has(fieldType.toLowerCase())) {
-    // struct and actions do not support property sources
-    return [];
-  }
-  return getDefaultPropertySources(fieldType);
+export function getAllowedPropertySources(
+  fieldType: string | readonly string[],
+): PropertySourceKey[] {
+  const types = typeof fieldType === 'string' ? [fieldType] : fieldType;
+  return [
+    ...new Set(
+      types.flatMap((t) =>
+        // struct and actions do not support property sources
+        SOURCE_CAPABLE_TYPES.has(t.toLowerCase()) ? getDefaultPropertySources(t) : [],
+      ),
+    ),
+  ];
 }
 
 /**
@@ -138,12 +130,14 @@ export function getAllowedPropertySources(fieldType: string): PropertySourceKey[
  * Returns { valid: boolean; reason?: string }
  */
 export function isPropertySourceAllowed(
-  fieldType: string,
+  fieldType: string | readonly string[],
   sourceKey: string,
 ): { valid: boolean; reason?: string } {
+  const types = typeof fieldType === 'string' ? [fieldType] : fieldType;
+  const typeLabel = types.join(' | ');
   // Check if the value type supports property sources at all
-  if (!SOURCE_CAPABLE_TYPES.has(fieldType.toLowerCase())) {
-    return { valid: false, reason: `Value type '${fieldType}' does not support property sources` };
+  if (!types.some((t) => SOURCE_CAPABLE_TYPES.has(t.toLowerCase()))) {
+    return { valid: false, reason: `Value type '${typeLabel}' does not support property sources` };
   }
 
   // Check if the property source exists
@@ -156,7 +150,7 @@ export function isPropertySourceAllowed(
   if (!allowed.includes(sourceKey as PropertySourceKey)) {
     return {
       valid: false,
-      reason: `Property source '${sourceKey}' is not allowed for value type '${fieldType}' (allowed: ${allowed.join(', ')})`,
+      reason: `Property source '${sourceKey}' is not allowed for value type '${typeLabel}' (allowed: ${allowed.join(', ')})`,
     };
   }
 

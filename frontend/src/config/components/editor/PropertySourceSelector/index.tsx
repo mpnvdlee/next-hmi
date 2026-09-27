@@ -26,8 +26,9 @@ interface PropertySourceSelectorProps {
   value: unknown;
   /** Called when the source or value changes */
   onChange: (v: unknown) => void;
-  /** The schema field type (string, number, boolean, color, url, icon, select) */
-  fieldType: string;
+  /** The schema field type (string, number, boolean, color, url, icon, select),
+   *  or a union of them — the menu offers what fits any one of them. */
+  fieldType: string | readonly string[];
   /** Optional schema-level default value used when creating a new source payload */
   defaultValue?: unknown;
   /** Optional explicit list of sources to show (bypasses fieldType matrix) */

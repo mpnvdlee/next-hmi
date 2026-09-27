@@ -69,7 +69,7 @@ Two kinds of source, by where their type comes from:
 - **Flexible** — carries whatever type the field needs (shown as `any`). Usable almost anywhere.
 - **Fixed-type** — always produces one specific type. Only valid where the field wants that type. Some of these take an inner `field` selector; once it's pinned, the produced type is fixed (a source whose `field` choices span several types simply appears once per type below).
 
-> **Source availability is decided by the field's *type* alone.** A source is offered wherever its produced type matches the field — there is no per-field allowlist, and a schema cannot hand-pick which sources its inputs accept. The field's `type` is the single gate for which sources appear.
+> **Source availability is decided by the field's *type* alone.** A source is offered only where its produced type is exactly the field's type — an `Integer` producer does not fit a `Float` field, a `Boolean` one not a `String` field, a `String` one not a `DateTime`, `Date` or `Time` field. The one exception is `Duration`, a number of seconds, which an `Integer` or `Float` producer also fills. There is no per-field allowlist, and a schema cannot hand-pick which sources its inputs accept. The field's `type` is the single gate for which sources appear.
 
 The scalar types derive that list from each source's produced type. The editor kinds are not scalars, so theirs is written out per kind in `frontend/src/hmi/utils/propertySourceRules.ts` — `image` and `video` share one list (`$static`, `$var`, `$urlParam`, `$if`, `$switch`, `$widgetProp`), `icon` adds `$page` to it, and `color` drops `$urlParam` from it. `$componentProp` and `$result` are added on top by the editor wherever the surrounding scope offers them, on any type.
 
@@ -102,7 +102,7 @@ Each of these only works in a field of the matching type.
 | `$device`, hostname | String | `{ $device: { field } }` `field: hostname` | This machine's network name |
 | `$device`, ipAddress | String | `{ $device: { field } }` `field: ipAddress` | This machine's IP address |
 | `$device`, macAddress | String | `{ $device: { field } }` `field: macAddress` | This machine's MAC address |
-| `$random` | Float | `{ $random: { min, max, integer? } }` | A random number (`integer` when whole numbers wanted) |
+| `$random` | Integer / Float | `{ $random: { min, max, integer? } }` | A random number — whole unless `integer: false`, so it is offered on `Integer` and `Float` fields alike |
 | `$alarmCount` | Integer | `{ $alarmCount: { filter } }` | Count of `all` \| `unacked` \| `error` \| `warning` \| `info` alarms |
 | `$recipe` | String / Boolean | `{ $recipe: { type, field } }` | Scoped to a dataset type: `activeName` (loaded recipe name), `loaded`, or `parametersChanged` (live values differ from the loaded dataset) |
 | `$recipeList` | Record[] | `{ $recipeList: { type } }` | A dataset type's saved recipes as grid rows `{ id, name, description, lastLoaded }` (empty `type` = all types). Offered on `record-list` fields; read with `useRecordListProp` |
@@ -112,8 +112,8 @@ Each of these only works in a field of the matching type.
 | `$pageIsActive` | Boolean | `{ $pageIsActive: { page? } }` | `true` when the target page is active |
 | `$languages` | String[] | `{ $languages: {} }` | The project's language list |
 | `$user`, username | String | `{ $user: { field } }` `field: username` | The logged-in user's name |
-| `$user`, groups | String | `{ $user: { field } }` `field: groups` | The logged-in user's group **labels, comma-joined** — `resolveUser` returns `groups.map(labelOf).join(', ')`, so this is one `String`, not a `String[]`, despite the registry advertising `string[]`. For membership tests use `$userGroups`, which is what the `visible` / `interactable` gate uses |
-| `$user`, userList | Record[] / String | `{ $user: { field } }` `field: userList` | Every username in the project. Its home is an **`option-list`** field, where it resolves to `{ label, value }` pairs; bound to a scalar field instead it joins the names with `", "`, since `ResolvedValue` cannot carry an array |
+| `$user`, groups | String | `{ $user: { field } }` `field: groups` | The logged-in user's group **labels, comma-joined** — `resolveUser` returns `groups.map(labelOf).join(', ')`, so this is one `String`, not a `String[]`. For membership tests use `$userGroups`, which is what the `visible` / `interactable` gate uses |
+| `$user`, userList | Record[] / String | `{ $user: { field } }` `field: userList` | Every username in the project. Its home is an **`option-list`** field, where it resolves to `{ label, value }` pairs; bound to a text field instead it joins the names with `", "`, since `ResolvedValue` cannot carry an array. The editor offers it on list and text fields, never on a number or boolean |
 | `$userGroups` | Boolean | `{ $userGroups: { groups } }` | `true` when the logged-in user is in one of the selected groups (empty `groups` = everyone). The source behind the standard `visible` / `interactable` group gate |
 | `$page`, id | String | `{ $page: { field, pageId? } }` `field: id` | The page's id. With no `pageId` this is the page **being rendered**, which inside a page overlay is not the route's — see [Page metadata in depth](#page-metadata-in-depth-page) |
 | `$page`, title | String | `{ $page: { field, pageId? } }` `field: title` | The page's title |
@@ -128,7 +128,11 @@ Each of these only works in a field of the matching type.
 | `$viewport`, orientation | String | `{ $viewport: { field } }` `field: orientation` | `portrait` or `landscape` |
 | `$viewport`, width | Integer | `{ $viewport: { field } }` `field: width` | The viewport's pixel width |
 | `$viewport`, height | Integer | `{ $viewport: { field } }` `field: height` | The viewport's pixel height |
-| `$time` | DateTime | `{ $time: { format?, timezone? } }` | The current date/time; serves a `Date` or `Time` host field too |
+| `$time` | DateTime / String / Date / Time | `{ $time: { format?, timezone? } }` | The current date/time as text formatted by `format` (default `HH:mm:ss`, the ISO time text a `Time` field takes). The format decides which of them the text is, so it is offered on all four |
+
+**A source's `field` choices follow the field it sits in.** What each choice of `$page`, `$viewport`, `$recipe`, `$user` and `$device` yields is one table, `SOURCE_FIELD_PRODUCES` in `frontend/src/hmi/utils/propertySourceRegistry.ts` (held by the fixture `frontend/src/shared/types/__fixtures__/sourceProduces.json`); a source's `produces` is the union of its choices'. The source is offered where at least one choice fits the field, by the same exact rule as any produced type (a boolean choice does not serve a text field, an integer choice does serve a `Duration`), and its Field dropdown lists only the choices that fit: on an `Integer` field `$page` lists `depth` alone and `$viewport` `width` / `height`; on a `Boolean` field `$recipe` lists `loaded` / `parametersChanged`. A stored choice that does not fit stays listed, marked, so opening the editor never changes an existing value. A new source starts on its usual choice when that fits, otherwise on the first that does (`$page` on an `Integer` field starts on `depth`). A slot that takes any type — a `$compare` operand, a `$switch` value — lists every choice.
+
+The backend holds a stored value to the same rules (`backend/core/validation/source_rules.py`, a port held equal to the TS by the fixtures `sourceOffers.json` and `sourceProduces.json`): a fixed-type source its field's type does not offer — `$alarmCount` on a `Boolean`, `$random` on a colour — or a stored `field` choice that yields a type the field does not take is a `source-type` error. Only the field's source-capable types count, any one of a union's will do, and the flexible and scope-injected sources are never judged. The editor offers a union field the same set: its source menu lists every source any of the field's types offers (`getAllowedPropertySources` on the whole `type`; the first type still picks the editor control), and a Field dropdown lists every choice one of them takes — `$alarmCount`, `$viewport` width and `$page` depth all appear on a `['float', 'integer']` field.
 
 ---
 
@@ -209,7 +213,7 @@ The map is `OPCUA_TO_SIMPLE` in `backend/core/value_types.py`, mirrored in
 | *anything else* | `String` (fallback) |
 
 - **The datasources manager is where the tree lives.** Browsing or editing a datasource records, per leaf, its real `data_type`, whether it's `writable`, and an explicit `is_array` plus optional positive `array_length` for fixed arrays. Folders organise, folders-with-variables become structs, and the same scalar / array / struct / struct-array shapes described above are exactly what `$var` binds to.
-- **There are eight simple types, not five.** `VALUE_TYPES` is `Boolean`, `Integer`, `Float`, `String`, `DateTime`, `Date`, `Time`, `Duration` — `Date`, `Time` and `Duration` collapse from their own OPC-UA datatypes rather than riding on `DateTime`. `color`, `icon`, `image` and `video` are the exception: they have no OPC-UA datatype at all and exist only as field types, refined by the **field**, never by the variable.
+- **There are eight simple types, not five.** `VALUE_TYPES` is `Boolean`, `Integer`, `Float`, `String`, `DateTime`, `Date`, `Time`, `Duration` — `Date`, `Time` and `Duration` collapse from their own OPC-UA datatypes rather than riding on `DateTime`. `color`, `icon`, `image` and `video` are the exception: they have no OPC-UA datatype at all and exist only as field types, refined by the **field**, never by the variable. A variable drives one as a `String`.
 - **The static datasource works in reverse.** It has no live server, so picking a simple type synthesises a *representative* OPC-UA type to store (`SIMPLE_TO_REPRESENTATIVE`): `Integer` → `Int32`, `Float` → `Double`, `Boolean` → `Boolean`, `String` → `String`, `DateTime` / `Date` / `Time` → `DateTime`, `Duration` → `Double`. The round trip is therefore lossy for `Date`, `Time` and `Duration` — a static `Date` reads back as `DateTime`.
 
 ---
@@ -220,11 +224,11 @@ A source doesn't always produce a clean value. Three things can go wrong, and ea
 
 | Situation | What it means | Resolves to |
 |---|---|---|
-| **Absent** | The source can't produce a value yet (no `index` match, optional member not supplied, page param missing with no `default`) | `undefined` — the field uses its own fallback / placeholder |
+| **Absent** | The source can't produce a value yet (no `index` match, a struct member that is not there at runtime such as a disabled leaf, page param missing with no `default`) | `undefined` — the field uses its own fallback / placeholder |
 | **Bad quality** | A `$var` is connected but the server reports the tag as bad/uncertain/stale | the field renders its **quality-degraded** state (typically blank or dimmed); the last good value is *not* silently reused unless the field opts in |
 | **Disconnected** | The datasource itself is down | treated as bad quality for every `$var` it owns |
 
-**Coercion.** A source's base type should match the field's base type. When they differ:
+**Coercion.** A source's base type should match the field's base type. When they differ, the widget's read (`getPropString` / `getPropNumber` / `getPropBoolean` in `frontend/src/hmi/components/layoutUtils.ts`, and their `useProp*` hooks) decides:
 
 - `Integer`/`Float` → `String` and `Boolean` → `String` coerce with the field's display format.
 - `Integer` and `Float` interconvert freely (`Float` → `Integer` rounds; `Integer` → `Float` is exact).
@@ -341,7 +345,7 @@ Validation reports those as `componentprop-nested` warnings (`backend/core/compo
 
 ### Struct inputs
 
-A struct input declares its members up front. Some members are **required**, some are **optional**:
+A struct input declares its members up front, as a `structSchema` tree. Each node is a `variable` (one leaf of a simple `type`), an `array` (a list of that `type`) or a `folder` (a nested struct, with its own `children`); `write: true` on a leaf asks for write access:
 
 ```jsonc
 // in the component's input definition
@@ -349,24 +353,27 @@ A struct input declares its members up front. Some members are **required**, som
   "sensor": {
     "type": "struct",
     "label": "Sensor",
-    "fields": [
-      { "name": "bEnabled", "type": "boolean" },           // required
-      { "name": "fValue",   "type": "float", "write": true }, // required
-      { "name": "label",    "type": "string", "optional": true } // optional
+    "structSchema": [
+      { "kind": "variable", "name": "bEnabled", "type": "boolean" },
+      { "kind": "variable", "name": "fValue",   "type": "float", "write": true },
+      { "kind": "array",    "name": "aHistory", "type": "float" },
+      { "kind": "folder",   "name": "stFiltered", "children": [
+        { "kind": "variable", "name": "bValue", "type": "boolean" }
+      ] }
     ]
   }
 }
 ```
 
-- **Required members** — the parent *must* supply them. When binding the struct, only sources that actually provide every required member are accepted.
-- **Optional members** — the parent *may* supply them. If left out, the member is simply absent at runtime.
+- **Every declared member is required.** There is no optional flag. The tree becomes the field's `requiredFields` (`componentPropertyToSchemaField`), and a struct variable fits only when it carries every member with a fitting type, and write access where a leaf asks for it — the binding picker, the backend's `var-type` diagnostic and the runtime overlay all apply that rule.
+- **Extra members are fine.** A variable may carry more than the tree declares; a child can still read those by slash-path.
 
 ### Reading a struct input
 
 A child can bind the **whole struct**, or drill into **one member** by slash-path:
 
 ```jsonc
-// the whole object { bEnabled, fValue, label? }
+// the whole object { bEnabled, fValue, aHistory, stFiltered }
 { "$componentProp": "sensor" }
 
 // a single member
@@ -376,16 +383,16 @@ A child can bind the **whole struct**, or drill into **one member** by slash-pat
 { "$componentProp": "sensor/stFiltered/bValue" }
 ```
 
-### What happens to a missing optional member
+### What happens to a missing member
 
-There's no separate "default value" mechanism for struct members — an unsupplied optional member is just **absent**. A child that reads it gets nothing, so the component decides the fallback:
+There's no "default value" mechanism for struct members. Required means the binding is *judged* against the tree, not that the value is guaranteed: a member that is not there at runtime — its leaf disabled in the datasource, a value not yet arrived, a hand-edited binding the diagnostics flag — is simply **absent**, and a child that reads it gets nothing. So the component still decides the fallback:
 
 ```tsx
-const label = fields?.label ?? 'Sensor'   // optional → fall back when absent
-const enabled = fields?.bEnabled === true  // required → safe to read directly
+const enabled = fields?.bEnabled === true   // absent reads as false
+const value = typeof fields?.fValue === 'number' ? fields.fValue : 0
 ```
 
-Rule of thumb: **required members are safe to read; optional members should always have a fallback.**
+Rule of thumb: **declare every member the component needs, and still guard every read.**
 
 ---
 

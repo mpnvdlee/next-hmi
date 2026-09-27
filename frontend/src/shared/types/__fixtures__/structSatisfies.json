@@ -1,0 +1,234 @@
+[
+  {
+    "name": "every plain name present",
+    "requiredFields": ["Speed", "Running"],
+    "members": {
+      "Speed": { "type": { "kind": "scalar", "base": "Float", "array": false } },
+      "Running": { "type": { "kind": "scalar", "base": "Boolean", "array": false } }
+    },
+    "expected": true
+  },
+  {
+    "name": "a missing name fails",
+    "requiredFields": ["Speed", "Running"],
+    "members": {
+      "Speed": { "type": { "kind": "scalar", "base": "Float", "array": false } }
+    },
+    "expected": false
+  },
+  {
+    "name": "no required fields is always satisfied",
+    "requiredFields": [],
+    "members": {},
+    "expected": true
+  },
+  {
+    "name": "a typed entry matching its member",
+    "requiredFields": [{ "name": "Speed", "type": "Float" }],
+    "members": {
+      "Speed": { "type": { "kind": "scalar", "base": "Float", "array": false } }
+    },
+    "expected": true
+  },
+  {
+    "name": "a typed entry with a mismatched member",
+    "requiredFields": [{ "name": "Speed", "type": "Float" }],
+    "members": {
+      "Speed": { "type": { "kind": "scalar", "base": "String", "array": false } }
+    },
+    "expected": false
+  },
+  {
+    "name": "a Float entry refuses an Integer member",
+    "requiredFields": [{ "name": "Speed", "type": "float" }],
+    "members": {
+      "Speed": { "type": { "kind": "scalar", "base": "Integer", "array": false } }
+    },
+    "expected": false
+  },
+  {
+    "name": "an Integer entry refuses a Float member",
+    "requiredFields": [{ "name": "Count", "type": "Integer" }],
+    "members": {
+      "Count": { "type": { "kind": "scalar", "base": "Float", "array": false } }
+    },
+    "expected": false
+  },
+  {
+    "name": "a write entry with a writable member",
+    "requiredFields": [{ "name": "Speed", "write": true }],
+    "members": {
+      "Speed": {
+        "type": { "kind": "scalar", "base": "Float", "array": false },
+        "writable": true
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "a write entry with a read-only member",
+    "requiredFields": [{ "name": "Speed", "write": true }],
+    "members": {
+      "Speed": {
+        "type": { "kind": "scalar", "base": "Float", "array": false },
+        "writable": false
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "a write entry with a member of unknown access",
+    "requiredFields": [{ "name": "Speed", "write": true }],
+    "members": {
+      "Speed": { "type": { "kind": "scalar", "base": "Float", "array": false } }
+    },
+    "expected": false
+  },
+  {
+    "name": "a member of unknown type is taken on trust for its type",
+    "requiredFields": [{ "name": "Speed", "type": "Float" }],
+    "members": { "Speed": {} },
+    "expected": true
+  },
+  {
+    "name": "trust in the type does not extend to access",
+    "requiredFields": [{ "name": "Speed", "type": "Float", "write": true }],
+    "members": { "Speed": { "writable": false } },
+    "expected": false
+  },
+  {
+    "name": "an array entry matches an array member",
+    "requiredFields": [{ "name": "Setpoints", "type": "float[]" }],
+    "members": {
+      "Setpoints": { "type": { "kind": "scalar", "base": "Float", "array": true, "length": 3 } }
+    },
+    "expected": true
+  },
+  {
+    "name": "an array entry refuses a scalar member",
+    "requiredFields": [{ "name": "Setpoints", "type": "float[]" }],
+    "members": {
+      "Setpoints": { "type": { "kind": "scalar", "base": "Float", "array": false } }
+    },
+    "expected": false
+  },
+  {
+    "name": "a plain name may be a nested struct",
+    "requiredFields": ["limits"],
+    "members": {
+      "limits": {
+        "type": { "kind": "struct", "name": "limits", "array": false, "fields": ["fMin", "fMax"] }
+      }
+    },
+    "expected": true
+  },
+  {
+    "name": "nested required fields present",
+    "requiredFields": ["bVisible", { "name": "limits", "requiredFields": ["fMin", "fMax"] }],
+    "members": {
+      "bVisible": { "type": { "kind": "scalar", "base": "Boolean", "array": false } },
+      "limits": {
+        "type": { "kind": "struct", "name": "limits", "array": false, "fields": ["fMin", "fMax"] }
+      },
+      "limits/fMin": { "type": { "kind": "scalar", "base": "Float", "array": false } },
+      "limits/fMax": { "type": { "kind": "scalar", "base": "Float", "array": false } }
+    },
+    "expected": true
+  },
+  {
+    "name": "a nested required field missing",
+    "requiredFields": [{ "name": "limits", "requiredFields": ["fMin", "fMax"] }],
+    "members": {
+      "limits": {
+        "type": { "kind": "struct", "name": "limits", "array": false, "fields": ["fMin"] }
+      },
+      "limits/fMin": { "type": { "kind": "scalar", "base": "Float", "array": false } }
+    },
+    "expected": false
+  },
+  {
+    "name": "a nested entry naming a scalar member",
+    "requiredFields": [{ "name": "limits", "requiredFields": ["fMin"] }],
+    "members": {
+      "limits": { "type": { "kind": "scalar", "base": "Float", "array": false } },
+      "limits/fMin": { "type": { "kind": "scalar", "base": "Float", "array": false } }
+    },
+    "expected": false
+  },
+  {
+    "name": "a nested entry naming a member of unknown type recurses",
+    "requiredFields": [{ "name": "limits", "requiredFields": ["fMin"] }],
+    "members": {
+      "limits": {},
+      "limits/fMin": { "type": { "kind": "scalar", "base": "Float", "array": false } }
+    },
+    "expected": true
+  },
+  {
+    "name": "typed and written entries are checked inside a nested struct",
+    "requiredFields": [
+      { "name": "limits", "requiredFields": [{ "name": "fMax", "type": "Float", "write": true }] }
+    ],
+    "members": {
+      "limits": {
+        "type": { "kind": "struct", "name": "limits", "array": false, "fields": ["fMax"] }
+      },
+      "limits/fMax": {
+        "type": { "kind": "scalar", "base": "Float", "array": false },
+        "writable": false
+      }
+    },
+    "expected": false
+  },
+  {
+    "name": "a doubly nested struct",
+    "requiredFields": [
+      {
+        "name": "io",
+        "requiredFields": [
+          { "name": "limits", "requiredFields": [{ "name": "fMax", "type": "Float" }] }
+        ]
+      }
+    ],
+    "members": {
+      "io": { "type": { "kind": "struct", "name": "io", "array": false, "fields": ["limits"] } },
+      "io/limits": {
+        "type": { "kind": "struct", "name": "limits", "array": false, "fields": ["fMax"] }
+      },
+      "io/limits/fMax": { "type": { "kind": "scalar", "base": "Float", "array": false } }
+    },
+    "expected": true
+  },
+  {
+    "name": "a member typed with an editor kind binds like that kind's field",
+    "requiredFields": [{ "name": "Tint", "type": "color" }],
+    "members": {
+      "Tint": { "type": { "kind": "scalar", "base": "String", "array": false } }
+    },
+    "expected": true
+  },
+  {
+    "name": "an editor-kind member type still refuses a mismatched member",
+    "requiredFields": [{ "name": "Tint", "type": "Color" }],
+    "members": {
+      "Tint": { "type": { "kind": "scalar", "base": "Float", "array": false } }
+    },
+    "expected": false
+  },
+  {
+    "name": "a member type binding no variable leaves the member unconstrained",
+    "requiredFields": [{ "name": "OnPress", "type": "actions" }],
+    "members": {
+      "OnPress": { "type": { "kind": "scalar", "base": "Float", "array": false } }
+    },
+    "expected": true
+  },
+  {
+    "name": "a struct-array member type matches a struct-array member",
+    "requiredFields": [{ "name": "Axes", "type": "Axis[]" }],
+    "members": {
+      "Axes": { "type": { "kind": "struct", "name": "Axes", "array": true, "fields": ["Pos"] } }
+    },
+    "expected": true
+  }
+]

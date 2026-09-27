@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, memo, type CSSProperties } from 'react';
+import { typeLabel } from '@shared/types/componentProperty';
 import {
   buildVarKey,
   isFolder,
@@ -34,7 +35,7 @@ function DualType({ dataType, arrayBadge }: { dataType?: string; arrayBadge?: st
         {arrayBadge ?? ''}
       </span>
       <span className="cfg-var-type-remote">
-        <SearchHighlight text={dataType || '—'} />
+        <SearchHighlight text={dataType ? typeLabel(dataType) : '—'} />
       </span>
     </span>
   );

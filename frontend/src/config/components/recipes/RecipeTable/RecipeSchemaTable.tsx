@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { typeLabel } from '@shared/types/componentProperty';
 import type { RecipeDatasetType, RecipeDataType } from '@shared/types/recipe';
 import { useRecipeConfigStore } from '@config/store/recipeConfigStore';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
@@ -170,7 +171,7 @@ export default function RecipeSchemaTable({ type, filter, showLive }: Props) {
                     </td>
                     {/* Derived from the bound variable at pick time — stated, not editable. */}
                     <td className="cfg-td cfg-recipe-td--type">
-                      <SearchHighlight text={param.dataType} />
+                      <SearchHighlight text={typeLabel(param.dataType)} />
                     </td>
                     {showLive && (
                       <td className="cfg-td cfg-recipe-td--live">

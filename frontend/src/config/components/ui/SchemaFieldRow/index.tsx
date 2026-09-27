@@ -316,7 +316,7 @@ export default function SchemaFieldRow({
     <PropertySourceSelector
       value={isStruct ? structValueForEditor : effectiveValue}
       onChange={onChange}
-      fieldType={fieldType}
+      fieldType={schema.type}
       defaultValue={schema.defaultValue}
       forcedSources={isStruct ? (['$var'] as PropertySource[]) : undefined}
       includeStatic={!isStruct && fieldType !== 'record-list'}

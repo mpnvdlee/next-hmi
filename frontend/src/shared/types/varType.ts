@@ -10,7 +10,7 @@
  */
 
 import type { RequiredFieldEntry } from './widgetSchema';
-import { VALUE_TYPES } from '../utils/valueTypes';
+import { VALUE_TYPES, acceptedValueTypes } from '../utils/valueTypes';
 
 type SimpleBase = (typeof VALUE_TYPES)[number];
 
@@ -68,7 +68,8 @@ function fieldName(f: RequiredFieldEntry): string {
  *
  * Struct field-shape is decided from metadata `fields`, never a live value's
  * runtime shape, so an empty `struct[]` (zero elements, no field info yet) is
- * still accepted.
+ * still accepted. Only the required *names* are checked here; `structSatisfies`
+ * checks each member's type and access.
  */
 export function accepts(a: AcceptType, v: VarType, requiredFields?: RequiredFieldEntry[]): boolean {
   if (a.array !== v.array) return false;
@@ -87,6 +88,56 @@ export function accepts(a: AcceptType, v: VarType, requiredFields?: RequiredFiel
  */
 export function nodeAcceptsOrElement(a: AcceptType, v: VarType): boolean {
   return accepts(a, v) || (!a.array && v.array && accepts(a, elementOf(v)));
+}
+
+/** One member of a struct, as far as the caller knows it. */
+export interface StructMember {
+  /** Absent when only the runtime knows the member's type. */
+  type?: VarType;
+  writable?: boolean;
+}
+
+/** A struct's member at a slash-joined path below it (`limits/fMax`);
+ *  `undefined` when the struct has no such member. */
+export type StructMemberLookup = (path: string) => StructMember | undefined;
+
+/**
+ * Whether a struct offers every required field: each must exist; one with
+ * nested `requiredFields` must be a struct itself and satisfy them in turn; one
+ * with a `type` must hold a type that type would accept as a field's
+ * (`acceptedValueTypes`, so an editor kind like `color` means `String`); one
+ * with `write` must be writable. A member whose type is unknown is taken on
+ * trust for its type, never for its access.
+ *
+ * Picker, runtime and backend all decide a struct binding through this one
+ * rule, each supplying the members from what it has — a tree, the variable
+ * metadata, the validator's registry.
+ */
+export function structSatisfies(
+  requiredFields: RequiredFieldEntry[],
+  member: StructMemberLookup,
+  prefix = '',
+): boolean {
+  return requiredFields.every((f) => {
+    const path = `${prefix}${fieldName(f)}`;
+    const found = member(path);
+    if (!found) return false;
+    if (typeof f === 'string') return true;
+    if (f.requiredFields?.length) {
+      if (found.type && found.type.kind !== 'struct') return false;
+      return structSatisfies(f.requiredFields, member, `${path}/`);
+    }
+    const accepted = f.type ? acceptedValueTypes(f.type) : [];
+    const memberType = found.type;
+    if (
+      memberType &&
+      accepted.length > 0 &&
+      !accepted.some((t) => accepts(parseTypeToken(t), memberType))
+    ) {
+      return false;
+    }
+    return !f.write || found.writable === true;
+  });
 }
 
 /** Minimal datasource-node shape needed to derive a VarType. */

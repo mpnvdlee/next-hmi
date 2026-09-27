@@ -98,12 +98,14 @@ describe('classifier', () => {
     expect(isEditorKind('color')).toBe(true);
     expect(isEditorKind('option-list')).toBe(true);
     expect(isEditorKind('integer')).toBe(false);
+    expect(isEditorKind('Color')).toBe(true);
     // A named struct is neither scalar nor editor kind.
     expect(isStructType('Alarms[]')).toBe(true);
     expect(isStructType('Motor')).toBe(true);
     expect(isStructType('struct')).toBe(true);
     expect(isStructType('float')).toBe(false);
     expect(isStructType('color')).toBe(false);
+    expect(isStructType('Color')).toBe(false);
   });
 
   it('isNumericType', () => {

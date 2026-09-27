@@ -194,7 +194,7 @@ The canonical list of names exposed on `window.__nextHMI__` lives in `frontend/s
 Hook variants (call internally `useEvalContext()`; safe to use inside a component body):
 
 - `usePropString(props, key, fallback?)`
-- `usePropNumber(props, key, fallback?)`
+- `usePropNumber(props, key, fallback?)` — a string that is a clean decimal number (`"42"`) reads as that number, never rounded; any other non-number returns `fallback`.
 - `usePropBoolean(props, key, fallback?)`
 - `usePropVar(props, key)` — resolves either a `$var` binding (including array-element bindings with an `index`) or a static / expression value; returns `unknown`.
 - `usePropStruct(props, key)` — for struct properties; returns the live struct (or array for an array struct `type` like `'struct[]'`).
@@ -511,7 +511,7 @@ At runtime, the backend returns the nested shape as a nested object:
 
 Nesting is recursive — sub-struct entries can themselves contain `requiredFields`.
 
-The binding picker matches the nested shape: it verifies that the selected struct folder contains a child folder named `limits` with the required scalar children `fMin` and `fMax`.
+The binding picker matches the nested shape: it verifies that the selected struct folder contains a child folder named `limits` with the required children `fMin` and `fMax`.
 
 #### Array-of-struct bindings
 
@@ -525,7 +525,7 @@ motors: {
 }
 ```
 
-The `requiredFields` describe the shape of each array element. The binding picker shows only folders whose children are all `[N]`-indexed sub-folders, and validates that the first element `[0]` contains the required fields.
+The `requiredFields` describe the shape of each array element. The binding picker shows only folders whose children are all `[N]`-indexed sub-folders, and validates that the lowest-index element (`[0]`, or `[1]` for an array counting from 1) satisfies the required fields; the runtime and the editor's warnings judge the bound element, or that same lowest-index one when none is bound.
 
 At runtime, the backend returns a JSON array:
 
@@ -752,8 +752,8 @@ All optional unless marked **required**.
 - The variable picker filter is the `type` itself: list non-editor entries (e.g. `['float','integer']`, `'string[]'`) restrict which variables can be bound. There is no separate `dataType` field.
 
 The value types and the full source model are specified in [../architecture/value-types.md](../architecture/value-types.md).
-- `write: true` — restrict the picker to writable variables.
-- The set of property **sources** offered for a field is determined entirely by its `type` — there is no per-field source allowlist. A source appears wherever its produced type matches the field.
+- `write: true` — restrict the picker to writable variables: only one whose metadata says `writable: true`, so one that states no access counts as read-only. A read-only variable bound anyway raises the runtime's red overlay and a `var-readonly` warning, and the backend refuses every write to it with `read_only`.
+- The set of property **sources** offered for a field is determined entirely by its `type` — there is no per-field source allowlist. A source appears only where its produced type is exactly the field's type; the one exception is a `Duration` field, which a number-producing source also fills.
 - `visibleWhen` — conditional visibility. A `VisibilityCondition` or an `AND`-joined array; conditions reference sibling property keys in the same schema.
 - `event` — only for `actions`: the key used to store the action array within the property value (default `'onPress'`).
 - `options` — **required** for `format: 'select'`; array of `{ label, value, icon? }`.
@@ -768,8 +768,10 @@ The value types and the full source model are specified in [../architecture/valu
 - a plain string — the child field must exist (read-only).
 - an object — `{ name, write?, type?, requiredFields? }`.
   - `write: true` requires that the picked field be writable.
-  - `type` restricts the simple datatype of that child (e.g. `'float'`).
+  - `type` restricts the datatype of that child (e.g. `'float'`), under the same rules as a field's `type`.
   - Nested `requiredFields` recursively constrain sub-folders, enabling nested-struct matching.
+
+The picker, the runtime binding check and the editor's warnings all hold a bound struct to every one of these — name, type, access and nesting — against the same element of a struct array, so a struct the picker offers (without **Show all**) is one the page accepts. A disabled member, or one gone from the server, counts as missing.
 
 Set an array struct `type` (`'struct[]'`, or a named array struct like `'Alarms[]'`) on the field itself to require an array-of-struct folder (children must be `[0]`, `[1]`, …). The `requiredFields` then describe the shape of each element. At runtime the value is a JSON array (`unknown[]`), accessed via `usePropStruct` or the explicit `useStructVariable(key)` for write-back.
 

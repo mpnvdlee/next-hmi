@@ -5,12 +5,13 @@ import {
   componentPropertyToSchemaField,
   OPTION_TYPE_EMPTY_VALUE,
   OPTION_TYPE_OPTIONS,
+  typeLabel,
   VALUELESS_PROPERTY_TYPES,
   type ComponentPropertyOptionType,
   type ComponentPropertySchema,
   type StructSchemaNode,
 } from '@shared/types/componentProperty';
-import { primaryType } from '@shared/utils/valueTypes';
+import { primaryType, typeList } from '@shared/utils/valueTypes';
 import { hasOptionValue, renderSchemaField, selectOptionKey } from '../../utils/renderSchemaField';
 import PropRow from '../ui/PropRow';
 import FieldGroup from '../ui/FieldGroup';
@@ -203,7 +204,7 @@ function ComponentPropertyRow({
           be typed into reads as a broken input. */}
       <StatedRow label="Key">{propKey}</StatedRow>
 
-      <StatedRow label="Type">{schema.type}</StatedRow>
+      <StatedRow label="Type">{typeList(schema.type).map(typeLabel).join(', ')}</StatedRow>
 
       {primary === 'struct' && (
         <PropRow

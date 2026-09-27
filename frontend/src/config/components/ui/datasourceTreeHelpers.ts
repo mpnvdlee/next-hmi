@@ -110,6 +110,9 @@ export function parseApiTree(nodes: unknown[], datasource: string, prefix = ''):
         is_array,
         array_length,
         enabled: (n as Record<string, unknown>).enabled === true,
+        ...((n as Record<string, unknown>).present_on_server === false && {
+          present_on_server: false,
+        }),
         writable,
         fields,
         _datasource: datasource,

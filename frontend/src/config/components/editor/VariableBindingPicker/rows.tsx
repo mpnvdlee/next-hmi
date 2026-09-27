@@ -115,7 +115,7 @@ function ComponentPropNodeRow({
       </span>
       {isLeaf && (
         <span className="editor-binding-char-row__type cfg-text-truncate">
-          <SearchHighlight text={node.type ?? '—'} />
+          <SearchHighlight text={node.type ? formatTypeBadge(node.type) : '—'} />
         </span>
       )}
       {isLeaf && <AccessBadge writable={node.write === true} />}
@@ -210,7 +210,7 @@ function ArrayElementRow({
       <span className="cfg-text-truncate editor-binding-item__name">[{item.index}]</span>
       {parent.data_type && (
         <span className="editor-binding-char-row__type cfg-text-truncate">
-          <SearchHighlight text={parent.data_type} />
+          <SearchHighlight text={formatTypeBadge(parent.data_type)} />
         </span>
       )}
       <AccessBadge writable={parent.writable} />
@@ -249,7 +249,7 @@ function VariableRow({ item, ctx }: { item: Extract<RowItem, 'variable'>; ctx: R
       </span>
       {v.data_type && (
         <span className="editor-binding-char-row__type cfg-text-truncate">
-          <SearchHighlight text={v.data_type} />
+          <SearchHighlight text={formatTypeBadge(v.data_type)} />
           {arrayBadgeSuffix(v)}
         </span>
       )}

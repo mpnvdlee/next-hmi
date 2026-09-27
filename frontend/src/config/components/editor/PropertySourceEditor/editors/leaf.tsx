@@ -25,12 +25,34 @@ import type {
   ViewportSource,
 } from '@shared/types/config';
 import { useRecipeConfigStore } from '@config/store/recipeConfigStore';
+import { sourceFieldFits, type FieldSelectingSource } from '@hmi/utils/propertySourceRegistry';
 
 /** Parse a typed `datasource:location[n]` string into a VariableBinding. */
 function parseVarPathInput(text: string): { path: string; index?: number } {
   const trimmed = text.trim();
   const m = trimmed.match(/^(.*)\[(\d+)\]$/);
   return m ? { path: m[1], index: parseInt(m[2], 10) } : { path: trimmed };
+}
+
+/**
+ * The choices of a source's `field` selector that fit the field it sits in.
+ * The stored choice stays listed even when it does not fit — marked, so an
+ * existing value never changes by itself. No `fieldType` lists them all.
+ */
+function fittingFieldOptions<T extends string>(
+  source: FieldSelectingSource,
+  options: readonly { value: T; label: string }[],
+  current: string | undefined,
+  fieldType: string | readonly string[] | undefined,
+): { value: T; label: string }[] {
+  if (!fieldType) return [...options];
+  return options.flatMap((o) =>
+    sourceFieldFits(source, o.value, fieldType)
+      ? [o]
+      : o.value === current
+        ? [{ value: o.value, label: `${o.label} (does not fit this field)` }]
+        : [],
+  );
 }
 
 /**
@@ -196,15 +218,24 @@ export function RandomEditor({
   );
 }
 
+const USER_FIELD_OPTIONS = [
+  { value: 'username', label: 'username' },
+  { value: 'groups', label: 'groups' },
+  { value: 'userList', label: 'User list' },
+] as const;
+
 export function UserFieldEditor({
   value,
   onChange,
   listOnly = false,
+  fieldType,
 }: {
   value: unknown;
   onChange: (v: unknown) => void;
   /** An option-list field takes a list, so only the list-valued fields apply. */
   listOnly?: boolean;
+  /** The type(s) the field takes; lists only the choices that fit one. */
+  fieldType?: string | readonly string[];
 }) {
   const userObj = (value as UserSource)?.$user ?? { field: listOnly ? 'userList' : 'username' };
 
@@ -229,9 +260,16 @@ export function UserFieldEditor({
           value={userObj.field ?? 'username'}
           onChange={(v) => onChange({ $user: { field: v } })}
         >
-          <option value="username">username</option>
-          <option value="groups">groups</option>
-          <option value="userList">User list</option>
+          {fittingFieldOptions(
+            '$user',
+            USER_FIELD_OPTIONS,
+            userObj.field ?? 'username',
+            fieldType,
+          ).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
         </Select>
       </PropRow>
     </>
@@ -259,12 +297,21 @@ export function UserGroupsEditor({
   );
 }
 
+const DEVICE_FIELD_OPTIONS = [
+  { value: 'hostname', label: 'Hostname' },
+  { value: 'ipAddress', label: 'IP address' },
+  { value: 'macAddress', label: 'MAC address' },
+] as const;
+
 export function DeviceFieldEditor({
   value,
   onChange,
+  fieldType,
 }: {
   value: unknown;
   onChange: (v: unknown) => void;
+  /** The type(s) the field takes; lists only the choices that fit one. */
+  fieldType?: string | readonly string[];
 }) {
   const deviceObj = (value as DeviceSource)?.$device ?? { field: 'hostname' as const };
 
@@ -275,9 +322,16 @@ export function DeviceFieldEditor({
           value={deviceObj.field ?? 'hostname'}
           onChange={(v) => onChange({ $device: { field: v as DeviceSource['$device']['field'] } })}
         >
-          <option value="hostname">Hostname</option>
-          <option value="ipAddress">IP address</option>
-          <option value="macAddress">MAC address</option>
+          {fittingFieldOptions(
+            '$device',
+            DEVICE_FIELD_OPTIONS,
+            deviceObj.field ?? 'hostname',
+            fieldType,
+          ).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
         </Select>
       </PropRow>
     </>
@@ -349,9 +403,12 @@ const PAGE_FIELD_OPTIONS: { value: PageField; label: string }[] = [
 export function PageEditor({
   value,
   onChange,
+  fieldType,
 }: {
   value: unknown;
   onChange: (v: unknown) => void;
+  /** The type(s) the field takes; lists only the choices that fit one. */
+  fieldType?: string | readonly string[];
 }) {
   const obj = (value as PageSource)?.$page ?? { field: 'title' as const };
   const isPathString = obj.field === 'pathString';
@@ -366,11 +423,13 @@ export function PageEditor({
           value={obj.field ?? 'title'}
           onChange={(v) => onChange({ $page: { ...obj, field: v as PageField } })}
         >
-          {PAGE_FIELD_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
+          {fittingFieldOptions('$page', PAGE_FIELD_OPTIONS, obj.field ?? 'title', fieldType).map(
+            (o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ),
+          )}
         </Select>
       </PropRow>
       <PropRow label="Page">
@@ -413,9 +472,12 @@ const VIEWPORT_FIELD_OPTIONS: {
 export function ViewportEditor({
   value,
   onChange,
+  fieldType,
 }: {
   value: unknown;
   onChange: (v: unknown) => void;
+  /** The type(s) the field takes; lists only the choices that fit one. */
+  fieldType?: string | readonly string[];
 }) {
   const obj = (value as ViewportSource)?.$viewport ?? { field: 'size' as const };
   return (
@@ -427,7 +489,12 @@ export function ViewportEditor({
             onChange({ $viewport: { field: v as 'size' | 'width' | 'height' | 'orientation' } })
           }
         >
-          {VIEWPORT_FIELD_OPTIONS.map((o) => (
+          {fittingFieldOptions(
+            '$viewport',
+            VIEWPORT_FIELD_OPTIONS,
+            obj.field ?? 'size',
+            fieldType,
+          ).map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
             </option>
@@ -476,9 +543,12 @@ const RECIPE_FIELD_OPTIONS = [
 export function RecipeEditor({
   value,
   onChange,
+  fieldType,
 }: {
   value: unknown;
   onChange: (v: unknown) => void;
+  /** The type(s) the field takes; lists only the choices that fit one. */
+  fieldType?: string | readonly string[];
 }) {
   const config = useRecipeConfigStore((s) => s.config);
   const load = useRecipeConfigStore((s) => s.load);
@@ -509,7 +579,12 @@ export function RecipeEditor({
           value={obj.field ?? 'parametersChanged'}
           onChange={(v) => onChange({ $recipe: { ...obj, field: v } })}
         >
-          {RECIPE_FIELD_OPTIONS.map((opt) => (
+          {fittingFieldOptions(
+            '$recipe',
+            RECIPE_FIELD_OPTIONS,
+            obj.field ?? 'parametersChanged',
+            fieldType,
+          ).map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>

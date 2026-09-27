@@ -51,7 +51,9 @@ const INT_RANGES: Record<string, readonly [bigint, bigint]> = {
   uint64: [0n, 18446744073709551615n],
 };
 const FLOAT32_MAX = 3.4028234663852886e38;
-const DECIMAL_NUMBER_RE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+/** A clean decimal number — sign, digits, fraction, exponent; no hex, `Infinity`
+ *  or unit. Also what `getPropNumber` parses a string with. */
+export const DECIMAL_NUMBER_RE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
 export const OPCUA_WRITE_TYPE_MATRIX: Record<string, TypeRule> = {};
 

@@ -93,4 +93,19 @@ describe('PropertySourceSelector', () => {
     expect(screen.queryByRole('button', { name: /Comparison/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Static Value/ })).not.toBeInTheDocument();
   });
+
+  it('offers on a union field the sources any of its types takes', () => {
+    const onChange = vi.fn();
+    render(
+      <PropertySourceSelector value={0} onChange={onChange} fieldType={['float', 'integer']} />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Static/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Browse property sources/ }));
+
+    // Integer producers alongside the Float ones.
+    expect(screen.getByRole('button', { name: /Formula/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Viewport/ }));
+    expect(onChange).toHaveBeenCalledWith({ $viewport: { field: 'width' } });
+  });
 });

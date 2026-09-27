@@ -4,6 +4,8 @@ import json
 import re
 import time
 from dataclasses import dataclass, field, replace
+from datetime import date, datetime
+from datetime import time as time_of_day
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +83,22 @@ _ATOMIC_TYPE_CHECKS = {
     "time": (str,),
     "duration": (str, int, float),
 }
+
+# A value's type as the editor names it — capitalised like every type the
+# editor shows ("Float", "Boolean").
+_PY_TYPE_LABELS = {
+    "bool": "Boolean",
+    "int": "Integer",
+    "float": "Float",
+    "str": "String",
+    "list": "Array",
+    "dict": "Object",
+}
+
+
+def _type_label(field_type: str) -> str:
+    return vartype.known_base(field_type) or field_type[:1].upper() + field_type[1:]
+
 
 # Property keys every widget node accepts regardless of its declared schema.
 # WidgetRenderer reads them straight off `node.properties` before it consults the
@@ -560,13 +578,7 @@ def _walk_variable_tree(nodes: Any, prefix: str, out: dict[str, dict]) -> None:
             if not isinstance(children, list):
                 continue
             is_array = bool(node.get("is_array"))
-            field_names = [
-                child.get("display_name")
-                for child in children
-                if isinstance(child, dict)
-                and child.get("kind") != "folder"
-                and isinstance(child.get("display_name"), str)
-            ]
+            field_names = _disk_struct_fields(children, path, is_array, out)
             if field_names or is_array:
                 out[path] = vartype.node_var_type({
                     "data_type": "struct",
@@ -574,8 +586,10 @@ def _walk_variable_tree(nodes: Any, prefix: str, out: dict[str, dict]) -> None:
                     "array_length": node.get("array_length"),
                     "fields": field_names,
                 })
-            _walk_variable_tree(children, path, out)
-        else:
+        elif is_subscribable(node):
+            # A disabled or stale leaf is no variable the pool serves, so the
+            # live registry leaves it out; it still counts among its struct's
+            # fields (see _disk_struct_fields), as it does there.
             raw_type = node.get("data_type")
             simple = to_simple_type(raw_type, as_array_suffix=False) if isinstance(raw_type, str) else "String"
             out[path] = vartype.node_var_type({
@@ -764,7 +778,9 @@ def build_context() -> ValidationContext:
     datasource_registry, datasource_writable = _collect_datasource_registry()
     return ValidationContext(
         widget_schemas=load_widget_manifest(),
-        datasource_registry=_collect_datasource_registry(),
+        datasource_registry=datasource_registry,
+        datasource_writable=datasource_writable,
+        _struct_elements=_struct_elements_for(datasource_registry),
         datasource_types=_collect_datasource_types(),
         page_ids=set(_page_stems(page_files)) | navigable_page_ids | dialogs_page_ids,
         navigable_page_ids=navigable_page_ids,
@@ -799,32 +815,12 @@ def _property_source_key(value: dict) -> str:
     return ""
 
 
-# Editor-kind schema tokens — never a binding-filter type, so they're excluded
-# from the accept-type list a $var/$componentProp value is checked against.
-# Mirrors frontend/src/shared/utils/valueTypes.ts EDITOR_KINDS — parity is
-# enforced by test_structure_parity.py / valueTypes.test.ts against the shared
-# frontend/src/shared/types/__fixtures__/editorKinds.json fixture.
-_EDITOR_KINDS: frozenset[str] = frozenset({
-    "color", "icon", "image", "video", "option-list", "actions", "groups",
-    "image-indicators", "child-positions", "menu-items", "page-group", "slot",
-    "widgets", "_action",
-})
-
-
 def _accept_types_for_schema(schema_field: dict | None) -> list[dict]:
-    """A schema field's binding-filter tokens (its `type`, minus editor kinds),
-    parsed into AcceptType specs. Empty = no type constraint (skip the check)."""
+    """A schema field's binding-filter tokens parsed into AcceptType specs.
+    Empty = no type constraint (skip the check)."""
     if not isinstance(schema_field, dict):
         return []
-    field_type = schema_field.get("type")
-    if field_type is None:
-        return []
-    tokens = field_type if isinstance(field_type, list) else [field_type]
-    return [
-        vartype.parse_type_token(token)
-        for token in tokens
-        if isinstance(token, str) and token not in _EDITOR_KINDS
-    ]
+    return vartype.accept_types(schema_field.get("type"))
 
 
 def _report_test_server_target(
@@ -894,7 +890,184 @@ def validate_var_ref(
     if var_type is None:
         return  # registry not (yet) populated for this path — best-effort, skip type check
     accept = _accept_types_for_schema(schema_field)
-    if not accept:
+    if accept and not any(vartype.accepts(a, element, required_fields) for a in accept):
+        report.warn(
+            path, f"{subject} type is incompatible with this field", severity="error", code="var-type"
+        )
+        return
+    if accept and element.get("kind") == "struct":
+        base = (
+            _element_path(ctx, ds_name, resolved_key, ref.get("index"))
+            if var_type.get("array")
+            else resolved_key
+        )
+        _report_struct_members(
+            ctx, ds_name, base, element, required_fields, path, report, subject, "var-type"
+        )
+    elif write and _read_only(ctx, ds_name, resolved_key):
+        report.warn(
+            path,
+            f"{subject} is read-only, and this field writes to it",
+            severity="error",
+            code="var-readonly",
+        )
+
+
+def _report_bad_index(
+    index: Any,
+    ds_name: str,
+    key: str,
+    var_type: dict | None,
+    path: str,
+    report: ValidationReport,
+) -> bool:
+    """Flag an `index` that names no element: not a whole number, negative,
+    on a variable that is no array, or past the array's fixed length. An
+    unknown variable type only gets the shape checks. True when something was
+    reported."""
+    if index is None:
+        return False
+    # JSON has one number type; the runtime reads `2.0` as element 2.
+    if isinstance(index, float) and index.is_integer():
+        index = int(index)
+    subject = f"variable '{ds_name}:{key}'"
+    if isinstance(index, bool) or not isinstance(index, int):
+        problem = f"index {json.dumps(index)} is not a whole number"
+    elif index < 0:
+        problem = f"index {index} is negative"
+    elif var_type is None:
+        return False
+    elif not var_type.get("array"):
+        problem = f"{subject} is not an array, so index {index} names no element"
+    else:
+        length = var_type.get("length")
+        if not (isinstance(length, int) and length > 0 and index >= length):
+            return False
+        problem = f"index {index} is outside {subject} (length {length})"
+    report.warn(path, problem, severity="error", code="var-index")
+    return True
+
+
+_ELEMENT_FOLDER = re.compile(r"\[(\d+)\]$")
+
+
+def _index_struct_elements(paths: dict[str, dict]) -> dict[str, dict[int, str]]:
+    """Array path -> element index -> element folder, for every struct array in
+    one datasource's registry. An element is the folder right below the array
+    whose name ends in `[N]` — `[2]`, or `Line[2]` from a static server — the
+    reading the runtime's `structElementPath` gives it."""
+    arrays = {
+        key
+        for key, var_type in paths.items()
+        if isinstance(var_type, dict) and var_type.get("kind") == "struct" and var_type.get("array")
+    }
+    index: dict[str, dict[int, str]] = {}
+    if not arrays:
+        return index
+    # Both registries list an element folder under its own key, so the keys
+    # ending in `]` are nearly always enough and cheap to pick out.
+    for key in paths:
+        if not key.endswith("]"):
+            continue
+        parent, _, name = key.rpartition("/")
+        match = _ELEMENT_FOLDER.search(name)
+        if match and parent in arrays:
+            index.setdefault(parent, {})[int(match.group(1))] = key
+    unlisted = arrays - index.keys()
+    if not unlisted:
+        return index
+    # An element folder that only shows through its members' keys.
+    for key in paths:
+        if "]/" not in key:
+            continue
+        parts = key.split("/")
+        for depth in range(1, len(parts) - 1):
+            parent = "/".join(parts[:depth])
+            match = _ELEMENT_FOLDER.search(parts[depth]) if parent in unlisted else None
+            if match:
+                index.setdefault(parent, {})[int(match.group(1))] = f"{parent}/{parts[depth]}"
+    return index
+
+
+class _StructElements:
+    """The element folders of a registry's struct arrays, indexed per
+    datasource on first use. Built once per registry and reused for as long as
+    that registry is cached, so no binding pays for a scan of it."""
+
+    def __init__(self, registry: _Registry) -> None:
+        self.registry = registry
+        self._by_ds: dict[str, dict[str, dict[int, str]]] = {}
+
+    def of(self, ds_name: str, array_path: str) -> dict[int, str]:
+        by_array = self._by_ds.get(ds_name)
+        if by_array is None:
+            by_array = self._by_ds[ds_name] = _index_struct_elements(
+                self.registry.get(ds_name) or {}
+            )
+        return by_array.get(array_path, {})
+
+
+_struct_elements_cache: _StructElements | None = None
+
+
+def _struct_elements_for(registry: _Registry) -> _StructElements:
+    """The element index of `registry`, kept alongside the live-pool and disk
+    registry caches: those hand back the same registry object until it is
+    rebuilt, and the index follows it."""
+    global _struct_elements_cache
+    if _struct_elements_cache is None or _struct_elements_cache.registry is not registry:
+        _struct_elements_cache = _StructElements(registry)
+    return _struct_elements_cache
+
+
+def _element_path(ctx: ValidationContext, ds_name: str, array_path: str, index: Any) -> str | None:
+    """The element folder a struct-array binding is judged on: the bound
+    element when an index is bound and exists, otherwise the lowest-index
+    element — the rule `checkBindingSpec` applies at runtime."""
+    elements = ctx.struct_elements.of(ds_name, array_path)
+    if not elements:
+        return None
+    if isinstance(index, int) and not isinstance(index, bool) and index in elements:
+        return elements[index]
+    return elements[min(elements)]
+
+
+def _writable(ctx: ValidationContext, ds_name: str, key: str) -> bool:
+    return (ctx.datasource_writable.get(ds_name) or {}).get(key) is True
+
+
+def _read_only(ctx: ValidationContext, ds_name: str, key: str) -> bool:
+    """Whether a writing field fails on the variable at `key`: unless the
+    registry says it is writable it is read-only, as the picker reads it. A
+    struct has no access of its own — its members are judged one by one."""
+    var_type = (ctx.datasource_registry.get(ds_name) or {}).get(key)
+    if isinstance(var_type, dict) and var_type.get("kind") == "struct":
+        return False
+    return not _writable(ctx, ds_name, key)
+
+
+def _report_struct_members(
+    ctx: ValidationContext,
+    ds_name: str,
+    base: str | None,
+    struct_type: dict,
+    required_fields: Any,
+    path: str,
+    report: ValidationReport,
+    subject: str,
+    type_code: str,
+) -> None:
+    """Judge the struct at `base` against the field's required members
+    (`vartype.struct_mismatches`) and report the first failure: a missing or
+    mistyped member under `type_code`, read-only ones under `var-readonly`.
+    Silent when there is nothing to judge — no required fields, or a struct
+    whose members are not known yet."""
+    if (
+        base is None
+        or not isinstance(required_fields, list)
+        or not required_fields
+        or not struct_type.get("fields")
+    ):
         return
     required_fields = schema_field.get("requiredFields") if isinstance(schema_field, dict) else None
     element = vartype.element_of(var_type) if ref.get("index") is not None else var_type
@@ -1213,9 +1386,9 @@ def _validate_property_value(
     path: str,
     report: ValidationReport,
 ) -> None:
-    # Mirrors frontend primaryType(): the first token drives the editor/literal
-    # type; the full token list (see _accept_types_for_schema) is only used for
-    # the $var binding-filter check below.
+    # Mirrors frontend primaryType(): the first token drives the editor (and
+    # the asset checks below); the full token list is what a literal
+    # (`_check_literal`) and a binding (`_accept_types_for_schema`) may fit.
     field_type = schema_field.get("type") if isinstance(schema_field, dict) else None
     if isinstance(field_type, list):
         field_type = field_type[0] if field_type else None
@@ -1227,29 +1400,20 @@ def _validate_property_value(
         _validate_menu_items(value, ctx, path, report)
 
     if not _has_property_source(value):
-        # Static literal — type-check against schema.
-        expected = _ATOMIC_TYPE_CHECKS.get(field_type) if field_type is not None else None
-        if expected is None:
-            return
-        if field_type in ("integer", "float") and isinstance(value, bool):
-            # bool is a subclass of int; reject it for numeric fields
-            report.add(path, f"expected {field_type}, got boolean")
-            return
-        if field_type == "duration" and isinstance(value, bool):
-            report.add(path, "expected duration, got boolean")
-            return
-        if not isinstance(value, expected) and value is not None:
-            report.add(path, f"expected {field_type}, got {type(value).__name__}")
+        _check_literal(value, schema_field, ctx, path, report, wrapped=False)
         return
     # Sourced value — recurse into its payload.
     if not isinstance(value, dict):
         return
     source_key = _property_source_key(value)
     payload = value.get(source_key)
+    _check_source_type(source_key, payload, schema_field, path, report)
     if source_key == "$var":
         validate_var_ref(payload, ctx, path, report, schema_field)
     elif source_key == "$static":
-        if field_type == "icon" and isinstance(payload, dict):
+        if not isinstance(payload, dict):
+            _check_literal(payload, schema_field, ctx, path, report, wrapped=True)
+        elif field_type == "icon":
             icon_type = payload.get("type")
             if icon_type == "builtin":
                 name = payload.get("name")
@@ -1259,13 +1423,13 @@ def _validate_property_value(
                 icon_path = payload.get("path")
                 if not isinstance(icon_path, str) or icon_path not in ctx.icon_assets:
                     report.warn(path, f"unknown icon asset '{icon_path}'", severity="error", code="icon-unknown")
-        elif field_type == "image" and isinstance(payload, dict):
+        elif field_type == "image":
             image_path = payload.get("path")
             if not _is_absolute_asset_url(image_path) and (
                 not isinstance(image_path, str) or image_path not in ctx.image_assets
             ):
                 report.warn(path, f"unknown image asset '{image_path}'", severity="error", code="image-unknown")
-        elif field_type == "video" and isinstance(payload, dict):
+        elif field_type == "video":
             video_path = payload.get("path")
             if not _is_absolute_asset_url(video_path) and (
                 not isinstance(video_path, str) or video_path not in ctx.video_assets

@@ -87,7 +87,7 @@ export async function pastePropertyValue(
   const detected = getPropertySource(parsed);
   const sourceKey = detected === 'static' || detected == null ? '$static' : detected;
   const fieldType = primaryType(schema.type);
-  const check = isPropertySourceAllowed(fieldType, sourceKey);
+  const check = isPropertySourceAllowed(schema.type, sourceKey);
   if (!check.valid && !isScopePasteSource(sourceKey, fieldType)) {
     toast('error', check.reason ?? 'Incompatible value');
     return;

@@ -6,8 +6,11 @@ import {
   nodeAcceptsOrElement,
   nodeVarType,
   parseTypeToken,
+  structSatisfies,
+  type StructMember,
   type VarType,
 } from './varType';
+import type { RequiredFieldEntry } from './widgetSchema';
 import parityFixture from './__fixtures__/varTypeAccepts.json';
 
 interface ParityCase {
@@ -71,6 +74,7 @@ describe('accepts (strict)', () => {
   });
 
   it('rejects a base mismatch and a scalar-vs-struct mismatch', () => {
+    expect(accepts(parseTypeToken('integer'), { ...intScalar, base: 'Float' })).toBe(false);
     expect(accepts(parseTypeToken('float'), intScalar)).toBe(false);
     expect(accepts(parseTypeToken('struct'), intScalar)).toBe(false);
   });

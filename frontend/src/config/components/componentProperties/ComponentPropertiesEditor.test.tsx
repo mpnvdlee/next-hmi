@@ -20,7 +20,7 @@ describe('ComponentPropertiesEditor', () => {
     await user.click(screen.getByText('Motor speed'));
 
     expect(screen.getByText('motorSpeed')).toBeInTheDocument();
-    expect(screen.getByText('float')).toBeInTheDocument();
+    expect(screen.getByText('Float')).toBeInTheDocument();
     expect(screen.queryByDisplayValue('motorSpeed')).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue('float')).not.toBeInTheDocument();
   });

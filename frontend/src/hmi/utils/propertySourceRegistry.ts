@@ -47,7 +47,16 @@ export type PropertySourceKey = Exclude<PropertySource, 'static'> | '$static';
  * editor-kind fields, never on scalar fields.
  */
 export type ProducedValueType =
-  'any' | 'string' | 'integer' | 'float' | 'boolean' | 'datetime' | 'string[]' | 'record-list';
+  | 'any'
+  | 'string'
+  | 'integer'
+  | 'float'
+  | 'boolean'
+  | 'datetime'
+  | 'date'
+  | 'time'
+  | 'string[]'
+  | 'record-list';
 
 /**
  * Content-tier shape for the property-panel `FieldGroup` primitive — how many
@@ -76,8 +85,131 @@ interface PropertySourceDescriptor {
   abbr: string;
   /** Base value type(s) this source yields — drives which fields it is offered on. */
   produces: ProducedValueType[];
-  /** Create the default value for this source given the target field type. */
-  createDefault: (fieldType: string, defaultValue?: unknown) => unknown;
+  /** Create the default value for this source given the target field type —
+   *  `fieldType` the first of a union, `fieldTypes` all of them. */
+  createDefault: (
+    fieldType: string,
+    defaultValue: unknown,
+    fieldTypes: readonly string[],
+  ) => unknown;
+}
+
+/**
+ * What each choice of a source's inner `field` selector yields. A source with
+ * such a selector produces the union of these; its editor lists the choices
+ * that fit the field it sits in. A choice that yields one type on a list field
+ * and another elsewhere lists both — it fits a field either one fits.
+ * Parity fixture: `sourceProduces.json`.
+ */
+export const SOURCE_FIELD_PRODUCES = {
+  $page: {
+    title: 'string',
+    breadcrumbLabel: 'string',
+    description: 'string',
+    icon: 'string',
+    id: 'string',
+    parentId: 'string',
+    pathString: 'string',
+    depth: 'integer',
+    pathSegments: 'string[]',
+  },
+  $viewport: { size: 'string', orientation: 'string', width: 'integer', height: 'integer' },
+  $recipe: { parametersChanged: 'boolean', loaded: 'boolean', activeName: 'string' },
+  // On a list field `userList` is every user and `groups` every group, as
+  // options; on a text field `resolveUser` joins the names — the signed-in
+  // user's group labels for `groups` — into one string. `userList` comes before
+  // `groups`, so a new list starts on the users.
+  $user: {
+    username: 'string',
+    userList: ['string[]', 'string'],
+    groups: ['string', 'string[]'],
+  },
+  $device: { hostname: 'string', ipAddress: 'string', macAddress: 'string' },
+} as const satisfies Partial<
+  Record<PropertySource, Record<string, ProducedValueType | readonly ProducedValueType[]>>
+>;
+
+export type FieldSelectingSource = keyof typeof SOURCE_FIELD_PRODUCES;
+
+/** The types one choice yields, or none for a choice the table does not know. */
+function choiceProduces(source: FieldSelectingSource, field: string): readonly ProducedValueType[] {
+  const produced = (
+    SOURCE_FIELD_PRODUCES[source] as Record<
+      string,
+      ProducedValueType | readonly ProducedValueType[] | undefined
+    >
+  )[field];
+  return produced === undefined ? [] : typeof produced === 'string' ? [produced] : produced;
+}
+
+function fieldProduces(source: FieldSelectingSource): ProducedValueType[] {
+  return [
+    ...new Set(
+      Object.keys(SOURCE_FIELD_PRODUCES[source]).flatMap((f) => choiceProduces(source, f)),
+    ),
+  ];
+}
+
+export const SCALAR_FIELD_TYPES = [
+  'string',
+  'datetime',
+  'date',
+  'time',
+  'duration',
+  'integer',
+  'float',
+  'boolean',
+];
+/** Editor kinds whose value is a string (see `acceptedValueTypes`). */
+const STRING_BOUND_KINDS = new Set(['color', 'icon', 'image', 'video']);
+const LIST_KINDS = new Set(['option-list', 'item-list']);
+
+/** Whether a produced base type fits a scalar field type (offer-time gate):
+ *  the same type only, except that a number also fills a `duration` field.
+ *  Array producers never fit a scalar; the editor-kind lists gate them. */
+export function producedFits(produced: ProducedValueType, fieldType: string): boolean {
+  if (produced === 'any' || produced === fieldType) return true;
+  // a duration is a number of seconds
+  return fieldType === 'duration' && (produced === 'integer' || produced === 'float');
+}
+
+/** Whether a produced type fits a field of any kind: a scalar by
+ *  `producedFits`, a string-valued editor kind a string, a list kind a list.
+ *  A field type this does not know is not narrowed. */
+function producedFitsField(produced: ProducedValueType, fieldType: string): boolean {
+  const ft = fieldType.toLowerCase();
+  if (SCALAR_FIELD_TYPES.includes(ft)) return producedFits(produced, ft);
+  if (produced === 'any') return true;
+  if (STRING_BOUND_KINDS.has(ft)) return produced === 'string';
+  if (LIST_KINDS.has(ft)) return produced === 'string[]' || produced === 'record-list';
+  if (ft === 'record-list') return produced === 'record-list';
+  return true;
+}
+
+/** Whether one choice of a source's `field` selector fits the field it sits
+ *  in — any one of a union's types will do. A choice the table does not know —
+ *  hand-edited JSON — does not. */
+export function sourceFieldFits(
+  source: FieldSelectingSource,
+  field: string,
+  fieldType: string | readonly string[],
+): boolean {
+  const types = typeof fieldType === 'string' ? [fieldType] : fieldType;
+  return choiceProduces(source, field).some((p) => types.some((t) => producedFitsField(p, t)));
+}
+
+/** The `field` a new source starts on: `preferred` when it fits the field,
+ *  else the first choice that does. */
+function defaultSourceField<S extends FieldSelectingSource>(
+  source: S,
+  fieldType: readonly string[],
+  preferred: keyof (typeof SOURCE_FIELD_PRODUCES)[S] & string,
+): keyof (typeof SOURCE_FIELD_PRODUCES)[S] & string {
+  if (sourceFieldFits(source, preferred, fieldType)) return preferred;
+  const fitting = Object.keys(SOURCE_FIELD_PRODUCES[source]).find((f) =>
+    sourceFieldFits(source, f, fieldType),
+  );
+  return (fitting ?? preferred) as keyof (typeof SOURCE_FIELD_PRODUCES)[S] & string;
 }
 
 export function defaultValueFor(fieldType: string, defaultValue?: unknown): unknown {
@@ -204,7 +336,8 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     label: 'Random Value',
     description: 'A random number within a configured range.',
     abbr: 'R',
-    produces: ['float'],
+    // whole numbers unless `integer: false`
+    produces: ['integer', 'float'],
     createDefault: () => ({ $random: { min: 0, max: 100, integer: true } }),
   },
   {
@@ -230,10 +363,9 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     label: 'User Data',
     description: 'Information about the logged-in user or user list.',
     abbr: '@',
-    // username → string; groups / userList → string[]
-    produces: ['string', 'string[]'],
-    createDefault: (fieldType) => ({
-      $user: { field: fieldType.toLowerCase() === 'option-list' ? 'userList' : 'username' },
+    produces: fieldProduces('$user'),
+    createDefault: (_fieldType, _defaultValue, fieldTypes) => ({
+      $user: { field: defaultSourceField('$user', fieldTypes, 'username') },
     }),
   },
   {
@@ -256,8 +388,10 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     description: 'The hostname, IP address, or MAC address of this device.',
     short: 'Device',
     abbr: 'D',
-    produces: ['string'],
-    createDefault: () => ({ $device: { field: 'hostname' } }),
+    produces: fieldProduces('$device'),
+    createDefault: (_fieldType, _defaultValue, fieldTypes) => ({
+      $device: { field: defaultSourceField('$device', fieldTypes, 'hostname') },
+    }),
   },
   {
     source: '$time',
@@ -266,7 +400,9 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     label: 'Current Time',
     description: 'The current date and time in a chosen format.',
     abbr: 'T',
-    produces: ['datetime'],
+    // the time as text formatted by `format`, which decides whether that text
+    // is a DateTime, a Date, a Time or just a string
+    produces: ['datetime', 'string', 'date', 'time'],
     createDefault: () => ({ $time: { format: 'HH:mm:ss', timezone: '' } }),
   },
   {
@@ -331,8 +467,10 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     label: 'Recipe',
     description: 'State from a selected recipe dataset type.',
     abbr: 'RC',
-    produces: ['boolean', 'string'],
-    createDefault: () => ({ $recipe: { type: '', field: 'parametersChanged' } }),
+    produces: fieldProduces('$recipe'),
+    createDefault: (_fieldType, _defaultValue, fieldTypes) => ({
+      $recipe: { type: '', field: defaultSourceField('$recipe', fieldTypes, 'parametersChanged') },
+    }),
   },
   {
     source: '$recipeList',
@@ -364,9 +502,16 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     description: 'Metadata from the current page or another selected page.',
     short: 'Page',
     abbr: 'PG',
-    // most fields → string; depth → integer; pathSegments → string[]
-    produces: ['string', 'integer', 'string[]'],
-    createDefault: () => ({ $page: { field: 'title' } }),
+    produces: fieldProduces('$page'),
+    createDefault: (fieldType, _defaultValue, fieldTypes) => ({
+      $page: {
+        field: defaultSourceField(
+          '$page',
+          fieldTypes,
+          fieldType.toLowerCase() === 'icon' ? 'icon' : 'title',
+        ),
+      },
+    }),
   },
   {
     source: '$viewport',
@@ -376,8 +521,10 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     description: 'The current screen size, orientation, width, or height.',
     short: 'Viewport',
     abbr: 'VP',
-    produces: ['string', 'integer'],
-    createDefault: () => ({ $viewport: { field: 'size' } }),
+    produces: fieldProduces('$viewport'),
+    createDefault: (_fieldType, _defaultValue, fieldTypes) => ({
+      $viewport: { field: defaultSourceField('$viewport', fieldTypes, 'size') },
+    }),
   },
   {
     source: '$result',
@@ -409,11 +556,13 @@ export function isPropertySourceKey(k: string): k is PropertySourceKey {
   return (PROPERTY_SOURCE_KEYS as readonly string[]).includes(k);
 }
 
-/** Create the default value for a property source and field type. */
+/** Create the default value for a property source and field type (or a
+ *  union of them, whose first type shapes the value). */
 export function createSourceDefault(
   source: PropertySource,
-  fieldType: string,
+  fieldType: string | readonly string[],
   defaultValue?: unknown,
 ): unknown {
-  return PROPERTY_SOURCES[source].createDefault(fieldType, defaultValue);
+  const types = typeof fieldType === 'string' ? [fieldType] : fieldType;
+  return PROPERTY_SOURCES[source].createDefault(types[0] ?? '', defaultValue, types);
 }

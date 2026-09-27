@@ -134,7 +134,9 @@ export const isNumericType = (t: string): boolean => {
 export const baseType = (t: string): string => (t.endsWith('[]') ? t.slice(0, -2) : t);
 export const isArrayType = (t: string): boolean => t.endsWith('[]');
 export const isScalarType = (t: string): boolean => baseType(t).toLowerCase() in CANONICAL_BY_LOWER;
-export const isEditorKind = (t: string): boolean => (EDITOR_KINDS as readonly string[]).includes(t);
+/** Case-insensitive: a schema written in code may spell a kind `'Color'`. */
+export const isEditorKind = (t: string): boolean =>
+  (EDITOR_KINDS as readonly string[]).includes(t.toLowerCase());
 /** A named struct (or array of named struct): not a simple type, not an editor kind. */
 export const isStructType = (t: string): boolean => !isScalarType(t) && !isEditorKind(t);
 

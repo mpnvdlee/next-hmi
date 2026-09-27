@@ -24,6 +24,7 @@ import {
   useResolvedLayout,
   useRecordListProp,
   usePropVar,
+  getPropNumber,
 } from './layoutUtils';
 import type { LayoutConfig, WidgetConfig } from '@shared/types/config';
 import selfLayoutKeys from '@shared/types/__fixtures__/selfLayoutKeys.json';
@@ -617,7 +618,11 @@ describe('collectComponentPriorityKeys', () => {
       name: 'sensor-card',
       componentProperties: {
         sensor: { type: 'struct', label: 'Sensor' },
-        speed: { type: 'Float', label: 'Speed', defaultValue: { $var: { path: 'PLC:DefaultSpeed' } } },
+        speed: {
+          type: 'Float',
+          label: 'Speed',
+          defaultValue: { $var: { path: 'PLC:DefaultSpeed' } },
+        },
       },
       children: [
         {
@@ -795,6 +800,47 @@ describe('usePropVar', () => {
   it('still passes a plain static value through', () => {
     const { result } = renderHook(() => usePropVar({ value: 7 }, 'value'), { wrapper });
     expect(result.current).toBe(7);
+  });
+});
+
+describe('getPropNumber', () => {
+  const ctx = {
+    resolveVariable: (ds: string, path: string) =>
+      (useVariableStore.getState().values[`${ds}:${path}`] ?? null) as string | number | null,
+  };
+
+  it('reads a clean decimal string as its number, on both paths', () => {
+    for (const [raw, expected] of [
+      ['42', 42],
+      [' -1.5 ', -1.5],
+      ['+.5', 0.5],
+      ['3.', 3],
+      ['2e3', 2000],
+    ] as const) {
+      expect(getPropNumber({ n: raw }, 'n', 9)).toBe(expected);
+      expect(getPropNumber({ n: raw }, 'n', 9, {})).toBe(expected);
+    }
+  });
+
+  it('does not round a fraction, even for an integer field', () => {
+    expect(getPropNumber({ n: '2.5' }, 'n', 0)).toBe(2.5);
+  });
+
+  it('falls back for anything that is not cleanly a number', () => {
+    for (const raw of ['', '  ', 'abc', '12px', '0x10', '1e', 'Infinity', 'NaN', '1e400', '1,5']) {
+      expect(getPropNumber({ n: raw }, 'n', 9)).toBe(9);
+      expect(getPropNumber({ n: raw }, 'n', 9, {})).toBe(9);
+    }
+    expect(getPropNumber({ n: NaN }, 'n', 9)).toBe(9);
+    expect(getPropNumber({ n: true }, 'n', 9)).toBe(9);
+    expect(getPropNumber({}, 'n', 9, {})).toBe(9);
+  });
+
+  it('parses a numeric string a property source resolves to', () => {
+    useVariableStore.setState({ values: { 'PLC:Setpoint': '12.5' } });
+    expect(getPropNumber({ n: { $var: { path: 'PLC:Setpoint' } } }, 'n', 0, ctx)).toBe(12.5);
+    useVariableStore.setState({ values: { 'PLC:Setpoint': 'off' } });
+    expect(getPropNumber({ n: { $var: { path: 'PLC:Setpoint' } } }, 'n', 0, ctx)).toBe(0);
   });
 });
 

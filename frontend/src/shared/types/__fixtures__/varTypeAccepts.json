@@ -113,5 +113,29 @@
     "varType": { "kind": "scalar", "base": "Integer", "array": false },
     "acceptTokens": ["NotARealType"],
     "expected": false
+  },
+  {
+    "name": "Float slot does not take an Integer variable",
+    "varType": { "kind": "scalar", "base": "Integer", "array": false },
+    "acceptTokens": ["float"],
+    "expected": false
+  },
+  {
+    "name": "Integer slot does not take a Float variable",
+    "varType": { "kind": "scalar", "base": "Float", "array": false },
+    "acceptTokens": ["integer"],
+    "expected": false
+  },
+  {
+    "name": "Float[] slot does not take an Integer[] variable",
+    "varType": { "kind": "scalar", "base": "Integer", "array": true, "length": 3 },
+    "acceptTokens": ["float[]"],
+    "expected": false
+  },
+  {
+    "name": "a numeric union takes either",
+    "varType": { "kind": "scalar", "base": "Integer", "array": false },
+    "acceptTokens": ["float", "integer"],
+    "expected": true
   }
 ]
