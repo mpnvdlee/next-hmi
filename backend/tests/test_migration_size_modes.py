@@ -771,6 +771,17 @@ def test_an_authored_floor_is_not_overwritten() -> None:
     assert layout["grow"] == 1
 
 
+@pytest.mark.parametrize("zero", ["0", "0px", 0])
+def test_an_authored_zero_min_still_gets_the_floor(zero: str | int) -> None:
+    """A zero min was no floor under `basis: auto` — the basis held the content
+    size. Kept under Fill's zero basis, it collapses the node to nothing in a
+    parent that hugs its content."""
+    layout, _ = retire({"grow": 1, "basis": "auto", "minHeight": zero}, "column")
+
+    assert layout["heightMode"] == "fill"
+    assert layout["minHeight"] == "auto"
+
+
 # ── the container half of a layout ───────────────────────────────────────────
 
 

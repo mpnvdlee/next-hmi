@@ -162,6 +162,20 @@ def _length(value: Any) -> str | None:
     return None
 
 
+def _is_zero_length(value: Any) -> bool:
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return value == 0
+    if not isinstance(value, str):
+        return False
+    number = value.strip().rstrip("abcdefghijklmnopqrstuvwxyz%")
+    try:
+        return float(number) == 0
+    except ValueError:
+        return False
+
+
 def _child_axis(node: dict[str, Any], types: _WidgetTypes) -> str | None:
     """The axis *node* lays its own children out on, or None if it doesn't flex.
 
@@ -747,9 +761,13 @@ def _write_content_floor(
     `hmi.css` defaults the min to `0`, so an unset one does not floor — which
     makes the two identical wherever this is the only growing child. Where it is
     not, each growing sibling's share shifts, and the note says so.
+
+    An authored zero min is overwritten too: under the content basis it floored
+    nothing, and kept under Fill's zero basis it collapses the node to nothing
+    wherever its parent hugs.
     """
     floor_key = "minWidth" if main_key == "width" else "minHeight"
-    if floor_key not in layout:
+    if floor_key not in layout or _is_zero_length(layout[floor_key]):
         layout[floor_key] = "auto"
     notes.append(
         f"{where}: read a grow over a content basis as Fill with {floor_key} auto — the raw flex "
