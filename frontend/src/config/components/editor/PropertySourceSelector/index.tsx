@@ -14,6 +14,7 @@ import type { PropertySource } from '@hmi/utils/propertySourceRegistry';
 import { getPropertySource } from '../propertyValueUtils';
 import { useComponentPropertySchema } from '../PropertySourceEditor/componentPropertySchemaContext';
 import { useResultFields } from '../PropertySourceEditor/resultFieldsContext';
+import { useRepeatEditorScope } from '../PropertySourceEditor/repeatScopeContext';
 import useDismissOnOutsideClick from '@config/hooks/useDismissOnOutsideClick';
 import { useOwnerWindow } from '@shared/components/PopoutWindow/windowContext';
 import PropertySourceDrawer from './PropertySourceDrawer';
@@ -53,6 +54,9 @@ interface PropertySourceSelectorProps {
    *  naming one of them. `value` carries nothing on such a row, so the trigger
    *  must not derive its badge from it. Picking a source applies it to all. */
   mixed?: { source: PropertySource | null };
+  /** Which of the context-offered sources (`$componentProp`, `$result`,
+   *  `$repeatItem`) may join the list. Default: all of them. */
+  scopeSources?: PropertySource[];
 }
 
 export default function PropertySourceSelector({
@@ -67,6 +71,7 @@ export default function PropertySourceSelector({
   label,
   source,
   mixed,
+  scopeSources,
 }: PropertySourceSelectorProps) {
   const [open, setOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -82,6 +87,7 @@ export default function PropertySourceSelector({
   const currentSource = source ?? getPropertySource(value);
   const inputScope = useComponentPropertySchema();
   const resultFields = useResultFields();
+  const repeatScope = useRepeatEditorScope();
 
   // Get allowed sources for this field type
   const allowedSources = useMemo(() => {
@@ -99,11 +105,14 @@ export default function PropertySourceSelector({
 
     // Flexible scope sources are offered by ambient context, not by field type:
     // `$componentProp` inside a widget/dialog scope, `$result` inside an action
-    // result handler. Their type-compatibility is enforced inside the picker.
+    // result handler, `$repeatItem` inside a Repeater. Their type-compatibility
+    // is enforced inside the picker.
     const withScopeSources = [...normalized];
+    const joins = (s: PropertySource) => !scopeSources || scopeSources.includes(s);
     if (baseSources.length > 0) {
-      if (inputScope) withScopeSources.push('$componentProp');
-      if (resultFields !== null) withScopeSources.push('$result');
+      if (inputScope && joins('$componentProp')) withScopeSources.push('$componentProp');
+      if (resultFields !== null && joins('$result')) withScopeSources.push('$result');
+      if (repeatScope && joins('$repeatItem')) withScopeSources.push('$repeatItem');
     }
 
     const effective = Array.from(new Set(withScopeSources)).sort();
@@ -113,7 +122,15 @@ export default function PropertySourceSelector({
       effective.unshift('static');
     }
     return effective;
-  }, [fieldType, forcedSources, includeStatic, inputScope, resultFields]);
+  }, [
+    fieldType,
+    forcedSources,
+    includeStatic,
+    inputScope,
+    resultFields,
+    repeatScope,
+    scopeSources,
+  ]);
 
   // Compute fixed popup position whenever popup opens. Flips above the trigger
   // and caps the height when there isn't enough room below, so the option list

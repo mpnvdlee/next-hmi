@@ -126,6 +126,8 @@ interface VariableBinding {
   /** Composite "datasource:location" key, e.g. "MyPLC:Motor1/Speed". */
   path: string;
   index?: number;
+  /** Take `index` from the surrounding Repeater copy instead. */
+  repeatIndex?: boolean;
 }
 
 /** The variable a write or toggle action writes: a `$var`, or — inside a
@@ -165,6 +167,10 @@ interface EvaluationContext {
   /** Backend response exposed to onSuccess / onFailed / onSettled handlers via
    *  `$result`. Absent in every other context. */
   resultValue?: Record<string, unknown>;
+  /** The surrounding Repeater copy's `$repeatItem`, resolved to its concrete source. */
+  resolveRepeatItem?: (payload: unknown) => unknown;
+  /** The surrounding Repeater copy's element index. */
+  repeatIndex?: number;
 }
 
 interface PagePathSegment {
@@ -284,9 +290,10 @@ type ComponentAction =
   | { type: 'closePageOverlay'; pageId?: string }
   | {
       type: 'writeDataVariable';
-      datasource: string;
-      path: string;
-      value: string | number | boolean;
+      /** `{ $var: { path: 'ds:path' } }`, or inside a Repeater the copy's element. */
+      target?: WriteTarget;
+      /** A literal, a dialog input parameter, or the Repeater copy's element. */
+      value: string | number | boolean | unknown[] | { $componentProp: string } | RepeatItemSource;
       onSuccess?: ComponentAction[];
       onFailed?: ComponentAction[];
       onSettled?: ComponentAction[];
@@ -360,7 +367,7 @@ type ComponentAction =
  * `string` | `datetime` | `date` | `time` | `duration`), one of their arrays
  * (`'float[]'` …), a named struct (`'struct'`, `'Alarms[]'`, …), or an
  * editor-only kind (`color` | `icon` | `image` | `video` | `option-list` |
- * `record-list` | `actions` | `groups` | `image-indicators` |
+ * `record-list` | `item-list` | `actions` | `groups` | `image-indicators` |
  * `child-positions` | `page-group`). It may also be a list — the first entry
  * drives the editor control, the rest form the variable-binding filter (e.g.
  * `['float','integer','boolean']` or `['option-list','string[]','integer[]']`).
@@ -737,6 +744,35 @@ declare function useComponentSlot(slot: string): WidgetConfig[];
  *  the components editor renders a definition on its own canvas. Pair it with
  *  `useIsPreview` to keep an authoring affordance out of the page preview. */
 declare function useIsComponentInstance(): boolean;
+
+/** `$repeatItem`: the surrounding Repeater copy's element, one member of it,
+ *  or its 0-based index. */
+interface RepeatItemSource {
+  $repeatItem: { field?: 'value' | 'index'; member?: string };
+}
+
+/** One Repeater copy, as published to the widgets inside it. */
+interface RepeatScopeValue {
+  /** 0-based position of this copy's element in the full items array. */
+  index: number;
+  /** The element itself — a scalar, a record, or a struct's field map. */
+  item: unknown;
+  /** Composite key of the `$var` array the items came from; absent otherwise. */
+  arrayKey?: string;
+  /** The items are a struct-array variable. */
+  structArray?: boolean;
+  /** Unique per copy across nested Repeaters. */
+  key: string;
+  /** The first copy drawn — the one a reader outside the Repeater sees. */
+  first: boolean;
+  /** An editor-canvas copy past the first: drawn for context, never edited. */
+  ghost?: boolean;
+}
+/** The innermost Repeater copy around the caller, or `null` outside one. */
+declare function useRepeatScope(): RepeatScopeValue | null;
+/** Publish one Repeater copy to `children`. Keep `value` stable per copy, and
+ *  declare `export const repeatsChildren = '<item-list prop>'` on the widget. */
+declare function RepeatScope(props: { value: RepeatScopeValue; children?: unknown }): JSX.Element;
 /** True inside the editor's preview pane, false in the operator runtime — for an
  *  authoring-only affordance the operator must never see. */
 declare function useIsPreview(): boolean;
@@ -931,6 +967,25 @@ declare function useRecordListProp(
   properties: Record<string, unknown> | undefined,
   key: string,
 ): unknown[];
+
+/** What an `item-list` property repeats over, and where its elements live. */
+interface ItemList {
+  items: unknown[];
+  /** Composite key of the bound array variable; absent for every other source. */
+  arrayKey?: string;
+  /** The bound variable is a struct array — each member is its own leaf. */
+  structArray: boolean;
+}
+
+/**
+ * Read an `item-list` property — any array from any source that can produce
+ * one (`$static`, a scalar or struct `$var` array, `$http` returning a JSON
+ * array, `$recipeList`, `$user` users/groups, `$widgetProp`).
+ */
+declare function useItemListProp(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+): ItemList;
 
 declare function useCssVar(varName: string, fallback: string): string;
 

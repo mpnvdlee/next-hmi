@@ -1,0 +1,26 @@
+/* Same flex vocabulary as a Container's content box, read off the
+   `--container-*` vars `containerLayoutProps()` emits, so the Layout panel's
+   direction/gap/wrap/align drive every copy the way they drive a Container.
+   Chained with `.hmi-component` for specificity: this sheet is injected at
+   runtime, so its order against other sheets is not guaranteed. */
+.hmi-component.hmi-repeater {
+  display: flex;
+  flex-direction: var(--container-direction, row);
+  gap: var(--container-gap, var(--hmi-space-sm));
+  flex-wrap: var(--container-wrap, nowrap);
+  align-items: var(--container-align, stretch);
+  justify-content: var(--container-justify, flex-start);
+  min-width: 0;
+  min-height: 0;
+}
+
+.hmi-component.hmi-repeater--empty {
+  align-items: center;
+  justify-content: center;
+}
+
+.hmi-repeater__empty {
+  font-family: var(--hmi-type-body-font);
+  font-size: var(--hmi-type-body-size);
+  color: var(--hmi-text-muted);
+}

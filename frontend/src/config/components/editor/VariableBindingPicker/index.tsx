@@ -28,7 +28,13 @@ import {
   type PickerTreeNode,
   type PickerVariableEntry,
 } from '@config/components/ui/datasourceTreeHelpers';
-import { accepts, elementOf, nodeVarType, parseTypeToken } from '@shared/types/varType';
+import {
+  accepts,
+  elementOf,
+  formatVarType,
+  nodeVarType,
+  parseTypeToken,
+} from '@shared/types/varType';
 import { acceptedValueTypes, isStructType, primaryType } from '@shared/utils/valueTypes';
 import { useToggleSet } from '@shared/hooks/useToggleSet';
 import { treePaddingLeft } from '@config/utils/treeRowLayout';
@@ -63,7 +69,26 @@ import {
   structSchemaNodeVerdict,
 } from './componentPropHelpers';
 import { ComponentPropPath } from './ComponentPropPath';
-import RightPanel, { type ComponentPropMode, type VarMode } from './RightPanel';
+import RightPanel, {
+  type ComponentPropMode,
+  type ComponentPropSelectedItem,
+  type VarMode,
+} from './RightPanel';
+import { varStructVerdict } from './helpers';
+import {
+  REPEAT_INDEX_SUFFIX,
+  repeatPickMembers,
+  REPEAT_KEY_PREFIX,
+  REPEAT_SOURCE_KEY,
+  isPickableRepeatKey,
+  isRepeatKey,
+  repeatItemProperties,
+  repeatPickFromKey,
+  repeatPickKey,
+  repeatPickFits,
+  repeatPickLabel,
+  repeatPickVarType,
+} from './repeatItemRows';
 
 type TreeNode = PickerTreeNode;
 type VariableEntry = PickerVariableEntry;
@@ -129,6 +154,10 @@ export default function VariableBindingPicker() {
   const [showAll, setShowAll] = useState(false);
 
   const isComponentPropMode = !!target?.componentPropSource;
+  // Repeat item mode lists only the Repeater copy's element — a source of its
+  // own, never mixed in with the datasources.
+  const repeatOptions = isComponentPropMode ? undefined : target?.repeatItem;
+  const loadsDatasources = !isComponentPropMode && !repeatOptions;
 
   // Find the target component and its current binding (var mode only)
   const comp = useMemo(
@@ -151,6 +180,7 @@ export default function VariableBindingPicker() {
         : undefined) ?? target.currentBinding;
     if (!wrapped?.path) return null;
     const base = wrapped.path;
+    if (wrapped.repeatIndex) return `${base}${REPEAT_INDEX_SUFFIX}`;
     if (wrapped.index === undefined) return base;
     // struct[] elements are addressed by folder path (".../[N]"), scalar
     // arrays by a bracket suffix on the variable's own path (§10.5) —
@@ -181,7 +211,9 @@ export default function VariableBindingPicker() {
         .filter((k) => !(boundKey === k || boundKey?.startsWith(`${k}/`)));
       setCollapsed(new Set(structKeys));
     } else {
-      setSelectedKey(currentKey);
+      setSelectedKey(
+        target?.repeatItem?.current ? repeatPickKey(target.repeatItem.current) : currentKey,
+      );
     }
     // currentKey is intentionally excluded — we only want to capture it at open time
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -216,10 +248,22 @@ export default function VariableBindingPicker() {
 
   const includeDisabled = target?.filter?.includeDisabled === true;
 
+  // The Repeat item rows follow the same type filter as the variables.
+  const repeatProperties = useMemo(
+    () =>
+      repeatOptions
+        ? repeatItemProperties(
+            repeatOptions,
+            showAll ? undefined : (pick) => repeatPickFits(pick, repeatOptions, schemaField),
+          )
+        : null,
+    [repeatOptions, showAll, schemaField],
+  );
+
   // ── Var mode: Phase 1 — load datasource headers on open ──────────────────
 
   useEffect(() => {
-    if (!open || isComponentPropMode) return;
+    if (!open || !loadsDatasources) return;
     headersControllerRef.current?.abort();
     const controller = new AbortController();
     headersControllerRef.current = controller;
@@ -262,7 +306,7 @@ export default function VariableBindingPicker() {
         }
       }
     })();
-  }, [open, isComponentPropMode, setCollapsed]);
+  }, [open, loadsDatasources, setCollapsed]);
 
   // ── Var mode: Phase 2 — load variables for a specific datasource ──────────
 
@@ -317,13 +361,13 @@ export default function VariableBindingPicker() {
   // the expansion, so no ordering between the header fetch, the auto-expand
   // below and a user click can leave a datasource expanded-but-empty.
   useEffect(() => {
-    if (!open || isComponentPropMode) return;
+    if (!open || !loadsDatasources) return;
     for (const ds of dsTree) {
       if (collapsed.has(`ds:${ds.name}`)) continue;
       if (dsLoaded.has(ds.name) || dsLoading.has(ds.name) || dsFailed.has(ds.name)) continue;
       loadDatasource(ds.name);
     }
-  }, [open, isComponentPropMode, dsTree, collapsed, dsLoaded, dsLoading, dsFailed, loadDatasource]);
+  }, [open, loadsDatasources, dsTree, collapsed, dsLoaded, dsLoading, dsFailed, loadDatasource]);
 
   // ── Var mode: auto-expand to current binding ──────────────────────────────
 
@@ -349,7 +393,7 @@ export default function VariableBindingPicker() {
 
   const prevSearch = useRef('');
   useEffect(() => {
-    if (isComponentPropMode) return;
+    if (!loadsDatasources) return;
     const wasEmpty = prevSearch.current.trim() === '';
     const isNowActive = search.trim() !== '';
     prevSearch.current = search;
@@ -359,7 +403,7 @@ export default function VariableBindingPicker() {
         loadDatasource(ds.name);
       }
     }
-  }, [isComponentPropMode, search, dsTree, dsLoaded, dsLoading, dsFailed, loadDatasource]);
+  }, [loadsDatasources, search, dsTree, dsLoaded, dsLoading, dsFailed, loadDatasource]);
 
   // ── Build row list ────────────────────────────────────────────────────────
 
@@ -396,6 +440,28 @@ export default function VariableBindingPicker() {
       };
       return collapsed.has(COMPONENT_PROP_SOURCE_KEY) ? [source] : [source, ...propRows];
     }
+    if (repeatProperties) {
+      const repeatRows = buildComponentPropRows(
+        repeatProperties,
+        undefined,
+        undefined,
+        search,
+        true,
+        collapsed,
+        { keyPrefix: REPEAT_KEY_PREFIX, baseDepth: 1, searchPath: 'Repeat item' },
+      );
+      if (repeatRows.length === 0) return repeatRows;
+      const source: RowItem = {
+        kind: 'component-prop-source',
+        key: REPEAT_SOURCE_KEY,
+        name: 'Repeat item',
+        meta: 'this copy',
+        depth: 0,
+      };
+      return collapsed.has(REPEAT_SOURCE_KEY) && !search.trim()
+        ? [source]
+        : [source, ...repeatRows];
+    }
     // Var mode
     const filtered: DatasourceNode[] = search.trim()
       ? typedDsTree
@@ -407,8 +473,13 @@ export default function VariableBindingPicker() {
       : typedDsTree;
     // Search results must expose their matching descendants even when their
     // datasource/folder was previously collapsed.
-    return flattenForRender(filtered, 0, search.trim() ? new Set() : collapsed);
-  }, [isComponentPropMode, target, typedDsTree, search, showAll, collapsed]);
+    return flattenForRender(
+      filtered,
+      0,
+      search.trim() ? new Set() : collapsed,
+      target?.repeatIndex === true,
+    );
+  }, [isComponentPropMode, target, typedDsTree, search, showAll, collapsed, repeatProperties]);
 
   // All variable entries across all datasources (for var-mode right panel lookup)
   const allVars = useMemo(() => {
@@ -420,10 +491,17 @@ export default function VariableBindingPicker() {
     return out;
   }, [isComponentPropMode, dsTree]);
 
-  // Raw (unfiltered) folder for the selected binding — var mode right panel
-  const rawSelectedFolder = useMemo(
-    () => (!isComponentPropMode && selectedKey ? findRawFolder(dsTree, selectedKey) : null),
-    [isComponentPropMode, dsTree, selectedKey],
+  // The type-filtered tree a selected folder is judged against, even while
+  // "Show all" lists everything.
+  const strictDsTree = useMemo(
+    () =>
+      isComponentPropMode || !showAll
+        ? typedDsTree
+        : dsTree.map((ds) => ({
+            ...ds,
+            children: typeFilter(ds.children, schemaField, includeDisabled),
+          })),
+    [isComponentPropMode, showAll, dsTree, typedDsTree, schemaField, includeDisabled],
   );
 
   // Scroll container for the virtual list
@@ -487,61 +565,6 @@ export default function VariableBindingPicker() {
   }
 
   // ── Actions ───────────────────────────────────────────────────────────────
-
-  const confirmKey = useCallback(
-    (key: string) => {
-      if (!target) return;
-      // Component-prop mode: call componentPropSource.onPick with the selected key
-      if (target.componentPropSource) {
-        target.componentPropSource.onPick(key);
-        closeBindingPicker();
-        return;
-      }
-      // Var mode: build a VariableBinding and update the component
-      const { datasource, path: rawPath } = parseVarKey(key);
-      const { path, index: elementIndex } = resolveElementBinding(
-        datasource,
-        rawPath,
-        findRawFolder(dsTree, key),
-        dsTree,
-      );
-      const pickedVar = allVars.find((v) =>
-        v._datasource && v._path
-          ? `${v._datasource}:${v._path}` === `${datasource}:${path}`
-          : false,
-      );
-      const binding: VariableBinding = {
-        path: `${datasource}:${path}`,
-        ...(elementIndex !== undefined ? { index: elementIndex } : {}),
-      };
-      if (target.onPick) {
-        target.onPick(binding, {
-          dataType: pickedVar?.data_type,
-          isArray: pickedVar ? isArrayShape(pickedVar) : undefined,
-          arrayLength:
-            pickedVar && typeof pickedVar.array_length === 'number'
-              ? pickedVar.array_length
-              : undefined,
-          index: elementIndex,
-        });
-      } else {
-        updateComponent(target.componentId, {
-          properties: { [target.propertyKey]: { $var: binding } },
-        });
-      }
-      closeBindingPicker();
-    },
-    [target, allVars, updateComponent, closeBindingPicker, dsTree],
-  );
-
-  const handleConfirm = useCallback(() => {
-    if (selectedKey) confirmKey(selectedKey);
-  }, [confirmKey, selectedKey]);
-
-  const handleConfirmTopSearchResult = useCallback(() => {
-    const topKey = rows.map(rowSelectionKey).find((key): key is string => key !== null);
-    if (topKey) confirmKey(topKey);
-  }, [confirmKey, rows]);
 
   const handleClear = useCallback(() => {
     if (!target) return;
@@ -614,8 +637,8 @@ export default function VariableBindingPicker() {
       allVars.find((v) =>
         v._datasource && v._path ? `${v._datasource}:${v._path}` === key : false,
       ) ?? null;
-    const selectedParsed = selectedKey ? parseVarKey(selectedKey) : null;
-    const elemSuffix = selectedParsed?.path.match(/^(.+)\[(\d+)\]$/) ?? null;
+    const selectedParsed = key ? parseVarKey(key) : null;
+    const elemSuffix = selectedParsed?.path.match(/^(.+)\[(\d+|#)\]$/) ?? null;
     const selectedParentVar = elemSuffix
       ? (allVars.find((v) =>
           v._datasource && v._path
@@ -623,35 +646,168 @@ export default function VariableBindingPicker() {
             : false,
         ) ?? null)
       : null;
-    const selectedElementIndex = elemSuffix ? parseInt(elemSuffix[2], 10) : undefined;
+    const selectedElementIndex = !elemSuffix
+      ? undefined
+      : elemSuffix[2] === '#'
+        ? ('#' as const)
+        : parseInt(elemSuffix[2], 10);
     const isStruct =
       schemaField?.type !== undefined &&
       isStructType(primaryType(schemaField.type)) &&
       schemaField?.requiredFields !== undefined;
+    const rawSelectedFolder = key ? findRawFolder(dsTree, key) : null;
+    // Whether the selected folder is one the field accepts — judged against the
+    // type-filtered tree even while "Show all" lists everything.
+    const strictFolderSelectable = !!key && findRawFolder(strictDsTree, key)?.selectable === true;
+
+    const allowed = schemaField?.type !== undefined ? acceptedValueTypes(schemaField.type) : [];
+    const needsWrite = schemaField?.write === true;
+    const repeatPick = isRepeatKey(key) ? repeatPickFromKey(key) : null;
+    const repeatType =
+      repeatPick && repeatOptions ? repeatPickVarType(repeatPick, repeatOptions.scope) : null;
+    const repeatWritable =
+      !!repeatPick && repeatPick.field !== 'index' && !!repeatOptions?.scope.writable;
+    // A selection whose datasource is still loading is not judged yet; once it
+    // has loaded, a key that resolves to nothing is a binding that no longer exists.
+    const pendingDatasource =
+      !!selectedParsed?.datasource &&
+      !repeatPick &&
+      !dsLoaded.has(selectedParsed.datasource) &&
+      !dsFailed.has(selectedParsed.datasource);
 
     let scalarIsValid: boolean | null = null;
     if (key && !isStruct) {
       const varToCheck = selectedVar ?? selectedParentVar;
-      if (varToCheck) {
-        const allowed = schemaField?.type !== undefined ? acceptedValueTypes(schemaField.type) : [];
+      if (repeatPick && repeatOptions) {
+        scalarIsValid = repeatPickFits(repeatPick, repeatOptions, schemaField);
+      } else if (varToCheck) {
         // Validate the resolved binding: a whole variable keeps its array-ness,
         // an array element (selectedParentVar) de-arrays to a scalar.
         const resolved = selectedVar ? nodeVarType(varToCheck) : elementOf(nodeVarType(varToCheck));
         const typeOk =
           allowed.length === 0 || allowed.some((t) => accepts(parseTypeToken(t), resolved));
-        const accessOk = !schemaField?.write || varToCheck.writable === true;
+        const accessOk = !needsWrite || varToCheck.writable === true;
         scalarIsValid = typeOk && accessOk;
+      } else if (rawSelectedFolder) {
+        scalarIsValid = strictFolderSelectable;
+      } else if (!pendingDatasource) {
+        scalarIsValid = false;
       }
     }
-    varMode = {
-      schemaField,
-      selectedVar,
-      selectedParentVar,
-      selectedElementIndex,
-      rawSelectedFolder,
-      scalarIsValid,
-      isStruct,
+    return {
+      componentPropMode: null,
+      varMode: {
+        repeatSelected:
+          repeatPick && repeatOptions
+            ? {
+                label: repeatPickLabel(repeatPick),
+                type: repeatType
+                  ? formatVarType(repeatType)
+                  : (repeatOptions.scope.elementType ?? undefined),
+                writable: repeatWritable,
+                ...repeatPickMembers(repeatPick, repeatType, repeatOptions.scope),
+              }
+            : undefined,
+        pendingSelection: !!key && pendingDatasource && !selectedVar && !rawSelectedFolder,
+        strictFolderSelectable,
+        schemaField,
+        selectedVar,
+        selectedParentVar,
+        selectedElementIndex,
+        rawSelectedFolder,
+        scalarIsValid,
+        isStruct,
+      },
     };
+  }
+
+  /** A key the drawer does not mark ✗ — still-loading selections included.
+   *  Every way of picking (Confirm, Enter, double-click) goes through here. */
+  function isConfirmable(key: string): boolean {
+    if (isRepeatKey(key) && !(repeatOptions && isPickableRepeatKey(key, repeatOptions))) {
+      return false;
+    }
+    const modes = modesFor(key);
+    if (modes.componentPropMode) return modes.componentPropMode.typeIsOk !== false;
+    const mode = modes.varMode!;
+    const verdict = mode.isStruct ? varStructVerdict(mode, true) : mode.scalarIsValid;
+    return verdict !== false;
+  }
+
+  const { componentPropMode, varMode } = modesFor(selectedKey);
+  const hasComponentPropTypeFilter = target.componentPropSource?.fieldType !== undefined;
+
+  function confirmKey(key: string) {
+    if (!target || !isConfirmable(key)) return;
+    if (target.repeatItem && isRepeatKey(key)) {
+      const pick = repeatPickFromKey(key);
+      if (!pick) return;
+      target.repeatItem.onPick(pick);
+      closeBindingPicker();
+      return;
+    }
+    // Component-prop mode: call componentPropSource.onPick with the selected key
+    if (target.componentPropSource) {
+      target.componentPropSource.onPick(key);
+      closeBindingPicker();
+      return;
+    }
+    // Var mode: build a VariableBinding and update the component
+    const { datasource, path: rawPath } = parseVarKey(key);
+    let binding: VariableBinding;
+    let meta: Parameters<NonNullable<typeof target.onPick>>[1];
+    if (rawPath.endsWith(REPEAT_INDEX_SUFFIX)) {
+      // The Repeater copy's own position in a parallel array.
+      binding = {
+        path: `${datasource}:${rawPath.slice(0, -REPEAT_INDEX_SUFFIX.length)}`,
+        repeatIndex: true,
+      };
+    } else {
+      const { path, index: elementIndex } = resolveElementBinding(
+        datasource,
+        rawPath,
+        findRawFolder(dsTree, key),
+        dsTree,
+      );
+      const pickedVar = allVars.find((v) =>
+        v._datasource && v._path
+          ? `${v._datasource}:${v._path}` === `${datasource}:${path}`
+          : false,
+      );
+      binding = {
+        path: `${datasource}:${path}`,
+        ...(elementIndex !== undefined ? { index: elementIndex } : {}),
+      };
+      meta = {
+        dataType: pickedVar?.data_type,
+        isArray: pickedVar ? isArrayShape(pickedVar) : undefined,
+        arrayLength:
+          pickedVar && typeof pickedVar.array_length === 'number'
+            ? pickedVar.array_length
+            : undefined,
+        index: elementIndex,
+      };
+    }
+    if (target.onPick) target.onPick(binding, meta);
+    else {
+      updateComponent(target.componentId, {
+        properties: { [target.propertyKey]: { $var: binding } },
+      });
+    }
+    closeBindingPicker();
+  }
+
+  function handleConfirm() {
+    if (selectedKey) confirmKey(selectedKey);
+  }
+
+  // Under "Show all" the top row may be one the field refuses; Enter takes
+  // the first one it accepts instead.
+  function handleConfirmTopSearchResult() {
+    const topKey = rows
+      .map(rowSelectionKey)
+      .find((key): key is string => key !== null && isConfirmable(key));
+    if (topKey) confirmKey(topKey);
   }
 
   // ── Right panel ───────────────────────────────────────────────────────────
@@ -674,10 +830,10 @@ export default function VariableBindingPicker() {
       onClose={closeBindingPicker}
       onConfirm={handleConfirm}
       onClear={handleClear}
-      confirmDisabled={!selectedKey}
+      confirmDisabled={!selectedKey || !isConfirmable(selectedKey)}
       search={search}
       onSearchChange={setSearch}
-      onSearchEnter={isComponentPropMode ? undefined : handleConfirmTopSearchResult}
+      onSearchEnter={loadsDatasources ? handleConfirmTopSearchResult : undefined}
       searchPlaceholder={
         isComponentPropMode ? 'Search by label or key…' : 'Search by name or node ID…'
       }
@@ -692,7 +848,7 @@ export default function VariableBindingPicker() {
       }
       showAll={showAll}
       onShowAllChange={setShowAll}
-      loadError={isComponentPropMode ? null : loadError}
+      loadError={loadsDatasources ? loadError : null}
       listRef={listRef}
       listContent={
         <SearchHighlightProvider query={withDotSearchSeparators(search)}>
@@ -703,7 +859,9 @@ export default function VariableBindingPicker() {
               <p className="editor-binding-empty">
                 {isComponentPropMode
                   ? 'No compatible properties found.'
-                  : 'No compatible variables found.'}
+                  : repeatOptions
+                    ? 'Nothing in the Repeat item fits this field.'
+                    : 'No compatible variables found.'}
               </p>
             }
             renderRow={(item) => {
@@ -715,10 +873,7 @@ export default function VariableBindingPicker() {
                 collapsed,
                 toggleCollapsed,
                 selectKey,
-                onPickAndClose: (key) => {
-                  target.componentPropSource?.onPick(key);
-                  closeBindingPicker();
-                },
+                onPickAndClose: confirmKey,
                 dsLoading,
               };
               return <PickerRow item={item} ctx={ctx} />;

@@ -19,6 +19,8 @@
  * - CSS sets `display: contents` on .hmi-preview-node so layout is unaffected.
  * - The PreviewView postMessage bridge then targets [data-widget-id] to apply
  *   `hmi-preview-node--selected` to the wrapper.
+ * - A Repeater copy past the first carries the template's ids too, so a click
+ *   on it selects the template, and `--ghost` dims it.
  */
 
 import './WidgetRenderer.css';
@@ -30,6 +32,7 @@ import { widgetRegistry, isContainerHostType, placesOwnChildren } from '../regis
 import { useHmiStore } from '../store/hmiStore';
 import { PreviewContext } from '@shared/context/PreviewContext';
 import { DefinitionScopeContext } from '../context/DefinitionScopeContext';
+import { useRepeatScope } from '../context/RepeatScopeContext';
 import { useBindingStatus, type BindingStatus } from '../utils/bindingValidation';
 import { useResolvedProperties } from '../hooks/useResolvedProperties';
 import { useLiveScalars } from '../hooks/useLiveScalars';
@@ -147,6 +150,7 @@ function wrapperStyle(layout?: LayoutConfig): CSSProperties {
 export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
   const isPreview = useContext(PreviewContext);
   const fromDefinition = useContext(DefinitionScopeContext);
+  const ghost = useRepeatScope()?.ghost === true;
   const entry = widgetRegistry[node.type];
 
   const isVisible = usePropBoolean(node.properties, 'visible', true);
@@ -281,7 +285,7 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
         data-widget-id={node.id}
         data-widget-type={node.type}
         data-widget-source={fromDefinition ? 'definition' : undefined}
-        className="hmi-preview-node"
+        className={ghost ? 'hmi-preview-node hmi-preview-node--ghost' : 'hmi-preview-node'}
       >
         {content}
       </div>

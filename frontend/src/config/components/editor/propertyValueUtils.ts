@@ -139,7 +139,8 @@ export function substituteWildcards<T>(
 export function propertyValuePreview(value: unknown, fieldType?: string, depth = 0): string {
   if (value === null || value === undefined || value === '') return '—';
   if (Array.isArray(value)) {
-    if (fieldType === 'option-list') return `${value.length} item${value.length === 1 ? '' : 's'}`;
+    if (fieldType === 'option-list' || fieldType === 'item-list')
+      return `${value.length} item${value.length === 1 ? '' : 's'}`;
     if (fieldType === 'image-indicators')
       return `${value.length} indicator${value.length === 1 ? '' : 's'}`;
     if (fieldType === 'child-positions')
@@ -276,6 +277,11 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
   if (key === '$componentProp') {
     const propKey = obj.$componentProp;
     return typeof propKey === 'string' && propKey ? propKey : '(component prop)';
+  }
+  if (key === '$repeatItem') {
+    const r = obj.$repeatItem as { field?: string; member?: string } | undefined;
+    if (r?.field === 'index') return 'item index';
+    return r?.member ? `item.${r.member}` : 'item';
   }
   if (key === '$result') {
     const field = obj.$result;

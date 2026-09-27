@@ -26,6 +26,7 @@ _CUSTOM_EXPORTS = (
     "displayName",
     "hostsChildren",
     "flowsChildren",
+    "repeatsChildren",
     "category",
     "description",
     "icon",
@@ -382,6 +383,11 @@ def _validate_catalog_entry(entry: dict[str, Any], file: str, key: str) -> None:
         value = entry.get(flag)
         if value is not None and not isinstance(value, bool):
             raise ExtractionError(f"'{key}.{flag}' must be a boolean", file)
+    repeats = entry.get("repeatsChildren")
+    if repeats is not None and (not isinstance(repeats, str) or not repeats.strip()):
+        raise ExtractionError(
+            f"'{key}.repeatsChildren' must name the widget's item-list property", file
+        )
     display_name = entry.get("displayName")
     if display_name is not None and (
         not isinstance(display_name, str) or not display_name.strip()

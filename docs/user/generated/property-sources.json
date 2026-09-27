@@ -215,5 +215,13 @@
     "produces": [
       "any"
     ]
+  },
+  {
+    "key": "$repeatItem",
+    "label": "Repeat Item",
+    "description": "The element of the surrounding Repeater copy, one of its members, or its index.",
+    "produces": [
+      "any"
+    ]
   }
 ]

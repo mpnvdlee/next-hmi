@@ -72,6 +72,7 @@ PROPERTY_SOURCE_KEYS = frozenset({
     "$result",
     "$recipe",
     "$recipeList",
+    "$repeatItem",
 })
 
 # Atomic schema field types that admit type checking on static literals.
@@ -178,6 +179,37 @@ class ValidationContext:
     # False while walking a page that has no input scope (see
     # ``navigable_page_ids``); ``validate_page`` sets it on its own copy.
     input_scope: bool = True
+    # The input parameters a `$componentProp` reads in the scope being walked
+    # (name -> declaration), innermost declaration winning. None where the scope
+    # is not known, which skips `componentprop-type` / `componentprop-unknown`.
+    input_schema: dict[str, dict] | None = None
+    # False where a mismatched literal is a diagnostic rather than a rejected
+    # write: values whose type was never checked before (a component instance's
+    # properties, an action's fields).
+    literals_block: bool = True
+    # Widget id -> (widget type, the column keys it offers as struct fields) for
+    # the artifact being walked, and the same per saved artifact of the project
+    # ("page:<id>", "component:<id>", "shell", "group:<id>"). A `$widgetProp`
+    # names a widget found in the first, else in any other than `artifact_key`
+    # (whose saved copy the draft replaces). No local index skips the check.
+    widget_index: dict[str, tuple[str, tuple[str, ...]]] | None = None
+    project_widgets: dict[str, dict[str, tuple[str, tuple[str, ...]]]] = field(default_factory=dict)
+    artifact_key: str | None = None
+    # (datasource, variable path) -> the variable's entry as the write path
+    # coerces against it (`data_type`, `is_array`, `array_length`, `min`,
+    # `max`): the live pool's, else the datasource file's. None skips
+    # `write-value-type`.
+    datasource_entry: Callable[[str, str], dict | None] | None = field(default=None, repr=False)
+    # True while walking the children of a Repeater: only there does
+    # `$repeatItem` (or a Repeat-item write target) have an element to read.
+    repeat_scope: bool = False
+    # The innermost Repeater's `items` value, for typing a `$repeatItem` against
+    # its field. None where the items are unknown (a component definition).
+    repeat_items: Any = None
+    # Element folders of the registry's struct arrays, for judging a binding's
+    # required members against one element. build_context shares the index
+    # cached with the registry; a hand-built context indexes its own.
+    _struct_elements: _StructElements | None = field(default=None, repr=False)
     # Keys of the active (Default) translation dictionary.
     translation_keys: frozenset[str] = field(default_factory=frozenset)
     # Curated built-in icon ids — mirrors frontend/src/shared/config/iconAllowlist.ts.
@@ -249,10 +281,41 @@ class ValidationContext:
                 matched = entry
         if matched is not None:
             return matched
-        builtin = self.widget_schemas.get("builtin", {})
-        if widget_type in builtin:
-            return builtin[widget_type].get("schema", {})
-        return None
+        return self.widget_schemas.get("builtin", {}).get(widget_type)
+
+    def widget_exports(self, widget_type: str) -> list[dict] | None:
+        """The properties a widget type exports to `$widgetProp`, or None when
+        they are not known: a component, an unknown type, a custom widget whose
+        schema could not be extracted, or a row that carries no export list.
+
+        A built-in's list wins whenever the catalog has one, as a built-in wins
+        a name clash in ``load_widget_manifest``: a `widget-schemas.json` left
+        in the runtime home can still hold a custom row for a widget that has
+        since become a built-in. The custom-widget extractor writes a list only
+        for a widget that declares exports, and an older build may lack it
+        altogether, so a custom row without one is not taken to export nothing."""
+        if widget_type.startswith(_COMPONENT_TYPE_PREFIX):
+            return None
+        builtin = self.widget_schemas.get("builtin", {}).get(widget_type)
+        if isinstance(builtin, dict) and isinstance(builtin.get("exportedProperties"), list):
+            entry: dict | None = builtin
+        else:
+            entry = self._widget_entry(widget_type)
+        if not isinstance(entry, dict) or entry.get("schemaError"):
+            return None
+        exported = entry.get("exportedProperties")
+        if not isinstance(exported, list):
+            return None
+        return [e for e in exported if isinstance(e, dict) and isinstance(e.get("key"), str)]
+
+    def repeat_items_key(self, widget_type: str) -> str | None:
+        """The item-list property a type declares with `repeatsChildren`: its
+        children are drawn once per element, each copy a repeat scope."""
+        if widget_type.startswith(_COMPONENT_TYPE_PREFIX):
+            return None
+        entry = self._widget_entry(widget_type)
+        key = entry.get("repeatsChildren") if isinstance(entry, dict) else None
+        return key if isinstance(key, str) and key else None
 
     def declared_property_keys(self, widget_type: str, schema: dict) -> frozenset[str] | None:
         """Property names the target's interface declares, or None when no
@@ -1142,8 +1205,17 @@ def validate_var_ref(
             return
         resolved_key = base
     var_type = paths.get(resolved_key) if paths else None
+    if ref.get("repeatIndex") is not True and _report_bad_index(
+        ref.get("index"), ds_name, resolved_key, var_type, path, report
+    ):
+        return
     if var_type is None:
         return  # registry not (yet) populated for this path — best-effort, skip type check
+    required_fields = schema_field.get("requiredFields") if isinstance(schema_field, dict) else None
+    write = isinstance(schema_field, dict) and schema_field.get("write") is True
+    indexed = ref.get("index") is not None or ref.get("repeatIndex") is True
+    element = vartype.element_of(var_type) if indexed else var_type
+    subject = f"variable '{ds_name}:{var_path}'"
     accept = _accept_types_for_schema(schema_field)
     if accept and not any(vartype.accepts(a, element, required_fields) for a in accept):
         report.warn(
@@ -1324,14 +1396,213 @@ def _report_struct_members(
         or not struct_type.get("fields")
     ):
         return
-    required_fields = schema_field.get("requiredFields") if isinstance(schema_field, dict) else None
-    element = vartype.element_of(var_type) if ref.get("index") is not None else var_type
-    if not any(vartype.accepts(a, element, required_fields) for a in accept):
+    paths = ctx.datasource_registry.get(ds_name) or {}
+
+    def lookup(member_path: str) -> dict | None:
+        key = f"{base}/{member_path}"
+        member_type = paths.get(key)
+        if member_type is None:
+            return None
+        return {"type": member_type, "writable": _writable(ctx, ds_name, key)}
+
+    _report_member_failures(
+        vartype.struct_mismatches(required_fields, lookup), path, report, subject, type_code
+    )
+
+
+def _report_member_failures(
+    failures: list[tuple[str, str]],
+    path: str,
+    report: ValidationReport,
+    subject: str,
+    type_code: str,
+) -> None:
+    wrong = [(member, why) for member, why in failures if why != "read-only"]
+    if wrong:
+        member, why = wrong[0]
+        detail = "is missing" if why == "missing" else "has the wrong type"
         report.warn(
             path,
-            f"variable '{ds_name}:{var_path}' type is incompatible with this field",
+            f"{subject} does not fit this field: member '{member}' {detail}",
             severity="error",
-            code="var-type",
+            code=type_code,
+        )
+    elif failures:
+        names = ", ".join(f"'{member}'" for member, _ in failures)
+        noun = "member" if len(failures) == 1 else "members"
+        verb = "is" if len(failures) == 1 else "are"
+        report.warn(
+            path,
+            f"{noun} {names} of {subject} {verb} read-only, and this field writes to it",
+            severity="error",
+            code="var-readonly",
+        )
+
+
+def _repeat_items_source(ctx: ValidationContext) -> tuple[str, str] | None:
+    """(datasource, array path) of the variable the innermost Repeater repeats
+    over, when it repeats over one."""
+    items = ctx.repeat_items
+    ref = items.get("$var") if isinstance(items, dict) else None
+    composite = ref.get("path") if isinstance(ref, dict) else None
+    if not isinstance(composite, str) or ":" not in composite:
+        return None
+    ds_name, _, var_path = composite.partition(":")
+    return ds_name, var_path
+
+
+def _repeat_item_read(payload: dict, ctx: ValidationContext) -> tuple[str, str, dict] | None:
+    """(datasource, registry key, VarType) of the variable a `$repeatItem`
+    reads, when the Repeater repeats over a variable the registry knows: the
+    array itself for a scalar element, the element folder for a struct one, the
+    member below it for a member. None when only the runtime knows."""
+    source = _repeat_items_source(ctx)
+    if source is None:
+        return None
+    ds_name, var_path = source
+    paths = ctx.datasource_registry.get(ds_name) or {}
+    array_type = paths.get(var_path)
+    if not isinstance(array_type, dict) or not array_type.get("array"):
+        return None
+    member = payload.get("member")
+    if array_type.get("kind") != "struct":
+        return None if member else (ds_name, var_path, vartype.element_of(array_type))
+    element = _element_path(ctx, ds_name, var_path, None)
+    if element is None:
+        return None
+    if not member:
+        return ds_name, element, vartype.element_of(array_type)
+    member_type = paths.get(f"{element}/{member}")
+    return (ds_name, f"{element}/{member}", member_type) if isinstance(member_type, dict) else None
+
+
+# Item-list sources whose elements are values, never variables: a copy has no
+# variable behind its element to write back to.
+_VALUE_LIST_SOURCES = frozenset({"$static", "$user", "$http", "$recipeList", "$widgetProp"})
+_USER_LIST_FIELDS = frozenset({"userList", "groups"})
+_STRING = {"kind": "scalar", "base": "String", "array": False}
+_LABEL_VALUE_RECORD: tuple[dict, dict[str, dict]] = (
+    {"kind": "struct", "name": "Struct", "array": False, "fields": ["label", "value"]},
+    {"label": _STRING, "value": _STRING},
+)
+
+
+def _repeats_values(ctx: ValidationContext) -> bool:
+    """Whether the innermost Repeater repeats over a list of values rather
+    than a variable — so its element cannot be written."""
+    items = ctx.repeat_items
+    return isinstance(items, list) or (
+        isinstance(items, dict) and _property_source_key(items) in _VALUE_LIST_SOURCES
+    )
+
+
+def _repeat_list_types(ctx: ValidationContext) -> tuple[dict | None, dict[str, dict]] | None:
+    """(element type, member types) of the list the innermost Repeater repeats
+    over, when the list is known here: a literal or `$static` one typed by its
+    values, a `$user` user or group list as `{ label, value }` strings. None
+    for a variable, and for a list only the runtime has (`$http`,
+    `$recipeList`, `$widgetProp`)."""
+    items = ctx.repeat_items
+    if isinstance(items, dict) and "$static" in items:
+        items = items["$static"]
+    elif isinstance(items, dict) and isinstance(items.get("$user"), dict):
+        return _LABEL_VALUE_RECORD if items["$user"].get("field") in _USER_LIST_FIELDS else None
+    if not isinstance(items, list):
+        return None
+    # An empty list has no values to type it by: it offers the `{ label,
+    # value }` members the list editor writes, as the picker does.
+    return vartype.list_item_types(items) if items else (_LABEL_VALUE_RECORD[0], {})
+
+
+def _list_item_read(member: Any, listed: tuple[dict | None, dict[str, dict]]) -> dict | None:
+    """The type a `$repeatItem` pick reads off a known list's element; None
+    where the values do not say."""
+    element, members = listed
+    if not member:
+        return element
+    return members.get(member) if element is not None and element.get("kind") == "struct" else None
+
+
+def _check_repeat_item_type(
+    payload: dict,
+    ctx: ValidationContext,
+    path: str,
+    report: ValidationReport,
+    schema_field: dict | None,
+) -> None:
+    member = payload.get("member")
+    is_index = payload.get("field") == "index"
+    listed = None
+    if is_index:
+        read = None
+        item_type: dict | None = {"kind": "scalar", "base": "Integer", "array": False}
+    else:
+        read = _repeat_item_read(payload, ctx)
+        listed = None if read else _repeat_list_types(ctx)
+        item_type = read[2] if read else _list_item_read(member, listed) if listed else None
+    required_fields = schema_field.get("requiredFields") if isinstance(schema_field, dict) else None
+    write = isinstance(schema_field, dict) and schema_field.get("write") is True
+    if is_index:
+        subject = "the Repeat item's index"
+    else:
+        subject = f"the Repeat item's member '{member}'" if member else "the Repeat item"
+    accept = _accept_types_for_schema(schema_field)
+    if (
+        item_type is not None
+        and accept
+        and not any(vartype.accepts(a, item_type, required_fields) for a in accept)
+    ):
+        report.warn(
+            path,
+            "the Repeat item's type is incompatible with this field",
+            severity="error",
+            code="repeatitem-type",
+        )
+        return
+    if read is not None:
+        ds_name, key, _ = read
+        if accept and item_type.get("kind") == "struct":
+            base = _element_path(ctx, ds_name, key, None) if item_type.get("array") else key
+            _report_struct_members(
+                ctx, ds_name, base, item_type, required_fields, path, report, subject, "repeatitem-type"
+            )
+        elif write and _read_only(ctx, ds_name, key):
+            report.warn(
+                path,
+                f"{subject} is read-only, and this field writes to it",
+                severity="error",
+                code="var-readonly",
+            )
+        return
+    if (
+        accept
+        and item_type is not None
+        and item_type.get("kind") == "struct"
+        and isinstance(required_fields, list)
+        and required_fields
+    ):
+        fields = item_type.get("fields") or []
+        members = listed[1] if listed else {}
+
+        # A record's values carry no nested structure the picker could show,
+        # so a path below a member is missing here as it is there.
+        def lookup(member_path: str) -> dict | None:
+            if "/" in member_path or member_path not in fields:
+                return None
+            return {"type": members.get(member_path), "writable": False}
+
+        failures = vartype.struct_mismatches(required_fields, lookup)
+        if write:
+            failures = [f for f in failures if f[1] != "read-only"]
+        if failures:
+            _report_member_failures(failures, path, report, subject, "repeatitem-type")
+            return
+    if write and (is_index or _repeats_values(ctx)):
+        report.warn(
+            path,
+            f"{subject} is read-only, and this field writes to it",
+            severity="error",
+            code="var-readonly",
         )
 
 
@@ -1352,14 +1623,105 @@ class _WriteTarget:
 def _check_write_target_type(
     kind: str, target: _WriteTarget, ctx: ValidationContext, path: str, report: ValidationReport
 ) -> None:
-    """A `writeDataVariable` / `toggleDataVariable` target is a flat
-    datasource/path pair, not a `$var` payload, so it never reaches
-    validate_var_ref — check it here against the same registry. Diagnostics anchor on `<action>/datasource`, which the
-    property panel maps back to the action's Variable row."""
-    ds_name = action.get("datasource")
-    var_path = action.get("path")
-    target_path = f"{path}/datasource"
-    if not isinstance(ds_name, str) or not ds_name or not isinstance(var_path, str) or not var_path:
+    """A write needs one variable it can put a value into: the write path
+    addresses a leaf (a whole array, or one element of it), never a struct
+    folder; a toggle reads and inverts a single Boolean."""
+    element = target.element
+    if element.get("kind") == "struct":
+        report.warn(
+            path,
+            f"{target.subject} is a struct — a write needs one variable, so pick one of its members",
+            severity="error",
+            code="write-target-type",
+        )
+        return
+    if kind == "toggleDataVariable":
+        problem = _toggle_type_problem(target, ctx)
+        if problem is not None:
+            report.warn(
+                path,
+                f"{target.subject} {problem} — a toggle can only invert a Boolean",
+                severity="error",
+                code="toggle-target-type",
+            )
+            return
+    if _read_only(ctx, target.ds_name, target.key):
+        report.warn(
+            path,
+            f"{target.subject} is read-only, so this action cannot write it",
+            severity="error",
+            code="write-target-type",
+        )
+
+
+def _toggle_type_problem(target: _WriteTarget, ctx: ValidationContext) -> str | None:
+    """Why a toggle cannot invert its target, or None. Judged on the entry's
+    own OPC-UA type where it is known — the registry collapses a type it does
+    not know (a Variant, a LocalizedText) to String — else on the registry's."""
+    if target.element.get("array"):
+        return "is an array"
+    entry = ctx.datasource_entry(target.ds_name, target.key) if ctx.datasource_entry else None
+    raw = entry.get("data_type") if isinstance(entry, dict) else None
+    if isinstance(raw, str) and raw:
+        from services.write_service import canonical_data_type
+
+        canonical = canonical_data_type(raw)
+        if canonical == "boolean":
+            return None
+        return f"has the type '{raw}', unknown to the write path" if canonical is None else f"is a {raw}"
+    return None if target.element.get("base") == "Boolean" else "is not a Boolean"
+
+
+def _repeat_write_target(target: dict, ctx: ValidationContext) -> _WriteTarget | None:
+    """The variable a Repeat-item target writes, when the Repeater repeats over
+    a variable the registry knows."""
+    payload = target.get("$repeatItem")
+    member = payload.get("member") if isinstance(payload, dict) else None
+    member = member if isinstance(member, str) and member else None
+    read = _repeat_item_read({"member": member} if member else {}, ctx)
+    source = _repeat_items_source(ctx)
+    if read is None or source is None:
+        return None
+    ds_name, key, element = read
+    subject = f"the Repeat item's member '{member}'" if member else "the Repeat item"
+    return _WriteTarget(ds_name, key, element, key == source[1], subject)
+
+
+def _validate_write_target(
+    action: dict, kind: str, ctx: ValidationContext, path: str, report: ValidationReport
+) -> _WriteTarget | None:
+    """A `writeDataVariable` / `toggleDataVariable` target: a `$var`, or —
+    inside a Repeater — the copy's `$repeatItem`. Diagnostics anchor on
+    `<action>/target`, which the property panel maps back to the action's
+    target row. Returns what the action writes, when the registry knows it."""
+    target = action.get("target")
+    target_path = f"{path}/target"
+    if isinstance(target, dict) and "$repeatItem" in target:
+        if not ctx.repeat_scope:
+            report.warn(
+                target_path,
+                "the Repeat item target writes nothing here — it only has an "
+                "element inside a Repeater",
+                severity="warning",
+                code="repeatitem-no-scope",
+            )
+            return None
+        written = _repeat_write_target(target, ctx)
+        if written is not None:
+            _check_write_target_type(kind, written, ctx, target_path, report)
+        elif _repeats_values(ctx):
+            report.warn(
+                target_path,
+                "the Repeat item is a value from a list, not a variable, so this "
+                "action cannot write it",
+                severity="error",
+                code="write-target-type",
+            )
+        return written
+    ref = target.get("$var") if isinstance(target, dict) else None
+    composite = ref.get("path") if isinstance(ref, dict) else None
+    ds_name, _, var_path = composite.partition(":") if isinstance(composite, str) else ("", "", "")
+    if not ds_name or not var_path:
         report.warn(
             target_path,
             "write target is incomplete (no variable bound)",
@@ -1854,6 +2216,310 @@ def _validate_menu_items(items: Any, ctx: ValidationContext, path: str, report: 
             _validate_menu_items(item.get("items"), ctx, f"{path}/{i}/items", report)
 
 
+_TEMPORAL_TYPES = frozenset({"datetime", "date", "time", "duration"})
+# ISO 8601 duration (`PT1H30M`, `P2DT4H`, `-PT5S`).
+_ISO_DURATION_RE = re.compile(
+    r"-?P(?=\d|T\d)(?:\d+(?:[.,]\d+)?Y)?(?:\d+(?:[.,]\d+)?M)?(?:\d+(?:[.,]\d+)?W)?"
+    r"(?:\d+(?:[.,]\d+)?D)?(?:T(?=\d)(?:\d+(?:[.,]\d+)?H)?(?:\d+(?:[.,]\d+)?M)?(?:\d+(?:[.,]\d+)?S)?)?"
+)
+_NUMBER_RE = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
+_TEMPORAL_LABELS = {"datetime": "DateTime", "date": "Date", "time": "Time", "duration": "Duration"}
+
+
+def _type_tokens(schema_field: dict | None) -> list[str]:
+    field_type = schema_field.get("type") if isinstance(schema_field, dict) else None
+    listed = field_type if isinstance(field_type, list) else [field_type]
+    return [t.lower() for t in listed if isinstance(t, str)]
+
+
+def _literal_matches(value: Any, token: str) -> bool:
+    # bool is a subclass of int; it is no number here.
+    if token in ("integer", "float", "duration") and isinstance(value, bool):
+        return False
+    return isinstance(value, _ATOMIC_TYPE_CHECKS[token])
+
+
+def _temporal_ok(value: str, token: str) -> bool:
+    """Whether a string reads as the ISO form of a temporal type. Empty is
+    unset, not malformed. A Duration is ISO or a plain number of seconds."""
+    if value == "":
+        return True
+    if token == "duration":
+        return bool(_ISO_DURATION_RE.fullmatch(value) or _NUMBER_RE.fullmatch(value.strip()))
+    parse = {"date": date.fromisoformat, "datetime": datetime.fromisoformat, "time": time_of_day.fromisoformat}
+    try:
+        parse[token](value)
+    except ValueError:
+        return False
+    return True
+
+
+def _check_literal(
+    value: Any,
+    schema_field: dict | None,
+    ctx: ValidationContext,
+    path: str,
+    report: ValidationReport,
+    *,
+    wrapped: bool,
+) -> None:
+    """Type-check a fixed value — bare, or the payload of a `$static` (`wrapped`).
+
+    It fits when it matches any scalar type the field lists, not only the
+    first; an array fits an `X[]` the field lists when every element is an X.
+    A bare scalar that fits nothing is a rejected write, as it always was,
+    unless the context says otherwise (`literals_block`); a `$static` payload
+    or an array element that fits nothing is `literal-type`. A string that
+    only fits as a Date, DateTime, Time or Duration but does not read as one
+    is `literal-format`.
+    """
+    tokens = _type_tokens(schema_field)
+    if not tokens or value is None:
+        return
+    # The first token decides the field's editor, and whether its literal is
+    # checked at all — an `option-list` whose binding filter lists `string[]`
+    # holds `{label, value}` rows, not strings; the others only widen what fits.
+    first_scalar = tokens[0] in _ATOMIC_TYPE_CHECKS
+    if not first_scalar and tokens[0].removesuffix("[]") not in _ATOMIC_TYPE_CHECKS:
+        return
+    if isinstance(value, list):
+        elements = [t[:-2] for t in tokens if t.endswith("[]") and t[:-2] in _ATOMIC_TYPE_CHECKS]
+        if elements:
+            fitting = [t for t in elements if all(_literal_matches(v, t) for v in value)]
+            if not fitting:
+                labels = " or ".join(f"{_type_label(t)}[]" for t in elements)
+                report.warn(
+                    path,
+                    f"expected {labels}: an element is of another type",
+                    severity="error",
+                    code="literal-type",
+                )
+            else:
+                _check_temporal_format(value, fitting, path, report)
+            return
+    scalars = [t for t in tokens if t in _ATOMIC_TYPE_CHECKS]
+    if not scalars:
+        return
+    matching = [t for t in scalars if _literal_matches(value, t)]
+    if not matching:
+        got = _PY_TYPE_LABELS.get(type(value).__name__, type(value).__name__)
+        message = f"expected {' or '.join(_type_label(t) for t in scalars)}, got {got}"
+        # Only a field whose first type is a scalar ever rejected a literal; a
+        # scalar in one that leads with an array type was never checked.
+        if ctx.literals_block and not wrapped and first_scalar:
+            report.add(path, message)
+        else:
+            report.warn(path, message, severity="error", code="literal-type")
+        return
+    _check_temporal_format([value], matching, path, report)
+
+
+def _check_temporal_format(
+    values: list, matching: list[str], path: str, report: ValidationReport
+) -> None:
+    if not all(t in _TEMPORAL_TYPES for t in matching):
+        return
+    for value in values:
+        if isinstance(value, str) and not any(_temporal_ok(value, t) for t in matching):
+            label = " or ".join(_TEMPORAL_LABELS[t] for t in matching)
+            report.warn(
+                path,
+                f"'{value}' is not an ISO {label}",
+                severity="warning",
+                code="literal-format",
+            )
+            return
+
+
+def _check_source_type(
+    source_key: str, payload: Any, schema_field: dict | None, path: str, report: ValidationReport
+) -> None:
+    """Flag a fixed-type source the field's type does not offer, or whose
+    stored `field` choice yields a type the field does not take — the rule the
+    editor's source menu and Field dropdown apply (`source_rules`)."""
+    if not isinstance(schema_field, dict):
+        return
+    field_type = schema_field.get("type")
+    why = source_rules.source_type_mismatch(source_key, payload, field_type)
+    if why is None:
+        return
+    tokens = [t for t in _type_tokens(schema_field) if t in source_rules.SOURCE_CAPABLE_TYPES]
+    target = f"this {_type_label(tokens[0])} field" if tokens else "this field"
+    if why == "field":
+        choice = payload.get("field") if isinstance(payload, dict) else None
+        message = f"{source_key} field '{choice}' does not give a value {target} takes"
+    else:
+        message = f"{source_key} does not give a value {target} takes"
+    report.warn(path, message, severity="error", code="source-type")
+
+
+def _input_scope(ctx: ValidationContext, node_id: str, own: dict[str, dict]) -> dict[str, dict]:
+    """The input parameters a Dialogs-folder node's widgets read: its own
+    declarations over its enclosing groups', innermost winning."""
+    chain = [own, *(ctx.page_properties.get(g) or {} for g in ctx.dialog_ancestors.get(node_id, ()))]
+    merged: dict[str, dict] = {}
+    for declarations in reversed(chain):
+        merged.update(declarations)
+    return merged
+
+
+def _report_prop_verdict(
+    why: str | None, subject: str, code: str, path: str, report: ValidationReport
+) -> None:
+    if why == "type":
+        report.warn(path, f"{subject} does not fit this field", severity="error", code=code)
+    elif why == "read-only":
+        report.warn(
+            path,
+            f"{subject} is not declared writable, and this field writes to it",
+            severity="error",
+            code=code,
+        )
+
+
+def _check_component_prop(
+    name: str, schema_field: dict | None, ctx: ValidationContext, path: str, report: ValidationReport
+) -> None:
+    """Type a `$componentProp` read against the declaration it names in the
+    scope being walked (`ctx.input_schema`), as the picker judges it."""
+    inputs = ctx.input_schema
+    if inputs is None:
+        return
+    key, _, member = name.partition("/")
+    decl = inputs.get(key)
+    if not isinstance(decl, dict):
+        report.warn(
+            path,
+            f"input parameter '{key}' is not declared here",
+            severity="warning",
+            code="componentprop-unknown",
+        )
+        return
+    if str(decl.get("type", "")).strip().lower() == "widgets":
+        report.warn(
+            path,
+            f"input parameter '{key}' is a widget slot — it holds no value to read",
+            severity="error",
+            code="componentprop-type",
+        )
+        return
+    subject = f"input parameter '{name}'"
+    if not member:
+        if isinstance(schema_field, dict):
+            _report_prop_verdict(
+                component_property.declaration_verdict(decl, schema_field),
+                subject, "componentprop-type", path, report,
+            )
+        return
+    if not decl.get("structSchema"):
+        return
+    known, node = component_property.member_node(decl, member)
+    if not known:
+        report.warn(
+            path,
+            f"input parameter '{key}' declares no member '{member}'",
+            severity="warning",
+            code="componentprop-unknown",
+        )
+    elif node is not None and isinstance(schema_field, dict):
+        _report_prop_verdict(
+            component_property.node_verdict(node, schema_field),
+            subject, "componentprop-type", path, report,
+        )
+
+
+_WidgetEntry = tuple[str, tuple[str, ...]]
+
+
+def _widget_candidates(ctx: ValidationContext, widget_id: str) -> list[_WidgetEntry]:
+    """The widgets a `$widgetProp` id can name: the one in the artifact being
+    walked, else every widget of that id elsewhere in the project — ids are
+    unique within one tree only, so another page or component can reuse one."""
+    # A Repeater copy publishes under `<id>@<copy>` as well as the bare id.
+    bare = widget_id.split("@", 1)[0]
+    local = ctx.widget_index or {}
+    if bare in local:
+        return [local[bare]]
+    return [
+        index[bare]
+        for key, index in ctx.project_widgets.items()
+        if key != ctx.artifact_key and bare in index
+    ]
+
+
+def _widget_prop_problem(
+    widget_id: str,
+    found: _WidgetEntry,
+    payload: dict,
+    schema_field: dict | None,
+    ctx: ValidationContext,
+) -> tuple[str, str] | None:
+    """(code, message) for what is wrong with reading `payload` off one
+    candidate widget, or None when it reads fine — or cannot be judged."""
+    prop_name = payload.get("property")
+    widget_type, columns = found
+    exports = ctx.widget_exports(widget_type)
+    if exports is None:
+        return None
+    export = next((e for e in exports if e.get("key") == prop_name), None)
+    if export is None:
+        return "widgetprop-unknown", f"widget '{widget_id}' ({widget_type}) does not export '{prop_name}'"
+    if not isinstance(schema_field, dict):
+        return None
+    fields: list[dict] = []
+    if export.get("type") == "Struct":
+        declared = export.get("structSchema")
+        fields = [f for f in declared if isinstance(f, dict)] if isinstance(declared, list) else []
+        names = {f.get("name") for f in fields}
+        fields += [{"name": c} for c in columns if c not in names]
+
+    def as_node(f: dict) -> dict:
+        node = {"kind": "variable", "name": f.get("name")}
+        node.update({k: f[k] for k in ("type", "write") if f.get(k) is not None})
+        return node
+
+    sub = payload.get("path")
+    subject = f"exported property '{widget_id}.{prop_name}'"
+    if isinstance(sub, str) and sub:
+        field_decl = next((f for f in fields if f.get("name") == sub), {"name": sub})
+        why = component_property.node_verdict(as_node(field_decl), schema_field)
+        subject = f"exported property '{widget_id}.{prop_name}/{sub}'"
+    else:
+        adapted: dict[str, Any] = {"type": export.get("type") or "string"}
+        if fields:
+            adapted["structSchema"] = [as_node(f) for f in fields]
+        why = component_property.declaration_verdict(adapted, schema_field)
+    if why == "read-only":
+        return "widgetprop-type", f"{subject} cannot be written, and this field writes to it"
+    if why == "type":
+        return "widgetprop-type", f"{subject} does not fit this field"
+    return None
+
+
+def _check_widget_prop(
+    payload: dict, schema_field: dict | None, ctx: ValidationContext, path: str, report: ValidationReport
+) -> None:
+    """Resolve a `$widgetProp` to the widget and export it names, and type it
+    as the `$widgetProp` picker does (an untyped export is a String; a `path`
+    into a `Struct` export is its declared field, else untyped). Where the id
+    names several widgets elsewhere in the project, one that reads fine is
+    enough; only when none does is the first one's problem reported."""
+    if ctx.widget_index is None:
+        return
+    widget_id = str(payload.get("componentId"))
+    candidates = _widget_candidates(ctx, widget_id)
+    if not candidates:
+        report.warn(
+            path, f"widget '{widget_id}' does not exist", severity="error", code="widgetprop-unknown"
+        )
+        return
+    problems = [_widget_prop_problem(widget_id, c, payload, schema_field, ctx) for c in candidates]
+    if any(problem is None for problem in problems):
+        return
+    code, message = problems[0]
+    report.warn(path, message, severity="error", code=code)
+
+
 def _validate_property_value(
     value: Any,
     schema_field: dict | None,
@@ -1885,6 +2551,12 @@ def _validate_property_value(
     _check_source_type(source_key, payload, schema_field, path, report)
     if source_key == "$var":
         validate_var_ref(payload, ctx, path, report, schema_field)
+        if isinstance(payload, dict) and payload.get("repeatIndex") is True and not ctx.repeat_scope:
+            report.warn(
+                path,
+                "the Repeat index has no Repeater copy here — the binding reads the whole array",
+                severity="warning", code="repeatitem-no-scope",
+            )
     elif source_key == "$static":
         if not isinstance(payload, dict):
             _check_literal(payload, schema_field, ctx, path, report, wrapped=True)
@@ -2035,7 +2707,24 @@ def _validate_property_value(
                 "the Dialogs folder take input parameters",
                 severity="warning", code="componentprop-no-scope",
             )
-    elif source_key == "$recipe" and isinstance(payload, dict):  # noqa: SIM102 -- no autofix offered, left as-is per the mechanical-only policy for this family
+        else:
+            _check_component_prop(payload, schema_field, ctx, path, report)
+    elif source_key == "$repeatItem":
+        if not isinstance(payload, dict):
+            report.add(path, "$repeatItem payload must be an object")
+        elif payload.get("field", "value") not in ("value", "index"):
+            report.add(f"{path}/$repeatItem/field", "field must be 'value' or 'index'")
+        elif not isinstance(payload.get("member", ""), str):
+            report.add(f"{path}/$repeatItem/member", "member must be a string")
+        elif not ctx.repeat_scope:
+            report.warn(
+                path,
+                "the Repeat item reads nothing here — it only has an element inside a Repeater",
+                severity="warning", code="repeatitem-no-scope",
+            )
+        else:
+            _check_repeat_item_type(payload, ctx, path, report, schema_field)
+    elif source_key == "$recipe" and isinstance(payload, dict):
         if not payload.get("type"):
             report.warn(
                 f"{path}/$recipe/type", "recipe type is empty",
@@ -2086,12 +2775,26 @@ def validate_widget_node(
                     # nothing walked before: a missing page is a diagnostic here.
                     _validate_actions_softly(value, prop_ctx, prop_path, report)
     # Walk children
+    child_ctx = ctx
+    items_key = ctx.repeat_items_key(wtype)
+    if items_key is not None:
+        items = properties.get(items_key) if isinstance(properties, dict) else None
+        child_ctx = replace(ctx, repeat_scope=True, repeat_items=items)
+    if wtype.startswith(_COMPONENT_TYPE_PREFIX):
+        # An instance's children are its slot content, which renders inside the
+        # instance (ComponentRenderer's InputScopeContext) — a `$componentProp`
+        # there reads the component's inputs, not the caller's.
+        child_ctx = replace(
+            child_ctx,
+            input_scope=True,
+            input_schema=ctx.component_properties.get(_component_id(wtype)),
+        )
     for child_field in ("children",):
         children = node.get(child_field)
         if isinstance(children, list):
             _validate_instance_slots(wtype, children, ctx, f"{path}/{child_field}", report)
             for i, child in enumerate(children):
-                validate_widget_node(child, ctx, f"{path}/{child_field}/{i}", report)
+                validate_widget_node(child, child_ctx, f"{path}/{child_field}/{i}", report)
     return report
 
 

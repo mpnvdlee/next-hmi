@@ -31,6 +31,7 @@ Any of these can also be an **array**. An optional *format* refines the editor w
 | `$widgetProp` | flexible | A value exported by a sibling widget on the page. |
 | `$componentProp` | flexible | A value passed in from outside — by the parent component, or by the action that opened this page as an overlay. |
 | `$result` | flexible | A field of an action's result (in its handlers only). |
+| `$repeatItem` | flexible | The element a Repeater copy draws, one member of it, or its index (inside a Repeater only). |
 | `$http` | flexible | A value picked out of an HTTP API response. |
 | `$loc` · `$stringExpr` | String | Translated text, or a template like `Tank {1} of {2}`. |
 | `$compare` · `$not` · `$pageIsActive` · `$userGroups` | Boolean | A comparison result, the opposite of another boolean, whether a page is active, or whether the signed-in user is in one of the listed groups. |
@@ -147,6 +148,23 @@ The two halves belong together, and the warnings pill says so when they drift: a
 
 > [!TIP]
 > **Sizing an instance works.** Size and growth set on the placed component apply to it as a whole — what's inside (direction, gap, padding) stays with the component's own design.
+
+## Repeating widgets over an array (Repeater)
+
+A **Repeater** draws the widgets inside it once for every element of an array — one row per motor, one tile per tank — so the screen grows and shrinks with the data.
+
+1. **Pick the array** — Set the Repeater's **Items**: an array tag (`$var`), a list you type in, an API response that returns a list (`$http`), the saved recipes, or the users or user groups.
+2. **Design one copy** — Put the widgets for a single element inside the Repeater, laid out the way one element should look. The Repeater's **Layout** decides how the copies line up (row, column, wrapping, gap).
+3. **Bind to the element** — Inside, pick **Repeat Item** as a property's source and open its picker: the whole **Element**, one of its **members** (a struct field like `Speed`, or `label` / `value` of a typed-in list), or its **Index** (0 for the first). Like the variable picker it lists only what fits the property unless **Show all** is ticked. A typed-in list's members take their type from what you typed: text is a String, Yes/No a Boolean, a whole number an Integer and a number with decimals a Float — so a Float property takes a `value` column only once one of its numbers has decimals. With the **Variable** source instead, every array in the picker gets a **[#] this copy** row that reads that array at the copy's position, the way `[2]` reads element 2: names next to setpoints. Typing `PLC:Names[#]` does the same.
+
+Each copy reads its own element. When Items is a tag, a copy's inputs write back to their own element too: a Switch bound to **Repeat Item** writes `Enables[3]` in the fourth copy, and **Write Data Variable** / **Toggle Boolean Variable** can switch their target to **Repeat Item**: always the copy's own element, or the member you pick of a struct element. Lists, API responses, recipes and users are read-only.
+
+**Start at** and **Max items** show part of the array — the first ten, or a page of it. **Empty text** is shown when there is nothing to draw.
+
+In the editor the first copy is the one you edit; the others are drawn dimmed and select the first when clicked. With no data yet, one copy is still drawn so there is something to edit.
+
+> [!NOTE]
+> **Repeat Item only means something inside a Repeater.** Anywhere else it is empty, and the warnings pill says so. A Repeater inside a Repeater reads its own elements — the outer one's are out of reach from inside it.
 
 ## Reading a value from an API (`$http`)
 

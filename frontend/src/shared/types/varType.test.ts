@@ -3,6 +3,7 @@ import {
   canonicalBase,
   elementOf,
   formatVarType,
+  listItemTypes,
   nodeAcceptsOrElement,
   nodeVarType,
   parseTypeToken,
@@ -12,12 +13,28 @@ import {
 } from './varType';
 import type { RequiredFieldEntry } from './widgetSchema';
 import parityFixture from './__fixtures__/varTypeAccepts.json';
+import structFixture from './__fixtures__/structSatisfies.json';
+import listItemFixture from './__fixtures__/listItemTypes.json';
 
 interface ParityCase {
   name: string;
   varType: VarType;
   acceptTokens: string[];
   requiredFields?: Array<string | { name: string }>;
+  expected: boolean;
+}
+
+interface ListItemCase {
+  name: string;
+  items: unknown;
+  element: VarType | null;
+  members: Record<string, VarType>;
+}
+
+interface StructCase {
+  name: string;
+  requiredFields: RequiredFieldEntry[];
+  members: Record<string, StructMember | undefined>;
   expected: boolean;
 }
 
@@ -117,6 +134,25 @@ describe('accepts (shared parity fixture)', () => {
         accepts(parseTypeToken(token), c.varType, c.requiredFields),
       );
       expect(result).toBe(c.expected);
+    });
+  }
+});
+
+describe('structSatisfies (shared parity fixture)', () => {
+  // Same fixture drives backend/tests/test_vartype.py.
+  // Through `unknown`: tsc infers a union of per-case member shapes from the JSON.
+  for (const c of structFixture as unknown as StructCase[]) {
+    it(c.name, () => {
+      expect(structSatisfies(c.requiredFields, (path) => c.members[path])).toBe(c.expected);
+    });
+  }
+});
+
+describe('listItemTypes (shared parity fixture)', () => {
+  // Same fixture drives backend/tests/test_vartype.py.
+  for (const c of listItemFixture as unknown as ListItemCase[]) {
+    it(c.name, () => {
+      expect(listItemTypes(c.items)).toEqual({ element: c.element, members: c.members });
     });
   }
 });

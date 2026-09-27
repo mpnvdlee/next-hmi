@@ -32,7 +32,8 @@ export type PropertySource =
   | '$componentProp'
   | '$page'
   | '$viewport'
-  | '$result';
+  | '$result'
+  | '$repeatItem';
 
 /** The persisted JSON key for a property source. 'static' is stored as '$static'; all others match the PropertySource string. */
 export type PropertySourceKey = Exclude<PropertySource, 'static'> | '$static';
@@ -215,7 +216,7 @@ function defaultSourceField<S extends FieldSelectingSource>(
 export function defaultValueFor(fieldType: string, defaultValue?: unknown): unknown {
   if (defaultValue !== undefined) return defaultValue;
   const ft = fieldType.toLowerCase();
-  if (ft === 'option-list') return [];
+  if (ft === 'option-list' || ft === 'item-list') return [];
   if (ft === 'integer' || ft === 'float') return 0;
   if (ft === 'boolean') return false;
   if (ft === 'color') return '#000000';
@@ -536,6 +537,17 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     abbr: 'RS',
     produces: ['any'],
     createDefault: () => ({ $result: 'reason' }),
+  },
+  {
+    source: '$repeatItem',
+    key: '$repeatItem',
+    contentTier: 1,
+    label: 'Repeat Item',
+    description: 'The element of the surrounding Repeater copy, one of its members, or its index.',
+    short: 'Repeat Item',
+    abbr: 'RI',
+    produces: ['any'],
+    createDefault: () => ({ $repeatItem: { field: 'value' } }),
   },
 ];
 

@@ -43,3 +43,26 @@ export function setFlowsChildren(type: string, flows: boolean): void {
 export function usesFlexLayout(type: string): boolean {
   return flowTypes.has(type);
 }
+
+/**
+ * Types that declared `repeatsChildren`, mapped to the item-list property they
+ * repeat over. Seeded and rewritten the same way as the flow types above: the
+ * repeat scope is on the custom-widget SDK, so a project's own repeating widget
+ * must get Repeat item in the editor and the validator the built-in one does.
+ */
+const repeatTypes = new Map(
+  (builtinWidgetsManifest as { name?: string; repeatsChildren?: string | null }[])
+    .filter((entry) => typeof entry.repeatsChildren === 'string' && entry.repeatsChildren)
+    .map((entry) => [String(entry.name), entry.repeatsChildren as string]),
+);
+
+/** Record one type's `repeatsChildren` declaration (see {@link setFlowsChildren}). */
+export function setRepeatsChildren(type: string, itemsKey: string | null | undefined): void {
+  if (itemsKey) repeatTypes.set(type, itemsKey);
+  else repeatTypes.delete(type);
+}
+
+/** The item-list property a type repeats its children over, or null. */
+export function repeatItemsKey(type: string): string | null {
+  return repeatTypes.get(type) ?? null;
+}

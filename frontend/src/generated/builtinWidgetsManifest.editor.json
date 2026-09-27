@@ -2059,6 +2059,39 @@
       }
     }
   },
+  "Layout/Repeater": {
+    "description": "Draws its child widgets once per element of an array, each copy bound to its own element.",
+    "icon": {
+      "type": "builtin",
+      "name": "rows"
+    },
+    "schema": {
+      "items": {
+        "label": "Items",
+        "group": "Content",
+        "description": "The array to repeat over. The widgets inside are drawn once per element; bind them to it with the Repeat Item source."
+      },
+      "startOffset": {
+        "label": "Start at",
+        "group": "Content",
+        "defaultValue": 0,
+        "min": 0,
+        "description": "Index of the first element drawn. Earlier elements are skipped."
+      },
+      "maxItems": {
+        "label": "Max items",
+        "group": "Content",
+        "defaultValue": 0,
+        "min": 0,
+        "description": "How many elements to draw at most, from Start at. 0 draws all of them."
+      },
+      "emptyText": {
+        "label": "Empty text",
+        "group": "Content",
+        "description": "Shown instead when there are no elements to draw. Empty shows nothing."
+      }
+    }
+  },
   "Layout/Separator": {
     "description": "A thin divider line between widgets.",
     "icon": {

@@ -1,5 +1,8 @@
 import type { SchemaField } from '@shared/types/widgetSchema';
 import type { VariableBinding } from '@shared/types/config';
+import type { PickerExtras, useEditorDomainStore } from '@config/store/domains/editorDomainStore';
+import { bindsVariable } from '@hmi/utils/propertySourceRules';
+import { primaryType } from '@shared/utils/valueTypes';
 import { varBindingOf } from '../../bindingPickerUtils';
 
 /** `currentBinding` is the binding the *calling slot* already holds, so the
@@ -8,12 +11,16 @@ import { varBindingOf } from '../../bindingPickerUtils';
  *  `$stringExpr` wildcard) lives inside the property value — the opener only
  *  ever sees the property's top-level value.
  *
- *  `anyType` marks a slot that formats whatever it gets — a `$stringExpr` or
- *  `$http` wildcard — so the property's own type does not constrain it. */
+ *  `slot` is a nested slot's own type — see `SlotType`. Absent, the slot takes
+ *  what the property takes (an `$if` branch, a `$switch` case's `then`).
+ *
+ *  `extras` belong to the slot and pass through wrappers untouched; a
+ *  `repeatItem` pick's `onPick` writes the slot directly. */
 export type OpenBindingPicker = (
   onPick?: (binding: VariableBinding) => void,
   currentBinding?: VariableBinding,
-  anyType?: boolean,
+  slot?: SlotType,
+  extras?: PickerExtras,
 ) => void;
 
 /**
@@ -38,9 +45,55 @@ export const BOOLEAN_SLOT: SlotType = { type: 'Boolean' };
  *  type of its own — the property's label over the slot's type. */
 export function slotFilter<F extends { label?: string }>(
   filter: F,
-  anyType?: boolean,
-): F | { label?: string } {
-  return anyType ? { label: filter.label } : filter;
+  slot?: SlotType,
+): F | { label?: string; type?: string | string[] } {
+  if (slot === undefined) return filter;
+  return slot === true ? { label: filter.label } : { label: filter.label, type: slot.type };
+}
+
+/** What the component- and exported-property pickers judge a slot by: the
+ *  schema's type, required fields and access — or the slot's own type, which
+ *  takes nothing but that type, read-only. */
+export function slotPropFilter(
+  schema: SchemaField | undefined,
+  slot?: SlotType,
+): {
+  fieldType?: string | string[];
+  requiredFields?: SchemaField['requiredFields'];
+  write?: boolean;
+} {
+  if (slot === true) return {};
+  if (slot) return { fieldType: slot.type };
+  return { fieldType: schema?.type, requiredFields: schema?.requiredFields, write: schema?.write };
+}
+
+/**
+ * The picker for a schema field whose value is not a component property on the
+ * page tree — a component definition's widget, a dialog's input parameter —
+ * so a top-level pick lands through `write` instead of `updateComponent`.
+ * `undefined` for a field that binds no variable.
+ */
+export function schemaFieldPicker(
+  open: ReturnType<typeof useEditorDomainStore.getState>['openBindingPicker'],
+  schema: SchemaField,
+  write: (binding: VariableBinding) => void,
+): OpenBindingPicker | undefined {
+  if (!bindsVariable(primaryType(schema.type))) return undefined;
+  return (onPick, currentBinding, slot, extras) =>
+    open('', schema.label ?? '', {
+      ...extras,
+      onPick: onPick ?? write,
+      currentBinding,
+      filter: slotFilter(
+        {
+          label: schema.label,
+          type: schema.type,
+          write: schema.write,
+          requiredFields: schema.requiredFields,
+        },
+        slot,
+      ),
+    });
 }
 
 /**
@@ -60,14 +113,15 @@ export function wrapPicker(
   slot?: SlotType,
 ): OpenBindingPicker | undefined {
   if (!parent) return undefined;
-  return (onPick, currentBinding, slotAnyType) =>
+  return (onPick, currentBinding, innerSlot, extras) =>
     parent(
       (b) => {
         apply(b);
         onPick?.(b);
       },
       currentBinding ?? varBindingOf(current),
-      slotAnyType ?? anyType,
+      innerSlot ?? slot,
+      extras,
     );
 }
 

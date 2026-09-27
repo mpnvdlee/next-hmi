@@ -170,6 +170,53 @@
         ]
       },
       {
+        "type": "Repeater",
+        "name": "Repeater",
+        "description": "Draws its child widgets once per element of an array, each copy bound to its own element.",
+        "props": [
+          {
+            "key": "items",
+            "label": "Items",
+            "type": "item-list",
+            "group": "Content"
+          },
+          {
+            "key": "startOffset",
+            "label": "Start at",
+            "type": "Integer",
+            "group": "Content",
+            "defaultValue": 0
+          },
+          {
+            "key": "maxItems",
+            "label": "Max items",
+            "type": "Integer",
+            "group": "Content",
+            "defaultValue": 0
+          },
+          {
+            "key": "emptyText",
+            "label": "Empty text",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
         "type": "Separator",
         "name": "Separator",
         "description": "A thin divider line between widgets.",

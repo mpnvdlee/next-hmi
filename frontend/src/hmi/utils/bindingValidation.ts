@@ -14,10 +14,20 @@ import { isVisibilityGateProperty } from '@shared/types/universalWidgetPropertie
 import { bindingKey, type VariableBinding } from '@shared/types/config';
 import { getVarBinding, isRecord, isVarSource } from '@shared/types/propertyValueGuards';
 import type { RequiredFieldEntry } from '@shared/types/widgetSchema';
-import { accepts, elementOf, parseTypeToken, type AcceptType } from '@shared/types/varType';
+import {
+  accepts,
+  elementOf,
+  parseTypeToken,
+  structSatisfies,
+  type AcceptType,
+  type StructMemberLookup,
+} from '@shared/types/varType';
 import { acceptedValueTypes } from '@shared/utils/valueTypes';
 import { useVariableStore } from '../store/variableStore';
 import type { VarMeta } from '../store/variableStore';
+import { structShapeElementPath } from './repeatItemResolution';
+import { resolveComponentPropValue } from './componentPropResolution';
+import { takenBranch, type EvaluationContext } from './propertySourceEval';
 import { useDataSettling } from '../context/DataSettleContext';
 import { useEvalContext } from '../hooks/useEvalContext';
 import { useMemo } from 'react';
@@ -253,6 +263,26 @@ function isRenderedProperty(key: string, field?: { type: string | string[] }): b
 // ── Per-binding check ─────────────────────────────────────────────────────────
 
 /**
+ * The members of the struct a binding reads, from the metadata, which lists
+ * every enabled leaf and struct folder under its own key. A struct array's
+ * members are read off the bound element, or the lowest-index one when none is
+ * bound. `null` when the struct has no known element to read them from.
+ */
+function structMembers(
+  varMeta: Record<string, VarMeta>,
+  id: string,
+  meta: VarMeta,
+  index: number | undefined,
+): StructMemberLookup | null {
+  const base = meta.type.array ? structShapeElementPath(varMeta, id, index) : id;
+  if (!base) return null;
+  return (path) => {
+    const member = varMeta[`${base}/${path}`];
+    return member ? { type: member.type, writable: member.writable } : undefined;
+  };
+}
+
+/**
  * Validate a single binding against store state.
  *
  * Shape and type come from the authoritative `varMeta[id].type`, never from
@@ -292,6 +322,10 @@ export function checkBindingSpec(
   if (accept.length > 0) {
     const value = index === undefined ? meta.type : elementOf(meta.type);
     if (!accept.some((a) => accepts(a, value, requiredFields))) return 'invalid';
+    if (value.kind === 'struct' && requiredFields?.length && value.fields.length > 0) {
+      const members = structMembers(s.varMeta, id, meta, index);
+      if (members && !structSatisfies(requiredFields, members)) return 'invalid';
+    }
   }
   // Unset access is read-only, as the picker and the backend read it. A struct
   // has no access of its own; its members were judged above.
@@ -363,6 +397,8 @@ export function createBindingStatusSelector(
     ),
   );
   const depDatasources = Array.from(new Set(depIds.map((id) => id.split(':')[0])));
+  // A struct's member checks read keys below it, which are not in `depIds`.
+  const readsMembers = bindingSpecs.some((spec) => spec.requiredFields?.length);
 
   let cache: {
     values: Record<string, unknown>;
@@ -379,7 +415,9 @@ export function createBindingStatusSelector(
       s.metadataReceived !== cache.metadataReceived ||
       s.wsConnected !== cache.wsConnected ||
       depValueIds.some((id) => s.values[id] !== cache!.values[id]) ||
-      depIds.some((id) => s.varMeta[id] !== cache!.varMeta[id]) ||
+      (readsMembers
+        ? s.varMeta !== cache!.varMeta
+        : depIds.some((id) => s.varMeta[id] !== cache!.varMeta[id])) ||
       depDatasources.some((ds) => s.opcuaConnected[ds] !== cache!.opcuaConnected[ds]);
 
     if (!relevantChange) return cache!.result;

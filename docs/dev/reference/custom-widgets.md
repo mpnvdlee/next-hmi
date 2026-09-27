@@ -199,6 +199,7 @@ Hook variants (call internally `useEvalContext()`; safe to use inside a componen
 - `usePropVar(props, key)` — resolves either a `$var` binding (including array-element bindings with an `index`) or a static / expression value; returns `unknown`.
 - `usePropStruct(props, key)` — for struct properties; returns the live struct (or array for an array struct `type` like `'struct[]'`).
 - `useRecordListProp(props, key)` — for a `record-list` property (array of records); resolves a `$var` struct-array binding, the `$recipeList` value source, a `$widgetProp` export, or a static array, and returns `unknown[]`.
+- `useItemListProp(props, key)` — for an `item-list` property (any array); resolves a scalar or struct `$var` array, a static list, an `$http` JSON-array pick, `$recipeList`, `$user` users/groups or a `$widgetProp` export, and returns `{ items, arrayKey?, structArray }` — `arrayKey` is set only for a `$var` array, which is what makes its elements writable.
 
 Non-hook variants (safe in event handlers, action callbacks, utilities — accept an optional `evalCtx`):
 
@@ -311,6 +312,15 @@ decide *where* each node goes, or to render a node that is not its own child.
   affordance on that canvas only: `ComponentSlot` outlines an unfilled slot with
   the two, so the author can see the hole they are filling while the UI preview
   and the operator show the page as it really is.
+- `RepeatScope({ value, children })` and `useRepeatScope()` — publish one copy of
+  a repeated subtree, and read the innermost one. `value` is
+  `{ index, item, arrayKey?, structArray?, key, first, ghost? }`; inside it,
+  `$repeatItem`, `$var` with `repeatIndex` and `$widgetProp` resolve per copy
+  (see [Repeater items in depth](../architecture/value-types.md#repeater-items-in-depth-repeatitem)).
+  Keep each `value` referentially stable, and make `key` unique across nested
+  scopes by prefixing the outer scope's `key`. Declare `repeatsChildren` too, or
+  the editor won't offer Repeat item inside the widget and the validator flags
+  it as out of scope. `Repeater` is the worked example.
 - `useAnchoredStyle(rect, placement)` → `[ref, style]` — positions a panel
   against a trigger's `AnchorRect`: renders at the raw offset, then clamps itself
   into the viewport once measured. Attach the ref and the style to the same
@@ -628,8 +638,8 @@ export default function MyActionButton({ properties, layout }: HmiWidgetProps) {
 Supported action types (see `frontend/src/config/components/editor/PropertiesPanel/actionsPreview.ts` for the canonical list):
 
 - `openDialog` (a Dialogs-folder node, with `componentProperties`) / `openPageOverlay` (a node in the `pages` root) / `closePageOverlay` (either)
-- `writeDataVariable` — `{ datasource, path, value }`; value is a literal (`string | number | boolean`, or an array for a whole-array target), or a property source (`$componentProp`, `$var`, …) evaluated when the action fires.
-- `toggleDataVariable` — `{ datasource, path }`; inverts a Boolean variable from its current server-side value.
+- `writeDataVariable` — `{ target, value }`; `target` is `{ $var: { path: 'ds:path' } }`, or inside a Repeater `{ $repeatItem: { member? } }` for the copy's element; value is a literal (`string | number | boolean`, or an array for a whole-array target), or a property source (`$componentProp`, `$var`, …) evaluated when the action fires.
+- `toggleDataVariable` — `{ target }`, the same shape; inverts a Boolean variable from its current server-side value.
 - `if` — `{ condition, then, else }`; evaluates `condition` (any property-source value, e.g. a `$var` or `$compare`) and runs the `then` or `else` action list.
 - `setLanguage` — switches the active HMI language; the `language` property is resolved from component properties at runtime.
 - `loginUser` / `logoutUser` — scope-based authentication (the scope defaults to the current `useHmiScope()`).
@@ -704,6 +714,7 @@ Optional sibling exports:
 - `displayName: string` — the label shown in the palette, the widget tree and the properties panel header. The folder name stays the widget *type* that page files reference; export this when that type reads badly as a label, since a folder name cannot carry spaces (`StretchSpacer` → `Stretch Spacer`). Defaults to the folder name.
 - `hostsChildren: boolean` — declares that nodes of this type carry a `children` array. The editor then treats the widget as a container (drop target, collapse toggle, tree recursion, move target) and the renderer hands the already-rendered children in as the component's `children` prop. Read them with `React.Children`, and place them with `containerLayoutProps(layout)` on the element that is actually `display: flex` — that element must carry `hmi-component` (or `hmi-container`), which is where the shared layout barrier in `hmi.css` resets every `--container-*` and `--w-*`/`--h-*`, and without it a nested host inherits its parent's direction and gap. The built-in `Container` is the worked example for the **split** form of this: its actual flex parent is `.hmi-container__content`, an inner element that carries neither class — only the outer `.hmi-container` does, and `--container-*` reaches the inner element by ordinary CSS inheritance, so only the class-carrying element needs it. `Container` also keeps its own configured padding off that outer element entirely, applying it instead to `.hmi-container__content` (and `.hmi-container__title`, when there is one) — see `containerLayoutProps` above for why.
 - `flowsChildren: boolean` — declares that those children are laid out with flexbox, off `containerLayoutProps`. Narrower than `hostsChildren`, and only meaningful with it: a host that pins its children to fixed slots (the built-in `ImageContainer`) hosts without flowing. Declaring it is what gives each child a resolvable main axis: the Layout panel offers them Hug/Fill/Fixed against it, and `hmi.css`'s flow-translation block reads each child's own axis-neutral `widthMode`/`heightMode` intent against whichever screen axis this host's own `data-flow-direction` says is main. Without it, a child's Fill/Hug intent applies against whatever ancestor is actually its flex parent, which may not be this one. Set it on any widget that arranges children in order (a row, a card, a grid).
+- `repeatsChildren: string` — names the widget's `item-list` property when it draws its children once per element of it, each copy inside a `RepeatScope`. The editor offers the Repeat item source, and the `[#]` element, to widgets inside it, typed against that property's binding; the validator accepts `$repeatItem` there and nowhere else. Omit it on any widget that does not repeat.
 - `category: string` — the card category. Defaults to the widget's source folder, or `Other` for a flat widget.
 - `description: string` — a one-line summary shown on the widget's card in the editor's widget selector (the drawer opened via **Add Widget/Component…** on the tree context menu).
 - `icon: IconValue` — a structured built-in or custom icon, using the same value produced by the editor's icon picker. A built-in icon is `{ type: 'builtin', name: '<allowlist-id>' }`; a workspace SVG is `{ type: 'custom', path: 'icons/<file>.svg' }`. When omitted, custom widgets fall back to a generic puzzle-piece icon.
@@ -719,7 +730,9 @@ export const icon = { type: 'builtin', name: 'gauge' } as const;
 
 ### Field-type reference
 
-A field's `type` is a **simple datatype** (`boolean`, `integer`, `float`, `string`, `datetime`, `date`, `time`, `duration`), one of their arrays (`'float[]'`, `'string[]'`, …), a **named struct** (`'struct'`, `'Alarms[]'`, …), or an **editor-only kind** (`color`, `icon`, `image`, `video`, `option-list`, `actions`, …). It may also be a **list** — the first entry drives the editor control, the rest form the variable-binding filter (e.g. `['float','integer','boolean']`, or `['option-list','string[]','integer[]']`). The types themselves, their bindable sources, and the full source model are specified in [../architecture/value-types.md](../architecture/value-types.md); the table below maps each `type` to the hook a custom component reads it with.
+A field's `type` is a **simple datatype** (`boolean`, `integer`, `float`, `string`, `datetime`, `date`, `time`, `duration`), one of their arrays (`'float[]'`, `'string[]'`, …), a **named struct** (`'struct'`, `'Alarms[]'`, …), or an **editor-only kind** (`color`, `icon`, `image`, `video`, `option-list`, `item-list`, `actions`, …). Tokens are case-insensitive. It may also be a **list** — the first entry drives the editor control, the rest form the variable-binding filter (e.g. `['float','integer','boolean']`, or `['option-list','string[]','integer[]']`). An `item-list` field binds to any array on its own — declare just `'item-list'`. A `color`, `icon`, `image` or `video` field binds to a `string` variable unless it lists simple types of its own; the other editor kinds bind no variable.
+
+A variable fits a token when its array-ness and base type match exactly — a `float` field takes no `integer` variable; list both to take either. The full rule set is in [../architecture/value-types.md](../architecture/value-types.md#which-variable-fits-a-field). The types themselves, their bindable sources, and the full source model are specified in [../architecture/value-types.md](../architecture/value-types.md); the table below maps each `type` to the hook a custom component reads it with.
 
 | `type`              | Read with                                  |
 |---------------------|--------------------------------------------|
@@ -736,6 +749,7 @@ A field's `type` is a **simple datatype** (`boolean`, `integer`, `float`, `strin
 | `video`             | `usePropString`                            |
 | `struct`            | `usePropStruct` (or `useStructVariable`)   |
 | `option-list`       | inspect `properties.<key>` directly        |
+| `item-list`         | `useItemListProp`                          |
 | `actions`           | `executeWidgetActions(props[key][event])`  |
 | `groups`            | read `properties.<key>` as `string[]`      |
 | `image-indicators`  | consumed by `ImageIndicators` widget       |

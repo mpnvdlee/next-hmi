@@ -3,6 +3,10 @@ import userEvent from '@testing-library/user-event';
 import type { ButtonAction, PageConfig, PageNode } from '@shared/types/config';
 import type ActionsInputType from './ActionsInput';
 import { ACTION_EDITORS, type ActionEditorCtx } from './actionEditors';
+import {
+  RepeatEditorScopeContext,
+  type RepeatEditorScope,
+} from '../PropertySourceEditor/repeatScopeContext';
 
 // jsdom doesn't implement scrollIntoView; Select's popup calls it to keep the
 // active option in view once opened.
@@ -278,5 +282,81 @@ describe('writeDataVariable coercion editor', () => {
     const Editor = ACTION_EDITORS.writeDataVariable!;
     render(<Editor action={action} ctx={ctx} />);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('write target inside a Repeater', () => {
+  const SCALAR = { members: [], writable: true, elementType: 'Float' };
+  const STRUCT = {
+    members: ['Name', 'Speed'],
+    writable: true,
+    elementType: 'struct',
+    memberTypes: { Name: 'String', Speed: 'Float' },
+  };
+
+  function renderWrite(
+    scope: RepeatEditorScope | null,
+    action: Partial<Extract<ButtonAction, { type: 'writeDataVariable' }>>,
+    ctx = makeCtx(),
+  ) {
+    const Editor = ACTION_EDITORS.writeDataVariable!;
+    render(
+      <RepeatEditorScopeContext.Provider value={scope}>
+        <Editor action={{ type: 'writeDataVariable', value: 0, ...action }} ctx={ctx} />
+      </RepeatEditorScopeContext.Provider>,
+    );
+    return ctx;
+  }
+
+  function variableRow(): HTMLElement {
+    return screen.getByText('Variable').closest('.cfg-field-group') as HTMLElement;
+  }
+
+  it("writes the copy's own element without asking which one", () => {
+    renderWrite(SCALAR, { target: { $repeatItem: {} } });
+    const row = within(variableRow());
+    expect(row.getByText('Repeat item › Element (this copy)')).toBeInTheDocument();
+    expect(row.queryByTitle('Choose the member to write')).not.toBeInTheDocument();
+  });
+
+  it('asks only which member of a struct element to write, in the Repeat item picker', async () => {
+    const ctx = renderWrite(STRUCT, { target: { $repeatItem: {} } });
+    await userEvent.setup().click(within(variableRow()).getByTitle('Choose the member to write'));
+    const options = vi.mocked(ctx.openBindingPicker).mock.calls[0][2];
+    expect(options?.repeatItem).toMatchObject({ writeTarget: true, scope: STRUCT });
+    expect(vi.mocked(ctx.openWriteVarPicker)).not.toHaveBeenCalled();
+  });
+
+  it('opens the datasource picker, with no Repeat item in it, for a variable target', async () => {
+    const ctx = renderWrite(SCALAR, {});
+    await userEvent.setup().click(within(variableRow()).getByTitle('Change variable binding'));
+    expect(vi.mocked(ctx.openWriteVarPicker)).toHaveBeenCalledWith();
+    expect(vi.mocked(ctx.openBindingPicker)).not.toHaveBeenCalled();
+  });
+
+  it("types the value by the member it writes and reads it from the Repeat item's own picker", async () => {
+    const ctx = renderWrite(STRUCT, {
+      target: { $repeatItem: { member: 'Speed' } },
+      value: { $repeatItem: { field: 'value', member: 'Speed' } },
+    });
+    const valueRow = screen.getByText('Value').closest('.cfg-field-group') as HTMLElement;
+    await userEvent.setup().click(within(valueRow).getByTitle('Change binding'));
+    const options = vi.mocked(ctx.openBindingPicker).mock.calls[0][2];
+    expect(options?.filter).toEqual({ label: 'Value', type: 'Float' });
+    expect(options?.repeatItem?.current).toEqual({ field: 'value', member: 'Speed' });
+  });
+});
+
+describe('If editor', () => {
+  it('opens the condition picker on Boolean variables', async () => {
+    const ctx = makeCtx();
+    const Editor = ACTION_EDITORS.if!;
+    render(<Editor action={{ type: 'if', condition: { $var: { path: '' } } }} ctx={ctx} />);
+    const row = screen.getByText('Condition').closest('.cfg-field-group') as HTMLElement;
+    await userEvent
+      .setup()
+      .click(within(row).getByRole('button', { name: 'Change variable binding' }));
+    const options = vi.mocked(ctx.openBindingPicker).mock.calls[0][2];
+    expect(options?.filter).toEqual({ label: 'Condition', type: 'Boolean' });
   });
 });

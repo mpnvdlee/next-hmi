@@ -211,6 +211,14 @@ const ICONS: Record<PropertySource, ReactNode> = {
       <path d="M2.5 8 h7.5 a3 3 0 0 0 3 -3 v-1.5" />
     </Icon>
   ),
+  // $repeatItem — three rows, one picked out.
+  $repeatItem: (
+    <Icon>
+      <rect x="2.5" y="2.5" width="11" height="3" rx="0.5" />
+      <rect x="2.5" y="6.5" width="11" height="3" rx="0.5" fill="currentColor" />
+      <rect x="2.5" y="10.5" width="11" height="3" rx="0.5" />
+    </Icon>
+  ),
 };
 
 export default ICONS;

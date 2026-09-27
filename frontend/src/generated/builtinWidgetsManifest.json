@@ -12,6 +12,7 @@
     "displayName": "Alarm History",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Content & controls",
     "schema": {
       "title": {
@@ -42,6 +43,7 @@
     "displayName": "Alarm List",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Content & controls",
     "schema": {
       "title": {
@@ -69,6 +71,7 @@
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Content & controls",
     "schema": {
       "label": {
@@ -108,6 +111,7 @@
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Content & controls",
     "schema": {
       "format": {
@@ -135,6 +139,7 @@
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Content & controls",
     "schema": {
       "iconName": {
@@ -165,6 +170,7 @@
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Content & controls",
     "schema": {
       "src": {
@@ -195,6 +201,7 @@
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Content & controls",
     "schema": {
       "text": {
@@ -234,6 +241,7 @@
     "displayName": "Logo Title",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Content & controls",
     "schema": {
       "logoUrl": {
@@ -261,6 +269,7 @@
     "displayName": "Page Title",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Content & controls",
     "schema": {
       "text": {
@@ -288,6 +297,7 @@
     "displayName": "Status Pill",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Content & controls",
     "schema": {
       "text": {
@@ -324,6 +334,7 @@
     "displayName": "Trend Chart",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Content & controls",
     "schema": {
       "source": {
@@ -366,6 +377,7 @@
     "displayName": "User Badge",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Content & controls",
     "schema": {
       "usernameText": {
@@ -414,6 +426,7 @@
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Content & controls",
     "schema": {
       "sourceMode": {
@@ -530,6 +543,7 @@
     "displayName": "Web Frame",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Content & controls",
     "schema": {
       "url": {
@@ -678,6 +692,7 @@
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Indicators",
     "schema": {
       "variable": {
@@ -711,6 +726,7 @@
     "displayName": "LED Indicator",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Indicators",
     "schema": {
       "variable": {
@@ -735,6 +751,7 @@
     "displayName": "Progress Bar",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Indicators",
     "schema": {
       "variable": {
@@ -789,6 +806,7 @@
     "displayName": "Ring Gauge",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Indicators",
     "schema": {
       "value": {
@@ -837,6 +855,7 @@
     "displayName": "Stat Tile",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Indicators",
     "schema": {
       "label": {
@@ -873,6 +892,7 @@
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Indicators",
     "schema": {
       "variable": {
@@ -909,6 +929,7 @@
     "displayName": "Value Display",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Indicators",
     "schema": {
       "variable": {
@@ -942,6 +963,7 @@
     "displayName": "Button Row",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Inputs",
     "schema": {
       "label": {
@@ -987,6 +1009,7 @@
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Inputs",
     "schema": {
       "label": {
@@ -1024,6 +1047,7 @@
     "displayName": "Number Input",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Inputs",
     "schema": {
       "label": {
@@ -1075,6 +1099,7 @@
     "displayName": "Numeric Stepper",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Inputs",
     "schema": {
       "label": {
@@ -1120,6 +1145,7 @@
     "displayName": "String Input",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Inputs",
     "schema": {
       "label": {
@@ -1150,6 +1176,7 @@
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Inputs",
     "schema": {
       "label": {
@@ -1180,6 +1207,7 @@
     "displayName": "Component Slot",
     "hostsChildren": true,
     "flowsChildren": true,
+    "repeatsChildren": null,
     "category": "Layout & structure",
     "schema": {
       "slot": {
@@ -1201,6 +1229,7 @@
     "displayName": null,
     "hostsChildren": true,
     "flowsChildren": true,
+    "repeatsChildren": null,
     "category": "Layout & structure",
     "schema": {
       "title": {
@@ -1237,6 +1266,7 @@
     "displayName": "Fixed Spacer",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Layout & structure",
     "schema": {
       "size": {
@@ -1258,6 +1288,7 @@
     "displayName": "Image Container",
     "hostsChildren": true,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Layout & structure",
     "schema": {
       "src": {
@@ -1279,6 +1310,37 @@
     "schemaError": null
   },
   {
+    "key": "Layout/Repeater",
+    "name": "Repeater",
+    "group": "Layout",
+    "origin": "builtin",
+    "hasStyle": true,
+    "hasFonts": false,
+    "usesRecharts": false,
+    "buildOk": true,
+    "buildTs": "428dad1c10dddb25",
+    "displayName": null,
+    "hostsChildren": true,
+    "flowsChildren": true,
+    "repeatsChildren": "items",
+    "category": "Layout & structure",
+    "schema": {
+      "items": {
+        "type": "item-list"
+      },
+      "startOffset": {
+        "type": "integer"
+      },
+      "maxItems": {
+        "type": "integer"
+      },
+      "emptyText": {
+        "type": "string"
+      }
+    },
+    "schemaError": null
+  },
+  {
     "key": "Layout/Separator",
     "name": "Separator",
     "group": "Layout",
@@ -1291,6 +1353,7 @@
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Layout & structure",
     "schema": {
       "orientation": {
@@ -1321,6 +1384,7 @@
     "displayName": "Stretch Spacer",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Layout & structure",
     "schema": {
       "mode": {
@@ -1348,6 +1412,7 @@
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Navigation",
     "schema": {
       "separator": {
@@ -1378,6 +1443,7 @@
     "displayName": "Language Switcher",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Navigation",
     "schema": {
       "label": {
@@ -1399,6 +1465,7 @@
     "displayName": "Menu Toggle",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Navigation",
     "schema": {
       "bound": {
@@ -1432,6 +1499,7 @@
     "displayName": "Navigation Menu",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Navigation",
     "schema": {
       "mode": {
@@ -1483,6 +1551,7 @@
     "displayName": "Page Navigator",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Navigation",
     "schema": {
       "groupId": {
@@ -1522,6 +1591,7 @@
     "displayName": "Tab Bar",
     "hostsChildren": null,
     "flowsChildren": null,
+    "repeatsChildren": null,
     "category": "Navigation",
     "schema": {
       "groupId": {

@@ -646,6 +646,7 @@ export default function ComponentsView() {
       return (
         <CompositionWidgetPanel
           comp={selectedWidget}
+          definitionChildren={activeComponent.children as WidgetConfig[] | undefined}
           componentProperties={activeComponent.componentProperties}
           onUpdate={handleUpdateWidget}
         />

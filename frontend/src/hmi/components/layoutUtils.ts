@@ -15,7 +15,9 @@ import { componentDefinition } from '@shared/store/componentStore';
 import { useEvalContext } from '../hooks/useEvalContext';
 import { useLiveScalars } from '../hooks/useLiveScalars';
 import { getViewportSnapshot } from '../hooks/useViewport';
-import { useBindingValue } from '../hooks/useVariable';
+import { useBindingValue, useVariableMeta } from '../hooks/useVariable';
+import { useUsersDocument } from '../hooks/useUsersDocument';
+import { useHttpSourceStore } from '../store/httpSourceStore';
 import { useStructVariable } from '../hooks/useStructVariable';
 import { useThemeRuntimeStore } from '../store/themeRuntimeStore';
 
@@ -629,6 +631,80 @@ export function useRecordListProp(
   const evalCtx = useEvalContext();
   if (binding) return Array.isArray(structVal) ? structVal : [];
   return resolveRecordListSource(properties?.[key], evalCtx);
+}
+
+/** What an `item-list` property repeats over, and where its elements live. */
+export interface ItemList {
+  items: unknown[];
+  /** Composite key of the bound array variable; absent for every other source. */
+  arrayKey?: string;
+  /** The bound variable is a struct array — each member is its own leaf. */
+  structArray: boolean;
+}
+
+const NO_ITEMS: unknown[] = [];
+
+/**
+ * Hook: read an `item-list` property — any array, from any source that can
+ * produce one. A `$var` array (scalar or struct) also reports its key, which is
+ * what lets a Repeater copy bind to and write its own element. `$http` counts
+ * when its pick is a JSON array; `$user` lists users or groups as
+ * `{ label, value }` records, the same shape a static list holds.
+ * @example
+ *   const { items } = useItemListProp(properties, 'items');
+ */
+export function useItemListProp(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+): ItemList {
+  const raw = properties?.[key];
+  const binding = getPropBinding(properties, key);
+  const arrayKey = bindingKey(binding);
+  const varValue = useStructVariable(arrayKey);
+  const meta = useVariableMeta(arrayKey);
+  const { users, groups } = useUsersDocument();
+  const evalCtx = useEvalContext();
+  // The response cache is read through `getState()`, so nothing else here
+  // changes when it lands; subscribe to it only when the items come from it.
+  const isHttp = isRecord(raw) && '$http' in raw;
+  const httpEntries = useHttpSourceStore((s) => (isHttp ? s.entries : null));
+  const userField = isRecord(raw) && isRecord(raw.$user) ? String(raw.$user.field ?? '') : null;
+
+  const httpText = useMemo(
+    () => (isHttp ? evaluatePropertyValue(raw, evalCtx) : undefined),
+    // httpEntries isn't read — the evaluator reads the cache itself — but it
+    // must invalidate the memo when a response lands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [isHttp, raw, evalCtx, httpEntries],
+  );
+
+  // Only a record-list source reads the context; the rest must not re-run on it.
+  const recordListCtx = binding || userField !== null || isHttp ? null : evalCtx;
+
+  const items = useMemo((): unknown[] => {
+    if (binding) return Array.isArray(varValue) ? varValue : NO_ITEMS;
+    if (userField === 'groups') return groups.map((g) => ({ label: g.label, value: g.id }));
+    if (userField === 'userList') {
+      return users.map((u) => ({ label: u.username, value: u.username }));
+    }
+    if (userField !== null) return NO_ITEMS;
+    if (isHttp) {
+      if (typeof httpText !== 'string') return NO_ITEMS;
+      try {
+        const parsed: unknown = JSON.parse(httpText);
+        return Array.isArray(parsed) ? parsed : NO_ITEMS;
+      } catch {
+        return NO_ITEMS;
+      }
+    }
+    return recordListCtx ? resolveRecordListSource(raw, recordListCtx) : NO_ITEMS;
+  }, [binding, varValue, userField, users, groups, isHttp, httpText, raw, recordListCtx]);
+
+  return {
+    items,
+    arrayKey: binding ? arrayKey : undefined,
+    structArray: meta?.type.kind === 'struct',
+  };
 }
 
 /**

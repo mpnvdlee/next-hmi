@@ -56,6 +56,19 @@ Places children at absolute spots over a background image. Collapses below a set
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
+### Repeater
+
+Draws its child widgets once per element of an array, each copy bound to its own element.
+
+| Property | Label | Type |
+|---|---|---|
+| `items` | Items | `item-list` |
+| `startOffset` | Start at | `Integer` |
+| `maxItems` | Max items | `Integer` |
+| `emptyText` | Empty text | `String` |
+| `visible` | Visible | `Boolean` |
+| `interactable` | Interactable | `Boolean` |
+
 ### Separator
 
 A thin divider line between widgets.

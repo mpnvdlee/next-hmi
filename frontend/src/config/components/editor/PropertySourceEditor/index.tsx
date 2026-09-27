@@ -17,6 +17,7 @@ import {
   RandomEditor,
   RecipeEditor,
   RecipeListEditor,
+  RepeatItemEditor,
   ResultEditor,
   TimeEditor,
   UrlParamEditor,
@@ -105,7 +106,11 @@ const SOURCE_EDITORS: Record<PropertySource, SourceEditorRenderer> = {
     <UserFieldEditor
       value={value}
       onChange={onChange}
-      listOnly={schema !== undefined && primaryType(schema.type).toLowerCase() === 'option-list'}
+      fieldType={fieldType}
+      listOnly={
+        schema !== undefined &&
+        ['option-list', 'item-list'].includes(primaryType(schema.type).toLowerCase())
+      }
     />
   ),
   $userGroups: ({ value, onChange }) => <UserGroupsEditor value={value} onChange={onChange} />,
@@ -138,6 +143,9 @@ const SOURCE_EDITORS: Record<PropertySource, SourceEditorRenderer> = {
     <ViewportEditor value={value} onChange={onChange} fieldType={fieldType} />
   ),
   $result: ({ value, onChange }) => <ResultEditor value={value} onChange={onChange} />,
+  $repeatItem: ({ value, onChange, onOpenBindingPicker }) => (
+    <RepeatItemEditor value={value} onChange={onChange} onOpenBindingPicker={onOpenBindingPicker} />
+  ),
 };
 
 export default function PropertySourceEditor({

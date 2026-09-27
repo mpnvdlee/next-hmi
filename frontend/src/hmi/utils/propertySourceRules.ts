@@ -52,6 +52,9 @@ const EDITOR_KIND_SOURCES: Record<string, PropertySourceKey[]> = {
   // A bound array-of-records (e.g. a data grid's rows). No static — always
   // resolves to a real array from a variable, the recipe list, or an export.
   'record-list': ['$var', '$recipeList', '$widgetProp'],
+  // What a Repeater repeats over: any array, scalar or record, from any source
+  // that can produce one. `$http` counts when its pick is a JSON array.
+  'item-list': ['$static', '$var', '$http', '$recipeList', '$user', '$widgetProp'],
 };
 
 /** Allowed property sources per value type, derived from per-source produced types. */
@@ -76,6 +79,7 @@ export const SOURCE_CAPABLE_TYPES = new Set([
   'video',
   'option-list',
   'record-list',
+  'item-list',
 ]);
 
 /**

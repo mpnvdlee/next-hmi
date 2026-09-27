@@ -205,6 +205,115 @@ describe('checkBindingSpec', () => {
   });
 });
 
+describe('checkBindingSpec — base types and struct members', () => {
+  const integer: VarType = { kind: 'scalar', base: 'Integer', array: false };
+  const float: VarType = { kind: 'scalar', base: 'Float', array: false };
+  const floatSlot = [{ kind: 'scalar', base: 'Float', array: false }] as const;
+
+  it('keeps an Integer variable out of a Float slot', () => {
+    const s = slice({ values: { 'PLC:Count': 3 }, varMeta: { 'PLC:Count': meta(integer) } });
+    expect(checkBindingSpec({ id: 'PLC:Count', accept: [...floatSlot] }, s, true)).toBe('invalid');
+  });
+
+  const motor: VarType = { kind: 'struct', name: 'Motor', array: false, fields: ['Speed', 'Name'] };
+  const motorMeta = {
+    'PLC:Motor': meta(motor),
+    'PLC:Motor/Speed': meta(float, { writable: true }),
+    'PLC:Motor/Name': meta({ kind: 'scalar', base: 'String', array: false }, { writable: false }),
+  };
+  const motorSpec = (requiredFields: BindingSpec['requiredFields']): BindingSpec => ({
+    id: 'PLC:Motor',
+    accept: [{ kind: 'struct', array: false }],
+    requiredFields,
+  });
+
+  it("checks a struct's members for type and access, not just their names", () => {
+    const s = slice({ values: { 'PLC:Motor': {} }, varMeta: motorMeta });
+    expect(
+      checkBindingSpec(motorSpec([{ name: 'Speed', type: 'Float', write: true }]), s, true),
+    ).toBe('ok');
+    expect(checkBindingSpec(motorSpec([{ name: 'Name', type: 'Float' }]), s, true)).toBe('invalid');
+    expect(checkBindingSpec(motorSpec([{ name: 'Name', write: true }]), s, true)).toBe('invalid');
+  });
+
+  const motors: VarType = { ...motor, name: 'Motors', array: true };
+  const writtenSpeed = [{ name: 'Speed', write: true }];
+  const motorsMeta = (first: number) => ({
+    'PLC:Motors': meta(motors),
+    [`PLC:Motors/Line[${first}]/Speed`]: meta(float, { writable: false }),
+    [`PLC:Motors/Line[${first}]/Name`]: meta(float),
+    [`PLC:Motors/Line[${first + 1}]/Speed`]: meta(float, { writable: true }),
+    [`PLC:Motors/Line[${first + 1}]/Name`]: meta(float),
+  });
+  const wholeSpec: BindingSpec = {
+    id: 'PLC:Motors',
+    accept: [{ kind: 'struct', array: true }],
+    requiredFields: writtenSpeed,
+  };
+  const elementSpec = (index: number): BindingSpec => ({
+    id: 'PLC:Motors',
+    index,
+    accept: [{ kind: 'struct', array: false }],
+    requiredFields: writtenSpeed,
+  });
+
+  it("judges a struct array's members on the bound element, else the lowest one", () => {
+    const s = slice({
+      values: {
+        'PLC:Motors': [],
+        'PLC:Motors/[0]': {},
+        'PLC:Motors/[1]': {},
+        'PLC:Motors/[7]': {},
+      },
+      varMeta: motorsMeta(0),
+    });
+    // Line[0] — read-only Speed — whatever the folder prefix; Line[1] writable.
+    expect(checkBindingSpec(wholeSpec, s, true)).toBe('invalid');
+    expect(checkBindingSpec(elementSpec(0), s, true)).toBe('invalid');
+    expect(checkBindingSpec(elementSpec(1), s, true)).toBe('ok');
+    // An index with no element of its own falls back to the lowest.
+    expect(checkBindingSpec(elementSpec(7), s, true)).toBe('invalid');
+  });
+
+  it('judges a struct array that counts from 1', () => {
+    const s = slice({ values: { 'PLC:Motors': [] }, varMeta: motorsMeta(1) });
+    expect(checkBindingSpec(wholeSpec, s, true)).toBe('invalid');
+  });
+
+  it('fails a writing field unless the variable is known to be writable', () => {
+    const speed = (writable?: boolean) =>
+      slice({
+        values: { 'PLC:Speed': 1 },
+        varMeta: { 'PLC:Speed': meta(float, writable === undefined ? {} : { writable }) },
+      });
+    const written: BindingSpec = { id: 'PLC:Speed', accept: [...floatSlot], write: true };
+    expect(checkBindingSpec(written, speed(false), true)).toBe('invalid');
+    expect(checkBindingSpec({ ...written, write: undefined }, speed(false), true)).toBe('ok');
+    expect(checkBindingSpec(written, speed(true), true)).toBe('ok');
+    // Access the metadata does not state is read-only, as the picker and backend read it.
+    expect(checkBindingSpec(written, speed(), true)).toBe('invalid');
+  });
+
+  it('judges a struct on a writing field by its members, not its own access', () => {
+    const written = motorSpec([{ name: 'Speed', write: true }]);
+    const s = slice({ values: { 'PLC:Motor': {} }, varMeta: motorMeta });
+    expect(checkBindingSpec({ ...written, write: true }, s, true)).toBe('ok');
+    const nameWritten = motorSpec([{ name: 'Name', write: true }]);
+    expect(checkBindingSpec({ ...nameWritten, write: true }, s, true)).toBe('invalid');
+  });
+
+  it('re-judges a struct when only its member metadata changes', () => {
+    const selector = createBindingStatusSelector([motorSpec([{ name: 'Name', write: true }])]);
+    const base = slice({ values: { 'PLC:Motor': {} }, varMeta: motorMeta });
+    expect(selector(base)).toBe('disabled');
+    const nameWritable = {
+      ...motorMeta,
+      'PLC:Motor/Name': { ...motorMeta['PLC:Motor/Name'], writable: true },
+    };
+    expect(selector({ ...base, varMeta: nameWritable })).toBe('ok');
+  });
+});
+
 describe('extractBindingSpecs', () => {
   it("carries the field's write flag onto the spec", () => {
     const [spec] = extractBindingSpecs(

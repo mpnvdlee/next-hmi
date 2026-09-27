@@ -169,3 +169,51 @@ export function formatVarType(t: VarType): string {
   const name = t.kind === 'scalar' ? t.base : t.name;
   return t.array ? `${name}[]` : name;
 }
+
+function literalBase(value: unknown): SimpleBase | null {
+  if (typeof value === 'boolean') return 'Boolean';
+  if (typeof value === 'string') return 'String';
+  if (typeof value === 'number') return Number.isInteger(value) ? 'Integer' : 'Float';
+  return null;
+}
+
+function commonBase(values: readonly unknown[]): SimpleBase | null {
+  const bases = new Set(values.map(literalBase));
+  if (bases.size === 2 && bases.has('Integer') && bases.has('Float')) return 'Float';
+  return bases.size === 1 ? [...bases][0] : null;
+}
+
+/** What one element of a literal list is, as far as its values say. */
+export interface ListItemTypes {
+  element: VarType | null;
+  members: Record<string, VarType>;
+}
+
+/**
+ * Type a literal list's element from its values: a list of records is a struct
+ * whose fields are every key any record has; a member — or a list of scalars —
+ * is typed when all its values share one simple type (whole and fractional
+ * numbers together make a Float). Anything else is unknown: `null`, or a member
+ * left out — records with no keys at all too. Mirrors `vartype.list_item_types`
+ * (parity: listItemTypes.json).
+ */
+export function listItemTypes(items: unknown): ListItemTypes {
+  if (!Array.isArray(items) || items.length === 0) return { element: null, members: {} };
+  const isRecordItem = (item: unknown): item is Record<string, unknown> =>
+    typeof item === 'object' && item !== null && !Array.isArray(item);
+  if (items.every(isRecordItem)) {
+    const fields: string[] = [];
+    for (const item of items) {
+      for (const key of Object.keys(item)) if (!fields.includes(key)) fields.push(key);
+    }
+    if (fields.length === 0) return { element: null, members: {} };
+    const members: Record<string, VarType> = {};
+    for (const name of fields) {
+      const base = commonBase(items.filter((item) => name in item).map((item) => item[name]));
+      if (base) members[name] = { kind: 'scalar', base, array: false };
+    }
+    return { element: { kind: 'struct', name: 'Struct', fields, array: false }, members };
+  }
+  const base = commonBase(items);
+  return { element: base ? { kind: 'scalar', base, array: false } : null, members: {} };
+}

@@ -36,7 +36,7 @@ import { apiJson } from '@shared/utils/api';
 import { isIconValue } from '@shared/utils/iconValue';
 import { primaryType } from '@shared/utils/valueTypes';
 import { collectSlotKeys } from '@shared/utils/componentSlots';
-import { setFlowsChildren } from '@shared/utils/parentFlow';
+import { setFlowsChildren, setRepeatsChildren } from '@shared/utils/parentFlow';
 import { ensureRecharts } from '@shared/utils/rechartsLoader';
 // Product built-in widgets: the same SDK contract as a project's custom widgets,
 // compiled at build time (`npm run build:builtin-widgets`). Imported statically
@@ -361,6 +361,7 @@ export function registerCustomWidget(entry: CustomWidgetManifestEntry): void {
   if (entry.hostsChildren) declaredHostTypes.add(entry.name);
   else declaredHostTypes.delete(entry.name);
   setFlowsChildren(entry.name, entry.flowsChildren === true);
+  setRepeatsChildren(entry.name, entry.repeatsChildren);
 
   function CustomWidgetEntry(props: HmiWidgetProps) {
     // Always its own silent boundary, wherever the widget sits. The page gate

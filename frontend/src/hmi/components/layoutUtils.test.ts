@@ -9,6 +9,15 @@ vi.mock('../hooks/useUsersData', () => ({
     { id: 2, username: 'operator1' },
   ],
 }));
+vi.mock('../hooks/useUsersDocument', () => ({
+  useUsersDocument: () => ({
+    users: [
+      { id: 1, username: 'admin' },
+      { id: 2, username: 'operator1' },
+    ],
+    groups: [{ id: 'ops', label: 'Operators' }],
+  }),
+}));
 import { createElement, type ReactNode } from 'react';
 import { renderHook, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -23,6 +32,7 @@ import {
   SELF_LAYOUT_KEYS,
   useResolvedLayout,
   useRecordListProp,
+  useItemListProp,
   usePropVar,
   getPropNumber,
 } from './layoutUtils';
@@ -849,6 +859,27 @@ describe('getPropNumber', () => {
 // useRecordListProp's own call sites (none in src/hmi/components). Exercised
 // directly against the hook instead, matching this file's useResolvedLayout
 // convention above.
+describe('useItemListProp', () => {
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(MemoryRouter, null, children);
+  const itemsOf = (field: string) =>
+    renderHook(() => useItemListProp({ items: { $user: { field } } }, 'items'), { wrapper }).result
+      .current.items;
+
+  it('lists users or groups as { label, value } records', () => {
+    expect(itemsOf('userList')).toEqual([
+      { label: 'admin', value: 'admin' },
+      { label: 'operator1', value: 'operator1' },
+    ]);
+    expect(itemsOf('groups')).toEqual([{ label: 'Operators', value: 'ops' }]);
+  });
+
+  // Same rule as a record-list field: only the array-valued fields list anything.
+  it('ignores a $user field that is not a list', () => {
+    expect(itemsOf('username')).toEqual([]);
+  });
+});
+
 describe('useRecordListProp', () => {
   const wrapper = ({ children }: { children: ReactNode }) =>
     createElement(MemoryRouter, null, children);

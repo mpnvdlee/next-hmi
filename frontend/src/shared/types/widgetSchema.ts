@@ -148,6 +148,10 @@ export interface CustomWidgetManifestEntry {
    *  `ImageContainer` hosts children but pins them to slots. Read through
    *  `usesFlexLayout` in `shared/utils/parentFlow.ts`. */
   flowsChildren?: boolean | null;
+  /** Declared by `export const repeatsChildren = '<prop>'`: this type draws its
+   *  children once per element of that `item-list` property, each copy a repeat
+   *  scope. Read through `repeatItemsKey` in `shared/utils/parentFlow.ts`. */
+  repeatsChildren?: string | null;
   /** Whether the compiled module references the Recharts SDK global. Only
    *  those modules need it populated before import, so the chart library stays
    *  out of first paint on pages that have no chart. Baked by the built-in-widgets

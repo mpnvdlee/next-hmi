@@ -6,13 +6,14 @@ import {
   type PickerVariableEntry,
 } from '@config/components/ui/datasourceTreeHelpers';
 import { nodeAcceptsOrElement, nodeVarType, parseTypeToken } from '@shared/types/varType';
-import { acceptedValueTypes, isStructType, primaryType } from '@shared/utils/valueTypes';
+import { acceptedValueTypes, isStructType } from '@shared/utils/valueTypes';
 import { buildVarKey, isFolder } from '@shared/types/datasource';
 import { isArrayShape, isFixedArray } from '@shared/types/arrayShape';
 import { useVariableStore } from '@hmi/store/variableStore';
 import type { StructSchemaNode, ComponentPropertySchema } from '@shared/types/componentProperty';
-import { hasRequiredFields } from './helpers';
+import { hasRequiredFields, shapeElementFolder } from './helpers';
 import { type RequiredFieldEntry } from '../bindingPickerUtils';
+import { REPEAT_INDEX_SUFFIX } from './repeatItemRows';
 
 type TreeNode = PickerTreeNode;
 type FolderEntry = PickerFolderEntry;
@@ -38,6 +39,8 @@ export type RowItem =
   | { kind: 'folder'; folder: FolderEntry; depth: number }
   | { kind: 'variable'; entry: VariableEntry; depth: number }
   | ArrayElementRow<PickerVariableEntry>
+  /** `[#]` under an array: the element at the Repeater copy's own index. */
+  | { kind: 'repeat-element'; parent: PickerVariableEntry; depth: number }
   | {
       kind: 'component-prop';
       /** Composite identity key (collapse/select) — may carry an outer-group prefix. */
@@ -58,27 +61,34 @@ function liveArrayLength(v: PickerVariableEntry): number {
   return Array.isArray(value) ? value.length : 0;
 }
 
-/** Flatten the var-mode tree into ordered rows, honoring collapsed-state. */
+/** Flatten the var-mode tree into ordered rows, honoring collapsed-state.
+ *  `repeatElement` adds a `[#]` row to every array, for a field inside a Repeater. */
 export function flattenForRender(
   nodes: DisplayNode[],
   depth: number,
   collapsed: Set<string>,
+  repeatElement = false,
 ): RowItem[] {
   const rows: RowItem[] = [];
   for (const n of nodes) {
     if (isDatasourceNode(n)) {
       const key = `ds:${n.name}`;
       rows.push({ kind: 'datasource', node: n, depth });
-      if (!collapsed.has(key)) rows.push(...flattenForRender(n.children, depth + 1, collapsed));
+      if (!collapsed.has(key)) {
+        rows.push(...flattenForRender(n.children, depth + 1, collapsed, repeatElement));
+      }
     } else if (isFolder(n)) {
       const key = folderKey(n);
       rows.push({ kind: 'folder', folder: n, depth });
-      if (!collapsed.has(key)) rows.push(...flattenForRender(n.children, depth + 1, collapsed));
+      if (!collapsed.has(key)) {
+        rows.push(...flattenForRender(n.children, depth + 1, collapsed, repeatElement));
+      }
     } else {
       const v = n as PickerVariableEntry;
       rows.push({ kind: 'variable', entry: v, depth });
       if (isArrayShape(v) && !collapsed.has(arrayExpansionKey(v))) {
         const liveLength = isFixedArray(v) ? undefined : liveArrayLength(v);
+        if (repeatElement) rows.push({ kind: 'repeat-element', parent: v, depth: depth + 1 });
         rows.push(...makeArrayElementRows(v, depth + 1, v._path ?? v.display_name, liveLength));
       }
     }
@@ -106,6 +116,21 @@ function isArrayOfStructFolder(folder: FolderEntry): boolean {
   return isArrayShape(folder) && (folder.children as TreeNode[]).length > 0;
 }
 
+/**
+ * Which struct shapes a field takes, read from *every* type it accepts rather
+ * than the first: a Repeater's items lead with the `item-list` editor kind and
+ * still take a `struct[]`.
+ */
+function structShapes(allowed: string[]) {
+  const structs = allowed.filter(isStructType);
+  return {
+    single: structs.some((t) => !t.endsWith('[]')),
+    array: structs.some((t) => t.endsWith('[]')),
+    /** Nothing but structs — a plain variable can never fit. */
+    only: structs.length > 0 && structs.length === allowed.length,
+  };
+}
+
 /** Walk the full tree and mark array-of-struct / struct folders as selectable
  *  without removing any nodes. Used when "Show all variables" is active. */
 export function annotateSelectable(
@@ -116,19 +141,20 @@ export function annotateSelectable(
   } | null,
 ): TreeNode[] {
   if (!schemaField) return nodes;
-  const structTarget =
-    schemaField.type !== undefined && isStructType(primaryType(schemaField.type));
-  return nodes.map((n): TreeNode => {
-    if (!isFolder(n)) return n;
-    const children = annotateSelectable(n.children, schemaField);
-    let selectable = false;
-    if (isArrayOfStructFolder(n)) {
-      if (structTarget) selectable = true;
-    } else if (structTarget) {
-      if (n.children.length > 0) selectable = true;
-    }
-    return { ...n, selectable, children } as FolderEntry;
-  });
+  const shapes = structShapes(
+    schemaField.type !== undefined ? acceptedValueTypes(schemaField.type) : [],
+  );
+  // "Show all" lets any struct folder be picked for any struct field; the
+  // drawer's ✓/✗ then says whether it fits.
+  const takesStruct = shapes.single || shapes.array;
+  const annotate = (level: TreeNode[]): TreeNode[] =>
+    level.map((n): TreeNode => {
+      if (!isFolder(n)) return n;
+      const children = annotate(n.children);
+      const selectable = takesStruct && (isArrayOfStructFolder(n) || n.children.length > 0);
+      return { ...n, selectable, children } as FolderEntry;
+    });
+  return annotate(nodes);
 }
 
 /** Keep only enabled entries; apply type filter per schema field. */
@@ -141,51 +167,44 @@ export function typeFilter(
   } | null,
   includeDisabled = false,
 ): TreeNode[] {
-  const primary = schemaField?.type !== undefined ? primaryType(schemaField.type) : undefined;
-  const structTarget = primary !== undefined && isStructType(primary);
-  const isStructArrayTarget = structTarget && primary!.endsWith('[]');
   const allowed = schemaField?.type !== undefined ? acceptedValueTypes(schemaField.type) : [];
+  const shapes = structShapes(allowed);
+  const required = schemaField?.requiredFields;
 
-  return nodes.flatMap((n): TreeNode[] => {
-    if (isFolder(n)) {
-      if (isArrayOfStructFolder(n) && !isStructArrayTarget && !structTarget) {
-        return [];
-      }
-      if (isStructArrayTarget && isArrayOfStructFolder(n)) {
-        if (schemaField!.requiredFields?.length) {
-          const firstElem = (n.children as TreeNode[]).find(
-            (c): c is FolderEntry => isFolder(c) && /\[0\]$/.test(c.name),
-          );
-          if (!firstElem || !hasRequiredFields(firstElem, schemaField!.requiredFields)) {
-            const filteredChildren = typeFilter(n.children, schemaField, includeDisabled);
-            return filteredChildren.length ? [{ ...n, children: filteredChildren }] : [];
+  const filterLevel = (level: TreeNode[]): TreeNode[] =>
+    level.flatMap((n): TreeNode[] => {
+      if (isFolder(n)) {
+        const recurse = (): TreeNode[] => {
+          const filteredChildren = filterLevel(n.children);
+          return filteredChildren.length ? [{ ...n, children: filteredChildren }] : [];
+        };
+        if (isArrayOfStructFolder(n)) {
+          if (!shapes.array && !shapes.single) return [];
+          if (!shapes.array) return recurse();
+          if (required?.length) {
+            const element = shapeElementFolder(n);
+            if (!element || !hasRequiredFields(element, required)) return recurse();
           }
-        }
-        return [{ ...n, selectable: true, children: n.children }];
-      }
-
-      if (structTarget && schemaField!.requiredFields !== undefined && !isStructArrayTarget) {
-        if (schemaField!.requiredFields.length === 0) {
-          if (n.children.length > 0) return [{ ...n, selectable: true, children: n.children }];
-        } else if (hasRequiredFields(n, schemaField!.requiredFields)) {
           return [{ ...n, selectable: true, children: n.children }];
         }
-        const filteredChildren = typeFilter(n.children, schemaField, includeDisabled);
-        return filteredChildren.length ? [{ ...n, children: filteredChildren }] : [];
+        if (shapes.single) {
+          const fits = required?.length ? hasRequiredFields(n, required) : n.children.length > 0;
+          if (fits) return [{ ...n, selectable: true, children: n.children }];
+        }
+        return recurse();
       }
-
-      const filteredChildren = typeFilter(n.children, schemaField, includeDisabled);
-      return filteredChildren.length ? [{ ...n, children: filteredChildren }] : [];
-    }
-    if (!includeDisabled && !n.enabled) return [];
-    if (structTarget && schemaField!.requiredFields !== undefined) return [];
-    if (n.data_type === 'struct') return [];
-    if (allowed.length) {
-      if (!allowed.some((t) => nodeAcceptsOrElement(parseTypeToken(t), nodeVarType(n)))) return [];
-    }
-    if (schemaField?.write && n.writable === false) return [];
-    return [n];
-  });
+      if (!includeDisabled && !n.enabled) return [];
+      if (shapes.only) return [];
+      if (n.data_type === 'struct') return [];
+      if (allowed.length) {
+        if (!allowed.some((t) => nodeAcceptsOrElement(parseTypeToken(t), nodeVarType(n))))
+          return [];
+      }
+      // Unset access is read-only, as the drawer's verdict and the backend read it.
+      if (schemaField?.write && n.writable !== true) return [];
+      return [n];
+    });
+  return filterLevel(nodes);
 }
 
 /**
@@ -204,9 +223,11 @@ export function rowSelectionKey(item: RowItem): string | null {
       return item.folder.selectable
         ? `${item.folder._datasource ?? ''}:${item.folder._path ?? item.folder.name}`
         : null;
-    case 'array-element': {
+    case 'array-element':
+    case 'repeat-element': {
       const p = item.parent;
-      return `${p._datasource ?? ''}:${p._path ?? p.display_name}[${item.index}]`;
+      const suffix = item.kind === 'array-element' ? `[${item.index}]` : REPEAT_INDEX_SUFFIX;
+      return `${p._datasource ?? ''}:${p._path ?? p.display_name}${suffix}`;
     }
     case 'component-prop':
       return item.key;

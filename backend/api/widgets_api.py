@@ -105,6 +105,7 @@ async def list_components() -> list[dict]:
             "displayName": metadata.get("displayName"),
             "hostsChildren": metadata.get("hostsChildren"),
             "flowsChildren": metadata.get("flowsChildren"),
+            "repeatsChildren": metadata.get("repeatsChildren"),
             "category": metadata.get("category"),
             "description": metadata.get("description"),
             "icon": metadata.get("icon"),

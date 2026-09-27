@@ -70,6 +70,14 @@ export interface EvaluationContext {
    * `$result` source resolves to `null` then).
    */
   resultValue?: Record<string, unknown>;
+  /**
+   * The surrounding Repeater copy, when there is one. Widget properties have
+   * their repeat references substituted before they get here (see
+   * `useResolvedProperties`); this catches the rest — values read straight off
+   * an eval context, like an action's payload.
+   */
+  resolveRepeatItem?: (payload: unknown) => unknown;
+  repeatIndex?: number;
 }
 
 const MAX_SOURCE_RECURSION_DEPTH = 64;
@@ -99,6 +107,10 @@ const SOURCE_HANDLERS: Record<string, SourceHandler> = {
   $time: (payload, ctx) => evaluateTime(payload, ctx),
   $widgetProp: (payload, ctx) => evaluateWidgetProp(payload, ctx),
   $componentProp: (payload, ctx, depth) => evaluateComponentProp(payload, ctx, depth),
+  $repeatItem: (payload, ctx, depth) =>
+    ctx.resolveRepeatItem
+      ? evaluatePropertyValueInternal(ctx.resolveRepeatItem(payload), ctx, depth)
+      : null,
   $result: (payload, ctx) => evaluateResult(payload, ctx),
   $stringExpr: (payload, ctx, d) => evaluateStringExpr(payload, ctx, d),
   $http: (payload, ctx, d) => evaluateHttp(payload, ctx, d),
@@ -202,7 +214,12 @@ function evaluateVar(varObj: unknown, context: EvaluationContext): ResolvedValue
 
   const v = varObj as Record<string, unknown>;
   const composite = v.path as string | undefined;
-  const index = typeof v.index === 'number' ? v.index : undefined;
+  const index =
+    v.repeatIndex === true
+      ? context.repeatIndex
+      : typeof v.index === 'number'
+        ? v.index
+        : undefined;
 
   if (!composite || !context.resolveVariable) {
     return null;

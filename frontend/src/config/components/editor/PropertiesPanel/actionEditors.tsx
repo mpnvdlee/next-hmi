@@ -48,9 +48,21 @@ import {
 import { isPageGroup, resolvePageTitle } from '@shared/utils/pageTree';
 import { ResultFieldsContext } from '../PropertySourceEditor/resultFieldsContext';
 import { varBindingOf } from '../bindingPickerUtils';
+import { BOOLEAN_SLOT, schemaFieldPicker, slotFilter } from '../PropertySourceEditor/editors/utils';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
 import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
 import { useComponentPropertySchema } from '../PropertySourceEditor/componentPropertySchemaContext';
+import {
+  useRepeatEditorScope,
+  type RepeatEditorScope,
+} from '../PropertySourceEditor/repeatScopeContext';
+import { useEditorDomainStore, type PickerExtras } from '@config/store/domains/editorDomainStore';
+import { repeatPickLabel } from '../VariableBindingPicker/repeatItemRows';
+import PropertySourceSelector, { type PropertySource } from '../PropertySourceSelector';
+import { getPropertySource } from '../propertyValueUtils';
+import { RepeatItemEditor } from '../PropertySourceEditor/editors/leaf';
+import { ComponentPropEditor } from '../PropertySourceEditor/editors/picker';
+import { getDefaultValueForKind } from './actionMutations';
 
 // ── Shared ─────────────────────────────────────────────────────────────────
 
@@ -83,7 +95,7 @@ export interface ActionEditorCtx {
   openBindingPicker: (
     componentId: string,
     propertyKey: string,
-    options?: {
+    options?: PickerExtras & {
       onPick?: (binding: VariableBinding) => void;
       /** Binding the field holds today, so the picker opens on it. */
       currentBinding?: VariableBinding;
@@ -302,6 +314,7 @@ function ActionComponentProperties({
       ),
     [declared],
   );
+  const openBindingPicker = useEditorDomainStore((s) => s.openBindingPicker);
   if (fields.length === 0) return null;
 
   function patch(key: string, value: unknown) {
@@ -320,6 +333,9 @@ function ActionComponentProperties({
           schema={field}
           value={values[key]}
           onChange={(v) => patch(key, v)}
+          onOpenPicker={schemaFieldPicker(openBindingPicker, field, (binding) =>
+            patch(key, { $var: binding }),
+          )}
           allProperties={values}
         />
       ))}
@@ -542,29 +558,157 @@ const ClosePageOverlayEditor: EditorFor<'closePageOverlay'> = ({ action, ctx }) 
   );
 };
 
+const WRITE_TARGET_FILTER = {
+  label: 'Write Data Variable target',
+  write: true,
+  type: ['String', 'Boolean', 'Integer', 'Float', 'DateTime', 'Date', 'Time', 'Duration'],
+};
+const TOGGLE_TARGET_FILTER = { label: 'Toggle target', write: true, type: ['Boolean'] };
+
+/** The copy's element a Repeat-item target names, or undefined for a `$var`. */
+function repeatTargetOf(target: WriteTarget | undefined): { member?: string } | undefined {
+  return target && '$repeatItem' in target ? target.$repeatItem : undefined;
+}
+
+/** The descriptor cached for a `$var` target — keyed by its `ds:path[N]`. */
+function varTargetDescriptor(
+  target: WriteTarget | undefined,
+  dataTypes: ActionEditorCtx['dataTypes'],
+): ActionEditorCtx['dataTypes'][string] | undefined {
+  const address = writeTargetAddress(target);
+  return address ? dataTypes[`${address.datasource}:${address.path}`] : undefined;
+}
+
+/** A Repeat-item target writes the element's type, or its member's. */
+function writeTargetType(
+  target: WriteTarget | undefined,
+  scope: RepeatEditorScope | null,
+  dataTypes: ActionEditorCtx['dataTypes'],
+): string | undefined {
+  const repeat = repeatTargetOf(target);
+  if (!repeat) return varTargetDescriptor(target, dataTypes)?.dataType;
+  return repeat.member ? scope?.memberTypes?.[repeat.member] : scope?.elementType;
+}
+
+/**
+ * A write/toggle target: a datasource variable, or — inside a Repeater — the
+ * copy's own element. Each is its own source with its own picker. The element
+ * is always this copy's; only a struct element asks which member to write.
+ */
+function WriteTargetRow({
+  action,
+  ctx,
+  filter,
+  diagnostic,
+}: {
+  action: { target?: WriteTarget };
+  ctx: ActionEditorCtx;
+  filter: { label: string; write: boolean; type: string[] };
+  diagnostic?: { level: 'error' | 'warning'; message: string };
+}) {
+  const scope = useRepeatEditorScope();
+  const target = repeatTargetOf(action.target);
+  const address = writeTargetAddress(action.target);
+  const active: PropertySource = target ? '$repeatItem' : '$var';
+  const members = scope?.members ?? [];
+  const pill =
+    scope || target ? (
+      <PropertySourceSelector
+        compact
+        value={target ? { $repeatItem: {} } : { $var: { path: '' } }}
+        source={active}
+        fieldType="string"
+        forcedSources={['$var']}
+        includeStatic={false}
+        scopeSources={['$repeatItem']}
+        label="Variable"
+        onChange={(v) => {
+          const next = getPropertySource(v);
+          if (next === active) return;
+          ctx.update({
+            target: next === '$repeatItem' ? { $repeatItem: {} } : undefined,
+          } as Partial<ButtonAction>);
+        }}
+      />
+    ) : undefined;
+
+  let field: ReactNode;
+  if (target && members.length > 0) {
+    field = (
+      <PickerField
+        mono
+        displayText={
+          target.member ? repeatPickLabel({ field: 'value', member: target.member }) : ''
+        }
+        emptyLabel="Choose a member"
+        pickTitle="Choose the member to write"
+        onPick={
+          scope
+            ? () =>
+                ctx.openBindingPicker('', 'writeTarget', {
+                  filter,
+                  repeatItem: {
+                    scope,
+                    writeTarget: true,
+                    current: target.member ? { field: 'value', member: target.member } : undefined,
+                    onPick: (pick) =>
+                      ctx.update({
+                        target: { $repeatItem: pick.member ? { member: pick.member } : {} },
+                      } as Partial<ButtonAction>),
+                  },
+                })
+            : undefined
+        }
+      />
+    );
+  } else if (target) {
+    field = <PickerField mono displayText="Repeat item › Element (this copy)" />;
+  } else {
+    field = (
+      <PickerField
+        mono
+        displayText={address ? `${address.datasource}:${address.path}` : ''}
+        emptyLabel="Not bound"
+        pickTitle="Change variable binding"
+        onPick={() => ctx.openWriteVarPicker()}
+      />
+    );
+  }
+
+  const repeatDiagnostic =
+    target && !scope
+      ? { level: 'warning' as const, message: 'Only meaningful inside a Repeater.' }
+      : target && !scope?.writable
+        ? {
+            level: 'warning' as const,
+            message:
+              'This Repeater does not repeat over a variable, so its elements cannot be written.',
+          }
+        : undefined;
+
+  return (
+    <PropRow label="Variable" badge={pill} diagnostic={repeatDiagnostic ?? diagnostic}>
+      {field}
+    </PropRow>
+  );
+}
+
 const WriteDataVariableEditor: EditorFor<'writeDataVariable'> = ({ action, ctx }) => {
   // The backend anchors write-target diagnostics (unknown datasource/variable,
   // test-server target) on the action's `target` slot — see
   // `_validate_write_target` in core/validation/structure.py.
   const widgetId = useContext(PanelScopeContext);
-  const targetDiagnostic = useFieldDiagnostic(widgetId, [...ctx.path, 'datasource']);
-  const key = `${action.datasource}:${action.path}`;
-  const descriptor = ctx.dataTypes[key];
-  const valueKind = getWriteCoercionKind(descriptor?.dataType);
-  const canonicalType = canonicalOpcuaWriteType(descriptor?.dataType);
-  // Inside a dialog's events (or a dialog widget) the value may come from one
-  // of its input parameters instead of being typed in.
+  const targetDiagnostic = useFieldDiagnostic(widgetId, [...ctx.path, 'target']);
+  const repeatScope = useRepeatEditorScope();
   const inputScope = useComponentPropertySchema();
-  const params = Object.entries(inputScope?.properties ?? {});
-  const boundParam =
-    action.value !== null &&
-    typeof action.value === 'object' &&
-    !Array.isArray(action.value) &&
-    typeof action.value.$componentProp === 'string'
-      ? action.value.$componentProp
-      : null;
+  const descriptor = varTargetDescriptor(action.target, ctx.dataTypes);
+  const targetType = writeTargetType(action.target, repeatScope, ctx.dataTypes);
+  const valueKind = getWriteCoercionKind(targetType);
+  const canonicalType = canonicalOpcuaWriteType(targetType);
+  const valueSource = getPropertySource(action.value) ?? 'static';
+  const sourced = valueSource !== 'static';
   const validation =
-    descriptor && boundParam === null
+    descriptor && !sourced
       ? coerceOpcuaWrite(action.value, {
           dataType: descriptor.dataType,
           isArray: descriptor.isArray,
@@ -579,45 +723,57 @@ const WriteDataVariableEditor: EditorFor<'writeDataVariable'> = ({ action, ctx }
     type: valueKind === 'boolean' ? 'boolean' : valueKind === 'number' ? 'number' : 'string',
     label: 'Value',
   };
+  // The value's own sources: a fixed value, or — in a dialog's events — one of
+  // its input parameters, or — inside a Repeater — the copy's element.
+  const valuePill =
+    inputScope || repeatScope || sourced ? (
+      <PropertySourceSelector
+        compact
+        value={action.value}
+        source={valueSource}
+        fieldType={valueSchema.type as string}
+        defaultValue={getDefaultValueForKind(valueKind)}
+        forcedSources={['static']}
+        scopeSources={['$componentProp', '$repeatItem']}
+        label="Value"
+        onChange={(v) => {
+          if (getPropertySource(v) !== valueSource) ctx.update({ value: v as typeof action.value });
+        }}
+      />
+    ) : undefined;
+  const valueFilter = { label: 'Value', ...(canonicalType && { type: canonicalType }) };
   return (
     <>
-      <PropRow label="Variable" diagnostic={targetDiagnostic}>
-        <PickerField
-          mono
-          displayText={
-            action.datasource && action.path ? `${action.datasource}:${action.path}` : ''
-          }
-          emptyLabel="Not bound"
-          pickTitle="Change variable binding"
-          onPick={ctx.openWriteVarPicker}
-        />
-      </PropRow>
-
-      {(params.length > 0 || boundParam !== null) && (
-        <PropRow label="Value from">
-          <Select
-            value={boundParam ?? ''}
-            onChange={(v) =>
-              ctx.update({
-                value: v ? { $componentProp: v } : valueKind === 'boolean' ? false : '',
-              })
+      <WriteTargetRow
+        action={action}
+        ctx={ctx}
+        filter={WRITE_TARGET_FILTER}
+        diagnostic={targetDiagnostic}
+      />
+      {valueSource === '$repeatItem' && (
+        <PropRow label="Value" badge={valuePill}>
+          <RepeatItemEditor
+            value={action.value}
+            onChange={(v) => ctx.update({ value: v as typeof action.value })}
+            onOpenBindingPicker={(_onPick, _current, _slot, extras) =>
+              ctx.openBindingPicker('', 'writeValue', { ...extras, filter: valueFilter })
             }
-          >
-            <option value="">Fixed value</option>
-            {params.map(([key, schema]) => (
-              <option key={key} value={key}>
-                Parameter: {schema.label || key}
-              </option>
-            ))}
-            {boundParam !== null && !params.some(([key]) => key === boundParam) && (
-              <option value={boundParam}>Parameter: {boundParam} (not declared)</option>
-            )}
-          </Select>
+          />
         </PropRow>
       )}
-      {boundParam === null && (
+      {valueSource === '$componentProp' && (
+        <PropRow label="Value" badge={valuePill}>
+          <ComponentPropEditor
+            value={action.value}
+            onChange={(v) => ctx.update({ value: v as typeof action.value })}
+            schema={{ ...valueSchema, ...(canonicalType && { type: canonicalType }) }}
+          />
+        </PropRow>
+      )}
+      {!sourced && (
         <PropRow
           label="Value"
+          badge={valuePill}
           selection={{ path: [...ctx.path, 'value'], schema: valueSchema }}
           block={descriptor?.isArray && !descriptor.indexed}
           diagnostic={
@@ -693,8 +849,13 @@ const IfEditor: EditorFor<'if'> = ({ action, ctx }) => {
           value={action.condition}
           onChange={(v) => ctx.update({ condition: v })}
           schema={CONDITION_SCHEMA}
-          onOpenBindingPicker={(onPick, currentBinding) =>
+          slot={BOOLEAN_SLOT}
+          onOpenBindingPicker={(onPick, currentBinding, slot, extras) =>
             ctx.openBindingPicker('', 'if-condition', {
+              ...extras,
+              // A nested operand with a type of its own (a comparison's, a
+              // formula's) replaces the condition's Boolean.
+              filter: slotFilter({ label: 'Condition', type: 'Boolean' }, slot),
               currentBinding: currentBinding ?? varBindingOf(action.condition),
               // A nested source (a comparison's operand) supplies its own
               // onPick; only a bare condition is replaced by the binding.
@@ -725,30 +886,22 @@ const IfEditor: EditorFor<'if'> = ({ action, ctx }) => {
 
 const ToggleDataVariableEditor: EditorFor<'toggleDataVariable'> = ({ action, ctx }) => {
   const widgetId = useContext(PanelScopeContext);
-  const targetDiagnostic = useFieldDiagnostic(widgetId, [...ctx.path, 'datasource']);
-  const descriptor = ctx.dataTypes[`${action.datasource}:${action.path}`];
-  const notBoolean =
-    descriptor !== undefined && canonicalOpcuaWriteType(descriptor.dataType) !== 'Boolean';
+  const targetDiagnostic = useFieldDiagnostic(widgetId, [...ctx.path, 'target']);
+  const repeatScope = useRepeatEditorScope();
+  const targetType = writeTargetType(action.target, repeatScope, ctx.dataTypes);
+  const notBoolean = targetType !== undefined && canonicalOpcuaWriteType(targetType) !== 'Boolean';
   return (
     <>
-      <PropRow
-        label="Variable"
+      <WriteTargetRow
+        action={action}
+        ctx={ctx}
+        filter={TOGGLE_TARGET_FILTER}
         diagnostic={
           notBoolean
             ? { level: 'error', message: 'Only a Boolean variable can be toggled.' }
             : targetDiagnostic
         }
-      >
-        <PickerField
-          mono
-          displayText={
-            action.datasource && action.path ? `${action.datasource}:${action.path}` : ''
-          }
-          emptyLabel="Not bound"
-          pickTitle="Change variable binding"
-          onPick={ctx.openWriteVarPicker}
-        />
-      </PropRow>
+      />
       <ResultHandlersSubrows action={action} actionType="toggleDataVariable" ctx={ctx} />
     </>
   );

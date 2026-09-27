@@ -22,7 +22,16 @@ import {
   rfNestedFields,
   type RequiredFieldEntry,
 } from '../bindingPickerUtils';
-import { formatTypeBadge, hasRequiredFields } from './helpers';
+import {
+  childMaps,
+  firstElementChildren,
+  formatTypeBadge,
+  hasRequiredFields,
+  requiredFieldMatched,
+  structOffer,
+  varStructVerdict,
+} from './helpers';
+import { typeLabel } from '@shared/types/componentProperty';
 import RequiredFieldsTree from './RequiredFieldsTree';
 
 type FolderEntry = PickerFolderEntry;
@@ -30,13 +39,6 @@ type VariableEntry = PickerVariableEntry;
 type TreeNode = PickerTreeNode;
 
 // ── Local helpers ────────────────────────────────────────────────────────────
-
-/** For an array-of-struct folder, return the children of element [0] so that
- *  the requirement display shows fields rather than the element sub-folders. */
-function firstElementChildren(folder: FolderEntry): TreeNode[] {
-  const first = folder.children.find((c): c is FolderEntry => isFolder(c) && /\[0\]$/.test(c.name));
-  return first ? first.children : folder.children;
-}
 
 function splitPath(path: string): { parentPath: string; varName: string } {
   const slash = path.lastIndexOf('/');
@@ -64,7 +66,13 @@ function FolderPathBadge({ ds, parentPath }: { ds?: string; parentPath: string }
 // ── Reused selected-row blocks ───────────────────────────────────────────────
 
 /** Header for a selected scalar/array-element variable. */
-function SelectedVarRow({ entry, elementIndex }: { entry: VariableEntry; elementIndex?: number }) {
+function SelectedVarRow({
+  entry,
+  elementIndex,
+}: {
+  entry: VariableEntry;
+  elementIndex?: number | '#';
+}) {
   if (!entry._datasource || !entry._path) return null;
   const { parentPath, varName } = splitPath(entry._path);
   const displayName = elementIndex !== undefined ? `${varName}[${elementIndex}]` : varName;
@@ -105,6 +113,27 @@ function SelectedFolderRow({
         <FolderChildrenTree nodes={firstElementChildren(folder)} requiredFields={requiredFields} />
       </div>
     </>
+  );
+}
+
+/** A selected key that names nothing (yet): its datasource is still loading, or
+ *  the variable is gone. */
+function UnresolvedRow({ selectedKey, pending }: { selectedKey: string; pending: boolean }) {
+  return (
+    <div className="editor-binding-req-row editor-binding-req-row--parent">
+      <span className="editor-binding-req-row__name">{selectedKey}</span>
+      <span className="editor-binding-char-row__type">{pending ? 'Loading…' : 'Not found'}</span>
+    </div>
+  );
+}
+
+function SelectedRepeatRow({ row }: { row: NonNullable<VarMode['repeatSelected']> }) {
+  return (
+    <div className="editor-binding-req-row editor-binding-req-row--parent">
+      <span className="editor-binding-req-row__name">{row.label}</span>
+      <span className="editor-binding-char-row__type">{row.type ?? '—'}</span>
+      <AccessBadge writable={row.writable} />
+    </div>
   );
 }
 
@@ -187,61 +216,33 @@ function RequiredFieldTree({
         const nested = rfNestedFields(f);
         if (nested?.length) {
           const subFolder = childFolders?.[name];
-          const folderMatched = subFolder !== undefined && hasRequiredFields(subFolder, nested);
-          const showFolderSlot = childFolders !== undefined;
-          const nestedChildMap = subFolder
-            ? Object.fromEntries(
-                subFolder.children
-                  .filter((c): c is VariableEntry => !isFolder(c))
-                  .map((c) => [c.display_name, c]),
-              )
-            : undefined;
-          const nestedChildFolders = subFolder
-            ? Object.fromEntries(
-                subFolder.children
-                  .filter((c): c is FolderEntry => isFolder(c))
-                  .map((c) => [c.name, c]),
-              )
-            : undefined;
+          const folderMatched = requiredFieldMatched(f, childMap ?? {}, childFolders);
+          // A selection that is not a folder still gets a verdict: a missing field.
+          const showFolderSlot = childMap !== undefined;
+          const subMaps = subFolder ? childMaps(subFolder) : undefined;
           return (
             <div key={`${name}-${i}`}>
               <div className="editor-binding-req-row editor-binding-req-row--folder">
                 <span className="editor-binding-req-row__name">{name}</span>
-                {showFolderSlot && (
-                  <span
-                    className={`editor-binding-char-row__match-slot${folderMatched ? '' : ' editor-binding-char-row__match-slot--mismatch'}`}
-                  >
-                    {folderMatched ? '✓' : '✗'}
-                  </span>
-                )}
+                <MatchSlot ok={showFolderSlot ? folderMatched : null} />
               </div>
               <div className="editor-binding-tree-children">
                 <RequiredFieldTree
                   fields={nested}
-                  childMap={nestedChildMap}
-                  childFolders={nestedChildFolders}
+                  childMap={subMaps?.childMap}
+                  childFolders={subMaps?.childFolders}
                 />
               </div>
             </div>
           );
         }
         const matched = childMap?.[name];
-        const showMatchSlot = childMap !== undefined;
-        const typeMatches =
-          !expectedType ||
-          (matched ? accepts(parseTypeToken(expectedType), nodeVarType(matched)) : false);
-        const accessGood = !needsWrite || (matched ? matched.writable === true : false);
-        const isMatched = matched !== undefined && typeMatches && accessGood;
+        const isMatched =
+          childMap !== undefined ? requiredFieldMatched(f, childMap, childFolders) : null;
         return (
           <div key={`${name}-${i}`} className="editor-binding-req-row">
             <span className="editor-binding-req-row__name">{name}</span>
-            {showMatchSlot && (
-              <span
-                className={`editor-binding-char-row__match-slot${isMatched ? '' : ' editor-binding-char-row__match-slot--mismatch'}`}
-              >
-                {isMatched ? '✓' : '✗'}
-              </span>
-            )}
+            <MatchSlot ok={isMatched} />
             <span className="editor-binding-char-row__type">
               {formatTypeBadge(expectedType || matched?.data_type || '—')}
             </span>
@@ -337,10 +338,25 @@ export interface ComponentPropSelectedItem {
 }
 
 export interface VarMode {
+  /** A Repeat item row is selected instead of a variable. */
+  repeatSelected?: {
+    label: string;
+    type?: string;
+    writable: boolean;
+    /** The members a struct element offers, as the struct's fields. */
+    fields: Record<string, VariableEntry>;
+    /** Its nested struct members. */
+    folders?: Record<string, FolderEntry>;
+  };
+  /** Selected, but its datasource has not loaded yet — not judged until it has. */
+  pendingSelection: boolean;
+  /** The selected folder is one the field's type accepts. */
+  strictFolderSelectable: boolean;
   schemaField: SchemaField | null;
   selectedVar: VariableEntry | null;
   selectedParentVar: VariableEntry | null;
-  selectedElementIndex?: number;
+  /** `#` is the Repeater copy's own index. */
+  selectedElementIndex?: number | '#';
   rawSelectedFolder: FolderEntry | null;
   scalarIsValid: boolean | null;
   isStruct: boolean;
@@ -381,9 +397,9 @@ export default function RightPanel({
     );
   }
   if (varMode?.isStruct && varMode.schemaField?.requiredFields) {
-    return <VarStructPanel mode={varMode} />;
+    return <VarStructPanel mode={varMode} selectedKey={selectedKey} />;
   }
-  return <VarScalarPanel pickerTitle={pickerTitle} mode={varMode} />;
+  return <VarScalarPanel pickerTitle={pickerTitle} selectedKey={selectedKey} mode={varMode} />;
 }
 
 function ComponentPropPanel({
@@ -474,24 +490,15 @@ function ComponentPropPanel({
   );
 }
 
-function VarStructPanel({ mode }: { mode: VarMode }) {
-  const { schemaField, selectedVar, rawSelectedFolder } = mode;
+function VarStructPanel({ mode, selectedKey }: { mode: VarMode; selectedKey: string | null }) {
+  const hasSelection = selectedKey !== null;
+  const { schemaField, selectedVar, rawSelectedFolder, repeatSelected, pendingSelection } = mode;
   const requiredFields = schemaField?.requiredFields;
   if (!requiredFields) return null;
-  const childByName = rawSelectedFolder
-    ? Object.fromEntries(
-        rawSelectedFolder.children
-          .filter((c): c is VariableEntry => !isFolder(c))
-          .map((c) => [c.display_name, c]),
-      )
-    : undefined;
-  const childFoldersByName = rawSelectedFolder
-    ? Object.fromEntries(
-        rawSelectedFolder.children
-          .filter((c): c is FolderEntry => isFolder(c))
-          .map((c) => [c.name, c]),
-      )
-    : undefined;
+  const offered = structOffer(mode, hasSelection);
+  const childByName = offered?.childMap;
+  const childFoldersByName = offered?.childFolders;
+  const isValid = varStructVerdict(mode, hasSelection);
   return (
     <div className="editor-binding-col2">
       <div className="editor-binding-right editor-binding-right--stacked">
@@ -501,6 +508,7 @@ function VarStructPanel({ mode }: { mode: VarMode }) {
             <span className="editor-binding-req-row__name">
               {schemaField?.label ?? 'Required fields'}
             </span>
+            <MatchSlot ok={isValid} />
           </div>
           <div className="editor-binding-children-group">
             <RequiredFieldTree
@@ -514,10 +522,19 @@ function VarStructPanel({ mode }: { mode: VarMode }) {
       <div className="editor-binding-mid">
         <div className="editor-binding-mid__label">Selected variable</div>
         <div className="editor-binding-characteristics">
-          {selectedVar ? (
+          {repeatSelected ? (
+            <SelectedRepeatRow row={repeatSelected} />
+          ) : selectedVar ? (
             <SelectedVarRow entry={selectedVar} />
+          ) : mode.selectedParentVar && mode.selectedElementIndex !== undefined ? (
+            <SelectedVarRow
+              entry={mode.selectedParentVar}
+              elementIndex={mode.selectedElementIndex}
+            />
           ) : rawSelectedFolder ? (
             <SelectedFolderRow folder={rawSelectedFolder} requiredFields={requiredFields} />
+          ) : selectedKey ? (
+            <UnresolvedRow selectedKey={selectedKey} pending={pendingSelection} />
           ) : (
             <div className="editor-binding-char-empty">Nothing selected</div>
           )}
@@ -527,7 +544,15 @@ function VarStructPanel({ mode }: { mode: VarMode }) {
   );
 }
 
-function VarScalarPanel({ pickerTitle, mode }: { pickerTitle: string; mode: VarMode | null }) {
+function VarScalarPanel({
+  pickerTitle,
+  selectedKey,
+  mode,
+}: {
+  pickerTitle: string;
+  selectedKey: string | null;
+  mode: VarMode | null;
+}) {
   const schemaField = mode?.schemaField ?? null;
   const selectedVar = mode?.selectedVar ?? null;
   const selectedParentVar = mode?.selectedParentVar ?? null;
@@ -558,7 +583,9 @@ function VarScalarPanel({ pickerTitle, mode }: { pickerTitle: string; mode: VarM
       <div className="editor-binding-mid">
         <div className="editor-binding-mid__label">Selected variable</div>
         <div className="editor-binding-characteristics">
-          {selectedVar ? (
+          {mode?.repeatSelected ? (
+            <SelectedRepeatRow row={mode.repeatSelected} />
+          ) : selectedVar ? (
             <SelectedVarRow entry={selectedVar} />
           ) : selectedParentVar !== null && selectedElementIndex !== undefined ? (
             <SelectedVarRow entry={selectedParentVar} elementIndex={selectedElementIndex} />
@@ -567,6 +594,8 @@ function VarScalarPanel({ pickerTitle, mode }: { pickerTitle: string; mode: VarM
               folder={rawSelectedFolder}
               requiredFields={schemaField?.requiredFields}
             />
+          ) : selectedKey ? (
+            <UnresolvedRow selectedKey={selectedKey} pending={mode?.pendingSelection === true} />
           ) : (
             <div className="editor-binding-char-empty">Nothing selected</div>
           )}

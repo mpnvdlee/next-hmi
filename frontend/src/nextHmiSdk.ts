@@ -38,6 +38,7 @@ import {
   usePropBoolean,
   usePropStruct,
   useRecordListProp,
+  useItemListProp,
   useCssVar,
 } from '@hmi/components/layoutUtils';
 import { useVariable, useBindingValue, useVariableMeta } from '@hmi/hooks/useVariable';
@@ -87,6 +88,8 @@ import { VirtualNumpad } from '@shared/components/VirtualNumpad';
 import CloseButton from '@shared/components/CloseButton';
 import { renderWidget, renderSlotWidgets } from '@hmi/components/renderRegion';
 import { useComponentSlot, useIsComponentInstance } from '@hmi/context/ComponentSlotContext';
+import { useRepeatScope } from '@hmi/context/RepeatScopeContext';
+import { RepeatScope } from '@hmi/components/RepeatScope';
 import { useIsPreview } from '@shared/context/PreviewContext';
 import { useActivePage } from '@hmi/hooks/useActivePage';
 import { useAnchoredStyle } from '@shared/hooks/useAnchoredStyle';
@@ -120,6 +123,7 @@ export const nextHmiSdk = {
   usePropBoolean,
   usePropStruct,
   useRecordListProp,
+  useItemListProp,
   useCssVar,
   useVariable,
   useBindingValue,
@@ -171,6 +175,8 @@ export const nextHmiSdk = {
   renderSlotWidgets,
   useComponentSlot,
   useIsComponentInstance,
+  useRepeatScope,
+  RepeatScope,
   useIsPreview,
   useActivePage,
   useAnchoredStyle,

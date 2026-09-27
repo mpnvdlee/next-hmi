@@ -6,8 +6,10 @@ import BoolButtonGroup from '../../../ui/BoolButtonGroup';
 import Select from '../../../ui/Select';
 import PageSelect from '../../../ui/PageSelect';
 import GroupsEditor from '../../PropertiesPanel/GroupsEditor';
-import PathInputField from '../../../ui/PathInputField';
+import PathInputField, { PickerField } from '../../../ui/PathInputField';
+import { REPEAT_INDEX_SUFFIX, repeatPickLabel } from '../../VariableBindingPicker/repeatItemRows';
 import { useResultFields } from '../resultFieldsContext';
+import { useRepeatEditorScope } from '../repeatScopeContext';
 import { varBindingOf } from '../../bindingPickerUtils';
 import type { OpenBindingPicker } from './utils';
 import type {
@@ -17,10 +19,12 @@ import type {
   PageIsActiveSource,
   PageSource,
   RandomSource,
+  RepeatItemSource,
   TimeSource,
   UrlParamSource,
   UserGroupsSource,
   UserSource,
+  VariableBinding,
   VarSource,
   ViewportSource,
 } from '@shared/types/config';
@@ -69,29 +73,110 @@ export function VarEditor({
   onChange: (v: unknown) => void;
   onOpenBindingPicker?: OpenBindingPicker;
 }) {
+  const repeatScope = useRepeatEditorScope();
   const varObj = (value as VarSource)?.$var ?? { path: '' };
   const basePath = varObj.path ?? '';
-  const committedText =
-    basePath && varObj.index !== undefined ? `${basePath}[${varObj.index}]` : basePath;
+  const repeatIndex = varObj.repeatIndex === true;
+  const committedText = !basePath
+    ? ''
+    : repeatIndex
+      ? `${basePath}${REPEAT_INDEX_SUFFIX}`
+      : varObj.index !== undefined
+        ? `${basePath}[${varObj.index}]`
+        : basePath;
 
   return (
     <PathInputField
       value={committedText}
-      placeholder="datasource:location"
+      placeholder={
+        repeatScope ? `datasource:location${REPEAT_INDEX_SUFFIX}` : 'datasource:location'
+      }
       titleFromDraft
       onCommit={(text) => {
-        const parsed = parseVarPathInput(text);
-        if (parsed.path === basePath && parsed.index === varObj.index) return;
-        onChange({ $var: parsed });
+        const trimmed = text.trim();
+        const next: VariableBinding = trimmed.endsWith(REPEAT_INDEX_SUFFIX)
+          ? { path: trimmed.slice(0, -REPEAT_INDEX_SUFFIX.length), repeatIndex: true }
+          : parseVarPathInput(text);
+        if (
+          next.path === basePath &&
+          next.index === varObj.index &&
+          next.repeatIndex === varObj.repeatIndex
+        )
+          return;
+        onChange({ $var: next });
       }}
       pickTitle="Change variable binding"
       // This field is the innermost slot that knows its own binding, so it names
       // the preselect outright rather than letting an enclosing `wrapPicker`
       // guess from a composite value.
       onPick={
-        onOpenBindingPicker ? () => onOpenBindingPicker(undefined, varBindingOf(value)) : undefined
+        onOpenBindingPicker
+          ? () =>
+              onOpenBindingPicker(
+                undefined,
+                varBindingOf(value),
+                undefined,
+                repeatScope ? { repeatIndex: true } : undefined,
+              )
+          : undefined
       }
       onClear={onOpenBindingPicker && committedText ? () => onChange(undefined) : undefined}
+    />
+  );
+}
+
+/** `$repeatItem` — one line like a variable binding, picked in the binding
+ *  picker beside the variables. Outside a Repeater the validator warns. */
+export function RepeatItemEditor({
+  value,
+  onChange,
+  onOpenBindingPicker,
+}: {
+  value: unknown;
+  onChange: (v: unknown) => void;
+  onOpenBindingPicker?: OpenBindingPicker;
+}) {
+  const scope = useRepeatEditorScope();
+  const obj = (value as RepeatItemSource)?.$repeatItem ?? {};
+  const pick: RepeatItemSource['$repeatItem'] =
+    obj.field === 'index'
+      ? { field: 'index' }
+      : { field: 'value', ...(obj.member && { member: obj.member }) };
+  const openPicker =
+    scope && onOpenBindingPicker
+      ? () =>
+          onOpenBindingPicker(undefined, undefined, undefined, {
+            repeatItem: {
+              scope,
+              current: pick,
+              onPick: (next) => onChange({ $repeatItem: next }),
+            },
+          })
+      : undefined;
+
+  // An element whose shape only the runtime knows (an API response) lists no
+  // members to pick, so its member path is typed here instead.
+  if (scope?.members === null && pick.field === 'value') {
+    return (
+      <PathInputField
+        value={pick.member ?? ''}
+        placeholder="Whole element — or a member, e.g. name"
+        titleFromDraft
+        onCommit={(text) =>
+          onChange({
+            $repeatItem: text.trim() ? { field: 'value', member: text.trim() } : { field: 'value' },
+          })
+        }
+        pickTitle="Change binding"
+        onPick={openPicker}
+      />
+    );
+  }
+  return (
+    <PickerField
+      displayText={repeatPickLabel(pick)}
+      pickTitle="Change binding"
+      onPick={openPicker}
     />
   );
 }

@@ -1,0 +1,11 @@
+[
+  "Boolean[]",
+  "Integer[]",
+  "Float[]",
+  "String[]",
+  "DateTime[]",
+  "Date[]",
+  "Time[]",
+  "Duration[]",
+  "Struct[]"
+]

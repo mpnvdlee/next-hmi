@@ -36,6 +36,13 @@
   display: contents;
 }
 
+/* A Repeater copy past the first: the template's widgets drawn again for
+ * context. Dimmed at its outermost node only — opacity already carries down to
+ * everything inside, and applying it again per level would compound. */
+.hmi-preview-node--ghost:not(.hmi-preview-node--ghost .hmi-preview-node--ghost) > * {
+  opacity: 0.5;
+}
+
 /* Disable interactive chart elements in preview so clicks select the component */
 .hmi-preview-node .recharts-wrapper {
   pointer-events: none;

@@ -48,6 +48,9 @@ export interface VariableBinding {
   path: string;
   /** Array element index (0-based). When set, resolves to value[index] at runtime. Absent means whole variable. */
   index?: number;
+  /** Take `index` from the surrounding Repeater copy instead. Replaced by a
+   *  concrete `index` before any widget sees the binding. */
+  repeatIndex?: boolean;
 }
 
 /** Extract the composite "datasource:location" key from a VariableBinding. */
@@ -543,7 +546,7 @@ export type ButtonAction =
       /** Absent until a target is picked. */
       target?: WriteTarget;
       /** A literal, or a dialog input parameter resolved when the action fires. */
-      value: string | number | boolean | unknown[] | { $componentProp: string };
+      value: string | number | boolean | unknown[] | { $componentProp: string } | RepeatItemSource;
       onSuccess?: ButtonAction[];
       onFailed?: ButtonAction[];
       onSettled?: ButtonAction[];

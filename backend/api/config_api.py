@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from dataclasses import replace
 from typing import Any
 
 from core.component_validation import (
@@ -18,6 +19,7 @@ from core.page_index import (
     INDEX_ROOTS,
     all_root_nodes,
     collect_page_ids,
+    declared_properties,
     find_page_document,
     is_page_group,
     iter_page_groups,
@@ -58,6 +60,7 @@ from core.validation import (
     component_undeclared_slots,
     ctx_for_page_group,
     ctx_for_root,
+    index_widgets,
     is_valid_dict_name,
     is_valid_page_id,
     validate_alarms,
@@ -333,6 +336,17 @@ def _validate_component_tree(
     if not isinstance(children, list):
         report.add("/children", "children must be an array")
         return report
+    # An instance may be placed inside a Repeater, which is invisible from
+    # here, so a definition's `$repeatItem` reads are not flagged as scopeless.
+    # Its children read the component's own declarations, and name its own
+    # widgets in a `$widgetProp`.
+    ctx = replace(
+        ctx,
+        repeat_scope=True,
+        input_schema=declared_properties(component),
+        widget_index=index_widgets(children),
+        artifact_key=f"component:{component_id}" if component_id else None,
+    )
     for index, child in enumerate(children):
         report.extend(validate_widget_node(child, ctx, f"/children/{index}"))
         if isinstance(child, dict) and str(child.get("type", "")).startswith("$component:"):

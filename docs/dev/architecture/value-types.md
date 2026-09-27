@@ -71,7 +71,7 @@ Two kinds of source, by where their type comes from:
 
 > **Source availability is decided by the field's *type* alone.** A source is offered only where its produced type is exactly the field's type — an `Integer` producer does not fit a `Float` field, a `Boolean` one not a `String` field, a `String` one not a `DateTime`, `Date` or `Time` field. The one exception is `Duration`, a number of seconds, which an `Integer` or `Float` producer also fills. There is no per-field allowlist, and a schema cannot hand-pick which sources its inputs accept. The field's `type` is the single gate for which sources appear.
 
-The scalar types derive that list from each source's produced type. The editor kinds are not scalars, so theirs is written out per kind in `frontend/src/hmi/utils/propertySourceRules.ts` — `image` and `video` share one list (`$static`, `$var`, `$urlParam`, `$if`, `$switch`, `$widgetProp`), `icon` adds `$page` to it, and `color` drops `$urlParam` from it. `$componentProp` and `$result` are added on top by the editor wherever the surrounding scope offers them, on any type.
+The scalar types derive that list from each source's produced type. The editor kinds are not scalars, so theirs is written out per kind in `frontend/src/hmi/utils/propertySourceRules.ts` — `image` and `video` share one list (`$static`, `$var`, `$urlParam`, `$if`, `$switch`, `$widgetProp`), `icon` adds `$page` to it, and `color` drops `$urlParam` from it. `item-list` (what a Repeater repeats over) takes `$static`, `$var`, `$http`, `$recipeList`, `$user` and `$widgetProp`. `$componentProp`, `$result` and `$repeatItem` are added on top by the editor wherever the surrounding scope offers them, on any type.
 
 ### Flexible sources (fit any field)
 
@@ -80,10 +80,11 @@ These carry whatever type the field requires, so you can use them almost anywher
 | Source | Shape | What it gives you |
 |---|---|---|
 | `$static` | `{ $static: value }` | A fixed value you type or pick — the literal for **any** type, including a structured `icon` (`{ type, name }`), `image` (`{ path }`) or `video` (`{ path }`). For those, the editor opens a picker rather than a text box |
-| `$var` | `{ $var: { path, index? } }` | A live datasource / OPC-UA variable |
+| `$var` | `{ $var: { path, index?, repeatIndex? } }` | A live datasource / OPC-UA variable. `repeatIndex: true` takes `index` from the surrounding Repeater copy — see [Repeater items in depth](#repeater-items-in-depth-repeatitem) |
 | `$widgetProp` | `{ $widgetProp: { componentId, property, path? } }` | A property **exported by another component** on the page (sibling → me). `path` is an optional slash-path into a struct/array member of the exported value (e.g. `name` on a selected row) |
 | `$componentProp` | `{ $componentProp: name }` | A value **passed in from outside** — by my parent component, or by the action that opened the page overlay I am in (outside → me) |
 | `$result` | `{ $result: field }` | An action's result (only inside `onSuccess` / `onFailed` / `onSettled`) |
+| `$repeatItem` | `{ $repeatItem: { field?, member? } }` | The element of the surrounding Repeater copy, one `member` of it, or (`field: 'index'`) its 0-based index — see [Repeater items in depth](#repeater-items-in-depth-repeatitem) |
 | `$if` | `{ $if: { condition, true, false } }` | One of two values, chosen by a condition |
 | `$switch` | `{ $switch: { value, cases[{ when, then }], default } }` | One of many values, chosen by a key |
 | `$http` | `{ $http: { url, wildcards?, method?, headers?, body?, path?, refreshSeconds? } }` | A value picked out of an HTTP API response — see [HTTP requests in depth](#http-requests-in-depth-http) |
@@ -191,7 +192,115 @@ The mirror of an array `$var` is an **array field** — a field that wants many 
 
 - A field declares it wants an array (e.g. a `string[]`). It may be **fixed-arity** (exactly N) or **variable-arity** (any length).
 - A scalar source bound to an array field contributes a single element; an array source (`$var` with no `index`, `$languages`, `$user.groups`) fills the whole array.
-- **Out-of-range `index`** resolves to *absent* (see below), not an error — the same fallback rules apply.
+- **Out-of-range `index`** resolves to *absent* (see below), not an error — the same fallback rules apply. The backend still reports a stored `index` that can name no element as `var-index`: one that is not a whole number or is negative, one on a variable that is not an array, and one at or past an array's fixed `length`. A `repeatIndex` binding is not judged on its `index`, which the Repeater copy replaces.
+
+### Which variable fits a field
+
+The binding picker, the runtime overlay and the backend's `var-type` /
+`repeatitem-type` / `var-readonly` diagnostics decide it with one predicate — `accepts` in
+`frontend/src/shared/types/varType.ts`, ported to
+`backend/core/validation/vartype.py` and held equal by the shared fixtures in
+`frontend/src/shared/types/__fixtures__/` (`varTypeAccepts.json`,
+`structSatisfies.json`, `editorKindAccepts.json`, `itemListAccepts.json`,
+`listItemTypes.json`).
+
+- **Array-ness is exact.** An array field takes an array variable; a scalar field takes a scalar variable or one element of an array (`index`).
+- **The base type is exact.** A `Float` field takes no `Integer` variable and an `Integer` field no `Float`; a field that takes both lists both (`['float', 'integer']`).
+- **`color`, `icon`, `image` and `video` bind to a `String` variable** — the value is a CSS colour, an icon name or an asset path. A field that lists simple types beside the kind (`['image', 'string[]']`) binds to those instead. Kinds match case-insensitively, so a schema written in code as `'Color'` is still the colour kind. `option-list` binds to the arrays it lists and `item-list` to any array; `actions`, `widgets` and the other editor kinds bind no variable at all.
+- **A struct is checked member by member** (`structSatisfies`). Every `requiredFields` entry must exist — a disabled variable, or one gone from the server, is no member, since the pool serves neither; one with nested `requiredFields` must be a struct itself and satisfy them; one with a `type` must hold a variable that type accepts as a field's `type` (an editor kind such as `color` meaning `String`); one with `write: true` must be writable. A struct array is judged on one element: the bound one when `index` names an element that exists, otherwise the lowest-index element there is (arrays may count from 1). A member whose type only the runtime knows is taken on trust for its type, never for its access. A struct whose metadata lists no fields yet (an empty struct array) is accepted.
+- **A writing field needs a writable variable.** A field with `write: true` — or a required member with it — refuses a variable whose own `writable` flag is off. The variable metadata carries that flag (`false` when a variable never set it), and only `true` fills a writing field: a variable or member whose access is not stated is read-only, in the picker, the runtime overlay and the backend alike. A variable the registry has no entry for is not judged at all. A struct has no access of its own — its required members are judged instead. A Repeat item's index, and the element of a Repeater over anything but a variable, are never writable. The backend reports a broken access rule as `var-readonly`, naming the member for a struct, apart from a wrong type (`var-type` / `repeatitem-type`). Those are warnings; the write itself is refused at write time — `write_service` answers `read_only` for any variable whose own flag is not `true` (see [websocket.md](websocket.md#action-result-correlation)).
+
+The picker's tree filter, its ✓/✗ drawer, the runtime overlay and the backend
+validator all run these checks, each with the members it has to hand — the
+picker the datasource tree (or, for a Repeat item, the members the variable
+metadata lists for the element), the runtime the variable metadata, the
+backend its registry (the live pool's metadata, or the datasource files before
+any pool has started, read the same way). So a variable the picker offers
+without **Show all** is one the runtime and the warnings pill accept.
+
+**A ✗ cannot be confirmed.** Whatever the drawer marks ✗ keeps Confirm
+disabled, and double-clicking a row is held to the same verdict; Enter in the
+search box takes the first result the field accepts. Every way of picking, a
+Repeat item row included, goes through one check in
+`VariableBindingPicker/index.tsx` (`isConfirmable`; `WidgetPropPicker` does the
+same). **Show all** still lists everything, to browse. A selection whose
+datasource has not loaded yet has no verdict and stays confirmable. For a
+writing field the tree lists only a variable whose `writable` flag is `true` —
+one that states no access is read-only there, as the drawer and the backend
+read it.
+
+**A slot inside a source takes its own type, not the property's.** The
+property's type, `write` and `requiredFields` describe the value the source
+produces, not its operands, so each nested slot opens the picker with a type of
+its own — the `slot` argument of `OpenBindingPicker`
+(`PropertySourceEditor/editors/utils.ts`, `SlotType`), which every opener
+honours in place of the property's filter while keeping its label. The
+innermost slot that names one wins. The same slot reaches everything edited
+inside it through `SlotContext` (`PropertySourceEditor/slotContext.ts`): a
+source's `field` choices, and the `$componentProp` / `$widgetProp` pickers,
+which then judge by the slot's type alone (any type, or that type read-only)
+instead of the placeholder schema the slot's editor is drawn with. So an `$if`
+nested inside a `$compare` operand has branches that take any type, like the
+operand.
+
+| Slot | Picker lists |
+|---|---|
+| `$if` condition, `$not` value, action `if` condition | `Boolean`, read-only — no truthiness of another type; test an `Integer` or `String` through `$compare` (`BOOLEAN_SLOT`) |
+| `$compare` left / right, `$switch` value and case `when` | Any type — ordering coerces with `toNumber`, `===` / `!==` use `looseEquals` |
+| `$formula` operand | `Float` and `Integer`, read-only — each operand is coerced to a number |
+| `$stringExpr` / `$http` wildcard | Any type — it is formatted into text |
+| `$if` true / false, `$switch` then / default | What the property takes |
+
+A nested operand with a type of its own (a `$compare`'s, a `$formula`'s)
+replaces the condition's `Boolean`.
+
+**Component and exported properties fit by the same rule.** The
+`$componentProp` picker (`componentPropHelpers.ts`: `componentPropFits`,
+`structSchemaNodeFits`) and the `$widgetProp` picker, which adapts each export
+into the same shape, judge a property as a variable of its type would be
+judged: the property is read in its schema-field form (a `select` as the type
+its options hold), then `accepts` runs over the field's `acceptedValueTypes`
+with the field's `write` flag — so an `Integer` property fits a read-only
+`Float` field and a `String` property fits an `icon` field. A writing field
+also needs the property to say it can be written — a component property's own
+`write: true`, a struct row's `write: true` on a variable row; an export never
+does — and the drawer shows ✗ with *Not declared writable* rather than hiding a
+property of the right type. A struct property is
+then checked with `structSatisfies` over its `structSchema`: a variable row is
+its `type`, writable only with `write: true`; a folder row is a struct; an array
+row is an array of its `type` (and the `requiredFields` a component derives from
+its own schema say so, `Float[]`). A property of an editor kind (`icon`,
+`color`, `actions`) holds that kind's own value, so it fits only a field of that
+kind. An export that declares no type is a `String`.
+
+The backend judges a stored `$componentProp` / `$widgetProp` by the same rule
+(`backend/core/validation/component_property.py`, held to the TS by
+`componentPropFits.json` and `componentPropertySchemaField.json`). A
+`$componentProp` is read against the declarations of the scope it sits in —
+a component definition's own, or a Dialogs-folder page's merged with its
+enclosing groups' (innermost first, see
+[below](#pages-and-page-groups-declare-the-same-inputs)); a `a/b/c` path
+resolves through the declaration's `structSchema`. A name the scope does not
+declare is `componentprop-unknown` (a warning); one that does not fit, or does
+not say it can be written into a writing field, is `componentprop-type`. A
+`$widgetProp` names a widget of the same artifact, else one elsewhere in the
+project (a Repeater copy's `<id>@<copy>` is the template widget). Ids are unique
+within one tree only, so elsewhere several widgets can share one; any of them
+reading fine is enough. A widget that exists nowhere, or an export none of the
+candidates declares, is `widgetprop-unknown`,
+and an export that does not fit is `widgetprop-type` (`path` into a `Struct`
+export reads the field its `structSchema` declares). Built-in widgets' exports
+come from the editor half of the baked manifest, and win over a custom row of
+the same name — a `widget-schemas.json` left in the runtime home can still hold
+one for a widget that has since become a built-in; custom widgets' come from
+`widget-schemas.json`. A widget whose exports are not known is not judged.
+
+A component instance's children are its slot content, and they render inside
+the instance — `ComponentRenderer` provides the instance's `InputScopeContext`,
+and `ComponentSlot` renders the caller's widgets under it without providing the
+caller's back. So a `$componentProp` in slot content reads the *component's*
+inputs, as the instance fills them, and the validator types it against the
+component's declarations — even on a page that has no inputs of its own.
 
 ### OPC-UA datatypes & the datasources manager
 
@@ -311,6 +420,75 @@ normal absent value rather than a broken API call.
 > contributes no origin and widens nothing — and a placeholder in the path, query
 > or credentials (`https://{user}:{pass}@h/x`, which still pins `https://h:443`)
 > is irrelevant.
+
+---
+
+## Repeater items in depth (`$repeatItem`)
+
+A **Repeater** draws its child widgets once per element of an array, its
+`item-list` property **Items**. Each copy publishes a *repeat scope* — the
+element, its index, and where the array came from — and the widgets inside read
+it:
+
+```jsonc
+{ "$repeatItem": { "field": "value" } }                     // the element
+{ "$repeatItem": { "field": "value", "member": "Speed" } }  // one member of it
+{ "$repeatItem": { "field": "index" } }                     // its 0-based index
+{ "$var": { "path": "PLC:Names", "repeatIndex": true } }    // a parallel array, same index
+```
+
+The editor writes `repeatIndex` from the variable picker's `[#] this copy` row
+under an array (offered when the slot passes `repeatIndex`), or when a path is
+typed with a `[#]` suffix (`PLC:Names[#]`), next to the `[n]` suffix that sets
+a fixed `index`. `$repeatItem` and the write/toggle `repeatItem` target come
+from the picker's separate Repeat item mode (`repeatItem` option;
+`VariableBindingPicker/repeatItemRows.ts`), which lists only the copy's element
+and never the datasources — see `PickerExtras` in
+`PropertySourceEditor/editors/utils.ts`. The validator types a `$repeatItem`
+against its field when the Repeater repeats over a known variable, or over a
+list whose values say what an element is (`repeatitem-type`), and the picker
+filters and marks the pick by the same types.
+
+- **A variable element stays a variable.** When Items is a `$var` array, a
+  `$repeatItem` is rewritten into the `$var` it stands for before the widget sees
+  it — `{ path, index }` for a scalar-array element or a whole struct element, the
+  member's own leaf (`PLC:Motors/[2]/Speed`) for a struct member. The live
+  subscription, the binding overlay and the widget's own writer then treat it as
+  any other binding, so an input inside a Repeater writes back to its element.
+  The leaf path comes from the element folder's real name in the variable
+  metadata, since a static server may call it `Line[2]` rather than `[2]`.
+- **Any other source is read-only.** Over `$static`, `$http` (a JSON-array
+  pick), `$recipeList`, `$user` users/groups or `$widgetProp`, `$repeatItem`
+  resolves to the element's value; `member` is a slash-path into it, and a record
+  surfaces as JSON text. A literal or `$static` list is typed by its values
+  (`listItemTypes`): records make a struct of every key any record has, a member
+  typed when all its values share one simple type (a string `String`, a boolean
+  `Boolean`, a whole number `Integer`, a fractional one `Float`; whole and
+  fractional numbers together `Float`), and a list of scalars the same way.
+  Mixed values, values that are objects or arrays, and records with no keys at
+  all are not typed and are taken on trust. An empty list offers
+  `{ label, value }` with no member types; a `$user` list is `{ label, value }`
+  strings. Over `$http`, `$recipeList` and `$widgetProp` only the runtime knows
+  the element, so its type is trusted — but, like every non-variable element, it
+  never fills a writing field (`var-readonly`) or a write/toggle target
+  (`write-target-type`).
+- **Only the innermost Repeater is reachable.** A nested Repeater shadows the
+  outer one's item.
+- **Write and toggle actions can target the item.** A `writeDataVariable` /
+  `toggleDataVariable` names its variable as a sourced `target`: a `$var`, or
+  `{ $repeatItem: { member? } }`, which becomes the copy's `$var` like any other
+  `$repeatItem` does — and is skipped when the element is read-only, since no
+  `$var` comes out.
+- **`$widgetProp` is per copy.** Every copy shares its template's widget ids, so
+  an export is kept per copy and a sibling inside the Repeater reads the one
+  beside it. A reader outside the Repeater gets the first copy's.
+- **The editor draws the template, then ghosts.** On the canvas the first copy is
+  the editable template; the rest are dimmed and select the template when
+  clicked. With no elements at all the template is still drawn once.
+- **Outside a Repeater** `$repeatItem` resolves to *absent* and a `repeatIndex`
+  binding reads the whole array. The warnings pill flags both
+  (`repeatitem-no-scope`), except inside a component definition, whose
+  instances may be placed in one.
 
 ---
 
@@ -438,6 +616,47 @@ but answers a different question: it compares against the **route's** active
 page. Inside an overlay it is therefore `false` — the overlay's page is rendered,
 not navigated to. Its picker offers navigable pages only, for that reason: a
 Dialogs-folder page could never make it true.
+
+## Type diagnostics
+
+What the backend reports when a stored value does not fit its field
+(`backend/core/validation/structure.py`). All of them are build diagnostics:
+they mark the row and the warnings pill and never block a save. Two rejected
+writes remain, both older than these codes and unchanged by them: a bare
+literal of a type its field does not list when that field's first type is a
+scalar, and an action naming a page that does not exist in a field the widget's
+own schema (or the property name `actions`) marks as actions. Anything the validator cannot know (a datasource
+with no typed variables yet, an interface it did not read, a widget's unknown
+exports) is skipped, never guessed.
+
+| Code | Severity | Reported when |
+|---|---|---|
+| `literal-type` | error | A literal fits none of its field's types. A bare scalar fits when it matches *any* scalar type of a union (`["string", "integer", "float"]`); an array fits an `X[]` the field lists when every element is an X; a `$static` payload is held to the same rule. A mismatch in an array, a `$static`, a component instance's value, an action's field or a field whose first type is an array is this code; a bare scalar anywhere else is still rejected |
+| `literal-format` | warning | A string that only fits as a `Date`, `DateTime`, `Time` or `Duration` does not read as one: ISO 8601 (`2026-06-16`, `2026-06-16T14:30:00Z`, `14:30:00`, `PT1H30M`), or a number of seconds for a `Duration`. Empty is unset, not malformed |
+| `source-type` | error | A fixed-type source its field's type does not offer, or a stored `field` choice that yields another type (see [Sources](#sources)) |
+| `var-index` | error | A bound `index` that names no element (see [Array fields](#array-fields)) |
+| `componentprop-type` / `componentprop-unknown` | error / warning | See [Which variable fits a field](#which-variable-fits-a-field) |
+| `widgetprop-type` / `widgetprop-unknown` | error | See [Which variable fits a field](#which-variable-fits-a-field) |
+| `write-target-type` | error | A Write Data Variable or Toggle target the write path cannot write: a struct (a write addresses one variable — a whole array or one element of it — never a struct folder), a variable not known to be writable, or the Repeat item of a Repeater over a list rather than a variable |
+| `toggle-target-type` | error | A Toggle target that is not a single Boolean — a toggle reads the current value and inverts it |
+| `write-value-type` | error | A fixed Write Data Variable value (bare or `$static`) that `coerce_entry_write_value` in `backend/services/write_service.py` would reject against the target's entry — its OPC-UA type, array shape and fixed length, and `min` / `max` — worded as the editor's row words it (`writeCoercionMessages.json`). The entry is the live pool's when it serves the datasource, else the datasource file's |
+| `value-invalid` | error | A malformed source payload inside an action's field (`{ "$loc": 5 }`) — rejected elsewhere, reported here |
+| `action-page-unknown` | error | An action naming a page that does not exist, inside a component instance's property that only its declaration types as `actions`. The same action in a widget's `actions` field is still a rejected write, as it always was |
+
+**Values inside actions are values.** Every field of every action type is
+listed with what it is checked as in `ACTION_FIELDS`
+(`structure.py`), mirroring the editors in
+`PropertiesPanel/actionEditors.tsx`: toast, alert, login, language and theme
+texts are `String`, overlay `width` / `height` and toast `duration` are
+`Integer`, `verify`, `dismissible` and an `if` condition `Boolean`,
+`openDialog`'s input values take the types the target page declares, and a
+sourced Write Data Variable value takes the target's type. The same table
+drives the walk: the fields it calls `actions` are the nested lists walked, and
+those it calls `page` the page references checked. Each value is run through
+the same checks as a property, so `var-unknown`, `loc-unknown`, `var-type`,
+`source-type` and the `componentprop-*` codes apply inside actions too. A
+Repeat-item target is judged on the element — or member — its Repeater's
+`$var` items hold.
 
 ## Putting it together
 

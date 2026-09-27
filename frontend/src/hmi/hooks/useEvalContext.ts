@@ -7,6 +7,9 @@ import { useUsersData } from './useUsersData';
 import { useHmiScope } from '../context/HmiScopeContext';
 import { useHostPageId } from '../context/HostPageContext';
 import { useInputScope } from '../context/InputScopeContext';
+import { useRepeatScope } from '../context/RepeatScopeContext';
+import { resolveRepeatItem } from '../utils/repeatItemResolution';
+import { scopedWidgetId } from './usePublishWidgetProp';
 import { useComponentPropStore } from '../store/widgetPropStore';
 import { useAlarmStore } from '../store/alarmStore';
 import { useRecipeStore } from '../store/recipeStore';
@@ -41,6 +44,7 @@ export function useEvalContext(): EvaluationContext {
   const scope = useHmiScope();
   const hostPageIdFromContext = useHostPageId();
   const inputScopeProps = useInputScope()?.properties;
+  const repeatScope = useRepeatScope();
   const currentUsersByScope = useHmiStore((s) => s.currentUsersByScope);
   // The project's account list, for `$user` with `field: 'userList'` — distinct
   // from `currentUsersByScope`, which is only who is signed in per scope.
@@ -121,7 +125,7 @@ export function useEvalContext(): EvaluationContext {
         },
 
         resolveComponentProp: (componentId, property): ResolvedValue => {
-          const val = widgetProps[componentId]?.[property];
+          const val = exportsFor(widgetProps, componentId, repeatScope?.key)?.[property];
           return (val !== undefined ? val : null) as ResolvedValue;
         },
 
@@ -208,6 +212,12 @@ export function useEvalContext(): EvaluationContext {
         resolveHttpRequest: (spec) => readHttpSource(spec),
 
         inputScopeProps,
+
+        ...(repeatScope && {
+          repeatIndex: repeatScope.index,
+          resolveRepeatItem: (payload: unknown) =>
+            resolveRepeatItem(payload, repeatScope, useVariableStore.getState().varMeta),
+        }),
       };
     },
     // activeLanguage/translations/alarmSummary/recipe* force memo invalidation
@@ -223,6 +233,7 @@ export function useEvalContext(): EvaluationContext {
       location,
       scope,
       inputScopeProps,
+      repeatScope,
       currentUsersByScope,
       allUsernames,
       widgetProps,
@@ -234,6 +245,28 @@ export function useEvalContext(): EvaluationContext {
       hostPageId,
     ],
   );
+}
+
+/**
+ * A widget's exports as seen from inside a Repeater copy: the same copy's first,
+ * then each enclosing copy's (a sibling of an inner Repeater lives in the outer
+ * copy), and only then the bare id a widget outside every Repeater publishes.
+ * Keyed on whether the widget published at all, so a copy whose sibling has not
+ * published yet reads nothing rather than another copy's value.
+ */
+function exportsFor(
+  widgetProps: Record<string, Record<string, unknown>>,
+  componentId: string,
+  repeatKey: string | undefined,
+): Record<string, unknown> | undefined {
+  let key = repeatKey;
+  while (key) {
+    const scoped = widgetProps[scopedWidgetId(componentId, key)];
+    if (scoped) return scoped;
+    const slash = key.lastIndexOf('/');
+    key = slash >= 0 ? key.slice(0, slash) : undefined;
+  }
+  return widgetProps[componentId];
 }
 
 function pageBreadcrumbLabel(node: object): string | null {

@@ -139,15 +139,87 @@ export function structSchemaLookup(nodes: StructSchemaNode[]): StructMemberLooku
     const slash = path.indexOf('/');
     const name = slash === -1 ? path : path.slice(0, slash);
     const node = nodes.find((n) => n.name === name);
-    if (!node) return false;
-    if (nested?.length) {
-      if (node.kind !== 'folder' && node.kind !== 'array') return false;
-      return structSchemaMatchesRequired(node.children ?? [], nested);
+    if (!node) return undefined;
+    if (slash !== -1) return structSchemaLookup(node.children ?? [])(path.slice(slash + 1));
+    return {
+      type: structSchemaNodeVarType(node),
+      writable: node.kind === 'variable' && node.write === true,
+    };
+  };
+}
+
+/** For an array-of-struct folder, return the children of the element its
+ *  shape is read off, so that the requirement display shows fields rather than
+ *  the element sub-folders. */
+export function firstElementChildren(folder: PickerFolderEntry): PickerTreeNode[] {
+  return shapeElementFolder(folder)?.children ?? folder.children;
+}
+
+export function childMaps(folder: PickerFolderEntry): {
+  childMap: Record<string, PickerVariableEntry>;
+  childFolders: Record<string, PickerFolderEntry>;
+} {
+  return {
+    childMap: Object.fromEntries(
+      folder.children
+        .filter((c): c is PickerVariableEntry => !isFolder(c))
+        .map((c) => [c.display_name, c]),
+    ),
+    childFolders: Object.fromEntries(
+      folder.children.filter((c): c is PickerFolderEntry => isFolder(c)).map((c) => [c.name, c]),
+    ),
+  };
+}
+
+/** Whether the selection supplies one required field — the ✓/✗ beside it. */
+export function requiredFieldMatched(
+  f: RequiredFieldEntry,
+  childMap: Record<string, PickerVariableEntry>,
+  childFolders: Record<string, PickerFolderEntry> | undefined,
+): boolean {
+  return structSatisfies([f], memberLookup(childMap, childFolders ?? {}));
+}
+
+/** What a var-mode selection offers as the struct's fields: a folder's children
+ *  (an element's, for a struct-array field), a Repeat item's members, or
+ *  nothing at all — a scalar picked for a struct field misses every field.
+ *  `undefined` while there is nothing to judge yet. */
+export function structOffer(
+  mode: VarMode,
+  hasSelection: boolean,
+):
+  | {
+      childMap: Record<string, PickerVariableEntry>;
+      childFolders: Record<string, PickerFolderEntry>;
     }
-    if (expectedType && node.type) {
-      if (node.type.toLowerCase() !== expectedType.toLowerCase()) return false;
-    }
-    if (needsWrite && node.write !== true) return false;
-    return true;
-  });
+  | undefined {
+  const { schemaField, rawSelectedFolder, repeatSelected, pendingSelection } = mode;
+  if (!hasSelection || pendingSelection) return undefined;
+  if (repeatSelected) {
+    return { childMap: repeatSelected.fields, childFolders: repeatSelected.folders ?? {} };
+  }
+  if (!rawSelectedFolder) return { childMap: {}, childFolders: {} };
+  const structArrayTarget =
+    schemaField?.type !== undefined && primaryType(schemaField.type).endsWith('[]');
+  return childMaps(
+    structArrayTarget
+      ? { ...rawSelectedFolder, children: firstElementChildren(rawSelectedFolder) }
+      : rawSelectedFolder,
+  );
+}
+
+/** The ✓/✗ for a struct field's selection — `null` while nothing is judged. */
+export function varStructVerdict(mode: VarMode, hasSelection: boolean): boolean | null {
+  const requiredFields = mode.schemaField?.requiredFields;
+  const offered = structOffer(mode, hasSelection);
+  if (!requiredFields || offered === undefined) return null;
+  const { repeatSelected, rawSelectedFolder } = mode;
+  const shapeOk = repeatSelected
+    ? Object.keys(repeatSelected.fields).length + Object.keys(repeatSelected.folders ?? {}).length >
+      0
+    : rawSelectedFolder !== null && mode.strictFolderSelectable;
+  return (
+    shapeOk &&
+    requiredFields.every((f) => requiredFieldMatched(f, offered.childMap, offered.childFolders))
+  );
 }

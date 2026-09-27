@@ -3,6 +3,11 @@ import { useTranslationStore } from '@shared/store/translationStore';
 import { isLocSource } from '@shared/types/propertyValueGuards';
 import { useInputScope } from '../context/InputScopeContext';
 import { resolveComponentPropValue } from '../utils/componentPropResolution';
+import { useRepeatScope } from '../context/RepeatScopeContext';
+import { useVariableStore } from '../store/variableStore';
+import { containsRepeatRef, substituteRepeatRefs } from '../utils/repeatItemResolution';
+
+const NO_META: Record<string, unknown> = {};
 
 export function useResolvedProperties(
   properties: Record<string, unknown> | undefined,
@@ -11,8 +16,15 @@ export function useResolvedProperties(
   const translations = useTranslationStore((s) => s.translations);
   const resolve = useTranslationStore((s) => s.resolve);
   const inputScope = useInputScope();
+  const repeatScope = useRepeatScope();
+  const repeats = repeatScope !== null && containsRepeatRef(properties);
+  // Only a struct-array copy needs the metadata (for its element's folder
+  // name); the rest must not re-render when it arrives.
+  const varMeta = useVariableStore((s) =>
+    repeats && repeatScope.structArray ? s.varMeta : NO_META,
+  );
 
-  return useMemo(() => {
+  const scoped = useMemo(() => {
     if (!properties) return properties;
     let changed = false;
     const out: Record<string, unknown> = {};
@@ -36,4 +48,12 @@ export function useResolvedProperties(
     // re-resolve when the user changes language or edits a translation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [properties, resolve, activeLanguage, translations, inputScope]);
+
+  return useMemo(
+    () =>
+      repeats && scoped
+        ? (substituteRepeatRefs(scoped, repeatScope, varMeta) as Record<string, unknown>)
+        : scoped,
+    [scoped, repeats, repeatScope, varMeta],
+  );
 }

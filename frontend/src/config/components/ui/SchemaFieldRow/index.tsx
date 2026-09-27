@@ -243,10 +243,13 @@ export default function SchemaFieldRow({
   const currentSource = isSourceCapable ? detectedSource : null;
 
   // Struct fields default to $var, but when authoring inside a component-property
-  // scope (widget or dialog) the user can bind via $componentProp instead. The
+  // scope (widget or dialog) the user can bind via $componentProp instead, and
+  // inside a Repeater via $repeatItem. The
   // body editor and source pill stay in sync via the detected source.
   const structSource: PropertySource =
-    isStruct && detectedSource === '$componentProp' ? '$componentProp' : '$var';
+    isStruct && (detectedSource === '$componentProp' || detectedSource === '$repeatItem')
+      ? detectedSource
+      : '$var';
   const structValueForEditor = isStruct
     ? structSource === '$var'
       ? structVarDefault(effectiveValue)
@@ -353,7 +356,7 @@ export default function SchemaFieldRow({
           schema={schema}
           staticEditor={
             currentSource === 'static' ? (
-              fieldType === 'option-list' ? (
+              fieldType === 'option-list' || fieldType === 'item-list' ? (
                 <ItemsInput
                   value={effectiveValue as ItemEntry[] | undefined}
                   onChange={onChange as (v: ItemEntry[]) => void}

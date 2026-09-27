@@ -24,6 +24,7 @@ const MULTI_EXCLUDED_TYPES = new Set([
   'menu-items',
   'actions',
   'option-list',
+  'item-list',
   'groups',
   'page-group',
   'slot',

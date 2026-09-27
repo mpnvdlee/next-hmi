@@ -211,6 +211,145 @@ def test_var_type_compatible_does_not_warn(ctx):
     assert report.findings == []
 
 
+_INTEGER = {"kind": "scalar", "base": "Integer", "array": False}
+_FLOAT = {"kind": "scalar", "base": "Float", "array": False}
+_STRING = {"kind": "scalar", "base": "String", "array": False}
+
+
+def _var_type_codes(ctx, var_path: str, field: dict, **ref) -> list[str]:
+    report = ValidationReport()
+    validate_var_ref({"path": var_path, **ref}, ctx, "/p", report, field)
+    assert report.findings == []
+    return [w.code for w in report.warnings]
+
+
+def test_float_and_integer_slots_take_only_their_own_base(ctx):
+    ctx.datasource_registry["PLC"]["Count"] = _INTEGER
+    assert _var_type_codes(ctx, "PLC:Count", {"type": "float"}) == ["var-type"]
+    assert _var_type_codes(ctx, "PLC:Count", {"type": ["float", "integer"]}) == []
+    ctx.datasource_registry["PLC"]["Speed"] = _FLOAT
+    assert _var_type_codes(ctx, "PLC:Speed", {"type": "integer"}) == ["var-type"]
+
+
+@pytest.mark.parametrize("kind", ["color", "Color", "icon", "image", "video"])
+def test_string_bound_editor_kinds_take_a_string_variable(ctx, kind):
+    ctx.datasource_registry["PLC"]["Label"] = _STRING
+    assert _var_type_codes(ctx, "PLC:Label", {"type": kind}) == []
+    assert _var_type_codes(ctx, "PLC:Motor/Speed", {"type": kind}) == ["var-type"]
+
+
+@pytest.fixture()
+def struct_ctx(ctx):
+    ctx.datasource_registry["PLC"].update({
+        "Motor": {"kind": "struct", "name": "Motor", "array": False, "fields": ["Speed", "Name", "Tint", "Limits"]},
+        "Motor/Speed": _FLOAT,
+        "Motor/Name": _STRING,
+        "Motor/Tint": _INTEGER,
+        "Motor/Limits": {"kind": "struct", "name": "Limits", "array": False, "fields": ["Max"]},
+        "Motor/Limits/Max": _INTEGER,
+        "Motors": {"kind": "struct", "name": "Motors", "array": True, "fields": ["Speed"]},
+        "Motors/Line[1]": {"kind": "struct", "name": "Line[1]", "array": False, "fields": ["Speed"]},
+        "Motors/Line[1]/Speed": _FLOAT,
+        "Motors/Line[0]": {"kind": "struct", "name": "Line[0]", "array": False, "fields": ["Speed"]},
+        "Motors/Line[0]/Speed": _FLOAT,
+    })
+    ctx.datasource_writable = {
+        "PLC": {
+            "Motor/Speed": True,
+            "Motor/Name": False,
+            "Motor/Limits/Max": False,
+            "Motors/Line[0]/Speed": False,
+            "Motors/Line[1]/Speed": True,
+        }
+    }
+    return ctx
+
+
+@pytest.mark.parametrize(
+    ("required", "code"),
+    [
+        (["Speed", "Name"], None),
+        ([{"name": "Name", "type": "Float"}], "var-type"),
+        ([{"name": "Tint", "type": "color"}], "var-type"),
+        ([{"name": "Name", "type": "color"}], None),
+        ([{"name": "Speed", "write": True}], None),
+        ([{"name": "Name", "write": True}], "var-readonly"),
+        ([{"name": "Limits", "requiredFields": [{"name": "Max", "type": "Float"}]}], "var-type"),
+        ([{"name": "Limits", "requiredFields": [{"name": "Max", "type": "Integer"}]}], None),
+        ([{"name": "Limits", "requiredFields": [{"name": "Max", "write": True}]}], "var-readonly"),
+        ([{"name": "Limits", "requiredFields": ["Min"]}], "var-type"),
+        ([{"name": "Speed", "requiredFields": ["Max"]}], "var-type"),
+    ],
+)
+def test_struct_members_are_checked_for_type_and_access(struct_ctx, required, code):
+    field = {"type": "Motor", "requiredFields": required}
+    assert _var_type_codes(struct_ctx, "PLC:Motor", field) == ([code] if code else [])
+
+
+def test_struct_member_failures_name_the_member(struct_ctx):
+    report = ValidationReport()
+    field = {"type": "Motor", "requiredFields": [{"name": "Name", "write": True}]}
+    validate_var_ref({"path": "PLC:Motor"}, struct_ctx, "/p", report, field)
+    assert report.warnings[0].message == (
+        "member 'Name' of variable 'PLC:Motor' is read-only, and this field writes to it"
+    )
+    report = ValidationReport()
+    field = {"type": "Motor", "requiredFields": [{"name": "Limits", "requiredFields": ["Min"]}]}
+    validate_var_ref({"path": "PLC:Motor"}, struct_ctx, "/p", report, field)
+    assert "member 'Limits/Min' is missing" in report.warnings[0].message
+
+
+def test_struct_array_members_are_read_off_the_bound_element(struct_ctx):
+    written = [{"name": "Speed", "write": True}]
+    whole = {"type": "Motor[]", "requiredFields": written}
+    one = {"type": "Motor", "requiredFields": written}
+    # Unindexed, the lowest-index element counts whatever order the registry
+    # lists them in: Line[0], whose Speed is read-only.
+    assert _var_type_codes(struct_ctx, "PLC:Motors", whole) == ["var-readonly"]
+    assert _var_type_codes(struct_ctx, "PLC:Motors", one, repeatIndex=True) == ["var-readonly"]
+    # A bound index is judged on that element; one that does not exist falls
+    # back to the lowest.
+    assert _var_type_codes(struct_ctx, "PLC:Motors", one, index=1) == []
+    assert _var_type_codes(struct_ctx, "PLC:Motors", one, index=0) == ["var-readonly"]
+    assert _var_type_codes(struct_ctx, "PLC:Motors", one, index=7) == ["var-readonly"]
+    struct_ctx.datasource_writable["PLC"]["Motors/Line[0]/Speed"] = True
+    assert _var_type_codes(struct_ctx, "PLC:Motors", whole) == []
+
+
+def test_one_based_struct_array_is_still_judged(struct_ctx):
+    registry = struct_ctx.datasource_registry["PLC"]
+    for key in [k for k in registry if k.startswith("Motors/Line[0]")]:
+        registry[key.replace("Line[0]", "Line[2]")] = registry.pop(key)
+    struct_ctx.datasource_writable["PLC"]["Motors/Line[1]/Speed"] = False
+    field = {"type": "Motor[]", "requiredFields": [{"name": "Speed", "write": True}]}
+    assert _var_type_codes(struct_ctx, "PLC:Motors", field) == ["var-readonly"]
+
+
+def test_read_only_variable_bound_to_a_writing_field(struct_ctx):
+    struct_ctx.datasource_registry["PLC"]["Setpoints"] = {"kind": "scalar", "base": "Float", "array": True}
+    struct_ctx.datasource_writable["PLC"].update({"Setpoints": False, "Motor/Speed": False})
+    written = {"type": "float", "write": True}
+    assert _var_type_codes(struct_ctx, "PLC:Motor/Speed", written) == ["var-readonly"]
+    assert _var_type_codes(struct_ctx, "PLC:Motor/Speed", {"type": "float"}) == []
+    assert _var_type_codes(struct_ctx, "PLC:Setpoints", written, index=1) == ["var-readonly"]
+    # Access that is not known is read-only, as the picker reads it.
+    del struct_ctx.datasource_writable["PLC"]["Motor/Speed"]
+    assert _var_type_codes(struct_ctx, "PLC:Motor/Speed", written) == ["var-readonly"]
+    struct_ctx.datasource_writable = {}
+    assert _var_type_codes(struct_ctx, "PLC:Setpoints", written, index=1) == ["var-readonly"]
+    # A datasource whose variables are not collected yet is not judged at all.
+    struct_ctx.datasource_registry["Fresh"] = {}
+    assert _var_type_codes(struct_ctx, "Fresh:Motor/Speed", written) == []
+
+
+def test_struct_member_access_is_read_only_without_access_information(struct_ctx):
+    struct_ctx.datasource_writable = {}
+    field = {"type": "Motor", "requiredFields": [{"name": "Speed", "write": True}]}
+    assert _var_type_codes(struct_ctx, "PLC:Motor", field) == ["var-readonly"]
+    # A struct has no access of its own: without write members it is not judged.
+    assert _var_type_codes(struct_ctx, "PLC:Motor", {"write": True}) == []
+
+
 def test_user_groups_is_a_boolean_expression(ctx):
     report = ValidationReport()
     _validate_property_value(

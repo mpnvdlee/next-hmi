@@ -20,6 +20,7 @@ import { useComponentEditorStore } from '@config/store/componentEditorStore';
 import { FieldPathContext } from '../../ui/FieldGroup/fieldPathContext';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { useConfigStore } from '@shared/store/configStore';
+import RepeatEditorScopeProvider from '../PropertySourceEditor/RepeatEditorScopeProvider';
 import { findWidgetsByIds } from '@shared/store/configStoreHelpers';
 import { widgetRegistry } from '@hmi/registry/widgetRegistry';
 import {
@@ -997,8 +998,9 @@ function ComponentPanel({
           ? // `currentBinding` arrives from whichever slot opened the picker — a
             // nested `$if` branch or `$switch` case names its own binding, which
             // the picker cannot read back off `comp.properties[key]`.
-            (onPick, currentBinding, anyType) =>
+            (onPick, currentBinding, slot, extras) =>
               openBindingPicker(comp.id, key, {
+                ...extras,
                 onPick,
                 currentBinding,
                 filter: slotFilter(
@@ -1009,7 +1011,7 @@ function ComponentPanel({
                     requiredFields: (schema[key] as { requiredFields?: RequiredFieldEntry[] })
                       .requiredFields,
                   },
-                  anyType,
+                  slot,
                 ),
               })
           : undefined
@@ -1025,6 +1027,11 @@ function ComponentPanel({
 
   const compRef = useRef(comp);
   compRef.current = comp;
+
+  // Read, not subscribed: the Repeater lookup below re-walks on `structureRev`.
+  const { pages, dialogs, header, footer, leftSidebar, rightSidebar } = useConfigStore.getState();
+  const repeatRoots = [pages, dialogs, header, footer, leftSidebar, rightSidebar];
+  const structureRev = useConfigStore((s) => s.structureRev);
 
   useCopyPasteShortcut((key, { path, schema: targetSchema }) => {
     const [topKey, ...subPath] = path;
@@ -1074,38 +1081,44 @@ function ComponentPanel({
   });
 
   return (
-    <PanelScopeContext.Provider value={comp.id}>
-      <FieldPathContext.Provider value={[...parentPath, displayName]}>
-        <PanelHeader
-          icon={<WidgetIcon type={comp.type} size={18} />}
-          name={displayName}
-          kind={<WidgetKind type={comp.type} typeName={entry?.name ?? comp.type} />}
-        />
-
-        {/* ── Identity ─────────────────────────────────────────────────── */}
-        <CollapsibleSection title="Identity">
-          <PropRow label="Name" selection={{ path: ['__name__'], schema: NAME_SCHEMA }} sourceless>
-            <TextField value={comp.name} onCommit={patchName} />
-          </PropRow>
-        </CollapsibleSection>
-        {schemaGroups.map((group) => (
-          <CollapsibleSection key={group.title} title={group.title}>
-            {group.keys.map(renderSchemaRow)}
-          </CollapsibleSection>
-        ))}
-
-        {/* ── Layout ───────────────────────────────────────────────────── */}
-        <CollapsibleSection title="Layout">
-          <LayoutFields
-            mode={isContainer ? 'container' : 'leaf'}
-            layout={layout}
-            onChange={patchLayout}
-            componentId={comp.id}
-            tokenValues={tokenValues}
+    <RepeatEditorScopeProvider roots={repeatRoots} rev={structureRev} widgetId={comp.id}>
+      <PanelScopeContext.Provider value={comp.id}>
+        <FieldPathContext.Provider value={[...parentPath, displayName]}>
+          <PanelHeader
+            icon={<WidgetIcon type={comp.type} size={18} />}
+            name={displayName}
+            kind={<WidgetKind type={comp.type} typeName={entry?.name ?? comp.type} />}
           />
-        </CollapsibleSection>
-      </FieldPathContext.Provider>
-    </PanelScopeContext.Provider>
+
+          {/* ── Identity ─────────────────────────────────────────────────── */}
+          <CollapsibleSection title="Identity">
+            <PropRow
+              label="Name"
+              selection={{ path: ['__name__'], schema: NAME_SCHEMA }}
+              sourceless
+            >
+              <TextField value={comp.name} onCommit={patchName} />
+            </PropRow>
+          </CollapsibleSection>
+          {schemaGroups.map((group) => (
+            <CollapsibleSection key={group.title} title={group.title}>
+              {group.keys.map(renderSchemaRow)}
+            </CollapsibleSection>
+          ))}
+
+          {/* ── Layout ───────────────────────────────────────────────────── */}
+          <CollapsibleSection title="Layout">
+            <LayoutFields
+              mode={isContainer ? 'container' : 'leaf'}
+              layout={layout}
+              onChange={patchLayout}
+              componentId={comp.id}
+              tokenValues={tokenValues}
+            />
+          </CollapsibleSection>
+        </FieldPathContext.Provider>
+      </PanelScopeContext.Provider>
+    </RepeatEditorScopeProvider>
   );
 }
 
