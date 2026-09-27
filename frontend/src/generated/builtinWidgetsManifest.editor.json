@@ -963,13 +963,11 @@
       "stateVariable": {
         "label": "State variable",
         "group": "Data",
-        "write": true,
         "description": "Writes \"playing\", \"paused\" or \"ended\" as playback state changes."
       },
       "currentTimeVariable": {
         "label": "Current time variable",
         "group": "Data",
-        "write": true,
         "description": "Writes the current playback position in seconds, throttled to once/second."
       },
       "onPlay": {
@@ -1336,8 +1334,7 @@
       },
       "inboundVariable": {
         "label": "Inbound variable (write target)",
-        "group": "Data",
-        "write": true
+        "group": "Data"
       },
       "outboundVariable": {
         "label": "Outbound variable",
@@ -1709,8 +1706,7 @@
       },
       "variable": {
         "label": "Value",
-        "group": "Data",
-        "write": true
+        "group": "Data"
       },
       "selectedValue": {
         "label": "Selected value",

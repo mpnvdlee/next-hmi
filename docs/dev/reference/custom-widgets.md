@@ -181,7 +181,7 @@ The canonical list of names exposed on `window.__nextHMI__` lives in `frontend/s
 - `useVariable(key)` — subscribe to a single composite-key scalar variable.
 - `useBindingValue(binding)` — same, but takes a `VariableBinding` (or `undefined`).
 - `useStructVariable(key)` — subscribe to a struct (returns `Record<string, unknown>`) or an array-of-struct (returns `unknown[]`).
-- `useVariableMeta(key)` — subscribe to `{ type, min?, max?, fieldRanges? }`. `type` is the canonical scalar/struct `VarType` with `array: boolean` and an optional fixed `length`; `min`/`max` apply to scalar numeric variables and `fieldRanges` carries per-field struct ranges. Returns `undefined` if the key isn't known.
+- `useVariableMeta(key)` — subscribe to `{ type, min?, max?, writable?, fieldRanges? }`. `type` is the canonical scalar/struct `VarType` with `array: boolean` and an optional fixed `length`; `min`/`max` apply to scalar numeric variables, `writable` says whether a scalar variable accepts writes, and `fieldRanges` carries per-field struct ranges. Returns `undefined` if the key isn't known.
 - `useEvalContext()` — returns the active `EvaluationContext` used to resolve `$var` / `$loc` / `$urlParam` / `$user` / `$device` / `$time` / `$pageIsActive` / `$random` / `$if` / `$compare` / `$not` / `$formula` / `$switch` / `$widgetProp` / `$componentProp` / `$stringExpr` / `$alarmCount` / `$page` / `$viewport` / `$result` property sources. The full source/type model is in [../architecture/value-types.md](../architecture/value-types.md).
 - `bindingKey(binding)` — composes a `"datasource:path"` key from a `VariableBinding`.
 - `parseVarKey(key)` — splits `"datasource:path"` back into `{ datasource, path }`.

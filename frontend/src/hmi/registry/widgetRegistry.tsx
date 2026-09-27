@@ -44,10 +44,10 @@ import { ensureRecharts } from '@shared/utils/rechartsLoader';
 // only the component modules load lazily from /builtin-widgets-js/.
 //
 // The manifest's *runtime* half: registration fields plus each schema field's
-// `type` and `requiredFields`, all `useBindingStatus` needs. Labels, options,
-// defaults, descriptions and icons live in the `.editor.json` sibling, imported
-// only from `src/config/`. Every route reaches this module, so a byte here is a
-// byte on every page.
+// `type`, `requiredFields` and `write`, all `useBindingStatus` needs. Labels,
+// options, defaults, descriptions and icons live in the `.editor.json` sibling,
+// imported only from `src/config/`. Every route reaches this module, so a byte
+// here is a byte on every page.
 import builtinWidgetsManifest from '../../generated/builtinWidgetsManifest.json';
 
 const COMPONENT_TYPE_PREFIX = '$component:';

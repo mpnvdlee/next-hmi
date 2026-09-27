@@ -470,6 +470,7 @@ export type ActionResultReason =
   | 'array_index_out_of_bounds'
   | 'array_state_unavailable'
   | 'value_unavailable'
+  | 'read_only'
   | 'timeout'
   | 'disconnected';
 

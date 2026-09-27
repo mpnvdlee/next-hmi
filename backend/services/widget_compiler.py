@@ -834,12 +834,13 @@ def _regenerate_widget_schemas(target: CompileTarget) -> bool:
         return False
 
 
-# The only schema-field attributes the *runtime* reads: `type` and
-# `requiredFields` are what `useBindingStatus` needs to decide whether a bound
-# variable fits the slot it is bound to (see hmi/utils/bindingValidation.ts).
+# The only schema-field attributes the *runtime* reads: `type`,
+# `requiredFields` and `write` are what `useBindingStatus` needs to decide
+# whether a bound variable fits the slot it is bound to (see
+# hmi/utils/bindingValidation.ts).
 # Everything else on a field — label, group, options, defaults, placeholders,
 # visibleWhen, min/max/step — only ever reaches the properties panel.
-_RUNTIME_SCHEMA_KEYS = frozenset({"type", "requiredFields"})
+_RUNTIME_SCHEMA_KEYS = frozenset({"type", "requiredFields", "write"})
 
 # Row-level metadata with the same story: read only by the editor's palette,
 # widget tree and `$widgetProp` picker, never by a rendering HMI page.

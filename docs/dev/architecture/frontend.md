@@ -329,8 +329,8 @@ product rollback.
 
 The manifest is split in two because its readers are. `widgetRegistry.tsx` is on
 every route, so what it imports lands in the shared entry chunk an HMI page
-loads: that half holds the registration fields plus each schema field's `type`
-and `requiredFields` — all `useBindingStatus` needs to raise the
+loads: that half holds the registration fields plus each schema field's `type`,
+`requiredFields` and `write` — all `useBindingStatus` needs to raise the
 disconnected/disabled overlay. Labels, options, defaults, `visibleWhen`,
 descriptions and icons go in `builtinWidgetsManifest.editor.json`, which only
 `hmi/registry/builtinWidgetsEditorMetadata.ts` imports, and which only

@@ -106,6 +106,11 @@ class ValidationContext:
     # existence/type checks are skipped for it, mirroring the pre-typed
     # behaviour (best-effort, never false-positives a fresh/unstarted pool).
     datasource_registry: dict[str, dict[str, dict]] = field(default_factory=dict)
+    # datasource -> scalar variable path -> writable, from the same source as
+    # the registry. Only `True` makes a variable writable: one the registry
+    # knows but this map does not — or a datasource missing here altogether —
+    # is read-only, as the binding picker reads it.
+    datasource_writable: dict[str, dict[str, bool]] = field(default_factory=dict)
     # datasource -> declared type ('opcua-client' | 'static' | 'opcua-test-server').
     # A test server is a simulator the product *serves*, never a binding target:
     # bindings must go through an opcua-client pointed at it (see validate_var_ref).
@@ -492,11 +497,12 @@ _ds_scan_cache: tuple[
 # thus this) once per debounced keystroke, so a short TTL collapses a burst of
 # rapid edits into one recompute instead of re-walking the pool per keystroke.
 _LIVE_REGISTRY_TTL_S = 0.25
-_live_registry_cache: tuple[float, dict[str, dict[str, dict]]] | None = None
+_live_registry_cache: tuple[float, _Registry, _Writable] | None = None
 
 
-def _collect_datasource_registry() -> dict[str, dict[str, dict]]:
-    """Best-effort: query the running datasource_manager for typed variables.
+def _collect_datasource_registry() -> tuple[_Registry, _Writable]:
+    """Best-effort: query the running datasource_manager for typed variables
+    and their writability.
 
     ``variable_metadata()`` already emits VarType-shaped dicts (kind/base/
     array/length or kind/name/array/fields) — the exact JSON shape
@@ -510,8 +516,9 @@ def _collect_datasource_registry() -> dict[str, dict[str, dict]]:
     global _live_registry_cache
     now = time.monotonic()
     if _live_registry_cache is not None and now - _live_registry_cache[0] < _LIVE_REGISTRY_TTL_S:
-        return _live_registry_cache[1]
-    registry: dict[str, dict[str, dict]] = {}
+        return _live_registry_cache[1], _live_registry_cache[2]
+    registry: _Registry = {}
+    writable: _Writable = {}
     try:
         from models.datasource import parse_var_key
         from services.datasource_manager import datasource_manager
@@ -523,8 +530,10 @@ def _collect_datasource_registry() -> dict[str, dict[str, dict]]:
             var_type = meta.get("type") if isinstance(meta, dict) else None
             if isinstance(var_type, dict):
                 registry.setdefault(ds_name, {})[var_path] = var_type
+                if isinstance(meta.get("writable"), bool):
+                    writable.setdefault(ds_name, {})[var_path] = meta["writable"]
     except Exception:
-        registry = {}
+        registry, writable = {}, {}
     if registry:
         _live_registry_cache = (now, registry)
         return registry
@@ -576,23 +585,25 @@ def _walk_variable_tree(nodes: Any, prefix: str, out: dict[str, dict]) -> None:
             })
 
 
-def _scan_datasources_from_disk() -> tuple[dict[str, dict[str, dict]], dict[str, str]]:
-    """(variable registry, declared datasource type) per datasource, from the
-    project's ``datasources/*.json`` — one mtime-keyed scan feeds both."""
+def _scan_datasources_from_disk() -> tuple[_Registry, _Writable, dict[str, str]]:
+    """(variable registry, leaf writability, declared datasource type) per
+    datasource, from the project's ``datasources/*.json`` — one mtime-keyed
+    scan feeds all three."""
     global _ds_scan_cache
     from core.storage import active_datasources_dir
 
     datasources_dir = active_datasources_dir()
     if not datasources_dir.exists():
         _ds_scan_cache = None
-        return {}, {}
+        return {}, {}, {}
     files = sorted(datasources_dir.glob("*.json"))
     fingerprint = frozenset(
         (str(p), p.stat().st_mtime_ns) for p in files
     )
     if _ds_scan_cache is not None and _ds_scan_cache[0] == fingerprint:
-        return _ds_scan_cache[1], _ds_scan_cache[2]
-    registry: dict[str, dict[str, dict]] = {}
+        return _ds_scan_cache[1], _ds_scan_cache[2], _ds_scan_cache[3]
+    registry: _Registry = {}
+    writable: _Writable = {}
     ds_types: dict[str, str] = {}
     for path in files:
         try:
@@ -628,7 +639,7 @@ def _collect_datasource_types() -> dict[str, str]:
         live = {}
     if live:
         return live
-    return _scan_datasources_from_disk()[1]
+    return _scan_datasources_from_disk()[2]
 
 
 # Curated built-in icon ids — mirrors frontend/src/shared/config/iconAllowlist.ts
@@ -750,6 +761,7 @@ def build_context() -> ValidationContext:
     page_files = page_document_files()
     navigable_page_ids = frozenset(_index_collect_page_ids(root_nodes(config, "pages")))
     dialogs_page_ids = frozenset(_index_collect_page_ids(root_nodes(config, "dialogs")))
+    datasource_registry, datasource_writable = _collect_datasource_registry()
     return ValidationContext(
         widget_schemas=load_widget_manifest(),
         datasource_registry=_collect_datasource_registry(),

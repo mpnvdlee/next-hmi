@@ -734,9 +734,10 @@ async def test_generate_builtin_widgets_manifest_splits_the_editor_half_out(
     widget_workspace, tmp_path
 ):
     """The runtime half rides in every route's entry chunk, so it must carry
-    only what a rendering page reads: the registration fields, plus the `type`
-    and `requiredFields` `useBindingStatus` validates a binding against. The
-    editor half holds the rest and is imported only from ``src/config/``."""
+    only what a rendering page reads: the registration fields, plus the `type`,
+    `requiredFields` and `write` `useBindingStatus` validates a binding
+    against. The editor half holds the rest and is imported only from
+    ``src/config/``."""
     src = widget_workspace["src"]
     _write_widget(
         src,
@@ -746,6 +747,7 @@ async def test_generate_builtin_widgets_manifest_splits_the_editor_half_out(
         "export const schema = {\n"
         "  label: { type: 'string' as const, label: 'Label', defaultValue: 'hi' },\n"
         "  motor: { type: 'struct' as const, label: 'Motor', requiredFields: ['run'] },\n"
+        "  setpoint: { type: 'float' as const, label: 'Setpoint', write: true },\n"
         "};\n"
         "export default function Box() { return null; }\n",
     )
@@ -762,6 +764,7 @@ async def test_generate_builtin_widgets_manifest_splits_the_editor_half_out(
     assert row["schema"] == {
         "label": {"type": "string"},
         "motor": {"type": "struct", "requiredFields": ["run"]},
+        "setpoint": {"type": "float", "write": True},
     }
 
     editor_path = tmp_path / "builtinWidgetsManifest.editor.json"
@@ -773,6 +776,7 @@ async def test_generate_builtin_widgets_manifest_splits_the_editor_half_out(
     assert half["schema"] == {
         "label": {"label": "Label", "defaultValue": "hi"},
         "motor": {"label": "Motor"},
+        "setpoint": {"label": "Setpoint"},
     }
 
 

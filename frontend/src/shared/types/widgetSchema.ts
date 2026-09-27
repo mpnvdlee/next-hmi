@@ -167,7 +167,7 @@ export type WidgetOrigin = 'project' | 'builtin';
  * `src/config/` so it lands in the editor's chunk. Both are static imports —
  * an editor surface reads a whole `RegistryEntry` on its first render, an HMI
  * page never fetches these bytes at all. A field absent here simply had
- * nothing beyond `type` / `requiredFields` to say.
+ * nothing beyond `type` / `requiredFields` / `write` to say.
  */
 export interface BuiltinWidgetEditorEntry {
   description?: string | null;

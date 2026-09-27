@@ -35,7 +35,7 @@ The `path` is always `datasource:location`, with the location slash-separated. T
 
 ## Write back to the machine
 
-Mark a variable **writable** when browsing, and controls can push values to it. A **Button** binds a struct with `bVisible`, `bEnabled` and a writable `bValue` — press it and the runtime sends a `write_field` message that sets the tag. A numeric setpoint written from a numpad works the same way.
+Mark a variable **writable** when browsing, and controls can push values to it. A **Button** binds a writable boolean — press it and the runtime sends a `write_field` message that sets the tag to `true`. A numeric setpoint written from a numpad works the same way. A variable not marked writable refuses every write — the server sends nothing to the machine and the operator sees *Variable is read-only*.
 
 ## What happens when data goes bad
 

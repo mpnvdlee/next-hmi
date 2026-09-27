@@ -60,7 +60,7 @@ def _make_manager(
 
 def test_static_write_emits_write_response() -> None:
     ws = FakeWebSocket()
-    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32"}})
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32", "writable": True}})
     manager = _make_manager(ws, ds_entry=ds_entry)
 
     _run_write(manager, _msg())
@@ -74,7 +74,7 @@ def test_opcua_write_success_emits_write_response() -> None:
     ws = FakeWebSocket()
     ds_entry = FakeDatasourceEntry(
         ds_type="opcua-client",
-        registry={"Tag": {"data_type": "int32", "node_id": "ns=2;s=Tag"}},
+        registry={"Tag": {"data_type": "int32", "writable": True, "node_id": "ns=2;s=Tag"}},
     )
     engine = FakeEngine()
     manager = _make_manager(ws, ds_entry=ds_entry, engine=engine)
@@ -130,7 +130,7 @@ def test_permission_denied_when_group_mismatch() -> None:
     ws = FakeWebSocket()
     ds_entry = FakeDatasourceEntry(
         ds_type="static",
-        registry={"Tag": {"data_type": "int32", "interactableByGroups": ["engineer"]}},
+        registry={"Tag": {"data_type": "int32", "writable": True, "interactableByGroups": ["engineer"]}},
     )
     manager = _make_manager(ws, ds_entry=ds_entry)
     # client identity carries only "guest", not "engineer"
@@ -153,7 +153,7 @@ def test_permission_denied_when_group_mismatch() -> None:
 
 def test_invalid_value_when_coercion_fails() -> None:
     ws = FakeWebSocket()
-    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32"}})
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32", "writable": True}})
     manager = _make_manager(ws, ds_entry=ds_entry)
 
     _run_write(manager, _msg(value="not-a-number"))
@@ -171,7 +171,7 @@ def test_invalid_value_when_coercion_fails() -> None:
 
 def test_present_null_is_invalid_value_not_bad_request() -> None:
     ws = FakeWebSocket()
-    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32"}})
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32", "writable": True}})
     manager = _make_manager(ws, ds_entry=ds_entry)
     _run_write(manager, _msg(value=None))
     assert ws.messages[0]["reason"] == "invalid_value"
@@ -182,7 +182,7 @@ def test_bad_field_when_node_id_unresolvable() -> None:
     # OPC-UA path but no node_id and no matching field → _resolve_node_id returns None
     ds_entry = FakeDatasourceEntry(
         ds_type="opcua-client",
-        registry={"Tag": {"data_type": "int32", "fields": {}}},
+        registry={"Tag": {"data_type": "int32", "writable": True, "fields": {}}},
     )
     manager = _make_manager(ws, ds_entry=ds_entry, engine=FakeEngine())
 
@@ -203,7 +203,7 @@ def test_opcua_unreachable_when_engine_missing() -> None:
     ws = FakeWebSocket()
     ds_entry = FakeDatasourceEntry(
         ds_type="opcua-client",
-        registry={"Tag": {"data_type": "int32", "node_id": "ns=2;s=Tag"}},
+        registry={"Tag": {"data_type": "int32", "writable": True, "node_id": "ns=2;s=Tag"}},
     )
     # pool returns no engine
     manager = _make_manager(ws, ds_entry=ds_entry, engine=None)
@@ -225,7 +225,7 @@ def test_write_failed_when_engine_raises() -> None:
     ws = FakeWebSocket()
     ds_entry = FakeDatasourceEntry(
         ds_type="opcua-client",
-        registry={"Tag": {"data_type": "int32", "node_id": "ns=2;s=Tag"}},
+        registry={"Tag": {"data_type": "int32", "writable": True, "node_id": "ns=2;s=Tag"}},
     )
     manager = _make_manager(ws, ds_entry=ds_entry, engine=FakeEngine(raises=True))
 
@@ -247,7 +247,7 @@ def test_write_failed_when_engine_raises() -> None:
 
 def test_no_request_id_means_silent_success() -> None:
     ws = FakeWebSocket()
-    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32"}})
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32", "writable": True}})
     manager = _make_manager(ws, ds_entry=ds_entry)
 
     msg = _msg()
@@ -285,7 +285,7 @@ def _toggle(**extra: Any) -> dict[str, Any]:
 
 def test_toggle_writes_the_inverse_of_the_cached_static_value() -> None:
     ws = FakeWebSocket()
-    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Run": {"data_type": "Boolean"}})
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Run": {"data_type": "Boolean", "writable": True}})
     manager = _make_manager(ws, ds_entry=ds_entry)
     manager._datasource_manager.cached = {"DS:Run": True}  # type: ignore[union-attr]
 
@@ -301,7 +301,7 @@ def test_toggle_respects_interactable_groups() -> None:
     ws = FakeWebSocket()
     ds_entry = FakeDatasourceEntry(
         ds_type="static",
-        registry={"Run": {"data_type": "Boolean", "interactableByGroups": ["operator"]}},
+        registry={"Run": {"data_type": "Boolean", "writable": True, "interactableByGroups": ["operator"]}},
     )
     manager = _make_manager(ws, ds_entry=ds_entry)
     manager._datasource_manager.cached = {"DS:Run": True}  # type: ignore[union-attr]
@@ -323,10 +323,48 @@ def test_toggle_without_path_is_a_bad_request() -> None:
 
 def test_toggle_of_unknown_value_reports_value_unavailable() -> None:
     ws = FakeWebSocket()
-    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Run": {"data_type": "Boolean"}})
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Run": {"data_type": "Boolean", "writable": True}})
     manager = _make_manager(ws, ds_entry=ds_entry)
     manager._datasource_manager.cached = {}  # type: ignore[union-attr]
 
     asyncio.run(manager._handle_toggle_field("c1", _toggle()))
 
     assert ws.messages[0]["reason"] == "value_unavailable"
+
+
+# ── read-only variables ──────────────────────────────────────────────────────
+
+
+def test_write_to_a_read_only_variable_reports_read_only() -> None:
+    ws = FakeWebSocket()
+    ds_entry = FakeDatasourceEntry(
+        ds_type="opcua-client",
+        registry={"Tag": {"data_type": "int32", "writable": False, "node_id": "ns=2;s=Tag"}},
+    )
+    engine = FakeEngine()
+    manager = _make_manager(ws, ds_entry=ds_entry, engine=engine)
+
+    _run_write(manager, _msg())
+
+    assert engine.write_calls == []
+    assert ws.messages == [
+        {
+            "type": "write_error",
+            "requestId": "req-1",
+            "datasource": "DS",
+            "path": "Tag",
+            "reason": "read_only",
+        },
+    ]
+
+
+def test_toggle_of_a_variable_that_states_no_access_reports_read_only() -> None:
+    ws = FakeWebSocket()
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Run": {"data_type": "Boolean"}})
+    manager = _make_manager(ws, ds_entry=ds_entry)
+    manager._datasource_manager.cached = {"DS:Run": True}  # type: ignore[union-attr]
+
+    asyncio.run(manager._handle_toggle_field("c1", _toggle()))
+
+    assert manager._datasource_manager.static_updates == []  # type: ignore[union-attr]
+    assert ws.messages[0]["reason"] == "read_only"

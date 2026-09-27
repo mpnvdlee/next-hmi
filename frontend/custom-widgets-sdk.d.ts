@@ -466,6 +466,8 @@ interface VarMeta {
   /** Configured numeric range — scalar variables only. */
   min?: number;
   max?: number;
+  /** Whether the variable accepts writes — scalar variables only. */
+  writable?: boolean;
   /** Configured numeric range per field — structs only. */
   fieldRanges?: Record<string, { min?: number; max?: number }>;
 }

@@ -165,6 +165,13 @@ it. This range check is independent of the coercion matrix and surfaces its
 own stable REST/WebSocket reason, `value_out_of_range` (see
 [websocket.md](websocket.md) for the full reason table).
 
+**Access enforcement.** Between coercion and the range check,
+`write_service.write_value` refuses a variable whose own `writable` flag is not
+`true` as `read_only` — the flag of the array for an element write, of the
+member for a struct-field write. `toggle_value` checks it before reading the
+current value. Every operator write reaches this one check: `write_field`,
+`toggle_field`, `POST /api/datasources/write` and recipe downloads.
+
 - `backend/services/recipe_manager.py`
   - thread-safe singleton; persists config to `recipes.json` and the loaded-per-type pointer to `recipe_state.json`
   - `download()` writes a dataset's values via `write_service` (continue-on-error, optional exact-match verify); `upload_into()` reads live values back into a dataset in place

@@ -30,6 +30,15 @@ export interface BindingSpec {
   /** Schema slot's accepted types (empty = no type constraint). */
   accept: AcceptType[];
   requiredFields?: RequiredFieldEntry[];
+  /** The slot writes the variable back, so a read-only variable fails it. */
+  write?: boolean;
+}
+
+/** The schema-field slice binding validation reads. */
+export interface BindingSchemaField {
+  type: string | string[];
+  requiredFields?: RequiredFieldEntry[];
+  write?: boolean;
 }
 
 /** Parse a schema field's `type` into the slot's accepted-type list. */
@@ -137,7 +146,7 @@ export function checkBindingSpec(
   s: BindingStoreSlice,
   hasMeta: boolean,
 ): 'ok' | 'invalid' | 'pending' {
-  const { id, index, accept, requiredFields } = spec;
+  const { id, index, accept, requiredFields, write } = spec;
   const meta = s.varMeta[id];
 
   if (!meta) {
@@ -162,6 +171,9 @@ export function checkBindingSpec(
     const value = index === undefined ? meta.type : elementOf(meta.type);
     if (!accept.some((a) => accepts(a, value, requiredFields))) return 'invalid';
   }
+  // Unset access is read-only, as the picker and the backend read it. A struct
+  // has no access of its own; its members were judged above.
+  if (write && meta.type.kind !== 'struct' && meta.writable !== true) return 'invalid';
 
   const valueId = index !== undefined && meta.type.kind === 'struct' ? `${id}/[${index}]` : id;
   if (!(valueId in s.values)) return 'pending';
@@ -274,7 +286,7 @@ export function createBindingStatusSelector(
  */
 export function useBindingStatus(
   properties: Record<string, unknown> | undefined,
-  schema: Record<string, { type: string | string[]; requiredFields?: RequiredFieldEntry[] }>,
+  schema: Record<string, BindingSchemaField>,
 ): BindingStatus {
   const bindingSpecs = useMemo(() => extractBindingSpecs(properties, schema), [properties, schema]);
   const selector = useMemo(() => createBindingStatusSelector(bindingSpecs), [bindingSpecs]);

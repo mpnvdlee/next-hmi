@@ -412,8 +412,15 @@ def test_rest_write_shares_envelope_coercion_and_group_permission(ds_client, mon
                     "display_name": "Count",
                     "data_type": "Int16",
                     "enabled": True,
+                    "writable": True,
                     "interactableByGroups": ["operator"],
-                }
+                },
+                {
+                    "kind": "variable",
+                    "display_name": "Status",
+                    "data_type": "Int16",
+                    "enabled": True,
+                },
             ],
         },
     )
@@ -444,6 +451,11 @@ def test_rest_write_shares_envelope_coercion_and_group_permission(ds_client, mon
     assert client.post(url, json=malformed, auth=("operator", "secret")).json() == {
         "ok": False,
         "reason": "bad_request",
+    }
+    read_only = {"datasource": "plc1", "path": "Status", "value": 1}
+    assert client.post(url, json=read_only, auth=("operator", "secret")).json() == {
+        "ok": False,
+        "reason": "read_only",
     }
 
 

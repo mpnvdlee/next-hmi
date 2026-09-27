@@ -43,6 +43,7 @@ REASON_ARRAY_INDEX_OUT_OF_BOUNDS = "array_index_out_of_bounds"
 REASON_ARRAY_STATE_UNAVAILABLE = "array_state_unavailable"
 REASON_VALUE_OUT_OF_RANGE = "value_out_of_range"
 REASON_VALUE_UNAVAILABLE = "value_unavailable"
+REASON_READ_ONLY = "read_only"
 
 
 @dataclass
@@ -201,6 +202,52 @@ COERCION_INVALID_STRING = "invalid_string"
 COERCION_INVALID_TEMPORAL = "invalid_temporal"
 COERCION_FLOAT_RANGE = "float_out_of_range"
 COERCION_INVALID_DESCRIPTOR = "invalid_descriptor"
+
+# What the editor tells an author about a rejected value, per reason. Mirrors
+# WRITE_COERCION_MESSAGES in frontend/src/shared/utils/opcuaWriteCoercion.ts
+# (parity: writeCoercionMessages.json).
+COERCION_MESSAGES: dict[str, str] = {
+    COERCION_NULL_NOT_ALLOWED: "A value is required.",
+    COERCION_UNKNOWN_TYPE: "The target variable's type is not known.",
+    COERCION_SCALAR_REQUIRED: "Expected a single value, not an array.",
+    COERCION_ARRAY_REQUIRED: "Expected an array.",
+    COERCION_ARRAY_LENGTH: "The array has the wrong number of elements.",
+    COERCION_INVALID_BOOLEAN: "Expected a Boolean (true or false).",
+    COERCION_INVALID_INTEGER: "Expected an Integer.",
+    COERCION_INTEGER_RANGE: "The Integer is out of range for this variable.",
+    COERCION_LOSSY: "This number cannot be stored exactly in this variable.",
+    COERCION_INVALID_FLOAT: "Expected a Float.",
+    COERCION_NON_FINITE: "Expected a finite Float.",
+    COERCION_INVALID_STRING: "Expected a String.",
+    COERCION_INVALID_TEMPORAL: "Expected a DateTime, Date or Time in ISO format.",
+    COERCION_FLOAT_RANGE: "The Float is out of range for this variable.",
+    COERCION_INVALID_DESCRIPTOR: "The target variable's type description is invalid.",
+    REASON_ARRAY_INDEX_OUT_OF_BOUNDS: "The element index is outside the array.",
+    REASON_VALUE_OUT_OF_RANGE: "The value is outside the variable's configured range.",
+}
+
+
+def canonical_data_type(data_type: Any) -> str | None:
+    """The write path's name for a variable's OPC-UA type (`int16`, `boolean`,
+    …), or None for a type it cannot write."""
+    return _CANONICAL_TYPE_ALIASES.get(data_type.strip().lower()) if isinstance(data_type, str) else None
+
+
+def value_out_of_range(value: Any, entry_data: dict[str, Any]) -> bool:
+    """Whether a coerced value falls outside the entry's configured min/max —
+    the check ``write_value`` applies after coercion."""
+    bounds = _range_bounds(entry_data)
+    if bounds is None:
+        return False
+    values = value if isinstance(value, list) else [value]
+    return not all(_in_range(v, bounds) for v in values)
+
+
+def is_writable(entry_data: dict[str, Any]) -> bool:
+    """Whether a variable accepts writes: its own ``writable`` flag, and only
+    when it says so — the same reading the variable metadata gives the editor
+    and the runtime binding check."""
+    return entry_data.get("writable") is True
 
 
 class WriteCoercionError(ValueError):
@@ -557,7 +604,9 @@ async def write_value(
 ) -> WriteOutcome:
     """Coerce and write *value* to ``ds_name:path``.
 
-    Static datasources are updated in memory; OPC-UA datasources are written via
+    The variable actually written — the element's array, the struct member —
+    must be writable; one that is not is refused as ``read_only``. Static
+    datasources are updated in memory; OPC-UA datasources are written via
     the pool engine. When *verify* is set, the value is read back and compared
     for exact equality (per-element for arrays).
     """
@@ -589,11 +638,11 @@ async def write_value(
     except ValueError:
         return WriteOutcome(False, REASON_INVALID_VALUE)
 
-    bounds = _range_bounds(coercion_entry)
-    if bounds is not None:
-        checked_values = coerced if isinstance(coerced, list) else [coerced]
-        if not all(_in_range(v, bounds) for v in checked_values):
-            return WriteOutcome(False, REASON_VALUE_OUT_OF_RANGE)
+    if not is_writable(coercion_entry):
+        return WriteOutcome(False, REASON_READ_ONLY)
+
+    if value_out_of_range(coerced, coercion_entry):
+        return WriteOutcome(False, REASON_VALUE_OUT_OF_RANGE)
 
     ds_entry = datasource_manager.get(ds_name)
     if index_match is not None and ds_entry is not None and ds_entry.ds_type == "static":
@@ -687,6 +736,8 @@ async def toggle_value(
     data_type = entry_data.get("data_type")
     if not isinstance(data_type, str) or _CANONICAL_TYPE_ALIASES.get(data_type.strip().lower()) != "boolean":
         return WriteOutcome(False, REASON_INVALID_VALUE), None
+    if not is_writable(entry_data):
+        return WriteOutcome(False, REASON_READ_ONLY), None
     current = await read_value(datasource_manager, opcua_pool, ds_name, path)
     if not isinstance(current, bool):
         return WriteOutcome(False, REASON_VALUE_UNAVAILABLE), None

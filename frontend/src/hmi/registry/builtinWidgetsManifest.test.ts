@@ -170,8 +170,8 @@ const rows = manifest as unknown as CustomWidgetManifestEntry[];
 const editorRows = editorManifest as unknown as Record<string, BuiltinWidgetEditorEntry>;
 
 /** Everything the runtime half is allowed to carry per schema field —
- *  `bindingValidation.ts` reads exactly these two. */
-const RUNTIME_FIELD_KEYS = new Set(['type', 'requiredFields']);
+ *  `bindingValidation.ts` reads exactly these three. */
+const RUNTIME_FIELD_KEYS = new Set(['type', 'requiredFields', 'write']);
 
 describe('builtin widgets manifest', () => {
   it('lists exactly the widgets on disk', () => {

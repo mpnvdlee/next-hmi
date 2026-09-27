@@ -31,6 +31,10 @@ def ctx() -> ValidationContext:
                 "Motor/Speed": {"kind": "scalar", "base": "Float", "array": False},
             },
         },
+        datasource_writable={
+            "PLC": {"Motor/Speed": True, "Motor/Running": True},
+            "Sim": {"Motor/Speed": True},
+        },
         datasource_types={"PLC": "opcua-client", "Sim": "opcua-test-server"},
         translation_keys=frozenset({"app.title"}),
         icon_assets=frozenset({"icons/logo.svg"}),

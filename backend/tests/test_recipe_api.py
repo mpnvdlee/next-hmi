@@ -57,7 +57,7 @@ def _config() -> dict:
 def recipe_client(monkeypatch, live_project_root: Path):
     storage.ensure_active_project_dirs()
     fresh = RecipeManager()
-    dm = FakeStaticDM({"Temp": {"data_type": "float"}})
+    dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True}})
     fresh.set_datasource_manager(dm)
     monkeypatch.setattr(recipe_manager_module, "recipe_manager", fresh)
     monkeypatch.setattr(recipe_api_module, "recipe_manager", fresh)
@@ -131,7 +131,7 @@ def test_upload_endpoint(recipe_client):
 
 
 def _restricted_entry(*_args) -> dict[str, Any]:
-    return {"data_type": "float", "interactableByGroups": ["admin"]}
+    return {"data_type": "float", "writable": True, "interactableByGroups": ["admin"]}
 
 
 def _restrict_live_variable(monkeypatch) -> None:

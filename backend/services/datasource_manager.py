@@ -1205,6 +1205,9 @@ class DatasourceManager:
             - struct: ``{"kind": "struct", "name": <folder name>, "array": bool,
               "fields": [<field names>]}``
         - ``min``/``max``: scalar numeric variables only, when configured
+        - ``writable``: scalars only — the variable's own ``writable`` flag
+          (an OPC-UA node's access level, or the authored flag of a static /
+          test-server variable); absent or not ``True`` reads as read-only
         - ``fieldRanges``: structs only — ``{field_name: {min?, max?}}`` for
           fields that have a configured range
 
@@ -1229,7 +1232,10 @@ class DatasourceManager:
                     }
                     if var_is_array and is_fixed_array(var_entry):
                         var_type["length"] = var_entry.get("array_length")
-                    meta: dict[str, Any] = {"type": var_type}
+                    meta: dict[str, Any] = {
+                        "type": var_type,
+                        "writable": var_entry.get("writable") is True,
+                    }
                     if var_entry.get("min") is not None:
                         meta["min"] = var_entry["min"]
                     if var_entry.get("max") is not None:

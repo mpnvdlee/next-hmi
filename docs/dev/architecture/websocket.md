@@ -41,15 +41,37 @@ On accept, the backend sends, in order:
    {
      "type": "var_metadata",
      "meta": {
+       "MyPLC:Motor1/Speed": {
+         "type": { "kind": "scalar", "base": "Float", "array": false },
+         "min": 0,
+         "max": 3000,
+         "writable": true
+       },
+       "MyPLC:Setpoints": {
+         "type": { "kind": "scalar", "base": "Integer", "array": true, "length": 5 },
+         "writable": false
+       },
        "MyPLC:Motor1": {
-         "kind": "scalar | struct | struct[]",
-         "data_type": "boolean | integer | float | string | datetime | <…>[] | <StructName>[]",
-         "array_length": 5,
-         "fields": ["bValue", "sUnit", "..."]
+         "type": { "kind": "struct", "name": "Motor1", "array": false, "fields": ["Speed", "sUnit", "Limits"] },
+         "fieldRanges": { "Speed": { "min": 0, "max": 3000 } }
        }
      }
    }
    ```
+
+   Every enabled leaf still present on the server, and every struct folder,
+   has its own key, so a struct's members (`MyPLC:Motor1/Speed`, the nested
+   `MyPLC:Motor1/Limits`) can be looked up beside it. A struct's `fields`
+   lists all its leaves — disabled ones too — and its nested structs; a struct
+   array's are those of its lowest-index element. `type` is the
+   canonical `VarType` (`frontend/src/shared/types/varType.ts`). `min`/`max`
+   appear on a scalar with a configured range, `fieldRanges` on a struct.
+   `writable` is on every scalar: the variable's own `writable` flag (an
+   OPC-UA node's access level as browsed, the authored flag on a static or
+   test-server variable), `false` when unset. The runtime binding check reads
+   it for a `write: true` field and for a struct field's `write: true`
+   members, and the write path refuses a write to a variable where it is not
+   `true` (`read_only`, below).
 
 3. Chunked `var_update` messages with the full cached value snapshot (500
    entries per chunk, yielding the event loop between chunks).
@@ -246,6 +268,7 @@ stable contract the frontend `$switch`es on:
 | `bad_field`           | Write: field cannot be resolved to an OPC-UA node id |
 | `invalid_value`       | Write: value cannot be coerced to the variable's data type |
 | `value_out_of_range`  | Write: coerced numeric value falls outside the variable's persisted `min`/`max` |
+| `read_only`           | Write / toggle: the variable written — for an element, its array; for a struct field, that member — does not have `writable: true`. Nothing is written |
 | `opcua_unreachable`   | Write: no engine for the datasource (not yet connected, or static-only) |
 | `write_failed`        | Write: the OPC-UA `write_node` call raised |
 | `array_index_out_of_bounds` | Write: an indexed write exceeds a fixed array's declared length |
@@ -254,6 +277,8 @@ stable contract the frontend `$switch`es on:
 | `verify_mismatch` | Write: `verify` was requested, the write itself succeeded, but reading the value back did not match what was written. Only reachable when the caller opts in — `recipe_load` with `verify: true` is the one producer today; `write_field` never sets it |
 
 `invalid_value` follows the documented [OPC-UA write-coercion matrix](backend.md#opc-ua-write-coercion-matrix). The REST variable-write endpoint uses project-user HTTP Basic credentials, then calls the same request parser, `interactableByGroups` permission helper, coercer, and dispatcher.
+
+`read_only` is checked in `write_service.write_value` (and before the read in `toggle_value`), so the WebSocket, REST and recipe-download writes refuse it alike; a recipe download reports it per parameter in `failures`. It comes after `bad_path`, `array_index_out_of_bounds`, `bad_field` and `invalid_value` — a whole-struct payload stays `invalid_value` — and before `value_out_of_range`. A variable that states no access at all is read-only, the same reading the editor and the runtime overlay give it.
 
 `value_out_of_range` is checked only after coercion succeeds, against the variable's own (or, for a struct field, that field's own) persisted `min`/`max` — a hard operator-write constraint enforced identically for REST, WebSocket, and recipe writes since all three share `write_service.write_value`. A whole-array write is rejected if any element is out of range; an indexed element write is checked the same way. A persisted `min > max` is a contract violation, not a range: it is left unenforced (the write proceeds as if no range were configured) and logged once as a warning when the datasource loads.
 

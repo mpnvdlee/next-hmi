@@ -504,7 +504,7 @@ export function VariableRowCells({
         ) : (
           <WritableLiveCell
             value={liveValues[varKey]}
-            canWrite={caps.editable || !!entry.writable}
+            canWrite={!!entry.writable}
             dsName={dsName}
             path={path}
           />
@@ -555,7 +555,7 @@ export function ArrayElementRowCells({
   });
   const displayStr = elementValue !== undefined ? String(elementValue) : undefined;
   const caps = DATASOURCE_CAPABILITIES[dsType];
-  const canWrite = caps.editable || !!parent.writable;
+  const canWrite = !!parent.writable;
   const writePath = `${path}[${index}]`;
 
   return (

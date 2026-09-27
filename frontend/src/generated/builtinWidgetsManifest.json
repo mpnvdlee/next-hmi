@@ -495,10 +495,12 @@
         "type": "boolean"
       },
       "stateVariable": {
-        "type": "string"
+        "type": "string",
+        "write": true
       },
       "currentTimeVariable": {
-        "type": "string"
+        "type": "string",
+        "write": true
       },
       "onPlay": {
         "type": "actions"
@@ -642,7 +644,8 @@
         "type": "string"
       },
       "inboundVariable": {
-        "type": "string"
+        "type": "string",
+        "write": true
       },
       "outboundVariable": {
         "type": "string"
@@ -956,7 +959,8 @@
           "string",
           "integer",
           "float"
-        ]
+        ],
+        "write": true
       },
       "selectedValue": {
         "type": "string"
@@ -979,7 +983,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "4bb65df0d02800ac",
+    "buildTs": "90d034699a5d04f8",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,

@@ -148,6 +148,14 @@ describe('useWriteVariable', () => {
     expect(useHmiStore.getState().pendingToasts[0].message).toMatch(/not allowed/i);
   });
 
+  it('names a read-only refusal in the toast', () => {
+    writer(bound)(1);
+
+    resolvePending(String(frames()[0].requestId), { reason: 'read_only' }, false);
+
+    expect(useHmiStore.getState().pendingToasts[0].message).toBe('Variable is read-only');
+  });
+
   it('reports canWrite only for a $var binding', () => {
     expect(writer(bound).canWrite).toBe(true);
     expect(writer({ variable: { $static: true } }).canWrite).toBe(false);
