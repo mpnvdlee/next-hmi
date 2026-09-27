@@ -131,6 +131,11 @@ VOLUME ["/data"]
 # which is where the app then binds.
 EXPOSE 8000 8443
 
+# core/version.py reads /app/version.txt; without it the image reports "dev" in
+# the banner, the SPA, telemetry and pre-migration backup names.
+ARG NEXTHMI_VERSION=dev
+RUN echo "$NEXTHMI_VERSION" > /app/version.txt
+
 COPY build/docker-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]

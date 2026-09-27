@@ -36,7 +36,7 @@ echo "[build] NEXT HMI Docker $VERSION → $DIST_DIR_NAME"
 # 1. Build the image. The Dockerfile internally handles SPA build,
 #    esbuild vendoring, and seed widget bake — nothing to vendor here.
 echo "[build] building image $IMAGE_TAG"
-docker build -t "$IMAGE_TAG" .
+docker build --build-arg NEXTHMI_VERSION="$VERSION" -t "$IMAGE_TAG" .
 
 # 2. Stage the bundle dir
 rm -rf "$OUTPUT_DIR"

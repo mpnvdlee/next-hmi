@@ -105,7 +105,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build image
-        run: docker build -t nexthmi:ci .
+        # A v* tag stamps its version into the image, which docker-publish
+        # pushes as that release; any other trigger stays "ci-smoke".
+        run: |
+          case "$GITHUB_REF_TYPE:$GITHUB_REF_NAME" in
+            tag:v*) version="${GITHUB_REF_NAME#v}" ;;
+            *)      version=ci-smoke ;;
+          esac
+          docker build --build-arg NEXTHMI_VERSION="$version" -t nexthmi:ci .
       - name: Empty-volume first boot
         run: |
           mkdir -p "$RUNNER_TEMP/project-data"
@@ -158,7 +165,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build image
-        run: docker build -t nexthmi:ci .
+        # A v* tag stamps its version into the image, which docker-publish
+        # pushes as that release; any other trigger stays "ci-smoke".
+        run: |
+          case "$GITHUB_REF_TYPE:$GITHUB_REF_NAME" in
+            tag:v*) version="${GITHUB_REF_NAME#v}" ;;
+            *)      version=ci-smoke ;;
+          esac
+          docker build --build-arg NEXTHMI_VERSION="$version" -t nexthmi:ci .
       - name: Empty-volume first boot
         run: |
           mkdir -p "$RUNNER_TEMP/project-data"
