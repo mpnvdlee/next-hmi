@@ -1,12 +1,12 @@
 import { renderSchemaField } from '../../../../utils/renderSchemaField';
 import { BranchEditor } from './shared';
 import { ParentPathContext, useParentPath, withSegs } from '../parentPathContext';
-import type { OpenBindingPicker } from './utils';
+import { NUMERIC_SLOT, NUMERIC_TYPES, type OpenBindingPicker } from './utils';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import type { FormulaSource } from '@shared/types/config';
 import { formulaWildcardKeys, parseFormula } from '@hmi/utils/formula';
 
-const OPERAND_SCHEMA: SchemaField = { type: 'Float', label: '' };
+const OPERAND_SCHEMA: SchemaField = { type: NUMERIC_TYPES, label: '' };
 const EXPRESSION_SCHEMA: SchemaField = {
   type: 'String',
   label: 'Formula',
@@ -70,6 +70,7 @@ export function FormulaEditor({
             value={wildcards[key] ?? 0}
             onChange={(v) => updateWildcard(key, v)}
             schema={OPERAND_SCHEMA}
+            slot={NUMERIC_SLOT}
             onOpenBindingPicker={onOpenBindingPicker}
           />
         </ParentPathContext.Provider>

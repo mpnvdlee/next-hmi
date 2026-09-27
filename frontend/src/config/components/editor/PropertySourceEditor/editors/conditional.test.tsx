@@ -11,6 +11,17 @@ import type { OpenBindingPicker } from './utils';
 Element.prototype.scrollIntoView = vi.fn();
 
 const STRING_SCHEMA: SchemaField = { type: 'string', label: 'Value' };
+const FLOAT_SCHEMA: SchemaField = { type: 'Float', label: 'Speed' };
+const UNBOUND = { $var: { path: '' } };
+
+/** The slot type a `✎` click hands the opener — the picker's third argument. */
+function pickerSlot(open: ReturnType<typeof vi.fn>, label: string): unknown {
+  open.mockClear();
+  fireEvent.click(
+    within(fieldGroup(label)).getByRole('button', { name: 'Change variable binding' }),
+  );
+  return open.mock.calls[0][2];
+}
 
 /** Scope a query to the `.cfg-field-group` owning a given slot label
  *  (Condition / When True / Expression / …), same pattern as
@@ -161,6 +172,21 @@ describe('IfEditor', () => {
     expect(onOpenBindingPicker.mock.calls[0][1]).toBeUndefined();
   });
 
+  it("opens the condition's picker on Boolean and the branches' on the field's", () => {
+    const open = vi.fn();
+    render(
+      <Harness
+        initial={{ $if: { condition: UNBOUND, true: UNBOUND, false: UNBOUND } }}
+        onChange={vi.fn()}
+        schema={FLOAT_SCHEMA}
+        onOpenBindingPicker={open}
+      />,
+    );
+    expect(pickerSlot(open, 'Condition')).toEqual({ type: 'Boolean' });
+    expect(pickerSlot(open, 'When True')).toBeUndefined();
+    expect(pickerSlot(open, 'When False')).toBeUndefined();
+  });
+
   it('does not crash and recovers to the default shape when given a malformed $if payload', () => {
     const onChange = vi.fn();
     render(<Harness initial={{ $if: null }} onChange={onChange} schema={STRING_SCHEMA} />);
@@ -262,6 +288,19 @@ describe('CompareEditor', () => {
       within(fieldGroup('That value')).getByRole('button', { name: 'Change variable binding' }),
     );
     expect(onOpenBindingPicker.mock.calls[1][1]).toEqual({ path: 'PLC:Limit' });
+  });
+
+  it('opens both operand pickers on any type', () => {
+    const open = vi.fn();
+    render(
+      <Harness
+        initial={{ $compare: { left: UNBOUND, operator: '>', right: UNBOUND } }}
+        onChange={vi.fn()}
+        onOpenBindingPicker={open}
+      />,
+    );
+    expect(pickerSlot(open, 'This value')).toBe(true);
+    expect(pickerSlot(open, 'That value')).toBe(true);
   });
 
   it('recovers gracefully from a malformed $compare payload, falling back to the default shape', () => {
@@ -397,6 +436,26 @@ describe('SwitchEditor', () => {
     expect(onChange).toHaveBeenLastCalledWith({
       $switch: { value: 'mode', cases: [], default: 'Unknown' },
     });
+  });
+
+  it("opens the expression's and a case's When picker on any type, Then and Default on the field's", async () => {
+    const open = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <SwitchEditor
+        value={{
+          $switch: { value: UNBOUND, cases: [{ when: UNBOUND, then: UNBOUND }], default: UNBOUND },
+        }}
+        onChange={vi.fn()}
+        schema={FLOAT_SCHEMA}
+        onOpenBindingPicker={open}
+      />,
+    );
+    expect(pickerSlot(open, 'Expression')).toBe(true);
+    expect(pickerSlot(open, 'Default')).toBeUndefined();
+    await user.click(screen.getByRole('button', { name: 'Expand' }));
+    expect(pickerSlot(open, 'When')).toBe(true);
+    expect(pickerSlot(open, 'Then')).toBeUndefined();
   });
 
   it('recovers gracefully from a malformed $switch payload, falling back to the default shape', () => {

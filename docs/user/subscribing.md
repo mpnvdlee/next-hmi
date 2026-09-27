@@ -17,7 +17,7 @@ A browser only ever subscribes to the tags actually on screen. A viewport-aware 
 ## Bind a property to a tag
 
 1. **Select the widget and its field** — e.g. a Label's **Text**. Click the field's **source pill** and choose **Variable**.
-2. **Pick the tag from the tree** — The variable picker shows your datasources' trees. Choose a leaf — say `LinePLC:Motor1/Speed`. For an array, also choose the **index** to bind one element; leave it off to bind the whole array.
+2. **Pick the tag from the tree** — The variable picker shows your datasources' trees. Choose a leaf — say `LinePLC:Motor1/Speed`. For an array, also choose the **index** to bind one element; leave it off to bind the whole array. The tree lists only tags that fit the field; **Show all** lists the rest to browse, but a tag marked ✗ cannot be confirmed. Inside a source each slot lists what that slot takes — a condition or either side of a comparison any tag, a formula's `{1}` only numbers.
 3. **Watch it go live** — The canvas immediately reflects streamed values. That's the subscription — there's nothing else to register.
 
 ```

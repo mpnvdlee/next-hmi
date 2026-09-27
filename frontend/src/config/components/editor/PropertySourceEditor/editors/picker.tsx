@@ -12,10 +12,13 @@ export function WidgetPropEditor({
   value,
   onChange,
   schema,
+  slot,
 }: {
   value: unknown;
   onChange: (v: unknown) => void;
   schema?: SchemaField;
+  /** The enclosing nested slot's own type, when it is not the schema's. */
+  slot?: SlotType;
 }) {
   const components = useComponentOptions();
   const openPicker = useEditorDomainStore((s) => s.openWidgetPropPicker);
@@ -69,10 +72,13 @@ export function ComponentPropEditor({
   value,
   onChange,
   schema,
+  slot,
 }: {
   value: unknown;
   onChange: (v: unknown) => void;
   schema?: SchemaField;
+  /** The enclosing nested slot's own type, when it is not the schema's. */
+  slot?: SlotType;
 }) {
   const ctx = useComponentPropertySchema();
   const openBindingPicker = useEditorDomainStore((s) => s.openBindingPicker);

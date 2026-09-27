@@ -16,8 +16,26 @@ export type OpenBindingPicker = (
   anyType?: boolean,
 ) => void;
 
-/** The picker filter for a slot: an `anyType` slot keeps only the property's
- *  label, since its type, access and required fields describe the property. */
+/**
+ * What a nested slot takes, in place of the property's type, access and
+ * required fields — those describe the property, not an operand inside it.
+ * `true` takes any type: a slot that formats whatever it gets (a `$stringExpr`
+ * or `$http` wildcard) or judges it by loose equality (a `$compare` operand, a
+ * `$switch` value). `{ type }` takes that type, read-only: a `$formula` operand
+ * takes a number, a condition a Boolean.
+ */
+export type SlotType = true | { type: string | string[] };
+
+/** What a `$formula` operand takes: the formula coerces each one to a number. */
+export const NUMERIC_TYPES: SchemaField['type'] = ['Float', 'Integer'];
+export const NUMERIC_SLOT: SlotType = { type: NUMERIC_TYPES };
+
+/** What a condition takes (an `$if`'s, an If action's, what `$not` inverts):
+ *  a Boolean, not any value's truthiness — an Integer tests through `$compare`. */
+export const BOOLEAN_SLOT: SlotType = { type: 'Boolean' };
+
+/** The picker filter for a slot: the property's own, or — for a slot with a
+ *  type of its own — the property's label over the slot's type. */
 export function slotFilter<F extends { label?: string }>(
   filter: F,
   anyType?: boolean,
@@ -31,13 +49,15 @@ export function slotFilter<F extends { label?: string }>(
  *
  * `current` is the wrapped slot's own value: it becomes the preselect whenever
  * a deeper wrap doesn't supply one of its own, so the innermost slot that knows
- * its binding always wins. `anyType` follows the same rule.
+ * its binding always wins. `slot` follows the same rule: an `$if` branch inside
+ * a `$formula` operand takes a number, a `$formula` inside an `$if` condition
+ * still hands its operands a number.
  */
 export function wrapPicker(
   parent: OpenBindingPicker | undefined,
   apply: (b: VariableBinding) => void,
   current?: unknown,
-  anyType?: boolean,
+  slot?: SlotType,
 ): OpenBindingPicker | undefined {
   if (!parent) return undefined;
   return (onPick, currentBinding, slotAnyType) =>

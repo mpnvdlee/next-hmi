@@ -457,7 +457,7 @@ export function LayoutFields({
         onChange={commit}
         onOpenPicker={
           componentId
-            ? (onPick, currentBinding, anyType) =>
+            ? (onPick, currentBinding, slot) =>
                 openBindingPicker(componentId, `${LAYOUT_PATH_KEY}.${f.key}`, {
                   // Layout values live on `comp.layout`, not `comp.properties`,
                   // so the picker can neither read this binding back nor write
@@ -465,7 +465,7 @@ export function LayoutFields({
                   // callback of its own gets `commit` instead of the picker's
                   // `properties[propertyKey]` fallback.
                   onPick: onPick ?? ((binding) => commit({ $var: binding })),
-                  filter: slotFilter({ label: f.schema.label, type: f.schema.type }, anyType),
+                  filter: slotFilter({ label: f.schema.label, type: f.schema.type }, slot),
                   // A nested slot inside the value overrides with its own binding.
                   currentBinding: currentBinding ?? varBindingOf(layout[f.key]),
                 })

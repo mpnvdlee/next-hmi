@@ -81,6 +81,8 @@ export interface ActionEditorCtx {
       onPick?: (binding: VariableBinding) => void;
       /** Binding the field holds today, so the picker opens on it. */
       currentBinding?: VariableBinding;
+      /** What the field takes — drives the picker's filter and its ✓/✗. */
+      filter?: { label?: string; type?: string | string[] };
     },
   ) => void;
   /** Open the writeDataVariable picker; updates this action + the dataTypes cache on pick. */
@@ -125,6 +127,26 @@ type EditorFor<T extends ButtonAction['type']> = ComponentType<{
   action: Extract<ButtonAction, { type: T }>;
   ctx: ActionEditorCtx;
 }>;
+
+/** Picker for a String action field: the pick is written into the field as `$var`
+ *  and forwarded to the calling slot. */
+function stringSlotPicker(
+  ctx: ActionEditorCtx,
+  pickerId: string,
+  label: string,
+  current: unknown,
+  write: (value: { $var: VariableBinding }) => void,
+): OpenBindingPicker {
+  return (onPick, currentBinding, slot) =>
+    ctx.openBindingPicker('', pickerId, {
+      filter: slotFilter({ label, type: 'String' }, slot),
+      currentBinding: currentBinding ?? varBindingOf(current),
+      onPick: (binding) => {
+        write({ $var: binding });
+        if (onPick) onPick(binding);
+      },
+    });
+}
 
 function LoginFieldEditor({
   ctx,
@@ -732,15 +754,13 @@ const LoginUserEditor: EditorFor<'loginUser'> = ({ action, ctx }) => (
       label="Username"
       value={action.username}
       onChange={(v) => ctx.update({ username: v })}
-      onOpenBindingPicker={(onPick, currentBinding) =>
-        ctx.openBindingPicker('', 'loginUser-username', {
-          currentBinding: currentBinding ?? varBindingOf(action.username),
-          onPick: (binding) => {
-            ctx.update({ username: { $var: binding } });
-            if (onPick) onPick(binding);
-          },
-        })
-      }
+      onOpenBindingPicker={stringSlotPicker(
+        ctx,
+        'loginUser-username',
+        'Username',
+        action.username,
+        (v) => ctx.update({ username: v }),
+      )}
     />
     <LoginFieldEditor
       ctx={ctx}
@@ -748,15 +768,13 @@ const LoginUserEditor: EditorFor<'loginUser'> = ({ action, ctx }) => (
       label="Password"
       value={action.password}
       onChange={(v) => ctx.update({ password: v })}
-      onOpenBindingPicker={(onPick, currentBinding) =>
-        ctx.openBindingPicker('', 'loginUser-password', {
-          currentBinding: currentBinding ?? varBindingOf(action.password),
-          onPick: (binding) => {
-            ctx.update({ password: { $var: binding } });
-            if (onPick) onPick(binding);
-          },
-        })
-      }
+      onOpenBindingPicker={stringSlotPicker(
+        ctx,
+        'loginUser-password',
+        'Password',
+        action.password,
+        (v) => ctx.update({ password: v }),
+      )}
     />
     <ResultHandlersSubrows action={action} actionType="loginUser" ctx={ctx} />
   </>
@@ -773,15 +791,13 @@ const SetLanguageEditor: EditorFor<'setLanguage'> = ({ action, ctx }) => (
     label="Language"
     value={action.language}
     onChange={(v) => ctx.update({ language: v })}
-    onOpenBindingPicker={(onPick, currentBinding) =>
-      ctx.openBindingPicker('', 'setLanguage-language', {
-        currentBinding: currentBinding ?? varBindingOf(action.language),
-        onPick: (binding) => {
-          ctx.update({ language: { $var: binding } });
-          if (onPick) onPick(binding);
-        },
-      })
-    }
+    onOpenBindingPicker={stringSlotPicker(
+      ctx,
+      'setLanguage-language',
+      'Language',
+      action.language,
+      (v) => ctx.update({ language: v }),
+    )}
   />
 );
 
@@ -792,15 +808,9 @@ const SetThemeEditor: EditorFor<'setActiveTheme'> = ({ action, ctx }) => (
     label="Theme"
     value={action.theme}
     onChange={(v) => ctx.update({ theme: v })}
-    onOpenBindingPicker={(onPick, currentBinding) =>
-      ctx.openBindingPicker('', 'setActiveTheme-theme', {
-        currentBinding: currentBinding ?? varBindingOf(action.theme),
-        onPick: (binding) => {
-          ctx.update({ theme: { $var: binding } });
-          if (onPick) onPick(binding);
-        },
-      })
-    }
+    onOpenBindingPicker={stringSlotPicker(ctx, 'setActiveTheme-theme', 'Theme', action.theme, (v) =>
+      ctx.update({ theme: v }),
+    )}
   />
 );
 
@@ -934,15 +944,13 @@ const RecipeLoadEditor: EditorFor<'recipeLoad'> = ({ action, ctx }) => (
       label="Dataset ID"
       value={action.datasetId}
       onChange={(v) => ctx.update({ datasetId: v })}
-      onOpenBindingPicker={(onPick, currentBinding) =>
-        ctx.openBindingPicker('', 'recipeLoad-datasetId', {
-          currentBinding: currentBinding ?? varBindingOf(action.datasetId),
-          onPick: (binding) => {
-            ctx.update({ datasetId: { $var: binding } });
-            if (onPick) onPick(binding);
-          },
-        })
-      }
+      onOpenBindingPicker={stringSlotPicker(
+        ctx,
+        'recipeLoad-datasetId',
+        'Dataset ID',
+        action.datasetId,
+        (v) => ctx.update({ datasetId: v }),
+      )}
     />
     <ActionFieldRow
       ctx={ctx}
@@ -964,15 +972,13 @@ const RecipeSaveEditor: EditorFor<'recipeSave'> = ({ action, ctx }) => (
       label="Dataset ID (blank = loaded)"
       value={action.datasetId}
       onChange={(v) => ctx.update({ datasetId: v })}
-      onOpenBindingPicker={(onPick, currentBinding) =>
-        ctx.openBindingPicker('', 'recipeSave-datasetId', {
-          currentBinding: currentBinding ?? varBindingOf(action.datasetId),
-          onPick: (binding) => {
-            ctx.update({ datasetId: { $var: binding } });
-            if (onPick) onPick(binding);
-          },
-        })
-      }
+      onOpenBindingPicker={stringSlotPicker(
+        ctx,
+        'recipeSave-datasetId',
+        'Dataset ID',
+        action.datasetId,
+        (v) => ctx.update({ datasetId: v }),
+      )}
     />
     <ResultHandlersSubrows action={action} actionType="recipeSave" ctx={ctx} />
   </>

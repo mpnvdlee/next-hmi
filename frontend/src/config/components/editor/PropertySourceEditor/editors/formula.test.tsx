@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { FormulaEditor } from './formula';
+import { NUMERIC_SLOT } from './utils';
 
 function Harness({ initial, onChange }: { initial?: unknown; onChange: (v: unknown) => void }) {
   const [value, setValue] = useState(initial);
@@ -50,5 +51,20 @@ describe('FormulaEditor', () => {
       <Harness initial={{ $formula: { expression: '1 + 2', wildcards: {} } }} onChange={vi.fn()} />,
     );
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('opens an operand picker on numbers, whatever the field takes', () => {
+    const open = vi.fn();
+    render(
+      <FormulaEditor
+        value={{ $formula: { expression: '{1} * 2', wildcards: { 1: { $var: { path: '' } } } } }}
+        onChange={vi.fn()}
+        onOpenBindingPicker={open}
+      />,
+    );
+    const titles = screen.getAllByText('{1}');
+    const card = titles[titles.length - 1].closest('.cfg-field-group') as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: 'Change variable binding' }));
+    expect(open.mock.calls[0][2]).toBe(NUMERIC_SLOT);
   });
 });

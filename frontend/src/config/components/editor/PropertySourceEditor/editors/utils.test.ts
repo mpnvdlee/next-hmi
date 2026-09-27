@@ -1,13 +1,13 @@
 import { slotFilter, wrapPicker, type OpenBindingPicker } from './utils';
 
-describe('wrapPicker anyType', () => {
-  it("passes the wrapped slot's own anyType to the parent", () => {
+describe('wrapPicker slot', () => {
+  it("passes the wrapped slot's own type to the parent", () => {
     const parent = vi.fn<OpenBindingPicker>();
     wrapPicker(parent, vi.fn(), undefined, true)!();
     expect(parent).toHaveBeenCalledWith(expect.any(Function), undefined, true);
   });
 
-  it('lets a deeper slot’s anyType through an outer wrap that sets none', () => {
+  it('lets a deeper slot’s type through an outer wrap that sets none', () => {
     const parent = vi.fn<OpenBindingPicker>();
     const outer = wrapPicker(parent, vi.fn())!;
     const inner = wrapPicker(outer, vi.fn(), undefined, true)!;
@@ -23,7 +23,7 @@ describe('slotFilter', () => {
     expect(slotFilter(filter)).toBe(filter);
   });
 
-  it('keeps only the label for an anyType slot', () => {
+  it('keeps only the label for a slot that takes any type', () => {
     expect(slotFilter(filter, true)).toEqual({ label: 'Value' });
   });
 });

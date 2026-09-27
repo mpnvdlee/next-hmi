@@ -4,7 +4,13 @@ import FieldGroup from '../../../ui/FieldGroup';
 import { ClearIcon } from '../../../ui/actionIcons';
 import { BranchEditor, CompareFields, KindLabel, PreviewText, SwitchCasePreview } from './shared';
 import { ParentPathContext, useParentPath, withSegs } from '../parentPathContext';
-import { COMPARE_OPERAND_SCHEMA, type Operator, type OpenBindingPicker, wrapPicker } from './utils';
+import {
+  BOOLEAN_SLOT,
+  COMPARE_OPERAND_SCHEMA,
+  type Operator,
+  type OpenBindingPicker,
+  wrapPicker,
+} from './utils';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import type { CompareSource, IfSource, NotSource, SwitchSource } from '@shared/types/config';
 import { primaryType } from '@shared/utils/valueTypes';
@@ -14,7 +20,9 @@ const NOT_VALUE_SCHEMA: SchemaField = { type: 'Boolean', label: 'Value' };
 
 /**
  * $if — condition + true/false outputs.
- * The condition is any boolean expression (e.g. $compare, $pageIsActive, $var).
+ * The condition is any boolean expression (e.g. $compare, $pageIsActive, $var);
+ * its picker lists Boolean variables only.
+ * The branches take what the property takes.
  */
 export function IfEditor({
   value,
@@ -42,6 +50,7 @@ export function IfEditor({
           value={ifObj.condition}
           onChange={(v) => onChange({ $if: { ...ifObj, condition: v } })}
           schema={IF_CONDITION_SCHEMA}
+          slot={BOOLEAN_SLOT}
           onOpenBindingPicker={onOpenBindingPicker}
         />
       </ParentPathContext.Provider>
@@ -92,6 +101,7 @@ export function NotEditor({
         value={notObj.value}
         onChange={(v) => onChange({ $not: { value: v } })}
         schema={NOT_VALUE_SCHEMA}
+        slot={BOOLEAN_SLOT}
         onOpenBindingPicker={onOpenBindingPicker}
       />
     </ParentPathContext.Provider>
@@ -204,6 +214,7 @@ function SwitchCaseRow({
           value={entry.when}
           onChange={(v) => onPatch({ when: v })}
           schema={COMPARE_OPERAND_SCHEMA}
+          slot={true}
           onOpenBindingPicker={onOpenBindingPicker}
         />
       </ParentPathContext.Provider>
@@ -276,6 +287,7 @@ export function SwitchEditor({
           value={switchObj.value ?? null}
           onChange={(v) => onChange({ $switch: { ...switchObj, value: v } })}
           schema={COMPARE_OPERAND_SCHEMA}
+          slot={true}
           onOpenBindingPicker={expressionPicker}
         />
       </ParentPathContext.Provider>

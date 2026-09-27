@@ -105,13 +105,13 @@ function AlarmPanel({
     apply: (binding: VariableBinding) => void,
     filter: { label: string; type: string | string[] },
   ): OpenBindingPicker {
-    return (onPick, _currentBinding, anyType) => {
+    return (onPick, _currentBinding, slot) => {
       openBindingPicker('', scope, {
         onPick: (binding: VariableBinding) => {
           apply(binding);
           onPick?.(binding);
         },
-        filter: slotFilter(filter, anyType),
+        filter: slotFilter(filter, slot),
         currentBinding: varBindingOf(current),
       });
     };

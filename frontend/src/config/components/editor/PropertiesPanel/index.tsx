@@ -1395,11 +1395,11 @@ function ShellRegionFields({
         // `true` is the default — store it as unset so the saved config stays
         // minimal and matches what the old static toggle wrote.
         onChange={(v) => onPatch({ enabled: v === true ? undefined : v })}
-        onOpenPicker={(onPick, currentBinding, anyType) =>
+        onOpenPicker={(onPick, currentBinding, slot) =>
           openBindingPicker(bindingTargetId, 'enabled', {
             onPick,
             currentBinding: currentBinding ?? varBindingOf(config.enabled),
-            filter: slotFilter({ label: 'Enabled', type: 'Boolean' }, anyType),
+            filter: slotFilter({ label: 'Enabled', type: 'Boolean' }, slot),
           })
         }
       />
@@ -1426,11 +1426,11 @@ function ShellRegionFields({
         schema={SHELL_EXPANDED_SIZE_SCHEMA}
         value={config.expandedSize}
         onChange={(v) => onPatch({ expandedSize: blankToUndefined(v) })}
-        onOpenPicker={(onPick, currentBinding, anyType) =>
+        onOpenPicker={(onPick, currentBinding, slot) =>
           openBindingPicker(bindingTargetId, 'expandedSize', {
             onPick,
             currentBinding: currentBinding ?? varBindingOf(config.expandedSize),
-            filter: slotFilter({ label: 'Expanded size', type: 'String' }, anyType),
+            filter: slotFilter({ label: 'Expanded size', type: 'String' }, slot),
           })
         }
       />
@@ -1440,11 +1440,11 @@ function ShellRegionFields({
         schema={SHELL_COLLAPSED_SIZE_SCHEMAS[id === 'header' || id === 'footer' ? 'auto' : 'zero']}
         value={config.collapsedSize}
         onChange={(v) => onPatch({ collapsedSize: blankToUndefined(v) })}
-        onOpenPicker={(onPick, currentBinding, anyType) =>
+        onOpenPicker={(onPick, currentBinding, slot) =>
           openBindingPicker(bindingTargetId, 'collapsedSize', {
             onPick,
             currentBinding: currentBinding ?? varBindingOf(config.collapsedSize),
-            filter: slotFilter({ label: 'Collapsed size', type: 'String' }, anyType),
+            filter: slotFilter({ label: 'Collapsed size', type: 'String' }, slot),
           })
         }
       />
@@ -1455,11 +1455,11 @@ function ShellRegionFields({
           schema={SHELL_FULL_HEIGHT_SCHEMA}
           value={config.fullHeight}
           onChange={(v) => onPatch({ fullHeight: v === false ? undefined : v })}
-          onOpenPicker={(onPick, currentBinding, anyType) =>
+          onOpenPicker={(onPick, currentBinding, slot) =>
             openBindingPicker(bindingTargetId, 'fullHeight', {
               onPick,
               currentBinding: currentBinding ?? varBindingOf(config.fullHeight),
-              filter: slotFilter({ label: 'Full height', type: 'Boolean' }, anyType),
+              filter: slotFilter({ label: 'Full height', type: 'Boolean' }, slot),
             })
           }
         />
@@ -1470,11 +1470,11 @@ function ShellRegionFields({
         schema={SHELL_BACKGROUND_SCHEMA}
         value={config.background}
         onChange={(v) => onPatch({ background: blankToUndefined(v) })}
-        onOpenPicker={(onPick, currentBinding, anyType) =>
+        onOpenPicker={(onPick, currentBinding, slot) =>
           openBindingPicker(bindingTargetId, 'background', {
             onPick,
             currentBinding: currentBinding ?? varBindingOf(config.background),
-            filter: slotFilter({ label: 'Background', type: 'Color' }, anyType),
+            filter: slotFilter({ label: 'Background', type: 'Color' }, slot),
           })
         }
       />
@@ -1484,11 +1484,11 @@ function ShellRegionFields({
         schema={SHELL_EXPANDED_SCHEMA}
         value={config.expanded}
         onChange={(v) => onPatch({ expanded: v as ShellRegionConfig['expanded'] })}
-        onOpenPicker={(onPick, currentBinding, anyType) =>
+        onOpenPicker={(onPick, currentBinding, slot) =>
           openBindingPicker(bindingTargetId, 'expanded', {
             onPick,
             currentBinding: currentBinding ?? varBindingOf(config.expanded),
-            filter: slotFilter({ label: 'Expanded', type: 'Boolean' }, anyType),
+            filter: slotFilter({ label: 'Expanded', type: 'Boolean' }, slot),
           })
         }
       />
@@ -1498,11 +1498,11 @@ function ShellRegionFields({
         schema={SHELL_OVERLAY_SCHEMA}
         value={config.overlay}
         onChange={(v) => onPatch({ overlay: v as ShellRegionConfig['overlay'] })}
-        onOpenPicker={(onPick, currentBinding, anyType) =>
+        onOpenPicker={(onPick, currentBinding, slot) =>
           openBindingPicker(bindingTargetId, 'overlay', {
             onPick,
             currentBinding: currentBinding ?? varBindingOf(config.overlay),
-            filter: slotFilter({ label: 'Overlay', type: 'Boolean' }, anyType),
+            filter: slotFilter({ label: 'Overlay', type: 'Boolean' }, slot),
           })
         }
       />

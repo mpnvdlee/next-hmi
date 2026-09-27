@@ -1318,6 +1318,11 @@ def _validate_wildcards(
             _validate_property_value(wildcard_value, None, ctx, wildcard_path, report)
 
 
+# What an `$if` condition and a `$not` operand take: a Boolean, not any value's
+# truthiness (the editor's BOOLEAN_SLOT).
+_CONDITION_SCHEMA: dict[str, str] = {"type": "boolean"}
+
+
 def _validate_slot(
     value: Any,
     schema_field: dict | None,
@@ -1446,7 +1451,7 @@ def _validate_property_value(
             report.warn(path, f"unknown translation key '{payload}'", severity="error", code="loc-unknown")
     elif source_key == "$if" and isinstance(payload, dict):
         _validate_slot(
-            payload.get("condition"), None, ctx, f"{path}/$if/condition", report,
+            payload.get("condition"), _CONDITION_SCHEMA, ctx, f"{path}/$if/condition", report,
             code="if-condition-empty", message="condition is unset",
         )
         _validate_slot(payload.get("true"), schema_field, ctx, f"{path}/$if/true", report)
@@ -1484,7 +1489,7 @@ def _validate_property_value(
         )
     elif source_key == "$not" and isinstance(payload, dict):
         _validate_slot(
-            payload.get("value"), None, ctx, f"{path}/$not/value", report,
+            payload.get("value"), _CONDITION_SCHEMA, ctx, f"{path}/$not/value", report,
             code="not-value-empty", message="value to invert is unset",
         )
     elif source_key == "$formula" and isinstance(payload, dict):

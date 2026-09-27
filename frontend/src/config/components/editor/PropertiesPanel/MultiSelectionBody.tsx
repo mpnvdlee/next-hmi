@@ -105,7 +105,7 @@ export default function MultiSelectionBody({
               // fallback writes to that one lead id — so it gets a writer that
               // fans out, landing a picked (or cleared) binding wherever a typed
               // edit would.
-              (onPick, currentBinding, anyType) =>
+              (onPick, currentBinding, slot) =>
                 openBindingPicker(comps[0].id, key, {
                   onPick: onPick ?? ((binding) => patchProp(key, { $var: binding })),
                   currentBinding,
@@ -117,7 +117,7 @@ export default function MultiSelectionBody({
                       requiredFields: (field as { requiredFields?: RequiredFieldEntry[] })
                         .requiredFields,
                     },
-                    anyType,
+                    slot,
                   ),
                 })
             : undefined

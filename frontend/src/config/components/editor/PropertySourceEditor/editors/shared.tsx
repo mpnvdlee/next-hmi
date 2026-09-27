@@ -23,6 +23,7 @@ import type { PropertySource } from '../../propertyValueUtils';
 import { isRecord } from '@shared/types/propertyValueGuards';
 import PropertySourceEditor from '..';
 import { ParentPathContext, useParentPath, withSegs } from '../parentPathContext';
+import { SlotContext, useSlotType } from '../slotContext';
 import { primaryType } from '@shared/utils/valueTypes';
 import { useUsersDomainStore, type UserGroup } from '@config/store/domains/usersDomainStore';
 import { useConfigStore } from '@shared/store/configStore';
@@ -32,6 +33,7 @@ import {
   OPERATORS,
   type Operator,
   type OpenBindingPicker,
+  type SlotType,
   wrapPicker,
 } from './utils';
 import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
@@ -358,6 +360,7 @@ export function CompareFields({
           value={left}
           onChange={onChangeLeft}
           schema={COMPARE_OPERAND_SCHEMA}
+          slot={true}
           onOpenBindingPicker={onOpenLeftPicker}
         />
       </ParentPathContext.Provider>
@@ -381,6 +384,7 @@ export function CompareFields({
           value={right}
           onChange={onChangeRight}
           schema={COMPARE_OPERAND_SCHEMA}
+          slot={true}
           onOpenBindingPicker={onOpenRightPicker}
         />
       </ParentPathContext.Provider>
@@ -399,6 +403,7 @@ export function CollapsiblePropertyCard({
   value,
   onChange,
   schema,
+  slot,
   forcedSources,
   includeStatic,
   onOpenBindingPicker,
@@ -416,6 +421,8 @@ export function CollapsiblePropertyCard({
   value: unknown;
   onChange: (v: unknown) => void;
   schema: SchemaField;
+  /** A nested slot's own type, when it is not the schema's — see `SlotType`. */
+  slot?: SlotType;
   forcedSources?: PropertySource[];
   includeStatic?: boolean;
   onOpenBindingPicker?: OpenBindingPicker;
@@ -428,6 +435,8 @@ export function CollapsiblePropertyCard({
   actions?: ReactNode;
 }) {
   const currentSource = getPropertySource(value) as PropertySource;
+  const inheritedSlot = useSlotType();
+  const effectiveSlot = slot ?? inheritedSlot;
   const path = useParentPath();
   const widgetId = useContext(PanelScopeContext);
   const diagnostic = useFieldDiagnostic(widgetId, path);
@@ -460,18 +469,20 @@ export function CollapsiblePropertyCard({
   );
 
   const editor = (
-    <PropertySourceEditor
-      value={value}
-      onChange={onChange}
-      source={currentSource}
-      schema={schema}
-      onOpenBindingPicker={onOpenBindingPicker}
-      staticEditor={
-        currentSource === 'static'
-          ? (staticEditor ?? renderSchemaField(schema, value, onChange))
-          : undefined
-      }
-    />
+    <SlotContext.Provider value={effectiveSlot}>
+      <PropertySourceEditor
+        value={value}
+        onChange={onChange}
+        source={currentSource}
+        schema={schema}
+        onOpenBindingPicker={onOpenBindingPicker}
+        staticEditor={
+          currentSource === 'static'
+            ? (staticEditor ?? renderSchemaField(schema, value, onChange))
+            : undefined
+        }
+      />
+    </SlotContext.Provider>
   );
 
   return (
@@ -502,21 +513,25 @@ export function BranchEditor({
   value,
   onChange,
   schema,
+  slot,
   onOpenBindingPicker,
 }: {
   label: string;
   value: unknown;
   onChange: (v: unknown) => void;
   schema: SchemaField;
+  /** What this slot's picker lists when it is not what the property takes. */
+  slot?: SlotType;
   onOpenBindingPicker?: OpenBindingPicker;
 }) {
-  const branchPicker = wrapPicker(onOpenBindingPicker, (b) => onChange({ $var: b }), value);
+  const branchPicker = wrapPicker(onOpenBindingPicker, (b) => onChange({ $var: b }), value, slot);
   return (
     <CollapsiblePropertyCard
       title={label}
       value={value}
       onChange={onChange}
       schema={schema}
+      slot={slot}
       onOpenBindingPicker={branchPicker}
     />
   );
@@ -544,6 +559,7 @@ export function WildcardCard({
       value={value}
       onChange={onChange}
       schema={schema}
+      slot={true}
       forcedSources={forcedSources}
       includeStatic
       onOpenBindingPicker={onOpenBindingPicker}
