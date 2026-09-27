@@ -3,7 +3,7 @@
 #
 # Four stages, because the SPA build has a Python step in the middle of it:
 #
-#   node-deps            node:20-slim — the npm tree plus the native esbuild
+#   node-deps            node:22-slim — the npm tree plus the native esbuild
 #                        binary.
 #   builtin-widgets-build python-base + that esbuild — runs the backend's
 #                        widget compiler over frontend/widgets/, producing
@@ -15,12 +15,12 @@
 #                        artifacts plus the FastAPI backend.
 #
 # The split exists because `npm run build` shells out to Python (see
-# frontend/scripts/build-builtin-widgets.mjs) and node:20-slim has no
+# frontend/scripts/build-builtin-widgets.mjs) and node:22-slim has no
 # interpreter. The node stage runs `build:app`, which is `build` minus that
 # shell-out, against the artifacts stage 2 already produced.
 
 # ── Stage 1 — npm tree + esbuild binary ────────────────────────────────────
-FROM node:20-slim AS node-deps
+FROM node:22-slim AS node-deps
 WORKDIR /src
 
 COPY frontend/package*.json frontend/
@@ -30,7 +30,7 @@ RUN cd frontend && npm ci
 # compile the built-in widgets, and by the runtime stage as the transformer
 # for user-authored custom widgets. esbuild ships per-platform native binaries
 # via npm; ``npm install -g esbuild`` drops the launcher at
-# /usr/local/bin/esbuild on node:20-slim (npm's global bin == /usr/local/bin).
+# /usr/local/bin/esbuild on node:22-slim (npm's global bin == /usr/local/bin).
 RUN npm install -g esbuild
 
 
