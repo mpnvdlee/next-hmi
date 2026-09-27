@@ -49,7 +49,7 @@ components_get = expose_read_tool(
     _get_component_payload,
     name="components_get",
     description=(
-        "Full component definition — ``componentProperties`` + ``tree``. "
+        "Full component definition — ``componentProperties`` + ``children``. "
         "Raises not-found when the component does not exist."
     ),
 )

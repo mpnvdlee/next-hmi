@@ -13,7 +13,7 @@ from pathlib import Path
 import core.storage as storage
 import core.validation.structure as structure
 import pytest
-from core.exceptions import ConfigValidationError
+from core.exceptions import ConfigConflictError, ConfigValidationError
 from mcp_server import idempotency, json_pointer, locks
 from mcp_server.tools import (
     assets as assets_tools,
@@ -170,6 +170,42 @@ def test_assets_delete_rejects_absolute_path():
 def test_assets_delete_rejects_traversal_segment():
     with pytest.raises(ConfigValidationError):
         _run(assets_tools.assets_delete(path="icons/../../etc/passwd", confirm=True))
+
+
+def test_assets_delete_refuses_an_image_a_grouped_component_uses():
+    schemas = json.loads(structure.WIDGET_SCHEMAS_PATH.read_text(encoding="utf-8"))
+    schemas["builtin"]["Image"] = {"name": "Image", "schema": {"src": {"type": "image"}}}
+    structure.WIDGET_SCHEMAS_PATH.write_text(json.dumps(schemas), encoding="utf-8")
+    image = storage.active_images_dir() / "logo.png"
+    image.parent.mkdir(parents=True, exist_ok=True)
+    image.write_bytes(b"png")
+    component = storage.active_components_dir() / "Brand" / "header.json"
+    component.parent.mkdir(parents=True, exist_ok=True)
+    component.write_text(
+        json.dumps(
+            {
+                "name": "Header",
+                "children": [
+                    {
+                        "id": "box",
+                        "type": "Container",
+                        "children": [
+                            {
+                                "id": "logo",
+                                "type": "Image",
+                                "properties": {"src": {"$static": {"path": "images/logo.png"}}},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigConflictError):
+        _run(assets_tools.assets_delete(path="images/logo.png", confirm=True))
+    assert image.exists()
 
 
 # ── SVG sanitization ────────────────────────────────────────────────────────

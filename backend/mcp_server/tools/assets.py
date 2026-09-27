@@ -14,10 +14,10 @@ from core.exceptions import (
 from core.page_index import page_document_files
 from core.storage import (
     active_assets_dir,
-    active_components_dir,
     active_icons_dir,
     active_images_dir,
     active_videos_dir,
+    component_files,
     read_json,
     write_bytes_atomic,
     write_text_atomic,
@@ -148,13 +148,13 @@ def _asset_referenced(asset_path: str) -> bool:
                     for child in children:
                         if _walk_widget_node(child, asset_path, schemas):
                             return True
-    for path in active_components_dir().glob("*.json"):
+    for path, _group in component_files():
         try:
             doc = read_json(path)
         except Exception:
             continue
-        tree = doc.get("tree", []) if isinstance(doc, dict) else []
-        for node in tree if isinstance(tree, list) else []:
+        children = doc.get("children", []) if isinstance(doc, dict) else []
+        for node in children if isinstance(children, list) else []:
             if _walk_widget_node(node, asset_path, schemas):
                 return True
     return False
