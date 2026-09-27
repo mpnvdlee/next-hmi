@@ -488,7 +488,7 @@ declare function useVariableMeta(key: string): VarMeta | undefined;
  *  a `requestId` the backend emits no `write_response` / `write_error`, so a
  *  rejected write is invisible to the operator. */
 declare function sendWsMessage(msg: {
-  type: 'write' | 'write_field';
+  type: 'write_field';
   requestId?: string;
   scope?: string;
   datasource: string;
