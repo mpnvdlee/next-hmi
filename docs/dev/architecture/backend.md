@@ -183,6 +183,7 @@ current value. Every operator write reaches this one check: `write_field`,
   - scans every persisted file before metadata migration; binding-invalid files stay byte-for-byte unchanged, malformed JSON/invalid UTF-8/unreadable files fail closed, and component roots, directories, or files that are symlinks or Windows reparse points are rejected without traversal
 - `backend/opcua/client_pool.py`
   - OPC-UA client pool and reconnect logic
+  - reads the server's `OperationLimits` on connect (`MaxNodesPerRead`, `MaxNodesPerBrowse`, `MaxMonitoredItemsPerCall`; 0 or absent means no limit) and sizes every batched request to them. Limits count *operations*, not nodes: a browse reads four attributes per variable, so 26 variables overflow a `MaxNodesPerRead` of 100 — the size CODESYS advertises. An over-limit request is refused with a `BadTooManyOperations` **service** fault, which fails every operation in it, so an unclamped batch degraded a whole browse level to `data_type: "Unknown"`. A chunk a server refuses anyway is halved and retried, which also covers a server that enforces a limit it never advertises
 - `backend/opcua/test_server.py`
   - in-process OPC-UA test-server pool
   - simulated values are index-derived waves per node; a variable carrying both `sim_min` and `sim_max` (with `min < max`) oscillates inside that band instead, so a node with a real-world range stops swinging to nonsense. Incomplete, inverted or non-numeric bounds fall back to the default wave

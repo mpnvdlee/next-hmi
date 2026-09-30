@@ -40,6 +40,94 @@ logger = logging.getLogger(__name__)
 SECURE_POLICY_NAMES = ("Basic256Sha256", "Aes128Sha256RsaOaep", "Aes256Sha256RsaPss")
 SECURITY_MODES = ("Sign", "SignAndEncrypt")
 
+# Batch sizes used when a server advertises no OperationLimits (0 or absent
+# means "no limit" per OPC-UA Part 5 § 6.3.2). A server that *does* enforce a
+# limit rejects an oversized request with a BadTooManyOperations *service*
+# fault, which fails every operation in the request rather than the ones past
+# the limit — so `_discover_operation_limits` reads the real values on connect
+# and every batched service call clamps itself to them.
+DEFAULT_MAX_READ_OPS = 1000
+DEFAULT_MAX_BROWSE_NODES = 100
+DEFAULT_MAX_MONITORED_ITEMS_PER_CALL = 500
+
+# The attributes a browse reads per variable node, in request order. Each one
+# is a separate Read operation against MaxNodesPerRead.
+_VAR_ATTRS = (
+    ua.AttributeIds.DataType,
+    ua.AttributeIds.ValueRank,
+    ua.AttributeIds.ArrayDimensions,
+    ua.AttributeIds.AccessLevel,
+)
+# (data_type, writable, array_length) for a node whose attributes never arrived.
+_UNKNOWN_VAR_ATTRS = ("Unknown", False, -1)
+
+
+def _decode_var_attrs(
+    results: list[ua.DataValue], index: int
+) -> tuple[str, bool, int]:
+    """Decode one node's slice of a `_VAR_ATTRS` read into
+    (data_type, writable, array_length).
+
+    Each attribute is decoded independently: a server that refuses one of the
+    four still yields the others rather than the whole node reading as Unknown.
+    """
+    write_bit = 1 << int(ua.AccessLevel.CurrentWrite)  # bit 1 = 0x02
+    base = index * len(_VAR_ATTRS)
+    slice_ = results[base : base + len(_VAR_ATTRS)]
+    if len(slice_) != len(_VAR_ATTRS):
+        # A compliant server answers every operation; one that truncates must
+        # not take the rest of the level down with it.
+        return _UNKNOWN_VAR_ATTRS
+    dt_dv, vr_dv, ad_dv, al_dv = slice_
+
+    data_type = "Unknown"
+    try:
+        if dt_dv.StatusCode.is_good() and dt_dv.Value is not None:
+            dt_nid: ua.NodeId = dt_dv.Value.Value
+            if (
+                isinstance(dt_nid, ua.NodeId)
+                and dt_nid.NamespaceIndex == 0
+                and isinstance(dt_nid.Identifier, int)
+            ):
+                ident = dt_nid.Identifier
+                if 1 <= ident <= 25:
+                    data_type = ua.VariantType(ident).name
+                elif ident == 29:
+                    data_type = "Int32"  # enumeration
+                else:
+                    data_type = "struct"
+            else:
+                data_type = "struct"
+    except Exception:
+        pass
+
+    writable = False
+    try:
+        if al_dv.StatusCode.is_good() and al_dv.Value is not None:
+            writable = bool(al_dv.Value.Value & write_bit)
+    except Exception:
+        pass
+
+    # Determine array_length from ValueRank + ArrayDimensions.
+    # ValueRank == 1 means a 1-D array.  array_length encodes:
+    #   -1  → scalar (ValueRank != 1)
+    #    0  → 1-D array of unknown/dynamic size (no ArrayDimensions)
+    #   >0  → 1-D array with known fixed size
+    array_length = -1
+    try:
+        if vr_dv.StatusCode.is_good() and vr_dv.Value is not None:
+            value_rank = vr_dv.Value.Value
+            if value_rank == 1:
+                array_length = 0  # is a 1-D array; size may be unknown
+                if ad_dv.StatusCode.is_good() and ad_dv.Value is not None:
+                    dims = ad_dv.Value.Value
+                    if dims and len(dims) == 1 and dims[0] > 0:
+                        array_length = int(dims[0])
+    except Exception:
+        pass
+
+    return data_type, writable, array_length
+
 
 # ── Security-string builder (shared by live connect + probe) ─────────────────
 
@@ -539,6 +627,11 @@ class DatasourceOpcuaEngine:
         # against a torn-down engine after shutdown.
         self._status_close_task: asyncio.Task | None = None
         self._config: dict = {}
+        # Server OperationLimits, read on connect. None means "not read yet or
+        # not advertised" — the DEFAULT_MAX_* batch sizes then apply.
+        self._max_read_ops: int | None = None
+        self._max_browse_nodes: int | None = None
+        self._max_monitored_items_per_call: int | None = None
         self._datasource_manager = None
         self._status_callback = None
         self._priority_recompute_callback = None
@@ -809,6 +902,7 @@ class DatasourceOpcuaEngine:
         self._connected = True
         self._error = None
         logger.info("OPC-UA connected: %s → %s", self.datasource_name, url)
+        await self._discover_operation_limits()
         if self._status_callback is not None:
             await self._status_callback(self.datasource_name, True)
         try:
@@ -842,6 +936,80 @@ class DatasourceOpcuaEngine:
             await self._close_client()
             raise
 
+    # ── Server operation limits ───────────────────────────────────────────────
+
+    async def _discover_operation_limits(self) -> None:
+        """Read the server's OperationLimits so batched requests stay legal.
+
+        Servers reject an oversized Read/Browse/CreateMonitoredItems with a
+        BadTooManyOperations *service* fault: the whole request fails, not just
+        the operations past the limit. CODESYS advertises MaxNodesPerRead = 100,
+        and the browse attribute read asks for four attributes per variable, so
+        without this a level of 26 variables was enough to lose every type on
+        that level.
+        """
+        self._max_read_ops = None
+        self._max_browse_nodes = None
+        self._max_monitored_items_per_call = None
+        client = self._client
+        if client is None:
+            return
+        limit_ids = (
+            ua.ObjectIds.Server_ServerCapabilities_OperationLimits_MaxNodesPerRead,
+            ua.ObjectIds.Server_ServerCapabilities_OperationLimits_MaxNodesPerBrowse,
+            ua.ObjectIds.Server_ServerCapabilities_OperationLimits_MaxMonitoredItemsPerCall,
+        )
+        try:
+            params = ua.ReadParameters()
+            params.MaxAge = 0
+            params.TimestampsToReturn = ua.TimestampsToReturn.Neither
+            for ident in limit_ids:
+                rv = ua.ReadValueId()
+                rv.NodeId = ua.NodeId(ident)
+                rv.AttributeId = ua.AttributeIds.Value
+                params.NodesToRead.append(rv)
+            results = await client.uaclient.read(params)
+        except Exception as exc:
+            # An optional part of the address space: a server may omit it
+            # entirely. The defaults then apply, as they did before.
+            logger.debug(
+                "Could not read OperationLimits for %s: %s", self.datasource_name, exc
+            )
+            return
+        limits: list[int | None] = []
+        for dv in results:
+            value: int | None = None
+            try:
+                if dv.StatusCode.is_good() and dv.Value is not None:
+                    raw = dv.Value.Value
+                    # 0 means "no limit"; keep None so the defaults apply.
+                    if isinstance(raw, int) and raw > 0:
+                        value = raw
+            except Exception:
+                value = None
+            limits.append(value)
+        self._max_read_ops, self._max_browse_nodes, self._max_monitored_items_per_call = limits
+        logger.info(
+            "OPC-UA operation limits for %s: MaxNodesPerRead=%s MaxNodesPerBrowse=%s "
+            "MaxMonitoredItemsPerCall=%s",
+            self.datasource_name,
+            self._max_read_ops or "unlimited",
+            self._max_browse_nodes or "unlimited",
+            self._max_monitored_items_per_call or "unlimited",
+        )
+
+    def _read_ops_budget(self) -> int:
+        """Operations allowed in one Read request."""
+        return self._max_read_ops or DEFAULT_MAX_READ_OPS
+
+    def _browse_nodes_budget(self) -> int:
+        """BrowseDescriptions allowed in one Browse request."""
+        return self._max_browse_nodes or DEFAULT_MAX_BROWSE_NODES
+
+    def _monitored_items_budget(self) -> int:
+        """Items allowed in one CreateMonitoredItems/DeleteMonitoredItems call."""
+        return self._max_monitored_items_per_call or DEFAULT_MAX_MONITORED_ITEMS_PER_CALL
+
     # ── Browse ────────────────────────────────────────────────────────────────
 
     async def browse(self, node_id: str | None = None) -> dict:
@@ -860,22 +1028,38 @@ class DatasourceOpcuaEngine:
     # ── Batched browse helpers ────────────────────────────────────────────────
 
     async def _batch_browse_nodes(
-        self, nodes: list[Node], chunk_size: int = 100
+        self, nodes: list[Node], chunk_size: int | None = None
     ) -> list[list[ua.ReferenceDescription]]:
         """Browse multiple parent nodes using one Browse request per chunk.
 
         The OPC-UA Browse service accepts a list of BrowseDescriptions and
         returns one BrowseResult per entry, so a single request suffices for
-        all nodes at a given BFS level.  Continuation points are handled
-        per-slot so no references are lost when the server splits results.
+        all nodes at a given BFS level.  Chunks respect the server's
+        MaxNodesPerBrowse, and a chunk the server still refuses is split and
+        retried rather than costing the whole level.
         """
         all_refs: list[list[ua.ReferenceDescription]] = [[] for _ in nodes]
-        for start in range(0, len(nodes), chunk_size):
-            chunk = nodes[start : start + chunk_size]
+        budget = chunk_size or self._browse_nodes_budget()
+        for start in range(0, len(nodes), budget):
+            chunk = nodes[start : start + budget]
+            chunk_refs = await self._browse_chunk(chunk)
+            for slot, refs in enumerate(chunk_refs):
+                all_refs[start + slot].extend(refs)
+        return all_refs
+
+    async def _browse_chunk(
+        self, nodes: list[Node]
+    ) -> list[list[ua.ReferenceDescription]]:
+        """Browse one chunk, halving it when the server refuses the batch.
+
+        Continuation points are followed per slot so no references are lost
+        when the server splits results.
+        """
+        try:
             params = ua.BrowseParameters()
             params.RequestedMaxReferencesPerNode = 0
             params.View.Timestamp = ua.get_win_epoch()
-            for n in chunk:
+            for n in nodes:
                 desc = ua.BrowseDescription()
                 desc.NodeId = n.nodeid
                 desc.BrowseDirection = ua.BrowseDirection.Forward
@@ -886,11 +1070,11 @@ class DatasourceOpcuaEngine:
                 desc.ResultMask = ua.BrowseResultMask.All
                 params.NodesToBrowse.append(desc)
             results = await self._client.uaclient.browse(params)
+            all_refs: list[list[ua.ReferenceDescription]] = [[] for _ in nodes]
             for slot, result in enumerate(results):
-                all_refs[start + slot].extend(result.References)
-            # Handle continuation points per slot
+                all_refs[slot].extend(result.References)
             pending = [
-                (start + i, r.ContinuationPoint)
+                (i, r.ContinuationPoint)
                 for i, r in enumerate(results)
                 if r.ContinuationPoint
             ]
@@ -905,18 +1089,34 @@ class DatasourceOpcuaEngine:
                     all_refs[idx].extend(result.References)
                     if result.ContinuationPoint:
                         pending.append((idx, result.ContinuationPoint))
-        return all_refs
+            return all_refs
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            if len(nodes) <= 1:
+                raise
+            logger.debug(
+                "Browse of %d nodes failed for %s (%s) — splitting",
+                len(nodes), self.datasource_name, exc,
+            )
+            half = len(nodes) // 2
+            return (
+                await self._browse_chunk(nodes[:half])
+                + await self._browse_chunk(nodes[half:])
+            )
 
     async def _batch_read_var_attrs(
-        self, node_ids: list[ua.NodeId], chunk_size: int = 300
+        self, node_ids: list[ua.NodeId], chunk_size: int | None = None
     ) -> list[tuple[str, bool, int]]:
         """Batch-read DataType, ValueRank, ArrayDimensions and AccessLevel for a
         list of variable NodeIds.
 
         Returns (data_type_name, writable, array_length) per input NodeId.
         array_length is 0 for scalars; for 1-D arrays with a known fixed size it
-        contains that size.  All reads are issued in a single ReadRequest per
-        chunk — far fewer round-trips than reading one node at a time.
+        contains that size.  Reads are issued as one ReadRequest per chunk — far
+        fewer round-trips than reading one node at a time — sized so the four
+        attributes per node stay inside the server's MaxNodesPerRead, which
+        counts operations (node/attribute pairs), not nodes.
 
         DataType resolution is done purely from the returned NodeId:
           - ns=0, identifier 1..25  → ua.VariantType(id).name (no extra RPC)
@@ -925,78 +1125,54 @@ class DatasourceOpcuaEngine:
         """
         if not node_ids:
             return []
-        _WRITE_BIT = 1 << int(ua.AccessLevel.CurrentWrite)  # bit 1 = 0x02
-        # 4 attributes per node: DataType, ValueRank, ArrayDimensions, AccessLevel
-        _ATTRS = (
-            ua.AttributeIds.DataType,
-            ua.AttributeIds.ValueRank,
-            ua.AttributeIds.ArrayDimensions,
-            ua.AttributeIds.AccessLevel,
-        )
-        _N = len(_ATTRS)
+        nodes_per_chunk = chunk_size or max(1, self._read_ops_budget() // len(_VAR_ATTRS))
         results_all: list[tuple[str, bool, int]] = []
-        for start in range(0, len(node_ids), chunk_size):
-            chunk = node_ids[start : start + chunk_size]
+        for start in range(0, len(node_ids), nodes_per_chunk):
+            chunk = node_ids[start : start + nodes_per_chunk]
+            results_all.extend(await self._read_var_attrs_chunk(chunk))
+        return results_all
+
+    async def _read_var_attrs_chunk(
+        self, node_ids: list[ua.NodeId]
+    ) -> list[tuple[str, bool, int]]:
+        """Read one chunk of variable attributes, halving it on a refusal.
+
+        A server that enforces a stricter limit than it advertises — or none at
+        all — still yields real types this way instead of degrading a whole
+        browse level to "Unknown".
+        """
+        try:
             params = ua.ReadParameters()
             params.MaxAge = 0
             params.TimestampsToReturn = ua.TimestampsToReturn.Neither
-            for nid in chunk:
-                for attr_id in _ATTRS:
+            for nid in node_ids:
+                for attr_id in _VAR_ATTRS:
                     rv = ua.ReadValueId()
                     rv.NodeId = nid
                     rv.AttributeId = attr_id
                     params.NodesToRead.append(rv)
             results = await self._client.uaclient.read(params)
-            for i in range(len(chunk)):
-                dt_dv = results[i * _N]
-                vr_dv = results[i * _N + 1]
-                ad_dv = results[i * _N + 2]
-                al_dv = results[i * _N + 3]
-                data_type = "Unknown"
-                try:
-                    if dt_dv.StatusCode.is_good() and dt_dv.Value is not None:
-                        dt_nid: ua.NodeId = dt_dv.Value.Value
-                        if (
-                            isinstance(dt_nid, ua.NodeId)
-                            and dt_nid.NamespaceIndex == 0
-                            and isinstance(dt_nid.Identifier, int)
-                        ):
-                            ident = dt_nid.Identifier
-                            if 1 <= ident <= 25:
-                                data_type = ua.VariantType(ident).name
-                            elif ident == 29:
-                                data_type = "Int32"  # enumeration
-                            else:
-                                data_type = "struct"
-                        else:
-                            data_type = "struct"
-                except Exception:
-                    pass
-                writable = False
-                try:
-                    if al_dv.StatusCode.is_good() and al_dv.Value is not None:
-                        writable = bool(al_dv.Value.Value & _WRITE_BIT)
-                except Exception:
-                    pass
-                # Determine array_length from ValueRank + ArrayDimensions.
-                # ValueRank == 1 means a 1-D array.  array_length encodes:
-                #   -1  → scalar (ValueRank != 1)
-                #    0  → 1-D array of unknown/dynamic size (no ArrayDimensions)
-                #   >0  → 1-D array with known fixed size
-                array_length = -1
-                try:
-                    if vr_dv.StatusCode.is_good() and vr_dv.Value is not None:
-                        value_rank = vr_dv.Value.Value
-                        if value_rank == 1:
-                            array_length = 0  # is a 1-D array; size may be unknown
-                            if ad_dv.StatusCode.is_good() and ad_dv.Value is not None:
-                                dims = ad_dv.Value.Value
-                                if dims and len(dims) == 1 and dims[0] > 0:
-                                    array_length = int(dims[0])
-                except Exception:
-                    pass
-                results_all.append((data_type, writable, array_length))
-        return results_all
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            if len(node_ids) <= 1:
+                logger.warning(
+                    "Attribute read failed for %s (%s): %s",
+                    self.datasource_name,
+                    node_ids[0].to_string() if node_ids else "?",
+                    exc,
+                )
+                return [_UNKNOWN_VAR_ATTRS] * len(node_ids)
+            logger.debug(
+                "Attribute read of %d nodes failed for %s (%s) — splitting",
+                len(node_ids), self.datasource_name, exc,
+            )
+            half = len(node_ids) // 2
+            return (
+                await self._read_var_attrs_chunk(node_ids[:half])
+                + await self._read_var_attrs_chunk(node_ids[half:])
+            )
+        return [_decode_var_attrs(results, i) for i in range(len(node_ids))]
 
     async def _browse_node(self, node: Node) -> dict[str, Any]:
         """BFS browse: ~2 round-trips per tree level instead of 5 per node.
@@ -1096,8 +1272,11 @@ class DatasourceOpcuaEngine:
                         "Batch read var attrs failed for %s: %s",
                         self.datasource_name, exc,
                     )
+                    # Fill both fields: an entry with a type but no `writable`
+                    # reads as "access unknown" in the picker, which hides that
+                    # the attribute read is what failed.
                     for entry in var_entries:
-                        entry["data_type"] = "Unknown"
+                        entry["data_type"], entry["writable"], _ = _UNKNOWN_VAR_ATTRS
 
             queue = next_queue
         return root_entry
@@ -1187,7 +1366,7 @@ class DatasourceOpcuaEngine:
                     continue
                 enabled_items.append((path, self._client.get_node(node_id)))
 
-            chunk_size = 500
+            chunk_size = self._monitored_items_budget()
             for i in range(0, len(enabled_items), chunk_size):
                 chunk = enabled_items[i : i + chunk_size]
                 nodes = [node for _, node in chunk]
@@ -1361,7 +1540,16 @@ class DatasourceOpcuaEngine:
         if not requests:
             return {}
 
-        values = await self._client.read_values([node for _, _, _, node in requests])
+        # One Read operation per node, chunked to MaxNodesPerRead: a server that
+        # enforces it fails the whole request, so an over-limit page context
+        # would leave every variable on the page without a value.
+        nodes_to_read = [node for _, _, _, node in requests]
+        read_budget = self._read_ops_budget()
+        values: list[Any] = []
+        for start in range(0, len(nodes_to_read), read_budget):
+            values.extend(
+                await self._client.read_values(nodes_to_read[start : start + read_budget])
+            )
         result: dict[str, Any] = {}
         for (kind, path, field_name, _node), value in zip(requests, values, strict=False):
             coerced = dm._coerce(value)

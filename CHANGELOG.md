@@ -9,6 +9,22 @@ project file format ships only in a release whose minor or major number moves.
 Breaking changes are always called out under a **Changed** or **Removed**
 heading.
 
+## [Unreleased]
+
+### Fixed
+
+- **Browse PLC now reads types from servers that limit a read request.** A
+  server may cap how many operations one request may carry, and refuses a
+  larger one outright — CODESYS Control Win V3 caps it at 100. Browse reads
+  four attributes per variable, so from 26 variables on a level it asked for
+  more than CODESYS allows and got nothing back: every variable on that level
+  imported as **String** with an **Unknown** badge, read-only, and structs were
+  listed flat with no members to bind. NEXT HMI now reads each server's limits
+  when it connects and keeps every browse, value read and subscription inside
+  them, and splits a request a server refuses anyway rather than losing the
+  types. Affects any server that advertises `OperationLimits`; CODESYS symbol
+  configurations were hit hardest.
+
 ## [1.0.0] - 2026-09-27
 
 The first stable release. Projects saved by a 0.0.1 release candidate are
