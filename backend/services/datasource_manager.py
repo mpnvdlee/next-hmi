@@ -676,7 +676,9 @@ class DatasourceManager:
             except Exception:
                 logger.exception("Failed to load datasource config %s", path)
 
-    # Map from lower-cased data_type to a zero-value for that type.
+    # Map from lower-cased data_type to a zero-value for that type, in the
+    # cache form a write leaves behind. Parity: opcuaBuiltinTypes.json
+    # (staticDefault).
     _STATIC_DEFAULTS: ClassVar[dict[str, Any]] = {
         "bool": False,
         "boolean": False,

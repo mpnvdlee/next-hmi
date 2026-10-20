@@ -8,10 +8,12 @@ learn it too. The fixture is maintained by hand.
 
 A ``writeVariantType`` of null is a type the write path refuses
 (``unknown_type``); a ``testServerType`` of null is one the test server
-refuses to build.
+refuses to build; a ``staticDefault`` of null is one a static datasource
+refuses, and any other is the value its variables start at.
 """
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -20,11 +22,13 @@ from core.exceptions import DatasourceValidationError
 from core.value_types import (
     OPCUA_TO_SIMPLE,
     VALUE_TYPES,
+    datetime_to_iso,
     representative_opcua_type,
     to_simple_type,
 )
 from opcua import browse, test_server
 from services import write_service
+from services.datasource_manager import DatasourceManager, validate_static_data_types
 
 FIXTURES_DIR = (
     Path(__file__).resolve().parents[2]
@@ -137,3 +141,51 @@ def test_representative_types_match_fixture() -> None:
         # MCP's add_variable stores the representative on any datasource,
         # a test server included.
         assert by_name[opcua_type]["testServerType"] == opcua_type
+
+
+# Accepted before this table was pinned and kept so a saved datasource still
+# loads; no OPC-UA type is called UInt, so the fixture does not list it.
+_LEGACY_STATIC_NAMES = {"uint": 0}
+
+
+def test_static_defaults_match_fixture() -> None:
+    def typed(table: dict) -> dict:
+        return {name: (type(value), value) for name, value in table.items()}
+
+    expected = {
+        t["name"].lower(): t["staticDefault"]
+        for t in TYPES
+        if t["staticDefault"] is not None
+    }
+    assert typed(DatasourceManager._STATIC_DEFAULTS) == typed(
+        {**expected, **_LEGACY_STATIC_NAMES}
+    )
+
+
+def test_static_datasources_accept_exactly_the_writable_names() -> None:
+    """A static variable changes only through the write path."""
+    assert {t["name"] for t in TYPES if t["staticDefault"] is not None} == {
+        t["name"] for t in TYPES if t["writeVariantType"] is not None
+    }
+
+
+def test_static_defaults_are_in_the_form_a_write_caches() -> None:
+    by_name = {t["name"]: t for t in TYPES}
+    assert by_name["DateTime"]["staticDefault"] == datetime_to_iso(datetime(1970, 1, 1))
+    for name in ("Date", "Time"):
+        default = by_name[name]["staticDefault"]
+        assert write_service.coerce_write_value(default, name) == default
+
+
+@pytest.mark.parametrize("simple", sorted(VALUE_TYPES))
+def test_static_datasources_accept_every_representative_type(simple: str) -> None:
+    """What the static editor's type picker stores for each simple type."""
+    validate_static_data_types(
+        [
+            {
+                "kind": "variable",
+                "display_name": "Var",
+                "data_type": representative_opcua_type(simple),
+            }
+        ]
+    )
