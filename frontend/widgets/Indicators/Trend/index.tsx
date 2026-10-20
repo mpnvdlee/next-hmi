@@ -50,7 +50,7 @@ function formatValue(value: number, decimals: number): string {
 export default function Trend({ properties, layout }: HmiWidgetProps) {
   const { LineChart, Line, XAxis, YAxis, ResponsiveContainer } = Recharts;
 
-  const value = readNumberValue(usePropVar(properties, 'variable'));
+  const value = usePropNumber(properties, 'variable', null);
   const historyLength = usePropNumber(properties, 'historyLength', 60);
   const decimals = usePropNumber(properties, 'decimals', 1);
   const label = usePropString(properties, 'label', '');
@@ -62,7 +62,7 @@ export default function Trend({ properties, layout }: HmiWidgetProps) {
   const [history, setHistory] = useState<Sample[]>([]);
 
   useEffect(() => {
-    if (value === undefined || !Number.isFinite(value)) return;
+    if (value === null || !Number.isFinite(value)) return;
     setHistory((prev) => {
       const next = [...prev, { t: Date.now(), v: value }];
       const cap = Math.max(2, Math.trunc(historyLength));
@@ -70,7 +70,7 @@ export default function Trend({ properties, layout }: HmiWidgetProps) {
     });
   }, [value, historyLength]);
 
-  const displayValue = value !== undefined ? formatValue(value, decimals) : '---';
+  const displayValue = value !== null ? formatValue(value, decimals) : '---';
 
   return (
     <div className="hmi-component hmi-trend" style={selfLayoutStyle(layout)}>

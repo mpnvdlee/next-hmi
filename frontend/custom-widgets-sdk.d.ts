@@ -907,7 +907,8 @@ declare function getPropString(
 
 /** A number, or a string that is a clean decimal number (`"42"`, `" -1.5 "`) —
  *  read as-is, never rounded for an integer field. Anything else returns
- *  `fallback` (default `0`). */
+ *  `fallback` (default `0`). Not a hook: a `$var` binding reads its value at
+ *  call time and does not re-render the widget — in a render, `usePropNumber`. */
 declare function getPropNumber(
   properties: Record<string, unknown> | undefined,
   key: string,
@@ -932,8 +933,9 @@ declare function getPropBindingOrStatic(value: unknown): {
   staticValue: unknown;
 };
 
-/** An already-resolved value — what `usePropVar` / `useVariable` returns, a
- *  struct field — as a number: a number as-is (`NaN` excepted), or a string that
+/** An already-resolved value — what `useVariable` returns, a struct field, a
+ *  raw value also needed as text — as a number (`usePropNumber` does this for a
+ *  property): a number as-is (`NaN` excepted), or a string that
  *  is a clean decimal number, the form an integer beyond ±(2**53 − 1) arrives in
  *  (read as the nearest double). Anything else returns `undefined`. */
 declare function readNumberValue(value: unknown): number | undefined;
@@ -946,12 +948,25 @@ declare function usePropString(
   fallback?: string,
 ): string;
 
-/** `getPropNumber` with the eval context supplied — same string parsing. */
+/** A number property from any source — static, a property source, or a `$var`
+ *  binding, read live — parsed as `readNumberValue` does. Returns `fallback`
+ *  (default `0`) when there is no numeric value; pass `null` to get `null`
+ *  instead, e.g. to show `---`. */
 declare function usePropNumber(
   properties: Record<string, unknown> | undefined,
   key: string,
   fallback?: number,
 ): number;
+declare function usePropNumber(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+  fallback: null,
+): number | null;
+declare function usePropNumber(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+  fallback: number | null,
+): number | null;
 
 declare function usePropBoolean(
   properties: Record<string, unknown> | undefined,

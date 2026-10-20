@@ -426,8 +426,9 @@ export function getPropString(
 }
 
 /**
- * Read an already-resolved value — what `usePropVar` or `useVariable` returns,
- * a struct field — as a number: a number as-is (`NaN` excepted), or a string
+ * Read an already-resolved value — what `useVariable` returns, a struct field,
+ * a raw value also needed as text — as a number (`usePropNumber` does this for
+ * a property): a number as-is (`NaN` excepted), or a string
  * that is a clean decimal number, which is how an integer beyond ±(2**53 − 1)
  * arrives (read as the nearest double). Anything else returns `undefined`.
  *
@@ -448,6 +449,10 @@ export function readNumberValue(value: unknown): number | undefined {
  * Safely read a number property. A string that is a clean decimal number (`"42"`,
  * `" -1.5 "`, `"2e3"`) reads as that number, unrounded even for an integer
  * field; anything else that is not a number returns fallback (default 0).
+ *
+ * Not a hook, so it cannot subscribe: a `$var` binding reads the store's value
+ * at call time through `evalContext`, and nothing re-renders the caller when it
+ * changes. Inside a render, use `usePropNumber`.
  */
 export function getPropNumber(
   properties: Record<string, unknown> | undefined,
@@ -527,10 +532,11 @@ export function getPropBindingOrStatic(value: unknown): {
 /**
  * Hook: subscribe to a live variable ($var binding) or resolve a static/sourced value.
  * Use this for `$static` / `$var` value-source properties.
- * Returns `unknown` — cast to the expected type at the call site.
+ * Returns `unknown` — cast to the expected type at the call site; for a number,
+ * `usePropNumber` does the parsing.
  * @example
  *   const value = usePropVar(properties, 'variable');
- *   const num   = typeof value === 'number' ? value : 0;
+ *   const isOn  = Boolean(value);
  */
 export function usePropVar(properties: Record<string, unknown> | undefined, key: string): unknown {
   const { binding, staticValue } = getPropBindingOrStatic(properties?.[key]);
@@ -556,14 +562,36 @@ export function usePropString(
   return getPropString(properties, key, fallback, evalCtx);
 }
 
-/** Hook: read a number property, evaluating any property source. */
+/**
+ * Hook: read a number property from any source — a static value, a property
+ * source, or a `$var` binding, whose live value it subscribes to (as
+ * `usePropVar` does) — parsed by `readNumberValue`. Returns `fallback` (default
+ * 0) when there is no numeric value; pass `null` to tell that apart from 0.
+ * @example
+ *   const min = usePropNumber(properties, 'min', 0);
+ *   const value = usePropNumber(properties, 'variable', null); // null → '---'
+ */
 export function usePropNumber(
   properties: Record<string, unknown> | undefined,
   key: string,
-  fallback = 0,
-): number {
-  const evalCtx = useEvalContext();
-  return getPropNumber(properties, key, fallback, evalCtx);
+  fallback?: number,
+): number;
+export function usePropNumber(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+  fallback: null,
+): number | null;
+export function usePropNumber(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+  fallback: number | null,
+): number | null;
+export function usePropNumber(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+  fallback: number | null = 0,
+): number | null {
+  return readNumberValue(usePropVar(properties, key)) ?? fallback;
 }
 
 /** Hook: read a boolean property, evaluating any property source. */
