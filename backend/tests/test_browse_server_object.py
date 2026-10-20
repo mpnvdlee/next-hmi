@@ -1,9 +1,10 @@
-"""A saved variable the browse did not reach is checked, not assumed gone.
+"""A browse from the default root leaves out the standard Server object.
 
-A browse below an explicit root walks only part of the server. Every saved
-variable outside it that the server still has is reported as
-present_outside_browse, so a re-browse cannot list it as removed or turn it
-stale.
+Server (i=2253) holds the server's own capabilities, diagnostics and namespace
+table — hundreds of nodes, none of them a PLC tag. It is still walked when it
+is the root that was asked for, and a variable saved from under it by an
+earlier browse is reported as present rather than gone, so a re-browse cannot
+turn it stale.
 """
 
 import contextlib
@@ -21,7 +22,7 @@ from services.datasource_manager import DatasourceEntry, DatasourceManager
 SERVER = "i=2253"
 SERVER_STATUS = "i=2256"
 CURRENT_TIME = "i=2258"
-NS_URI = "http://nexthmi/saved-outside"
+NS_URI = "http://nexthmi/server-object"
 
 
 def _free_url() -> str:
@@ -29,7 +30,7 @@ def _free_url() -> str:
     sock.bind(("127.0.0.1", 0))
     port = sock.getsockname()[1]
     sock.close()
-    return f"opc.tcp://127.0.0.1:{port}/nexthmi/saved-outside/"
+    return f"opc.tcp://127.0.0.1:{port}/nexthmi/server-object/"
 
 
 @contextlib.asynccontextmanager
@@ -63,6 +64,10 @@ def _ids(entry: dict) -> set[str]:
     return {entry["node_id"]} | {i for c in entry.get("children", []) for i in _ids(c)}
 
 
+def _count_nodes(entry: dict) -> int:
+    return sum(1 + _count_nodes(child) for child in entry.get("children", []))
+
+
 def _engine_with_saved(variables: list[dict[str, Any]]) -> DatasourceOpcuaEngine:
     engine = DatasourceOpcuaEngine("PLC")
     manager = DatasourceManager()
@@ -85,14 +90,81 @@ def _var(node_id: str, name: str, **extra: Any) -> dict[str, Any]:
 
 
 @pytest.mark.asyncio
-async def test_a_saved_variable_outside_the_root_is_present_and_a_removed_one_is_not():
+async def test_default_root_leaves_out_the_server_object():
+    events: list[dict] = []
+    engine = DatasourceOpcuaEngine("PLC")
+    async with _live_server() as url, Client(url) as client:
+        engine.attach_client(
+            client, {}, operation_limits=OperationLimits(max_read_ops=8, max_browse_nodes=2)
+        )
+        tree = await engine.browse(on_progress=events.append)
+
+    top = {c["display_name"]: c for c in tree["children"]}
+    assert "Server" not in top
+    assert SERVER not in _ids(tree)
+    assert SERVER_STATUS not in _ids(tree)
+    assert {c["display_name"] for c in top["Plant"]["children"]} == {"Speed", "Running"}
+    # A device in another namespace is a tag source, not server plumbing.
+    assert [c["display_name"] for c in top["DeviceSet"]["children"]] == ["SerialNumber"]
+    assert tree["show_root"] is False
+    assert "present_outside_browse" not in tree
+
+    last = events[-1]
+    assert last["done"] == last["total"]
+    assert all(e["done"] <= e["total"] for e in events)
+    assert last["nodes"] == _count_nodes(tree)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("root", [SERVER, SERVER_STATUS])
+async def test_an_explicit_root_at_or_inside_server_is_walked(root):
+    engine = DatasourceOpcuaEngine("PLC")
+    async with _live_server() as url, Client(url) as client:
+        engine.attach_client(client, {"browse_root_node": root})
+        tree = await engine.browse()
+        engine.attach_client(client, {})
+        by_argument = await engine.browse(root)
+
+    assert tree["node_id"] == root
+    assert tree["show_root"] is True
+    assert CURRENT_TIME in _ids(tree)
+    assert by_argument["show_root"] is True
+    assert _ids(by_argument) == _ids(tree)
+
+
+@pytest.mark.asyncio
+async def test_an_explicit_objects_root_still_walks_server():
+    engine = DatasourceOpcuaEngine("PLC")
+    async with _live_server() as url, Client(url) as client:
+        engine.attach_client(client, {"browse_root_node": "i=85"})
+        tree = await engine.browse()
+
+    assert SERVER in {c["node_id"] for c in tree["children"]}
+
+
+@pytest.mark.asyncio
+async def test_a_saved_variable_from_under_server_is_present_not_gone():
+    """The migration case: a tag imported from under Server by an earlier
+    browse is still on the server. The default browse no longer walks it, so
+    it says so — and a tag that really is gone is not covered by that."""
     async with _live_server() as url, Client(url) as client:
         plc_speed = await _plant_speed(client)
-        plant = plc_speed.replace("Plant.Speed", "Plant")
         gone = plc_speed.replace("Plant.Speed", "Plant.Removed")
         engine = _engine_with_saved(
             [
-                _var(CURRENT_TIME, "CurrentTime", data_type="DateTime"),
+                {
+                    "kind": "folder",
+                    "name": "Server",
+                    "children": [
+                        {
+                            "kind": "folder",
+                            "name": "ServerStatus",
+                            "children": [
+                                _var(CURRENT_TIME, "CurrentTime", data_type="DateTime")
+                            ],
+                        },
+                    ],
+                },
                 {
                     "kind": "folder",
                     "name": "Plant",
@@ -100,21 +172,11 @@ async def test_a_saved_variable_outside_the_root_is_present_and_a_removed_one_is
                 },
             ]
         )
-        engine.attach_client(client, {"browse_root_node": plant})
-        tree = await engine.browse()
-
-    assert plc_speed in _ids(tree)
-    assert tree["present_outside_browse"] == [CURRENT_TIME]
-
-
-@pytest.mark.asyncio
-async def test_a_default_browse_that_reaches_every_saved_variable_reports_none():
-    async with _live_server() as url, Client(url) as client:
-        engine = _engine_with_saved([_var(await _plant_speed(client), "Speed")])
         engine.attach_client(client, {})
         tree = await engine.browse()
 
-    assert "present_outside_browse" not in tree
+    assert CURRENT_TIME not in _ids(tree)
+    assert tree["present_outside_browse"] == [CURRENT_TIME]
 
 
 @pytest.mark.asyncio

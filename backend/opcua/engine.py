@@ -16,7 +16,7 @@ from asyncua.common.node import Node
 from core.number_utils import get_config_float
 from models.datasource import build_var_key, is_present_on_server, is_subscribable
 
-from .browse import AddressSpaceBrowser, BrowseProgressSink
+from .browse import SERVER_OBJECT_NODE_ID, AddressSpaceBrowser, BrowseProgressSink
 from .compat import apply_asyncua_watchdog_log_patch
 from .discovery import _short_probe_error
 from .limits import OperationLimits, read_operation_limits
@@ -496,7 +496,12 @@ class DatasourceOpcuaEngine:
             client, self._operation_limits, datasource_name=self.datasource_name
         )
         result = await browser.browse(
-            node, on_progress=on_progress, saved_node_ids=self._saved_node_ids()
+            node,
+            on_progress=on_progress,
+            # Browsing Server itself, or anything inside it, as the root still
+            # walks it: then it was asked for.
+            skip_children=() if configured_root else (SERVER_OBJECT_NODE_ID,),
+            saved_node_ids=self._saved_node_ids(),
         )
         result["show_root"] = configured_root is not None
         return result

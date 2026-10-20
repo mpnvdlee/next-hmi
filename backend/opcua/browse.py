@@ -7,7 +7,7 @@ none of the engine's subscription state — so it is its own class.
 
 import asyncio
 import logging
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Collection, Iterable
 from typing import Any
 
 from asyncua import Client, ua
@@ -35,6 +35,10 @@ _UNKNOWN_VAR_ATTRS = ("Unknown", False, -1)
 _HAS_COMPONENT = ua.NodeId(ua.ObjectIds.HasComponent)
 
 _BROWSE_NODE_CLASSES = int(ua.NodeClass.Object) | int(ua.NodeClass.Variable)
+
+# The standard Server object under Objects: the server's own capabilities,
+# diagnostics and namespace table — hundreds of nodes, none of them a PLC tag.
+SERVER_OBJECT_NODE_ID = ua.NodeId(ua.ObjectIds.Server).to_string()
 
 # The only answers that say a node is gone. Anything else — access denied, a
 # busy server — still means the node is there.
@@ -214,6 +218,7 @@ class AddressSpaceBrowser:
         node: Node,
         *,
         on_progress: BrowseProgressSink | None = None,
+        skip_children: Collection[str] = (),
         saved_node_ids: Iterable[str] = (),
     ) -> dict[str, Any]:
         """Walk the address space below *node*.
@@ -222,13 +227,16 @@ class AddressSpaceBrowser:
         Browse and attribute-Read chunk; see _BrowseProgress for what the
         numbers mean.
 
-        Of *saved_node_ids* — the datasource's variables — those the walk did
-        not reach but the server still has are listed under
+        *skip_children* names children of *node* that are left out, subtree
+        and all. Of *saved_node_ids* — the datasource's variables — those the
+        walk did not reach but the server still has are listed under
         ``present_outside_browse``: not browsed is not removed.
         """
         # Types can change with a PLC download between two browses.
         self._data_type_names = {}
-        tree = await self._browse_node(node, _BrowseProgress(on_progress))
+        tree = await self._browse_node(
+            node, _BrowseProgress(on_progress), skip_children=frozenset(skip_children)
+        )
         walked = _node_ids_in(tree)
         outside = [nid for nid in dict.fromkeys(saved_node_ids) if nid and nid not in walked]
         present = await self.existing_node_ids(outside)
@@ -498,7 +506,11 @@ class AddressSpaceBrowser:
         raise ua.UaError(f"DataType {dt_nid.to_string()} derives from no builtin type")
 
     async def _browse_node(
-        self, node: Node, progress: _BrowseProgress | None = None
+        self,
+        node: Node,
+        progress: _BrowseProgress | None = None,
+        *,
+        skip_children: frozenset[str] = frozenset(),
     ) -> dict[str, Any]:
         """BFS browse: ~2 round-trips per tree level instead of 5 per node.
 
@@ -594,6 +606,8 @@ class AddressSpaceBrowser:
                         continue
                     cid_str = ref.NodeId.to_string()
                     if cid_str in visited:
+                        continue
+                    if parent_entry is root_entry and cid_str in skip_children:
                         continue
                     visited.add(cid_str)
                     child_entry: dict[str, Any] = {

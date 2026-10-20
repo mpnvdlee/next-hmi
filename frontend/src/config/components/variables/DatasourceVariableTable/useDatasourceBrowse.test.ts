@@ -154,7 +154,7 @@ describe('useDatasourceBrowse', () => {
     expect(useVariablesDomainStore.getState().pendingBrowse).toEqual({});
   });
 
-  describe('a saved tag the browse did not walk', () => {
+  describe('a tag saved from under the Server object, which the browse now skips', () => {
     const SPEED: TreeNode = {
       kind: 'variable',
       node_id: 'ns=2;s=Speed',
@@ -165,25 +165,48 @@ describe('useDatasourceBrowse', () => {
     };
     const savedTree = (stale: boolean): TreeNode[] => [
       {
-        kind: 'variable',
-        node_id: 'ns=2;s=Level',
-        display_name: 'Level',
-        data_type: 'Double',
-        enabled: true,
-        writable: false,
-        ...(stale && { present_on_server: false }),
+        kind: 'folder',
+        name: 'Server',
+        children: [
+          {
+            kind: 'folder',
+            name: 'ServerStatus',
+            children: [
+              {
+                kind: 'variable',
+                node_id: 'i=2258',
+                display_name: 'CurrentTime',
+                data_type: 'DateTime',
+                enabled: true,
+                writable: false,
+                ...(stale && { present_on_server: false }),
+              },
+            ],
+          },
+        ],
       },
       { kind: 'folder', name: 'Plant', node_id: 'ns=2;s=Plant', children: [SPEED] },
     ];
-    // An explicit browse root: only Plant is walked.
     const browsed = (presentOutside?: string[]) => ({
-      node_id: 'ns=2;s=Plant',
-      display_name: 'Plant',
+      node_id: 'i=85',
+      display_name: 'Objects',
       data_type: null,
-      show_root: true,
+      show_root: false,
       ...(presentOutside && { present_outside_browse: presentOutside }),
       children: [
-        { node_id: 'ns=2;s=Speed', display_name: 'Speed', data_type: 'Double', writable: false },
+        {
+          node_id: 'ns=2;s=Plant',
+          display_name: 'Plant',
+          data_type: null,
+          children: [
+            {
+              node_id: 'ns=2;s=Speed',
+              display_name: 'Speed',
+              data_type: 'Double',
+              writable: false,
+            },
+          ],
+        },
       ],
     });
 
@@ -200,7 +223,7 @@ describe('useDatasourceBrowse', () => {
     }
 
     it('is not offered as removed when the server says it is still there', async () => {
-      const { applyTreeUpdate } = await browseOver(savedTree(false), browsed(['ns=2;s=Level']));
+      const { applyTreeUpdate } = await browseOver(savedTree(false), browsed(['i=2258']));
 
       expect(useVariablesDomainStore.getState().pendingBrowse['A']).toBeUndefined();
       expect(applyTreeUpdate).not.toHaveBeenCalled();
@@ -210,12 +233,12 @@ describe('useDatasourceBrowse', () => {
       await browseOver(savedTree(false), browsed());
 
       const pending = useVariablesDomainStore.getState().pendingBrowse['A'];
-      expect(pending?.diff.removed.map((r) => r.node_id)).toEqual(['ns=2;s=Level']);
+      expect(pending?.diff.removed.map((r) => r.node_id)).toEqual(['i=2258']);
     });
 
     it('is brought back if an earlier browse had marked it stale', async () => {
       const tree = savedTree(true);
-      const { applyTreeUpdate } = await browseOver(tree, browsed(['ns=2;s=Level']));
+      const { applyTreeUpdate } = await browseOver(tree, browsed(['i=2258']));
 
       expect(useVariablesDomainStore.getState().pendingBrowse['A']).toBeUndefined();
       expect(applyTreeUpdate).toHaveBeenCalledTimes(1);
