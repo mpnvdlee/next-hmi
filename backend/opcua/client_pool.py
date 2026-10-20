@@ -67,6 +67,8 @@ _UNKNOWN_VAR_ATTRS = ("Unknown", False, -1)
 # the walker keeps them out of the tree.
 _HAS_COMPONENT = ua.NodeId(ua.ObjectIds.HasComponent)
 
+_BROWSE_NODE_CLASSES = int(ua.NodeClass.Object) | int(ua.NodeClass.Variable)
+
 
 def _builtin_data_type_name(ident: int) -> str:
     """Name for a namespace-0 DataType id, as browse reports it.
@@ -1120,7 +1122,10 @@ class DatasourceOpcuaEngine:
                 desc.BrowseDirection = ua.BrowseDirection.Forward
                 desc.ReferenceTypeId = ua.NodeId(ua.ObjectIds.HierarchicalReferences)
                 desc.IncludeSubtypes = True
-                desc.NodeClassMask = ua.NodeClass.Unspecified
+                # Only what can be a tag or hold one. A Method is neither, yet
+                # unmasked it was walked like a folder and its InputArguments
+                # and OutputArguments properties offered as bindable rows.
+                desc.NodeClassMask = _BROWSE_NODE_CLASSES
                 # BrowseResultMask.All returns NodeClass + DisplayName for free
                 desc.ResultMask = ua.BrowseResultMask.All
                 params.NodesToBrowse.append(desc)
@@ -1353,6 +1358,10 @@ class DatasourceOpcuaEngine:
             ):
                 for ref in refs:
                     if parent_is_struct and ref.ReferenceTypeId != _HAS_COMPONENT:
+                        continue
+                    if ref.NodeClass not in (ua.NodeClass.Object, ua.NodeClass.Variable):
+                        # The mask asks the server not to send these; a server
+                        # that ignores it must not get them into the tree.
                         continue
                     cid_str = ref.NodeId.to_string()
                     if cid_str in visited:

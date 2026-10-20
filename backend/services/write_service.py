@@ -32,6 +32,8 @@ from asyncua import ua
 from core.value_types import array_index_out_of_bounds
 from models.datasource import build_var_key
 
+from services.datasource_manager import DatasourceManager
+
 logger = logging.getLogger(__name__)
 
 # ── Failure reasons (string values match the WebSocket write_error contract) ──
@@ -766,7 +768,10 @@ async def write_value(
 
     if verify:
         read_back = await read_value(datasource_manager, opcua_pool, ds_name, path)
-        if not _values_equal(coerced, read_back):
+        # read_back comes through the cache, which stores JSON-ready forms —
+        # a DateTime as a string — so the written value is compared in that
+        # form too. Compared raw, every verified DateTime write mismatched.
+        if not _values_equal(DatasourceManager._coerce(coerced), read_back):
             return WriteOutcome(False, REASON_VERIFY_MISMATCH)
 
     return WriteOutcome(True)

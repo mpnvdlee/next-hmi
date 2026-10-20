@@ -16,6 +16,7 @@ import threading
 from collections.abc import Callable, Iterable
 from typing import Any, ClassVar
 
+from asyncua import ua
 from core.exceptions import DatasourceValidationError
 from core.storage import active_datasources_dir, read_json, write_json
 from core.value_types import (
@@ -916,6 +917,15 @@ class DatasourceManager:
         # bytes -> base64 string to keep it compact (common for OPC-UA byte strings)
         if isinstance(value, (bytes, bytearray)):
             return base64.b64encode(value).decode()
+        # Its str() is the dataclass repr — "LocalizedText(Locale='de', Text=…)"
+        # — which would reach the screen verbatim. Status texts, messages and
+        # the device info a PLC publishes (Manufacturer, Model) are this type.
+        if isinstance(value, ua.LocalizedText):
+            return value.Text or ""
+        # Same problem, same fix: their canonical string forms, "ns=3;s=Tag"
+        # and "2:Speed", rather than the repr. Covers ExpandedNodeId too.
+        if isinstance(value, (ua.NodeId, ua.QualifiedName)):
+            return value.to_string()
         # Anything else: convert to string representation
         return str(value)
 

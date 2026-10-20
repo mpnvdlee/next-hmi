@@ -20,6 +20,22 @@ heading.
   you chose that only refines it, such as **Date** on a string tag, keeps its
   own validation.
 
+- **Browse PLC no longer lists methods as folders.** A method a PLC publishes —
+  a TwinCAT POU method, the `Reset` on a device object — appeared in the
+  variable table as an empty folder, and one with arguments added its
+  `InputArguments` and `OutputArguments` as bindable tags. Browse now walks
+  objects and variables only.
+
+- **Text-typed tags show their text.** A localized text — the type of many
+  status messages and of the manufacturer and model a PLC publishes about
+  itself — showed on screen as `LocalizedText(Locale='de', Text='Tür offen')`
+  rather than `Tür offen`. Node ids and qualified names had the same problem.
+
+- **A verified write to a DateTime tag no longer always fails.** Verification
+  compared the written date with the form the cache stores it in and never
+  found them equal, so a recipe downloaded with verification reported every
+  DateTime parameter as mismatched even when the PLC held the right value.
+
 - **The connection wizard no longer offers endpoints it cannot use.** Many PLCs
   still advertise the deprecated `Basic128Rsa15` and `Basic256` security
   policies. Discover listed them as ordinary choices, and picking one failed
