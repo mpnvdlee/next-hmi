@@ -756,3 +756,11 @@ async def test_toggle_of_a_read_only_boolean_is_refused_without_reading_it():
     outcome, written = await write_service.toggle_value(dm, None, "DS", "Run")
     assert (outcome.ok, outcome.reason, written) == (False, write_service.REASON_READ_ONLY, None)
     assert dm._entry.cache[build_var_key("DS", "Run")] is True
+
+
+@pytest.mark.asyncio
+async def test_toggle_of_a_read_only_untyped_variable_reports_read_only():
+    dm = FakeStaticDM({"NoType": {"writable": False}})
+    dm._entry.cache[build_var_key("DS", "NoType")] = True
+    outcome, written = await write_service.toggle_value(dm, None, "DS", "NoType")
+    assert (outcome.ok, outcome.reason, written) == (False, write_service.REASON_READ_ONLY, None)

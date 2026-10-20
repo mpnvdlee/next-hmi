@@ -833,7 +833,7 @@ async def toggle_value(
     if entry_data is None:
         return WriteOutcome(False, REASON_BAD_PATH), None
     data_type = entry_data.get("data_type")
-    if data_type is not None and not is_writable(entry_data):
+    if not _is_struct_folder(entry_data) and not is_writable(entry_data):
         return WriteOutcome(False, REASON_READ_ONLY), None
     if not isinstance(data_type, str) or _CANONICAL_TYPE_ALIASES.get(data_type.strip().lower()) != "boolean":
         return WriteOutcome(False, REASON_INVALID_VALUE), None
