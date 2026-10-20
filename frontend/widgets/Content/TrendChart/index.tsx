@@ -173,8 +173,8 @@ function LiveSampler({
 }) {
   const value = useVariable(varKey);
   useEffect(() => {
-    const numeric = typeof value === 'boolean' ? Number(value) : value;
-    if (typeof numeric === 'number' && Number.isFinite(numeric)) onSample(varKey, numeric);
+    const numeric = typeof value === 'boolean' ? Number(value) : readNumberValue(value);
+    if (numeric !== undefined && Number.isFinite(numeric)) onSample(varKey, numeric);
   }, [varKey, value, onSample]);
   return null;
 }

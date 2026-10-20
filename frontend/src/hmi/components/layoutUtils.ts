@@ -425,16 +425,23 @@ export function getPropString(
   return String(v);
 }
 
-// The OPC-UA write path's decimal grammar, so a value that reads as a number
-// here would also be accepted when written back: no hex, no `Infinity`, no
-// trailing unit.
-function readNumber(value: unknown, fallback: number): number {
-  if (typeof value === 'number') return isNaN(value) ? fallback : value;
-  if (typeof value !== 'string') return fallback;
+/**
+ * Read an already-resolved value — what `usePropVar` or `useVariable` returns,
+ * a struct field — as a number: a number as-is (`NaN` excepted), or a string
+ * that is a clean decimal number, which is how an integer beyond ±(2**53 − 1)
+ * arrives (read as the nearest double). Anything else returns `undefined`.
+ *
+ * The string grammar is the OPC-UA write path's, so a value that reads as a
+ * number here would also be accepted when written back: no hex, no
+ * `Infinity`, no trailing unit.
+ */
+export function readNumberValue(value: unknown): number | undefined {
+  if (typeof value === 'number') return isNaN(value) ? undefined : value;
+  if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
-  if (!DECIMAL_NUMBER_RE.test(trimmed)) return fallback;
+  if (!DECIMAL_NUMBER_RE.test(trimmed)) return undefined;
   const parsed = Number(trimmed);
-  return Number.isFinite(parsed) ? parsed : fallback;
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 /**
@@ -449,7 +456,7 @@ export function getPropNumber(
   evalContext?: EvaluationContext,
 ): number {
   const v = properties?.[key];
-  return readNumber(evalContext ? evaluatePropertyValue(v, evalContext) : v, fallback);
+  return readNumberValue(evalContext ? evaluatePropertyValue(v, evalContext) : v) ?? fallback;
 }
 
 function coerceBoolean(value: unknown, fallback: boolean): boolean {

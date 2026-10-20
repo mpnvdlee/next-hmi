@@ -179,6 +179,61 @@ describe('VariableRowCells min/max range editing', () => {
   });
 });
 
+describe('VariableRowCells test-server type editor', () => {
+  function renderTestServerRow(dataType: unknown) {
+    const onUpdateVar = vi.fn();
+    const utils = render(
+      <VariableRowCells
+        entry={{
+          kind: 'variable',
+          display_name: 'Counter',
+          data_type: dataType as string,
+          enabled: true,
+          writable: true,
+        }}
+        depth={0}
+        path="Line/Counter"
+        dsName="Sim"
+        dsType="opcua-test-server"
+        showLive={false}
+        isEditable
+        rangeEditable={false}
+        showRange={false}
+        liveValues={{}}
+        onUpdateVar={onUpdateVar}
+        onRemoveNode={() => {}}
+      />,
+    );
+    return { ...utils, onUpdateVar };
+  }
+
+  beforeAll(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it('shows a supported type as its canonical name', () => {
+    const { getByRole } = renderTestServerRow('uint32');
+    expect(getByRole('combobox')).toHaveTextContent('UInt32');
+  });
+
+  it.each([
+    ['Integer', 'Integer (unsupported)'],
+    ['Duration', 'Duration (unsupported)'],
+    [null, 'No type (unsupported)'],
+  ])('shows an unsupported %s as itself, and picking Float changes it', (dataType, label) => {
+    const { getByRole, onUpdateVar } = renderTestServerRow(dataType);
+    const trigger = getByRole('combobox');
+    expect(trigger).toHaveTextContent(label);
+    expect(trigger).toHaveClass('cfg-var-type-unsupported');
+
+    fireEvent.click(trigger);
+    expect(getByRole('option', { name: label })).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(getByRole('option', { name: 'Float' }));
+
+    expect(onUpdateVar).toHaveBeenCalledWith('Line/Counter', undefined, { data_type: 'Float' });
+  });
+});
+
 describe('ArrayElementRowCells granular subscription', () => {
   const parent: VariableEntry = {
     kind: 'variable',

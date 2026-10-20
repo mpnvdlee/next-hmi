@@ -136,6 +136,17 @@ describe('NumberInput', () => {
     expect(container.querySelector('.hmi-number-input__field--invalid')).not.toBeNull();
   });
 
+  it('reads an fValue beyond 2**53, which arrives as its decimal string', () => {
+    useVariableStore.setState({
+      values: { [VAR_KEY]: { fValue: '9007199254740993' } },
+      ...structMeta({ fValue: { min: 0, max: 100 } }),
+    });
+    const { container } = renderInput({ variable: BINDING });
+
+    expect(screen.getByRole('textbox')).toHaveValue('9007199254740992');
+    expect(container.querySelector('.hmi-number-input__field--invalid')).not.toBeNull();
+  });
+
   it('renders nothing when its bVisible field is false', () => {
     useVariableStore.setState({ values: { [VAR_KEY]: { bVisible: false } } });
     const { container } = renderInput({ variable: BINDING });

@@ -68,7 +68,8 @@ function formatValue(value: number, decimals: number): string {
 
 export default function ProgressBar({ properties, layout }: HmiWidgetProps) {
   const rawValue = usePropVar(properties, 'variable');
-  const value = typeof rawValue === 'number' && Number.isFinite(rawValue) ? rawValue : 0;
+  const numericValue = readNumberValue(rawValue);
+  const value = numericValue !== undefined && Number.isFinite(numericValue) ? numericValue : 0;
 
   const min = usePropNumber(properties, 'min', 0);
   const max = usePropNumber(properties, 'max', 100);
@@ -125,7 +126,7 @@ export default function ProgressBar({ properties, layout }: HmiWidgetProps) {
         role="progressbar"
         aria-valuemin={min}
         aria-valuemax={max}
-        aria-valuenow={typeof rawValue === 'number' ? rawValue : undefined}
+        aria-valuenow={numericValue}
         aria-label={label || undefined}
       >
         <div className="hmi-progress-bar__fill" />
