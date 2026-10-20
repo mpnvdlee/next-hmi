@@ -3,6 +3,7 @@ import {
   toSimpleType,
   representativeOpcuaType,
   canonicalOpcuaType,
+  opcuaTypeOf,
   baseType,
   isArrayType,
   isScalarType,
@@ -14,10 +15,16 @@ import {
   acceptedValueTypes,
   EDITOR_KINDS,
   ITEM_LIST_ACCEPTS,
+  OPCUA_TO_SIMPLE,
+  OPCUA_TYPES,
+  OPCUA_TYPE_ALIASES,
+  VALUE_TYPES,
 } from './valueTypes';
+import { canonicalOpcuaWriteType, OPCUA_WRITE_TYPE_MATRIX } from './opcuaWriteCoercion';
 import editorKindsFixture from '../types/__fixtures__/editorKinds.json';
 import itemListAcceptsFixture from '../types/__fixtures__/itemListAccepts.json';
 import editorKindAcceptsFixture from '../types/__fixtures__/editorKindAccepts.json';
+import builtinTypesFixture from '../types/__fixtures__/opcuaBuiltinTypes.json';
 
 describe('EDITOR_KINDS', () => {
   it('matches the shared fixture also read by backend/core/validation/structure.py', () => {
@@ -58,7 +65,6 @@ describe('toSimpleType', () => {
     expect(toSimpleType('Bool')).toBe('Boolean');
     expect(toSimpleType('Int32')).toBe('Integer');
     expect(toSimpleType('UInt64')).toBe('Integer');
-    expect(toSimpleType('Int')).toBe('Integer');
     expect(toSimpleType('Double')).toBe('Float');
     expect(toSimpleType('Single')).toBe('Float');
     expect(toSimpleType('ByteString')).toBe('String');
@@ -165,5 +171,49 @@ describe('classifier', () => {
       'integer',
       'boolean',
     ]);
+  });
+});
+
+// Same fixture drives backend/tests/test_opcua_type_parity.py: a type name added
+// to one table and not the other fails one side.
+describe('OPC-UA builtin type table', () => {
+  const types = builtinTypesFixture.types;
+  const lowerNames = (keep: (t: (typeof types)[number]) => boolean) =>
+    types
+      .filter(keep)
+      .map((t) => t.name.toLowerCase())
+      .sort();
+
+  it.each(types)('$name', (t) => {
+    expect(toSimpleType(t.name)).toBe(t.simpleType);
+    expect(opcuaTypeOf(t.name)).toBe(t.testServerType);
+    // What the UI calls a variable is what a write to it is coerced as.
+    expect(canonicalOpcuaWriteType(t.name)).toBe(t.writeVariantType === null ? null : t.simpleType);
+  });
+
+  it('has no simple-type mapping outside the fixture', () => {
+    const names = new Set(types.map((t) => t.name.toLowerCase()));
+    expect(Object.keys(OPCUA_TO_SIMPLE).filter((k) => !names.has(k))).toEqual([]);
+  });
+
+  it('offers the test-server types in fixture order', () => {
+    expect([...OPCUA_TYPES]).toEqual(types.filter((t) => t.inOpcuaTypes).map((t) => t.name));
+    expect(
+      [...OPCUA_TYPES.map((t) => t.toLowerCase()), ...Object.keys(OPCUA_TYPE_ALIASES)].sort(),
+    ).toEqual(lowerNames((t) => t.testServerType !== null));
+  });
+
+  it('writes exactly the writable names', () => {
+    expect(Object.keys(OPCUA_WRITE_TYPE_MATRIX).sort()).toEqual(
+      lowerNames((t) => t.writeVariantType !== null),
+    );
+  });
+
+  it('synthesises each value type as the fixture says', () => {
+    const representative: Record<string, string> = builtinTypesFixture.representative;
+    expect(Object.keys(representative).sort()).toEqual([...VALUE_TYPES].sort());
+    for (const [simple, opcuaType] of Object.entries(representative)) {
+      expect(representativeOpcuaType(simple)).toBe(opcuaType);
+    }
   });
 });

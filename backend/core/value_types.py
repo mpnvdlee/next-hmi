@@ -11,7 +11,7 @@ import base64
 from datetime import UTC, datetime
 from typing import Any
 
-# Lower-cased real OPC-UA type -> simple type.
+# Lower-cased real OPC-UA type -> simple type. Parity: opcuaBuiltinTypes.json.
 OPCUA_TO_SIMPLE: dict[str, str] = {
     "boolean": "Boolean",
     "bool": "Boolean",
