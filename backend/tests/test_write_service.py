@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import struct
 from dataclasses import dataclass, field
 from datetime import UTC
 from typing import Any
@@ -88,19 +89,29 @@ def test_variant_types_cover_canonical_write_aliases() -> None:
     assert write_service.variant_type_for_data_type("Date") == ua.VariantType.String
 
 
-def test_float32_contract_serializes_only_exact_values() -> None:
+def _float32(value: float) -> float:
+    return struct.unpack("!f", struct.pack("!f", value))[0]
+
+
+def test_float32_contract_rounds_to_the_nearest_float32() -> None:
     from asyncua import ua
     from asyncua.ua.ua_binary import variant_to_binary
 
     maximum = 3.4028234663852886e38
     coerced = write_service.coerce_write_value(maximum, "Float")
     assert variant_to_binary(ua.Variant(coerced, ua.VariantType.Float))
-    with pytest.raises(write_service.WriteCoercionError) as rounding:
-        write_service.coerce_write_value(0.1, "Float")
-    assert rounding.value.reason == write_service.COERCION_LOSSY
+    # What an S7 Real or CODESYS REAL stores for an ordinary decimal setpoint.
+    assert write_service.coerce_write_value(0.1, "Float") == _float32(0.1) != 0.1
+    assert write_service.coerce_write_value("48.2", "Single") == 48.20000076293945
+    assert write_service.coerce_write_value(-19.9, "Float") == -19.899999618530273
+    assert write_service.coerce_write_value([3.5, 0.1], "Float") == [3.5, _float32(0.1)]
+    assert write_service.coerce_write_value(0.1, "Double") == 0.1
     with pytest.raises(write_service.WriteCoercionError) as overflow:
         write_service.coerce_write_value("3.5e38", "Single")
     assert overflow.value.reason == write_service.COERCION_FLOAT_RANGE
+    with pytest.raises(write_service.WriteCoercionError) as non_finite:
+        write_service.coerce_write_value(float("inf"), "Float")
+    assert non_finite.value.reason == write_service.COERCION_NON_FINITE
 
 
 def test_shared_write_permission_defaults_to_guest_and_matches_groups() -> None:
@@ -272,6 +283,20 @@ async def test_write_boundary_values_are_inclusive():
     dm = FakeStaticDM({"Temp": {"data_type": "float", "writable": True, "min": -20, "max": 10}})
     assert (await write_service.write_value(dm, None, "DS", "Temp", -20)).ok
     assert (await write_service.write_value(dm, None, "DS", "Temp", 10)).ok
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", [19.9, "19.9"])
+async def test_float32_range_is_judged_on_the_value_entered_not_the_rounded_one(value):
+    # 19.9 rounds to 19.8999996…, below a bound the operator would read as 19.9.
+    dm = FakeStaticDM({"Temp": {"data_type": "Float", "writable": True, "min": 19.9, "max": 48.2}})
+    assert (await write_service.write_value(dm, None, "DS", "Temp", value)).ok
+    assert dm._entry.cache[build_var_key("DS", "Temp")] == _float32(19.9)
+    # …and 48.2 rounds up to 48.2000007…, above the maximum of 48.2.
+    assert (await write_service.write_value(dm, None, "DS", "Temp", 48.2)).ok
+    assert dm._entry.cache[build_var_key("DS", "Temp")] == _float32(48.2)
+    below = await write_service.write_value(dm, None, "DS", "Temp", 19.89999)
+    assert below.reason == write_service.REASON_VALUE_OUT_OF_RANGE
 
 
 @pytest.mark.asyncio
@@ -481,6 +506,24 @@ async def test_opcua_write_and_verify_match():
     assert engine.writes == [("ns=2;s=Temp", 3.5)]
 
 
+class Float32Engine(FakeEngine):
+    """A server holding single-precision tags: it stores the nearest float32
+    to whatever double it is sent, as a PLC's Real does."""
+
+    async def write_node(self, node_id: str, value: Any, variant: Any) -> None:
+        await super().write_node(node_id, value, variant)
+        self._store[node_id] = _float32(value)
+
+
+@pytest.mark.asyncio
+async def test_opcua_float32_write_sends_and_verifies_the_rounded_value():
+    engine = Float32Engine()
+    dm = FakeOpcuaDM({"Temp": {"data_type": "Float", "writable": True, "node_id": "ns=2;s=Temp"}})
+    outcome = await write_service.write_value(dm, FakeOpcuaPool(engine), "PLC", "Temp", 48.2, verify=True)
+    assert outcome == write_service.WriteOutcome(True)
+    assert engine.writes == [("ns=2;s=Temp", 48.20000076293945)]
+
+
 @pytest.mark.asyncio
 async def test_opcua_verify_mismatch():
     engine = FakeEngine()
@@ -635,7 +678,7 @@ async def test_struct_member_written_by_path_takes_its_own_writable_flag():
 
 
 @pytest.mark.asyncio
-async def test_read_only_does_not_mask_an_unknown_variable_or_a_bad_value():
+async def test_read_only_does_not_mask_an_unknown_variable_or_field():
     dm = FakeStaticDM({"Count": {"data_type": "int32"}, "Motor": {"_child_paths": {}}})
     assert (await write_service.write_value(dm, None, "DS", "Nope", 1)).reason == (
         write_service.REASON_BAD_PATH
@@ -643,13 +686,62 @@ async def test_read_only_does_not_mask_an_unknown_variable_or_a_bad_value():
     assert (await write_service.write_value(dm, None, "DS", "Motor", 1, field="x")).reason == (
         write_service.REASON_BAD_FIELD
     )
-    assert (await write_service.write_value(dm, None, "DS", "Count", "abc")).reason == (
-        write_service.REASON_INVALID_VALUE
-    )
     # A whole-struct payload is a shape the write path cannot take, not an access fault.
     assert (await write_service.write_value(dm, None, "DS", "Motor", {"a": 1})).reason == (
         write_service.REASON_INVALID_VALUE
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        ("Count", "abc"),
+        ("Count", 1.5),
+        ("Count", 500),
+        ("Count", [1]),
+        ("Count", None),
+        ("Temp", "nan"),
+        ("Temp", "3.5e38"),
+        ("Label", 1),
+        ("Steps[1]", "abc"),
+        ("Steps[7]", 1),
+        ("Steps", [1]),
+    ],
+)
+async def test_read_only_is_reported_before_any_value_error(path, value):
+    # Whatever is wrong with the value, nothing written to this variable could
+    # succeed: the operator is told that, not to correct a value in vain.
+    engine = FakeEngine()
+    dm = FakeOpcuaDM({
+        "Count": {"data_type": "Int16", "node_id": "ns=2;s=Count", "min": 0, "max": 100},
+        "Temp": {"data_type": "Float", "node_id": "ns=2;s=Temp", "writable": False},
+        "Label": {"data_type": "LocalizedText", "node_id": "ns=2;s=Label"},
+        "Steps": {"data_type": "int32", "is_array": True, "array_length": 3, "node_id": "ns=2;s=Steps"},
+    })
+    outcome = await write_service.write_value(dm, FakeOpcuaPool(engine), "PLC", path, value)
+    assert outcome == write_service.WriteOutcome(False, write_service.REASON_READ_ONLY)
+    assert engine.writes == []
+
+
+@pytest.mark.asyncio
+async def test_read_only_struct_member_is_reported_before_its_value_error():
+    dm = FakeStaticDM(
+        {
+            "Motor": {"_child_paths": {"Motor/Status": "Status"}},
+            "Motor/Status": {"data_type": "int32", "writable": False},
+        }
+    )
+    outcome = await write_service.write_value(dm, None, "DS", "Motor", "abc", field="Status")
+    assert outcome.reason == write_service.REASON_READ_ONLY
+
+
+@pytest.mark.asyncio
+async def test_toggle_of_a_read_only_non_boolean_reports_read_only():
+    dm = FakeStaticDM({"Speed": {"data_type": "int32"}})
+    dm._entry.cache[build_var_key("DS", "Speed")] = 1
+    outcome, written = await write_service.toggle_value(dm, None, "DS", "Speed")
+    assert (outcome.ok, outcome.reason, written) == (False, write_service.REASON_READ_ONLY, None)
 
 
 @pytest.mark.asyncio

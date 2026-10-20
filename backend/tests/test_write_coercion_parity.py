@@ -40,6 +40,8 @@ def test_cross_language_coercion_cases(case: dict) -> None:
         "data_type": case["dataType"],
         "is_array": case.get("isArray", False),
         "array_length": case.get("arrayLength"),
+        "min": case.get("min"),
+        "max": case.get("max"),
     }
     if case["ok"]:
         assert _normalize(coerce_entry_write_value(case["value"], entry)) == case["output"]

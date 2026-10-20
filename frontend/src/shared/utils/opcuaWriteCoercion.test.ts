@@ -27,6 +27,8 @@ describe('OPC-UA write type matrix', () => {
       dataType: testCase.dataType,
       isArray: 'isArray' in testCase ? testCase.isArray : undefined,
       arrayLength: 'arrayLength' in testCase ? testCase.arrayLength : undefined,
+      min: 'min' in testCase ? testCase.min : undefined,
+      max: 'max' in testCase ? testCase.max : undefined,
     });
     expect(result.ok).toBe(testCase.ok);
     if (testCase.ok && result.ok && 'output' in testCase)

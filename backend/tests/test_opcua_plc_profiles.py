@@ -286,8 +286,7 @@ def _changed(value: Any) -> Any:
     if isinstance(value, int):
         return value - 1 if value > 0 else value + 1
     if isinstance(value, float):
-        # A whole number: exact in float32, so a write is refused for being
-        # read-only rather than for not fitting the type.
+        # A whole number: exact in float32, so a Float tag holds exactly it.
         return float(int(value) + 1)
     return f"{value}!"
 

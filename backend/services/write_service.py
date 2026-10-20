@@ -239,8 +239,8 @@ def canonical_data_type(data_type: Any) -> str | None:
 
 
 def value_out_of_range(value: Any, entry_data: dict[str, Any]) -> bool:
-    """Whether a coerced value falls outside the entry's configured min/max —
-    the check ``write_value`` applies after coercion."""
+    """Whether a value, as entered, falls outside the entry's configured
+    min/max — the check ``coerce_entry_write_value`` applies before rounding."""
     bounds = _range_bounds(entry_data)
     if bounds is None:
         return False
@@ -292,9 +292,14 @@ _VARIANT_TYPE_MAP: dict[str, ua.VariantType] = {
 def coerce_write_value(value: Any, data_type: Any) -> Any:
     """Best-effort coercion of a write payload to the target node datatype.
 
-    Whole-array values (a ``list``) coerce every element to *data_type*.
+    Whole-array values (a ``list``) coerce every element to *data_type*. A
+    Float (float32) target receives the nearest float32 to the value.
     Raises ``ValueError`` when a value cannot be coerced.
     """
+    return _stored_precision(_parse_write_value(value, data_type), data_type)
+
+
+def _parse_write_value(value: Any, data_type: Any) -> Any:
     if value is None:
         raise WriteCoercionError(COERCION_NULL_NOT_ALLOWED)
     if isinstance(value, list):
@@ -302,8 +307,28 @@ def coerce_write_value(value: Any, data_type: Any) -> Any:
     return _coerce_scalar(value, data_type)
 
 
+def _round_to_float32(value: float) -> float:
+    return struct.unpack("!f", struct.pack("!f", value))[0]
+
+
+def _stored_precision(value: Any, data_type: str) -> Any:
+    """*value* as the target type stores it: the nearest float32 for a Float."""
+    if _CANONICAL_TYPE_ALIASES.get(data_type.strip().lower()) not in _FLOAT32_TYPES:
+        return value
+    if isinstance(value, list):
+        return [_round_to_float32(v) for v in value]
+    return _round_to_float32(value)
+
+
 def coerce_entry_write_value(value: Any, entry_data: dict[str, Any], *, indexed: bool = False) -> Any:
-    """Apply the scalar/array shape contract before element coercion."""
+    """Apply the scalar/array shape contract, element coercion and the entry's
+    configured min/max, then round to what the target type stores.
+
+    The range is judged on the value as entered: a bound of 19.9 on a Float is
+    no float32 either, and 19.9 rounds to 19.8999996…, so judging the rounded
+    value would refuse an operator's 19.9 against their own minimum of 19.9.
+    A value outside the range raises with reason ``value_out_of_range``.
+    """
     data_type = entry_data.get("data_type")
     if not isinstance(data_type, str) or data_type.strip().lower() not in _CANONICAL_TYPE_ALIASES:
         raise WriteCoercionError(COERCION_UNKNOWN_TYPE)
@@ -322,16 +347,17 @@ def coerce_entry_write_value(value: Any, entry_data: dict[str, Any], *, indexed:
             raise WriteCoercionError(COERCION_INVALID_DESCRIPTOR)
         if isinstance(value, (list, dict)):
             raise WriteCoercionError(COERCION_SCALAR_REQUIRED)
-        return coerce_write_value(value, data_type)
-    if is_array:
+    elif is_array:
         if not isinstance(value, list):
             raise WriteCoercionError(COERCION_ARRAY_REQUIRED)
         if fixed_length is not None and len(value) != fixed_length:
             raise WriteCoercionError(COERCION_ARRAY_LENGTH)
-        return coerce_write_value(value, data_type)
-    if isinstance(value, (list, dict)):
+    elif isinstance(value, (list, dict)):
         raise WriteCoercionError(COERCION_SCALAR_REQUIRED)
-    return coerce_write_value(value, data_type)
+    entered = _parse_write_value(value, data_type)
+    if value_out_of_range(entered, entry_data):
+        raise WriteCoercionError(REASON_VALUE_OUT_OF_RANGE)
+    return _stored_precision(entered, data_type)
 
 
 def _range_bounds(entry_data: dict[str, Any]) -> tuple[float | None, float | None] | None:
@@ -485,12 +511,8 @@ def _coerce_scalar(value: Any, data_type: Any) -> Any:
             raise WriteCoercionError(COERCION_INVALID_FLOAT) from exc
         if not math.isfinite(fvalue):
             raise WriteCoercionError(COERCION_NON_FINITE)
-        if dt in _FLOAT32_TYPES:
-            if abs(fvalue) > _FLOAT32_MAX:
-                raise WriteCoercionError(COERCION_FLOAT_RANGE)
-            narrowed = struct.unpack("!f", struct.pack("!f", fvalue))[0]
-            if narrowed != fvalue:
-                raise WriteCoercionError(COERCION_LOSSY)
+        if dt in _FLOAT32_TYPES and abs(fvalue) > _FLOAT32_MAX:
+            raise WriteCoercionError(COERCION_FLOAT_RANGE)
         return fvalue
 
     raise WriteCoercionError(COERCION_UNKNOWN_TYPE)
@@ -657,7 +679,8 @@ async def write_value(
     """Coerce and write *value* to ``ds_name:path``.
 
     The variable actually written — the element's array, the struct member —
-    must be writable; one that is not is refused as ``read_only``. Static
+    must be writable; one that is not is refused as ``read_only``, before its
+    index or the value is judged: nothing written to it could succeed. Static
     datasources are updated in memory; OPC-UA datasources are written via
     the pool engine. When *verify* is set, the value is read back and compared
     for exact equality (per-element for arrays).
@@ -670,6 +693,15 @@ async def write_value(
     if entry_data is None:
         return WriteOutcome(False, REASON_BAD_PATH)
 
+    coercion_entry = _field_entry(datasource_manager, ds_name, entry_data, field)
+    if coercion_entry is None:
+        return WriteOutcome(False, REASON_BAD_FIELD)
+    data_type = coercion_entry.get("data_type")
+    # A struct folder (no data_type) has no access of its own: writing one
+    # whole is a shape the write path cannot take, reported as invalid_value.
+    if data_type is not None and not is_writable(coercion_entry):
+        return WriteOutcome(False, REASON_READ_ONLY)
+
     index_match = _ARRAY_INDEX_RE.search(path)
     if index_match is not None:
         index_text = index_match.group(1)
@@ -679,10 +711,6 @@ async def write_value(
         if index < 0 or index > _MAX_DYNAMIC_ARRAY_INDEX or array_index_out_of_bounds(entry_data, index):
             return WriteOutcome(False, REASON_ARRAY_INDEX_OUT_OF_BOUNDS)
 
-    coercion_entry = _field_entry(datasource_manager, ds_name, entry_data, field)
-    if coercion_entry is None:
-        return WriteOutcome(False, REASON_BAD_FIELD)
-    data_type = coercion_entry.get("data_type")
     wire_type = await _wire_data_type(
         datasource_manager, opcua_pool, ds_name, entry_data, field, data_type,
     )
@@ -693,14 +721,14 @@ async def write_value(
         coerced = coerce_entry_write_value(
             value, coercion_entry, indexed=index_match is not None,
         )
-    except ValueError:
+    except ValueError as exc:
+        if getattr(exc, "reason", None) == REASON_VALUE_OUT_OF_RANGE:
+            return WriteOutcome(False, REASON_VALUE_OUT_OF_RANGE)
         return WriteOutcome(False, REASON_INVALID_VALUE)
-
+    # Reached untyped only when the server's wire type stood in for a missing
+    # data_type; such an entry still states no access, so nothing is written.
     if not is_writable(coercion_entry):
         return WriteOutcome(False, REASON_READ_ONLY)
-
-    if value_out_of_range(coerced, coercion_entry):
-        return WriteOutcome(False, REASON_VALUE_OUT_OF_RANGE)
 
     ds_entry = datasource_manager.get(ds_name)
     if index_match is not None and ds_entry is not None and ds_entry.ds_type == "static":
@@ -795,10 +823,10 @@ async def toggle_value(
     if entry_data is None:
         return WriteOutcome(False, REASON_BAD_PATH), None
     data_type = entry_data.get("data_type")
+    if data_type is not None and not is_writable(entry_data):
+        return WriteOutcome(False, REASON_READ_ONLY), None
     if not isinstance(data_type, str) or _CANONICAL_TYPE_ALIASES.get(data_type.strip().lower()) != "boolean":
         return WriteOutcome(False, REASON_INVALID_VALUE), None
-    if not is_writable(entry_data):
-        return WriteOutcome(False, REASON_READ_ONLY), None
     current = await read_value(datasource_manager, opcua_pool, ds_name, path)
     if not isinstance(current, bool):
         return WriteOutcome(False, REASON_VALUE_UNAVAILABLE), None

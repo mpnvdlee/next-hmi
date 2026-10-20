@@ -98,6 +98,10 @@ register(['date'], { canonical: 'Date' });
 register(['time'], { canonical: 'Time' });
 register(['duration', 'timespan'], { canonical: 'Duration' });
 
+function isFloat32(rawType: string): boolean {
+  return rawType === 'float' || rawType === 'single';
+}
+
 function reject(reason: WriteCoercionReason): WriteCoercionResult {
   return { ok: false, reason };
 }
@@ -166,10 +170,7 @@ function scalar(value: unknown, rule: TypeRule, rawType: string): WriteCoercionR
     }
     const parsed = Number(trimmed);
     if (Number.isFinite(parsed)) {
-      if (rawType === 'float' || rawType === 'single') {
-        if (Math.abs(parsed) > FLOAT32_MAX) return reject('float_out_of_range');
-        if (!Object.is(Math.fround(parsed), parsed)) return reject('lossy_conversion');
-      }
+      if (isFloat32(rawType) && Math.abs(parsed) > FLOAT32_MAX) return reject('float_out_of_range');
       return { ok: true, value: parsed };
     }
     return reject('non_finite_float');
@@ -281,12 +282,20 @@ export function coerceOpcuaWrite(
     result = scalar(value, rule, rawType);
   }
   if (!result.ok) return result;
+  // Judged on the value as entered: a Float bound of 19.9 is no float32 either,
+  // and 19.9 rounds to 19.8999996…, below it. Mirrors backend write_service.
   const bounds = rangeBounds(descriptor);
   if (bounds) {
     const values = Array.isArray(result.value) ? result.value : [result.value];
     if (!values.every((item) => inRange(item, bounds))) return reject('value_out_of_range');
   }
-  return result;
+  if (!isFloat32(rawType)) return result;
+  return {
+    ok: true,
+    value: Array.isArray(result.value)
+      ? result.value.map((item) => Math.fround(item as number))
+      : Math.fround(result.value as number),
+  };
 }
 
 export function canonicalOpcuaWriteType(

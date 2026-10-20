@@ -17,7 +17,7 @@ import { coerceOpcuaWrite, type OpcuaWriteDescriptor } from '@shared/utils/opcua
 import { getPropBinding } from '../components/layoutUtils';
 import { useHmiScope } from '../context/HmiScopeContext';
 import { useHmiStore } from '../store/hmiStore';
-import type { VarMeta } from '../store/variableStore';
+import { useVariableStore, type VarMeta } from '../store/variableStore';
 import { beginTrackedWrite } from '../utils/actionDispatcher';
 import { useVariableMeta } from './useVariable';
 import { sendWsMessage } from './useWebSocket';
@@ -75,10 +75,11 @@ function failureMessage(reason: string): string {
  * `VarMeta.type.base` is a *simple* type, so it cannot say how wide the real
  * OPC-UA variable is: `Float` covers Float and Double, `Integer` covers Int16
  * through UInt64. The coercion matrix keys on wire types and enforces the width
- * it is given — `float` narrows to float32 (rejecting 19.9 as `lossy_conversion`)
- * and bare `integer` carries int32 bounds. Widening here keeps this pass a
- * pre-flight for type and shape; the backend holds the real width and rejects
- * authoritatively, so a false local reject would block a write the PLC accepts.
+ * it is given — `float` rounds to float32 (sending 19.9 as 19.8999996…) and
+ * bare `integer` carries int32 bounds. Widening here keeps this pass a
+ * pre-flight for type and shape; the backend holds the real width, rounds for
+ * a real Float and rejects authoritatively, so a local narrowing would corrupt
+ * a Double write and a false local reject would block a write the PLC accepts.
  */
 const WIDEST_FOR_SIMPLE: Record<string, string> = {
   float: 'double',
@@ -103,6 +104,22 @@ function scalarDescriptor(meta: VarMeta, index: number | undefined): OpcuaWriteD
     ...(meta.max !== undefined ? { max: meta.max } : {}),
     ...(index !== undefined ? { indexed: true, arrayIndex: index } : {}),
   };
+}
+
+/**
+ * The metadata of the variable a write lands on — for a field write, that
+ * member's own. An element of a struct array has no member entry to read here,
+ * so its access is left to the backend.
+ */
+function writtenMeta(
+  varKey: string,
+  meta: VarMeta | undefined,
+  field: string | undefined,
+  index: number | undefined,
+): VarMeta | undefined {
+  if (!field) return meta;
+  if (index !== undefined) return undefined;
+  return useVariableStore.getState().varMeta[`${varKey}/${field}`];
 }
 
 /** Range half of the coercion, for values whose type we cannot know. */
@@ -161,6 +178,12 @@ export function useWriteVariable(
       };
 
       const field = opts?.field;
+      // Read-only before anything about the value, as backend write_service
+      // orders it: no correction of the value could make this write succeed.
+      if (writtenMeta(varKey, meta, field, index)?.writable === false) {
+        report('read_only');
+        return;
+      }
       let payloadValue = value;
       if (field) {
         // Struct fields carry no type in `VarMeta` — only names — so there is
