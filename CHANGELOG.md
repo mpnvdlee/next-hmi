@@ -53,7 +53,8 @@ heading.
 - **Counters beyond 2^53 drive numeric widgets.** Gauge, Progress Bar, Ring
   Gauge, Trend, Trend Chart, Numeric Stepper and Number Input read an
   `Int64`/`UInt64` value that arrives as text instead of showing `---` or 0,
-  and Numeric Stepper steps it exactly, across the full `UInt64` range.
+  and Numeric Stepper shows, steps and accepts it exactly, across the full
+  `UInt64` range, against a min/max given as exact digits too.
   Custom widgets get the same reading from the new SDK helper
   `readNumberValue`.
 
@@ -64,7 +65,8 @@ heading.
 
 - **Range checks agree on very large integers.** A write of an integer beyond
   2^53 is checked against the variable's min/max exactly in the runtime as
-  well as on the server.
+  well as on the server, for a struct field too, which the runtime now also
+  checks against the member's own type.
 
 - **A timestamp beyond year 1 or 9999 in UTC is refused.** A DateTime whose
   time zone pushes it past the first or last representable moment
