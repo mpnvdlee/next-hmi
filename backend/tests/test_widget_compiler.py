@@ -81,6 +81,15 @@ export default function Foo({ properties }: HmiWidgetProps) {
 }
 """
 
+SDK_SHADOW_WIDGET = """\
+export const schema = { label: { type: 'string' } };
+export default function Foo({ properties }: HmiWidgetProps) {
+  const getPropNumber = (v: unknown) => Number(v);
+  const label = usePropString(properties, 'label', '');
+  return React.createElement('div', null, label + getPropNumber('1'));
+}
+"""
+
 SIBLING_IMPORT_WIDGET = """\
 import { greet } from './helper';
 export const schema = { label: { type: 'string' } };
@@ -229,6 +238,20 @@ async def test_compile_entry_rejects_local_sdk_name_collision(widget_workspace):
     assert ok is False
     status = json.loads((build / ".build-status.json").read_text(encoding="utf-8"))
     assert "parseVarKey" in status["widgets"]["Inputs/Foo"]["error"]
+
+
+@pytest.mark.asyncio
+async def test_compile_entry_allows_a_function_local_sdk_name(widget_workspace):
+    """A helper declared inside the component shadows the banner's const
+    legally, so a widget written before an SDK name was added keeps compiling."""
+    src, build = widget_workspace["src"], widget_workspace["build"]
+    entry = _write_widget(src, "Inputs/Foo", SDK_SHADOW_WIDGET)
+
+    ok = await widget_compiler.compile_entry(entry)
+
+    assert ok is True
+    body = (build / "Inputs" / "Foo" / "index.js").read_text(encoding="utf-8")
+    assert "const getPropNumber = " in body
 
 
 @pytest.mark.asyncio

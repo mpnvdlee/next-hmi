@@ -351,8 +351,10 @@ def _esbuild_external_args(external_imports: set[str]) -> list[str]:
     ]
 
 
+# esbuild's unminified ESM output starts module-scope declarations in column 0;
+# an indented one is function-local and shadows the banner's const legally.
 _TOP_LEVEL_DECL_RE = re.compile(
-    r"(?:^|\n)\s*(?:export\s+)?(?:const|let|var|function\*?|class)\s+([A-Za-z_$][\w$]*)"
+    r"(?:^|\n)(?:export\s+)?(?:const|let|var|function\*?|class)\s+([A-Za-z_$][\w$]*)"
 )
 
 _WIDGET_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
