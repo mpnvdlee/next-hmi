@@ -109,8 +109,8 @@ Open the datasource and browse. Each variable is recorded with its real OPC-UA *
 
 OPC-UA's many data types collapse to eight simple ones at the HMI boundary — `Boolean`, `Integer`, `Float`, `String`, `DateTime`, `Date`, `Time` and `Duration`: every `Int16/UInt32/…` becomes `Integer`, every `Float/Double` becomes `Float` — so a widget field never sees a wire type. A tag binds only to a field of its own simple type; see [Coercion, in short](properties.md#coercion-in-short).
 
-**Browse PLC** starts at the server's *Objects* folder, or at the **Browse Root Node** set in the datasource's properties.
+**Browse PLC** starts at the server's *Objects* folder, or at the **Browse Root Node** set in the datasource's properties. From *Objects* it skips the server's own `Server` object — its diagnostics, capabilities and namespace table: hundreds of nodes and no PLC tags. To bind one of those, such as `ServerStatus/CurrentTime`, set **Browse Root Node** to `i=2253` (or to the node inside it you want) and browse again.
 
-A re-browse compares the server with your tree and lists what was added, modified and *removed from server* for you to accept. A variable the browse did not reach is not counted as removed while the server still has it — so tags imported earlier from outside the current browse root stay as they are, enabled and bound.
+A re-browse compares the server with your tree and lists what was added, modified and *removed from server* for you to accept. A variable the browse did not reach is not counted as removed while the server still has it — so tags imported earlier from under `Server`, or from outside the current browse root, stay as they are, enabled and bound.
 
 Next: [bind and subscribe →](subscribing.md)

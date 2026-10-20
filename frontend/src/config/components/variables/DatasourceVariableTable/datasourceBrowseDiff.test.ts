@@ -171,8 +171,8 @@ describe('computeBrowseDiff', () => {
   });
 
   describe('a saved variable the browse did not walk', () => {
-    // An earlier browse imported ServerStatus/CurrentTime; this one, from an
-    // explicit root, did not walk it.
+    // An earlier browse imported ServerStatus/CurrentTime from under the
+    // Server object, which a default browse now leaves out.
     const currentTime = v('i=2258', 'CurrentTime', { data_type: 'DateTime', enabled: true });
     const serverFolder = (entry: VariableEntry) =>
       folder('Server', [folder('ServerStatus', [entry])]);
