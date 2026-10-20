@@ -23,6 +23,14 @@
   border-color: var(--hmi-border);
 }
 
+/* No value yet: the collapsed icon, muted and outlined, rather than a state the
+   menu may not be in. */
+.hmi-component.hmi-menu-toggle--unknown {
+  color: var(--hmi-text-muted);
+  border-style: dashed;
+  border-color: var(--hmi-border);
+}
+
 .hmi-component.hmi-menu-toggle:focus-visible {
   outline: var(--hmi-accent-outline);
   outline-offset: var(--hmi-accent-outline-offset);

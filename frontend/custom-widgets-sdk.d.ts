@@ -898,6 +898,8 @@ declare function widgetColorStyle(color: string | undefined): Record<string, str
 declare function bindingKey(binding: VariableBinding | unknown): string;
 declare function parseVarKey(key: string): { datasource: string; path: string };
 
+/** Not a hook: a `$var` binding reads its value at call time and does not
+ *  re-render the widget — in a render, `usePropString`. */
 declare function getPropString(
   properties: Record<string, unknown> | undefined,
   key: string,
@@ -916,6 +918,8 @@ declare function getPropNumber(
   evalCtx?: EvaluationContext,
 ): number;
 
+/** Not a hook: a `$var` binding reads its value at call time and does not
+ *  re-render the widget — in a render, `usePropBoolean`. */
 declare function getPropBoolean(
   properties: Record<string, unknown> | undefined,
   key: string,
@@ -942,11 +946,25 @@ declare function readNumberValue(value: unknown): number | undefined;
 
 declare function usePropVar(properties: Record<string, unknown> | undefined, key: string): unknown;
 
+/** A string property from any source — static, a property source, or a `$var`
+ *  binding, read live — as `getPropString` converts it: a number or boolean as
+ *  its text, an object as no value. Returns `fallback` (default `''`) when there
+ *  is no value; pass `null` to get `null` instead. */
 declare function usePropString(
   properties: Record<string, unknown> | undefined,
   key: string,
   fallback?: string,
 ): string;
+declare function usePropString(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+  fallback: null,
+): string | null;
+declare function usePropString(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+  fallback: string | null,
+): string | null;
 
 /** A number property from any source — static, a property source, or a `$var`
  *  binding, read live — parsed as `readNumberValue` does. Returns `fallback`
@@ -968,11 +986,27 @@ declare function usePropNumber(
   fallback: number | null,
 ): number | null;
 
+/** A boolean property from any source — static, a property source, or a `$var`
+ *  binding, read live — coerced as `getPropBoolean` does (a number is true when
+ *  non-zero; `'true'`/`'1'`/`'yes'`/`'on'` and `'false'`/`'0'`/`'no'`/`'off'`
+ *  read as written). Returns `fallback` (default `false`) when there is no
+ *  value; pass `null` to get `null` instead, e.g. to show an unknown state —
+ *  that form also reads an empty text or NaN as no value. */
 declare function usePropBoolean(
   properties: Record<string, unknown> | undefined,
   key: string,
   fallback?: boolean,
 ): boolean;
+declare function usePropBoolean(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+  fallback: null,
+): boolean | null;
+declare function usePropBoolean(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+  fallback: boolean | null,
+): boolean | null;
 
 declare function usePropStruct(
   properties: Record<string, unknown> | undefined,
