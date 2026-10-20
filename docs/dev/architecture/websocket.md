@@ -94,7 +94,7 @@ leaving a half-initialised socket registered.
 |---|---|---|
 | `var_snapshot` | `{ type, values }` | Once on connect (empty `values`). |
 | `var_metadata` | `{ type, meta }` | Once on connect; variable shape metadata. |
-| `var_update` | `{ type, values: { [compositeKey]: value } }` | Value changes. Batched in a 50 ms window; the per-datasource priority window is `settings.priority_ws_batch_ms`, clamped to `[0, 1000]`, default 10 ms. |
+| `var_update` | `{ type, values: { [compositeKey]: value } }` — see [Value forms](#value-forms) | Value changes. Batched in a 50 ms window; the per-datasource priority window is `settings.priority_ws_batch_ms`, clamped to `[0, 1000]`, default 10 ms. |
 | `var_removed` | `{ type, ids: [compositeKey, ...] }` | Variables no longer available. |
 | `opcua_status` | `{ type, datasource, connected }` | Per-datasource connection-state change. |
 | `alarm_snapshot` | `{ type, active: AlarmInstance[], summary: AlarmSummary }` | On connect. |
@@ -115,6 +115,33 @@ leaving a half-initialised socket registered.
 > Auto-login (`request_identity`) never carries a `requestId` in its
 > `user_identity`, so the client dispatcher does not confuse it with a `login`
 > response.
+
+### Value forms
+
+A `var_update` value is the value-cache entry verbatim, and the cache holds
+only JSON-ready forms. An OPC-UA value is normalized where it leaves asyncua
+(`opcua.values.normalize_value`, applied in the datachange handler and in
+`read_current_values`); `DatasourceManager` passes every write through the
+datasource-agnostic `core.value_types.json_ready` as well, so a static
+datasource follows the same rules. Alarms, the historian and recipe uploads
+read the same forms.
+
+| Server value | Sent as |
+|---|---|
+| Boolean, String, Float/Double | JSON boolean / string / number |
+| Integer within ±9,007,199,254,740,991 (`Number.MAX_SAFE_INTEGER`) | JSON number |
+| Integer beyond that (an `Int64`/`UInt64` counter) | its decimal string, e.g. `"9223372036854775808"` — the form a write takes it back in |
+| `DateTime` | ISO 8601 UTC with milliseconds and `Z`, e.g. `"2026-01-02T03:04:05.678Z"`; a server value without a zone is UTC |
+| `LocalizedText` | its text |
+| `NodeId` / `ExpandedNodeId` / `QualifiedName` | canonical string, `"ns=3;s=Tag"` / `"2:Speed"` |
+| `ByteString` | base64 |
+| anything else (Guid, an undecoded structure) | its `str()` |
+| array / struct | JSON array / object of the above |
+
+A widget reading a number takes a decimal string as that number
+(`getPropNumber`), so a counter beyond 2**53 still drives a numeric field —
+rounded to the nearest double, as JavaScript holds it — while a text field
+shows every digit.
 
 ## Client → server messages
 

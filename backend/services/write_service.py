@@ -29,10 +29,8 @@ from decimal import Decimal
 from typing import Any
 
 from asyncua import ua
-from core.value_types import array_index_out_of_bounds
+from core.value_types import MAX_SAFE_INTEGER, array_index_out_of_bounds, json_ready
 from models.datasource import build_var_key
-
-from services.datasource_manager import DatasourceManager
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +137,6 @@ def array_registry_path(path: str) -> str:
 # ── Type coercion tables ──────────────────────────────────────────────────────
 
 _ARRAY_INDEX_RE = re.compile(r"\[(-?\d+)\]$")
-_JSON_SAFE_INTEGER = 9007199254740991
 _MAX_DYNAMIC_ARRAY_INDEX = 10000
 _FLOAT32_MAX = 3.4028234663852886e38
 _DECIMAL_NUMBER_RE = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
@@ -478,14 +475,14 @@ def _coerce_scalar(value: Any, data_type: Any) -> Any:
         if isinstance(value, bool):
             raise WriteCoercionError(COERCION_INVALID_INTEGER)
         if isinstance(value, int):
-            if abs(value) > _JSON_SAFE_INTEGER:
+            if abs(value) > MAX_SAFE_INTEGER:
                 raise WriteCoercionError(COERCION_LOSSY)
             ivalue = value
         elif isinstance(value, float):
             if (
                 not math.isfinite(value)
                 or not value.is_integer()
-                or abs(value) > _JSON_SAFE_INTEGER
+                or abs(value) > MAX_SAFE_INTEGER
             ):
                 raise WriteCoercionError(COERCION_LOSSY)
             ivalue = int(value)
@@ -783,8 +780,8 @@ async def write_value(
         if index_match is not None:
             try:
                 # Raw, not the cache form: the untouched elements go back to
-                # the server, and a DateTime cannot be written as the string
-                # the cache holds it as.
+                # the server, and a DateTime or a 64-bit integer beyond 2**53
+                # cannot be written as the string the cache holds it as.
                 current_values = await engine.read_current_values({registry_path}, raw=True)
                 current_array = current_values.get(build_var_key(ds_name, registry_path))
             except Exception:
@@ -805,14 +802,15 @@ async def write_value(
             # one array) starts from the updated array instead of the stale one
             # write_node left behind. The subscription overwrites this with
             # server truth shortly after.
-            ds_entry.cache[build_var_key(ds_name, registry_path)] = DatasourceManager._coerce(write_val)
+            ds_entry.cache[build_var_key(ds_name, registry_path)] = json_ready(write_val)
 
     if verify:
         read_back = await read_value(datasource_manager, opcua_pool, ds_name, path)
-        # read_back comes through the cache, which stores JSON-ready forms —
-        # a DateTime as a string — so the written value is compared in that
-        # form too. Compared raw, every verified DateTime write mismatched.
-        if not _values_equal(DatasourceManager._coerce(coerced), read_back):
+        # read_back comes in the cache form — a DateTime as an ISO string, a
+        # 64-bit integer beyond 2**53 as a decimal string — so the written
+        # value is compared in that form too. Compared raw, every verified
+        # DateTime write mismatched.
+        if not _values_equal(json_ready(coerced), read_back):
             return WriteOutcome(False, REASON_VERIFY_MISMATCH)
 
     return WriteOutcome(True)

@@ -7,7 +7,6 @@ where each datasource has its own JSON file under the active project's
 ``datasources/`` directory.
 """
 
-import base64
 import contextlib
 import hashlib
 import logging
@@ -16,7 +15,6 @@ import threading
 from collections.abc import Callable, Iterable
 from typing import Any, ClassVar
 
-from asyncua import ua
 from core.exceptions import DatasourceValidationError
 from core.storage import active_datasources_dir, read_json, write_json
 from core.value_types import (
@@ -24,6 +22,7 @@ from core.value_types import (
     is_array_shape,
     is_dynamic_array,
     is_fixed_array,
+    json_ready,
     to_simple_type,
 )
 from models.datasource import (
@@ -615,9 +614,6 @@ class DatasourceManager:
     def _walk(value: Any, leaf_fn: Callable[[Any], Any]) -> Any:
         """Recursively rebuild dict/list containers, applying *leaf_fn* to every
         non-container leaf.
-
-        Shared traversal for _snapshot_copy (passthrough leaf) and _coerce
-        (type-coercing leaf) — they differ only in what happens at the leaves.
         """
         if isinstance(value, dict):
             return {k: DatasourceManager._walk(v, leaf_fn) for k, v in value.items()}
@@ -785,7 +781,7 @@ class DatasourceManager:
             array_index = int(m.group(1))
             base_path = path[:m.start()]
 
-        value = self._coerce(value)
+        value = json_ready(value)
         with self._lock:
             entry = self.datasources.get(name)
             if entry is None:
@@ -919,38 +915,14 @@ class DatasourceManager:
 
     # -- Variable cache updates ----------------------------------------------
 
-    @staticmethod
-    def _coerce_leaf(value: Any) -> Any:
-        if value is None or isinstance(value, (bool, int, float, str)):
-            return value
-        # bytes -> base64 string to keep it compact (common for OPC-UA byte strings)
-        if isinstance(value, (bytes, bytearray)):
-            return base64.b64encode(value).decode()
-        # Its str() is the dataclass repr — "LocalizedText(Locale='de', Text=…)"
-        # — which would reach the screen verbatim. Status texts, messages and
-        # the device info a PLC publishes (Manufacturer, Model) are this type.
-        if isinstance(value, ua.LocalizedText):
-            return value.Text or ""
-        # Same problem, same fix: their canonical string forms, "ns=3;s=Tag"
-        # and "2:Speed", rather than the repr. Covers ExpandedNodeId too.
-        if isinstance(value, (ua.NodeId, ua.QualifiedName)):
-            return value.to_string()
-        # Anything else: convert to string representation
-        return str(value)
-
-    @staticmethod
-    def _coerce(value: Any) -> Any:
-        """Recursively coerce a value to a JSON-serialisable Python primitive.
-
-        OPC-UA types such as LocalizedText, NodeId, QualifiedName, and Variant
-        are not JSON-serialisable by default.  Convert them to their string
-        representation so the cache and WS broadcast never contain exotic types.
-        """
-        return DatasourceManager._walk(value, DatasourceManager._coerce_leaf)
-
     def update(self, datasource: str, path: str, value: Any, priority: bool = False) -> None:
-        """Update cache for a variable and enqueue for WS broadcast."""
-        value = self._coerce(value)
+        """Update cache for a variable and enqueue for WS broadcast.
+
+        A datasource normalizes its own values where they enter (OPC-UA:
+        ``opcua.values.normalize_value``); ``json_ready`` here only guarantees
+        the cache stays JSON-ready whatever the writer.
+        """
+        value = json_ready(value)
         key = build_var_key(datasource, path)
         entry = self._get_datasource_entry(datasource)
         if entry is None:
@@ -1045,7 +1017,7 @@ class DatasourceManager:
         so a ``{path, index}`` binding on the array resolves per-element
         instead of re-rendering on any element's change.
         """
-        value = self._coerce(value)
+        value = json_ready(value)
         entry = self._get_datasource_entry(datasource)
         if entry is None:
             return

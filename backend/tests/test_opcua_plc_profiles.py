@@ -27,6 +27,7 @@ import pytest
 from asyncua import Client, ua
 from opcua.client_pool import DatasourceOpcuaEngine
 from opcua.limits import read_operation_limits
+from opcua.values import normalize_value
 from services import write_service
 from services.datasource_manager import DatasourceEntry, DatasourceManager
 from tests.opcua_plc_profiles import (
@@ -75,7 +76,7 @@ def _same(actual: Any, expected: Any) -> bool:
 
 def _cache_form(value: Any) -> Any:
     """What a server value looks like once it has been through the cache."""
-    return DatasourceManager._coerce(value)
+    return normalize_value(value)
 
 
 def _enable_all(tree: list[dict]) -> list[dict]:
@@ -347,12 +348,12 @@ async def test_imported_tree_refuses_writes_to_read_only_tags(profile: Profile):
 
 def test_localized_text_displays_its_text():
     """Status texts, alarm messages and device info are LocalizedText."""
-    assert DatasourceManager._coerce(ua.LocalizedText("Tür offen", "de")) == "Tür offen"
+    assert normalize_value(ua.LocalizedText("Tür offen", "de")) == "Tür offen"
 
 
 def test_node_id_and_qualified_name_display_in_their_string_form():
-    assert DatasourceManager._coerce(ua.NodeId("Tag", 3)) == "ns=3;s=Tag"
-    assert DatasourceManager._coerce(ua.QualifiedName("Speed", 2)) == "2:Speed"
+    assert normalize_value(ua.NodeId("Tag", 3)) == "ns=3;s=Tag"
+    assert normalize_value(ua.QualifiedName("Speed", 2)) == "2:Speed"
 
 
 @pytest.mark.asyncio
@@ -371,6 +372,58 @@ async def test_a_verified_datetime_write_is_confirmed():
 
     assert outcome.ok, outcome.reason
     assert on_server == datetime.datetime(2026, 3, 4, 5, 6, 7, tzinfo=datetime.UTC)
+
+
+@pytest.mark.asyncio
+async def test_a_datetime_and_a_counter_beyond_two_to_the_53_read_in_their_browser_form():
+    """ISO 8601 UTC with milliseconds — the form the write path parses — and
+    the decimal string a JSON client can carry exactly, verified on write."""
+    from tests.opcua_plc_profiles import GENERIC
+
+    async with RunningProfile(GENERIC) as run, Client(run.url) as client:
+        engine, dm, _entry, root_name = await _engine_for(run, GENERIC, client)
+        stamp, counter = f"{root_name}/Types/DateTime", f"{root_name}/Types/UInt64"
+        outcome = await write_service.write_value(
+            dm, _Pool(engine), GENERIC.name, counter, str(2**63), verify=True,
+        )
+        values = await engine.read_current_values({stamp, counter})
+
+    assert outcome.ok, outcome.reason
+    assert values == {
+        f"{GENERIC.name}:{stamp}": "2026-01-02T03:04:05.000Z",
+        f"{GENERIC.name}:{counter}": "9223372036854775808",
+    }
+
+
+@pytest.mark.asyncio
+async def test_an_element_write_returns_siblings_beyond_two_to_the_53_as_integers():
+    """The cache holds those siblings as strings; the patched array must go
+    back to the server as the integers it holds, or the write is refused."""
+    from tests.opcua_plc_profiles import GENERIC
+
+    async with RunningProfile(GENERIC) as run, Client(run.url) as client:
+        node = await run.server.nodes.objects.add_variable(
+            ua.NodeId("Counters", 2), "Counters",
+            ua.Variant([2**63, 1, 2**64 - 1], ua.VariantType.UInt64),
+        )
+        await node.set_writable()
+        engine, dm, _entry, _root_name = await _engine_for(run, GENERIC, client)
+        dm.datasources[GENERIC.name] = DatasourceEntry({
+            "name": GENERIC.name,
+            "type": "opcua-client",
+            "variables": [{
+                "kind": "variable", "display_name": "Counters", "node_id": "ns=2;s=Counters",
+                "data_type": "UInt64", "is_array": True, "array_length": 3,
+                "enabled": True, "writable": True,
+            }],
+        })
+        outcome = await write_service.write_value(
+            dm, _Pool(engine), GENERIC.name, "Counters[1]", "7", verify=True,
+        )
+        on_server = await node.read_value()
+
+    assert outcome.ok, outcome.reason
+    assert on_server == [2**63, 7, 2**64 - 1]
 
 
 # ── The built-in test server ──────────────────────────────────────────────────
