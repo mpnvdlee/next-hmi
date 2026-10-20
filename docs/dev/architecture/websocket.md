@@ -131,7 +131,7 @@ read the same forms.
 | Boolean, String, Float/Double | JSON boolean / string / number |
 | Integer within ±9,007,199,254,740,991 (`Number.MAX_SAFE_INTEGER`) | JSON number |
 | Integer beyond that (an `Int64`/`UInt64` counter) | its decimal string, e.g. `"9223372036854775808"` — the form a write takes it back in |
-| `DateTime` | ISO 8601 UTC with milliseconds and `Z`, e.g. `"2026-01-02T03:04:05.678Z"`; a server value without a zone is UTC |
+| `DateTime` | ISO 8601 UTC with milliseconds and `Z`, e.g. `"2026-01-02T03:04:05.678Z"`; a server value without a zone is UTC; an offset-aware value whose instant has no UTC form (beyond year 1 or 9999) keeps its own offset, e.g. `"9999-12-31T23:59:59.000-01:00"`, rather than being clamped |
 | `LocalizedText` | its text |
 | `NodeId` / `ExpandedNodeId` / `QualifiedName` | canonical string, `"ns=3;s=Tag"` / `"2:Speed"` |
 | `ByteString` | base64 |

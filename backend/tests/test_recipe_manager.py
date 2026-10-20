@@ -340,3 +340,41 @@ async def test_uploaded_counter_and_timestamp_download_back_verified(mgr: Recipe
     result = await mgr.download("d", verify=True)
     assert result.result == "success", result
     assert dm.get_cached_values({"DS:Count"}) == {"DS:Count": "9223372036854775808"}
+
+
+@pytest.mark.asyncio
+async def test_download_continues_past_a_timestamp_without_a_utc_form(mgr: RecipeManager):
+    # The stamp used to raise out of the write and abort the download midway.
+    dm = DatasourceManager()
+    dm.apply_config("DS", {
+        "name": "DS",
+        "type": "static",
+        "variables": [
+            {"kind": "variable", "display_name": "Stamp", "data_type": "DateTime",
+             "enabled": True, "writable": True},
+            {"kind": "variable", "display_name": "Temp", "data_type": "Double",
+             "enabled": True, "writable": True},
+        ],
+    })
+    mgr.set_datasource_manager(dm)
+    mgr.set_config(RecipeConfig.model_validate({
+        "datasetTypes": [{
+            "id": "t", "name": "T",
+            "parameters": [
+                {"id": "stamp", "label": "Stamp", "binding": _var("DS", "Stamp"), "dataType": "datetime"},
+                {"id": "temp", "label": "Temp", "binding": _var("DS", "Temp"), "dataType": "float"},
+            ],
+            "datasets": [{"id": "d", "name": "D", "values": {
+                "stamp": "9999-12-31T23:59:59-01:00", "temp": 92.5,
+            }}],
+        }],
+    }))
+
+    result = await mgr.download("d", verify=True)
+
+    assert result.result == "partial"
+    assert [(f.parameter_id, f.reason) for f in result.failures] == [("stamp", "invalid_value")]
+    assert dm.get_cached_values({"DS:Stamp", "DS:Temp"}) == {
+        "DS:Stamp": "1970-01-01T00:00:00.000Z",
+        "DS:Temp": 92.5,
+    }

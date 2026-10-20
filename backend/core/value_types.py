@@ -156,8 +156,20 @@ def datetime_to_iso(value: datetime) -> str:
 
     A naive datetime is taken as UTC — OPC-UA DateTime is UTC by definition,
     and the write path hands a naive one to the server as UTC as well.
+
+    An aware datetime whose instant falls outside years 1 to 9999 in UTC
+    (``9999-12-31T23:59:59-01:00``) has no UTC form here. It keeps its own
+    offset — the same instant, still ISO 8601 — rather than raising, which
+    would take down the broadcast carrying it, or being clamped, which would
+    silently report a different instant.
     """
-    utc = value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+    if value.tzinfo is None:
+        utc = value.replace(tzinfo=UTC)
+    else:
+        try:
+            utc = value.astimezone(UTC)
+        except OverflowError:
+            return value.isoformat(timespec="milliseconds")
     return utc.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 

@@ -199,11 +199,22 @@ function scalar(value: unknown, rule: TypeRule, rawType: string): WriteCoercionR
     !dateTime ||
     !validDate(dateTime[1]) ||
     !validTime(dateTime[2]) ||
-    (dateTime[4] !== undefined && (Number(dateTime[4]) > 23 || Number(dateTime[5]) > 59))
+    (dateTime[4] !== undefined && (Number(dateTime[4]) > 23 || Number(dateTime[5]) > 59)) ||
+    !utcRepresentable(dateTime)
   ) {
     return reject('invalid_temporal');
   }
   return { ok: true, value: trimmed };
+}
+
+// The backend stores a DateTime in UTC; an offset that pushes the first or
+// last representable day past year 1 or 9999 has no UTC form there.
+function utcRepresentable([, datePart, timePart, sign, offH, offM]: RegExpExecArray): boolean {
+  if (sign === undefined || (datePart !== '0001-01-01' && datePart !== '9999-12-31')) return true;
+  const [hours, minutes] = timePart.split(':').map(Number);
+  const offset = (sign === '+' ? 1 : -1) * (Number(offH) * 60 + Number(offM));
+  const utcMinutes = hours * 60 + minutes - offset;
+  return datePart === '0001-01-01' ? utcMinutes >= 0 : utcMinutes < 24 * 60;
 }
 
 function rangeBounds(

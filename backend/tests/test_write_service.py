@@ -71,6 +71,30 @@ def test_coerce_datetime_rejects_garbage() -> None:
         write_service.coerce_write_value("not-a-date", "datetime")
 
 
+_NO_UTC_FORM = ["9999-12-31T23:59:59-01:00", "0001-01-01T00:30:00+01:00"]
+
+
+@pytest.mark.parametrize(
+    "value", [*_NO_UTC_FORM, *(datetime.fromisoformat(text) for text in _NO_UTC_FORM)]
+)
+def test_coerce_datetime_rejects_an_instant_without_a_utc_form(value) -> None:
+    with pytest.raises(write_service.WriteCoercionError) as exc_info:
+        write_service.coerce_write_value(value, "DateTime")
+    assert exc_info.value.reason == write_service.COERCION_INVALID_TEMPORAL
+
+
+def test_coerce_datetime_accepts_the_edges_of_the_utc_range() -> None:
+    assert write_service.coerce_write_value("9999-12-31T23:59:59+01:00", "DateTime") == (
+        datetime(9999, 12, 31, 22, 59, 59, tzinfo=UTC)
+    )
+    assert write_service.coerce_write_value("0001-01-01T00:30:00-01:00", "DateTime") == (
+        datetime(1, 1, 1, 1, 30, tzinfo=UTC)
+    )
+    assert write_service.coerce_write_value("9999-12-31T23:59:59", "DateTime") == (
+        datetime(9999, 12, 31, 23, 59, 59)
+    )
+
+
 @pytest.mark.parametrize("data_type", [None, 3, ["Float"]])
 def test_coerce_an_empty_array_of_a_non_string_type_is_left_empty(data_type) -> None:
     assert write_service.coerce_write_value([], data_type) == []
@@ -575,6 +599,29 @@ async def test_static_datetime_write_caches_iso_utc_with_milliseconds():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("value", _NO_UTC_FORM)
+async def test_static_datetime_write_without_a_utc_form_is_an_invalid_value(value):
+    # It used to raise out of update_static_value, closing the operator's socket.
+    dm = _static_dm({"display_name": "Stamp", "data_type": "DateTime"})
+    outcome = await write_service.write_value(dm, None, "DS", "Stamp", value, verify=True)
+    assert outcome == write_service.WriteOutcome(False, write_service.REASON_INVALID_VALUE)
+    assert dm.get_cached_values({"DS:Stamp"}) == {"DS:Stamp": "1970-01-01T00:00:00.000Z"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", _NO_UTC_FORM)
+async def test_opcua_datetime_write_without_a_utc_form_is_never_dispatched(value):
+    # Written, the server would store the clamped bound and verify then raised.
+    engine = FakeEngine()
+    dm = FakeOpcuaDM({"Stamp": {"data_type": "DateTime", "writable": True, "node_id": "ns=2;s=Stamp"}})
+    outcome = await write_service.write_value(
+        dm, FakeOpcuaPool(engine), "PLC", "Stamp", value, verify=True,
+    )
+    assert outcome == write_service.WriteOutcome(False, write_service.REASON_INVALID_VALUE)
+    assert engine.writes == []
+
+
+@pytest.mark.asyncio
 async def test_static_int64_write_beyond_two_to_the_53_caches_the_decimal_string():
     dm = _static_dm({"display_name": "Count", "data_type": "Int64"})
     outcome = await write_service.write_value(
@@ -811,6 +858,33 @@ async def test_read_only_is_reported_before_any_value_error(path, value):
     outcome = await write_service.write_value(dm, FakeOpcuaPool(engine), "PLC", path, value)
     assert outcome == write_service.WriteOutcome(False, write_service.REASON_READ_ONLY)
     assert engine.writes == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("flag", [{"writable": False}, {"writable": "true"}])
+async def test_read_only_is_reported_first_for_a_variable_without_a_data_type(flag):
+    # Only a struct folder skips the access check; a plain variable missing
+    # its type is refused as read-only, as the editor's pre-flight says.
+    dm = _static_dm({"display_name": "NoType", **flag})
+    outcome = await write_service.write_value(dm, None, "DS", "NoType", "x")
+    assert outcome == write_service.WriteOutcome(False, write_service.REASON_READ_ONLY)
+
+
+@pytest.mark.asyncio
+async def test_a_registered_struct_folder_written_whole_is_still_an_invalid_value():
+    dm = DatasourceManager()
+    dm.apply_config("DS", {
+        "name": "DS",
+        "type": "static",
+        "variables": [{
+            "kind": "folder",
+            "name": "Motor",
+            "children": [{"kind": "variable", "display_name": "Speed", "data_type": "Float",
+                          "enabled": True, "writable": True}],
+        }],
+    })
+    outcome = await write_service.write_value(dm, None, "DS", "Motor", {"Speed": 1})
+    assert outcome == write_service.WriteOutcome(False, write_service.REASON_INVALID_VALUE)
 
 
 @pytest.mark.asyncio

@@ -58,6 +58,12 @@ heading.
   2^53 is checked against the variable's min/max exactly in the runtime as
   well as on the server.
 
+- **A timestamp beyond year 1 or 9999 in UTC is refused.** A DateTime whose
+  time zone pushes it past the first or last representable moment
+  (`9999-12-31T23:59:59-01:00`) has no UTC form, which OPC-UA requires. It is
+  now refused as an invalid value, in the runtime as well as on the server, and
+  a recipe download containing one carries on with the rest.
+
 ## [1.0.1] - 2026-10-24
 
 Fixes for OPC-UA browse and writes, most of them reported against CODESYS
