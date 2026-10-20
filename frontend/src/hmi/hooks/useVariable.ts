@@ -1,5 +1,8 @@
+import { useSyncExternalStore } from 'react';
 import { useVariableStore, type VarMeta } from '../store/variableStore';
 import { type VariableBinding, bindingKey } from '@shared/types/config';
+
+const noSubscribe = (): (() => void) => () => {};
 
 /**
  * Subscribe to a single scalar variable value.
@@ -29,18 +32,23 @@ export function useVariable(id: string): unknown {
  */
 export function useBindingValue(binding: VariableBinding | undefined): unknown {
   const id = bindingKey(binding);
-  const type = useVariableStore((state) => (id ? state.varMeta[id]?.type : undefined));
-  const isStructArray = type?.kind === 'struct' && type.array;
-  const resolvedId =
-    binding?.index !== undefined && isStructArray ? `${id}/[${binding.index}]` : id;
-  const raw = useVariableStore((state) => (resolvedId ? state.values[resolvedId] : undefined));
-  if (binding?.index !== undefined) {
-    if (!type?.array || !Number.isInteger(binding.index) || binding.index < 0) return null;
-    if (!isStructArray) {
-      return Array.isArray(raw) ? (raw[binding.index] ?? null) : null;
-    }
-  }
-  return raw;
+  const index = binding?.index;
+  // The snapshot is the resolved value itself — a store value or an element of
+  // one, never a fresh object — so it compares equal across ticks that leave it
+  // alone, and a scalar-array element re-renders only when that element changes.
+  const getSnapshot = (): unknown => {
+    const { values, varMeta } = useVariableStore.getState();
+    if (index === undefined) return id ? values[id] : undefined;
+    const type = id ? varMeta[id]?.type : undefined;
+    if (!type?.array || !Number.isInteger(index) || index < 0) return null;
+    if (type.kind === 'struct') return values[`${id}/[${index}]`];
+    const raw = values[id];
+    return Array.isArray(raw) ? (raw[index] ?? null) : null;
+  };
+  // A property with no binding has nothing to watch, so it registers no store
+  // listener; every widget reads several such properties.
+  const subscribe = id ? useVariableStore.subscribe : noSubscribe;
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 /**

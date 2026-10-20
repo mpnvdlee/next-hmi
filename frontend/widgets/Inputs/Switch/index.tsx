@@ -26,17 +26,8 @@ export const description = 'A toggle that writes a boolean on/off to a variable.
 export const category = 'Inputs';
 export const icon = { type: 'builtin', name: 'check-circle' } as const;
 
-// A tag's text "false", "0", "no" or "off" reads as off, the way getPropBoolean
-// reads it; an empty text or NaN says nothing, so it stays off rather than
-// taking getPropBoolean's truthy reading.
-function isOnValue(value: unknown): boolean {
-  if (typeof value === 'string' && value.trim() === '') return false;
-  if (typeof value === 'number' && Number.isNaN(value)) return false;
-  return getPropBoolean({ value }, 'value');
-}
-
 export default function Switch({ properties, layout }: HmiWidgetProps) {
-  const isOn = isOnValue(usePropVar(properties, 'variable'));
+  const isOn = usePropBoolean(properties, 'variable', null);
   const label = usePropString(properties, 'label', '');
   const labelPosition = usePropString(properties, 'labelPosition', 'inline');
   const color = usePropString(properties, 'color', '');
@@ -47,6 +38,9 @@ export default function Switch({ properties, layout }: HmiWidgetProps) {
   // the writer cannot change, so the control must read as disabled rather than
   // swallow the click and snap back.
   const isReadOnly = !writeVariable.canWrite;
+  // With no value yet there is no state to invert: a write would be a guess,
+  // not the toggle the operator asked for, so the control waits for a value.
+  const isUnknown = isOn === null;
 
   return (
     <div
@@ -55,12 +49,15 @@ export default function Switch({ properties, layout }: HmiWidgetProps) {
     >
       {label && <span className="hmi-switch__label">{label}</span>}
       <button
-        className={`hmi-switch__track${isOn ? ' hmi-switch__track--on' : ''}`}
+        className={`hmi-switch__track${isOn ? ' hmi-switch__track--on' : ''}${isUnknown ? ' hmi-switch__track--unknown' : ''}`}
         style={isOn ? widgetColorStyle(color) : {}}
         type="button"
         role="switch"
-        aria-checked={isOn}
-        disabled={isReadOnly}
+        // `mixed` is not defined for role="switch" and reads as off; busy says
+        // the state is still to come.
+        aria-checked={isOn === true}
+        aria-busy={isUnknown || undefined}
+        disabled={isReadOnly || isUnknown}
         onClick={() => writeVariable(!isOn)}
       >
         <span className="hmi-switch__thumb" />

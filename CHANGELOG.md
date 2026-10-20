@@ -26,6 +26,12 @@ heading.
   live outside a page as well; `readNumberValue(usePropVar(...))` is no longer
   needed for a numeric binding.
 
+- **`usePropString` and `usePropBoolean` work the same way.** Both follow a
+  bound variable live and take a `null` fallback to tell "no value yet" apart
+  from `''` or `false`; `usePropBoolean`'s `null` form also reads an empty text
+  or `NaN` as no value. A property with no variable bound no longer costs a
+  variable-store listener.
+
 ### Changed
 
 - **On/off widgets show "unknown" instead of "off" before a value arrives.**

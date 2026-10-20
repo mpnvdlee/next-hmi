@@ -403,7 +403,17 @@ export function useResolvedLayout(layout?: LayoutConfig): LayoutConfig | undefin
 // These replace verbose cast patterns in HMI components and are also exposed
 // via window.__nextHMI__ so custom components can use them too.
 
-/** Safely read a string property. Returns fallback (default '') when absent or wrong type. */
+/** A resolved value as text: a scalar through `String`, nothing for null or an object. */
+function stringValue(value: unknown): string | undefined {
+  if (value == null || typeof value === 'object') return undefined;
+  return String(value);
+}
+
+/**
+ * Safely read a string property. Returns fallback (default '') when absent or wrong type.
+ *
+ * Not a hook, so it cannot subscribe — inside a render, use `usePropString`.
+ */
 export function getPropString(
   properties: Record<string, unknown> | undefined,
   key: string,
@@ -413,16 +423,10 @@ export function getPropString(
   const v = properties?.[key];
   if (v == null) return fallback;
   // If evaluation context provided, evaluate the value first
-  if (evalContext) {
-    const evaluated = evaluatePropertyValue(v, evalContext);
-    if (evaluated == null) return fallback;
-    if (typeof evaluated === 'object') return fallback;
-    return String(evaluated);
-  }
+  if (evalContext) return stringValue(evaluatePropertyValue(v, evalContext)) ?? fallback;
   // Translation references are { $loc: 'key' } objects — treat as absent here;
   // components that render translated text should use the translation hook instead.
-  if (typeof v === 'object') return fallback;
-  return String(v);
+  return stringValue(v) ?? fallback;
 }
 
 /**
@@ -464,7 +468,7 @@ export function getPropNumber(
   return readNumberValue(evalContext ? evaluatePropertyValue(v, evalContext) : v) ?? fallback;
 }
 
-function coerceBoolean(value: unknown, fallback: boolean): boolean {
+function coerceBoolean<F extends boolean | null>(value: unknown, fallback: F): boolean | F {
   if (value == null) return fallback;
   if (typeof value === 'boolean') return value;
   if (typeof value === 'number') return value !== 0;
@@ -491,7 +495,11 @@ function coerceBoolean(value: unknown, fallback: boolean): boolean {
   return Boolean(value);
 }
 
-/** Safely read a boolean property. Returns fallback (default false) when absent or wrong type. */
+/**
+ * Safely read a boolean property. Returns fallback (default false) when absent or wrong type.
+ *
+ * Not a hook, so it cannot subscribe — inside a render, use `usePropBoolean`.
+ */
 export function getPropBoolean(
   properties: Record<string, unknown> | undefined,
   key: string,
@@ -532,11 +540,12 @@ export function getPropBindingOrStatic(value: unknown): {
 /**
  * Hook: subscribe to a live variable ($var binding) or resolve a static/sourced value.
  * Use this for `$static` / `$var` value-source properties.
- * Returns `unknown` — cast to the expected type at the call site; for a number,
- * `usePropNumber` does the parsing.
+ * Returns `unknown` — for a string, number or boolean, `usePropString`,
+ * `usePropNumber` and `usePropBoolean` do the conversion; use this hook when
+ * the raw value itself matters.
  * @example
  *   const value = usePropVar(properties, 'variable');
- *   const isOn  = Boolean(value);
+ *   const text  = typeof value === 'number' ? value.toFixed(1) : String(value ?? '---');
  */
 export function usePropVar(properties: Record<string, unknown> | undefined, key: string): unknown {
   const { binding, staticValue } = getPropBindingOrStatic(properties?.[key]);
@@ -552,14 +561,37 @@ export function usePropVar(properties: Record<string, unknown> | undefined, key:
   return resolved ?? staticValue;
 }
 
-/** Hook: read a string property, evaluating any property source. */
+/**
+ * Hook: read a string property from any source — a static value, a property
+ * source, or a `$var` binding, whose live value it subscribes to (as
+ * `usePropVar` does) — as `getPropString` converts it: a number or boolean as
+ * its text, an object as no value. Returns `fallback` (default '') when there
+ * is no value; pass `null` to tell that apart from an empty string.
+ * @example
+ *   const label = usePropString(properties, 'label', '');
+ *   const state = usePropString(properties, 'variable', null); // null → '---'
+ */
 export function usePropString(
   properties: Record<string, unknown> | undefined,
   key: string,
-  fallback = '',
-): string {
-  const evalCtx = useEvalContext();
-  return getPropString(properties, key, fallback, evalCtx);
+  fallback?: string,
+): string;
+export function usePropString(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+  fallback: null,
+): string | null;
+export function usePropString(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+  fallback: string | null,
+): string | null;
+export function usePropString(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+  fallback: string | null = '',
+): string | null {
+  return stringValue(usePropVar(properties, key)) ?? fallback;
 }
 
 /**
@@ -594,14 +626,54 @@ export function usePropNumber(
   return readNumberValue(usePropVar(properties, key)) ?? fallback;
 }
 
-/** Hook: read a boolean property, evaluating any property source. */
+/**
+ * Hook: read a boolean property from any source — a static value, a property
+ * source, or a `$var` binding, whose live value it subscribes to (as
+ * `usePropVar` does) — coerced as `getPropBoolean` does: a number is true when
+ * non-zero, `'true'`/`'1'`/`'yes'`/`'on'` and `'false'`/`'0'`/`'no'`/`'off'`
+ * read as written. Returns `fallback` (default false) when there is no value;
+ * pass `null` to tell "no value yet" apart from false — that form also reads an
+ * empty text or NaN as no value.
+ * @example
+ *   const dense = usePropBoolean(properties, 'dense', false);
+ *   const isOn = usePropBoolean(properties, 'variable', null); // null → unknown
+ */
 export function usePropBoolean(
   properties: Record<string, unknown> | undefined,
   key: string,
-  fallback = false,
-): boolean {
-  const evalCtx = useEvalContext();
-  return getPropBoolean(properties, key, fallback, evalCtx);
+  fallback?: boolean,
+): boolean;
+export function usePropBoolean(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+  fallback: null,
+): boolean | null;
+export function usePropBoolean(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+  fallback: boolean | null,
+): boolean | null;
+export function usePropBoolean(
+  properties: Record<string, unknown> | undefined,
+  key: string,
+  fallback: boolean | null = false,
+): boolean | null {
+  const raw = properties?.[key];
+  const value = usePropVar(properties, key);
+  // A caller asking to tell "no value" apart (a `null` fallback) is reading
+  // state: an empty text or NaN from a tag says nothing, so it must not light
+  // an indicator the way getPropBoolean's truthy reading of them would.
+  if (fallback === null && isBlankState(value)) return null;
+  // usePropVar hands a plain object with no `$` key back as itself; evaluated,
+  // as getPropBoolean reads it, that object is no value rather than a truthy one.
+  return coerceBoolean(isRecord(raw) && !hasPropertySourceKey(raw) ? undefined : value, fallback);
+}
+
+function isBlankState(value: unknown): boolean {
+  return (
+    (typeof value === 'string' && value.trim() === '') ||
+    (typeof value === 'number' && Number.isNaN(value))
+  );
 }
 
 /**
