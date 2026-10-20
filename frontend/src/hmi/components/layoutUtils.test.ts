@@ -34,6 +34,7 @@ import {
   useRecordListProp,
   useItemListProp,
   usePropVar,
+  usePropNumber,
   getPropNumber,
   readNumberValue,
 } from './layoutUtils';
@@ -811,6 +812,73 @@ describe('usePropVar', () => {
   it('still passes a plain static value through', () => {
     const { result } = renderHook(() => usePropVar({ value: 7 }, 'value'), { wrapper });
     expect(result.current).toBe(7);
+  });
+});
+
+describe('usePropNumber', () => {
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(MemoryRouter, null, children);
+  const read = (properties: Record<string, unknown>, fallback?: number | null) =>
+    renderHook(
+      () =>
+        fallback === null
+          ? usePropNumber(properties, 'n', null)
+          : usePropNumber(properties, 'n', fallback),
+      { wrapper },
+    ).result;
+
+  beforeEach(() => {
+    useVariableStore.setState({ values: {}, varMeta: {} });
+  });
+
+  it('reads a static number and a static numeric string', () => {
+    expect(read({ n: 12.5 }, 9).current).toBe(12.5);
+    expect(read({ n: { $static: 3 } }, 9).current).toBe(3);
+    expect(read({ n: ' -1.5 ' }, 9).current).toBe(-1.5);
+  });
+
+  it('reads what an expression source resolves to', () => {
+    const n = { $formula: { expression: '{1} * 2', wildcards: { 1: 21 } } };
+    expect(read({ n }, 9).current).toBe(42);
+  });
+
+  it('follows a $var binding live', () => {
+    useVariableStore.setState({ values: { 'PLC:Setpoint': 10 } });
+    const result = read({ n: { $var: { path: 'PLC:Setpoint' } } }, -1);
+    expect(result.current).toBe(10);
+    act(() => useVariableStore.setState({ values: { 'PLC:Setpoint': 11.5 } }));
+    expect(result.current).toBe(11.5);
+    act(() => useVariableStore.setState({ values: { 'PLC:Setpoint': 'off' } }));
+    expect(result.current).toBe(-1);
+  });
+
+  it('reads one element of an array binding by its index', () => {
+    useVariableStore.setState({
+      values: { 'PLC:Temps': [20, 21.5, 23] },
+      varMeta: { 'PLC:Temps': { type: { kind: 'scalar', base: 'Float', array: true } } },
+    });
+    const result = read({ n: { $var: { path: 'PLC:Temps', index: 1 } } }, -1);
+    expect(result.current).toBe(21.5);
+    act(() => useVariableStore.setState({ values: { 'PLC:Temps': [20, 22, 23] } }));
+    expect(result.current).toBe(22);
+  });
+
+  it('reads an integer beyond 2**53 from its decimal string', () => {
+    useVariableStore.setState({ values: { 'PLC:Counter': '9007199254740993' } });
+    expect(read({ n: { $var: { path: 'PLC:Counter' } } }, 0).current).toBe(2 ** 53);
+  });
+
+  it('returns the fallback when there is no numeric value', () => {
+    expect(read({ n: 'abc' }, 9).current).toBe(9);
+    expect(read({}, 9).current).toBe(9);
+    expect(read({ n: { $var: { path: '' } } }, 9).current).toBe(9);
+  });
+
+  it('returns null for the null fallback, 0 by default', () => {
+    expect(read({ n: 'abc' }, null).current).toBeNull();
+    expect(read({ n: { $var: { path: 'PLC:Missing' } } }, null).current).toBeNull();
+    expect(read({ n: 0 }, null).current).toBe(0);
+    expect(read({ n: 'abc' }).current).toBe(0);
   });
 });
 
