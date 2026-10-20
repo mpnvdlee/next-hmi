@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import pytest
 from asyncua import Client, Server, ua
 from asyncua.ua import ua_binary
-from opcua.client_pool import DatasourceOpcuaEngine
+from opcua.browse import AddressSpaceBrowser
 from opcua.compat import apply_asyncua_watchdog_log_patch
 
 
@@ -170,10 +170,8 @@ async def test_batch_read_var_attrs_reads_real_attribute_names():
 
     await server.start()
     try:
-        engine = DatasourceOpcuaEngine("attrs-test")
         async with Client(url) as client:
-            engine._client = client
-            attrs = await engine._batch_read_var_attrs(
+            attrs = await AddressSpaceBrowser(client)._batch_read_var_attrs(
                 [read_only.nodeid, writable.nodeid, array.nodeid]
             )
     finally:

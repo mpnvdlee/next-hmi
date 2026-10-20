@@ -683,14 +683,16 @@ async def browse_profile(profile: Profile) -> dict:
     """The browse tree NEXT HMI produces for *profile*, as the API returns it."""
     from asyncua import Client
     from opcua.client_pool import DatasourceOpcuaEngine
+    from opcua.limits import read_operation_limits
 
     async with RunningProfile(profile) as run:
         engine = DatasourceOpcuaEngine(profile.name)
         async with Client(run.url) as client:
-            engine._client = client
-            engine._connected = True
-            engine._config = {"browse_root_node": run.root_id}
-            await engine._discover_operation_limits()
+            engine.attach_client(
+                client,
+                {"browse_root_node": run.root_id},
+                operation_limits=await read_operation_limits(client),
+            )
             return await engine.browse()
 
 

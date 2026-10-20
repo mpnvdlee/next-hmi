@@ -146,8 +146,8 @@ def test_security_paths_are_resolved_relative_to_project_root(monkeypatch, tmp_p
     """Absolute cert paths are not supported — every path is resolved against
     the active project root, matching the project-relative ``certs/...`` form a
     datasource stores."""
-    monkeypatch.setattr("opcua.client_pool.active_project_root", lambda: tmp_path)
-    monkeypatch.setattr("opcua.client_pool.active_certs_dir", lambda: tmp_path / "certs")
+    monkeypatch.setattr("opcua.security.active_project_root", lambda: tmp_path)
+    monkeypatch.setattr("opcua.security.active_certs_dir", lambda: tmp_path / "certs")
 
     security = _resolve_security_settings(
         {
@@ -181,8 +181,8 @@ def test_resolve_security_settings_rejects_unlisted_policy_or_mode(
     """``SecurityPolicyNone`` / ``MessageSecurityMode.None_`` are reachable by
     attribute name, so a datasource that reads as secured in the UI could
     otherwise negotiate an unsecured channel. Only the wizard's own names pass."""
-    monkeypatch.setattr("opcua.client_pool.active_project_root", lambda: tmp_path)
-    monkeypatch.setattr("opcua.client_pool.active_certs_dir", lambda: tmp_path / "certs")
+    monkeypatch.setattr("opcua.security.active_project_root", lambda: tmp_path)
+    monkeypatch.setattr("opcua.security.active_certs_dir", lambda: tmp_path / "certs")
 
     with pytest.raises(DatasourceValidationError):
         _resolve_security_settings(
@@ -201,8 +201,8 @@ def test_security_settings_repr_hides_the_private_key_password(
     monkeypatch, tmp_path: Path
 ):
     """One ``logger.exception`` away from a secret in the log otherwise."""
-    monkeypatch.setattr("opcua.client_pool.active_project_root", lambda: tmp_path)
-    monkeypatch.setattr("opcua.client_pool.active_certs_dir", lambda: tmp_path / "certs")
+    monkeypatch.setattr("opcua.security.active_project_root", lambda: tmp_path)
+    monkeypatch.setattr("opcua.security.active_certs_dir", lambda: tmp_path / "certs")
 
     settings = _resolve_security_settings(
         {
@@ -276,8 +276,8 @@ def test_resolve_security_settings_skips_generation_when_key_password_set(
 ):
     """A configured key password means the operator supplies their own
     encrypted key — never silently generate over it."""
-    monkeypatch.setattr("opcua.client_pool.active_project_root", lambda: tmp_path)
-    monkeypatch.setattr("opcua.client_pool.active_certs_dir", lambda: tmp_path / "certs")
+    monkeypatch.setattr("opcua.security.active_project_root", lambda: tmp_path)
+    monkeypatch.setattr("opcua.security.active_certs_dir", lambda: tmp_path / "certs")
 
     _resolve_security_settings(
         {

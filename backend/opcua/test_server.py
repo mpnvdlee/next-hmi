@@ -22,7 +22,7 @@ from core.project_packer import safe_filename
 from core.storage import active_certs_dir
 from core.value_types import is_array_shape, is_fixed_array
 
-from opcua.client_pool import (
+from opcua.security import (
     SECURE_POLICY_NAMES,
     SECURITY_MODES,
     ensure_client_certificate,

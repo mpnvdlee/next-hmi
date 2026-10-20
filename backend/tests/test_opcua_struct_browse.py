@@ -16,6 +16,7 @@ import socket
 import pytest
 from asyncua import Client, Server, ua
 from opcua.client_pool import DatasourceOpcuaEngine
+from opcua.limits import read_operation_limits
 
 
 def _free_url(suffix: str) -> str:
@@ -111,10 +112,11 @@ def _names(entry: dict) -> set[str]:
 async def _browse(url: str, root_node_id: str) -> dict:
     engine = DatasourceOpcuaEngine("struct-test")
     async with Client(url) as client:
-        engine._client = client
-        engine._connected = True
-        engine._config = {"browse_root_node": root_node_id}
-        await engine._discover_operation_limits()
+        engine.attach_client(
+            client,
+            {"browse_root_node": root_node_id},
+            operation_limits=await read_operation_limits(client),
+        )
         return await engine.browse()
 
 

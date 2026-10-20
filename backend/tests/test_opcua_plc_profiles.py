@@ -26,6 +26,7 @@ from typing import Any
 import pytest
 from asyncua import Client, ua
 from opcua.client_pool import DatasourceOpcuaEngine
+from opcua.limits import read_operation_limits
 from services import write_service
 from services.datasource_manager import DatasourceEntry, DatasourceManager
 from tests.opcua_plc_profiles import (
@@ -197,10 +198,9 @@ async def _engine_for(run: RunningProfile, profile: Profile, client: Client):
     dm.datasources[profile.name] = entry
     engine = DatasourceOpcuaEngine(profile.name)
     engine.set_datasource_manager(dm)
-    engine._client = client
-    engine._connected = True
-    engine._config = {"server_url": run.url}
-    await engine._discover_operation_limits()
+    engine.attach_client(
+        client, {"server_url": run.url}, operation_limits=await read_operation_limits(client)
+    )
     root_name = fixture["browse"]["display_name"]
     return engine, dm, entry, root_name
 
@@ -463,9 +463,7 @@ async def test_the_built_in_test_server_browses_back_to_its_own_config():
     try:
         engine = DatasourceOpcuaEngine("Sim")
         async with Client(f"opc.tcp://127.0.0.1:{port}/nexthmi/sim/") as client:
-            engine._client = client
-            engine._connected = True
-            engine._config = {}
+            engine.attach_client(client, {})
             root = await engine.browse()
     finally:
         await instance.stop()

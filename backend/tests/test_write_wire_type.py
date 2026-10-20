@@ -203,8 +203,7 @@ async def test_a_mislabelled_tag_is_really_written_on_a_live_server():
     try:
         engine = DatasourceOpcuaEngine("PLC")
         async with Client(url) as client:
-            engine._client = client
-            engine._connected = True
+            engine.attach_client(client)
             # As Walter's browse imported it: a Boolean labelled String.
             dm = _DM(
                 {

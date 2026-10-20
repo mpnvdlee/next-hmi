@@ -18,11 +18,9 @@ import pytest
 from asyncua import Client, Server, ua
 from asyncua.server.internal_session import InternalSession
 from asyncua.server.uaprocessor import ServiceError
-from opcua.client_pool import (
-    _VAR_ATTRS,
-    DEFAULT_MAX_READ_OPS,
-    DatasourceOpcuaEngine,
-)
+from opcua.browse import _VAR_ATTRS
+from opcua.engine import DatasourceOpcuaEngine
+from opcua.limits import DEFAULT_MAX_READ_OPS, OperationLimits, read_operation_limits
 
 SERVER_MAX_NODES_PER_READ = 100
 # 4 attributes per variable, so more than 25 variables overflows the limit.
@@ -108,11 +106,11 @@ async def _browse_gvl(url: str, *, advertise_limit: bool, discover: bool) -> dic
     try:
         engine = DatasourceOpcuaEngine("limits-test")
         async with Client(url) as client:
-            engine._client = client
-            engine._connected = True
-            engine._config = {"browse_root_node": gvl_node_id}
-            if discover:
-                await engine._discover_operation_limits()
+            engine.attach_client(
+                client,
+                {"browse_root_node": gvl_node_id},
+                operation_limits=await read_operation_limits(client) if discover else None,
+            )
             return await engine.browse()
     finally:
         await server.stop()
@@ -186,25 +184,24 @@ async def test_discover_operation_limits_reads_advertised_value():
     try:
         engine = DatasourceOpcuaEngine("limits-test")
         async with Client(url) as client:
-            engine._client = client
+            engine.attach_client(client)
             await engine._discover_operation_limits()
     finally:
         await server.stop()
 
-    assert engine._max_read_ops == SERVER_MAX_NODES_PER_READ
+    assert engine.operation_limits.max_read_ops == SERVER_MAX_NODES_PER_READ
     # Attribute reads must budget in operations, not nodes.
-    assert engine._read_ops_budget() == SERVER_MAX_NODES_PER_READ
-    nodes_per_chunk = engine._read_ops_budget() // len(_VAR_ATTRS)
+    assert engine.operation_limits.read_ops_budget() == SERVER_MAX_NODES_PER_READ
+    nodes_per_chunk = engine.operation_limits.read_ops_budget() // len(_VAR_ATTRS)
     assert nodes_per_chunk == 25
 
 
 def test_read_budget_falls_back_when_no_limit_is_known():
     engine = DatasourceOpcuaEngine("limits-test")
 
-    assert engine._read_ops_budget() == DEFAULT_MAX_READ_OPS
+    assert engine.operation_limits.read_ops_budget() == DEFAULT_MAX_READ_OPS
     # A server reporting 0 means "no limit" — never a zero-sized chunk.
-    engine._max_read_ops = None
-    assert engine._read_ops_budget() > 0
+    assert OperationLimits(max_read_ops=0).read_ops_budget() > 0
 
 
 class _RecordingClient:
@@ -247,9 +244,9 @@ async def test_read_current_values_chunks_to_the_read_limit():
     engine = DatasourceOpcuaEngine("DS")
     engine.set_datasource_manager(dm)
     client = _RecordingClient()
-    engine._client = client
-    engine._connected = True
-    engine._max_read_ops = SERVER_MAX_NODES_PER_READ
+    engine.attach_client(
+        client, operation_limits=OperationLimits(max_read_ops=SERVER_MAX_NODES_PER_READ)
+    )
 
     values = await engine.read_current_values(set(paths))
 

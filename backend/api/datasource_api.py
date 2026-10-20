@@ -22,11 +22,8 @@ from models.datasource import (
     TestConnectionBody,
     TestConnectionResult,
 )
-from opcua.client_pool import (
-    discover_endpoints,
-    generate_self_signed_client_certificate,
-    probe_connection,
-)
+from opcua.discovery import discover_endpoints, probe_connection
+from opcua.security import generate_self_signed_client_certificate
 from services import users_manager, write_service
 from services.datasource_manager import (
     DatasourceEntry,
