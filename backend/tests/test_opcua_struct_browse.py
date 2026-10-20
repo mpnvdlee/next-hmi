@@ -1,0 +1,188 @@
+"""The browse walks into a struct tag and stops at its members.
+
+A struct tag is a Variable node whose DataType is a custom structured type and
+whose members hang off it as HasComponent children — the shape both CODESYS and
+S7-1500 publish. Treating every Variable as a leaf meant the browse reported the
+struct itself (as data_type "struct", which the UI renders as "String") and none
+of its members, so nothing inside it could be bound.
+
+The members' own metadata (EURange, EngineeringUnits, …) are HasProperty
+children of the same node. Those describe the tag rather than being tags, so
+they must stay out of the tree even though the walk now descends.
+"""
+
+import socket
+
+import pytest
+from asyncua import Client, Server, ua
+from opcua.client_pool import DatasourceOpcuaEngine
+
+
+def _free_url(suffix: str) -> str:
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    return f"opc.tcp://127.0.0.1:{port}/nexthmi/{suffix}/"
+
+
+async def _build_server(url: str) -> tuple[Server, str, str]:
+    """L1_L2_Machine_Data → Battery{SOC, Voltage, Current, Cell{Temp}} + Running."""
+    server = Server()
+    await server.init()
+    server.set_endpoint(url)
+    server.set_security_policy([ua.SecurityPolicyType.NoSecurity])
+    idx = await server.register_namespace("http://nexthmi/struct")
+
+    types = server.get_node(ua.NodeId(ua.ObjectIds.Structure))
+    battery_dt = await types.add_data_type(ua.NodeId("DT_Battery", idx), "DT_Battery")
+    cell_dt = await types.add_data_type(ua.NodeId("DT_Cell", idx), "DT_Cell")
+
+    machine = await server.nodes.objects.add_object(
+        ua.NodeId("L1_L2_Machine_Data", idx), "L1_L2_Machine_Data"
+    )
+    battery = await machine.add_variable(
+        ua.NodeId("Battery", idx),
+        "Battery",
+        ua.Variant(None, ua.VariantType.ExtensionObject),
+        datatype=battery_dt.nodeid,
+    )
+    for name, value in (("SOC", 82.5), ("Voltage", 48.2), ("Current", 12.0)):
+        member = await battery.add_variable(
+            ua.NodeId(f"Battery.{name}", idx), name, ua.Variant(value, ua.VariantType.Float)
+        )
+        await member.set_writable(True)
+
+    # Metadata, not a tag: HasProperty rather than HasComponent.
+    await battery.add_property(
+        ua.NodeId("Battery.EURange", idx), "EURange", ua.Variant(0.0, ua.VariantType.Double)
+    )
+
+    # A nested struct, so the walk has to recurse rather than go one level deep.
+    cell = await battery.add_variable(
+        ua.NodeId("Battery.Cell", idx),
+        "Cell",
+        ua.Variant(None, ua.VariantType.ExtensionObject),
+        datatype=cell_dt.nodeid,
+    )
+    await cell.add_variable(
+        ua.NodeId("Battery.Cell.Temp", idx), "Temp", ua.Variant(31.4, ua.VariantType.Float)
+    )
+
+    await machine.add_variable(
+        ua.NodeId("Running", idx), "Running", ua.Variant(True, ua.VariantType.Boolean)
+    )
+    return server, machine.nodeid.to_string(), battery.nodeid.to_string()
+
+
+def _child(entry: dict, name: str) -> dict | None:
+    for child in entry.get("children", []):
+        if child["display_name"] == name:
+            return child
+    return None
+
+
+def _names(entry: dict) -> set[str]:
+    return {child["display_name"] for child in entry.get("children", [])}
+
+
+async def _browse(url: str, root_node_id: str) -> dict:
+    engine = DatasourceOpcuaEngine("struct-test")
+    async with Client(url) as client:
+        engine._client = client
+        engine._connected = True
+        engine._config = {"browse_root_node": root_node_id}
+        await engine._discover_operation_limits()
+        return await engine.browse()
+
+
+@pytest.mark.asyncio
+async def test_browse_descends_into_a_struct_tag():
+    url = _free_url("struct-members")
+    server, machine_id, _ = await _build_server(url)
+    await server.start()
+    try:
+        root = await _browse(url, machine_id)
+    finally:
+        await server.stop()
+
+    battery = _child(root, "Battery")
+    assert battery is not None
+    # The struct keeps its own identity: a bindable node with a struct type.
+    assert battery["data_type"] == "struct"
+    assert battery["node_id"]
+    # ...and now carries its members.
+    assert {"SOC", "Voltage", "Current", "Cell"} <= _names(battery)
+    soc = _child(battery, "SOC")
+    assert soc["data_type"] == "Float"
+    assert soc["writable"] is True
+    # A plain sibling on the same level is unaffected.
+    assert _child(root, "Running")["data_type"] == "Boolean"
+
+
+@pytest.mark.asyncio
+async def test_browse_recurses_through_a_nested_struct():
+    url = _free_url("struct-nested")
+    server, machine_id, _ = await _build_server(url)
+    await server.start()
+    try:
+        root = await _browse(url, machine_id)
+    finally:
+        await server.stop()
+
+    cell = _child(_child(root, "Battery"), "Cell")
+    assert cell is not None
+    assert cell["data_type"] == "struct"
+    assert _child(cell, "Temp")["data_type"] == "Float"
+
+
+@pytest.mark.asyncio
+async def test_struct_properties_are_not_bindable_rows():
+    """EURange is a HasProperty child — metadata, not a member."""
+    url = _free_url("struct-properties")
+    server, machine_id, battery_id = await _build_server(url)
+    await server.start()
+    try:
+        root = await _browse(url, machine_id)
+        # The server really does expose it, so its absence below is the filter
+        # working rather than the node not being there.
+        async with Client(url) as client:
+            children = await client.get_node(battery_id).get_children()
+            exposed = {(await c.read_browse_name()).Name for c in children}
+    finally:
+        await server.stop()
+
+    assert "EURange" in exposed
+    assert "EURange" not in _names(_child(root, "Battery"))
+
+
+@pytest.mark.asyncio
+async def test_a_struct_browsed_as_the_root_still_yields_its_members():
+    """browse_root_node pointed straight at a struct used to return a bare leaf."""
+    url = _free_url("struct-as-root")
+    server, _, battery_id = await _build_server(url)
+    await server.start()
+    try:
+        root = await _browse(url, battery_id)
+    finally:
+        await server.stop()
+
+    assert root["data_type"] == "struct"
+    assert {"SOC", "Voltage", "Current", "Cell"} <= _names(root)
+    assert "EURange" not in _names(root)
+
+
+@pytest.mark.asyncio
+async def test_a_scalar_variable_is_still_a_leaf():
+    """Only structs are worth a second Browse; a scalar must not sprout rows."""
+    url = _free_url("struct-scalar-leaf")
+    server, machine_id, _ = await _build_server(url)
+    await server.start()
+    try:
+        root = await _browse(url, machine_id)
+    finally:
+        await server.stop()
+
+    assert _child(root, "Running")["children"] == []
+    soc = _child(_child(root, "Battery"), "SOC")
+    assert soc["children"] == []

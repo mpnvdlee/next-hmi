@@ -250,7 +250,13 @@ export function buildFromBrowse(
     if (visitedIds.has(child.node_id)) continue;
     visitedIds.add(child.node_id);
 
-    if (child.data_type !== null && child.data_type !== undefined) {
+    // A struct is a Variable on the wire, so it arrives with a data_type — but
+    // it holds members rather than a value, and `toSimpleType` has no entry for
+    // it, so importing it as a variable would show it as a String and drop the
+    // members the browse walked. It belongs in the tree as a folder, which is
+    // also what the property picker's parseApiTree() makes of it.
+    const isStruct = child.data_type === 'struct';
+    if (child.data_type !== null && child.data_type !== undefined && !isStruct) {
       const entry: VariableEntry = {
         kind: 'variable',
         node_id: child.node_id,
@@ -274,7 +280,9 @@ export function buildFromBrowse(
         node_id: child.node_id,
         children: builtChildren,
       };
-      if (looksLikeArrayOfStruct(builtChildren)) {
+      // An array of structs is recognised either from the server's own
+      // ValueRank or from the `[0]`, `[1]`, … element convention.
+      if (child.is_array || looksLikeArrayOfStruct(builtChildren)) {
         folder.is_array = true;
       }
       result.push(folder);

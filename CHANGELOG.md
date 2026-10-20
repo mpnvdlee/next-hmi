@@ -13,6 +13,15 @@ heading.
 
 ### Fixed
 
+- **Browse PLC now finds the members of a struct.** A struct tag stopped the
+  browse: the struct showed up as a single row typed **String**, with nothing
+  inside it to bind, so a tag like `Battery.SOC` could only be added by typing
+  its node ID by hand. Every member is now walked — nested structs included —
+  and the struct arrives as a folder holding them. Tag metadata the server
+  publishes alongside the members (`EURange`, `EngineeringUnits`) stays out of
+  the variable table. Reported against SIMATIC S7-1500 and CODESYS, and it
+  affected every server that publishes structs this way.
+
 - **Browse PLC now reads types from servers that limit a read request.** A
   server may cap how many operations one request may carry, and refuses a
   larger one outright — CODESYS Control Win V3 caps it at 100. Browse reads

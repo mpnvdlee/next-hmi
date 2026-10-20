@@ -61,6 +61,11 @@ _VAR_ATTRS = (
 # (data_type, writable, array_length) for a node whose attributes never arrived.
 _UNKNOWN_VAR_ATTRS = ("Unknown", False, -1)
 
+# A struct's members are its HasComponent children. Its HasProperty children
+# (EURange, EngineeringUnits, …) describe the tag rather than being tags, so
+# the walker keeps them out of the tree.
+_HAS_COMPONENT = ua.NodeId(ua.ObjectIds.HasComponent)
+
 
 def _decode_var_attrs(
     results: list[ua.DataValue], index: int
@@ -1180,6 +1185,12 @@ class DatasourceOpcuaEngine:
         Browse returns NodeClass + DisplayName for each child for free
         (BrowseResultMask.All).  A separate bulk Read fetches DataType and
         AccessLevel only for Variable nodes at each level.
+
+        A struct tag is a Variable that carries its members as HasComponent
+        children — that is how both CODESYS and S7-1500 publish one — so a
+        Variable is a leaf only until its DataType says otherwise. Structs are
+        walked one level deeper per BFS round, which is why the attribute read
+        for a level has to happen before the next round is queued.
         """
         # ── Bootstrap: read root's own DisplayName + NodeClass ────────────────
         try:
@@ -1203,6 +1214,14 @@ class DatasourceOpcuaEngine:
             "data_type": None,
             "children": [],
         }
+        # ── BFS: one Browse + one Read per level ──────────────────────────────
+        # Each queue entry carries whether its parent is a struct Variable: the
+        # members of a struct hang off it by HasComponent, while HasProperty
+        # children (EURange, EngineeringUnits, …) are metadata, not tags, and
+        # must not become bindable rows.
+        visited: set[str] = {node.nodeid.to_string()}
+        queue: list[tuple[Node, dict, bool]] = []
+
         if root_nc == ua.NodeClass.Variable:
             try:
                 attrs = await self._batch_read_var_attrs([node.nodeid])
@@ -1216,13 +1235,15 @@ class DatasourceOpcuaEngine:
             except Exception:
                 root_entry["data_type"] = "Unknown"
                 root_entry["writable"] = False
-            return root_entry
+            if root_entry["data_type"] != "struct":
+                return root_entry
+            # A struct browsed as the root still has members to walk.
+            queue.append((node, root_entry, True))
+        else:
+            queue.append((node, root_entry, False))
 
-        # ── BFS: one Browse + one Read per level ──────────────────────────────
-        visited: set[str] = {node.nodeid.to_string()}
-        queue: list[tuple[Node, dict]] = [(node, root_entry)]
         while queue:
-            parent_nodes = [n for n, _ in queue]
+            parent_nodes = [n for n, _, _ in queue]
             try:
                 batch_refs = await self._batch_browse_nodes(parent_nodes)
             except Exception as exc:
@@ -1232,12 +1253,16 @@ class DatasourceOpcuaEngine:
                 )
                 break
 
-            next_queue: list[tuple[Node, dict]] = []
+            next_queue: list[tuple[Node, dict, bool]] = []
             var_node_ids: list[ua.NodeId] = []
             var_entries: list[dict] = []
 
-            for (_, parent_entry), refs in zip(queue, batch_refs, strict=False):
+            for (_, parent_entry, parent_is_struct), refs in zip(
+                queue, batch_refs, strict=False
+            ):
                 for ref in refs:
+                    if parent_is_struct and ref.ReferenceTypeId != _HAS_COMPONENT:
+                        continue
                     cid_str = ref.NodeId.to_string()
                     if cid_str in visited:
                         continue
@@ -1254,19 +1279,28 @@ class DatasourceOpcuaEngine:
                         var_entries.append(child_entry)
                     else:
                         next_queue.append(
-                            (Node(self._client.uaclient, ref.NodeId), child_entry)
+                            (Node(self._client.uaclient, ref.NodeId), child_entry, False)
                         )
 
             if var_node_ids:
                 try:
                     attrs = await self._batch_read_var_attrs(var_node_ids)
-                    for entry, (dt, wr, al) in zip(var_entries, attrs, strict=False):
+                    for nid, entry, (dt, wr, al) in zip(
+                        var_node_ids, var_entries, attrs, strict=False
+                    ):
                         entry["data_type"] = dt
                         entry["writable"] = wr
                         if al >= 0:  # 0 = dynamic array, >0 = fixed array, -1 = scalar
                             entry["is_array"] = True
                             if al > 0:
                                 entry["array_length"] = al
+                        # Only a struct has members, so only a struct is worth
+                        # another Browse — a scalar would cost one operation per
+                        # tag and return nothing but its own properties.
+                        if dt == "struct":
+                            next_queue.append(
+                                (Node(self._client.uaclient, nid), entry, True)
+                            )
                 except Exception as exc:
                     logger.warning(
                         "Batch read var attrs failed for %s: %s",
