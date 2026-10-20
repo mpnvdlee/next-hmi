@@ -19,6 +19,13 @@ heading.
   reached. Leaving the datasource stops the browse on the server too, instead
   of letting it finish for nobody.
 
+- **`usePropNumber` can report "no value".** Custom widgets can pass `null` as
+  the fallback — `usePropNumber(properties, 'variable', null)` — to get `null`
+  instead of `0` when a bound variable has no numeric value yet, and show
+  `---`. The hook now also subscribes to a bound variable itself, so it stays
+  live outside a page as well; `readNumberValue(usePropVar(...))` is no longer
+  needed for a numeric binding.
+
 ### Changed
 
 - **On/off widgets show "unknown" instead of "off" before a value arrives.**

@@ -139,8 +139,9 @@ read the same forms.
 | array / struct | JSON array / object of the above |
 
 A widget reading a number takes a decimal string as that number
-(`getPropNumber`, or `readNumberValue` for a value already read with
-`usePropVar` / `useVariable`), so a counter beyond 2**53 still drives a
+(`usePropNumber` for a property, bound or not; `readNumberValue` for a value
+that is not one — a struct field, a `useVariable` result, a raw value also
+shown as text), so a counter beyond 2**53 still drives a
 numeric field — rounded to the nearest double, as JavaScript holds it — while
 a text field shows every digit. Numeric Stepper shows, steps, clamps and takes
 numpad entry of such a value by its exact digits — a widget min/max written as
