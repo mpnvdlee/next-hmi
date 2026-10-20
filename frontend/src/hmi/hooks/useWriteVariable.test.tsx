@@ -207,6 +207,54 @@ describe('useWriteVariable', () => {
     expect(sendWsMessage).not.toHaveBeenCalled();
   });
 
+  it("coerces a struct field against the member's own type and range", () => {
+    useVariableStore.setState({
+      varMeta: {
+        'PLC:Motor/Speed': {
+          type: { kind: 'struct', name: 'Counter', array: false, fields: ['nTotal'] },
+          fieldRanges: { nTotal: { min: 0, max: 100 } },
+        },
+        'PLC:Motor/Speed/nTotal': {
+          type: { kind: 'scalar', base: 'Integer', array: false },
+          min: 0,
+          max: 100,
+          writable: true,
+        },
+      },
+    });
+    const reasons: string[] = [];
+    const write = writer(bound, { onError: (reason) => reasons.push(reason) });
+
+    write('9007199254740993', { field: 'nTotal' });
+    write('abc', { field: 'nTotal' });
+    write('42', { field: 'nTotal' });
+
+    expect(reasons).toEqual(['value_out_of_range', 'invalid_integer']);
+    expect(frames().map((f) => [f.field, f.value])).toEqual([['nTotal', 42]]);
+  });
+
+  it('range-checks a big integer on a struct-array element field exactly', () => {
+    useVariableStore.setState({
+      varMeta: {
+        'PLC:Motor/Speed': {
+          type: { kind: 'struct', name: 'Counter', array: true, fields: ['nTotal'] },
+          fieldRanges: { nTotal: { max: 9007199254740992 } },
+        },
+      },
+    });
+    const reasons: string[] = [];
+    const write = writer(
+      { variable: { $var: { path: 'PLC:Motor/Speed', index: 1 } } },
+      { onError: (reason) => reasons.push(reason) },
+    );
+
+    write('9007199254740993', { field: 'nTotal' });
+    write('9007199254740991', { field: 'nTotal' });
+
+    expect(reasons).toEqual(['value_out_of_range']);
+    expect(frames().map((f) => f.value)).toEqual(['9007199254740991']);
+  });
+
   it('names a read-only refusal in the toast', () => {
     writer(bound)(1);
 

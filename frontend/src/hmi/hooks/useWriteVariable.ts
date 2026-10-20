@@ -13,7 +13,11 @@
 import { useCallback, useId, useMemo } from 'react';
 import { bindingKey } from '@shared/types/config';
 import { parseVarKey } from '@shared/types/datasource';
-import { coerceOpcuaWrite, type OpcuaWriteDescriptor } from '@shared/utils/opcuaWriteCoercion';
+import {
+  coerceOpcuaWrite,
+  type OpcuaWriteDescriptor,
+  type WriteCoercionResult,
+} from '@shared/utils/opcuaWriteCoercion';
 import { getPropBinding } from '../components/layoutUtils';
 import { useHmiScope } from '../context/HmiScopeContext';
 import { useHmiStore } from '../store/hmiStore';
@@ -122,14 +126,34 @@ function writtenMeta(
   return useVariableStore.getState().varMeta[`${varKey}/${field}`];
 }
 
+function preflight(value: unknown, descriptor: OpcuaWriteDescriptor): WriteCoercionResult {
+  const coerced = coerceOpcuaWrite(value, descriptor);
+  if (!coerced.ok && coerced.reason === 'integer_out_of_range' && descriptor.dataType === 'int64') {
+    // Integer also covers UInt64, whose upper half int64 cannot hold.
+    return coerceOpcuaWrite(value, { ...descriptor, dataType: 'uint64' });
+  }
+  return coerced;
+}
+
 /** Range half of the coercion, for values whose type we cannot know. */
 function outOfRange(value: unknown, range: { min?: number; max?: number } | undefined): boolean {
-  if (!range || typeof value !== 'number') return false;
+  if (!range) return false;
+  // An integer beyond ±(2**53 − 1) travels as its decimal string; a BigInt
+  // compares it against a number bound exactly, as the backend does.
+  const comparable =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' &&
+          /^[+-]?\d+$/.test(value.trim()) &&
+          !Number.isSafeInteger(Number(value))
+        ? BigInt(value.trim())
+        : null;
+  if (comparable === null) return false;
   const { min, max } = range;
   // A persisted min > max is a contract violation, left unenforced to match
   // backend write_service (and `rangeBounds` in opcuaWriteCoercion).
   if (min !== undefined && max !== undefined && min > max) return false;
-  return (min !== undefined && value < min) || (max !== undefined && value > max);
+  return (min !== undefined && comparable < min) || (max !== undefined && comparable > max);
 }
 
 /**
@@ -178,40 +202,29 @@ export function useWriteVariable(
       };
 
       const field = opts?.field;
+      const target = writtenMeta(varKey, meta, field, index);
       // Read-only before anything about the value, as backend write_service
       // orders it: no correction of the value could make this write succeed.
-      if (writtenMeta(varKey, meta, field, index)?.writable === false) {
+      if (target?.writable === false) {
         report('read_only');
         return;
       }
       let payloadValue = value;
-      if (field) {
-        // Struct fields carry no type in `VarMeta` — only names — so there is
-        // no `dataType` to coerce against and the matrix would reject the
-        // write as `unknown_type`. Check the configured field range only and
-        // leave type coercion to the backend, which knows the field's type.
-        if (outOfRange(value, meta?.fieldRanges?.[field])) {
-          report('value_out_of_range');
+      // A field write coerces against the member's own metadata. An element of
+      // a struct array has none, and the struct's `VarType` names its fields
+      // without their types, so only the configured field range is checked
+      // there and type coercion is left to the backend.
+      const descriptor = target ? scalarDescriptor(target, field ? undefined : index) : null;
+      if (descriptor) {
+        const coerced = preflight(value, descriptor);
+        if (!coerced.ok) {
+          report(coerced.reason);
           return;
         }
-      } else if (meta) {
-        const descriptor = scalarDescriptor(meta, index);
-        if (descriptor) {
-          let coerced = coerceOpcuaWrite(value, descriptor);
-          if (
-            !coerced.ok &&
-            coerced.reason === 'integer_out_of_range' &&
-            descriptor.dataType === 'int64'
-          ) {
-            // Integer also covers UInt64, whose upper half int64 cannot hold.
-            coerced = coerceOpcuaWrite(value, { ...descriptor, dataType: 'uint64' });
-          }
-          if (!coerced.ok) {
-            report(coerced.reason);
-            return;
-          }
-          payloadValue = coerced.value;
-        }
+        payloadValue = coerced.value;
+      } else if (field && outOfRange(value, meta?.fieldRanges?.[field])) {
+        report('value_out_of_range');
+        return;
       }
 
       const { datasource, path } = parseVarKey(varKey);
