@@ -246,3 +246,38 @@ async def test_a_derived_scalar_resolves_to_its_builtin():
     name = _child(root, "sName")
     assert name["data_type"] == "String"
     assert name["children"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_derived_standard_type_resolves_to_its_builtin():
+    """Duration and UtcTime live in namespace 0 but are not builtins.
+
+    Their ids lie past the builtin range, so the namespace alone used to
+    label them "struct": a PLC's TIME or timestamp tag imported as a folder.
+    """
+    url = _free_url("struct-ns0-derived")
+    server, machine_id, _ = await _build_server(url)
+    machine = server.get_node(machine_id)
+    idx = machine.nodeid.NamespaceIndex
+    for name, dt_id, value, variant in (
+        ("tCycle", ua.ObjectIds.Duration, 250.0, ua.VariantType.Double),
+        ("dtStamp", ua.ObjectIds.UtcTime, None, ua.VariantType.DateTime),
+        ("nCount", ua.ObjectIds.Counter, 7, ua.VariantType.UInt32),
+    ):
+        await machine.add_variable(
+            ua.NodeId(name, idx),
+            name,
+            ua.Variant(value, variant),
+            datatype=ua.NodeId(dt_id),
+        )
+    await server.start()
+    try:
+        root = await _browse(url, machine_id)
+    finally:
+        await server.stop()
+
+    assert _child(root, "tCycle")["data_type"] == "Double"
+    assert _child(root, "dtStamp")["data_type"] == "DateTime"
+    assert _child(root, "nCount")["data_type"] == "UInt32"
+    for name in ("tCycle", "dtStamp", "nCount"):
+        assert _child(root, name)["children"] == []

@@ -58,6 +58,10 @@ def _builtin_data_type_name(ident: int) -> str:
     return "struct"
 
 
+def _is_structure_id(dt_nid: ua.NodeId) -> bool:
+    return dt_nid.NamespaceIndex == 0 and dt_nid.Identifier == 22
+
+
 def _decode_var_attrs(
     results: list[ua.DataValue], index: int
 ) -> tuple[str, bool, int]:
@@ -301,7 +305,7 @@ class AddressSpaceBrowser:
                 continue
             dt_dv = results[i * len(_VAR_ATTRS)]
             dt_nid = dt_dv.Value.Value if dt_dv.Value is not None else None
-            if isinstance(dt_nid, ua.NodeId) and dt_nid.NamespaceIndex != 0:
+            if isinstance(dt_nid, ua.NodeId) and not _is_structure_id(dt_nid):
                 decoded[i] = (
                     await self._custom_data_type_name(dt_nid),
                     writable,
@@ -315,8 +319,10 @@ class AddressSpaceBrowser:
         CODESYS publishes every ENUM, and S7 every UDT, as its own DataType in
         the application namespace, so the namespace alone cannot tell an enum
         (bind it as Int32) from a struct (walk it for members). The HasSubtype
-        chain can. Resolved once per distinct type per browse — a PLC has tens
-        of types, not thousands, and each hop is a Browse.
+        chain can. The same goes for the standard's own derived types in
+        namespace 0 — Duration is a Double, UtcTime a DateTime. Resolved once
+        per distinct type per browse — a PLC has tens of types, not thousands,
+        and each hop is a Browse.
         """
         key = dt_nid.to_string()
         cached = self._data_type_names.get(key)
