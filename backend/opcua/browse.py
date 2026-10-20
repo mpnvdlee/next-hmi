@@ -11,7 +11,7 @@ from typing import Any
 
 from asyncua import Client, ua
 from asyncua.common.node import Node
-from asyncua.common.ua_utils import get_base_data_type
+from asyncua.common.ua_utils import get_node_supertype
 
 from .limits import OperationLimits
 
@@ -36,6 +36,9 @@ _HAS_COMPONENT = ua.NodeId(ua.ObjectIds.HasComponent)
 _BROWSE_NODE_CLASSES = int(ua.NodeClass.Object) | int(ua.NodeClass.Variable)
 
 
+_DECIMAL_ID = 50
+
+
 def _builtin_data_type_name(ident: int) -> str:
     """Name for a namespace-0 DataType id, as browse reports it.
 
@@ -53,7 +56,7 @@ def _builtin_data_type_name(ident: int) -> str:
         return "UInt64"  # UInteger (abstract)
     if ident == 29:
         return "Int32"  # Enumeration — enums travel as Int32 on the wire
-    if ident == 50:
+    if ident == _DECIMAL_ID:
         # A subtype of Number, but encoded as an ExtensionObject: resolved
         # through HasSubtype it would read as Double, a write the server refuses.
         return "Decimal"
@@ -333,8 +336,7 @@ class AddressSpaceBrowser:
         if cached is not None:
             return cached
         try:
-            base = await get_base_data_type(Node(self._client.uaclient, dt_nid))
-            name = _builtin_data_type_name(base.nodeid.Identifier)
+            name = await self._base_data_type_name(dt_nid)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -347,6 +349,23 @@ class AddressSpaceBrowser:
             name = "struct"
         self._data_type_names[key] = name
         return name
+
+    async def _base_data_type_name(self, dt_nid: ua.NodeId) -> str:
+        """Walk HasSubtype up to the first builtin, as asyncua's
+        ``get_base_data_type`` does — but stop at Decimal (i=50) too, which lies
+        past the builtin range: a type derived from it would otherwise read as
+        Double, the Number it derives from."""
+        node: Node | None = Node(self._client.uaclient, dt_nid)
+        while node is not None:
+            nid = node.nodeid
+            if (
+                nid.NamespaceIndex == 0
+                and isinstance(nid.Identifier, int)
+                and (nid.Identifier < 30 or nid.Identifier == _DECIMAL_ID)
+            ):
+                return _builtin_data_type_name(nid.Identifier)
+            node = await get_node_supertype(node)
+        raise ua.UaError(f"DataType {dt_nid.to_string()} derives from no builtin type")
 
     async def _browse_node(self, node: Node) -> dict[str, Any]:
         """BFS browse: ~2 round-trips per tree level instead of 5 per node.

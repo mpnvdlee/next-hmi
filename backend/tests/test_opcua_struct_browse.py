@@ -304,3 +304,29 @@ async def test_the_standard_decimal_type_is_not_resolved_to_double():
 
     assert _child(root, "decPrice")["data_type"] == "Decimal"
     assert _child(root, "decPrice")["children"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_server_type_derived_from_decimal_stays_decimal():
+    """The HasSubtype walk stops at Decimal rather than at the Number above it."""
+    url = _free_url("struct-derived-decimal")
+    server, machine_id, _ = await _build_server(url)
+    machine = server.get_node(machine_id)
+    idx = machine.nodeid.NamespaceIndex
+    money_dt = await server.get_node(ua.NodeId(ua.ObjectIds.Decimal)).add_data_type(
+        ua.NodeId("T_Money", idx), "T_Money"
+    )
+    await machine.add_variable(
+        ua.NodeId("mPrice", idx),
+        "mPrice",
+        ua.Variant(None, ua.VariantType.ExtensionObject),
+        datatype=money_dt.nodeid,
+    )
+    await server.start()
+    try:
+        root = await _browse(url, machine_id)
+    finally:
+        await server.stop()
+
+    assert _child(root, "mPrice")["data_type"] == "Decimal"
+    assert _child(root, "mPrice")["children"] == []
