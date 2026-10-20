@@ -12,6 +12,9 @@ import pytest
 from asyncua import Server, ua
 from core.exceptions import DatasourceValidationError
 from opcua.client_pool import (
+    SECURE_POLICY_NAMES,
+    SECURITY_MODES,
+    _endpoint_supported,
     _pem_or_der,
     _resolve_security_settings,
     discover_endpoints,
@@ -60,6 +63,45 @@ async def test_discover_lists_nosecurity_anonymous_endpoint():
         and "Anonymous" in ep["user_tokens"]
         for ep in result["endpoints"]
     )
+
+
+@pytest.mark.asyncio
+async def test_discover_marks_a_nosecurity_endpoint_supported():
+    async with _running_server() as url:
+        result = await discover_endpoints(url)
+
+    open_endpoints = [
+        ep for ep in result["endpoints"] if ep["security_policy"] == "NoSecurity"
+    ]
+    assert open_endpoints
+    assert all(ep["supported"] is True for ep in open_endpoints)
+
+
+@pytest.mark.parametrize(
+    ("mode", "policy", "supported"),
+    [
+        ("None", "NoSecurity", True),
+        ("SignAndEncrypt", "Basic256Sha256", True),
+        ("Sign", "Aes128Sha256RsaOaep", True),
+        ("SignAndEncrypt", "Aes256Sha256RsaPss", True),
+        # Deprecated policies servers still advertise — and that the connect
+        # path refuses, so the wizard must not offer them as a choice.
+        ("SignAndEncrypt", "Basic256", False),
+        ("Sign", "Basic128Rsa15", False),
+        # Inconsistent pairs: no security mode with a policy, or the reverse.
+        ("None", "Basic256Sha256", False),
+        ("SignAndEncrypt", "NoSecurity", False),
+    ],
+)
+def test_endpoint_supported_matches_the_connect_allowlist(mode, policy, supported):
+    assert _endpoint_supported(mode, policy) is supported
+
+
+def test_endpoint_supported_offers_every_policy_the_connect_path_accepts():
+    """Drift guard: one allowlist, applied at discovery and at connect."""
+    for mode in SECURITY_MODES:
+        for policy in SECURE_POLICY_NAMES:
+            assert _endpoint_supported(mode, policy), (mode, policy)
 
 
 @pytest.mark.asyncio

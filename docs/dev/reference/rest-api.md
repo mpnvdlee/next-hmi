@@ -253,7 +253,8 @@ Pre-save helpers. None of them touch the live pool or persist a datasource.
 
 - `POST /api/datasources/discover`
   - Body: `{ "address": "opc.tcp://host:4840" }`. Enumerates the server's endpoints so the engineer can pick one instead of typing URL/security/auth by hand.
-  - Returns `{ ok, error, endpoints: [{ endpoint_url, security_mode, security_policy, user_tokens, server_name, application_uri }] }`. A failed probe is `ok: false` with `error`, not an HTTP error.
+  - Returns `{ ok, error, endpoints: [{ endpoint_url, security_mode, security_policy, user_tokens, server_name, application_uri, supported }] }`. A failed probe is `ok: false` with `error`, not an HTTP error.
+  - `supported` is `false` for an endpoint a datasource cannot be saved against — the deprecated `Basic128Rsa15` and `Basic256` policies many PLCs still advertise. It applies the same allowlist the connect path enforces, so the wizard shows such an endpoint without offering it.
 - `POST /api/datasources/test-connection`
   - Body: `{ server_url, username?, password?, security_policy?, security_mode?, ...extra }`. Extra fields (certificate paths, key password) are forwarded to the probe unchanged.
   - Opens a throwaway session. Returns `{ ok, error, server_name, namespace_count }`.

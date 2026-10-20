@@ -9,11 +9,16 @@ interface Props {
   onSelect: (endpoint: DiscoveredEndpoint) => void;
 }
 
+function isSupported(ep: DiscoveredEndpoint): boolean {
+  return ep.supported !== false;
+}
+
 /** Pick the endpoint we auto-select after a discovery: prefer an unsecured one
  *  so the wizard doesn't jump straight to certificate upload, else the first
- *  offered. */
-function preferredEndpoint(endpoints: DiscoveredEndpoint[]): DiscoveredEndpoint {
-  return endpoints.find((ep) => ep.security_mode === 'None') ?? endpoints[0];
+ *  usable one. Null when the server offers nothing we can connect with. */
+function preferredEndpoint(endpoints: DiscoveredEndpoint[]): DiscoveredEndpoint | null {
+  const usable = endpoints.filter(isSupported);
+  return usable.find((ep) => ep.security_mode === 'None') ?? usable[0] ?? null;
 }
 
 export default function EndpointDiscovery({ address, onAddressChange, onSelect }: Props) {
@@ -42,6 +47,13 @@ export default function EndpointDiscovery({ address, onAddressChange, onSelect }
       }
       setEndpoints(res.endpoints);
       const preferred = preferredEndpoint(res.endpoints);
+      if (!preferred) {
+        setError(
+          'This server only offers deprecated security policies (Basic128Rsa15, Basic256). ' +
+            'Enable Basic256Sha256 or a newer policy on the server, or allow an unsecured endpoint.',
+        );
+        return;
+      }
       setSelectedIdx(res.endpoints.indexOf(preferred));
       onSelect(preferred);
     } catch (err) {
@@ -84,14 +96,18 @@ export default function EndpointDiscovery({ address, onAddressChange, onSelect }
         <ul className="ds-wizard__endpoints" role="listbox" aria-label="Discovered endpoints">
           {endpoints.map((ep, i) => {
             const open = ep.security_mode === 'None';
+            const supported = isSupported(ep);
             return (
               <li key={`${ep.endpoint_url}-${ep.security_policy}-${ep.security_mode}-${i}`}>
                 <button
                   type="button"
                   role="option"
                   aria-selected={selectedIdx === i}
-                  className={`ds-wizard__endpoint${selectedIdx === i ? ' ds-wizard__endpoint--selected' : ''}`}
+                  aria-disabled={!supported}
+                  disabled={!supported}
+                  className={`ds-wizard__endpoint${selectedIdx === i ? ' ds-wizard__endpoint--selected' : ''}${supported ? '' : ' ds-wizard__endpoint--unsupported'}`}
                   onClick={() => {
+                    if (!supported) return;
                     setSelectedIdx(i);
                     onSelect(ep);
                   }}
@@ -112,10 +128,16 @@ export default function EndpointDiscovery({ address, onAddressChange, onSelect }
                     <span className="ds-wizard__endpoint-server">{ep.server_name}</span>
                   )}
                   <span className="ds-wizard__endpoint-url">{ep.endpoint_url}</span>
-                  {!open && (
+                  {!supported ? (
                     <span className="ds-wizard__endpoint-note">
-                      You'll be asked for certificates on the next step.
+                      {ep.security_policy} is deprecated and not supported.
                     </span>
+                  ) : (
+                    !open && (
+                      <span className="ds-wizard__endpoint-note">
+                        You'll be asked for certificates on the next step.
+                      </span>
+                    )
                   )}
                 </button>
               </li>

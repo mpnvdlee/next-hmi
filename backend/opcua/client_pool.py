@@ -413,6 +413,19 @@ def _security_mode_name(mode: Any) -> str:
     return "None" if name == "None_" else name
 
 
+def _endpoint_supported(security_mode: str, security_policy: str) -> bool:
+    """Whether a discovered endpoint is one a datasource can be saved against.
+
+    The same allowlist resolve_security_settings() enforces at connect time,
+    applied before the user picks: servers still offer the deprecated
+    Basic128Rsa15 and Basic256, which would otherwise be selectable here and
+    only refused once the connection is tested.
+    """
+    if security_mode == "None" and security_policy == "NoSecurity":
+        return True
+    return security_mode in SECURITY_MODES and security_policy in SECURE_POLICY_NAMES
+
+
 def _user_token_types(tokens: Any) -> list[str]:
     result: list[str] = []
     for tok in tokens or []:
@@ -462,13 +475,16 @@ async def discover_endpoints(address: str, *, timeout_s: float = 5.0) -> dict:
             name_field = getattr(server, "ApplicationName", None)
             app_name = getattr(name_field, "Text", "") or ""
             app_uri = getattr(server, "ApplicationUri", "") or ""
+        security_mode = _security_mode_name(getattr(ep, "SecurityMode", None))
+        security_policy = _policy_short_name(getattr(ep, "SecurityPolicyUri", "") or "")
         row = {
             "endpoint_url": getattr(ep, "EndpointUrl", "") or url,
-            "security_mode": _security_mode_name(getattr(ep, "SecurityMode", None)),
-            "security_policy": _policy_short_name(getattr(ep, "SecurityPolicyUri", "") or ""),
+            "security_mode": security_mode,
+            "security_policy": security_policy,
             "user_tokens": _user_token_types(getattr(ep, "UserIdentityTokens", None)),
             "server_name": app_name,
             "application_uri": app_uri,
+            "supported": _endpoint_supported(security_mode, security_policy),
         }
         key = (row["endpoint_url"], row["security_mode"], row["security_policy"])
         if key in seen:
@@ -526,6 +542,12 @@ class _DsSubHandler:
             # Use the NodeId object directly as the dict key — NodeId implements __hash__
             # and __eq__, so this avoids the to_string() serialisation on every notification.
             node_id = node.nodeid
+            # What the server actually encodes is the type a write must use;
+            # recording it here makes it free for every subscribed tag.
+            variant = getattr(getattr(data, "monitored_item", None), "Value", None)
+            variant = getattr(variant, "Value", None)
+            if variant is not None and variant.VariantType != ua.VariantType.Null:
+                self._engine._wire_types[node_id] = variant.VariantType
             dm = self._engine._datasource_manager
             if dm is None:
                 return
@@ -659,6 +681,9 @@ class DatasourceOpcuaEngine:
         self._max_monitored_items_per_call: int | None = None
         # Server-defined DataType → builtin name, filled during a browse.
         self._data_type_names: dict[str, str] = {}
+        # The VariantType each node arrives in, from datachange or a one-off
+        # read. Cleared on connect: a PLC download can retype a tag.
+        self._wire_types: dict[ua.NodeId, ua.VariantType] = {}
         self._datasource_manager = None
         self._status_callback = None
         self._priority_recompute_callback = None
@@ -929,6 +954,7 @@ class DatasourceOpcuaEngine:
         self._connected = True
         self._error = None
         logger.info("OPC-UA connected: %s → %s", self.datasource_name, url)
+        self._wire_types = {}
         await self._discover_operation_limits()
         if self._status_callback is not None:
             await self._status_callback(self.datasource_name, True)
@@ -1572,6 +1598,33 @@ class DatasourceOpcuaEngine:
         self._current_priority_paths.clear()
 
     # ── Write ─────────────────────────────────────────────────────────────────
+
+    async def wire_variant_type(self, node_id: str) -> ua.VariantType | None:
+        """The VariantType the server sends for *node_id*, or None if unknown.
+
+        Free for a subscribed tag (recorded on datachange); one Read otherwise,
+        cached. A null or unreadable value says nothing, so it is not cached.
+        """
+        try:
+            nid = ua.NodeId.from_string(node_id)
+        except Exception:
+            return None
+        cached = self._wire_types.get(nid)
+        if cached is not None:
+            return cached
+        if not self._connected or self._client is None:
+            return None
+        try:
+            data_value = await self._client.get_node(nid).read_data_value()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            return None
+        variant = data_value.Value
+        if variant is None or variant.VariantType == ua.VariantType.Null:
+            return None
+        self._wire_types[nid] = variant.VariantType
+        return variant.VariantType
 
     async def write_node(self, node_id: str, value: Any, variant_type: ua.VariantType | None = None) -> None:
         if not self._connected or self._client is None:

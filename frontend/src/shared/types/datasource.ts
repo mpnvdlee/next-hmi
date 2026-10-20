@@ -147,6 +147,10 @@ export interface DiscoveredEndpoint {
   user_tokens: string[];
   server_name: string;
   application_uri: string;
+  /** False for an endpoint a datasource cannot be saved against — the
+   *  deprecated Basic128Rsa15 and Basic256 policies servers still offer.
+   *  Absent from an older backend, which is read as supported. */
+  supported?: boolean;
 }
 
 export interface DiscoveryResult {

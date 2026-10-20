@@ -13,6 +13,19 @@ heading.
 
 ### Fixed
 
+- **Writes use the type the PLC actually has.** A tag imported with the wrong
+  type — **Unknown** after a failed browse, **String** for an enum, **Float**
+  where the PLC declares **Double** — was refused on every write, or never
+  attempted at all. Writes now follow the type the server sends, while a type
+  you chose that only refines it, such as **Date** on a string tag, keeps its
+  own validation.
+
+- **The connection wizard no longer offers endpoints it cannot use.** Many PLCs
+  still advertise the deprecated `Basic128Rsa15` and `Basic256` security
+  policies. Discover listed them as ordinary choices, and picking one failed
+  only at the connection test. They are now shown greyed out and never
+  pre-selected, and a server that offers nothing else says so.
+
 - **Browse PLC now finds the members of a struct.** A struct tag stopped the
   browse: the struct showed up as a single row typed **String**, with nothing
   inside it to bind, so a tag like `Battery.SOC` could only be added by typing

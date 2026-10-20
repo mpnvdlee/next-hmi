@@ -18,6 +18,7 @@ record emitted here could not say who to attribute the write to.
 
 from __future__ import annotations
 
+import logging
 import math
 import re
 import struct
@@ -30,6 +31,8 @@ from typing import Any
 from asyncua import ua
 from core.value_types import array_index_out_of_bounds
 from models.datasource import build_var_key
+
+logger = logging.getLogger(__name__)
 
 # ── Failure reasons (string values match the WebSocket write_error contract) ──
 
@@ -517,6 +520,53 @@ def variant_type_for_data_type(data_type: Any) -> ua.VariantType | None:
     return _VARIANT_TYPE_MAP.get(canonical or "")
 
 
+async def _wire_data_type(
+    datasource_manager: Any,
+    opcua_pool: Any,
+    ds_name: str,
+    entry_data: dict[str, Any],
+    field: str | None,
+    configured: Any,
+) -> str | None:
+    """The server's own type for this write, when it contradicts *configured*.
+
+    A configured type is only as good as the browse that produced it, and a
+    browse can mislabel a tag ("Unknown", a struct-named enum, a Float that is
+    really a Double). The VariantType the server sends cannot be wrong, and
+    writing any other one is refused with BadTypeMismatch.
+
+    The configured type still wins when it maps to the same VariantType: Date,
+    Time and Duration travel as String and Double but carry validation of
+    their own, so they refine the wire type rather than contradict it.
+    Anything that cannot be determined returns None and leaves the
+    configured type in charge, exactly as before.
+    """
+    ds_entry = datasource_manager.get(ds_name)
+    if ds_entry is None or getattr(ds_entry, "ds_type", None) == "static":
+        return None
+    if opcua_pool is None:
+        return None
+    engine = opcua_pool.get(ds_name)
+    lookup = getattr(engine, "wire_variant_type", None)
+    node_id = _resolve_node_id(entry_data, field)
+    if lookup is None or not node_id:
+        return None
+    try:
+        wire = await lookup(node_id)
+    except Exception:
+        return None
+    if wire is None or wire.name.lower() not in _CANONICAL_TYPE_ALIASES:
+        # ByteString, Guid, LocalizedText…: nothing the coercer can target.
+        return None
+    if variant_type_for_data_type(configured) == wire:
+        return None
+    logger.debug(
+        "Write to %s:%s uses the server's %s, not the configured %r",
+        ds_name, node_id, wire.name, configured,
+    )
+    return wire.name
+
+
 def _field_path(entry_data: dict[str, Any], field: str | None) -> str | None:
     """Resolve a struct field name to the child variable's own path.
 
@@ -631,6 +681,12 @@ async def write_value(
     if coercion_entry is None:
         return WriteOutcome(False, REASON_BAD_FIELD)
     data_type = coercion_entry.get("data_type")
+    wire_type = await _wire_data_type(
+        datasource_manager, opcua_pool, ds_name, entry_data, field, data_type,
+    )
+    if wire_type is not None:
+        coercion_entry = {**coercion_entry, "data_type": wire_type}
+        data_type = wire_type
     try:
         coerced = coerce_entry_write_value(
             value, coercion_entry, indexed=index_match is not None,
