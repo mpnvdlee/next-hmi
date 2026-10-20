@@ -311,9 +311,12 @@ def _round_to_float32(value: float) -> float:
     return struct.unpack("!f", struct.pack("!f", value))[0]
 
 
-def _stored_precision(value: Any, data_type: str) -> Any:
+def _stored_precision(value: Any, data_type: Any) -> Any:
     """*value* as the target type stores it: the nearest float32 for a Float."""
-    if _CANONICAL_TYPE_ALIASES.get(data_type.strip().lower()) not in _FLOAT32_TYPES:
+    if (
+        not isinstance(data_type, str)
+        or _CANONICAL_TYPE_ALIASES.get(data_type.strip().lower()) not in _FLOAT32_TYPES
+    ):
         return value
     if isinstance(value, list):
         return [_round_to_float32(v) for v in value]
@@ -591,6 +594,12 @@ async def _wire_data_type(
     return wire.name
 
 
+def _is_struct_folder(entry_data: dict[str, Any]) -> bool:
+    """Whether *entry_data* is a ``folder_registry`` entry, which every folder
+    the manager registers carries ``_child_paths`` for."""
+    return "_child_paths" in entry_data
+
+
 def _field_path(entry_data: dict[str, Any], field: str | None) -> str | None:
     """Resolve a struct field name to the child variable's own path.
 
@@ -697,9 +706,9 @@ async def write_value(
     if coercion_entry is None:
         return WriteOutcome(False, REASON_BAD_FIELD)
     data_type = coercion_entry.get("data_type")
-    # A struct folder (no data_type) has no access of its own: writing one
-    # whole is a shape the write path cannot take, reported as invalid_value.
-    if data_type is not None and not is_writable(coercion_entry):
+    # A struct folder has no access of its own: writing one whole is a shape
+    # the write path cannot take, reported as invalid_value.
+    if not _is_struct_folder(coercion_entry) and not is_writable(coercion_entry):
         return WriteOutcome(False, REASON_READ_ONLY)
 
     index_match = _ARRAY_INDEX_RE.search(path)
@@ -725,8 +734,9 @@ async def write_value(
         if getattr(exc, "reason", None) == REASON_VALUE_OUT_OF_RANGE:
             return WriteOutcome(False, REASON_VALUE_OUT_OF_RANGE)
         return WriteOutcome(False, REASON_INVALID_VALUE)
-    # Reached untyped only when the server's wire type stood in for a missing
-    # data_type; such an entry still states no access, so nothing is written.
+    # Reached unwritable only by a struct folder whose missing data_type the
+    # server's wire type stood in for; it still states no access, so nothing
+    # is written.
     if not is_writable(coercion_entry):
         return WriteOutcome(False, REASON_READ_ONLY)
 

@@ -129,6 +129,31 @@ async def test_a_refining_type_keeps_its_own_validation():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("value", ["abc", 70000, 5])
+async def test_an_untyped_read_only_tag_is_refused_before_its_value_is_judged(value):
+    """The wire type stands in for the missing data_type, but only for a
+    write that could land: read_only comes before any value error."""
+    engine = _WireEngine(ua.VariantType.Int16)
+    dm = _DM({"Tag": {"node_id": "ns=2;s=Tag", "writable": False}})
+    outcome = await write_service.write_value(dm, _Pool(engine), "PLC", "Tag", value)
+
+    assert outcome == write_service.WriteOutcome(False, write_service.REASON_READ_ONLY)
+    assert engine.writes == []
+
+
+@pytest.mark.asyncio
+async def test_an_untyped_writable_tag_is_written_with_the_servers_type():
+    engine = _WireEngine(ua.VariantType.Int16)
+    dm = _DM({"Tag": {"node_id": "ns=2;s=Tag", "writable": True}})
+    refused = await write_service.write_value(dm, _Pool(engine), "PLC", "Tag", 70000)
+    outcome = await write_service.write_value(dm, _Pool(engine), "PLC", "Tag", 5)
+
+    assert refused.reason == write_service.REASON_INVALID_VALUE
+    assert outcome.ok, outcome.reason
+    assert engine.writes == [("ns=2;s=Tag", 5, ua.VariantType.Int16)]
+
+
+@pytest.mark.asyncio
 async def test_without_a_wire_type_the_configured_type_applies():
     outcome, writes = await _write("Float", None, 1.5)
 

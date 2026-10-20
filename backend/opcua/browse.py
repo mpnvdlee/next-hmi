@@ -53,6 +53,10 @@ def _builtin_data_type_name(ident: int) -> str:
         return "UInt64"  # UInteger (abstract)
     if ident == 29:
         return "Int32"  # Enumeration — enums travel as Int32 on the wire
+    if ident == 50:
+        # A subtype of Number, but encoded as an ExtensionObject: resolved
+        # through HasSubtype it would read as Double, a write the server refuses.
+        return "Decimal"
     if 1 <= ident <= 25:
         return ua.VariantType(ident).name
     return "struct"

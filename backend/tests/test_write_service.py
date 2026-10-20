@@ -71,6 +71,11 @@ def test_coerce_datetime_rejects_garbage() -> None:
         write_service.coerce_write_value("not-a-date", "datetime")
 
 
+@pytest.mark.parametrize("data_type", [None, 3, ["Float"]])
+def test_coerce_an_empty_array_of_a_non_string_type_is_left_empty(data_type) -> None:
+    assert write_service.coerce_write_value([], data_type) == []
+
+
 def test_coerce_rejects_null_and_unknown_type() -> None:
     with pytest.raises(write_service.WriteCoercionError) as null_error:
         write_service.coerce_write_value(None, "String")

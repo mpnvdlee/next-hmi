@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 # Compiled once at module level; shared by _build_folder_maps and _sort_key.
 _ELEM_INDEX_RE = re.compile(r"\[(\d+)\]$")
 
-# Matches the "idx:field" encoding client_pool._struct_field_routes() uses for
+# Matches the "idx:field" encoding opcua.routing._struct_field_routes() uses for
 # a direct field of an array-of-struct element (mirrors the "array_elem"
 # encoding in DatasourceOpcuaEngine.read_current_values).
 _ARRAY_FIELD_RE = re.compile(r"^(\d+):(.+)$")
@@ -488,7 +488,8 @@ class DatasourceManager:
         Returns ``(aggregate_snapshot, elem_key, elem_snapshot)``, or None if
         the field already held this value (no-op — caller should skip
         broadcast). *field_name* encodes where the leaf lives, mirroring the
-        encodings client_pool._struct_field_routes()/read_current_values() use:
+        encodings opcua.routing._struct_field_routes() and
+        DatasourceOpcuaEngine.read_current_values() use:
         - ``"name"``        — direct field of a flat struct (cache is a dict)
         - ``"a/b/name"``    — field of a nested sub-struct (cache is nested dicts)
         - ``"idx:name"``    — direct field of array-of-struct element *idx*
@@ -685,6 +686,8 @@ class DatasourceManager:
         "boolean": False,
         "string": "",
         "int": 0,
+        "integer": 0,
+        "enumeration": 0,
         "int8": 0,
         "int16": 0,
         "int32": 0,
@@ -697,7 +700,13 @@ class DatasourceManager:
         "sbyte": 0,
         "byte": 0,
         "float": 0.0,
+        "single": 0.0,
         "double": 0.0,
+        "datetime": "1970-01-01T00:00:00.000Z",
+        "date": "1970-01-01",
+        "time": "00:00:00",
+        "duration": 0.0,
+        "timespan": 0.0,
     }
 
     def _static_default(self, var_entry: dict[str, Any]) -> Any:

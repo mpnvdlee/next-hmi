@@ -281,3 +281,26 @@ async def test_a_derived_standard_type_resolves_to_its_builtin():
     assert _child(root, "nCount")["data_type"] == "UInt32"
     for name in ("tCycle", "dtStamp", "nCount"):
         assert _child(root, name)["children"] == []
+
+
+@pytest.mark.asyncio
+async def test_the_standard_decimal_type_is_not_resolved_to_double():
+    """Decimal derives from Number, so HasSubtype reads it as Double, but it
+    travels as an ExtensionObject: a Double write to it is refused."""
+    url = _free_url("struct-ns0-decimal")
+    server, machine_id, _ = await _build_server(url)
+    machine = server.get_node(machine_id)
+    await machine.add_variable(
+        ua.NodeId("decPrice", machine.nodeid.NamespaceIndex),
+        "decPrice",
+        ua.Variant(None, ua.VariantType.ExtensionObject),
+        datatype=ua.NodeId(ua.ObjectIds.Decimal),
+    )
+    await server.start()
+    try:
+        root = await _browse(url, machine_id)
+    finally:
+        await server.stop()
+
+    assert _child(root, "decPrice")["data_type"] == "Decimal"
+    assert _child(root, "decPrice")["children"] == []
