@@ -990,7 +990,8 @@ declare function usePropNumber(
  *  binding, read live — coerced as `getPropBoolean` does (a number is true when
  *  non-zero; `'true'`/`'1'`/`'yes'`/`'on'` and `'false'`/`'0'`/`'no'`/`'off'`
  *  read as written). Returns `fallback` (default `false`) when there is no
- *  value; pass `null` to get `null` instead, e.g. to show an unknown state. */
+ *  value; pass `null` to get `null` instead, e.g. to show an unknown state —
+ *  that form also reads an empty text or NaN as no value. */
 declare function usePropBoolean(
   properties: Record<string, unknown> | undefined,
   key: string,

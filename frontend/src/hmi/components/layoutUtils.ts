@@ -632,7 +632,8 @@ export function usePropNumber(
  * `usePropVar` does) — coerced as `getPropBoolean` does: a number is true when
  * non-zero, `'true'`/`'1'`/`'yes'`/`'on'` and `'false'`/`'0'`/`'no'`/`'off'`
  * read as written. Returns `fallback` (default false) when there is no value;
- * pass `null` to tell "no value yet" apart from false.
+ * pass `null` to tell "no value yet" apart from false — that form also reads an
+ * empty text or NaN as no value.
  * @example
  *   const dense = usePropBoolean(properties, 'dense', false);
  *   const isOn = usePropBoolean(properties, 'variable', null); // null → unknown
@@ -659,9 +660,20 @@ export function usePropBoolean(
 ): boolean | null {
   const raw = properties?.[key];
   const value = usePropVar(properties, key);
+  // A caller asking to tell "no value" apart (a `null` fallback) is reading
+  // state: an empty text or NaN from a tag says nothing, so it must not light
+  // an indicator the way getPropBoolean's truthy reading of them would.
+  if (fallback === null && isBlankState(value)) return null;
   // usePropVar hands a plain object with no `$` key back as itself; evaluated,
   // as getPropBoolean reads it, that object is no value rather than a truthy one.
   return coerceBoolean(isRecord(raw) && !hasPropertySourceKey(raw) ? undefined : value, fallback);
+}
+
+function isBlankState(value: unknown): boolean {
+  return (
+    (typeof value === 'string' && value.trim() === '') ||
+    (typeof value === 'number' && Number.isNaN(value))
+  );
 }
 
 /**

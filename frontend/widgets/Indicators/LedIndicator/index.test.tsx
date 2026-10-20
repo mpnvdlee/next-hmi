@@ -62,4 +62,15 @@ describe('LedIndicator', () => {
     act(() => useVariableStore.getState().setScalar('PLC:Pump/Running', 'false'));
     expect(el.className).toContain('hmi-led-indicator--off');
   });
+
+  it('never lights on an empty text or NaN from a tag', () => {
+    const { container } = renderLed({ variable: { $var: { path: 'PLC:Batch/Id' } } });
+    const el = container.firstElementChild as HTMLElement;
+
+    for (const blank of ['', '   ', Number.NaN]) {
+      act(() => useVariableStore.getState().setScalar('PLC:Batch/Id', blank));
+      expect(el.className).toContain('hmi-led-indicator--unknown');
+      expect(el.className).not.toContain('hmi-led-indicator--on');
+    }
+  });
 });

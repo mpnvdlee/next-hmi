@@ -26,7 +26,22 @@ heading.
   live outside a page as well; `readNumberValue(usePropVar(...))` is no longer
   needed for a numeric binding.
 
+- **`usePropString` and `usePropBoolean` work the same way.** Both follow a
+  bound variable live and take a `null` fallback to tell "no value yet" apart
+  from `''` or `false`; `usePropBoolean`'s `null` form also reads an empty text
+  or `NaN` as no value. A property with no variable bound no longer costs a
+  variable-store listener.
+
 ### Changed
+
+- **On/off widgets show "unknown" instead of "off" before a value arrives.**
+  An **LED Indicator** shows an empty ring, a **Switch** a hollow track with its
+  thumb midway — and it can't be pressed until it knows its state — and a
+  **Menu Toggle** is dimmed with a dashed outline; pressing it still runs its
+  actions but writes nothing. An empty text or an invalid number from a tag
+  counts as no value too. These widgets now also read the text `"false"`,
+  `"0"`, `"no"` or `"off"` as off, as the rest of NEXT HMI already did; before,
+  any non-empty text lit them.
 
 - **DateTime tags read as ISO 8601 UTC.** A Text widget bound to a DateTime tag
   showed `2026-01-02 03:04:05+00:00`. It now shows `2026-01-02T03:04:05.678Z`:

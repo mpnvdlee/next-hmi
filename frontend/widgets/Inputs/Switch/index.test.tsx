@@ -42,7 +42,8 @@ describe('Switch', () => {
 
     expect(el.className).toContain('hmi-component');
     expect(el.className).toContain('hmi-switch');
-    expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'mixed');
+    expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('switch')).toHaveAttribute('aria-busy', 'true');
   });
 
   it('renders its label and reflects the bound value', () => {
@@ -59,7 +60,8 @@ describe('Switch', () => {
     renderSwitch({ variable: { $var: { path: 'PLC:Pump/Running' } } });
     const track = screen.getByRole('switch');
 
-    expect(track).toHaveAttribute('aria-checked', 'mixed');
+    expect(track).toHaveAttribute('aria-checked', 'false');
+    expect(track).toHaveAttribute('aria-busy', 'true');
     expect(track.className).toContain('hmi-switch__track--unknown');
     expect(track).toBeDisabled();
     await user.click(track);
@@ -67,6 +69,7 @@ describe('Switch', () => {
 
     act(() => useVariableStore.getState().setScalar('PLC:Pump/Running', false));
     expect(track).toHaveAttribute('aria-checked', 'false');
+    expect(track).not.toHaveAttribute('aria-busy');
     expect(track.className).not.toContain('hmi-switch__track--unknown');
     expect(track).toBeEnabled();
   });

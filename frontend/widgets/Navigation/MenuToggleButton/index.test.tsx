@@ -61,11 +61,13 @@ describe('MenuToggleButton', () => {
   });
 
   it('reads an unset bound state as its declared default, not as unknown', () => {
-    renderToggle({});
-
-    const btn = screen.getByRole('button');
-    expect(btn).toHaveAttribute('aria-pressed', 'false');
-    expect(btn.className).not.toContain('hmi-menu-toggle--unknown');
+    for (const properties of [{}, { bound: null }]) {
+      const { unmount } = renderToggle(properties);
+      const btn = screen.getByRole('button');
+      expect(btn).toHaveAttribute('aria-pressed', 'false');
+      expect(btn.className).not.toContain('hmi-menu-toggle--unknown');
+      unmount();
+    }
   });
 
   it('shows the expanded glyph and aria-pressed=true when the bound value is true', () => {

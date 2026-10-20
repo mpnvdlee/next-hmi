@@ -952,6 +952,15 @@ describe('usePropBoolean', () => {
     useVariableStore.setState({ values: {}, varMeta: {} });
   });
 
+  it('reads an empty text or NaN as no value only in the null form', () => {
+    for (const blank of ['', '  ', Number.NaN]) {
+      useVariableStore.setState({ values: { 'PLC:B': blank }, varMeta: {} });
+      expect(read({ b: { $var: { path: 'PLC:B' } } }, null).current).toBeNull();
+    }
+    useVariableStore.setState({ values: { 'PLC:B': '' }, varMeta: {} });
+    expect(read({ b: { $var: { path: 'PLC:B' } } }).current).toBe(true);
+  });
+
   it('coerces a static value as getPropBoolean does', () => {
     for (const [raw, expected] of [
       [true, true],

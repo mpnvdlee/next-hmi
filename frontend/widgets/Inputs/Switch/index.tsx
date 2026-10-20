@@ -53,7 +53,10 @@ export default function Switch({ properties, layout }: HmiWidgetProps) {
         style={isOn ? widgetColorStyle(color) : {}}
         type="button"
         role="switch"
-        aria-checked={isUnknown ? 'mixed' : isOn}
+        // `mixed` is not defined for role="switch" and reads as off; busy says
+        // the state is still to come.
+        aria-checked={isOn === true}
+        aria-busy={isUnknown || undefined}
         disabled={isReadOnly || isUnknown}
         onClick={() => writeVariable(!isOn)}
       >

@@ -29,7 +29,7 @@ export default function MenuToggleButton({ properties, layout }: HmiWidgetProps)
   const scope = useHmiScope();
   // Left unset, the field means its declared default (false) — a toggle driven by
   // its actions alone; only a source that has not delivered a value is unknown.
-  const bound = usePropBoolean(properties, 'bound', properties?.bound === undefined ? false : null);
+  const bound = usePropBoolean(properties, 'bound', properties?.bound == null ? false : null);
   const writeBound = useWriteVariable(properties, 'bound');
 
   const iconCollapsed = getPropString(properties, 'iconCollapsed', '☰', evalCtx);
