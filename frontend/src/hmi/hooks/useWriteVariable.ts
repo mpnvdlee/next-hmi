@@ -197,7 +197,15 @@ export function useWriteVariable(
       } else if (meta) {
         const descriptor = scalarDescriptor(meta, index);
         if (descriptor) {
-          const coerced = coerceOpcuaWrite(value, descriptor);
+          let coerced = coerceOpcuaWrite(value, descriptor);
+          if (
+            !coerced.ok &&
+            coerced.reason === 'integer_out_of_range' &&
+            descriptor.dataType === 'int64'
+          ) {
+            // Integer also covers UInt64, whose upper half int64 cannot hold.
+            coerced = coerceOpcuaWrite(value, { ...descriptor, dataType: 'uint64' });
+          }
           if (!coerced.ok) {
             report(coerced.reason);
             return;

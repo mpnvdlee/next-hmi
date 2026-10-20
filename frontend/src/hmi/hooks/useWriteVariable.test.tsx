@@ -85,6 +85,20 @@ describe('useWriteVariable', () => {
     expect(frames()[0].value).toBe(3000000000);
   });
 
+  it('sends an integer beyond the int64 ceiling, which a UInt64 tag holds', () => {
+    useVariableStore.setState({
+      varMeta: { 'PLC:Motor/Speed': { type: { kind: 'scalar', base: 'Integer', array: false } } },
+    });
+
+    const write = writer(bound);
+    write('18446744073709551615');
+    write('-9223372036854775808');
+    write('18446744073709551616');
+
+    expect(frames().map((f) => f.value)).toEqual(['18446744073709551615', '-9223372036854775808']);
+    expect(useHmiStore.getState().pendingToasts).toHaveLength(1);
+  });
+
   it('rejects an out-of-range scalar locally and toasts once', () => {
     useVariableStore.setState({
       varMeta: {

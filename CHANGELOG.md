@@ -39,6 +39,13 @@ heading.
   **Browse Root Node** to `i=2253`, or to a node inside it, to browse it. A tag
   imported earlier from under `Server` stays as it is, enabled and bound.
 
+- **`readNumberValue` is a reserved SDK name.** A custom widget that declares
+  its own `readNumberValue` at module level no longer compiles until the
+  helper is renamed. One declared inside a component or function is
+  unaffected.
+
+### Fixed
+
 - **The test server no longer publishes a Float for a type it cannot
   simulate.** It matches type names regardless of case, accepts `Single`,
   and for anything else refuses to start with the variable and type named.
@@ -46,8 +53,9 @@ heading.
 - **Counters beyond 2^53 drive numeric widgets.** Gauge, Progress Bar, Ring
   Gauge, Trend, Trend Chart, Numeric Stepper and Number Input read an
   `Int64`/`UInt64` value that arrives as text instead of showing `---` or 0,
-  and Numeric Stepper steps it exactly. Custom widgets get the same reading
-  from the new SDK helper `readNumberValue`.
+  and Numeric Stepper steps it exactly, across the full `UInt64` range.
+  Custom widgets get the same reading from the new SDK helper
+  `readNumberValue`.
 
 - **Unsupported test-server types are shown, not hidden.** A variable whose
   stored type the test server cannot simulate — a legacy `Integer`,

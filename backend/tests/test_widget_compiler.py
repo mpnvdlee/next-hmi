@@ -84,9 +84,9 @@ export default function Foo({ properties }: HmiWidgetProps) {
 SDK_SHADOW_WIDGET = """\
 export const schema = { label: { type: 'string' } };
 export default function Foo({ properties }: HmiWidgetProps) {
-  const getPropNumber = (v: unknown) => Number(v);
+  const readNumberValue = (v: unknown) => Number(v);
   const label = usePropString(properties, 'label', '');
-  return React.createElement('div', null, label + getPropNumber('1'));
+  return React.createElement('div', null, label + readNumberValue('1'));
 }
 """
 
@@ -251,7 +251,7 @@ async def test_compile_entry_allows_a_function_local_sdk_name(widget_workspace):
 
     assert ok is True
     body = (build / "Inputs" / "Foo" / "index.js").read_text(encoding="utf-8")
-    assert "const getPropNumber = " in body
+    assert "const readNumberValue = " in body
 
 
 @pytest.mark.asyncio
