@@ -51,6 +51,26 @@ heading.
   variable and type named; pick a supported type for that variable in the
   test-server editor, which marks the old one unsupported.
 
+### Fixed
+
+- **Counters beyond 2^53 drive numeric widgets.** Gauge, Progress Bar, Ring
+  Gauge, Trend, Trend Chart, Numeric Stepper and Number Input read an
+  `Int64`/`UInt64` value that arrives as text instead of showing `---` or 0,
+  and Numeric Stepper shows, steps and accepts it exactly, across the full
+  `UInt64` range, against a min/max given as exact digits too.
+  Custom widgets get the same reading from the new SDK helper
+  `readNumberValue`.
+
+- **Unsupported test-server types are shown, not hidden.** A variable whose
+  stored type the test server cannot simulate — a legacy `Integer`,
+  `Duration`, or none — shows that type, marked unsupported, instead of
+  **Float**; picking any supported type changes it.
+
+- **Range checks agree on very large integers.** A write of an integer beyond
+  2^53 is checked against the variable's min/max exactly in the runtime as
+  well as on the server, for a struct field too, which the runtime now also
+  checks against the member's own type.
+
 ## [1.0.1] - 2026-10-24
 
 Fixes for OPC-UA browse and writes, most of them reported against CODESYS

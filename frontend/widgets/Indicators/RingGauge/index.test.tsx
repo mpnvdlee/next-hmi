@@ -1,6 +1,7 @@
 import '../../testSdk';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { useVariableStore } from '@hmi/store/variableStore';
 import RingGauge from './index';
 
 function renderRing(properties: Record<string, unknown>) {
@@ -43,6 +44,20 @@ describe('RingGauge', () => {
     expect(
       (container.firstElementChild as HTMLElement).style.getPropertyValue('--hmi-ring-gauge-color'),
     ).toBe('');
+  });
+
+  it('reads an integer beyond 2**53, which arrives as its decimal string', () => {
+    useVariableStore.setState({ values: { 'PLC:Counter': '9007199254740993' } });
+    const { container } = renderRing({
+      value: { $var: { path: 'PLC:Counter' } },
+      max: 2 ** 55,
+      decimals: 0,
+      unit: '',
+    });
+    const el = container.firstElementChild as HTMLElement;
+
+    expect(el.style.getPropertyValue('--hmi-ring-gauge-sweep')).toBe('90.00deg');
+    expect(container.querySelector('.hmi-ring-gauge__value')?.textContent).toBe('9007199254740992');
   });
 
   it('clamps a decimals value a binding pushed outside the schema range', () => {

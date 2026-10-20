@@ -205,6 +205,7 @@ Hook variants (call internally `useEvalContext()`; safe to use inside a componen
 Non-hook variants (safe in event handlers, action callbacks, utilities — accept an optional `evalCtx`):
 
 - `getPropString`, `getPropNumber`, `getPropBoolean`
+- `readNumberValue(value)` — an already-resolved value (a `usePropVar` / `useVariable` result, a struct field) as a number: a number as-is, a clean decimal string as the nearest double, otherwise `undefined`.
 - `getPropBinding(props, key)` — returns the underlying `VariableBinding | undefined` (no resolution).
 - `getPropBindingOrStatic(value)` — returns `{ binding, staticValue }` from a property value.
 
@@ -441,7 +442,7 @@ static value in one call:
 ```tsx
 export default function MyWidget({ properties, layout }: HmiWidgetProps) {
   const value = usePropVar(properties, 'variable');
-  const num   = typeof value === 'number' ? value : 0;
+  const num   = readNumberValue(value) ?? 0;
 
   return <div style={selfLayoutStyle(layout)}>{num.toFixed(2)}</div>;
 }
@@ -456,8 +457,8 @@ A live value arrives in the form the `/ws` contract lists under
 [Value forms](../architecture/websocket.md#value-forms). Two matter to a
 widget: an `integer` beyond ±9,007,199,254,740,991 (an `Int64`/`UInt64`
 counter) arrives as its decimal string, so `typeof value === 'number'` is
-false for it — `usePropNumber` reads it as the nearest number, and the string
-itself shows every digit; a `datetime` arrives as ISO 8601 UTC with
+false for it — `readNumberValue(value)` reads it as the nearest number, and
+the string itself shows every digit; a `datetime` arrives as ISO 8601 UTC with
 milliseconds (`"2026-01-02T03:04:05.678Z"`), which `new Date(value)` parses.
 
 If you also need the composite key for write-back, use `getPropBinding` to extract it:

@@ -218,10 +218,15 @@ function rangeBounds(
 function inRange(
   value: unknown,
   [min, max]: readonly [number | undefined, number | undefined],
+  integer: boolean,
 ): boolean {
-  if (typeof value !== 'number') return true;
-  if (min !== undefined && value < min) return false;
-  if (max !== undefined && value > max) return false;
+  // An Integer beyond ±(2**53 − 1) comes out of `integerValue` as its decimal
+  // string; a BigInt compares it against a number bound exactly, as Python does.
+  const comparable =
+    typeof value === 'number' ? value : integer && typeof value === 'string' ? BigInt(value) : null;
+  if (comparable === null) return true;
+  if (min !== undefined && comparable < min) return false;
+  if (max !== undefined && comparable > max) return false;
   return true;
 }
 
@@ -287,7 +292,10 @@ export function coerceOpcuaWrite(
   const bounds = rangeBounds(descriptor);
   if (bounds) {
     const values = Array.isArray(result.value) ? result.value : [result.value];
-    if (!values.every((item) => inRange(item, bounds))) return reject('value_out_of_range');
+    const integer = rule.canonical === 'Integer';
+    if (!values.every((item) => inRange(item, bounds, integer))) {
+      return reject('value_out_of_range');
+    }
   }
   if (!isFloat32(rawType)) return result;
   return {

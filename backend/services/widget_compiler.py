@@ -69,6 +69,7 @@ SDK_NAMES: tuple[str, ...] = (
     "getPropBoolean",
     "getPropBinding",
     "getPropBindingOrStatic",
+    "readNumberValue",
     "usePropVar",
     "usePropString",
     "usePropNumber",

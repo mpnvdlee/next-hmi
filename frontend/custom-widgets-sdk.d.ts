@@ -932,6 +932,12 @@ declare function getPropBindingOrStatic(value: unknown): {
   staticValue: unknown;
 };
 
+/** An already-resolved value — what `usePropVar` / `useVariable` returns, a
+ *  struct field — as a number: a number as-is (`NaN` excepted), or a string that
+ *  is a clean decimal number, the form an integer beyond ±(2**53 − 1) arrives in
+ *  (read as the nearest double). Anything else returns `undefined`. */
+declare function readNumberValue(value: unknown): number | undefined;
+
 declare function usePropVar(properties: Record<string, unknown> | undefined, key: string): unknown;
 
 declare function usePropString(

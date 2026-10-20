@@ -35,6 +35,7 @@ import {
   useItemListProp,
   usePropVar,
   getPropNumber,
+  readNumberValue,
 } from './layoutUtils';
 import type { LayoutConfig, WidgetConfig } from '@shared/types/config';
 import selfLayoutKeys from '@shared/types/__fixtures__/selfLayoutKeys.json';
@@ -851,6 +852,26 @@ describe('getPropNumber', () => {
     expect(getPropNumber({ n: { $var: { path: 'PLC:Setpoint' } } }, 'n', 0, ctx)).toBe(12.5);
     useVariableStore.setState({ values: { 'PLC:Setpoint': 'off' } });
     expect(getPropNumber({ n: { $var: { path: 'PLC:Setpoint' } } }, 'n', 0, ctx)).toBe(0);
+  });
+});
+
+describe('readNumberValue', () => {
+  it('reads an integer beyond 2**53 from the decimal string it arrives as', () => {
+    expect(readNumberValue('9007199254740993')).toBe(2 ** 53);
+    expect(readNumberValue('-18446744073709551615')).toBe(-(2 ** 64));
+  });
+
+  it('passes a number through and reads a clean decimal string', () => {
+    expect(readNumberValue(12.5)).toBe(12.5);
+    expect(readNumberValue(Infinity)).toBe(Infinity);
+    expect(readNumberValue(' -1.5 ')).toBe(-1.5);
+    expect(readNumberValue('2e3')).toBe(2000);
+  });
+
+  it('returns undefined for anything that is not cleanly a number', () => {
+    for (const raw of [undefined, null, NaN, true, {}, [], '', 'abc', '12px', '0x10', '1e400']) {
+      expect(readNumberValue(raw)).toBeUndefined();
+    }
   });
 });
 
