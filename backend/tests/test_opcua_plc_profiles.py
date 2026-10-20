@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import datetime
+import json
 import math
 from typing import Any
 
@@ -31,6 +32,7 @@ from opcua.values import normalize_value
 from services import write_service
 from services.datasource_manager import DatasourceEntry, DatasourceManager
 from tests.opcua_plc_profiles import (
+    FIXTURE_PATH,
     PROFILES,
     Leaf,
     Profile,
@@ -429,8 +431,11 @@ async def test_an_element_write_returns_siblings_beyond_two_to_the_53_as_integer
 # ── The built-in test server ──────────────────────────────────────────────────
 
 _TEST_SERVER_TYPES = [
-    "Boolean", "SByte", "Byte", "Int16", "UInt16", "Int32", "UInt32", "Int64", "UInt64",
-    "Float", "Double", "String", "DateTime",
+    t["name"]
+    for t in json.loads(
+        (FIXTURE_PATH.parent / "opcuaBuiltinTypes.json").read_text(encoding="utf-8")
+    )["types"]
+    if t["inOpcuaTypes"]
 ]
 
 
@@ -525,41 +530,3 @@ async def test_the_built_in_test_server_browses_back_to_its_own_config():
     names = {n[1] for n in expected}
     browsed = [n for n in root["children"] if n["display_name"] in names]
     assert _shape_of_browse(browsed) == expected
-
-
-@pytest.mark.asyncio
-async def test_the_test_server_matches_type_names_regardless_of_case():
-    """Hand-edited or legacy configs spell types in any case; the editor also
-    resolves Single. An unknown name still builds a Float, as it always did."""
-    from opcua.test_server import TestServerInstance
-    from tests.opcua_plc_profiles import free_url
-
-    port = int(free_url("sim-case").split(":")[2].split("/")[0])
-    spelled = {"lower": "int32", "upper": "BOOLEAN", "alias": "Single", "padded": " Double "}
-    config = {
-        "name": "Sim",
-        "type": "opcua-test-server",
-        "settings": {"port": port, "endpoint_path": "/nexthmi/sim/"},
-        "variables": [
-            {"kind": "variable", "display_name": name, "data_type": data_type, "enabled": True}
-            for name, data_type in {**spelled, "unknown": "Mystery"}.items()
-        ],
-    }
-    instance = TestServerInstance("Sim")
-    await instance.start(config)
-    try:
-        engine = DatasourceOpcuaEngine("Sim")
-        async with Client(f"opc.tcp://127.0.0.1:{port}/nexthmi/sim/") as client:
-            engine.attach_client(client, {})
-            root = await engine.browse()
-    finally:
-        await instance.stop()
-
-    types = {n["display_name"]: n["data_type"] for n in root["children"]}
-    assert {name: types[name] for name in [*spelled, "unknown"]} == {
-        "lower": "Int32",
-        "upper": "Boolean",
-        "alias": "Float",
-        "padded": "Double",
-        "unknown": "Float",
-    }

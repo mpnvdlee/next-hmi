@@ -7,7 +7,7 @@ from typing import Any
 import opcua.test_server as test_server_module
 import pytest
 from asyncua import ua
-from core.exceptions import DatasourceConflictError
+from core.exceptions import DatasourceConflictError, DatasourceValidationError
 from opcua.test_server import TestServerInstance as ServerInstance
 from opcua.test_server import TestServerPool as ServerPool
 
@@ -58,6 +58,24 @@ async def test_start_surfaces_port_conflict(fake_server):
     assert "4855" in instance.error
     assert "already in use" in instance.error.lower()
     assert "4855" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_start_refuses_a_type_it_cannot_simulate(fake_server):
+    pool = ServerPool()
+    config = {
+        **_CONFIG,
+        "variables": [{"kind": "variable", "display_name": "Level", "data_type": "Duration"}],
+    }
+    with pytest.raises(DatasourceValidationError) as excinfo:
+        await pool.start("ts1", config)
+
+    instance = pool.get("ts1")
+    assert instance is not None
+    assert instance.running is False
+    assert instance.error == str(excinfo.value)
+    assert "Level" in instance.error
+    assert "Duration" in instance.error
 
 
 @pytest.mark.asyncio

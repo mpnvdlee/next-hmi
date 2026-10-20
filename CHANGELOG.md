@@ -21,6 +21,13 @@ heading.
 
 ### Changed
 
+- **On/off widgets show "unknown" instead of "off" before a value arrives.**
+  An **LED Indicator** shows an empty ring, a **Switch** a hollow track with its
+  thumb midway — and it can't be pressed until it knows its state — and a
+  **Menu Toggle** is dimmed with a dashed outline; pressing it still runs its
+  actions but writes nothing. An empty text or an invalid number from a tag
+  counts as no value too.
+
 - **DateTime tags read as ISO 8601 UTC.** A Text widget bound to a DateTime tag
   showed `2026-01-02 03:04:05+00:00`. It now shows `2026-01-02T03:04:05.678Z`:
   the same form a write accepts and a recipe stores. The time is kept to the
@@ -38,6 +45,11 @@ heading.
   diagnostics and namespace table, hundreds of nodes with no PLC tags. Set
   **Browse Root Node** to `i=2253`, or to a node inside it, to browse it. A tag
   imported earlier from under `Server` stays as it is, enabled and bound.
+
+- **The test server refuses a type it cannot simulate.** It used to publish a
+  Float for any type name it did not know. It now refuses to start, with the
+  variable and type named; pick a supported type for that variable in the
+  test-server editor, which marks the old one unsupported.
 
 ## [1.0.1] - 2026-10-24
 
