@@ -55,6 +55,12 @@ class TestOnVariableChange:
         mgr.on_variable_change("PLC1:Temp", "hello")
         assert len(mgr._buffer) == 0
 
+    def test_buffers_a_counter_beyond_two_to_the_53_as_a_number(self, tmp_path):
+        # The cache holds such a counter as its decimal string.
+        mgr = _make_manager(tmp_path, variables={"PLC1:Count": {"enabled": True, "minInterval": 0}})
+        mgr.on_variable_change("PLC1:Count", "9223372036854775808")
+        assert mgr._buffer[0][2] == 9223372036854775808.0
+
     def test_min_interval_filter(self, tmp_path):
         mgr = _make_manager(tmp_path, variables={"PLC1:Temp": {"enabled": True, "minInterval": 10}})
         mgr.on_variable_change("PLC1:Temp", 1.0)

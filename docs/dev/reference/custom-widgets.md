@@ -452,6 +452,14 @@ Schema:
 variable: { type: 'float', label: 'Value' }
 ```
 
+A live value arrives in the form the `/ws` contract lists under
+[Value forms](../architecture/websocket.md#value-forms). Two matter to a
+widget: an `integer` beyond ±9,007,199,254,740,991 (an `Int64`/`UInt64`
+counter) arrives as its decimal string, so `typeof value === 'number'` is
+false for it — `usePropNumber` reads it as the nearest number, and the string
+itself shows every digit; a `datetime` arrives as ISO 8601 UTC with
+milliseconds (`"2026-01-02T03:04:05.678Z"`), which `new Date(value)` parses.
+
 If you also need the composite key for write-back, use `getPropBinding` to extract it:
 
 ```tsx

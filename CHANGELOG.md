@@ -19,6 +19,26 @@ heading.
   reached. Leaving the datasource stops the browse on the server too, instead
   of letting it finish for nobody.
 
+### Changed
+
+- **DateTime tags read as ISO 8601 UTC.** A Text widget bound to a DateTime tag
+  showed `2026-01-02 03:04:05+00:00`. It now shows `2026-01-02T03:04:05.678Z`:
+  the same form a write accepts and a recipe stores. The time is kept to the
+  millisecond, so a recipe that captures a DateTime writes it back without its
+  microseconds.
+
+- **Very large 64-bit integers arrive as text.** An `Int64`/`UInt64` beyond
+  ±9,007,199,254,740,991 reached the browser as a number and lost its last
+  digits. It now arrives as its exact decimal text. Number fields still read
+  it, and a recipe that captures it downloads it back instead of refusing it as
+  lossy.
+
+- **Browse PLC skips the server's own `Server` object.** A browse from the
+  default Objects root no longer walks `Server` (`i=2253`): its capabilities,
+  diagnostics and namespace table, hundreds of nodes with no PLC tags. Set
+  **Browse Root Node** to `i=2253`, or to a node inside it, to browse it. A tag
+  imported earlier from under `Server` stays as it is, enabled and bound.
+
 ## [1.0.1] - 2026-10-24
 
 Fixes for OPC-UA browse and writes, most of them reported against CODESYS

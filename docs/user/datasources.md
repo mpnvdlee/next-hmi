@@ -113,4 +113,9 @@ OPC-UA's many data types collapse to eight simple ones at the HMI boundary — `
 
 A re-browse compares the server with your tree and lists what was added, modified and *removed from server* for you to accept. A variable the browse did not reach is not counted as removed while the server still has it — so tags imported earlier from under `Server`, or from outside the current browse root, stay as they are, enabled and bound.
 
+Two kinds of value read differently from how a PLC tool shows them:
+
+- **A `DateTime` reads as UTC.** A Text widget bound to one shows `2026-01-02T03:04:05.678Z` — date, `T`, time to the millisecond, `Z` for UTC — whatever the panel's time zone.
+- **A very large `Int64`/`UInt64`** — beyond 9,007,199,254,740,991, a long-running counter for instance — arrives as text holding every digit. A Text widget shows it exactly; a number field still reads it, rounded to the nearest number a browser holds. To write one back, send it as text too.
+
 Next: [bind and subscribe →](subscribing.md)

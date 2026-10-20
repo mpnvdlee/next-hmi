@@ -1,7 +1,13 @@
 """Tests for core.value_types — the real-OPC-UA ↔ simple-type boundary helpers."""
 
+import datetime
+import json
+import uuid
+from decimal import Decimal
+
 import pytest
 from core.value_types import (
+    json_ready,
     representative_opcua_type,
     simplify_variable_tree,
     to_simple_type,
@@ -136,3 +142,29 @@ def test_simplify_variable_tree_converts_variables_without_kind():
     ]
     out = simplify_variable_tree(tree)
     assert out[0]["children"][0]["data_type"] == "Float"
+
+
+def test_json_ready_gives_every_leaf_its_cache_form():
+    value = {
+        "stamp": datetime.datetime(2026, 1, 2, 3, 4, 5, 678901, tzinfo=datetime.UTC),
+        "naive": datetime.datetime(2026, 1, 2, 3, 4, 5),
+        "counters": (2**53 - 1, 2**53, -(2**63)),
+        "flags": [True, None, 0.5, "x"],
+        "blob": bytearray(b"\x00\x01"),
+        "id": uuid.UUID("72962b91-fa75-4ae6-8d28-b404dc7daf63"),
+        "dec": Decimal("1.5"),
+    }
+    assert json_ready(value) == {
+        "stamp": "2026-01-02T03:04:05.678Z",
+        "naive": "2026-01-02T03:04:05.000Z",
+        "counters": [9007199254740991, "9007199254740992", "-9223372036854775808"],
+        "flags": [True, None, 0.5, "x"],
+        "blob": "AAE=",
+        "id": "72962b91-fa75-4ae6-8d28-b404dc7daf63",
+        "dec": "1.5",
+    }
+
+
+def test_json_ready_output_survives_a_round_trip_through_json():
+    value = json_ready([2**64 - 1, datetime.datetime(1601, 1, 1, tzinfo=datetime.UTC)])
+    assert json.loads(json.dumps(value)) == ["18446744073709551615", "1601-01-01T00:00:00.000Z"]
