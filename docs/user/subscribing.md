@@ -49,6 +49,8 @@ The runtime turns failure into a defined visual state — never a stale value pa
 | **Bad quality** | The tag is connected but reported bad / uncertain / stale → the field shows its quality-degraded state (blank or dimmed). |
 | **Disconnected** | The datasource itself is down → treated as bad quality for every tag it owns. |
 
+On/off widgets show *Absent* as a state of its own, so no value is never mistaken for *off*. Until a bound value arrives, an **LED Indicator** shows an empty ring instead of a grey lamp; a **Switch** shows a hollow track with its thumb midway and can't be pressed, since there is no state yet to invert; a **Menu Toggle** shows its collapsed icon dimmed in a dashed outline — pressing it still runs its actions but writes nothing until the state is known.
+
 ## The marks on a widget
 
 A widget whose bindings aren't delivering gets an overlay, and which one it is

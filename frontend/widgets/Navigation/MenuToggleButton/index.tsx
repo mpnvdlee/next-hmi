@@ -22,22 +22,14 @@ export const description = 'Collapses or expands a bound menu state; swaps icon 
 export const category = 'Navigation';
 export const icon = { type: 'builtin', name: 'list' } as const;
 
-// A tag's text "false", "0", "no" or "off" reads as off, the way getPropBoolean
-// reads it; an empty text or NaN says nothing, so it stays off rather than
-// taking getPropBoolean's truthy reading.
-function isOnValue(value: unknown): boolean {
-  if (typeof value === 'string' && value.trim() === '') return false;
-  if (typeof value === 'number' && Number.isNaN(value)) return false;
-  return getPropBoolean({ value }, 'value');
-}
-
 // `bound` must be a $var binding for the toggle to write back; non-$var
 // expressions are read-only and require an `actions.onPress` for side effects.
 export default function MenuToggleButton({ properties, layout }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
   const scope = useHmiScope();
-  const liveValue = usePropVar(properties, 'bound');
-  const bound = isOnValue(liveValue);
+  // Left unset, the field means its declared default (false) — a toggle driven by
+  // its actions alone; only a source that has not delivered a value is unknown.
+  const bound = usePropBoolean(properties, 'bound', properties?.bound === undefined ? false : null);
   const writeBound = useWriteVariable(properties, 'bound');
 
   const iconCollapsed = getPropString(properties, 'iconCollapsed', '☰', evalCtx);
@@ -52,17 +44,18 @@ export default function MenuToggleButton({ properties, layout }: HmiWidgetProps)
   function handleClick(e: React.MouseEvent<HTMLButtonElement>) {
     const actions = properties?.actions as ActionsConfig | undefined;
     executeWidgetActions(actions?.onPress, { scope, evalCtx, anchorEl: e.currentTarget });
-    writeBound(!bound);
+    // An unknown state has no inverse to write; the actions above still run.
+    if (bound !== null) writeBound(!bound);
   }
 
   return (
     <button
       type="button"
-      className="hmi-component hmi-menu-toggle"
+      className={`hmi-component hmi-menu-toggle${bound === null ? ' hmi-menu-toggle--unknown' : ''}`}
       style={selfLayoutStyle(layout)}
       onClick={handleClick}
       aria-label={ariaLabel}
-      aria-pressed={bound}
+      aria-pressed={bound ?? 'mixed'}
     >
       {IconComp ? (
         <React.Suspense fallback={null}>
