@@ -17,6 +17,7 @@ from typing import Any
 
 from asyncua import Client, ua
 from asyncua.common.node import Node
+from asyncua.common.ua_utils import get_base_data_type
 from asyncua.crypto import security_policies
 from asyncua.crypto.uacrypto import CertProperties
 from core.cert_info import log_expiry_warning
@@ -67,6 +68,28 @@ _UNKNOWN_VAR_ATTRS = ("Unknown", False, -1)
 _HAS_COMPONENT = ua.NodeId(ua.ObjectIds.HasComponent)
 
 
+def _builtin_data_type_name(ident: int) -> str:
+    """Name for a namespace-0 DataType id, as browse reports it.
+
+    Only Structure (i=22) and what does not map anywhere else is "struct":
+    "struct" now means "walk this node for members and import it as a
+    folder", so a scalar labelled struct stops being bindable.
+    """
+    if ident == 22:
+        return "struct"  # Structure — VariantType(22) would say ExtensionObject
+    if ident == 26:
+        return "Double"  # Number (abstract)
+    if ident == 27:
+        return "Int64"  # Integer (abstract)
+    if ident == 28:
+        return "UInt64"  # UInteger (abstract)
+    if ident == 29:
+        return "Int32"  # Enumeration — enums travel as Int32 on the wire
+    if 1 <= ident <= 25:
+        return ua.VariantType(ident).name
+    return "struct"
+
+
 def _decode_var_attrs(
     results: list[ua.DataValue], index: int
 ) -> tuple[str, bool, int]:
@@ -94,14 +117,11 @@ def _decode_var_attrs(
                 and dt_nid.NamespaceIndex == 0
                 and isinstance(dt_nid.Identifier, int)
             ):
-                ident = dt_nid.Identifier
-                if 1 <= ident <= 25:
-                    data_type = ua.VariantType(ident).name
-                elif ident == 29:
-                    data_type = "Int32"  # enumeration
-                else:
-                    data_type = "struct"
+                data_type = _builtin_data_type_name(dt_nid.Identifier)
             else:
+                # A server-defined type. Provisional: _read_var_attrs_chunk
+                # resolves it to its base, since a PLC enum or a derived
+                # scalar is just as likely here as a struct.
                 data_type = "struct"
     except Exception:
         pass
@@ -637,6 +657,8 @@ class DatasourceOpcuaEngine:
         self._max_read_ops: int | None = None
         self._max_browse_nodes: int | None = None
         self._max_monitored_items_per_call: int | None = None
+        # Server-defined DataType → builtin name, filled during a browse.
+        self._data_type_names: dict[str, str] = {}
         self._datasource_manager = None
         self._status_callback = None
         self._priority_recompute_callback = None
@@ -1026,6 +1048,8 @@ class DatasourceOpcuaEngine:
             client.get_node(configured_root) if configured_root
             else client.get_objects_node()
         )
+        # Types can change with a PLC download between two browses.
+        self._data_type_names = {}
         result = await self._browse_node(node)
         result["show_root"] = configured_root is not None
         return result
@@ -1177,7 +1201,48 @@ class DatasourceOpcuaEngine:
                 await self._read_var_attrs_chunk(node_ids[:half])
                 + await self._read_var_attrs_chunk(node_ids[half:])
             )
-        return [_decode_var_attrs(results, i) for i in range(len(node_ids))]
+        decoded = [_decode_var_attrs(results, i) for i in range(len(node_ids))]
+        for i, (data_type, writable, array_length) in enumerate(decoded):
+            if data_type != "struct":
+                continue
+            dt_dv = results[i * len(_VAR_ATTRS)]
+            dt_nid = dt_dv.Value.Value if dt_dv.Value is not None else None
+            if isinstance(dt_nid, ua.NodeId) and dt_nid.NamespaceIndex != 0:
+                decoded[i] = (
+                    await self._custom_data_type_name(dt_nid),
+                    writable,
+                    array_length,
+                )
+        return decoded
+
+    async def _custom_data_type_name(self, dt_nid: ua.NodeId) -> str:
+        """Name a server-defined DataType by the builtin it derives from.
+
+        CODESYS publishes every ENUM, and S7 every UDT, as its own DataType in
+        the application namespace, so the namespace alone cannot tell an enum
+        (bind it as Int32) from a struct (walk it for members). The HasSubtype
+        chain can. Resolved once per distinct type per browse — a PLC has tens
+        of types, not thousands, and each hop is a Browse.
+        """
+        key = dt_nid.to_string()
+        cached = self._data_type_names.get(key)
+        if cached is not None:
+            return cached
+        try:
+            base = await get_base_data_type(Node(self._client.uaclient, dt_nid))
+            name = _builtin_data_type_name(base.nodeid.Identifier)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            # An unresolvable type stays "struct": the walker then looks for
+            # HasComponent members, and a struct import without any falls
+            # back to a plain variable, so nothing bindable is lost.
+            logger.debug(
+                "Could not resolve DataType %s for %s: %s", key, self.datasource_name, exc
+            )
+            name = "struct"
+        self._data_type_names[key] = name
+        return name
 
     async def _browse_node(self, node: Node) -> dict[str, Any]:
         """BFS browse: ~2 round-trips per tree level instead of 5 per node.

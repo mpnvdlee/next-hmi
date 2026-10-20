@@ -72,6 +72,28 @@ async def _build_server(url: str) -> tuple[Server, str, str]:
     await machine.add_variable(
         ua.NodeId("Running", idx), "Running", ua.Variant(True, ua.VariantType.Boolean)
     )
+
+    # Server-defined types that are NOT structs, in the same namespace as the
+    # struct types — the namespace alone cannot tell them apart. A CODESYS
+    # ENUM is a subtype of Enumeration; a derived scalar subtypes a builtin.
+    enum_dt = await server.get_node(ua.NodeId(ua.ObjectIds.Enumeration)).add_data_type(
+        ua.NodeId("E_ControlState", idx), "E_ControlState"
+    )
+    await machine.add_variable(
+        ua.NodeId("eControlState", idx),
+        "eControlState",
+        ua.Variant(0, ua.VariantType.Int32),
+        datatype=enum_dt.nodeid,
+    )
+    name_dt = await server.get_node(ua.NodeId(ua.ObjectIds.String)).add_data_type(
+        ua.NodeId("T_Name", idx), "T_Name"
+    )
+    await machine.add_variable(
+        ua.NodeId("sName", idx),
+        "sName",
+        ua.Variant("robot", ua.VariantType.String),
+        datatype=name_dt.nodeid,
+    )
     return server, machine.nodeid.to_string(), battery.nodeid.to_string()
 
 
@@ -186,3 +208,39 @@ async def test_a_scalar_variable_is_still_a_leaf():
     assert _child(root, "Running")["children"] == []
     soc = _child(_child(root, "Battery"), "SOC")
     assert soc["children"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_plc_enum_is_a_bindable_integer_not_a_struct():
+    """A server-defined ENUM shares the struct types' namespace.
+
+    Reporting it as "struct" used to be cosmetic (it showed as String). Once a
+    struct became a folder on import, it would have made every PLC enum
+    unbindable — so the type is resolved through its HasSubtype chain.
+    """
+    url = _free_url("struct-enum")
+    server, machine_id, _ = await _build_server(url)
+    await server.start()
+    try:
+        root = await _browse(url, machine_id)
+    finally:
+        await server.stop()
+
+    state = _child(root, "eControlState")
+    assert state["data_type"] == "Int32"
+    assert state["children"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_derived_scalar_resolves_to_its_builtin():
+    url = _free_url("struct-derived")
+    server, machine_id, _ = await _build_server(url)
+    await server.start()
+    try:
+        root = await _browse(url, machine_id)
+    finally:
+        await server.stop()
+
+    name = _child(root, "sName")
+    assert name["data_type"] == "String"
+    assert name["children"] == []

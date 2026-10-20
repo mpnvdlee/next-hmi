@@ -22,6 +22,12 @@ heading.
   the variable table. Reported against SIMATIC S7-1500 and CODESYS, and it
   affected every server that publishes structs this way.
 
+- **PLC enums and derived types import with their real type.** A CODESYS
+  `ENUM`, or any tag whose type the PLC derives from a builtin, showed up as
+  **String**. Browse now follows the type back to the builtin it derives from,
+  so an enum imports as **Integer** and a derived string as **String** — and
+  only a genuine struct is opened up into a folder.
+
 - **Browse PLC now reads types from servers that limit a read request.** A
   server may cap how many operations one request may carry, and refuses a
   larger one outright — CODESYS Control Win V3 caps it at 100. Browse reads

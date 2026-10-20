@@ -255,7 +255,11 @@ export function buildFromBrowse(
     // it, so importing it as a variable would show it as a String and drop the
     // members the browse walked. It belongs in the tree as a folder, which is
     // also what the property picker's parseApiTree() makes of it.
-    const isStruct = child.data_type === 'struct';
+    // Only with members: a "struct" the browse found nothing inside — a server
+    // that publishes the value but not its fields, or a type the backend could
+    // not resolve — stays the variable it always was rather than becoming an
+    // empty folder with nothing left to bind.
+    const isStruct = child.data_type === 'struct' && (child.children?.length ?? 0) > 0;
     if (child.data_type !== null && child.data_type !== undefined && !isStruct) {
       const entry: VariableEntry = {
         kind: 'variable',

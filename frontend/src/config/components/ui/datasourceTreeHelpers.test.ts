@@ -143,6 +143,18 @@ describe('buildFromBrowse', () => {
     expect((battery.children[1] as VariableEntry).enabled).toBe(false);
   });
 
+  it('keeps a struct the browse found no members in as a variable', () => {
+    // An empty folder would leave nothing to bind; the variable it used to be
+    // at least still carries the value.
+    const tree = buildFromBrowse(
+      [{ node_id: 'ns=3;s=Opaque', display_name: 'Opaque', data_type: 'struct', children: [] }],
+      new Map(),
+    );
+
+    expect(tree[0].kind).toBe('variable');
+    expect((tree[0] as VariableEntry).node_id).toBe('ns=3;s=Opaque');
+  });
+
   it("marks an array of structs from the server's own ValueRank", () => {
     const tree = buildFromBrowse(
       [{ ...batteryBrowse[0], is_array: true, array_length: 4 }],
