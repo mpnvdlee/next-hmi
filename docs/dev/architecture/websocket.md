@@ -139,9 +139,11 @@ read the same forms.
 | array / struct | JSON array / object of the above |
 
 A widget reading a number takes a decimal string as that number
-(`getPropNumber`), so a counter beyond 2**53 still drives a numeric field —
-rounded to the nearest double, as JavaScript holds it — while a text field
-shows every digit.
+(`getPropNumber`, or `readNumberValue` for a value already read with
+`usePropVar` / `useVariable`), so a counter beyond 2**53 still drives a
+numeric field — rounded to the nearest double, as JavaScript holds it — while
+a text field shows every digit. Numeric Stepper steps such a value exactly and
+writes it back as a string.
 
 ## Client → server messages
 

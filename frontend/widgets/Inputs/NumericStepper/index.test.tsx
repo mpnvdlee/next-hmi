@@ -88,6 +88,20 @@ describe('NumericStepper', () => {
     expect(frames()[0].value).toBe(8);
   });
 
+  it('steps an integer beyond 2**53 by its exact digits, the form it arrives in', async () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: '9007199254740993' } });
+    const user = userEvent.setup();
+    const { container } = renderStepper({ variable: BINDING, step: 1 });
+
+    expect(container.querySelector('.hmi-numeric-stepper__value')?.textContent).toBe(
+      '9007199254740992',
+    );
+    await user.click(screen.getByRole('button', { name: 'Increment' }));
+    await user.click(screen.getByRole('button', { name: 'Decrement' }));
+
+    expect(frames().map((frame) => frame.value)).toEqual(['9007199254740994', '9007199254740992']);
+  });
+
   it('clamps the reachable range with the step buttons', () => {
     useVariableStore.setState({ values: { [VAR_KEY]: 100 } });
     renderStepper({ variable: BINDING, step: 1, min: 0, max: 100 });

@@ -51,6 +51,7 @@ export const SDK_NAMES = [
   'getPropBoolean',
   'getPropBinding',
   'getPropBindingOrStatic',
+  'readNumberValue',
   'usePropVar',
   'usePropString',
   'usePropNumber',

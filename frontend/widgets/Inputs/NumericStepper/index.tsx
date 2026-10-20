@@ -40,9 +40,8 @@ export default function NumericStepper({ properties, layout }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
   const meta = useVariableMeta(bindingKey(getPropBinding(properties, 'variable')));
   const rawValue = usePropVar(properties, 'variable');
+  const fValue = readNumberValue(rawValue);
   const writeVariable = useWriteVariable(properties, 'variable');
-
-  const fValue = typeof rawValue === 'number' ? rawValue : undefined;
 
   const label = getPropString(properties, 'label', '', evalCtx);
   const unit = getPropString(properties, 'unit', '', evalCtx);
@@ -102,14 +101,28 @@ export default function NumericStepper({ properties, layout }: HmiWidgetProps) {
     if (Number.isFinite(parsed)) writeVariable(clamp(parsed));
   }
 
+  // An integer beyond ±(2**53 − 1) arrives as its decimal string and reads as
+  // the nearest double, so stepping that double would write a neighbouring
+  // integer. Step the exact digits instead; the write path takes them as-is.
+  function stepBy(current: number, delta: number): number | string {
+    const digits = typeof rawValue === 'string' ? rawValue.trim() : '';
+    if (!Number.isSafeInteger(current) && Number.isInteger(delta) && /^[+-]?\d+$/.test(digits)) {
+      const next = BigInt(digits) + BigInt(delta);
+      if (next < widgetMin) return widgetMin;
+      if (next > widgetMax) return widgetMax;
+      return next.toString();
+    }
+    return clamp(current + delta);
+  }
+
   function handleDecrement() {
     if (fValue == null) return;
-    writeVariable(clamp(fValue - step));
+    writeVariable(stepBy(fValue, -step));
   }
 
   function handleIncrement() {
     if (fValue == null) return;
-    writeVariable(clamp(fValue + step));
+    writeVariable(stepBy(fValue, step));
   }
 
   return (

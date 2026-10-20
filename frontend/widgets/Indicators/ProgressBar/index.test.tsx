@@ -1,6 +1,7 @@
 import '../../testSdk';
 import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { useVariableStore } from '@hmi/store/variableStore';
 import ProgressBar from './index';
 
 function renderBar(properties: Record<string, unknown>) {
@@ -55,6 +56,24 @@ describe('ProgressBar', () => {
         '--hmi-progress-bar-fill',
       ),
     ).toBe('0%');
+  });
+
+  it('fills from an integer beyond 2**53, which arrives as its decimal string', () => {
+    useVariableStore.setState({ values: { 'PLC:Counter': '9007199254740993' } });
+    const { container } = renderBar({
+      variable: { $var: { path: 'PLC:Counter' } },
+      max: 2 ** 55,
+      showValue: true,
+    });
+    const el = container.firstElementChild as HTMLElement;
+
+    expect(el.style.getPropertyValue('--hmi-progress-bar-fill')).toBe('25%');
+    expect(container.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe(
+      '9007199254740992',
+    );
+    expect(container.querySelector('.hmi-progress-bar__value')?.textContent).toBe(
+      '9007199254740993',
+    );
   });
 
   it('clamps a decimals value a binding pushed outside the schema range', () => {

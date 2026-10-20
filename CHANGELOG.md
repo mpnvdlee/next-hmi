@@ -43,6 +43,21 @@ heading.
   simulate.** It matches type names regardless of case, accepts `Single`,
   and for anything else refuses to start with the variable and type named.
 
+- **Counters beyond 2^53 drive numeric widgets.** Gauge, Progress Bar, Ring
+  Gauge, Trend, Trend Chart, Numeric Stepper and Number Input read an
+  `Int64`/`UInt64` value that arrives as text instead of showing `---` or 0,
+  and Numeric Stepper steps it exactly. Custom widgets get the same reading
+  from the new SDK helper `readNumberValue`.
+
+- **Unsupported test-server types are shown, not hidden.** A variable whose
+  stored type the test server cannot simulate — a legacy `Integer`,
+  `Duration`, or none — shows that type, marked unsupported, instead of
+  **Float**; picking any supported type changes it.
+
+- **Range checks agree on very large integers.** A write of an integer beyond
+  2^53 is checked against the variable's min/max exactly in the runtime as
+  well as on the server.
+
 ## [1.0.1] - 2026-10-24
 
 Fixes for OPC-UA browse and writes, most of them reported against CODESYS

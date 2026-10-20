@@ -212,6 +212,10 @@
   min-width: 0;
 }
 
+.cfg-select.cfg-var-type-unsupported {
+  color: var(--cfg-warning-fg, var(--cfg-warning));
+}
+
 /* ── Dual remote/local type (OPC-UA client) ─────────────────── */
 .cfg-var-type-dual {
   display: inline-flex;

@@ -78,6 +78,14 @@ describe('Trend', () => {
     expect(container.querySelector('.hmi-trend__value')?.textContent).toBe('---');
   });
 
+  it('plots and shows an integer beyond 2**53, which arrives as its decimal string', () => {
+    useVariableStore.setState({ values: { [VAR]: '9007199254740993' } });
+    const { container } = renderTrend({ variable: BINDING, decimals: 0 });
+
+    expect(container.querySelector('[data-testid="line-chart"]')?.dataset.points).toBe('1');
+    expect(container.querySelector('.hmi-trend__value')?.textContent).toBe('9007199254740992');
+  });
+
   it('clamps a decimals value a binding pushed outside the schema range', () => {
     useVariableStore.setState({ values: { [VAR]: 1.23456789 } });
     const { container } = renderTrend({ variable: BINDING, decimals: 42 });
