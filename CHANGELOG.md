@@ -46,6 +46,11 @@ heading.
   **Browse Root Node** to `i=2253`, or to a node inside it, to browse it. A tag
   imported earlier from under `Server` stays as it is, enabled and bound.
 
+- **`readNumberValue` is a reserved SDK name.** A custom widget that declares
+  its own `readNumberValue` at module level no longer compiles until the
+  helper is renamed. One declared inside a component or function is
+  unaffected.
+
 - **The test server refuses a type it cannot simulate.** It used to publish a
   Float for any type name it did not know. It now refuses to start, with the
   variable and type named; pick a supported type for that variable in the
