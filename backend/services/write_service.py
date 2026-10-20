@@ -24,7 +24,7 @@ import re
 import struct
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from typing import Any
 
@@ -411,7 +411,7 @@ def _coerce_scalar(value: Any, data_type: Any) -> Any:
 
     if dt in _DATETIME_TYPES:
         if isinstance(value, datetime):
-            return value
+            return _utc_representable(value)
         if isinstance(value, str):
             iso = value.strip()
             if not re.fullmatch(
@@ -424,9 +424,10 @@ def _coerce_scalar(value: Any, data_type: Any) -> Any:
             if iso.endswith("Z"):
                 iso = iso[:-1] + "+00:00"
             try:
-                return datetime.fromisoformat(iso)
+                parsed = datetime.fromisoformat(iso)
             except ValueError as exc:
                 raise WriteCoercionError(COERCION_INVALID_TEMPORAL) from exc
+            return _utc_representable(parsed)
         raise WriteCoercionError(COERCION_INVALID_TEMPORAL)
 
     if dt in _DATE_TYPES:
@@ -516,6 +517,19 @@ def _coerce_scalar(value: Any, data_type: Any) -> Any:
         return fvalue
 
     raise WriteCoercionError(COERCION_UNKNOWN_TYPE)
+
+
+def _utc_representable(value: datetime) -> datetime:
+    """*value*, refused when its instant has no UTC datetime — an offset
+    pushing year 1 or 9999 past the edge. OPC-UA DateTime is UTC, so such a
+    value cannot be stored as entered: the wire encoding would clamp it and
+    the cache could only hold it in its offset form."""
+    if value.tzinfo is not None:
+        try:
+            value.astimezone(UTC)
+        except OverflowError as exc:
+            raise WriteCoercionError(COERCION_INVALID_TEMPORAL) from exc
+    return value
 
 
 def _javascript_number_string(value: int | float) -> str:

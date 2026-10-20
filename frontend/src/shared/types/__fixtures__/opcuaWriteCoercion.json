@@ -305,6 +305,41 @@
     "reason": "invalid_temporal"
   },
   {
+    "name": "DateTime past year 9999 in UTC rejected",
+    "dataType": "DateTime",
+    "value": "9999-12-31T23:59:59-01:00",
+    "ok": false,
+    "reason": "invalid_temporal"
+  },
+  {
+    "name": "DateTime before year 1 in UTC rejected",
+    "dataType": "DateTime",
+    "value": "0001-01-01T00:30:00+01:00",
+    "ok": false,
+    "reason": "invalid_temporal"
+  },
+  {
+    "name": "DateTime at the last UTC day with a positive offset accepted",
+    "dataType": "DateTime",
+    "value": "9999-12-31T23:59:59+01:00",
+    "ok": true,
+    "output": "9999-12-31T23:59:59+01:00"
+  },
+  {
+    "name": "DateTime at the first UTC day with a negative offset accepted",
+    "dataType": "DateTime",
+    "value": "0001-01-01T00:30:00-01:00",
+    "ok": true,
+    "output": "0001-01-01T00:30:00-01:00"
+  },
+  {
+    "name": "DateTime on 0001-01-01 reaching exactly midnight UTC accepted",
+    "dataType": "DateTime",
+    "value": "0001-01-01T01:00:00+01:00",
+    "ok": true,
+    "output": "0001-01-01T01:00:00+01:00"
+  },
+  {
     "name": "valid leap date",
     "dataType": "Date",
     "value": "2028-02-29",

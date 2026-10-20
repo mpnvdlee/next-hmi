@@ -51,266 +51,304 @@
       "simpleType": "Boolean",
       "writeVariantType": "Boolean",
       "testServerType": "Boolean",
-      "inOpcuaTypes": true
+      "inOpcuaTypes": true,
+      "staticDefault": false
     },
     {
       "name": "SByte",
       "simpleType": "Integer",
       "writeVariantType": "SByte",
       "testServerType": "SByte",
-      "inOpcuaTypes": true
+      "inOpcuaTypes": true,
+      "staticDefault": 0
     },
     {
       "name": "Byte",
       "simpleType": "Integer",
       "writeVariantType": "Byte",
       "testServerType": "Byte",
-      "inOpcuaTypes": true
+      "inOpcuaTypes": true,
+      "staticDefault": 0
     },
     {
       "name": "Int16",
       "simpleType": "Integer",
       "writeVariantType": "Int16",
       "testServerType": "Int16",
-      "inOpcuaTypes": true
+      "inOpcuaTypes": true,
+      "staticDefault": 0
     },
     {
       "name": "UInt16",
       "simpleType": "Integer",
       "writeVariantType": "UInt16",
       "testServerType": "UInt16",
-      "inOpcuaTypes": true
+      "inOpcuaTypes": true,
+      "staticDefault": 0
     },
     {
       "name": "Int32",
       "simpleType": "Integer",
       "writeVariantType": "Int32",
       "testServerType": "Int32",
-      "inOpcuaTypes": true
+      "inOpcuaTypes": true,
+      "staticDefault": 0
     },
     {
       "name": "UInt32",
       "simpleType": "Integer",
       "writeVariantType": "UInt32",
       "testServerType": "UInt32",
-      "inOpcuaTypes": true
+      "inOpcuaTypes": true,
+      "staticDefault": 0
     },
     {
       "name": "Int64",
       "simpleType": "Integer",
       "writeVariantType": "Int64",
       "testServerType": "Int64",
-      "inOpcuaTypes": true
+      "inOpcuaTypes": true,
+      "staticDefault": 0
     },
     {
       "name": "UInt64",
       "simpleType": "Integer",
       "writeVariantType": "UInt64",
       "testServerType": "UInt64",
-      "inOpcuaTypes": true
+      "inOpcuaTypes": true,
+      "staticDefault": 0
     },
     {
       "name": "Float",
       "simpleType": "Float",
       "writeVariantType": "Float",
       "testServerType": "Float",
-      "inOpcuaTypes": true
+      "inOpcuaTypes": true,
+      "staticDefault": 0.0
     },
     {
       "name": "Double",
       "simpleType": "Float",
       "writeVariantType": "Double",
       "testServerType": "Double",
-      "inOpcuaTypes": true
+      "inOpcuaTypes": true,
+      "staticDefault": 0.0
     },
     {
       "name": "String",
       "simpleType": "String",
       "writeVariantType": "String",
       "testServerType": "String",
-      "inOpcuaTypes": true
+      "inOpcuaTypes": true,
+      "staticDefault": ""
     },
     {
       "name": "DateTime",
       "simpleType": "DateTime",
       "writeVariantType": "DateTime",
       "testServerType": "DateTime",
-      "inOpcuaTypes": true
+      "inOpcuaTypes": true,
+      "staticDefault": "1970-01-01T00:00:00.000Z"
     },
     {
       "name": "Guid",
       "simpleType": "String",
       "writeVariantType": null,
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": null
     },
     {
       "name": "ByteString",
       "simpleType": "String",
       "writeVariantType": null,
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": null
     },
     {
       "name": "XmlElement",
       "simpleType": "String",
       "writeVariantType": null,
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": null
     },
     {
       "name": "NodeId",
       "simpleType": "String",
       "writeVariantType": null,
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": null
     },
     {
       "name": "ExpandedNodeId",
       "simpleType": "String",
       "writeVariantType": null,
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": null
     },
     {
       "name": "StatusCode",
       "simpleType": "String",
       "writeVariantType": null,
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": null
     },
     {
       "name": "QualifiedName",
       "simpleType": "String",
       "writeVariantType": null,
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": null
     },
     {
       "name": "LocalizedText",
       "simpleType": "String",
       "writeVariantType": null,
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": null
     },
     {
       "name": "DataValue",
       "simpleType": "String",
       "writeVariantType": null,
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": null
     },
     {
       "name": "Variant",
       "simpleType": "String",
       "writeVariantType": null,
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": null
     },
     {
       "name": "DiagnosticInfo",
       "simpleType": "String",
       "writeVariantType": null,
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": null
     },
     {
       "name": "struct",
       "simpleType": "String",
       "writeVariantType": null,
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": null
     },
     {
       "name": "Unknown",
       "simpleType": "String",
       "writeVariantType": null,
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": null
     },
     {
       "name": "Bool",
       "simpleType": "Boolean",
       "writeVariantType": "Boolean",
       "testServerType": "Boolean",
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": false
     },
     {
       "name": "Int8",
       "simpleType": "Integer",
       "writeVariantType": "SByte",
       "testServerType": "SByte",
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": 0
     },
     {
       "name": "UInt8",
       "simpleType": "Integer",
       "writeVariantType": "Byte",
       "testServerType": "Byte",
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": 0
     },
     {
       "name": "Single",
       "simpleType": "Float",
       "writeVariantType": "Float",
       "testServerType": "Float",
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": 0.0
     },
     {
       "name": "Integer",
       "simpleType": "Integer",
       "writeVariantType": "Int32",
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": 0
     },
     {
       "name": "Int",
       "simpleType": "Integer",
       "writeVariantType": "Int32",
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": 0
     },
     {
       "name": "Enumeration",
       "simpleType": "Integer",
       "writeVariantType": "Int32",
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": 0
     },
     {
       "name": "Decimal",
       "simpleType": "Float",
       "writeVariantType": null,
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": null
     },
     {
       "name": "Date",
       "simpleType": "Date",
       "writeVariantType": "String",
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": "1970-01-01"
     },
     {
       "name": "Time",
       "simpleType": "Time",
       "writeVariantType": "String",
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": "00:00:00"
     },
     {
       "name": "Duration",
       "simpleType": "Duration",
       "writeVariantType": "Double",
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": 0.0
     },
     {
       "name": "TimeSpan",
       "simpleType": "Duration",
       "writeVariantType": "Double",
       "testServerType": null,
-      "inOpcuaTypes": false
+      "inOpcuaTypes": false,
+      "staticDefault": 0.0
     }
   ]
 }

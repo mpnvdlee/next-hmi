@@ -167,3 +167,18 @@ def test_json_ready_gives_every_leaf_its_cache_form():
 def test_json_ready_output_survives_a_round_trip_through_json():
     value = json_ready([2**64 - 1, datetime.datetime(1601, 1, 1, tzinfo=datetime.UTC)])
     assert json.loads(json.dumps(value)) == ["18446744073709551615", "1601-01-01T00:00:00.000Z"]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("9999-12-31T23:59:59.5-01:00", "9999-12-31T23:59:59.500-01:00"),
+        ("0001-01-01T00:30:00+01:00", "0001-01-01T00:30:00.000+01:00"),
+    ],
+)
+def test_an_instant_without_a_utc_form_keeps_its_own_offset(text, expected):
+    # A broadcast or a verify compare carrying it must not raise; clamping it
+    # would report a different instant than the one held.
+    value = datetime.datetime.fromisoformat(text)
+    assert json_ready({"stamp": value}) == {"stamp": expected}
+    assert datetime.datetime.fromisoformat(expected) == value
