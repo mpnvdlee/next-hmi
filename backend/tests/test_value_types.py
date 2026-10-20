@@ -29,7 +29,6 @@ from core.value_types import (
         ("UInt16", "Integer"),
         ("UInt32", "Integer"),
         ("UInt64", "Integer"),
-        ("Int", "Integer"),
         ("enumeration", "Integer"),
         ("Float", "Float"),
         ("Single", "Float"),

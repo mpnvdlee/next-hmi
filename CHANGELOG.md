@@ -39,6 +39,10 @@ heading.
   **Browse Root Node** to `i=2253`, or to a node inside it, to browse it. A tag
   imported earlier from under `Server` stays as it is, enabled and bound.
 
+- **The test server no longer publishes a Float for a type it cannot
+  simulate.** It matches type names regardless of case, accepts `Single`,
+  and for anything else refuses to start with the variable and type named.
+
 ## [1.0.1] - 2026-10-24
 
 Fixes for OPC-UA browse and writes, most of them reported against CODESYS

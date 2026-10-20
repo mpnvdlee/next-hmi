@@ -100,6 +100,11 @@ LAN peer discovery (mDNS) and every peer-transfer surface belong to the manager 
 Raw type matching is case-insensitive and trims surrounding whitespace. The
 frontend predictor and backend coercer use the same matrix, guarded by the
 cross-language `opcuaWriteTypes.json` and `opcuaWriteCoercion.json` fixtures.
+The VariantType each raw name is written with, its simple type, and whether
+the test server can build it are pinned in `opcuaBuiltinTypes.json`, together
+with browse's namespace-0 DataType names and the test server's `_VARIANT_MAP`.
+The test server refuses a type outside that map with a 422 and records the
+reason as the instance error.
 Persisted raw strings are never rewritten while loading a datasource; an
 unrecognised persisted type can still be displayed, but a write to it is
 rejected.

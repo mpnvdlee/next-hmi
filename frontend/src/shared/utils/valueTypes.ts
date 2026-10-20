@@ -38,8 +38,9 @@ export const EDITOR_KINDS = [
   '_action',
 ] as const;
 
-// Lower-cased real OPC-UA type -> simple type. Mirrors backend OPCUA_TO_SIMPLE.
-const OPCUA_TO_SIMPLE: Record<string, string> = {
+// Lower-cased real OPC-UA type -> simple type. Mirrors backend OPCUA_TO_SIMPLE
+// (parity: opcuaBuiltinTypes.json).
+export const OPCUA_TO_SIMPLE: Record<string, string> = {
   boolean: 'Boolean',
   bool: 'Boolean',
   sbyte: 'Integer',
@@ -94,8 +95,8 @@ export function representativeOpcuaType(simpleType: string): string {
 }
 
 // Concrete OPC-UA types the test server can synthesise (mirrors backend
-// _VARIANT_MAP). Used by the test-server editor so the user picks the exact
-// wire type rather than only a simple type.
+// _VARIANT_MAP; parity: opcuaBuiltinTypes.json). Used by the test-server
+// editor so the user picks the exact wire type rather than only a simple type.
 export const OPCUA_TYPES = [
   'Boolean',
   'SByte',
@@ -112,19 +113,24 @@ export const OPCUA_TYPES = [
   'DateTime',
 ] as const;
 
-const OPCUA_TYPE_ALIASES: Record<string, string> = {
+export const OPCUA_TYPE_ALIASES: Record<string, string> = {
   bool: 'Boolean',
   int8: 'SByte',
   uint8: 'Byte',
   single: 'Float',
 };
 
+/** The OPCUA_TYPES entry a raw OPC-UA type names, or null when the test
+ *  server cannot synthesise it. */
+export function opcuaTypeOf(raw: string | undefined): string | null {
+  const lower = (raw ?? '').trim().toLowerCase();
+  const match = (OPCUA_TYPES as readonly string[]).find((t) => t.toLowerCase() === lower);
+  return match ?? OPCUA_TYPE_ALIASES[lower] ?? null;
+}
+
 /** Normalise a raw OPC-UA type to one of OPCUA_TYPES (canonical casing). */
 export function canonicalOpcuaType(raw: string | undefined): string {
-  const key = (raw ?? '').trim();
-  const lower = key.toLowerCase();
-  const match = (OPCUA_TYPES as readonly string[]).find((t) => t.toLowerCase() === lower);
-  return match ?? OPCUA_TYPE_ALIASES[lower] ?? 'Float';
+  return opcuaTypeOf(raw) ?? 'Float';
 }
 
 /** True when the simple or raw OPC-UA type resolves to a numeric simple type. */
