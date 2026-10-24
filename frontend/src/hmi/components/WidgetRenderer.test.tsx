@@ -282,6 +282,24 @@ describe('WidgetRenderer', () => {
       expect(useHmiStore.getState().pendingToasts[0].message).toBe('Interaction not permitted');
     });
 
+    it('runs the onInteractionDenied global event on a locked press', async () => {
+      const { useConfigStore } = await import('@shared/store/configStore');
+      useConfigStore.setState({
+        shell: { lockedFeedback: 'none' },
+        globalEvents: {
+          onInteractionDenied: [
+            { type: 'showToast', message: 'Please log in', severity: 'info', discard: 'auto' },
+          ],
+        },
+      });
+      const { container } = renderNode(lockedButton);
+
+      fireEvent.click(container.querySelector('.hmi-lock-overlay')!);
+
+      expect(useHmiStore.getState().pendingToasts.map((t) => t.message)).toEqual(['Please log in']);
+      useConfigStore.setState({ globalEvents: {} });
+    });
+
     it('stays silent in none mode but keeps blocking the press', async () => {
       await setShell({ lockedFeedback: 'none' });
       const { container } = renderNode(lockedButton);

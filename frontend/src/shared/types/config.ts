@@ -645,6 +645,8 @@ export interface GlobalEventsConfig {
   onPageLoaded?: ButtonAction[];
   onHmiLoaded?: ButtonAction[];
   onLocaleChanged?: ButtonAction[];
+  /** A press on a widget whose `interactable` resolves false. */
+  onInteractionDenied?: ButtonAction[];
 }
 
 /**
