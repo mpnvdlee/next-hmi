@@ -73,6 +73,7 @@ const PAGE_SAVE_FIELDS = [
   'showCloseButton',
   'closeOnBackgroundPress',
   'tapThrough',
+  'showModalHeader',
 ] as const satisfies readonly (keyof PageConfig)[];
 
 // Compile-time invariant: every non-structural PageConfig key must appear in PAGE_SAVE_FIELDS.
