@@ -782,7 +782,10 @@ async def write_value(
         current_array: Any = None
         if index_match is not None:
             try:
-                current_values = await engine.read_current_values({registry_path})
+                # Raw, not the cache form: the untouched elements go back to
+                # the server, and a DateTime cannot be written as the string
+                # the cache holds it as.
+                current_values = await engine.read_current_values({registry_path}, raw=True)
                 current_array = current_values.get(build_var_key(ds_name, registry_path))
             except Exception:
                 return WriteOutcome(False, REASON_ARRAY_STATE_UNAVAILABLE)
@@ -802,7 +805,7 @@ async def write_value(
             # one array) starts from the updated array instead of the stale one
             # write_node left behind. The subscription overwrites this with
             # server truth shortly after.
-            ds_entry.cache[build_var_key(ds_name, registry_path)] = write_val
+            ds_entry.cache[build_var_key(ds_name, registry_path)] = DatasourceManager._coerce(write_val)
 
     if verify:
         read_back = await read_value(datasource_manager, opcua_pool, ds_name, path)

@@ -719,8 +719,13 @@ class DatasourceOpcuaEngine:
             return
         await node.write_value(value)
 
-    async def read_current_values(self, paths: set[str]) -> dict[str, Any]:
-        """Bulk-read current values for requested paths and folder structs."""
+    async def read_current_values(self, paths: set[str], *, raw: bool = False) -> dict[str, Any]:
+        """Bulk-read current values for requested paths and folder structs.
+
+        Values come back in their cache form; *raw* keeps the asyncua values
+        instead, for a caller that writes them back to the server — a patched
+        array element write.
+        """
         if not paths or not self._connected or self._client is None:
             return {}
         dm = self._datasource_manager
@@ -788,7 +793,7 @@ class DatasourceOpcuaEngine:
             )
         result: dict[str, Any] = {}
         for (kind, path, field_name, _node), value in zip(requests, values, strict=False):
-            coerced = dm._coerce(value)
+            coerced = value if raw else dm._coerce(value)
             key = build_var_key(self.datasource_name, path)
             if kind == "struct" and field_name is not None:
                 fields = result.get(key)

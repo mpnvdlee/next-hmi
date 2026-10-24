@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import struct
 from dataclasses import dataclass, field
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
 from models.datasource import build_var_key
 from services import write_service
+from services.datasource_manager import DatasourceManager
 
 
 def test_coerce_int32_out_of_range_raises() -> None:
@@ -57,8 +58,6 @@ def test_coerce_bool_accepts_true_false() -> None:
 
 
 def test_coerce_datetime_parses_iso8601() -> None:
-    from datetime import datetime
-
     result = write_service.coerce_write_value("2026-06-15T12:00:00Z", "datetime")
     assert result == datetime(2026, 6, 15, 12, 0, 0, tzinfo=UTC)
 
@@ -177,13 +176,15 @@ class FakeEngine:
         self.writes.append((node_id, value))
         self._store[node_id] = value
 
-    async def read_current_values(self, paths: set[str]) -> dict[str, Any]:
-        # Map back registry path -> composite key using the entry's node_id.
+    async def read_current_values(self, paths: set[str], *, raw: bool = False) -> dict[str, Any]:
+        # Map back registry path -> composite key using the entry's node_id;
+        # values come back in the cache form, as the real engine returns them.
         out = {}
         for path in paths:
             node_id = f"ns=2;s={path}"
             if node_id in self._store:
-                out[build_var_key("PLC", path)] = self._store[node_id]
+                value = self._store[node_id]
+                out[build_var_key("PLC", path)] = value if raw else DatasourceManager._coerce(value)
         return out
 
 
@@ -499,6 +500,25 @@ async def test_indexed_dynamic_array_requires_existing_element():
     valid = await write_service.write_value(dm, pool, "PLC", "Steps[1]", 7)
     assert valid.ok
     assert engine.writes == [("ns=2;s=Steps", [11, 7])]
+
+
+@pytest.mark.asyncio
+async def test_indexed_write_sends_untouched_datetime_elements_as_the_server_holds_them():
+    # The cache holds these elements as strings; written back as strings, the
+    # server would refuse the whole array.
+    first = datetime(2026, 1, 2, 3, 4, 5, 678901, tzinfo=UTC)
+    second = datetime(2026, 6, 7, 8, 9, 10, tzinfo=UTC)
+    engine = FakeEngine()
+    dm = FakeOpcuaDM({
+        "Steps": {"data_type": "DateTime", "writable": True, "is_array": True, "node_id": "ns=2;s=Steps"},
+    })
+    engine._store["ns=2;s=Steps"] = [first, first]
+    outcome = await write_service.write_value(
+        dm, FakeOpcuaPool(engine), "PLC", "Steps[1]", "2026-06-07T08:09:10Z", verify=True,
+    )
+    assert outcome == write_service.WriteOutcome(True)
+    assert engine.writes == [("ns=2;s=Steps", [first, second])]
+    assert dm._entry.cache[build_var_key("PLC", "Steps")] == [str(first), str(second)]
 
 
 @pytest.mark.asyncio
