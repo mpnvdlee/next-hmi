@@ -30,6 +30,7 @@ export type PropertySource =
   | '$recipe'
   | '$recipeList'
   | '$componentProp'
+  | '$overlay'
   | '$page'
   | '$viewport'
   | '$result'
@@ -494,6 +495,18 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     abbr: 'CP',
     produces: ['any'],
     createDefault: () => ({ $componentProp: '' }),
+  },
+  {
+    source: '$overlay',
+    key: '$overlay',
+    contentTier: 3,
+    label: 'Open Dialog Input',
+    description:
+      'An input parameter of a dialog while it is open — empty once it closes. Lights a selection that follows the open popover.',
+    short: 'Dialog Input',
+    abbr: 'DI',
+    produces: ['any'],
+    createDefault: () => ({ $overlay: { page: '', param: '' } }),
   },
   {
     source: '$page',

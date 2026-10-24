@@ -13,6 +13,7 @@ import {
   LanguagesEditor,
   LocEditor,
   PageEditor,
+  OverlayEditor,
   PageIsActiveEditor,
   RandomEditor,
   RecipeEditor,
@@ -76,6 +77,7 @@ const SOURCE_EDITORS: Record<PropertySource, SourceEditorRenderer> = {
   $loc: ({ value, onChange }) => <LocEditor value={value} onChange={onChange} />,
   $urlParam: ({ value, onChange }) => <UrlParamEditor value={value} onChange={onChange} />,
   $pageIsActive: ({ value, onChange }) => <PageIsActiveEditor value={value} onChange={onChange} />,
+  $overlay: ({ value, onChange }) => <OverlayEditor value={value} onChange={onChange} />,
   $if: ({ value, onChange, schema, onOpenBindingPicker }) => (
     <IfEditor
       value={value}

@@ -63,6 +63,7 @@ PROPERTY_SOURCE_KEYS = frozenset({
     "$pageIsActive",
     "$widgetProp",
     "$componentProp",
+    "$overlay",
     "$languages",
     "$stringExpr",
     "$http",
@@ -2532,6 +2533,31 @@ def _check_widget_prop(
     report.warn(path, message, severity="error", code=code)
 
 
+def _check_overlay(payload: dict, ctx: ValidationContext, path: str, report: ValidationReport) -> None:
+    """A `$overlay` reads an input parameter of a Dialogs-folder page while
+    that page is open, so the page must be a dialog that declares it."""
+    page, param = payload.get("page"), payload.get("param")
+    if not isinstance(page, str) or not page or not isinstance(param, str) or not param:
+        report.warn(
+            path, "page or input parameter is empty", severity="warning", code="overlay-empty"
+        )
+        return
+    if ctx.dialogs_page_ids and page not in ctx.dialogs_page_ids:
+        report.warn(
+            path,
+            f"page '{page}' is not in the Dialogs folder — only a dialog has input parameters",
+            severity="error", code="overlay-page",
+        )
+        return
+    declared = ctx.page_property_keys.get(page)
+    if declared is not None and param not in declared:
+        report.warn(
+            path,
+            f"page '{page}' declares no input parameter '{param}'",
+            severity="error", code="overlay-param-unknown",
+        )
+
+
 def _validate_property_value(
     value: Any,
     schema_field: dict | None,
@@ -2721,6 +2747,8 @@ def _validate_property_value(
             )
         else:
             _check_component_prop(payload, schema_field, ctx, path, report)
+    elif source_key == "$overlay" and isinstance(payload, dict):
+        _check_overlay(payload, ctx, path, report)
     elif source_key == "$repeatItem":
         if not isinstance(payload, dict):
             report.add(path, "$repeatItem payload must be an object")

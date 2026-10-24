@@ -183,6 +183,10 @@ function previewNodes(
       <Kw tint="pageIsActive">{pageId ? (pageTitles[pageId] ?? pageId) : '(current page)'}</Kw>
     );
   }
+  if ('$overlay' in value) {
+    const o = value.$overlay as { page?: string; param?: string } | undefined;
+    return <Kw tint="overlay">{o?.page ? `${o.page}.${o.param || '?'}` : '(dialog input)'}</Kw>;
+  }
   if ('$random' in value) {
     if (depth >= MAX_PREVIEW_DEPTH) return <Kw tint="random">random(…)</Kw>;
     const r = value.$random as { min?: unknown; max?: unknown } | undefined;

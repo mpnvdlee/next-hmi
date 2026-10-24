@@ -190,6 +190,14 @@
     ]
   },
   {
+    "key": "$overlay",
+    "label": "Open Dialog Input",
+    "description": "An input parameter of a dialog while it is open — empty once it closes. Lights a selection that follows the open popover.",
+    "produces": [
+      "any"
+    ]
+  },
+  {
     "key": "$page",
     "label": "Page Metadata",
     "description": "Metadata from the current page or another selected page.",
