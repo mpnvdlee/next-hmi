@@ -11,9 +11,8 @@ NEXT HMI replaces proprietary HMI/SCADA panels with one self-hosted server: your
 PLCs on OPC-UA in, live operator screens in any browser out, and the whole
 project as plain JSON and CSV your team can diff, review and version.
 
-No seat licences. No tag counts. No feature paywall — historian, alarms with
-acknowledgement, recipes, users and permissions are all in this build, and there
-is no licence check in it at all.
+No per-seat pricing. No tag counts. No feature paywall — historian, alarms
+with acknowledgement, recipes, users and permissions are all in this build.
 
 ![The NEXT HMI in-browser page editor: the page tree on the left, a live fill-line dashboard in the middle, and the property panel on the right binding each card to an OPC-UA tag.](docs/screenshots/editor.png)
 
