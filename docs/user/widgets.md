@@ -24,7 +24,7 @@ Every widget declares a **schema** — the list of fields it exposes and the typ
 - a `color` field opens a color picker (with theme-token support),
 - an `icon` field opens the icon picker, an `image` field the asset picker,
 - a `select` shows a dropdown of allowed values,
-- a `struct` field (like a Number Input's bound variable) binds a struct variable that carries every member the field asks for.
+- a `struct` field (custom widgets can declare one) binds a struct variable that carries every member the field asks for.
 
 Most fields also carry a small **source pill** — that's where a static value becomes a live binding. Full detail in [Dynamic properties](properties.md).
 

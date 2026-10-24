@@ -81,6 +81,14 @@ heading.
   *Community Edition* or *Enterprise Edition* under the logo, and the runtime's
   loading screen says *Community Edition* in the public build.
 
+- **Number Input binds a plain Float or Integer variable (breaking).** Like
+  the Button and the Numeric Stepper, it no longer takes a
+  `bVisible` / `bEnabled` / `fValue` struct: bind the setpoint itself, and use
+  the widget's own **Visible** and **Interactable** properties to hide or lock
+  it. An Integer variable turns the numpad's point off, and with no min/max on
+  the widget the variable's own range applies. A Number Input still bound to a
+  struct shows `---` until it is rebound; there is no migration.
+
 - **A tap outside a popover reaches what is under it.** With the backdrop set
   to *none*, a tap outside a dialog used to close it and stop there, so moving
   from one machine symbol's popover to the next took two taps. Now that tap

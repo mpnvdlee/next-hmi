@@ -400,7 +400,7 @@ A numeric entry field that writes a number to a variable.
 | `unit` | Unit | `String` |
 | `min` | Min value | `Float` |
 | `max` | Max value | `Float` |
-| `variable` | Variable | `struct` |
+| `variable` | Variable | `Float | Integer` |
 | `allowNegative` | Allow negative values | `Boolean` |
 | `decimals` | Decimal places | `Integer` |
 | `showRangeOnNumpad` | Show range on numpad | `Boolean` |

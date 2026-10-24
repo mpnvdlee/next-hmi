@@ -1785,8 +1785,7 @@
       },
       "variable": {
         "label": "Variable",
-        "group": "Data",
-        "description": "Struct driving the field from the PLC: bVisible and bEnabled gate it, fValue is shown and written."
+        "group": "Data"
       },
       "allowNegative": {
         "label": "Allow negative values",
