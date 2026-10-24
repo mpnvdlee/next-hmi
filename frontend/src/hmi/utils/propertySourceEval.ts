@@ -603,6 +603,17 @@ const STRING_EXPR_FNS: Record<string, (v: string) => string> = {
     const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     return frac ? `${grouped}.${frac}` : grouped;
   },
+  // Works on the text, not the number, so the decimals an inner Round1/Round2
+  // produced survive ("6.0" → "+6.0"). The minus is U+2212, the typographic one.
+  Signed: (v) => {
+    const t = v.trim();
+    const n = parseFloat(t);
+    if (isNaN(n)) return v;
+    const digits = t.replace(/^[+-]/, '');
+    if (n > 0) return `+${digits}`;
+    if (n < 0) return `−${digits}`;
+    return digits;
+  },
 };
 
 /**
