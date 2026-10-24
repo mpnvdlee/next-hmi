@@ -71,6 +71,12 @@ heading.
 
 ### Fixed
 
+- **A user-group check works in page and global events.** An **If** in a
+  page's `onOpen` or `onClose`, or in a global event such as `onPageLoaded`,
+  saw no signed-in user, so `$userGroups` was always false: a "is this an
+  admin?" guard turned the admin away too. Event actions now see the same
+  signed-in user, translations and variables as a button's actions.
+
 - **Counters beyond 2^53 drive numeric widgets.** Gauge, Progress Bar, Ring
   Gauge, Trend, Trend Chart, Numeric Stepper and Number Input read an
   `Int64`/`UInt64` value that arrives as text instead of showing `---` or 0,

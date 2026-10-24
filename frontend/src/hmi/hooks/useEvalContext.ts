@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useVariableStore } from '../store/variableStore';
 import { useTranslationStore } from '@shared/store/translationStore';
-import { useHmiStore } from '../store/hmiStore';
+import { resolveUserField, useHmiStore } from '../store/hmiStore';
 import { useUsersData } from './useUsersData';
 import { useHmiScope } from '../context/HmiScopeContext';
 import { useHostPageId } from '../context/HostPageContext';
@@ -106,14 +106,7 @@ export function useEvalContext(): EvaluationContext {
 
         hostPageId,
 
-        resolveUser: (field) => {
-          const user = currentUsersByScope[scope];
-          if (!user) return null;
-          if (field === 'username') return user.username;
-          if (field === 'groups')
-            return user.groups.map((id) => user.groupLabels[id] ?? id).join(', ');
-          return null;
-        },
+        resolveUser: (field) => resolveUserField(currentUsersByScope[scope], field),
 
         resolveUserGroups: () => currentUsersByScope[scope]?.groups ?? ['guest'],
 

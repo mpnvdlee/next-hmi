@@ -59,6 +59,16 @@ interface UserIdentity {
   groupLabels: Record<string, string>;
 }
 
+/** What `$user` reads for a scope's signed-in user. */
+export function resolveUserField(
+  user: UserIdentity | undefined,
+  field: 'username' | 'groups',
+): string | null {
+  if (!user) return null;
+  if (field === 'username') return user.username;
+  return user.groups.map((id) => user.groupLabels[id] ?? id).join(', ');
+}
+
 export interface AlertEntry {
   id: string;
   title: string;
