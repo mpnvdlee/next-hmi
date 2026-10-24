@@ -16,7 +16,7 @@ from asyncua.common.node import Node
 from core.number_utils import get_config_float
 from models.datasource import build_var_key, is_present_on_server, is_subscribable
 
-from .browse import AddressSpaceBrowser
+from .browse import AddressSpaceBrowser, BrowseProgressSink
 from .compat import apply_asyncua_watchdog_log_patch
 from .discovery import _short_probe_error
 from .limits import OperationLimits, read_operation_limits
@@ -473,8 +473,17 @@ class DatasourceOpcuaEngine:
 
     # ── Browse ────────────────────────────────────────────────────────────────
 
-    async def browse(self, node_id: str | None = None) -> dict:
-        """Walk the address space below *node_id* (or the configured root)."""
+    async def browse(
+        self,
+        node_id: str | None = None,
+        *,
+        on_progress: BrowseProgressSink | None = None,
+    ) -> dict:
+        """Walk the address space below *node_id* (or the configured root).
+
+        *on_progress* receives ``{done, total, nodes, level}`` after every
+        Browse and attribute-Read chunk; see AddressSpaceBrowser.
+        """
         client = self._client
         if not self._connected or client is None:
             raise RuntimeError(f"Not connected: {self.datasource_name}")
@@ -486,7 +495,9 @@ class DatasourceOpcuaEngine:
         browser = AddressSpaceBrowser(
             client, self._operation_limits, datasource_name=self.datasource_name
         )
-        result = await browser.browse(node, saved_node_ids=self._saved_node_ids())
+        result = await browser.browse(
+            node, on_progress=on_progress, saved_node_ids=self._saved_node_ids()
+        )
         result["show_root"] = configured_root is not None
         return result
 

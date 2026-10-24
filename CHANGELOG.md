@@ -11,6 +11,14 @@ heading.
 
 ## [Unreleased]
 
+### Added
+
+- **Browse PLC shows its progress.** Browsing a whole server could run for
+  minutes on a large PLC with only a disabled button to show for it. A bar now
+  fills as the walk goes, with the number of nodes found and how deep it has
+  reached. Leaving the datasource stops the browse on the server too, instead
+  of letting it finish for nobody.
+
 ## [1.0.1] - 2026-10-24
 
 Fixes for OPC-UA browse and writes, most of them reported against CODESYS

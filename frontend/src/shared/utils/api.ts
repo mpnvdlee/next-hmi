@@ -119,6 +119,58 @@ export async function apiJson<T = unknown>(url: string, options?: JsonOptions): 
 }
 
 /**
+ * Splits NDJSON text arriving in arbitrary chunks into parsed lines.
+ *
+ * A network chunk ends wherever the transport cut it — mid-line, mid-character
+ * of a multi-byte sequence even — so the tail of each chunk is held back until
+ * its newline arrives. `flush` hands over a final line sent without one.
+ */
+export function createNdjsonDecoder<T = unknown>() {
+  const text = new TextDecoder();
+  let pending = '';
+  const take = (raw: string): T[] => {
+    const lines = raw.split('\n');
+    pending = lines.pop() ?? '';
+    return lines.filter((line) => line.trim()).map((line) => JSON.parse(line) as T);
+  };
+  return {
+    push(chunk: Uint8Array): T[] {
+      return take(pending + text.decode(chunk, { stream: true }));
+    },
+    flush(): T[] {
+      const rest = pending + text.decode();
+      pending = '';
+      return rest.trim() ? [JSON.parse(rest) as T] : [];
+    },
+  };
+}
+
+/**
+ * GET an NDJSON stream, calling `onLine` for each object as it arrives.
+ *
+ * For long-running endpoints that report progress before their result. Errors
+ * before the stream opens go through `apiErrorFrom` like any `apiJson` call, so
+ * a lost session or a stopped project is reported the same way.
+ */
+export async function apiNdjson<T = unknown>(
+  url: string,
+  onLine: (line: T) => void,
+  options?: { signal?: AbortSignal },
+): Promise<void> {
+  const res = await fetch(withBase(url), { signal: options?.signal });
+  if (!res.ok) throw await apiErrorFrom(res);
+  if (!res.body) throw new Error('Empty response stream');
+  const decoder = createNdjsonDecoder<T>();
+  const reader = res.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    for (const line of decoder.push(value)) onLine(line);
+  }
+  for (const line of decoder.flush()) onLine(line);
+}
+
+/**
  * `apiJson` for an endpoint only the manager serves.
  *
  * `/api/manager/*` lives on the manager at the origin root. A project instance
