@@ -173,4 +173,33 @@ describe('VirtualNumpad', () => {
     await press(user, '-', '9', '9', '9', 'Enter');
     expect(onApply).toHaveBeenCalledWith('-999');
   });
+
+  it('puts every key in one grid, with the hooks the 4-column theme layout places', () => {
+    render(<NumpadHarness />);
+    const grid = document.querySelector('.hmi-virtual-input__keys');
+
+    expect(grid?.querySelectorAll('button')).toHaveLength(15);
+    expect(screen.getByRole('button', { name: 'Back' })).toHaveClass(
+      'hmi-virtual-input__key--back',
+    );
+    expect(screen.getByRole('button', { name: 'Clear' })).toHaveClass(
+      'hmi-virtual-input__key--clear',
+    );
+    expect(screen.getByRole('button', { name: 'Enter' })).toHaveClass(
+      'hmi-virtual-input__key--accent',
+    );
+  });
+
+  it('scopes the numpad layout and accent rules to the numpad grid, not the text keyboard', async () => {
+    // jsdom gives import.meta.url no file scheme; vitest runs from frontend/.
+    const { readFileSync } = await import('node:fs');
+    const hmiCss = readFileSync('src/hmi/styles/hmi.css', 'utf8');
+    const rules = [...hmiCss.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter(
+      ([, selector, body]) =>
+        selector.includes('numpad-columns') || body.includes('--hmi-numpad-accent'),
+    );
+
+    expect(rules.length).toBe(5);
+    for (const [, selector] of rules) expect(selector).toContain('.hmi-virtual-input__keys');
+  });
 });

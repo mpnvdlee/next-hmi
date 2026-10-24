@@ -82,6 +82,26 @@ For example, label tracking is `--hmi-type-label-tracking` backed by
 | `--hmi-radius-lg` | Large radius | `spacing.radius_lg` | `border-radius: var(--hmi-radius-lg);` |
 | `--hmi-shadow` | Elevation shadow | `spacing.shadow` | `box-shadow: var(--hmi-shadow);` |
 
+#### Numpad — edit in the Themes editor → Numpad
+
+Styles `VirtualNumpad` (`hmi-virtual-input__*`), so every numeric input gets it. An empty
+theme value removes the inline property and the fallback in `hmi.tokens.css` shows, which
+reproduces the look from before these tokens existed.
+
+| Token | Controls | Theme JSON path | Empty means |
+| ------ | ------ | ------ | ------ |
+| `--hmi-numpad-columns` | `3`, or `4` = Back / Clear / Enter in a fourth column | `numpad.columns` | (never empty) |
+| `--hmi-numpad-key-size` | Key width and minimum height | `numpad.key_size` | Width of a three-column 188px panel, padding-driven height |
+| `--hmi-numpad-gap` | Gap between keys | `numpad.gap` | `--hmi-virtual-panel-gap-compact` |
+| `--hmi-numpad-key-font` | Key font family | `numpad.key_font` | `--hmi-type-body-font` |
+| `--hmi-numpad-key-font-size` | Digit key font size (Back / Clear / Enter stay caption size) | `numpad.key_font_size` | `--hmi-type-body-size` |
+| `--hmi-numpad-key-font-weight` | Key font weight | `numpad.key_font_weight` | `--hmi-type-body-weight` |
+| `--hmi-numpad-accent` | Enter key colour (hover: `--hmi-numpad-accent-ink`) | `numpad.accent` | `--hmi-accent` |
+
+A custom property cannot drive a selector, so the column count is also written as
+`data-hmi-numpad-columns` on `<html>` (the registry entry's `attribute`); `hmi.css` places
+Back / Clear / Enter in the fourth column under `[data-hmi-numpad-columns='4']`.
+
 > Runtime structural constants (topbar height, select height) are **not** theme
 > tokens. They are defined in `hmi.tokens.css` and component CSS files and are not editable
 > in the Themes editor.
@@ -139,7 +159,7 @@ and the apply mechanism.
    to the project's default theme. The backend only tracks the default pointer
    (`config.json` → `project.defaultTheme`, set via `PUT /api/default-theme`).
 4. **Token registry** — `THEME_TOKENS` is the single registry. Each entry carries
-   the CSS variable (`cssVar`), theme JSON path (`themePath`), `label`, and the
+   the CSS variable (`cssVar`), an optional `<html>` `attribute` mirror, theme JSON path (`themePath`), `label`, and the
    editor UI metadata (`section`, `inputType`, `options`, `group`, `wide`,
    `placeholder`, `min`/`max`/`step`). `themeSections()` derives the Themes editor
    layout from it; `defaultTheme()` returns a fresh clone for Reset / import.
@@ -152,7 +172,7 @@ and the apply mechanism.
    index load) and `LS_THEME_SAVED` (post-save refresh, consumed by `AppInner`,
    which re-fetches with `loadAndApplyThemeTokens({ force: true })` and realigns
    `themeRuntimeStore`) localStorage keys signal theme changes between browser tabs. `ThemeSection` is
-   typed `'colors' | 'typography' | 'spacing'` (lowercase).
+   typed `'colors' | 'typography' | 'spacing' | 'numpad'` (lowercase).
 
 ## Config Tokens
 

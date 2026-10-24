@@ -15,17 +15,20 @@ import themeDefaults from '../themeDefaults.json';
  * `themeDefaults.json` and the matching Pydantic field on the backend.
  */
 
-export type ThemeSection = 'colors' | 'typography' | 'spacing';
+export type ThemeSection = 'colors' | 'typography' | 'spacing' | 'numpad';
 type ThemeInputType = 'color' | 'text' | 'number' | 'font' | 'select';
 
 interface ThemeSelectOption {
   label: string;
-  value: string;
+  value: string | number;
 }
 
 export interface ThemeTokenEntry {
   /** CSS custom property name, e.g. `--hmi-bg`. */
   cssVar: string;
+  /** Also written as this attribute on `<html>`, for CSS that switches layout on the value
+   *  (a custom property cannot drive a selector). */
+  attribute?: string;
   /** Dot-path into ThemeConfig, e.g. `colors.bg`. */
   themePath: string;
   /** Theme section this token belongs to. */
@@ -274,6 +277,73 @@ export const THEME_TOKENS: ThemeTokenEntry[] = [
     wide: true,
     label: 'Shadow',
   },
+
+  // ── Numpad (empty = derived from the rest of the theme) ─────────────────────
+  {
+    cssVar: '--hmi-numpad-columns',
+    attribute: 'data-hmi-numpad-columns',
+    themePath: 'numpad.columns',
+    section: 'numpad',
+    inputType: 'select',
+    options: [
+      { label: '3 — Back, Clear, Enter below the digits', value: 3 },
+      { label: '4 — Back, Clear, Enter beside the digits', value: 4 },
+    ],
+    wide: true,
+    label: 'Columns',
+  },
+  {
+    cssVar: '--hmi-numpad-key-size',
+    themePath: 'numpad.key_size',
+    section: 'numpad',
+    inputType: 'text',
+    placeholder: 'auto',
+    label: 'Key size',
+  },
+  {
+    cssVar: '--hmi-numpad-gap',
+    themePath: 'numpad.gap',
+    section: 'numpad',
+    inputType: 'text',
+    placeholder: 'Small spacing',
+    label: 'Key gap',
+  },
+  {
+    cssVar: '--hmi-numpad-key-font',
+    themePath: 'numpad.key_font',
+    section: 'numpad',
+    inputType: 'font',
+    wide: true,
+    placeholder: 'Body font',
+    label: 'Key font',
+  },
+  {
+    cssVar: '--hmi-numpad-key-font-size',
+    themePath: 'numpad.key_font_size',
+    section: 'numpad',
+    inputType: 'text',
+    placeholder: 'Body size',
+    label: 'Key font size',
+  },
+  {
+    cssVar: '--hmi-numpad-key-font-weight',
+    themePath: 'numpad.key_font_weight',
+    section: 'numpad',
+    inputType: 'number',
+    min: 100,
+    max: 900,
+    step: 100,
+    placeholder: 'Body weight',
+    label: 'Key font weight',
+  },
+  {
+    cssVar: '--hmi-numpad-accent',
+    themePath: 'numpad.accent',
+    section: 'numpad',
+    inputType: 'color',
+    placeholder: 'Accent',
+    label: 'Enter key colour',
+  },
 ];
 
 // ── Derived lookups ───────────────────────────────────────────────────────────
@@ -296,6 +366,7 @@ const SECTION_TITLES: Record<ThemeSection, string> = {
   colors: 'Colors',
   typography: 'Typography',
   spacing: 'Spacing, Radius & Shadow',
+  numpad: 'Numpad',
 };
 
 /** Sections derived from THEME_TOKENS, in registry order. */
@@ -304,11 +375,12 @@ export function themeSections(): ThemeSectionDescriptor[] {
     colors: { key: 'colors', title: SECTION_TITLES.colors, tokens: [] },
     typography: { key: 'typography', title: SECTION_TITLES.typography, tokens: [] },
     spacing: { key: 'spacing', title: SECTION_TITLES.spacing, tokens: [] },
+    numpad: { key: 'numpad', title: SECTION_TITLES.numpad, tokens: [] },
   };
   for (const token of THEME_TOKENS) {
     sections[token.section].tokens.push(token);
   }
-  return [sections.colors, sections.typography, sections.spacing];
+  return [sections.colors, sections.typography, sections.spacing, sections.numpad];
 }
 
 function getThemeValue(theme: ThemeConfig, path: string): string | number {
@@ -324,7 +396,9 @@ export function applyThemeTokens(theme: ThemeConfig): void {
   const root = document.documentElement;
   for (const token of THEME_TOKENS) {
     const value = getThemeValue(theme, token.themePath);
+    // An empty value removes the property, so the stylesheet's derived default shows.
     root.style.setProperty(token.cssVar, String(value));
+    if (token.attribute) root.setAttribute(token.attribute, String(value));
   }
 }
 
