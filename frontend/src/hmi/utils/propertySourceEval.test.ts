@@ -442,6 +442,32 @@ describe('propertySourceEval', () => {
     });
   });
 
+  describe('$and / $or', () => {
+    const status = { $var: { path: 'PLC1:Status' } };
+    const below = { $compare: { left: 5, operator: '<', right: 3 } };
+
+    it('is true for $and only when every item is', () => {
+      expect(evaluatePropertyValue({ $and: [true, status] }, mockContext)).toBe(true);
+      expect(evaluatePropertyValue({ $and: [status, below] }, mockContext)).toBe(false);
+    });
+
+    it('is true for $or when any item is', () => {
+      expect(evaluatePropertyValue({ $or: [below, status] }, mockContext)).toBe(true);
+      expect(evaluatePropertyValue({ $or: [below, false] }, mockContext)).toBe(false);
+    });
+
+    it('nests, and reads a missing value as false', () => {
+      const nested = { $or: [{ $and: [status, { $var: { path: 'PLC1:Nope' } }] }, below] };
+      expect(evaluatePropertyValue(nested, mockContext)).toBe(false);
+    });
+
+    it('is false for an empty or malformed list', () => {
+      expect(evaluatePropertyValue({ $and: [] }, mockContext)).toBe(false);
+      expect(evaluatePropertyValue({ $or: [] }, mockContext)).toBe(false);
+      expect(evaluatePropertyValue({ $and: { value: true } }, mockContext)).toBe(false);
+    });
+  });
+
   describe('$formula wrapper', () => {
     const formula = (expression: string, wildcards: Record<string, unknown> = {}) =>
       evaluatePropertyValue({ $formula: { expression, wildcards } }, mockContext);

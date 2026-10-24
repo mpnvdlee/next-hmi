@@ -19,6 +19,15 @@ heading.
   as a file, a compose file and `install.sh`, for a machine that cannot reach a
   registry.
 
+- **AND (`$and`) and OR (`$or`) combine conditions.** Two new Boolean
+  sources take a list of conditions — a variable, a comparison, an Invert, a
+  group check, another AND / OR — and are true when every one, or any
+  one, is. A button can then be interactable only while the machine is ready
+  *and* the door is shut, without a helper tag in the PLC. They fit every
+  Boolean field, an `$if` condition and the If action's condition; the editor
+  lists one card per condition with **+ Add condition**, and the backend
+  flags a list with no conditions as an error.
+
 - **The numpad takes its look from the theme.** A new **Numpad** section in
   the theme settings sets the key size, the gap between keys, the key font
   and the Enter key colour, and picks one of two layouts: 3 columns, with

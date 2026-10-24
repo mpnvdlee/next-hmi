@@ -32,6 +32,8 @@
   --cfg-source-if: #7c3aed;
   --cfg-source-compare: #9333ea;
   --cfg-source-not: #be185d;
+  --cfg-source-and: #be123c;
+  --cfg-source-or: #e11d48;
   --cfg-source-formula: #b45309;
   --cfg-source-switch: #c026d3;
   --cfg-source-random: #d97706;

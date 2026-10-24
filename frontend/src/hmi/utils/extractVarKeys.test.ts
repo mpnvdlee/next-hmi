@@ -53,6 +53,11 @@ describe('extractVarKeys', () => {
     ]);
   });
 
+  it('finds $var inside every $and / $or item', () => {
+    const value = { $and: [v('PLC:ready'), { $or: [{ $not: { value: v('PLC:fault') } }, true] }] };
+    expect(extractVarKeys(value).slice().sort()).toEqual(['PLC:fault', 'PLC:ready']);
+  });
+
   it('de-duplicates repeated keys', () => {
     expect(extractVarKeys({ a: v('PLC:x'), b: v('PLC:x') })).toEqual(['PLC:x']);
   });

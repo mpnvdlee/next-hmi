@@ -78,6 +78,20 @@ const ICONS: Record<PropertySource, ReactNode> = {
       <path d="M4 3l16 18" />
     </Icon>
   ),
+  // $and — an AND gate.
+  $and: (
+    <Icon viewBox="0 0 24 24" strokeWidth={2}>
+      <path d="M6 5h6a7 7 0 0 1 0 14H6z" />
+      <path d="M2 9h4M2 15h4M19 12h3" />
+    </Icon>
+  ),
+  // $or — an OR gate.
+  $or: (
+    <Icon viewBox="0 0 24 24" strokeWidth={2}>
+      <path d="M5 5c4 0 9 1 13 7c-4 6-9 7-13 7c2-4 2-10 0-14z" />
+      <path d="M2 9h5M2 15h5M18 12h4" />
+    </Icon>
+  ),
   // $formula — the four operators as a calculator keypad.
   $formula: (
     <Icon viewBox="0 0 24 24" strokeWidth={2}>
