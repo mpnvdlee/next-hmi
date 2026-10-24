@@ -113,6 +113,7 @@ Each of these only works in a field of the matching type.
 | `$recipeList` | Record[] | `{ $recipeList: { type } }` | A dataset type's saved recipes as grid rows `{ id, name, description, lastLoaded }` (empty `type` = all types). Offered on `record-list` fields; read with `useRecordListProp` |
 | `$compare` | Boolean | `{ $compare: { left, operator, right } }` | A comparison result (`>` `<` `>=` `<=` `===` `!==`). The ordering operators coerce both sides to numbers, treating a non-numeric side as `0`. `===` / `!==` are **not** strict despite the spelling: `looseEquals` compares identity first, then number-vs-string by `parseFloat`, so `5 === "5"` is `true` while `true === 1` is `false` |
 | `$not` | Boolean | `{ $not: { value } }` | The inverse of a boolean `value`. A number counts as a 0/1 flag (`0` → `true`, anything else → `false`); any other input, or none, is *absent* |
+| `$and` / `$or` | Boolean | `{ $and: [cond, …] }` / `{ $or: [cond, …] }` | `$and` is `true` when every item is truthy, `$or` when any is; items are Boolean property values of any source, nested `$and` / `$or` included. An empty or non-list payload is `false` (the validator reports `and-empty` / `or-empty` as an error, and a non-list as a structural error) |
 | `$formula` | Float | `{ $formula: { expression, wildcards } }` | Arithmetic like `({1} - 32) / 1.8`: numbers, `{n}` placeholders filled from `wildcards` (each a full property value, coerced with `toNumber`), `+ - * /`, unary minus and parentheses. An unparseable expression, a placeholder with no numeric value, a division by zero or a non-finite result makes the whole value *absent*. The grammar lives in `frontend/src/hmi/utils/formula.ts`; the backend mirrors it only to flag syntax errors |
 | `$pageIsActive` | Boolean | `{ $pageIsActive: { page? } }` | `true` when the target page is active |
 | `$languages` | String[] | `{ $languages: {} }` | The project's language list |
@@ -250,7 +251,7 @@ operand.
 
 | Slot | Picker lists |
 |---|---|
-| `$if` condition, `$not` value, action `if` condition | `Boolean`, read-only — no truthiness of another type; test an `Integer` or `String` through `$compare` (`BOOLEAN_SLOT`) |
+| `$if` condition, `$not` value, `$and` / `$or` item, action `if` condition | `Boolean`, read-only — no truthiness of another type; test an `Integer` or `String` through `$compare` (`BOOLEAN_SLOT`) |
 | `$compare` left / right, `$switch` value and case `when` | Any type — ordering coerces with `toNumber`, `===` / `!==` use `looseEquals` |
 | `$formula` operand | `Float` and `Integer`, read-only — each operand is coerced to a number |
 | `$stringExpr` / `$http` wildcard | Any type — it is formatted into text |

@@ -15,6 +15,8 @@ export type PropertySource =
   | '$if'
   | '$compare'
   | '$not'
+  | '$and'
+  | '$or'
   | '$formula'
   | '$random'
   | '$switch'
@@ -320,6 +322,26 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     abbr: '!',
     produces: ['boolean'],
     createDefault: () => ({ $not: { value: { $var: { path: '' } } } }),
+  },
+  {
+    source: '$and',
+    key: '$and',
+    contentTier: 3,
+    label: 'AND',
+    description: 'True when every condition is true.',
+    abbr: 'AND',
+    produces: ['boolean'],
+    createDefault: () => ({ $and: [{ $var: { path: '' } }, { $var: { path: '' } }] }),
+  },
+  {
+    source: '$or',
+    key: '$or',
+    contentTier: 3,
+    label: 'OR',
+    description: 'True when any condition is true.',
+    abbr: 'OR',
+    produces: ['boolean'],
+    createDefault: () => ({ $or: [{ $var: { path: '' } }, { $var: { path: '' } }] }),
   },
   {
     source: '$formula',

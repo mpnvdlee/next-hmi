@@ -173,6 +173,16 @@ export interface NotSource {
   };
 }
 
+/** $and: true when every listed boolean is true */
+export interface AndSource {
+  $and: unknown[];
+}
+
+/** $or: true when any listed boolean is true */
+export interface OrSource {
+  $or: unknown[];
+}
+
 /** $formula: arithmetic over `{n}` placeholders, e.g. "({1} - 32) / 1.8" */
 export interface FormulaSource {
   $formula: {

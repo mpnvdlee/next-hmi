@@ -529,18 +529,20 @@ def _condition_codes(ctx, where: str, condition) -> list[str]:
         _validate_property_value(
             {"$if": {"condition": condition, "true": 1, "false": 2}}, None, ctx, "/p", report,
         )
+    elif where in ("$and", "$or"):
+        _validate_property_value({where: [{"$static": True}, condition]}, None, ctx, "/p", report)
     else:
         _validate_property_value({"$not": {"value": condition}}, None, ctx, "/p", report)
     return [w.code for w in report.warnings]
 
 
-@pytest.mark.parametrize("where", ["action", "$if", "$not"])
+@pytest.mark.parametrize("where", ["action", "$if", "$not", "$and", "$or"])
 def test_condition_takes_a_boolean_not_any_value_truthiness(ctx, where):
     assert _condition_codes(ctx, where, {"$var": {"path": "PLC:Motor/Running"}}) == []
     assert _condition_codes(ctx, where, {"$var": {"path": "PLC:Motor/Speed"}}) == ["var-type"]
 
 
-@pytest.mark.parametrize("where", ["action", "$if", "$not"])
+@pytest.mark.parametrize("where", ["action", "$if", "$not", "$and", "$or"])
 def test_condition_compares_a_number_through_compare(ctx, where):
     compare = {"$compare": {
         "left": {"$var": {"path": "PLC:Motor/Speed"}}, "operator": ">", "right": 80,
@@ -612,6 +614,35 @@ def test_not_validates_nested_value(ctx):
         None, ctx, "/p", report,
     )
     assert "compare-operand-empty" in {w.code for w in report.warnings}
+
+
+@pytest.mark.parametrize("key", ["$and", "$or"])
+def test_and_or_reports(ctx, key):
+    name = key[1:]
+    report = ValidationReport()
+    _validate_property_value({key: []}, None, ctx, "/p", report)
+    assert (_warn(report).code, _warn(report).severity) == (f"{name}-empty", "error")
+
+    report = ValidationReport()
+    _validate_property_value({key: [{"$static": True}, None]}, None, ctx, "/p", report)
+    w = _warn(report)
+    assert (w.path, w.code, w.severity) == (f"/p/{key}/1", f"{name}-item-empty", "warning")
+
+    report = ValidationReport()
+    _validate_property_value({key: {"value": True}}, None, ctx, "/p", report)
+    assert [f.message for f in report.findings] == [f"{key} payload must be a list of conditions"]
+
+
+@pytest.mark.parametrize("key", ["$and", "$or"])
+def test_and_or_fill_a_boolean_field_and_nest(ctx, key):
+    report = ValidationReport()
+    value = {key: [{"$not": {"value": {"$static": False}}}, {"$and": [{"$static": True}]}]}
+    _validate_property_value(value, {"type": "Boolean"}, ctx, "/p", report)
+    assert report.warnings == [] and report.findings == []
+
+    report = ValidationReport()
+    _validate_property_value({key: [{"$static": True}]}, {"type": "Integer"}, ctx, "/p", report)
+    assert _warn(report).code == "source-type"
 
 
 def test_formula_empty(ctx):

@@ -64,6 +64,22 @@
     ]
   },
   {
+    "key": "$and",
+    "label": "AND",
+    "description": "True when every condition is true.",
+    "produces": [
+      "boolean"
+    ]
+  },
+  {
+    "key": "$or",
+    "label": "OR",
+    "description": "True when any condition is true.",
+    "produces": [
+      "boolean"
+    ]
+  },
+  {
     "key": "$formula",
     "label": "Formula",
     "description": "A number calculated from values with + − × ÷ and parentheses.",

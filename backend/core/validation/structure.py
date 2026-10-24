@@ -53,6 +53,8 @@ PROPERTY_SOURCE_KEYS = frozenset({
     "$switch",
     "$compare",
     "$not",
+    "$and",
+    "$or",
     "$formula",
     "$random",
     "$user",
@@ -2206,8 +2208,8 @@ def _validate_wildcards(
             _validate_property_value(wildcard_value, None, ctx, wildcard_path, report)
 
 
-# What an `$if` condition and a `$not` operand take: a Boolean, not any value's
-# truthiness (the editor's BOOLEAN_SLOT).
+# What an `$if` condition, a `$not` operand and an `$and`/`$or` item take: a
+# Boolean, not any value's truthiness (the editor's BOOLEAN_SLOT).
 _CONDITION_SCHEMA: dict[str, str] = {"type": "boolean"}
 
 
@@ -2715,6 +2717,18 @@ def _validate_property_value(
             payload.get("value"), _CONDITION_SCHEMA, ctx, f"{path}/$not/value", report,
             code="not-value-empty", message="value to invert is unset",
         )
+    elif source_key in ("$and", "$or"):
+        name = source_key[1:]
+        if not isinstance(payload, list):
+            report.add(path, f"{source_key} payload must be a list of conditions")
+        elif not payload:
+            report.warn(path, f"{name} has no conditions", severity="error", code=f"{name}-empty")
+        else:
+            for i, item in enumerate(payload):
+                _validate_slot(
+                    item, _CONDITION_SCHEMA, ctx, f"{path}/{source_key}/{i}", report,
+                    code=f"{name}-item-empty", message="condition is unset",
+                )
     elif source_key == "$formula" and isinstance(payload, dict):
         expression = payload.get("expression")
         if not isinstance(expression, str) or expression.strip() == "":
