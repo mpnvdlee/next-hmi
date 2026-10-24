@@ -58,6 +58,7 @@ describe('toSimpleType', () => {
     expect(toSimpleType('Bool')).toBe('Boolean');
     expect(toSimpleType('Int32')).toBe('Integer');
     expect(toSimpleType('UInt64')).toBe('Integer');
+    expect(toSimpleType('Int')).toBe('Integer');
     expect(toSimpleType('Double')).toBe('Float');
     expect(toSimpleType('Single')).toBe('Float');
     expect(toSimpleType('ByteString')).toBe('String');
