@@ -2041,6 +2041,18 @@ def validate_action_targets(actions: Any, ctx: ValidationContext, path: str, rep
 
 
 _WILDCARD_RE = re.compile(r"\{([^{}]*)\}")
+_PLACEHOLDER_FN_RE = re.compile(r"([A-Za-z]\w*)\((.+)\)", re.ASCII)
+
+
+def _placeholder_key(body: str) -> str | None:
+    """The wildcard key of a placeholder body such as `Trim(ToLower(1))`, or None
+    when it is not one. Mirrors `parsePlaceholder` in
+    frontend/src/hmi/utils/propertySourceEval.ts: the digits in a function name
+    (`Round2`) are not a key."""
+    rest = body.strip()
+    while (m := _PLACEHOLDER_FN_RE.fullmatch(rest)):
+        rest = m.group(2).strip()
+    return rest if re.fullmatch(r"[0-9]+", rest) else None
 
 # `$formula` grammar, mirrored from frontend/src/hmi/utils/formula.ts:
 #   expr := term (("+" | "-") term)*     term := unary (("*" | "/") unary)*
@@ -2134,7 +2146,9 @@ def _validate_wildcards(
     referenced: set[str] = set()
     for template in templates:
         for match in _WILDCARD_RE.finditer(template):
-            referenced |= set(re.findall(r"\d+", match.group(1)))
+            key = _placeholder_key(match.group(1))
+            if key is not None:
+                referenced.add(key)
     code_prefix = source_key.lstrip("$").lower()
     for n in sorted(referenced, key=int):
         wildcard_value = wildcards.get(n)
