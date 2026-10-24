@@ -25,6 +25,13 @@ export const ACTION_TYPES = [
     description: 'Closes a named dialog or page overlay, or the top-most one when left empty.',
   },
   {
+    type: 'navigateToPage' as const,
+    label: 'Navigate To Page',
+    category: 'Screens',
+    description:
+      'Closes every open dialog and overlay, then goes to a page — a fixed one, or the one a dialog input parameter names.',
+  },
+  {
     type: 'writeDataVariable' as const,
     label: 'Write Data Variable',
     category: 'Machine',
@@ -108,6 +115,7 @@ export const ACTION_TYPE_TINT: Record<ButtonAction['type'], string> = {
   openDialog: 'componentProp',
   openPageOverlay: 'page',
   closePageOverlay: 'static',
+  navigateToPage: 'pageIsActive',
   writeDataVariable: 'var',
   toggleDataVariable: 'not',
   editValue: 'formula',

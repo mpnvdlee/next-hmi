@@ -45,6 +45,7 @@ import { useVariableStore } from '@hmi/store/variableStore';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { HmiScopeContext } from '@hmi/context/HmiScopeContext';
 import { AlertModal } from '@hmi/components/AlertModal';
+import { ActionNavigation } from '@hmi/components/ActionNavigation';
 import { HmiToastStack } from '@hmi/components/ToastStack';
 import { ModalStack } from '@hmi/components/ModalStack';
 import { useResolvedPageOverlays } from '@hmi/hooks/useOpenOverlays';
@@ -546,6 +547,7 @@ export default function PreviewView() {
                 </div>
                 <ModalStack />
                 <AlertModal scope="runtime:preview" />
+                <ActionNavigation />
                 <HmiToastStack />
               </div>
             </PageDataSettleGate>
@@ -654,6 +656,7 @@ export default function PreviewView() {
                 <ModalStack />
               </div>
               <AlertModal scope="runtime:preview" />
+              <ActionNavigation />
               <HmiToastStack />
             </div>
           </PageDataSettleGate>

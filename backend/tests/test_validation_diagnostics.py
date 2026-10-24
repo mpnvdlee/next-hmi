@@ -1092,3 +1092,89 @@ def test_menu_item_linking_to_a_navigable_page_is_silent(nav_ctx):
         {"type": "menu-items"}, nav_ctx, "/p", report,
     )
     assert report.warnings == []
+
+
+def test_page_field_naming_no_page():
+    report = ValidationReport()
+    _validate_property_value("gone", {"type": "String", "format": "page"}, _root_ctx(), "/p", report)
+    assert (_warn(report).code, _warn(report).severity) == ("page-unknown", "error")
+
+
+def _navigate(page_id, ctx: ValidationContext) -> ValidationReport:
+    report = ValidationReport()
+    _validate_action({"type": "navigateToPage", "pageId": page_id}, ctx, "/a", report)
+    return report
+
+
+def _dialog_scope(**inputs) -> ValidationContext:
+    return replace(_root_ctx(), input_schema=inputs)
+
+
+def test_navigate_to_a_navigable_page_is_silent():
+    report = _navigate("home", _root_ctx())
+    assert (report.findings, report.warnings) == ([], [])
+
+
+def test_navigate_to_an_unknown_page():
+    report = _navigate("gone", _root_ctx())
+    assert [f.message for f in report.findings] == ["action target page 'gone' does not exist"]
+    assert report.warnings == []
+
+
+def test_navigate_to_a_page_file_no_root_lists():
+    # The file exists, so the page-field finding stays quiet, but nothing routes there.
+    ctx = replace(_root_ctx(), page_ids={"motor-detail", "home", "orphan"})
+    report = _navigate("orphan", ctx)
+    assert report.findings == []
+    assert [(w.code, w.path) for w in report.warnings] == [("page-unknown", "/a/pageId")]
+
+
+def test_navigate_to_the_dialogs_folder():
+    w = _warn(_navigate("motor-detail", _root_ctx()))
+    assert (w.code, w.severity, w.path) == ("page-not-navigable", "error", "/a/pageId")
+    assert "Open Dialog" in w.message
+
+
+def test_navigate_to_a_page_input():
+    ctx = _dialog_scope(stationPage={"type": "String", "format": "page"})
+    assert _navigate({"$componentProp": "stationPage"}, ctx).warnings == []
+
+
+@pytest.mark.parametrize(
+    "inputs",
+    [{"stationPage": {"type": "String"}}, {}],
+    ids=["not-format-page", "undeclared"],
+)
+def test_navigate_to_an_input_that_is_not_a_page(inputs):
+    w = _warn(_navigate({"$componentProp": "stationPage"}, _dialog_scope(**inputs)))
+    assert (w.code, w.severity) == ("navigate-input-not-page", "error")
+
+
+def test_navigate_to_an_input_outside_a_dialog():
+    ctx = replace(_root_ctx(), input_scope=False)
+    assert _warn(_navigate({"$componentProp": "stationPage"}, ctx)).code == "navigate-input-not-page"
+
+
+@pytest.mark.parametrize("page_id", [{"$static": "home"}, {"$var": {"path": "PLC:Page"}}])
+def test_navigate_takes_nothing_else(page_id):
+    assert _warn(_navigate(page_id, _root_ctx())).code == "navigate-target-invalid"
+
+
+def test_open_dialog_passing_a_page_input_checks_the_page():
+    ctx = replace(
+        _root_ctx(),
+        page_properties={"motor-detail": {"stationPage": {"type": "String", "format": "page"}}},
+    )
+    for value, code in [("gone", "page-unknown"), ("motor-detail", "page-not-navigable")]:
+        report = ValidationReport()
+        _validate_action(
+            {"type": "openDialog", "pageId": "motor-detail", "componentProperties": {"stationPage": value}},
+            ctx, "/a", report,
+        )
+        assert [w.code for w in report.warnings] == [code]
+    report = ValidationReport()
+    _validate_action(
+        {"type": "openDialog", "pageId": "motor-detail", "componentProperties": {"stationPage": "home"}},
+        ctx, "/a", report,
+    )
+    assert report.warnings == []

@@ -13,6 +13,8 @@ import { useTranslationStore } from '@shared/store/translationStore';
 import { randomUuid } from '@shared/utils/id';
 import { hasPropertySourceKey } from '@shared/types/propertyValueGuards';
 import { beginAsyncAction } from '@hmi/utils/actionDispatcher';
+import { useConfigStore } from '@shared/store/configStore';
+import { findPageNodeById } from '@shared/utils/pageTree';
 
 interface ActionContext {
   scope?: string;
@@ -149,6 +151,15 @@ export function executeWidgetActions(
 
     if (action.type === 'closePageOverlay') {
       useHmiStore.getState().closePageOverlay(action.pageId);
+      continue;
+    }
+
+    if (action.type === 'navigateToPage') {
+      const pageId = String(evaluatePropertyValue(action.pageId, evalCtx) ?? '');
+      // Only the `pages` root routes; an input naming nothing there does nothing.
+      if (pageId && findPageNodeById(useConfigStore.getState().pages, pageId)) {
+        useHmiStore.getState().navigateToPage(pageId);
+      }
       continue;
     }
 

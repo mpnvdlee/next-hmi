@@ -341,8 +341,11 @@ and page-group nodes, each page's widgets in its own document under
 `dialogs/`. It is the **Dialogs folder**: the nodes in it are never navigated
 to, only opened by `openDialog` — `openPageOverlay` is the same modal over a
 node in the `pages` root, and takes no parameters. An overlay action naming a
-node of the other root is an `overlay-wrong-root` error, and a menu item or
-`format: 'page'` field naming a Dialogs-folder page is `page-not-navigable`.
+node of the other root is an `overlay-wrong-root` error, and a menu item,
+`navigateToPage` or `format: 'page'` field naming a Dialogs-folder page is
+`page-not-navigable` (one naming no node of the `pages` root is `page-unknown`). An input
+parameter declared `format: 'page'` (the editor's **Page** type) gets the page picker in `openDialog`, and is
+what a `navigateToPage` inside the dialog may read.
 A node moves between the two roots unchanged — apart from its document, which
 moves to the other directory with it (see below).
 
@@ -423,6 +426,7 @@ nested inside other actions (`onSuccess` / `onFailed` / `onSettled`, `then` /
 | `openDialog` | `pageId` (a page or group of the Dialogs folder), `componentProperties` (input values), `size` (`auto` \| `small` \| `medium` \| `fullscreen` \| `fixed`), `placement`, `backdrop` (`dim` \| `none`), `width` / `height` (for `fixed`) |
 | `openPageOverlay` | as `openDialog`, on a node of the `pages` root, without `componentProperties` |
 | `closePageOverlay` | `pageId` — the overlay to close; empty closes the top-most |
+| `navigateToPage` | `pageId` — a node of the `pages` root, or `{ "$componentProp": "<input>" }` naming an input parameter declared `format: "page"`; closes every overlay first |
 | `writeDataVariable` | `target`, `value` (a literal, a `$componentProp` or a `$repeatItem`), `onSuccess` / `onFailed` / `onSettled` |
 | `toggleDataVariable` | `target`, `onSuccess` / `onFailed` / `onSettled` |
 | `editValue` | `target`, `title`, `unit`, `min`, `max`, `decimals`, `allowNegative`, `position` (`center` \| `bottom-right`), `onSuccess` / `onFailed` / `onSettled` |

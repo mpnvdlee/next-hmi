@@ -37,6 +37,7 @@ import { PickerField } from '../../ui/PathInputField';
 import type { OpenBindingPicker } from '../PropertySourceEditor/editors/utils';
 import { ParentPathContext } from '../PropertySourceEditor/parentPathContext';
 import PropRow from '../../ui/PropRow';
+import PageSelect from '../../ui/PageSelect';
 import Select from '../../ui/Select';
 import BoolButtonGroup from '../../ui/BoolButtonGroup';
 import SchemaFieldRow from '../../ui/SchemaFieldRow';
@@ -51,7 +52,10 @@ import { varBindingOf } from '../bindingPickerUtils';
 import { BOOLEAN_SLOT, schemaFieldPicker, slotFilter } from '../PropertySourceEditor/editors/utils';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
 import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
-import { useComponentPropertySchema } from '../PropertySourceEditor/componentPropertySchemaContext';
+import {
+  ComponentPropertySchemaContext,
+  useComponentPropertySchema,
+} from '../PropertySourceEditor/componentPropertySchemaContext';
 import {
   useRepeatEditorScope,
   type RepeatEditorScope,
@@ -561,6 +565,69 @@ const ClosePageOverlayEditor: EditorFor<'closePageOverlay'> = ({ action, ctx }) 
         {everyOverlayTargetOption(ctx.overlayTargets)}
       </Select>
     </ActionFieldRow>
+  );
+};
+
+const NAVIGATE_SCHEMA: SchemaField = { type: 'String', format: 'page', label: 'Page' };
+
+/** A fixed page, or — in a dialog — an input parameter the opener fills with one. */
+const NavigateToPageEditor: EditorFor<'navigateToPage'> = ({ action, ctx }) => {
+  const widgetId = useContext(PanelScopeContext);
+  const diagnostic = useFieldDiagnostic(widgetId, [...ctx.path, 'pageId']);
+  const inputScope = useComponentPropertySchema();
+  // The picker offers only the inputs declared to hold a page.
+  const pageInputs = useMemo(
+    () =>
+      inputScope && {
+        ...inputScope,
+        properties: Object.fromEntries(
+          Object.entries(inputScope.properties).filter(([, decl]) => decl.format === 'page'),
+        ),
+      },
+    [inputScope],
+  );
+  const source = getPropertySource(action.pageId) ?? 'static';
+  const pill =
+    inputScope || source !== 'static' ? (
+      <PropertySourceSelector
+        compact
+        value={action.pageId}
+        source={source}
+        fieldType="string"
+        forcedSources={['static']}
+        scopeSources={['$componentProp']}
+        label="Page"
+        onChange={(v) => {
+          if (getPropertySource(v) === source) return;
+          ctx.update({ pageId: source === 'static' ? { $componentProp: '' } : '' });
+        }}
+      />
+    ) : undefined;
+  return (
+    <PropRow
+      label="Page"
+      badge={pill}
+      selection={{ path: [...ctx.path, 'pageId'], schema: NAVIGATE_SCHEMA }}
+      diagnostic={diagnostic}
+    >
+      {source === '$componentProp' ? (
+        <ComponentPropertySchemaContext.Provider value={pageInputs}>
+          <ComponentPropEditor
+            value={action.pageId}
+            onChange={(v) =>
+              ctx.update({ pageId: (v as { $componentProp: string }) ?? { $componentProp: '' } })
+            }
+            schema={NAVIGATE_SCHEMA}
+          />
+        </ComponentPropertySchemaContext.Provider>
+      ) : (
+        <PageSelect
+          value={action.pageId}
+          onChange={(v) => ctx.update({ pageId: v ?? '' })}
+          emptyLabel="— select page —"
+        />
+      )}
+    </PropRow>
   );
 };
 
@@ -1281,6 +1348,7 @@ export const ACTION_EDITORS: ActionEditors = {
   openDialog: OpenDialogEditor,
   openPageOverlay: OpenPageOverlayEditor,
   closePageOverlay: ClosePageOverlayEditor,
+  navigateToPage: NavigateToPageEditor,
   writeDataVariable: WriteDataVariableEditor,
   toggleDataVariable: ToggleDataVariableEditor,
   editValue: EditValueEditor,

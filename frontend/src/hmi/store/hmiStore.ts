@@ -112,6 +112,8 @@ interface HmiStore {
   pendingAlerts: AlertEntry[];
   /** Opening another replaces it: one numpad is on screen at a time. */
   numpadRequest: NumpadRequest | null;
+  /** A page a `navigateToPage` action routes to; `ActionNavigation` takes it. */
+  pendingNavigation: string | null;
   pendingToasts: ToastEntry[];
   currentUsersByScope: Record<string, UserIdentity>;
   loginErrorsByScope: Record<string, string | null>;
@@ -122,6 +124,8 @@ interface HmiStore {
   updatePageOverlay: (overlayId: string, nextPageId: string) => void;
   showAlert: (entry: AlertEntry) => void;
   openNumpad: (request: NumpadRequest | null) => void;
+  /** Closes every open overlay, then queues the route change. */
+  navigateToPage: (pageId: string) => void;
   dismissAlert: (id: string) => void;
   showToast: (entry: ToastEntry) => void;
   dismissToast: (id: string) => void;
@@ -133,6 +137,7 @@ export const useHmiStore = create<HmiStore>((set) => ({
   openPageOverlays: [],
   pendingAlerts: [],
   numpadRequest: null,
+  pendingNavigation: null,
   pendingToasts: [],
   currentUsersByScope: {},
   loginErrorsByScope: {},
@@ -194,6 +199,7 @@ export const useHmiStore = create<HmiStore>((set) => ({
     }),
   showAlert: (entry) => set((state) => ({ pendingAlerts: [...state.pendingAlerts, entry] })),
   openNumpad: (request) => set({ numpadRequest: request }),
+  navigateToPage: (pageId) => set({ openPageOverlays: [], pendingNavigation: pageId }),
   dismissAlert: (id) =>
     set((state) => ({
       pendingAlerts: state.pendingAlerts.filter((a) => a.id !== id),
