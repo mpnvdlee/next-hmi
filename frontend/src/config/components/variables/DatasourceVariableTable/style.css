@@ -487,3 +487,34 @@
 .cfg-browse-diff__chip-after {
   color: var(--cfg-text);
 }
+
+/* ── Browse progress ─────────────────────────────────────────── */
+
+.cfg-browse-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-1);
+  flex-shrink: 0;
+  margin-bottom: var(--cfg-space-3);
+  padding: var(--cfg-space-2) var(--cfg-space-3);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface);
+  font-size: var(--cfg-font-size-base);
+}
+
+.cfg-browse-progress__label {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--cfg-space-3);
+}
+
+.cfg-browse-progress__detail {
+  color: var(--cfg-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cfg-browse-progress__bar {
+  width: 100%;
+  accent-color: var(--cfg-accent);
+}

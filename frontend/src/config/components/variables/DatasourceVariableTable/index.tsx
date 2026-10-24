@@ -15,6 +15,7 @@
 import './style.css';
 import type { DatasourceConfig, TreeNode } from '@shared/types/datasource';
 import DatasourceBrowseDiffBanner from './DatasourceBrowseDiffBanner';
+import DatasourceBrowseProgress from './DatasourceBrowseProgress';
 import DatasourceVariableToolbar from './DatasourceVariableToolbar';
 import DatasourceVariableVirtualTable from './DatasourceVariableVirtualTable';
 import { useDatasourceVariableTableController } from './useDatasourceVariableTableController';
@@ -55,6 +56,7 @@ export default function DatasourceVariableTable({
     addArrayStruct,
     updateArrayLength,
     browseError,
+    browseProgress,
     scrollRef,
     colsTmpl,
     rows,
@@ -126,6 +128,7 @@ export default function DatasourceVariableTable({
         <div className="cfg-panel-empty">Select a datasource from the left panel.</div>
       ) : (
         <>
+          {browseProgress && <DatasourceBrowseProgress progress={browseProgress} />}
           {browseError && <div className="cfg-error-banner">{browseError}</div>}
 
           {hasPendingBrowse && (
