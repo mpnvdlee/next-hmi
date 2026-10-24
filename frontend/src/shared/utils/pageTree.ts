@@ -102,6 +102,7 @@ function readMetadata(c: Record<string, unknown>) {
     events: PageEventsConfig;
     showCloseButton: boolean;
     closeOnBackgroundPress: boolean;
+    tapThrough: boolean;
   }> = {};
   if (typeof c.description === 'string') meta.description = c.description;
   if (typeof c.breadcrumbLabel === 'string') meta.breadcrumbLabel = c.breadcrumbLabel;
@@ -118,6 +119,7 @@ function readMetadata(c: Record<string, unknown>) {
   if (typeof c.closeOnBackgroundPress === 'boolean') {
     meta.closeOnBackgroundPress = c.closeOnBackgroundPress;
   }
+  if (typeof c.tapThrough === 'boolean') meta.tapThrough = c.tapThrough;
   return meta;
 }
 
