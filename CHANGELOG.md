@@ -34,6 +34,17 @@ heading.
 
 ### Changed
 
+- **Usage reporting says more, and still nothing about your projects.** The
+  report now goes out every hour instead of once a day, and adds how NEXT HMI
+  was installed, how long it has been running, whether the last run stopped
+  cleanly, whether this installation has ever connected to a PLC, saved a page
+  or been used over MCP, and the rough size of all projects together (0, 1–10,
+  11–100 or more pages, tags and OPC-UA connections). No names, values or
+  addresses are sent. [Usage reporting](docs/user/install.md#usage-reporting)
+  lists every field; the switch and `NEXTHMI_TELEMETRY=off` work as before.
+  An installation that has connected and saved a page is asked once, on the
+  Projects page, whether it is used in a machine or product.
+
 - **On/off widgets show "unknown" instead of "off" before a value arrives.**
   An **LED Indicator** shows an empty ring, a **Switch** a hollow track with its
   thumb midway — and it can't be pressed until it knows its state — and a

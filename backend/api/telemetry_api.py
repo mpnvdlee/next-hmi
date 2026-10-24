@@ -32,3 +32,10 @@ async def put_telemetry(body: TelemetryBody) -> dict:
         )
     telemetry.set_enabled(body.enabled)
     return telemetry.status()
+
+
+@router.delete("/contact-prompt")
+async def dismiss_contact_prompt() -> dict:
+    # Allowed under the env pin: dismissing the question is not the reporting switch.
+    telemetry.dismiss_contact_prompt()
+    return telemetry.status()

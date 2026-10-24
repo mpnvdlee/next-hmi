@@ -3,6 +3,7 @@ import logging
 from dataclasses import replace
 from typing import Any
 
+from core import telemetry
 from core.component_validation import (
     DIRECT_BINDING_MESSAGE,
     NESTED_PROP_MESSAGE,
@@ -1044,7 +1045,9 @@ async def get_page(page_id: str) -> Any:
 
 @router.put("/pages/{page_id}")
 async def put_page(page_id: str, body: dict) -> Any:
-    return await _put_page_document(page_id, "pages", body)
+    result = await _put_page_document(page_id, "pages", body)
+    telemetry.mark("pageSaved")
+    return result
 
 
 @router.delete("/pages/{page_id}")

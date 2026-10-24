@@ -37,3 +37,8 @@
   border-radius: var(--cfg-radius-sm);
   word-break: break-all;
 }
+
+.cfg-admin-telemetry__link {
+  color: var(--cfg-accent);
+  font-weight: var(--cfg-fw-medium);
+}
