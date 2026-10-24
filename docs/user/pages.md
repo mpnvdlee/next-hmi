@@ -86,6 +86,8 @@ motor on the plant instead of one page per machine. The values belong to the ove
 navigating inside it keeps them.
 
 Each parameter also takes a **default value**, which applies whenever nothing supplied one.
+A text parameter set to **Holds a page** gets a page picker in the Open Dialog action, and
+a **Navigate To Page** action inside the dialog can go to whatever page the caller picked.
 
 > [!NOTE]
 > **Input parameters and overlay settings appear only inside the Dialogs folder.** A page

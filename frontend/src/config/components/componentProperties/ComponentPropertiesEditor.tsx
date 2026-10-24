@@ -37,6 +37,9 @@ interface Props {
   title?: string;
   /** Singular form of `title`, for the add and delete controls. */
   itemNoun?: string;
+  /** Offer "Holds a page" on text inputs — a dialog's input parameters only;
+   *  a Component's declaration has no `format`. */
+  pageInputs?: boolean;
   onChange: (next: Record<string, ComponentPropertySchema>) => void;
 }
 
@@ -45,6 +48,7 @@ export default function ComponentPropertiesEditor({
   ownerName,
   title = 'Component Properties',
   itemNoun = 'component property',
+  pageInputs = false,
   onChange,
 }: Props) {
   const [addingProp, setAddingProp] = useState(false);
@@ -104,6 +108,7 @@ export default function ComponentPropertiesEditor({
             key={key}
             propKey={key}
             schema={schema}
+            pageInputs={pageInputs}
             onChange={(patch) => handlePatchProperty(key, patch)}
             onDelete={() => handleDeleteProperty(key)}
             onEditStructSchema={() => setEditingStructKey(key)}
@@ -137,6 +142,7 @@ export default function ComponentPropertiesEditor({
 function ComponentPropertyRow({
   propKey,
   schema,
+  pageInputs,
   onChange,
   onDelete,
   onEditStructSchema,
@@ -145,6 +151,7 @@ function ComponentPropertyRow({
 }: {
   propKey: string;
   schema: ComponentPropertySchema;
+  pageInputs: boolean;
   onChange: (patch: Partial<ComponentPropertySchema>) => void;
   onDelete: () => void;
   onEditStructSchema: () => void;
@@ -249,6 +256,19 @@ function ComponentPropertyRow({
           onChange={(e) => onChange({ description: e.target.value || undefined })}
         />
       </PropRow>
+
+      {pageInputs && primary.toLowerCase() === 'string' && (
+        <PropRow
+          label="Holds a page"
+          description="The caller picks a navigable page, which Navigate To Page can go to."
+          sourceless
+        >
+          <BoolButtonGroup
+            value={schema.format === 'page'}
+            onChange={(page) => onChange({ format: page ? 'page' : undefined })}
+          />
+        </PropRow>
+      )}
 
       {/* A struct declares write access per field, and an actions or widgets
           property binds no variable at all — for everything else the flag is what

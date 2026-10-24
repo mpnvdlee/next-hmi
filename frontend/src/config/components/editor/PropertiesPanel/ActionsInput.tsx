@@ -338,6 +338,12 @@ function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets)
       const p = findOverlayTarget(overlayTargets, action.pageId)?.node;
       return p ? K('Close', resolvePageTitle(p.title), ' overlay') : K('Close top-most overlay');
     }
+    case 'navigateToPage': {
+      if (typeof action.pageId !== 'string')
+        return K('Go to input', action.pageId.$componentProp || undefined);
+      const p = findOverlayTarget(overlayTargets, action.pageId)?.node;
+      return p ? K('Go to', resolvePageTitle(p.title)) : K('Navigate to page');
+    }
     case 'writeDataVariable': {
       const address = writeTargetAddress(action.target);
       return address ? (

@@ -24,6 +24,7 @@ import type { CSSWithVars } from '@shared/types/style';
 import { ModalStack } from '../components/ModalStack';
 import { AlertModal } from '../components/AlertModal';
 import { EditValueNumpad } from '../components/EditValueNumpad';
+import { ActionNavigation } from '../components/ActionNavigation';
 import { HmiToastStack } from '../components/ToastStack';
 import AlarmPopup from '../components/AlarmPopup';
 import { FullscreenPrompt } from '../components/FullscreenPrompt';
@@ -247,6 +248,7 @@ export default function HmiView() {
           </div>
           <AlertModal scope={scope} />
           <EditValueNumpad />
+          <ActionNavigation />
           <HmiToastStack />
           <AlarmPopup />
           <FullscreenPrompt />

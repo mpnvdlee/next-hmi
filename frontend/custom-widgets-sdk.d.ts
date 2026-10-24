@@ -289,6 +289,12 @@ type ComponentAction =
     }
   | { type: 'closePageOverlay'; pageId?: string }
   | {
+      /** Closes every open overlay, then navigates to a page in the `pages` root. */
+      type: 'navigateToPage';
+      /** A page id, or a dialog input parameter declared `format: 'page'`. */
+      pageId: string | { $componentProp: string };
+    }
+  | {
       type: 'writeDataVariable';
       /** `{ $var: { path: 'ds:path' } }`, or inside a Repeater the copy's element. */
       target?: WriteTarget;

@@ -13,6 +13,15 @@ heading.
 
 ### Added
 
+- **Navigate To Page goes to a page chosen at runtime.** The new action
+  closes every open dialog and overlay, then goes to a page from the Pages
+  section, firing the page events a menu press would. The page is fixed, or
+  — inside a dialog — an input parameter switched to **Holds a page**, which
+  the Open Dialog action fills in with a page picker: one station popup's
+  *Open station page* button then leads to each caller's own station. The
+  warnings pill flags a page that does not exist, one in the Dialogs folder,
+  and an input that is not declared as a page.
+
 - **Alarm text can show live values.** An alarm gets a **Values** list of
   variables, numbered `{1}`, `{2}` …, and those placeholders in its title and
   description show them, with the same functions a String Expression takes

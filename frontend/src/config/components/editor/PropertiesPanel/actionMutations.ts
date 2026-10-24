@@ -1,4 +1,5 @@
 import type { ButtonAction } from '@shared/types/config';
+import { isPageGroup } from '@shared/utils/pageTree';
 import type { OverlayTargets } from './actionEditors';
 import type { getWriteCoercionKind } from '@config/utils/variableType';
 
@@ -33,6 +34,11 @@ export function makeDefaultAction(
       };
     case 'closePageOverlay':
       return { type: 'closePageOverlay' };
+    case 'navigateToPage':
+      return {
+        type: 'navigateToPage',
+        pageId: context.overlayTargets.pages.find((node) => !isPageGroup(node))?.id ?? '',
+      };
     case 'writeDataVariable':
       return { type: 'writeDataVariable', value: '' };
     case 'if':

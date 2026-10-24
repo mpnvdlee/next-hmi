@@ -17,6 +17,7 @@
     "height": "Integer"
   },
   "closePageOverlay": { "pageId": "page" },
+  "navigateToPage": { "pageId": "page" },
   "writeDataVariable": {
     "target": "target",
     "value": "writeValue",
