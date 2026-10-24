@@ -649,7 +649,7 @@ def _pager(pages: list[tuple[str, str, str]], index: int) -> str:
     return f'<div class="pager">{"".join(parts)}</div>'
 
 
-# The product mark, from enterprise/promotion-website/assets/logo.svg. Inlined
+# The product mark, from enterprise/promotion-website/public_html/assets/logo.svg. Inlined
 # rather than linked so the offline bundle stays self-contained, and its fixed
 # hex values are swapped for theme tokens so it survives the dark toggle: the
 # tile takes --ink and the knockouts --paper, which inverts cleanly. The indigo

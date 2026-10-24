@@ -196,7 +196,7 @@ After verifying every artifact:
    cloned in:
 
    ```bash
-   NEXTHMI_EDITION=ee python build/publish-docs.py <promotion-website>/docs <version>
+   NEXTHMI_EDITION=ee python build/publish-docs.py <promotion-website>/public_html/docs <version>
    ```
 
    This renders the release into `docs/v<version>/`, replaces `docs/` with
