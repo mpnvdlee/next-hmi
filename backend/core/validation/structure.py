@@ -1644,6 +1644,15 @@ def _check_write_target_type(
             code="write-target-type",
         )
         return
+    numeric = target.element.get("base") in ("Integer", "Float") and not target.element.get("array")
+    if kind == "editValue" and not numeric:
+        report.warn(
+            path,
+            f"{target.subject} is not a number — the numpad can only edit an Integer or Float",
+            severity="error",
+            code="edit-target-type",
+        )
+        return
     if kind == "toggleDataVariable":
         problem = _toggle_type_problem(target, ctx)
         if problem is not None:
@@ -1880,6 +1889,19 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
         "onFailed": "actions",
         "onSettled": "actions",
     },
+    "editValue": {
+        "target": "target",
+        "title": "String",
+        "unit": "String",
+        "min": "Float",
+        "max": "Float",
+        "decimals": "Integer",
+        "allowNegative": "Boolean",
+        "position": "String",
+        "onSuccess": "actions",
+        "onFailed": "actions",
+        "onSettled": "actions",
+    },
     "loginUser": {
         "username": "String",
         "password": "String",
@@ -1923,6 +1945,7 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
 _ACTION_VALUE_SCHEMAS: dict[str, dict[str, str]] = {
     "String": {"type": "string"},
     "Integer": {"type": "integer"},
+    "Float": {"type": "float"},
     "Boolean": {"type": "boolean"},
 }
 
@@ -1974,7 +1997,7 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
     if not isinstance(action, dict):
         return
     kind = action.get("type") or action.get("action")
-    if kind in ("writeDataVariable", "toggleDataVariable"):
+    if kind in ("writeDataVariable", "toggleDataVariable", "editValue"):
         written = _validate_write_target(action, kind, ctx, path, report)
         if kind == "writeDataVariable":
             _validate_write_value(action, written, ctx, path, report)
@@ -1993,6 +2016,15 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
                 f"unknown toast severity '{severity}'",
                 severity="error",
                 code="toast-severity-invalid",
+            )
+    if kind == "editValue":
+        position = action.get("position")
+        if isinstance(position, str) and position not in ("center", "bottom-right"):
+            report.warn(
+                f"{path}/position",
+                f"unknown numpad position '{position}'",
+                severity="error",
+                code="numpad-position-invalid",
             )
     page_fields = [name for name, role in (fields or {}).items() if role == "page"]
     if page_fields or kind in _LEGACY_PAGE_TARGET_ACTIONS:

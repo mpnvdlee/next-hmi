@@ -31,6 +31,19 @@
     "onFailed": "actions",
     "onSettled": "actions"
   },
+  "editValue": {
+    "target": "target",
+    "title": "String",
+    "unit": "String",
+    "min": "Float",
+    "max": "Float",
+    "decimals": "Integer",
+    "allowNegative": "Boolean",
+    "position": "String",
+    "onSuccess": "actions",
+    "onFailed": "actions",
+    "onSettled": "actions"
+  },
   "loginUser": {
     "username": "String",
     "password": "String",

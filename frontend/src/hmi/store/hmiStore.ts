@@ -93,9 +93,25 @@ export interface ToastEntry {
   duration: number;
 }
 
+/** A numpad opened by an `editValue` action, rendered at the top of HmiView. */
+export interface NumpadRequest {
+  id: string;
+  title?: string;
+  unit?: string;
+  min?: number;
+  max?: number;
+  decimals?: number;
+  allowNegative?: boolean;
+  position: 'center' | 'bottom-right';
+  currentValue?: string;
+  apply: (value: number) => void;
+}
+
 interface HmiStore {
   openPageOverlays: PageOverlayEntry[];
   pendingAlerts: AlertEntry[];
+  /** Opening another replaces it: one numpad is on screen at a time. */
+  numpadRequest: NumpadRequest | null;
   pendingToasts: ToastEntry[];
   currentUsersByScope: Record<string, UserIdentity>;
   loginErrorsByScope: Record<string, string | null>;
@@ -105,6 +121,7 @@ interface HmiStore {
   /** Moves the overlay identified by `overlayId` onto `nextPageId`. */
   updatePageOverlay: (overlayId: string, nextPageId: string) => void;
   showAlert: (entry: AlertEntry) => void;
+  openNumpad: (request: NumpadRequest | null) => void;
   dismissAlert: (id: string) => void;
   showToast: (entry: ToastEntry) => void;
   dismissToast: (id: string) => void;
@@ -115,6 +132,7 @@ interface HmiStore {
 export const useHmiStore = create<HmiStore>((set) => ({
   openPageOverlays: [],
   pendingAlerts: [],
+  numpadRequest: null,
   pendingToasts: [],
   currentUsersByScope: {},
   loginErrorsByScope: {},
@@ -175,6 +193,7 @@ export const useHmiStore = create<HmiStore>((set) => ({
       };
     }),
   showAlert: (entry) => set((state) => ({ pendingAlerts: [...state.pendingAlerts, entry] })),
+  openNumpad: (request) => set({ numpadRequest: request }),
   dismissAlert: (id) =>
     set((state) => ({
       pendingAlerts: state.pendingAlerts.filter((a) => a.id !== id),
