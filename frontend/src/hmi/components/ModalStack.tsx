@@ -161,7 +161,10 @@ export function ModalStack() {
               }),
               style: { ...fixedStyle, ...stackOffsetStyle(stackIndex) },
               zIndex: index + 1,
+              // The header bar is the named node's, from either root — a group
+              // opened as an overlay decides it, not the page shown inside it.
               title: resolvePageTitle(target.title),
+              showHeader: target.showModalHeader !== false,
               onClose: closeSettings(root, target).showCloseButton
                 ? () => closePageOverlay(entry.pageId)
                 : null,
@@ -192,7 +195,9 @@ export function ModalStack() {
 
 /**
  * The modal-card shape every page overlay shares: a header (title + optional
- * close button) over a content body, inside a `ModalCard`.
+ * close button) over a content body, inside a `ModalCard`. With `showHeader`
+ * off the header bar goes, close button included; the title still names the
+ * card for assistive tech.
  */
 function renderModalCard({
   key,
@@ -202,6 +207,7 @@ function renderModalCard({
   style,
   zIndex,
   title,
+  showHeader,
   onClose,
   children,
 }: {
@@ -212,6 +218,7 @@ function renderModalCard({
   style?: CSSProperties;
   zIndex: number;
   title: string;
+  showHeader: boolean;
   onClose: (() => void) | null;
   children: ReactNode;
 }) {
@@ -223,11 +230,14 @@ function renderModalCard({
       className={className}
       style={style}
       zIndex={zIndex}
+      label={title}
     >
-      <div className="hmi-modal__header">
-        <span className="hmi-modal__title">{title}</span>
-        {onClose && <CloseButton className="hmi-modal__close" onClick={onClose} />}
-      </div>
+      {showHeader && (
+        <div className="hmi-modal__header">
+          <span className="hmi-modal__title">{title}</span>
+          {onClose && <CloseButton className="hmi-modal__close" onClick={onClose} />}
+        </div>
+      )}
       <div className="hmi-modal__content" data-flow-direction="row" data-flow-align="stretch">
         {children}
       </div>
@@ -246,6 +256,7 @@ function ModalCard({
   className,
   style,
   zIndex,
+  label,
   children,
 }: {
   anchorRect?: AnchorRect | null;
@@ -253,6 +264,7 @@ function ModalCard({
   className: string;
   style?: CSSProperties;
   zIndex: number;
+  label: string;
   children: ReactNode;
 }) {
   const anchored = anchorRect != null && isAnchoredPlacement(placement);
@@ -262,6 +274,9 @@ function ModalCard({
       ref={ref}
       className={className}
       style={{ ...style, ...pos, zIndex }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={label}
       onClick={(e) => e.stopPropagation()}
     >
       {children}

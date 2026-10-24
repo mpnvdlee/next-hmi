@@ -447,6 +447,9 @@ interface PageNodeBase {
    *  it — so tapping the next hotspot closes this popover and opens its own in
    *  one tap. Read only for a node in the Dialogs folder; absent = it does. */
   tapThrough?: boolean;
+  /** Whether the modal card shows its header bar (title and close button) while
+   *  this node is open as a page overlay, from either root; absent = shown. */
+  showModalHeader?: boolean;
 }
 
 export interface PageConfig extends PageNodeBase {

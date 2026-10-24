@@ -800,6 +800,15 @@ def test_put_page_persists_main_padding_and_background(client, tmp_dirs):
     assert fetched["mainBackground"] == "#123456"
 
 
+def test_put_dialog_persists_show_modal_header(client, tmp_dirs, dialogs_dir):
+    resp = client.put(
+        "/api/config/dialogs/keypad",
+        json={"id": "keypad", "showModalHeader": False, "sections": {"content": []}},
+    )
+    assert resp.status_code == 200
+    assert client.get("/api/config/dialogs/keypad").json()["showModalHeader"] is False
+
+
 def test_put_page_persists_lifecycle_events(client, tmp_dirs):
     page_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     events = {"onOpen": [{"type": "closePageOverlay"}], "onClose": [{"type": "closePageOverlay"}]}

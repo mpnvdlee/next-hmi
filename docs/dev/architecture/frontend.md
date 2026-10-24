@@ -315,6 +315,10 @@ stack (`document.elementsFromPoint`), so the next hotspot opens in the same tap.
 `openPageOverlay` on the `pageId` already on top replaces that entry — new
 inputs, new anchor — instead of being refused; lower in the stack it is refused.
 
+A node with `showModalHeader: false` — from either root — renders its card
+without the `hmi-modal__header` bar, so without the title and the close button
+too. The flag is read on the node the action named, like the close settings.
+
 ## Component Registry
 
 Every product widget is a **built-in** widget: sources under

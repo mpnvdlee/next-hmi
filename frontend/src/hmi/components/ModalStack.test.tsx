@@ -196,6 +196,71 @@ describe('ModalStack overlay close settings', () => {
   });
 });
 
+// ── Header bar: the node the action named decides it, from either root ───────
+
+describe('ModalStack header bar', () => {
+  const bare = (id: string): PageConfig => ({ ...placementPage(id), showModalHeader: false });
+
+  function renderOverlays() {
+    return render(
+      <MemoryRouter>
+        <ModalStack />
+      </MemoryRouter>,
+    );
+  }
+
+  beforeEach(() => {
+    useConfigStore.setState({
+      pages: [bare('nav')],
+      dialogs: [
+        placementPage('a'),
+        bare('keypad'),
+        {
+          id: 'grp',
+          title: 'Group',
+          type: 'page-group',
+          showModalHeader: false,
+          children: [placementPage('inner')],
+        } as unknown as PageNode,
+      ],
+    });
+    useHmiStore.setState({ openPageOverlays: [] });
+  });
+
+  it('shows the header bar by default', () => {
+    openOverlayEntries([overlayEntry('a')]);
+    const { container } = renderOverlays();
+
+    expect(container.querySelector('.hmi-modal__header')).not.toBeNull();
+    expect(screen.getByText('Dialog a')).toBeTruthy();
+  });
+
+  it('drops the title and close button with the header bar', () => {
+    openOverlayEntries([overlayEntry('keypad')]);
+    const { container } = renderOverlays();
+
+    expect(container.querySelector('.hmi-modal__header')).toBeNull();
+    expect(container.querySelector('.hmi-modal__close')).toBeNull();
+    expect(container.querySelector('.hmi-modal__content')).not.toBeNull();
+    // The title still names the card for a screen reader.
+    expect(screen.getByRole('dialog', { name: 'Dialog keypad' })).toBeTruthy();
+  });
+
+  it('honours the flag on a page outside the Dialogs folder too', () => {
+    openOverlayEntries([overlayEntry('nav')]);
+    const { container } = renderOverlays();
+
+    expect(container.querySelector('.hmi-modal__header')).toBeNull();
+  });
+
+  it('follows the group the action named, not the page inside it', () => {
+    openOverlayEntries([overlayEntry('grp', { activePageId: 'inner' })]);
+    const { container } = renderOverlays();
+
+    expect(container.querySelector('.hmi-modal__header')).toBeNull();
+  });
+});
+
 // ── Tap-through: a press outside a backdrop-less popover reaches what is under it
 
 describe('ModalStack tap-through', () => {
