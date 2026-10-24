@@ -6,7 +6,7 @@ import { evaluatePropertyValue } from '@hmi/utils/propertySourceEval';
 import { isAnchoredPlacement } from '@shared/utils/anchorPosition';
 import { resolveComponentPropValue } from '@hmi/utils/componentPropResolution';
 import { sendWsMessage } from '@hmi/hooks/useWebSocket';
-import { useHmiStore } from '@hmi/store/hmiStore';
+import { resolveUserField, useHmiStore } from '@hmi/store/hmiStore';
 import { useThemeRuntimeStore } from '@hmi/store/themeRuntimeStore';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { randomUuid } from '@shared/utils/id';
@@ -44,13 +44,26 @@ function readStoredVariable(datasource: string, path: string): ResolvedValue {
   return (value !== undefined ? value : null) as ResolvedValue;
 }
 
+/** Page and global events fire outside any widget, so their context has no
+ *  readers of its own; these read the live stores for the firing scope. */
+function storeEvalContext(scope: string): EvaluationContext {
+  const currentUser = () => useHmiStore.getState().currentUsersByScope[scope];
+  return {
+    resolveVariable: readStoredVariable,
+    resolveTranslation: (key) => useTranslationStore.getState().resolve(key),
+    resolveUser: (field) => resolveUserField(currentUser(), field),
+    resolveUserGroups: () => currentUser()?.groups ?? ['guest'],
+  };
+}
+
 export function executeWidgetActions(
   actions: ButtonAction[] | undefined,
   context: ActionContext = {},
 ): void {
   if (!actions || actions.length === 0) return;
 
-  const { scope = '', evalCtx = {}, anchorEl } = context;
+  const { scope = '', anchorEl } = context;
+  const evalCtx: EvaluationContext = { ...storeEvalContext(scope), ...context.evalCtx };
   const inputScopeProps = evalCtx.inputScopeProps;
 
   for (const action of actions) {
@@ -80,14 +93,7 @@ export function executeWidgetActions(
     }
 
     if (action.type === 'if') {
-      // Page and global events fire outside any widget, so their context has
-      // no variable reader of its own; the condition reads the live store.
-      const conditionCtx: EvaluationContext = evalCtx.resolveVariable
-        ? evalCtx
-        : { ...evalCtx, resolveVariable: readStoredVariable };
-      const branch = evaluatePropertyValue(action.condition, conditionCtx)
-        ? action.then
-        : action.else;
+      const branch = evaluatePropertyValue(action.condition, evalCtx) ? action.then : action.else;
       executeWidgetActions(branch, context);
       continue;
     }
