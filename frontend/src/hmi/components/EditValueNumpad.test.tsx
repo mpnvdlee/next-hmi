@@ -18,7 +18,17 @@ const edit = (extra: Partial<Extract<ButtonAction, { type: 'editValue' }>> = {})
   ...extra,
 });
 
-const keyFor = (key: string) => screen.getByRole('button', { name: key });
+// The icon keys carry no names; the digit keys are named by their text.
+const ICON_KEYS: Record<string, string> = {
+  Back: '.hmi-virtual-input__key--back',
+  Clear: '.hmi-virtual-input__key--clear',
+  Enter: '.hmi-virtual-input__key--accent',
+  'Close numpad': '.hmi-virtual-input__close',
+};
+const keyFor = (key: string) =>
+  key in ICON_KEYS
+    ? document.querySelector<HTMLElement>(ICON_KEYS[key])!
+    : screen.getByRole('button', { name: key });
 
 function press(...keys: string[]) {
   for (const key of keys) fireEvent.click(keyFor(key));

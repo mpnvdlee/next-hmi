@@ -146,7 +146,7 @@ describe('NumericStepper', () => {
     renderStepper({ variable: BINDING, showRangeOnNumpad: false });
 
     await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__display')!);
-    await user.click(screen.getByRole('button', { name: 'Clear' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--clear')!);
     for (const digit of '18446744073709551615') {
       await user.click(screen.getByRole('button', { name: digit }));
     }

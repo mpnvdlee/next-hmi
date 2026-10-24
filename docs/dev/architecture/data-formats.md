@@ -26,7 +26,7 @@ A project is a self-contained folder anywhere on disk, registered in the runtime
     <DatasourceName>.json
   config.json             ← page index + globalEvents + embedded project metadata/defaultTheme
   themes/
-    <themeId>.json        ← one theme each (colors, typography, spacing)
+    <themeId>.json        ← one theme each (colors, typography, spacing, numpad)
   pages/
     <pageId>.json         ← per-page component tree (the navigable tree)
   dialogs/
@@ -88,7 +88,7 @@ Outside any project, the runtime keeps its own state:
 - `<project>/config.json`
   - Page index: HMI page list, header, footer, the Dialogs folder's page list, global lifecycle events (v2 — no component children for pages). Also holds `project.defaultTheme` — the id of the default theme
 - `<project>/themes/<themeId>.json`
-  - One theme per file (colors, typography, and spacing tokens editable in Theme Editor). The id is the file stem
+  - One theme per file (colors, typography, spacing, and numpad tokens editable in Theme Editor). The id is the file stem
 - `<project>/pages/<pageId>.json`
   - Page document for one page of the navigable tree: its metadata and component tree
 - `<project>/dialogs/<pageId>.json`
@@ -448,7 +448,7 @@ registry.
 On first access the backend seeds `themes/default.json` from defaults if no
 theme exists yet. A theme file is read as-is, with no read-time normalization.
 
-One theme file has three sections:
+One theme file has four sections:
 
 - **colors** — `bg`, `surface`, `surface_raised`, `text`, `text_muted`,
   `accent`, `border`, `ok`, `warn`, and `fault`.
@@ -457,9 +457,17 @@ One theme file has three sections:
   `_tracking`, and `_transform`.
 - **spacing** — `space_sm`, `space_md`, `space_lg`, `radius_sm`, `radius_md`,
   `radius_lg`, and `shadow`.
+- **numpad** — the on-screen numpad of every numeric input: `columns` (`3`, or
+  `4` to move Back / Clear / Enter into a column beside the digits), `key_size`
+  (key width and minimum height), `gap`, `key_font`, `key_font_size` (digit
+  keys), `key_font_weight`, and `accent` (the Enter key). Every field but
+  `columns` may be empty (`""`, or `null` for the weight): the numpad then
+  derives it from the rest of the theme — body font, accent colour, a 188px
+  three-column panel — as it did before the section existed. A theme file
+  without the section reads as these defaults.
 
-That is 52 editable fields: 10 colors, 35 typography values, and 7 spacing
-values. `frontend/src/shared/themeDefaults.json` is the exact canonical JSON
+That is 59 editable fields: 10 colors, 35 typography values, 7 spacing
+values, and 7 numpad values. `frontend/src/shared/themeDefaults.json` is the exact canonical JSON
 shape and `project-seed/themes/light.json` is kept byte-for-byte equivalent.
 Extra fields are rejected by the backend (`extra="forbid"`).
 

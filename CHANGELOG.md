@@ -19,6 +19,14 @@ heading.
   as a file, a compose file and `install.sh`, for a machine that cannot reach a
   registry.
 
+- **The numpad takes its look from the theme.** A new **Numpad** section in
+  the theme settings sets the key size, the gap between keys, the key font
+  and the Enter key colour, and picks one of two layouts: 3 columns, with
+  Back, Clear and Enter under the digits, or 4, with them in a column on the
+  right. Every numeric input gets it — Number Input, Numeric Stepper, Edit
+  Value and custom widgets that open the SDK numpad. A field left empty
+  follows the rest of the theme, so existing projects look the same.
+
 - **Edit Value opens the numpad on a tag without a Number Input.** The new
   action puts the numpad over the screen for a numeric variable — a setpoint
   behind a machine tile, a value in a table row, the element a dialog's input
