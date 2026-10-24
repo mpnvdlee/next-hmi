@@ -13,6 +13,15 @@ heading.
 
 ### Added
 
+- **A variable's array index can come from another value.** A binding such
+  as `Safety/Open` with its index bound to a dialog's input parameter reads,
+  writes and toggles the element of whichever device opened the dialog — one
+  popup instead of a 27-case **Switch**, and no hand-off variable for a
+  toggle. **+ Bind index** under a variable path turns a fixed index into a
+  source; any whole-number source works, including another variable. An index
+  that is empty or past the end reads nothing and a write fails with
+  `array_index_out_of_bounds`, never the whole array.
+
 - **Open Dialog Input (`$overlay`) lights what a popover belongs to.** The new
   source reads an input parameter of a dialog while it is open and is empty
   once it closes, from anywhere on the screen. Bind a machine symbol's

@@ -13,6 +13,7 @@ from core.validation.report import ValidationReport
 from core.validation.structure import (
     _validate_action,
     _validate_property_value,
+    validate_action_targets,
     validate_var_ref,
     validate_widget_node,
 )
@@ -721,6 +722,54 @@ def test_componentprop_empty(ctx):
     _validate_property_value({"$componentProp": ""}, None, ctx, "/p", report)
     w = _warn(report)
     assert (w.code, w.severity) == ("componentprop-empty", "warning")
+
+
+def _array_ctx(ctx: ValidationContext) -> ValidationContext:
+    registry = dict(ctx.datasource_registry)
+    registry["PLC"] = {
+        **registry["PLC"],
+        "Safety/Open": {"kind": "scalar", "base": "Boolean", "array": True, "length": 27},
+    }
+    return replace(
+        ctx,
+        datasource_registry=registry,
+        datasource_writable={"PLC": {**ctx.datasource_writable["PLC"], "Safety/Open": True}},
+        input_schema={"device": {"type": "Integer"}, "label": {"type": "String"}},
+    )
+
+
+def test_bound_index_reading_an_integer_input_is_clean(ctx):
+    report = ValidationReport()
+    value = {"$var": {"path": "PLC:Safety/Open", "index": {"$componentProp": "device"}}}
+    _validate_property_value(value, {"type": "Boolean"}, _array_ctx(ctx), "/p", report)
+    assert report.warnings == [] and report.findings == []
+
+
+@pytest.mark.parametrize(
+    "index, code",
+    [
+        ({"$loc": "app.title"}, "source-type"),
+        ({"$componentProp": "label"}, "componentprop-type"),
+    ],
+)
+def test_bound_index_must_give_an_integer(ctx, index, code):
+    report = ValidationReport()
+    value = {"$var": {"path": "PLC:Safety/Open", "index": index}}
+    _validate_property_value(value, {"type": "Boolean"}, _array_ctx(ctx), "/p", report)
+    w = _warn(report)
+    assert w.code == code
+    assert w.path == "/p/$var/index"
+
+
+@pytest.mark.parametrize(
+    "index, codes",
+    [({"$componentProp": "device"}, []), ({"$componentProp": "label"}, ["componentprop-type"])],
+)
+def test_bound_index_on_a_write_target(ctx, index, codes):
+    report = ValidationReport()
+    action = {"type": "toggleDataVariable", "target": {"$var": {"path": "PLC:Safety/Open", "index": index}}}
+    validate_action_targets([action], _array_ctx(ctx), "/a", report)
+    assert [w.code for w in report.warnings] == codes
 
 
 def _overlay_ctx(ctx: ValidationContext) -> ValidationContext:

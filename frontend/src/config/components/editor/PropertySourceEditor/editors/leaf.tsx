@@ -1,4 +1,8 @@
 import { useEffect } from 'react';
+import AddButton from '../../../ui/AddButton';
+import { BranchEditor } from './shared';
+import { ParentPathContext, useParentPath, withSegs } from '../parentPathContext';
+import type { SchemaField } from '@shared/types/widgetSchema';
 import ReadOnlyValue from '../../../ui/ReadOnlyValue';
 import TranslationInput from '../../TranslationInput';
 import PropRow from '../../../ui/PropRow';
@@ -11,7 +15,7 @@ import { REPEAT_INDEX_SUFFIX, repeatPickLabel } from '../../VariableBindingPicke
 import { useResultFields } from '../resultFieldsContext';
 import { useRepeatEditorScope } from '../repeatScopeContext';
 import { varBindingOf } from '../../bindingPickerUtils';
-import type { OpenBindingPicker } from './utils';
+import type { OpenBindingPicker, SlotType } from './utils';
 import type {
   DeviceSource,
   LocSource,
@@ -29,6 +33,7 @@ import type {
   VarSource,
   ViewportSource,
 } from '@shared/types/config';
+import { isBoundIndex } from '@shared/types/config';
 import { useRecipeConfigStore } from '@config/store/recipeConfigStore';
 import { useConfigStore } from '@shared/store/configStore';
 import { findPageNodeById, flattenPageNodes, resolvePageTitle } from '@shared/utils/pageTree';
@@ -77,56 +82,96 @@ export function VarEditor({
   onOpenBindingPicker?: OpenBindingPicker;
 }) {
   const repeatScope = useRepeatEditorScope();
+  const parent = useParentPath();
   const varObj = (value as VarSource)?.$var ?? { path: '' };
   const basePath = varObj.path ?? '';
   const repeatIndex = varObj.repeatIndex === true;
+  // A bound index lives in its own row below, so the path shows without one.
+  const boundIndex = isBoundIndex(varObj.index) ? varObj.index : undefined;
   const committedText = !basePath
     ? ''
     : repeatIndex
       ? `${basePath}${REPEAT_INDEX_SUFFIX}`
-      : varObj.index !== undefined
+      : varObj.index !== undefined && !boundIndex
         ? `${basePath}[${varObj.index}]`
         : basePath;
 
   return (
-    <PathInputField
-      value={committedText}
-      placeholder={
-        repeatScope ? `datasource:location${REPEAT_INDEX_SUFFIX}` : 'datasource:location'
-      }
-      titleFromDraft
-      onCommit={(text) => {
-        const trimmed = text.trim();
-        const next: VariableBinding = trimmed.endsWith(REPEAT_INDEX_SUFFIX)
-          ? { path: trimmed.slice(0, -REPEAT_INDEX_SUFFIX.length), repeatIndex: true }
-          : parseVarPathInput(text);
-        if (
-          next.path === basePath &&
-          next.index === varObj.index &&
-          next.repeatIndex === varObj.repeatIndex
+    <>
+      <PathInputField
+        value={committedText}
+        placeholder={
+          repeatScope ? `datasource:location${REPEAT_INDEX_SUFFIX}` : 'datasource:location'
+        }
+        titleFromDraft
+        onCommit={(text) => {
+          const trimmed = text.trim();
+          const parsed: VariableBinding = trimmed.endsWith(REPEAT_INDEX_SUFFIX)
+            ? { path: trimmed.slice(0, -REPEAT_INDEX_SUFFIX.length), repeatIndex: true }
+            : parseVarPathInput(text);
+          // A typed `[n]` replaces a bound index; a bare path keeps it.
+          const next =
+            boundIndex && parsed.index === undefined && !parsed.repeatIndex
+              ? { ...parsed, index: boundIndex }
+              : parsed;
+          if (
+            next.path === basePath &&
+            next.index === varObj.index &&
+            next.repeatIndex === varObj.repeatIndex
+          )
+            return;
+          onChange({ $var: next });
+        }}
+        pickTitle="Change variable binding"
+        // This field is the innermost slot that knows its own binding, so it names
+        // the preselect outright rather than letting an enclosing `wrapPicker`
+        // guess from a composite value.
+        onPick={
+          onOpenBindingPicker
+            ? () =>
+                onOpenBindingPicker(
+                  undefined,
+                  varBindingOf(value),
+                  undefined,
+                  repeatScope ? { repeatIndex: true } : undefined,
+                )
+            : undefined
+        }
+        onClear={onOpenBindingPicker && committedText ? () => onChange(undefined) : undefined}
+      />
+      {boundIndex ? (
+        <ParentPathContext.Provider value={withSegs(parent, '$var', 'index')}>
+          <BranchEditor
+            label="Index"
+            value={boundIndex}
+            // A fixed number stays wrapped, so the row keeps its source pill.
+            onChange={(v) =>
+              onChange({ $var: { ...varObj, index: isBoundIndex(v) ? v : { $static: v } } })
+            }
+            schema={INDEX_SCHEMA}
+            slot={INDEX_SLOT}
+            onOpenBindingPicker={onOpenBindingPicker}
+          />
+        </ParentPathContext.Provider>
+      ) : (
+        basePath &&
+        !repeatIndex && (
+          <AddButton
+            title="Take the element index from another value"
+            onClick={() =>
+              onChange({ $var: { path: basePath, index: { $static: varObj.index ?? 0 } } })
+            }
+          >
+            + Bind index
+          </AddButton>
         )
-          return;
-        onChange({ $var: next });
-      }}
-      pickTitle="Change variable binding"
-      // This field is the innermost slot that knows its own binding, so it names
-      // the preselect outright rather than letting an enclosing `wrapPicker`
-      // guess from a composite value.
-      onPick={
-        onOpenBindingPicker
-          ? () =>
-              onOpenBindingPicker(
-                undefined,
-                varBindingOf(value),
-                undefined,
-                repeatScope ? { repeatIndex: true } : undefined,
-              )
-          : undefined
-      }
-      onClear={onOpenBindingPicker && committedText ? () => onChange(undefined) : undefined}
-    />
+      )}
+    </>
   );
 }
+
+const INDEX_SCHEMA: SchemaField = { type: 'Integer', label: 'Index' };
+const INDEX_SLOT: SlotType = { type: 'Integer' };
 
 /** `$repeatItem` — one line like a variable binding, picked in the binding
  *  picker beside the variables. Outside a Repeater the validator warns. */

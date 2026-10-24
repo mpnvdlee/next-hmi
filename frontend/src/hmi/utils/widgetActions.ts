@@ -2,7 +2,8 @@ import type { AnchorRect, ButtonAction, OverlayPlacement } from '@shared/types/c
 import { writeTargetAddress } from '@shared/types/config';
 import type { EvaluationContext, ResolvedValue } from '@hmi/utils/propertySourceEval';
 import { useVariableStore } from '@hmi/store/variableStore';
-import { evaluatePropertyValue } from '@hmi/utils/propertySourceEval';
+import { evaluatePropertyValue, resolveBoundIndex } from '@hmi/utils/propertySourceEval';
+import { substituteBoundIndexes } from '@hmi/utils/boundIndexResolution';
 import { isAnchoredPlacement } from '@shared/utils/anchorPosition';
 import { resolveComponentPropValue } from '@hmi/utils/componentPropResolution';
 import { sendWsMessage } from '@hmi/hooks/useWebSocket';
@@ -42,6 +43,12 @@ function anchorRectFor(
 function readStoredVariable(datasource: string, path: string): ResolvedValue {
   const value = useVariableStore.getState().values[`${datasource}:${path}`];
   return (value !== undefined ? value : null) as ResolvedValue;
+}
+
+/** A write target's bound index resolved at the moment of the write — an action
+ *  fired by a page or global event never passed through a widget's resolution. */
+function withBoundIndexResolved(target: unknown, ctx: EvaluationContext): unknown {
+  return substituteBoundIndexes(target, (index) => resolveBoundIndex(index, ctx));
 }
 
 /** Page and global events fire outside any widget, so their context has no
@@ -104,7 +111,7 @@ export function executeWidgetActions(
     }
 
     if (action.type === 'writeDataVariable') {
-      const address = writeTargetAddress(action.target);
+      const address = writeTargetAddress(withBoundIndexResolved(action.target, evalCtx));
       if (!address) continue;
       const requestId = beginAsyncAction(action, scope, inputScopeProps);
       sendWsMessage({
@@ -122,7 +129,7 @@ export function executeWidgetActions(
     }
 
     if (action.type === 'toggleDataVariable') {
-      const address = writeTargetAddress(action.target);
+      const address = writeTargetAddress(withBoundIndexResolved(action.target, evalCtx));
       if (!address) continue;
       const requestId = beginAsyncAction(action, scope, inputScopeProps);
       sendWsMessage({

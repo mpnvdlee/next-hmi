@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { useVariableStore, type VarMeta } from '../store/variableStore';
-import { type VariableBinding, bindingKey } from '@shared/types/config';
+import { type VariableBinding, bindingIndex, bindingKey } from '@shared/types/config';
 
 const noSubscribe = (): (() => void) => () => {};
 
@@ -32,7 +32,7 @@ export function useVariable(id: string): unknown {
  */
 export function useBindingValue(binding: VariableBinding | undefined): unknown {
   const id = bindingKey(binding);
-  const index = binding?.index;
+  const index = bindingIndex(binding);
   // The snapshot is the resolved value itself — a store value or an element of
   // one, never a fresh object — so it compares equal across ticks that leave it
   // alone, and a scalar-array element re-renders only when that element changes.
