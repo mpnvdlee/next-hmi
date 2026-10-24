@@ -364,6 +364,26 @@ def _consume_restart_sentinel() -> bool:
     return True
 
 
+def _warn_if_dist_stale() -> None:
+    # The launcher hands every project instance frontend/dist when it exists,
+    # so built-in widgets come from there, not from the public/ copy that
+    # `npm run dev` just rebuilt. An edited widget then looks unchanged.
+    dist = FRONTEND_DIR / "dist" / "builtin-widgets-js"
+    if not dist.is_dir():
+        return
+    newest_source = max(
+        (p.stat().st_mtime for p in (FRONTEND_DIR / "widgets").rglob("*") if p.is_file() and ".test." not in p.name),
+        default=0,
+    )
+    newest_build = max((p.stat().st_mtime for p in dist.rglob("*") if p.is_file()), default=0)
+    if newest_source > newest_build:
+        print(
+            "  WARNING: frontend/dist is older than frontend/widgets/ — projects serve the stale "
+            "built-in widgets. Run `npm run build` in frontend/ or delete frontend/dist.",
+            flush=True,
+        )
+
+
 def start(*, quiet: bool, edition: str) -> None:
     if edition == "ee":
         _check_enterprise()
@@ -395,6 +415,7 @@ def start(*, quiet: bool, edition: str) -> None:
             ),
         ),
     )
+    _warn_if_dist_stale()
 
     try:
         # Backend respawn loop: when /api/system/restart shuts the worker

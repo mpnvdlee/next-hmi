@@ -97,6 +97,52 @@ export default tseslint.config(
     },
   },
   {
+    // Hard rule: no inline styles. Only a CSS custom property may be set via
+    // `style={{ '--name': value }}`; everything else is a class and a token.
+    files: ['**/*.tsx'],
+    ignores: ['**/*.test.tsx'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "JSXAttribute[name.name='style'] > JSXExpressionContainer > ObjectExpression > Property[key.type='Identifier']",
+          message:
+            'No inline styles: use a class and a token. Only a CSS custom property may be set inline.',
+        },
+        {
+          selector:
+            "JSXAttribute[name.name='style'] > JSXExpressionContainer > ObjectExpression > Property > Literal.key[value=/^(?!--)/]",
+          message:
+            'No inline styles: use a class and a token. Only a CSS custom property may be set inline.',
+        },
+      ],
+    },
+  },
+  {
+    // Inline styles that predate the rule. Remove a file once it is fixed;
+    // never add one.
+    files: [
+      'src/config/components/compositions/CompositionTabBar.tsx',
+      'src/config/components/editor/ChildPositionsEditor/index.tsx',
+      'src/config/components/editor/ColorInput/index.tsx',
+      'src/config/components/editor/ImageIndicatorsEditor/index.tsx',
+      'src/config/components/editor/PropertySourceEditor/editors/shared.tsx',
+      'src/config/components/editor/PropertySourceSelector/index.tsx',
+      'src/config/components/editor/TabBar/index.tsx',
+      'src/config/components/shared/VirtualTreeRows/index.tsx',
+      'src/config/components/themes/ThemeEditor/index.tsx',
+      'src/config/components/translations/TranslationsTable/index.tsx',
+      'src/hmi/components/ModalStack.tsx',
+      'widgets/Content/Icon/index.tsx',
+      'widgets/Content/Image/index.tsx',
+      'widgets/Layout/FixedSpacer/index.tsx',
+    ],
+    rules: {
+      'no-restricted-syntax': 'off',
+    },
+  },
+  {
     files: ['scripts/**/*.mjs'],
     languageOptions: {
       globals: globals.node,

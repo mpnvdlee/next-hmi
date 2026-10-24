@@ -1,4 +1,20 @@
 import '@testing-library/jest-dom';
+import { createElement } from 'react';
+
+/**
+ * Every builtin icon is a lazy import of the whole Phosphor module, and `act()`
+ * waits for it: ~2 s on an idle machine, past the 5 s test timeout under a
+ * busy full run. Tests only need *an* svg, so stub the module for all of them;
+ * the Icon widget's own test unmocks it to cover the real loader.
+ */
+vi.mock('@shared/utils/phosphorIconComponents', async () => {
+  const { BUILTIN_ICON_IDS } = await import('@shared/config/iconAllowlist');
+  return {
+    BUILTIN_ICON_COMPONENTS: Object.fromEntries(
+      [...BUILTIN_ICON_IDS].map((id) => [id, () => createElement('svg', { 'data-icon': id })]),
+    ),
+  };
+});
 
 /**
  * jsdom never fetches an injected `<link rel="stylesheet">`, so it fires
