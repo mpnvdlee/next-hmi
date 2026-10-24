@@ -44,6 +44,11 @@ Control and SIMATIC S7-1500. The project file format is unchanged.
   and `"off"` as off, as the rest of NEXT HMI already did. An empty text stays
   off.
 
+- **The test server matches type names regardless of case.** A test-server
+  variable typed `int32` or `BOOLEAN` — hand-edited, or from an older
+  configuration — was published as a Float. It now gets the type it names, and
+  `Single` is accepted as a Float.
+
 - **A read-only variable without a type reports read-only.** A write or toggle
   to a variable that has no data type and is not writable reported *invalid
   value*; it now reports *Variable is read-only*, as the runtime's local

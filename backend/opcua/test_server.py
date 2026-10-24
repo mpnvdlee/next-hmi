@@ -107,24 +107,26 @@ _SIM_LABELS = (
     "Juliet",
 )
 
-# OPC-UA variant type mapping from data_type strings
+# Lower-cased data_type -> the VariantType a node is built with: OPCUA_TYPES
+# and its aliases in shared/utils/valueTypes.ts.
 _VARIANT_MAP: dict[str, ua.VariantType] = {
-    "Boolean": ua.VariantType.Boolean,
-    "Bool": ua.VariantType.Boolean,
-    "Float": ua.VariantType.Float,
-    "Double": ua.VariantType.Double,
-    "SByte": ua.VariantType.SByte,
-    "Int8": ua.VariantType.SByte,
-    "Int16": ua.VariantType.Int16,
-    "Int32": ua.VariantType.Int32,
-    "Int64": ua.VariantType.Int64,
-    "Byte": ua.VariantType.Byte,
-    "UInt8": ua.VariantType.Byte,
-    "UInt16": ua.VariantType.UInt16,
-    "UInt32": ua.VariantType.UInt32,
-    "UInt64": ua.VariantType.UInt64,
-    "String": ua.VariantType.String,
-    "DateTime": ua.VariantType.DateTime,
+    "boolean": ua.VariantType.Boolean,
+    "bool": ua.VariantType.Boolean,
+    "float": ua.VariantType.Float,
+    "single": ua.VariantType.Float,
+    "double": ua.VariantType.Double,
+    "sbyte": ua.VariantType.SByte,
+    "int8": ua.VariantType.SByte,
+    "int16": ua.VariantType.Int16,
+    "int32": ua.VariantType.Int32,
+    "int64": ua.VariantType.Int64,
+    "byte": ua.VariantType.Byte,
+    "uint8": ua.VariantType.Byte,
+    "uint16": ua.VariantType.UInt16,
+    "uint32": ua.VariantType.UInt32,
+    "uint64": ua.VariantType.UInt64,
+    "string": ua.VariantType.String,
+    "datetime": ua.VariantType.DateTime,
 }
 
 _DEFAULT_VALUES: dict[ua.VariantType, Any] = {
@@ -255,7 +257,10 @@ class TestServerInstance:
                     fixed_length if fixed_length else
                     (_DYNAMIC_ARRAY_SIM_LENGTH if node_is_array else 0)
                 )
-                variant_type = _VARIANT_MAP.get(data_type_str, ua.VariantType.Float)
+                variant_type = (
+                    _VARIANT_MAP.get(data_type_str.strip().lower())
+                    if isinstance(data_type_str, str) else None
+                ) or ua.VariantType.Float
                 default = _DEFAULT_VALUES.get(variant_type, 0.0)
                 if node_is_array:
                     initial_value = ua.Variant(
