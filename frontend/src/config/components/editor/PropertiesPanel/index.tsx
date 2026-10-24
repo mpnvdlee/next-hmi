@@ -1285,6 +1285,7 @@ const GLOBAL_EVENT_FIELDS: { eventKey: keyof GlobalEventsConfig; label: string }
   { eventKey: 'onPageLoaded', label: 'Page Loaded' },
   { eventKey: 'onHmiLoaded', label: 'HMI Loaded' },
   { eventKey: 'onLocaleChanged', label: 'Locale Changed' },
+  { eventKey: 'onInteractionDenied', label: 'Interaction Denied' },
 ];
 
 function GlobalEventsPanel() {
