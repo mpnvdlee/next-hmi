@@ -39,9 +39,7 @@ heading.
   thumb midway — and it can't be pressed until it knows its state — and a
   **Menu Toggle** is dimmed with a dashed outline; pressing it still runs its
   actions but writes nothing. An empty text or an invalid number from a tag
-  counts as no value too. These widgets now also read the text `"false"`,
-  `"0"`, `"no"` or `"off"` as off, as the rest of NEXT HMI already did; before,
-  any non-empty text lit them.
+  counts as no value too.
 
 - **DateTime tags read as ISO 8601 UTC.** A Text widget bound to a DateTime tag
   showed `2026-01-02 03:04:05+00:00`. It now shows `2026-01-02T03:04:05.678Z`:
@@ -66,11 +64,12 @@ heading.
   helper is renamed. One declared inside a component or function is
   unaffected.
 
-### Fixed
+- **The test server refuses a type it cannot simulate.** It used to publish a
+  Float for any type name it did not know. It now refuses to start, with the
+  variable and type named; pick a supported type for that variable in the
+  test-server editor, which marks the old one unsupported.
 
-- **The test server no longer publishes a Float for a type it cannot
-  simulate.** It matches type names regardless of case, accepts `Single`,
-  and for anything else refuses to start with the variable and type named.
+### Fixed
 
 - **Counters beyond 2^53 drive numeric widgets.** Gauge, Progress Bar, Ring
   Gauge, Trend, Trend Chart, Numeric Stepper and Number Input read an
