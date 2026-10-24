@@ -1167,4 +1167,30 @@ describe('propertySourceEval', () => {
       expect(evaluatePropertyValue({ $http: { url: 'https://x/y' } }, {})).toBeNull();
     });
   });
+  describe('$stringExpr Signed()', () => {
+    const signed = (value: unknown, template = '{Signed(1)}') =>
+      evaluatePropertyValue(
+        { $stringExpr: { template, wildcards: { '1': { $static: value } } } },
+        mockContext,
+      );
+
+    it('prefixes positives with + and negatives with a true minus sign', () => {
+      expect(signed(6)).toBe('+6');
+      expect(signed(-4)).toBe('\u22124');
+    });
+
+    it('leaves zero unsigned, including negative zero', () => {
+      expect(signed(0)).toBe('0');
+      expect(signed('-0.0')).toBe('0.0');
+    });
+
+    it('keeps the decimals an inner rounding produced', () => {
+      expect(signed(6, '{Signed(Round1(1))} g')).toBe('+6.0 g');
+      expect(signed(-3.456, '{Signed(Round2(1))}')).toBe('\u22123.46');
+    });
+
+    it('passes non-numeric text through', () => {
+      expect(signed('n/a')).toBe('n/a');
+    });
+  });
 });
