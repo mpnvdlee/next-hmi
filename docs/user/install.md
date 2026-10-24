@@ -48,7 +48,9 @@ origin root; an individual project's HMI is at
   .mcp-tokens.json        hashed MCP bearer tokens, each scoped to one project
   .peer-trust.json        pinned peer TLS certificates (trust on first use)
   .install-id.json        random installation ID used by usage reporting
-  .telemetry.json         usage-reporting on/off (absent means on)
+  .telemetry.json         usage-reporting on/off (absent means on), contact prompt dismissed
+  .telemetry-session.json whether the last run stopped cleanly, and its version
+  .telemetry-milestones/  a dated file per first time: connected, pageSaved, mcpUsed
   tls/                    HTTPS setting + generated and uploaded certificates
   .peer-transfer-sender.json    outgoing push transfer phases/progress (no bearer plaintext)
   .peer-transfer-receipts.json  incoming push claims, recovery phases, and receipts
@@ -182,10 +184,11 @@ require the explicit `NEXTHMI_ALLOW_LOOPBACK_PEERS=1` deployment override.
 
 ## Usage reporting
 
-The runtime reports that it started to `https://next-hmi.com/ping` — once at
-start-up, then once every 24 hours while it keeps running. It is the only
-outgoing connection NEXT HMI makes on its own, and it exists to answer one
-question: how many installations are active.
+The runtime reports that it is running to `https://next-hmi.com/ping` — once at
+start-up, then once an hour while it keeps running. It is the only outgoing
+connection NEXT HMI makes on its own, and it exists to answer a few questions:
+how many installations are active, how long they stay up, and whether people
+get past connecting to a PLC.
 
 Each report carries exactly:
 
@@ -197,9 +200,18 @@ Each report carries exactly:
 | `os` / `osRelease` | `Darwin` / `25.6.0` | the host platform |
 | `python` | `3.14.6` | the bundled interpreter |
 | `event` | `start` / `heartbeat` | which of the two moments this is |
+| `installMethod` | `bundle` / `docker` / `source` / `other` | the portable download, the Docker image, a source checkout, or none of those |
+| `sessionId` | `9a07e2c1…` | random ID for this run, new on every start |
+| `uptimeS` | `86400` | seconds since this run started |
+| `connected` / `pageSaved` / `mcpUsed` | `true` | whether this installation has *ever* connected to an OPC-UA server, saved a page, or answered an MCP tool call |
+| `pages` / `tags` / `opcuaConns` | `11-100` | how many pages, variables and OPC-UA client connections all projects have together, as `0`, `1-10`, `11-100` or `100+` |
+| `mcpEnabled` | `false` | whether any project has MCP access switched on |
+| `prevExit` | `clean` / `unclean` / `none` | start only: whether the previous run shut down normally, crashed or was killed, or there was none |
+| `prevVersion` | `1.0.0` | start only: the version of the previous run, when it was a different one; empty otherwise |
 
-Nothing else is sent: no project names, variables, addresses, tag values, user
-names, or licence data. The receiving end stores no IP address. The
+Nothing else is sent: no project names, page or variable names, tag values,
+addresses, user names, or licence data. The sizes are counted on this machine
+and only the class leaves it. The receiving end stores no IP address. The
 installation ID is a random number tied to the runtime home, not to the
 machine — copy the runtime home and both copies report as the same
 installation; delete `.install-id.json` and the next start counts as a new one.
@@ -215,6 +227,14 @@ To turn it off, either:
 - set `NEXTHMI_TELEMETRY=off` in the environment — this wins over the setting
   and makes the switch read-only, which is the form to use in Docker or a
   managed deployment. `NEXTHMI_TELEMETRY=on` forces the opposite the same way.
+
+Once an installation has connected to a PLC and saved a page, the Projects page
+asks once whether you use NEXT HMI in a machine or product. **Tell us about
+it** opens the contact form on next-hmi.com in your browser — with the
+installation ID filled in while usage reporting is on, so the message can be
+read next to this installation's reports — and **Not now** puts the question
+away for good. The app itself sends nothing either way; only submitting the
+form does. The same link stays under Settings → Usage reporting.
 
 ## HTTPS
 

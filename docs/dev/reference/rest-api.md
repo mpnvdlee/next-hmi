@@ -656,14 +656,17 @@ Either certificate is `null` when absent or unreadable. `source: "env"` means HT
 
 **(manager)** Base prefix: `/api/system/telemetry`. Device-level like TLS — one runtime home, one installation ID, one setting — so it sits on the manager behind the device-admin session. Implementation is `core/telemetry.py`; the operator-facing description of what is sent is [Usage reporting](../../user/install.md#usage-reporting).
 
-The runtime POSTs `{ installId, version, edition, os, osRelease, python, event }` to `https://next-hmi.com/ping` (`event` is `start` or `heartbeat`) once from the manager lifespan and once every 24 h after that. The loop re-reads the setting before every send, so switching it off needs no restart. Failures are swallowed at `debug` — offline is the expected case, and there is no retry or queue. Test suites are covered by an autouse fixture that sets `NEXTHMI_TELEMETRY=off`.
+The runtime POSTs one JSON object to `https://next-hmi.com/ping` (`event` is `start` or `heartbeat`) once from the manager lifespan and once every hour after that; the field list is [Usage reporting](../../user/install.md#usage-reporting). The loop re-reads the setting before every send, so switching it off needs no restart. Failures are swallowed at `debug` — offline is the expected case, and there is no retry or queue: every field is state on disk or in the process, so the next ping resends it. Test suites are covered by an autouse fixture that sets `NEXTHMI_TELEMETRY=off` and stubs `telemetry.mark`.
 
-Both endpoints return `{ "enabled": bool, "envOverride": bool | null, "installId": "<32 hex>" }`.
+The three first-time flags are files under `<runtime_home>/.telemetry-milestones/`, written by `telemetry.mark()` from the OPC-UA engine (`connected`), `PUT /api/config/pages/{id}` (`pageSaved`) and the MCP tool wrapper (`mcpUsed`) — one file each, because project instances write them too. They are recorded with reporting off as well: the contact prompt reads them, and nothing leaves the machine from there. `prevExit` comes from `<runtime_home>/.telemetry-session.json`, which `stop()` marks clean on a graceful shutdown.
+
+All three endpoints return `{ "enabled": bool, "envOverride": bool | null, "installId": "<32 hex>", "contactPrompt": bool }`. `contactPrompt` is true once `connected` and `pageSaved` are both recorded and the prompt was never dismissed.
 
 - `GET /api/system/telemetry` → the status object. Mints the installation ID (`<runtime_home>/.install-id.json`) if this is the first read.
 - `PUT /api/system/telemetry`
   - Body: `{ "enabled": bool }`. Persists to `<runtime_home>/.telemetry.json`; absent means enabled.
   - `409` when `NEXTHMI_TELEMETRY` is set — the environment owns the setting and `envOverride` reports which way it is pinned.
+- `DELETE /api/system/telemetry/contact-prompt` → dismisses the dashboard's contact prompt for good (`contactPromptDismissed` in `.telemetry.json`). Allowed under the environment pin: it is not the reporting switch.
 
 The receiving end is a PHP handler on next-hmi.com (private repo): it validates the whitelisted fields, appends one JSON line per report to a monthly file above the web root, stores no IP or user agent, and always answers `204`.
 
