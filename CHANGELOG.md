@@ -13,6 +13,13 @@ heading.
 
 ### Added
 
+- **Buttons can be icon-only, stacked, and sized.** The Button gets five
+  properties: **Show label** (off makes an icon-only button that keeps its
+  label as the name a screen reader announces and as a hover tooltip),
+  **Icon position** (left, or on top with the text below), **Icon size** and
+  **Border width** in pixels, and a **Fill** colour for the outline style.
+  Each one left at its default keeps today's look.
+
 - **All Of (`$and`) and Any Of (`$or`) combine conditions.** Two new Boolean
   sources take a list of conditions — a variable, a comparison, an Invert, a
   group check, another All Of / Any Of — and are true when every one, or any

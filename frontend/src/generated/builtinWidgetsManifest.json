@@ -67,7 +67,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "42cd64cf0558eb6a",
+    "buildTs": "59d5fd99cbcbd0d8",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -80,14 +80,29 @@
       "iconName": {
         "type": "icon"
       },
+      "showLabel": {
+        "type": "boolean"
+      },
+      "iconPosition": {
+        "type": "string"
+      },
       "color": {
         "type": "color"
       },
       "variant": {
         "type": "string"
       },
+      "fill": {
+        "type": "color"
+      },
       "radius": {
         "type": "string"
+      },
+      "borderWidth": {
+        "type": "integer"
+      },
+      "iconSize": {
+        "type": "integer"
       },
       "variable": {
         "type": "boolean"

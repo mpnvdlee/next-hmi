@@ -102,6 +102,53 @@ describe('Button', () => {
     expect(btn.style.backgroundColor).toBe('rgb(34, 167, 224)');
   });
 
+  it('hides the label but keeps it as the accessible name when Show label is off', () => {
+    renderButton({ label: 'Reset', showLabel: false });
+
+    const btn = screen.getByRole('button', { name: 'Reset' });
+    expect(btn).toHaveAttribute('title', 'Reset');
+    expect(btn.querySelector('.hmi-button__label')).toBeNull();
+  });
+
+  it('omits an empty accessible name and title when the hidden label is empty', () => {
+    renderButton({ label: '', showLabel: false });
+
+    const btn = screen.getByRole('button');
+    expect(btn).not.toHaveAttribute('aria-label');
+    expect(btn).not.toHaveAttribute('title');
+  });
+
+  it('stacks the icon above the text with the top icon position', () => {
+    renderButton({ label: 'Home', iconPosition: 'top' });
+
+    expect(screen.getByRole('button', { name: 'Home' })).toHaveClass('hmi-button__btn--icon-top');
+  });
+
+  it('emits icon size, border width and outline fill as custom properties', () => {
+    const { container } = renderButton({
+      label: 'Jog',
+      variant: 'outline',
+      iconSize: 32,
+      borderWidth: 3,
+      fill: '#102030',
+    });
+    const el = container.firstElementChild as HTMLElement;
+
+    expect(el.style.getPropertyValue('--hmi-btn-icon-size')).toBe('32px');
+    expect(el.style.getPropertyValue('--hmi-btn-border-width')).toBe('3px');
+    expect(el.style.getPropertyValue('--hmi-btn-fill')).toBe('#102030');
+  });
+
+  it('leaves the new overrides unset so the default look stays', () => {
+    const { container } = renderButton({ label: 'Jog' });
+    const el = container.firstElementChild as HTMLElement;
+
+    for (const prop of ['--hmi-btn-icon-size', '--hmi-btn-border-width', '--hmi-btn-fill']) {
+      expect(el.style.getPropertyValue(prop)).toBe('');
+    }
+    expect(screen.getByRole('button', { name: 'Jog' })).not.toHaveAttribute('title');
+  });
+
   it('dispatches configured onPress actions', async () => {
     const user = userEvent.setup();
     renderButton({

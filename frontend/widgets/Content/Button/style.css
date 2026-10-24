@@ -32,7 +32,7 @@
   padding: var(--hmi-btn-padding-y) var(--hmi-btn-padding-x);
   background: var(--hmi-accent);
   color: var(--hmi-accent-on);
-  border: 1px solid var(--hmi-accent);
+  border: var(--hmi-btn-border-width, 1px) solid var(--hmi-accent);
   border-radius: var(--hmi-btn-radius, var(--hmi-radius));
   font-size: var(--hmi-type-body-size);
   font-weight: var(--hmi-type-subheading-weight);
@@ -53,6 +53,13 @@
   line-height: 0;
 }
 
+/* The Phosphor svg's own width/height attributes lose to CSS, so the icon size
+   override reaches built-in and custom icons alike. */
+.hmi-button__icon > svg {
+  width: var(--hmi-btn-icon-size);
+  height: var(--hmi-btn-icon-size);
+}
+
 .hmi-button__icon-svg {
   display: flex;
   align-items: center;
@@ -66,6 +73,10 @@
   min-width: 0;
 }
 
+.hmi-button__btn--icon-top {
+  flex-direction: column;
+}
+
 .hmi-button__btn:hover:not(:disabled) {
   background: var(--hmi-accent-ink);
   border-color: var(--hmi-accent-ink);
@@ -77,11 +88,11 @@
 }
 
 .hmi-button__btn--outline {
-  background: transparent;
+  background: var(--hmi-btn-fill, transparent);
   color: var(--hmi-accent);
 }
 
 .hmi-button__btn--outline:hover:not(:disabled) {
-  background: color-mix(in oklch, currentColor 12%, transparent);
+  background: color-mix(in oklch, currentColor 12%, var(--hmi-btn-fill, transparent));
   border-color: currentColor;
 }
