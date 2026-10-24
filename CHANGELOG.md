@@ -11,7 +11,61 @@ heading.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-24
+
+Fixes for OPC-UA browse and writes, most of them reported against CODESYS
+Control and SIMATIC S7-1500. The project file format is unchanged.
+
+### Changed
+
+- **Single-precision tags accept ordinary setpoints.** A write to an OPC-UA
+  `Float` tag — an S7 `Real`, a CODESYS `REAL` — was refused whenever the value
+  was not exactly representable, so 19.9 or 48.2 could not be written at all.
+  The value is now rounded to the nearest single-precision number, as the PLC
+  itself does. A configured min/max is checked against the value as entered,
+  before rounding. Values beyond the single-precision range and non-finite
+  values are still refused.
+
+- **Read-only comes first.** A write to a read-only variable now always reports
+  *Variable is read-only*, even when the value would also have been rejected.
+  The runtime's local pre-check reports it the same way.
+
 ### Fixed
+
+- **A read-only variable without a type reports read-only.** A write or toggle
+  to a variable that has no data type and is not writable reported *invalid
+  value*; it now reports *Variable is read-only*, as the runtime's local
+  pre-check already did.
+
+- **Static datasources accept DateTime, Date and Time.** Picking one of these
+  types for a static variable made the datasource impossible to save
+  (*Unknown data_type 'DateTime'*). They are accepted now, along with every
+  other type a write can target. A DateTime starts at
+  `1970-01-01T00:00:00.000Z`, a Date at `1970-01-01`, a Time at `00:00:00`.
+
+- **Decimal tags are no longer imported as Double.** Browse PLC labelled a tag
+  of the standard `Decimal` type as **Double**, and every write to it was
+  refused by the server. It now imports as **Decimal**, as does a server type
+  derived from it.
+
+- **Duration and timestamp tags import as values, not folders.** A tag typed
+  with one of the standard's derived types — `Duration` (a CODESYS `TIME`),
+  `UtcTime`, `Counter` — was reported as a struct by Browse PLC, so it arrived
+  as a folder or as a String. It now gets the type it derives from: **Double**,
+  **DateTime**, **UInt32**.
+
+- **A tag typed `Int` shows as a number.** It was written as an integer but
+  shown and bound as a String.
+
+- **Writing one element of a DateTime array no longer fails.** The other
+  elements were sent back to the PLC as text, and the PLC refused the whole
+  array.
+
+- **A custom widget may name a local helper after an SDK function.** A helper
+  declared inside a component or function with the name of an SDK global —
+  `getPropNumber`, say — made the widget fail to compile, although it only
+  shadows the global there. Only a module-level declaration with such a name
+  is refused now.
 
 - **Writes use the type the PLC actually has.** A tag imported with the wrong
   type — **Unknown** after a failed browse, **String** for an enum, **Float**

@@ -93,7 +93,7 @@ No PLC handy? A **static** datasource is a variable tree you define by hand, wit
 4. **Watch the values** — Toggle **⚡ Live** in the toolbar for a **Value** column showing what each variable holds right now.
 
 > [!NOTE]
-> **Static values live in memory only.** Every variable starts at its type's zero value (`0`, `false`, `""`) and holds whatever the HMI writes to it while the project runs. Nothing is written to disk, so a restart puts the whole tree back to zero — the definitions persist, the values don't.
+> **Static values live in memory only.** Every variable starts at its type's zero value (`0`, `false`, `""`, and `1970-01-01T00:00:00.000Z` for a DateTime) and holds whatever the HMI writes to it while the project runs. Nothing is written to disk, so a restart puts the whole tree back to zero — the definitions persist, the values don't.
 
 ## Browse the address space into a tree
 

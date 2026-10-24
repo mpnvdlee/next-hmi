@@ -108,7 +108,7 @@ rejected.
 | --- | --- | --- | --- | --- |
 | `Boolean` | `Boolean`, `Bool` | boolean; integer `0`/`1`; strings `true/false`, `1/0`, `on/off`, `yes/no` | boolean | all other numbers/strings/containers/null |
 | `Integer` | `Integer`, `Int`, `Enumeration`, `SByte`, `Byte`, `Int8`, `UInt8`, `Int16`, `UInt16`, `Int32`, `UInt32`, `Int64`, `UInt64` | JSON-safe integer number, integral finite float, or base-10 integer string; use a string beyond ±9,007,199,254,740,991 | integer | booleans, fractions, unsafe JSON numbers, malformed strings, and values outside the raw type's range; canonical `Integer`/`Int`/`Enumeration` use signed 32-bit range |
-| `Float` | `Float`, `Single`, `Double` | finite number or decimal string using `[+-]digits[.digits][e[+-]digits]` | finite number | booleans, underscores/hex, empty/malformed strings, NaN, and infinities; `Float`/`Single` additionally reject values beyond Float32 range or values that would round when serialized to Float32, while `Double` uses finite Float64 |
+| `Float` | `Float`, `Single`, `Double` | finite number or decimal string using `[+-]digits[.digits][e[+-]digits]` | finite number (nearest Float32 for `Float`/`Single`) | booleans, underscores/hex, empty/malformed strings, NaN, and infinities; `Float`/`Single` additionally reject values beyond ±FLT_MAX — any other finite value is rounded to the nearest Float32 after the range check — while `Double` uses finite Float64 |
 | `String` | `String` | string, number, or boolean | string; numbers follow ECMAScript formatting (`0` for either zero sign, decimal for magnitudes from `1e-6` through below `1e21`, normalized exponent otherwise) | containers, null, NaN, and infinities |
 | `DateTime` | `DateTime` | `datetime` internally or an ISO-8601 string containing date and time | Python `datetime` on the backend; the frontend retains the validated string | date-only/malformed strings, other values, null |
 | `Date` | `Date` | ISO `YYYY-MM-DD` string (or Python `date` internally) | ISO date string | impossible/malformed dates, datetimes, other values, null |
@@ -147,29 +147,35 @@ and `Duration` writes plus the aliases `Int`, `Enumeration`, and `TimeSpan`. The
 by the matrix above; an unknown raw type is never passed through.
 
 The deliberate safety rejections are present nulls, unsafe/lossy integer
-numbers, rounded or out-of-range Float32 values, malformed/non-finite numeric
+numbers, out-of-range Float32 values, malformed/non-finite numeric
 strings, scalar/array shape mismatches, invalid array descriptors, and unknown
 or unsupported raw types — each of which would otherwise be truncated,
 inferred as the wrong Variant type, or fail only inside asyncua.
 
-**Configured range enforcement.** After a numeric value survives the matrix
-above, `write_service.write_value` checks it against the variable's own
-persisted `min`/`max` (a struct field's write is checked against that field's
-own `min`/`max`, not its parent's) — a hard operator-write constraint shared by
+**Configured range enforcement.** While a numeric value passes the matrix
+above, `coerce_entry_write_value` checks it — as entered, before Float32
+rounding — against the variable's own persisted `min`/`max` (a struct field's
+write is checked against that field's own `min`/`max`, not its parent's) — a hard operator-write constraint shared by
 REST, WebSocket, and recipe writes. A whole-array write is rejected if any
 element is out of range; either bound may be absent to leave that side
 unenforced. A persisted `min > max` is a contract violation rather than a
 usable range: `DatasourceEntry` logs it once as a warning when the datasource
 loads, and writes remain unenforced for that variable until an author corrects
-it. This range check is independent of the coercion matrix and surfaces its
-own stable REST/WebSocket reason, `value_out_of_range` (see
-[websocket.md](websocket.md) for the full reason table).
+it. A range failure surfaces its own stable REST/WebSocket reason,
+`value_out_of_range`, rather than the matrix's `invalid_value` (see
+[websocket.md](websocket.md) for the full reason table). A verified write
+compares the read-back with the value actually sent — rounded, in its cache
+form (`DatasourceManager._coerce`); an OPC-UA indexed write reads the array raw
+(`read_current_values(raw=True)`) so the untouched elements go back in their
+wire types.
 
-**Access enforcement.** Between coercion and the range check,
-`write_service.write_value` refuses a variable whose own `writable` flag is not
+**Access enforcement.** After `bad_path`/`bad_field` and before the index,
+coercion and range checks (a struct folder — a `folder_registry` entry,
+identified by `_child_paths` — written whole stays `invalid_value`; any other
+entry, typed or not, is checked), `write_service.write_value` refuses a variable whose own `writable` flag is not
 `true` as `read_only` — the flag of the array for an element write, of the
 member for a struct-field write. `toggle_value` checks it before reading the
-current value. Every operator write reaches this one check: `write_field`,
+current value and before its Boolean check, with the same folder exception. Every operator write reaches this one check: `write_field`,
 `toggle_field`, `POST /api/datasources/write` and recipe downloads.
 
 - `backend/services/recipe_manager.py`
@@ -183,14 +189,14 @@ current value. Every operator write reaches this one check: `write_field`,
   - scans every persisted file before metadata migration; binding-invalid files stay byte-for-byte unchanged, malformed JSON/invalid UTF-8/unreadable files fail closed, and component roots, directories, or files that are symlinks or Windows reparse points are rejected without traversal
 - `backend/opcua/` — the OPC-UA client, one module per concern
   - `pool.py` — `OpcuaPool` and the `opcua_pool` singleton: one engine per `opcua-client` datasource; `subscription_status()` collects each engine's own `subscription_status()`
-  - `engine.py` — `DatasourceOpcuaEngine`: connection lifecycle and reconnect loop, the background and priority subscriptions (promote/demote), bulk reads, writes and the wire VariantType each tag arrives in. `_DsSubHandler` is the datachange hot path. `attach_client()` adopts an already-connected asyncua `Client` without the reconnect loop — the supported seam for tests and tools that own the client
-  - `browse.py` — `AddressSpaceBrowser`: the address-space walk, DataType resolution. It needs only a connected client and the `OperationLimits`, none of the engine's subscription state; `DatasourceOpcuaEngine.browse()` builds one per browse
+  - `engine.py` — `DatasourceOpcuaEngine`: connection lifecycle and reconnect loop, the background and priority subscriptions (promote/demote), bulk reads, writes and the wire VariantType each tag arrives in. `read_current_values(paths, raw=False)` returns cache forms; `raw=True` keeps the server's values, for an indexed array write that sends the untouched elements back. `_DsSubHandler` is the datachange hot path. `attach_client()` adopts an already-connected asyncua `Client` without the reconnect loop — the supported seam for tests and tools that own the client
+  - `browse.py` — `AddressSpaceBrowser`: the address-space walk and DataType resolution. It needs only a connected client and the `OperationLimits`, none of the engine's subscription state; `DatasourceOpcuaEngine.browse()` builds one per browse
   - `limits.py` — `OperationLimits`, `read_operation_limits()` and the `DEFAULT_MAX_*` fallbacks. The engine owns the result, since reads and monitored-item creation are batched too, and hands it to the browser
   - `routing.py` — maps struct and array-of-struct leaves to the `(folder, field)` pair `DatasourceManager.update_struct_field()` patches in O(1)
   - `security.py` — secure-channel settings, certificate-path containment and self-signed certificate generation, shared by connect, the probe and the test server
   - `discovery.py` — `discover_endpoints()` / `probe_connection()` for the connection wizard, on throwaway clients
   - `client_pool.py` — compatibility facade re-exporting every name the module used to define, for existing imports. Patch a global where the code that reads it lives (`opcua.security.active_project_root`, `opcua.engine.Client`): the facade does not carry those names, so a patch aimed at it fails instead of silently patching nothing
-  - a struct tag is a `Variable` whose DataType is a structured type and whose members are its `HasComponent` children — how CODESYS and S7-1500 both publish one — so the BFS walker queues a Variable for another Browse exactly when its DataType resolved to `struct`, and follows only `HasComponent` from it. `HasProperty` children (`EURange`, `EngineeringUnits`, …) describe the tag rather than being tags, so they stay out of the tree. Scalars are never re-browsed: that would cost one Browse operation per tag and return only those properties. A server-defined DataType is named by the builtin its `HasSubtype` chain ends in (`AddressSpaceBrowser._custom_data_type_name`, cached per browse): CODESYS ENUMs and S7 UDTs share one namespace, so the namespace alone cannot tell an enum (Int32) from a struct. The frontend turns a `struct` browse node into a folder (`buildFromBrowse`) — the shape [data-formats](data-formats.md) already defines for a struct — but only when it has members; one without stays a variable, so nothing bindable is ever lost to an empty folder
+  - a struct tag is a `Variable` whose DataType is a structured type and whose members are its `HasComponent` children — how CODESYS and S7-1500 both publish one — so the BFS walker queues a Variable for another Browse exactly when its DataType resolved to `struct`, and follows only `HasComponent` from it. `HasProperty` children (`EURange`, `EngineeringUnits`, …) describe the tag rather than being tags, so they stay out of the tree. Scalars are never re-browsed: that would cost one Browse operation per tag and return only those properties. A server-defined DataType is named by the builtin its `HasSubtype` chain ends in (`AddressSpaceBrowser._custom_data_type_name`, cached per browse) — or by `Decimal` (i=50) when the chain passes it, since a Decimal travels as an ExtensionObject and the `Number` above it would read as Double: CODESYS ENUMs and S7 UDTs share one namespace, so the namespace alone cannot tell an enum (Int32) from a struct. The frontend turns a `struct` browse node into a folder (`buildFromBrowse`) — the shape [data-formats](data-formats.md) already defines for a struct — but only when it has members; one without stays a variable, so nothing bindable is ever lost to an empty folder
   - reads the server's `OperationLimits` on connect (`MaxNodesPerRead`, `MaxNodesPerBrowse`, `MaxMonitoredItemsPerCall`; 0 or absent means no limit) and sizes every batched request to them. Limits count *operations*, not nodes: a browse reads four attributes per variable, so 26 variables overflow a `MaxNodesPerRead` of 100 — the size CODESYS advertises. An over-limit request is refused with a `BadTooManyOperations` **service** fault, which fails every operation in it, so an unclamped batch degraded a whole browse level to `data_type: "Unknown"`. A chunk a server refuses anyway is halved and retried, which also covers a server that enforces a limit it never advertises
 - `backend/opcua/test_server.py`
   - in-process OPC-UA test-server pool
