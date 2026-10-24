@@ -178,6 +178,15 @@ def test_extract_variable_keys_handles_string_wildcards_switch_when_and_plain_re
     assert keys == {"DS:Wildcard", "DS:Mode", "DS:ExpectedMode", "DS:ActionPayload"}
 
 
+def test_extract_variable_keys_follows_a_bound_index() -> None:
+    keys: set[str] = set()
+    payload = {"$var": {"path": "DS:Open", "index": {"$var": {"path": "DS:Selected"}}}}
+
+    _extract_variable_keys_from_value(payload, keys)
+
+    assert keys == {"DS:Open", "DS:Selected"}
+
+
 def test_extract_variable_keys_stops_at_depth_limit() -> None:
     keys: set[str] = set()
     nested: dict[str, object] = {"$var": {"path": "DS:Deep"}}

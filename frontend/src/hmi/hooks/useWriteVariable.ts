@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useId, useMemo } from 'react';
-import { bindingKey } from '@shared/types/config';
+import { bindingIndex, bindingKey } from '@shared/types/config';
 import { parseVarKey } from '@shared/types/datasource';
 import {
   coerceOpcuaWrite,
@@ -170,7 +170,7 @@ export function useWriteVariable(
   const scope = useHmiScope();
   const binding = getPropBinding(properties, propKey);
   const varKey = bindingKey(binding);
-  const index = binding?.index;
+  const index = bindingIndex(binding);
   const meta = useVariableMeta(varKey);
   // One toast id per hook instance: an operator who presses the same control
   // again while its rejection is still on screen reuses that toast instead of

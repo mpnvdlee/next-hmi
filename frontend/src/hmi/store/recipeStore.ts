@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { useVariableStore } from './variableStore';
-import { bindingKey } from '@shared/types/config';
+import { bindingIndex, bindingKey } from '@shared/types/config';
 import { getVarBinding } from '@shared/types/propertyValueGuards';
 import type {
   RecipeConfig,
@@ -53,8 +53,9 @@ function liveValue(binding: unknown, values: Record<string, unknown>): unknown {
   const v = getVarBinding(binding);
   if (!v) return undefined;
   const live = values[bindingKey(v)];
-  if (v.index !== undefined && Array.isArray(live)) {
-    return v.index < live.length ? live[v.index] : undefined;
+  const index = bindingIndex(v);
+  if (index !== undefined && Array.isArray(live)) {
+    return live[index];
   }
   return live;
 }

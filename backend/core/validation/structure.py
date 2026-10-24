@@ -1161,6 +1161,9 @@ def _report_test_server_target(
     return True
 
 
+_BOUND_INDEX_FIELD = {"type": "Integer", "label": "Index"}
+
+
 def validate_var_ref(
     ref: Any,
     ctx: ValidationContext,
@@ -1206,8 +1209,13 @@ def validate_var_ref(
             return
         resolved_key = base
     var_type = paths.get(resolved_key) if paths else None
-    if ref.get("repeatIndex") is not True and _report_bad_index(
-        ref.get("index"), ds_name, resolved_key, var_type, path, report
+    index = ref.get("index")
+    if isinstance(index, dict):
+        # A bound index is a source of its own — a dialog's input, another
+        # variable — resolved to an element at runtime; only its type is known.
+        _validate_property_value(index, _BOUND_INDEX_FIELD, ctx, f"{path}/$var/index", report)
+    elif ref.get("repeatIndex") is not True and _report_bad_index(
+        index, ds_name, resolved_key, var_type, path, report
     ):
         return
     if var_type is None:
@@ -1749,7 +1757,10 @@ def _validate_write_target(
         return None
     var_type = paths.get(key)
     index = ref.get("index") if isinstance(ref, dict) else None
-    if _report_bad_index(index, ds_name, key, var_type, target_path, report):
+    if isinstance(index, dict):
+        # Resolved to an element when the action runs, like a read's bound index.
+        _validate_action_value(index, _BOUND_INDEX_FIELD, ctx, f"{target_path}/$var/index", report)
+    elif _report_bad_index(index, ds_name, key, var_type, target_path, report):
         return None
     if var_type is None:
         return None

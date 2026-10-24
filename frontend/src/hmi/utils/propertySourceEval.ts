@@ -1,7 +1,7 @@
 import { isRecord } from '@shared/types/propertyValueGuards';
 import type { AlarmCountFilter } from '@shared/types/alarm';
 import type { RecipeField, RecipeRow } from '@shared/types/recipe';
-import type { PageField, PagePathSegment } from '@shared/types/config';
+import { isBoundIndex, type PageField, type PagePathSegment } from '@shared/types/config';
 import type { HttpEntry, HttpRequestSpec } from '../store/httpSourceStore';
 import { imageBodyToUrl } from '@shared/utils/imageAsset';
 import { withBase } from '@shared/utils/runtimeBase';
@@ -93,7 +93,7 @@ type SourceHandler = (payload: unknown, context: EvaluationContext, depth: numbe
 
 const SOURCE_HANDLERS: Record<string, SourceHandler> = {
   $static: (payload) => resolveStaticValue(payload),
-  $var: (payload, ctx) => evaluateVar(payload, ctx),
+  $var: (payload, ctx, d) => evaluateVar(payload, ctx, d),
   $loc: (payload, ctx) => evaluateLoc(payload, ctx),
   $urlParam: (payload, ctx) => evaluateUrlParam(payload, ctx),
   $pageIsActive: (payload, ctx) => evaluatePageIsActive(payload, ctx),
@@ -216,7 +216,22 @@ function evaluateResult(payload: unknown, context: EvaluationContext): ResolvedV
   return JSON.stringify(v);
 }
 
-function evaluateVar(varObj: unknown, context: EvaluationContext): ResolvedValue {
+/**
+ * The element a bound `$var.index` names: -1 when it yields no whole number
+ * from 0 up — no element to read, and a write the server refuses as out of
+ * bounds, rather than falling back to the whole array.
+ */
+export function resolveBoundIndex(
+  index: unknown,
+  context: EvaluationContext,
+  depth = MAX_SOURCE_RECURSION_DEPTH,
+): number {
+  const v = evaluatePropertyValueInternal(index, context, depth);
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
+  return Number.isInteger(n) && n >= 0 ? n : -1;
+}
+
+function evaluateVar(varObj: unknown, context: EvaluationContext, depth: number): ResolvedValue {
   if (typeof varObj !== 'object' || varObj === null) {
     return null;
   }
@@ -228,7 +243,9 @@ function evaluateVar(varObj: unknown, context: EvaluationContext): ResolvedValue
       ? context.repeatIndex
       : typeof v.index === 'number'
         ? v.index
-        : undefined;
+        : isBoundIndex(v.index)
+          ? resolveBoundIndex(v.index, context, depth)
+          : undefined;
 
   if (!composite || !context.resolveVariable) {
     return null;
