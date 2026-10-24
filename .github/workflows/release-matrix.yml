@@ -18,6 +18,12 @@ permissions:
   contents: read
 
 jobs:
+  # Every upload below keeps its artifact for 3 days. The artifacts only feed
+  # publish-release and docker-publish in the same run, and a Release asset
+  # does not count against Actions storage — the default 90 days filled the
+  # account's free storage with superseded RC builds. Three days still covers
+  # re-running a failed publish job.
+
   # ── Real checks: existing suites, no follow-up work required ──────────────
 
   frontend:
@@ -159,6 +165,7 @@ jobs:
           name: docker-image-amd64
           path: ${{ runner.temp }}/nexthmi-amd64.tar.gz
           if-no-files-found: error
+          retention-days: 3
 
   docker-linux-arm64:
     runs-on: ubuntu-24.04-arm
@@ -214,6 +221,7 @@ jobs:
           name: docker-image-arm64
           path: ${{ runner.temp }}/nexthmi-arm64.tar.gz
           if-no-files-found: error
+          retention-days: 3
 
   # Not yet covered by either job above (both single-project, root-user
   # images): multiple simultaneously running child projects behind one
@@ -259,6 +267,7 @@ jobs:
           name: nexthmi-macos-arm64
           path: dist/nexthmi-macos-arm64-*.zip
           if-no-files-found: error
+          retention-days: 3
       - name: Unzip artifact
         run: |
           mkdir -p "$RUNNER_TEMP/portable"
@@ -345,6 +354,7 @@ jobs:
           name: nexthmi-windows-x64
           path: dist\nexthmi-windows-x64-*.zip
           if-no-files-found: error
+          retention-days: 3
       - name: Unzip artifact
         shell: pwsh
         run: |
@@ -509,6 +519,7 @@ jobs:
           name: docs-site-oss
           path: ${{ runner.temp }}/nexthmi-docs-oss-${{ steps.version.outputs.value }}.zip
           if-no-files-found: error
+          retention-days: 3
 
   # ── Gate: a missing, skipped, or failed required job fails the release ────
 
