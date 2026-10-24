@@ -23,6 +23,7 @@
     "$recipe": ["boolean", "string"],
     "$recipeList": ["record-list"],
     "$componentProp": ["any"],
+    "$overlay": ["any"],
     "$page": ["string", "integer", "string[]"],
     "$viewport": ["string", "integer"],
     "$result": ["any"],
@@ -43,12 +44,13 @@
       "$stringExpr",
       "$http",
       "$recipe",
+      "$overlay",
       "$page",
       "$viewport"
     ],
-    "datetime": ["$static", "$var", "$if", "$switch", "$time", "$widgetProp", "$http"],
-    "date": ["$static", "$var", "$if", "$switch", "$time", "$widgetProp", "$http"],
-    "time": ["$static", "$var", "$if", "$switch", "$time", "$widgetProp", "$http"],
+    "datetime": ["$static", "$var", "$if", "$switch", "$time", "$widgetProp", "$http", "$overlay"],
+    "date": ["$static", "$var", "$if", "$switch", "$time", "$widgetProp", "$http", "$overlay"],
+    "time": ["$static", "$var", "$if", "$switch", "$time", "$widgetProp", "$http", "$overlay"],
     "duration": [
       "$static",
       "$var",
@@ -59,6 +61,7 @@
       "$widgetProp",
       "$http",
       "$alarmCount",
+      "$overlay",
       "$page",
       "$viewport"
     ],
@@ -71,10 +74,21 @@
       "$widgetProp",
       "$http",
       "$alarmCount",
+      "$overlay",
       "$page",
       "$viewport"
     ],
-    "float": ["$static", "$var", "$if", "$formula", "$random", "$switch", "$widgetProp", "$http"],
+    "float": [
+      "$static",
+      "$var",
+      "$if",
+      "$formula",
+      "$random",
+      "$switch",
+      "$widgetProp",
+      "$http",
+      "$overlay"
+    ],
     "boolean": [
       "$static",
       "$var",
@@ -86,7 +100,8 @@
       "$userGroups",
       "$widgetProp",
       "$http",
-      "$recipe"
+      "$recipe",
+      "$overlay"
     ],
     "color": ["$static", "$var", "$if", "$switch", "$widgetProp"],
     "icon": ["$static", "$var", "$urlParam", "$if", "$switch", "$page", "$widgetProp"],
@@ -272,6 +287,7 @@
         "$switch",
         "$widgetProp",
         "$http",
+        "$overlay",
         "$alarmCount",
         "$page",
         "$viewport"
@@ -293,6 +309,7 @@
         "$stringExpr",
         "$http",
         "$recipe",
+        "$overlay",
         "$page",
         "$viewport",
         "$random",
@@ -312,7 +329,8 @@
         "$userGroups",
         "$widgetProp",
         "$http",
-        "$recipe"
+        "$recipe",
+        "$overlay"
       ]
     },
     {

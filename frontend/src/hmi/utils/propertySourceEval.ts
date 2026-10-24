@@ -34,6 +34,8 @@ export interface EvaluationContext {
   resolveDevice?: (field: 'hostname' | 'ipAddress' | 'macAddress') => string | null;
   resolveTime?: (format?: string, timezone?: string) => string | null;
   resolveComponentProp?: (componentId: string, property: string) => ResolvedValue;
+  /** An input parameter of the open dialog `page`, or null while it is closed. */
+  resolveOverlayParam?: (page: string, param: string) => unknown;
   resolveAlarmCount?: (filter: AlarmCountFilter) => number;
   resolveRecipe?: (typeId: string, field: RecipeField) => string | boolean;
   /** Resolve the $recipeList property source: the datasets of a type as grid rows.
@@ -107,6 +109,13 @@ const SOURCE_HANDLERS: Record<string, SourceHandler> = {
   $time: (payload, ctx) => evaluateTime(payload, ctx),
   $widgetProp: (payload, ctx) => evaluateWidgetProp(payload, ctx),
   $componentProp: (payload, ctx, depth) => evaluateComponentProp(payload, ctx, depth),
+  $overlay: (payload, ctx, depth) => {
+    const { page, param } = (payload ?? {}) as { page?: unknown; param?: unknown };
+    if (typeof page !== 'string' || typeof param !== 'string' || !ctx.resolveOverlayParam) {
+      return null;
+    }
+    return evaluatePropertyValueInternal(ctx.resolveOverlayParam(page, param), ctx, depth);
+  },
   $repeatItem: (payload, ctx, depth) =>
     ctx.resolveRepeatItem
       ? evaluatePropertyValueInternal(ctx.resolveRepeatItem(payload), ctx, depth)

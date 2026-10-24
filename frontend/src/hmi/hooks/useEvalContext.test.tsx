@@ -3,6 +3,8 @@ import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useConfigStore } from '@shared/store/configStore';
 import { HostPageContext } from '../context/HostPageContext';
+import { useHmiStore } from '../store/hmiStore';
+import { evaluatePropertyValue } from '../utils/propertySourceEval';
 import { useEvalContext } from './useEvalContext';
 
 const PAGES = [
@@ -135,5 +137,70 @@ describe('useEvalContext $pageIsActive', () => {
     const { result } = renderHook(() => useEvalContext(), { wrapper: wrapper('/') });
     expect(result.current.isPageActive?.('dashboard')).toBe(true);
     expect(result.current.isPageActive?.('line')).toBe(false);
+  });
+});
+
+describe('useEvalContext $overlay', () => {
+  beforeEach(() => {
+    useConfigStore.setState({
+      pages: PAGES as never,
+      dialogs: [
+        {
+          id: 'device',
+          type: 'page',
+          title: 'Device',
+          componentProperties: {
+            device: { type: 'Integer' },
+            mode: { type: 'String', defaultValue: 'view' },
+          },
+          sections: { content: [] },
+        },
+      ] as never,
+    });
+    useHmiStore.setState({ openPageOverlays: [] });
+  });
+
+  function Ring() {
+    const ctx = useEvalContext();
+    const value = evaluatePropertyValue({ $overlay: { page: 'device', param: 'device' } }, ctx);
+    return <span data-testid="ring">{String(value)}</span>;
+  }
+
+  it('reads the input of the open dialog and follows it opening, swapping and closing', () => {
+    const Wrapper = wrapper('/pages/dashboard');
+    render(
+      <Wrapper>
+        <Ring />
+      </Wrapper>,
+    );
+    expect(screen.getByTestId('ring').textContent).toBe('null');
+
+    const open = (device: number) =>
+      act(() => {
+        useHmiStore.getState().openPageOverlay({
+          pageId: 'device',
+          componentProperties: { device },
+          size: 'auto',
+          placement: 'center',
+        });
+      });
+    open(3);
+    expect(screen.getByTestId('ring').textContent).toBe('3');
+    open(4);
+    expect(screen.getByTestId('ring').textContent).toBe('4');
+
+    act(() => useHmiStore.getState().closePageOverlay('device'));
+    expect(screen.getByTestId('ring').textContent).toBe('null');
+  });
+
+  it('falls back to the declared default for an input the opener left out', () => {
+    useHmiStore.setState({
+      openPageOverlays: [
+        { pageId: 'device', componentProperties: {}, size: 'auto', placement: 'center' },
+      ],
+    });
+    const { result } = renderHook(() => useEvalContext(), { wrapper: wrapper('/pages/line') });
+    expect(result.current.resolveOverlayParam?.('device', 'mode')).toBe('view');
+    expect(result.current.resolveOverlayParam?.('other', 'mode')).toBeNull();
   });
 });

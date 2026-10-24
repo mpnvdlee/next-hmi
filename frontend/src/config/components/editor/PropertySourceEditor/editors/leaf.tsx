@@ -15,6 +15,7 @@ import type { OpenBindingPicker } from './utils';
 import type {
   DeviceSource,
   LocSource,
+  OverlaySource,
   PageField,
   PageIsActiveSource,
   PageSource,
@@ -29,6 +30,8 @@ import type {
   ViewportSource,
 } from '@shared/types/config';
 import { useRecipeConfigStore } from '@config/store/recipeConfigStore';
+import { useConfigStore } from '@shared/store/configStore';
+import { findPageNodeById, flattenPageNodes, resolvePageTitle } from '@shared/utils/pageTree';
 import { sourceFieldFits, type FieldSelectingSource } from '@hmi/utils/propertySourceRegistry';
 
 /** Parse a typed `datasource:location[n]` string into a VariableBinding. */
@@ -257,6 +260,52 @@ export function PageIsActiveEditor({
           onChange={(v) => onChange({ $pageIsActive: v ? { page: v } : {} })}
           emptyLabel="(Current page)"
         />
+      </PropRow>
+    </>
+  );
+}
+
+export function OverlayEditor({
+  value,
+  onChange,
+}: {
+  value: unknown;
+  onChange: (v: unknown) => void;
+}) {
+  const overlay = (value as OverlaySource)?.$overlay ?? { page: '', param: '' };
+  const dialogs = useConfigStore((s) => s.dialogs);
+  const inputs = Object.keys(findPageNodeById(dialogs, overlay.page)?.componentProperties ?? {});
+
+  return (
+    <>
+      <p className="cfg-prop-hint">
+        The input a dialog was opened with, while it is open; empty once it closes.
+      </p>
+      <PropRow label="Dialog">
+        <Select
+          value={overlay.page}
+          onChange={(v) => onChange({ $overlay: { page: v, param: '' } })}
+        >
+          <option value="">(Pick a dialog)</option>
+          {flattenPageNodes(dialogs).map((n) => (
+            <option key={n.id} value={n.id}>
+              {resolvePageTitle(n.title) || n.id}
+            </option>
+          ))}
+        </Select>
+      </PropRow>
+      <PropRow label="Input">
+        <Select
+          value={overlay.param}
+          onChange={(v) => onChange({ $overlay: { ...overlay, param: v } })}
+        >
+          <option value="">(Pick an input)</option>
+          {inputs.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </Select>
       </PropRow>
     </>
   );

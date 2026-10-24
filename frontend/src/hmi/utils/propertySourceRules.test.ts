@@ -117,8 +117,9 @@ describe('propertySourceRules', () => {
     }
   });
 
-  it('contains all 27 valid source types', () => {
-    expect(PROPERTY_SOURCE_KEYS).toHaveLength(27);
+  it('contains all 28 valid source types', () => {
+    expect(PROPERTY_SOURCE_KEYS).toHaveLength(28);
+    expect(PROPERTY_SOURCE_KEYS).toContain('$overlay');
     expect(PROPERTY_SOURCE_KEYS).toContain('$static');
     expect(PROPERTY_SOURCE_KEYS).toContain('$var');
     expect(PROPERTY_SOURCE_KEYS).toContain('$loc');

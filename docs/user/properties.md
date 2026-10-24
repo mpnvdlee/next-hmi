@@ -30,6 +30,7 @@ Any of these can also be an **array**. An optional *format* refines the editor w
 | `$switch` | flexible | One of many values chosen by a key. |
 | `$widgetProp` | flexible | A value exported by a sibling widget on the page. |
 | `$componentProp` | flexible | A value passed in from outside — by the parent component, or by the **Open Dialog** action that opened this dialog. |
+| `$overlay` | flexible | An input of a dialog while it is open, empty once it closes — so a symbol can light up while its own popover shows: compare `$overlay` (dialog *device*, input *device*) with the symbol's number. |
 | `$result` | flexible | A field of an action's result (in its handlers only). |
 | `$repeatItem` | flexible | The element a Repeater copy draws, one member of it, or its index (inside a Repeater only). |
 | `$http` | flexible | A value picked out of an HTTP API response. |

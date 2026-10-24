@@ -19,6 +19,17 @@ heading.
   as a file, a compose file and `install.sh`, for a machine that cannot reach a
   registry.
 
+- **Open Dialog Input (`$overlay`) lights what a popover belongs to.** The new
+  source reads an input parameter of a dialog while it is open and is empty
+  once it closes, from anywhere on the screen. Bind a machine symbol's
+  selection ring to a comparison of `$overlay` (dialog *device*, input
+  *device*) with the symbol's own number, and it lights exactly while its
+  popover shows, moves along when the popover swaps to the next symbol and
+  clears when it closes — with no extra variable to set and reset. The
+  editor picks the dialog and then one of the inputs it declares; the
+  diagnostics flag a page outside the Dialogs folder or an input it does not
+  declare.
+
 - **Browse PLC shows its progress.** Browsing a whole server could run for
   minutes on a large PLC with only a disabled button to show for it. A bar now
   fills as the walk goes, with the number of nodes found and how deep it has
