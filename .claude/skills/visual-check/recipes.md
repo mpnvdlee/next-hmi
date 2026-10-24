@@ -842,7 +842,8 @@ regression from screenshots:
 - **Binding-unavailable overlay:** `await context.setOffline(true)` and wait
   ~4s — every bound widget wraps in `.hmi-binding-overlay--disconnected`.
 - **A widget whose struct binding lacks `requiredFields`** renders a red ✕
-  placeholder (NumberInput needs `bVisible`, `bEnabled`, `fValue`).
+  placeholder. No built-in widget has a struct field any more; use a custom
+  widget that declares `requiredFields`.
 - **State that is not live** (an alarm popup, any server push): collect sockets
   in an init script and dispatch the frame the backend would send. The runtime
   opens three sockets; the next real update overwrites the injection.

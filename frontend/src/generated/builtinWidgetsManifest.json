@@ -1043,7 +1043,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "c8cfaa4b4ef31e9f",
+    "buildTs": "51855a501884ee50",
     "displayName": "Number Input",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1063,22 +1063,11 @@
         "type": "float"
       },
       "variable": {
-        "type": "struct",
-        "requiredFields": [
-          {
-            "name": "bVisible",
-            "type": "Boolean"
-          },
-          {
-            "name": "bEnabled",
-            "type": "Boolean"
-          },
-          {
-            "name": "fValue",
-            "type": "Float",
-            "write": true
-          }
-        ]
+        "type": [
+          "float",
+          "integer"
+        ],
+        "write": true
       },
       "allowNegative": {
         "type": "boolean"

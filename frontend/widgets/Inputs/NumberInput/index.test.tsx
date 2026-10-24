@@ -27,14 +27,11 @@ function renderInput(properties: Record<string, unknown>) {
   );
 }
 
-/** Struct meta carrying only a per-field range — the shape the field write coerces against. */
-function structMeta(fieldRanges: Record<string, { min?: number; max?: number }>) {
+/** Scalar meta — what the whole-variable write coerces against. */
+function scalarMeta(range: { min?: number; max?: number }, base: 'Float' | 'Integer' = 'Float') {
   return {
     varMeta: {
-      [VAR_KEY]: {
-        type: { kind: 'struct' as const, name: 'Setpoint', fields: ['fValue'], array: false },
-        fieldRanges,
-      },
+      [VAR_KEY]: { type: { kind: 'scalar' as const, base, array: false }, ...range },
     },
   };
 }
@@ -60,8 +57,8 @@ describe('NumberInput', () => {
     expect(screen.getByRole('textbox')).toHaveValue('---');
   });
 
-  it('writes fValue with a correlating requestId when the operator commits', async () => {
-    useVariableStore.setState({ values: { [VAR_KEY]: { fValue: 12 } } });
+  it('writes the value with a correlating requestId when the operator commits', async () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: 12 } });
     const user = userEvent.setup();
     renderInput({ variable: BINDING });
 
@@ -75,16 +72,15 @@ describe('NumberInput', () => {
       scope: 'runtime:preview',
       datasource: 'PLC',
       path: 'Tank/Level',
-      field: 'fValue',
       value: 42,
     });
     expect(sentFrame().requestId).toBeTruthy();
   });
 
-  it('refuses a typed value outside the field range and says why', async () => {
+  it('refuses a typed value outside the variable range and says why', async () => {
     useVariableStore.setState({
-      values: { [VAR_KEY]: { fValue: 12 } },
-      ...structMeta({ fValue: { min: 0, max: 100 } }),
+      values: { [VAR_KEY]: 12 },
+      ...scalarMeta({ min: 0, max: 100 }),
     });
     const user = userEvent.setup();
     renderInput({ variable: BINDING });
@@ -98,7 +94,7 @@ describe('NumberInput', () => {
   });
 
   it('refuses a numpad entry above the widget max instead of clamping it', async () => {
-    useVariableStore.setState({ values: { [VAR_KEY]: { fValue: 12 } } });
+    useVariableStore.setState({ values: { [VAR_KEY]: 12 } });
     const user = userEvent.setup();
     // The range hint hidden: the bounds must hold all the same.
     renderInput({ variable: BINDING, min: 0, max: 100, showRangeOnNumpad: false });
@@ -113,7 +109,7 @@ describe('NumberInput', () => {
   });
 
   it('writes nothing when the operator closes the numpad with ×', async () => {
-    useVariableStore.setState({ values: { [VAR_KEY]: { fValue: 12 } } });
+    useVariableStore.setState({ values: { [VAR_KEY]: 12 } });
     const user = userEvent.setup();
     renderInput({ variable: BINDING });
 
@@ -126,7 +122,7 @@ describe('NumberInput', () => {
   });
 
   it('starts the entry empty, so a key replaces the value instead of appending', async () => {
-    useVariableStore.setState({ values: { [VAR_KEY]: { fValue: 35 } } });
+    useVariableStore.setState({ values: { [VAR_KEY]: 35 } });
     const user = userEvent.setup();
     renderInput({ variable: BINDING });
 
@@ -139,7 +135,7 @@ describe('NumberInput', () => {
   });
 
   it('shows and limits the configured decimal places', async () => {
-    useVariableStore.setState({ values: { [VAR_KEY]: { fValue: 2 } } });
+    useVariableStore.setState({ values: { [VAR_KEY]: 2 } });
     const user = userEvent.setup();
     renderInput({ variable: BINDING, decimals: 0 });
 
@@ -149,7 +145,7 @@ describe('NumberInput', () => {
   });
 
   it('disables minus when negatives are not allowed', async () => {
-    useVariableStore.setState({ values: { [VAR_KEY]: { fValue: 2 } } });
+    useVariableStore.setState({ values: { [VAR_KEY]: 2 } });
     const user = userEvent.setup();
     renderInput({ variable: BINDING, allowNegative: false });
 
@@ -159,8 +155,8 @@ describe('NumberInput', () => {
 
   it('flags a value the variable range allows but the widget range does not', () => {
     useVariableStore.setState({
-      values: { [VAR_KEY]: { fValue: 50 } },
-      ...structMeta({ fValue: { min: 0, max: 100 } }),
+      values: { [VAR_KEY]: 50 },
+      ...scalarMeta({ min: 0, max: 100 }),
     });
     const { container } = renderInput({ variable: BINDING, max: 10 });
 
@@ -169,18 +165,18 @@ describe('NumberInput', () => {
 
   it('falls back to the variable range when the widget sets none', () => {
     useVariableStore.setState({
-      values: { [VAR_KEY]: { fValue: 150 } },
-      ...structMeta({ fValue: { min: 0, max: 100 } }),
+      values: { [VAR_KEY]: 150 },
+      ...scalarMeta({ min: 0, max: 100 }),
     });
     const { container } = renderInput({ variable: BINDING });
 
     expect(container.querySelector('.hmi-number-input__field--invalid')).not.toBeNull();
   });
 
-  it('reads an fValue beyond 2**53, which arrives as its decimal string', () => {
+  it('reads a value beyond 2**53, which arrives as its decimal string', () => {
     useVariableStore.setState({
-      values: { [VAR_KEY]: { fValue: '9007199254740993' } },
-      ...structMeta({ fValue: { min: 0, max: 100 } }),
+      values: { [VAR_KEY]: '9007199254740993' },
+      ...scalarMeta({ min: 0, max: 100 }),
     });
     const { container } = renderInput({ variable: BINDING });
 
@@ -188,25 +184,21 @@ describe('NumberInput', () => {
     expect(container.querySelector('.hmi-number-input__field--invalid')).not.toBeNull();
   });
 
-  it('renders nothing when its bVisible field is false', () => {
-    useVariableStore.setState({ values: { [VAR_KEY]: { bVisible: false } } });
-    const { container } = renderInput({ variable: BINDING });
+  it('disables the point for an Integer variable', async () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: 3 }, ...scalarMeta({}, 'Integer') });
+    const user = userEvent.setup();
+    renderInput({ variable: BINDING, decimals: 2 });
 
-    expect(container.firstChild).toBeNull();
+    await user.click(screen.getByRole('textbox'));
+    expect(screen.getByRole('button', { name: '.' })).toBeDisabled();
   });
 
   // Only a $var binding reaches the writer, so any other source must not offer
   // an editable field: the commit would be swallowed without a word.
-  it('disables the field for a struct source it cannot write back to', () => {
-    renderInput({ variable: { $static: { bEnabled: true, fValue: 3 } } });
+  it('disables the field for a source it cannot write back to', () => {
+    renderInput({ variable: { $static: 3 } });
 
     expect(screen.getByRole('textbox')).toBeDisabled();
-  });
-
-  it('disables the field when its bEnabled field is false', () => {
-    useVariableStore.setState({ values: { [VAR_KEY]: { bEnabled: false, fValue: 3 } } });
-    renderInput({ variable: BINDING });
-
-    expect(screen.getByRole('textbox')).toBeDisabled();
+    expect(screen.getByRole('textbox')).toHaveValue('3');
   });
 });
