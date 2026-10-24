@@ -99,12 +99,30 @@
     "schema": {
       "label": {
         "label": "Label",
+        "description": "Leave it empty with an icon set for an icon-only button.",
         "defaultValue": "Button",
         "group": "Content"
       },
       "iconName": {
         "label": "Icon",
         "group": "Content"
+      },
+      "iconPosition": {
+        "format": "select",
+        "label": "Icon position",
+        "display": "button-text",
+        "group": "Content",
+        "defaultValue": "left",
+        "options": [
+          {
+            "label": "Left",
+            "value": "left"
+          },
+          {
+            "label": "Top",
+            "value": "top"
+          }
+        ]
       },
       "color": {
         "label": "Color",
@@ -127,10 +145,32 @@
           }
         ]
       },
+      "fill": {
+        "label": "Fill",
+        "description": "Background of the outline button; empty keeps it transparent.",
+        "group": "Appearance",
+        "visibleWhen": {
+          "property": "variant",
+          "equals": "outline"
+        }
+      },
       "radius": {
         "format": "length",
         "label": "Radius",
         "defaultToken": "--hmi-radius",
+        "group": "Appearance"
+      },
+      "borderWidth": {
+        "label": "Border width (px)",
+        "min": 0,
+        "step": 1,
+        "group": "Appearance"
+      },
+      "iconSize": {
+        "label": "Icon size (px)",
+        "min": 8,
+        "max": 512,
+        "step": 1,
         "group": "Appearance"
       },
       "variable": {
