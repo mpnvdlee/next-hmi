@@ -15,7 +15,7 @@ Publishing refuses to drop a page the site already serves — see
 ``dropped_pages``. That is the guard against publishing an ``oss`` render over
 a site whose guide was built with the enterprise pages in it.
 
-Run it against a checkout of the published site (``promotion-website/docs``),
+Run it against a checkout of the published site (``promotion-website/public_html/docs``),
 then upload. Re-running for a version that already exists replaces that copy,
 which is what you want after fixing a typo in a shipped guide.
 
