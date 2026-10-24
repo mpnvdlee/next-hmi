@@ -15,6 +15,7 @@ Three more fields turn a definition into something an operator can act on:
 
 - **Auto popup** — **On** raises the alarm popup on every display the moment the alarm goes active. Leave it **Off** and it only shows up in the lists.
 - **Resolutions** — an ordered list of what to check or do, shown in the alarm's detail dialog. This is where the tribal knowledge goes, instead of in a folder nobody opens.
+- **Values** — variables whose value you want in the alarm text. Each row is numbered: `{1}` in the **Title** or **Description** shows the first one, `{2}` the second, with the same functions a String Expression takes (`{Round1(1)}`, `{Signed(2)}`). While the alarm is active the text shows the live value; once it has cleared, and in the history, it shows the value from the moment the alarm went off. Write `Tank temperature {Round1(1)} °C` and the operator reads `Tank temperature 81.5 °C`.
 - **Acknowledgment permissions → Allowed groups** — who may acknowledge it. Empty means anyone; set it and only those groups can clear the alarm. See [Users, groups & permissions](users.md).
 
 The centre of the editor previews both surfaces live — the popup notification and the detail dialog — so you can see what the operator will read while you write it.

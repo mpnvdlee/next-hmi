@@ -57,7 +57,7 @@ export default function AlarmPopup() {
             key={alarm.id}
             level={alarm.level}
             code={alarm.code}
-            title={alarmText(alarm.title)}
+            title={alarmText(alarm.title, alarm)}
             onClick={() => setDetailAlarm(alarm)}
             onAck={(e) => handleAck(e, alarm.id)}
             onDismiss={(e) => handleDismiss(e, alarm.id)}

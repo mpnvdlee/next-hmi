@@ -429,11 +429,11 @@ Mounts are registered at module-import time against the project this instance is
 1. looks up matching alarm definitions by composite key
 2. extracts the array element value if the trigger binding includes an `index`
 3. evaluates `bool` (compare to `on_true`) or `value_range` (`min`/`max` thresholds, both can be plain numbers, `$static`, or `$var`) trigger
-4. fires a new `AlarmInstance` if the trigger transitions from inactive → active
+4. fires a new `AlarmInstance` if the trigger transitions from inactive → active, capturing the cached raw value of each `values` binding
 5. clears the active instance and writes a `AlarmHistoryEntry` (capped at 500 entries) on the reverse transition
 6. persists `alarm_state.json` and broadcasts `alarm_update` to all clients
 
-`get_trigger_paths_by_datasource()` is consumed by the websocket manager to keep alarm-trigger variables permanently on the priority OPC-UA subscription.
+`get_trigger_paths_by_datasource()` is consumed by the websocket manager to keep alarm-trigger and `values` variables permanently on the priority OPC-UA subscription.
 
 ## Widget Storage
 

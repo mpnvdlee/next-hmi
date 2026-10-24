@@ -34,6 +34,7 @@ from models.alarm import (
     AlarmState,
     AlarmSummary,
 )
+from models.binding import resolve_var_binding, resolve_var_index
 from models.datasource import build_var_key
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,8 @@ class AlarmManager:
         self._state: AlarmState = AlarmState()
         # Maps composite variable key -> list of (AlarmDefinition, AlarmGroup)
         self._trigger_map: dict[str, list[tuple[AlarmDefinition, AlarmGroup]]] = {}
+        # Composite keys of every definition's `values` bindings
+        self._value_keys: set[str] = set()
         # Async broadcast callback set by main.py wiring
         self._broadcast_callback: Callable[..., Any] | None = None
         # Callback that schedules an OPC-UA priority-subscription recompute,
@@ -136,14 +139,16 @@ class AlarmManager:
             self._request_recompute()
 
     def get_trigger_paths_by_datasource(self) -> dict[str, set[str]]:
-        """Return {datasource: set-of-paths} for all configured alarm triggers.
+        """Return {datasource: set-of-paths} for all configured alarm triggers
+        and `values` bindings.
 
         Used by the websocket manager to keep alarm trigger variables on the
-        priority (fast) OPC-UA subscription at all times.
+        priority (fast) OPC-UA subscription at all times, and the `values` ones
+        there too so they are cached when an alarm fires.
         """
         with self._lock:
             result: dict[str, set[str]] = {}
-            for key in self._trigger_map:
+            for key in self._trigger_map.keys() | self._value_keys:
                 ds, path = key.split(":", 1)
                 result.setdefault(ds, set()).add(path)
             return result
@@ -151,8 +156,13 @@ class AlarmManager:
     def _rebuild_trigger_map(self) -> None:
         """Rebuild the mapping from composite variable keys to alarm definitions."""
         self._trigger_map.clear()
+        self._value_keys.clear()
         for group in self._config.groups:
             for alarm in group.alarms:
+                for ref in alarm.values:
+                    ds, path = resolve_var_binding(ref)
+                    if ds and path:
+                        self._value_keys.add(build_var_key(ds, path))
                 trigger = alarm.trigger
                 ds, path = trigger.resolve_datasource_path()
                 if not ds or not path:
@@ -173,7 +183,7 @@ class AlarmManager:
         """
         from services.datasource_manager import datasource_manager
 
-        datasource_manager.set_interest_keys("alarms", set(self._trigger_map))
+        datasource_manager.set_interest_keys("alarms", self._trigger_map.keys() | self._value_keys)
 
     # ── Active alarms & history ───────────────────────────────────────────────
 
@@ -203,14 +213,11 @@ class AlarmManager:
     # ── Value listener (called from datasource_manager thread) ────────────────
 
     def on_variable_change(self, key: str, value: Any) -> None:
-        """Evaluate all triggers that depend on this variable key."""
+        """Evaluate all triggers that depend on this variable key, and fill in
+        a `values` entry an active alarm captured as None."""
         with self._lock:
-            definitions = self._trigger_map.get(key)
-            if not definitions:
-                return
-
-            changed = False
-            for alarm_def, group in definitions:
+            changed = key in self._value_keys and self._backfill_values(key, value)
+            for alarm_def, group in self._trigger_map.get(key, []):
                 triggered = self._evaluate_trigger(alarm_def.trigger, value)
                 existing = self._find_active_by_alarm_id(alarm_def.id)
 
@@ -268,6 +275,39 @@ class AlarmManager:
     def _used_instance_ids(self) -> set[str]:
         return {a.id for a in self._state.active} | {h.id for h in self._state.history}
 
+    @staticmethod
+    def _element(ref: Any, value: Any) -> Any:
+        """The value a `values` binding names: its `index` element when it has one."""
+        index = resolve_var_index(ref)
+        if index is None:
+            return value
+        return value[index] if isinstance(value, list) and 0 <= index < len(value) else None
+
+    def _read_values(self, refs: list[Any]) -> list[Any]:
+        """The value of each `values` binding as cached when the alarm fires,
+        None where there is none yet (see `_backfill_values`)."""
+        from services.datasource_manager import datasource_manager
+
+        keys = [build_var_key(*resolve_var_binding(ref)) for ref in refs]
+        cached = datasource_manager.get_cached_values(set(keys))
+        return [self._element(ref, cached.get(key)) for ref, key in zip(refs, keys, strict=True)]
+
+    def _backfill_values(self, key: str, value: Any) -> bool:
+        """Fill the None entries of active alarms' captured `values` that `key`
+        feeds. The engine emits a scan's items one by one, so a value changed
+        in the trigger's scan can land just after the alarm fired."""
+        filled = False
+        for inst in self._state.active:
+            for i, ref in enumerate(inst.value_refs):
+                if (
+                    i < len(inst.values)
+                    and inst.values[i] is None
+                    and build_var_key(*resolve_var_binding(ref)) == key
+                ):
+                    inst.values[i] = self._element(ref, value)
+                    filled = filled or inst.values[i] is not None
+        return filled
+
     def _fire_alarm(self, definition: AlarmDefinition, group: AlarmGroup) -> None:
         now = datetime.now(UTC).isoformat()
         instance = AlarmInstance(
@@ -282,6 +322,8 @@ class AlarmManager:
             group_title=group.title,
             auto_popup=definition.auto_popup,
             ack_groups=list(definition.ack_groups),
+            value_refs=list(definition.values),
+            values=self._read_values(definition.values),
             triggered_at=now,
         )
         self._state.active.append(instance)
@@ -296,6 +338,7 @@ class AlarmManager:
             level=instance.level,
             title=instance.title,
             group_title=instance.group_title,
+            values=instance.values,
             triggered_at=instance.triggered_at,
             cleared_at=now,
             acked=instance.acked,

@@ -98,3 +98,63 @@ def test_value_range_trigger_reads_a_counter_beyond_two_to_the_53():
     manager = AlarmManager()
     assert manager._evaluate_trigger(trigger, str(2**63)) is True
     assert manager._evaluate_trigger(trigger, str(2**59)) is False
+
+
+def test_fire_captures_values_and_clear_keeps_them(live_project_root: Path, monkeypatch):
+    from services.datasource_manager import datasource_manager
+
+    cache = {"DS:Temp": 81.5, "DS:Arr": [1, 2, 3]}
+    monkeypatch.setattr(
+        datasource_manager, "get_cached_values", lambda keys: {k: cache[k] for k in keys if k in cache}
+    )
+    config = _config_with_trigger()
+    config.groups[0].alarms[0].values = [
+        {"$var": {"path": "DS:Temp"}},
+        {"$var": {"path": "DS:Arr", "index": 2}},
+        {"$var": {"path": "DS:Missing"}},
+    ]
+    manager = AlarmManager()
+    manager.set_config(config)
+    assert manager.get_trigger_paths_by_datasource() == {"DS": {"Overheat", "Temp", "Arr", "Missing"}}
+
+    manager.on_variable_change("DS:Overheat", True)
+    cache["DS:Temp"] = 20.0  # a later change must not reach the captured value
+    [active] = manager.get_active()
+    assert active.values == [81.5, 3, None]
+    assert active.value_refs == config.groups[0].alarms[0].values
+
+    manager.on_variable_change("DS:Overheat", False)
+    [entry] = manager.get_history()
+    assert entry.values == [81.5, 3, None]
+
+    reloaded = AlarmManager()
+    reloaded.load()
+    assert reloaded.get_history()[0].values == [81.5, 3, None]
+
+
+def test_a_value_missing_at_fire_time_is_filled_by_its_next_update(
+    live_project_root: Path, monkeypatch
+):
+    from services.datasource_manager import datasource_manager
+
+    cache = {"DS:Temp": 81.5}
+    monkeypatch.setattr(
+        datasource_manager, "get_cached_values", lambda keys: {k: cache[k] for k in keys if k in cache}
+    )
+    config = _config_with_trigger()
+    config.groups[0].alarms[0].values = [
+        {"$var": {"path": "DS:Temp"}},
+        {"$var": {"path": "DS:Arr", "index": 1}},
+    ]
+    manager = AlarmManager()
+    manager.set_config(config)
+    manager.on_variable_change("DS:Overheat", True)
+    assert manager.get_active()[0].values == [81.5, None]
+
+    manager.on_variable_change("DS:Arr", [7, 8])
+    manager.on_variable_change("DS:Temp", 90.0)  # captured already: not overwritten
+    manager.on_variable_change("DS:Arr", [0, 0])
+    assert manager.get_active()[0].values == [81.5, 8]
+
+    manager.on_variable_change("DS:Overheat", False)
+    assert manager.get_history()[0].values == [81.5, 8]
