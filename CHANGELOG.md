@@ -34,6 +34,17 @@ heading.
 
 ### Changed
 
+- **A tap outside a popover reaches what is under it.** With the backdrop set
+  to *none*, a tap outside a dialog used to close it and stop there, so moving
+  from one machine symbol's popover to the next took two taps. Now that tap
+  closes the popover *and* lands on what lies under it, so the next symbol's
+  popover opens at once. A new **Tap through** switch in a dialog's **Overlay**
+  section turns it off; a dimmed backdrop only ever closes, and a dialog that
+  does not close on a backdrop press still ignores it. Opening the dialog that
+  is already on top now swaps in the new input parameters and moves it to the
+  new anchor, where it used to do nothing. Projects with backdrop-less dialogs
+  change behaviour without a migration.
+
 - **The numpad never writes when the operator backs out.** ×, a press outside
   the numpad and Escape now cancel the entry; only Enter writes, and only a
   value inside min/max. Number Input and Numeric Stepper used to save the typed

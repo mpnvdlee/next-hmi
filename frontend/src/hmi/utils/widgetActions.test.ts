@@ -106,4 +106,41 @@ describe('executeWidgetActions — openDialog component properties', () => {
     executeWidgetActions([{ type: 'openPageOverlay', pageId: 'p1' }], {});
     expect(useHmiStore.getState().openPageOverlays[0].componentProperties).toEqual({});
   });
+  it('swaps the inputs and anchor of the dialog on top when it is opened again', () => {
+    const open = (device: number, left: number) =>
+      executeWidgetActions(
+        [
+          {
+            type: 'openDialog',
+            pageId: 'device',
+            componentProperties: { device },
+            placement: 'trigger-below',
+          },
+        ],
+        { anchorEl: anchorElement({ left, width: 20, height: 20 }) },
+      );
+    open(4, 10);
+    open(5, 300);
+
+    const overlays = useHmiStore.getState().openPageOverlays;
+    expect(overlays).toHaveLength(1);
+    expect(overlays[0].componentProperties).toEqual({ device: 5 });
+    expect(overlays[0].anchorRect?.left).toBe(300);
+  });
+
+  it('leaves a dialog lower in the stack alone when it is opened again', () => {
+    executeWidgetActions(
+      [{ type: 'openDialog', pageId: 'device', componentProperties: { device: 4 } }],
+      {},
+    );
+    executeWidgetActions([{ type: 'openDialog', pageId: 'confirm' }], {});
+    executeWidgetActions(
+      [{ type: 'openDialog', pageId: 'device', componentProperties: { device: 5 } }],
+      {},
+    );
+
+    const overlays = useHmiStore.getState().openPageOverlays;
+    expect(overlays.map((o) => o.pageId)).toEqual(['device', 'confirm']);
+    expect(overlays[0].componentProperties).toEqual({ device: 4 });
+  });
 });

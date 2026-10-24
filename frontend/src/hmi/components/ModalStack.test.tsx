@@ -196,6 +196,87 @@ describe('ModalStack overlay close settings', () => {
   });
 });
 
+// ── Tap-through: a press outside a backdrop-less popover reaches what is under it
+
+describe('ModalStack tap-through', () => {
+  let beneath: HTMLButtonElement;
+  const pressed = vi.fn();
+
+  function renderOverlays() {
+    return render(
+      <MemoryRouter>
+        <ModalStack />
+      </MemoryRouter>,
+    );
+  }
+
+  function pressBackdrop(container: HTMLElement) {
+    const backdrop = container.querySelector('.hmi-modal-backdrop') as HTMLElement;
+    act(() => {
+      backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 40, clientY: 50 }));
+    });
+  }
+
+  beforeEach(() => {
+    pressed.mockClear();
+    beneath = document.createElement('button');
+    beneath.addEventListener('click', pressed);
+    document.body.appendChild(beneath);
+    // jsdom has no layout; hand back the backdrop first, then what lies under it.
+    document.elementsFromPoint = vi.fn(() => [
+      document.querySelector('.hmi-modal-backdrop') as Element,
+      beneath,
+    ]);
+    useConfigStore.setState({
+      pages: [],
+      dialogs: [
+        placementPage('pop'),
+        { ...placementPage('held'), tapThrough: false },
+        { ...placementPage('sealed'), closeOnBackgroundPress: false },
+      ],
+    });
+    useHmiStore.setState({ openPageOverlays: [] });
+  });
+
+  afterEach(() => beneath.remove());
+
+  it('closes a backdrop-less popover and hands the press to what lies under it', () => {
+    openOverlayEntries([overlayEntry('pop', { backdrop: 'none' })]);
+    const { container } = renderOverlays();
+
+    pressBackdrop(container);
+    expect(useHmiStore.getState().openPageOverlays).toEqual([]);
+    expect(pressed).toHaveBeenCalledTimes(1);
+  });
+
+  it('only closes when the dialog turns tap-through off', () => {
+    openOverlayEntries([overlayEntry('held', { backdrop: 'none' })]);
+    const { container } = renderOverlays();
+
+    pressBackdrop(container);
+    expect(useHmiStore.getState().openPageOverlays).toEqual([]);
+    expect(pressed).not.toHaveBeenCalled();
+  });
+
+  it('only closes behind a dimmed backdrop', () => {
+    openOverlayEntries([overlayEntry('pop', { backdrop: 'dim' })]);
+    const { container } = renderOverlays();
+
+    pressBackdrop(container);
+    expect(useHmiStore.getState().openPageOverlays).toEqual([]);
+    expect(pressed).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when the dialog does not close on a backdrop press', () => {
+    openOverlayEntries([overlayEntry('sealed', { backdrop: 'none' })]);
+    const { container } = renderOverlays();
+
+    pressBackdrop(container);
+    expect(useHmiStore.getState().openPageOverlays).toHaveLength(1);
+    expect(pressed).not.toHaveBeenCalled();
+  });
+});
+
 // ── Title: the node the action named decides it too ──────────────────────────
 
 describe('ModalStack overlay title', () => {

@@ -406,6 +406,10 @@ interface PageNodeBase {
   /** Whether pressing the backdrop closes this node's page overlay. Read only
    *  for a node in the Dialogs folder; absent = closes. */
   closeOnBackgroundPress?: boolean;
+  /** Whether that press, with no backdrop drawn, also reaches what lies under
+   *  it — so tapping the next hotspot closes this popover and opens its own in
+   *  one tap. Read only for a node in the Dialogs folder; absent = it does. */
+  tapThrough?: boolean;
 }
 
 export interface PageConfig extends PageNodeBase {

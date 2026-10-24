@@ -249,7 +249,7 @@ page of the Dialogs folder — one shape, two directories):
 only the keys in `_PAGE_PERSISTED_FIELDS` (`api/config_api.py`) — `title`,
 `icon`, `description`, `breadcrumbLabel`, `hidden`, `role`, `order`, `route`,
 `layout`, `showHeader`, `showFooter`, `mainPadding`, `mainBackground`, `events`,
-`componentProperties`, `showCloseButton`, `closeOnBackgroundPress` — and drops
+`componentProperties`, `showCloseButton`, `closeOnBackgroundPress`, `tapThrough` — and drops
 any other key on save.
 
 A widget node carries `id`, `type`, `name`, `properties`, `layout`, optional
@@ -349,6 +349,9 @@ Two optional keys are read only on a node in this root, on both kinds:
 
 - `showCloseButton` — the modal's close button. Absent means shown
 - `closeOnBackgroundPress` — a press on the backdrop closes it. Absent means it does
+- `tapThrough` — with backdrop `none`, that closing press also reaches the element
+  under it, so tapping the next hotspot closes this popover and opens its own in one
+  tap. Absent means it does; ignored when `closeOnBackgroundPress` is off
 
 `componentProperties` is likewise only read here — declared on a page in its
 page document, on a group in its index node, exactly as above.

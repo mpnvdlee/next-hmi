@@ -510,8 +510,12 @@ function OverlaySection({
   node,
   onPatch,
 }: {
-  node: { showCloseButton?: boolean; closeOnBackgroundPress?: boolean };
-  onPatch: (patch: { showCloseButton?: boolean; closeOnBackgroundPress?: boolean }) => void;
+  node: { showCloseButton?: boolean; closeOnBackgroundPress?: boolean; tapThrough?: boolean };
+  onPatch: (patch: {
+    showCloseButton?: boolean;
+    closeOnBackgroundPress?: boolean;
+    tapThrough?: boolean;
+  }) => void;
 }) {
   return (
     <div className="cfg-section">
@@ -529,6 +533,15 @@ function OverlaySection({
           onChange={(v) => onPatch({ closeOnBackgroundPress: v })}
         />
       </PropRow>
+      {/* Only a backdrop press that closes can be handed on. */}
+      {node.closeOnBackgroundPress !== false && (
+        <PropRow label="Tap through">
+          <BoolButtonGroup
+            value={node.tapThrough !== false}
+            onChange={(v) => onPatch({ tapThrough: v })}
+          />
+        </PropRow>
+      )}
     </div>
   );
 }

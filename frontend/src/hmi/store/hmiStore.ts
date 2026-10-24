@@ -120,9 +120,15 @@ export const useHmiStore = create<HmiStore>((set) => ({
   loginErrorsByScope: {},
   openPageOverlay: (entry) =>
     set((state) => {
-      if (!entry.pageId || state.openPageOverlays.some((e) => overlayMatches(e, entry.pageId)))
-        return state;
-      return { openPageOverlays: [...state.openPageOverlays, entry] };
+      if (!entry.pageId) return state;
+      const overlays = state.openPageOverlays;
+      // Opening the dialog on top again swaps its inputs and anchor — a popover
+      // moving on to the next hotspot — instead of being refused.
+      if (overlays[overlays.length - 1]?.pageId === entry.pageId) {
+        return { openPageOverlays: [...overlays.slice(0, -1), entry] };
+      }
+      if (overlays.some((e) => overlayMatches(e, entry.pageId))) return state;
+      return { openPageOverlays: [...overlays, entry] };
     }),
   closePageOverlay: (id) =>
     set((state) => {
