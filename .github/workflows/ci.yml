@@ -1,21 +1,21 @@
-name: Bundle budget
+name: CI
 
-# Manual-only. No PR or push trigger — all automatic CI runs only at tag time,
-# in release-matrix.yml, which re-runs this same budget check as part of its
-# frontend job. This file exists as an on-demand tool: run it by hand
-# (workflow_dispatch) to check the current bundle size without cutting a tag.
+# Every pull request, not every push: the checks a change must pass before it
+# merges. release-matrix.yml repeats these at tag time alongside the platform
+# builds.
 on:
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: bundle-budget-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  budget:
+  frontend:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -39,6 +39,9 @@ jobs:
         run: npm ci
       - name: Install the widget compiler's Python dependencies
         run: pip install -r ../backend/requirements.txt
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test -- --run
       - name: Build
         run: npm run build
       # Free rider on the build above: it already ran `build:builtin-widgets`,
@@ -69,3 +72,15 @@ jobs:
       # dist/builtin-widgets-js/ modules.
       - name: Check bundle budget
         run: npm run check:bundle-budget
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+      - run: pip install -r backend/requirements-dev.txt
+      - run: ruff check backend
+      - run: pytest backend/tests

@@ -11,14 +11,6 @@ vi.mock('@hmi/hooks/useWebSocket', () => ({
   sendWsMessage: vi.fn(),
 }));
 
-// The sign-in and sign-out glyphs are code-split Phosphor icons: a `React.lazy`
-// over a dynamic import of the whole 130-icon module, which `act` waits on —
-// seconds under a loaded CPU, past the 5s test timeout. Nothing here asserts
-// which glyph renders (the Icon widget's own test covers the real loader).
-vi.mock('@shared/utils/phosphorIconComponents', () => ({
-  BUILTIN_ICON_COMPONENTS: { lock: () => <svg />, 'sign-out': () => <svg /> },
-}));
-
 function renderBadge(properties: Record<string, unknown>) {
   return render(
     <MemoryRouter>

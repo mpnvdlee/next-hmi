@@ -3,6 +3,10 @@ import { render, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Icon from './index';
 
+// test-setup.ts stubs the icon module for every other test; this one covers the
+// real loader.
+vi.unmock('@shared/utils/phosphorIconComponents');
+
 function renderIcon(properties: Record<string, unknown>) {
   return render(
     <MemoryRouter>

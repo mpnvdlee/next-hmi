@@ -17,7 +17,9 @@ product.
 ## Hard rules
 
 Breaking one of these usually still passes review and fails at runtime. They
-apply to every change, in every directory.
+apply to every change, in every directory. Three are enforced: inline styles by
+`npm run lint`, raw file writes and import-time resolver calls by
+`backend/tests/test_storage_hard_rules.py`.
 
 - **Never write files directly on the backend.** Use the `core.storage` atomic
   helpers. Resolve every workspace path through the project-anchored resolvers in
@@ -77,7 +79,8 @@ ruff check backend
 npm test -- --run                     # `npm test` alone stays in watch mode
 npm test -- --run src/path/file.test.tsx
 npm run lint
-npm run build                         # tsc + vite build; the type check
+npm run type-check                    # tsc only; writes nothing
+npm run build                         # also regenerates the tracked widget manifest
 ```
 
 | Changed | Also run |
