@@ -13,6 +13,14 @@ heading.
 
 ### Added
 
+- **Toasts take their place, shape and colours from the theme.** A new
+  **Toasts** section in the theme settings puts Show Toast notifications in
+  one of six places — top or bottom, left, center or right — makes them
+  rounded or a pill, and sets a background and text colour per severity
+  (info, success, warning, error). The default is today's look: top center,
+  rounded, and an empty colour keeps the severity tint, so existing projects
+  look the same.
+
 - **Buttons can be icon-only, stacked, and sized.** The Button gets five
   properties: **Show label** (off makes an icon-only button that keeps its
   label as the name a screen reader announces and as a hover tooltip),

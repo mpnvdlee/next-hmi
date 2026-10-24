@@ -102,6 +102,24 @@ A custom property cannot drive a selector, so the column count is also written a
 `data-hmi-numpad-columns` on `<html>` (the registry entry's `attribute`); `hmi.css` places
 Back / Clear / Enter in the fourth column under `[data-hmi-numpad-columns='4']`.
 
+#### Toasts — edit in the Themes editor → Toasts
+
+Styles the Show Toast stack (`HmiToastStack`, `toast-stack.css`). Alarm toasts
+(`AlarmPopup`) share the `.hmi-toast` classes, so the themed rules are scoped to
+`.hmi-toast-stack` and leave them untouched. Empty colours fall back inside `toast-stack.css`, to the
+look from before these tokens existed.
+
+| Token | Controls | Theme JSON path | Empty means |
+| ------ | ------ | ------ | ------ |
+| `--hmi-toast-position` | Where the stack sits: `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right` | `toasts.position` | (never empty) |
+| `--hmi-toast-shape` | `rounded` (`--hmi-radius`) or `pill` (`--hmi-radius-full`) | `toasts.shape` | (never empty) |
+| `--hmi-toast-{info,success,warning,error}-bg` | Toast background per severity | `toasts.<severity>_bg` | Surface tinted with the severity colour |
+| `--hmi-toast-{info,success,warning,error}-text` | Text, icon and close × colour per severity | `toasts.<severity>_text` | `--hmi-text`; the icon keeps the severity colour, the × its muted colour |
+
+Position and shape are mirrored as `data-hmi-toast-position` and `data-hmi-toast-shape` on
+`<html>`. `toast-stack.css` matches the position by edge (`^='bottom'`) and side (`$='left'`,
+`$='right'`); top and center are the unattributed default.
+
 > Runtime structural constants (topbar height, select height) are **not** theme
 > tokens. They are defined in `hmi.tokens.css` and component CSS files and are not editable
 > in the Themes editor.
@@ -172,7 +190,7 @@ and the apply mechanism.
    index load) and `LS_THEME_SAVED` (post-save refresh, consumed by `AppInner`,
    which re-fetches with `loadAndApplyThemeTokens({ force: true })` and realigns
    `themeRuntimeStore`) localStorage keys signal theme changes between browser tabs. `ThemeSection` is
-   typed `'colors' | 'typography' | 'spacing' | 'numpad'` (lowercase).
+   typed `'colors' | 'typography' | 'spacing' | 'numpad' | 'toasts'` (lowercase).
 
 ## Config Tokens
 

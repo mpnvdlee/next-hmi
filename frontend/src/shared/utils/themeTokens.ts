@@ -15,7 +15,7 @@ import themeDefaults from '../themeDefaults.json';
  * `themeDefaults.json` and the matching Pydantic field on the backend.
  */
 
-export type ThemeSection = 'colors' | 'typography' | 'spacing' | 'numpad';
+export type ThemeSection = 'colors' | 'typography' | 'spacing' | 'numpad' | 'toasts';
 type ThemeInputType = 'color' | 'text' | 'number' | 'font' | 'select';
 
 interface ThemeSelectOption {
@@ -344,6 +344,100 @@ export const THEME_TOKENS: ThemeTokenEntry[] = [
     placeholder: 'Accent',
     label: 'Enter key colour',
   },
+
+  // ── Toasts (empty colour = severity tint derived from the rest of the theme) ──
+  {
+    cssVar: '--hmi-toast-position',
+    attribute: 'data-hmi-toast-position',
+    themePath: 'toasts.position',
+    section: 'toasts',
+    inputType: 'select',
+    options: [
+      { label: 'Top left', value: 'top-left' },
+      { label: 'Top center', value: 'top-center' },
+      { label: 'Top right', value: 'top-right' },
+      { label: 'Bottom left', value: 'bottom-left' },
+      { label: 'Bottom center', value: 'bottom-center' },
+      { label: 'Bottom right', value: 'bottom-right' },
+    ],
+    label: 'Position',
+  },
+  {
+    cssVar: '--hmi-toast-shape',
+    attribute: 'data-hmi-toast-shape',
+    themePath: 'toasts.shape',
+    section: 'toasts',
+    inputType: 'select',
+    options: [
+      { label: 'Rounded — the theme radius', value: 'rounded' },
+      { label: 'Pill — fully round ends', value: 'pill' },
+    ],
+    label: 'Shape',
+  },
+  {
+    cssVar: '--hmi-toast-info-bg',
+    themePath: 'toasts.info_bg',
+    section: 'toasts',
+    inputType: 'color',
+    placeholder: 'Info tint',
+    label: 'Info background',
+  },
+  {
+    cssVar: '--hmi-toast-info-text',
+    themePath: 'toasts.info_text',
+    section: 'toasts',
+    inputType: 'color',
+    placeholder: 'Text',
+    label: 'Info text',
+  },
+  {
+    cssVar: '--hmi-toast-success-bg',
+    themePath: 'toasts.success_bg',
+    section: 'toasts',
+    inputType: 'color',
+    placeholder: 'OK tint',
+    label: 'Success background',
+  },
+  {
+    cssVar: '--hmi-toast-success-text',
+    themePath: 'toasts.success_text',
+    section: 'toasts',
+    inputType: 'color',
+    placeholder: 'Text',
+    label: 'Success text',
+  },
+  {
+    cssVar: '--hmi-toast-warning-bg',
+    themePath: 'toasts.warning_bg',
+    section: 'toasts',
+    inputType: 'color',
+    placeholder: 'Warn tint',
+    label: 'Warning background',
+  },
+  {
+    cssVar: '--hmi-toast-warning-text',
+    themePath: 'toasts.warning_text',
+    section: 'toasts',
+    inputType: 'color',
+    placeholder: 'Text',
+    label: 'Warning text',
+  },
+  {
+    cssVar: '--hmi-toast-error-bg',
+    themePath: 'toasts.error_bg',
+    section: 'toasts',
+    inputType: 'color',
+    placeholder: 'Fault tint',
+    label: 'Error background',
+  },
+  {
+    cssVar: '--hmi-toast-error-text',
+    themePath: 'toasts.error_text',
+    section: 'toasts',
+    inputType: 'color',
+    placeholder: 'Text',
+    label: 'Error text',
+  },
 ];
 
 // ── Derived lookups ───────────────────────────────────────────────────────────
@@ -367,6 +461,7 @@ const SECTION_TITLES: Record<ThemeSection, string> = {
   typography: 'Typography',
   spacing: 'Spacing, Radius & Shadow',
   numpad: 'Numpad',
+  toasts: 'Toasts',
 };
 
 /** Sections derived from THEME_TOKENS, in registry order. */
@@ -376,11 +471,12 @@ export function themeSections(): ThemeSectionDescriptor[] {
     typography: { key: 'typography', title: SECTION_TITLES.typography, tokens: [] },
     spacing: { key: 'spacing', title: SECTION_TITLES.spacing, tokens: [] },
     numpad: { key: 'numpad', title: SECTION_TITLES.numpad, tokens: [] },
+    toasts: { key: 'toasts', title: SECTION_TITLES.toasts, tokens: [] },
   };
   for (const token of THEME_TOKENS) {
     sections[token.section].tokens.push(token);
   }
-  return [sections.colors, sections.typography, sections.spacing, sections.numpad];
+  return [sections.colors, sections.typography, sections.spacing, sections.numpad, sections.toasts];
 }
 
 function getThemeValue(theme: ThemeConfig, path: string): string | number {
