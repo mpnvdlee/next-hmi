@@ -6,6 +6,12 @@ export const schema = {
   step: { type: 'float' as const, label: 'Step', group: 'Data', step: 0.1, defaultValue: 1 },
   min: { type: 'float' as const, label: 'Min value', group: 'Data' },
   max: { type: 'float' as const, label: 'Max value', group: 'Data' },
+  allowNegative: {
+    type: 'boolean' as const,
+    label: 'Allow negative values',
+    group: 'Data',
+    defaultValue: true,
+  },
   decimals: {
     type: 'integer' as const,
     label: 'Decimal places',
@@ -20,6 +26,17 @@ export const schema = {
     label: 'Show range on numpad',
     group: 'Appearance',
     defaultValue: true,
+  },
+  numpadPosition: {
+    type: 'string' as const,
+    format: 'select' as const,
+    label: 'Numpad position',
+    group: 'Appearance',
+    defaultValue: 'bottom-right',
+    options: [
+      { label: 'Bottom right', value: 'bottom-right' },
+      { label: 'Center', value: 'center' },
+    ],
   },
 };
 
@@ -78,6 +95,12 @@ export default function NumericStepper({ properties, layout }: HmiWidgetProps) {
   const step = usePropNumber(properties, 'step', 1);
   const decimals = usePropNumber(properties, 'decimals', 0);
   const showRangeOnNumpad = getPropBoolean(properties, 'showRangeOnNumpad', true, evalCtx);
+  const allowNegative = getPropBoolean(properties, 'allowNegative', true, evalCtx);
+  const numpadPosition =
+    getPropString(properties, 'numpadPosition', 'bottom-right', evalCtx) === 'center'
+      ? 'center'
+      : 'bottom-right';
+  const isInteger = meta?.type.kind === 'scalar' && meta.type.base === 'Integer';
 
   // Widget-configured min/max win when set; otherwise fall back to the
   // range configured on the bound variable itself. A bound written as integer
@@ -99,13 +122,14 @@ export default function NumericStepper({ properties, layout }: HmiWidgetProps) {
   const [isEditing, setIsEditing] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
-  const displayValue = isEditing
-    ? localValue
-    : exactValue !== null
+  const shownValue =
+    exactValue !== null
       ? formatInteger(exactValue, decimals)
       : fValue != null
         ? formatValue(fValue, decimals)
         : '---';
+  // The entry starts empty, so until the first key the current value stays on show.
+  const displayValue = isEditing && localValue ? localValue : shownValue;
   // Only a `$var` binding can be written back: with any other source the value
   // still renders but the writer no-ops, so the controls must read as disabled
   // rather than swallow the press.
@@ -125,9 +149,11 @@ export default function NumericStepper({ properties, layout }: HmiWidgetProps) {
     current != null &&
     ((isFiniteBound(min) && current < min) || (isFiniteBound(max) && current > max));
 
+  // Editing starts empty: the first key replaces the shown value instead of
+  // appending to it, and the numpad shows the current one as its placeholder.
   function openNumpad() {
     if (isIdle || isEditing) return;
-    setLocalValue(exactValue !== null ? exactValue.toString() : String(fValue));
+    setLocalValue('');
     setIsEditing(true);
   }
 
@@ -142,15 +168,15 @@ export default function NumericStepper({ properties, layout }: HmiWidgetProps) {
     return writable(v);
   }
 
+  // A typed value outside min/max is refused, never clamped: the numpad keeps
+  // it on screen and says why. Only the ± steps stop at the bound.
   function commit(raw: string) {
-    setIsEditing(false);
     const exact = integerOf(raw);
-    if (exact !== null && !Number.isSafeInteger(Number(exact))) {
-      writeVariable(clamp(exact));
-      return;
-    }
-    const parsed = parseFloat(raw);
-    if (Number.isFinite(parsed)) writeVariable(clamp(parsed));
+    const typed = exact !== null && !Number.isSafeInteger(Number(exact)) ? exact : parseFloat(raw);
+    if (typeof typed === 'number' && !Number.isFinite(typed)) return;
+    if (typed < min || typed > max) return;
+    setIsEditing(false);
+    writeVariable(writable(typed));
   }
 
   function stepBy(delta: number): number | string {
@@ -213,12 +239,18 @@ export default function NumericStepper({ properties, layout }: HmiWidgetProps) {
         isOpen={isEditing && !isIdle}
         value={localValue}
         onChange={setLocalValue}
-        onClose={commit}
+        onApply={commit}
+        onCancel={() => setIsEditing(false)}
         anchorRef={wrapperRef}
         title={label || undefined}
+        dockPosition={numpadPosition}
         unit={showRangeOnNumpad ? unit || undefined : undefined}
-        min={showRangeOnNumpad && isFiniteBound(min) ? Number(min) : undefined}
-        max={showRangeOnNumpad && isFiniteBound(max) ? Number(max) : undefined}
+        min={isFiniteBound(min) ? Number(min) : undefined}
+        max={isFiniteBound(max) ? Number(max) : undefined}
+        showRange={showRangeOnNumpad}
+        currentValue={exactValue !== null || fValue != null ? shownValue : undefined}
+        decimals={isInteger ? 0 : Math.min(6, Math.max(0, Math.trunc(decimals)))}
+        allowNegative={allowNegative && !(min >= 0)}
       />
     </div>
   );

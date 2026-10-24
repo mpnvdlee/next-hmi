@@ -1061,14 +1061,25 @@ interface VirtualNumpadProps {
   isOpen: boolean;
   value: string;
   onChange: (value: string) => void;
-  onClose: (value: string) => void;
+  /** Called on Enter with a value that parses and sits inside min/max. */
+  onApply: (value: string) => void;
+  /** Called on ×, Escape, or a press outside the panel: the entry is dropped. */
+  onCancel: () => void;
   anchorRef?: { readonly current: Element | null };
   title?: string;
   dockPosition?: 'center' | 'bottom-right';
-  /** Range/unit hint shown under the title. Reddens the value preview and disables Enter when out of range. Omit to hide. */
+  /** Bounds a value must sit inside to be applied; out of range, Enter is disabled and the panel says why. */
   min?: number;
   max?: number;
   unit?: string;
+  /** Whether min/max show as a hint under the title. They gate Enter either way. Default true. */
+  showRange?: boolean;
+  /** The value being replaced: the placeholder while the entry is empty, and the "Current setpoint" line. */
+  currentValue?: string;
+  /** Digits allowed after the point; 0 disables the point. Omit for no limit. */
+  decimals?: number;
+  /** Whether the minus key works. Default: true unless min is 0 or more. */
+  allowNegative?: boolean;
 }
 
 interface CloseButtonProps {

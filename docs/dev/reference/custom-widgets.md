@@ -367,7 +367,7 @@ widget that renders one branches on both pairs below — as the built-in `Icon`,
 
 ### Virtual input
 
-- `VirtualKeyboard` / `VirtualNumpad` — modal soft input components driven by `{ isOpen, value, onChange, onClose, anchorRef?, title?, dockPosition? }`. `VirtualKeyboard` also takes optional `password?` to mask its value preview. `VirtualNumpad` also takes optional `min?`, `max?`, `unit?` — shown as a range/unit hint under the title and used to redden the value preview when the entered value is out of bounds.
+- `VirtualKeyboard` / `VirtualNumpad` — modal soft input components driven by `{ isOpen, value, onChange, anchorRef?, title?, dockPosition? }`. `VirtualKeyboard` closes through `onClose()` and also takes optional `password?` to mask its value preview. `VirtualNumpad` has no `onClose`: Enter calls `onApply(value)` — only with a value that parses and sits inside `min?`/`max?` — and ×, Escape or a press outside call `onCancel()`, so backing out never writes. Out of range, Enter is disabled and the panel says why ("Enter a value between 80 and 200 ms"). It also takes optional `unit?`, `showRange?` (the min/max hint; the bounds gate Enter either way), `currentValue?` (placeholder and "Current setpoint" line — start `value` empty so the first key replaces it), `decimals?` (0 disables the point) and `allowNegative?` (default: off when `min` ≥ 0).
 - `CloseButton` — the standard themed close/dismiss control, driven by `{ onClick?, label?, tone?, className? }`.
 
 ### Charts

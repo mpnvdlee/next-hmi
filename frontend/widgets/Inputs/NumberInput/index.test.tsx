@@ -81,7 +81,7 @@ describe('NumberInput', () => {
     expect(sentFrame().requestId).toBeTruthy();
   });
 
-  it('sends nothing and toasts when the value is outside the field range', async () => {
+  it('refuses a typed value outside the field range and says why', async () => {
     useVariableStore.setState({
       values: { [VAR_KEY]: { fValue: 12 } },
       ...structMeta({ fValue: { min: 0, max: 100 } }),
@@ -94,26 +94,67 @@ describe('NumberInput', () => {
     await user.type(field, '500{Enter}');
 
     expect(sendWsMessage).not.toHaveBeenCalled();
-    const toasts = useHmiStore.getState().pendingToasts;
-    expect(toasts).toHaveLength(1);
-    expect(toasts[0].message).toMatch(/outside the allowed range/i);
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter a value between 0 and 100');
   });
 
-  it('clamps a numpad commit to the widget max', async () => {
+  it('refuses a numpad entry above the widget max instead of clamping it', async () => {
     useVariableStore.setState({ values: { [VAR_KEY]: { fValue: 12 } } });
     const user = userEvent.setup();
-    // showRangeOnNumpad off so the numpad itself does not gate Enter — the
-    // widget's own clamp is what has to hold the limit here.
+    // The range hint hidden: the bounds must hold all the same.
     renderInput({ variable: BINDING, min: 0, max: 100, showRangeOnNumpad: false });
 
     await user.click(screen.getByRole('textbox'));
-    await user.click(screen.getByRole('button', { name: 'Clear' }));
     for (const digit of '5000') {
       await user.click(screen.getByRole('button', { name: digit }));
     }
     await user.click(screen.getByRole('button', { name: 'Enter' }));
 
-    expect(sentFrame().value).toBe(100);
+    expect(sendWsMessage).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing when the operator closes the numpad with ×', async () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: { fValue: 12 } } });
+    const user = userEvent.setup();
+    renderInput({ variable: BINDING });
+
+    await user.click(screen.getByRole('textbox'));
+    await user.click(screen.getByRole('button', { name: '7' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__close')!);
+
+    expect(sendWsMessage).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox')).toHaveValue('12');
+  });
+
+  it('starts the entry empty, so a key replaces the value instead of appending', async () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: { fValue: 35 } } });
+    const user = userEvent.setup();
+    renderInput({ variable: BINDING });
+
+    await user.click(screen.getByRole('textbox'));
+    expect(screen.getByText('Current setpoint 35')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '7' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
+
+    expect(sentFrame().value).toBe(7);
+  });
+
+  it('shows and limits the configured decimal places', async () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: { fValue: 2 } } });
+    const user = userEvent.setup();
+    renderInput({ variable: BINDING, decimals: 0 });
+
+    expect(screen.getByRole('textbox')).toHaveValue('2');
+    await user.click(screen.getByRole('textbox'));
+    expect(screen.getByRole('button', { name: '.' })).toBeDisabled();
+  });
+
+  it('disables minus when negatives are not allowed', async () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: { fValue: 2 } } });
+    const user = userEvent.setup();
+    renderInput({ variable: BINDING, allowNegative: false });
+
+    await user.click(screen.getByRole('textbox'));
+    expect(screen.getByRole('button', { name: '-' })).toBeDisabled();
   });
 
   it('flags a value the variable range allows but the widget range does not', () => {

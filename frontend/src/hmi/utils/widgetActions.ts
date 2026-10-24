@@ -93,9 +93,7 @@ export function executeWidgetActions(
     }
 
     if (action.type === 'if') {
-      const branch = evaluatePropertyValue(action.condition, evalCtx)
-        ? action.then
-        : action.else;
+      const branch = evaluatePropertyValue(action.condition, evalCtx) ? action.then : action.else;
       executeWidgetActions(branch, context);
       continue;
     }
