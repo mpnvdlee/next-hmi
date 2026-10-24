@@ -184,6 +184,7 @@ dashboard via `POST /api/projects/{id}/mcp` and reported by `projects_list`. A
 - `onLocaleChanged`
 - `onUserLoggedIn`
 - `onUserLoggedOut`
+- `onInteractionDenied` (a press on a non-interactable widget)
 
 Index page node — structural only. Saving the index strips everything else, so
 a page's title, icon and the rest of its metadata live in its page document:

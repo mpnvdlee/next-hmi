@@ -118,6 +118,7 @@ Some things should happen because *the system reached a state*, not because some
 | **onUserLoggedIn** | When this runtime goes from the guest identity to a signed-in user. |
 | **onUserLoggedOut** | When it goes back to guest. |
 | **onLocaleChanged** | When the active language changes (not on the initial load). |
+| **onInteractionDenied** | When someone presses a widget that is not **Interactable** — the place to open your sign-in dialog. Runs whatever the **Locked feedback** mode is. |
 
 They are scoped to the runtime that triggered them, so on a multi-panel installation each screen runs its own — one operator signing in on the line-side panel does not fire `onUserLoggedIn` in the control room.
 
