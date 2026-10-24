@@ -102,4 +102,18 @@ describe('Switch', () => {
 
     expect(screen.getByRole('switch')).toBeDisabled();
   });
+
+  it.each([
+    ['false', 'false'],
+    ['0', 'false'],
+    ['off', 'false'],
+    ['', 'false'],
+    ['true', 'true'],
+    ['on', 'true'],
+  ])('reads the tag text %j as aria-checked=%s', (value, checked) => {
+    useVariableStore.setState({ values: { 'PLC:Pump/Running': value } });
+    renderSwitch({ variable: { $var: { path: 'PLC:Pump/Running' } } });
+
+    expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', checked);
+  });
 });

@@ -38,6 +38,12 @@ Control and SIMATIC S7-1500. The project file format is unchanged.
   under *Removed from server* or marked stale. If an earlier browse had marked
   it stale, it is reactivated.
 
+- **On/off widgets read `"false"` as off.** An **LED Indicator**, **Switch** or
+  **Menu Toggle** bound to a text tag lit up or switched on for any non-empty
+  text, `"false"` and `"0"` included. They now read `"false"`, `"0"`, `"no"`
+  and `"off"` as off, as the rest of NEXT HMI already did. An empty text stays
+  off.
+
 - **A read-only variable without a type reports read-only.** A write or toggle
   to a variable that has no data type and is not writable reported *invalid
   value*; it now reports *Variable is read-only*, as the runtime's local
