@@ -209,6 +209,7 @@ type AsyncActionType =
   | 'logoutUser'
   | 'writeDataVariable'
   | 'toggleDataVariable'
+  | 'editValue'
   | 'recipeLoad'
   | 'recipeSave';
 
@@ -238,6 +239,11 @@ const RESULT_FIELDS_BY_ACTION_SLOT: Record<AsyncActionType, Record<ResultEventKe
     onSuccess: ['datasource', 'path'],
     onFailed: ['datasource', 'path', 'reason'],
     onSettled: ['datasource', 'path', 'reason'],
+  },
+  editValue: {
+    onSuccess: ['value', 'previous', 'datasource', 'path'],
+    onFailed: ['value', 'previous', 'datasource', 'path', 'reason'],
+    onSettled: ['value', 'previous', 'datasource', 'path', 'reason'],
   },
   recipeLoad: {
     onSuccess: ['result', 'datasetId', 'written', 'total', 'verified', 'failures'],
@@ -564,6 +570,7 @@ const WRITE_TARGET_FILTER = {
   type: ['String', 'Boolean', 'Integer', 'Float', 'DateTime', 'Date', 'Time', 'Duration'],
 };
 const TOGGLE_TARGET_FILTER = { label: 'Toggle target', write: true, type: ['Boolean'] };
+const EDIT_TARGET_FILTER = { label: 'Edit Value target', write: true, type: ['Integer', 'Float'] };
 
 /** The copy's element a Repeat-item target names, or undefined for a `$var`. */
 function repeatTargetOf(target: WriteTarget | undefined): { member?: string } | undefined {
@@ -907,6 +914,125 @@ const ToggleDataVariableEditor: EditorFor<'toggleDataVariable'> = ({ action, ctx
   );
 };
 
+const MIN_SCHEMA: SchemaField = { type: 'Float', label: 'Min' };
+const MAX_SCHEMA: SchemaField = { type: 'Float', label: 'Max' };
+const DECIMALS_SCHEMA: SchemaField = { type: 'Integer', label: 'Decimals' };
+const NEGATIVE_SCHEMA: SchemaField = { type: 'Boolean', label: 'Allow negative' };
+const POSITION_SCHEMA: SchemaField = { type: 'String', format: 'select', label: 'Position' };
+
+/** A number field left empty: the runtime falls back to the variable's own setting. */
+function OptionalNumberInput({
+  value,
+  placeholder,
+  integer,
+  onChange,
+}: {
+  value: unknown;
+  placeholder: string;
+  integer?: boolean;
+  onChange: (v: number | undefined) => void;
+}) {
+  return (
+    <input
+      type="number"
+      className="cfg-prop-input"
+      step={integer ? 1 : 'any'}
+      min={integer ? 0 : undefined}
+      placeholder={placeholder}
+      value={typeof value === 'number' ? value : ''}
+      onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+    />
+  );
+}
+
+const EditValueEditor: EditorFor<'editValue'> = ({ action, ctx }) => {
+  const widgetId = useContext(PanelScopeContext);
+  const targetDiagnostic = useFieldDiagnostic(widgetId, [...ctx.path, 'target']);
+  const repeatScope = useRepeatEditorScope();
+  const targetType = writeTargetType(action.target, repeatScope, ctx.dataTypes);
+  const canonical = targetType !== undefined ? canonicalOpcuaWriteType(targetType) : undefined;
+  const notNumeric = targetType !== undefined && canonical !== 'Integer' && canonical !== 'Float';
+  const negative =
+    action.allowNegative === true ? 'yes' : action.allowNegative === false ? 'no' : 'auto';
+  return (
+    <>
+      <WriteTargetRow
+        action={action}
+        ctx={ctx}
+        filter={EDIT_TARGET_FILTER}
+        diagnostic={
+          notNumeric
+            ? { level: 'error', message: 'Only a numeric variable can be edited.' }
+            : targetDiagnostic
+        }
+      />
+      <LoginFieldEditor
+        ctx={ctx}
+        fieldKey="title"
+        label="Title"
+        value={action.title}
+        onChange={(v) => ctx.update({ title: v })}
+      />
+      <LoginFieldEditor
+        ctx={ctx}
+        fieldKey="unit"
+        label="Unit"
+        value={action.unit}
+        onChange={(v) => ctx.update({ unit: v })}
+      />
+      <ActionFieldRow ctx={ctx} fieldKey="min" schema={MIN_SCHEMA} label="Min">
+        <OptionalNumberInput
+          value={action.min}
+          placeholder="Variable's range"
+          onChange={(v) => ctx.update({ min: v })}
+        />
+      </ActionFieldRow>
+      <ActionFieldRow ctx={ctx} fieldKey="max" schema={MAX_SCHEMA} label="Max">
+        <OptionalNumberInput
+          value={action.max}
+          placeholder="Variable's range"
+          onChange={(v) => ctx.update({ max: v })}
+        />
+      </ActionFieldRow>
+      <ActionFieldRow ctx={ctx} fieldKey="decimals" schema={DECIMALS_SCHEMA} label="Decimals">
+        <OptionalNumberInput
+          integer
+          value={action.decimals}
+          placeholder={canonical === 'Integer' ? '0' : 'No limit'}
+          onChange={(v) => ctx.update({ decimals: v })}
+        />
+      </ActionFieldRow>
+      <ActionFieldRow
+        ctx={ctx}
+        fieldKey="allowNegative"
+        schema={NEGATIVE_SCHEMA}
+        label="Allow negative"
+      >
+        <Select
+          value={negative}
+          onChange={(v) =>
+            ctx.update({ allowNegative: v === 'yes' ? true : v === 'no' ? false : undefined })
+          }
+        >
+          <option value="auto">Unless min is 0 or more</option>
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </Select>
+      </ActionFieldRow>
+      <ActionFieldRow ctx={ctx} fieldKey="position" schema={POSITION_SCHEMA} label="Position">
+        <Select
+          value={action.position ?? 'center'}
+          onChange={(v) => ctx.update({ position: v as 'center' | 'bottom-right' })}
+        >
+          <option value="center">Center</option>
+          <option value="bottom-right">Bottom right</option>
+        </Select>
+      </ActionFieldRow>
+      <ResultHandlersSubrows action={action} actionType="editValue" ctx={ctx} />
+    </>
+  );
+};
+
 const LoginUserEditor: EditorFor<'loginUser'> = ({ action, ctx }) => (
   <>
     <LoginFieldEditor
@@ -1157,6 +1283,7 @@ export const ACTION_EDITORS: ActionEditors = {
   closePageOverlay: ClosePageOverlayEditor,
   writeDataVariable: WriteDataVariableEditor,
   toggleDataVariable: ToggleDataVariableEditor,
+  editValue: EditValueEditor,
   if: IfEditor,
   recipeLoad: RecipeLoadEditor,
   recipeSave: RecipeSaveEditor,

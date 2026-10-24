@@ -599,6 +599,25 @@ export type ButtonAction =
       onSettled?: ButtonAction[];
     }
   | {
+      /** Opens the numpad on a numeric variable; Apply writes, Cancel does nothing. */
+      type: 'editValue';
+      /** Absent until a target is picked. */
+      target?: WriteTarget;
+      title?: unknown;
+      unit?: unknown;
+      /** Empty falls back to the variable's own configured range. */
+      min?: unknown;
+      max?: unknown;
+      /** Empty: none for an Integer variable, no limit otherwise. */
+      decimals?: unknown;
+      /** Empty: allowed unless the lower bound is 0 or more. */
+      allowNegative?: unknown;
+      position?: 'center' | 'bottom-right';
+      onSuccess?: ButtonAction[];
+      onFailed?: ButtonAction[];
+      onSettled?: ButtonAction[];
+    }
+  | {
       type: 'loginUser';
       username: unknown;
       password: unknown;

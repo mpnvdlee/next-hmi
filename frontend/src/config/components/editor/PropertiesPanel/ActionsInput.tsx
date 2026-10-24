@@ -128,7 +128,12 @@ export default function ActionsInput({
 
     async function ensureDataTypes() {
       for (const action of actions) {
-        if (action.type !== 'writeDataVariable' && action.type !== 'toggleDataVariable') continue;
+        if (
+          action.type !== 'writeDataVariable' &&
+          action.type !== 'toggleDataVariable' &&
+          action.type !== 'editValue'
+        )
+          continue;
         const address = writeTargetAddress(action.target);
         if (!address) continue;
 
@@ -155,13 +160,15 @@ export default function ActionsInput({
     // The picked element index is baked into the path as a `[N]` suffix — the
     // same shape a migrated pair takes — so the path is also the picker's key.
     const currentBinding =
-      current?.type === 'writeDataVariable' || current?.type === 'toggleDataVariable'
+      current?.type === 'writeDataVariable' ||
+      current?.type === 'toggleDataVariable' ||
+      current?.type === 'editValue'
         ? varBindingOf(current.target)
         : undefined;
     const pickedKey = (binding: VariableBinding, metadata?: BindingPickMetadata) =>
       metadata?.index !== undefined ? `${binding.path}[${metadata.index}]` : binding.path;
-    if (current?.type === 'toggleDataVariable') {
-      openBindingPicker('', 'toggleDataVariable', {
+    if (current?.type === 'toggleDataVariable' || current?.type === 'editValue') {
+      openBindingPicker('', current.type, {
         currentBinding,
         onPick: (binding: VariableBinding, metadata?: BindingPickMetadata) => {
           const key = pickedKey(binding, metadata);
@@ -177,7 +184,10 @@ export default function ActionsInput({
             }));
           }
         },
-        filter: { label: 'Toggle target', write: true, type: ['Boolean'] },
+        filter:
+          current.type === 'editValue'
+            ? { label: 'Edit Value target', write: true, type: ['Integer', 'Float'] }
+            : { label: 'Toggle target', write: true, type: ['Boolean'] },
       });
       return;
     }
@@ -358,6 +368,18 @@ function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets)
         </>
       ) : (
         K('Toggle boolean variable')
+      );
+    }
+    case 'editValue': {
+      const address = writeTargetAddress(action.target);
+      return address ? (
+        <>
+          <Kw tint={tint}>Edit</Kw>
+          {'\u00a0'}
+          <BreakableToken text={`${address.datasource}:${address.path}`} />
+        </>
+      ) : (
+        K('Edit value')
       );
     }
     case 'recipeLoad': {

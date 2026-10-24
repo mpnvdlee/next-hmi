@@ -19,6 +19,14 @@ heading.
   as a file, a compose file and `install.sh`, for a machine that cannot reach a
   registry.
 
+- **Edit Value opens the numpad on a tag without a Number Input.** The new
+  action puts the numpad over the screen for a numeric variable — a setpoint
+  behind a machine tile, a value in a table row, the element a dialog's input
+  names. **Apply** writes, **Cancel** writes nothing and runs no handler.
+  Min, max and decimals default to what the variable itself is configured
+  with, and `onSuccess` / `onFailed` / `onSettled` read the entered value and
+  the one it replaced as `$result` `value` and `previous`.
+
 - **A variable's array index can come from another value.** A binding such
   as `Safety/Open` with its index bound to a dialog's input parameter reads,
   writes and toggles the element of whichever device opened the dialog — one

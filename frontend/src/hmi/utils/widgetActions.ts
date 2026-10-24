@@ -51,6 +51,48 @@ function withBoundIndexResolved(target: unknown, ctx: EvaluationContext): unknow
   return substituteBoundIndexes(target, (index) => resolveBoundIndex(index, ctx));
 }
 
+/** The value a write address holds now. A struct member read outside a widget
+ *  has no subscription of its own, so it is picked off the struct's record. */
+function currentValueAt(target: unknown, ctx: EvaluationContext): unknown {
+  const value = evaluatePropertyValue(target, ctx);
+  if (value !== null) return value;
+  const address = writeTargetAddress(target);
+  const slash = address?.path.lastIndexOf('/') ?? -1;
+  if (!address || slash < 0) return null;
+  const parent = readStoredVariable(address.datasource, address.path.slice(0, slash));
+  const record = parent as unknown as Record<string, unknown> | null;
+  return typeof record === 'object' && record
+    ? (record[address.path.slice(slash + 1)] ?? null)
+    : null;
+}
+
+/** The range configured on the variable a write address names — its own, or a
+ *  struct member's — and whether it holds whole numbers only. */
+function configuredRange(address: { datasource: string; path: string }): {
+  min?: number;
+  max?: number;
+  integer: boolean;
+} {
+  const { varMeta } = useVariableStore.getState();
+  const location = address.path.replace(/\[-?\d+\]/g, '');
+  const own = varMeta[`${address.datasource}:${location}`];
+  if (own) {
+    const integer = own.type.kind === 'scalar' && own.type.base === 'Integer';
+    return { min: own.min, max: own.max, integer };
+  }
+  const slash = location.lastIndexOf('/');
+  const parent =
+    slash > 0 ? varMeta[`${address.datasource}:${location.slice(0, slash)}`] : undefined;
+  return { ...parent?.fieldRanges?.[location.slice(slash + 1)], integer: false };
+}
+
+/** A number an action field resolves to, or undefined when it is left empty. */
+function optionalNumber(value: unknown, ctx: EvaluationContext): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const n = Number(evaluatePropertyValue(value, ctx));
+  return Number.isFinite(n) ? n : undefined;
+}
+
 /** Page and global events fire outside any widget, so their context has no
  *  readers of its own; these read the live stores for the firing scope. */
 function storeEvalContext(scope: string): EvaluationContext {
@@ -137,6 +179,46 @@ export function executeWidgetActions(
         ...(requestId && { requestId }),
         scope,
         ...address,
+      });
+      continue;
+    }
+
+    if (action.type === 'editValue') {
+      const target = withBoundIndexResolved(action.target, evalCtx);
+      const address = writeTargetAddress(target);
+      if (!address) continue;
+      const range = configuredRange(address);
+      const decimals = optionalNumber(action.decimals, evalCtx) ?? (range.integer ? 0 : undefined);
+      const previous = currentValueAt(target, evalCtx);
+      const negative = action.allowNegative;
+      useHmiStore.getState().openNumpad({
+        id: randomUuid(),
+        title: String(evaluatePropertyValue(action.title, evalCtx) ?? '') || undefined,
+        unit: String(evaluatePropertyValue(action.unit, evalCtx) ?? '') || undefined,
+        min: optionalNumber(action.min, evalCtx) ?? range.min,
+        max: optionalNumber(action.max, evalCtx) ?? range.max,
+        decimals,
+        allowNegative:
+          negative === undefined || negative === null
+            ? undefined
+            : Boolean(evaluatePropertyValue(negative, evalCtx)),
+        position: action.position ?? 'center',
+        currentValue:
+          typeof previous === 'number'
+            ? decimals !== undefined
+              ? previous.toFixed(decimals)
+              : String(previous)
+            : undefined,
+        apply: (value) => {
+          const requestId = beginAsyncAction(action, scope, inputScopeProps, { value, previous });
+          sendWsMessage({
+            type: 'write_field',
+            ...(requestId && { requestId }),
+            scope,
+            ...address,
+            value,
+          });
+        },
       });
       continue;
     }

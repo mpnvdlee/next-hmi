@@ -54,6 +54,13 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
       <path d="M13.5 10.5 h-10 M6 8 l-2.5 2.5 L6 13" />
     </Icon>
   ),
+  // A keypad — three by three keys.
+  editValue: (
+    <Icon>
+      <rect x="2.5" y="2.5" width="11" height="11" rx="1" />
+      <path d="M6 2.5 v11 M10 2.5 v11 M2.5 6 h11 M2.5 10 h11" />
+    </Icon>
+  ),
   // Tray, arrow down — load into the form.
   recipeLoad: (
     <Icon>
