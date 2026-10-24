@@ -13,7 +13,7 @@ Custom widgets fire the same lists through the SDK's `executeWidgetActions`, so 
 
 ## The action catalog
 
-Fifteen types, in the order the **Add action** menu lists them. **Browse actions…** at the top of that menu opens the same catalog as a searchable drawer, grouped as below.
+Sixteen types, in the order the **Add action** menu lists them. **Browse actions…** at the top of that menu opens the same catalog as a searchable drawer, grouped as below.
 
 ### Screens
 
@@ -22,6 +22,7 @@ Fifteen types, in the order the **Add action** menu lists them. **Browse actions
 | **Open Dialog** | Opens a page from the **Dialogs** folder — or a whole **dialog group**, which brings its tabs and chrome along — as a modal on top of the current screen. It also fills in the target's **input parameters**, which the widgets inside read with `$componentProp`. |
 | **Open Page As Overlay** | Opens a navigable page from the **Pages** section — or a page group — as a modal on top of the current screen. Same presentation fields, no parameters: a navigation destination declares none. |
 | **Close Dialog/Overlay** | Closes either kind, by name, or the current one when left empty. Name the page or page group the overlay was opened with — switching tabs inside it doesn't change that. |
+| **Navigate To Page** | Closes every open dialog and overlay, then goes to a page from the **Pages** section, firing its page events as a menu press does. **Page** is a fixed page, or — inside a dialog — one of its input parameters of type **Page**, so the caller decides where it leads. A parameter that names no navigable page does nothing. |
 
 > [!NOTE]
 > **Two open actions, one close.** The two open actions differ only in which
@@ -37,7 +38,7 @@ Both open actions carry the presentation fields:
 - **Backdrop** — `dim` darkens the screen behind, `none` leaves it untouched (right for a small anchored popover).
 
 > [!NOTE]
-> **Page-to-page navigation is not an action.** Moving between screens is the job of the navigation widgets — **Navigation Menu**, **Tab Bar**, **Breadcrumb**, **Page Navigator** — which read the page tree and stay correct as it changes. See [Pages & navigation](pages.md#give-operators-a-way-around). Actions cover the things *on top of* a page: overlays.
+> **Navigation widgets are still the way around.** Moving between screens is the job of **Navigation Menu**, **Tab Bar**, **Breadcrumb** and **Page Navigator**, which read the page tree and stay correct as it changes. See [Pages & navigation](pages.md#give-operators-a-way-around). **Navigate To Page** is for a destination chosen at runtime: a station popup's *Open station page* button, where each caller of the dialog passes its own station's page.
 
 ### Machine
 

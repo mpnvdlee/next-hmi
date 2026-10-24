@@ -1877,6 +1877,7 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
         "height": "Integer",
     },
     "closePageOverlay": {"pageId": "page"},
+    "navigateToPage": {"pageId": "page"},
     "writeDataVariable": {
         "target": "target",
         "value": "writeValue",
@@ -2040,6 +2041,8 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
         if names_target and target not in ctx.page_ids:
             report.add(path, f"action target page '{target}' does not exist")
     page_id = action.get("pageId")
+    if kind == "navigateToPage":
+        _check_navigate_target(page_id, ctx, f"{path}/pageId", report)
     if kind in ("openDialog", "openPageOverlay") and isinstance(page_id, str) and page_id:
         _check_overlay_root(kind, page_id, ctx, f"{path}/pageId", report)
     if kind == "openDialog" and isinstance(page_id, str) and page_id:
@@ -2250,18 +2253,53 @@ def _static_page_id(value: Any) -> str | None:
     return None
 
 
-def _check_navigable(page_id: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> None:
-    """Flag a navigation target sitting in the Dialogs folder. Only the overlay
-    actions reach those, so a menu item or `format: 'page'` field naming one
-    goes nowhere — the runtime resolves the route against the `pages` root
-    alone and renders its empty state."""
+def _check_navigable(
+    page_id: Any, ctx: ValidationContext, path: str, report: ValidationReport, hint: str = ""
+) -> None:
+    """Flag a navigation target sitting in the Dialogs folder, or naming no page
+    at all. Only the overlay actions reach the Dialogs folder, so a menu item or
+    `format: 'page'` field naming one goes nowhere — the runtime resolves the
+    route against the `pages` root alone and renders its empty state."""
     pid = _static_page_id(page_id)
     if pid is not None and pid in ctx.dialogs_page_ids:
         report.warn(
             path,
             f"page '{pid}' is in the Dialogs folder — nothing navigates to it, "
-            "so this target opens nothing",
+            f"so this target opens nothing{hint}",
             severity="error", code="page-not-navigable",
+        )
+    # Only the `pages` root routes, so a page file neither root lists is as dead
+    # as a missing one. An empty set means the index wasn't read: skip.
+    elif pid is not None and ctx.navigable_page_ids and pid not in ctx.navigable_page_ids:
+        report.warn(
+            path, f"page '{pid}' is not in the Pages section", severity="error", code="page-unknown"
+        )
+
+
+def _check_navigate_target(page_id: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> None:
+    """A Navigate To Page target: a fixed page id (an unknown one is already the
+    page-field finding), or a `$componentProp` naming an input parameter
+    declared `format: 'page'` — whose callers' values `_check_navigable` checks."""
+    if isinstance(page_id, str):
+        if page_id in ctx.page_ids:
+            _check_navigable(page_id, ctx, path, report, " — open it with Open Dialog instead")
+        return
+    name = page_id.get("$componentProp") if isinstance(page_id, dict) and len(page_id) == 1 else None
+    if not isinstance(name, str):
+        report.warn(
+            path,
+            "the page is a fixed page or an input parameter declared as a page — nothing else",
+            severity="error", code="navigate-target-invalid",
+        )
+    elif not name:
+        report.warn(path, "property name is empty", severity="warning", code="componentprop-empty")
+    elif not ctx.input_scope or (
+        ctx.input_schema is not None and (ctx.input_schema.get(name) or {}).get("format") != "page"
+    ):
+        report.warn(
+            path,
+            f"input parameter '{name}' is not declared here as a page (format: page)",
+            severity="error", code="navigate-input-not-page",
         )
 
 

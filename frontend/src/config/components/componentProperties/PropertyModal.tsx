@@ -16,8 +16,10 @@ import PropRow from '../ui/PropRow';
 import BoolButtonGroup from '../ui/BoolButtonGroup';
 import {
   componentPropertyToSchemaField,
+  PAGE_INPUT,
   VALUE_TYPE_OPTIONS,
   VALUELESS_PROPERTY_TYPES,
+  type ComponentPropertySchema,
 } from '@shared/types/componentProperty';
 import { isScalarType } from '@shared/utils/valueTypes';
 import { renderSchemaField } from '../../utils/renderSchemaField';
@@ -27,11 +29,25 @@ interface Props {
   existingKeys: string[];
   /** Name of the component the property is added to. */
   contextName?: string;
-  onConfirm(key: string, label: string, type: string, defaultValue?: unknown): void;
+  /** Offer the Page type — a dialog's input parameters only; a Component's
+   *  declaration has no `format`. */
+  pageInputs?: boolean;
+  onConfirm(
+    key: string,
+    label: string,
+    declared: Pick<ComponentPropertySchema, 'type' | 'format'>,
+    defaultValue?: unknown,
+  ): void;
   onCancel(): void;
 }
 
-export function PropertyModal({ existingKeys, contextName, onConfirm, onCancel }: Props) {
+export function PropertyModal({
+  existingKeys,
+  contextName,
+  pageInputs = false,
+  onConfirm,
+  onCancel,
+}: Props) {
   const [key, setKey] = useState('');
   const [label, setLabel] = useState('');
   const [type, setType] = useState<string>('string');
@@ -49,6 +65,7 @@ export function PropertyModal({ existingKeys, contextName, onConfirm, onCancel }
   const canConfirm = trimmedKey.length > 0 && !isDuplicateKey;
   const arrayCapable = isScalarType(type);
   const finalType = arrayCapable && isArray ? `${type}[]` : type;
+  const declared = type === 'page' ? PAGE_INPUT : { type: finalType };
   // A select has no options until its row is expanded, and an array default
   // would need a list editor — both are set on the row once the property exists.
   const takesDefault =
@@ -65,7 +82,7 @@ export function PropertyModal({ existingKeys, contextName, onConfirm, onCancel }
     onConfirm(
       trimmedKey,
       label.trim() || trimmedKey,
-      finalType,
+      declared,
       takesDefault && defaultValue !== '' ? defaultValue : undefined,
     );
   }
@@ -112,7 +129,10 @@ export function PropertyModal({ existingKeys, contextName, onConfirm, onCancel }
 
         <PropRow label="Type">
           <Select value={type} onChange={handleTypeChange}>
-            {VALUE_TYPE_OPTIONS.map((t) => (
+            {(pageInputs
+              ? [...VALUE_TYPE_OPTIONS, { value: 'page', label: 'Page' }]
+              : VALUE_TYPE_OPTIONS
+            ).map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
               </option>
@@ -136,7 +156,7 @@ export function PropertyModal({ existingKeys, contextName, onConfirm, onCancel }
             sourceless
           >
             {renderSchemaField(
-              componentPropertyToSchemaField({ type, label: label.trim() || trimmedKey }),
+              componentPropertyToSchemaField({ ...declared, label: label.trim() || trimmedKey }),
               defaultValue,
               setDefaultValue,
             )}

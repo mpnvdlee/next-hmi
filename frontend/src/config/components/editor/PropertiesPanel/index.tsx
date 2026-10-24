@@ -680,6 +680,7 @@ function PagePanel({
             ownerName={resolvePageTitle(page.title)}
             title="Input Parameters"
             itemNoun="input parameter"
+            pageInputs
             properties={page.componentProperties ?? {}}
             onChange={(next) => updatePage(page.id, { componentProperties: next })}
           />
@@ -975,6 +976,7 @@ function PageGroupPanel({
             ownerName={resolvePageTitle(pageGroup.title)}
             title="Input Parameters"
             itemNoun="input parameter"
+            pageInputs
             properties={pageGroup.componentProperties ?? {}}
             onChange={(next) => updatePageGroup(pageGroup.id, { componentProperties: next })}
           />

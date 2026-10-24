@@ -586,6 +586,13 @@ export type ButtonAction =
    *  closes the top-most overlay. */
   | { type: 'closePageOverlay'; pageId?: string }
   | {
+      /** Closes every open overlay, then navigates to a page or page group in
+       *  the `pages` root: a fixed id, or a dialog input parameter declared
+       *  `format: 'page'`. One that resolves to no navigable page does nothing. */
+      type: 'navigateToPage';
+      pageId: string | { $componentProp: string };
+    }
+  | {
       type: 'writeDataVariable';
       /** Absent until a target is picked. */
       target?: WriteTarget;
