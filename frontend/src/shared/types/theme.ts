@@ -68,10 +68,22 @@ interface ThemeSpacing {
   shadow: string;
 }
 
+/** Numpad tokens. An empty value (or `null` weight) keeps the look derived from the rest of the theme. */
+interface ThemeNumpad {
+  columns: 3 | 4;
+  key_size: string;
+  gap: string;
+  key_font: string;
+  key_font_size: string;
+  key_font_weight: number | null;
+  accent: string;
+}
+
 export interface ThemeConfig {
   colors: ThemeColors;
   typography: ThemeTypography;
   spacing: ThemeSpacing;
+  numpad: ThemeNumpad;
 }
 
 /** One theme in the `/api/themes` index: its id and config. */

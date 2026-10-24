@@ -2,12 +2,8 @@ import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import CloseButton from './CloseButton';
 
-const NUMPAD_ROWS = [
-  ['7', '8', '9'],
-  ['4', '5', '6'],
-  ['1', '2', '3'],
-  ['0', '.', '-'],
-] as const;
+// One flat grid so the theme's column count (hmi.css) can move Back/Clear/Enter beside the digits.
+const NUMPAD_KEYS = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '0', '.', '-'] as const;
 
 interface VirtualNumpadProps {
   isOpen: boolean;
@@ -152,30 +148,23 @@ export function VirtualNumpad({
             {rangeMessage(min, max, unit)}
           </div>
         )}
-        {NUMPAD_ROWS.map((row, rowIndex) => (
-          <div
-            className="hmi-virtual-input__row hmi-virtual-input__row--3"
-            key={`numpad-row-${rowIndex}`}
-          >
-            {row.map((key) => (
-              <button
-                type="button"
-                key={key}
-                className="hmi-virtual-input__key"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => applyKey(key)}
-                disabled={keyDisabled(key)}
-                tabIndex={-1}
-              >
-                {key}
-              </button>
-            ))}
-          </div>
-        ))}
-        <div className="hmi-virtual-input__row hmi-virtual-input__row--3 hmi-virtual-input__row--actions">
+        <div className="hmi-virtual-input__keys">
+          {NUMPAD_KEYS.map((key) => (
+            <button
+              type="button"
+              key={key}
+              className="hmi-virtual-input__key"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => applyKey(key)}
+              disabled={keyDisabled(key)}
+              tabIndex={-1}
+            >
+              {key}
+            </button>
+          ))}
           <button
             type="button"
-            className="hmi-virtual-input__key"
+            className="hmi-virtual-input__key hmi-virtual-input__key--action hmi-virtual-input__key--back"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => onChange(value.slice(0, -1))}
             tabIndex={-1}
@@ -184,7 +173,7 @@ export function VirtualNumpad({
           </button>
           <button
             type="button"
-            className="hmi-virtual-input__key"
+            className="hmi-virtual-input__key hmi-virtual-input__key--action hmi-virtual-input__key--clear"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => onChange('')}
             tabIndex={-1}
@@ -193,7 +182,7 @@ export function VirtualNumpad({
           </button>
           <button
             type="button"
-            className="hmi-virtual-input__key hmi-virtual-input__key--accent"
+            className="hmi-virtual-input__key hmi-virtual-input__key--action hmi-virtual-input__key--accent"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
               if (canApply) onApply(value);

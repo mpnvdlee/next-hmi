@@ -1,6 +1,7 @@
 import { useProjectStore } from '@shared/store/projectStore';
 import { useThemeViewStore } from './themeViewStore';
 import type { ThemeConfig } from '@shared/types/theme';
+import { DEFAULT_THEME } from '@shared/utils/themeTokens';
 
 const SAMPLE: ThemeConfig = {
   colors: {
@@ -61,6 +62,7 @@ const SAMPLE: ThemeConfig = {
     radius_lg: '8px',
     shadow: '0 4px 16px rgba(0,0,0,0.12)',
   },
+  numpad: DEFAULT_THEME.numpad,
 };
 
 describe('themeViewStore', () => {

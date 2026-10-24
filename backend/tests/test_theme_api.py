@@ -201,6 +201,17 @@ def test_validate_reports_multiple_malformed_fields_independently(theme_client):
     assert "typography.heading_weight" in paths
 
 
+def test_validate_numpad_accepts_empty_follow_values_and_rejects_bad_ones(theme_client):
+    client, _ = theme_client
+    theme = _valid_theme()
+    theme["numpad"] = {"columns": 4, "accent": "", "key_font_weight": None}
+    assert client.post("/api/themes/default/validate", json=theme).json()["valid"] is True
+
+    theme["numpad"] = {"columns": 5, "accent": "red"}
+    result = client.post("/api/themes/default/validate", json=theme).json()
+    assert {e["path"] for e in result["errors"]} == {"numpad.columns", "numpad.accent"}
+
+
 def test_put_theme_still_uses_automatic_422_for_malformed_body(theme_client):
     client, _ = theme_client
     client.get("/api/themes")  # seed

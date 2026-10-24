@@ -232,6 +232,28 @@ class ThemeSpacing(BaseModel):
     shadow: str = Field(default_factory=lambda: _default("spacing", "shadow"), description="Elevation shadow")
 
 
+class ThemeNumpad(BaseModel):
+    """Numpad tokens. An empty value (or ``null`` weight) keeps the look the numpad
+    derives from the rest of the theme: body font, accent colour, the 188px panel."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    columns: Literal[3, 4] = Field(default_factory=lambda: _default("numpad", "columns"), description="3 = Back/Clear/Enter under the digits, 4 = in a column beside them")
+    key_size: str = Field(default_factory=lambda: _default("numpad", "key_size"), description="Key width and minimum height")
+    gap: str = Field(default_factory=lambda: _default("numpad", "gap"), description="Gap between keys")
+    key_font: str = Field(default_factory=lambda: _default("numpad", "key_font"), max_length=256, description="Key font family")
+    key_font_size: str = Field(default_factory=lambda: _default("numpad", "key_font_size"), description="Digit key font size")
+    key_font_weight: int | None = Field(default_factory=lambda: _default("numpad", "key_font_weight"), ge=100, le=900, description="Key font weight")
+    accent: str = Field(default_factory=lambda: _default("numpad", "accent"), description="Enter key colour")
+
+    @field_validator("accent")
+    @classmethod
+    def validate_accent(cls, v: str) -> str:
+        if v and not _validate_color(v):
+            raise ValueError(f"Invalid color format: {v}")
+        return v
+
+
 class ThemeConfig(BaseModel):
     """Complete editable theme configuration."""
 
@@ -240,6 +262,7 @@ class ThemeConfig(BaseModel):
     colors: ThemeColors = Field(default_factory=ThemeColors)
     typography: ThemeTypography = Field(default_factory=ThemeTypography)
     spacing: ThemeSpacing = Field(default_factory=ThemeSpacing)
+    numpad: ThemeNumpad = Field(default_factory=ThemeNumpad)
 
 
 # ── Request/Response models ────────────────────────────────────────────────────
