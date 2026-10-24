@@ -671,6 +671,26 @@ def test_stringexpr_wildcard_empty(ctx):
     assert report.warnings[0].path.endswith("/wildcards/2")
 
 
+@pytest.mark.parametrize("template", ["{Round2(1)}", "{Trim(Round1(1))} g", "{ Signed( Round2(1) ) }"])
+def test_stringexpr_digits_in_function_names_are_not_wildcards(ctx, template):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$stringExpr": {"template": template, "wildcards": {"1": {"$static": 3}}}},
+        None, ctx, "/p", report,
+    )
+    assert report.warnings == []
+
+
+@pytest.mark.parametrize("template", ["{Round2}", "{abc}", "{1.5}", "{Round2()}"])
+def test_stringexpr_non_wildcard_braces_are_not_wildcards(ctx, template):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$stringExpr": {"template": template, "wildcards": {}}},
+        None, ctx, "/p", report,
+    )
+    assert report.warnings == []
+
+
 def test_stringexpr_all_wildcards_bound_does_not_warn(ctx):
     report = ValidationReport()
     _validate_property_value(
