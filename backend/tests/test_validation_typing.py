@@ -539,6 +539,10 @@ def _toggle(path: str, **ref) -> dict:
     return {"type": "toggleDataVariable", "target": {"$var": {"path": path, **ref}}}
 
 
+def _edit(path: str, **fields) -> dict:
+    return {"type": "editValue", "target": {"$var": {"path": path}}, **fields}
+
+
 @pytest.mark.parametrize(
     ("action", "code"),
     [
@@ -547,6 +551,9 @@ def _toggle(path: str, **ref) -> dict:
         (_toggle("PLC:Count"), "toggle-target-type"),
         (_toggle("PLC:Flags"), "toggle-target-type"),
         (_toggle("PLC:Flags", index=7), "var-index"),
+        (_edit("PLC:Run"), "edit-target-type"),
+        (_edit("PLC:Levels"), "edit-target-type"),
+        (_edit("PLC:Speed"), "write-target-type"),
         # Access the registry does not state is read-only.
         (_write("PLC:Levels", [1.5]), "write-target-type"),
     ],
@@ -564,10 +571,18 @@ def test_a_target_the_action_cannot_write(ctx, action, code):
         _write("PLC:Flags", [True, False, True, False]),
         _toggle("PLC:Run"),
         _toggle("PLC:Flags", index=2),
+        _edit("PLC:Count", min=0, max=50.5, decimals=1, title="Cycles", position="bottom-right"),
+        _edit("PLC:Setpoint"),
     ],
 )
 def test_a_target_the_action_can_write(ctx, action):
     assert _codes(_action(ctx, action)) == []
+
+
+def test_an_edit_value_names_a_known_numpad_position(ctx):
+    report = _action(ctx, _edit("PLC:Count", position="left"))
+    assert _codes(report) == ["numpad-position-invalid"]
+    assert report.warnings[0].path == "/a/position"
 
 
 def _entries(entries: dict):

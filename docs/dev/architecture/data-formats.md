@@ -419,6 +419,7 @@ nested inside other actions (`onSuccess` / `onFailed` / `onSettled`, `then` /
 | `closePageOverlay` | `pageId` — the overlay to close; empty closes the top-most |
 | `writeDataVariable` | `target`, `value` (a literal, a `$componentProp` or a `$repeatItem`), `onSuccess` / `onFailed` / `onSettled` |
 | `toggleDataVariable` | `target`, `onSuccess` / `onFailed` / `onSettled` |
+| `editValue` | `target`, `title`, `unit`, `min`, `max`, `decimals`, `allowNegative`, `position` (`center` \| `bottom-right`), `onSuccess` / `onFailed` / `onSettled` |
 | `if` | `condition` (a Boolean property value), `then`, `else` |
 | `loginUser` | `username`, `password`, `onSuccess` / `onFailed` / `onSettled` |
 | `logoutUser` | `onSuccess` / `onFailed` / `onSettled` |

@@ -13,7 +13,7 @@ Custom widgets fire the same lists through the SDK's `executeWidgetActions`, so 
 
 ## The action catalog
 
-Fourteen types, in the order the **Add action** menu lists them. **Browse actions…** at the top of that menu opens the same catalog as a searchable drawer, grouped as below.
+Fifteen types, in the order the **Add action** menu lists them. **Browse actions…** at the top of that menu opens the same catalog as a searchable drawer, grouped as below.
 
 ### Screens
 
@@ -45,6 +45,7 @@ Both open actions carry the presentation fields:
 |---|---|
 | **Write Data Variable** | Pushes a value to a writable tag — a coil, a mode, a setpoint. The **Variable** row names the tag, picked from the variable picker; the **value** is a fixed literal typed to match the tag (true/false, a number, text — or a JSON array for a whole-array tag). The value's source pill can take it from one of the dialog's input parameters instead (inside a dialog's own actions and events), or from the copy's element (inside a [Repeater](properties.md#repeating-widgets-over-an-array-repeater)). Inside a Repeater the **Variable** row's source pill switches the target to **Repeat Item**: the copy's own element, or — for a struct element — the member you pick. The server coerces it to the tag's data type on write, and refuses it with `read_only` when the tag is not writable. |
 | **Toggle Boolean Variable** | Flips a writable Boolean tag — `true` becomes `false` and back. The server reads the tag's current value and writes the opposite, so a stale screen or a second panel cannot make it write the wrong state. Only Boolean variables can be picked. Fails with `value_unavailable` when the tag has no known value yet, and with `read_only` when it is not writable. |
+| **Edit Value** | Opens the numpad on a numeric tag — a setpoint behind a tile, a value in a table row — without a Number Input on the screen. **Apply** writes the entered value, **Cancel** (×, Escape, a press outside) writes nothing and runs no handler. **Title** and **Unit** label the numpad. **Min** and **Max** refuse a value outside them; left empty, the tag's own configured range applies, and without one there is no limit. **Decimals** limits the digits after the point — empty means none for an Integer tag and no limit otherwise — and **Allow negative** turns the minus key on or off (by default it is off when the lower bound is 0 or more). **Position** puts the numpad in the center (the default) or bottom right. Only Integer and Float tags can be picked; the target takes a Repeat item inside a Repeater, like **Write Data Variable**. |
 | **Recipe: Load** | Downloads a saved dataset into its variables. **Dataset** may be fixed or bound (a row id from a `$recipeList` grid). **Verify** reads the values back after writing and fails the action if they didn't take. A parameter bound to a variable that is not writable is skipped and listed in `failures` as `read_only`. |
 | **Recipe: Save** | Captures current live values into a dataset. Leave **Dataset** empty to update the one that is loaded. |
 
@@ -74,7 +75,7 @@ See [Users, groups & permissions](users.md#sign-in-and-out-on-a-screen) for the 
 
 ## Async actions and `$result`
 
-Six actions cross the wire and therefore *may fail*: **Write Data Variable**, **Toggle Boolean Variable**, **Recipe: Load**, **Recipe: Save**, **Login User**, **Logout User**. Each carries three optional handler lists:
+Seven actions cross the wire and therefore *may fail*: **Write Data Variable**, **Toggle Boolean Variable**, **Edit Value**, **Recipe: Load**, **Recipe: Save**, **Login User**, **Logout User**. Each carries three optional handler lists:
 
 - **onSuccess** — the server acknowledged.
 - **onFailed** — the server refused, or the request timed out (10 seconds) or the connection dropped.
@@ -86,6 +87,7 @@ Inside those handlers the **`$result`** source reads fields of what came back. W
 |---|---|---|
 | **Login / Logout User** | `username`, `groups`, `groupLabels` | `reason` |
 | **Write Data Variable** · **Toggle Boolean Variable** | `datasource`, `path` | `datasource`, `path`, `reason` |
+| **Edit Value** | `value` (what was entered), `previous` (what the tag held when the numpad opened), `datasource`, `path` | the same, plus `reason` |
 | **Recipe: Load** | `result`, `datasetId`, `written`, `total`, `verified`, `failures` | `reason` |
 | **Recipe: Save** | `datasetId` | `reason` |
 

@@ -647,6 +647,8 @@ exports) is skipped, never guessed.
 | `widgetprop-type` / `widgetprop-unknown` | error | See [Which variable fits a field](#which-variable-fits-a-field) |
 | `write-target-type` | error | A Write Data Variable or Toggle target the write path cannot write: a struct (a write addresses one variable — a whole array or one element of it — never a struct folder), a variable not known to be writable, or the Repeat item of a Repeater over a list rather than a variable |
 | `toggle-target-type` | error | A Toggle target that is not a single Boolean — a toggle reads the current value and inverts it |
+| `edit-target-type` | error | An Edit Value target that is not a single Integer or Float — the numpad enters one number |
+| `numpad-position-invalid` | error | An Edit Value `position` other than `center` or `bottom-right` |
 | `write-value-type` | error | A fixed Write Data Variable value (bare or `$static`) that `coerce_entry_write_value` in `backend/services/write_service.py` would reject against the target's entry — its OPC-UA type, array shape and fixed length, and `min` / `max` — worded as the editor's row words it (`writeCoercionMessages.json`). The entry is the live pool's when it serves the datasource, else the datasource file's |
 | `value-invalid` | error | A malformed source payload inside an action's field (`{ "$loc": 5 }`) — rejected elsewhere, reported here |
 | `action-page-unknown` | error | An action naming a page that does not exist, inside a component instance's property that only its declaration types as `actions`. The same action in a widget's `actions` field is a rejected write |

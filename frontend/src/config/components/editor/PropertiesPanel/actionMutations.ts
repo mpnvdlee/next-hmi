@@ -39,6 +39,8 @@ export function makeDefaultAction(
       return { type: 'if', condition: { $var: { path: '' } }, then: [], else: [] };
     case 'toggleDataVariable':
       return { type: 'toggleDataVariable' };
+    case 'editValue':
+      return { type: 'editValue', position: 'center' };
     case 'recipeLoad':
       return { type: 'recipeLoad', datasetId: { $static: '' }, verify: false };
     case 'recipeSave':

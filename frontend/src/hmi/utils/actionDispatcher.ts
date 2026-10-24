@@ -1,12 +1,12 @@
 /**
  * Action result dispatcher.
  *
- * Async actions (loginUser, logoutUser, writeDataVariable, toggleDataVariable) carry an optional
- * `onSuccess` / `onFailed` / `onSettled` list of follow-up actions. When such
- * an action is fired, `executeWidgetActions` calls `registerPending` here with
- * a freshly-generated requestId; the backend echoes the requestId on its
- * response, the WebSocket handler calls `resolvePending`, and we invoke the
- * appropriate handler list — always followed by `onSettled`.
+ * Async actions (loginUser, logoutUser, writeDataVariable, toggleDataVariable,
+ * editValue) carry an optional `onSuccess` / `onFailed` / `onSettled` list of
+ * follow-up actions. When such an action is fired, `executeWidgetActions` calls
+ * `registerPending` here with a freshly-generated requestId; the backend echoes
+ * the requestId on its response, the WebSocket handler calls `resolvePending`,
+ * and we invoke the appropriate handler list — always followed by `onSettled`.
  *
  * Pending entries are cleared on response, on timeout (10s), or on WebSocket
  * reconnect (via `flushAllAsDisconnected`). The `reason` exposed to handlers
@@ -48,6 +48,8 @@ interface PendingEntry {
   onSettled?: ButtonAction[];
   onResult?: PendingResultCallback;
   inputScopeProps?: Record<string, unknown>;
+  /** Fields the firing side adds to `$result`, under what the backend sends. */
+  result?: Record<string, unknown>;
   timeoutHandle: ReturnType<typeof setTimeout>;
 }
 
@@ -59,6 +61,7 @@ export interface RegisterPendingArgs {
   onSettled?: ButtonAction[];
   onResult?: PendingResultCallback;
   inputScopeProps?: Record<string, unknown>;
+  result?: Record<string, unknown>;
 }
 
 const TIMEOUT_MS = 10_000;
@@ -82,6 +85,7 @@ export function registerPending(args: RegisterPendingArgs): void {
     onSettled: args.onSettled,
     onResult: args.onResult,
     inputScopeProps: args.inputScopeProps,
+    result: args.result,
     timeoutHandle,
   });
 }
@@ -101,6 +105,7 @@ export function beginAsyncAction(
   },
   scope: string,
   inputScopeProps?: Record<string, unknown>,
+  result?: Record<string, unknown>,
 ): string | undefined {
   const hasHandlers =
     (action.onSuccess?.length ?? 0) > 0 ||
@@ -115,6 +120,7 @@ export function beginAsyncAction(
     onFailed: action.onFailed,
     onSettled: action.onSettled,
     inputScopeProps,
+    result,
   });
   return requestId;
 }
@@ -196,7 +202,7 @@ function runHandlers(
       scope: entry.scope,
       evalCtx: {
         inputScopeProps: entry.inputScopeProps,
-        resultValue: payload,
+        resultValue: { ...entry.result, ...payload },
       },
     });
   } catch (err) {

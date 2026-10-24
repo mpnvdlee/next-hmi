@@ -314,6 +314,23 @@ type ComponentAction =
       onSettled?: ComponentAction[];
     }
   | {
+      /** Opens the numpad on a numeric variable; Apply writes, Cancel does nothing. */
+      type: 'editValue';
+      /** `{ $var: { path: 'ds:path' } }`, or inside a Repeater the copy's element. */
+      target?: WriteTarget;
+      title?: unknown;
+      unit?: unknown;
+      /** Empty falls back to the variable's own configured range. */
+      min?: unknown;
+      max?: unknown;
+      decimals?: unknown;
+      allowNegative?: unknown;
+      position?: 'center' | 'bottom-right';
+      onSuccess?: ComponentAction[];
+      onFailed?: ComponentAction[];
+      onSettled?: ComponentAction[];
+    }
+  | {
       type: 'loginUser';
       username: unknown;
       password: unknown;
