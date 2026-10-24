@@ -207,6 +207,10 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
     const p = obj.$pageIsActive as { page?: string } | undefined;
     return p?.page ? p.page : '(current page)';
   }
+  if (key === '$overlay') {
+    const o = obj.$overlay as { page?: string; param?: string } | undefined;
+    return o?.page ? `${o.page}.${o.param || '?'}` : '(dialog input)';
+  }
   if (key === '$user') {
     const u = obj.$user as { field?: string } | undefined;
     if (u?.field === 'userList') return 'User list';

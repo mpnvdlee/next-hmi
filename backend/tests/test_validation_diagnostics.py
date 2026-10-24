@@ -723,6 +723,38 @@ def test_componentprop_empty(ctx):
     assert (w.code, w.severity) == ("componentprop-empty", "warning")
 
 
+def _overlay_ctx(ctx: ValidationContext) -> ValidationContext:
+    return replace(
+        ctx,
+        dialogs_page_ids=frozenset({"device"}),
+        page_property_keys={"device": frozenset({"device"})},
+    )
+
+
+@pytest.mark.parametrize(
+    "payload, code, severity",
+    [
+        ({"page": "", "param": ""}, "overlay-empty", "warning"),
+        ({"page": "device", "param": ""}, "overlay-empty", "warning"),
+        ({"page": "dashboard", "param": "device"}, "overlay-page", "error"),
+        ({"page": "device", "param": "motor"}, "overlay-param-unknown", "error"),
+    ],
+)
+def test_overlay_reports(ctx, payload, code, severity):
+    report = ValidationReport()
+    _validate_property_value({"$overlay": payload}, None, _overlay_ctx(ctx), "/p", report)
+    w = _warn(report)
+    assert (w.code, w.severity) == (code, severity)
+
+
+def test_overlay_reading_a_declared_input_is_clean(ctx):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$overlay": {"page": "device", "param": "device"}}, None, _overlay_ctx(ctx), "/p", report,
+    )
+    assert report.warnings == [] and report.findings == []
+
+
 def test_recipe_type_empty(ctx):
     report = ValidationReport()
     _validate_property_value({"$recipe": {"type": ""}}, None, ctx, "/p", report)

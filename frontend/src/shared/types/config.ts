@@ -121,6 +121,16 @@ export interface PageIsActiveSource {
   };
 }
 
+/** $overlay: an input parameter of a Dialogs-folder page, while it is open */
+export interface OverlaySource {
+  $overlay: {
+    /** The dialog page (or page group) id. */
+    page: string;
+    /** The input parameter it declares. */
+    param: string;
+  };
+}
+
 /** $if: conditional property source (condition + true/false branches) */
 export interface IfSource {
   $if: {

@@ -79,6 +79,7 @@ SOURCE_PRODUCES: dict[str, tuple[str, ...]] = {
     "$recipe": _field_produces("$recipe"),
     "$recipeList": ("record-list",),
     "$componentProp": ("any",),
+    "$overlay": ("any",),
     "$page": _field_produces("$page"),
     "$viewport": _field_produces("$viewport"),
     "$result": ("any",),

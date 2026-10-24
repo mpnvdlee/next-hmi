@@ -42,6 +42,14 @@ const ICONS: Record<PropertySource, ReactNode> = {
       <path d="M6 8.3 L7.4 9.7 L10.3 6.6" />
     </Icon>
   ),
+  // $overlay — a dialog card with a marked input.
+  $overlay: (
+    <Icon>
+      <rect x="2.5" y="3.5" width="11" height="9" rx="1" />
+      <path d="M2.5 6 h11" />
+      <circle cx="8" cy="9.2" r="1.3" />
+    </Icon>
+  ),
   // $if — branch fork.
   $if: (
     <Icon viewBox="0 0 24 24" strokeWidth={2}>
