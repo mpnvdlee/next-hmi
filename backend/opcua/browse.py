@@ -7,6 +7,7 @@ none of the engine's subscription state — so it is its own class.
 
 import asyncio
 import logging
+from collections.abc import Iterable
 from typing import Any
 
 from asyncua import Client, ua
@@ -34,6 +35,20 @@ _UNKNOWN_VAR_ATTRS = ("Unknown", False, -1)
 _HAS_COMPONENT = ua.NodeId(ua.ObjectIds.HasComponent)
 
 _BROWSE_NODE_CLASSES = int(ua.NodeClass.Object) | int(ua.NodeClass.Variable)
+
+# The only answers that say a node is gone. Anything else — access denied, a
+# busy server — still means the node is there.
+_NODE_MISSING = frozenset({ua.StatusCodes.BadNodeIdUnknown, ua.StatusCodes.BadNodeIdInvalid})
+
+
+def _node_ids_in(entry: dict[str, Any]) -> set[str]:
+    found: set[str] = set()
+    stack = [entry]
+    while stack:
+        current = stack.pop()
+        found.add(current["node_id"])
+        stack.extend(current.get("children", []))
+    return found
 
 
 _DECIMAL_ID = 50
@@ -150,11 +165,62 @@ class AddressSpaceBrowser:
         # Server-defined DataType → builtin name, filled during a browse.
         self._data_type_names: dict[str, str] = {}
 
-    async def browse(self, node: Node) -> dict[str, Any]:
-        """Walk the address space below *node*."""
+    async def browse(self, node: Node, *, saved_node_ids: Iterable[str] = ()) -> dict[str, Any]:
+        """Walk the address space below *node*.
+
+        Of *saved_node_ids* — the datasource's variables — those the walk did
+        not reach but the server still has are listed under
+        ``present_outside_browse``: not browsed is not removed.
+        """
         # Types can change with a PLC download between two browses.
         self._data_type_names = {}
-        return await self._browse_node(node)
+        tree = await self._browse_node(node)
+        walked = _node_ids_in(tree)
+        outside = [nid for nid in dict.fromkeys(saved_node_ids) if nid and nid not in walked]
+        present = await self.existing_node_ids(outside)
+        if present:
+            tree["present_outside_browse"] = present
+        return tree
+
+    async def existing_node_ids(self, node_ids: list[str]) -> list[str]:
+        """The subset of *node_ids* that still name a node on the server.
+
+        One NodeClass Read per chunk. Only BadNodeIdUnknown/Invalid counts as
+        gone, and a chunk the server will not read at all counts as present:
+        a check that failed must not report a tag as removed.
+        """
+        parsed: list[tuple[str, ua.NodeId]] = []
+        for nid in node_ids:
+            try:
+                parsed.append((nid, ua.NodeId.from_string(nid)))
+            except Exception:
+                continue
+        present: list[str] = []
+        budget = self._limits.read_ops_budget()
+        for start in range(0, len(parsed), budget):
+            chunk = parsed[start : start + budget]
+            params = ua.ReadParameters()
+            params.TimestampsToReturn = ua.TimestampsToReturn.Neither
+            for _, node_id in chunk:
+                rv = ua.ReadValueId()
+                rv.NodeId = node_id
+                rv.AttributeId = ua.AttributeIds.NodeClass
+                params.NodesToRead.append(rv)
+            try:
+                results = await self._client.uaclient.read(params)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "Could not check %d saved variables on %s: %s",
+                    len(chunk), self.datasource_name, exc,
+                )
+                present.extend(nid for nid, _ in chunk)
+                continue
+            for (nid, _), dv in zip(chunk, results, strict=False):
+                if dv.StatusCode.value not in _NODE_MISSING:
+                    present.append(nid)
+        return present
 
     # ── Batched browse helpers ────────────────────────────────────────────────
 

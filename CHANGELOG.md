@@ -32,6 +32,12 @@ Control and SIMATIC S7-1500. The project file format is unchanged.
 
 ### Fixed
 
+- **A re-browse no longer marks tags it did not walk as removed.** A saved
+  variable that the browse did not reach but that the server still has — one
+  imported from outside the current **Browse Root Node** — is no longer listed
+  under *Removed from server* or marked stale. If an earlier browse had marked
+  it stale, it is reactivated.
+
 - **A read-only variable without a type reports read-only.** A write or toggle
   to a variable that has no data type and is not writable reported *invalid
   value*; it now reports *Variable is read-only*, as the runtime's local

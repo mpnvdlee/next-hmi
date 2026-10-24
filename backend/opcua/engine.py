@@ -486,9 +486,20 @@ class DatasourceOpcuaEngine:
         browser = AddressSpaceBrowser(
             client, self._operation_limits, datasource_name=self.datasource_name
         )
-        result = await browser.browse(node)
+        result = await browser.browse(node, saved_node_ids=self._saved_node_ids())
         result["show_root"] = configured_root is not None
         return result
+
+    def _saved_node_ids(self) -> list[str]:
+        dm = self._datasource_manager
+        ds_entry = dm.get(self.datasource_name) if dm is not None else None
+        if ds_entry is None:
+            return []
+        return [
+            entry["node_id"]
+            for entry in list(ds_entry.registry.values())
+            if entry.get("node_id")
+        ]
 
     # ── Subscriptions ─────────────────────────────────────────────────────────
 

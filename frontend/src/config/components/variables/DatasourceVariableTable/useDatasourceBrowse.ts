@@ -21,9 +21,9 @@ export function useDatasourceBrowse({ dsName, latestTree, applyTreeUpdate }: Par
     setBrowseError(null);
 
     try {
-      const root = await apiJson<BrowseNode & { show_root?: boolean }>(
-        `/api/datasources/${encodeURIComponent(dsName)}/browse`,
-      );
+      const root = await apiJson<
+        BrowseNode & { show_root?: boolean; present_outside_browse?: string[] }
+      >(`/api/datasources/${encodeURIComponent(dsName)}/browse`);
 
       // The user may have switched to a different datasource while this
       // browse was in flight — latestTree/applyTreeUpdate are shared across
@@ -39,7 +39,11 @@ export function useDatasourceBrowse({ dsName, latestTree, applyTreeUpdate }: Par
       const browseTree = buildFromBrowse(items, new Map());
 
       const savedTree = latestTree.current;
-      const diff = computeBrowseDiff(savedTree, browseTree);
+      const diff = computeBrowseDiff(
+        savedTree,
+        browseTree,
+        new Set(root.present_outside_browse ?? []),
+      );
 
       // Silent reactivations are server-state corrections, not user-reviewable
       // choices — apply them immediately so Discard can't strand a var as
