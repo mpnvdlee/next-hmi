@@ -1338,6 +1338,8 @@ def _extract_variable_keys_from_value(value: Any, keys: set[str], depth: int = M
     if binding is not None:
         ds, path = binding
         keys.add(build_var_key(ds, path))
+        # A bound index is a source of its own, which may read another variable.
+        _extract_variable_keys_from_value(value["$var"].get("index"), keys, depth - 1)
         return
 
     for nested in value.values():

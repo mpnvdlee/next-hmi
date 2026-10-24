@@ -68,6 +68,30 @@ describe('writeDataVariable value resolution', () => {
   });
 });
 
+describe('a write target with a bound index', () => {
+  const target = { $var: { path: 'CF:Safety/Open', index: { $componentProp: 'device' } } };
+
+  it('toggles the element the dialog input names', () => {
+    executeWidgetActions([{ type: 'toggleDataVariable', target } as ButtonAction], {
+      scope: 'runtime',
+      evalCtx: { inputScopeProps: { device: 4 } },
+    });
+    expect(sendWsMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'toggle_field', path: 'Safety/Open[4]' }),
+    );
+  });
+
+  it('sends an index the server refuses as out of bounds when the input is missing', () => {
+    executeWidgetActions([{ type: 'writeDataVariable', target, value: true } as ButtonAction], {
+      scope: 'runtime',
+      evalCtx: { inputScopeProps: {} },
+    });
+    expect(sendWsMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'write_field', path: 'Safety/Open[-1]' }),
+    );
+  });
+});
+
 describe('if action', () => {
   const write = (path: string): ButtonAction => ({
     type: 'writeDataVariable',

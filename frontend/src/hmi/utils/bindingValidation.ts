@@ -11,7 +11,7 @@
 import { getPropBinding } from '../components/layoutUtils';
 import { extractRenderedVarKeys, usesBranch } from './extractVarKeys';
 import { isVisibilityGateProperty } from '@shared/types/universalWidgetProperties';
-import { bindingKey, type VariableBinding } from '@shared/types/config';
+import { bindingIndex, bindingKey, type VariableBinding } from '@shared/types/config';
 import { getVarBinding, isRecord, isVarSource } from '@shared/types/propertyValueGuards';
 import type { RequiredFieldEntry } from '@shared/types/widgetSchema';
 import {
@@ -133,7 +133,7 @@ function buildBindingSpecs(
       covered.add(id);
       specs.push({
         id,
-        index: b.index,
+        index: bindingIndex(b),
         accept: acceptTypes(field?.type),
         requiredFields: field?.requiredFields,
         ...(field?.write === true && { write: true }),

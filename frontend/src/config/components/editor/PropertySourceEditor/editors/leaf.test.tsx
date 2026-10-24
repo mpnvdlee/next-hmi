@@ -13,6 +13,47 @@ import {
 } from './leaf';
 
 describe('VarEditor', () => {
+  it('binds a fixed index, keeping its number as the starting value', async () => {
+    const onChange = vi.fn();
+    render(
+      <VarEditor value={{ $var: { path: 'CF:Safety/Open', index: 3 } }} onChange={onChange} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: '+ Bind index' }));
+    expect(onChange).toHaveBeenCalledWith({
+      $var: { path: 'CF:Safety/Open', index: { $static: 3 } },
+    });
+  });
+
+  it('shows a bound index in its own row and the path without brackets', () => {
+    render(
+      <VarEditor
+        value={{ $var: { path: 'CF:Safety/Open', index: { $componentProp: 'device' } } }}
+        onChange={vi.fn()}
+      />,
+    );
+    expect(screen.getAllByRole('textbox')[0]).toHaveValue('CF:Safety/Open');
+    expect(screen.getByText('Index')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '+ Bind index' })).toBeNull();
+  });
+
+  it('keeps a bound index when the bare path is retyped, and drops it for a typed [n]', () => {
+    const onChange = vi.fn();
+    const bound = { $componentProp: 'device' };
+    render(
+      <VarEditor value={{ $var: { path: 'CF:Safety/Open', index: bound } }} onChange={onChange} />,
+    );
+    const input = screen.getAllByRole('textbox')[0];
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'CF:Safety/Closed' } });
+    fireEvent.blur(input);
+    expect(onChange).toHaveBeenLastCalledWith({ $var: { path: 'CF:Safety/Closed', index: bound } });
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'CF:Safety/Open[5]' } });
+    fireEvent.blur(input);
+    expect(onChange).toHaveBeenLastCalledWith({ $var: { path: 'CF:Safety/Open', index: 5 } });
+  });
+
   it('shows the composite path with index suffix', () => {
     render(
       <VarEditor value={{ $var: { path: 'PLC:Motor1/Speed', index: 2 } }} onChange={vi.fn()} />,

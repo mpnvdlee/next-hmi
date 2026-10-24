@@ -46,11 +46,27 @@ export interface VariableBinding {
    *  datasource name before the first ':' selects the connection; the rest is
    *  the slash-separated location of the variable within that datasource. */
   path: string;
-  /** Array element index (0-based). When set, resolves to value[index] at runtime. Absent means whole variable. */
-  index?: number;
+  /** Array element index (0-based). When set, resolves to value[index] at runtime. Absent means whole variable.
+   *  May itself be an Integer property source — a dialog's `$componentProp`, a
+   *  `$var` — which the runtime resolves to a number before any widget or write
+   *  sees the binding (see `isBoundIndex`). */
+  index?: number | BoundIndex;
   /** Take `index` from the surrounding Repeater copy instead. Replaced by a
    *  concrete `index` before any widget sees the binding. */
   repeatIndex?: boolean;
+}
+
+/** A `$var.index` given as a property source instead of a number. */
+export type BoundIndex = { [source: `$${string}`]: unknown };
+
+/** Whether a binding's index is a property source still to be resolved. */
+export function isBoundIndex(index: unknown): index is BoundIndex {
+  return typeof index === 'object' && index !== null;
+}
+
+/** The element a binding names: a bound index no one resolved names none (-1). */
+export function bindingIndex(b: VariableBinding | undefined | null): number | undefined {
+  return isBoundIndex(b?.index) ? -1 : b?.index;
 }
 
 /** Extract the composite "datasource:location" key from a VariableBinding. */
@@ -77,9 +93,10 @@ export function writeTargetAddress(target: unknown): { datasource: string; path:
   const binding = (target as VarSource).$var;
   const { datasource, location } = bindingParts(binding);
   if (!datasource || !location) return null;
+  const index = bindingIndex(binding);
   return {
     datasource,
-    path: binding.index !== undefined ? `${location}[${binding.index}]` : location,
+    path: index !== undefined ? `${location}[${index}]` : location,
   };
 }
 
