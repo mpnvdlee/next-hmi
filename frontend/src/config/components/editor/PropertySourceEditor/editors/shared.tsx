@@ -165,6 +165,24 @@ function previewNodes(
       </>
     );
   }
+  for (const key of ['$and', '$or'] as const) {
+    if (!(key in value)) continue;
+    const op = key.slice(1);
+    const items = value[key];
+    if (!Array.isArray(items) || depth >= MAX_PREVIEW_DEPTH) return <Kw tint={op}>{op}(…)</Kw>;
+    return (
+      <>
+        <Kw tint={op}>{op}(</Kw>
+        {items.map((c, i) => (
+          <Fragment key={i}>
+            {i > 0 && <Kw tint={op}>, </Kw>}
+            {previewNodes(c, undefined, depth + 1, lookups)}
+          </Fragment>
+        ))}
+        <Kw tint={op}>)</Kw>
+      </>
+    );
+  }
   if ('$userGroups' in value) {
     const groupLabels = lookups.groupLabels ?? EMPTY_GROUP_LABELS;
     const groups = (value.$userGroups as { groups?: string[] } | undefined)?.groups ?? [];
@@ -519,6 +537,7 @@ export function BranchEditor({
   schema,
   slot,
   onOpenBindingPicker,
+  actions,
 }: {
   label: string;
   value: unknown;
@@ -527,6 +546,8 @@ export function BranchEditor({
   /** What this slot's picker lists when it is not what the property takes. */
   slot?: SlotType;
   onOpenBindingPicker?: OpenBindingPicker;
+  /** Row actions, e.g. a list entry's remove `×`. */
+  actions?: ReactNode;
 }) {
   const branchPicker = wrapPicker(onOpenBindingPicker, (b) => onChange({ $var: b }), value, slot);
   return (
@@ -537,6 +558,7 @@ export function BranchEditor({
       schema={schema}
       slot={slot}
       onOpenBindingPicker={branchPicker}
+      actions={actions}
     />
   );
 }

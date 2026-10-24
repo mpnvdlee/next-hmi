@@ -12,7 +12,14 @@ import {
   wrapPicker,
 } from './utils';
 import type { SchemaField } from '@shared/types/widgetSchema';
-import type { CompareSource, IfSource, NotSource, SwitchSource } from '@shared/types/config';
+import type {
+  AndSource,
+  CompareSource,
+  IfSource,
+  NotSource,
+  OrSource,
+  SwitchSource,
+} from '@shared/types/config';
 import { primaryType } from '@shared/utils/valueTypes';
 
 const IF_CONDITION_SCHEMA: SchemaField = { type: 'Boolean', label: 'Condition' };
@@ -105,6 +112,63 @@ export function NotEditor({
         onOpenBindingPicker={onOpenBindingPicker}
       />
     </ParentPathContext.Provider>
+  );
+}
+
+/** $and / $or — a list of boolean conditions, each its own nested card. */
+export function ConditionListEditor({
+  op,
+  value,
+  onChange,
+  onOpenBindingPicker,
+}: {
+  op: '$and' | '$or';
+  value: unknown;
+  onChange: (v: unknown) => void;
+  onOpenBindingPicker?: OpenBindingPicker;
+}) {
+  const raw = (value as Partial<AndSource & OrSource>)?.[op];
+  const items = Array.isArray(raw) ? raw : [];
+  const parent = useParentPath();
+  const set = (next: unknown[]) => onChange({ [op]: next });
+
+  return (
+    <div className="cfg-editor-actions cfg-switch-cases">
+      <div className="cfg-editor-actions__title-row">
+        <span className="cfg-field-group__label">
+          {op === '$and' ? 'True when all are true' : 'True when any is true'}
+        </span>
+        <AddButton title="Add condition" onClick={() => set([...items, { $var: { path: '' } }])}>
+          + Add condition
+        </AddButton>
+      </div>
+      {items.length === 0 ? (
+        <div className="cfg-switch-empty">No conditions yet</div>
+      ) : (
+        items.map((item, idx) => (
+          <ParentPathContext.Provider key={idx} value={withSegs(parent, op, String(idx))}>
+            <BranchEditor
+              label={`Condition ${idx + 1}`}
+              value={item}
+              onChange={(v) => set(items.map((c, i) => (i === idx ? v : c)))}
+              schema={IF_CONDITION_SCHEMA}
+              slot={BOOLEAN_SLOT}
+              onOpenBindingPicker={onOpenBindingPicker}
+              actions={
+                <button
+                  type="button"
+                  className="cfg-row-action-btn cfg-row-action-btn--stretch"
+                  title="Remove condition"
+                  onClick={() => set(items.filter((_, i) => i !== idx))}
+                >
+                  <ClearIcon />
+                </button>
+              }
+            />
+          </ParentPathContext.Provider>
+        ))
+      )}
+    </div>
   );
 }
 

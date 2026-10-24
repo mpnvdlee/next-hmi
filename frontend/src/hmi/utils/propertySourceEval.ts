@@ -100,6 +100,14 @@ const SOURCE_HANDLERS: Record<string, SourceHandler> = {
   $if: (payload, ctx, d) => evaluateIf(payload, ctx, d),
   $compare: (payload, ctx, d) => evaluateCompare(payload, ctx, d),
   $not: (payload, ctx, d) => evaluateNot(payload, ctx, d),
+  // An empty list is false for both; the validator flags it.
+  $and: (payload, ctx, d) =>
+    Array.isArray(payload) &&
+    payload.length > 0 &&
+    payload.every((c) => Boolean(evaluatePropertyValueInternal(c, ctx, d))),
+  $or: (payload, ctx, d) =>
+    Array.isArray(payload) &&
+    payload.some((c) => Boolean(evaluatePropertyValueInternal(c, ctx, d))),
   $formula: (payload, ctx, d) => evaluateFormulaSource(payload, ctx, d),
   $random: (payload) => evaluateRandom(payload),
   $switch: (payload, ctx, d) => evaluateSwitch(payload, ctx, d),

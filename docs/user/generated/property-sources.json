@@ -64,6 +64,22 @@
     ]
   },
   {
+    "key": "$and",
+    "label": "All Of",
+    "description": "True when every one of a list of boolean conditions is true.",
+    "produces": [
+      "boolean"
+    ]
+  },
+  {
+    "key": "$or",
+    "label": "Any Of",
+    "description": "True when at least one of a list of boolean conditions is true.",
+    "produces": [
+      "boolean"
+    ]
+  },
+  {
     "key": "$formula",
     "label": "Formula",
     "description": "A number calculated from values with + − × ÷ and parentheses.",

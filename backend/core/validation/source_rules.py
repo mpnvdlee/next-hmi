@@ -61,6 +61,8 @@ SOURCE_PRODUCES: dict[str, tuple[str, ...]] = {
     "$if": ("any",),
     "$compare": ("boolean",),
     "$not": ("boolean",),
+    "$and": ("boolean",),
+    "$or": ("boolean",),
     "$formula": ("float",),
     # Whole numbers unless `integer: false`.
     "$random": ("integer", "float"),

@@ -3,7 +3,13 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import type { VariableBinding } from '@shared/types/config';
-import { CompareEditor, IfEditor, NotEditor, SwitchEditor } from './conditional';
+import {
+  CompareEditor,
+  ConditionListEditor,
+  IfEditor,
+  NotEditor,
+  SwitchEditor,
+} from './conditional';
 import type { OpenBindingPicker } from './utils';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { ComponentPropertySchemaContext } from '../componentPropertySchemaContext';
@@ -477,6 +483,28 @@ describe('NotEditor', () => {
       />,
     );
     expect(pickerSlot(open, 'Invert this value')).toEqual({ type: 'Boolean' });
+  });
+});
+
+describe('ConditionListEditor', () => {
+  it('adds, removes and types each condition as a Boolean', () => {
+    const onChange = vi.fn();
+    const open = vi.fn();
+    render(
+      <ConditionListEditor
+        op="$or"
+        value={{ $or: [true, UNBOUND] }}
+        onChange={onChange}
+        onOpenBindingPicker={open}
+      />,
+    );
+    expect(pickerSlot(open, 'Condition 2')).toEqual({ type: 'Boolean' });
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Add condition' }));
+    expect(onChange).toHaveBeenLastCalledWith({ $or: [true, UNBOUND, UNBOUND] });
+
+    fireEvent.click(screen.getAllByTitle('Remove condition')[0]);
+    expect(onChange).toHaveBeenLastCalledWith({ $or: [UNBOUND] });
   });
 });
 
