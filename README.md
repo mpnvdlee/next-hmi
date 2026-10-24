@@ -20,20 +20,44 @@ with acknowledgement, recipes, users and permissions are all in this build.
 
 ## Get it running
 
-Two ways in, same runtime, same project folder — so what you try on your laptop
-is what runs on the line. Both boot with a seeded example project, so there is
-something to click before you have a PLC connected.
+### **[⬇ Download the latest release](https://github.com/mpnvdlee/next-hmi/releases/latest)**
 
-### 1 · Docker — servers and anything with a container runtime
+A portable zip for Windows and Apple-silicon Macs. You do not need an installer,
+admin rights, Python or Node on the host.
+
+1. **Download** `nexthmi-windows-x64-<version>.zip` or
+   `nexthmi-macos-arm64-<version>.zip` from the
+   [latest release](https://github.com/mpnvdlee/next-hmi/releases/latest).
+2. **Unzip** anywhere you can write, and double-click `nexthmi.exe` or
+   `nexthmi.command`. A terminal opens and prints the URL to visit.
+3. **Open that URL and set the device-admin password.** It gates the whole
+   installation — the dashboard, and every project's runtime and editor.
+   Then **Start** the seeded example project and open its runtime or its
+   editor. You have something to click before a PLC is connected.
+
+These builds are unsigned, so the OS asks once — Gatekeeper on macOS,
+SmartScreen on Windows. The
+[one-time steps](docs/user/install.md#first-run-gatekeeper-prompts) are two
+lines each. The zip also carries the full guide as an offline HTML site in
+`docs/` beside the executable.
+
+A new project carries no accounts of its own beyond the anonymous `guest`, and
+nothing ships with a default credential. Add real users when you want them,
+from the editor's **Users** area.
+
+### Docker — Linux, servers and anything with a container runtime
+
+There is no portable Linux build; on Linux, use Docker. Same runtime, same
+project folder, same seeded example.
 
 ```bash
 docker run -d --name nexthmi -p 8000:8000 -p 8443:8443 \
   -v nexthmi-data:/data ghcr.io/mpnvdlee/next-hmi:latest
 ```
 
-Open **<http://localhost:8000>**. The image is multi-arch (`linux/amd64` +
-`linux/arm64`); swap `:latest` for a version tag such as `:1.0.0` to pin a
-release.
+Open **<http://localhost:8000>** and continue at step 3 above. The image is
+multi-arch (`linux/amd64` + `linux/arm64`); swap `:latest` for a version tag
+such as `:1.0.0` to pin a release.
 
 Both ports are published on purpose: turning on HTTPS in Settings moves the app
 to `8443` and leaves `8000` redirecting there. Map them one-to-one.
@@ -45,32 +69,25 @@ With compose instead — `docker-compose.yml` at the repo root binds
 docker compose up -d
 ```
 
-### 2 · Portable zip — panel PCs, Windows and Apple-silicon Macs
+### Build from source — for development
 
-Download `nexthmi-windows-x64-<version>.zip` or
-`nexthmi-macos-arm64-<version>.zip` from the
-[Releases](https://github.com/mpnvdlee/next-hmi/releases) page, unzip anywhere
-you can write, and double-click `nexthmi.exe` or `nexthmi.command`. No
-installer, no admin rights, no Python or Node on the host. A terminal opens and
-prints the URL to visit.
+Requirements: **Python 3.14** (>=3.14.2, <3.15) and **Node 22+**.
 
-These builds are unsigned, so the OS asks once — Gatekeeper on macOS,
-SmartScreen on Windows. The
-[one-time steps](docs/user/install.md#first-run-gatekeeper-prompts) are two
-lines each. The zip also carries the full guide as an offline HTML site in
-`docs/` beside the executable.
+```bash
+git clone https://github.com/mpnvdlee/next-hmi.git
+cd next-hmi
 
-There is no portable Linux build; on Linux, use Docker.
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r backend/requirements.txt
+cd frontend && npm install && cd ..
 
-### First launch — one password, then you are in
+python start-dev.py       # app on :8000 (Vite with HMR), API on :8001
+```
 
-1. Set the **device-admin password** on the manager dashboard. It gates the
-   whole installation — the dashboard, and every project's runtime and editor.
-2. **Start** the seeded project, then open its runtime or its editor.
-
-A new project carries no accounts of its own beyond the anonymous `guest`, and
-nothing ships with a default credential. Add real users when you want them,
-from the editor's **Users** area.
+Stop with Ctrl-C, or `python start-dev.py --stop` to free `:8000`/`:8001` from
+another shell. Tests and linters:
+`pytest backend/tests`, `ruff check backend`, and `npm test` / `npm run lint` /
+`npm run build` from `frontend/`.
 
 Full install reference — runtime home, HTTPS, environment variables, upgrades:
 [`docs/user/install.md`](docs/user/install.md).
@@ -160,26 +177,6 @@ One binding language covers every property on every widget:
 Built on FastAPI · React · OPC-UA · `asyncua` · Python 3.14 · Node 22+.
 
 ---
-
-## Build from source
-
-Requirements: **Python 3.14** (>=3.14.2, <3.15) and **Node 22+**.
-
-```bash
-git clone https://github.com/mpnvdlee/next-hmi.git
-cd next-hmi
-
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r backend/requirements.txt
-cd frontend && npm install && cd ..
-
-python start-dev.py       # app on :8000 (Vite with HMR), API on :8001
-```
-
-Stop with Ctrl-C, or `python start-dev.py --stop` to free `:8000`/`:8001` from
-another shell. Tests and linters:
-`pytest backend/tests`, `ruff check backend`, and `npm test` / `npm run lint` /
-`npm run build` from `frontend/`.
 
 ## Documentation
 
