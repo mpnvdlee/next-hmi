@@ -32,6 +32,7 @@ from __future__ import annotations
 import inspect
 from typing import Annotated, Any
 
+from core import telemetry
 from core.manifest import project_mcp_enabled
 from core.storage import active_project_root, use_project
 from mcp.server.mcpserver import Context
@@ -94,9 +95,9 @@ def _make_scoped_wrapper(pending: PendingTool) -> Any:
                 mcp_auth.require_mcp_access(project_id, need_write=pending.is_write)
                 if pending.is_write:
                     _require_write_allowed(project_id)
-                if is_async:
-                    return await orig_fn(**kwargs)
-                return orig_fn(**kwargs)
+                result = await orig_fn(**kwargs) if is_async else orig_fn(**kwargs)
+                telemetry.mark("mcpUsed")
+                return result
         finally:
             _current_mcp_session.reset(token)
 

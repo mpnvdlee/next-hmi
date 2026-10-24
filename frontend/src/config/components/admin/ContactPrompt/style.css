@@ -1,0 +1,53 @@
+.cfg-contact-prompt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cfg-space-3) var(--cfg-space-5);
+  padding: var(--cfg-space-4) var(--cfg-space-5);
+  border: 1px solid color-mix(in srgb, var(--cfg-accent) 30%, var(--cfg-border));
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-accent-soft);
+}
+
+.cfg-contact-prompt__body {
+  flex: 999 1 26rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--cfg-space-1);
+}
+
+.cfg-contact-prompt__title {
+  margin: 0;
+  font-size: var(--cfg-text-base);
+  font-weight: var(--cfg-fw-bold);
+  color: var(--cfg-text);
+}
+
+.cfg-contact-prompt__text,
+.cfg-contact-prompt__note {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.cfg-contact-prompt__text {
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text);
+}
+
+.cfg-contact-prompt__note {
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-muted);
+}
+
+.cfg-contact-prompt__actions {
+  flex: 1 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--cfg-space-2);
+}
+
+.cfg-contact-prompt__link {
+  text-decoration: none;
+}

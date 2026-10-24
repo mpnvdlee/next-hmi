@@ -13,6 +13,7 @@ from typing import Any
 
 from asyncua import Client, ua
 from asyncua.common.node import Node
+from core import telemetry
 from core.number_utils import get_config_float
 from models.datasource import build_var_key, is_present_on_server, is_subscribable
 
@@ -430,6 +431,7 @@ class DatasourceOpcuaEngine:
         self._connected = True
         self._error = None
         logger.info("OPC-UA connected: %s → %s", self.datasource_name, url)
+        telemetry.mark("connected")
         self._wire_types = {}
         await self._discover_operation_limits()
         if self._status_callback is not None:
