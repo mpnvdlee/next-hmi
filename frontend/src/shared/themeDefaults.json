@@ -65,5 +65,17 @@
     "key_font_size": "",
     "key_font_weight": null,
     "accent": ""
+  },
+  "toasts": {
+    "position": "top-center",
+    "shape": "rounded",
+    "info_bg": "",
+    "info_text": "",
+    "success_bg": "",
+    "success_text": "",
+    "warning_bg": "",
+    "warning_text": "",
+    "error_bg": "",
+    "error_text": ""
   }
 }

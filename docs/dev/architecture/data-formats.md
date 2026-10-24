@@ -26,7 +26,7 @@ A project is a self-contained folder anywhere on disk, registered in the runtime
     <DatasourceName>.json
   config.json             ← page index + globalEvents + embedded project metadata/defaultTheme
   themes/
-    <themeId>.json        ← one theme each (colors, typography, spacing, numpad)
+    <themeId>.json        ← one theme each (colors, typography, spacing, numpad, toasts)
   pages/
     <pageId>.json         ← per-page component tree (the navigable tree)
   dialogs/
@@ -88,7 +88,7 @@ Outside any project, the runtime keeps its own state:
 - `<project>/config.json`
   - Page index: HMI page list, header, footer, the Dialogs folder's page list, global lifecycle events (v2 — no component children for pages). Also holds `project.defaultTheme` — the id of the default theme
 - `<project>/themes/<themeId>.json`
-  - One theme per file (colors, typography, spacing, and numpad tokens editable in Theme Editor). The id is the file stem
+  - One theme per file (colors, typography, spacing, numpad, and toasts tokens editable in Theme Editor). The id is the file stem
 - `<project>/pages/<pageId>.json`
   - Page document for one page of the navigable tree: its metadata and component tree
 - `<project>/dialogs/<pageId>.json`
@@ -448,7 +448,7 @@ registry.
 On first access the backend seeds `themes/default.json` from defaults if no
 theme exists yet. A theme file is read as-is, with no read-time normalization.
 
-One theme file has four sections:
+One theme file has five sections:
 
 - **colors** — `bg`, `surface`, `surface_raised`, `text`, `text_muted`,
   `accent`, `border`, `ok`, `warn`, and `fault`.
@@ -465,9 +465,17 @@ One theme file has four sections:
   derives it from the rest of the theme — body font, accent colour, a 188px
   three-column panel — as it did before the section existed. A theme file
   without the section reads as these defaults.
+- **toasts** — the Show Toast notifications: `position` (`top-left`,
+  `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right`;
+  default `top-center`), `shape` (`rounded` = the theme radius, or `pill`), and
+  a background and text colour per severity: `info_bg`, `info_text`,
+  `success_bg`, `success_text`, `warning_bg`, `warning_text`, `error_bg`,
+  `error_text`. An empty colour keeps the severity tint derived from the
+  theme. A theme file without the section reads as these defaults, which is
+  the look toasts had before the section existed.
 
-That is 59 editable fields: 10 colors, 35 typography values, 7 spacing
-values, and 7 numpad values. `frontend/src/shared/themeDefaults.json` is the exact canonical JSON
+That is 69 editable fields: 10 colors, 35 typography values, 7 spacing
+values, 7 numpad values, and 10 toasts values. `frontend/src/shared/themeDefaults.json` is the exact canonical JSON
 shape and `project-seed/themes/light.json` is kept byte-for-byte equivalent.
 Extra fields are rejected by the backend (`extra="forbid"`).
 

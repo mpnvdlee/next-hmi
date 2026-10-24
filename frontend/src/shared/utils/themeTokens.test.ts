@@ -23,3 +23,32 @@ describe('applyThemeTokens — numpad', () => {
     expect(root.getAttribute('data-hmi-numpad-columns')).toBe('3');
   });
 });
+
+describe('applyThemeTokens — toasts', () => {
+  const root = document.documentElement;
+
+  it('writes position and shape as attributes and the severity colours as tokens', () => {
+    const theme = defaultTheme();
+    theme.toasts = {
+      ...theme.toasts,
+      position: 'bottom-right',
+      shape: 'pill',
+      error_bg: '#b91c1c',
+    };
+
+    applyThemeTokens(theme);
+
+    expect(root.getAttribute('data-hmi-toast-position')).toBe('bottom-right');
+    expect(root.getAttribute('data-hmi-toast-shape')).toBe('pill');
+    expect(root.style.getPropertyValue('--hmi-toast-error-bg')).toBe('#b91c1c');
+  });
+
+  it("defaults to today's look: top-center, rounded, empty colours left to the stylesheet", () => {
+    applyThemeTokens(defaultTheme());
+
+    expect(root.getAttribute('data-hmi-toast-position')).toBe('top-center');
+    expect(root.getAttribute('data-hmi-toast-shape')).toBe('rounded');
+    expect(root.style.getPropertyValue('--hmi-toast-info-bg')).toBe('');
+    expect(root.style.getPropertyValue('--hmi-toast-error-text')).toBe('');
+  });
+});

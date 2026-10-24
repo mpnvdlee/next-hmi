@@ -68,6 +68,7 @@ function theme(accent: string): ThemeConfig {
       shadow: 'none',
     },
     numpad: DEFAULT_THEME.numpad,
+    toasts: DEFAULT_THEME.toasts,
   };
 }
 
