@@ -42,7 +42,8 @@ The guide is its own site, not a page of the promotion website. It borrows that
 site's palette and faces and nothing else: no marketing nav, no marketing
 footer. A reader is here to look something up, and every link that leaves for
 next-hmi.com is a link out of the thing they are reading. The promotion site
-links *in*; the guide does not link back out.
+links *in*; the guide links back out only to the contact form, for the reader
+the docs did not answer.
 
 Enterprise guide pages are appended only when ``NEXTHMI_EDITION=ee`` (or
 ``--edition ee``). Presence of ``enterprise/`` is deliberately *not* the test —
@@ -1057,10 +1058,11 @@ def _document(
 ) -> str:
     # An offline panel has no internet; a link that cannot work is worse than
     # no link at all.
-    github_button = (
+    topbar_links = (
         ""
         if offline
-        else '<a class="btn btn-ghost" href="https://github.com/mpnvdlee/next-hmi" '
+        else '<a class="btn btn-ghost" href="https://next-hmi.com/contact">Contact</a>'
+        '<a class="btn btn-ghost" href="https://github.com/mpnvdlee/next-hmi" '
         'target="_blank" rel="noopener">GitHub</a>'
     )
 
@@ -1131,7 +1133,7 @@ def _document(
         f'{SEARCH_ICON}<span class="st-label">Search</span>'
         f'<kbd class="kbd st-key">/</kbd></button>'
         f'<button class="icon-btn" id="theme-toggle" aria-label="Toggle color theme" '
-        f'title="Toggle theme">{TOPBAR_THEME_ICON}</button>{github_button}'
+        f'title="Toggle theme">{TOPBAR_THEME_ICON}</button>{topbar_links}'
         "</div></div></header>"
         '<div class="sidebar-backdrop" id="backdrop"></div>'
         f'<div class="layout">{_nav(pages, current)}'
