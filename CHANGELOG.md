@@ -19,6 +19,14 @@ heading.
   as a file, a compose file and `install.sh`, for a machine that cannot reach a
   registry.
 
+- **A dialog can drop its header bar.** A new **Show header bar** switch in a
+  page's or group's **Overlay** section hides the title and the × of the
+  card it opens in, so a keypad or an access panel can be a real dialog
+  without a title strip. The page then closes through a **Close
+  Dialog/Overlay** button of its own, or through the backdrop when **Close
+  on backdrop** is on. For a group, the group's switch counts, not the page
+  inside it. It is on by default, so existing projects look the same.
+
 - **Toasts take their place, shape and colours from the theme.** A new
   **Toasts** section in the theme settings puts Show Toast notifications in
   one of six places — top or bottom, left, center or right — makes them

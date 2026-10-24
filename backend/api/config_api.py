@@ -558,6 +558,7 @@ _PAGE_PERSISTED_FIELDS: frozenset[str] = frozenset({
     "showCloseButton",
     "closeOnBackgroundPress",
     "tapThrough",
+    "showModalHeader",
     "sections",
 })
 

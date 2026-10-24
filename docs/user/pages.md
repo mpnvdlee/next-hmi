@@ -69,6 +69,12 @@ popover then closes it *and* reaches whatever lies under it — tap the next mac
 symbol and its own popover opens in the same tap. All three are on unless you turn them
 off; a dimmed backdrop only ever closes.
 
+**Show header bar** in the same section hides the card's title strip, × included — for a
+keypad or an access panel that should be all content. The page then needs its own
+**Close Dialog/Overlay** button, unless a backdrop click closes it. It is on unless you
+turn it off, and it is the one Overlay setting a navigable page opened with **Open Page
+As Overlay** has too. On a page group the group's setting counts, not its pages'.
+
 **Opening a dialog that is already on top swaps its inputs.** The card stays, takes the
 new input parameters and moves to the new anchor, rather than stacking a second copy.
 

@@ -515,14 +515,16 @@ export default function PreviewView() {
                   ref={layoutRef}
                 >
                   <div className="hmi-modal">
-                    <div className="hmi-modal__header">
-                      <span className="hmi-modal__title">
-                        {resolvePageTitle(overlayNode.title)}
-                      </span>
-                      {overlayNode.showCloseButton !== false && (
-                        <CloseButton className="hmi-modal__close" />
-                      )}
-                    </div>
+                    {overlayNode.showModalHeader !== false && (
+                      <div className="hmi-modal__header">
+                        <span className="hmi-modal__title">
+                          {resolvePageTitle(overlayNode.title)}
+                        </span>
+                        {overlayNode.showCloseButton !== false && (
+                          <CloseButton className="hmi-modal__close" />
+                        )}
+                      </div>
+                    )}
                     {/* Same `data-flow-*` attributes the runtime's `ModalStack`
                         sets — without them the previewed page would sit in a
                         plain CSS default and drift from the real render. */}
