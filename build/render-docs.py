@@ -283,7 +283,7 @@ def heading_slug(text: str) -> str:
 
 
 def apply_heading_ids(body: str) -> str:
-    """Give every h2–h4 a slug id. ``markdown-it`` emits bare heading tags, so
+    """Give every h2 to h4 a slug id. ``markdown-it`` emits bare heading tags, so
     without this every in-page anchor in the guide is a dead link on the site."""
     seen: dict[str, int] = {}
 
