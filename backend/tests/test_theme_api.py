@@ -8,6 +8,7 @@ import pytest
 from core.exceptions import register_exception_handlers
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from models.theme import ThemeToasts
 
 
 @pytest.fixture()
@@ -210,6 +211,19 @@ def test_validate_numpad_accepts_empty_follow_values_and_rejects_bad_ones(theme_
     theme["numpad"] = {"columns": 5, "accent": "red"}
     result = client.post("/api/themes/default/validate", json=theme).json()
     assert {e["path"] for e in result["errors"]} == {"numpad.columns", "numpad.accent"}
+
+
+def test_validate_toasts_accepts_defaults_and_rejects_an_unknown_position(theme_client):
+    client, _ = theme_client
+    theme = _valid_theme()
+    defaults = ThemeToasts().model_dump()
+    assert defaults["position"] == "top-center" and defaults["shape"] == "rounded"
+    theme["toasts"] = {**defaults, "error_bg": "#e74c3c", "error_text": "#ffffff"}
+    assert client.post("/api/themes/default/validate", json=theme).json()["valid"] is True
+
+    theme["toasts"] = {"position": "middle", "shape": "square", "info_text": "blue"}
+    result = client.post("/api/themes/default/validate", json=theme).json()
+    assert {e["path"] for e in result["errors"]} == {"toasts.position", "toasts.shape", "toasts.info_text"}
 
 
 def test_put_theme_still_uses_automatic_422_for_malformed_body(theme_client):

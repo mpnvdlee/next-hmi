@@ -2,7 +2,7 @@
  * ThemeEditor — the per-theme token editor body.
  *
  * Presentational: renders the validation notices and the Colors / Typography /
- * Spacing / Numpad sections (derived from the shared `THEME_TOKENS` registry) for one
+ * Spacing / Numpad / Toasts sections (derived from the shared `THEME_TOKENS` registry) for one
  * theme, delegating edits and per-section reset to its parent (ThemesView).
  *
  * Each setting is shown exactly once, with its live preview folded into the
@@ -185,6 +185,8 @@ const SECTION_HINTS: Record<ThemeSection, string> = {
     'Spacing, corner radius and elevation. The shape next to each field is drawn at the value you enter.',
   numpad:
     'The on-screen numpad used by numeric inputs. An empty field follows the rest of the theme: Body font, Accent colour, the standard key width.',
+  toasts:
+    'Notifications from the Show Toast action: where they stack, their shape, and a background and text colour per severity. An empty colour keeps the severity tint.',
 };
 
 function SectionDescription({ section }: { section: ThemeSection }) {
@@ -232,7 +234,7 @@ function SectionBody({
     );
   }
 
-  if (section.key === 'numpad') {
+  if (section.key === 'numpad' || section.key === 'toasts') {
     return (
       <div className="cfg-theme-grid">
         {section.tokens.map((token) =>

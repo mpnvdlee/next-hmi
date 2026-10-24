@@ -15,6 +15,7 @@ Widgets never hardcode a colour or a font size; they reference theme tokens (the
 3. **Choose typefaces** — Pick a UI font and a mono font. Several are bundled ready to use — **Inter**, **Manrope**, **Lexend**, and **Roboto Mono** / **JetBrains Mono**.
 4. **Dial in shape & spacing** — Set the base **radius** and spacing tokens so cards, buttons and inputs share one consistent feel.
 5. **Tune the numpad** — The **Numpad** section styles the on-screen numpad every numeric input opens: **Columns** (3 puts Back, Clear and Enter under the digits; 4 puts them in a column on the right), **Key size**, **Key gap**, the key font, and the **Enter key colour**. Leave a field empty and it follows the rest of the theme.
+6. **Place and colour the toasts** — The **Toasts** section sets where Show Toast notifications appear (**Position**: top or bottom, left, center or right; top center by default), their **Shape** (**Rounded**, with the theme radius, or **Pill**), and a background and text colour for each severity: info, success, warning and error. Leave a colour empty and the toast keeps its tint of the severity colour. Alarm toasts are not affected.
 
 > [!TIP]
 > Because the theme is just tokens on disk, you can keep per-customer themes in version control and swap them per deployment — same pages, different brand.

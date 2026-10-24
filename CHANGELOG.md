@@ -19,6 +19,14 @@ heading.
   as a file, a compose file and `install.sh`, for a machine that cannot reach a
   registry.
 
+- **Toasts take their place, shape and colours from the theme.** A new
+  **Toasts** section in the theme settings puts Show Toast notifications in
+  one of six places — top or bottom, left, center or right — makes them
+  rounded or a pill, and sets a background and text colour per severity
+  (info, success, warning, error). The default is today's look: top center,
+  rounded, and an empty colour keeps the severity tint, so existing projects
+  look the same.
+
 - **Buttons can be icon-only, stacked, and sized.** A Button with an icon and
   an empty label is icon-only: it takes even padding on every side so it sizes
   to a near-square tile. The Button also gets four properties: **Icon
