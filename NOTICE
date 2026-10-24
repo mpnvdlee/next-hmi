@@ -9,6 +9,14 @@ No third-party source is vendored into this tree. Dependency versions are
 pinned in backend/requirements.txt and frontend/package.json; policy is in
 docs/dev/operations/dependency-policy.md.
 
+Bundled font files under frontend/public/fonts/:
+
+  Exo 2     — SIL OFL 1.1, Copyright 2013 The Exo 2 Project Authors
+              (https://github.com/googlefonts/Exo-2.0). Latin subset,
+              weights 400-700, from @fontsource/exo-2@5.3.0; licence text
+              in frontend/public/fonts/exo-2-OFL.txt (google/fonts
+              ofl/exo2/OFL.txt @ 8445cfa).
+
 Two backend runtime dependencies are LGPL and stay separately replaceable
 rather than statically combined:
 

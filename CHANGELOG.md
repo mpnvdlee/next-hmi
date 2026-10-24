@@ -13,6 +13,10 @@ heading.
 
 ### Added
 
+- **Exo 2 is a bundled font.** The theme settings offer **Exo 2** next to
+  Inter, Manrope and Lexend for every font token, in weights 400 to 700,
+  served from the HMI itself so it looks the same without internet access.
+
 - **A dialog can drop its header bar.** A new **Show header bar** switch in a
   page's or group's **Overlay** section hides the title and the × of the
   card it opens in, so a keypad or an access panel can be a real dialog
