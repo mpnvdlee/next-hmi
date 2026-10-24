@@ -1623,7 +1623,7 @@
           {
             "key": "variable",
             "label": "Variable",
-            "type": "struct",
+            "type": "Float | Integer",
             "group": "Data"
           },
           {
