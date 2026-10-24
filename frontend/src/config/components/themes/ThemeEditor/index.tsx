@@ -35,6 +35,7 @@ const FONT_PRESETS: FontPreset[] = [
   { label: 'Inter (bundled)', value: "'Inter', system-ui, sans-serif" },
   { label: 'Manrope (bundled)', value: "'Manrope', system-ui, sans-serif" },
   { label: 'Lexend (bundled)', value: "'Lexend', system-ui, sans-serif" },
+  { label: 'Exo 2 (bundled)', value: "'Exo 2', system-ui, sans-serif" },
   {
     label: 'Roboto Mono (bundled)',
     value: "'Roboto Mono', 'Courier New', 'Consolas', 'Monaco', monospace",
