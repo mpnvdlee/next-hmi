@@ -175,6 +175,7 @@ table.data td.desc { color: var(--ink-2); }
   .topbar-inner, .layout { padding-left: 20px; padding-right: 20px; }
   .wordmark .doc-tag { display: none; }
   .doc-version, .version-picker { display: none; }
+  .top-actions .btn { display: none; }
   .pager { flex-direction: column; } .pager a { max-width: none; }
   .search-modal { padding: 12px; }
   .search-panel { max-height: calc(100vh - 24px); }
