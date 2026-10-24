@@ -116,4 +116,26 @@ describe('if action', () => {
     );
     expect(sendWsMessage).toHaveBeenCalledWith(expect.objectContaining({ path: 'Two' }));
   });
+
+  it("checks the scope's signed-in user when the context has no user reader", async () => {
+    const { useHmiStore } = await import('@hmi/store/hmiStore');
+    useHmiStore.setState({
+      currentUsersByScope: {
+        'runtime:a': { username: 'mark', groups: ['admin'], groupLabels: {} },
+      },
+    });
+    // A page's onOpen guard: the event hook passes no reader of its own.
+    executeWidgetActions(
+      [
+        {
+          type: 'if',
+          condition: { $userGroups: { groups: ['admin'] } },
+          then: [write('Admin')],
+          else: [write('Other')],
+        },
+      ],
+      { scope: 'runtime:a' },
+    );
+    expect(sendWsMessage).toHaveBeenCalledWith(expect.objectContaining({ path: 'Admin' }));
+  });
 });
