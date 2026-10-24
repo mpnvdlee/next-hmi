@@ -34,9 +34,10 @@ const DISCOVERY: DiscoveryResult = {
 function routeApi(overrides?: {
   test?: TestConnectionResult;
   generate?: { client_certificate: string; client_private_key: string };
+  discovery?: DiscoveryResult;
 }) {
   mockedApiJson.mockImplementation(async (url: string) => {
-    if (url.includes('/discover')) return DISCOVERY as never;
+    if (url.includes('/discover')) return (overrides?.discovery ?? DISCOVERY) as never;
     if (url.includes('/certs/generate'))
       return (overrides?.generate ?? {
         client_certificate: 'certs/generated.pem',
@@ -147,6 +148,82 @@ describe('OpcuaConnectionWizard', () => {
     fireEvent.click(screen.getByRole('button', { name: /Next/ }));
     // Step 2: sign-in, anonymous chosen because the endpoint advertises it.
     expect(screen.getByRole('button', { name: 'Anonymous' })).toHaveClass('cfg-seg-btn--active');
+  });
+
+  it('lists a deprecated endpoint as unavailable and never selects it', async () => {
+    // Servers still advertise Basic256; the connect path refuses it, so the
+    // wizard must not let the user pick it and only find out when testing.
+    routeApi({
+      discovery: {
+        ok: true,
+        error: null,
+        endpoints: [
+          {
+            endpoint_url: 'opc.tcp://plc.local:4840',
+            security_mode: 'SignAndEncrypt',
+            security_policy: 'Basic256',
+            user_tokens: ['Username'],
+            server_name: 'LinePLC',
+            application_uri: 'urn:LinePLC',
+            supported: false,
+          },
+          {
+            endpoint_url: 'opc.tcp://plc.local:4840',
+            security_mode: 'SignAndEncrypt',
+            security_policy: 'Basic256Sha256',
+            user_tokens: ['Username'],
+            server_name: 'LinePLC',
+            application_uri: 'urn:LinePLC',
+            supported: true,
+          },
+        ],
+      },
+    });
+    renderWizard();
+    fireEvent.change(screen.getByLabelText('Server address'), {
+      target: { value: 'opc.tcp://plc.local:4840' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Discover/ }));
+
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(2));
+    const [deprecated, current] = screen.getAllByRole('option');
+    expect(deprecated).toBeDisabled();
+    expect(deprecated).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByText('Basic256 is deprecated and not supported.')).toBeInTheDocument();
+    // The first *usable* endpoint is picked, not the first offered.
+    expect(current).toHaveAttribute('aria-selected', 'true');
+
+    fireEvent.click(deprecated);
+    expect(current).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('explains a server that offers only deprecated policies', async () => {
+    routeApi({
+      discovery: {
+        ok: true,
+        error: null,
+        endpoints: [
+          {
+            endpoint_url: 'opc.tcp://plc.local:4840',
+            security_mode: 'Sign',
+            security_policy: 'Basic128Rsa15',
+            user_tokens: ['Anonymous'],
+            server_name: 'OldPLC',
+            application_uri: 'urn:OldPLC',
+            supported: false,
+          },
+        ],
+      },
+    });
+    renderWizard();
+    fireEvent.change(screen.getByLabelText('Server address'), {
+      target: { value: 'opc.tcp://plc.local:4840' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Discover/ }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/only offers deprecated security policies/)).toBeInTheDocument(),
+    );
   });
 
   it('creates with background sync off, then hands off to browse', async () => {

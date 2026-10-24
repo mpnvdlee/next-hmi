@@ -253,7 +253,8 @@ Pre-save helpers. None of them touch the live pool or persist a datasource.
 
 - `POST /api/datasources/discover`
   - Body: `{ "address": "opc.tcp://host:4840" }`. Enumerates the server's endpoints so the engineer can pick one instead of typing URL/security/auth by hand.
-  - Returns `{ ok, error, endpoints: [{ endpoint_url, security_mode, security_policy, user_tokens, server_name, application_uri }] }`. A failed probe is `ok: false` with `error`, not an HTTP error.
+  - Returns `{ ok, error, endpoints: [{ endpoint_url, security_mode, security_policy, user_tokens, server_name, application_uri, supported }] }`. A failed probe is `ok: false` with `error`, not an HTTP error.
+  - `supported` is `false` for an endpoint a datasource cannot be saved against — the deprecated `Basic128Rsa15` and `Basic256` policies many PLCs still advertise. It applies the same allowlist the connect path enforces, so the wizard shows such an endpoint without offering it.
 - `POST /api/datasources/test-connection`
   - Body: `{ server_url, username?, password?, security_policy?, security_mode?, ...extra }`. Extra fields (certificate paths, key password) are forwarded to the probe unchanged.
   - Opens a throwaway session. Returns `{ ok, error, server_name, namespace_count }`.
@@ -273,7 +274,8 @@ Pre-save helpers. None of them touch the live pool or persist a datasource.
 
 - `GET /api/datasources/{name}/browse`
   - Only valid for `opcua-client` and `opcua-test-server` (`422` for `static`).
-  - Returns the engine's `browse()` result (the OPC-UA node tree).
+  - Returns the engine's `browse()` result (the OPC-UA node tree), walked from the datasource's `browse_root_node` or, without one, from the Objects folder. `show_root` is `true` when a root was configured.
+  - `present_outside_browse` (only when non-empty): the `node_id`s of the datasource's saved variables that this walk did not reach but that the server still has — checked with one NodeClass Read per chunk, where only `BadNodeIdUnknown`/`BadNodeIdInvalid` count as gone and a chunk that cannot be read counts as present. A variable saved from outside the configured root is not browsed rather than removed; **Browse PLC** neither lists it under *Removed from server* nor marks it stale.
   - `503` if the OPC-UA pool is unavailable, no engine exists for the datasource, or the engine is not connected.
 
 ### Lifecycle

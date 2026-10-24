@@ -37,4 +37,23 @@ describe('LedIndicator', () => {
       'hmi-led-indicator--on',
     );
   });
+
+  it.each(['false', '0', 'no', 'OFF', '', '  ', Number.NaN, 0])(
+    'stays off for a tag value that means off or nothing: %j',
+    (value) => {
+      const { container } = renderLed({ variable: value });
+
+      expect((container.firstElementChild as HTMLElement).className).toContain(
+        'hmi-led-indicator--off',
+      );
+    },
+  );
+
+  it.each(['true', '1', 'on', 1])('lights up for a tag value that means on: %j', (value) => {
+    const { container } = renderLed({ variable: value });
+
+    expect((container.firstElementChild as HTMLElement).className).toContain(
+      'hmi-led-indicator--on',
+    );
+  });
 });

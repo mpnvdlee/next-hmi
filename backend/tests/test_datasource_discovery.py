@@ -12,6 +12,9 @@ import pytest
 from asyncua import Server, ua
 from core.exceptions import DatasourceValidationError
 from opcua.client_pool import (
+    SECURE_POLICY_NAMES,
+    SECURITY_MODES,
+    _endpoint_supported,
     _pem_or_der,
     _resolve_security_settings,
     discover_endpoints,
@@ -63,6 +66,45 @@ async def test_discover_lists_nosecurity_anonymous_endpoint():
 
 
 @pytest.mark.asyncio
+async def test_discover_marks_a_nosecurity_endpoint_supported():
+    async with _running_server() as url:
+        result = await discover_endpoints(url)
+
+    open_endpoints = [
+        ep for ep in result["endpoints"] if ep["security_policy"] == "NoSecurity"
+    ]
+    assert open_endpoints
+    assert all(ep["supported"] is True for ep in open_endpoints)
+
+
+@pytest.mark.parametrize(
+    ("mode", "policy", "supported"),
+    [
+        ("None", "NoSecurity", True),
+        ("SignAndEncrypt", "Basic256Sha256", True),
+        ("Sign", "Aes128Sha256RsaOaep", True),
+        ("SignAndEncrypt", "Aes256Sha256RsaPss", True),
+        # Deprecated policies servers still advertise — and that the connect
+        # path refuses, so the wizard must not offer them as a choice.
+        ("SignAndEncrypt", "Basic256", False),
+        ("Sign", "Basic128Rsa15", False),
+        # Inconsistent pairs: no security mode with a policy, or the reverse.
+        ("None", "Basic256Sha256", False),
+        ("SignAndEncrypt", "NoSecurity", False),
+    ],
+)
+def test_endpoint_supported_matches_the_connect_allowlist(mode, policy, supported):
+    assert _endpoint_supported(mode, policy) is supported
+
+
+def test_endpoint_supported_offers_every_policy_the_connect_path_accepts():
+    """Drift guard: one allowlist, applied at discovery and at connect."""
+    for mode in SECURITY_MODES:
+        for policy in SECURE_POLICY_NAMES:
+            assert _endpoint_supported(mode, policy), (mode, policy)
+
+
+@pytest.mark.asyncio
 async def test_discover_accepts_host_port_without_scheme():
     async with _running_server() as url:
         authority = url.split("://", 1)[1].split("/", 1)[0]
@@ -104,8 +146,8 @@ def test_security_paths_are_resolved_relative_to_project_root(monkeypatch, tmp_p
     """Absolute cert paths are not supported — every path is resolved against
     the active project root, matching the project-relative ``certs/...`` form a
     datasource stores."""
-    monkeypatch.setattr("opcua.client_pool.active_project_root", lambda: tmp_path)
-    monkeypatch.setattr("opcua.client_pool.active_certs_dir", lambda: tmp_path / "certs")
+    monkeypatch.setattr("opcua.security.active_project_root", lambda: tmp_path)
+    monkeypatch.setattr("opcua.security.active_certs_dir", lambda: tmp_path / "certs")
 
     security = _resolve_security_settings(
         {
@@ -139,8 +181,8 @@ def test_resolve_security_settings_rejects_unlisted_policy_or_mode(
     """``SecurityPolicyNone`` / ``MessageSecurityMode.None_`` are reachable by
     attribute name, so a datasource that reads as secured in the UI could
     otherwise negotiate an unsecured channel. Only the wizard's own names pass."""
-    monkeypatch.setattr("opcua.client_pool.active_project_root", lambda: tmp_path)
-    monkeypatch.setattr("opcua.client_pool.active_certs_dir", lambda: tmp_path / "certs")
+    monkeypatch.setattr("opcua.security.active_project_root", lambda: tmp_path)
+    monkeypatch.setattr("opcua.security.active_certs_dir", lambda: tmp_path / "certs")
 
     with pytest.raises(DatasourceValidationError):
         _resolve_security_settings(
@@ -159,8 +201,8 @@ def test_security_settings_repr_hides_the_private_key_password(
     monkeypatch, tmp_path: Path
 ):
     """One ``logger.exception`` away from a secret in the log otherwise."""
-    monkeypatch.setattr("opcua.client_pool.active_project_root", lambda: tmp_path)
-    monkeypatch.setattr("opcua.client_pool.active_certs_dir", lambda: tmp_path / "certs")
+    monkeypatch.setattr("opcua.security.active_project_root", lambda: tmp_path)
+    monkeypatch.setattr("opcua.security.active_certs_dir", lambda: tmp_path / "certs")
 
     settings = _resolve_security_settings(
         {
@@ -234,8 +276,8 @@ def test_resolve_security_settings_skips_generation_when_key_password_set(
 ):
     """A configured key password means the operator supplies their own
     encrypted key — never silently generate over it."""
-    monkeypatch.setattr("opcua.client_pool.active_project_root", lambda: tmp_path)
-    monkeypatch.setattr("opcua.client_pool.active_certs_dir", lambda: tmp_path / "certs")
+    monkeypatch.setattr("opcua.security.active_project_root", lambda: tmp_path)
+    monkeypatch.setattr("opcua.security.active_certs_dir", lambda: tmp_path / "certs")
 
     _resolve_security_settings(
         {

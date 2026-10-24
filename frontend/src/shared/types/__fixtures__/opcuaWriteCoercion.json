@@ -51,11 +51,114 @@
   },
   { "name": "float32 exact", "dataType": "Float", "value": 3.5, "ok": true, "output": 3.5 },
   {
-    "name": "float32 rounding rejected",
+    "name": "float32 rounds to nearest",
     "dataType": "Float",
     "value": 0.1,
+    "ok": true,
+    "output": 0.10000000149011612
+  },
+  {
+    "name": "float32 rounds a setpoint up",
+    "dataType": "Float",
+    "value": 48.2,
+    "ok": true,
+    "output": 48.20000076293945
+  },
+  {
+    "name": "float32 rounds a decimal string down",
+    "dataType": "Single",
+    "value": "19.9",
+    "ok": true,
+    "output": 19.899999618530273
+  },
+  {
+    "name": "float32 rounds a negative value",
+    "dataType": "Float",
+    "value": -48.2,
+    "ok": true,
+    "output": -48.20000076293945
+  },
+  {
+    "name": "float32 rounds a negative decimal string",
+    "dataType": "Single",
+    "value": "-0.1",
+    "ok": true,
+    "output": -0.10000000149011612
+  },
+  {
+    "name": "float32 rounds beyond its integer precision",
+    "dataType": "Float",
+    "value": 16777217,
+    "ok": true,
+    "output": 16777216
+  },
+  {
+    "name": "float32 maximum is exact",
+    "dataType": "Float",
+    "value": 3.4028234663852886e38,
+    "ok": true,
+    "output": 3.4028234663852886e38
+  },
+  {
+    "name": "float32 array rounds every element",
+    "dataType": "Float",
+    "isArray": true,
+    "value": [3.5, 0.1],
+    "ok": true,
+    "output": [3.5, 0.10000000149011612]
+  },
+  {
+    "name": "double keeps the value",
+    "dataType": "Double",
+    "value": 19.9,
+    "ok": true,
+    "output": 19.9
+  },
+  {
+    "name": "float32 minimum judged before rounding",
+    "dataType": "Float",
+    "value": 19.9,
+    "min": 19.9,
+    "max": 48.2,
+    "ok": true,
+    "output": 19.899999618530273
+  },
+  {
+    "name": "float32 maximum judged before rounding",
+    "dataType": "Float",
+    "value": "48.2",
+    "min": 19.9,
+    "max": 48.2,
+    "ok": true,
+    "output": 48.20000076293945
+  },
+  {
+    "name": "float32 below minimum",
+    "dataType": "Float",
+    "value": 19.89999,
+    "min": 19.9,
+    "max": 48.2,
     "ok": false,
-    "reason": "lossy_conversion"
+    "reason": "value_out_of_range"
+  },
+  {
+    "name": "float32 array element above maximum",
+    "dataType": "Float",
+    "isArray": true,
+    "value": [19.9, 48.21],
+    "min": 19.9,
+    "max": 48.2,
+    "ok": false,
+    "reason": "value_out_of_range"
+  },
+  {
+    "name": "integer range",
+    "dataType": "Int16",
+    "value": 101,
+    "min": 0,
+    "max": 100,
+    "ok": false,
+    "reason": "value_out_of_range"
   },
   {
     "name": "float32 overflow",

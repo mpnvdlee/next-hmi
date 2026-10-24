@@ -240,6 +240,24 @@ def test_put_datasource_rejects_unknown_data_type(ds_client):
     assert manager.get("plc1") is None
 
 
+@pytest.mark.parametrize(
+    "data_type", ["DateTime", "Date", "Time", "Duration", "Single", "Integer", "Enumeration"]
+)
+def test_put_datasource_accepts_every_writable_data_type(ds_client, data_type):
+    """A static variable changes only through the write path, so every type a
+    write can target must be saveable."""
+    client, manager = ds_client
+    resp = client.put(
+        "/api/datasources/plc1",
+        json={
+            "type": "static",
+            "variables": [{"kind": "variable", "display_name": "X", "data_type": data_type}],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert manager.get("plc1") is not None
+
+
 def test_put_variables_rejects_unknown_data_type(ds_client):
     client, manager = ds_client
     manager.save("plc1", {"name": "plc1", "type": "static", "variables": []})
@@ -878,3 +896,47 @@ def test_list_datasources_surfaces_opcua_client_connect_error(ds_client, monkeyp
     item = resp.json()[0]
     assert item["connected"] is False
     assert item["error"] == "Connection timed out"
+
+
+# ── POST /discover ────────────────────────────────────────────────────────────
+
+
+def test_discover_response_carries_the_supported_flag(ds_client, monkeypatch):
+    """The flag has to survive the response model, not just discover_endpoints.
+
+    Pydantic drops a field the model does not declare, so a flag computed in
+    client_pool but missing from DiscoveredEndpoint never reaches the wizard.
+    """
+    client, _ = ds_client
+
+    async def fake_discover(address: str) -> dict:
+        return {
+            "ok": True,
+            "error": None,
+            "endpoints": [
+                {
+                    "endpoint_url": "opc.tcp://plc:4840",
+                    "security_mode": "SignAndEncrypt",
+                    "security_policy": "Basic256",
+                    "user_tokens": ["Username"],
+                    "server_name": "PLC",
+                    "application_uri": "urn:PLC",
+                    "supported": False,
+                },
+                {
+                    "endpoint_url": "opc.tcp://plc:4840",
+                    "security_mode": "None",
+                    "security_policy": "NoSecurity",
+                    "user_tokens": ["Anonymous"],
+                    "server_name": "PLC",
+                    "application_uri": "urn:PLC",
+                    "supported": True,
+                },
+            ],
+        }
+
+    monkeypatch.setattr(datasource_api_module, "discover_endpoints", fake_discover)
+    resp = client.post("/api/datasources/discover", json={"address": "plc:4840"})
+
+    assert resp.status_code == 200
+    assert [ep["supported"] for ep in resp.json()["endpoints"]] == [False, True]

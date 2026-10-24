@@ -2,7 +2,7 @@
 
 import asyncio
 
-import opcua.client_pool as client_pool_module
+import opcua.engine as engine_module
 import pytest
 from opcua.client_pool import DatasourceOpcuaEngine
 
@@ -36,7 +36,7 @@ async def test_do_connect_resets_connected_state_on_subscription_setup_failure(m
     """A failure in _setup_subscriptions must reset _connected so the
     reconnect loop actually retries instead of reporting a healthy connection
     with zero working subscriptions forever."""
-    monkeypatch.setattr(client_pool_module, "Client", lambda url: _FakeAsyncuaClient(url))
+    monkeypatch.setattr(engine_module, "Client", lambda url: _FakeAsyncuaClient(url))
 
     engine = DatasourceOpcuaEngine("DS")
     engine._config = {"server_url": "opc.tcp://fake:4840"}

@@ -1,0 +1,2064 @@
+{
+  "codesys": {
+    "title": "CODESYS Control V3",
+    "browse": {
+      "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application",
+      "display_name": "Application",
+      "data_type": null,
+      "children": [
+        {
+          "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot",
+          "display_name": "GVL_Robot",
+          "data_type": null,
+          "children": [
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.bAlarm",
+              "display_name": "bAlarm",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.bCommsError",
+              "display_name": "bCommsError",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.eControlState",
+              "display_name": "eControlState",
+              "data_type": "Int32",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.sDiag",
+              "display_name": "sDiag",
+              "data_type": "String",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.rSpeed",
+              "display_name": "rSpeed",
+              "data_type": "Float",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.lrPosition",
+              "display_name": "lrPosition",
+              "data_type": "Double",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.aTemps",
+              "display_name": "aTemps",
+              "data_type": "Float",
+              "children": [],
+              "writable": true,
+              "is_array": true,
+              "array_length": 4
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn00",
+              "display_name": "xIn00",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn01",
+              "display_name": "xIn01",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn02",
+              "display_name": "xIn02",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn03",
+              "display_name": "xIn03",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn04",
+              "display_name": "xIn04",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn05",
+              "display_name": "xIn05",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn06",
+              "display_name": "xIn06",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn07",
+              "display_name": "xIn07",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn08",
+              "display_name": "xIn08",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn09",
+              "display_name": "xIn09",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn10",
+              "display_name": "xIn10",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn11",
+              "display_name": "xIn11",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn12",
+              "display_name": "xIn12",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn13",
+              "display_name": "xIn13",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn14",
+              "display_name": "xIn14",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn15",
+              "display_name": "xIn15",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn16",
+              "display_name": "xIn16",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn17",
+              "display_name": "xIn17",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn18",
+              "display_name": "xIn18",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn19",
+              "display_name": "xIn19",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.stAxis",
+              "display_name": "stAxis",
+              "data_type": "struct",
+              "children": [
+                {
+                  "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.stAxis.rPos",
+                  "display_name": "rPos",
+                  "data_type": "Float",
+                  "children": [],
+                  "writable": true
+                },
+                {
+                  "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.stAxis.bHomed",
+                  "display_name": "bHomed",
+                  "data_type": "Boolean",
+                  "children": [],
+                  "writable": false
+                }
+              ],
+              "writable": false
+            }
+          ]
+        }
+      ],
+      "show_root": true
+    },
+    "tree": [
+      {
+        "kind": "folder",
+        "name": "Application",
+        "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application",
+        "children": [
+          {
+            "kind": "folder",
+            "name": "GVL_Robot",
+            "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot",
+            "children": [
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.bAlarm",
+                "display_name": "bAlarm",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.bCommsError",
+                "display_name": "bCommsError",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.eControlState",
+                "display_name": "eControlState",
+                "data_type": "Int32",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.sDiag",
+                "display_name": "sDiag",
+                "data_type": "String",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.rSpeed",
+                "display_name": "rSpeed",
+                "data_type": "Float",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.lrPosition",
+                "display_name": "lrPosition",
+                "data_type": "Double",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.aTemps",
+                "display_name": "aTemps",
+                "data_type": "Float",
+                "enabled": false,
+                "writable": true,
+                "is_array": true,
+                "array_length": 4
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn00",
+                "display_name": "xIn00",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn01",
+                "display_name": "xIn01",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn02",
+                "display_name": "xIn02",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn03",
+                "display_name": "xIn03",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn04",
+                "display_name": "xIn04",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn05",
+                "display_name": "xIn05",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn06",
+                "display_name": "xIn06",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn07",
+                "display_name": "xIn07",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn08",
+                "display_name": "xIn08",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn09",
+                "display_name": "xIn09",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn10",
+                "display_name": "xIn10",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn11",
+                "display_name": "xIn11",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn12",
+                "display_name": "xIn12",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn13",
+                "display_name": "xIn13",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn14",
+                "display_name": "xIn14",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn15",
+                "display_name": "xIn15",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn16",
+                "display_name": "xIn16",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn17",
+                "display_name": "xIn17",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn18",
+                "display_name": "xIn18",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.xIn19",
+                "display_name": "xIn19",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "folder",
+                "name": "stAxis",
+                "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.stAxis",
+                "children": [
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.stAxis.rPos",
+                    "display_name": "rPos",
+                    "data_type": "Float",
+                    "enabled": false,
+                    "writable": true
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=4;s=|var|CODESYS Control Win V3 x64.Application.GVL_Robot.stAxis.bHomed",
+                    "display_name": "bHomed",
+                    "data_type": "Boolean",
+                    "enabled": false,
+                    "writable": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "s7_1500": {
+    "title": "Siemens SIMATIC S7-1500",
+    "browse": {
+      "node_id": "ns=3;s=PLC_1",
+      "display_name": "PLC_1",
+      "data_type": null,
+      "children": [
+        {
+          "node_id": "ns=3;s=DataBlocksGlobal",
+          "display_name": "DataBlocksGlobal",
+          "data_type": null,
+          "children": [
+            {
+              "node_id": "ns=3;s=\"DB_Machine\"",
+              "display_name": "DB_Machine",
+              "data_type": null,
+              "children": [
+                {
+                  "node_id": "ns=3;s=\"DB_Machine\".\"Battery\"",
+                  "display_name": "Battery",
+                  "data_type": "struct",
+                  "children": [
+                    {
+                      "node_id": "ns=3;s=\"DB_Machine\".\"Battery\".\"SOC\"",
+                      "display_name": "SOC",
+                      "data_type": "Float",
+                      "children": [],
+                      "writable": true
+                    },
+                    {
+                      "node_id": "ns=3;s=\"DB_Machine\".\"Battery\".\"Voltage\"",
+                      "display_name": "Voltage",
+                      "data_type": "Float",
+                      "children": [],
+                      "writable": true
+                    },
+                    {
+                      "node_id": "ns=3;s=\"DB_Machine\".\"Battery\".\"Current\"",
+                      "display_name": "Current",
+                      "data_type": "Float",
+                      "children": [],
+                      "writable": false
+                    },
+                    {
+                      "node_id": "ns=3;s=\"DB_Machine\".\"Battery\".\"Cell\"",
+                      "display_name": "Cell",
+                      "data_type": "struct",
+                      "children": [
+                        {
+                          "node_id": "ns=3;s=\"DB_Machine\".\"Battery\".\"Cell\".\"Temp\"",
+                          "display_name": "Temp",
+                          "data_type": "Float",
+                          "children": [],
+                          "writable": false
+                        }
+                      ],
+                      "writable": false
+                    }
+                  ],
+                  "writable": false
+                },
+                {
+                  "node_id": "ns=3;s=\"DB_Machine\".\"Running\"",
+                  "display_name": "Running",
+                  "data_type": "Boolean",
+                  "children": [],
+                  "writable": true
+                },
+                {
+                  "node_id": "ns=3;s=\"DB_Machine\".\"Counter\"",
+                  "display_name": "Counter",
+                  "data_type": "Int32",
+                  "children": [],
+                  "writable": true
+                },
+                {
+                  "node_id": "ns=3;s=\"DB_Machine\".\"Mode\"",
+                  "display_name": "Mode",
+                  "data_type": "Int16",
+                  "children": [],
+                  "writable": true
+                },
+                {
+                  "node_id": "ns=3;s=\"DB_Machine\".\"Status\"",
+                  "display_name": "Status",
+                  "data_type": "UInt16",
+                  "children": [],
+                  "writable": true
+                },
+                {
+                  "node_id": "ns=3;s=\"DB_Machine\".\"Flags\"",
+                  "display_name": "Flags",
+                  "data_type": "UInt32",
+                  "children": [],
+                  "writable": false
+                },
+                {
+                  "node_id": "ns=3;s=\"DB_Machine\".\"Energy\"",
+                  "display_name": "Energy",
+                  "data_type": "Int64",
+                  "children": [],
+                  "writable": true
+                },
+                {
+                  "node_id": "ns=3;s=\"DB_Machine\".\"Hours\"",
+                  "display_name": "Hours",
+                  "data_type": "UInt64",
+                  "children": [],
+                  "writable": false
+                },
+                {
+                  "node_id": "ns=3;s=\"DB_Machine\".\"Offset\"",
+                  "display_name": "Offset",
+                  "data_type": "SByte",
+                  "children": [],
+                  "writable": true
+                },
+                {
+                  "node_id": "ns=3;s=\"DB_Machine\".\"Level\"",
+                  "display_name": "Level",
+                  "data_type": "Byte",
+                  "children": [],
+                  "writable": true
+                },
+                {
+                  "node_id": "ns=3;s=\"DB_Machine\".\"Pressure\"",
+                  "display_name": "Pressure",
+                  "data_type": "Double",
+                  "children": [],
+                  "writable": true
+                },
+                {
+                  "node_id": "ns=3;s=\"DB_Machine\".\"Recipe\"",
+                  "display_name": "Recipe",
+                  "data_type": "String",
+                  "children": [],
+                  "writable": true
+                },
+                {
+                  "node_id": "ns=3;s=\"DB_Machine\".\"Levels\"",
+                  "display_name": "Levels",
+                  "data_type": "Float",
+                  "children": [],
+                  "writable": true,
+                  "is_array": true,
+                  "array_length": 8
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "node_id": "ns=3;s=Inputs",
+          "display_name": "Inputs",
+          "data_type": null,
+          "children": [
+            {
+              "node_id": "ns=3;s=\"I_Start\"",
+              "display_name": "I_Start",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": false
+            }
+          ]
+        },
+        {
+          "node_id": "ns=3;s=Outputs",
+          "display_name": "Outputs",
+          "data_type": null,
+          "children": [
+            {
+              "node_id": "ns=3;s=\"Q_Motor\"",
+              "display_name": "Q_Motor",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": true
+            }
+          ]
+        }
+      ],
+      "show_root": true
+    },
+    "tree": [
+      {
+        "kind": "folder",
+        "name": "PLC_1",
+        "node_id": "ns=3;s=PLC_1",
+        "children": [
+          {
+            "kind": "folder",
+            "name": "DataBlocksGlobal",
+            "node_id": "ns=3;s=DataBlocksGlobal",
+            "children": [
+              {
+                "kind": "folder",
+                "name": "DB_Machine",
+                "node_id": "ns=3;s=\"DB_Machine\"",
+                "children": [
+                  {
+                    "kind": "folder",
+                    "name": "Battery",
+                    "node_id": "ns=3;s=\"DB_Machine\".\"Battery\"",
+                    "children": [
+                      {
+                        "kind": "variable",
+                        "node_id": "ns=3;s=\"DB_Machine\".\"Battery\".\"SOC\"",
+                        "display_name": "SOC",
+                        "data_type": "Float",
+                        "enabled": false,
+                        "writable": true
+                      },
+                      {
+                        "kind": "variable",
+                        "node_id": "ns=3;s=\"DB_Machine\".\"Battery\".\"Voltage\"",
+                        "display_name": "Voltage",
+                        "data_type": "Float",
+                        "enabled": false,
+                        "writable": true
+                      },
+                      {
+                        "kind": "variable",
+                        "node_id": "ns=3;s=\"DB_Machine\".\"Battery\".\"Current\"",
+                        "display_name": "Current",
+                        "data_type": "Float",
+                        "enabled": false,
+                        "writable": false
+                      },
+                      {
+                        "kind": "folder",
+                        "name": "Cell",
+                        "node_id": "ns=3;s=\"DB_Machine\".\"Battery\".\"Cell\"",
+                        "children": [
+                          {
+                            "kind": "variable",
+                            "node_id": "ns=3;s=\"DB_Machine\".\"Battery\".\"Cell\".\"Temp\"",
+                            "display_name": "Temp",
+                            "data_type": "Float",
+                            "enabled": false,
+                            "writable": false
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=3;s=\"DB_Machine\".\"Running\"",
+                    "display_name": "Running",
+                    "data_type": "Boolean",
+                    "enabled": false,
+                    "writable": true
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=3;s=\"DB_Machine\".\"Counter\"",
+                    "display_name": "Counter",
+                    "data_type": "Int32",
+                    "enabled": false,
+                    "writable": true
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=3;s=\"DB_Machine\".\"Mode\"",
+                    "display_name": "Mode",
+                    "data_type": "Int16",
+                    "enabled": false,
+                    "writable": true
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=3;s=\"DB_Machine\".\"Status\"",
+                    "display_name": "Status",
+                    "data_type": "UInt16",
+                    "enabled": false,
+                    "writable": true
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=3;s=\"DB_Machine\".\"Flags\"",
+                    "display_name": "Flags",
+                    "data_type": "UInt32",
+                    "enabled": false,
+                    "writable": false
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=3;s=\"DB_Machine\".\"Energy\"",
+                    "display_name": "Energy",
+                    "data_type": "Int64",
+                    "enabled": false,
+                    "writable": true
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=3;s=\"DB_Machine\".\"Hours\"",
+                    "display_name": "Hours",
+                    "data_type": "UInt64",
+                    "enabled": false,
+                    "writable": false
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=3;s=\"DB_Machine\".\"Offset\"",
+                    "display_name": "Offset",
+                    "data_type": "SByte",
+                    "enabled": false,
+                    "writable": true
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=3;s=\"DB_Machine\".\"Level\"",
+                    "display_name": "Level",
+                    "data_type": "Byte",
+                    "enabled": false,
+                    "writable": true
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=3;s=\"DB_Machine\".\"Pressure\"",
+                    "display_name": "Pressure",
+                    "data_type": "Double",
+                    "enabled": false,
+                    "writable": true
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=3;s=\"DB_Machine\".\"Recipe\"",
+                    "display_name": "Recipe",
+                    "data_type": "String",
+                    "enabled": false,
+                    "writable": true
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=3;s=\"DB_Machine\".\"Levels\"",
+                    "display_name": "Levels",
+                    "data_type": "Float",
+                    "enabled": false,
+                    "writable": true,
+                    "is_array": true,
+                    "array_length": 8
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "folder",
+            "name": "Inputs",
+            "node_id": "ns=3;s=Inputs",
+            "children": [
+              {
+                "kind": "variable",
+                "node_id": "ns=3;s=\"I_Start\"",
+                "display_name": "I_Start",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": false
+              }
+            ]
+          },
+          {
+            "kind": "folder",
+            "name": "Outputs",
+            "node_id": "ns=3;s=Outputs",
+            "children": [
+              {
+                "kind": "variable",
+                "node_id": "ns=3;s=\"Q_Motor\"",
+                "display_name": "Q_Motor",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "twincat": {
+    "title": "Beckhoff TwinCAT 3",
+    "browse": {
+      "node_id": "ns=4;s=PLC1",
+      "display_name": "PLC1",
+      "data_type": null,
+      "children": [
+        {
+          "node_id": "ns=4;s=MAIN",
+          "display_name": "MAIN",
+          "data_type": null,
+          "children": [
+            {
+              "node_id": "ns=4;s=MAIN.bStart",
+              "display_name": "bStart",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=4;s=MAIN.nCounter",
+              "display_name": "nCounter",
+              "data_type": "Int16",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=4;s=MAIN.fSpeed",
+              "display_name": "fSpeed",
+              "data_type": "Double",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=4;s=MAIN.eState",
+              "display_name": "eState",
+              "data_type": "Int32",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=4;s=MAIN.stMotor",
+              "display_name": "stMotor",
+              "data_type": "struct",
+              "children": [
+                {
+                  "node_id": "ns=4;s=MAIN.stMotor.fActualSpeed",
+                  "display_name": "fActualSpeed",
+                  "data_type": "Double",
+                  "children": [],
+                  "writable": false
+                },
+                {
+                  "node_id": "ns=4;s=MAIN.stMotor.bRunning",
+                  "display_name": "bRunning",
+                  "data_type": "Boolean",
+                  "children": [],
+                  "writable": false
+                },
+                {
+                  "node_id": "ns=4;s=MAIN.stMotor.stLimits",
+                  "display_name": "stLimits",
+                  "data_type": "struct",
+                  "children": [
+                    {
+                      "node_id": "ns=4;s=MAIN.stMotor.stLimits.fMin",
+                      "display_name": "fMin",
+                      "data_type": "Double",
+                      "children": [],
+                      "writable": true
+                    },
+                    {
+                      "node_id": "ns=4;s=MAIN.stMotor.stLimits.fMax",
+                      "display_name": "fMax",
+                      "data_type": "Double",
+                      "children": [],
+                      "writable": true
+                    }
+                  ],
+                  "writable": false
+                }
+              ],
+              "writable": false
+            }
+          ]
+        },
+        {
+          "node_id": "ns=4;s=GVL",
+          "display_name": "GVL",
+          "data_type": null,
+          "children": [
+            {
+              "node_id": "ns=4;s=GVL.aBuffer",
+              "display_name": "aBuffer",
+              "data_type": "UInt16",
+              "children": [],
+              "writable": true,
+              "is_array": true
+            },
+            {
+              "node_id": "ns=4;s=GVL.sVersion",
+              "display_name": "sVersion",
+              "data_type": "String",
+              "children": [],
+              "writable": false
+            }
+          ]
+        }
+      ],
+      "show_root": true
+    },
+    "tree": [
+      {
+        "kind": "folder",
+        "name": "PLC1",
+        "node_id": "ns=4;s=PLC1",
+        "children": [
+          {
+            "kind": "folder",
+            "name": "MAIN",
+            "node_id": "ns=4;s=MAIN",
+            "children": [
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=MAIN.bStart",
+                "display_name": "bStart",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=MAIN.nCounter",
+                "display_name": "nCounter",
+                "data_type": "Int16",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=MAIN.fSpeed",
+                "display_name": "fSpeed",
+                "data_type": "Double",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=MAIN.eState",
+                "display_name": "eState",
+                "data_type": "Int32",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "folder",
+                "name": "stMotor",
+                "node_id": "ns=4;s=MAIN.stMotor",
+                "children": [
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=4;s=MAIN.stMotor.fActualSpeed",
+                    "display_name": "fActualSpeed",
+                    "data_type": "Double",
+                    "enabled": false,
+                    "writable": false
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=4;s=MAIN.stMotor.bRunning",
+                    "display_name": "bRunning",
+                    "data_type": "Boolean",
+                    "enabled": false,
+                    "writable": false
+                  },
+                  {
+                    "kind": "folder",
+                    "name": "stLimits",
+                    "node_id": "ns=4;s=MAIN.stMotor.stLimits",
+                    "children": [
+                      {
+                        "kind": "variable",
+                        "node_id": "ns=4;s=MAIN.stMotor.stLimits.fMin",
+                        "display_name": "fMin",
+                        "data_type": "Double",
+                        "enabled": false,
+                        "writable": true
+                      },
+                      {
+                        "kind": "variable",
+                        "node_id": "ns=4;s=MAIN.stMotor.stLimits.fMax",
+                        "display_name": "fMax",
+                        "data_type": "Double",
+                        "enabled": false,
+                        "writable": true
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "folder",
+            "name": "GVL",
+            "node_id": "ns=4;s=GVL",
+            "children": [
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=GVL.aBuffer",
+                "display_name": "aBuffer",
+                "data_type": "UInt16",
+                "enabled": false,
+                "writable": true,
+                "is_array": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=4;s=GVL.sVersion",
+                "display_name": "sVersion",
+                "data_type": "String",
+                "enabled": false,
+                "writable": false
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "kepware": {
+    "title": "Kepware KEPServerEX (Allen-Bradley)",
+    "browse": {
+      "node_id": "ns=2;s=Channel1",
+      "display_name": "Channel1",
+      "data_type": null,
+      "children": [
+        {
+          "node_id": "ns=2;s=Channel1.Device1",
+          "display_name": "Device1",
+          "data_type": null,
+          "children": [
+            {
+              "node_id": "ns=2;s=Channel1.Device1.Line_A",
+              "display_name": "Line_A",
+              "data_type": null,
+              "children": [
+                {
+                  "node_id": "ns=2;s=Channel1.Device1.Line_A.Temp",
+                  "display_name": "Temp",
+                  "data_type": "Double",
+                  "children": [],
+                  "writable": false
+                }
+              ]
+            },
+            {
+              "node_id": "ns=2;s=Channel1.Device1._System",
+              "display_name": "_System",
+              "data_type": null,
+              "children": [
+                {
+                  "node_id": "ns=2;s=Channel1.Device1._System._Enabled",
+                  "display_name": "_Enabled",
+                  "data_type": "Boolean",
+                  "children": [],
+                  "writable": true
+                },
+                {
+                  "node_id": "ns=2;s=Channel1.Device1._System._NoError",
+                  "display_name": "_NoError",
+                  "data_type": "Boolean",
+                  "children": [],
+                  "writable": false
+                }
+              ]
+            },
+            {
+              "node_id": "ns=2;s=Channel1.Device1.Run",
+              "display_name": "Run",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;s=Channel1.Device1.Speed",
+              "display_name": "Speed",
+              "data_type": "UInt16",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;s=Channel1.Device1.Total",
+              "display_name": "Total",
+              "data_type": "UInt32",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=2;s=Channel1.Device1.Setpoint",
+              "display_name": "Setpoint",
+              "data_type": "Float",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;s=Channel1.Device1.Batch",
+              "display_name": "Batch",
+              "data_type": "String",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;s=Channel1.Device1.Profile",
+              "display_name": "Profile",
+              "data_type": "Float",
+              "children": [],
+              "writable": true,
+              "is_array": true,
+              "array_length": 10
+            }
+          ]
+        }
+      ],
+      "show_root": true
+    },
+    "tree": [
+      {
+        "kind": "folder",
+        "name": "Channel1",
+        "node_id": "ns=2;s=Channel1",
+        "children": [
+          {
+            "kind": "folder",
+            "name": "Device1",
+            "node_id": "ns=2;s=Channel1.Device1",
+            "children": [
+              {
+                "kind": "folder",
+                "name": "Line_A",
+                "node_id": "ns=2;s=Channel1.Device1.Line_A",
+                "children": [
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=2;s=Channel1.Device1.Line_A.Temp",
+                    "display_name": "Temp",
+                    "data_type": "Double",
+                    "enabled": false,
+                    "writable": false
+                  }
+                ]
+              },
+              {
+                "kind": "folder",
+                "name": "_System",
+                "node_id": "ns=2;s=Channel1.Device1._System",
+                "children": [
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=2;s=Channel1.Device1._System._Enabled",
+                    "display_name": "_Enabled",
+                    "data_type": "Boolean",
+                    "enabled": false,
+                    "writable": true
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=2;s=Channel1.Device1._System._NoError",
+                    "display_name": "_NoError",
+                    "data_type": "Boolean",
+                    "enabled": false,
+                    "writable": false
+                  }
+                ]
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;s=Channel1.Device1.Run",
+                "display_name": "Run",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;s=Channel1.Device1.Speed",
+                "display_name": "Speed",
+                "data_type": "UInt16",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;s=Channel1.Device1.Total",
+                "display_name": "Total",
+                "data_type": "UInt32",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;s=Channel1.Device1.Setpoint",
+                "display_name": "Setpoint",
+                "data_type": "Float",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;s=Channel1.Device1.Batch",
+                "display_name": "Batch",
+                "data_type": "String",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;s=Channel1.Device1.Profile",
+                "display_name": "Profile",
+                "data_type": "Float",
+                "enabled": false,
+                "writable": true,
+                "is_array": true,
+                "array_length": 10
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "bnr": {
+    "title": "B&R Automation Runtime",
+    "browse": {
+      "node_id": "ns=6;s=Modules",
+      "display_name": "Modules",
+      "data_type": null,
+      "children": [
+        {
+          "node_id": "ns=6;s=::",
+          "display_name": "Global",
+          "data_type": null,
+          "children": [
+            {
+              "node_id": "ns=6;s=::gMachine",
+              "display_name": "gMachine",
+              "data_type": "struct",
+              "children": [
+                {
+                  "node_id": "ns=6;s=::gMachine.speed",
+                  "display_name": "speed",
+                  "data_type": "Double",
+                  "children": [],
+                  "writable": true
+                },
+                {
+                  "node_id": "ns=6;s=::gMachine.Füllstand",
+                  "display_name": "Füllstand",
+                  "data_type": "Float",
+                  "children": [],
+                  "writable": false
+                }
+              ],
+              "writable": false
+            },
+            {
+              "node_id": "ns=6;s=::gCount",
+              "display_name": "gCount",
+              "data_type": "UInt32",
+              "children": [],
+              "writable": true
+            }
+          ]
+        },
+        {
+          "node_id": "ns=6;s=Program",
+          "display_name": "Program",
+          "data_type": null,
+          "children": [
+            {
+              "node_id": "ns=6;s=Program:enable",
+              "display_name": "enable",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=6;s=Program:温度",
+              "display_name": "温度",
+              "data_type": "Float",
+              "children": [],
+              "writable": false
+            },
+            {
+              "node_id": "ns=6;s=Program:Störmeldung",
+              "display_name": "Störmeldung",
+              "data_type": "String",
+              "children": [],
+              "writable": true
+            }
+          ]
+        }
+      ],
+      "show_root": true
+    },
+    "tree": [
+      {
+        "kind": "folder",
+        "name": "Modules",
+        "node_id": "ns=6;s=Modules",
+        "children": [
+          {
+            "kind": "folder",
+            "name": "Global",
+            "node_id": "ns=6;s=::",
+            "children": [
+              {
+                "kind": "folder",
+                "name": "gMachine",
+                "node_id": "ns=6;s=::gMachine",
+                "children": [
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=6;s=::gMachine.speed",
+                    "display_name": "speed",
+                    "data_type": "Double",
+                    "enabled": false,
+                    "writable": true
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=6;s=::gMachine.Füllstand",
+                    "display_name": "Füllstand",
+                    "data_type": "Float",
+                    "enabled": false,
+                    "writable": false
+                  }
+                ]
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=6;s=::gCount",
+                "display_name": "gCount",
+                "data_type": "UInt32",
+                "enabled": false,
+                "writable": true
+              }
+            ]
+          },
+          {
+            "kind": "folder",
+            "name": "Program",
+            "node_id": "ns=6;s=Program",
+            "children": [
+              {
+                "kind": "variable",
+                "node_id": "ns=6;s=Program:enable",
+                "display_name": "enable",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=6;s=Program:温度",
+                "display_name": "温度",
+                "data_type": "Float",
+                "enabled": false,
+                "writable": false
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=6;s=Program:Störmeldung",
+                "display_name": "Störmeldung",
+                "data_type": "String",
+                "enabled": false,
+                "writable": true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "generic": {
+    "title": "Generic server, numeric NodeIds (edge cases)",
+    "browse": {
+      "node_id": "ns=2;i=1000",
+      "display_name": "Plant",
+      "data_type": null,
+      "children": [
+        {
+          "node_id": "ns=2;i=1001",
+          "display_name": "SerialNumber",
+          "data_type": "String",
+          "children": [],
+          "writable": false
+        },
+        {
+          "node_id": "ns=2;i=1100",
+          "display_name": "Types",
+          "data_type": null,
+          "children": [
+            {
+              "node_id": "ns=2;i=1101",
+              "display_name": "Boolean",
+              "data_type": "Boolean",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;i=1102",
+              "display_name": "SByte",
+              "data_type": "SByte",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;i=1103",
+              "display_name": "Byte",
+              "data_type": "Byte",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;i=1104",
+              "display_name": "Int16",
+              "data_type": "Int16",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;i=1105",
+              "display_name": "UInt16",
+              "data_type": "UInt16",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;i=1106",
+              "display_name": "Int32",
+              "data_type": "Int32",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;i=1107",
+              "display_name": "UInt32",
+              "data_type": "UInt32",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;i=1108",
+              "display_name": "Int64",
+              "data_type": "Int64",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;i=1109",
+              "display_name": "UInt64",
+              "data_type": "UInt64",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;i=1110",
+              "display_name": "Float",
+              "data_type": "Float",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;i=1111",
+              "display_name": "Double",
+              "data_type": "Double",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;i=1112",
+              "display_name": "String",
+              "data_type": "String",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;i=1113",
+              "display_name": "DateTime",
+              "data_type": "DateTime",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;i=1114",
+              "display_name": "Guid",
+              "data_type": "Guid",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;i=1115",
+              "display_name": "ByteString",
+              "data_type": "ByteString",
+              "children": [],
+              "writable": true
+            },
+            {
+              "node_id": "ns=2;i=1116",
+              "display_name": "LocalizedText",
+              "data_type": "LocalizedText",
+              "children": [],
+              "writable": true
+            }
+          ]
+        },
+        {
+          "node_id": "ns=2;i=1201",
+          "display_name": "L1",
+          "data_type": "struct",
+          "children": [
+            {
+              "node_id": "ns=2;i=1202",
+              "display_name": "L2",
+              "data_type": "struct",
+              "children": [
+                {
+                  "node_id": "ns=2;i=1203",
+                  "display_name": "L3",
+                  "data_type": "struct",
+                  "children": [
+                    {
+                      "node_id": "ns=2;i=1204",
+                      "display_name": "L4",
+                      "data_type": "struct",
+                      "children": [
+                        {
+                          "node_id": "ns=2;i=1205",
+                          "display_name": "L5",
+                          "data_type": "struct",
+                          "children": [
+                            {
+                              "node_id": "ns=2;i=1299",
+                              "display_name": "Value",
+                              "data_type": "Double",
+                              "children": [],
+                              "writable": true
+                            }
+                          ],
+                          "writable": false
+                        }
+                      ],
+                      "writable": false
+                    }
+                  ],
+                  "writable": false
+                }
+              ],
+              "writable": false
+            }
+          ],
+          "writable": false
+        },
+        {
+          "node_id": "ns=2;i=1300",
+          "display_name": "History",
+          "data_type": "Int32",
+          "children": [],
+          "writable": false,
+          "is_array": true
+        },
+        {
+          "node_id": "ns=2;i=1400",
+          "display_name": "Points",
+          "data_type": "struct",
+          "children": [
+            {
+              "node_id": "ns=2;i=1410",
+              "display_name": "[0]",
+              "data_type": "struct",
+              "children": [
+                {
+                  "node_id": "ns=2;i=1411",
+                  "display_name": "x",
+                  "data_type": "Double",
+                  "children": [],
+                  "writable": true
+                },
+                {
+                  "node_id": "ns=2;i=1412",
+                  "display_name": "y",
+                  "data_type": "Double",
+                  "children": [],
+                  "writable": true
+                }
+              ],
+              "writable": false
+            },
+            {
+              "node_id": "ns=2;i=1420",
+              "display_name": "[1]",
+              "data_type": "struct",
+              "children": [
+                {
+                  "node_id": "ns=2;i=1421",
+                  "display_name": "x",
+                  "data_type": "Double",
+                  "children": [],
+                  "writable": true
+                },
+                {
+                  "node_id": "ns=2;i=1422",
+                  "display_name": "y",
+                  "data_type": "Double",
+                  "children": [],
+                  "writable": true
+                }
+              ],
+              "writable": false
+            }
+          ],
+          "writable": false,
+          "is_array": true
+        },
+        {
+          "node_id": "ns=2;i=1600",
+          "display_name": "Favorites",
+          "data_type": null,
+          "children": []
+        }
+      ],
+      "show_root": true
+    },
+    "tree": [
+      {
+        "kind": "folder",
+        "name": "Plant",
+        "node_id": "ns=2;i=1000",
+        "children": [
+          {
+            "kind": "variable",
+            "node_id": "ns=2;i=1001",
+            "display_name": "SerialNumber",
+            "data_type": "String",
+            "enabled": false,
+            "writable": false
+          },
+          {
+            "kind": "folder",
+            "name": "Types",
+            "node_id": "ns=2;i=1100",
+            "children": [
+              {
+                "kind": "variable",
+                "node_id": "ns=2;i=1101",
+                "display_name": "Boolean",
+                "data_type": "Boolean",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;i=1102",
+                "display_name": "SByte",
+                "data_type": "SByte",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;i=1103",
+                "display_name": "Byte",
+                "data_type": "Byte",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;i=1104",
+                "display_name": "Int16",
+                "data_type": "Int16",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;i=1105",
+                "display_name": "UInt16",
+                "data_type": "UInt16",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;i=1106",
+                "display_name": "Int32",
+                "data_type": "Int32",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;i=1107",
+                "display_name": "UInt32",
+                "data_type": "UInt32",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;i=1108",
+                "display_name": "Int64",
+                "data_type": "Int64",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;i=1109",
+                "display_name": "UInt64",
+                "data_type": "UInt64",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;i=1110",
+                "display_name": "Float",
+                "data_type": "Float",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;i=1111",
+                "display_name": "Double",
+                "data_type": "Double",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;i=1112",
+                "display_name": "String",
+                "data_type": "String",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;i=1113",
+                "display_name": "DateTime",
+                "data_type": "DateTime",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;i=1114",
+                "display_name": "Guid",
+                "data_type": "Guid",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;i=1115",
+                "display_name": "ByteString",
+                "data_type": "ByteString",
+                "enabled": false,
+                "writable": true
+              },
+              {
+                "kind": "variable",
+                "node_id": "ns=2;i=1116",
+                "display_name": "LocalizedText",
+                "data_type": "LocalizedText",
+                "enabled": false,
+                "writable": true
+              }
+            ]
+          },
+          {
+            "kind": "folder",
+            "name": "L1",
+            "node_id": "ns=2;i=1201",
+            "children": [
+              {
+                "kind": "folder",
+                "name": "L2",
+                "node_id": "ns=2;i=1202",
+                "children": [
+                  {
+                    "kind": "folder",
+                    "name": "L3",
+                    "node_id": "ns=2;i=1203",
+                    "children": [
+                      {
+                        "kind": "folder",
+                        "name": "L4",
+                        "node_id": "ns=2;i=1204",
+                        "children": [
+                          {
+                            "kind": "folder",
+                            "name": "L5",
+                            "node_id": "ns=2;i=1205",
+                            "children": [
+                              {
+                                "kind": "variable",
+                                "node_id": "ns=2;i=1299",
+                                "display_name": "Value",
+                                "data_type": "Double",
+                                "enabled": false,
+                                "writable": true
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "kind": "variable",
+            "node_id": "ns=2;i=1300",
+            "display_name": "History",
+            "data_type": "Int32",
+            "enabled": false,
+            "writable": false,
+            "is_array": true
+          },
+          {
+            "kind": "folder",
+            "name": "Points",
+            "node_id": "ns=2;i=1400",
+            "children": [
+              {
+                "kind": "folder",
+                "name": "[0]",
+                "node_id": "ns=2;i=1410",
+                "children": [
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=2;i=1411",
+                    "display_name": "x",
+                    "data_type": "Double",
+                    "enabled": false,
+                    "writable": true
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=2;i=1412",
+                    "display_name": "y",
+                    "data_type": "Double",
+                    "enabled": false,
+                    "writable": true
+                  }
+                ]
+              },
+              {
+                "kind": "folder",
+                "name": "[1]",
+                "node_id": "ns=2;i=1420",
+                "children": [
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=2;i=1421",
+                    "display_name": "x",
+                    "data_type": "Double",
+                    "enabled": false,
+                    "writable": true
+                  },
+                  {
+                    "kind": "variable",
+                    "node_id": "ns=2;i=1422",
+                    "display_name": "y",
+                    "data_type": "Double",
+                    "enabled": false,
+                    "writable": true
+                  }
+                ]
+              }
+            ],
+            "is_array": true
+          },
+          {
+            "kind": "folder",
+            "name": "Favorites",
+            "node_id": "ns=2;i=1600",
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "exotic_ids": {
+    "title": "Every NodeId identifier type",
+    "browse": {
+      "node_id": "ns=2;s=Exotic",
+      "display_name": "Exotic",
+      "data_type": null,
+      "children": [
+        {
+          "node_id": "ns=2;g=0b9a8f1e-6b1d-4c3a-9f77-2a1e3c4d5e6f",
+          "display_name": "GuidTag",
+          "data_type": "Int32",
+          "children": [],
+          "writable": true
+        },
+        {
+          "node_id": "ns=2;b=AQL/",
+          "display_name": "OpaqueTag",
+          "data_type": "Int32",
+          "children": [],
+          "writable": true
+        },
+        {
+          "node_id": "ns=2;s=Tag;With=Specials",
+          "display_name": "Semicolon",
+          "data_type": "Int32",
+          "children": [],
+          "writable": true
+        },
+        {
+          "node_id": "ns=2;s=Tag \"quoted\" and spaces",
+          "display_name": "Quoted",
+          "data_type": "Int32",
+          "children": [],
+          "writable": true
+        },
+        {
+          "node_id": "ns=2;s=a/b\\c:d.e",
+          "display_name": "Separators",
+          "data_type": "Int32",
+          "children": [],
+          "writable": true
+        }
+      ],
+      "show_root": true
+    },
+    "tree": [
+      {
+        "kind": "folder",
+        "name": "Exotic",
+        "node_id": "ns=2;s=Exotic",
+        "children": [
+          {
+            "kind": "variable",
+            "node_id": "ns=2;g=0b9a8f1e-6b1d-4c3a-9f77-2a1e3c4d5e6f",
+            "display_name": "GuidTag",
+            "data_type": "Int32",
+            "enabled": false,
+            "writable": true
+          },
+          {
+            "kind": "variable",
+            "node_id": "ns=2;b=AQL/",
+            "display_name": "OpaqueTag",
+            "data_type": "Int32",
+            "enabled": false,
+            "writable": true
+          },
+          {
+            "kind": "variable",
+            "node_id": "ns=2;s=Tag;With=Specials",
+            "display_name": "Semicolon",
+            "data_type": "Int32",
+            "enabled": false,
+            "writable": true
+          },
+          {
+            "kind": "variable",
+            "node_id": "ns=2;s=Tag \"quoted\" and spaces",
+            "display_name": "Quoted",
+            "data_type": "Int32",
+            "enabled": false,
+            "writable": true
+          },
+          {
+            "kind": "variable",
+            "node_id": "ns=2;s=a/b\\c:d.e",
+            "display_name": "Separators",
+            "data_type": "Int32",
+            "enabled": false,
+            "writable": true
+          }
+        ]
+      }
+    ]
+  }
+}

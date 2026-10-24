@@ -93,7 +93,7 @@ No PLC handy? A **static** datasource is a variable tree you define by hand, wit
 4. **Watch the values** — Toggle **⚡ Live** in the toolbar for a **Value** column showing what each variable holds right now.
 
 > [!NOTE]
-> **Static values live in memory only.** Every variable starts at its type's zero value (`0`, `false`, `""`) and holds whatever the HMI writes to it while the project runs. Nothing is written to disk, so a restart puts the whole tree back to zero — the definitions persist, the values don't.
+> **Static values live in memory only.** Every variable starts at its type's zero value (`0`, `false`, `""`, and `1970-01-01T00:00:00.000Z` for a DateTime) and holds whatever the HMI writes to it while the project runs. Nothing is written to disk, so a restart puts the whole tree back to zero — the definitions persist, the values don't.
 
 ## Browse the address space into a tree
 
@@ -108,5 +108,9 @@ Open the datasource and browse. Each variable is recorded with its real OPC-UA *
 | **Folder** | Pure organisation (only folders inside). | not bindable |
 
 OPC-UA's many data types collapse to eight simple ones at the HMI boundary — `Boolean`, `Integer`, `Float`, `String`, `DateTime`, `Date`, `Time` and `Duration`: every `Int16/UInt32/…` becomes `Integer`, every `Float/Double` becomes `Float` — so a widget field never sees a wire type. A tag binds only to a field of its own simple type; see [Coercion, in short](properties.md#coercion-in-short).
+
+**Browse PLC** starts at the server's *Objects* folder, or at the **Browse Root Node** set in the datasource's properties.
+
+A re-browse compares the server with your tree and lists what was added, modified and *removed from server* for you to accept. A variable the browse did not reach is not counted as removed while the server still has it — so tags imported earlier from outside the current browse root stay as they are, enabled and bound.
 
 Next: [bind and subscribe →](subscribing.md)

@@ -35,7 +35,9 @@ The `path` is always `datasource:location`, with the location slash-separated. T
 
 ## Write back to the machine
 
-Mark a variable **writable** when browsing, and controls can push values to it. A **Button** binds a writable boolean — press it and the runtime sends a `write_field` message that sets the tag to `true`. A numeric setpoint written from a numpad works the same way. A variable not marked writable refuses every write — the server sends nothing to the machine and the operator sees *Variable is read-only*.
+Mark a variable **writable** when browsing, and controls can push values to it. A **Button** binds a writable boolean — press it and the runtime sends a `write_field` message that sets the tag to `true`. A numeric setpoint written from a numpad works the same way. A variable not marked writable refuses every write — the server sends nothing to the machine and the operator sees *Variable is read-only*, whatever value was entered.
+
+A single-precision tag — OPC-UA `Float`, which is an S7 `Real` or a CODESYS `REAL` — cannot hold most decimals exactly, so a write stores the nearest value it can, just as the PLC itself would: 48.2 is written as 48.20000076. A configured minimum or maximum is checked against the number entered, before that rounding, so a setpoint exactly on a bound is always accepted.
 
 ## What happens when data goes bad
 

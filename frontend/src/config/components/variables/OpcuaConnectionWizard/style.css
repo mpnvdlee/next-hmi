@@ -177,6 +177,13 @@
   background: var(--cfg-bg-hover);
 }
 
+.ds-wizard__endpoint--unsupported,
+.ds-wizard__endpoint--unsupported:hover {
+  background: var(--cfg-surface);
+  color: var(--cfg-text-muted);
+  cursor: not-allowed;
+}
+
 .ds-wizard__endpoint--selected {
   border-color: var(--cfg-accent);
   background: var(--cfg-selected-bg);

@@ -52,6 +52,7 @@ const OPCUA_TO_SIMPLE: Record<string, string> = {
   uint16: 'Integer',
   uint32: 'Integer',
   uint64: 'Integer',
+  int: 'Integer',
   enumeration: 'Integer',
   float: 'Float',
   single: 'Float',

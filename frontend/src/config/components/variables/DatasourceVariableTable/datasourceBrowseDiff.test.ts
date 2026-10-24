@@ -169,6 +169,44 @@ describe('computeBrowseDiff', () => {
     expect(diff.modified).toHaveLength(1);
     expect(asModified(diff.modified[0]).changedFields).toEqual(['writable']);
   });
+
+  describe('a saved variable the browse did not walk', () => {
+    // An earlier browse imported ServerStatus/CurrentTime; this one, from an
+    // explicit root, did not walk it.
+    const currentTime = v('i=2258', 'CurrentTime', { data_type: 'DateTime', enabled: true });
+    const serverFolder = (entry: VariableEntry) =>
+      folder('Server', [folder('ServerStatus', [entry])]);
+    const browse: TreeNode[] = [folder('Plant', [v('ns=2;s=Speed', 'Speed')])];
+
+    it('is neither removed nor stale when the server confirms it still exists', () => {
+      const saved: TreeNode[] = [serverFolder(currentTime), ...browse];
+      const diff = computeBrowseDiff(saved, browse, new Set(['i=2258']));
+      expect(diff.removed).toHaveLength(0);
+      expect(diff.silentReactivations).toHaveLength(0);
+      expect(isEmptyDiff(diff)).toBe(true);
+      const next = applyBrowseDiff({ savedTree: saved, diff, selected: new Set() });
+      expect(next).toEqual(saved);
+    });
+
+    it('is reactivated if an earlier browse had marked it stale', () => {
+      const saved: TreeNode[] = [
+        serverFolder({ ...currentTime, present_on_server: false }),
+        ...browse,
+      ];
+      const diff = computeBrowseDiff(saved, browse, new Set(['i=2258']));
+      expect(diff.removed).toHaveLength(0);
+      expect(diff.silentReactivations).toEqual(['i=2258']);
+    });
+
+    it('is still removed when the server no longer has it', () => {
+      const saved: TreeNode[] = [
+        serverFolder(currentTime),
+        folder('Plant', [v('ns=2;s=Speed', 'Speed'), v('ns=2;s=Gone', 'Gone')]),
+      ];
+      const diff = computeBrowseDiff(saved, browse, new Set(['i=2258']));
+      expect(diff.removed.map((r) => r.node_id)).toEqual(['ns=2;s=Gone']);
+    });
+  });
 });
 
 describe('applyBrowseDiff', () => {

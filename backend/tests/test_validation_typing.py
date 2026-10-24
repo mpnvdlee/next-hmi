@@ -59,9 +59,12 @@ def ctx() -> ValidationContext:
                 "Levels": {"kind": "scalar", "base": "Float", "array": True},
                 "Motor": {"kind": "struct", "name": "Motor", "array": False, "fields": ["Speed"]},
                 "Motor/Speed": _FLOAT,
+                "Setpoint": _FLOAT,
             },
         },
-        datasource_writable={"PLC": {"Speed": False, "Count": True, "Run": True, "Flags": True}},
+        datasource_writable={
+            "PLC": {"Speed": False, "Count": True, "Run": True, "Flags": True, "Setpoint": True},
+        },
         translation_keys=frozenset({"app.title"}),
     )
 
@@ -579,6 +582,7 @@ def entry_ctx(ctx) -> ValidationContext:
             "PLC:Count": {"data_type": "Int16", "min": 0, "max": 100},
             "PLC:Flags": {"data_type": "Boolean", "is_array": True, "array_length": 4},
             "PLC:Run": {"data_type": "LocalizedText"},
+            "PLC:Setpoint": {"data_type": "Float", "min": 19.9, "max": 48.2},
         }),
     )
 
@@ -592,6 +596,7 @@ def entry_ctx(ctx) -> ValidationContext:
         (_write("PLC:Flags", True), "Expected an array."),
         (_write("PLC:Flags", [True]), "The array has the wrong number of elements."),
         (_write("PLC:Flags", [True], index=1), "Expected a single value, not an array."),
+        (_write("PLC:Setpoint", 48.21), "The value is outside the variable's configured range."),
     ],
 )
 def test_a_value_the_write_path_would_reject(entry_ctx, action, message):
@@ -608,6 +613,9 @@ def test_a_value_the_write_path_would_reject(entry_ctx, action, message):
         _write("PLC:Count", "42"),
         _write("PLC:Count", {"$static": 7}),
         _write("PLC:Flags", False, index=1),
+        # Rounded to float32 these cross the bounds; the range judges the value as written.
+        _write("PLC:Setpoint", 19.9),
+        _write("PLC:Setpoint", {"$static": 48.2}),
         # A type the write path does not know is not judged.
         _write("PLC:Run", "x"),
     ],

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { filterTree, updateVarInTree } from './datasourceTreeHelpers';
+import { buildFromBrowse, filterTree, updateVarInTree } from './datasourceTreeHelpers';
+import type { BrowseNode } from './datasourceTreeHelpers';
 import type { FolderEntry, TreeNode, VariableEntry } from '@shared/types/datasource';
 
 function makeArrayOfStructTree(): TreeNode[] {
@@ -84,5 +85,83 @@ describe('filterTree', () => {
   it('includes a supplied datasource ancestor in matching', () => {
     expect(filterTree(tree, 'plc speed', 'Main PLC')).not.toEqual([]);
     expect(filterTree(tree, 'other speed', 'Main PLC')).toEqual([]);
+  });
+});
+
+describe('buildFromBrowse', () => {
+  // A struct arrives from the browse as a Variable with data_type 'struct' and
+  // its members as children. Imported as a variable it would show up as a
+  // String — 'struct' is not in the simple-type vocabulary, so toSimpleType
+  // falls back — and its members would be dropped.
+  const batteryBrowse: BrowseNode[] = [
+    {
+      node_id: 'ns=3;s=Battery',
+      display_name: 'Battery',
+      data_type: 'struct',
+      writable: false,
+      children: [
+        { node_id: 'ns=3;s=Battery.SOC', display_name: 'SOC', data_type: 'Float', writable: true },
+        {
+          node_id: 'ns=3;s=Battery.Voltage',
+          display_name: 'Voltage',
+          data_type: 'Float',
+          writable: true,
+        },
+      ],
+    },
+    { node_id: 'ns=3;s=Running', display_name: 'Running', data_type: 'Boolean', writable: false },
+  ];
+
+  it('imports a struct as a folder holding its members', () => {
+    const tree = buildFromBrowse(batteryBrowse, new Map());
+
+    const battery = tree[0] as FolderEntry;
+    expect(battery.kind).toBe('folder');
+    expect(battery.name).toBe('Battery');
+    // The node_id is kept: the struct-field read path routes through it.
+    expect(battery.node_id).toBe('ns=3;s=Battery');
+    expect(battery.children.map((c) => (c as VariableEntry).display_name)).toEqual([
+      'SOC',
+      'Voltage',
+    ]);
+    expect((battery.children[0] as VariableEntry).data_type).toBe('Float');
+  });
+
+  it('leaves a scalar sibling a variable', () => {
+    const tree = buildFromBrowse(batteryBrowse, new Map());
+
+    const running = tree[1] as VariableEntry;
+    expect(running.kind).toBe('variable');
+    expect(running.data_type).toBe('Boolean');
+  });
+
+  it('carries the enabled flag onto struct members by node_id', () => {
+    const tree = buildFromBrowse(batteryBrowse, new Map([['ns=3;s=Battery.SOC', true]]));
+
+    const battery = tree[0] as FolderEntry;
+    expect((battery.children[0] as VariableEntry).enabled).toBe(true);
+    expect((battery.children[1] as VariableEntry).enabled).toBe(false);
+  });
+
+  it('keeps a struct the browse found no members in as a variable', () => {
+    // An empty folder would leave nothing to bind; the variable it used to be
+    // at least still carries the value.
+    const tree = buildFromBrowse(
+      [{ node_id: 'ns=3;s=Opaque', display_name: 'Opaque', data_type: 'struct', children: [] }],
+      new Map(),
+    );
+
+    expect(tree[0].kind).toBe('variable');
+    expect((tree[0] as VariableEntry).node_id).toBe('ns=3;s=Opaque');
+  });
+
+  it("marks an array of structs from the server's own ValueRank", () => {
+    const tree = buildFromBrowse(
+      [{ ...batteryBrowse[0], is_array: true, array_length: 4 }],
+      new Map(),
+    );
+
+    expect(tree[0].kind).toBe('folder');
+    expect((tree[0] as FolderEntry).is_array).toBe(true);
   });
 });

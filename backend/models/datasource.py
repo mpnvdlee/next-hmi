@@ -69,6 +69,9 @@ class DiscoveredEndpoint(BaseModel):
     user_tokens: list[str] = Field(default_factory=list)
     server_name: str = ""
     application_uri: str = ""
+    # False for a policy the connect path refuses (deprecated Basic128Rsa15,
+    # Basic256), so the wizard can show it without offering it.
+    supported: bool = True
 
 
 class DiscoveryResult(BaseModel):

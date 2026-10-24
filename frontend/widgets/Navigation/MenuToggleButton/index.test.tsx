@@ -83,4 +83,16 @@ describe('MenuToggleButton', () => {
     expect(container.querySelector('svg')?.outerHTML).not.toContain('fill="red"');
     expect(container.querySelector('svg')?.outerHTML).toContain('currentColor');
   });
+
+  it.each([
+    ['false', 'false'],
+    ['no', 'false'],
+    ['', 'false'],
+    ['true', 'true'],
+  ])('reads the tag text %j as aria-pressed=%s', (value, pressed) => {
+    useVariableStore.setState({ values: { 'PLC:Menu/Open': value } });
+    renderToggle({ bound: { $var: { path: 'PLC:Menu/Open' } } });
+
+    expect(screen.getByRole('button')).toHaveAttribute('aria-pressed', pressed);
+  });
 });

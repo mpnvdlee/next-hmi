@@ -22,13 +22,22 @@ export const description = 'Collapses or expands a bound menu state; swaps icon 
 export const category = 'Navigation';
 export const icon = { type: 'builtin', name: 'list' } as const;
 
+// A tag's text "false", "0", "no" or "off" reads as off, the way getPropBoolean
+// reads it; an empty text or NaN says nothing, so it stays off rather than
+// taking getPropBoolean's truthy reading.
+function isOnValue(value: unknown): boolean {
+  if (typeof value === 'string' && value.trim() === '') return false;
+  if (typeof value === 'number' && Number.isNaN(value)) return false;
+  return getPropBoolean({ value }, 'value');
+}
+
 // `bound` must be a $var binding for the toggle to write back; non-$var
 // expressions are read-only and require an `actions.onPress` for side effects.
 export default function MenuToggleButton({ properties, layout }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
   const scope = useHmiScope();
   const liveValue = usePropVar(properties, 'bound');
-  const bound = Boolean(liveValue);
+  const bound = isOnValue(liveValue);
   const writeBound = useWriteVariable(properties, 'bound');
 
   const iconCollapsed = getPropString(properties, 'iconCollapsed', '☰', evalCtx);

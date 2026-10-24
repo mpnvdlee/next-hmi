@@ -279,7 +279,7 @@ stable contract the frontend `$switch`es on:
 | `bad_path`            | Write: datasource/path is unknown to the registry |
 | `bad_field`           | Write: field cannot be resolved to an OPC-UA node id |
 | `invalid_value`       | Write: value cannot be coerced to the variable's data type |
-| `value_out_of_range`  | Write: coerced numeric value falls outside the variable's persisted `min`/`max` |
+| `value_out_of_range`  | Write: the numeric value, as entered (before any Float32 rounding), falls outside the variable's persisted `min`/`max` |
 | `read_only`           | Write / toggle: the variable written — for an element, its array; for a struct field, that member — does not have `writable: true`. Nothing is written |
 | `opcua_unreachable`   | Write: no engine for the datasource (not yet connected, or static-only) |
 | `write_failed`        | Write: the OPC-UA `write_node` call raised |
@@ -290,9 +290,9 @@ stable contract the frontend `$switch`es on:
 
 `invalid_value` follows the documented [OPC-UA write-coercion matrix](backend.md#opc-ua-write-coercion-matrix). The REST variable-write endpoint uses project-user HTTP Basic credentials, then calls the same request parser, `interactableByGroups` permission helper, coercer, and dispatcher.
 
-`read_only` is checked in `write_service.write_value` (and before the read in `toggle_value`), so the WebSocket, REST and recipe-download writes refuse it alike; a recipe download reports it per parameter in `failures`. It comes after `bad_path`, `array_index_out_of_bounds`, `bad_field` and `invalid_value` — a whole-struct payload stays `invalid_value` — and before `value_out_of_range`. A variable that states no access at all is read-only, the same reading the editor and the runtime overlay give it.
+`read_only` is checked in `write_service.write_value` (and in `toggle_value`, before the Boolean check and the read), so the WebSocket, REST and recipe-download writes refuse it alike; a recipe download reports it per parameter in `failures`. It comes after `bad_path` and `bad_field` and before everything about the index or the value — `array_index_out_of_bounds`, `invalid_value`, `value_out_of_range` — since no other value could make the write succeed. A whole-struct payload names a folder with no access of its own and stays `invalid_value`. `useWriteVariable` pre-flights it in the same order: a variable whose metadata says `writable: false` is reported `read_only` before its value is coerced. A variable that states no access at all is read-only, the same reading the editor and the runtime overlay give it.
 
-`value_out_of_range` is checked only after coercion succeeds, against the variable's own (or, for a struct field, that field's own) persisted `min`/`max` — a hard operator-write constraint enforced identically for REST, WebSocket, and recipe writes since all three share `write_service.write_value`. A whole-array write is rejected if any element is out of range; an indexed element write is checked the same way. A persisted `min > max` is a contract violation, not a range: it is left unenforced (the write proceeds as if no range were configured) and logged once as a warning when the datasource loads.
+`value_out_of_range` is checked only after coercion succeeds, against the variable's own (or, for a struct field, that field's own) persisted `min`/`max` — a hard operator-write constraint enforced identically for REST, WebSocket, and recipe writes since all three share `write_service.write_value`. It judges the value as entered: a `Float` (float32) write is rounded to the nearest float32 only after the check, so 19.9 against a minimum of 19.9 is accepted although it is stored as 19.89999962. A whole-array write is rejected if any element is out of range; an indexed element write is checked the same way. A persisted `min > max` is a contract violation, not a range: it is left unenforced (the write proceeds as if no range were configured) and logged once as a warning when the datasource loads.
 
 Two further reason codes are synthesised by the **client** dispatcher and never
 emitted by the backend: `timeout` (10 s elapsed with no response) and

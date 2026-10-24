@@ -160,7 +160,17 @@ function groupFolderRenames(modified: ModifiedRow[]): ModifiedEntry[] {
   return result;
 }
 
-export function computeBrowseDiff(savedTree: TreeNode[], browseTree: TreeNode[]): BrowseDiff {
+/**
+ * `presentOutsideBrowse` holds saved node ids the browse did not walk but the
+ * server confirmed still exist — anything outside an explicit browse root.
+ * Not browsed is not removed: those are neither offered for deletion nor
+ * marked stale.
+ */
+export function computeBrowseDiff(
+  savedTree: TreeNode[],
+  browseTree: TreeNode[],
+  presentOutsideBrowse: ReadonlySet<string> = new Set(),
+): BrowseDiff {
   const saved = new Map<string, FlatEntry>();
   const browse = new Map<string, FlatEntry>();
   flattenByNodeId(savedTree, '', saved);
@@ -203,6 +213,10 @@ export function computeBrowseDiff(savedTree: TreeNode[], browseTree: TreeNode[])
 
   for (const [nodeId, s] of saved) {
     if (browse.has(nodeId)) continue;
+    if (presentOutsideBrowse.has(nodeId)) {
+      if (s.entry.present_on_server === false) silentReactivations.push(nodeId);
+      continue;
+    }
     if (s.entry.present_on_server === false) continue;
     removed.push({ kind: 'removed', node_id: nodeId, path: s.path, entry: s.entry });
   }

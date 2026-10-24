@@ -9,6 +9,137 @@ project file format ships only in a release whose minor or major number moves.
 Breaking changes are always called out under a **Changed** or **Removed**
 heading.
 
+## [Unreleased]
+
+## [1.0.1] - 2026-10-24
+
+Fixes for OPC-UA browse and writes, most of them reported against CODESYS
+Control and SIMATIC S7-1500. The project file format is unchanged.
+
+### Changed
+
+- **Single-precision tags accept ordinary setpoints.** A write to an OPC-UA
+  `Float` tag — an S7 `Real`, a CODESYS `REAL` — was refused whenever the value
+  was not exactly representable, so 19.9 or 48.2 could not be written at all.
+  The value is now rounded to the nearest single-precision number, as the PLC
+  itself does. A configured min/max is checked against the value as entered,
+  before rounding. Values beyond the single-precision range and non-finite
+  values are still refused.
+
+- **Read-only comes first.** A write to a read-only variable now always reports
+  *Variable is read-only*, even when the value would also have been rejected.
+  The runtime's local pre-check reports it the same way.
+
+### Fixed
+
+- **A re-browse no longer marks tags it did not walk as removed.** A saved
+  variable that the browse did not reach but that the server still has — one
+  imported from outside the current **Browse Root Node** — is no longer listed
+  under *Removed from server* or marked stale. If an earlier browse had marked
+  it stale, it is reactivated.
+
+- **On/off widgets read `"false"` as off.** An **LED Indicator**, **Switch** or
+  **Menu Toggle** bound to a text tag lit up or switched on for any non-empty
+  text, `"false"` and `"0"` included. They now read `"false"`, `"0"`, `"no"`
+  and `"off"` as off, as the rest of NEXT HMI already did. An empty text stays
+  off.
+
+- **The test server matches type names regardless of case.** A test-server
+  variable typed `int32` or `BOOLEAN` — hand-edited, or from an older
+  configuration — was published as a Float. It now gets the type it names, and
+  `Single` is accepted as a Float.
+
+- **A read-only variable without a type reports read-only.** A write or toggle
+  to a variable that has no data type and is not writable reported *invalid
+  value*; it now reports *Variable is read-only*, as the runtime's local
+  pre-check already did.
+
+- **Static datasources accept DateTime, Date and Time.** Picking one of these
+  types for a static variable made the datasource impossible to save
+  (*Unknown data_type 'DateTime'*). They are accepted now, along with every
+  other type a write can target. A DateTime starts at
+  `1970-01-01T00:00:00.000Z`, a Date at `1970-01-01`, a Time at `00:00:00`.
+
+- **Decimal tags are no longer imported as Double.** Browse PLC labelled a tag
+  of the standard `Decimal` type as **Double**, and every write to it was
+  refused by the server. It now imports as **Decimal**, as does a server type
+  derived from it.
+
+- **Duration and timestamp tags import as values, not folders.** A tag typed
+  with one of the standard's derived types — `Duration` (a CODESYS `TIME`),
+  `UtcTime`, `Counter` — was reported as a struct by Browse PLC, so it arrived
+  as a folder or as a String. It now gets the type it derives from: **Double**,
+  **DateTime**, **UInt32**.
+
+- **A tag typed `Int` shows as a number.** It was written as an integer but
+  shown and bound as a String.
+
+- **Writing one element of a DateTime array no longer fails.** The other
+  elements were sent back to the PLC as text, and the PLC refused the whole
+  array.
+
+- **A custom widget may name a local helper after an SDK function.** A helper
+  declared inside a component or function with the name of an SDK global —
+  `getPropNumber`, say — made the widget fail to compile, although it only
+  shadows the global there. Only a module-level declaration with such a name
+  is refused now.
+
+- **Writes use the type the PLC actually has.** A tag imported with the wrong
+  type — **Unknown** after a failed browse, **String** for an enum, **Float**
+  where the PLC declares **Double** — was refused on every write, or never
+  attempted at all. Writes now follow the type the server sends, while a type
+  you chose that only refines it, such as **Date** on a string tag, keeps its
+  own validation.
+
+- **Browse PLC no longer lists methods as folders.** A method a PLC publishes —
+  a TwinCAT POU method, the `Reset` on a device object — appeared in the
+  variable table as an empty folder, and one with arguments added its
+  `InputArguments` and `OutputArguments` as bindable tags. Browse now walks
+  objects and variables only.
+
+- **Text-typed tags show their text.** A localized text — the type of many
+  status messages and of the manufacturer and model a PLC publishes about
+  itself — showed on screen as `LocalizedText(Locale='de', Text='Tür offen')`
+  rather than `Tür offen`. Node ids and qualified names had the same problem.
+
+- **A verified write to a DateTime tag no longer always fails.** Verification
+  compared the written date with the form the cache stores it in and never
+  found them equal, so a recipe downloaded with verification reported every
+  DateTime parameter as mismatched even when the PLC held the right value.
+
+- **The connection wizard no longer offers endpoints it cannot use.** Many PLCs
+  still advertise the deprecated `Basic128Rsa15` and `Basic256` security
+  policies. Discover listed them as ordinary choices, and picking one failed
+  only at the connection test. They are now shown greyed out and never
+  pre-selected, and a server that offers nothing else says so.
+
+- **Browse PLC now finds the members of a struct.** A struct tag stopped the
+  browse: the struct showed up as a single row typed **String**, with nothing
+  inside it to bind, so a tag like `Battery.SOC` could only be added by typing
+  its node ID by hand. Every member is now walked — nested structs included —
+  and the struct arrives as a folder holding them. Tag metadata the server
+  publishes alongside the members (`EURange`, `EngineeringUnits`) stays out of
+  the variable table. Reported against SIMATIC S7-1500 and CODESYS, and it
+  affected every server that publishes structs this way.
+
+- **PLC enums and derived types import with their real type.** A CODESYS
+  `ENUM`, or any tag whose type the PLC derives from a builtin, showed up as
+  **String**. Browse now follows the type back to the builtin it derives from,
+  so an enum imports as **Integer** and a derived string as **String** — and
+  only a genuine struct is opened up into a folder.
+
+- **Browse PLC now reads types from servers that limit a read request.** A
+  server may cap how many operations one request may carry, and refuses a
+  larger one outright — CODESYS Control Win V3 caps it at 100. Browse reads
+  four attributes per variable, so from 26 variables on a level it asked for
+  more than CODESYS allows and got nothing back: every variable on that level
+  imported as **String** with an **Unknown** badge, read-only, and structs were
+  listed flat with no members to bind. NEXT HMI now reads each server's limits
+  when it connects and keeps every browse, value read and subscription inside
+  them, and splits a request a server refuses anyway rather than losing the
+  types. Affects any server that advertises `OperationLimits`; CODESYS symbol
+  configurations were hit hardest.
+
 ## [1.0.0] - 2026-09-27
 
 The first stable release. Projects saved by a 0.0.1 release candidate are

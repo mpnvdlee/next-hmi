@@ -1798,19 +1798,17 @@ def _validate_write_value(
         COERCION_INVALID_DESCRIPTOR,
         COERCION_MESSAGES,
         COERCION_UNKNOWN_TYPE,
-        REASON_VALUE_OUT_OF_RANGE,
         WriteCoercionError,
         coerce_entry_write_value,
-        value_out_of_range,
     )
 
     literal = value.get("$static") if wrapped else value
     try:
-        coerced = coerce_entry_write_value(literal, entry, indexed=written.indexed)
+        coerce_entry_write_value(literal, entry, indexed=written.indexed)
     except WriteCoercionError as err:
         reason: str | None = err.reason
     else:
-        reason = REASON_VALUE_OUT_OF_RANGE if value_out_of_range(coerced, entry) else None
+        reason = None
     # The entry's own type unknown to the write path: nothing to judge by.
     if reason is None or reason in (COERCION_UNKNOWN_TYPE, COERCION_INVALID_DESCRIPTOR):
         return

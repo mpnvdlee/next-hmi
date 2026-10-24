@@ -26,8 +26,17 @@ export const description = 'A toggle that writes a boolean on/off to a variable.
 export const category = 'Inputs';
 export const icon = { type: 'builtin', name: 'check-circle' } as const;
 
+// A tag's text "false", "0", "no" or "off" reads as off, the way getPropBoolean
+// reads it; an empty text or NaN says nothing, so it stays off rather than
+// taking getPropBoolean's truthy reading.
+function isOnValue(value: unknown): boolean {
+  if (typeof value === 'string' && value.trim() === '') return false;
+  if (typeof value === 'number' && Number.isNaN(value)) return false;
+  return getPropBoolean({ value }, 'value');
+}
+
 export default function Switch({ properties, layout }: HmiWidgetProps) {
-  const isOn = Boolean(usePropVar(properties, 'variable'));
+  const isOn = isOnValue(usePropVar(properties, 'variable'));
   const label = usePropString(properties, 'label', '');
   const labelPosition = usePropString(properties, 'labelPosition', 'inline');
   const color = usePropString(properties, 'color', '');

@@ -61,8 +61,8 @@ describe('useWriteVariable', () => {
   });
 
   // `base` is a simple type, so `Float` covers Double as well. Keying the
-  // coercion matrix with it directly narrows to float32 and rejects any value
-  // `Math.fround` cannot round-trip — every fractional setpoint write.
+  // coercion matrix with it directly would round to float32 and send a Double
+  // tag 19.8999996… for 19.9; the backend rounds only for a real Float.
   it('sends a fractional value against a Float variable', () => {
     useVariableStore.setState({
       varMeta: { 'PLC:Motor/Speed': { type: { kind: 'scalar', base: 'Float', array: false } } },
@@ -146,6 +146,51 @@ describe('useWriteVariable', () => {
     resolvePending(String(frames()[0].requestId), { reason: 'permission_denied' }, false);
 
     expect(useHmiStore.getState().pendingToasts[0].message).toMatch(/not allowed/i);
+  });
+
+  // Backend write_service reports read_only before any value error; the local
+  // pre-flight must not answer a different reason for the same write.
+  it('reports a read-only variable before a value error', () => {
+    useVariableStore.setState({
+      varMeta: {
+        'PLC:Motor/Speed': {
+          type: { kind: 'scalar', base: 'Integer', array: false },
+          min: 0,
+          max: 10,
+          writable: false,
+        },
+      },
+    });
+    const reasons: string[] = [];
+    const write = writer(bound, { onError: (reason) => reasons.push(reason) });
+
+    write('fast');
+    write(50);
+    write(5);
+
+    expect(reasons).toEqual(['read_only', 'read_only', 'read_only']);
+    expect(sendWsMessage).not.toHaveBeenCalled();
+  });
+
+  it("reports a read-only struct member before its field's range", () => {
+    useVariableStore.setState({
+      varMeta: {
+        'PLC:Motor/Speed': {
+          type: { kind: 'struct', name: 'Setpoint', array: false, fields: ['fValue'] },
+          fieldRanges: { fValue: { min: 0, max: 100 } },
+        },
+        'PLC:Motor/Speed/fValue': {
+          type: { kind: 'scalar', base: 'Float', array: false },
+          writable: false,
+        },
+      },
+    });
+    const reasons: string[] = [];
+
+    writer(bound, { onError: (reason) => reasons.push(reason) })(150, { field: 'fValue' });
+
+    expect(reasons).toEqual(['read_only']);
+    expect(sendWsMessage).not.toHaveBeenCalled();
   });
 
   it('names a read-only refusal in the toast', () => {
