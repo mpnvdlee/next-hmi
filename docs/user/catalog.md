@@ -401,7 +401,10 @@ A numeric entry field that writes a number to a variable.
 | `min` | Min value | `Float` |
 | `max` | Max value | `Float` |
 | `variable` | Variable | `struct` |
+| `allowNegative` | Allow negative values | `Boolean` |
+| `decimals` | Decimal places | `Integer` |
 | `showRangeOnNumpad` | Show range on numpad | `Boolean` |
+| `numpadPosition` | Numpad position | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
@@ -417,8 +420,10 @@ Increment / decrement a numeric variable with + / − buttons.
 | `step` | Step | `Float` |
 | `min` | Min value | `Float` |
 | `max` | Max value | `Float` |
+| `allowNegative` | Allow negative values | `Boolean` |
 | `decimals` | Decimal places | `Integer` |
 | `showRangeOnNumpad` | Show range on numpad | `Boolean` |
+| `numpadPosition` | Numpad position | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 

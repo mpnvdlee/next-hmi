@@ -1788,10 +1788,38 @@
         "group": "Data",
         "description": "Struct driving the field from the PLC: bVisible and bEnabled gate it, fValue is shown and written."
       },
+      "allowNegative": {
+        "label": "Allow negative values",
+        "group": "Data",
+        "defaultValue": true
+      },
+      "decimals": {
+        "label": "Decimal places",
+        "group": "Appearance",
+        "min": 0,
+        "max": 6,
+        "step": 1
+      },
       "showRangeOnNumpad": {
         "label": "Show range on numpad",
         "group": "Appearance",
         "defaultValue": true
+      },
+      "numpadPosition": {
+        "format": "select",
+        "label": "Numpad position",
+        "group": "Appearance",
+        "defaultValue": "bottom-right",
+        "options": [
+          {
+            "label": "Bottom right",
+            "value": "bottom-right"
+          },
+          {
+            "label": "Center",
+            "value": "center"
+          }
+        ]
       }
     }
   },
@@ -1828,6 +1856,11 @@
         "label": "Max value",
         "group": "Data"
       },
+      "allowNegative": {
+        "label": "Allow negative values",
+        "group": "Data",
+        "defaultValue": true
+      },
       "decimals": {
         "label": "Decimal places",
         "group": "Appearance",
@@ -1840,6 +1873,22 @@
         "label": "Show range on numpad",
         "group": "Appearance",
         "defaultValue": true
+      },
+      "numpadPosition": {
+        "format": "select",
+        "label": "Numpad position",
+        "group": "Appearance",
+        "defaultValue": "bottom-right",
+        "options": [
+          {
+            "label": "Bottom right",
+            "value": "bottom-right"
+          },
+          {
+            "label": "Center",
+            "value": "center"
+          }
+        ]
       }
     }
   },

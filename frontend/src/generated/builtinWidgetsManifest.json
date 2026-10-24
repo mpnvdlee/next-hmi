@@ -1043,7 +1043,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "4f1acec6194cd73e",
+    "buildTs": "c8cfaa4b4ef31e9f",
     "displayName": "Number Input",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1080,8 +1080,17 @@
           }
         ]
       },
+      "allowNegative": {
+        "type": "boolean"
+      },
+      "decimals": {
+        "type": "integer"
+      },
       "showRangeOnNumpad": {
         "type": "boolean"
+      },
+      "numpadPosition": {
+        "type": "string"
       }
     },
     "schemaError": null
@@ -1095,7 +1104,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "1af3ac5aef6d3439",
+    "buildTs": "c47a67c5bf243cf8",
     "displayName": "Numeric Stepper",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1123,11 +1132,17 @@
       "max": {
         "type": "float"
       },
+      "allowNegative": {
+        "type": "boolean"
+      },
       "decimals": {
         "type": "integer"
       },
       "showRangeOnNumpad": {
         "type": "boolean"
+      },
+      "numpadPosition": {
+        "type": "string"
       }
     },
     "schemaError": null

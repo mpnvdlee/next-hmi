@@ -578,11 +578,21 @@
   color: var(--hmi-fault);
 }
 
-.hmi-virtual-input__range {
+.hmi-virtual-input__range,
+.hmi-virtual-input__current,
+.hmi-virtual-input__error {
   text-align: center;
   font-family: var(--hmi-type-caption-font);
   font-size: var(--hmi-type-caption-size);
   font-weight: var(--hmi-type-caption-weight);
+  color: var(--hmi-text-muted);
+}
+
+.hmi-virtual-input__error {
+  color: var(--hmi-fault);
+}
+
+.hmi-virtual-input__value-placeholder {
   color: var(--hmi-text-muted);
 }
 
@@ -618,6 +628,11 @@
     background var(--hmi-motion-fast) ease,
     border-color var(--hmi-motion-fast) ease,
     color var(--hmi-motion-fast) ease;
+}
+
+.hmi-virtual-input__key:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .hmi-virtual-input__panel--keyboard .hmi-virtual-input__key {
