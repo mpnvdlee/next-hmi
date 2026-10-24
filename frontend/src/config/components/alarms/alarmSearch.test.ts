@@ -14,6 +14,7 @@ function alarm(id: string, code: string, title: unknown): AlarmDefinition {
     resolutions: [],
     trigger: { type: 'bool', source_value: undefined, min: null, max: null, on_true: true },
     ack_groups: [],
+    values: [],
   };
 }
 

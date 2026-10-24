@@ -651,9 +651,35 @@ const STRING_EXPR_FNS: Record<string, (v: string) => string> = {
 };
 
 /**
- * Fill `{1}` / `{Trim(ToLower(2))}` placeholders in `template` from `wildcards`,
- * evaluating each wildcard as a full property value. Shared by `$stringExpr`
- * and by `$http`, whose url / body / header values use the same syntax.
+ * Fill `{1}` / `{Trim(ToLower(2))}` placeholders in `template` with the text
+ * `valueOf(key)` gives for each wildcard key, transforms applied. A placeholder
+ * it gives `undefined` for, or that does not parse, is left intact.
+ */
+export function fillPlaceholders(
+  template: string,
+  valueOf: (key: string) => string | undefined,
+): string {
+  return template.replace(PLACEHOLDER_RE, (match, body: string) => {
+    const parsed = parsePlaceholder(body);
+    if (!parsed) return match;
+
+    let resolved = valueOf(parsed.key);
+    if (resolved === undefined) return match;
+
+    // Apply transform functions inside-out (the fns array is outer-first)
+    for (let i = parsed.fns.length - 1; i >= 0; i--) {
+      const fn = STRING_EXPR_FNS[parsed.fns[i]];
+      if (fn) resolved = fn(resolved);
+    }
+
+    return resolved;
+  });
+}
+
+/**
+ * Fill `{n}` placeholders in `template` from `wildcards`, evaluating each
+ * wildcard as a full property value. Shared by `$stringExpr` and by `$http`,
+ * whose url / body / header values use the same syntax.
  */
 function renderTemplate(
   template: string,
@@ -663,24 +689,11 @@ function renderTemplate(
 ): string {
   if (!template) return '';
 
-  return template.replace(PLACEHOLDER_RE, (_match, body: string) => {
-    const parsed = parsePlaceholder(body);
-    if (!parsed) return `{${body}}`; // leave unrecognised placeholders intact
-
-    const wcValue = wildcards[parsed.key];
-    if (wcValue === undefined) return `{${body}}`;
-
-    // Resolve wildcard using the standard expression evaluator
+  return fillPlaceholders(template, (key) => {
+    const wcValue = wildcards[key];
+    if (wcValue === undefined) return undefined;
     const evaluated = evaluatePropertyValueInternal(wcValue, context, depth);
-    let resolved = evaluated != null ? String(evaluated) : '';
-
-    // Apply transform functions inside-out (the fns array is outer-first)
-    for (let i = parsed.fns.length - 1; i >= 0; i--) {
-      const fn = STRING_EXPR_FNS[parsed.fns[i]];
-      if (fn) resolved = fn(resolved);
-    }
-
-    return resolved;
+    return evaluated != null ? String(evaluated) : '';
   });
 }
 

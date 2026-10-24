@@ -2100,6 +2100,16 @@ def _placeholder_key(body: str) -> str | None:
         rest = m.group(2).strip()
     return rest if re.fullmatch(r"[0-9]+", rest) else None
 
+
+def template_placeholder_keys(templates: list[str]) -> set[str]:
+    """Every `{n}` wildcard key the placeholders across `templates` name."""
+    return {
+        key
+        for template in templates
+        for match in _WILDCARD_RE.finditer(template)
+        if (key := _placeholder_key(match.group(1))) is not None
+    }
+
 # `$formula` grammar, mirrored from frontend/src/hmi/utils/formula.ts:
 #   expr := term (("+" | "-") term)*     term := unary (("*" | "/") unary)*
 #   unary := ("-" | "+") unary | primary  primary := number | "{n}" | "(" expr ")"
@@ -2189,12 +2199,7 @@ def _validate_wildcards(
     `wildcards` bag. Shared by `$stringExpr` (one template) and `$http` (url,
     body and header values), which use the same placeholder syntax."""
     wildcards = payload.get("wildcards") if isinstance(payload.get("wildcards"), dict) else {}
-    referenced: set[str] = set()
-    for template in templates:
-        for match in _WILDCARD_RE.finditer(template):
-            key = _placeholder_key(match.group(1))
-            if key is not None:
-                referenced.add(key)
+    referenced = template_placeholder_keys(templates)
     code_prefix = source_key.lstrip("$").lower()
     for n in sorted(referenced, key=int):
         wildcard_value = wildcards.get(n)

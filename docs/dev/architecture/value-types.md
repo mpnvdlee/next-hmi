@@ -652,6 +652,7 @@ exports) is skipped, never guessed.
 | `numpad-position-invalid` | error | An Edit Value `position` other than `center` or `bottom-right` |
 | `write-value-type` | error | A fixed Write Data Variable value (bare or `$static`) that `coerce_entry_write_value` in `backend/services/write_service.py` would reject against the target's entry — its OPC-UA type, array shape and fixed length, and `min` / `max` — worded as the editor's row words it (`writeCoercionMessages.json`). The entry is the live pool's when it serves the datasource, else the datasource file's |
 | `value-invalid` | error | A malformed source payload inside an action's field (`{ "$loc": 5 }`) — rejected elsewhere, reported here |
+| `alarm-value-not-var` | error | An entry of an alarm's `values` list that is not a `$var` binding — the backend can only store a variable's value when the alarm fires ([Alarm Files](data-formats.md#alarm-files)) |
 | `action-page-unknown` | error | An action naming a page that does not exist, inside a component instance's property that only its declaration types as `actions`. The same action in a widget's `actions` field is a rejected write |
 
 **Values inside actions are values.** Every field of every action type is

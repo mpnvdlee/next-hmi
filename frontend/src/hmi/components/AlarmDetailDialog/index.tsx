@@ -41,9 +41,9 @@ export default function AlarmDetailDialog({ alarm, username, onClose }: AlarmDet
         className={styles.dialogFloating}
         level={alarm.level}
         code={alarm.code}
-        title={alarmText(alarm.title)}
+        title={alarmText(alarm.title, alarm)}
         imageSrc={alarm.image ? imageAssetUrl(alarm.image) : undefined}
-        description={alarm.description ? alarmText(alarm.description) : undefined}
+        description={alarm.description ? alarmText(alarm.description, alarm) : undefined}
         resolutions={resolutions}
         meta={
           <>

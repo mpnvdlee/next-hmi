@@ -7,9 +7,13 @@
  * the operator saw nothing at all. They now carry `useWriteVariable`'s error
  * contract, which is what these tests pin.
  */
+import { act, renderHook } from '@testing-library/react';
+import type { AlarmInstance } from '@shared/types/alarm';
+import { useAlarmStore } from '@hmi/store/alarmStore';
 import { useHmiStore } from '@hmi/store/hmiStore';
+import { useVariableStore } from '@hmi/store/variableStore';
 import { apiJson } from '@shared/utils/api';
-import { ackAlarm, ackAllAlarms } from './alarmUtils';
+import { ackAlarm, ackAllAlarms, useAlarmText } from './alarmUtils';
 
 vi.mock('@shared/utils/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@shared/utils/api')>()),
@@ -97,5 +101,79 @@ describe('ackAllAlarms', () => {
 
     expect(toasts()).toHaveLength(1);
     expect(toasts()[0].message).toMatch(/Server unreachable/);
+  });
+});
+
+describe('useAlarmText placeholders', () => {
+  const TEXT = 'Temp {Round1(1)} at {2}';
+  const active = {
+    id: 'inst-1',
+    value_refs: [{ $var: { path: 'DS:Temp' } }, { $var: { path: 'DS:Arr', index: 1 } }],
+    values: [80.04, 'x'],
+  } as unknown as AlarmInstance;
+
+  beforeEach(() => {
+    useAlarmStore.setState({ active: [active] });
+    useVariableStore.setState({ values: { 'DS:Temp': 91.26, 'DS:Arr': [1, 2] } });
+  });
+
+  it('reads an active alarm live and re-renders when its variable ticks', () => {
+    const { result } = renderHook(() => useAlarmText());
+    expect(result.current(TEXT, active)).toBe('Temp 91.3 at 2');
+    act(() => useVariableStore.setState({ values: { 'DS:Temp': 12, 'DS:Arr': [1, 2] } }));
+    expect(result.current(TEXT, active)).toBe('Temp 12.0 at 2');
+  });
+
+  it('shows the value stored at fire time once cleared, and — without one', () => {
+    const { result } = renderHook(() => useAlarmText());
+    expect(result.current(TEXT, { id: 'hist-1', values: [80.04, 'x'] })).toBe('Temp 80.0 at x');
+    expect(result.current(TEXT, { id: 'hist-2', values: [] })).toBe('Temp — at —');
+    expect(result.current(TEXT)).toBe(TEXT);
+  });
+});
+
+describe('useAlarmText placeholders on array and struct-array elements', () => {
+  // As the backend caches them: a struct array counted from 1, each member of
+  // an element under its own leaf key (the binding picker's shape for it).
+  const TEXT = '{1} / {2} / {3} / {4}';
+  const active = {
+    id: 'inst-1',
+    value_refs: [
+      { $var: { path: 'DS:Stations/Stations[3]/Temp' } },
+      { $var: { path: 'DS:Arr', index: 2 } },
+      { $var: { path: 'DS:Arr', index: { $static: 3 } } },
+      { $var: { path: 'DS:Arr', index: { $var: { path: 'DS:Idx' } } } },
+    ],
+    values: [33, 2.5, 3.5, 1.5],
+  } as unknown as AlarmInstance;
+  const values = {
+    'DS:Stations': [{ Temp: 0 }, { Temp: 0 }, { Temp: 33 }],
+    'DS:Stations/Stations[3]': { Temp: 33 },
+    'DS:Stations/Stations[3]/Temp': 33,
+    'DS:Arr': [0.5, 1.5, 2.5, 3.5],
+    'DS:Idx': 1,
+  };
+
+  beforeEach(() => {
+    useAlarmStore.setState({ active: [active] });
+    useVariableStore.setState({ values });
+  });
+
+  it('reads them live, following the member, the array and a bound index', () => {
+    const { result } = renderHook(() => useAlarmText());
+    expect(result.current(TEXT, active)).toBe('33 / 2.5 / 3.5 / 1.5');
+    act(() =>
+      useVariableStore.setState({
+        values: { ...values, 'DS:Stations/Stations[3]/Temp': 40, 'DS:Idx': 0 },
+      }),
+    );
+    expect(result.current(TEXT, active)).toBe('40 / 2.5 / 3.5 / 0.5');
+  });
+
+  it('shows the values captured at fire time once cleared', () => {
+    const { result } = renderHook(() => useAlarmText());
+    expect(result.current(TEXT, { id: 'hist-1', values: [33, 2.5, 3.5, 1.5] })).toBe(
+      '33 / 2.5 / 3.5 / 1.5',
+    );
   });
 });

@@ -654,6 +654,10 @@ interface AlarmInstance {
   group_title: string;
   auto_popup: boolean;
   ack_groups: string[];
+  /** `$var` bindings of the alarm's `values`, read live while it is active. */
+  value_refs?: unknown[];
+  /** Raw `values` when the alarm fired. */
+  values?: unknown[];
   triggered_at: string;
   acked: boolean;
   acked_by: string;
@@ -673,8 +677,13 @@ declare function useActiveAlarms(): AlarmInstance[];
 /** Live alarm counts, pushed alongside the active list. */
 declare function useAlarmSummary(): AlarmSummary;
 /** Resolves alarm text through the active language's dictionary, and re-renders
- *  the caller when the language changes. */
-declare function useAlarmText(): (text: string) => string;
+ *  the caller when the language changes. Pass the alarm instance or history row
+ *  to fill its `{1}`, `{2}` … placeholders: live while it is active, else the
+ *  value stored when it fired, '—' where there is none. */
+declare function useAlarmText(): (
+  text: string,
+  alarm?: { id?: string; values?: unknown[] },
+) => string;
 /** The current HMI actor username, falling back to 'operator'. */
 declare function useAlarmUsername(): string;
 /** Class publishing a severity as `--hmi-alarm-level` on an alarm surface. */

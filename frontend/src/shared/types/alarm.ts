@@ -29,6 +29,8 @@ export interface AlarmDefinition {
   resolutions: unknown[];
   trigger: AlarmTrigger;
   ack_groups: string[];
+  /** `$var` bindings the `{1}`, `{2}` … placeholders in title / description name. */
+  values: unknown[];
 }
 
 export interface AlarmGroup {
@@ -55,6 +57,10 @@ export interface AlarmInstance {
   group_title: string;
   auto_popup: boolean;
   ack_groups: string[];
+  /** The definition's `values` bindings, read live while the alarm is active. */
+  value_refs?: unknown[];
+  /** Raw values of those bindings when the alarm fired (null: none cached). */
+  values?: unknown[];
   triggered_at: string;
   acked: boolean;
   acked_by: string;
@@ -68,6 +74,8 @@ export interface AlarmHistoryEntry {
   level: AlarmLevel;
   title: string;
   group_title: string;
+  /** Raw `values` captured when the alarm fired; empty on rows from before them. */
+  values?: unknown[];
   triggered_at: string;
   cleared_at: string;
   acked: boolean;

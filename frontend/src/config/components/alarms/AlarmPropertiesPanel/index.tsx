@@ -103,7 +103,7 @@ function AlarmPanel({
     scope: string,
     current: unknown,
     apply: (binding: VariableBinding) => void,
-    filter: { label: string; type: string | string[] },
+    filter: { label: string; type?: string | string[] },
   ): OpenBindingPicker {
     return (onPick, _currentBinding, slot) => {
       openBindingPicker('', scope, {
@@ -147,6 +147,16 @@ function AlarmPanel({
     (binding) => updateTrigger({ max: { $var: binding } }),
     { label: 'Max threshold', type: NUMERIC_DATA_TYPES },
   );
+
+  const { values } = alarm;
+
+  function setValues(next: unknown[]) {
+    onPatch(alarm.id, { values: next });
+  }
+
+  function addValue() {
+    setValues([...values, { $var: { path: '' } }]);
+  }
 
   function addResolution() {
     onPatch(alarm.id, { resolutions: [...alarm.resolutions, ''] });
@@ -242,6 +252,50 @@ function AlarmPanel({
             labels={['On', 'Off']}
           />
         </PropRow>
+      </div>
+
+      {/* ── Values ── entry n fills the `{n}` placeholders in title and description. */}
+      <div className="cfg-section">
+        <div className="cfg-editor-actions">
+          <div className="cfg-editor-actions__title-row">
+            <div className="cfg-section__title">Values</div>
+            <AddButton title="Add value" onClick={addValue} />
+          </div>
+
+          {values.map((ref, i) => (
+            <CollapsiblePropertyCard
+              key={i}
+              title={`{${i + 1}}`}
+              value={ref}
+              schema={{ type: 'String', label: `{${i + 1}}` } as SchemaField}
+              slot={true}
+              sourceless
+              onChange={(v) => setValues(values.map((r, j) => (j === i ? v : r)))}
+              onOpenBindingPicker={makePicker(
+                'alarm-value',
+                ref,
+                (binding) => setValues(values.map((r, j) => (j === i ? { $var: binding } : r))),
+                { label: `Value {${i + 1}}` },
+              )}
+              actions={
+                <button
+                  type="button"
+                  className="cfg-row-action-btn cfg-row-action-btn--stretch"
+                  title="Remove value"
+                  onClick={() => setValues(values.filter((_, j) => j !== i))}
+                >
+                  <ClearIcon />
+                </button>
+              }
+            />
+          ))}
+
+          {values.length === 0 && (
+            <span className="cfg-prop-hint cfg-section__empty">
+              No values yet. Add one to show it in the title or description as {'{1}'}.
+            </span>
+          )}
+        </div>
       </div>
 
       {/* ── Trigger ── */}
