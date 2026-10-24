@@ -407,6 +407,13 @@
             "group": "Content"
           },
           {
+            "key": "iconPosition",
+            "label": "Icon position",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "left"
+          },
+          {
             "key": "color",
             "label": "Color",
             "type": "color",
@@ -420,9 +427,27 @@
             "defaultValue": "solid"
           },
           {
+            "key": "fill",
+            "label": "Fill",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
             "key": "radius",
             "label": "Radius",
             "type": "String",
+            "group": "Appearance"
+          },
+          {
+            "key": "borderWidth",
+            "label": "Border width (px)",
+            "type": "Integer",
+            "group": "Appearance"
+          },
+          {
+            "key": "iconSize",
+            "label": "Icon size (px)",
+            "type": "Integer",
             "group": "Appearance"
           },
           {

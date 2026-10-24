@@ -129,9 +129,13 @@ Runs actions and can write true to a bound boolean on press.
 |---|---|---|
 | `label` | Label | `String` |
 | `iconName` | Icon | `icon` |
+| `iconPosition` | Icon position | `String` |
 | `color` | Color | `color` |
 | `variant` | Style | `String` |
+| `fill` | Fill | `color` |
 | `radius` | Radius | `String` |
+| `borderWidth` | Border width (px) | `Integer` |
+| `iconSize` | Icon size (px) | `Integer` |
 | `variable` | Variable | `Boolean` |
 | `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |

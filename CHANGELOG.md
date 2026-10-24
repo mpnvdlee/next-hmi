@@ -19,6 +19,13 @@ heading.
   as a file, a compose file and `install.sh`, for a machine that cannot reach a
   registry.
 
+- **Buttons can be icon-only, stacked, and sized.** A Button with an icon and
+  an empty label is icon-only: it takes even padding on every side so it sizes
+  to a near-square tile. The Button also gets four properties: **Icon
+  position** (left, or on top with the text below), **Icon size** and
+  **Border width** in pixels, and a **Fill** colour for the outline style.
+  Each one left at its default keeps today's look.
+
 - **AND (`$and`) and OR (`$or`) combine conditions.** Two new Boolean
   sources take a list of conditions — a variable, a comparison, an Invert, a
   group check, another AND / OR — and are true when every one, or any

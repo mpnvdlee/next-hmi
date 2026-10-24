@@ -1,7 +1,25 @@
 /* @jsxRuntime classic */
 export const schema = {
-  label: { type: 'string' as const, label: 'Label', defaultValue: 'Button', group: 'Content' },
+  label: {
+    type: 'string' as const,
+    label: 'Label',
+    description: 'Leave it empty with an icon set for an icon-only button.',
+    defaultValue: 'Button',
+    group: 'Content',
+  },
   iconName: { type: 'icon' as const, label: 'Icon', group: 'Content' },
+  iconPosition: {
+    type: 'string' as const,
+    format: 'select' as const,
+    label: 'Icon position',
+    display: 'button-text' as const,
+    group: 'Content',
+    defaultValue: 'left',
+    options: [
+      { label: 'Left', value: 'left' },
+      { label: 'Top', value: 'top' },
+    ],
+  },
   color: {
     type: 'color' as const,
     label: 'Color',
@@ -19,11 +37,33 @@ export const schema = {
       { label: 'Outline', value: 'outline' },
     ],
   },
+  fill: {
+    type: 'color' as const,
+    label: 'Fill',
+    description: 'Background of the outline button; empty keeps it transparent.',
+    group: 'Appearance',
+    visibleWhen: { property: 'variant', equals: 'outline' },
+  },
   radius: {
     type: 'string' as const,
     format: 'length' as const,
     label: 'Radius',
     defaultToken: '--hmi-radius',
+    group: 'Appearance',
+  },
+  borderWidth: {
+    type: 'integer' as const,
+    label: 'Border width (px)',
+    min: 0,
+    step: 1,
+    group: 'Appearance',
+  },
+  iconSize: {
+    type: 'integer' as const,
+    label: 'Icon size (px)',
+    min: 8,
+    max: 512,
+    step: 1,
     group: 'Appearance',
   },
   variable: {
@@ -49,6 +89,10 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   const label = getPropString(properties, 'label', 'Button', evalCtx);
   const variant = getPropString(properties, 'variant', 'solid', evalCtx);
   const radius = getPropString(properties, 'radius', '', evalCtx);
+  const iconTop = getPropString(properties, 'iconPosition', 'left', evalCtx) === 'top';
+  const fill = getPropString(properties, 'fill', '', evalCtx);
+  const borderWidth = getPropNumber(properties, 'borderWidth', NaN, evalCtx);
+  const iconSize = getPropNumber(properties, 'iconSize', NaN, evalCtx);
   const isOutline = variant === 'outline';
   const colorStyle: React.CSSProperties = color
     ? isOutline
@@ -61,8 +105,13 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   // and leaving it unset there keeps the themed default in the stylesheet.
   const style: Record<string, string | number> = { ...selfLayoutStyle(layout) };
   if (radius) style['--hmi-btn-radius'] = radius;
+  if (fill) style['--hmi-btn-fill'] = fill;
+  if (Number.isFinite(borderWidth)) style['--hmi-btn-border-width'] = `${borderWidth}px`;
+  if (Number.isFinite(iconSize)) style['--hmi-btn-icon-size'] = `${iconSize}px`;
 
   const IconComp = iconName && isBuiltinIconId(iconName) ? getBuiltinIconComponent(iconName) : null;
+  // An empty label is the icon-only button; without an icon it stays an empty text button.
+  const iconOnly = !!iconName && !label.trim();
   const iconIsCustomAsset = iconName ? isCustomIconAssetPath(iconName) : false;
   const customSvgContent = useInlineSvg(iconIsCustomAsset ? iconName : null);
 
@@ -77,7 +126,7 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   return (
     <div className="hmi-component hmi-button" style={style}>
       <button
-        className={`hmi-button__btn${isOutline ? ' hmi-button__btn--outline' : ''}`}
+        className={`hmi-button__btn${isOutline ? ' hmi-button__btn--outline' : ''}${iconTop ? ' hmi-button__btn--icon-top' : ''}${iconOnly ? ' hmi-button__btn--icon-only' : ''}`}
         style={colorStyle}
         onClick={handleClick}
       >
@@ -95,7 +144,7 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
             ) : null}
           </span>
         )}
-        <span className="hmi-button__label">{label}</span>
+        {!iconOnly && <span className="hmi-button__label">{label}</span>}
       </button>
     </div>
   );
