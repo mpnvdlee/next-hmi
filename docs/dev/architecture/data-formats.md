@@ -517,7 +517,8 @@ the `/api/themes` endpoints in [../reference/rest-api.md](../reference/rest-api.
             "max": { "$static": 100 },
             "on_true": true
           },
-          "ack_groups": []
+          "ack_groups": [],
+          "values": [{ "$var": { "path": "MyPLC:Motor1/Temp" } }]
         }
       ]
     }
@@ -532,14 +533,18 @@ Trigger types:
 
 Group and alarm ids are slugs the service layer assigns from the title or `code`. `source_value` carries the `$var` binding for the monitored variable; the binding's own `index` selects an array element. Title/description/image fields accept plain strings, `$static` (an image carries a `{ path }` payload), or `$loc` keys.
 
+`values` is an optional list of `$var` bindings. A `{1}`, `{2}` … placeholder in the title or description (or in the translation a `$loc` key names) is entry 1, 2 … of that list, with the same chained transforms `$stringExpr` takes (`{Round1(1)}`, `{Signed(2)}`). The backend formats no text: when the alarm fires it stores each binding's raw value as cached at that moment with the instance — a binding with no cached value yet stores `null`, filled in by that variable's first update while the alarm is still active — and the client fills the placeholders — live from the bindings while the alarm is active, from the stored values once it has cleared, and `—` where neither exists. An entry that is not a `$var` is the `alarm-value-not-var` error, since only a variable has a value to store. A placeholder in literal title/description text with no matching entry is the `alarm-value-missing` warning; an entry naming an unknown variable gets the same error as the trigger binding. The `values` variables stay on the priority subscription like trigger variables. A binding with an `index` stores that element. A bound index is resolved first, as the client resolves it: `$static`, or a `$var` read from the cache, whose variable is on the priority subscription too; any other source names no element. A member of a struct-array element is bound by its own leaf key (`MyPLC:Stations/Stations[3]/Temp`), as the binding picker writes it.
+
 `alarm_state.json` is owned by the backend and tracks runtime state:
 
 ```json
 {
-  "active": [ /* AlarmInstance entries with triggered_at, acked, acked_by, acked_at */ ],
-  "history": [ /* AlarmHistoryEntry entries, newest first; capped at 500 */ ]
+  "active": [ /* AlarmInstance entries with triggered_at, acked, acked_by, acked_at, value_refs, values */ ],
+  "history": [ /* AlarmHistoryEntry entries with values, newest first; capped at 500 */ ]
 }
 ```
+
+An instance's `value_refs` is its definition's `values` bindings, copied at fire time, and `values` their raw values at that moment; a history entry keeps `values`. A file written before these fields existed reads them as `[]`.
 
 ## Recipe Files
 

@@ -71,6 +71,8 @@ class AlarmDefinition(BaseModel):
     resolutions: list[Any] = Field(default_factory=list)
     trigger: AlarmTrigger = Field(default_factory=lambda: AlarmTrigger(type="value_range"))
     ack_groups: list[str] = Field(default_factory=list)
+    # `$var` bindings the `{1}`, `{2}` … placeholders in title/description name.
+    values: list[Any] = Field(default_factory=list)
 
     @staticmethod
     def resolve_string(value: Any) -> str:
@@ -147,6 +149,10 @@ class AlarmInstance(BaseModel):
     group_title: str = ""
     auto_popup: bool = True
     ack_groups: list[str] = Field(default_factory=list)
+    # The definition's `values` bindings, so a client can show them live while
+    # active, and their raw values at fire time, which history keeps.
+    value_refs: list[Any] = Field(default_factory=list)
+    values: list[Any] = Field(default_factory=list)
     triggered_at: str = ""
     acked: bool = False
     acked_by: str = ""
@@ -164,6 +170,7 @@ class AlarmHistoryEntry(BaseModel):
     level: AlarmLevel = "error"
     title: str = ""
     group_title: str = ""
+    values: list[Any] = Field(default_factory=list)
     triggered_at: str = ""
     cleared_at: str = ""
     acked: bool = False
