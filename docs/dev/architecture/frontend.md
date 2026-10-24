@@ -308,7 +308,12 @@ resolved *page* — never a group id — that is hydrated, sent in `set_context`
 and waited on by the settle gate.
 
 A press on the backdrop closes the top-most overlay, unless its node — a
-Dialogs-folder page or group — sets `closeOnBackgroundPress: false`.
+Dialogs-folder page or group — sets `closeOnBackgroundPress: false`. When no
+overlay dims (backdrop `none`) and the node leaves `tapThrough` on, `ModalStack`
+then re-dispatches the click to the topmost element under that point outside the
+stack (`document.elementsFromPoint`), so the next hotspot opens in the same tap.
+`openPageOverlay` on the `pageId` already on top replaces that entry — new
+inputs, new anchor — instead of being refused; lower in the stack it is refused.
 
 ## Component Registry
 
