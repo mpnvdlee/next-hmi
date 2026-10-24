@@ -75,19 +75,12 @@ describe('TabBar', () => {
   it("renders each page's own icon when showIcons is on", async () => {
     const { container } = renderTabBar({ showIcons: true });
 
-    // Builtin icon components are code-split: the lazy import pulls the whole
-    // `phosphorIconComponents` module, whose first on-the-fly transform can
-    // outlast waitFor's 1s default when the suite runs in parallel. See the
-    // fuller note in ../../Content/Icon/index.test.tsx.
-    await waitFor(
-      () => {
-        expect(container.querySelector('.hmi-tab-bar__icon svg')).not.toBeNull();
-      },
-      { timeout: 8000 },
-    );
+    await waitFor(() => {
+      expect(container.querySelector('.hmi-tab-bar__icon svg')).not.toBeNull();
+    });
     // Only the page that declares an icon gets one.
     expect(container.querySelectorAll('.hmi-tab-bar__icon')).toHaveLength(1);
-  }, 15000);
+  });
 
   it('renders nothing outside a page group', () => {
     const { container } = render(
