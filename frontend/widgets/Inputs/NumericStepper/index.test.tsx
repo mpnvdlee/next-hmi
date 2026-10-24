@@ -175,21 +175,59 @@ describe('NumericStepper', () => {
     expect(screen.getByRole('button', { name: 'Increment' })).toBeDisabled();
   });
 
-  it('clamps a numpad commit to the widget max', async () => {
+  it('refuses a numpad entry above the widget max instead of clamping it', async () => {
     useVariableStore.setState({ values: { [VAR_KEY]: 10 } });
     const user = userEvent.setup();
-    // showRangeOnNumpad off so the numpad itself does not gate Enter — the
-    // widget's own clamp is what has to hold the limit here.
+    // The range hint hidden: the bounds must hold all the same.
     renderStepper({ variable: BINDING, min: 0, max: 100, showRangeOnNumpad: false });
 
     await user.click(screen.getByRole('button', { name: 'Edit value' }));
-    await user.click(screen.getByRole('button', { name: 'Clear' }));
     for (const digit of '5000') {
       await user.click(screen.getByRole('button', { name: digit }));
     }
     await user.click(screen.getByRole('button', { name: 'Enter' }));
 
-    expect(frames()[0].value).toBe(100);
+    expect(frames()).toHaveLength(0);
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter a value between 0 and 100');
+  });
+
+  it('writes nothing when the operator closes the numpad with ×', async () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: 10 } });
+    const user = userEvent.setup();
+    renderStepper({ variable: BINDING });
+
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__display')!);
+    await user.click(screen.getByRole('button', { name: '7' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__close')!);
+
+    expect(frames()).toHaveLength(0);
+  });
+
+  it('starts the entry empty, so a key replaces the value instead of appending', async () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: 35 } });
+    const user = userEvent.setup();
+    renderStepper({ variable: BINDING });
+
+    await user.click(screen.getByRole('button', { name: 'Edit value' }));
+    expect(screen.getByText('Current setpoint 35')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '7' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
+
+    expect(frames()[0].value).toBe(7);
+  });
+
+  it('disables the point for an Integer variable', async () => {
+    useVariableStore.setState({
+      values: { [VAR_KEY]: 3 },
+      varMeta: {
+        [VAR_KEY]: { type: { kind: 'scalar' as const, base: 'Integer' as const, array: false } },
+      },
+    });
+    const user = userEvent.setup();
+    renderStepper({ variable: BINDING, decimals: 2 });
+
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__display')!);
+    expect(screen.getByRole('button', { name: '.' })).toBeDisabled();
   });
 
   it('marks the value invalid when it sits outside the widget range', () => {

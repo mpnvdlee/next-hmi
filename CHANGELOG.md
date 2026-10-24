@@ -47,6 +47,24 @@ heading.
   *Community Edition* or *Enterprise Edition* under the logo, and the runtime's
   loading screen says *Community Edition* in the public build.
 
+- **The numpad never writes when the operator backs out.** ×, a press outside
+  the numpad and Escape now cancel the entry; only Enter writes, and only a
+  value inside min/max. Number Input and Numeric Stepper used to save the typed
+  value on × and on a press outside, and silently clamped an out-of-range entry
+  — a typed 5000 reached the machine as the max, 200. Now the numpad refuses
+  it and shows its bounds in red (`Min: 80 · Max: 200`). An entry starts
+  empty, with the current value as placeholder, so a key replaces the value
+  instead of appending to it. The entry is a real field: a physical keyboard
+  types into it by the same rules as the keys, Enter applies and Escape
+  cancels, and a tablet's own keyboard stays shut. Both widgets get
+  **Allow negative values** (minus is off anyway when min is 0 or more) and
+  **Numpad position** (bottom right or center); Number Input also gets
+  **Decimal places**. Numeric Stepper's **Decimal places** now also limits what
+  can be typed, and an Integer variable never takes a point. The ± buttons
+  still stop at min/max. **Custom widgets:** `VirtualNumpad` replaces
+  `onClose(value)` with `onApply(value)` and `onCancel()`; a widget that passes
+  `onClose` must switch.
+
 - **Usage reporting says more, and still nothing about your projects.** The
   report now goes out every hour instead of once a day, and adds how NEXT HMI
   was installed, how long it has been running, whether the last run stopped
