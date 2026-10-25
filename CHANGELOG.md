@@ -245,10 +245,9 @@ heading.
   the operator is typing on now sits above toasts, and below a Show Alert
   confirm and an alarm's detail dialog.
 
-- **A centred numpad is centred.** A numpad docked `center` sat at the left
-  edge of a keyboard-wide strip in the middle of the screen. It is now
-  centred itself, for the Edit Value action, Number Input, Numeric Stepper
-  and a custom widget's `VirtualNumpad` alike.
+- **A custom widget's centred numpad is centred.** A `VirtualNumpad` with
+  `dockPosition="center"` sat at the left edge of a keyboard-wide strip in
+  the middle of the screen. It is now centred itself.
 
 - **A second tap on a Number Input or String Input opens its numpad or
   keyboard again.** After × (or Enter, on a Number Input) the field kept

@@ -181,7 +181,10 @@ export default function SelectionDrawer<T>({
         className="cfg-selection-drawer__header"
         title={<PickerTitle context={title} action={action} />}
         search={query}
-        onSearchChange={setQuery}
+        onSearchChange={(next) => {
+          releaseRailPick();
+          setQuery(next);
+        }}
         onSearchEnter={() => {
           if (topItem) onSelectItem(topItem);
         }}

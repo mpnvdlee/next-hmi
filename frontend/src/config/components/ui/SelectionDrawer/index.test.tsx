@@ -56,6 +56,14 @@ describe('SelectionDrawer rail', () => {
     fireEvent.wheel(document.querySelector('.cfg-selection-drawer__scroll')!);
     spyOn('Machine');
     expect(rail('Machine')).toHaveClass('cfg-selection-drawer__rail-item--active');
+
+    // Typing a search moves the sections too, so it ends the hold as a scroll does.
+    fireEvent.click(rail('Logic'));
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search' }), {
+      target: { value: 'm' },
+    });
+    spyOn('Machine');
+    expect(rail('Machine')).toHaveClass('cfg-selection-drawer__rail-item--active');
     vi.unstubAllGlobals();
   });
 });
