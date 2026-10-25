@@ -365,7 +365,11 @@ def _validate_component_tree(
             severity="error",
             code="component-direct-binding",
         )
-    for nested_path in component_nested_prop_paths(component):
+    def is_actions(widget_type: str, key: str) -> bool:
+        field = (ctx.widget_schema_for(widget_type) or {}).get(key)
+        return key == "actions" or (isinstance(field, dict) and field.get("type") == "actions")
+
+    for nested_path in component_nested_prop_paths(component, is_actions):
         report.warn(
             nested_path,
             NESTED_PROP_MESSAGE,

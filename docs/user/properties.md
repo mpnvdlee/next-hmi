@@ -145,7 +145,7 @@ An input of type **Select (enum)** gives whoever places the component a fixed li
 Pages and page groups declare their **input parameters** in the same panel (see [Pages](pages.md)), so the option kinds apply there too.
 
 > [!IMPORTANT]
-> **`$componentProp` has to be the whole value of a property.** Use it directly — a Label's **Text** set to `$componentProp: title` — and it stays live. Bury it inside another source (as one arm of an `$if`, a wildcard of a string expression) or put it on a **Layout** field, and it fills in once and then stops updating. The warnings pill flags this. Do the thinking on the *instance* instead: the instance may bind `$var`, compare, format — then pass the finished value in through a plain `$componentProp`.
+> **`$componentProp` has to be the whole value of a property.** Use it directly — a Label's **Text** set to `$componentProp: title` — and it stays live. Bury it inside another source (as one arm of an `$if`, a wildcard of a string expression) or put it on a **Layout** field, and it fills in once and then stops updating. The warnings pill flags this. Actions are the exception: an action reads its fields when it fires, so inside an action list — an Edit Value **Title** of `Set {1}` with `{1}` the input, a Show Toast message — the input can sit anywhere and is always current. Elsewhere, do the thinking on the *instance* instead: the instance may bind `$var`, compare, format — then pass the finished value in through a plain `$componentProp`.
 
 ### Passing widgets into a component (slots)
 
