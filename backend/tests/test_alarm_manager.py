@@ -239,3 +239,28 @@ def test_an_element_whose_bound_index_arrives_late_is_filled_in(live_project_roo
 
     manager.on_variable_change("DS:Idx", 2)
     assert manager.get_active()[0].values == [2.5]
+
+
+@pytest.mark.parametrize("value, still_active", [(False, 0), (True, 1)])
+def test_a_restored_alarm_follows_the_values_cached_at_start(
+    live_project_root: Path, monkeypatch, value, still_active
+):
+    # A static datasource seeds its cache on start without emitting a change,
+    # so a door alarm restored from alarm_state.json must be checked against it.
+    from services.datasource_manager import datasource_manager
+
+    manager = AlarmManager()
+    manager.set_config(_config_with_trigger())
+    manager.on_variable_change("DS:Overheat", True)
+    assert len(manager.get_active()) == 1
+
+    cache = {"DS:Overheat": value}
+    monkeypatch.setattr(
+        datasource_manager, "get_cached_values", lambda keys: {k: cache[k] for k in keys if k in cache}
+    )
+    restarted = AlarmManager()
+    restarted.load()
+    restarted.evaluate_cached()
+
+    assert len(restarted.get_active()) == still_active
+    assert len(restarted.get_history()) == 1 - still_active
