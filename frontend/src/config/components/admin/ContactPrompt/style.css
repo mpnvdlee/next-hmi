@@ -35,6 +35,11 @@
   color: var(--cfg-text);
 }
 
+.cfg-contact-prompt__text a {
+  color: var(--cfg-accent);
+  font-weight: var(--cfg-fw-medium);
+}
+
 .cfg-contact-prompt__note {
   font-size: var(--cfg-text-xs);
   color: var(--cfg-text-muted);

@@ -1,3 +1,4 @@
+import { getEdition } from '@shared/utils/runtimeBase';
 import AdminSection from '../AdminSection';
 import './style.css';
 
@@ -22,6 +23,24 @@ export default function SystemInfoSection({ info }: Props) {
   return (
     <AdminSection title="System Information">
       <div className="cfg-admin-info-grid">
+        <span className="cfg-admin-info-grid__label">Edition</span>
+        <span className="cfg-admin-info-grid__value">
+          {getEdition() === 'ee' ? (
+            'Enterprise'
+          ) : (
+            <>
+              Community ·{' '}
+              <a
+                className="cfg-admin-info-grid__link"
+                href="https://next-hmi.com/docs/shipping.html?from=sysinfo"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Shipping it to customers? ↗
+              </a>
+            </>
+          )}
+        </span>
         <span className="cfg-admin-info-grid__label">Backend uptime</span>
         <span className="cfg-admin-info-grid__value">
           {info ? formatUptime(info.uptime_seconds) : '—'}

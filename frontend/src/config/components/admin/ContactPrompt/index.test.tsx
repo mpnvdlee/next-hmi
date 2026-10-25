@@ -41,6 +41,14 @@ describe('ContactPrompt', () => {
     expect(screen.queryByText(/ID filled in/)).not.toBeInTheDocument();
   });
 
+  it('points at what shipping it costs', () => {
+    renderPrompt();
+    expect(screen.getByRole('link', { name: /What you owe when you ship it/ })).toHaveAttribute(
+      'href',
+      'https://next-hmi.com/pricing?from=contact-prompt#situations',
+    );
+  });
+
   it('is dismissed by "Not now" and by following the link', async () => {
     const { onDismiss } = renderPrompt();
     await userEvent.click(screen.getByRole('button', { name: 'Not now' }));

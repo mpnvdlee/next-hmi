@@ -19,3 +19,9 @@
   word-break: break-all;
   line-height: 1.5;
 }
+
+.cfg-admin-info-grid__link {
+  color: var(--cfg-accent);
+  font-weight: var(--cfg-fw-medium);
+  word-break: normal;
+}
