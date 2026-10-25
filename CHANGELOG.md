@@ -296,6 +296,12 @@ heading.
 
 ### Fixed
 
+- **A formula can be written to an Integer tag.** A Write Data Variable
+  whose value is a `$formula` was flagged by the warnings pill as not fitting
+  an Integer tag, although the write itself goes through. It is no longer
+  flagged; a whole result is written, and a result with decimals is refused
+  with `invalid_value`, as any other number with decimals is.
+
 - **The alarm guide says what Value Range does.** It said the trigger fires
   outside **Min** / **Max**; it fires while the value lies between them, both
   included, as it always has. The guide now says so, with what one empty

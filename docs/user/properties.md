@@ -36,7 +36,7 @@ Any of these can also be an **array**. An optional *format* refines the editor w
 | `$http` | flexible | A value picked out of an HTTP API response. |
 | `$loc` · `$stringExpr` | String | Translated text, or a template like `Tank {1} of {2}`. |
 | `$compare` · `$not` · `$and` · `$or` · `$pageIsActive` · `$userGroups` | Boolean | A comparison result, the opposite of another boolean, whether every (**AND**) or any (**OR**) condition in a list is true, whether a page is active, or whether the signed-in user is in one of the listed groups. |
-| `$formula` | Float | A number calculated from other values, like `({1} - 32) / 1.8` — `+ - * /` and parentheses. Empty when an input is missing or you divide by zero. |
+| `$formula` | Float | A number calculated from other values, like `({1} - 32) / 1.8` — `+ - * /` and parentheses. Empty when an input is missing or you divide by zero. As the value of a **Write Data Variable** it can also go into an Integer tag: a whole result is written, a fraction is refused with `invalid_value`, as any number with decimals is. |
 | `$user` | String / String[] | The signed-in user's name or groups, or the list of all users. |
 | `$device` · `$urlParam` | String | This machine's identity (hostname, IP, MAC), or a parameter from the page URL. |
 | `$viewport` | String / Integer | Screen size class, orientation, width, height. |

@@ -1867,6 +1867,11 @@ def _validate_write_value(
         schema = {"type": f"{base}[]" if element.get("array") else base}
     wrapped = _has_property_source(value)
     if wrapped and _property_source_key(value) != "$static":
+        if _property_source_key(value) == "$formula" and schema == {"type": "Integer"}:
+            # A formula computes a Float, but the write path takes a whole one
+            # into an integer tag and refuses a fraction as lossy, as it does
+            # for any number — so only the formula itself is checked here.
+            schema = {"type": "Float"}
         _validate_action_value(value, schema, ctx, value_path, report)
         return
     if schema is None or written is None or ctx.datasource_entry is None:
