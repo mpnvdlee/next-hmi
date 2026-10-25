@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useConfigStore } from '@shared/store/configStore';
 import { usePanelExpansionStore } from '@config/store/panelExpansionStore';
@@ -591,5 +591,40 @@ describe('ActionsInput — Navigate To Page in a dialog', () => {
 
     const source = useEditorDomainStore.getState().bindingPickerTarget?.componentPropSource;
     expect(Object.keys(source?.properties ?? {})).toEqual(['target']);
+  });
+});
+
+describe('ActionsInput — a write target inside a component', () => {
+  beforeEach(setupStores);
+  afterEach(() => useEditorDomainStore.getState().closeBindingPicker());
+
+  it('targets an input parameter the instance fills with a writable variable', async () => {
+    const user = userEvent.setup();
+    const onChangeSpy = vi.fn();
+    const inputs = {
+      properties: {
+        value: { type: 'float', label: 'Value', write: true },
+        label: { type: 'string', label: 'Name' },
+      },
+    };
+    render(
+      <ComponentPropertySchemaContext.Provider value={inputs}>
+        <Harness
+          onChangeSpy={onChangeSpy}
+          initial={{ onPress: [{ type: 'editValue', target: { $componentProp: '' } }] }}
+        />
+      </ComponentPropertySchemaContext.Provider>,
+    );
+
+    await user.click(screen.getByTitle('Expand'));
+    await user.click(screen.getByRole('button', { name: 'Select component property' }));
+
+    const source = useEditorDomainStore.getState().bindingPickerTarget?.componentPropSource;
+    expect(source?.write).toBe(true);
+    expect(source?.fieldType).toEqual(['Integer', 'Float']);
+    act(() => source?.onPick('value'));
+    expect(onChangeSpy).toHaveBeenLastCalledWith({
+      onPress: [{ type: 'editValue', target: { $componentProp: 'value' } }],
+    });
   });
 });

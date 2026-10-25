@@ -1726,15 +1726,37 @@ def _repeat_write_target(target: dict, ctx: ValidationContext) -> _WriteTarget |
     return _WriteTarget(ds_name, key, element, key == source[1], subject)
 
 
+# What a write target's `$componentProp` input must be declared as — a writable
+# input of a type the action writes. Mirrors WRITE_TARGET_FILTER /
+# TOGGLE_TARGET_FILTER / EDIT_TARGET_FILTER in the editor's actionEditors.tsx.
+_INPUT_WRITE_TARGET_FIELDS: dict[str, dict] = {
+    "writeDataVariable": {
+        "type": ["String", "Boolean", "Integer", "Float", "DateTime", "Date", "Time", "Duration"],
+        "write": True,
+    },
+    "toggleDataVariable": {"type": ["Boolean"], "write": True},
+    "editValue": {"type": ["Integer", "Float"], "write": True},
+}
+
+
 def _validate_write_target(
     action: dict, kind: str, ctx: ValidationContext, path: str, report: ValidationReport
 ) -> _WriteTarget | None:
-    """A `writeDataVariable` / `toggleDataVariable` target: a `$var`, or —
-    inside a Repeater — the copy's `$repeatItem`. Diagnostics anchor on
-    `<action>/target`, which the property panel maps back to the action's
-    target row. Returns what the action writes, when the registry knows it."""
+    """A `writeDataVariable` / `toggleDataVariable` / `editValue` target: a
+    `$var`, inside a Repeater the copy's `$repeatItem`, or inside a component
+    or dialog a `$componentProp` input the caller fills with a variable.
+    Diagnostics anchor on `<action>/target`, which the property panel maps back
+    to the action's target row. Returns what the action writes, when the
+    registry knows it."""
     target = action.get("target")
     target_path = f"{path}/target"
+    if isinstance(target, dict) and "$componentProp" in target:
+        # Checked like a writing field reading the input; the variable it names
+        # is the caller's, checked where the caller fills the input.
+        _validate_property_value(
+            target, _INPUT_WRITE_TARGET_FIELDS[kind], ctx, target_path, report
+        )
+        return None
     if isinstance(target, dict) and "$repeatItem" in target:
         if not ctx.repeat_scope:
             report.warn(

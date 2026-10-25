@@ -131,9 +131,11 @@ interface VariableBinding {
   repeatIndex?: boolean;
 }
 
-/** The variable a write or toggle action writes: a `$var`, or — inside a
- *  Repeater — the copy's element (`member` of a struct element). */
-type WriteTarget = { $var: VariableBinding } | { $repeatItem: { member?: string } };
+/** The variable a write or toggle action writes: a `$var`, inside a Repeater
+ *  the copy's element (`member` of a struct element), or inside a component or
+ *  dialog an input parameter the caller filled with a variable. */
+type WriteTarget =
+  { $var: VariableBinding } | { $repeatItem: { member?: string } } | { $componentProp: string };
 
 /** Mirrors `EvaluationContext` in `hmi/utils/propertySourceEval.ts` — one resolver
  *  per property source. Everything is optional: a context that omits a resolver
