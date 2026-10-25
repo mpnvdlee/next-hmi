@@ -1,4 +1,5 @@
 import { useCallback, useEffect, type MutableRefObject } from 'react';
+import { forgetVariableTrees } from '@config/utils/variableType';
 import { useProjectStore } from '@shared/store/projectStore';
 import { apiJson } from '@shared/utils/api';
 import type { TreeNode } from '@shared/types/datasource';
@@ -29,6 +30,8 @@ export function useDatasourceSaveRegistration({
         method: 'PUT',
         body: sentTree,
       });
+      // A REST save broadcasts no config_changed, so the type lookups learn of it here.
+      forgetVariableTrees();
       if (latestTree.current !== sentTree) {
         // A newer edit landed while this save was in flight. Keep `dirty`
         // true and don't overwrite local state with a refresh that only
