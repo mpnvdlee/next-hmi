@@ -221,6 +221,11 @@ heading.
 
 ### Fixed
 
+- **An alarm's detail opens on screen from any page.** Tapping a row of an
+  Alarm List on a long page dimmed the screen but drew the detail dialog
+  off-screen, where it could not be read or acknowledged. The dialog now
+  always opens over the middle of the screen, from a custom widget too.
+
 - **A toast no longer covers the numpad.** A toast arriving while the
   numpad or keyboard was open drew over its bottom row of keys. The keypad
   the operator is typing on now sits above toasts, and below an alarm's
