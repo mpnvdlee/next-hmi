@@ -266,6 +266,12 @@ heading.
   along the bottom of the screen. It now sits in the middle of the screen,
   across and down; the keyboard stays docked at the bottom.
 
+- **A second tap on a Number Input or String Input opens its numpad or
+  keyboard again.** After × (or Enter, on a Number Input) the field kept
+  focus, and the keypad opened only when the field gained focus, so tapping
+  the same field again did nothing until the operator tapped somewhere else
+  first.
+
 - **Bundled fonts now carry their licence.** Inter, JetBrains Mono, Lexend,
   Manrope and Roboto Mono ship their SIL OFL 1.1 text next to the font files
   in `frontend/public/fonts/`, and `NOTICE` lists each family's copyright and
