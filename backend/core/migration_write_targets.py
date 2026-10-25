@@ -36,7 +36,14 @@ _OLD_KEYS = ("datasource", "path", "repeatItem")
 
 
 def _is_old_action(value: dict[str, Any]) -> bool:
-    return value.get("type") in _WRITE_ACTIONS and any(key in value for key in _OLD_KEYS)
+    # A widget property named "type" can hold a bound source ({"$var": ...}),
+    # which a frozenset lookup cannot hash.
+    action_type = value.get("type")
+    return (
+        isinstance(action_type, str)
+        and action_type in _WRITE_ACTIONS
+        and any(key in value for key in _OLD_KEYS)
+    )
 
 
 def _target_of(action: dict[str, Any]) -> dict[str, Any] | None:
