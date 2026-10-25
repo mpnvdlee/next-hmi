@@ -193,7 +193,7 @@
   --hmi-virtual-panel-gap-mobile: var(--hmi-space-sm);
 
   /* ── Numpad theme tokens ─────────────────────────────────────────────────
-     Editable in Themes → Numpad. An empty theme value removes the inline
+     Editable in Themes → Numpad & keyboard. An empty theme value removes the inline
      property and these defaults show, derived from the rest of the theme.
      --hmi-numpad-key-size has no default here: unset, keys keep the width of
      a three-column 188px panel and the height their padding gives them. */

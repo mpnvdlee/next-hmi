@@ -246,16 +246,15 @@ describe('VirtualNumpad', () => {
     );
   });
 
-  it('scopes the numpad layout and accent rules to the numpad grid, not the text keyboard', async () => {
+  it('scopes the numpad column rules to the numpad grid, not the text keyboard', async () => {
     // jsdom gives import.meta.url no file scheme; vitest runs from frontend/.
     const { readFileSync } = await import('node:fs');
     const hmiCss = readFileSync('src/hmi/styles/hmi.css', 'utf8');
-    const rules = [...hmiCss.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter(
-      ([, selector, body]) =>
-        selector.includes('numpad-columns') || body.includes('--hmi-numpad-accent'),
+    const rules = [...hmiCss.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter(([, selector]) =>
+      selector.includes('numpad-columns'),
     );
 
-    expect(rules.length).toBe(5);
+    expect(rules.length).toBe(3);
     for (const [, selector] of rules) expect(selector).toContain('.hmi-virtual-input__keys');
   });
 

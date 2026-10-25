@@ -82,11 +82,13 @@ For example, label tracking is `--hmi-type-label-tracking` backed by
 | `--hmi-radius-lg` | Large radius | `spacing.radius_lg` | `border-radius: var(--hmi-radius-lg);` |
 | `--hmi-shadow` | Elevation shadow | `spacing.shadow` | `box-shadow: var(--hmi-shadow);` |
 
-#### Numpad — edit in the Themes editor → Numpad
+#### Numpad & keyboard — edit in the Themes editor → Numpad & keyboard
 
-Styles `VirtualNumpad` (`hmi-virtual-input__*`), so every numeric input gets it. An empty
-theme value removes the inline property and the fallback in `hmi.tokens.css` shows, which
-reproduces the look from before these tokens existed.
+Styles `VirtualNumpad` and `VirtualKeyboard` (`hmi-virtual-input__*`), so every input that
+opens either gets it. Columns is numpad-only; the keyboard's key widths come from its
+60-column grid, so Key size sets only its height. The default theme sets the Enter colour to
+`#0a84ff`. An empty theme value removes the inline property and the fallback in
+`hmi.tokens.css` shows.
 
 | Token | Controls | Theme JSON path | Empty means |
 | ------ | ------ | ------ | ------ |
@@ -94,7 +96,7 @@ reproduces the look from before these tokens existed.
 | `--hmi-numpad-key-size` | Key width and minimum height | `numpad.key_size` | Width of a three-column 188px panel, padding-driven height |
 | `--hmi-numpad-gap` | Gap between keys | `numpad.gap` | `--hmi-virtual-panel-gap-compact` |
 | `--hmi-numpad-key-font` | Key font family | `numpad.key_font` | `--hmi-type-body-font` |
-| `--hmi-numpad-key-font-size` | Digit key font size (Back / Clear / Enter stay caption size) | `numpad.key_font_size` | `--hmi-type-body-size` |
+| `--hmi-numpad-key-font-size` | Key font size (numpad Back / Clear / Enter and keyboard modifiers stay caption size) | `numpad.key_font_size` | `--hmi-type-body-size` |
 | `--hmi-numpad-key-font-weight` | Key font weight | `numpad.key_font_weight` | `--hmi-type-body-weight` |
 | `--hmi-numpad-accent` | Enter key colour (hover: `--hmi-numpad-accent-ink`) | `numpad.accent` | `--hmi-accent` |
 
@@ -106,15 +108,15 @@ Back / Clear / Enter in the fourth column under `[data-hmi-numpad-columns='4']`.
 
 Styles the Show Toast stack (`HmiToastStack`, `toast-stack.css`). Alarm toasts
 (`AlarmPopup`) share the `.hmi-toast` classes, so the themed rules are scoped to
-`.hmi-toast-stack` and leave them untouched. Empty colours fall back inside `toast-stack.css`, to the
-look from before these tokens existed.
+`.hmi-toast-stack` and leave them untouched. The default theme sets every colour to the
+tint the fallback gives on the default palette. Empty colours fall back inside `toast-stack.css`.
 
 | Token | Controls | Theme JSON path | Empty means |
 | ------ | ------ | ------ | ------ |
 | `--hmi-toast-position` | Where the stack sits: `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right` | `toasts.position` | (never empty) |
 | `--hmi-toast-shape` | `rounded` (`--hmi-radius`) or `pill` (`--hmi-radius-full`) | `toasts.shape` | (never empty) |
 | `--hmi-toast-{info,success,warning,error}-bg` | Toast background per severity | `toasts.<severity>_bg` | Surface tinted with the severity colour |
-| `--hmi-toast-{info,success,warning,error}-text` | Text, icon and close × colour per severity | `toasts.<severity>_text` | `--hmi-text`; the icon keeps the severity colour, the × its muted colour |
+| `--hmi-toast-{info,success,warning,error}-text` | Text and close × colour per severity (the icon always keeps the severity colour) | `toasts.<severity>_text` | `--hmi-text`; the × its muted colour |
 
 Position and shape are mirrored as `data-hmi-toast-position` and `data-hmi-toast-shape` on
 `<html>`. `toast-stack.css` matches the position by edge (`^='bottom'`) and side (`$='left'`,
