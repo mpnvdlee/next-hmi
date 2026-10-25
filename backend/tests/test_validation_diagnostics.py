@@ -1232,6 +1232,38 @@ def test_navigate_to_an_input_outside_a_dialog():
     assert _warn(_navigate({"$componentProp": "stationPage"}, ctx)).code == "navigate-input-not-page"
 
 
+_REPEATED_ICON = {"$static": {"type": "custom", "path": {"$repeatItem": {"member": "icon"}}}}
+
+
+@pytest.mark.parametrize(
+    "value, field_type",
+    [
+        (_REPEATED_ICON, "icon"),
+        ({"$static": {"type": "builtin", "name": {"$repeatItem": {"member": "icon"}}}}, "icon"),
+        ({"$static": {"path": {"$repeatItem": {"member": "photo"}}}}, "image"),
+    ],
+)
+def test_a_repeat_item_naming_the_asset_over_a_list_is_not_an_unknown_asset(ctx, value, field_type):
+    # Each copy gets its item's text as the path (substituteRepeatRefs).
+    rctx = replace(ctx, repeat_scope=True, repeat_items=[{"icon": "icons/door.svg"}])
+    report = ValidationReport()
+    _validate_property_value(value, {"type": field_type}, rctx, "/p", report)
+    assert (report.findings, report.warnings) == ([], [])
+
+
+def test_a_repeat_item_naming_the_asset_over_a_variable_says_to_bind_the_field(ctx):
+    rctx = replace(ctx, repeat_scope=True, repeat_items={"$var": {"path": "PLC:Doors"}})
+    report = ValidationReport()
+    _validate_property_value(_REPEATED_ICON, {"type": "icon"}, rctx, "/p", report)
+    assert _warn(report).code == "repeatitem-in-static"
+
+
+def test_a_repeat_item_naming_the_asset_outside_a_repeater(ctx):
+    report = ValidationReport()
+    _validate_property_value(_REPEATED_ICON, {"type": "icon"}, ctx, "/p", report)
+    assert _warn(report).code == "repeatitem-no-scope"
+
+
 def _write_formula(target_base: str) -> ValidationReport:
     ctx = ValidationContext(
         widget_schemas={"version": 2, "builtin": {}, "custom": {}},

@@ -1511,6 +1511,30 @@ _LABEL_VALUE_RECORD: tuple[dict, dict[str, dict]] = (
 )
 
 
+def _repeat_bound_asset(ref: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> bool:
+    """Whether a `$static` icon/image/video payload names its asset with a
+    `$repeatItem` — which the runtime fills in per Repeater copy
+    (`substituteRepeatRefs`), so there is no literal asset to look up. Over a
+    list it becomes the item's text; over a variable it becomes a binding, which
+    names no asset, and outside a Repeater it is never filled in."""
+    if not (isinstance(ref, dict) and "$repeatItem" in ref):
+        return False
+    if not ctx.repeat_scope:
+        report.warn(
+            path,
+            "the Repeat item has no Repeater copy here, so this names no asset",
+            severity="warning", code="repeatitem-no-scope",
+        )
+    elif _repeat_items_source(ctx) is not None:
+        report.warn(
+            path,
+            "a Repeat item inside a fixed icon or image names no asset when the Repeater "
+            "repeats a variable — set the field's own source to Repeat Item instead",
+            severity="error", code="repeatitem-in-static",
+        )
+    return True
+
+
 def _repeats_values(ctx: ValidationContext) -> bool:
     """Whether the innermost Repeater repeats over a list of values rather
     than a variable — so its element cannot be written."""
@@ -2752,21 +2776,29 @@ def _validate_property_value(
             icon_type = payload.get("type")
             if icon_type == "builtin":
                 name = payload.get("name")
-                if not isinstance(name, str) or name not in ctx.builtin_icons:
+                if _repeat_bound_asset(name, ctx, path, report):
+                    pass
+                elif not isinstance(name, str) or name not in ctx.builtin_icons:
                     report.warn(path, f"unknown built-in icon '{name}'", severity="error", code="icon-unknown")
             elif icon_type == "custom":
                 icon_path = payload.get("path")
-                if not isinstance(icon_path, str) or icon_path not in ctx.icon_assets:
+                if _repeat_bound_asset(icon_path, ctx, path, report):
+                    pass
+                elif not isinstance(icon_path, str) or icon_path not in ctx.icon_assets:
                     report.warn(path, f"unknown icon asset '{icon_path}'", severity="error", code="icon-unknown")
         elif field_type == "image":
             image_path = payload.get("path")
-            if not _is_absolute_asset_url(image_path) and (
+            if _repeat_bound_asset(image_path, ctx, path, report):
+                pass
+            elif not _is_absolute_asset_url(image_path) and (
                 not isinstance(image_path, str) or image_path not in ctx.image_assets
             ):
                 report.warn(path, f"unknown image asset '{image_path}'", severity="error", code="image-unknown")
         elif field_type == "video":
             video_path = payload.get("path")
-            if not _is_absolute_asset_url(video_path) and (
+            if _repeat_bound_asset(video_path, ctx, path, report):
+                pass
+            elif not _is_absolute_asset_url(video_path) and (
                 not isinstance(video_path, str) or video_path not in ctx.video_assets
             ):
                 report.warn(path, f"unknown video asset '{video_path}'", severity="error", code="video-unknown")
