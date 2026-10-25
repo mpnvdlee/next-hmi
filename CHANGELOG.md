@@ -238,6 +238,12 @@ heading.
 
 ### Fixed
 
+- **The category rail follows a click to its end.** In the Add action,
+  Add widget and source drawers, clicking a category near the end of the
+  list, such as **Interface**, scrolled to it but left the rail highlighting
+  one above it, because that section could not scroll to the top. The
+  clicked category now stays highlighted until you scroll yourself.
+
 - **A placeholder typed into a String Expr warns until it is bound.**
   Typing `{2}` into a template added a `{2}` row holding an empty Static
   text, which counts as a value, so the "placeholder {2} is unbound" warning
@@ -254,6 +260,11 @@ heading.
   the operator is typing on now sits above toasts, and below a Show Alert
   confirm and an alarm's detail dialog. An open confirm now also dims the
   toasts behind it; alarm popups keep their own layer above it.
+
+- **A custom widget's centred numpad is centred.** A `VirtualNumpad` with
+  `dockPosition="center"` sat at the left edge of a keyboard-wide strip
+  along the bottom of the screen. It now sits in the middle of the screen,
+  across and down; the keyboard stays docked at the bottom.
 
 - **Bundled fonts now carry their licence.** Inter, JetBrains Mono, Lexend,
   Manrope and Roboto Mono ship their SIL OFL 1.1 text next to the font files
