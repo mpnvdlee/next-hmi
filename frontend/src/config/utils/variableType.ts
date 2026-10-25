@@ -81,16 +81,20 @@ export async function loadVariableWriteDescriptor(
     const payload = await apiJson<{ variables?: unknown[] }>(
       `/api/datasources/${encodeURIComponent(datasource)}/variables?simple=false`,
     );
-    const indexMatch = /\[(-?\d+)\]$/.exec(path);
+    // `[…]` is a bound index: one element, which one only known at run time.
+    const indexMatch = /\[(-?\d+|…)\]$/.exec(path);
     const descriptor = findVariableWriteDescriptor(
       Array.isArray(payload.variables) ? payload.variables : [],
-      path.replace(/\[-?\d+\]$/, ''),
+      path.slice(0, indexMatch?.index),
     );
     return descriptor
       ? {
           ...descriptor,
           complete: true,
-          ...(indexMatch && { indexed: true, arrayIndex: Number(indexMatch[1]) }),
+          ...(indexMatch && {
+            indexed: true,
+            ...(indexMatch[1] !== '…' && { arrayIndex: Number(indexMatch[1]) }),
+          }),
         }
       : undefined;
   } catch {

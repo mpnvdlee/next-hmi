@@ -803,6 +803,38 @@ def test_bound_index_on_a_write_target(ctx, index, codes):
     assert [w.code for w in report.warnings] == codes
 
 
+def test_whole_array_on_a_one_value_field_anchors_on_its_index(ctx):
+    report = ValidationReport()
+    value = {"$var": {"path": "PLC:Safety/Open"}}
+    _validate_property_value(value, {"type": "Boolean"}, _array_ctx(ctx), "/p", report)
+    w = _warn(report)
+    assert (w.code, w.path) == ("var-type", "/p/$var/index")
+    assert "choose an element" in w.message
+
+
+@pytest.mark.parametrize("kind", ["toggleDataVariable", "writeDataVariable"])
+def test_whole_array_toggle_target_anchors_on_its_index(ctx, kind):
+    report = ValidationReport()
+    action = {"type": kind, "target": {"$var": {"path": "PLC:Safety/Open"}}}
+    validate_action_targets([action], _array_ctx(ctx), "/a", report)
+    # A write may write the whole array; a toggle needs one element.
+    expected = [("/a/0/target/$var/index", "toggle-target-type")] if kind == "toggleDataVariable" else []
+    assert [(w.path, w.code) for w in report.warnings] == expected
+
+
+def test_read_only_whole_array_toggle_target_asks_for_its_element_and_says_read_only(ctx):
+    array_ctx = _array_ctx(ctx)
+    array_ctx.datasource_writable["PLC"]["Safety/Open"] = False
+    report = ValidationReport()
+    action = {"type": "toggleDataVariable", "target": {"$var": {"path": "PLC:Safety/Open"}}}
+    validate_action_targets([action], array_ctx, "/a", report)
+    assert [(w.path, w.code) for w in report.warnings] == [
+        ("/a/0/target/$var/index", "toggle-target-type"),
+        ("/a/0/target", "write-target-type"),
+    ]
+    assert "read-only" in report.warnings[1].message
+
+
 def _overlay_ctx(ctx: ValidationContext) -> ValidationContext:
     return replace(
         ctx,

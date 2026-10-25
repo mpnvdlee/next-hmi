@@ -12,3 +12,10 @@ export const SlotContext = createContext<SlotType | undefined>(undefined);
 export function useSlotType(): SlotType | undefined {
   return useContext(SlotContext);
 }
+
+/**
+ * Set by a slot that takes any type but only one value of it — an alarm's
+ * `{n}` — so a whole array bound there asks for its element, as a scalar
+ * field's does.
+ */
+export const TakesOneValueContext = createContext(false);

@@ -1,8 +1,8 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ButtonAction, PageConfig, PageNode } from '@shared/types/config';
 import type ActionsInputType from './ActionsInput';
-import { ACTION_EDITORS, type ActionEditorCtx } from './actionEditors';
+import { ACTION_EDITORS, editorTargetAddress, type ActionEditorCtx } from './actionEditors';
 import {
   RepeatEditorScopeContext,
   type RepeatEditorScope,
@@ -344,6 +344,105 @@ describe('write target inside a Repeater', () => {
     const options = vi.mocked(ctx.openBindingPicker).mock.calls[0][2];
     expect(options?.filter).toEqual({ label: 'Value', type: 'Float' });
     expect(options?.repeatItem?.current).toEqual({ field: 'value', member: 'Speed' });
+  });
+});
+
+describe('array index on a write target', () => {
+  const indexRow = () =>
+    screen.getByText('Variable - Index').closest('.cfg-field-group') as HTMLElement;
+
+  it('asks a toggle on a whole array for its element in a row below Variable', () => {
+    const ctx = makeCtx();
+    ctx.dataTypes['PLC:Open'] = { dataType: 'Boolean', isArray: true };
+    const Editor = ACTION_EDITORS.toggleDataVariable!;
+    render(
+      <Editor
+        action={{ type: 'toggleDataVariable', target: { $var: { path: 'PLC:Open' } } }}
+        ctx={ctx}
+      />,
+    );
+    const variableGroup = screen.getByText('Variable').closest('.cfg-field-group') as HTMLElement;
+    expect(variableGroup.contains(indexRow())).toBe(false);
+    fireEvent.change(within(indexRow()).getByPlaceholderText('Choose an element'), {
+      target: { value: '3' },
+    });
+    expect(ctx.update).toHaveBeenCalledWith({
+      target: { $var: { path: 'PLC:Open', index: { $static: 3 } } },
+    });
+  });
+
+  it('offers a write the whole array, and resets the value when the row names an element', () => {
+    const ctx = makeCtx();
+    ctx.dataTypes['PLC:Steps'] = { dataType: 'Int16', isArray: true };
+    const Editor = ACTION_EDITORS.writeDataVariable!;
+    render(
+      <Editor
+        action={{
+          type: 'writeDataVariable',
+          target: { $var: { path: 'PLC:Steps' } },
+          value: [1, 2],
+        }}
+        ctx={ctx}
+      />,
+    );
+    fireEvent.change(within(indexRow()).getByPlaceholderText('Whole array'), {
+      target: { value: '0' },
+    });
+    expect(ctx.update).toHaveBeenCalledWith({
+      target: { $var: { path: 'PLC:Steps', index: { $static: 0 } } },
+      value: 0,
+    });
+  });
+
+  it('names a fixed $static index by its number and any other source as […]', () => {
+    expect(editorTargetAddress({ $var: { path: 'PLC:Open', index: { $static: 3 } } })).toEqual({
+      datasource: 'PLC',
+      path: 'Open[3]',
+    });
+    expect(
+      editorTargetAddress({ $var: { path: 'PLC:Open', index: { $componentProp: 'device' } } }),
+    ).toEqual({ datasource: 'PLC', path: 'Open[…]' });
+  });
+
+  it.each([
+    ['a variable that is no array', 'PLC:Run', { dataType: 'Boolean', isArray: false }],
+    [
+      'an element picked in the picker',
+      'PLC:Open[3]',
+      { dataType: 'Boolean', isArray: true, indexed: true },
+    ],
+  ])('adds no Index row for %s', (_, path, descriptor) => {
+    const ctx = makeCtx();
+    ctx.dataTypes[path] = descriptor;
+    const Editor = ACTION_EDITORS.toggleDataVariable!;
+    render(
+      <Editor action={{ type: 'toggleDataVariable', target: { $var: { path } } }} ctx={ctx} />,
+    );
+    expect(screen.queryByText('Variable - Index')).not.toBeInTheDocument();
+  });
+
+  it('shows a bound index in its row, writes one element, and clearing it writes the whole array', () => {
+    const ctx = makeCtx();
+    ctx.dataTypes['PLC:Steps[4]'] = { dataType: 'Int16', isArray: true, indexed: true };
+    const Editor = ACTION_EDITORS.writeDataVariable!;
+    render(
+      <Editor
+        action={{
+          type: 'writeDataVariable',
+          target: { $var: { path: 'PLC:Steps', index: { $static: 4 } } },
+          value: 5,
+        }}
+        ctx={ctx}
+      />,
+    );
+    expect(screen.getByText('PLC:Steps')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('JSON array')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    fireEvent.change(within(indexRow()).getByRole('spinbutton'), { target: { value: '' } });
+    expect(ctx.update).toHaveBeenCalledWith({
+      target: { $var: { path: 'PLC:Steps' } },
+      value: [],
+    });
   });
 });
 

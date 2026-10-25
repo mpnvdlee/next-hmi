@@ -41,6 +41,16 @@ describe('write value classification', () => {
     expect(apiJson).toHaveBeenCalledWith('/api/datasources/PLC/variables?simple=false');
   });
 
+  it('reads a bound index `[…]` as one element of the array, at no fixed index', async () => {
+    expect(await loadVariableWriteDescriptor('PLC', 'Count[…]')).toEqual({
+      dataType: 'UInt16',
+      isArray: true,
+      arrayLength: 2,
+      indexed: true,
+      complete: true,
+    });
+  });
+
   it('carries numeric min/max onto the descriptor when configured', async () => {
     const { apiJson } = await import('@shared/utils/api');
     vi.mocked(apiJson).mockResolvedValueOnce({

@@ -77,8 +77,13 @@ type SourceEditorRenderer = (props: {
 const SOURCE_EDITORS: Record<PropertySource, SourceEditorRenderer> = {
   static: ({ staticEditor }) =>
     staticEditor ? <div className="cfg-property-source-editor__static">{staticEditor}</div> : null,
-  $var: ({ value, onChange, onOpenBindingPicker }) => (
-    <VarEditor value={value} onChange={onChange} onOpenBindingPicker={onOpenBindingPicker} />
+  $var: ({ value, onChange, fieldType, onOpenBindingPicker }) => (
+    <VarEditor
+      value={value}
+      onChange={onChange}
+      fieldType={fieldType}
+      onOpenBindingPicker={onOpenBindingPicker}
+    />
   ),
   $loc: ({ value, onChange }) => <LocEditor value={value} onChange={onChange} />,
   $urlParam: ({ value, onChange }) => <UrlParamEditor value={value} onChange={onChange} />,

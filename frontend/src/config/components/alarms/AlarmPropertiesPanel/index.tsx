@@ -19,6 +19,7 @@ import AddButton from '../../ui/AddButton';
 import BoolButtonGroup from '../../ui/BoolButtonGroup';
 import PropertiesEmpty from '../../ui/PropertiesEmpty';
 import { CollapsiblePropertyCard } from '../../editor/PropertySourceEditor/editors/shared';
+import { TakesOneValueContext } from '../../editor/PropertySourceEditor/slotContext';
 import { getStaticString } from '../../editor/propertyValueUtils';
 import { varBindingOf } from '../../editor/bindingPickerUtils';
 import { findAlarm, resolveAlarmString } from '../alarmDisplayUtils';
@@ -262,33 +263,36 @@ function AlarmPanel({
             <AddButton title="Add value" onClick={addValue} />
           </div>
 
-          {values.map((ref, i) => (
-            <CollapsiblePropertyCard
-              key={i}
-              title={`{${i + 1}}`}
-              value={ref}
-              schema={{ type: 'String', label: `{${i + 1}}` } as SchemaField}
-              slot={true}
-              sourceless
-              onChange={(v) => setValues(values.map((r, j) => (j === i ? v : r)))}
-              onOpenBindingPicker={makePicker(
-                'alarm-value',
-                ref,
-                (binding) => setValues(values.map((r, j) => (j === i ? { $var: binding } : r))),
-                { label: `Value {${i + 1}}` },
-              )}
-              actions={
-                <button
-                  type="button"
-                  className="cfg-row-action-btn cfg-row-action-btn--stretch"
-                  title="Remove value"
-                  onClick={() => setValues(values.filter((_, j) => j !== i))}
-                >
-                  <ClearIcon />
-                </button>
-              }
-            />
-          ))}
+          {/* Each value fills one placeholder, so a whole array asks for its element. */}
+          <TakesOneValueContext.Provider value={true}>
+            {values.map((ref, i) => (
+              <CollapsiblePropertyCard
+                key={i}
+                title={`{${i + 1}}`}
+                value={ref}
+                schema={{ type: 'String', label: `{${i + 1}}` } as SchemaField}
+                slot={true}
+                sourceless
+                onChange={(v) => setValues(values.map((r, j) => (j === i ? v : r)))}
+                onOpenBindingPicker={makePicker(
+                  'alarm-value',
+                  ref,
+                  (binding) => setValues(values.map((r, j) => (j === i ? { $var: binding } : r))),
+                  { label: `Value {${i + 1}}` },
+                )}
+                actions={
+                  <button
+                    type="button"
+                    className="cfg-row-action-btn cfg-row-action-btn--stretch"
+                    title="Remove value"
+                    onClick={() => setValues(values.filter((_, j) => j !== i))}
+                  >
+                    <ClearIcon />
+                  </button>
+                }
+              />
+            ))}
+          </TakesOneValueContext.Provider>
 
           {values.length === 0 && (
             <span className="cfg-prop-hint cfg-section__empty">
