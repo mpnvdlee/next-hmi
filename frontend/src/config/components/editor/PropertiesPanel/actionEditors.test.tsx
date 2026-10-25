@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ButtonAction, PageConfig, PageNode } from '@shared/types/config';
 import type ActionsInputType from './ActionsInput';
-import { ACTION_EDITORS, type ActionEditorCtx } from './actionEditors';
+import { ACTION_EDITORS, editorTargetAddress, type ActionEditorCtx } from './actionEditors';
 import {
   RepeatEditorScopeContext,
   type RepeatEditorScope,
@@ -344,6 +344,89 @@ describe('write target inside a Repeater', () => {
     const options = vi.mocked(ctx.openBindingPicker).mock.calls[0][2];
     expect(options?.filter).toEqual({ label: 'Value', type: 'Float' });
     expect(options?.repeatItem?.current).toEqual({ field: 'value', member: 'Speed' });
+  });
+});
+
+describe('bound array index on a write target', () => {
+  it('turns the picked element into a bound index starting at that element', async () => {
+    const ctx = makeCtx();
+    ctx.dataTypes['PLC:Open[3]'] = { dataType: 'Boolean', isArray: true, indexed: true };
+    const Editor = ACTION_EDITORS.toggleDataVariable!;
+    render(
+      <Editor
+        action={{ type: 'toggleDataVariable', target: { $var: { path: 'PLC:Open[3]' } } }}
+        ctx={ctx}
+      />,
+    );
+    await userEvent.setup().click(screen.getByRole('button', { name: '+ Bind index' }));
+    expect(ctx.update).toHaveBeenCalledWith({
+      target: { $var: { path: 'PLC:Open', index: { $static: 3 } } },
+    });
+  });
+
+  it('resets a whole-array value to an element default when the index is bound', async () => {
+    const ctx = makeCtx();
+    ctx.dataTypes['PLC:Steps'] = { dataType: 'Int16', isArray: true };
+    const Editor = ACTION_EDITORS.writeDataVariable!;
+    render(
+      <Editor
+        action={{
+          type: 'writeDataVariable',
+          target: { $var: { path: 'PLC:Steps' } },
+          value: [1, 2],
+        }}
+        ctx={ctx}
+      />,
+    );
+    await userEvent.setup().click(screen.getByRole('button', { name: '+ Bind index' }));
+    expect(ctx.update).toHaveBeenCalledWith({
+      target: { $var: { path: 'PLC:Steps', index: { $static: 0 } } },
+      value: 0,
+    });
+  });
+
+  it('names a fixed $static index by its number and any other source as […]', () => {
+    expect(editorTargetAddress({ $var: { path: 'PLC:Open', index: { $static: 3 } } })).toEqual({
+      datasource: 'PLC',
+      path: 'Open[3]',
+    });
+    expect(
+      editorTargetAddress({ $var: { path: 'PLC:Open', index: { $componentProp: 'device' } } }),
+    ).toEqual({ datasource: 'PLC', path: 'Open[…]' });
+  });
+
+  it('offers no bound index on a variable that is not an array', () => {
+    const ctx = makeCtx();
+    ctx.dataTypes['PLC:Run'] = { dataType: 'Boolean', isArray: false };
+    const Editor = ACTION_EDITORS.toggleDataVariable!;
+    render(
+      <Editor
+        action={{ type: 'toggleDataVariable', target: { $var: { path: 'PLC:Run' } } }}
+        ctx={ctx}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: '+ Bind index' })).not.toBeInTheDocument();
+  });
+
+  it('shows an existing bound index in its own row and writes one element', () => {
+    const ctx = makeCtx();
+    ctx.dataTypes['PLC:Steps[…]'] = { dataType: 'Int16', isArray: true, indexed: true };
+    const Editor = ACTION_EDITORS.writeDataVariable!;
+    render(
+      <Editor
+        action={{
+          type: 'writeDataVariable',
+          target: { $var: { path: 'PLC:Steps', index: { $componentProp: 'device' } } },
+          value: 5,
+        }}
+        ctx={ctx}
+      />,
+    );
+    expect(screen.getByText('PLC:Steps[…]')).toBeInTheDocument();
+    expect(screen.getByText('Index')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '+ Bind index' })).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('JSON array')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
 

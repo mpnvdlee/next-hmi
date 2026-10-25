@@ -82,7 +82,6 @@ export function VarEditor({
   onOpenBindingPicker?: OpenBindingPicker;
 }) {
   const repeatScope = useRepeatEditorScope();
-  const parent = useParentPath();
   const varObj = (value as VarSource)?.$var ?? { path: '' };
   const basePath = varObj.path ?? '';
   const repeatIndex = varObj.repeatIndex === true;
@@ -139,39 +138,61 @@ export function VarEditor({
         }
         onClear={onOpenBindingPicker && committedText ? () => onChange(undefined) : undefined}
       />
-      {boundIndex ? (
-        <ParentPathContext.Provider value={withSegs(parent, '$var', 'index')}>
-          <BranchEditor
-            label="Index"
-            value={boundIndex}
-            // A fixed number stays wrapped, so the row keeps its source pill.
-            onChange={(v) =>
-              onChange({ $var: { ...varObj, index: isBoundIndex(v) ? v : { $static: v } } })
-            }
-            schema={INDEX_SCHEMA}
-            slot={INDEX_SLOT}
-            onOpenBindingPicker={onOpenBindingPicker}
-          />
-        </ParentPathContext.Provider>
-      ) : (
-        basePath &&
-        !repeatIndex && (
-          <AddButton
-            title="Take the element index from another value"
-            onClick={() =>
-              onChange({ $var: { path: basePath, index: { $static: varObj.index ?? 0 } } })
-            }
-          >
-            + Bind index
-          </AddButton>
-        )
-      )}
+      <BoundIndexControl
+        binding={varObj}
+        canBind={!!basePath && !repeatIndex}
+        onChange={(b) => onChange({ $var: b })}
+        onOpenBindingPicker={onOpenBindingPicker}
+      />
     </>
   );
 }
 
 const INDEX_SCHEMA: SchemaField = { type: 'Integer', label: 'Index' };
 const INDEX_SLOT: SlotType = { type: 'Integer' };
+
+/**
+ * A binding's element index as a source of its own: the "Index" card while it
+ * is bound, else "+ Bind index", which starts the source at the fixed index —
+ * `index`, or a `[n]` the picker baked into the path — or 0.
+ */
+export function BoundIndexControl({
+  binding,
+  canBind,
+  onChange,
+  onOpenBindingPicker,
+}: {
+  binding: VariableBinding;
+  canBind: boolean;
+  onChange: (b: VariableBinding) => void;
+  onOpenBindingPicker?: OpenBindingPicker;
+}) {
+  const parent = useParentPath();
+  if (isBoundIndex(binding.index))
+    return (
+      <ParentPathContext.Provider value={withSegs(parent, '$var', 'index')}>
+        <BranchEditor
+          label="Index"
+          value={binding.index}
+          // A fixed number stays wrapped, so the row keeps its source pill.
+          onChange={(v) => onChange({ ...binding, index: isBoundIndex(v) ? v : { $static: v } })}
+          schema={INDEX_SCHEMA}
+          slot={INDEX_SLOT}
+          onOpenBindingPicker={onOpenBindingPicker}
+        />
+      </ParentPathContext.Provider>
+    );
+  if (!canBind) return null;
+  const fixed = binding.index === undefined ? parseVarPathInput(binding.path) : binding;
+  return (
+    <AddButton
+      title="Take the element index from another value"
+      onClick={() => onChange({ path: fixed.path, index: { $static: fixed.index ?? 0 } })}
+    >
+      + Bind index
+    </AddButton>
+  );
+}
 
 /** `$repeatItem` — one line like a variable binding, picked in the binding
  *  picker beside the variables. Outside a Repeater the validator warns. */
