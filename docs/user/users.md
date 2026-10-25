@@ -103,7 +103,7 @@ Both already arrive on that source. A newly placed widget has **Visible** and **
 
 ### What a locked widget does
 
-A widget that is not **Interactable** renders read-only rather than disappearing — the operator can see the setpoint and see that it is not theirs to change. It is dimmed, and pressing it does nothing.
+A widget that is not **Interactable** renders read-only rather than disappearing — the operator can see the setpoint and see that it is not theirs to change. It is dimmed, and pressing it does nothing. The keyboard cannot reach it either: **Tab** skips it, so **Enter** or **Space** cannot fire it, and a screen reader announces it as unavailable.
 
 Whether the press *says* anything is a project-wide choice: the editor's **Settings** panel (see [Layout & the shell](layout.md)) carries **Locked feedback** with three modes.
 

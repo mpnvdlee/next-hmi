@@ -24,7 +24,7 @@
  */
 
 import './WidgetRenderer.css';
-import { Component, useContext, useState } from 'react';
+import { Component, useContext, useId, useState } from 'react';
 import type { CSSProperties, MouseEvent, ReactNode, ErrorInfo } from 'react';
 import type { WidgetConfig, LayoutConfig } from '@shared/types/config';
 import { useConfigStore } from '@shared/store/configStore';
@@ -186,6 +186,7 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
   const [lockFlash, setLockFlash] = useState<{ x: number; y: number } | null>(null);
   const lockedFeedback = useConfigStore((s) => s.shell.lockedFeedback ?? 'flash');
   const scope = useHmiScope();
+  const lockedContentId = useId();
 
   // ── Visibility gate ───────────────────────────────────────────────────────
   // All hooks are called above; early return is safe here. `visible` /
@@ -270,8 +271,18 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
           className="hmi-lock-wrapper"
           style={wrapperStyle(layout)}
           title={lockedFeedback === 'none' ? undefined : LOCKED_MESSAGE}
+          // `inert` takes the widget out of the accessibility tree along with
+          // focus, so the wrapper stands in for it: named by the widget's own
+          // text (a label reference reaches into an inert subtree) and disabled.
+          role="group"
+          aria-disabled="true"
+          aria-labelledby={lockedContentId}
         >
-          {comp}
+          {/* The overlay stops the pointer; `inert` stops Tab, Enter and Space,
+              which reach the widget underneath straight past it. */}
+          <div className="hmi-lock-content" id={lockedContentId} inert>
+            {comp}
+          </div>
           <div className="hmi-lock-overlay" onClick={handleLockedClick} aria-hidden="true">
             {lockFlash && (
               <span

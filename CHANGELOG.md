@@ -173,6 +173,13 @@ heading.
   the same masking through the SDK numpad's new `password` prop. The default
   stays **Text**.
 
+- **A locked widget is out of the keyboard's reach too.** A widget that is
+  not **Interactable** already ignored a press, but **Tab** still reached
+  the Button or field underneath, and **Enter** or **Space** fired it,
+  so a keyboard got past a lock that guards a setpoint. A locked widget
+  now takes no focus and no keys, and a screen reader announces it as
+  unavailable under its own name. Unlocked widgets behave as before.
+
 ### Changed
 
 - **A project opened in 1.1.0 no longer opens in 1.0.x (breaking).** The
