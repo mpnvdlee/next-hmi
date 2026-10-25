@@ -37,9 +37,6 @@ interface Props {
   title?: string;
   /** Singular form of `title`, for the add and delete controls. */
   itemNoun?: string;
-  /** Offer the Page type — a dialog's input parameters only; a Component's
-   *  declaration has no `format`. */
-  pageInputs?: boolean;
   onChange: (next: Record<string, ComponentPropertySchema>) => void;
 }
 
@@ -48,7 +45,6 @@ export default function ComponentPropertiesEditor({
   ownerName,
   title = 'Component Properties',
   itemNoun = 'component property',
-  pageInputs = false,
   onChange,
 }: Props) {
   const [addingProp, setAddingProp] = useState(false);
@@ -126,7 +122,6 @@ export default function ComponentPropertiesEditor({
         <PropertyModal
           existingKeys={Object.keys(properties)}
           contextName={ownerName}
-          pageInputs={pageInputs}
           onConfirm={handleAddProperty}
           onCancel={() => setAddingProp(false)}
         />

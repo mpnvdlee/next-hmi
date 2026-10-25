@@ -103,7 +103,6 @@ describe('ComponentPropertiesEditor', () => {
         properties={{}}
         title="Input Parameters"
         itemNoun="input parameter"
-        pageInputs
         onChange={onChange}
       />,
     );
@@ -117,7 +116,7 @@ describe('ComponentPropertiesEditor', () => {
     const stored = { target: { type: 'string', format: 'page', label: 'target' } };
     expect(onChange).toHaveBeenCalledWith(stored);
 
-    rerender(<ComponentPropertiesEditor properties={stored} pageInputs onChange={onChange} />);
+    rerender(<ComponentPropertiesEditor properties={stored} onChange={onChange} />);
     const type = screen.getByText('Type').closest('.cfg-component-prop-stated-row') as HTMLElement;
     expect(within(type).getByText('Page')).toBeInTheDocument();
     expect(screen.queryByText('Holds a page')).not.toBeInTheDocument();
@@ -125,7 +124,7 @@ describe('ComponentPropertiesEditor', () => {
     expect(screen.queryByText('Write access')).not.toBeInTheDocument();
   });
 
-  it("offers no Page type on a Component's properties", async () => {
+  it("offers the Page type on a Component's properties too", async () => {
     Element.prototype.scrollIntoView = vi.fn();
     const user = userEvent.setup();
     render(<ComponentPropertiesEditor properties={{}} onChange={vi.fn()} />);
@@ -134,7 +133,7 @@ describe('ComponentPropertiesEditor', () => {
     await user.click(screen.getByRole('combobox'));
 
     expect(screen.getByRole('option', { name: 'String' })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Page' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Page' })).toBeInTheDocument();
   });
 
   it('updates component-property references, including a struct path', () => {
