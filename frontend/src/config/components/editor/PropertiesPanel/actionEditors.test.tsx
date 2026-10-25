@@ -349,7 +349,7 @@ describe('write target inside a Repeater', () => {
 
 describe('array index on a write target', () => {
   const indexRow = () =>
-    screen.getByText('Variable - Index').closest('.cfg-field-group') as HTMLElement;
+    screen.getByText(/^Element of the array/).closest('.cfg-field-group') as HTMLElement;
 
   it('asks a toggle on a whole array for its element in a row below Variable', () => {
     const ctx = makeCtx();
@@ -362,7 +362,9 @@ describe('array index on a write target', () => {
       />,
     );
     const variableGroup = screen.getByText('Variable').closest('.cfg-field-group') as HTMLElement;
-    expect(variableGroup.contains(indexRow())).toBe(false);
+    // Part of the Variable field, under its box rather than inside it.
+    expect(variableGroup.contains(indexRow())).toBe(true);
+    expect(variableGroup.querySelector('.cfg-field-group__box')!.contains(indexRow())).toBe(false);
     fireEvent.change(within(indexRow()).getByPlaceholderText('Choose an element'), {
       target: { value: '3' },
     });
@@ -418,7 +420,7 @@ describe('array index on a write target', () => {
     render(
       <Editor action={{ type: 'toggleDataVariable', target: { $var: { path } } }} ctx={ctx} />,
     );
-    expect(screen.queryByText('Variable - Index')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Element of the array/)).not.toBeInTheDocument();
   });
 
   it('shows a bound index in its row, writes one element, and clearing it writes the whole array', () => {

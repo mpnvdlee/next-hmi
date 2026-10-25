@@ -111,15 +111,17 @@ export function VarEditor({
       : varObj.index !== undefined && !boundIndex
         ? `${basePath}[${varObj.index}]`
         : basePath;
-  // Whether the path names a whole array, which the variable's metadata tells.
-  const [wholeArrayPath, setWholeArrayPath] = useState<string>();
+  // Whether the path names a whole array, which the variable's metadata tells,
+  // and how long it is.
+  const [wholeArray, setWholeArray] = useState<{ path: string; length?: number }>();
   const asksIndex = takesOne && varObj.index === undefined && !repeatIndex;
   useEffect(() => {
     const { datasource, location } = bindingParts({ path: basePath });
     if (!datasource || !location || !asksIndex) return;
     let live = true;
     void loadVariableWriteDescriptor(datasource, location).then((d) => {
-      if (live && d?.isArray && !d.indexed) setWholeArrayPath(basePath);
+      if (live && d?.isArray && !d.indexed)
+        setWholeArray({ path: basePath, length: d.arrayLength });
     });
     return () => {
       live = false;
@@ -180,10 +182,11 @@ export function VarEditor({
         }
         onClear={onOpenBindingPicker && committedText ? () => onChange(undefined) : undefined}
       />
-      {(boundIndex || (asksIndex && wholeArrayPath === basePath)) && (
+      {(boundIndex || (asksIndex && wholeArray?.path === basePath)) && (
         <FieldRowBelow>
           <IndexRow
             label={fieldLabel}
+            arrayLength={wholeArray?.path === basePath ? wholeArray.length : undefined}
             binding={varObj}
             onChange={(b) => onChange({ $var: b })}
             onOpenBindingPicker={onOpenBindingPicker}
@@ -203,21 +206,25 @@ const INDEX_SCHEMA: SchemaField = {
 const OPTIONAL_INDEX_SCHEMA: SchemaField = { ...INDEX_SCHEMA, placeholder: 'Whole array' };
 
 /**
- * The row below a field bound to a whole array that names the element it
- * reads or writes: a number, or a source such as a dialog's input parameter.
+ * The row under a field's box, bound to a whole array, that names the element
+ * it reads or writes: a number, or a source such as a dialog's input parameter.
+ * It shows no title of its own, only a hint above its box.
  * Either is stored as a source (`{ $static: n }`), which keeps it apart from
  * an element picked in the picker, a plain `index` the path shows as `[n]`.
  * Cleared, the binding names the whole array again.
  */
 export function IndexRow({
   label,
+  arrayLength,
   binding,
   optional,
   onChange,
   onOpenBindingPicker,
 }: {
-  /** The field's own label; the row reads `<label> - Index`. */
+  /** The field's own label; the row's drawer reads `<label> - Index`. */
   label?: string;
+  /** Puts the valid range in the hint, when the variable knows it. */
+  arrayLength?: number;
   binding: VariableBinding;
   /** The field also takes the whole array, which an empty row then means. */
   optional?: boolean;
@@ -230,6 +237,10 @@ export function IndexRow({
     <ParentPathContext.Provider value={withSegs(parent, '$var', 'index')}>
       <BranchEditor
         label={label ? `${label} - Index` : 'Index'}
+        hideLabel
+        description={
+          arrayLength ? `Element of the array, 0 to ${arrayLength - 1}` : 'Element of the array'
+        }
         value={index}
         onChange={(v) =>
           onChange(

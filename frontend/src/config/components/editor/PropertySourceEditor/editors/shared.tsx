@@ -23,7 +23,7 @@ import type { PropertySource } from '../../propertyValueUtils';
 import { isRecord } from '@shared/types/propertyValueGuards';
 import PropertySourceEditor from '..';
 import { ParentPathContext, useParentPath, withSegs } from '../parentPathContext';
-import { SlotContext, useSlotType } from '../slotContext';
+import { SlotContext, TakesOneValueContext, useSlotType } from '../slotContext';
 import { primaryType } from '@shared/utils/valueTypes';
 import { useUsersDomainStore, type UserGroup } from '@config/store/domains/usersDomainStore';
 import { useConfigStore } from '@shared/store/configStore';
@@ -533,6 +533,8 @@ export function CollapsiblePropertyCard({
  */
 export function BranchEditor({
   label,
+  hideLabel,
+  description,
   value,
   onChange,
   schema,
@@ -541,6 +543,9 @@ export function BranchEditor({
   actions,
 }: {
   label: string;
+  /** See `CollapsiblePropertyCard`. */
+  hideLabel?: boolean;
+  description?: ReactNode;
   value: unknown;
   onChange: (v: unknown) => void;
   schema: SchemaField;
@@ -554,6 +559,8 @@ export function BranchEditor({
   return (
     <CollapsiblePropertyCard
       title={label}
+      hideLabel={hideLabel}
+      description={description}
       value={value}
       onChange={onChange}
       schema={schema}
@@ -581,15 +588,18 @@ export function WildcardCard({
   forcedSources: PropertySource[];
 }) {
   return (
-    <CollapsiblePropertyCard
-      title={`{${wcKey}}`}
-      value={value}
-      onChange={onChange}
-      schema={schema}
-      slot={true}
-      forcedSources={forcedSources}
-      includeStatic
-      onOpenBindingPicker={onOpenBindingPicker}
-    />
+    // A placeholder prints one value, so a whole array there asks for its element.
+    <TakesOneValueContext.Provider value={true}>
+      <CollapsiblePropertyCard
+        title={`{${wcKey}}`}
+        value={value}
+        onChange={onChange}
+        schema={schema}
+        slot={true}
+        forcedSources={forcedSources}
+        includeStatic
+        onOpenBindingPicker={onOpenBindingPicker}
+      />
+    </TakesOneValueContext.Provider>
   );
 }

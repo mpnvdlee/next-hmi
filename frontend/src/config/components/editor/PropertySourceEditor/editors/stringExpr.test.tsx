@@ -2,6 +2,11 @@ import { useState, type ComponentType } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { StringExprEditor } from './stringExpr';
 import { HttpEditor } from './http';
+import { loadVariableWriteDescriptor } from '@config/utils/variableType';
+
+vi.mock('@config/utils/variableType', () => ({
+  loadVariableWriteDescriptor: vi.fn(async () => undefined),
+}));
 
 type Editor = ComponentType<{ value: unknown; onChange: (v: unknown) => void }>;
 
@@ -59,5 +64,28 @@ describe('placeholder rows the editor adds', () => {
     expect(onChange).toHaveBeenLastCalledWith({
       $http: expect.objectContaining({ url: 'https://plc/{1}', wildcards: { 1: unbound } }),
     });
+  });
+});
+
+describe('a placeholder bound to a whole array', () => {
+  it('asks for the element, as a placeholder prints one value', async () => {
+    vi.mocked(loadVariableWriteDescriptor).mockResolvedValueOnce({
+      dataType: 'Double',
+      isArray: true,
+      arrayLength: 5,
+    });
+    render(
+      <Harness
+        Editor={StringExprEditor}
+        initial={{
+          $stringExpr: {
+            template: '{1}',
+            wildcards: { 1: { $var: { path: 'Ui:Batches/Dones' } } },
+          },
+        }}
+        onChange={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText('Element of the array, 0 to 4')).toBeInTheDocument();
   });
 });
