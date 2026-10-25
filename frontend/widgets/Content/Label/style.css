@@ -1,4 +1,4 @@
-/* The three overrides land as custom properties so the component file stays
+/* The overrides land as custom properties so the component file stays
    free of inline style values: unset ones fall back to the typography combo.
    Chained with the global `.hmi-component`, which sets its own color and
    font-family — the two-class selector wins on specificity rather than on
@@ -18,7 +18,7 @@
 
   font-family: var(--hmi-type-heading-font);
   letter-spacing: var(--hmi-type-heading-tracking);
-  text-transform: var(--hmi-type-heading-transform);
+  text-transform: var(--hmi-label-transform, var(--hmi-type-heading-transform));
 }
 
 .hmi-component.hmi-label--type-subheading {
@@ -27,7 +27,7 @@
 
   font-family: var(--hmi-type-subheading-font);
   letter-spacing: var(--hmi-type-subheading-tracking);
-  text-transform: var(--hmi-type-subheading-transform);
+  text-transform: var(--hmi-label-transform, var(--hmi-type-subheading-transform));
 }
 
 .hmi-component.hmi-label--type-body {
@@ -36,7 +36,7 @@
 
   font-family: var(--hmi-type-body-font);
   letter-spacing: var(--hmi-type-body-tracking);
-  text-transform: var(--hmi-type-body-transform);
+  text-transform: var(--hmi-label-transform, var(--hmi-type-body-transform));
 }
 
 .hmi-component.hmi-label--type-caption {
@@ -45,7 +45,7 @@
 
   font-family: var(--hmi-type-caption-font);
   letter-spacing: var(--hmi-type-caption-tracking);
-  text-transform: var(--hmi-type-caption-transform);
+  text-transform: var(--hmi-label-transform, var(--hmi-type-caption-transform));
 }
 
 .hmi-component.hmi-label--type-code {
@@ -54,7 +54,7 @@
 
   font-family: var(--hmi-type-code-font);
   letter-spacing: var(--hmi-type-code-tracking);
-  text-transform: var(--hmi-type-code-transform);
+  text-transform: var(--hmi-label-transform, var(--hmi-type-code-transform));
 }
 
 .hmi-component.hmi-label--type-value {
@@ -63,7 +63,7 @@
 
   font-family: var(--hmi-type-value-font);
   letter-spacing: var(--hmi-type-value-tracking);
-  text-transform: var(--hmi-type-value-transform);
+  text-transform: var(--hmi-label-transform, var(--hmi-type-value-transform));
 }
 
 .hmi-component.hmi-label--type-label {
@@ -72,7 +72,7 @@
 
   font-family: var(--hmi-type-label-font);
   letter-spacing: var(--hmi-type-label-tracking);
-  text-transform: var(--hmi-type-label-transform);
+  text-transform: var(--hmi-label-transform, var(--hmi-type-label-transform));
 }
 
 /* ── Alignment ─────────────────────────────────────────────────────────── */

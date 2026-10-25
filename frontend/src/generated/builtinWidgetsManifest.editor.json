@@ -253,6 +253,11 @@
         "step": 1,
         "group": "Appearance"
       },
+      "borderColor": {
+        "label": "Border color",
+        "description": "Empty uses the button color.",
+        "group": "Appearance"
+      },
       "align": {
         "format": "select",
         "label": "Content alignment",
@@ -457,7 +462,8 @@
       },
       "align": {
         "format": "select",
-        "label": "Align",
+        "label": "Content alignment",
+        "display": "button-text",
         "group": "Appearance",
         "defaultValue": "left",
         "options": [
@@ -472,6 +478,27 @@
           {
             "label": "Right",
             "value": "right"
+          }
+        ]
+      },
+      "textTransform": {
+        "format": "select",
+        "label": "Text case",
+        "display": "button-text",
+        "group": "Appearance",
+        "defaultValue": "theme",
+        "options": [
+          {
+            "label": "Typography",
+            "value": "theme"
+          },
+          {
+            "label": "As typed",
+            "value": "none"
+          },
+          {
+            "label": "Uppercase",
+            "value": "uppercase"
           }
         ]
       },
@@ -2231,12 +2258,6 @@
         "label": "Border",
         "defaultValue": "none",
         "description": "Any CSS border shorthand, e.g. 1px solid var(--hmi-border).",
-        "group": "Appearance"
-      },
-      "shadow": {
-        "label": "Shadow",
-        "defaultValue": "none",
-        "description": "Any CSS box-shadow, e.g. var(--hmi-shadow).",
         "group": "Appearance"
       },
       "actions": {

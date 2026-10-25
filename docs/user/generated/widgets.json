@@ -67,13 +67,6 @@
             "defaultValue": "none"
           },
           {
-            "key": "shadow",
-            "label": "Shadow",
-            "type": "String",
-            "group": "Appearance",
-            "defaultValue": "none"
-          },
-          {
             "key": "actions",
             "label": "Actions",
             "type": "actions"
@@ -487,6 +480,12 @@
             "group": "Appearance"
           },
           {
+            "key": "borderColor",
+            "label": "Border color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
             "key": "align",
             "label": "Content alignment",
             "type": "String",
@@ -684,10 +683,17 @@
           },
           {
             "key": "align",
-            "label": "Align",
+            "label": "Content alignment",
             "type": "String",
             "group": "Appearance",
             "defaultValue": "left"
+          },
+          {
+            "key": "textTransform",
+            "label": "Text case",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "theme"
           },
           {
             "key": "wrap",

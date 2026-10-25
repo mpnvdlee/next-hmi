@@ -26,13 +26,27 @@ export const schema = {
   align: {
     type: 'string' as const,
     format: 'select' as const,
-    label: 'Align',
+    label: 'Content alignment',
+    display: 'button-text' as const,
     group: 'Appearance',
     defaultValue: 'left',
     options: [
       { label: 'Left', value: 'left' },
       { label: 'Center', value: 'center' },
       { label: 'Right', value: 'right' },
+    ],
+  },
+  textTransform: {
+    type: 'string' as const,
+    format: 'select' as const,
+    label: 'Text case',
+    display: 'button-text' as const,
+    group: 'Appearance',
+    defaultValue: 'theme',
+    options: [
+      { label: 'Typography', value: 'theme' },
+      { label: 'As typed', value: 'none' },
+      { label: 'Uppercase', value: 'uppercase' },
     ],
   },
   wrap: {
@@ -75,6 +89,7 @@ export default function Label({ properties, layout }: HmiWidgetProps) {
   const typography = getPropString(properties, 'typography', 'body', evalCtx);
   const align = getPropString(properties, 'align', 'left', evalCtx);
   const wrap = getPropString(properties, 'wrap', 'wrap', evalCtx);
+  const textTransform = getPropString(properties, 'textTransform', 'theme', evalCtx);
   const color = getPropString(properties, 'color', '', evalCtx);
   // Escape hatches for the one-off sizes the seven theme combos don't cover.
   const size = getPropString(properties, 'size', '', evalCtx);
@@ -86,6 +101,9 @@ export default function Label({ properties, layout }: HmiWidgetProps) {
   if (color) style['--hmi-label-color'] = color;
   if (size) style['--hmi-label-size'] = size;
   if (weight) style['--hmi-label-weight'] = String(weight);
+  // Typography keeps the combo's own case: the Label combo is uppercase by default.
+  if (textTransform === 'none' || textTransform === 'uppercase')
+    style['--hmi-label-transform'] = textTransform;
 
   const className = [
     'hmi-component',

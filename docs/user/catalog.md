@@ -28,7 +28,6 @@ Groups and lays out child widgets in a row or column. Hosts other widgets, and r
 | `overflow` | Overflow | `String` |
 | `background` | Background | `color` |
 | `border` | Border | `String` |
-| `shadow` | Shadow | `String` |
 | `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
@@ -142,6 +141,7 @@ Runs actions and can write true to a bound boolean on press.
 | `fill` | Fill | `color` |
 | `radius` | Radius | `String` |
 | `borderWidth` | Border width (px) | `Integer` |
+| `borderColor` | Border color | `color` |
 | `align` | Content alignment | `String` |
 | `textTransform` | Text case | `String` |
 | `iconSize` | Icon size (px) | `Integer` |
@@ -197,7 +197,8 @@ Text in one of the theme typography combos, with translation support.
 | `text` | Text | `String` |
 | `typography` | Typography | `String` |
 | `color` | Color | `color` |
-| `align` | Align | `String` |
+| `align` | Content alignment | `String` |
+| `textTransform` | Text case | `String` |
 | `wrap` | Overflow | `String` |
 | `size` | Size override | `String` |
 | `weight` | Weight override | `Integer` |

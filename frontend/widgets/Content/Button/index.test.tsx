@@ -161,6 +161,13 @@ describe('Button', () => {
     expect(screen.getByRole('button', { name: 'Jog' })).not.toHaveAttribute('title');
   });
 
+  it('gives the border its own color, falling back to the button color', () => {
+    renderButton({ label: 'Alarms', color: '#22a7e0', borderColor: '#d0452f' });
+    expect(screen.getByRole('button', { name: 'Alarms' }).style.borderColor).toBe(
+      'rgb(208, 69, 47)',
+    );
+  });
+
   it('dispatches configured onPress actions', async () => {
     const user = userEvent.setup();
     renderButton({

@@ -190,6 +190,12 @@ heading.
   or `NaN` as no value. A property with no variable bound no longer costs a
   variable-store listener.
 
+- **A Button sets its alignment and text case.** **Content alignment**
+  (center, or start for a menu-style tile) and **Text case** (uppercase). A Label's **Align** is now
+  called **Content alignment**, and its new **Text case** follows the
+  typography by default or picks *As typed* or *Uppercase*. Each one left at
+  its default keeps today's look.
+
 - **The Alarm List fits a touch panel.** Six new options: **Row size** (Touch
   gives tap-sized rows and buttons), **Severity mark** (a stripe, the whole
   row in the level colour, or only the coloured icon), **Show** (the active
@@ -209,6 +215,10 @@ heading.
 - **An action acknowledges every alarm.** **Acknowledge All Alarms**
   acknowledges each unacknowledged alarm in the name of the signed-in user,
   so any Button can be the screen's acknowledge button.
+
+- **A Button sets its border color.** A **Border color** that differs from
+  the button color, such as a ring that marks the active page. Left empty, it
+  keeps today's look.
 
 - **A String Input can open the numpad.** A new **Keyboard** property set to
   **Numeric** opens the numpad instead of the on-screen keyboard, with
@@ -396,12 +406,20 @@ heading.
   or page around it. A stored `chrome` key is ignored and the warnings pill
   flags it as an unknown property; delete it there.
 
+- **The Container's Shadow.** A Container now always draws without a shadow.
+  A stored `shadow` key is ignored and the warnings pill flags it as an
+  unknown property; delete it there.
+
 ### Fixed
 
 - **A Button's custom SVG icon shows in Safari.** A project SVG on a Button
   rendered at zero size in Safari and other WebKit browsers, so the button
   showed no icon. It now fills the icon size, as it already did in Chrome
   and Firefox.
+
+- **A Button stays inside a narrow fixed tile.** A Button in a fixed size
+  narrower than its label plus padding grew past it. It now keeps the size it
+  was given.
 
 - **A restart keeps the default project's name.** Each start renamed the
   default project back to *Default*, so a name given in the manager did not
