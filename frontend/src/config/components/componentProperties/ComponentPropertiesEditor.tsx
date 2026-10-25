@@ -5,13 +5,13 @@ import {
   componentPropertyToSchemaField,
   OPTION_TYPE_EMPTY_VALUE,
   OPTION_TYPE_OPTIONS,
-  typeLabel,
+  propertyTypeLabel,
   VALUELESS_PROPERTY_TYPES,
   type ComponentPropertyOptionType,
   type ComponentPropertySchema,
   type StructSchemaNode,
 } from '@shared/types/componentProperty';
-import { primaryType, typeList } from '@shared/utils/valueTypes';
+import { primaryType } from '@shared/utils/valueTypes';
 import { hasOptionValue, renderSchemaField, selectOptionKey } from '../../utils/renderSchemaField';
 import PropRow from '../ui/PropRow';
 import FieldGroup from '../ui/FieldGroup';
@@ -37,8 +37,8 @@ interface Props {
   title?: string;
   /** Singular form of `title`, for the add and delete controls. */
   itemNoun?: string;
-  /** Offer "Holds a page" on text inputs — a dialog's input parameters only;
-   *  a Component's declaration has no `format`. */
+  /** Offer the Page type — a dialog's input parameters only; a Component's
+   *  declaration has no `format`. */
   pageInputs?: boolean;
   onChange: (next: Record<string, ComponentPropertySchema>) => void;
 }
@@ -59,12 +59,17 @@ export default function ComponentPropertiesEditor({
 
   const propertyEntries = Object.entries(properties);
 
-  function handleAddProperty(key: string, label: string, type: string, defaultValue?: unknown) {
+  function handleAddProperty(
+    key: string,
+    label: string,
+    declared: Pick<ComponentPropertySchema, 'type' | 'format'>,
+    defaultValue?: unknown,
+  ) {
     if (properties[key]) return;
     const newProp: ComponentPropertySchema = {
-      type,
+      ...declared,
       label,
-      ...(type === 'struct' ? { structSchema: [] } : {}),
+      ...(declared.type === 'struct' ? { structSchema: [] } : {}),
       ...(defaultValue !== undefined ? { defaultValue } : {}),
     };
     onChange({ ...properties, [key]: newProp });
@@ -108,7 +113,6 @@ export default function ComponentPropertiesEditor({
             key={key}
             propKey={key}
             schema={schema}
-            pageInputs={pageInputs}
             onChange={(patch) => handlePatchProperty(key, patch)}
             onDelete={() => handleDeleteProperty(key)}
             onEditStructSchema={() => setEditingStructKey(key)}
@@ -122,6 +126,7 @@ export default function ComponentPropertiesEditor({
         <PropertyModal
           existingKeys={Object.keys(properties)}
           contextName={ownerName}
+          pageInputs={pageInputs}
           onConfirm={handleAddProperty}
           onCancel={() => setAddingProp(false)}
         />
@@ -142,7 +147,6 @@ export default function ComponentPropertiesEditor({
 function ComponentPropertyRow({
   propKey,
   schema,
-  pageInputs,
   onChange,
   onDelete,
   onEditStructSchema,
@@ -151,7 +155,6 @@ function ComponentPropertyRow({
 }: {
   propKey: string;
   schema: ComponentPropertySchema;
-  pageInputs: boolean;
   onChange: (patch: Partial<ComponentPropertySchema>) => void;
   onDelete: () => void;
   onEditStructSchema: () => void;
@@ -211,7 +214,7 @@ function ComponentPropertyRow({
           be typed into reads as a broken input. */}
       <StatedRow label="Key">{propKey}</StatedRow>
 
-      <StatedRow label="Type">{typeList(schema.type).map(typeLabel).join(', ')}</StatedRow>
+      <StatedRow label="Type">{propertyTypeLabel(schema)}</StatedRow>
 
       {primary === 'struct' && (
         <PropRow
@@ -257,23 +260,11 @@ function ComponentPropertyRow({
         />
       </PropRow>
 
-      {pageInputs && primary.toLowerCase() === 'string' && (
-        <PropRow
-          label="Holds a page"
-          description="The caller picks a navigable page, which Navigate To Page can go to."
-          sourceless
-        >
-          <BoolButtonGroup
-            value={schema.format === 'page'}
-            onChange={(page) => onChange({ format: page ? 'page' : undefined })}
-          />
-        </PropRow>
-      )}
-
       {/* A struct declares write access per field, and an actions or widgets
-          property binds no variable at all — for everything else the flag is what
-          limits the picker to writable variables (see VariableBindingPicker). */}
-      {!VALUELESS_PROPERTY_TYPES.has(primary) && (
+          property or a page input binds no variable at all — for everything else
+          the flag is what limits the picker to writable variables (see
+          VariableBindingPicker). */}
+      {!VALUELESS_PROPERTY_TYPES.has(primary) && schema.format !== 'page' && (
         <PropRow
           label="Write access"
           description="Only allow binding to a variable the component may write."

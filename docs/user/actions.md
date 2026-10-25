@@ -22,7 +22,7 @@ Sixteen types, in the order the **Add action** menu lists them. **Browse actions
 | **Open Dialog** | Opens a page from the **Dialogs** folder — or a whole **dialog group**, which brings its tabs and chrome along — as a modal on top of the current screen. It also fills in the target's **input parameters**, which the widgets inside read with `$componentProp`. |
 | **Open Page As Overlay** | Opens a navigable page from the **Pages** section — or a page group — as a modal on top of the current screen. Same presentation fields, no parameters: a navigation destination declares none. |
 | **Close Dialog/Overlay** | Closes either kind, by name, or the current one when left empty. Name the page or page group the overlay was opened with — switching tabs inside it doesn't change that. |
-| **Navigate To Page** | Closes every open dialog and overlay, then goes to a page from the **Pages** section, firing its page events as a menu press does. **Page** is a fixed page, or — inside a dialog — one of its input parameters that **Holds a page**, so the caller decides where it leads. A parameter that names no navigable page does nothing. |
+| **Navigate To Page** | Closes every open dialog and overlay, then goes to a page from the **Pages** section, firing its page events as a menu press does. **Page** is a fixed page, or — inside a dialog — one of its input parameters of type **Page**, so the caller decides where it leads. A parameter that names no navigable page does nothing. |
 
 > [!NOTE]
 > **Two open actions, one close.** The two open actions differ only in which

@@ -16,7 +16,7 @@ heading.
 - **Navigate To Page goes to a page chosen at runtime.** The new action
   closes every open dialog and overlay, then goes to a page from the Pages
   section, firing the page events a menu press would. The page is fixed, or
-  — inside a dialog — an input parameter switched to **Holds a page**, which
+  — inside a dialog — an input parameter of the new type **Page**, which
   the Open Dialog action fills in with a page picker: one station popup's
   *Open station page* button then leads to each caller's own station. The
   warnings pill flags a page that does not exist, one in the Dialogs folder,

@@ -345,7 +345,7 @@ node in the `pages` root, and takes no parameters. An overlay action naming a
 node of the other root is an `overlay-wrong-root` error, and a menu item,
 `navigateToPage` or `format: 'page'` field naming a Dialogs-folder page is
 `page-not-navigable` (one naming no node of the `pages` root is `page-unknown`). An input
-parameter declared `format: 'page'` gets the page picker in `openDialog`, and is
+parameter declared `format: 'page'` (the editor's **Page** type) gets the page picker in `openDialog`, and is
 what a `navigateToPage` inside the dialog may read.
 A node moves between the two roots unchanged — apart from its document, which
 moves to the other directory with it (see below).

@@ -10,6 +10,7 @@ import { makeDefaultAction } from './actionMutations';
 import ActionsInput from './ActionsInput';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
+import { ComponentPropertySchemaContext } from '../PropertySourceEditor/componentPropertySchemaContext';
 import { usePanelDiagnostics } from '@config/hooks/usePanelDiagnostics';
 import { apiJson } from '@shared/utils/api';
 import { stubIntersectionObserver } from '../../../../test-setup';
@@ -539,5 +540,34 @@ describe('ActionsInput — write target', () => {
     // Expanded: the Variable row owning the target gets the full error mark.
     await user.click(screen.getByTitle('Expand'));
     expect(fieldGroup('Variable')).toHaveClass('cfg-field-group--invalid');
+  });
+});
+
+describe('ActionsInput — Navigate To Page in a dialog', () => {
+  beforeEach(setupStores);
+  afterEach(() => useEditorDomainStore.getState().closeBindingPicker());
+
+  it('offers only the input parameters of type Page', async () => {
+    const user = userEvent.setup();
+    const inputs = {
+      properties: {
+        target: { type: 'string', format: 'page', label: 'Target' },
+        title: { type: 'string', label: 'Title' },
+      },
+    };
+    render(
+      <ComponentPropertySchemaContext.Provider value={inputs}>
+        <Harness
+          onChangeSpy={vi.fn()}
+          initial={{ onPress: [{ type: 'navigateToPage', pageId: { $componentProp: '' } }] }}
+        />
+      </ComponentPropertySchemaContext.Provider>,
+    );
+
+    await user.click(screen.getByTitle('Expand'));
+    await user.click(screen.getByRole('button', { name: 'Select component property' }));
+
+    const source = useEditorDomainStore.getState().bindingPickerTarget?.componentPropSource;
+    expect(Object.keys(source?.properties ?? {})).toEqual(['target']);
   });
 });

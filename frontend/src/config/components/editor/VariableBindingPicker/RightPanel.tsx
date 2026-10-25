@@ -31,7 +31,7 @@ import {
   structOffer,
   varStructVerdict,
 } from './helpers';
-import { typeLabel } from '@shared/types/componentProperty';
+import { propertyTypeLabel, typeLabel } from '@shared/types/componentProperty';
 import RequiredFieldsTree from './RequiredFieldsTree';
 
 type FolderEntry = PickerFolderEntry;
@@ -471,7 +471,7 @@ function ComponentPropPanel({
               <div className="editor-binding-req-row editor-binding-req-row--parent">
                 <span className="editor-binding-req-row__name">{selectedItem.displayLabel}</span>
                 {!isStructTarget && !selectedItem.node && (
-                  <TypeBadge type={formatTypeBadge(selectedItem.propSchema.type)} />
+                  <TypeBadge type={propertyTypeLabel(selectedItem.propSchema)} />
                 )}
                 {selectedItem.node?.kind === 'variable' && (
                   <>
