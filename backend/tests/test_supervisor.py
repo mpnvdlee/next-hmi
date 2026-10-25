@@ -270,6 +270,22 @@ def test_refusal_names_the_version_the_project_was_stamped_with(
         sup.start(project_id)
 
 
+def test_a_1_0_build_refuses_a_project_this_build_stamped(
+    home: Path, tmp_path: Path, monkeypatch
+) -> None:
+    """A 1.0.x build parses 1.1.0's alarm and theme files as invalid and saves
+    empty ones over them, so it has to refuse the project and name 1.1.0."""
+    project_id = _register_project(home, tmp_path)
+    monkeypatch.setattr(supervisor_mod, "PROJECT_FORMAT_VERSION", 9)
+    monkeypatch.setattr(supervisor_mod, "app_version", lambda: "1.0.1")
+    sup = _make_supervisor(monkeypatch, healthy=True)
+
+    with pytest.raises(
+        ValueError, match=r"requires NEXT HMI 1\.1\.0 or newer to open; this build is 1\.0\.1"
+    ):
+        sup.start(project_id)
+
+
 def test_crash_restart_fails_closed_when_credentials_become_corrupt(
     home: Path, tmp_path: Path, monkeypatch
 ) -> None:
