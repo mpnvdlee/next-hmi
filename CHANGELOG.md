@@ -223,6 +223,12 @@ heading.
 
 ### Fixed
 
+- **A placeholder typed into a String Expr warns until it is bound.**
+  Typing `{2}` into a template added a `{2}` row holding an empty Static
+  text, which counts as a value, so the "placeholder {2} is unbound" warning
+  never showed. The new row now starts unbound, in an HTTP Request's URL and
+  body too. A Static value cleared on purpose still counts as set.
+
 - **An alarm's detail opens on screen from any page.** Tapping a row of an
   Alarm List on a long page dimmed the screen but drew the detail dialog
   off-screen, where it could not be read or acknowledged. The dialog now
