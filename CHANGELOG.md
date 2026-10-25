@@ -238,6 +238,12 @@ heading.
 
 ### Fixed
 
+- **A toast no longer covers the numpad.** A toast arriving while the
+  numpad or keyboard was open drew over its bottom row of keys. The keypad
+  the operator is typing on now sits above toasts, and below a Show Alert
+  confirm and an alarm's detail dialog. An open confirm now also dims the
+  toasts behind it; alarm popups keep their own layer above it.
+
 - **Bundled fonts now carry their licence.** Inter, JetBrains Mono, Lexend,
   Manrope and Roboto Mono ship their SIL OFL 1.1 text next to the font files
   in `frontend/public/fonts/`, and `NOTICE` lists each family's copyright and
