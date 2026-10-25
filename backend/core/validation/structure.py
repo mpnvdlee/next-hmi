@@ -2949,6 +2949,8 @@ def validate_widget_node(
                     # Typed as actions only by the component's declaration, which
                     # nothing walked before: a missing page is a diagnostic here.
                     _validate_actions_softly(value, prop_ctx, prop_path, report)
+    if wtype == "Repeater" and isinstance(properties, dict):
+        _validate_placed_items(properties, f"{path}/properties", report)
     # Walk children
     child_ctx = ctx
     items_key = ctx.repeat_items_key(wtype)
@@ -2971,6 +2973,40 @@ def validate_widget_node(
             for i, child in enumerate(children):
                 validate_widget_node(child, child_ctx, f"{path}/{child_field}/{i}", report)
     return report
+
+
+_PLACED_SIDES = frozenset({"top", "bottom", "left", "right"})
+
+
+def _validate_placed_items(properties: dict, path: str, report: ValidationReport) -> None:
+    """A Repeater placing its copies at item x / y reads each element's `x` and
+    `y` (0 to 1 across and down the image) and optional `side`. Only a literal list
+    is checked; a variable or API list is known only when it renders."""
+    if properties.get("placement") != "items":
+        return
+    items = properties.get("items")
+    path = f"{path}/items"
+    if isinstance(items, dict) and isinstance(items.get("$static"), list):
+        items, path = items["$static"], f"{path}/$static"
+    if not isinstance(items, list):
+        return
+    for i, item in enumerate(items):
+        rec = item if isinstance(item, dict) else {}
+        for axis in ("x", "y"):
+            v = rec.get(axis)
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v <= 1:
+                report.warn(
+                    f"{path}/{i}/{axis}",
+                    f"'{axis}' must be a number from 0 to 1 to place this copy",
+                    code="repeat-placement",
+                )
+        side = rec.get("side")
+        if side is not None and side not in _PLACED_SIDES:
+            report.warn(
+                f"{path}/{i}/side",
+                "'side' must be top, bottom, left or right",
+                code="repeat-placement",
+            )
 
 
 def _is_actions_field(field_schema: Any) -> bool:

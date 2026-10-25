@@ -9,7 +9,12 @@ import { useComponentPropStore } from '@hmi/store/widgetPropStore';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { useVariableStore } from '@hmi/store/variableStore';
 import type { WidgetConfig } from '@shared/types/config';
-import { autoMarkerLabel, clamp01, resolveMarkerLabel } from '@shared/utils/childPositions';
+import {
+  autoMarkerLabel,
+  clamp01,
+  fillsImage,
+  resolveMarkerLabel,
+} from '@shared/utils/childPositions';
 import WidgetRenderer from '@hmi/components/WidgetRenderer';
 
 function childOf(overrides: Partial<WidgetConfig> & { id: string }): WidgetConfig {
@@ -172,6 +177,42 @@ describe('ImageContainer', () => {
     const slot = container.querySelector('[data-child-id="lonely"]') as HTMLElement;
     expect(slot.style.getPropertyValue('--hmi-imgctn-x')).toBe('50%');
     expect(slot.style.getPropertyValue('--hmi-imgctn-y')).toBe('50%');
+  });
+
+  it('lays a Repeater placing at item x / y over the whole image, with no marker', async () => {
+    const devices: WidgetConfig = {
+      id: 'devices',
+      type: 'Repeater',
+      name: 'Devices',
+      properties: {
+        placement: 'items',
+        items: [
+          { x: 0.1, y: 0.2, tag: 'D1' },
+          { x: 0.9, y: 0.8, tag: 'D2' },
+        ],
+      },
+      children: [
+        {
+          id: 'tag',
+          type: 'Label',
+          name: 'tag',
+          properties: { text: { $repeatItem: { member: 'tag' } } },
+        },
+      ],
+    };
+    const children = [childOf({ id: 'a' }), devices, childOf({ id: 'b' })];
+    const { container } = renderImageContainer({ src: '/img.png' }, children);
+    expect(await screen.findByText('D2')).toBeInTheDocument();
+
+    expect(fillsImage(devices)).toBe(true);
+    const slot = container.querySelector('[data-child-id="devices"]') as HTMLElement;
+    expect(slot).toHaveClass('hmi-imgctn__slot--fill');
+    expect(slot.querySelectorAll('.hmi-repeater__copy')).toHaveLength(2);
+    // The Repeater keeps its letter in tree order; it just shows none.
+    const markers = [...container.querySelectorAll('.hmi-imgctn__marker')].map(
+      (el) => el.textContent,
+    );
+    expect(markers).toEqual(['A', 'C']);
   });
 
   // A widget module carries no app imports, so the render-time half of

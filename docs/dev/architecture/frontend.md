@@ -334,7 +334,9 @@ project's custom widgets and reusable components on top. A widget that renders
 other widgets itself — `NavigationMenu` (a page-tree menu with a footer slot),
 `ImageContainer` (children placed absolutely over a background image),
 `Repeater` (its children drawn once per array element, each copy in a
-`RepeatScope`) and `ComponentSlot` (the component system's own machinery) — is
+`RepeatScope`; with `placement: "items"` each copy is its own box at the
+element's `x` / `y`, and an `ImageContainer` gives such a Repeater the whole
+image instead of a point) and `ComponentSlot` (the component system's own machinery) — is
 authored against
 the SDK's [composition primitives](../reference/custom-widgets.md#composition)
 like any other built-in widget. Like any built-in widget it arrives as a lazy
