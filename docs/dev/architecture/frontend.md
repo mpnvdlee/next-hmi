@@ -613,8 +613,9 @@ conventions is restated here, so the two cannot drift apart.
 
 ## Runtime SDK For Custom Components
 
-`frontend/src/nextHmiSdk.ts` builds `window.__nextHMI__` (installed at boot by
-`main.tsx`) so compiled custom components can reuse the app's React instance and
+`frontend/src/nextHmiSdk.ts` builds `window.__nextHMI__` (installed by
+`App.tsx` as the lazy `AppInner` loads, so the manager dashboard, which renders
+no widgets, never loads it or the HMI runtime it reaches) so compiled custom components can reuse the app's React instance and
 helper functions instead of importing app modules. The canonical name list and every hook signature are
 documented in [../reference/custom-widgets.md](../reference/custom-widgets.md)
 (source of truth: `frontend/src/shared/utils/nextHmiSdkNames.ts` and

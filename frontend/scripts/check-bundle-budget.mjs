@@ -22,6 +22,11 @@
 //    adds: the recharts chunk `ensureRecharts()` dynamically imports, and
 //    TrendChart's own built-in module from check 2's tree.
 //
+// The widget SDK (nextHmiSdk.ts) reaches the whole HMI runtime, so it is
+// installed from App.tsx's lazy AppInner loader rather than main.tsx: from
+// main.tsx it sat in the main entry chunk every route loads, and the manager
+// route paid for each HMI-runtime feature until it crossed its budget.
+//
 // All three checks are CI-enforced. `vendor-icons` (all @phosphor-icons/react
 // icons used by the HMI runtime, ~94 kB gzip) used to be a static import of
 // every route via nextHmiSdk.ts's custom-widget SDK exposure and the Icon/Button/
