@@ -161,6 +161,33 @@ function useCopyPasteShortcut(handle: CopyPasteHandler) {
   }, [selectedParam, setSelectedParam]);
 }
 
+/** Ctrl+V on an action row: insert the clipboard action after the selected
+ *  one (`path` ends in its list index) rather than replacing it. */
+function pasteActionAfter(
+  root: unknown,
+  path: string[],
+  label: string,
+  write: (newRoot: unknown) => void,
+) {
+  const listPath = path.slice(0, -1);
+  const idx = Number(path[path.length - 1]);
+  void pasteActionValue(label, (action) => {
+    const list = getAtPath(root, listPath) as unknown[];
+    write(setAtPath(root, listPath, [...list.slice(0, idx + 1), action, ...list.slice(idx + 1)]));
+  });
+}
+
+/** Copy/paste for event panels, whose selection paths index straight into
+ *  `root` (`[eventKey, idx, …]`). Only action rows are selectable there. */
+function useEventActionsCopyPaste(root: unknown, write: (newRoot: unknown) => void) {
+  useCopyPasteShortcut((key, { path, schema }) => {
+    if (schema.type !== '_action') return;
+    const label = schema.label || path[0];
+    if (key === 'c') void copyPropertyValue(getAtPath(root, path), label);
+    else pasteActionAfter(root, path, label, write);
+  });
+}
+
 /** Candidate struct-field keys for a component's struct exports, taken from a
  *  `columns` property (the grid convention: each column's `value` is a row
  *  field). These populate the field tree under a `Struct` export. */
@@ -877,6 +904,8 @@ function PageEventsSection({
     onPatch({ events: Object.keys(next).length > 0 ? next : undefined });
   }
 
+  useEventActionsCopyPaste(events, (next) => onPatch({ events: next }));
+
   const inputScope = useMemo(
     () => (inputs && Object.keys(inputs).length > 0 ? { properties: inputs } : null),
     [inputs],
@@ -1112,16 +1141,15 @@ function ComponentPanel({
     if (key === 'c') {
       const valueAtPath = subPath.length === 0 ? root : getAtPath(root, subPath);
       void copyPropertyValue(valueAtPath, label);
+    } else if (targetSchema.type === '_action') {
+      pasteActionAfter(root, subPath, label, (newRoot) =>
+        updateComponent(compRef.current.id, { properties: { [topKey]: newRoot } }),
+      );
     } else {
-      const apply = (v: unknown) => {
+      void pastePropertyValue(targetSchema, label, (v) => {
         const newRoot = subPath.length === 0 ? v : setAtPath(root, subPath, v);
         updateComponent(compRef.current.id, { properties: { [topKey]: newRoot } });
-      };
-      if (targetSchema.type === '_action') {
-        void pasteActionValue(label, apply);
-      } else {
-        void pastePropertyValue(targetSchema, label, apply);
-      }
+      });
     }
   });
 
@@ -1352,6 +1380,8 @@ function GlobalEventsPanel() {
     const actionsConfig = value as ActionsConfig | undefined;
     updateGlobalEvents({ ...globalEvents, [eventKey]: actionsConfig?.[eventKey] });
   }
+
+  useEventActionsCopyPaste(globalEvents, (next) => updateGlobalEvents(next as GlobalEventsConfig));
 
   return (
     // Global event handlers belong to no widget node; the backend stamps this
