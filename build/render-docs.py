@@ -762,7 +762,9 @@ VERSION_PICKER_SCRIPT = """
       data.versions.forEach(function (entry) {
         var option = document.createElement('option');
         option.value = entry.path;
-        option.textContent = entry.version + (entry.latest ? ' (latest)' : '');
+        // One copy per minor line, so the label names the line: 1.0.2 shows as 1.0.x.
+        option.textContent = entry.version.split('-')[0].split('.').slice(0, 2).join('.') + '.x' +
+          (entry.latest ? ' (latest)' : '');
         if (entry.version === '__VERSION__') option.selected = true;
         select.appendChild(option);
       });
@@ -1085,9 +1087,10 @@ def _document(
     version_label = f'<span class="doc-version">{html.escape(version)}</span>'
     picker_script = ""
     if not offline:
+        web_line = ".".join(version.split("-")[0].split(".")[:2]) + ".x"
         version_label = (
             '<div class="version-picker"><select id="version-select" '
-            f'aria-label="Documentation version"><option value="" selected>{html.escape(version)}'
+            f'aria-label="Documentation version"><option value="" selected>{html.escape(web_line)}'
             "</option></select></div>"
         )
         picker_script = VERSION_PICKER_SCRIPT.replace("__VERSIONS_URL__", versions_url).replace(
