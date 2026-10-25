@@ -3,7 +3,11 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import fs from 'fs';
-import { buildImportMap, resolveLiveProjectDir } from './dev-plugins/externalModules.ts';
+import {
+  buildImportMap,
+  resolveLiveProjectDir,
+  resolveProjectDirById,
+} from './dev-plugins/externalModules.ts';
 
 /// <reference types="vitest/config" />
 
@@ -112,17 +116,28 @@ function externalModulesPlugin(): Plugin {
     transformIndexHtml: {
       order: 'pre',
       handler(_html, ctx) {
-        if (Object.keys(importMap.imports).length === 0) return;
         // Import-map values are root-absolute (/external-libraries/…). Under an
         // instance document (/editor/<slug>/) those URLs are only proxied to the
         // backend when prefixed with the instance base, so rewrite them here.
         const base = instanceBaseFromUrl(ctx.originalUrl || '/');
+        // An instance document gets its own project's libraries, as the
+        // production backend gives each instance; the live project's map is
+        // the fallback. A per-request scan is a directory listing.
+        const slug = base === '/' ? undefined : decodeURIComponent(base.split('/')[2]);
+        const projectDir = slug ? resolveProjectDirById(REPO_ROOT, slug) : undefined;
+        const map = projectDir
+          ? buildImportMap(
+              path.join(projectDir, 'external-libraries'),
+              path.join(projectDir, 'external-modules.json'),
+            )
+          : importMap;
+        if (Object.keys(map.imports).length === 0) return;
         const prefixed =
           base === '/'
-            ? importMap
+            ? map
             : {
                 imports: Object.fromEntries(
-                  Object.entries(importMap.imports).map(([key, value]) => [
+                  Object.entries(map.imports).map(([key, value]) => [
                     key,
                     value.startsWith('/') ? base + value.slice(1) : value,
                   ]),
