@@ -223,6 +223,12 @@ heading.
 
 ### Fixed
 
+- **The category rail follows a click to its end.** In the Add action,
+  Add widget and source drawers, clicking a category near the end of the
+  list, such as **Interface**, scrolled to it but left the rail highlighting
+  one above it, because that section could not scroll to the top. The
+  clicked category now stays highlighted until you scroll yourself.
+
 - **A placeholder typed into a String Expr warns until it is bound.**
   Typing `{2}` into a template added a `{2}` row holding an empty Static
   text, which counts as a value, so the "placeholder {2} is unbound" warning
