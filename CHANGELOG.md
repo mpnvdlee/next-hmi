@@ -221,6 +221,11 @@ heading.
 
 ### Fixed
 
+- **A second tap on a Number Input opens its numpad again.** After × or
+  Enter the field kept focus, and the numpad opened only when the field
+  gained focus, so tapping the same field again did nothing until the
+  operator tapped somewhere else first.
+
 - **Bundled fonts now carry their licence.** Inter, JetBrains Mono, Lexend,
   Manrope and Roboto Mono ship their SIL OFL 1.1 text next to the font files
   in `frontend/public/fonts/`, and `NOTICE` lists each family's copyright and

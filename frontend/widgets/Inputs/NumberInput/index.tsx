@@ -91,8 +91,10 @@ export default function NumberInput({ properties, layout }: HmiWidgetProps) {
 
   // Editing starts empty: the first key replaces the shown value instead of
   // appending to it, and the numpad shows the current one as its placeholder.
+  // A tap opens it too: the field keeps focus after × or Enter, so focus alone
+  // would not fire again. Already open, a tap must not wipe the entry.
   const openNumpad = () => {
-    if (!canWrite) return;
+    if (!canWrite || isEditing) return;
     setLocalValue('');
     setIsEditing(true);
   };
@@ -126,6 +128,7 @@ export default function NumberInput({ properties, layout }: HmiWidgetProps) {
             disabled={!canWrite}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocalValue(e.target.value)}
             onFocus={openNumpad}
+            onClick={openNumpad}
             onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
               if (e.key === 'Enter') {
                 commit(e.currentTarget.value);

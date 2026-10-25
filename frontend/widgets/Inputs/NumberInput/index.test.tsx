@@ -121,6 +121,21 @@ describe('NumberInput', () => {
     expect(screen.getByRole('textbox')).toHaveValue('12');
   });
 
+  it('reopens the numpad on a second tap while the field still has focus', async () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: 12 } });
+    const user = userEvent.setup();
+    renderInput({ variable: BINDING });
+
+    const field = screen.getByRole('textbox');
+    await user.click(field);
+    await user.click(screen.getByRole('button', { name: 'Close numpad' }));
+    expect(field).toHaveFocus();
+    expect(screen.queryByRole('button', { name: 'Enter' })).not.toBeInTheDocument();
+
+    await user.click(field);
+    expect(screen.getByRole('button', { name: 'Enter' })).toBeInTheDocument();
+  });
+
   it('starts the entry empty, so a key replaces the value instead of appending', async () => {
     useVariableStore.setState({ values: { [VAR_KEY]: 35 } });
     const user = userEvent.setup();
