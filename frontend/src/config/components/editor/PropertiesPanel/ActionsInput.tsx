@@ -43,8 +43,10 @@ import {
   type OverlayTargets,
 } from './actionEditors';
 import ActionTypeDrawer from './ActionTypeDrawer';
+import { pasteActionValue } from '@config/components/ui/SchemaFieldRow/clipboardOps';
 
 const BROWSE_ACTIONS = '__browse';
+const PASTE_ACTION = '__paste';
 
 interface Props {
   value: ActionsConfig | undefined;
@@ -107,7 +109,10 @@ export default function ActionsInput({
 
   function addAction(type: string) {
     const next = makeDefaultAction(type, { overlayTargets });
-    if (!next) return;
+    if (next) appendAction(next);
+  }
+
+  function appendAction(next: ButtonAction) {
     const idx = actions.length;
     update([...actions, next]);
     // Existing actions load collapsed; the one the user just added opens so
@@ -258,6 +263,10 @@ export default function ActionsInput({
       placeholder="Add"
       onChange={(v) => {
         if (v === BROWSE_ACTIONS) setDrawerOpen(true);
+        // Ctrl+V on a selected action replaces it; this is the only way to
+        // paste into another (or an empty) trigger.
+        else if (v === PASTE_ACTION)
+          void pasteActionValue(headerTitle ?? eventLabel, (a) => appendAction(a as ButtonAction));
         else if (v) addAction(v);
       }}
     >
@@ -266,6 +275,12 @@ export default function ActionsInput({
           ?
         </span>
         Browse actions…
+      </option>
+      <option value={PASTE_ACTION} className="cfg-editor-actions__browse">
+        <span className="cfg-source-pill__abbr" aria-hidden="true">
+          ⎘
+        </span>
+        Paste action
       </option>
       {ACTION_TYPES.map((t) => (
         <option key={t.type} value={t.type} style={actionTypeColorStyle(t.type)}>
