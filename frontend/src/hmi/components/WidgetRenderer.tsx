@@ -14,13 +14,16 @@
  * - The amber ones wait for the surrounding `DataSettleGate`: a page renders
  *   before its variables land, so nothing is marked until that load is over.
  *
- * Preview mode (set by PreviewContext):
+ * Widget wrapper, in the runtime and the editor preview alike:
  * - Wraps each component in `<div data-widget-id="..." className="hmi-preview-node">`.
  * - CSS sets `display: contents` on .hmi-preview-node so layout is unaffected.
- * - The PreviewView postMessage bridge then targets [data-widget-id] to apply
+ * - A Repeater copy past the first carries the template's ids too.
+ *
+ * Preview mode (set by PreviewContext):
+ * - The PreviewView postMessage bridge targets [data-widget-id] to apply
  *   `hmi-preview-node--selected` to the wrapper.
- * - A Repeater copy past the first carries the template's ids too, so a click
- *   on it selects the template, and `--ghost` dims it.
+ * - A click on a Repeater copy selects the template, and `--ghost` dims it.
+ * - `data-widget-source="definition"` marks what a component definition draws.
  */
 
 import './WidgetRenderer.css';
@@ -297,17 +300,19 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
         comp
       );
 
-    return isPreview ? (
+    // The runtime gets the same wrapper as the editor preview, so a test or a
+    // script can find a widget by its id and both draw the same DOM.
+    return (
       <div
         data-widget-id={node.id}
         data-widget-type={node.type}
-        data-widget-source={fromDefinition ? 'definition' : undefined}
-        className={ghost ? 'hmi-preview-node hmi-preview-node--ghost' : 'hmi-preview-node'}
+        data-widget-source={isPreview && fromDefinition ? 'definition' : undefined}
+        className={
+          isPreview && ghost ? 'hmi-preview-node hmi-preview-node--ghost' : 'hmi-preview-node'
+        }
       >
         {content}
       </div>
-    ) : (
-      content
     );
   };
 

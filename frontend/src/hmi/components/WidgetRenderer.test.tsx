@@ -44,6 +44,14 @@ describe('WidgetRenderer', () => {
     });
   });
 
+  it('marks each widget with its id in the runtime, outside the editor preview', () => {
+    renderNode({ id: 'pump-start', type: 'GateProbe', name: 'Probe', properties: {} });
+
+    const wrapper = document.querySelector('[data-widget-id="pump-start"]');
+    expect(wrapper?.getAttribute('data-widget-type')).toBe('GateProbe');
+    expect(wrapper?.querySelector('.hmi-gate-probe')).not.toBeNull();
+  });
+
   describe('visibility gate', () => {
     it('renders content by default when visible is unset', () => {
       renderNode({ id: 'a', type: 'GateProbe', name: 'Probe', properties: {} });

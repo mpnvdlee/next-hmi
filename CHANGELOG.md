@@ -199,6 +199,13 @@ heading.
   `Round2`, a String Expression and alarm text can show a value with three
   or four decimals: `{Round3(1)}`.
 
+- **Runtime widgets carry their id.** Every widget on an operator screen now
+  sits in an element with `data-widget-id` and `data-widget-type`, as it
+  already did in the editor, so a test or script can find it by its node id:
+  `[data-widget-id="pump-start"]`. The element takes no space, so layouts look
+  the same; a Navigation Menu placed straight in a shell region now gets its
+  sidebar background and border in the editor preview too.
+
 ### Changed
 
 - **A project opened in 1.1.0 no longer opens in 1.0.x (breaking).** The

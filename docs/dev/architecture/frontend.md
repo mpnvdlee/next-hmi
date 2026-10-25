@@ -569,6 +569,12 @@ Runtime implementation:
 - renders the shell regions (header, sidebars, footer), the page body and the open overlays
 - sends visible binding keys to the backend
 
+Both views draw each widget inside a `display: contents`
+`<div class="hmi-preview-node" data-widget-id="…" data-widget-type="…">` from
+`WidgetRenderer`, so a test or script can find a runtime widget by its node id
+(`[data-widget-id="pump-start"]`). Ids are unique per tree, not per screen: a
+component definition's widgets and every Repeater copy carry their own tree's ids.
+
 ### PreviewView
 
 `PreviewView` runs inside the editor iframe and differs from `HmiView` in two ways:
