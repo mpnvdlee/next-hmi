@@ -101,6 +101,9 @@ export default function SelectionDrawer<T>({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Map<string, HTMLElement>>(new Map());
+  // A rail click holds its category until the user scrolls: a section near the
+  // end cannot reach the top, and scroll-spy would hand the rail to one above it.
+  const railPickRef = useRef(false);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return categories;
@@ -129,7 +132,7 @@ export default function SelectionDrawer<T>({
           .filter((entry) => entry.isIntersecting)
           .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
         const top = visible[0]?.target.getAttribute('data-category');
-        if (top) setActiveCategory(top);
+        if (top && !railPickRef.current) setActiveCategory(top);
       },
       { root, rootMargin: '0px 0px -70% 0px', threshold: 0 },
     );
@@ -138,8 +141,13 @@ export default function SelectionDrawer<T>({
   }, [categoryKey]);
 
   const scrollToCategory = (category: string) => {
+    railPickRef.current = true;
     setActiveCategory(category);
     sectionRefs.current.get(category)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  };
+
+  const releaseRailPick = () => {
+    railPickRef.current = false;
   };
 
   const registerSectionCallbacks = useRef<Map<string, (element: HTMLElement | null) => void>>(
@@ -173,7 +181,10 @@ export default function SelectionDrawer<T>({
         className="cfg-selection-drawer__header"
         title={<PickerTitle context={title} action={action} />}
         search={query}
-        onSearchChange={setQuery}
+        onSearchChange={(next) => {
+          releaseRailPick();
+          setQuery(next);
+        }}
         onSearchEnter={() => {
           if (topItem) onSelectItem(topItem);
         }}
@@ -203,7 +214,13 @@ export default function SelectionDrawer<T>({
             ))}
           </nav>
 
-          <div className="cfg-selection-drawer__scroll" ref={scrollRef}>
+          <div
+            className="cfg-selection-drawer__scroll"
+            ref={scrollRef}
+            onWheel={releaseRailPick}
+            onPointerDown={releaseRailPick}
+            onKeyDown={releaseRailPick}
+          >
             {filtered.length === 0 ? (
               <p className="cfg-selection-drawer__empty">{emptyMessage(query)}</p>
             ) : (
