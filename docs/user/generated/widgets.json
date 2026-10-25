@@ -450,6 +450,20 @@
             "group": "Appearance"
           },
           {
+            "key": "align",
+            "label": "Content alignment",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "center"
+          },
+          {
+            "key": "textTransform",
+            "label": "Text case",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "none"
+          },
+          {
             "key": "iconSize",
             "label": "Icon size (px)",
             "type": "Integer",
