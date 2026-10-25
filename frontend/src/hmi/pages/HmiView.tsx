@@ -32,6 +32,7 @@ import BootSplash from '../components/BootSplash';
 import { PageDataSettleGate } from '../components/DataSettleGate';
 import { markBooted, useBootHold } from '../components/BootSplash/bootHold';
 import { collectComponentPriorityKeys } from '../components/layoutUtils';
+import { extractVarKeys } from '../utils/extractVarKeys';
 import { ContentSpinner } from '@shared/components/Spinner';
 import { useGlobalEvents } from '../hooks/useGlobalEvents';
 import { usePageEvents } from '../hooks/usePageEvents';
@@ -124,7 +125,12 @@ export default function HmiView() {
       ...rightSidebar,
       ...openPageOverlays.flatMap((item) => (item.page ? getPageChildren(item.page) : [])),
     ];
-    const priorityKeys = collectComponentPriorityKeys(components);
+    // onHmiLoaded's variables too: useGlobalEvents holds that event back until
+    // this context's values have arrived, so its `if` reads them, not "no value".
+    const priorityKeys = [
+      ...collectComponentPriorityKeys(components),
+      ...extractVarKeys(useConfigStore.getState().globalEvents.onHmiLoaded),
+    ];
 
     sendWsMessage({ type: 'set_context', currentPageIds, priorityKeys });
     // page, header, footer, openPageOverlays are intentionally
