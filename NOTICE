@@ -11,11 +11,44 @@ docs/dev/operations/dependency-policy.md.
 
 Bundled font files under frontend/public/fonts/:
 
-  Exo 2     — SIL OFL 1.1, Copyright 2013 The Exo 2 Project Authors
-              (https://github.com/googlefonts/Exo-2.0). Latin subset,
-              weights 400-700, from @fontsource/exo-2@5.3.0; licence text
-              in frontend/public/fonts/exo-2-OFL.txt (google/fonts
-              ofl/exo2/OFL.txt @ 8445cfa).
+  Exo 2          — SIL OFL 1.1, Copyright 2013 The Exo 2 Project Authors
+                   (https://github.com/googlefonts/Exo-2.0). Latin subset,
+                   weights 400-700, from @fontsource/exo-2@5.3.0; licence
+                   text in frontend/public/fonts/exo-2-OFL.txt (google/fonts
+                   ofl/exo2/OFL.txt @ 8445cfa).
+
+  Inter          — SIL OFL 1.1, Copyright (c) 2016 The Inter Project Authors
+                   (https://github.com/rsms/inter). Full character set,
+                   weights 400-700, from the Inter 4.0 release
+                   (web/Inter-*.woff2, as in npm inter-ui@4.0.2); licence
+                   text in frontend/public/fonts/inter-OFL.txt (rsms/inter
+                   LICENSE.txt @ 2ce9119, tag v4.0).
+
+  JetBrains Mono — SIL OFL 1.1, Copyright 2020 The JetBrains Mono Project
+                   Authors (https://github.com/JetBrains/JetBrainsMono).
+                   Latin subset, weights 400-700, from
+                   @fontsource/jetbrains-mono@5.3.0; licence text in
+                   frontend/public/fonts/jetbrains-mono-OFL.txt (google/fonts
+                   ofl/jetbrainsmono/OFL.txt @ e7db6ca).
+
+  Lexend         — SIL OFL 1.1, Copyright 2018 The Lexend Project Authors
+                   (https://github.com/googlefonts/lexend), with Reserved
+                   Font Name “RevReading Lexend”. Latin subset, weights
+                   400-700, from @fontsource/lexend@5.3.0; licence text in
+                   frontend/public/fonts/lexend-OFL.txt (google/fonts
+                   ofl/lexend/OFL.txt @ e7db6ca).
+
+  Manrope        — SIL OFL 1.1, Copyright 2018 The Manrope Project Authors
+                   (https://github.com/googlefonts/manrope). Latin subset,
+                   weights 400-700, from @fontsource/manrope@5.3.0; licence
+                   text in frontend/public/fonts/manrope-OFL.txt (google/fonts
+                   ofl/manrope/OFL.txt @ e7db6ca).
+
+  Roboto Mono    — SIL OFL 1.1, Copyright 2015 The Roboto Mono Project Authors
+                   (https://github.com/googlefonts/robotomono). Latin subset,
+                   weights 400 and 700, from @fontsource/roboto-mono@5.2.5;
+                   licence text in frontend/public/fonts/roboto-mono-OFL.txt
+                   (google/fonts ofl/robotomono/OFL.txt @ e7db6ca).
 
 Two backend runtime dependencies are LGPL and stay separately replaceable
 rather than statically combined:

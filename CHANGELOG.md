@@ -221,6 +221,11 @@ heading.
 
 ### Fixed
 
+- **Bundled fonts now carry their licence.** Inter, JetBrains Mono, Lexend,
+  Manrope and Roboto Mono ship their SIL OFL 1.1 text next to the font files
+  in `frontend/public/fonts/`, and `NOTICE` lists each family's copyright and
+  source, as it already did for Exo 2.
+
 - **A user-group check works in page and global events.** An **If** in a
   page's `onOpen` or `onClose`, or in a global event such as `onPageLoaded`,
   saw no signed-in user, so `$userGroups` was always false: a "is this an
