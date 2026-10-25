@@ -131,3 +131,49 @@ describe('useAlarmText placeholders', () => {
     expect(result.current(TEXT)).toBe(TEXT);
   });
 });
+
+describe('useAlarmText placeholders on array and struct-array elements', () => {
+  // As the backend caches them: a struct array counted from 1, each member of
+  // an element under its own leaf key (the binding picker's shape for it).
+  const TEXT = '{1} / {2} / {3} / {4}';
+  const active = {
+    id: 'inst-1',
+    value_refs: [
+      { $var: { path: 'DS:Stations/Stations[3]/Temp' } },
+      { $var: { path: 'DS:Arr', index: 2 } },
+      { $var: { path: 'DS:Arr', index: { $static: 3 } } },
+      { $var: { path: 'DS:Arr', index: { $var: { path: 'DS:Idx' } } } },
+    ],
+    values: [33, 2.5, 3.5, 1.5],
+  } as unknown as AlarmInstance;
+  const values = {
+    'DS:Stations': [{ Temp: 0 }, { Temp: 0 }, { Temp: 33 }],
+    'DS:Stations/Stations[3]': { Temp: 33 },
+    'DS:Stations/Stations[3]/Temp': 33,
+    'DS:Arr': [0.5, 1.5, 2.5, 3.5],
+    'DS:Idx': 1,
+  };
+
+  beforeEach(() => {
+    useAlarmStore.setState({ active: [active] });
+    useVariableStore.setState({ values });
+  });
+
+  it('reads them live, following the member, the array and a bound index', () => {
+    const { result } = renderHook(() => useAlarmText());
+    expect(result.current(TEXT, active)).toBe('33 / 2.5 / 3.5 / 1.5');
+    act(() =>
+      useVariableStore.setState({
+        values: { ...values, 'DS:Stations/Stations[3]/Temp': 40, 'DS:Idx': 0 },
+      }),
+    );
+    expect(result.current(TEXT, active)).toBe('40 / 2.5 / 3.5 / 0.5');
+  });
+
+  it('shows the values captured at fire time once cleared', () => {
+    const { result } = renderHook(() => useAlarmText());
+    expect(result.current(TEXT, { id: 'hist-1', values: [33, 2.5, 3.5, 1.5] })).toBe(
+      '33 / 2.5 / 3.5 / 1.5',
+    );
+  });
+});

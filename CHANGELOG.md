@@ -27,8 +27,10 @@ heading.
   description show them, with the same functions a String Expression takes
   (`{Round1(1)}`, `{Signed(2)}`). While the alarm is active the text follows
   the live value; once it has cleared, and in the alarm history, it shows the
-  value from the moment the alarm went off. History rows from before this
-  release show `—`.
+  value from the moment the alarm went off. A value can be a member of one
+  element of a struct array, or one element of an array, also with its index
+  bound to another value; the stored value is the element the index named
+  when the alarm went off. History rows from before this release show `—`.
 
 - **Exo 2 is a bundled font.** The theme settings offer **Exo 2** next to
   Inter, Manrope and Lexend for every font token, in weights 400 to 700,

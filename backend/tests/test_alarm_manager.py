@@ -158,3 +158,71 @@ def test_a_value_missing_at_fire_time_is_filled_by_its_next_update(
 
     manager.on_variable_change("DS:Overheat", False)
     assert manager.get_history()[0].values == [81.5, 8]
+
+
+def _stations_datasource(monkeypatch):
+    """A static datasource as the cache holds it: a struct array counted from 1
+    (each element under its own folder, each member under its own leaf key), a
+    scalar array, and an Integer to index it with."""
+    from services.datasource_manager import DatasourceEntry, datasource_manager
+
+    entry = DatasourceEntry({
+        "name": "DS",
+        "type": "static",
+        "variables": [
+            {"kind": "folder", "name": "Stations", "is_array": True, "children": [
+                {"kind": "folder", "name": f"Stations[{i}]", "children": [
+                    {"display_name": "Temp", "data_type": "Float", "enabled": True},
+                ]}
+                for i in (1, 2, 3)
+            ]},
+            {"display_name": "Arr", "data_type": "Float", "is_array": True, "array_length": 4, "enabled": True},
+            {"display_name": "Idx", "data_type": "Integer", "enabled": True},
+        ],
+    })
+    monkeypatch.setitem(datasource_manager.datasources, "DS", entry)
+    datasource_manager._load_static_values(entry)
+    datasource_manager.update_static_value("DS", "Stations/Stations[3]/Temp", 33.0)
+    datasource_manager.update_static_value("DS", "Arr", [0.5, 1.5, 2.5, 3.5])
+    datasource_manager.update_static_value("DS", "Idx", 1)
+    return datasource_manager
+
+
+def test_fire_captures_a_struct_array_member_and_array_elements(live_project_root: Path, monkeypatch):
+    dm = _stations_datasource(monkeypatch)
+    config = _config_with_trigger()
+    config.groups[0].alarms[0].values = [
+        # The binding picker's shape for a member of a struct-array element: its leaf key.
+        {"$var": {"path": "DS:Stations/Stations[3]/Temp"}},
+        {"$var": {"path": "DS:Arr", "index": 2}},
+        {"$var": {"path": "DS:Arr", "index": {"$static": 3}}},
+        {"$var": {"path": "DS:Arr", "index": {"$var": {"path": "DS:Idx"}}}},
+        {"$var": {"path": "DS:Arr", "index": {"$componentProp": "device"}}},
+    ]
+    manager = AlarmManager()
+    manager.set_config(config)
+    assert manager.get_trigger_paths_by_datasource() == {
+        "DS": {"Overheat", "Stations/Stations[3]/Temp", "Arr", "Idx"}
+    }
+
+    manager.on_variable_change("DS:Overheat", True)
+    dm.update_static_value("DS", "Idx", 0)  # the element was picked when it fired
+    assert manager.get_active()[0].values == [33.0, 2.5, 3.5, 1.5, None]
+    manager.on_variable_change("DS:Overheat", False)
+    assert manager.get_history()[0].values == [33.0, 2.5, 3.5, 1.5, None]
+
+
+def test_an_element_whose_bound_index_arrives_late_is_filled_in(live_project_root: Path, monkeypatch):
+    dm = _stations_datasource(monkeypatch)
+    dm.datasources["DS"].cache.pop("DS:Idx")
+    config = _config_with_trigger()
+    config.groups[0].alarms[0].values = [
+        {"$var": {"path": "DS:Arr", "index": {"$var": {"path": "DS:Idx"}}}},
+    ]
+    manager = AlarmManager()
+    manager.set_config(config)
+    manager.on_variable_change("DS:Overheat", True)
+    assert manager.get_active()[0].values == [None]
+
+    manager.on_variable_change("DS:Idx", 2)
+    assert manager.get_active()[0].values == [2.5]

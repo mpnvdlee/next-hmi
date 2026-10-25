@@ -34,7 +34,7 @@ from models.alarm import (
     AlarmState,
     AlarmSummary,
 )
-from models.binding import resolve_var_binding, resolve_var_index
+from models.binding import resolve_var_binding
 from models.datasource import build_var_key
 
 logger = logging.getLogger(__name__)
@@ -160,9 +160,7 @@ class AlarmManager:
         for group in self._config.groups:
             for alarm in group.alarms:
                 for ref in alarm.values:
-                    ds, path = resolve_var_binding(ref)
-                    if ds and path:
-                        self._value_keys.add(build_var_key(ds, path))
+                    self._value_keys.update(self._ref_keys(ref))
                 trigger = alarm.trigger
                 ds, path = trigger.resolve_datasource_path()
                 if not ds or not path:
@@ -276,35 +274,64 @@ class AlarmManager:
         return {a.id for a in self._state.active} | {h.id for h in self._state.history}
 
     @staticmethod
-    def _element(ref: Any, value: Any) -> Any:
-        """The value a `values` binding names: its `index` element when it has one."""
-        index = resolve_var_index(ref)
+    def _index_of(ref: Any) -> Any:
+        """A `values` binding's `index`: a number, a property source, or None."""
+        var = ref.get("$var") if isinstance(ref, dict) else None
+        return var.get("index") if isinstance(var, dict) else None
+
+    @classmethod
+    def _ref_keys(cls, ref: Any) -> set[str]:
+        """The keys a `values` binding reads: its variable's, and the one a
+        bound index (`{"$var": …}`) takes the element number from."""
+        return {
+            build_var_key(ds, path)
+            for ds, path in (resolve_var_binding(ref), resolve_var_binding(cls._index_of(ref)))
+            if ds and path
+        }
+
+    @classmethod
+    def _element(cls, ref: Any, cached: dict[str, Any]) -> Any:
+        """The value a `values` binding names, read from `cached`: its `index`
+        element when it has one. Like `resolveBoundIndex` on the client, a bound
+        index is resolved first — `$static` or a `$var`, the only sources with a
+        server-side value — and anything but a whole number from 0 up names no
+        element."""
+        value = cached.get(build_var_key(*resolve_var_binding(ref)))
+        index = cls._index_of(ref)
         if index is None:
             return value
-        return value[index] if isinstance(value, list) and 0 <= index < len(value) else None
+        if isinstance(index, dict):
+            index = index.get("$static", cached.get(build_var_key(*resolve_var_binding(index))))
+        if isinstance(index, str) and index.strip():
+            try:
+                index = float(index)
+            except ValueError:
+                return None
+        if isinstance(index, bool) or not isinstance(index, int | float) or not float(index).is_integer():
+            return None
+        i = int(index)
+        return value[i] if isinstance(value, list) and 0 <= i < len(value) else None
 
     def _read_values(self, refs: list[Any]) -> list[Any]:
         """The value of each `values` binding as cached when the alarm fires,
         None where there is none yet (see `_backfill_values`)."""
         from services.datasource_manager import datasource_manager
 
-        keys = [build_var_key(*resolve_var_binding(ref)) for ref in refs]
-        cached = datasource_manager.get_cached_values(set(keys))
-        return [self._element(ref, cached.get(key)) for ref, key in zip(refs, keys, strict=True)]
+        cached = datasource_manager.get_cached_values({k for ref in refs for k in self._ref_keys(ref)})
+        return [self._element(ref, cached) for ref in refs]
 
     def _backfill_values(self, key: str, value: Any) -> bool:
         """Fill the None entries of active alarms' captured `values` that `key`
         feeds. The engine emits a scan's items one by one, so a value changed
         in the trigger's scan can land just after the alarm fired."""
+        from services.datasource_manager import datasource_manager
+
         filled = False
         for inst in self._state.active:
             for i, ref in enumerate(inst.value_refs):
-                if (
-                    i < len(inst.values)
-                    and inst.values[i] is None
-                    and build_var_key(*resolve_var_binding(ref)) == key
-                ):
-                    inst.values[i] = self._element(ref, value)
+                if i < len(inst.values) and inst.values[i] is None and key in (keys := self._ref_keys(ref)):
+                    cached = {**datasource_manager.get_cached_values(keys), key: value}
+                    inst.values[i] = self._element(ref, cached)
                     filled = filled or inst.values[i] is not None
         return filled
 
