@@ -1117,6 +1117,10 @@ interface VirtualNumpadProps {
   allowNegative?: boolean;
   /** Masks the entry, for a PIN. */
   password?: boolean;
+  /** Drawn in place inside its widget rather than as a floating panel: no ×, and a press outside cancels nothing. */
+  inline?: boolean;
+  /** Whether the entry field takes focus as it appears. Default true. */
+  autoFocus?: boolean;
 }
 
 interface CloseButtonProps {

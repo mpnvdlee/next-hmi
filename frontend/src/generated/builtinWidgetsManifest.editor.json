@@ -1994,7 +1994,7 @@
       "keyboard": {
         "format": "select",
         "label": "Keyboard",
-        "description": "Numeric opens the numpad instead, for digits only — a PIN or a code.",
+        "description": "Numeric opens the numpad instead, for digits only — a PIN or a code. Keypad draws that numpad in the field itself, so a PIN dialog is one panel.",
         "display": "button-text",
         "group": "Appearance",
         "defaultValue": "text",
@@ -2006,6 +2006,10 @@
           {
             "label": "Numeric",
             "value": "numeric"
+          },
+          {
+            "label": "Keypad",
+            "value": "keypad"
           }
         ]
       },

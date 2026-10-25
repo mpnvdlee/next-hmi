@@ -209,7 +209,10 @@ describe('NumericStepper', () => {
     renderStepper({ variable: BINDING });
 
     await user.click(screen.getByRole('button', { name: 'Edit value' }));
-    expect(screen.getByRole('textbox', { name: 'Value' })).toHaveAttribute('placeholder', '35');
+    expect(document.querySelector<HTMLElement>('.hmi-virtual-input__field')!).toHaveAttribute(
+      'placeholder',
+      '35',
+    );
     await user.click(screen.getByRole('button', { name: '7' }));
     await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
 
