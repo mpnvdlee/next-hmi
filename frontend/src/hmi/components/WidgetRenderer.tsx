@@ -270,8 +270,14 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
           className="hmi-lock-wrapper"
           style={wrapperStyle(layout)}
           title={lockedFeedback === 'none' ? undefined : LOCKED_MESSAGE}
+          role="group"
+          aria-disabled="true"
         >
-          {comp}
+          {/* The overlay stops the pointer; `inert` stops Tab, Enter and Space,
+              which reach the widget underneath straight past it. */}
+          <div className="hmi-lock-content" inert>
+            {comp}
+          </div>
           <div className="hmi-lock-overlay" onClick={handleLockedClick} aria-hidden="true">
             {lockFlash && (
               <span

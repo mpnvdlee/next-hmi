@@ -156,6 +156,12 @@ heading.
   itself instead, so a PIN dialog is one panel rather than a dialog with a
   second panel over it; Enter submits and clears the entry for the next try.
 
+- **A locked widget is out of the keyboard's reach too.** A widget that is
+  not **Interactable** already ignored a press, but **Tab** still reached
+  the Button or field underneath, and **Enter** or **Space** fired it,
+  so a keyboard got past a lock that guards a setpoint. A locked widget
+  now takes no focus and no keys. Unlocked widgets behave as before.
+
 ### Changed
 
 - **Every download names its edition.** The public zips are now

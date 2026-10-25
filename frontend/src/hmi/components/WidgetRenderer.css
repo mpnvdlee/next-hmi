@@ -204,9 +204,15 @@
   position: relative;
 }
 
+/* Boxless, so the widget inside stays the wrapper's own flex child and sizes
+   exactly as it does unlocked. */
+.hmi-lock-content {
+  display: contents;
+}
+
 /* Dim the locked component itself, never the overlay — dimming the wrapper
    dimmed the denied-press marker along with it. */
-.hmi-lock-wrapper > :not(.hmi-lock-overlay) {
+.hmi-lock-content > * {
   opacity: 0.55;
   filter: grayscale(20%);
 }
