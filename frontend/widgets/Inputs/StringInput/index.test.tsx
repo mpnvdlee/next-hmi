@@ -48,6 +48,20 @@ describe('StringInput', () => {
     expect(useComponentPropStore.getState().props.entry.value).toBe('A17');
   });
 
+  it('reopens the keyboard on a second tap while the field still has focus', async () => {
+    const user = userEvent.setup();
+    renderInput({});
+
+    const field = screen.getByRole('textbox');
+    await user.click(field);
+    await user.click(screen.getByRole('button', { name: 'Close keyboard' }));
+    expect(field).toHaveFocus();
+    expect(screen.queryByRole('button', { name: 'Close keyboard' })).not.toBeInTheDocument();
+
+    await user.click(field);
+    expect(screen.getByRole('button', { name: 'Close keyboard' })).toBeInTheDocument();
+  });
+
   it('masks the field and toggles it with the reveal button', async () => {
     const user = userEvent.setup();
     stubCssMasking(true);
