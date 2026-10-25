@@ -92,7 +92,14 @@ source checkout required.
 ./build/build-docker.sh 1.1.0
 ```
 
-Output: `dist/nexthmi-docker-linux-<arch>.zip`, containing
+For the enterprise image, with `enterprise/` cloned in, prefix the command
+with `NEXTHMI_EDITION=ee`: the output is
+`dist/nexthmi-enterprise-docker-linux-<arch>-<version>.zip`, and its compose
+file runs the container on the host's network with the host's machine-id, which
+is what keeps a license bound across updates. That zip is never published to
+GitHub or GHCR.
+
+Output: `dist/nexthmi-docker-linux-<arch>-<version>.zip`, containing
 `nexthmi-image.tar.gz` (a gzipped `docker save`), a self-contained
 `docker-compose.yml` (no `build:`, no registry), `install.sh`,
 `version.txt`, and `README.txt`.
@@ -100,7 +107,7 @@ Output: `dist/nexthmi-docker-linux-<arch>.zip`, containing
 Smoke-test from a clean unzip, exactly as an operator would:
 
 ```bash
-unzip dist/nexthmi-docker-linux-x64.zip -d /tmp/nxd
+unzip dist/nexthmi-docker-linux-x64-*.zip -d /tmp/nxd
 cd /tmp/nxd/nexthmi-docker-linux-x64
 ./install.sh
 # open http://localhost:8000, click around, edit a custom widget, verify
@@ -176,18 +183,20 @@ After verifying every artifact:
 1. Push the release branch, then the tag. A `v*` tag runs
    `.github/workflows/release-matrix.yml`, which rebuilds the whole matrix from
    a clean checkout: the frontend and backend suites, a Docker image plus
-   first-boot/restart smoke test on each native arch, portable macOS arm64 and
-   Windows x64 builds with the same smoke test, and a documentation-site render.
+   first-boot/restart smoke test on each native arch, portable macOS arm64,
+   Linux x64 and Windows x64 builds with the same smoke test, and a
+   documentation-site render.
    The `release-readiness` job fails the release if any of those is red,
    skipped or missing, and both publish jobs hang off it.
 2. Don't upload the portable zips by hand. On a green matrix `publish-release`
-   attaches `nexthmi-macos-arm64-<version>.zip` and
-   `nexthmi-windows-x64-<version>.zip` to the GitHub Release for the tag,
+   attaches `nexthmi-macos-arm64-<version>.zip`,
+   `nexthmi-linux-x64-<version>.zip`, `nexthmi-windows-x64-<version>.zip` and
+   the offline Docker installers `nexthmi-docker-linux-x64-<version>.zip` and
+   `nexthmi-docker-linux-arm64-<version>.zip` to the GitHub Release for the tag,
    creating it with generated notes when it does not exist yet; a tag carrying a
    hyphen (`v1.1.0-rc.1`) is published `--prerelease`, so only a bare `vX.Y.Z`
-   can become "Latest". Check the Release page once the run is green. CI does
-   not build the offline Docker installer — attach a locally built
-   `nexthmi-docker-linux-<arch>.zip` yourself if the release needs one.
+   can become "Latest". Check the Release page once the run is green, then
+   point the website's `dl.php` at the new filenames.
 3. The registry image is published for you, on a **final** tag only:
    `docker-publish` loads the two smoke-tested per-arch tarballs and pushes
    `ghcr.io/<repo>:<version>` and `:latest` as one multi-arch manifest. An RC

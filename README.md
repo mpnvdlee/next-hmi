@@ -22,14 +22,17 @@ with acknowledgement, recipes, users and permissions are all in this build.
 
 ### **[⬇ Download the latest release](https://github.com/mpnvdlee/next-hmi/releases/latest)**
 
-A portable zip for Windows and Apple-silicon Macs. You do not need an installer,
-admin rights, Python or Node on the host.
+A portable zip for Windows, Linux and Apple-silicon Macs. You do not need an
+installer, admin rights, Python or Node on the host.
 
-1. **Download** `nexthmi-windows-x64-<version>.zip` or
-   `nexthmi-macos-arm64-<version>.zip` from the
-   [latest release](https://github.com/mpnvdlee/next-hmi/releases/latest).
+1. **Download** `nexthmi-windows-x64-<version>.zip`,
+   `nexthmi-linux-x64-<version>.zip` or `nexthmi-macos-arm64-<version>.zip`
+   from the [latest release](https://github.com/mpnvdlee/next-hmi/releases/latest).
+   For Docker without a registry, take `nexthmi-docker-linux-<arch>-<version>.zip`
+   and run its `install.sh`.
 2. **Unzip** anywhere you can write, and double-click `nexthmi.exe` or
-   `nexthmi.command`. A terminal opens and prints the URL to visit.
+   `nexthmi.command`, or run `./nexthmi` on Linux. A terminal opens and prints
+   the URL to visit.
 3. **Open that URL and set the device-admin password.** It gates the whole
    installation — the dashboard, and every project's runtime and editor.
    Then **Start** the seeded example project and open its runtime or its
