@@ -879,6 +879,12 @@ class DatasourceManager:
             self.datasources[name] = entry
         if config.get("type") == "static":
             self._load_static_values(entry, old_entry)
+            # A new or reshaped variable restarts at its default without a
+            # change event, so hold its alarms to it the way startup does. A
+            # local import, as the alarm manager imports this module.
+            from services.alarm_manager import alarm_manager
+
+            alarm_manager.evaluate_cached()
         return entry
 
     def delete(self, name: str) -> None:

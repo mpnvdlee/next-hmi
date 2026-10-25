@@ -215,20 +215,42 @@ class AlarmManager:
         a `values` entry an active alarm captured as None."""
         with self._lock:
             changed = key in self._value_keys and self._backfill_values(key, value)
-            for alarm_def, group in self._trigger_map.get(key, []):
-                triggered = self._evaluate_trigger(alarm_def.trigger, value)
-                existing = self._find_active_by_alarm_id(alarm_def.id)
-
-                if triggered and existing is None:
-                    self._fire_alarm(alarm_def, group)
-                    changed = True
-                elif not triggered and existing is not None:
-                    self._clear_alarm(existing)
-                    changed = True
-
+            changed = self._apply_trigger_value(key, value) or changed
             if changed:
                 self._save_state()
                 self._request_broadcast()
+
+    def evaluate_cached(self) -> None:
+        """Evaluate every trigger against the values already cached, once the
+        datasources are loaded. A static datasource seeds its cache on start
+        without emitting a change, so an alarm restored active from
+        alarm_state.json would otherwise stay active until its tag next
+        changed, whatever the tag now holds."""
+        from services.datasource_manager import datasource_manager
+
+        with self._lock:
+            cached = datasource_manager.get_cached_values(set(self._trigger_map))
+            changed = False
+            for key, value in cached.items():
+                changed = self._apply_trigger_value(key, value) or changed
+            if changed:
+                self._save_state()
+                self._request_broadcast()
+
+    def _apply_trigger_value(self, key: str, value: Any) -> bool:
+        """Fire or clear the alarms `key` triggers for `value`; True when any did."""
+        changed = False
+        for alarm_def, group in self._trigger_map.get(key, []):
+            triggered = self._evaluate_trigger(alarm_def.trigger, value)
+            existing = self._find_active_by_alarm_id(alarm_def.id)
+
+            if triggered and existing is None:
+                self._fire_alarm(alarm_def, group)
+                changed = True
+            elif not triggered and existing is not None:
+                self._clear_alarm(existing)
+                changed = True
+        return changed
 
     def _evaluate_trigger(self, trigger: Any, value: Any) -> bool:
         """Return True if the trigger condition is met for the given value."""
