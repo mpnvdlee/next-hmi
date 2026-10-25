@@ -104,6 +104,13 @@
   pointer-events: auto;
 }
 
+/* A Repeater placing copies at item x / y gets the whole image. */
+.hmi-imgctn__slot.hmi-imgctn__slot--fill {
+  inset: 0;
+  transform: none;
+  pointer-events: none;
+}
+
 .hmi-imgctn__marker-inline {
   /* Hidden in expanded mode — only used in the stacked list. */
   display: none;
@@ -158,4 +165,18 @@
   display: block;
   flex: 1 1 auto;
   min-width: 0;
+}
+
+/* Collapsed, its copies stack like any other child. */
+.hmi-imgctn--collapsed .hmi-component.hmi-repeater--placed {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  gap: var(--hmi-space-md);
+  pointer-events: auto;
+}
+
+.hmi-imgctn--collapsed .hmi-component.hmi-repeater--placed > .hmi-repeater__copy {
+  position: static;
+  transform: none;
 }

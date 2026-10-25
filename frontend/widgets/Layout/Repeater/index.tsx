@@ -29,6 +29,19 @@ export const schema = {
     group: 'Content',
     description: 'Shown instead when there are no elements to draw. Empty shows nothing.',
   },
+  placement: {
+    type: 'String' as const,
+    format: 'select' as const,
+    label: 'Place copies',
+    group: 'Content',
+    defaultValue: 'flow',
+    options: [
+      { label: 'In a row or column', value: 'flow' },
+      { label: 'At item x / y', value: 'items' },
+    ],
+    description:
+      "At item x / y draws each copy at its element's x and y (0–1) over an Image Container's image, on the element's side (top, bottom, left, right) of that point when it names one.",
+  },
 };
 
 export const category = 'Layout & structure';
@@ -43,6 +56,22 @@ export const flowsChildren = true;
 /** The property whose elements the children repeat over — what makes the
  *  editor and the validator offer Repeat item inside this widget. */
 export const repeatsChildren = 'items';
+
+/** The side of its point a placed copy sits on; the copy's last child touches it. */
+const SIDE = /^(top|bottom|left|right)$/;
+
+function fraction(v: unknown): number {
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v) : NaN;
+  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.5;
+}
+
+/** A placed copy's point and side, read off its element; the editor's unbound
+ *  template sits at the centre. */
+function itemPoint(item: unknown): { x: number; y: number; side?: string } {
+  const rec = typeof item === 'object' && item !== null ? (item as Record<string, unknown>) : {};
+  const side = typeof rec.side === 'string' && SIDE.test(rec.side) ? rec.side : undefined;
+  return { x: fraction(rec.x), y: fraction(rec.y), side };
+}
 
 function wholeNumber(n: number): number {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
@@ -66,6 +95,7 @@ export default function Repeater({ id, properties, layout, children }: HmiWidget
   const start = wholeNumber(usePropNumber(properties, 'startOffset', 0));
   const max = wholeNumber(usePropNumber(properties, 'maxItems', 0));
   const emptyText = usePropString(properties, 'emptyText', '');
+  const placed = usePropString(properties, 'placement', 'flow') === 'items';
   const outer = useRepeatScope();
   const isPreview = useIsPreview();
   const previous = useRef(new Map<string, RepeatScopeValue>());
@@ -117,6 +147,36 @@ export default function Repeater({ id, properties, layout, children }: HmiWidget
     return (
       <div className="hmi-component hmi-repeater hmi-repeater--empty" style={style}>
         <span className="hmi-repeater__empty">{emptyText}</span>
+      </div>
+    );
+  }
+
+  if (placed) {
+    // Each copy is its own flex box at its point, laid out by the same Layout
+    // panel settings the copies share in flow.
+    return (
+      <div className="hmi-component hmi-repeater hmi-repeater--placed" style={style}>
+        {scopes.map((scope) => {
+          const { x, y, side } = itemPoint(scope.item);
+          return (
+            <div
+              key={scope.key}
+              className="hmi-repeater__copy"
+              style={{ '--hmi-repeater-x': `${x * 100}%`, '--hmi-repeater-y': `${y * 100}%` }}
+              data-side={side}
+              data-flow-direction={
+                side
+                  ? /top|bottom/.test(side)
+                    ? 'column'
+                    : 'row'
+                  : flowAttrs['data-flow-direction']
+              }
+              data-flow-align={flowAttrs['data-flow-align']}
+            >
+              <RepeatScope value={scope}>{children}</RepeatScope>
+            </div>
+          );
+        })}
       </div>
     );
   }

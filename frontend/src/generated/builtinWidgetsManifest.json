@@ -1345,7 +1345,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "9fbc34106611c4c2",
+    "buildTs": "ec118521a94b7a2c",
     "displayName": "Image Container",
     "hostsChildren": true,
     "flowsChildren": null,
@@ -1379,7 +1379,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "428dad1c10dddb25",
+    "buildTs": "a4c3c230407a5dab",
     "displayName": null,
     "hostsChildren": true,
     "flowsChildren": true,
@@ -1397,6 +1397,9 @@
       },
       "emptyText": {
         "type": "string"
+      },
+      "placement": {
+        "type": "String"
       }
     },
     "schemaError": null

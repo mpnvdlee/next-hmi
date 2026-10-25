@@ -212,6 +212,13 @@
             "group": "Content"
           },
           {
+            "key": "placement",
+            "label": "Place copies",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "flow"
+          },
+          {
             "key": "visible",
             "label": "Visible",
             "type": "Boolean",

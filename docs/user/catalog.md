@@ -68,6 +68,7 @@ Draws its child widgets once per element of an array, each copy bound to its own
 | `startOffset` | Start at | `Integer` |
 | `maxItems` | Max items | `Integer` |
 | `emptyText` | Empty text | `String` |
+| `placement` | Place copies | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 

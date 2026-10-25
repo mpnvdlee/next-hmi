@@ -35,7 +35,7 @@ def ctx() -> ValidationContext:
                     "name": "Repeater",
                     "category": "Layout",
                     "repeatsChildren": "items",
-                    "schema": {"items": {"type": "item-list"}},
+                    "schema": {"items": {"type": "item-list"}, "placement": {"type": "string"}},
                 },
             },
             "custom": {},
@@ -660,6 +660,40 @@ def test_literal_type_messages_name_types_capitalised(ctx, field_type, value, me
     report = validate_widget_node({"type": "Container", "properties": {"value": value}}, ctx)
     assert any(f.message == message for f in report.findings)
 
+
+
+def _placed(items) -> dict:
+    title = {"$var": {"path": "PLC:Names", "index": {"$repeatItem": {"member": "device"}}}}
+    return {
+        "type": "Repeater",
+        "properties": {"placement": "items", "items": items},
+        "children": [{"type": "Container", "properties": {"title": title}}],
+    }
+
+
+@pytest.mark.parametrize("wrap", [lambda items: items, lambda items: {"$static": items}])
+def test_placed_repeater_over_a_device_list_is_clean(ctx, wrap):
+    items = [{"x": 0.1, "y": 0.25, "side": "top", "device": 0}, {"x": 1, "y": 0, "device": 1}]
+    assert _warning_codes(validate_widget_node(_placed(wrap(items)), ctx)) == []
+
+
+def test_placed_repeater_flags_an_element_it_cannot_place(ctx):
+    items = [{"x": 1.5, "y": "top"}, {"y": 0.5, "x": True, "side": "up"}, "plain"]
+    report = validate_widget_node(_placed(items), ctx)
+    assert [(w.path, w.code) for w in report.warnings] == [
+        ("/properties/items/0/x", "repeat-placement"),
+        ("/properties/items/0/y", "repeat-placement"),
+        ("/properties/items/1/x", "repeat-placement"),
+        ("/properties/items/1/side", "repeat-placement"),
+        ("/properties/items/2/x", "repeat-placement"),
+        ("/properties/items/2/y", "repeat-placement"),
+    ]
+
+
+def test_repeater_in_flow_does_not_ask_for_positions(ctx):
+    node = _placed([{"label": "A", "value": 1}])
+    node["properties"]["placement"] = "flow"
+    assert "repeat-placement" not in _warning_codes(validate_widget_node(node, ctx))
 
 
 def test_repeat_scope_follows_the_declaration_not_the_type_name(ctx):

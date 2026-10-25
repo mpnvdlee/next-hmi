@@ -3,7 +3,8 @@
    direction/gap/wrap/align drive every copy the way they drive a Container.
    Chained with `.hmi-component` for specificity: this sheet is injected at
    runtime, so its order against other sheets is not guaranteed. */
-.hmi-component.hmi-repeater {
+.hmi-component.hmi-repeater,
+.hmi-repeater__copy {
   display: flex;
   flex-direction: var(--container-direction, row);
   gap: var(--container-gap, var(--hmi-space-sm));
@@ -23,4 +24,36 @@
   font-family: var(--hmi-type-body-font);
   font-size: var(--hmi-type-body-size);
   color: var(--hmi-text-muted);
+}
+
+/* At item x / y: fill an Image Container's image, each copy at its point. */
+.hmi-component.hmi-repeater--placed {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+}
+
+.hmi-repeater__copy {
+  position: absolute;
+  left: var(--hmi-repeater-x);
+  top: var(--hmi-repeater-y);
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+.hmi-repeater__copy[data-side='top'] {
+  flex-direction: column;
+  transform: translate(-50%, -100%);
+}
+.hmi-repeater__copy[data-side='bottom'] {
+  flex-direction: column-reverse;
+  transform: translateX(-50%);
+}
+.hmi-repeater__copy[data-side='left'] {
+  flex-direction: row;
+  transform: translate(-100%, -50%);
+}
+.hmi-repeater__copy[data-side='right'] {
+  flex-direction: row-reverse;
+  transform: translateY(-50%);
 }

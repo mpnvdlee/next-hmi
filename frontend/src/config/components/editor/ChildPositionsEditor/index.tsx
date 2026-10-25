@@ -5,6 +5,7 @@ import { resolveImageSrc } from '@shared/utils/imageAsset';
 import {
   clamp01,
   ensurePositionsForChildren,
+  fillsImage,
   indexPositions,
   pruneOrphanPositions,
   resolveMarkerLabel,
@@ -32,15 +33,16 @@ export default function ChildPositionsEditor({ value, src, childConfigs, onChang
 
   const imageUrl = resolveImageSrc(src);
   const children = useMemo(() => childConfigs ?? [], [childConfigs]);
+  const placeable = useMemo(() => children.filter((c) => !fillsImage(c)), [children]);
   const placements = useMemo(() => (Array.isArray(value) ? value : []), [value]);
 
-  const summary = `${children.length} child${children.length === 1 ? '' : 'ren'} • ${placements.length} placement${placements.length === 1 ? '' : 's'}`;
+  const summary = `${placeable.length} child${placeable.length === 1 ? '' : 'ren'} • ${placements.length} placement${placements.length === 1 ? '' : 's'}`;
 
   function openModal() {
-    const pruned = pruneOrphanPositions(placements, childConfigs);
-    const ensured = ensurePositionsForChildren(pruned, childConfigs);
+    const pruned = pruneOrphanPositions(placements, placeable);
+    const ensured = ensurePositionsForChildren(pruned, placeable);
     setLocal(ensured);
-    setSelectedId(children[0]?.id ?? null);
+    setSelectedId(placeable[0]?.id ?? null);
     setImgSize(null);
     setOpen(true);
   }
@@ -51,7 +53,7 @@ export default function ChildPositionsEditor({ value, src, childConfigs, onChang
   }
 
   function handleSave() {
-    const cleaned = pruneOrphanPositions(local, childConfigs);
+    const cleaned = pruneOrphanPositions(local, placeable);
     onChange(cleaned);
     closeModal();
   }
@@ -107,9 +109,9 @@ export default function ChildPositionsEditor({ value, src, childConfigs, onChang
         type="button"
         className="cfg-btn cfg-btn--sm cfg-btn--neutral"
         onClick={openModal}
-        disabled={children.length === 0}
+        disabled={placeable.length === 0}
         title={
-          children.length === 0
+          placeable.length === 0
             ? 'Add child components first, then place them on the image.'
             : undefined
         }
@@ -186,11 +188,11 @@ export default function ChildPositionsEditor({ value, src, childConfigs, onChang
             <div className="cfg-marker-sidebar">
               <div className="cfg-marker-sidebar__header">
                 <span className="cfg-marker-sidebar__title">Children</span>
-                {children.length > 0 && (
-                  <span className="cfg-marker-sidebar__count">{children.length}</span>
+                {placeable.length > 0 && (
+                  <span className="cfg-marker-sidebar__count">{placeable.length}</span>
                 )}
               </div>
-              {children.length === 0 ? (
+              {placeable.length === 0 ? (
                 <div className="cfg-marker-empty">
                   No child components. Add some to the component tree first.
                 </div>
@@ -204,6 +206,7 @@ export default function ChildPositionsEditor({ value, src, childConfigs, onChang
                     </div>
                   </div>
                   {children.map((child, treeIndex) => {
+                    if (fillsImage(child)) return null;
                     const pos = positionsById.get(child.id);
                     const label = resolveMarkerLabel(pos, treeIndex);
                     const isSelected = child.id === selectedId;
