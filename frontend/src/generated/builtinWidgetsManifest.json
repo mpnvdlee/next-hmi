@@ -1193,7 +1193,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "b1a2c7fdaec5305c",
+    "buildTs": "89c4565bcfbf6a35",
     "displayName": "String Input",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1208,6 +1208,9 @@
       },
       "isPassword": {
         "type": "boolean"
+      },
+      "keyboard": {
+        "type": "string"
       },
       "disabled": {
         "type": "boolean"

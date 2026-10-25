@@ -453,6 +453,7 @@ A text field whose typed value is published for sibling widgets to read.
 | `label` | Label | `String` |
 | `placeholder` | Placeholder | `String` |
 | `isPassword` | Password field | `Boolean` |
+| `keyboard` | Keyboard | `String` |
 | `disabled` | Disabled | `Boolean` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |

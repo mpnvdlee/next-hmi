@@ -100,4 +100,47 @@ describe('StringInput', () => {
     expect(screen.getByRole('textbox')).toBeDisabled();
     expect(screen.queryByRole('button')).toBeNull();
   });
+
+  describe('numeric keyboard', () => {
+    it('opens the numpad, not the keyboard, and publishes the digits', async () => {
+      const user = userEvent.setup();
+      renderInput({ keyboard: 'numeric', label: 'PIN' });
+
+      await user.click(screen.getByRole('textbox'));
+      expect(screen.queryByRole('button', { name: 'Close keyboard' })).not.toBeInTheDocument();
+      for (const key of ['0', '4', '2'])
+        await user.click(screen.getByRole('button', { name: key }));
+
+      expect(useComponentPropStore.getState().props.entry.value).toBe('042');
+      expect(screen.getByRole('button', { name: '.' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: '-' })).toBeDisabled();
+
+      await user.click(screen.getByRole('button', { name: 'Enter' }));
+      expect(screen.queryByRole('button', { name: 'Close numpad' })).not.toBeInTheDocument();
+      expect(useComponentPropStore.getState().props.entry.value).toBe('042');
+    });
+
+    it('masks the numpad entry of a password field through CSS where supported', async () => {
+      stubCssMasking(true);
+      const user = userEvent.setup();
+      renderInput({ keyboard: 'numeric', isPassword: true, label: 'PIN' });
+
+      await user.click(screen.getByRole('textbox'));
+      const entry = screen.getByLabelText('PIN', { selector: '.hmi-virtual-input__field' });
+
+      expect(entry).toHaveClass('hmi-virtual-input__field--masked');
+      expect(entry).toHaveAttribute('type', 'text');
+    });
+
+    it('falls back to a password numpad entry where the CSS mask is unsupported', async () => {
+      stubCssMasking(false);
+      const user = userEvent.setup();
+      renderInput({ keyboard: 'numeric', isPassword: true, label: 'PIN' });
+
+      await user.click(document.querySelector('.hmi-string-input__input') as HTMLElement);
+      const entry = screen.getByLabelText('PIN', { selector: '.hmi-virtual-input__field' });
+
+      expect(entry).toHaveAttribute('type', 'password');
+    });
+  });
 });

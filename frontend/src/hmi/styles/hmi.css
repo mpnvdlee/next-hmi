@@ -585,6 +585,10 @@
   transition: border-color var(--hmi-motion-fast) ease;
 }
 
+.hmi-virtual-input__field--masked {
+  -webkit-text-security: disc;
+}
+
 .hmi-virtual-input__field:focus {
   outline: none;
   border-color: var(--hmi-accent);

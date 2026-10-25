@@ -166,6 +166,13 @@ heading.
   Label with a String Expression for the number. Left empty, each keeps
   today's look.
 
+- **A String Input can open the numpad.** A new **Keyboard** property set to
+  **Numeric** opens the numpad instead of the on-screen keyboard, with
+  digits only, so a PIN or a code needs no letters to tap past. With
+  **Password field** on, the numpad masks the entry too. Custom widgets get
+  the same masking through the SDK numpad's new `password` prop. The default
+  stays **Text**.
+
 ### Changed
 
 - **A project opened in 1.1.0 no longer opens in 1.0.x (breaking).** The

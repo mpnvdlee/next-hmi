@@ -1883,6 +1883,13 @@
             "group": "Appearance"
           },
           {
+            "key": "keyboard",
+            "label": "Keyboard",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "text"
+          },
+          {
             "key": "disabled",
             "label": "Disabled",
             "type": "Boolean",
