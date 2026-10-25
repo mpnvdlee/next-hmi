@@ -65,6 +65,7 @@ import { repeatPickLabel } from '../VariableBindingPicker/repeatItemRows';
 import PropertySourceSelector, { type PropertySource } from '../PropertySourceSelector';
 import { getPropertySource } from '../propertyValueUtils';
 import { IndexRow, RepeatItemEditor } from '../PropertySourceEditor/editors/leaf';
+import { FieldRowBelow } from '../../ui/FieldGroup';
 import { ComponentPropEditor } from '../PropertySourceEditor/editors/picker';
 import { getDefaultValueForKind } from './actionMutations';
 
@@ -784,6 +785,7 @@ function WriteTargetRow({
     <ParentPathContext.Provider value={[...ctx.path, 'target']}>
       <IndexRow
         label="Variable"
+        arrayLength={wholeArray ? descriptor.arrayLength : undefined}
         binding={binding}
         optional={writesWholeArray}
         onChange={(b) =>
@@ -826,8 +828,8 @@ function WriteTargetRow({
     <>
       <PropRow label="Variable" badge={pill} diagnostic={repeatDiagnostic ?? diagnostic}>
         {field}
+        {indexRow && <FieldRowBelow>{indexRow}</FieldRowBelow>}
       </PropRow>
-      {indexRow}
     </>
   );
 }
