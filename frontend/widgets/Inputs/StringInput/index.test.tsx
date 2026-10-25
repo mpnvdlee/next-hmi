@@ -205,6 +205,27 @@ describe('StringInput', () => {
       expect(toasts()).toEqual(['A17']);
     });
 
+    it('draws the Keypad inside the widget, one panel with no × or floating dock', () => {
+      const { container } = renderInput({ keyboard: 'keypad', label: 'PIN' });
+
+      expect(container.querySelector('.hmi-virtual-input__panel--inline')).not.toBeNull();
+      expect(document.querySelector('.hmi-virtual-input__dock')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Close numpad' })).not.toBeInTheDocument();
+    });
+
+    it('runs On Submit with the Keypad entry on Enter, then clears it for the next try', async () => {
+      const user = userEvent.setup();
+      renderInput({ keyboard: 'keypad', isPassword: true, onSubmit: toastValue });
+
+      for (const key of ['1', '2', '3', '4'])
+        await user.click(screen.getByRole('button', { name: key }));
+      await user.click(screen.getByRole('button', { name: 'Enter' }));
+
+      expect(toasts()).toEqual(['1234']);
+      expect(useComponentPropStore.getState().props.entry.value).toBe('');
+      expect(screen.getByRole('button', { name: 'Enter' })).toBeInTheDocument();
+    });
+
     it('does not run On Submit when the numpad is closed with ×', async () => {
       const user = userEvent.setup();
       renderInput({ keyboard: 'numeric', autoFocus: true, onSubmit: toastValue });

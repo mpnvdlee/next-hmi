@@ -7,13 +7,15 @@ export const schema = {
     type: 'string' as const,
     format: 'select' as const,
     label: 'Keyboard',
-    description: 'Numeric opens the numpad instead, for digits only — a PIN or a code.',
+    description:
+      'Numeric opens the numpad instead, for digits only — a PIN or a code. Keypad draws that numpad in the field itself, so a PIN dialog is one panel.',
     display: 'button-text' as const,
     group: 'Appearance',
     defaultValue: 'text',
     options: [
       { label: 'Text', value: 'text' },
       { label: 'Numeric', value: 'numeric' },
+      { label: 'Keypad', value: 'keypad' },
     ],
   },
   autoFocus: {
@@ -57,7 +59,8 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
   const placeholder = getPropString(properties, 'placeholder', '', evalCtx);
   const isPassword = getPropBoolean(properties, 'isPassword', false, evalCtx);
   const disabled = getPropBoolean(properties, 'disabled', false, evalCtx);
-  const numeric = usePropString(properties, 'keyboard', 'text') === 'numeric';
+  const keyboard = usePropString(properties, 'keyboard', 'text');
+  const numeric = keyboard === 'numeric';
   const autoFocus = usePropBoolean(properties, 'autoFocus', false);
 
   usePublishWidgetProp(id, 'value', value);
@@ -73,6 +76,38 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
     const actions = (properties?.onSubmit as ActionsConfig | undefined)?.onSubmit;
     executeWidgetActions(actions, { scope, evalCtx, anchorEl: wrapperRef.current });
   };
+
+  if (keyboard === 'keypad') {
+    // The numpad is the field: always shown, Enter submits, and the entry is
+    // only masked, never revealed, since there is no field to put an eye on.
+    return (
+      <div
+        className={`hmi-component hmi-string-input${disabled ? ' hmi-string-input--disabled' : ''}`}
+        style={selfLayoutStyle(layout)}
+        ref={wrapperRef}
+      >
+        <VirtualNumpad
+          inline
+          isOpen
+          value={value}
+          onChange={setValue}
+          // Actions read the entry as they start, so clearing it straight after
+          // leaves a fresh keypad for the next try, as a PIN pad does.
+          onApply={() => {
+            submit();
+            setValue('');
+          }}
+          onCancel={() => setValue('')}
+          title={label || undefined}
+          currentValue={placeholder || undefined}
+          decimals={0}
+          allowNegative={false}
+          password={isPassword}
+          autoFocus={autoFocus && !isPreview}
+        />
+      </div>
+    );
+  }
 
   // Masked through CSS on a plain text field rather than `type="password"`:
   // that attribute is the only thing a browser keychain keys off, and every one

@@ -31,6 +31,10 @@ interface VirtualNumpadProps {
   allowNegative?: boolean;
   /** Masks the entry, for a PIN. */
   password?: boolean;
+  /** Drawn in place inside its widget rather than as a floating panel: no ×, and a press outside cancels nothing. */
+  inline?: boolean;
+  /** Whether the entry field takes focus as it appears. Default true. */
+  autoFocus?: boolean;
 }
 
 /** Whether an entry obeys the key rules: one optional leading minus, one point, the decimals limit. */
@@ -65,11 +69,13 @@ export function VirtualNumpad({
   decimals,
   allowNegative = !(min !== undefined && min >= 0),
   password = false,
+  inline = false,
+  autoFocus = true,
 }: VirtualNumpadProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || inline) return;
 
     const handlePointerDown = (event: MouseEvent | TouchEvent) => {
       const target = event.target as Node | null;
@@ -94,7 +100,7 @@ export function VirtualNumpad({
       document.removeEventListener('touchstart', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onCancel, anchorRef]);
+  }, [isOpen, inline, onCancel, anchorRef]);
 
   if (!isOpen) return null;
 
@@ -125,103 +131,105 @@ export function VirtualNumpad({
   const keyDisabled = (key: string) =>
     (key === '-' && !allowNegative) || (key === '.' && decimals === 0);
 
-  return createPortal(
-    <div className={dockClass}>
-      <div
-        className="hmi-virtual-input__panel hmi-virtual-input__panel--compact"
-        ref={panelRef}
-        // Keeps the focus, and with it the caret, in the entry field while keys are pressed.
-        onMouseDown={(e) => {
-          if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
-        }}
-      >
+  const panel = (
+    <div
+      className={`hmi-virtual-input__panel hmi-virtual-input__panel--compact${inline ? ' hmi-virtual-input__panel--inline' : ''}`}
+      ref={panelRef}
+      // Keeps the focus, and with it the caret, in the entry field while keys are pressed.
+      onMouseDown={(e) => {
+        if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
+      }}
+    >
+      {(title || !inline) && (
         <div className="hmi-virtual-input__header">
           {title && <span className="hmi-virtual-input__title">{title}</span>}
-          <CloseButton
-            className="hmi-virtual-input__close"
-            onClick={onCancel}
-            label="Close numpad"
-          />
+          {!inline && (
+            <CloseButton
+              className="hmi-virtual-input__close"
+              onClick={onCancel}
+              label="Close numpad"
+            />
+          )}
         </div>
-        <div
-          className={`hmi-virtual-input__value${isOutOfRange ? ' hmi-virtual-input__value--invalid' : ''}`}
-        >
-          {/* A physical keyboard types here through the same rules; Escape is the document listener's.
+      )}
+      <div
+        className={`hmi-virtual-input__value${isOutOfRange ? ' hmi-virtual-input__value--invalid' : ''}`}
+      >
+        {/* A physical keyboard types here through the same rules; Escape is the document listener's.
               inputMode none keeps a tablet's own keyboard shut. */}
-          <input
-            className={`hmi-virtual-input__field${maskedByCss ? ' hmi-virtual-input__field--masked' : ''}`}
-            type={password && !maskedByCss ? 'password' : 'text'}
-            inputMode="none"
-            autoFocus
-            aria-label={title || 'Value'}
-            value={value}
-            placeholder={currentValue || '0'}
-            onChange={(e) => {
-              if (fitsRules(e.target.value, decimals, allowNegative)) onChange(e.target.value);
-            }}
-            onKeyDown={(e) => {
-              if (e.ctrlKey || e.metaKey || e.altKey) return;
-              if (e.key === 'Enter') apply();
-              else if ((NUMPAD_KEYS as readonly string[]).includes(e.key)) applyKey(e.key);
-              else return;
-              e.preventDefault();
-            }}
-          />
-          {unit && <span className="hmi-virtual-input__value-unit">{unit}</span>}
-        </div>
-        {hasRange && (
-          <div className="hmi-virtual-input__range">
-            {min !== undefined && `Min: ${min}`}
-            {min !== undefined && max !== undefined && ' · '}
-            {max !== undefined && `Max: ${max}`}
-          </div>
-        )}
-        {isOutOfRange && (
-          <div className="hmi-virtual-input__error" role="alert">
-            {rangeMessage(min, max, unit)}
-          </div>
-        )}
-        <div className="hmi-virtual-input__keys">
-          {NUMPAD_KEYS.map((key) => (
-            <button
-              type="button"
-              key={key}
-              className="hmi-virtual-input__key"
-              onClick={() => applyKey(key)}
-              disabled={keyDisabled(key)}
-              tabIndex={-1}
-            >
-              {key}
-            </button>
-          ))}
-          <button
-            type="button"
-            className="hmi-virtual-input__key hmi-virtual-input__key--action hmi-virtual-input__key--back"
-            onClick={() => onChange(value.slice(0, -1))}
-            tabIndex={-1}
-          >
-            Back
-          </button>
-          <button
-            type="button"
-            className="hmi-virtual-input__key hmi-virtual-input__key--action hmi-virtual-input__key--clear"
-            onClick={() => onChange('')}
-            tabIndex={-1}
-          >
-            Clear
-          </button>
-          <button
-            type="button"
-            className="hmi-virtual-input__key hmi-virtual-input__key--action hmi-virtual-input__key--accent"
-            onClick={apply}
-            disabled={!canApply}
-            tabIndex={-1}
-          >
-            Enter
-          </button>
-        </div>
+        <input
+          className={`hmi-virtual-input__field${maskedByCss ? ' hmi-virtual-input__field--masked' : ''}`}
+          type={password && !maskedByCss ? 'password' : 'text'}
+          inputMode="none"
+          autoFocus={autoFocus}
+          aria-label={title || 'Value'}
+          value={value}
+          placeholder={currentValue || '0'}
+          onChange={(e) => {
+            if (fitsRules(e.target.value, decimals, allowNegative)) onChange(e.target.value);
+          }}
+          onKeyDown={(e) => {
+            if (e.ctrlKey || e.metaKey || e.altKey) return;
+            if (e.key === 'Enter') apply();
+            else if ((NUMPAD_KEYS as readonly string[]).includes(e.key)) applyKey(e.key);
+            else return;
+            e.preventDefault();
+          }}
+        />
+        {unit && <span className="hmi-virtual-input__value-unit">{unit}</span>}
       </div>
-    </div>,
-    document.body,
+      {hasRange && (
+        <div className="hmi-virtual-input__range">
+          {min !== undefined && `Min: ${min}`}
+          {min !== undefined && max !== undefined && ' · '}
+          {max !== undefined && `Max: ${max}`}
+        </div>
+      )}
+      {isOutOfRange && (
+        <div className="hmi-virtual-input__error" role="alert">
+          {rangeMessage(min, max, unit)}
+        </div>
+      )}
+      <div className="hmi-virtual-input__keys">
+        {NUMPAD_KEYS.map((key) => (
+          <button
+            type="button"
+            key={key}
+            className="hmi-virtual-input__key"
+            onClick={() => applyKey(key)}
+            disabled={keyDisabled(key)}
+            tabIndex={-1}
+          >
+            {key}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="hmi-virtual-input__key hmi-virtual-input__key--action hmi-virtual-input__key--back"
+          onClick={() => onChange(value.slice(0, -1))}
+          tabIndex={-1}
+        >
+          Back
+        </button>
+        <button
+          type="button"
+          className="hmi-virtual-input__key hmi-virtual-input__key--action hmi-virtual-input__key--clear"
+          onClick={() => onChange('')}
+          tabIndex={-1}
+        >
+          Clear
+        </button>
+        <button
+          type="button"
+          className="hmi-virtual-input__key hmi-virtual-input__key--action hmi-virtual-input__key--accent"
+          onClick={apply}
+          disabled={!canApply}
+          tabIndex={-1}
+        >
+          Enter
+        </button>
+      </div>
+    </div>
   );
+  return inline ? panel : createPortal(<div className={dockClass}>{panel}</div>, document.body);
 }

@@ -81,11 +81,12 @@ like any other screen, wired with actions ([Actions](actions.md)):
 > is masked. It deliberately keeps browser keychains out, so a panel PC never
 > offers to save — or auto-fill — an operator's credentials.
 >
-> For a PIN, set its **Keyboard** to **Numeric** as well: a tap then opens the
-> numpad instead of the on-screen keyboard, with digits only, and the numpad
-> masks the entry too. Tick **Focus when shown** and put the Login User action
-> in the field's **On Submit**, and a PIN dialog opens straight onto the
-> numpad, centred over it, and signs in on **Enter**.
+> For a PIN, set its **Keyboard** to **Keypad** as well: the field becomes the
+> numpad itself, digits only and masked, so the dialog is one panel. Put the
+> Login User action in the field's **On Submit** and it signs in on **Enter**,
+> then clears the entry for the next try. **Numeric** instead keeps a plain
+> field that opens the numpad over the dialog when tapped; **Focus when shown**
+> opens it straight away.
 
 Sign-in is **per open runtime**, not per browser and not per installation: two tabs on the same panel PC can be two different operators, and each keeps its own identity until it is closed or logged out.
 
