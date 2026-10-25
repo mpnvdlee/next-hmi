@@ -301,6 +301,15 @@ heading.
 
 ### Fixed
 
+- **Alarms restored after a restart follow the tags.** An alarm active when
+  the project stopped came back active on start even when its tag no longer
+  held the condition: a static datasource's tags start at their defaults
+  without a change, so seven open-door alarms stayed lit until a door was
+  toggled. Every restored alarm is now checked against the tag values as soon
+  as they are known, and one whose condition has gone clears into the history.
+  The same check runs when a static datasource is saved while the project
+  runs, since a new or reshaped variable restarts at its default too.
+
 - **HMI Loaded sees the tag values.** `onHmiLoaded` ran as soon as the
   configuration had loaded, before any tag value had arrived, so a first-start
   guard such as an **If** on `Machine/Initialized` read "no value yet" and

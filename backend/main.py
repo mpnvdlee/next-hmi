@@ -211,6 +211,9 @@ async def lifespan(app: FastAPI):
     global _event_loop
     _event_loop = asyncio.get_running_loop()
     datasource_manager.load_all()
+    # Static values are seeded without a change event: hold every alarm
+    # restored from alarm_state.json to what its tag holds now.
+    alarm_manager.evaluate_cached()
     # Historian startup runs AFTER datasource_manager.load_all() so its
     # value-listener sees a fully-initialised core, but BEFORE
     # widget_compiler.compile_all() (which can take seconds on big projects) —
