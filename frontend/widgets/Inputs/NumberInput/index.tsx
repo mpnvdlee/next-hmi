@@ -91,7 +91,7 @@ export default function NumberInput({ properties, layout }: HmiWidgetProps) {
 
   // Editing starts empty: the first key replaces the shown value instead of
   // appending to it, and the numpad shows the current one as its placeholder.
-  // A tap opens it too: the field keeps focus after × or Enter, so focus alone
+  // A tap opens it too, for a field that still holds focus, where focus alone
   // would not fire again. Already open, a tap must not wipe the entry.
   const openNumpad = () => {
     if (!canWrite || isEditing) return;
@@ -122,23 +122,13 @@ export default function NumberInput({ properties, layout }: HmiWidgetProps) {
           <input
             className={`hmi-number-input__field${isOutOfRange ? ' hmi-number-input__field--invalid' : ''}`}
             type="text"
-            inputMode="decimal"
+            // The numpad takes the focus and every key, typed or tapped, so this field only opens it.
+            readOnly
             value={displayValue}
             placeholder={isEditing && value != null ? shownValue : undefined}
             disabled={!canWrite}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocalValue(e.target.value)}
             onFocus={openNumpad}
             onClick={openNumpad}
-            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-              if (e.key === 'Enter') {
-                commit(e.currentTarget.value);
-                e.currentTarget.blur();
-              }
-              if (e.key === 'Escape') {
-                cancel();
-                e.currentTarget.blur();
-              }
-            }}
           />
           {unit && <span className="hmi-number-input__unit">{unit}</span>}
         </div>

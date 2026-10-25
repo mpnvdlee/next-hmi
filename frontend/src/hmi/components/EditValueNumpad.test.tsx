@@ -56,7 +56,7 @@ describe('editValue', () => {
     render(<EditValueNumpad />);
     act(() => executeWidgetActions([edit()], { scope: 'runtime' }));
 
-    expect(screen.getByText('Current setpoint 120')).toBeTruthy();
+    expect(screen.getByRole('textbox').getAttribute('placeholder')).toBe('120');
     // An Integer variable takes no decimal point.
     expect(screen.getByRole('button', { name: '.' })).toHaveProperty('disabled', true);
     press('1', '5', '0', 'Enter');
