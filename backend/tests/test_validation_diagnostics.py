@@ -1203,6 +1203,35 @@ def test_navigate_to_an_input_outside_a_dialog():
     assert _warn(_navigate({"$componentProp": "stationPage"}, ctx)).code == "navigate-input-not-page"
 
 
+def _write_formula(target_base: str) -> ValidationReport:
+    ctx = ValidationContext(
+        widget_schemas={"version": 2, "builtin": {}, "custom": {}},
+        datasource_registry={
+            "PLC": {"Count": {"kind": "scalar", "base": target_base, "array": False}}
+        },
+        datasource_writable={"PLC": {"Count": True}},
+        datasource_types={"PLC": "opcua-client"},
+    )
+    report = ValidationReport()
+    formula = {"$formula": {"expression": "{1} + 1", "wildcards": {"1": {"$var": {"path": "PLC:Count"}}}}}
+    _validate_action(
+        {"type": "writeDataVariable", "target": {"$var": {"path": "PLC:Count"}}, "value": formula},
+        ctx, "/a", report,
+    )
+    return report
+
+
+@pytest.mark.parametrize("base", ["Integer", "Float"])
+def test_a_formula_value_can_be_written_to_a_number_tag(base):
+    # Into an integer tag the write path takes a whole result and refuses a
+    # fraction as lossy (test_write_service), so validation does not refuse it.
+    assert _write_formula(base).warnings == []
+
+
+def test_a_formula_value_still_does_not_fit_a_boolean_tag():
+    assert _warn(_write_formula("Boolean")).code == "source-type"
+
+
 def _write_to_input(kind: str, ctx: ValidationContext, name: str = "value") -> ValidationReport:
     report = ValidationReport()
     action = {"type": kind, "target": {"$componentProp": name}}
