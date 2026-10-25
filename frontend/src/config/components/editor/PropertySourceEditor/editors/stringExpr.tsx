@@ -54,8 +54,10 @@ export function StringExprEditor({
   function handleTemplateChange(newTemplate: string) {
     const newKeys = new Set(extractWildcardKeys(newTemplate));
     const next: Record<string, unknown> = {};
+    // A new placeholder starts unbound, so diagnostics warn until it is; a
+    // Static cleared to "" is a value the author chose.
     for (const k of newKeys) {
-      next[k] = wildcards[k] ?? '';
+      next[k] = wildcards[k] ?? { $var: { path: '' } };
     }
     onChange({ $stringExpr: { template: newTemplate, wildcards: next } });
   }
