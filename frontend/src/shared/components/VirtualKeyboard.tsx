@@ -222,51 +222,52 @@ export function VirtualKeyboard({
         >
           {previewValue || '\u00a0'}
         </div>
-        {KEYBOARD_ROWS.map((row, rowIndex) => (
-          <div
-            className="hmi-virtual-input__row hmi-virtual-input__row--keyboard"
-            key={`kb-row-${rowIndex}`}
-          >
-            {row.map((key, keyIndex) => {
-              const isPressed =
-                (key.kind === 'shift' && shift) || (key.kind === 'capsLock' && capsLock);
-              const label =
-                key.kind === 'char' ? characterFor(key, shift, capsLock) : keyLabel(key);
+        <div className="hmi-virtual-input__keyboard-rows">
+          {KEYBOARD_ROWS.map((row, rowIndex) => (
+            <div
+              className="hmi-virtual-input__row hmi-virtual-input__row--keyboard"
+              key={`kb-row-${rowIndex}`}
+            >
+              {row.map((key, keyIndex) => {
+                const isPressed =
+                  (key.kind === 'shift' && shift) || (key.kind === 'capsLock' && capsLock);
+                const label =
+                  key.kind === 'char' ? characterFor(key, shift, capsLock) : keyLabel(key);
 
-              return (
-                <button
-                  type="button"
-                  key={`${key.kind}-${key.kind === 'char' ? key.value : keyIndex}`}
-                  className={keyClassName(key, isPressed)}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => applyKey(key)}
-                  aria-label={label}
-                  aria-pressed={
-                    key.kind === 'shift' || key.kind === 'capsLock' ? isPressed : undefined
-                  }
-                  tabIndex={-1}
-                >
-                  {key.kind === 'char' && key.shifted ? (
-                    <span className="hmi-virtual-input__key-legends" aria-hidden="true">
-                      <span
-                        className={`hmi-virtual-input__key-legend${shift ? ' hmi-virtual-input__key-legend--active' : ''}`}
-                      >
-                        {key.shifted}
+                return (
+                  <button
+                    type="button"
+                    key={`${key.kind}-${key.kind === 'char' ? key.value : keyIndex}`}
+                    className={keyClassName(key, isPressed)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => applyKey(key)}
+                    aria-pressed={
+                      key.kind === 'shift' || key.kind === 'capsLock' ? isPressed : undefined
+                    }
+                    tabIndex={-1}
+                  >
+                    {key.kind === 'char' && key.shifted ? (
+                      <span className="hmi-virtual-input__key-legends" aria-hidden="true">
+                        <span
+                          className={`hmi-virtual-input__key-legend${shift ? ' hmi-virtual-input__key-legend--active' : ''}`}
+                        >
+                          {key.shifted}
+                        </span>
+                        <span
+                          className={`hmi-virtual-input__key-legend${shift ? '' : ' hmi-virtual-input__key-legend--active'}`}
+                        >
+                          {key.value}
+                        </span>
                       </span>
-                      <span
-                        className={`hmi-virtual-input__key-legend${shift ? '' : ' hmi-virtual-input__key-legend--active'}`}
-                      >
-                        {key.value}
-                      </span>
-                    </span>
-                  ) : (
-                    <span aria-hidden="true">{label}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        ))}
+                    ) : (
+                      <span aria-hidden="true">{label}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
       </div>
     </div>,
     document.body,

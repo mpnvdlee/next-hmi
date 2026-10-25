@@ -233,8 +233,9 @@ class ThemeSpacing(BaseModel):
 
 
 class ThemeNumpad(BaseModel):
-    """Numpad tokens. An empty value (or ``null`` weight) keeps the look the numpad
-    derives from the rest of the theme: body font, accent colour, the 188px panel."""
+    """Numpad and keyboard tokens (``columns`` is numpad-only). An empty value (or ``null``
+    weight) keeps the look derived from the rest of the theme: body font, accent colour,
+    the 188px numpad panel."""
 
     model_config = ConfigDict(extra="forbid")
 

@@ -100,7 +100,7 @@ describe('HmiToastStack', () => {
         /--hmi-toast-(themed|\w+-(bg|text))/.test(body),
     );
 
-    expect(themed.length).toBe(12);
+    expect(themed.length).toBe(8);
     for (const [, selector] of themed) expect(selector).toContain('.hmi-toast-stack .hmi-toast');
   });
 });

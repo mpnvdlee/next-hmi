@@ -108,17 +108,14 @@
 
 /* Themes → Toasts colours. Scoped to the Show Toast stack: alarm cards (AlarmToastCard)
    share the toast classes and keep the severity look. An empty theme colour leaves its
-   property unset, so each var() falls back to the default above. */
+   property unset, so each var() falls back to the default above. The icon keeps its
+   severity colour either way: the default theme sets every text colour. */
 .hmi-toast-stack .hmi-toast--info {
   --hmi-toast-themed-text: var(--hmi-toast-info-text);
   background: var(
     --hmi-toast-info-bg,
     color-mix(in oklch, var(--hmi-surface) 95%, var(--hmi-info))
   );
-}
-
-.hmi-toast-stack .hmi-toast--info .hmi-toast__icon {
-  color: var(--hmi-toast-themed-text, var(--hmi-info));
 }
 
 .hmi-toast-stack .hmi-toast--success {
@@ -129,10 +126,6 @@
   );
 }
 
-.hmi-toast-stack .hmi-toast--success .hmi-toast__icon {
-  color: var(--hmi-toast-themed-text, var(--hmi-ok));
-}
-
 .hmi-toast-stack .hmi-toast--warning {
   --hmi-toast-themed-text: var(--hmi-toast-warning-text);
   background: var(
@@ -141,20 +134,12 @@
   );
 }
 
-.hmi-toast-stack .hmi-toast--warning .hmi-toast__icon {
-  color: var(--hmi-toast-themed-text, var(--hmi-warn));
-}
-
 .hmi-toast-stack .hmi-toast--error {
   --hmi-toast-themed-text: var(--hmi-toast-error-text);
   background: var(
     --hmi-toast-error-bg,
     color-mix(in oklch, var(--hmi-surface) 95%, var(--hmi-fault))
   );
-}
-
-.hmi-toast-stack .hmi-toast--error .hmi-toast__icon {
-  color: var(--hmi-toast-themed-text, var(--hmi-fault));
 }
 
 .hmi-toast-stack .hmi-toast {
