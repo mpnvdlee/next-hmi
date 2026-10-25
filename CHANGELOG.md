@@ -142,6 +142,20 @@ heading.
   or `NaN` as no value. A property with no variable bound no longer costs a
   variable-store listener.
 
+- **A String Input can open the numpad.** A new **Keyboard** property set to
+  **Numeric** opens the numpad instead of the on-screen keyboard, with
+  digits only, so a PIN or a code needs no letters to tap past. With
+  **Password field** on, the numpad masks the entry too. Custom widgets get
+  the same masking through the SDK numpad's new `password` prop. The default
+  stays **Text**. Two more properties make a PIN dialog one tap shorter:
+  **Focus when shown** opens the keyboard or numpad as soon as the field
+  appears (not in the editor canvas), and **On Submit** runs its actions on
+  Enter, on the numpad or a physical keyboard — a Login User there signs in
+  without a separate button. The numpad opens centred on screen, over the
+  dialog, like Edit Value's. **Keypad** draws that numpad inside the field
+  itself instead, so a PIN dialog is one panel rather than a dialog with a
+  second panel over it; Enter submits and clears the entry for the next try.
+
 ### Changed
 
 - **Every download names its edition.** The public zips are now

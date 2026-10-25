@@ -29,6 +29,8 @@ interface VirtualNumpadProps {
   decimals?: number;
   /** Whether the minus key works. Default: true unless min is 0 or more. */
   allowNegative?: boolean;
+  /** Masks the entry, for a PIN. */
+  password?: boolean;
 }
 
 /** Whether an entry obeys the key rules: one optional leading minus, one point, the decimals limit. */
@@ -62,6 +64,7 @@ export function VirtualNumpad({
   currentValue,
   decimals,
   allowNegative = !(min !== undefined && min >= 0),
+  password = false,
 }: VirtualNumpadProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
 
@@ -116,6 +119,9 @@ export function VirtualNumpad({
     if (canApply) onApply(value);
   };
   const hasRange = showRange && (min !== undefined || max !== undefined);
+  // The String Input's masking: CSS where supported, so no browser offers to
+  // save the PIN, and a real password field where it is not.
+  const maskedByCss = password && CSS.supports('-webkit-text-security', 'disc');
   const keyDisabled = (key: string) =>
     (key === '-' && !allowNegative) || (key === '.' && decimals === 0);
 
@@ -143,8 +149,8 @@ export function VirtualNumpad({
           {/* A physical keyboard types here through the same rules; Escape is the document listener's.
               inputMode none keeps a tablet's own keyboard shut. */}
           <input
-            className="hmi-virtual-input__field"
-            type="text"
+            className={`hmi-virtual-input__field${maskedByCss ? ' hmi-virtual-input__field--masked' : ''}`}
+            type={password && !maskedByCss ? 'password' : 'text'}
             inputMode="none"
             autoFocus
             aria-label={title || 'Value'}
