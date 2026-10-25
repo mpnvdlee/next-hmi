@@ -116,7 +116,7 @@ Some things should happen because *the system reached a state*, not because some
 
 | Event | Fires |
 |---|---|
-| **onHmiLoaded** | Once, when a runtime finishes loading. The place for start-up state: pick a theme from the device, raise a "connecting" toast, open a lock-screen overlay. |
+| **onHmiLoaded** | Once, when a runtime finishes loading. The place for start-up state: pick a theme from the device, raise a "connecting" toast, open a lock-screen overlay. It waits until the values of the first page and of the variables its own actions read have arrived, up to 3 seconds, so a first-start guard such as an **If** on `Machine/Initialized` reads the tag, not "no value yet". The first **onPageLoaded** runs right after it. |
 | **onPageLoaded** | On the first page and on every navigation afterwards. |
 | **onUserLoggedIn** | When this runtime goes from the guest identity to a signed-in user. |
 | **onUserLoggedOut** | When it goes back to guest. |

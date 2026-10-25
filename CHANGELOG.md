@@ -317,6 +317,13 @@ heading.
 
 ### Fixed
 
+- **HMI Loaded sees the tag values.** `onHmiLoaded` ran as soon as the
+  configuration had loaded, before any tag value had arrived, so a first-start
+  guard such as an **If** on `Machine/Initialized` read "no value yet" and
+  took the wrong branch. It now waits until the first page's values and those
+  of the variables its own actions read are in, up to 3 seconds; the first
+  **onPageLoaded** follows it as before.
+
 - **A formula can be written to an Integer tag.** A Write Data Variable
   whose value is a `$formula` was flagged by the warnings pill as not fitting
   an Integer tag, although the write itself goes through. It is no longer
