@@ -116,10 +116,10 @@ widget schema.
   [Component Registry](../architecture/frontend.md#component-registry) and
   [Add a built-in widget](#add-a-built-in-widget). Module map:
   [../architecture/frontend.md](../architecture/frontend.md).
-- `project-testbench/` — the dev/test project: real example content, intentional
-  diagnostic findings, deliberate scale fixtures. Lives in its own private
-  repository (`next-hmi-testbench`), cloned in here or symlinked to a sibling
-  checkout (`ln -s ../next-hmi-testbench project-testbench`) — gitignored
+- `project-testbench/` — the dev/test project: the `aquavane/` example of the
+  private `next-hmi-testbench` repository, which holds one folder per example
+  project. Symlinked to a sibling checkout
+  (`ln -s ../next-hmi-testbench/aquavane project-testbench`) — gitignored
   (root-anchored `/project-testbench`), same pattern as `enterprise/`. Without
   it, the `project-testbench` tests skip silently. When present it is the
   auto-bootstrapped live project in dev; when absent the backend bootstrap seeds
