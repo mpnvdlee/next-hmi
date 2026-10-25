@@ -494,7 +494,7 @@
 /* ── Virtual Input Panels ─────────────────────────────────────────────────── */
 .hmi-virtual-input__dock {
   position: fixed;
-  z-index: 120;
+  z-index: var(--hmi-z-input);
 }
 
 /* The dock takes its panel's width, so the panel is what gets centred: a

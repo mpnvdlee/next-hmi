@@ -263,7 +263,7 @@ motion) are not declared in CSS. They are written as inline styles on `:root` by
    set to almost nothing), indicator, virtual-panel
    sizes, the alarm severity stripe, the chart series palette, and the layering scale
    (`--hmi-z-modal` 100 → `--hmi-z-popup` 130 → `--hmi-z-alert` 200 → `--hmi-z-toast` 300
-   → `--hmi-z-alarm-dialog` 400) that every runtime overlay reads its `z-index` from.
+   → `--hmi-z-input` 350 → `--hmi-z-alarm-dialog` 400) that every runtime overlay reads its `z-index` from.
    `--hmi-z-popup` is the widget-owned layer: a dropdown list or nav flyout escapes its
    scroll container but still belongs to the page
 3. **Aliases** referenced by component CSS but not surfaced in the editor —

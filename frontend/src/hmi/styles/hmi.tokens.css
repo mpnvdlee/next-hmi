@@ -91,6 +91,9 @@
   --hmi-z-popup: 130;
   --hmi-z-alert: 200;
   --hmi-z-toast: 300;
+  /* The numpad and keyboard the operator is typing on: a toast arriving
+     meanwhile must not cover their keys. */
+  --hmi-z-input: 350;
   --hmi-z-alarm-dialog: 400;
 
   /* Width of the severity stripe down the left edge of an alarm row or toast. */

@@ -221,6 +221,11 @@ heading.
 
 ### Fixed
 
+- **A toast no longer covers the numpad.** A toast arriving while the
+  numpad or keyboard was open drew over its bottom row of keys. The keypad
+  the operator is typing on now sits above toasts, and below an alarm's
+  detail dialog.
+
 - **A centred numpad is centred.** A numpad docked `center` sat at the left
   edge of a keyboard-wide strip in the middle of the screen. It is now
   centred itself, for the Edit Value action, Number Input, Numeric Stepper
