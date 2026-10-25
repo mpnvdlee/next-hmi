@@ -35,6 +35,8 @@ function NumpadHarness({
   );
 }
 
+const field = () => screen.getByRole('textbox', { name: 'Value' });
+
 async function press(user: ReturnType<typeof userEvent.setup>, ...keys: string[]) {
   for (const key of keys) await user.click(screen.getByRole('button', { name: key }));
 }
@@ -74,13 +76,14 @@ describe('VirtualNumpad', () => {
     expect(onApply).not.toHaveBeenCalled();
   });
 
-  it('cancels on Escape', async () => {
+  it('cancels on Escape, once, typed in the field', async () => {
     const user = userEvent.setup();
     const onApply = vi.fn();
     const onCancel = vi.fn();
     render(<NumpadHarness onApply={onApply} onCancel={onCancel} />);
 
     await press(user, '7');
+    expect(field()).toHaveFocus();
     await user.keyboard('{Escape}');
 
     expect(onCancel).toHaveBeenCalledTimes(1);
@@ -134,14 +137,66 @@ describe('VirtualNumpad', () => {
     expect(screen.getByRole('button', { name: 'Enter' })).toBeDisabled();
   });
 
-  it('starts empty with the current value as placeholder and a current-setpoint line', async () => {
+  it('starts empty with the current value as placeholder, and no current-setpoint line', async () => {
     const user = userEvent.setup();
     const onApply = vi.fn();
     render(<NumpadHarness onApply={onApply} currentValue="35" unit="ml" />);
 
-    expect(screen.getByText('Current setpoint 35 ml')).toBeInTheDocument();
+    expect(field()).toHaveValue('');
+    expect(field()).toHaveAttribute('placeholder', '35');
+    expect(screen.queryByText(/Current setpoint/)).not.toBeInTheDocument();
     await press(user, '7', 'Enter');
     expect(onApply).toHaveBeenCalledWith('7');
+  });
+
+  it('opens with the focus in a field that keeps the tablet keyboard shut', async () => {
+    const user = userEvent.setup();
+    render(<NumpadHarness />);
+
+    expect(field()).toHaveFocus();
+    expect(field()).toHaveAttribute('inputmode', 'none');
+    await press(user, '1', 'Back', '2');
+    expect(field()).toHaveFocus();
+  });
+
+  it('takes physical typing through the same rules as the keys', async () => {
+    const user = userEvent.setup();
+    render(<NumpadHarness decimals={2} allowNegative={false} />);
+
+    await user.keyboard('-1a2..345');
+    expect(field()).toHaveValue('12.34');
+    await user.keyboard('{Backspace}');
+    expect(field()).toHaveValue('12.3');
+  });
+
+  it('toggles the sign on a typed minus, when negatives are allowed', async () => {
+    const user = userEvent.setup();
+    render(<NumpadHarness />);
+    await user.keyboard('5-');
+    expect(field()).toHaveValue('-5');
+  });
+
+  it('applies on a typed Enter only when the value is valid', async () => {
+    const user = userEvent.setup();
+    const onApply = vi.fn();
+    render(<NumpadHarness onApply={onApply} max={10} />);
+
+    await user.keyboard('{Enter}11{Enter}');
+    expect(onApply).not.toHaveBeenCalled();
+    await user.keyboard('{Backspace}{Enter}');
+    expect(onApply).toHaveBeenCalledWith('1');
+  });
+
+  it('accepts a paste only when the pasted text follows the rules', async () => {
+    const user = userEvent.setup();
+    render(<NumpadHarness decimals={1} />);
+
+    await user.paste('1.25');
+    expect(field()).toHaveValue('');
+    await user.paste('abc');
+    expect(field()).toHaveValue('');
+    await user.paste('-1.5');
+    expect(field()).toHaveValue('-1.5');
   });
 
   it('disables the point when decimals is 0', () => {

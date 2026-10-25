@@ -165,8 +165,10 @@ heading.
   value on × and on a press outside, and silently clamped an out-of-range entry
   — a typed 5000 reached the machine as the max, 200. Now the numpad refuses
   it and says why ("Enter a value between 80 and 200 ms"). An entry starts
-  empty, with the current value as placeholder and a "Current setpoint" line,
-  so a key replaces the value instead of appending to it. Both widgets get
+  empty, with the current value as placeholder, so a key replaces the value
+  instead of appending to it. The entry is a real field: a physical keyboard
+  types into it by the same rules as the keys, Enter applies and Escape
+  cancels, and a tablet's own keyboard stays shut. Both widgets get
   **Allow negative values** (minus is off anyway when min is 0 or more) and
   **Numpad position** (bottom right or center); Number Input also gets
   **Decimal places**. Numeric Stepper's **Decimal places** now also limits what

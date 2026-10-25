@@ -1106,7 +1106,7 @@ interface VirtualNumpadProps {
   unit?: string;
   /** Whether min/max show as a hint under the title. They gate Enter either way. Default true. */
   showRange?: boolean;
-  /** The value being replaced: the placeholder while the entry is empty, and the "Current setpoint" line. */
+  /** The value being replaced: the entry field's placeholder while the entry is empty. */
   currentValue?: string;
   /** Digits allowed after the point; 0 disables the point. Omit for no limit. */
   decimals?: number;
