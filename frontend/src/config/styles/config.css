@@ -2052,6 +2052,12 @@
   max-width: 100px;
 }
 
+/* In a theme field's label-over-input column, `flex: 1` above would stretch the
+   length row to the tallest field beside it and centre its inputs lower down. */
+.cfg-theme-input-group > .cfg-theme-length {
+  flex: none;
+}
+
 /* ── Per-color WCAG contrast badges ─────────────────────────── */
 .cfg-theme-contrast-badges {
   display: flex;
