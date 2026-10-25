@@ -77,6 +77,9 @@ from core.validation import (
 )
 from fastapi import APIRouter, Query
 from mcp_server.diff import make_diff
+from models.alarm import AlarmConfig
+from models.recipe import RecipeConfig
+from pydantic import ValidationError
 from services import widget_compiler
 from services.websocket_manager import ConfigChangedEvent, websocket_manager
 
@@ -495,13 +498,15 @@ def _collect_widget_build_diagnostics(diagnostics: list[dict[str, Any]]) -> None
 
 
 # The config domains that live in their own files rather than in the page tree.
-# Each is a (kind, path resolver, validator) triple; the sweep treats them all
-# the same, so adding a domain is one row here.
-_DOMAIN_VALIDATORS: tuple[tuple[str, Any, Any], ...] = (
-    ("alarms", active_alarms_config_path, validate_alarms),
-    ("recipes", active_recipes_config_path, validate_recipes),
-    ("historian", lambda: active_project_root() / "historian" / "config.json", validate_historian),
-    ("users", lambda: active_project_root() / "users.json", validate_users),
+# Each is a (kind, path resolver, validator, load model) row; the sweep treats
+# them all the same, so adding a domain is one row here. The load model is the
+# one the service parses the file with: a file it rejects is replaced by an
+# empty default at runtime, so the sweep reports every rejection.
+_DOMAIN_VALIDATORS: tuple[tuple[str, Any, Any, Any], ...] = (
+    ("alarms", active_alarms_config_path, validate_alarms, AlarmConfig),
+    ("recipes", active_recipes_config_path, validate_recipes, RecipeConfig),
+    ("historian", lambda: active_project_root() / "historian" / "config.json", validate_historian, None),
+    ("users", lambda: active_project_root() / "users.json", validate_users, None),
 )
 
 
@@ -509,7 +514,7 @@ def _collect_domain_diagnostics(ctx: Any, diagnostics: list[dict[str, Any]]) -> 
     """Validate alarms/recipes/historian/users — the config domains whose
     ``$var`` bindings and group references nothing else checks, so a variable
     deleted out from under them used to read as "No issues"."""
-    for kind, resolve_path, validate in _DOMAIN_VALIDATORS:
+    for kind, resolve_path, validate, model in _DOMAIN_VALIDATORS:
         path = resolve_path()
         if not path.exists():
             continue
@@ -522,6 +527,18 @@ def _collect_domain_diagnostics(ctx: Any, diagnostics: list[dict[str, Any]]) -> 
             ))
             continue
         report = validate(doc, ctx)
+        if model is not None:
+            try:
+                model.model_validate(doc)
+            except ValidationError as exc:
+                for err in exc.errors():
+                    report.warn(
+                        "/" + "/".join(str(part) for part in err["loc"]),
+                        f"{path.name} does not load ({err['msg']}), so the runtime "
+                        "replaces it with an empty default",
+                        severity="error",
+                        code="config-invalid",
+                    )
         diagnostics.extend(
             _diagnostic_rows(report, artifact_kind=kind, artifact_id=kind, draft=doc)
         )
