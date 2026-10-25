@@ -64,18 +64,18 @@
     "key_font": "",
     "key_font_size": "",
     "key_font_weight": null,
-    "accent": ""
+    "accent": "#0a84ff"
   },
   "toasts": {
     "position": "top-center",
     "shape": "rounded",
-    "info_bg": "",
-    "info_text": "",
-    "success_bg": "",
-    "success_text": "",
-    "warning_bg": "",
-    "warning_text": "",
-    "error_bg": "",
-    "error_text": ""
+    "info_bg": "#f4f9ff",
+    "info_text": "#0f1722",
+    "success_bg": "#f5faf6",
+    "success_text": "#0f1722",
+    "warning_bg": "#fcf7f2",
+    "warning_text": "#0f1722",
+    "error_bg": "#fef5f4",
+    "error_text": "#0f1722"
   }
 }

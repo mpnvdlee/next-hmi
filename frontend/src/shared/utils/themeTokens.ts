@@ -278,7 +278,7 @@ export const THEME_TOKENS: ThemeTokenEntry[] = [
     label: 'Shadow',
   },
 
-  // ── Numpad (empty = derived from the rest of the theme) ─────────────────────
+  // ── Numpad & keyboard (empty = derived from the rest of the theme) ──────────
   {
     cssVar: '--hmi-numpad-columns',
     attribute: 'data-hmi-numpad-columns',
@@ -290,7 +290,7 @@ export const THEME_TOKENS: ThemeTokenEntry[] = [
       { label: '4 — Back, Clear, Enter beside the digits', value: 4 },
     ],
     wide: true,
-    label: 'Columns',
+    label: 'Numpad columns',
   },
   {
     cssVar: '--hmi-numpad-key-size',
@@ -460,7 +460,7 @@ const SECTION_TITLES: Record<ThemeSection, string> = {
   colors: 'Colors',
   typography: 'Typography',
   spacing: 'Spacing, Radius & Shadow',
-  numpad: 'Numpad',
+  numpad: 'Numpad & keyboard',
   toasts: 'Toasts',
 };
 
