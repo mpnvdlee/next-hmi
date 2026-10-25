@@ -194,12 +194,17 @@ Text in one of the theme typography combos, with translation support.
 | Property | Label | Type |
 |---|---|---|
 | `text` | Text | `String` |
+| `unit` | Unit | `String` |
 | `typography` | Typography | `String` |
 | `color` | Color | `color` |
 | `align` | Align | `String` |
 | `wrap` | Overflow | `String` |
 | `size` | Size override | `String` |
 | `weight` | Weight override | `Integer` |
+| `lineHeight` | Line height | `String` |
+| `letterSpacing` | Letter spacing | `String` |
+| `unitSize` | Unit size | `String` |
+| `unitColor` | Unit color | `color` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 

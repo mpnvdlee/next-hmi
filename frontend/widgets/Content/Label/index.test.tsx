@@ -74,4 +74,43 @@ describe('Label', () => {
     );
     expect(screen.getByText('From a source')).toBeInTheDocument();
   });
+
+  it('emits line height, letter spacing and the unit style as custom properties', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <Label
+          properties={{
+            text: '12.4',
+            lineHeight: '1',
+            letterSpacing: '-0.02em',
+            unit: 'g',
+            unitSize: '15px',
+            unitColor: 'var(--hmi-text)',
+          }}
+        />
+      </MemoryRouter>,
+    );
+    const el = container.firstElementChild as HTMLElement;
+
+    expect(el.style.getPropertyValue('--hmi-label-line-height')).toBe('1');
+    expect(el.style.getPropertyValue('--hmi-label-tracking')).toBe('-0.02em');
+    expect(el.style.getPropertyValue('--hmi-label-unit-size')).toBe('15px');
+    expect(el.style.getPropertyValue('--hmi-label-unit-color')).toBe('var(--hmi-text)');
+    expect(el).toHaveTextContent('12.4 g');
+    expect(el.querySelector('.hmi-label__unit')).toHaveTextContent('g');
+  });
+
+  it('renders the text alone without a unit', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <Label properties={{ text: '12.4' }} />
+      </MemoryRouter>,
+    );
+    const el = container.firstElementChild as HTMLElement;
+
+    expect(el.textContent).toBe('12.4');
+    expect(el.querySelector('.hmi-label__unit')).toBeNull();
+    expect(el.style.getPropertyValue('--hmi-label-line-height')).toBe('');
+    expect(el.style.getPropertyValue('--hmi-label-tracking')).toBe('');
+  });
 });

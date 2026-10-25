@@ -158,6 +158,14 @@ heading.
   (uppercase) and **Letter spacing** for the label. Each one left at its
   default keeps today's look.
 
+- **A Label sets its line height and letter spacing, and shows a unit.**
+  New **Line height** and **Letter spacing** properties override the
+  typography combo's, and a **Unit** shows after the text in a style of its
+  own — normal weight and the muted text colour by default, with a **Unit
+  size** and **Unit color** to change it — so a readout like `12.4 g` is one
+  Label with a String Expression for the number. Left empty, each keeps
+  today's look.
+
 ### Changed
 
 - **A project opened in 1.1.0 no longer opens in 1.0.x (breaking).** The

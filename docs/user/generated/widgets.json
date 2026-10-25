@@ -663,6 +663,12 @@
             "group": "Content"
           },
           {
+            "key": "unit",
+            "label": "Unit",
+            "type": "String",
+            "group": "Content"
+          },
+          {
             "key": "typography",
             "label": "Typography",
             "type": "String",
@@ -699,6 +705,30 @@
             "key": "weight",
             "label": "Weight override",
             "type": "Integer",
+            "group": "Appearance"
+          },
+          {
+            "key": "lineHeight",
+            "label": "Line height",
+            "type": "String",
+            "group": "Appearance"
+          },
+          {
+            "key": "letterSpacing",
+            "label": "Letter spacing",
+            "type": "String",
+            "group": "Appearance"
+          },
+          {
+            "key": "unitSize",
+            "label": "Unit size",
+            "type": "String",
+            "group": "Appearance"
+          },
+          {
+            "key": "unitColor",
+            "label": "Unit color",
+            "type": "color",
             "group": "Appearance"
           },
           {

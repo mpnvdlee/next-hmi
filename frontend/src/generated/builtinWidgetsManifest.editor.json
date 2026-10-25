@@ -347,6 +347,11 @@
         "label": "Text",
         "group": "Content"
       },
+      "unit": {
+        "label": "Unit",
+        "description": "Shown after the text in a style of its own, e.g. g or °C.",
+        "group": "Content"
+      },
       "typography": {
         "format": "select",
         "label": "Typography",
@@ -434,6 +439,26 @@
         "min": 100,
         "max": 900,
         "step": 100,
+        "group": "Appearance"
+      },
+      "lineHeight": {
+        "label": "Line height",
+        "description": "A factor such as 1.2, or a length.",
+        "group": "Appearance"
+      },
+      "letterSpacing": {
+        "label": "Letter spacing",
+        "description": "Any CSS letter-spacing, e.g. 0.08em or -0.02em.",
+        "group": "Appearance"
+      },
+      "unitSize": {
+        "label": "Unit size",
+        "description": "Font size of the unit; empty uses the text size.",
+        "group": "Appearance"
+      },
+      "unitColor": {
+        "label": "Unit color",
+        "defaultToken": "--hmi-text-muted",
         "group": "Appearance"
       }
     }

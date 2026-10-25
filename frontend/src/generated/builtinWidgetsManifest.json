@@ -230,7 +230,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "e2a11193fad2cb17",
+    "buildTs": "eeff52deb49070f8",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -238,6 +238,9 @@
     "category": "Content & controls",
     "schema": {
       "text": {
+        "type": "string"
+      },
+      "unit": {
         "type": "string"
       },
       "typography": {
@@ -257,6 +260,18 @@
       },
       "weight": {
         "type": "integer"
+      },
+      "lineHeight": {
+        "type": "string"
+      },
+      "letterSpacing": {
+        "type": "string"
+      },
+      "unitSize": {
+        "type": "string"
+      },
+      "unitColor": {
+        "type": "color"
       }
     },
     "schemaError": null

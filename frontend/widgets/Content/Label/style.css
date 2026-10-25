@@ -1,4 +1,4 @@
-/* The three overrides land as custom properties so the component file stays
+/* The overrides land as custom properties so the component file stays
    free of inline style values: unset ones fall back to the typography combo.
    Chained with the global `.hmi-component`, which sets its own color and
    font-family — the two-class selector wins on specificity rather than on
@@ -9,6 +9,17 @@
   color: var(--hmi-label-color, var(--hmi-text));
   font-size: var(--hmi-label-size, var(--hmi-label-combo-size));
   font-weight: var(--hmi-label-weight, var(--hmi-label-combo-weight));
+  letter-spacing: var(--hmi-label-tracking, var(--hmi-label-combo-tracking));
+  /* No fallback on purpose: unset, the declaration is invalid and the
+     inherited line height applies, exactly as with no declaration at all. */
+  line-height: var(--hmi-label-line-height);
+}
+
+/* Same trick: an unset unit size inherits the text size. */
+.hmi-label__unit {
+  font-size: var(--hmi-label-unit-size);
+  font-weight: var(--hmi-type-body-weight);
+  color: var(--hmi-label-unit-color, var(--hmi-text-muted));
 }
 
 /* ── Typography combos ─────────────────────────────────────────────────── */
@@ -17,7 +28,7 @@
   --hmi-label-combo-weight: var(--hmi-type-heading-weight);
 
   font-family: var(--hmi-type-heading-font);
-  letter-spacing: var(--hmi-type-heading-tracking);
+  --hmi-label-combo-tracking: var(--hmi-type-heading-tracking);
   text-transform: var(--hmi-type-heading-transform);
 }
 
@@ -26,7 +37,7 @@
   --hmi-label-combo-weight: var(--hmi-type-subheading-weight);
 
   font-family: var(--hmi-type-subheading-font);
-  letter-spacing: var(--hmi-type-subheading-tracking);
+  --hmi-label-combo-tracking: var(--hmi-type-subheading-tracking);
   text-transform: var(--hmi-type-subheading-transform);
 }
 
@@ -35,7 +46,7 @@
   --hmi-label-combo-weight: var(--hmi-type-body-weight);
 
   font-family: var(--hmi-type-body-font);
-  letter-spacing: var(--hmi-type-body-tracking);
+  --hmi-label-combo-tracking: var(--hmi-type-body-tracking);
   text-transform: var(--hmi-type-body-transform);
 }
 
@@ -44,7 +55,7 @@
   --hmi-label-combo-weight: var(--hmi-type-caption-weight);
 
   font-family: var(--hmi-type-caption-font);
-  letter-spacing: var(--hmi-type-caption-tracking);
+  --hmi-label-combo-tracking: var(--hmi-type-caption-tracking);
   text-transform: var(--hmi-type-caption-transform);
 }
 
@@ -53,7 +64,7 @@
   --hmi-label-combo-weight: var(--hmi-type-code-weight);
 
   font-family: var(--hmi-type-code-font);
-  letter-spacing: var(--hmi-type-code-tracking);
+  --hmi-label-combo-tracking: var(--hmi-type-code-tracking);
   text-transform: var(--hmi-type-code-transform);
 }
 
@@ -62,7 +73,7 @@
   --hmi-label-combo-weight: var(--hmi-type-value-weight);
 
   font-family: var(--hmi-type-value-font);
-  letter-spacing: var(--hmi-type-value-tracking);
+  --hmi-label-combo-tracking: var(--hmi-type-value-tracking);
   text-transform: var(--hmi-type-value-transform);
 }
 
@@ -71,7 +82,7 @@
   --hmi-label-combo-weight: var(--hmi-type-label-weight);
 
   font-family: var(--hmi-type-label-font);
-  letter-spacing: var(--hmi-type-label-tracking);
+  --hmi-label-combo-tracking: var(--hmi-type-label-tracking);
   text-transform: var(--hmi-type-label-transform);
 }
 
