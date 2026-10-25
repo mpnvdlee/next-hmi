@@ -476,6 +476,20 @@ That bind-mount carries both the runtime home (`projects.json`, `.logs/`,
 `.widget-build/`) AND any project folders the operator places under it.
 Projects with absolute paths outside `/data` need their own bind-mounts.
 
+### From the release, without a registry or a clone
+
+Every release carries an offline installer per architecture,
+`nexthmi-docker-linux-x64-<version>.zip` and
+`nexthmi-docker-linux-arm64-<version>.zip`: the image as a file, a compose file
+that restarts the container with the host, and `install.sh`. Unzip it and run:
+
+```bash
+./install.sh
+```
+
+It loads the image and starts it on port 8000, with `./project-data` beside it
+as `/data`. `README.txt` in the zip covers stopping, logs and updating.
+
 Discovery note: mDNS requires host networking. Without it (default bridge
 mode) the runtime won't appear on peer pickers — operators can still use
 manual `host:port` entries.
@@ -515,7 +529,7 @@ the next start and registers it. A fresh device-admin password is required again
 and the reseeded project starts out with only its `guest` user.
 Existing volumes retain their current project credentials unchanged.
 
-## Mac / Windows portable binaries
+## Portable binaries
 
 ### Installing
 
@@ -525,6 +539,7 @@ Existing volumes retain their current project credentials unchanged.
 3. Launch:
    - macOS: double-click `nexthmi.command`.
    - Windows: double-click `nexthmi.exe`.
+   - Linux (x64): run `./nexthmi` from a terminal in the unzipped folder.
 
 A terminal window opens, prints the banner, and stays in the foreground.
 
@@ -645,5 +660,6 @@ lives wherever the bootstrap file points.
 - No auto-update. Operators check the release page for new versions.
 - No process-level service install — the binary runs in the foreground
   of whichever terminal launched it. If you want it persistent, wrap it
-  in `launchd` (macOS) or *Task Scheduler* (Windows) yourself.
+  in `launchd` (macOS), *Task Scheduler* (Windows) or a systemd unit
+  (Linux) yourself.
 

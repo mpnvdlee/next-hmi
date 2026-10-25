@@ -13,6 +13,12 @@ heading.
 
 ### Added
 
+- **A Linux zip and an offline Docker installer in every release.** Next to the
+  Windows and macOS zips, a release now carries `nexthmi-linux-x64-<version>.zip`
+  and, per architecture, `nexthmi-docker-linux-<arch>-<version>.zip`: the image
+  as a file, a compose file and `install.sh`, for a machine that cannot reach a
+  registry.
+
 - **Navigate To Page goes to a page chosen at runtime.** The new action
   closes every open dialog and overlay, then goes to a page from the Pages
   section, firing the page events a menu press would. The page is fixed, or
