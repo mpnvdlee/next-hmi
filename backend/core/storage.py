@@ -329,14 +329,14 @@ def load_json_or_default(  # noqa: UP047 -- PEP 695 type-param syntax is a manua
     try:
         raw = read_json(path)
     except Exception as exc:
-        logger.error("Failed to read %s: %s", path.name, exc)
+        logger.error("Failed to read %s, using an empty default instead: %s", path.name, exc)
         return default_factory()
     if parse is None:
         return raw  # type: ignore[return-value]
     try:
         return parse(raw)
     except Exception as exc:
-        logger.error("Failed to parse %s: %s", path.name, exc)
+        logger.error("Failed to parse %s, using an empty default instead: %s", path.name, exc)
         return default_factory()
 
 

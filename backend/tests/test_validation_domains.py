@@ -404,6 +404,21 @@ def test_sweep_reports_an_unreadable_domain_file(sweep_client):
     assert "could not read recipes.json" in rows[0]["message"]
 
 
+def test_sweep_reports_an_alarms_file_the_alarm_model_rejects(sweep_client):
+    # The runtime loads such a file as an empty default, so every alarm is gone.
+    storage.write_json(
+        storage.active_project_root() / "alarms.json",
+        {"groups": [{"id": "g", "alarms": [{"id": "a", "value": {"$var": {"path": "X"}}}]}]},
+    )
+    resp = sweep_client.get("/api/config/validate")
+    rows = [d for d in resp.json()["diagnostics"] if d["code"] == "config-invalid"]
+    assert len(rows) == 1
+    assert rows[0]["artifactKind"] == "alarms"
+    assert rows[0]["severity"] == "error"
+    assert rows[0]["sourcePath"] == "/groups/0/alarms/0/value"
+    assert "alarms.json does not load (Extra inputs are not permitted)" in rows[0]["message"]
+
+
 def test_sweep_skips_absent_domain_files(sweep_client):
     resp = sweep_client.get("/api/config/validate")
     kinds = {d["artifactKind"] for d in resp.json()["diagnostics"]}
