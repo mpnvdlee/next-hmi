@@ -83,7 +83,9 @@ like any other screen, wired with actions ([Actions](actions.md)):
 >
 > For a PIN, set its **Keyboard** to **Numeric** as well: a tap then opens the
 > numpad instead of the on-screen keyboard, with digits only, and the numpad
-> masks the entry too.
+> masks the entry too. Tick **Focus when shown** and put the Login User action
+> in the field's **On Submit**, and a PIN dialog opens straight onto the
+> numpad, centred over it, and signs in on **Enter**.
 
 Sign-in is **per open runtime**, not per browser and not per installation: two tabs on the same panel PC can be two different operators, and each keeps its own identity until it is closed or logged out.
 
