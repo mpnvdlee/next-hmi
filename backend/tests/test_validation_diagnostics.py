@@ -703,6 +703,19 @@ def test_stringexpr_wildcard_empty(ctx):
     assert report.warnings[0].path.endswith("/wildcards/2")
 
 
+def test_stringexpr_wildcard_row_the_editor_added_is_unbound_but_a_cleared_static_is_not(ctx):
+    # The editor seeds a typed placeholder's row as an empty $var; a Static the
+    # author cleared is stored as "" and is a value (an optional query part, say).
+    report = ValidationReport()
+    _validate_property_value(
+        {"$stringExpr": {"template": "{1} {2}", "wildcards": {"1": "", "2": {"$var": {"path": ""}}}}},
+        None, ctx, "/p", report,
+    )
+    assert [(w.code, w.path) for w in report.warnings] == [
+        ("stringexpr-wildcard-empty", "/p/$stringExpr/wildcards/2"),
+    ]
+
+
 @pytest.mark.parametrize("template", ["{Round2(1)}", "{Trim(Round1(1))} g", "{ Signed( Round2(1) ) }"])
 def test_stringexpr_digits_in_function_names_are_not_wildcards(ctx, template):
     report = ValidationReport()
