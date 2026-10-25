@@ -203,6 +203,18 @@ describe('AlarmListManaged', () => {
     expect(screen.queryByRole('button', { name: 'Acknowledge' })).not.toBeInTheDocument();
   });
 
+  // A long page wraps the widget in `content-visibility: auto`, which sizes a
+  // fixed overlay to the container instead of the viewport.
+  it('renders the detail dialog outside the widget, at the document body', async () => {
+    const user = userEvent.setup();
+    useAlarmStore.setState({ active: [mkAlarm()], summary: mkSummary({ total: 1, unacked: 1 }) });
+    const { container } = renderList();
+
+    await user.click(screen.getByText('[A-001] Motor Overheat'));
+    const ack = screen.getByRole('button', { name: 'Acknowledge' });
+    expect(container).not.toContainElement(ack);
+  });
+
   it('surfaces the configured title', () => {
     renderList({ title: 'Active Faults' });
     expect(screen.getByText('Active Faults')).toBeInTheDocument();
