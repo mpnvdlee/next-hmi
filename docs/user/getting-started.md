@@ -8,7 +8,7 @@ All three paths run the same server against the same kind of project folder. Mov
 
 - **From source** — For developing. Hot reload for both the runtime and your custom widgets.
 - **From Docker** — For servers. One command brings up the server and the example project.
-- **Portable zip** — For panel PCs. Unzip a self-contained Mac/Windows build and double-click.
+- **Portable zip** — For panel PCs. Unzip a self-contained Mac, Windows or Linux build and start it.
 
 ```
 # 1 · From source (dev, hot reload)
@@ -17,7 +17,7 @@ $ python start-dev.py
 # 2 · From Docker (server)
 $ docker compose up
 
-# 3 · Portable build (macOS; double-click nexthmi.exe on Windows)
+# 3 · Portable build (macOS; nexthmi.exe on Windows, ./nexthmi on Linux)
 $ ./nexthmi.command
 → NEXT HMI running on http://localhost:8000
 ```

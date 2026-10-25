@@ -13,6 +13,12 @@ heading.
 
 ### Added
 
+- **A Linux zip and an offline Docker installer in every release.** Next to the
+  Windows and macOS zips, a release now carries `nexthmi-community-linux-x64-<version>.zip`
+  and, per architecture, `nexthmi-community-docker-linux-<arch>-<version>.zip`: the image
+  as a file, a compose file and `install.sh`, for a machine that cannot reach a
+  registry.
+
 - **Browse PLC shows its progress.** Browsing a whole server could run for
   minutes on a large PLC with only a disabled button to show for it. A bar now
   fills as the walk goes, with the number of nodes found and how deep it has
