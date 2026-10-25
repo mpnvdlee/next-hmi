@@ -73,10 +73,13 @@ const ICON_CHUNK_GZIP_BUDGET = 100 * 1024;
 // the tree simply had less headroom left than one more widget needs. Leave a
 // few kB of slack when raising — a cap sitting a few hundred bytes above the
 // current total fails CI on an unrelated CSS tweak to any of the 39, which
-// turns the gate into noise rather than signal.
+// turns the gate into noise rather than signal. Raised again from 104 kB when
+// Container, Button, Label and String Input took the options that had kept
+// three example projects on custom widgets (~+2.6 kB gzip, mostly schema text
+// the editor shows): the set grew in what it covers rather than in count.
 const BUILTIN_WIDGET_RAW_BUDGET = 32 * 1024;
 const BUILTIN_WIDGET_GZIP_BUDGET = 10 * 1024;
-const BUILTIN_WIDGETS_TREE_GZIP_BUDGET = 104 * 1024;
+const BUILTIN_WIDGETS_TREE_GZIP_BUDGET = 108 * 1024;
 
 const ROUTE_BUDGETS_GZIP = {
   manager: 150 * 1024,
