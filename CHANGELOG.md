@@ -89,13 +89,15 @@ heading.
   as `Safety/Open` with its index bound to a dialog's input parameter reads,
   writes and toggles the element of whichever device opened the dialog — one
   popup instead of a 27-case **Switch**, and no hand-off variable for a
-  toggle. **+ Bind index** under a variable path turns a fixed index into a
-  source; any whole-number source works, including another variable. The
-  same control sits under the **Variable** row of a **Write Data Variable**,
-  **Toggle Boolean Variable** or **Edit Value** action on an array tag, whose
-  summary then reads `path[…]`; picking the tag again sets a fixed element. An
-  index that is empty or past the end reads nothing and a write fails with
-  `array_index_out_of_bounds`, never the whole array.
+  toggle. A field that takes one value, bound to a whole array, gets a row of
+  its own below it — **Value - Index**, **Variable - Index** on a **Toggle
+  Boolean Variable** or **Edit Value** target, **{3} - Index** on an alarm
+  value — that asks for the element: a number, or any whole-number source,
+  including another variable. On a **Write Data Variable** target the row is
+  optional, and empty writes the whole array. An element picked in the picker
+  shows in the path instead, with no row. An index that is empty or past the
+  end reads nothing and a write fails with `array_index_out_of_bounds`, never
+  the whole array.
 
 - **Open Dialog Input (`$overlay`) lights what a popover belongs to.** The new
   source reads an input parameter of a dialog while it is open and is empty

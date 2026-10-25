@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import AddButton from '../../../ui/AddButton';
+import { useContext, useEffect, useState } from 'react';
 import { BranchEditor } from './shared';
 import { ParentPathContext, useParentPath, withSegs } from '../parentPathContext';
 import type { SchemaField } from '@shared/types/widgetSchema';
@@ -33,7 +32,12 @@ import type {
   VarSource,
   ViewportSource,
 } from '@shared/types/config';
-import { isBoundIndex } from '@shared/types/config';
+import { bindingParts, isBoundIndex } from '@shared/types/config';
+import { loadVariableWriteDescriptor } from '@config/utils/variableType';
+import { acceptedValueTypes, isArrayType } from '@shared/utils/valueTypes';
+import { FieldRowBelow } from '../../../ui/FieldGroup';
+import { useFieldLabel } from '../../../ui/FieldGroup/fieldPathContext';
+import { TakesOneValueContext } from '../slotContext';
 import { useRecipeConfigStore } from '@config/store/recipeConfigStore';
 import { useConfigStore } from '@shared/store/configStore';
 import { findPageNodeById, flattenPageNodes, resolvePageTitle } from '@shared/utils/pageTree';
@@ -67,21 +71,34 @@ function fittingFieldOptions<T extends string>(
   );
 }
 
+/** Whether a field of `fieldType` takes one value, so not a whole array. No
+ *  type takes any variable, an array among them. */
+function takesOneValue(fieldType: string | readonly string[] | undefined): boolean {
+  const accepted = fieldType ? acceptedValueTypes(fieldType as string | string[]) : [];
+  return accepted.length > 0 && !accepted.some(isArrayType);
+}
+
 /**
  * Sub-editor for $var wrapper — a typable `datasource:location[n]` path with a
  * picker button shortcut. Commits on blur/Enter; Escape reverts to the value at
  * focus time. The `✎` button still opens the full binding picker overlay.
+ * A whole array on a field that takes one value gets an Index row below it.
  */
 export function VarEditor({
   value,
   onChange,
   onOpenBindingPicker,
+  fieldType,
 }: {
   value: unknown;
   onChange: (v: unknown) => void;
   onOpenBindingPicker?: OpenBindingPicker;
+  /** What the slot takes; absent for a slot that takes any type. */
+  fieldType?: string | readonly string[];
 }) {
   const repeatScope = useRepeatEditorScope();
+  const takesOne = useContext(TakesOneValueContext) || takesOneValue(fieldType);
+  const fieldLabel = useFieldLabel();
   const varObj = (value as VarSource)?.$var ?? { path: '' };
   const basePath = varObj.path ?? '';
   const repeatIndex = varObj.repeatIndex === true;
@@ -94,6 +111,20 @@ export function VarEditor({
       : varObj.index !== undefined && !boundIndex
         ? `${basePath}[${varObj.index}]`
         : basePath;
+  // Whether the path names a whole array, which the variable's metadata tells.
+  const [wholeArrayPath, setWholeArrayPath] = useState<string>();
+  const asksIndex = takesOne && varObj.index === undefined && !repeatIndex;
+  useEffect(() => {
+    const { datasource, location } = bindingParts({ path: basePath });
+    if (!datasource || !location || !asksIndex) return;
+    let live = true;
+    void loadVariableWriteDescriptor(datasource, location).then((d) => {
+      if (live && d?.isArray && !d.indexed) setWholeArrayPath(basePath);
+    });
+    return () => {
+      live = false;
+    };
+  }, [basePath, asksIndex]);
 
   return (
     <>
@@ -129,8 +160,19 @@ export function VarEditor({
           onOpenBindingPicker
             ? () =>
                 onOpenBindingPicker(
-                  undefined,
-                  varBindingOf(value),
+                  // A bound index names no element, so the picker opens on the
+                  // array; confirming that array keeps the index, an element
+                  // replaces it — as on an action's target.
+                  boundIndex
+                    ? (b) =>
+                        onChange({
+                          $var:
+                            b.path === basePath && b.index === undefined && !b.repeatIndex
+                              ? { ...b, index: boundIndex }
+                              : b,
+                        })
+                    : undefined,
+                  boundIndex ? { path: basePath } : varBindingOf(value),
                   undefined,
                   repeatScope ? { repeatIndex: true } : undefined,
                 )
@@ -138,59 +180,69 @@ export function VarEditor({
         }
         onClear={onOpenBindingPicker && committedText ? () => onChange(undefined) : undefined}
       />
-      <BoundIndexControl
-        binding={varObj}
-        canBind={!!basePath && !repeatIndex}
-        onChange={(b) => onChange({ $var: b })}
-        onOpenBindingPicker={onOpenBindingPicker}
-      />
+      {(boundIndex || (asksIndex && wholeArrayPath === basePath)) && (
+        <FieldRowBelow>
+          <IndexRow
+            label={fieldLabel}
+            binding={varObj}
+            onChange={(b) => onChange({ $var: b })}
+            onOpenBindingPicker={onOpenBindingPicker}
+          />
+        </FieldRowBelow>
+      )}
     </>
   );
 }
 
-const INDEX_SCHEMA: SchemaField = { type: 'Integer', label: 'Index' };
 const INDEX_SLOT: SlotType = { type: 'Integer' };
+const INDEX_SCHEMA: SchemaField = {
+  type: 'Integer',
+  label: 'Index',
+  placeholder: 'Choose an element',
+};
+const OPTIONAL_INDEX_SCHEMA: SchemaField = { ...INDEX_SCHEMA, placeholder: 'Whole array' };
 
 /**
- * A binding's element index as a source of its own: the "Index" card while it
- * is bound, else "+ Bind index", which starts the source at the fixed index —
- * `index`, or a `[n]` the picker baked into the path — or 0.
+ * The row below a field bound to a whole array that names the element it
+ * reads or writes: a number, or a source such as a dialog's input parameter.
+ * Either is stored as a source (`{ $static: n }`), which keeps it apart from
+ * an element picked in the picker, a plain `index` the path shows as `[n]`.
+ * Cleared, the binding names the whole array again.
  */
-export function BoundIndexControl({
+export function IndexRow({
+  label,
   binding,
-  canBind,
+  optional,
   onChange,
   onOpenBindingPicker,
 }: {
+  /** The field's own label; the row reads `<label> - Index`. */
+  label?: string;
   binding: VariableBinding;
-  canBind: boolean;
+  /** The field also takes the whole array, which an empty row then means. */
+  optional?: boolean;
   onChange: (b: VariableBinding) => void;
   onOpenBindingPicker?: OpenBindingPicker;
 }) {
   const parent = useParentPath();
-  if (isBoundIndex(binding.index))
-    return (
-      <ParentPathContext.Provider value={withSegs(parent, '$var', 'index')}>
-        <BranchEditor
-          label="Index"
-          value={binding.index}
-          // A fixed number stays wrapped, so the row keeps its source pill.
-          onChange={(v) => onChange({ ...binding, index: isBoundIndex(v) ? v : { $static: v } })}
-          schema={INDEX_SCHEMA}
-          slot={INDEX_SLOT}
-          onOpenBindingPicker={onOpenBindingPicker}
-        />
-      </ParentPathContext.Provider>
-    );
-  if (!canBind) return null;
-  const fixed = binding.index === undefined ? parseVarPathInput(binding.path) : binding;
+  const { index, ...whole } = binding;
   return (
-    <AddButton
-      title="Take the element index from another value"
-      onClick={() => onChange({ path: fixed.path, index: { $static: fixed.index ?? 0 } })}
-    >
-      + Bind index
-    </AddButton>
+    <ParentPathContext.Provider value={withSegs(parent, '$var', 'index')}>
+      <BranchEditor
+        label={label ? `${label} - Index` : 'Index'}
+        value={index}
+        onChange={(v) =>
+          onChange(
+            v === undefined || v === null
+              ? whole
+              : { ...whole, index: isBoundIndex(v) ? v : { $static: v } },
+          )
+        }
+        schema={optional ? OPTIONAL_INDEX_SCHEMA : INDEX_SCHEMA}
+        slot={INDEX_SLOT}
+        onOpenBindingPicker={onOpenBindingPicker}
+      />
+    </ParentPathContext.Provider>
   );
 }
 

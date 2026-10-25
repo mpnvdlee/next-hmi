@@ -1229,9 +1229,22 @@ def validate_var_ref(
     subject = f"variable '{ds_name}:{var_path}'"
     accept = _accept_types_for_schema(schema_field)
     if accept and not any(vartype.accepts(a, element, required_fields) for a in accept):
-        report.warn(
-            path, f"{subject} type is incompatible with this field", severity="error", code="var-type"
-        )
+        # A whole array whose element would fit: the editor's Index row below
+        # the field names the element, so the finding anchors there.
+        whole = not indexed and var_type.get("array")
+        if whole and any(
+            vartype.accepts(a, vartype.element_of(var_type), required_fields) for a in accept
+        ):
+            report.warn(
+                f"{path}/$var/index",
+                f"{subject} is an array — choose an element",
+                severity="error",
+                code="var-type",
+            )
+        else:
+            report.warn(
+                path, f"{subject} type is incompatible with this field", severity="error", code="var-type"
+            )
         return
     if accept and element.get("kind") == "struct":
         base = (
@@ -1632,7 +1645,13 @@ class _WriteTarget:
 
 
 def _check_write_target_type(
-    kind: str, target: _WriteTarget, ctx: ValidationContext, path: str, report: ValidationReport
+    kind: str,
+    target: _WriteTarget,
+    ctx: ValidationContext,
+    path: str,
+    report: ValidationReport,
+    *,
+    access: bool = True,
 ) -> None:
     """A write needs one variable it can put a value into: the write path
     addresses a leaf (a whole array, or one element of it), never a struct
@@ -1665,7 +1684,7 @@ def _check_write_target_type(
                 code="toggle-target-type",
             )
             return
-    if _read_only(ctx, target.ds_name, target.key):
+    if access and _read_only(ctx, target.ds_name, target.key):
         report.warn(
             path,
             f"{target.subject} is read-only, so this action cannot write it",
@@ -1783,6 +1802,22 @@ def _validate_write_target(
         indexed,
         f"variable '{ds_name}:{var_path}'",
     )
+    if not indexed and var_type.get("array") and kind != "writeDataVariable":
+        # A toggle or numpad acts on one element: when one would fit, the
+        # finding anchors on the editor's Index row below the target.
+        # Only the element's type decides; its access is reported on the target.
+        probe = ValidationReport()
+        element = replace(written, element=vartype.element_of(var_type), indexed=True)
+        _check_write_target_type(kind, element, ctx, target_path, probe, access=False)
+        if not probe.warnings:
+            report.warn(
+                f"{target_path}/$var/index",
+                f"{written.subject} is an array — choose an element",
+                severity="error",
+                code="toggle-target-type" if kind == "toggleDataVariable" else "edit-target-type",
+            )
+            _check_write_target_type(kind, element, ctx, target_path, report)
+            return written
     _check_write_target_type(kind, written, ctx, target_path, report)
     return written
 

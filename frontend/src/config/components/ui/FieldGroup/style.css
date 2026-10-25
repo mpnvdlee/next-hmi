@@ -21,8 +21,15 @@
   gap: var(--cfg-space-1);
 }
 
-.cfg-field-list > .cfg-field-group {
+.cfg-field-list > .cfg-field-group,
+.cfg-field-list > .cfg-field-group__below > .cfg-field-group {
   margin-bottom: 0;
+}
+
+/* The slot a row below the field portals into (`FieldRowBelow`) adds no box of
+   its own, so that row lays out as the field's next sibling. */
+.cfg-field-group__below {
+  display: contents;
 }
 
 /* Title row: the label, plus the add control of a field that owns a list
