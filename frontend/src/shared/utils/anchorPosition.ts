@@ -15,8 +15,10 @@ export function isAnchoredPlacement(placement: OverlayPlacement | undefined): bo
 
 /**
  * Position a panel relative to its trigger's rect (popover style). Mirrors the
- * NavigationMenu flyout offsets, then clamps the panel into the viewport using
- * its measured size (0×0 before the first layout pass yields the raw offset).
+ * NavigationMenu flyout offsets, flips to the opposite side of the trigger when
+ * the panel does not fit on its own side but does on the other, then clamps it
+ * into the viewport using its measured size (0×0 before the first layout pass
+ * yields the raw offset).
  */
 export function computeAnchorStyle(
   rect: AnchorRect,
@@ -27,25 +29,35 @@ export function computeAnchorStyle(
   const vh = window.innerHeight;
   const { width, height } = panelSize;
 
+  const below = rect.bottom + GAP;
+  const above = rect.top - GAP - height;
+  const right = rect.right + GAP;
+  const leftOf = rect.left - GAP - width;
+  const fitsY = (y: number) => y >= MARGIN && y + height <= vh - MARGIN;
+  const fitsX = (x: number) => x >= MARGIN && x + width <= vw - MARGIN;
+  // The asked side, unless only the other one fits.
+  const side = (asked: number, other: number, fits: (v: number) => boolean) =>
+    !fits(asked) && fits(other) ? other : asked;
+
   let top: number;
   let left: number;
 
   switch (placement) {
     case 'trigger-above':
-      top = rect.top - GAP - height;
+      top = side(above, below, fitsY);
       left = rect.left;
       break;
     case 'trigger-left':
       top = rect.top;
-      left = rect.left - GAP - width;
+      left = side(leftOf, right, fitsX);
       break;
     case 'trigger-right':
       top = rect.top;
-      left = rect.right + GAP;
+      left = side(right, leftOf, fitsX);
       break;
     case 'trigger-below':
     default:
-      top = rect.bottom + GAP;
+      top = side(below, above, fitsY);
       left = rect.left;
       break;
   }
