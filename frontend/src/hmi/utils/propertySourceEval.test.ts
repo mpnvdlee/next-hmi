@@ -1219,4 +1219,23 @@ describe('propertySourceEval', () => {
       expect(signed('n/a')).toBe('n/a');
     });
   });
+  describe('$stringExpr Round3, Round4 and Thousands()', () => {
+    const fill = (value: unknown, template: string) =>
+      evaluatePropertyValue(
+        { $stringExpr: { template, wildcards: { '1': { $static: value } } } },
+        mockContext,
+      );
+
+    it('rounds to three and four decimals', () => {
+      expect(fill(1.23456, '{Round3(1)}')).toBe('1.235');
+      expect(fill(2, '{Round4(1)}')).toBe('2.0000');
+    });
+
+    it('groups digits and keeps the decimals its input has', () => {
+      expect(fill(41280, '{Thousands(1)}')).toBe('41,280');
+      expect(fill(41280, '{Thousands(Round1(1))}')).toBe('41,280.0');
+      expect(fill(-1234567.891, '{Thousands(Round2(1))}')).toBe('-1,234,567.89');
+      expect(fill('n/a', '{Thousands(1)}')).toBe('n/a');
+    });
+  });
 });

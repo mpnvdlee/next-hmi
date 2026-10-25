@@ -173,6 +173,10 @@ heading.
   now takes no focus and no keys, and a screen reader announces it as
   unavailable under its own name. Unlocked widgets behave as before.
 
+- **`Round3` and `Round4` in text templates.** Next to `Round1` and
+  `Round2`, a String Expression and alarm text can show a value with three
+  or four decimals: `{Round3(1)}`.
+
 ### Changed
 
 - **Every download names its edition.** The public zips are now
@@ -275,6 +279,10 @@ heading.
   test-server editor, which marks the old one unsupported.
 
 ### Fixed
+
+- **`Thousands` keeps the decimals it is given.** `{Thousands(Round1(1))}`
+  showed `41,280` for 41280, dropping the `.0` the inner `Round1` wrote. It
+  now groups the text it receives, so it shows `41,280.0`.
 
 - **An alarms file the app cannot load is flagged.** An `alarms.json` that
   breaks the alarm format, such as an alarm with a key it does not know, was
