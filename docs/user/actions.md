@@ -34,7 +34,7 @@ Sixteen types, in the order the **Add action** menu lists them. **Browse actions
 Both open actions carry the presentation fields:
 
 - **Size** — `auto`, `small`, `medium`, `fullscreen`, or `fixed` (then set **Width** / **Height** in pixels).
-- **Placement** — `center`, `top`, `bottom`, `left`, `right`, or one of the **trigger-anchored** values (`trigger-above`, `trigger-below`, `trigger-left`, `trigger-right`) which pins the panel to the control that opened it, popover-style. Anchored placement and `fullscreen` are mutually exclusive.
+- **Placement** — `center`, `top`, `bottom`, `left`, `right`, or one of the **trigger-anchored** values (`trigger-above`, `trigger-below`, `trigger-left`, `trigger-right`) which pins the panel to the control that opened it, popover-style. A panel with no room on its side opens on the opposite side of the control when that side has room, and is otherwise kept inside the screen. Anchored placement and `fullscreen` are mutually exclusive.
 - **Backdrop** — `dim` darkens the screen behind, `none` leaves it untouched (right for a small anchored popover).
 
 > [!NOTE]

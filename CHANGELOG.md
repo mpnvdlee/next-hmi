@@ -238,6 +238,13 @@ heading.
 
 ### Fixed
 
+- **A popover opened near the bottom of the screen stays on it.** A dialog
+  placed `trigger-below` a button low on the screen opened below it anyway,
+  partly off the screen, because its size was read before its contents had
+  loaded. It now opens on the other side of the button when only that side
+  has room, and is pulled inside the screen when neither has; the same for
+  `trigger-above`, `trigger-left` and `trigger-right`.
+
 - **The category rail follows a click to its end.** In the Add action,
   Add widget and source drawers, clicking a category near the end of the
   list, such as **Interface**, scrolled to it but left the rail highlighting
