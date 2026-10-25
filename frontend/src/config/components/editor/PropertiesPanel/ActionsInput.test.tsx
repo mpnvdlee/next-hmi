@@ -131,6 +131,28 @@ describe('ActionsInput — full discriminator sweep', () => {
   );
 });
 
+describe('ActionsInput — paste', () => {
+  beforeEach(setupStores);
+
+  it('appends a copied action from the clipboard via the Add dropdown', async () => {
+    const existing: ButtonAction = { type: 'logoutUser' };
+    const copied: ButtonAction = {
+      type: 'showToast',
+      message: 'Hi',
+      severity: 'info',
+      discard: 'auto',
+    };
+    const onChangeSpy = vi.fn();
+    // userEvent.setup() installs the clipboard stub the paste reads from.
+    const user = userEvent.setup();
+    await navigator.clipboard.writeText(JSON.stringify({ $static: copied }));
+    render(<Harness initial={{ onPress: [existing] }} onChangeSpy={onChangeSpy} />);
+    await pick(user, screen.getByRole('combobox'), 'Paste action');
+
+    await waitFor(() => expect(onChangeSpy).toHaveBeenCalledWith({ onPress: [existing, copied] }));
+  });
+});
+
 describe('ActionsInput — browse drawer', () => {
   beforeEach(setupStores);
 
