@@ -46,6 +46,12 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
   const inputType = masked && !maskedByCss ? 'password' : 'text';
   const PasswordVisibilityIcon = getBuiltinIconComponent(showPassword ? 'eye-slash' : 'eye');
 
+  // A tap opens it too: the field keeps focus after ×, so focus alone would
+  // not fire again.
+  const openKeyboard = () => {
+    if (!disabled) setIsKeyboardOpen(true);
+  };
+
   return (
     <div
       className={`hmi-component hmi-string-input${disabled ? ' hmi-string-input--disabled' : ''}`}
@@ -68,9 +74,8 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
           data-1p-ignore=""
           data-lpignore="true"
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
-          onFocus={() => {
-            if (!disabled) setIsKeyboardOpen(true);
-          }}
+          onFocus={openKeyboard}
+          onClick={openKeyboard}
           onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
             if (e.key === 'Enter') {
               setIsKeyboardOpen(false);
