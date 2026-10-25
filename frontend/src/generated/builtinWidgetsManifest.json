@@ -82,7 +82,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "47d00e6b28a359f0",
+    "buildTs": "2edc7e5cdab67261",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -112,6 +112,9 @@
       },
       "borderWidth": {
         "type": "integer"
+      },
+      "borderColor": {
+        "type": "color"
       },
       "align": {
         "type": "string"
@@ -230,7 +233,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "e2a11193fad2cb17",
+    "buildTs": "19fd8cc1aa37eefa",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -247,6 +250,9 @@
         "type": "color"
       },
       "align": {
+        "type": "string"
+      },
+      "textTransform": {
         "type": "string"
       },
       "wrap": {
@@ -1286,7 +1292,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "e0bc552ea666e0a1",
+    "buildTs": "a1bbdb23dff401c6",
     "displayName": null,
     "hostsChildren": true,
     "flowsChildren": true,
@@ -1306,9 +1312,6 @@
         "type": "color"
       },
       "border": {
-        "type": "string"
-      },
-      "shadow": {
         "type": "string"
       },
       "actions": {

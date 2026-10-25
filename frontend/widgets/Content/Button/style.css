@@ -24,6 +24,9 @@
 
 .hmi-button__btn {
   flex: 1;
+  /* A fixed tile narrower than the label plus padding keeps its width; without
+     this the button grew past it. */
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -121,3 +124,4 @@
   background: color-mix(in oklch, currentColor 12%, var(--hmi-btn-fill, transparent));
   border-color: currentColor;
 }
+

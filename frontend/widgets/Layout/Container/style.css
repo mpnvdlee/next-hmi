@@ -15,7 +15,6 @@
      layoutUtils.test.ts guards that. */
   --container-bg: initial;
   --container-border: initial;
-  --container-shadow: initial;
 
   display: flex;
   flex-direction: column;
@@ -34,7 +33,6 @@
      --container-radius) overrides. Switching theme re-skins these. */
   background: var(--container-bg, transparent);
   border: var(--container-border, none);
-  box-shadow: var(--container-shadow, none);
   border-radius: var(--container-radius, var(--hmi-radius));
 }
 

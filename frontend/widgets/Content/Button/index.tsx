@@ -58,6 +58,12 @@ export const schema = {
     step: 1,
     group: 'Appearance',
   },
+  borderColor: {
+    type: 'color' as const,
+    label: 'Border color',
+    description: 'Empty uses the button color.',
+    group: 'Appearance',
+  },
   align: {
     type: 'string' as const,
     format: 'select' as const,
@@ -119,12 +125,12 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   const iconSize = getPropNumber(properties, 'iconSize', NaN, evalCtx);
   const alignStart = usePropString(properties, 'align', 'center') === 'start';
   const uppercase = usePropString(properties, 'textTransform', 'none') === 'uppercase';
+  const borderColor = usePropString(properties, 'borderColor', '') || color;
   const isOutline = variant === 'outline';
-  const colorStyle: React.CSSProperties = color
-    ? isOutline
-      ? { color, borderColor: color }
-      : { backgroundColor: color, borderColor: color }
-    : {};
+  const colorStyle: React.CSSProperties = {
+    ...(color ? (isOutline ? { color } : { backgroundColor: color }) : {}),
+    ...(borderColor ? { borderColor } : {}),
+  };
 
   // The radius rides a custom property rather than a literal inline
   // `borderRadius`: the value is consumed by `.hmi-button__btn` one level down,
