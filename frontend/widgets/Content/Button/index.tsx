@@ -128,7 +128,7 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   return (
     <div className="hmi-component hmi-button" style={style}>
       <button
-        className={`hmi-button__btn${isOutline ? ' hmi-button__btn--outline' : ''}${iconTop ? ' hmi-button__btn--icon-top' : ''}`}
+        className={`hmi-button__btn${isOutline ? ' hmi-button__btn--outline' : ''}${iconTop ? ' hmi-button__btn--icon-top' : ''}${showLabel ? '' : ' hmi-button__btn--icon-only'}`}
         style={colorStyle}
         aria-label={showLabel || !label ? undefined : label}
         title={showLabel || !label ? undefined : label}

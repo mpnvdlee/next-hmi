@@ -77,6 +77,14 @@
   flex-direction: column;
 }
 
+/* Icon-only takes the vertical padding on every side, so hug sizing gives a
+   square-ish tile instead of a text button's wide pill. */
+.hmi-button__btn--icon-only {
+  padding: var(--hmi-btn-padding-y);
+  /* Square in hug mode: as wide as the touch-target height. */
+  min-width: var(--hmi-btn-min-height);
+}
+
 .hmi-button__btn:hover:not(:disabled) {
   background: var(--hmi-accent-ink);
   border-color: var(--hmi-accent-ink);

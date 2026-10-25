@@ -110,6 +110,20 @@ describe('Button', () => {
     expect(btn.querySelector('.hmi-button__label')).toBeNull();
   });
 
+  it('marks an icon-only button so it drops the text padding, and only then', () => {
+    const { rerender } = renderButton({ label: 'Reset', showLabel: false });
+    expect(screen.getByRole('button', { name: 'Reset' })).toHaveClass('hmi-button__btn--icon-only');
+
+    rerender(
+      <MemoryRouter>
+        <Button properties={{ label: 'Reset' }} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('button', { name: 'Reset' })).not.toHaveClass(
+      'hmi-button__btn--icon-only',
+    );
+  });
+
   it('omits an empty accessible name and title when the hidden label is empty', () => {
     renderButton({ label: '', showLabel: false });
 
