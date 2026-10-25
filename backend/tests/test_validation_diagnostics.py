@@ -1037,6 +1037,35 @@ def _root_ctx() -> ValidationContext:
     )
 
 
+def _station_link_instance(target: str) -> ValidationReport:
+    decl = {"target": {"type": "string", "label": "Target", "format": "page"}}
+    ctx = replace(
+        _root_ctx(),
+        component_ids={"station-link"},
+        component_property_keys={"station-link": frozenset(decl)},
+        component_properties={"station-link": decl},
+    )
+    return validate_widget_node(_node("$component:station-link", {"target": target}), ctx)
+
+
+def test_a_component_page_input_takes_a_navigable_page():
+    report = _station_link_instance("home")
+    assert (report.findings, report.warnings) == ([], [])
+
+
+@pytest.mark.parametrize(
+    "target, code", [("motor-detail", "page-not-navigable"), ("gone", "page-unknown")]
+)
+def test_a_component_page_input_flags_a_page_navigation_cannot_reach(target, code):
+    w = _warn(_station_link_instance(target))
+    assert (w.code, w.path) == (code, "/properties/target")
+
+
+def test_navigate_inside_a_component_to_its_page_input():
+    ctx = _dialog_scope(target={"type": "string", "label": "Target", "format": "page"})
+    assert _navigate({"$componentProp": "target"}, ctx).warnings == []
+
+
 def test_open_dialog_naming_a_navigable_page():
     report = ValidationReport()
     _validate_action({"type": "openDialog", "pageId": "home"}, _root_ctx(), "/a", report)
