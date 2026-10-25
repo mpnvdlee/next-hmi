@@ -15,11 +15,11 @@
 }
 
 /* Sidebar chrome for a menu dropped straight into a shell region — a region
-   renders its widgets as its own DOM children, so this is the bare "menu is
-   the sidebar" shape. Chrome only: the width that used to live here pinned the
+   renders its widgets as its own DOM children, each in a `display: contents`
+   widget wrapper, so this is the bare "menu is the sidebar" shape. Chrome only: the width that used to live here pinned the
    box against the Layout panel, which is the one thing this widget must not
    do. */
-[data-region] > .hmi-navmenu {
+[data-region] > .hmi-preview-node > .hmi-navmenu {
   background: var(--hmi-surface);
   border-right: 1px solid var(--hmi-border);
 }
@@ -345,13 +345,13 @@
    Leaving those pins behind is what made a region-hosted menu hug above
    1024px and then jump to a hard 176px below it. */
 @media (max-width: 768px) {
-  [data-region] > .hmi-navmenu {
+  [data-region] > .hmi-preview-node > .hmi-navmenu {
     max-height: 220px;
     border-right: none;
     border-bottom: 1px solid var(--hmi-border);
   }
 
-  [data-region] > .hmi-navmenu.hmi-navmenu--collapsed {
+  [data-region] > .hmi-preview-node > .hmi-navmenu.hmi-navmenu--collapsed {
     max-height: 42px;
     overflow: hidden;
   }
