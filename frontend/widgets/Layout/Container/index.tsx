@@ -39,10 +39,11 @@ export const schema = {
     description: 'Any CSS box-shadow, e.g. var(--hmi-shadow).',
     group: 'Appearance',
   },
+  actions: { type: 'actions' as const, label: 'Actions' },
 };
 
 export const description =
-  'Groups and lays out child widgets in a row or column. Hosts other widgets.';
+  'Groups and lays out child widgets in a row or column. Hosts other widgets, and runs its actions when pressed.';
 export const category = 'Layout & structure';
 export const icon = { type: 'builtin', name: 'stack' } as const;
 /** Nodes of this type carry a `children` array; the renderer hands them in
@@ -56,6 +57,7 @@ export const flowsChildren = true;
 
 export default function Container({ properties, layout, children }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
+  const scope = useHmiScope();
   const title = getPropString(properties, 'title', '', evalCtx);
   const showWhenEmpty = getPropBoolean(properties, 'showWhenEmpty', false, evalCtx);
   const background = getPropString(properties, 'background', '', evalCtx);
@@ -108,8 +110,37 @@ export default function Container({ properties, layout, children }: HmiWidgetPro
     ...(title ? {} : { paddingTop: pad.top }),
   };
 
+  // Only a container with press actions becomes a control; without them it
+  // stays the plain layout box it always was.
+  const onPress = (properties?.actions as ActionsConfig | undefined)?.onPress;
+  const pressProps = onPress?.length
+    ? {
+        role: 'button',
+        tabIndex: 0,
+        onClick: (e: React.MouseEvent<HTMLDivElement>) => {
+          // A press on a control inside (a Button, an input, a nested pressable
+          // Container) belongs to that control, not to this one as well.
+          if (
+            (e.target as Element).closest('button, a, input, select, textarea, [role="button"]') !==
+            e.currentTarget
+          )
+            return;
+          executeWidgetActions(onPress, { scope, evalCtx, anchorEl: e.currentTarget });
+        },
+        onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+          if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+          e.preventDefault();
+          executeWidgetActions(onPress, { scope, evalCtx, anchorEl: e.currentTarget });
+        },
+      }
+    : {};
+
   return (
-    <div className="hmi-container" style={selfStyle}>
+    <div
+      className={onPress?.length ? 'hmi-container hmi-container--pressable' : 'hmi-container'}
+      style={selfStyle}
+      {...pressProps}
+    >
       {title && (
         <span className="hmi-container__title" style={titleStyle}>
           {title}

@@ -32,6 +32,7 @@ declare namespace React {
   }
   interface KeyboardEvent<T = Element> {
     currentTarget: T;
+    target: EventTarget;
     key: string;
     preventDefault(): void;
     stopPropagation(): void;

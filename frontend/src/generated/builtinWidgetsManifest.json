@@ -1241,7 +1241,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "c6561f624875680f",
+    "buildTs": "e0bc552ea666e0a1",
     "displayName": null,
     "hostsChildren": true,
     "flowsChildren": true,
@@ -1265,6 +1265,9 @@
       },
       "shadow": {
         "type": "string"
+      },
+      "actions": {
+        "type": "actions"
       }
     },
     "schemaError": null
