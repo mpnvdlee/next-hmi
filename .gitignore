@@ -14,6 +14,7 @@ build/*
 !build/build-docker.sh
 !build/render-docs.py
 !build/publish-docs.py
+!build/release-notes.py
 !build/docs-assets/
 !build/docs-assets/*
 !build/icons/
