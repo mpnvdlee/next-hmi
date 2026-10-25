@@ -7,8 +7,17 @@ import { preloadableLazy, type PreloadableLazy } from '@shared/utils/settledLazy
 
 // AppInner (HMI/editor routing, the widget registry, and everything they pull
 // in — including the recharts SDK loader) is lazy so a manager-mode session
-// never statically reaches it and never pays its bundle cost.
-const AppInner = preloadableLazy(() => import('./AppInner'));
+// never statically reaches it and never pays its bundle cost. The widget SDK
+// rides along for the same reason: it reaches the whole HMI runtime. It must be
+// on window.__nextHMI__ before anything renders a widget, since compiled widget
+// modules read it at module-eval time (see nextHmiSdk.ts); AppInner renders
+// nothing until this promise settles, and widget modules load after that.
+const AppInner = preloadableLazy(async () => {
+  const [sdk, inner] = await Promise.all([import('./nextHmiSdk'), import('./AppInner')]);
+  sdk.installNextHmiSdk();
+  sdk.warmRecharts();
+  return inner;
+});
 // The manager dashboard is the same SPA bundle served at the origin root
 // (window.__NEXTHMI_MODE__ === 'manager'); project instances are proxied under
 // /runtime/<slug>/ or /editor/<slug>/ and render the HMI/config app above.
