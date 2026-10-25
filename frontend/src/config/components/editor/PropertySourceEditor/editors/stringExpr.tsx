@@ -71,7 +71,7 @@ export function StringExprEditor({
       <p className="cfg-prop-hint">
         Use <code>{'{1}'}</code>, <code>{'{2}'}</code>, … as placeholders. Functions:{' '}
         <code>ToLower</code>, <code>ToUpper</code>, <code>Trim</code>, <code>Capitalize</code>,{' '}
-        <code>Round</code>, <code>Round1</code>, <code>Round2</code>, <code>Thousands</code>,{' '}
+        <code>Round</code>, <code>Round1</code> … <code>Round4</code>, <code>Thousands</code>,{' '}
         <code>Signed</code>
         <br />
         Example: <code>{'{Trim(ToLower(1))}'}</code>

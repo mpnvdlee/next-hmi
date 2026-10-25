@@ -716,7 +716,10 @@ def test_stringexpr_wildcard_row_the_editor_added_is_unbound_but_a_cleared_stati
     ]
 
 
-@pytest.mark.parametrize("template", ["{Round2(1)}", "{Trim(Round1(1))} g", "{ Signed( Round2(1) ) }"])
+@pytest.mark.parametrize(
+    "template",
+    ["{Round2(1)}", "{Trim(Round1(1))} g", "{ Signed( Round2(1) ) }", "{Thousands(Round4(1))}"],
+)
 def test_stringexpr_digits_in_function_names_are_not_wildcards(ctx, template):
     report = ValidationReport()
     _validate_property_value(
