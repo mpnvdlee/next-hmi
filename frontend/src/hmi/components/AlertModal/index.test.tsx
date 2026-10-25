@@ -131,3 +131,16 @@ describe('AlertModal', () => {
     expect(screen.getByRole('button', { name: 'Acknowledge' })).toBeInTheDocument();
   });
 });
+
+describe('AlertModal layering', () => {
+  it('sits above the numpad and toasts and below the alarm detail dialog', async () => {
+    // jsdom computes no stacking, so read the layering scale itself; vitest runs from frontend/.
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync('src/hmi/styles/hmi.tokens.css', 'utf8');
+    const z = (name: string) => Number(css.match(new RegExp(`--hmi-z-${name}:\\s*(\\d+)`))?.[1]);
+
+    expect(z('toast')).toBeLessThan(z('input'));
+    expect(z('input')).toBeLessThan(z('alert'));
+    expect(z('alert')).toBeLessThan(z('alarm-dialog'));
+  });
+});

@@ -89,11 +89,13 @@
      scroll container but still belongs to the page, so it sits just above
      the modal layer and below anything the runtime raises over the page. */
   --hmi-z-popup: 130;
-  --hmi-z-alert: 200;
   --hmi-z-toast: 300;
   /* The numpad and keyboard the operator is typing on: a toast arriving
      meanwhile must not cover their keys. */
   --hmi-z-input: 350;
+  /* A Show Alert confirm must cover a numpad the same action list opened,
+     or the keypad would still take input over it. */
+  --hmi-z-alert: 380;
   --hmi-z-alarm-dialog: 400;
 
   /* Width of the severity stripe down the left edge of an alarm row or toast. */
