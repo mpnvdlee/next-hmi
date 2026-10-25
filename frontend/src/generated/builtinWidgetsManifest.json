@@ -1193,7 +1193,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "89c4565bcfbf6a35",
+    "buildTs": "bfc4badb66f19f8b",
     "displayName": "String Input",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1212,8 +1212,14 @@
       "keyboard": {
         "type": "string"
       },
+      "autoFocus": {
+        "type": "boolean"
+      },
       "disabled": {
         "type": "boolean"
+      },
+      "onSubmit": {
+        "type": "actions"
       }
     },
     "schemaError": null

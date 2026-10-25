@@ -1897,10 +1897,22 @@
             "defaultValue": "text"
           },
           {
+            "key": "autoFocus",
+            "label": "Focus when shown",
+            "type": "Boolean",
+            "group": "Appearance"
+          },
+          {
             "key": "disabled",
             "label": "Disabled",
             "type": "Boolean",
             "group": "Appearance"
+          },
+          {
+            "key": "onSubmit",
+            "label": "On Submit",
+            "type": "actions",
+            "group": "Actions"
           },
           {
             "key": "visible",

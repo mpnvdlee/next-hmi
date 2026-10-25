@@ -181,7 +181,12 @@ heading.
   digits only, so a PIN or a code needs no letters to tap past. With
   **Password field** on, the numpad masks the entry too. Custom widgets get
   the same masking through the SDK numpad's new `password` prop. The default
-  stays **Text**.
+  stays **Text**. Two more properties make a PIN dialog one tap shorter:
+  **Focus when shown** opens the keyboard or numpad as soon as the field
+  appears (not in the editor canvas), and **On Submit** runs its actions on
+  Enter, on the numpad or a physical keyboard — a Login User there signs in
+  without a separate button. The numpad opens centred on screen, over the
+  dialog, like Edit Value's.
 
 - **A locked widget is out of the keyboard's reach too.** A widget that is
   not **Interactable** already ignored a press, but **Tab** still reached

@@ -455,7 +455,9 @@ A text field whose typed value is published for sibling widgets to read.
 | `placeholder` | Placeholder | `String` |
 | `isPassword` | Password field | `Boolean` |
 | `keyboard` | Keyboard | `String` |
+| `autoFocus` | Focus when shown | `Boolean` |
 | `disabled` | Disabled | `Boolean` |
+| `onSubmit` | On Submit | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 

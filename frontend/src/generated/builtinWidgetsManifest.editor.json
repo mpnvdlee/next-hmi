@@ -2054,9 +2054,20 @@
           }
         ]
       },
+      "autoFocus": {
+        "label": "Focus when shown",
+        "description": "Opens the keyboard or numpad as soon as the field appears, as a PIN dialog wants.",
+        "group": "Appearance"
+      },
       "disabled": {
         "label": "Disabled",
         "group": "Appearance"
+      },
+      "onSubmit": {
+        "label": "On Submit",
+        "description": "Runs on Enter, on the numpad or a physical keyboard.",
+        "group": "Actions",
+        "event": "onSubmit"
       }
     }
   },
