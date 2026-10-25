@@ -26,7 +26,14 @@ export default function ContactPrompt({ status, onDismiss }: Props) {
         <h2 className="cfg-contact-prompt__title">Using NEXT HMI in a machine or product?</h2>
         <p className="cfg-contact-prompt__text">
           We would like to hear what you are building. A short conversation helps decide what comes
-          next, and you get a direct line to the people who make it.
+          next, and you get a direct line to the people who make it.{' '}
+          <a
+            href="https://next-hmi.com/pricing?from=contact-prompt#situations"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            What you owe when you ship it ↗
+          </a>
         </p>
         <p className="cfg-contact-prompt__note">
           Opens next-hmi.com in your browser

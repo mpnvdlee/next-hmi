@@ -111,6 +111,7 @@ USER_SOURCES: list[tuple[str, str]] = [
     ("docs/user/users.md", "Operations"),
     ("docs/user/diagnostics.md", "Operations"),
     ("docs/user/mcp.md", "Operations"),
+    ("docs/user/shipping.md", "Operations"),
     ("CHANGELOG.md", "Project"),
     (".github/SECURITY.md", "Project"),
     ("docs/user/licence.md", "Licensing"),
