@@ -19,6 +19,13 @@ heading.
   as a file, a compose file and `install.sh`, for a machine that cannot reach a
   registry.
 
+- **A guide to shipping it on a machine.** *Shipping it on a machine* in the
+  user guide covers which build ships, activation on the commissioning bench,
+  locking the installation down and what to hand the customer. The manager's
+  System Information names the edition and links to it, and in the community
+  build the editor's Branding section and the contact card point at what the
+  enterprise build adds and what shipping costs.
+
 - **Navigate To Page goes to a page chosen at runtime.** The new action
   closes every open dialog and overlay, then goes to a page from the Pages
   section, firing the page events a menu press would. The page is fixed, or

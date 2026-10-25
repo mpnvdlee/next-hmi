@@ -973,6 +973,19 @@
   padding: 0 0 6px;
 }
 
+/* A line of explanation standing in for a section's fields. */
+.cfg-section__note {
+  margin: 0;
+  font-size: var(--cfg-text-sm);
+  line-height: 1.5;
+  color: var(--cfg-text-muted);
+}
+
+.cfg-section__note a {
+  color: var(--cfg-accent);
+  font-weight: var(--cfg-fw-medium);
+}
+
 /* "Nothing here yet" line inside a section body. */
 .cfg-section__empty {
   display: block;

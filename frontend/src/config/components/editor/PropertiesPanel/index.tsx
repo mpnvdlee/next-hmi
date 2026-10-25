@@ -1302,9 +1302,9 @@ function SettingsPanel() {
           </Select>
         </PropRow>
       </div>
-      {getEdition() === 'ee' && (
-        <div className="cfg-section">
-          <div className="cfg-section__title">Branding</div>
+      <div className="cfg-section">
+        <div className="cfg-section__title">Branding</div>
+        {getEdition() === 'ee' ? (
           <PropRow
             label="Boot logo"
             description="Shown on the HMI boot screen in place of the product logo and name. Leave empty for the default branding."
@@ -1316,8 +1316,19 @@ function SettingsPanel() {
               onBrowse={browseBootLogo}
             />
           </PropRow>
-        </div>
-      )}
+        ) : (
+          <p className="cfg-section__note">
+            Your own logo on the boot screen, in place of ours, comes with the Enterprise build.{' '}
+            <a
+              href="https://next-hmi.com/pricing?from=boot-logo#situations"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              What it costs ↗
+            </a>
+          </p>
+        )}
+      </div>
     </>
   );
 }
