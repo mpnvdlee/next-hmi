@@ -128,6 +128,14 @@ A reusable **Component** declares **input properties** the parent fills in. Insi
 
 Both reads are typed. The `$componentProp` and `$widgetProp` pickers judge each input or exported value against the field it would fill, exactly as the variable picker judges a tag — one that does not fit is marked ✗ and cannot be confirmed — and the value an instance puts into an input is checked against the input's type like any widget property. The warnings pill flags a stored read or value that does not fit.
 
+An action inside the component can write through an input, too. Declare the input with **write** access — a **Float** input `value` with write ticked, say — and set the action's **Variable** row (Write Data Variable, Toggle Boolean Variable, Edit Value) to the input's source pill: the action writes whatever variable the instance passed in. One parameter-row component with an **Edit Value** button then edits a different setpoint per instance. The picker lists only inputs declared writable with a type the action writes, and the warnings pill flags one that is not. In the file:
+
+```json
+{ "type": "editValue", "target": { "$componentProp": "value" } }
+```
+
+The same works in a dialog, on an input parameter the opener fills with a variable.
+
 Each input can carry a **description** (one line shown under the field) and a **default value**, used wherever an instance leaves the property empty — the default is what the component really renders with, not just an editor hint.
 
 An input of type **Select (enum)** gives whoever places the component a fixed list of choices instead of a free field. **Option values** decides what a choice actually hands over: **String**, **Integer**, **Float**, **Boolean** or **Localisable text**. Pick the kind that matches what the component does with it — a size list should pass a real number, a caption list a translation — so the value arrives usable rather than as text that has to be read back as a number. Change the kind later and the option labels stay put while their values clear, since a value written for the old kind means nothing under the new one.

@@ -212,6 +212,15 @@ heading.
   Start button can read *Stop the pump first*. Left empty, the text is the
   same as before.
 
+- **An action in a component writes through its input.** Write Data
+  Variable, Toggle Boolean Variable and Edit Value inside a component can
+  target an input declared with write access, `{ "$componentProp": "value" }`,
+  and write whatever variable the instance passed in. A parameter row with an
+  Edit Value button is then one component placed once per setpoint. The
+  Variable row's source pill offers the input, inside a dialog too, and the
+  warnings pill flags an input that is not writable or not of a type the
+  action writes.
+
 ### Changed
 
 - **A project opened in 1.1.0 no longer opens in 1.0.x (breaking).** The
