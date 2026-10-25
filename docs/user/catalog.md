@@ -136,6 +136,8 @@ Runs actions and can write true to a bound boolean on press.
 | `fill` | Fill | `color` |
 | `radius` | Radius | `String` |
 | `borderWidth` | Border width (px) | `Integer` |
+| `align` | Content alignment | `String` |
+| `textTransform` | Text case | `String` |
 | `iconSize` | Icon size (px) | `Integer` |
 | `variable` | Variable | `Boolean` |
 | `actions` | Actions | `actions` |

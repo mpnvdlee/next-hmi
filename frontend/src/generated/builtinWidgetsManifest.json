@@ -67,7 +67,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "b23087d75b30b7fc",
+    "buildTs": "db95980b0dd659d7",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -97,6 +97,12 @@
       },
       "borderWidth": {
         "type": "integer"
+      },
+      "align": {
+        "type": "string"
+      },
+      "textTransform": {
+        "type": "string"
       },
       "iconSize": {
         "type": "integer"

@@ -172,4 +172,27 @@ describe('Button', () => {
 
     expect(useHmiStore.getState().openPageOverlays.map((o) => o.pageId)).toContain('settings');
   });
+
+  describe('label styling', () => {
+    it('emits the text case as a custom property', () => {
+      const { container } = renderButton({ label: 'Start', textTransform: 'uppercase' });
+      const el = container.firstElementChild as HTMLElement;
+
+      expect(el.style.getPropertyValue('--hmi-btn-transform')).toBe('uppercase');
+    });
+
+    it('sets neither case nor alignment by default', () => {
+      const { container } = renderButton({ label: 'Start' });
+      const el = container.firstElementChild as HTMLElement;
+
+      expect(el.style.getPropertyValue('--hmi-btn-transform')).toBe('');
+      expect(screen.getByRole('button')).not.toHaveClass('hmi-button__btn--start');
+    });
+
+    it('aligns its content to the start on request', () => {
+      renderButton({ label: 'Home', align: 'start' });
+
+      expect(screen.getByRole('button')).toHaveClass('hmi-button__btn--start');
+    });
+  });
 });

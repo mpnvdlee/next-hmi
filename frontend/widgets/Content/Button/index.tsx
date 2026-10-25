@@ -58,6 +58,30 @@ export const schema = {
     step: 1,
     group: 'Appearance',
   },
+  align: {
+    type: 'string' as const,
+    format: 'select' as const,
+    label: 'Content alignment',
+    display: 'button-text' as const,
+    group: 'Appearance',
+    defaultValue: 'center',
+    options: [
+      { label: 'Center', value: 'center' },
+      { label: 'Start', value: 'start' },
+    ],
+  },
+  textTransform: {
+    type: 'string' as const,
+    format: 'select' as const,
+    label: 'Text case',
+    display: 'button-text' as const,
+    group: 'Appearance',
+    defaultValue: 'none',
+    options: [
+      { label: 'As typed', value: 'none' },
+      { label: 'Uppercase', value: 'uppercase' },
+    ],
+  },
   iconSize: {
     type: 'integer' as const,
     label: 'Icon size (px)',
@@ -93,6 +117,8 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   const fill = getPropString(properties, 'fill', '', evalCtx);
   const borderWidth = getPropNumber(properties, 'borderWidth', NaN, evalCtx);
   const iconSize = getPropNumber(properties, 'iconSize', NaN, evalCtx);
+  const alignStart = usePropString(properties, 'align', 'center') === 'start';
+  const uppercase = usePropString(properties, 'textTransform', 'none') === 'uppercase';
   const isOutline = variant === 'outline';
   const colorStyle: React.CSSProperties = color
     ? isOutline
@@ -108,6 +134,7 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   if (fill) style['--hmi-btn-fill'] = fill;
   if (Number.isFinite(borderWidth)) style['--hmi-btn-border-width'] = `${borderWidth}px`;
   if (Number.isFinite(iconSize)) style['--hmi-btn-icon-size'] = `${iconSize}px`;
+  if (uppercase) style['--hmi-btn-transform'] = 'uppercase';
 
   const IconComp = iconName && isBuiltinIconId(iconName) ? getBuiltinIconComponent(iconName) : null;
   // An empty label is the icon-only button; without an icon it stays an empty text button.
@@ -126,7 +153,7 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   return (
     <div className="hmi-component hmi-button" style={style}>
       <button
-        className={`hmi-button__btn${isOutline ? ' hmi-button__btn--outline' : ''}${iconTop ? ' hmi-button__btn--icon-top' : ''}${iconOnly ? ' hmi-button__btn--icon-only' : ''}`}
+        className={`hmi-button__btn${isOutline ? ' hmi-button__btn--outline' : ''}${iconTop ? ' hmi-button__btn--icon-top' : ''}${iconOnly ? ' hmi-button__btn--icon-only' : ''}${alignStart ? ' hmi-button__btn--start' : ''}`}
         style={colorStyle}
         onClick={handleClick}
       >

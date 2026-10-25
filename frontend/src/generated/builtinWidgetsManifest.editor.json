@@ -166,6 +166,40 @@
         "step": 1,
         "group": "Appearance"
       },
+      "align": {
+        "format": "select",
+        "label": "Content alignment",
+        "display": "button-text",
+        "group": "Appearance",
+        "defaultValue": "center",
+        "options": [
+          {
+            "label": "Center",
+            "value": "center"
+          },
+          {
+            "label": "Start",
+            "value": "start"
+          }
+        ]
+      },
+      "textTransform": {
+        "format": "select",
+        "label": "Text case",
+        "display": "button-text",
+        "group": "Appearance",
+        "defaultValue": "none",
+        "options": [
+          {
+            "label": "As typed",
+            "value": "none"
+          },
+          {
+            "label": "Uppercase",
+            "value": "uppercase"
+          }
+        ]
+      },
       "iconSize": {
         "label": "Icon size (px)",
         "min": 8,
