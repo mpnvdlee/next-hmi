@@ -488,8 +488,8 @@ left as clean as it started — the zip from step 1 is the only durable record.
 `main.py`'s lifespan logs the version span, the file count, the backup path and
 every step diagnostic under the `nexthmi.migration` logger.
 
-`PROJECT_FORMAT_VERSION` is `9`, stamped beside `PROJECT_FORMAT_MIN_APP`
-(`"1.0.0"`). What each of the three `_STEPS` rewrites on disk is in
+`PROJECT_FORMAT_VERSION` is `10`, stamped beside `PROJECT_FORMAT_MIN_APP`
+(`"1.1.0"`). What each of the four `_STEPS` rewrites on disk is in
 [data-formats.md](data-formats.md#format-versions).
 
 Adding a step and bumping the version is described in the module docstring; the

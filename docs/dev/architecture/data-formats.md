@@ -131,8 +131,8 @@ Outside any project, the runtime keeps its own state:
 
 ### Format versions
 
-This build writes format **9** (`PROJECT_FORMAT_VERSION`) and stamps
-`minAppVersion` `1.0.0` (`PROJECT_FORMAT_MIN_APP`) beside it. A project stamped
+This build writes format **10** (`PROJECT_FORMAT_VERSION`) and stamps
+`minAppVersion` `1.1.0` (`PROJECT_FORMAT_MIN_APP`) beside it. A project stamped
 lower is carried up through every step of `_STEPS` in
 `core/project_migrations.py`, in order; each one rewrites only the shape below
 and skips what it has already converted:
@@ -142,6 +142,7 @@ and skips what it has already converted:
 | 4 → 7 | `retire-flex-and-collapse-padding` | `core/migration_size_modes.py`, then `core/migration_padding.py` | Widget `layout`s in `config.json`, `pages/` and `components/`: the raw flex keys (`basis`, `shrink`, `alignSelf`, a stale `grow`) become `widthMode` / `heightMode` or are dropped, as are `margin` and the container keys of a widget type that does not flow children, and the `padding` shorthand is split into `paddingTop` / `paddingRight` / `paddingBottom` / `paddingLeft`. A project stamped below 4 runs through this step too. Formats 5 and 6 were never stamped by a release and have no step of their own |
 | 7 → 8 | `dialogs-to-pages` | `core/migration_dialogs_folder.py` | Each inline entry of `config.json`'s `dialogs` list becomes an index node `{ id, type: "page" }` with its document in `dialogs/<id>.json` (title, `componentProperties`, both close flags written out, widgets as `sections.content` — more than one wrapped in a wrapping-row `Container`). In every stored action, `openDialog` renames `dialogId` to `pageId` (and gets `size: "auto"` when it had no size) and `closeDialog` becomes `closePageOverlay` |
 | 8 → 9 | `write-target-source` | `core/migration_write_targets.py` | Every `writeDataVariable` / `toggleDataVariable` swaps its `datasource` / `path` pair for one `target`, `{ "$var": { "path": "<datasource>:<path>" } }`; a pair with an empty half becomes no `target` |
+| 9 → 10 | `release-1-1-fields` | `core/project_migrations.py` | Nothing — the stamp marks the fields 1.1.0 added to files a 1.0.x build parses strictly: `values` in `alarms.json` and `values` / `value_refs` in `alarm_state.json`, the `numpad` and `toasts` sections of a theme. That build would read either alarm file as invalid, fall back to an empty one and save it over the original, and would fail to load the theme; the stamp makes it refuse the project instead |
 
 How a migration is staged, backed up and swapped in is in
 [backend.md](backend.md#project-format-migration).

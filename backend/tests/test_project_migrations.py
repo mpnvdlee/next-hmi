@@ -52,7 +52,18 @@ def test_min_app_names_a_release_that_exists():
     """The stamp is what a too-old build shows an operator, so it has to name
     a version they can actually download. 0.0.1 was never released."""
     from core.project_migrations import PROJECT_FORMAT_MIN_APP
-    assert PROJECT_FORMAT_MIN_APP == "1.0.0"
+    assert PROJECT_FORMAT_MIN_APP == "1.1.0"
+
+
+def test_a_format_9_project_is_stamped_10_with_nothing_rewritten(project_root: Path) -> None:
+    """9 → 10 only marks the fields 1.1.0 added, so a 1.0.x build refuses the
+    project rather than parsing those files as empty and saving over them."""
+    _stamp(project_root, 9, min_app="1.0.0")
+    result = pm.run_baseline_migration(project_root)
+    assert (result.from_version, result.to_version) == (9, 10)
+    assert result.files_changed == []
+    metadata = read_project_metadata(project_root)
+    assert (metadata.formatVersion, metadata.minAppVersion) == (10, "1.1.0")
 
 
 def test_already_current_is_a_no_op(project_root: Path) -> None:

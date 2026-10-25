@@ -139,7 +139,7 @@ def test_rerunning_changes_nothing(project: Path) -> None:
     assert {p: p.read_bytes() for p in project.rglob("*.json")} == before
 
 
-def test_the_coordinator_carries_a_format_8_project_to_9(project: Path) -> None:
+def test_the_coordinator_carries_a_format_8_project_past_9(project: Path) -> None:
     write_project_metadata(
         project,
         ProjectMetadata(id="proj", formatVersion=8, minAppVersion=pm.PROJECT_FORMAT_MIN_APP),
@@ -147,8 +147,8 @@ def test_the_coordinator_carries_a_format_8_project_to_9(project: Path) -> None:
 
     result = pm.run_baseline_migration(project)
 
-    assert (result.from_version, result.to_version) == (8, 9)
-    assert read_project_metadata(project).formatVersion == 9
+    assert (result.from_version, result.to_version) == (8, pm.PROJECT_FORMAT_VERSION)
+    assert read_project_metadata(project).formatVersion == pm.PROJECT_FORMAT_VERSION
     assert _read(project / "config.json")["globalEvents"]["onStart"][0]["target"] == {
         "$var": {"path": "PLC:Run"}
     }

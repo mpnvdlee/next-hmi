@@ -7,7 +7,7 @@ A project's stamped format version lives at ``config.json``'s
 every project activation (see ``main.py``'s lifespan) because it is a no-op
 once a project is already stamped at ``PROJECT_FORMAT_VERSION``.
 
-``_STEPS`` holds three steps. The first, 4 → 7, rewrites stored layouts into
+``_STEPS`` holds four steps. The first, 4 → 7, rewrites stored layouts into
 the Hug/Fill/Fixed sizing model, retiring the raw flex keys and margin from
 authored projects (see ``core.migration_size_modes``), then collapses the
 `padding` shorthand into the four side keys it overlapped with (see
@@ -21,7 +21,11 @@ dialog into a page in the Dialogs folder and rewrites the dialog actions into
 page-overlay actions, moving their documents into ``dialogs/``
 (see ``core.migration_dialogs_folder``). The third, 8 → 9, turns the
 ``datasource``/``path`` pair a write or toggle action names its variable with
-into one sourced ``target`` (see ``core.migration_write_targets``).
+into one sourced ``target`` (see ``core.migration_write_targets``). The
+fourth, 9 → 10, rewrites nothing: it marks the fields 1.1.0 added to files a
+1.0.x build parses strictly (alarm ``values``, the theme ``numpad`` and
+``toasts`` sections), so that build refuses the project instead of parsing
+the alarm files as empty and saving over them.
 
 ``PROJECT_FORMAT_VERSION`` only ever counts up, including when steps are
 retired: the number is stamped into user data that travels between builds
@@ -99,9 +103,9 @@ from core.project_packer import BACKUPS_SUBDIR, pack_project, safe_filename
 from core.time_utils import iso_now
 from core.version import app_version
 
-PROJECT_FORMAT_VERSION = 9
-# The release that introduced format 9. See the module docstring; bump with it.
-PROJECT_FORMAT_MIN_APP = "1.0.0"
+PROJECT_FORMAT_VERSION = 10
+# The release that introduced format 10. See the module docstring; bump with it.
+PROJECT_FORMAT_MIN_APP = "1.1.0"
 
 @dataclass(frozen=True)
 class _Target:
@@ -241,6 +245,11 @@ def _retire_flex_and_collapse_padding(staged: Mapping[str, Path], project_root: 
     )
 
 
+def _mark_release_1_1_fields(staged: Mapping[str, Path], project_root: Path) -> StepResult:
+    """No-op: the step exists for the stamp it leaves (see the module docstring)."""
+    return StepResult()
+
+
 _STEPS: list[MigrationStep] = [
     MigrationStep(
         from_version=4,
@@ -262,6 +271,13 @@ _STEPS: list[MigrationStep] = [
         name=WRITE_TARGETS_STEP_NAME,
         targets=("config", "pages", "dialogs", "components"),
         run=migrate_write_targets,
+    ),
+    MigrationStep(
+        from_version=9,
+        to_version=10,
+        name="release-1-1-fields",
+        targets=(),
+        run=_mark_release_1_1_fields,
     ),
 ]
 

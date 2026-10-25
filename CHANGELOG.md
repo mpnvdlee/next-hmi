@@ -144,6 +144,15 @@ heading.
   *Community Edition* or *Enterprise Edition* under the logo, and the runtime's
   loading screen says *Community Edition* in the public build.
 
+- **A project opened in 1.1.0 no longer opens in 1.0.x (breaking).** The
+  project file format moves to 10, because 1.1.0 adds fields to the alarm and
+  theme files that a 1.0.x build rejects: it would read the alarm files as
+  empty and save over them, and fail to load the themes. **Start** asks to
+  upgrade a project the first time 1.1.0 opens it, zipping it into
+  `.backups/` first; nothing in it is rewritten. A 1.0.x build then shows
+  **Requires update** and names 1.1.0 as the version it needs, instead of
+  losing the alarms.
+
 - **Number Input binds a plain Float or Integer variable (breaking).** Like
   the Button and the Numeric Stepper, it no longer takes a
   `bVisible` / `bEnabled` / `fValue` struct: bind the setpoint itself, and use
