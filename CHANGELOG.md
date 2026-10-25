@@ -302,6 +302,13 @@ heading.
 
 ### Fixed
 
+- **An icon path taken from the Repeat item is not an unknown asset.** A
+  fixed icon or image whose path is a Repeat item member, as in
+  `{ "$static": { "type": "custom", "path": { "$repeatItem": { "member": "icon" } } } }`,
+  was flagged as an unknown asset although each copy fills it in from its
+  item. It no longer is over a list; over a tag array, where it names no
+  asset, the pill now says to set the field's own source to Repeat Item.
+
 - **Alarms restored after a restart follow the tags.** An alarm active when
   the project stopped came back active on start even when its tag no longer
   held the condition: a static datasource's tags start at their defaults
