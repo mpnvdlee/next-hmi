@@ -136,7 +136,7 @@ export function ConditionListEditor({
     <div className="cfg-editor-actions cfg-switch-cases">
       <div className="cfg-editor-actions__title-row">
         <span className="cfg-field-group__label">
-          {op === '$and' ? 'True when all are true' : 'True when any is true'}
+          {op === '$and' ? 'True when every condition is true' : 'True when any condition is true'}
         </span>
         <AddButton title="Add condition" onClick={() => set([...items, { $var: { path: '' } }])}>
           + Add condition

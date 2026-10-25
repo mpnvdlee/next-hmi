@@ -60,9 +60,9 @@ heading.
   **Border width** in pixels, and a **Fill** colour for the outline style.
   Each one left at its default keeps today's look.
 
-- **All Of (`$and`) and Any Of (`$or`) combine conditions.** Two new Boolean
+- **AND (`$and`) and OR (`$or`) combine conditions.** Two new Boolean
   sources take a list of conditions — a variable, a comparison, an Invert, a
-  group check, another All Of / Any Of — and are true when every one, or any
+  group check, another AND / OR — and are true when every one, or any
   one, is. A button can then be interactable only while the machine is ready
   *and* the door is shut, without a helper tag in the PLC. They fit every
   Boolean field, an `$if` condition and the If action's condition; the editor

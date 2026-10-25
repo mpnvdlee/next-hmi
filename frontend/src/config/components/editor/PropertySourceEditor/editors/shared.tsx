@@ -168,11 +168,12 @@ function previewNodes(
   for (const key of ['$and', '$or'] as const) {
     if (!(key in value)) continue;
     const op = key.slice(1);
+    const name = op.toUpperCase();
     const items = value[key];
-    if (!Array.isArray(items) || depth >= MAX_PREVIEW_DEPTH) return <Kw tint={op}>{op}(…)</Kw>;
+    if (!Array.isArray(items) || depth >= MAX_PREVIEW_DEPTH) return <Kw tint={op}>{name}(…)</Kw>;
     return (
       <>
-        <Kw tint={op}>{op}(</Kw>
+        <Kw tint={op}>{name}(</Kw>
         {items.map((c, i) => (
           <Fragment key={i}>
             {i > 0 && <Kw tint={op}>, </Kw>}

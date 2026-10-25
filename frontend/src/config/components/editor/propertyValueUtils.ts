@@ -276,7 +276,7 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
   }
   if (key === '$and' || key === '$or') {
     const items = obj[key];
-    const op = key.slice(1);
+    const op = key.slice(1).toUpperCase();
     if (!Array.isArray(items) || depth >= MAX_PREVIEW_DEPTH) return `${op}(…)`;
     return `${op}(${items.map((c) => propertyValuePreview(c, undefined, depth + 1)).join(', ')})`;
   }

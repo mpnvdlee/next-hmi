@@ -65,16 +65,16 @@
   },
   {
     "key": "$and",
-    "label": "All Of",
-    "description": "True when every one of a list of boolean conditions is true.",
+    "label": "AND",
+    "description": "True when every condition is true.",
     "produces": [
       "boolean"
     ]
   },
   {
     "key": "$or",
-    "label": "Any Of",
-    "description": "True when at least one of a list of boolean conditions is true.",
+    "label": "OR",
+    "description": "True when any condition is true.",
     "produces": [
       "boolean"
     ]
