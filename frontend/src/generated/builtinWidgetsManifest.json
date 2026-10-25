@@ -67,7 +67,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "19bd940ebc04612d",
+    "buildTs": "abaf0b0d9a565c92",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -79,9 +79,6 @@
       },
       "iconName": {
         "type": "icon"
-      },
-      "showLabel": {
-        "type": "boolean"
       },
       "iconPosition": {
         "type": "string"

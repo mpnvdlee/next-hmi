@@ -407,13 +407,6 @@
             "group": "Content"
           },
           {
-            "key": "showLabel",
-            "label": "Show label",
-            "type": "Boolean",
-            "group": "Content",
-            "defaultValue": true
-          },
-          {
             "key": "iconPosition",
             "label": "Icon position",
             "type": "String",

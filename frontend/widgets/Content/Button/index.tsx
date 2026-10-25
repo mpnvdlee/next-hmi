@@ -1,16 +1,13 @@
 /* @jsxRuntime classic */
 export const schema = {
-  label: { type: 'string' as const, label: 'Label', defaultValue: 'Button', group: 'Content' },
-  iconName: { type: 'icon' as const, label: 'Icon', group: 'Content' },
-  showLabel: {
-    type: 'boolean' as const,
-    format: 'show' as const,
-    label: 'Show label',
-    description:
-      'Off makes an icon-only button. The label text stays its accessible name, so keep it filled in.',
+  label: {
+    type: 'string' as const,
+    label: 'Label',
+    description: 'Leave it empty with an icon set for an icon-only button.',
+    defaultValue: 'Button',
     group: 'Content',
-    defaultValue: true,
   },
+  iconName: { type: 'icon' as const, label: 'Icon', group: 'Content' },
   iconPosition: {
     type: 'string' as const,
     format: 'select' as const,
@@ -92,7 +89,6 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   const label = getPropString(properties, 'label', 'Button', evalCtx);
   const variant = getPropString(properties, 'variant', 'solid', evalCtx);
   const radius = getPropString(properties, 'radius', '', evalCtx);
-  const showLabel = getPropBoolean(properties, 'showLabel', true, evalCtx);
   const iconTop = getPropString(properties, 'iconPosition', 'left', evalCtx) === 'top';
   const fill = getPropString(properties, 'fill', '', evalCtx);
   const borderWidth = getPropNumber(properties, 'borderWidth', NaN, evalCtx);
@@ -114,6 +110,8 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   if (Number.isFinite(iconSize)) style['--hmi-btn-icon-size'] = `${iconSize}px`;
 
   const IconComp = iconName && isBuiltinIconId(iconName) ? getBuiltinIconComponent(iconName) : null;
+  // An empty label is the icon-only button; without an icon it stays an empty text button.
+  const iconOnly = !!iconName && !label.trim();
   const iconIsCustomAsset = iconName ? isCustomIconAssetPath(iconName) : false;
   const customSvgContent = useInlineSvg(iconIsCustomAsset ? iconName : null);
 
@@ -128,10 +126,9 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   return (
     <div className="hmi-component hmi-button" style={style}>
       <button
-        className={`hmi-button__btn${isOutline ? ' hmi-button__btn--outline' : ''}${iconTop ? ' hmi-button__btn--icon-top' : ''}${showLabel ? '' : ' hmi-button__btn--icon-only'}`}
+        className={`hmi-button__btn${isOutline ? ' hmi-button__btn--outline' : ''}${iconTop ? ' hmi-button__btn--icon-top' : ''}${iconOnly ? ' hmi-button__btn--icon-only' : ''}`}
         style={colorStyle}
-        aria-label={showLabel || !label ? undefined : label}
-        title={showLabel || !label ? undefined : label}
+        aria-label={iconOnly && IconComp ? iconName : undefined}
         onClick={handleClick}
       >
         {iconName && (
@@ -148,7 +145,7 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
             ) : null}
           </span>
         )}
-        {showLabel && <span className="hmi-button__label">{label}</span>}
+        {!iconOnly && <span className="hmi-button__label">{label}</span>}
       </button>
     </div>
   );

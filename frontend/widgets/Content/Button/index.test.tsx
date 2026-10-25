@@ -1,5 +1,5 @@
 import '../../testSdk';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useVariableStore } from '@hmi/store/variableStore';
@@ -102,34 +102,32 @@ describe('Button', () => {
     expect(btn.style.backgroundColor).toBe('rgb(34, 167, 224)');
   });
 
-  it('hides the label but keeps it as the accessible name when Show label is off', () => {
-    renderButton({ label: 'Reset', showLabel: false });
+  it('renders an empty label with an icon as an icon-only button named after the icon', async () => {
+    renderButton({ label: ' ', iconName: 'house' });
 
-    const btn = screen.getByRole('button', { name: 'Reset' });
-    expect(btn).toHaveAttribute('title', 'Reset');
+    const btn = screen.getByRole('button', { name: 'house' });
+    await waitFor(() => expect(btn.querySelector('svg')).not.toBeNull());
+    expect(btn).toHaveClass('hmi-button__btn--icon-only');
+    expect(btn).not.toHaveAttribute('title');
     expect(btn.querySelector('.hmi-button__label')).toBeNull();
   });
 
-  it('marks an icon-only button so it drops the text padding, and only then', () => {
-    const { rerender } = renderButton({ label: 'Reset', showLabel: false });
-    expect(screen.getByRole('button', { name: 'Reset' })).toHaveClass('hmi-button__btn--icon-only');
+  it('keeps the text padding while the label is filled in', async () => {
+    renderButton({ label: 'Reset', iconName: 'house' });
 
-    rerender(
-      <MemoryRouter>
-        <Button properties={{ label: 'Reset' }} />
-      </MemoryRouter>,
-    );
-    expect(screen.getByRole('button', { name: 'Reset' })).not.toHaveClass(
-      'hmi-button__btn--icon-only',
-    );
+    const btn = screen.getByRole('button', { name: 'Reset' });
+    await waitFor(() => expect(btn.querySelector('svg')).not.toBeNull());
+    expect(btn).not.toHaveClass('hmi-button__btn--icon-only');
+    expect(btn).not.toHaveAttribute('aria-label');
   });
 
-  it('omits an empty accessible name and title when the hidden label is empty', () => {
-    renderButton({ label: '', showLabel: false });
+  it('stays a plain text button with neither icon nor label', () => {
+    renderButton({ label: '' });
 
     const btn = screen.getByRole('button');
+    expect(btn).not.toHaveClass('hmi-button__btn--icon-only');
     expect(btn).not.toHaveAttribute('aria-label');
-    expect(btn).not.toHaveAttribute('title');
+    expect(btn.querySelector('.hmi-button__label')).not.toBeNull();
   });
 
   it('stacks the icon above the text with the top icon position', () => {

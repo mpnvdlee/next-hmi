@@ -99,19 +99,13 @@
     "schema": {
       "label": {
         "label": "Label",
+        "description": "Leave it empty with an icon set for an icon-only button.",
         "defaultValue": "Button",
         "group": "Content"
       },
       "iconName": {
         "label": "Icon",
         "group": "Content"
-      },
-      "showLabel": {
-        "format": "show",
-        "label": "Show label",
-        "description": "Off makes an icon-only button. The label text stays its accessible name, so keep it filled in.",
-        "group": "Content",
-        "defaultValue": true
       },
       "iconPosition": {
         "format": "select",

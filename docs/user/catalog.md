@@ -129,7 +129,6 @@ Runs actions and can write true to a bound boolean on press.
 |---|---|---|
 | `label` | Label | `String` |
 | `iconName` | Icon | `icon` |
-| `showLabel` | Show label | `Boolean` |
 | `iconPosition` | Icon position | `String` |
 | `color` | Color | `color` |
 | `variant` | Style | `String` |

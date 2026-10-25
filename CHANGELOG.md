@@ -52,11 +52,10 @@ heading.
   rounded, and an empty colour keeps the severity tint, so existing projects
   look the same.
 
-- **Buttons can be icon-only, stacked, and sized.** The Button gets five
-  properties: **Show label** (off makes an icon-only button that keeps its
-  label as the name a screen reader announces and as a hover tooltip, and
-  takes even padding on every side so it sizes to a near-square tile),
-  **Icon position** (left, or on top with the text below), **Icon size** and
+- **Buttons can be icon-only, stacked, and sized.** A Button with an icon and
+  an empty label is icon-only: it takes even padding on every side so it sizes
+  to a near-square tile. The Button also gets four properties: **Icon
+  position** (left, or on top with the text below), **Icon size** and
   **Border width** in pixels, and a **Fill** colour for the outline style.
   Each one left at its default keeps today's look.
 
