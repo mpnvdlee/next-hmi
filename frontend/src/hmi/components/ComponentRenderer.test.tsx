@@ -269,3 +269,52 @@ describe('ComponentRenderer property defaults', () => {
     expect(renderWith({}).container.textContent).toBe('');
   });
 });
+
+describe('ComponentRenderer actions', () => {
+  it('resolves a $componentProp nested in an action when the action fires', async () => {
+    const { useHmiStore } = await import('@hmi/store/hmiStore');
+    const { fireEvent } = await import('@testing-library/react');
+    useHmiStore.setState({ pendingToasts: [], numpadRequest: null });
+    const label = { $componentProp: 'label' };
+    defineComponent([
+      {
+        id: 'edit',
+        type: 'Button',
+        name: 'Edit',
+        properties: {
+          label: 'Edit',
+          actions: {
+            onPress: [
+              {
+                type: 'showToast',
+                message: { $stringExpr: { template: 'Editing {1}', wildcards: { '1': label } } },
+                severity: 'info',
+                discard: 'auto',
+              },
+              {
+                type: 'editValue',
+                target: { $componentProp: 'value' },
+                title: { $stringExpr: { template: 'Set {1}', wildcards: { '1': label } } },
+              },
+            ],
+          },
+        },
+      },
+    ]);
+    render(
+      <MemoryRouter>
+        <ComponentRenderer
+          _widgetId="cmp"
+          properties={{ label: 'Max pressure', value: { $var: { path: 'CP:Params/Max' } } }}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+
+    expect(useHmiStore.getState().pendingToasts.map((t) => t.message)).toEqual([
+      'Editing Max pressure',
+    ]);
+    expect(useHmiStore.getState().numpadRequest?.title).toBe('Set Max pressure');
+  });
+});

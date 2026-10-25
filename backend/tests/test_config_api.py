@@ -46,6 +46,12 @@ def tmp_dirs(live_project_root: Path, monkeypatch, tmp_path: Path):
                     "category": "Navigation",
                     "schema": {"items": {"type": "menu-items"}},
                 },
+                # A named event: an actions-typed field that is not `actions`.
+                "StringInput": {
+                    "name": "String Input",
+                    "category": "Inputs",
+                    "schema": {"onSubmit": {"type": "actions"}},
+                },
             },
             "custom": {},
         },
@@ -1567,6 +1573,47 @@ def test_post_validate_component_flags_component_props_the_runtime_cannot_keep_l
         "/children/0/layout/width/$componentProp",
         "/componentProperties/fallback/defaultValue/$componentProp",
     }
+
+
+def test_post_validate_component_lets_actions_nest_component_props(client):
+    """An action reads its fields when it fires, so a nested $componentProp in
+    any action list stays current; a rendered property still warns."""
+    label = {"$componentProp": "label"}
+    toast = {
+        "type": "showToast",
+        "message": {"$stringExpr": {"template": "Set {1}", "wildcards": {"1": label}}},
+    }
+    edit = {"type": "editValue", "target": {"$componentProp": "value"}, "title": label}
+    draft = {
+        "name": "ParamRow",
+        "componentProperties": {
+            "label": {"type": "string", "label": "Name"},
+            "value": {"type": "float", "label": "Value", "write": True},
+        },
+        "children": [
+            {
+                "id": "edit",
+                "type": "Button",
+                "properties": {
+                    "label": {"$stringExpr": {"template": "Edit {1}", "wildcards": {"1": label}}},
+                    "actions": {
+                        "onPress": [
+                            {"type": "if", "condition": True, "then": [edit], "else": [toast]},
+                            {**edit, "onSuccess": [toast]},
+                        ]
+                    },
+                },
+            },
+            {"id": "entry", "type": "StringInput", "properties": {"onSubmit": [toast]}},
+        ],
+    }
+
+    resp = client.post("/api/config/validate", json={"kind": "component", "draft": draft})
+
+    nested = {
+        d["sourcePath"] for d in resp.json()["diagnostics"] if d["code"] == "componentprop-nested"
+    }
+    assert nested == {"/children/0/properties/label/$stringExpr/wildcards/1/$componentProp"}
 
 
 def test_post_validate_component_keeps_nested_component_props_a_warning(client):

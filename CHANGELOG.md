@@ -301,6 +301,14 @@ heading.
 
 ### Fixed
 
+- **An input inside a component's actions is not flagged.** The warnings
+  pill said a `$componentProp` nested in another source "renders once and
+  then stops updating" inside actions too, such as an Edit Value title built
+  from the input, although an action reads its fields when it fires. Action
+  lists — Actions, On Submit and other events, their If branches and On
+  Success / On Failed lists — are no longer flagged; a rendered property
+  still is.
+
 - **An icon path taken from the Repeat item is not an unknown asset.** A
   fixed icon or image whose path is a Repeat item member, as in
   `{ "$static": { "type": "custom", "path": { "$repeatItem": { "member": "icon" } } } }`,
