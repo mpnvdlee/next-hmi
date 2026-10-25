@@ -25,6 +25,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -97,6 +104,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -124,6 +138,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -177,6 +198,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -231,6 +259,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -275,6 +310,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -314,6 +356,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       }
@@ -364,6 +413,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -403,6 +459,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -530,6 +593,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -570,6 +640,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -613,6 +690,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -655,6 +739,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -751,6 +842,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -791,6 +889,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -830,6 +935,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -889,6 +1001,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -964,6 +1083,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -1047,6 +1173,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -1277,6 +1410,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -1588,6 +1728,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       }
@@ -1649,6 +1796,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -1699,6 +1853,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -1777,6 +1938,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -1863,6 +2031,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -1927,6 +2102,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -1973,6 +2155,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       }
@@ -2031,6 +2220,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -2064,6 +2260,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -2157,6 +2360,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -2238,6 +2448,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -2297,6 +2514,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -2356,6 +2580,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -2402,6 +2633,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       }
@@ -2451,6 +2689,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -2478,6 +2723,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -2528,6 +2780,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -2625,6 +2884,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -2691,6 +2957,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       },
@@ -2731,6 +3004,13 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
+          },
+          {
+            "key": "lockedMessage",
+            "label": "Locked message",
+            "type": "String",
+            "group": "Visibility",
+            "defaultValue": ""
           }
         ]
       }

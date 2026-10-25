@@ -735,7 +735,7 @@ export const schema: Record<string, SchemaField> = {
 };
 ```
 
-Every widget — built-in and custom — is automatically given two standard boolean properties, `visible` and `interactable` (both default `true`), surfaced under a **Visibility** section in the editor. Do not declare them in your schema. `WidgetRenderer` gates rendering and pointer interaction on them, so they accept any boolean source, including `$userGroups` to gate by user group. See [../architecture/value-types.md](../architecture/value-types.md).
+Every widget — built-in and custom — is automatically given two standard boolean properties, `visible` and `interactable` (both default `true`), surfaced under a **Visibility** section in the editor. Do not declare them in your schema. `WidgetRenderer` gates rendering and pointer interaction on them, so they accept any boolean source, including `$userGroups` to gate by user group. A third, the String `lockedMessage` (default empty), is the text a press on the widget shows while `interactable` is false; empty means *Interaction not permitted*. Do not declare it either. See [../architecture/value-types.md](../architecture/value-types.md).
 
 Optional sibling exports:
 

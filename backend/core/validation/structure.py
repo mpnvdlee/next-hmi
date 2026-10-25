@@ -116,7 +116,7 @@ def _type_label(field_type: str) -> str:
 # VISIBILITY_SCHEMA in frontend/src/hmi/registry/widgetRegistry.tsx, which the
 # registry merges into every widget; parity is fixture-tested in
 # test_structure_parity.py.
-_UNIVERSAL_PROPERTY_KEYS: frozenset[str] = frozenset({"visible", "interactable"})
+_UNIVERSAL_PROPERTY_KEYS: frozenset[str] = frozenset({"visible", "interactable", "lockedMessage"})
 
 _COMPONENT_TYPE_PREFIX = "$component:"
 

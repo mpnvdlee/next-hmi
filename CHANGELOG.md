@@ -206,6 +206,12 @@ heading.
   the same; a Navigation Menu placed straight in a shell region now gets its
   sidebar background and border in the editor preview too.
 
+- **A locked widget can say why.** Every widget gets a **Locked message**
+  next to **Interactable**. A press on the locked widget shows it in the
+  notification and the tooltip instead of *Interaction not permitted*, so a
+  Start button can read *Stop the pump first*. Left empty, the text is the
+  same as before.
+
 ### Changed
 
 - **A project opened in 1.1.0 no longer opens in 1.0.x (breaking).** The
