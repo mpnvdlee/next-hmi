@@ -250,7 +250,8 @@ heading.
 - **A toast no longer covers the numpad.** A toast arriving while the
   numpad or keyboard was open drew over its bottom row of keys. The keypad
   the operator is typing on now sits above toasts, and below a Show Alert
-  confirm and an alarm's detail dialog.
+  confirm and an alarm's detail dialog. An open confirm now also dims the
+  toasts behind it; alarm popups keep their own layer above it.
 
 - **A custom widget's centred numpad is centred.** A `VirtualNumpad` with
   `dockPosition="center"` sat at the left edge of a keyboard-wide strip

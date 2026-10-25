@@ -141,6 +141,7 @@ describe('AlertModal layering', () => {
 
     expect(z('toast')).toBeLessThan(z('input'));
     expect(z('input')).toBeLessThan(z('alert'));
-    expect(z('alert')).toBeLessThan(z('alarm-dialog'));
+    expect(z('alert')).toBeLessThan(z('alarm-popup'));
+    expect(z('alarm-popup')).toBeLessThan(z('alarm-dialog'));
   });
 });

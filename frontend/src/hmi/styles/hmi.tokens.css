@@ -96,6 +96,9 @@
   /* A Show Alert confirm must cover a numpad the same action list opened,
      or the keypad would still take input over it. */
   --hmi-z-alert: 380;
+  /* An alarm popup must never sit under an alert's dim: it gets its own layer
+     above the alert, below the detail dialog it opens. */
+  --hmi-z-alarm-popup: 390;
   --hmi-z-alarm-dialog: 400;
 
   /* Width of the severity stripe down the left edge of an alarm row or toast. */
