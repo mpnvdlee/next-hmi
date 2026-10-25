@@ -556,8 +556,9 @@ jobs:
   # cloned in; see docs/dev/operations/release.md, and the edition guard in
   # build/publish-docs.py that refuses the downgrade.
   #
-  # The tree is additive by design. It carries this release's `v<version>/`
-  # directory, a copy of it at the root as "latest", and a `versions.json` built
+  # The tree is additive by design. It carries this release's minor-line
+  # directory (`v1.1/` for 1.1.2), a copy of it at the root as "latest" when
+  # that line is the newest, and a `versions.json` built
   # from the repository's released tags — so uploading it over the live site
   # leaves every previously published version directory untouched while the
   # picker immediately starts offering the new one.
@@ -583,7 +584,7 @@ jobs:
           fi
       - name: Render the versioned site tree
         run: |
-          python build/publish-docs.py site "${{ steps.version.outputs.value }}" /docs --from-git-tags
+          python build/publish-docs.py site "${{ steps.version.outputs.value }}" /docs
       - name: Render the offline copy the release zips ship
         run: |
           python build/render-docs.py offline "${{ steps.version.outputs.value }}"
@@ -591,15 +592,16 @@ jobs:
         run: |
           set -euo pipefail
           version="${{ steps.version.outputs.value }}"
+          line="$(echo "${version%%-*}" | cut -d. -f1-2)"
           test -f site/versions.json
-          test -d "site/v$version"
-          test -f "site/v$version/index.html"
-          # No version gate on the root copy: publish-docs.py renders it for a
-          # candidate exactly like a final release, so it must exist either way.
-          test -f site/index.html
+          test -f "site/v$line/index.html"
+          # The root holds the newest minor line only: a patch for an older
+          # line (1.0.2 after 1.1.0) leaves it alone, so it is not rendered.
+          latest="$(python3 -c 'import json; print(json.load(open("site/versions.json"))["versions"][0]["version"])')"
+          if [ "$latest" = "$version" ]; then test -f site/index.html; fi
           # A dev doc reaching the guide is the regression this split exists to
           # prevent — see docs/INDEX.md.
-          if ls site/v"$version"/*.html | grep -Ee '(backend|rest-api|websocket|dependency-policy)\.html'; then
+          if ls site/v"$line"/*.html | grep -Ee '(backend|rest-api|websocket|dependency-policy)\.html'; then
             echo "::error::developer documentation leaked into the user guide"
             exit 1
           fi
@@ -614,7 +616,7 @@ jobs:
           # fetched from Google Fonts on purpose (WEBFONTS in render-docs.py).
           # Any *other* host is the regression — typically an asset that only
           # resolves from the machine that wrote the page.
-          if grep -Eoh 'src="https?://[^"]*"|<link[^>]+href="https?://[^"]*"' site/v"$version"/*.html \
+          if grep -Eoh 'src="https?://[^"]*"|<link[^>]+href="https?://[^"]*"' site/v"$line"/*.html \
              | grep -Ev 'https://fonts\.(googleapis|gstatic)\.com'; then
             echo "::error::rendered docs load a resource from an unexpected external host"
             exit 1
@@ -686,6 +688,14 @@ jobs:
     permissions:
       contents: write
     steps:
+      # The release notes are a short form of this version's CHANGELOG.md
+      # section, made by build/release-notes.py.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: |
+            CHANGELOG.md
+            build/release-notes.py
+          sparse-checkout-cone-mode: false
       # Only the portable zips and the offline Docker installers belong in the
       # Release — not the docs-site-oss bundle or the docker-image-* tarballs
       # (those feed docker-publish below, not end users).
@@ -706,13 +716,24 @@ jobs:
           case "$tag" in
             *-*) prerelease_flag=(--prerelease) ;;
           esac
+          # A tag without its own section (an rc, still under [Unreleased])
+          # falls back to GitHub's generated notes.
+          python3 build/release-notes.py "${tag#v}" "$GITHUB_REPOSITORY" > notes.md
+          if [ -s notes.md ]; then
+            notes=(--notes-file notes.md)
+          else
+            notes=(--generate-notes)
+          fi
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$tag" artifacts/* --repo "$GITHUB_REPOSITORY" --clobber
+            if [ -s notes.md ]; then
+              gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
+            fi
           else
             gh release create "$tag" artifacts/* \
               --repo "$GITHUB_REPOSITORY" \
               --title "NEXT HMI ${tag#v}" \
-              --generate-notes \
+              "${notes[@]}" \
               "${prerelease_flag[@]}"
           fi
 

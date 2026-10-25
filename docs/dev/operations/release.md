@@ -3,6 +3,59 @@
 Internal checklist for cutting a new release. Read [deploy.md](deploy.md) for
 operator-facing install instructions.
 
+## Release, step by step
+
+The whole run, in order. The sections below hold the detail per step.
+
+1. **Pick the version.** Patch for fixes, minor for features, and at least a
+   minor when the project format moved — see [Versioning](#versioning) and
+   [Project format](#project-format).
+2. **Close the changelog section.** In `CHANGELOG.md`, rename `[Unreleased]`
+   to `## [x.y.z] - YYYY-MM-DD` and add
+   `[x.y.z]: https://github.com/mpnvdlee/next-hmi/releases/tag/vx.y.z` to the
+   link list at the bottom, or the heading renders as plain `[x.y.z]`. Open the
+   next `[Unreleased]` only after tagging: the website renders the changelog at
+   the tag, and an empty section shows there as a bare heading. Start the section with a one- or two-sentence intro, and write every entry
+   as `- **Title.** Body`. The GitHub Release shows only the intro, the
+   headings and the titles, so a title must stand on its own.
+3. **Run the [pre-flight](#pre-flight) checks.**
+4. **Merge and tag.** Merge to the release branch, tag that commit `vx.y.z`,
+   push the branch, then the tag. A patch for an older line (1.0.3 after
+   1.1.0) is tagged from that line's branch, which must carry
+   `build/release-notes.py` and the line-aware `build/publish-docs.py`.
+5. **Wait for the release matrix.** On green, the GitHub Release appears with
+   the zips and the short notes, and a final tag also pushes the GHCR image —
+   see [Sign-off](#sign-off) steps 1–3. Check the Release page. To redo its
+   notes after the fact:
+
+   ```bash
+   python3 build/release-notes.py x.y.z <owner>/<repo> | gh release edit vx.y.z --notes-file -
+   ```
+
+6. **Point the website's `dl.php`** at the new filenames.
+7. **Render the guide from the tag**, not from a development branch — the
+   guide must describe what this release does:
+
+   ```bash
+   git worktree add --detach ../nexthmi-docs vx.y.z
+   cd ../nexthmi-docs
+   ln -s <private-repo-checkout> enterprise
+   NEXTHMI_EDITION=ee \
+   NEXTHMI_DOCS_ANALYTICS_TAG_FILE=<promotion-website>/analytics-tag.html \
+     <next-hmi>/.venv/bin/python build/publish-docs.py <promotion-website>/public_html/docs x.y.z
+   cd - && git worktree remove --force ../nexthmi-docs
+   ```
+
+   This writes the minor line's copy (`docs/v1.1/`), the root when that line is
+   the newest, `versions.json` and `sitemap.xml` — see [Sign-off](#sign-off)
+   step 4. The version picker shows the line, `1.1.x`.
+
+8. **Upload `docs/`** — plus `.htaccess` when it changed — and commit the
+   website checkout.
+9. **After a patch for an older line**, merge its changelog section into the
+   newest line's `CHANGELOG.md`. The root guide is rendered from the newest
+   line, so its changelog lists the patch only from then on.
+
 ## Versioning
 
 Releases follow semver on the 1.x line: a patch (`1.0.1`) for fixes, a minor
@@ -193,9 +246,14 @@ After verifying every artifact:
    `nexthmi-linux-x64-<version>.zip`, `nexthmi-windows-x64-<version>.zip` and
    the offline Docker installers `nexthmi-docker-linux-x64-<version>.zip` and
    `nexthmi-docker-linux-arm64-<version>.zip` to the GitHub Release for the tag,
-   creating it with generated notes when it does not exist yet; a tag carrying a
+   creating it when it does not exist yet; a tag carrying a
    hyphen (`v1.1.0-rc.1`) is published `--prerelease`, so only a bare `vX.Y.Z`
-   can become "Latest". Check the Release page once the run is green, then
+   can become "Latest". The release description is a short form of the
+   version's `## [x.y.z]` section of `CHANGELOG.md` at the tag — its intro and
+   the bold title of each entry, linking to the full text
+   (`build/release-notes.py`) — so date and rename the
+   `[Unreleased]` section before tagging; a tag without its own section gets
+   GitHub's generated notes instead. Check the Release page once the run is green, then
    point the website's `dl.php` at the new filenames.
 3. The registry image is published for you, on a **final** tag only:
    `docker-publish` loads the two smoke-tested per-arch tarballs and pushes
@@ -208,10 +266,13 @@ After verifying every artifact:
    NEXTHMI_EDITION=ee python build/publish-docs.py <promotion-website>/public_html/docs <version>
    ```
 
-   This renders the release into `docs/v<version>/`, replaces `docs/` with
-   the same version as "latest", and rewrites `docs/versions.json` and
-   `docs/sitemap.xml`. Upload the whole `docs/` tree. Older releases stay
-   where they are — the picker in the page header reads `versions.json` at
+   This renders the release into its minor line's directory (`docs/v1.1/` for
+   1.1.2, overwriting the previous patch, changelog included), replaces `docs/`
+   with the same version as "latest" when that line is the newest, and rewrites
+   `docs/versions.json` and `docs/sitemap.xml`. A patch for an older line
+   (1.0.3 after 1.1.0) updates only `docs/v1.0/`. The lines come from the final
+   tags, so run it from a checkout that has them. Upload the whole `docs/`
+   tree. Older lines stay where they are — the picker in the page header reads `versions.json` at
    load time, so a guide published a year ago starts offering the new version
    without being rebuilt.
 

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Publish the user guide to the website, keeping older releases readable.
 
-    python build/publish-docs.py <site-docs-dir> 1.2.3 [base-url] [--from-git-tags]
-                                 [--allow-dropped-pages]
+    python build/publish-docs.py <site-docs-dir> 1.2.3 [base-url] [--allow-dropped-pages]
 
 Layout it maintains:
 
-    <site-docs-dir>/                 the latest release — the URL people link
-    <site-docs-dir>/v1.2.3/          a frozen copy of each published release
+    <site-docs-dir>/                 the newest minor line — the URL people link
+    <site-docs-dir>/v1.2/            one copy per minor line, which each patch
+                                     release overwrites, changelog included
     <site-docs-dir>/versions.json    what the in-page version picker reads
     <site-docs-dir>/sitemap.xml      the latest pages, for search engines
 
@@ -16,16 +16,17 @@ Publishing refuses to drop a page the site already serves — see
 a site whose guide was built with the enterprise pages in it.
 
 Run it against a checkout of the published site (``promotion-website/public_html/docs``),
-then upload. Re-running for a version that already exists replaces that copy,
-which is what you want after fixing a typo in a shipped guide.
+then upload. A patch for an older line (``1.0.2`` once ``1.1.0`` is out) updates
+only ``v1.0/``; the root stays on the newest line. The lines come from the
+repository's final tags, so run it from a checkout that has them.
 
 Set ``NEXTHMI_DOCS_ANALYTICS_TAG_FILE`` to a file holding an HTML snippet and
 every published page carries it — that is how the site counts page views. Leave
 it unset and the guide is published without any. See ``ANALYTICS_TAG_ENV``.
 
-A release candidate (any version with a hyphen) gets its ``v<version>/``
-directory and a manifest entry exactly like a final release, including the
-root copy — there is no version gate on what may serve as the latest guide.
+A release candidate (any version with a hyphen) writes its line's directory,
+manifest entry and — when its line is the newest — the root copy, exactly like
+a final release.
 
 Only the website gets this treatment. The docs inside a release zip are rendered
 by ``render-docs.py`` alone and describe exactly the executable they ship beside
@@ -37,6 +38,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -99,9 +101,9 @@ def render(out_dir: Path, version: str, base_url: str, *, archived: bool) -> Non
         raise SystemExit(result.returncode)
 
 
-def is_prerelease(version: str) -> bool:
-    """A hyphen marks a candidate — the same rule the release workflow gates on."""
-    return "-" in version
+def minor_line(version: str) -> str:
+    """``1.0.2`` → ``1.0``: the docs keep one copy per minor line."""
+    return ".".join(version.lstrip("v").split("-")[0].split(".")[:2])
 
 
 def released_tags() -> list[str] | None:
@@ -128,35 +130,31 @@ def released_tags() -> list[str] | None:
     return sorted(tags, key=version_sort_key, reverse=True)
 
 
-def write_manifest(
-    site_dir: Path, latest: str, base_url: str, *, from_git: bool
-) -> list[dict[str, object]]:
-    archived: list[str] | None = None
-    if from_git:
-        archived = released_tags()
-        if archived is None:
-            print("[docs] no git tags readable — falling back to a directory scan")
-    if archived is None:
-        # Same rule the tag list applies: candidates are not published versions,
-        # so they never appear in the picker — including the one being written
-        # right now, which is already on disk by the time this runs.
-        archived = sorted(
-            (
-                p.name
-                for p in site_dir.iterdir()
-                if p.is_dir() and p.name.startswith("v") and not is_prerelease(p.name)
-            ),
-            key=version_sort_key,
-            reverse=True,
-        )
-    base = base_url.rstrip("/") or "/"
-    entries: list[dict[str, object]] = [{"version": latest, "path": base, "latest": True}]
+def published_lines(site_dir: Path, version: str) -> dict[str, str]:
+    """Newest version per minor line, newest line first, ``version`` included."""
+    names = released_tags()
+    if names is None:
+        print("[docs] no git tags readable — falling back to a directory scan")
+        names = [
+            p.name
+            for p in site_dir.iterdir()
+            if p.is_dir() and re.fullmatch(r"v\d+\.\d+", p.name)
+        ]
+    newest: dict[str, str] = {}
+    for name in sorted(names, key=version_sort_key):
+        newest[minor_line(name)] = name.lstrip("v")
+    # The copy on disk is the one being published, even when it re-publishes an
+    # older patch, and the picker selects its entry by exact version.
+    newest[minor_line(version)] = version
+    return dict(sorted(newest.items(), key=lambda kv: version_sort_key(kv[0]), reverse=True))
 
-    for name in archived:
-        version = name.lstrip("v")
-        if any(entry["version"] == version for entry in entries):
-            continue
-        entries.append({"version": version, "path": f"{base}/{name}", "latest": False})
+
+def write_manifest(site_dir: Path, lines: dict[str, str], base_url: str) -> list[dict[str, object]]:
+    base = base_url.rstrip("/") or "/"
+    entries: list[dict[str, object]] = [
+        {"version": version, "path": base if i == 0 else f"{base}/v{line}", "latest": i == 0}
+        for i, (line, version) in enumerate(lines.items())
+    ]
     (site_dir / "versions.json").write_text(
         json.dumps({"versions": entries}, indent=2) + "\n", encoding="utf-8"
     )
@@ -205,7 +203,6 @@ def write_sitemap(site_dir: Path, base_url: str) -> int:
 
 def main(argv: list[str]) -> int:
     args = [a for a in argv[1:] if not a.startswith("--")]
-    from_git = "--from-git-tags" in argv
     allow_dropped = "--allow-dropped-pages" in argv
     if len(args) < 2:
         print(__doc__, file=sys.stderr)
@@ -215,8 +212,13 @@ def main(argv: list[str]) -> int:
     base_url = args[2] if len(args) > 2 else "/docs"
     site_dir.mkdir(parents=True, exist_ok=True)
 
-    archive_dir = site_dir / f"v{version}"
-    render(archive_dir, version, base_url, archived=True)
+    lines = published_lines(site_dir, version)
+    line = minor_line(version)
+    render(site_dir / f"v{line}", version, base_url, archived=True)
+    if line != next(iter(lines)):
+        write_manifest(site_dir, lines, base_url)
+        print(f"[docs] published {version} → v{line}/; the root stays on {next(iter(lines.values()))}")
+        return 0
 
     # The latest copy is rendered separately rather than copied, so a future
     # change to how "latest" is presented does not need the archive rebuilt.
@@ -254,7 +256,7 @@ def main(argv: list[str]) -> int:
     shutil.rmtree(staging)
     write_sitemap(site_dir, base_url)
 
-    entries = write_manifest(site_dir, version, base_url, from_git=from_git)
+    entries = write_manifest(site_dir, lines, base_url)
     print(f"[docs] published {version} → {site_dir}")
     if dropped and allow_dropped:
         print("[docs] dropped on request: " + ", ".join(dropped))
