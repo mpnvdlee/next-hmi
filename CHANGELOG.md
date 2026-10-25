@@ -291,6 +291,13 @@ heading.
 
 ### Fixed
 
+- **An alarms file the app cannot load is flagged.** An `alarms.json` that
+  breaks the alarm format, such as an alarm with a key it does not know, was
+  replaced by an empty one at startup, and the warnings pill said nothing, so
+  every alarm was gone without a word. The pill now shows an error per field
+  the format rejects, and the log says the file was replaced. The same goes
+  for `recipes.json`.
+
 - **A popover opened near the bottom of the screen stays on it.** A dialog
   placed `trigger-below` a button low on the screen opened below it anyway,
   partly off the screen, because its size was read before its contents had
