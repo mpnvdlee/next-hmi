@@ -23,7 +23,7 @@ import type {
   VariableBinding,
   WriteTarget,
 } from '@shared/types/config';
-import { writeTargetAddress } from '@shared/types/config';
+import { bindingParts, isBoundIndex, writeTargetAddress } from '@shared/types/config';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import { getWriteCoercionKind, type VariableWriteDescriptor } from '@config/utils/variableType';
 import {
@@ -64,7 +64,7 @@ import { useEditorDomainStore, type PickerExtras } from '@config/store/domains/e
 import { repeatPickLabel } from '../VariableBindingPicker/repeatItemRows';
 import PropertySourceSelector, { type PropertySource } from '../PropertySourceSelector';
 import { getPropertySource } from '../propertyValueUtils';
-import { RepeatItemEditor } from '../PropertySourceEditor/editors/leaf';
+import { IndexRow, RepeatItemEditor } from '../PropertySourceEditor/editors/leaf';
 import { ComponentPropEditor } from '../PropertySourceEditor/editors/picker';
 import { getDefaultValueForKind } from './actionMutations';
 
@@ -644,12 +644,28 @@ function repeatTargetOf(target: WriteTarget | undefined): { member?: string } | 
   return target && '$repeatItem' in target ? target.$repeatItem : undefined;
 }
 
+/** A `$var` target's address as the editor names it: a bound index shows as
+ *  `path[…]`, since which element it writes is only known when the action runs —
+ *  unless it is a fixed `$static` number. */
+export function editorTargetAddress(
+  target: WriteTarget | undefined,
+): { datasource: string; path: string } | null {
+  const address = writeTargetAddress(target);
+  const binding = varBindingOf(target);
+  if (!address || !isBoundIndex(binding?.index)) return address;
+  const fixed = binding.index.$static;
+  return {
+    ...address,
+    path: `${bindingParts(binding).location}[${Number.isInteger(fixed) ? fixed : '…'}]`,
+  };
+}
+
 /** The descriptor cached for a `$var` target — keyed by its `ds:path[N]`. */
 function varTargetDescriptor(
   target: WriteTarget | undefined,
   dataTypes: ActionEditorCtx['dataTypes'],
 ): ActionEditorCtx['dataTypes'][string] | undefined {
-  const address = writeTargetAddress(target);
+  const address = editorTargetAddress(target);
   return address ? dataTypes[`${address.datasource}:${address.path}`] : undefined;
 }
 
@@ -674,15 +690,20 @@ function WriteTargetRow({
   ctx,
   filter,
   diagnostic,
+  writesWholeArray,
 }: {
   action: { target?: WriteTarget };
   ctx: ActionEditorCtx;
   filter: { label: string; write: boolean; type: string[] };
   diagnostic?: { level: 'error' | 'warning'; message: string };
+  /** The action may write a whole array, so its index is optional. */
+  writesWholeArray?: boolean;
 }) {
   const scope = useRepeatEditorScope();
   const target = repeatTargetOf(action.target);
-  const address = writeTargetAddress(action.target);
+  const address = editorTargetAddress(action.target);
+  const binding = varBindingOf(action.target);
+  const descriptor = varTargetDescriptor(action.target, ctx.dataTypes);
   const active: PropertySource = target ? '$repeatItem' : '$var';
   const members = scope?.members ?? [];
   const pill =
@@ -741,13 +762,54 @@ function WriteTargetRow({
     field = (
       <PickerField
         mono
-        displayText={address ? `${address.datasource}:${address.path}` : ''}
+        // A bound index shows in its own row below, so the path shows without one.
+        displayText={
+          binding && isBoundIndex(binding.index)
+            ? binding.path
+            : address
+              ? `${address.datasource}:${address.path}`
+              : ''
+        }
         emptyLabel="Not bound"
         pickTitle="Change variable binding"
         onPick={() => ctx.openWriteVarPicker()}
       />
     );
   }
+  // A whole array target names its element in a row of its own below: a
+  // number or a source such as a dialog's input parameter. A write may also
+  // write the whole array, which leaving that row empty means.
+  const wholeArray = descriptor?.isArray === true && !descriptor.indexed;
+  const indexRow = binding && (isBoundIndex(binding.index) || wholeArray) && (
+    <ParentPathContext.Provider value={[...ctx.path, 'target']}>
+      <IndexRow
+        label="Variable"
+        binding={binding}
+        optional={writesWholeArray}
+        onChange={(b) =>
+          ctx.update({
+            target: { $var: b },
+            // A whole-array write's value is an array; one element takes a scalar.
+            ...(writesWholeArray &&
+              (b.index === undefined) !== (binding.index === undefined) && {
+                value:
+                  b.index === undefined
+                    ? []
+                    : getDefaultValueForKind(getWriteCoercionKind(descriptor?.dataType)),
+              }),
+          } as Partial<ButtonAction>)
+        }
+        onOpenBindingPicker={(onPick, currentBinding, slot, extras) =>
+          ctx.openBindingPicker('', 'writeTargetIndex', {
+            ...extras,
+            filter: slotFilter({ label: 'Index', type: 'Integer' }, slot),
+            currentBinding,
+            onPick,
+          })
+        }
+      />
+    </ParentPathContext.Provider>
+  );
 
   const repeatDiagnostic =
     target && !scope
@@ -761,9 +823,12 @@ function WriteTargetRow({
         : undefined;
 
   return (
-    <PropRow label="Variable" badge={pill} diagnostic={repeatDiagnostic ?? diagnostic}>
-      {field}
-    </PropRow>
+    <>
+      <PropRow label="Variable" badge={pill} diagnostic={repeatDiagnostic ?? diagnostic}>
+        {field}
+      </PropRow>
+      {indexRow}
+    </>
   );
 }
 
@@ -823,6 +888,7 @@ const WriteDataVariableEditor: EditorFor<'writeDataVariable'> = ({ action, ctx }
         ctx={ctx}
         filter={WRITE_TARGET_FILTER}
         diagnostic={targetDiagnostic}
+        writesWholeArray
       />
       {valueSource === '$repeatItem' && (
         <PropRow label="Value" badge={valuePill}>

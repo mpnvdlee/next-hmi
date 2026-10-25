@@ -361,6 +361,9 @@ export interface VarMode {
   selectedElementIndex?: number | '#';
   rawSelectedFolder: FolderEntry | null;
   scalarIsValid: boolean | null;
+  /** The selection is a whole array that fits by its element, which the
+   *  field's Index row then names. */
+  wholeArrayElement?: boolean;
   isStruct: boolean;
 }
 
@@ -605,6 +608,11 @@ function VarScalarPanel({
             <UnresolvedRow selectedKey={selectedKey} pending={mode?.pendingSelection === true} />
           ) : (
             <div className="editor-binding-char-empty">Nothing selected</div>
+          )}
+          {mode?.wholeArrayElement && (
+            <div className="editor-binding-char-empty">
+              Whole array — choose its element in the field's Index row
+            </div>
           )}
         </div>
       </div>

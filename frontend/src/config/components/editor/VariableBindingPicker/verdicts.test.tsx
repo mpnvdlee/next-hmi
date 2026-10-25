@@ -93,7 +93,7 @@ const VARIABLE_CASES: [string, Filter | undefined, string, string][] = [
   ['Float', { type: 'Float' }, 'PLC:Speed', '✓'],
   ['Float', { type: 'Float' }, 'PLC:SpeedRO', '✓'],
   ['Float', { type: 'Float' }, 'PLC:Run', '✗'],
-  ['Float', { type: 'Float' }, 'PLC:Setpoints', '✗'],
+  ['Float', { type: 'Float' }, 'PLC:Setpoints', '✓'],
   ['Float', { type: 'Float' }, 'PLC:Setpoints[1]', '✓'],
   ['Float', { type: 'Float' }, 'PLC:Setpoints[#]', '✓'],
   ['Float', { type: 'Float' }, 'PLC:Motor', '✗'],
@@ -169,6 +169,28 @@ describe('variable picker verdicts', () => {
     open(filter, key);
     await waitFor(() => expect(verdict()).toBe(expected));
     expect(confirmDisabled()).toBe(expected === '✗');
+  });
+
+  it('confirms a whole array on a one-value field as the bare array, which its Index row then names', async () => {
+    const onPick = vi.fn();
+    mockedApiJson.mockImplementation(async (url: string) =>
+      url === '/api/datasources'
+        ? ([{ name: 'PLC', type: 'static' }] as never)
+        : ({ variables: PLC_VARIABLES } as never),
+    );
+    useEditorDomainStore.getState().openBindingPicker('', 'field', {
+      filter: { type: 'Float' },
+      currentBinding: { path: 'PLC:Setpoints' },
+      onPick,
+    });
+    render(<VariableBindingPicker />);
+    await waitFor(() => expect(verdict()).toBe('✓'));
+    expect(screen.getByText(/Whole array — choose its element/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(onPick).toHaveBeenCalledWith(
+      { path: 'PLC:Setpoints' },
+      expect.objectContaining({ isArray: true, index: undefined }),
+    );
   });
 
   it('keeps a selection confirmable while its datasource is still loading', async () => {
