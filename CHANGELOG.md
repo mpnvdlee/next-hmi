@@ -221,6 +221,11 @@ heading.
 
 ### Fixed
 
+- **A centred numpad is centred.** A numpad docked `center` sat at the left
+  edge of a keyboard-wide strip in the middle of the screen. It is now
+  centred itself, for the Edit Value action, Number Input, Numeric Stepper
+  and a custom widget's `VirtualNumpad` alike.
+
 - **A second tap on a Number Input opens its numpad again.** After × or
   Enter the field kept focus, and the numpad opened only when the field
   gained focus, so tapping the same field again did nothing until the
