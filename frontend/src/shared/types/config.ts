@@ -362,7 +362,10 @@ export interface RepeatItemSource {
 /** The variable a write or toggle action writes: a `$var`, or — inside a
  *  Repeater — the copy's element (`member` of a struct element), which becomes
  *  that copy's `$var` before the action fires. */
-export type WriteTarget = VarSource | { $repeatItem: { member?: string } };
+/** What a write action writes: a variable, the Repeater copy's element, or — inside
+ *  a component or a dialog — an input parameter the caller filled with a variable. */
+export type WriteTarget =
+  VarSource | { $repeatItem: { member?: string } } | { $componentProp: string };
 
 /** Logical viewport size class. Driven by configurable breakpoints. */
 export type ViewportSize = 'phone' | 'tablet' | 'laptop';

@@ -682,9 +682,11 @@ function writeTargetType(
 }
 
 /**
- * A write/toggle target: a datasource variable, or — inside a Repeater — the
- * copy's own element. Each is its own source with its own picker. The element
- * is always this copy's; only a struct element asks which member to write.
+ * A write/toggle target: a datasource variable, inside a Repeater the copy's
+ * own element, or inside a component or dialog an input parameter the caller
+ * fills with a variable. Each is its own source with its own picker. The
+ * element is always this copy's; only a struct element asks which member to
+ * write.
  */
 function WriteTargetRow({
   action,
@@ -701,35 +703,57 @@ function WriteTargetRow({
   writesWholeArray?: boolean;
 }) {
   const scope = useRepeatEditorScope();
+  const inputScope = useComponentPropertySchema();
   const target = repeatTargetOf(action.target);
+  const inputTarget = action.target && '$componentProp' in action.target;
   const address = editorTargetAddress(action.target);
   const binding = varBindingOf(action.target);
   const descriptor = varTargetDescriptor(action.target, ctx.dataTypes);
-  const active: PropertySource = target ? '$repeatItem' : '$var';
+  const active: PropertySource = target ? '$repeatItem' : inputTarget ? '$componentProp' : '$var';
   const members = scope?.members ?? [];
+  const scopeSources: PropertySource[] = [
+    ...(scope || target ? (['$repeatItem'] as const) : []),
+    ...(inputScope || inputTarget ? (['$componentProp'] as const) : []),
+  ];
   const pill =
-    scope || target ? (
+    scopeSources.length > 0 ? (
       <PropertySourceSelector
         compact
-        value={target ? { $repeatItem: {} } : { $var: { path: '' } }}
+        value={action.target ?? { $var: { path: '' } }}
         source={active}
         fieldType="string"
         forcedSources={['$var']}
         includeStatic={false}
-        scopeSources={['$repeatItem']}
+        scopeSources={scopeSources}
         label="Variable"
         onChange={(v) => {
           const next = getPropertySource(v);
           if (next === active) return;
           ctx.update({
-            target: next === '$repeatItem' ? { $repeatItem: {} } : undefined,
+            target:
+              next === '$repeatItem'
+                ? { $repeatItem: {} }
+                : next === '$componentProp'
+                  ? { $componentProp: '' }
+                  : undefined,
           } as Partial<ButtonAction>);
         }}
       />
     ) : undefined;
 
   let field: ReactNode;
-  if (target && members.length > 0) {
+  if (inputTarget) {
+    // The picker offers the inputs that can hold a writable variable of this type.
+    field = (
+      <ComponentPropEditor
+        value={action.target}
+        onChange={(v) =>
+          ctx.update({ target: v ?? { $componentProp: '' } } as Partial<ButtonAction>)
+        }
+        schema={{ type: filter.type as SchemaField['type'], write: true, label: filter.label }}
+      />
+    );
+  } else if (target && members.length > 0) {
     field = (
       <PickerField
         mono

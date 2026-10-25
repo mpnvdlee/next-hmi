@@ -47,10 +47,13 @@ function readStoredVariable(datasource: string, path: string): ResolvedValue {
   return (value !== undefined ? value : null) as ResolvedValue;
 }
 
-/** A write target's bound index resolved at the moment of the write — an action
- *  fired by a page or global event never passed through a widget's resolution. */
-function withBoundIndexResolved(target: unknown, ctx: EvaluationContext): unknown {
-  return substituteBoundIndexes(target, (index) => resolveBoundIndex(index, ctx));
+/** A write target as it stands at the moment of the write: a component input it
+ *  names swapped for the binding the instance passed, and its bound index
+ *  resolved — an action fired by a page or global event never passed through a
+ *  widget's resolution. */
+function resolveWriteTarget(target: unknown, ctx: EvaluationContext): unknown {
+  const bound = resolveComponentPropValue(target, ctx.inputScopeProps);
+  return substituteBoundIndexes(bound, (index) => resolveBoundIndex(index, ctx));
 }
 
 /** The value a write address holds now. A struct member read outside a widget
@@ -164,7 +167,7 @@ export function executeWidgetActions(
     }
 
     if (action.type === 'writeDataVariable') {
-      const address = writeTargetAddress(withBoundIndexResolved(action.target, evalCtx));
+      const address = writeTargetAddress(resolveWriteTarget(action.target, evalCtx));
       if (!address) continue;
       const requestId = beginAsyncAction(action, scope, inputScopeProps);
       sendWsMessage({
@@ -182,7 +185,7 @@ export function executeWidgetActions(
     }
 
     if (action.type === 'toggleDataVariable') {
-      const address = writeTargetAddress(withBoundIndexResolved(action.target, evalCtx));
+      const address = writeTargetAddress(resolveWriteTarget(action.target, evalCtx));
       if (!address) continue;
       const requestId = beginAsyncAction(action, scope, inputScopeProps);
       sendWsMessage({
@@ -195,7 +198,7 @@ export function executeWidgetActions(
     }
 
     if (action.type === 'editValue') {
-      const target = withBoundIndexResolved(action.target, evalCtx);
+      const target = resolveWriteTarget(action.target, evalCtx);
       const address = writeTargetAddress(target);
       if (!address) continue;
       const range = configuredRange(address);
