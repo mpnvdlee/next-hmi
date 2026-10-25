@@ -111,8 +111,8 @@ A placeholder may wrap its value in transform functions, applied inside-out:
 | Function | Does |
 |---|---|
 | `ToLower` · `ToUpper` · `Capitalize` · `Trim` | Case and whitespace. |
-| `Round` · `Round1` · `Round2` | Nearest integer, or one / two decimals. |
-| `Thousands` | Digit grouping — `41280` → `41,280`. |
+| `Round` · `Round1` · `Round2` · `Round3` · `Round4` | Nearest integer, or one to four decimals. |
+| `Thousands` | Digit grouping — `41280` → `41,280`. It keeps the decimals its input has: `{Thousands(Round1(1))}` → `41,280.0`. |
 | `Signed` | Always show the sign — `6` → `+6`, `-4` → `−4`, `0` stays `0`. Put it outermost so it keeps the decimals of an inner round: `{Signed(Round1(1))}` → `+6.0`. |
 
 A placeholder whose wildcard is missing is left in the text as-is, so a typo shows up on screen rather than silently blanking the label.

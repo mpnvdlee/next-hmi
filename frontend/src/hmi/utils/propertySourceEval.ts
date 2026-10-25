@@ -610,6 +610,12 @@ function parsePlaceholder(body: string): { fns: string[]; key: string } | null {
   return { fns, key: rest };
 }
 
+/** A transform that writes a number with exactly `digits` decimals. */
+const toDecimals = (digits: number) => (v: string) => {
+  const n = parseFloat(v);
+  return isNaN(n) ? v : n.toFixed(digits);
+};
+
 /** Supported transform functions mapped to their implementations. */
 const STRING_EXPR_FNS: Record<string, (v: string) => string> = {
   ToLower: (v) => v.toLowerCase(),
@@ -620,24 +626,21 @@ const STRING_EXPR_FNS: Record<string, (v: string) => string> = {
     const n = parseFloat(v);
     return isNaN(n) ? v : String(Math.round(n));
   },
-  Round1: (v) => {
-    const n = parseFloat(v);
-    return isNaN(n) ? v : n.toFixed(1);
-  },
-  Round2: (v) => {
-    const n = parseFloat(v);
-    return isNaN(n) ? v : n.toFixed(2);
-  },
+  Round1: toDecimals(1),
+  Round2: toDecimals(2),
+  Round3: toDecimals(3),
+  Round4: toDecimals(4),
   // Digit grouping for readable counters ("41280" → "41,280"). Locale-independent
   // on purpose: an operator screen shows the same separator wherever it runs.
+  // Groups the text, not the number, so an inner Round1's "6.0" keeps its ".0".
   Thousands: (v) => {
-    const n = parseFloat(v);
-    if (isNaN(n)) return v;
-    const [int, frac] = String(n).split('.');
+    const t = v.trim();
+    if (isNaN(parseFloat(t))) return v;
+    const [int, frac] = t.split('.');
     const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     return frac ? `${grouped}.${frac}` : grouped;
   },
-  // Works on the text, not the number, so the decimals an inner Round1/Round2
+  // Works on the text, not the number, so the decimals an inner Round1…Round4
   // produced survive ("6.0" → "+6.0"). The minus is U+2212, the typographic one.
   Signed: (v) => {
     const t = v.trim();
