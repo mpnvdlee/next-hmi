@@ -246,8 +246,9 @@ heading.
   confirm and an alarm's detail dialog.
 
 - **A custom widget's centred numpad is centred.** A `VirtualNumpad` with
-  `dockPosition="center"` sat at the left edge of a keyboard-wide strip in
-  the middle of the screen. It is now centred itself.
+  `dockPosition="center"` sat at the left edge of a keyboard-wide strip
+  along the bottom of the screen. It now sits in the middle of the screen,
+  across and down; the keyboard stays docked at the bottom.
 
 - **A second tap on a Number Input or String Input opens its numpad or
   keyboard again.** After × (or Enter, on a Number Input) the field kept

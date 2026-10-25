@@ -100,7 +100,8 @@ export function VirtualNumpad({
     onChange(`${value}${key}`);
   };
 
-  const dockClass = `hmi-virtual-input__dock hmi-virtual-input__dock--${dockPosition}`;
+  // A centred numpad sits in the middle of the screen; the keyboard's centre dock stays at the bottom.
+  const dockClass = `hmi-virtual-input__dock hmi-virtual-input__dock--${dockPosition === 'center' ? 'middle' : dockPosition}`;
 
   const parsed = parseFloat(value);
   const isOutOfRange =

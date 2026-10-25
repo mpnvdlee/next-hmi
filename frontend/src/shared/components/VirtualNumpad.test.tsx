@@ -17,6 +17,7 @@ function NumpadHarness({
   decimals?: number;
   allowNegative?: boolean;
   showRange?: boolean;
+  dockPosition?: 'center' | 'bottom-right';
 }) {
   const [value, setValue] = useState('');
   return (
@@ -201,5 +202,19 @@ describe('VirtualNumpad', () => {
 
     expect(rules.length).toBe(5);
     for (const [, selector] of rules) expect(selector).toContain('.hmi-virtual-input__keys');
+  });
+
+  it("docks a centred numpad in the middle of the screen, not at the keyboard's bottom dock", async () => {
+    render(<NumpadHarness dockPosition="center" />);
+    const dock = screen.getByRole('button', { name: 'Enter' }).closest('.hmi-virtual-input__dock');
+    expect(dock).toHaveClass('hmi-virtual-input__dock--middle');
+    expect(dock).not.toHaveClass('hmi-virtual-input__dock--center');
+
+    // jsdom lays nothing out, so read the rule; vitest runs from frontend/.
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync('src/hmi/styles/hmi.css', 'utf8');
+    const rule = /\.hmi-virtual-input__dock--middle \{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(rule).toContain('top: 50%');
+    expect(rule).toContain('translate(-50%, -50%)');
   });
 });

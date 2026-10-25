@@ -497,12 +497,20 @@
   z-index: var(--hmi-z-input);
 }
 
-/* The dock takes its panel's width, so the panel is what gets centred: a
-   fixed-width dock would leave a narrower numpad at its left edge. */
+/* The keyboard, at the bottom centre. The dock takes its panel's width, so
+   the panel is what gets centred. */
 .hmi-virtual-input__dock--center {
   left: 50%;
   bottom: var(--hmi-virtual-dock-offset);
   transform: translateX(-50%);
+  width: max-content;
+}
+
+/* A numpad docked center: the middle of the screen, both ways. */
+.hmi-virtual-input__dock--middle {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   width: max-content;
 }
 
