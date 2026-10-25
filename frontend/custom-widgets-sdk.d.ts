@@ -1113,6 +1113,8 @@ interface VirtualNumpadProps {
   decimals?: number;
   /** Whether the minus key works. Default: true unless min is 0 or more. */
   allowNegative?: boolean;
+  /** Masks the entry, for a PIN. */
+  password?: boolean;
 }
 
 interface CloseButtonProps {

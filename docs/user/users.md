@@ -80,6 +80,10 @@ like any other screen, wired with actions ([Actions](actions.md)):
 > Tick **Password field** on the String Input holding the password so the entry
 > is masked. It deliberately keeps browser keychains out, so a panel PC never
 > offers to save — or auto-fill — an operator's credentials.
+>
+> For a PIN, set its **Keyboard** to **Numeric** as well: a tap then opens the
+> numpad instead of the on-screen keyboard, with digits only, and the numpad
+> masks the entry too.
 
 Sign-in is **per open runtime**, not per browser and not per installation: two tabs on the same panel PC can be two different operators, and each keeps its own identity until it is closed or logged out.
 

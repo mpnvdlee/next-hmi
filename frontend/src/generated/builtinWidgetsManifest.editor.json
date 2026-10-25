@@ -1991,6 +1991,24 @@
         "label": "Password field",
         "group": "Appearance"
       },
+      "keyboard": {
+        "format": "select",
+        "label": "Keyboard",
+        "description": "Numeric opens the numpad instead, for digits only — a PIN or a code.",
+        "display": "button-text",
+        "group": "Appearance",
+        "defaultValue": "text",
+        "options": [
+          {
+            "label": "Text",
+            "value": "text"
+          },
+          {
+            "label": "Numeric",
+            "value": "numeric"
+          }
+        ]
+      },
       "disabled": {
         "label": "Disabled",
         "group": "Appearance"

@@ -3,6 +3,19 @@ export const schema = {
   label: { type: 'string' as const, label: 'Label', group: 'Content' },
   placeholder: { type: 'string' as const, label: 'Placeholder', group: 'Content' },
   isPassword: { type: 'boolean' as const, label: 'Password field', group: 'Appearance' },
+  keyboard: {
+    type: 'string' as const,
+    format: 'select' as const,
+    label: 'Keyboard',
+    description: 'Numeric opens the numpad instead, for digits only — a PIN or a code.',
+    display: 'button-text' as const,
+    group: 'Appearance',
+    defaultValue: 'text',
+    options: [
+      { label: 'Text', value: 'text' },
+      { label: 'Numeric', value: 'numeric' },
+    ],
+  },
   disabled: { type: 'boolean' as const, label: 'Disabled', group: 'Appearance' },
 };
 
@@ -28,6 +41,7 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
   const placeholder = getPropString(properties, 'placeholder', '', evalCtx);
   const isPassword = getPropBoolean(properties, 'isPassword', false, evalCtx);
   const disabled = getPropBoolean(properties, 'disabled', false, evalCtx);
+  const numeric = usePropString(properties, 'keyboard', 'text') === 'numeric';
 
   usePublishWidgetProp(id, 'value', value);
 
@@ -67,6 +81,8 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
           value={value}
           placeholder={placeholder}
           disabled={disabled}
+          // The numpad takes the focus and every key, as on a Number Input.
+          readOnly={numeric}
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"
@@ -101,18 +117,33 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
           </button>
         )}
       </div>
-      <VirtualKeyboard
-        isOpen={isKeyboardOpen}
-        value={value}
-        onChange={(v: string) => {
-          setValue(v);
-          inputRef.current?.focus();
-        }}
-        onClose={() => setIsKeyboardOpen(false)}
-        anchorRef={wrapperRef}
-        title={label || undefined}
-        password={masked}
-      />
+      {numeric ? (
+        <VirtualNumpad
+          isOpen={isKeyboardOpen}
+          value={value}
+          onChange={setValue}
+          onApply={() => setIsKeyboardOpen(false)}
+          onCancel={() => setIsKeyboardOpen(false)}
+          anchorRef={wrapperRef}
+          title={label || undefined}
+          decimals={0}
+          allowNegative={false}
+          password={masked}
+        />
+      ) : (
+        <VirtualKeyboard
+          isOpen={isKeyboardOpen}
+          value={value}
+          onChange={(v: string) => {
+            setValue(v);
+            inputRef.current?.focus();
+          }}
+          onClose={() => setIsKeyboardOpen(false)}
+          anchorRef={wrapperRef}
+          title={label || undefined}
+          password={masked}
+        />
+      )}
     </div>
   );
 }
