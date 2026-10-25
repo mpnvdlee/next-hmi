@@ -571,6 +571,34 @@
   color: var(--hmi-text);
 }
 
+.hmi-virtual-input__field {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: var(--hmi-virtual-key-padding-y-compact) var(--hmi-input-padding-x);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius);
+  background: var(--hmi-bg);
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  transition: border-color var(--hmi-motion-fast) ease;
+}
+
+.hmi-virtual-input__field:focus {
+  outline: none;
+  border-color: var(--hmi-accent);
+}
+
+.hmi-virtual-input__field::placeholder {
+  color: var(--hmi-text-muted);
+  opacity: 1;
+}
+
+.hmi-virtual-input__value--invalid .hmi-virtual-input__field {
+  border-color: var(--hmi-fault);
+}
+
 .hmi-virtual-input__value-unit {
   font-family: var(--hmi-type-caption-font);
   font-size: var(--hmi-type-caption-size);
@@ -589,7 +617,6 @@
 }
 
 .hmi-virtual-input__range,
-.hmi-virtual-input__current,
 .hmi-virtual-input__error {
   text-align: center;
   font-family: var(--hmi-type-caption-font);
@@ -600,10 +627,6 @@
 
 .hmi-virtual-input__error {
   color: var(--hmi-fault);
-}
-
-.hmi-virtual-input__value-placeholder {
-  color: var(--hmi-text-muted);
 }
 
 .hmi-virtual-input__row {
