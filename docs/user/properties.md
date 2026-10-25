@@ -163,6 +163,8 @@ A **Repeater** draws the widgets inside it once for every element of an array �
 
 Each copy reads its own element. When Items is a tag, a copy's inputs write back to their own element too: a Switch bound to **Repeat Item** writes `Enables[3]` in the fourth copy, and **Write Data Variable** / **Toggle Boolean Variable** can switch their target to **Repeat Item**: always the copy's own element, or the member you pick of a struct element. Lists, API responses, recipes and users are read-only.
 
+Inside an **Image Container**, **Place copies: At item x / y** draws each copy at the point its element names instead of in a row — see [Place one design many times from a list](layout.md#place-one-design-many-times-from-a-list).
+
 **Start at** and **Max items** show part of the array — the first ten, or a page of it. **Empty text** is shown when there is nothing to draw.
 
 In the editor the first copy is the one you edit; the others are drawn dimmed and select the first when clicked. With no data yet, one copy is still drawn so there is something to edit.

@@ -140,6 +140,70 @@ describe('Repeater', () => {
     expect(await texts(/^(Left|Right)$/)).toEqual(['Left', 'Right']);
   });
 
+  it('indexes a variable array by an item field, as a bound index', async () => {
+    useVariableStore.setState({
+      values: { 'PLC:Open': [false, true, false] },
+      varMeta: { 'PLC:Open': { type: { kind: 'scalar', base: 'Boolean', array: true } } } as never,
+    });
+    const open = { $var: { path: 'PLC:Open', index: { $repeatItem: { member: 'device' } } } };
+    renderNode(
+      repeater({ items: [{ device: 2 }, { device: 1 }] }, [
+        label('l', { $if: { condition: open, true: 'open', false: 'closed' } }),
+      ]),
+    );
+
+    expect(await texts(/^(open|closed)$/)).toEqual(['closed', 'open']);
+  });
+
+  it('places each copy at its element x / y, on the side the element names', async () => {
+    const { container } = renderNode(
+      repeater(
+        {
+          placement: 'items',
+          items: [
+            { x: 0.25, y: 0.4, side: 'top', name: 'A' },
+            { x: 2, y: 'far', side: 'up', name: 'B' },
+          ],
+        },
+        [label('l', { $repeatItem: { member: 'name' } })],
+      ),
+    );
+    await texts(/^[AB]$/);
+
+    const copies = [...container.querySelectorAll<HTMLElement>('.hmi-repeater__copy')];
+    expect(
+      copies.map((c) => [
+        c.style.getPropertyValue('--hmi-repeater-x'),
+        c.style.getPropertyValue('--hmi-repeater-y'),
+        c.dataset.side,
+        c.dataset.flowDirection,
+        c.textContent,
+      ]),
+    ).toEqual([
+      ['25%', '40%', 'top', 'column', 'A'],
+      // Out of range clamps, unreadable centres, an unknown side is no side.
+      ['100%', '50%', undefined, 'row', 'B'],
+    ]);
+  });
+
+  it('places the copies of a struct-array tag at their x / y members', async () => {
+    const POINTS = { type: { kind: 'struct', name: 'Point', fields: ['x', 'y'], array: true } };
+    useVariableStore.setState({
+      values: { 'PLC:Points': [{ x: 0.3, y: 0.7 }] },
+      varMeta: { 'PLC:Points': POINTS } as never,
+    });
+    const { container } = renderNode(
+      repeater({ placement: 'items', items: { $var: { path: 'PLC:Points' } } }, [
+        label('l', 'pin'),
+      ]),
+    );
+    await screen.findByText('pin');
+
+    const copy = container.querySelector<HTMLElement>('.hmi-repeater__copy')!;
+    expect(copy.style.getPropertyValue('--hmi-repeater-x')).toBe('30%');
+    expect(copy.style.getPropertyValue('--hmi-repeater-y')).toBe('70%');
+  });
+
   it('shows the empty text when there is nothing to draw', async () => {
     renderNode(repeater({ items: [], emptyText: 'No motors' }, [label('l', 'row')]));
 

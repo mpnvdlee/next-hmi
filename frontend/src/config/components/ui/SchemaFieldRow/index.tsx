@@ -30,6 +30,7 @@ import GroupsField from '../GroupsField';
 import ImageIndicatorsEditor from '../../editor/ImageIndicatorsEditor';
 import ChildPositionsEditor from '../../editor/ChildPositionsEditor';
 import ItemsInput, { type ItemEntry } from '../../editor/ItemsInput';
+import ItemListInput from '../../editor/ItemsInput/ItemListInput';
 import VariableListInput from '../../editor/VariableListInput';
 import PageGroupSelect from '../PageGroupSelect';
 import PropRow from '../PropRow';
@@ -356,7 +357,9 @@ export default function SchemaFieldRow({
           schema={schema}
           staticEditor={
             currentSource === 'static' ? (
-              fieldType === 'option-list' || fieldType === 'item-list' ? (
+              fieldType === 'item-list' ? (
+                <ItemListInput value={effectiveValue} onChange={onChange} />
+              ) : fieldType === 'option-list' ? (
                 <ItemsInput
                   value={effectiveValue as ItemEntry[] | undefined}
                   onChange={onChange as (v: ItemEntry[]) => void}

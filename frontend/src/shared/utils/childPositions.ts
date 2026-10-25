@@ -85,6 +85,18 @@ export function ensurePositionsForChildren(
   return list;
 }
 
+/**
+ * A Repeater that places its copies at item x / y covers the whole image: it
+ * has no position entry or marker of its own, though it still counts in the
+ * tree order the marker letters follow. Mirrors the `fills` check in the
+ * ImageContainer widget.
+ */
+export function fillsImage(child: WidgetConfig): boolean {
+  const v = child.properties?.placement;
+  const placement = v && typeof v === 'object' ? (v as { $static?: unknown }).$static : v;
+  return child.type === 'Repeater' && placement === 'items';
+}
+
 /** Build a lookup from child id → position entry. */
 export function indexPositions(positions: ChildPosition[] | undefined): Map<string, ChildPosition> {
   const map = new Map<string, ChildPosition>();

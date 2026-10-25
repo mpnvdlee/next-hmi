@@ -26,6 +26,16 @@ heading.
   build the editor's Branding section and the contact card point at what the
   enterprise build adds and what shipping costs.
 
+- **A Repeater places its copies on an Image Container's image.** With
+  **Place copies** set to **At item x / y**, each copy is drawn at the point
+  its element names (`x` and `y`, 0 to 1 across and down the image), and an
+  optional `side` puts it on one side of that point with its last widget on
+  it, so one callout design serves every edge of a machine. The element's
+  other fields reach the copy through Repeat Item, also as the index of an
+  array tag. Items take a typed-in list of records through **Edit as JSON**,
+  and the warnings pill flags an element it cannot place. Positions are
+  edited in the list; the copies are not dragged on the canvas.
+
 - **Navigate To Page goes to a page chosen at runtime.** The new action
   closes every open dialog and overlay, then goes to a page from the Pages
   section, firing the page events a menu press would. The page is fixed, or

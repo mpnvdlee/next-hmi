@@ -2232,6 +2232,23 @@
         "label": "Empty text",
         "group": "Content",
         "description": "Shown instead when there are no elements to draw. Empty shows nothing."
+      },
+      "placement": {
+        "format": "select",
+        "label": "Place copies",
+        "group": "Content",
+        "defaultValue": "flow",
+        "options": [
+          {
+            "label": "In a row or column",
+            "value": "flow"
+          },
+          {
+            "label": "At item x / y",
+            "value": "items"
+          }
+        ],
+        "description": "At item x / y draws each copy at its element's x and y (0–1) over an Image Container's image, on the element's side (top, bottom, left, right) of that point when it names one."
       }
     }
   },
