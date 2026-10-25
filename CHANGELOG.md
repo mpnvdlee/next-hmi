@@ -192,6 +192,12 @@ heading.
   warnings pill flags an input that is not writable or not of a type the
   action writes.
 
+- **A component input can hold a page.** A component's properties take the
+  **Page** type that dialog input parameters already had: the instance picks
+  the page from a page picker, and a **Navigate To Page** inside the
+  component goes to it. Before, saving such a component was refused, so a
+  link card had to be handed a whole action list instead.
+
 ### Changed
 
 - **Every download names its edition.** The public zips are now

@@ -29,9 +29,6 @@ interface Props {
   existingKeys: string[];
   /** Name of the component the property is added to. */
   contextName?: string;
-  /** Offer the Page type — a dialog's input parameters only; a Component's
-   *  declaration has no `format`. */
-  pageInputs?: boolean;
   onConfirm(
     key: string,
     label: string,
@@ -41,13 +38,7 @@ interface Props {
   onCancel(): void;
 }
 
-export function PropertyModal({
-  existingKeys,
-  contextName,
-  pageInputs = false,
-  onConfirm,
-  onCancel,
-}: Props) {
+export function PropertyModal({ existingKeys, contextName, onConfirm, onCancel }: Props) {
   const [key, setKey] = useState('');
   const [label, setLabel] = useState('');
   const [type, setType] = useState<string>('string');
@@ -129,10 +120,7 @@ export function PropertyModal({
 
         <PropRow label="Type">
           <Select value={type} onChange={handleTypeChange}>
-            {(pageInputs
-              ? [...VALUE_TYPE_OPTIONS, { value: 'page', label: 'Page' }]
-              : VALUE_TYPE_OPTIONS
-            ).map((t) => (
+            {[...VALUE_TYPE_OPTIONS, { value: 'page', label: 'Page' }].map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
               </option>
