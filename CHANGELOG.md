@@ -296,6 +296,11 @@ heading.
 
 ### Fixed
 
+- **The alarm guide says what Value Range does.** It said the trigger fires
+  outside **Min** / **Max**; it fires while the value lies between them, both
+  included, as it always has. The guide now says so, with what one empty
+  bound does.
+
 - **`Thousands` keeps the decimals it is given.** `{Thousands(Round1(1))}`
   showed `41,280` for 41280, dropping the `.0` the inner `Round1` wrote. It
   now groups the text it receives, so it shows `41,280.0`.
