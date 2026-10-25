@@ -599,6 +599,7 @@ below ships in the initial open-source build.
   shipped loose (replaceable) in binary builds, with the LGPL texts and a
   written source offer bundled alongside.
 
+[1.0.1]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.0.1
 [1.0.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.0.0
 [0.0.1-rc2]: https://github.com/mpnvdlee/next-hmi/releases/tag/v0.0.1-rc2
 [0.0.1-rc1]: https://github.com/mpnvdlee/next-hmi/releases/tag/v0.0.1-rc1
