@@ -264,3 +264,32 @@ def test_a_restored_alarm_follows_the_values_cached_at_start(
 
     assert len(restarted.get_active()) == still_active
     assert len(restarted.get_history()) == 1 - still_active
+
+
+def test_saving_a_static_datasource_clears_an_alarm_its_reset_variable_ends(
+    live_project_root: Path, monkeypatch
+):
+    # A reshaped variable restarts at its default without a change event.
+    from services.alarm_manager import alarm_manager
+    from services.datasource_manager import datasource_manager
+
+    monkeypatch.setattr(datasource_manager, "datasources", {})
+    monkeypatch.setattr(datasource_manager, "_name_to_filename", {})
+    monkeypatch.setattr(alarm_manager, "_state", type(alarm_manager._state)())
+
+    def door(data_type: str) -> dict:
+        variable = {"display_name": "Overheat", "data_type": data_type, "enabled": True}
+        return {"name": "DS", "type": "static", "variables": [variable]}
+
+    datasource_manager.apply_config("DS", door("Boolean"))
+    alarm_manager.set_config(_config_with_trigger())
+    try:
+        datasource_manager.update_static_value("DS", "Overheat", True)
+        alarm_manager.on_variable_change("DS:Overheat", True)  # main.py wires the listener
+        assert len(alarm_manager.get_active()) == 1
+
+        datasource_manager.apply_config("DS", door("Integer"))
+        assert alarm_manager.get_active() == []
+        assert len(alarm_manager.get_history()) == 1
+    finally:
+        alarm_manager.set_config(AlarmConfig(groups=[]))
