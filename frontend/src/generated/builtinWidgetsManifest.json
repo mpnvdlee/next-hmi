@@ -1241,7 +1241,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "c6561f624875680f",
+    "buildTs": "598d0d63aa1e279a",
     "displayName": null,
     "hostsChildren": true,
     "flowsChildren": true,
@@ -1265,6 +1265,12 @@
       },
       "shadow": {
         "type": "string"
+      },
+      "ariaLabel": {
+        "type": "string"
+      },
+      "actions": {
+        "type": "actions"
       }
     },
     "schemaError": null

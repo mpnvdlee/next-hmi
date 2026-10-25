@@ -2017,7 +2017,7 @@
     }
   },
   "Layout/Container": {
-    "description": "Groups and lays out child widgets in a row or column. Hosts other widgets.",
+    "description": "Groups and lays out child widgets in a row or column. Hosts other widgets, and runs its actions when pressed.",
     "icon": {
       "type": "builtin",
       "name": "stack"
@@ -2070,6 +2070,14 @@
         "defaultValue": "none",
         "description": "Any CSS box-shadow, e.g. var(--hmi-shadow).",
         "group": "Appearance"
+      },
+      "ariaLabel": {
+        "label": "Accessible name",
+        "description": "What a screen reader announces for a container with press actions, when its children carry no text of their own.",
+        "group": "Content"
+      },
+      "actions": {
+        "label": "Actions"
       }
     }
   },

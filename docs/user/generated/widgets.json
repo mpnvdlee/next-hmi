@@ -31,7 +31,7 @@
       {
         "type": "Container",
         "name": "Container",
-        "description": "Groups and lays out child widgets in a row or column. Hosts other widgets.",
+        "description": "Groups and lays out child widgets in a row or column. Hosts other widgets, and runs its actions when pressed.",
         "props": [
           {
             "key": "title",
@@ -72,6 +72,17 @@
             "type": "String",
             "group": "Appearance",
             "defaultValue": "none"
+          },
+          {
+            "key": "ariaLabel",
+            "label": "Accessible name",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "actions",
+            "label": "Actions",
+            "type": "actions"
           },
           {
             "key": "visible",

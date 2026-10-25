@@ -142,6 +142,14 @@ heading.
   or `NaN` as no value. A property with no variable bound no longer costs a
   variable-store listener.
 
+- **A Container can run actions when it is pressed.** The Container gets the
+  Button's **Actions** field and an **Accessible name**. With press actions
+  it becomes one control around whatever it holds — a tile, a list row, a
+  header logo: it takes the keyboard (**Enter** or **Space**), shows the
+  focus ring and a pressed look, and dims and blocks under **Interactable**
+  like a Button. A press on a Button or an input inside it stays with that
+  control. A Container without actions behaves as before.
+
 ### Changed
 
 - **A project opened in 1.1.0 no longer opens in 1.0.x (breaking).** The
