@@ -412,6 +412,18 @@
             "defaultValue": "Button"
           },
           {
+            "key": "subLabel",
+            "label": "Second line",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "badge",
+            "label": "Badge",
+            "type": "String | Integer",
+            "group": "Content"
+          },
+          {
             "key": "iconName",
             "label": "Icon",
             "type": "icon",
@@ -427,6 +439,12 @@
           {
             "key": "color",
             "label": "Color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "iconColor",
+            "label": "Icon color",
             "type": "color",
             "group": "Appearance"
           },
@@ -453,6 +471,26 @@
             "key": "borderWidth",
             "label": "Border width (px)",
             "type": "Integer",
+            "group": "Appearance"
+          },
+          {
+            "key": "align",
+            "label": "Content alignment",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "center"
+          },
+          {
+            "key": "textTransform",
+            "label": "Text case",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "none"
+          },
+          {
+            "key": "letterSpacing",
+            "label": "Letter spacing",
+            "type": "String",
             "group": "Appearance"
           },
           {

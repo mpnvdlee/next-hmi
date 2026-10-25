@@ -130,13 +130,19 @@ Runs actions and can write true to a bound boolean on press.
 | Property | Label | Type |
 |---|---|---|
 | `label` | Label | `String` |
+| `subLabel` | Second line | `String` |
+| `badge` | Badge | `String | Integer` |
 | `iconName` | Icon | `icon` |
 | `iconPosition` | Icon position | `String` |
 | `color` | Color | `color` |
+| `iconColor` | Icon color | `color` |
 | `variant` | Style | `String` |
 | `fill` | Fill | `color` |
 | `radius` | Radius | `String` |
 | `borderWidth` | Border width (px) | `Integer` |
+| `align` | Content alignment | `String` |
+| `textTransform` | Text case | `String` |
+| `letterSpacing` | Letter spacing | `String` |
 | `iconSize` | Icon size (px) | `Integer` |
 | `variable` | Variable | `Boolean` |
 | `actions` | Actions | `actions` |

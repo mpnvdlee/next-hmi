@@ -172,4 +172,68 @@ describe('Button', () => {
 
     expect(useHmiStore.getState().openPageOverlays.map((o) => o.pageId)).toContain('settings');
   });
+
+  describe('label styling', () => {
+    it('stacks a second line under the label', () => {
+      renderButton({ label: 'Product', subLabel: 'Tolerances' });
+
+      const button = screen.getByRole('button', { name: 'Product Tolerances' });
+      expect(button.querySelector('.hmi-button__text .hmi-button__sub')).toHaveTextContent(
+        'Tolerances',
+      );
+    });
+
+    it('keeps the plain label markup without a second line', () => {
+      renderButton({ label: 'Product' });
+
+      expect(screen.getByRole('button').querySelector('.hmi-button__text')).toBeNull();
+    });
+
+    it.each([
+      [3, '3'],
+      ['NEW', 'NEW'],
+    ])('shows a badge of %s', (badge, text) => {
+      renderButton({ label: 'Alarms', badge });
+
+      expect(screen.getByRole('button').querySelector('.hmi-button__badge')).toHaveTextContent(
+        text,
+      );
+    });
+
+    it.each([0, '', '  '])('hides the badge for %j', (badge) => {
+      renderButton({ label: 'Alarms', badge });
+
+      expect(screen.getByRole('button').querySelector('.hmi-button__badge')).toBeNull();
+    });
+
+    it('emits case, letter spacing and icon color as custom properties', () => {
+      const { container } = renderButton({
+        label: 'Start',
+        textTransform: 'uppercase',
+        letterSpacing: '0.08em',
+        iconColor: 'var(--hmi-ok)',
+      });
+      const el = container.firstElementChild as HTMLElement;
+
+      expect(el.style.getPropertyValue('--hmi-btn-transform')).toBe('uppercase');
+      expect(el.style.getPropertyValue('--hmi-btn-tracking')).toBe('0.08em');
+      expect(el.style.getPropertyValue('--hmi-btn-icon-color')).toBe('var(--hmi-ok)');
+    });
+
+    it('sets none of them by default', () => {
+      const { container } = renderButton({ label: 'Start' });
+      const el = container.firstElementChild as HTMLElement;
+
+      expect(el.style.getPropertyValue('--hmi-btn-transform')).toBe('');
+      expect(el.style.getPropertyValue('--hmi-btn-tracking')).toBe('');
+      expect(el.style.getPropertyValue('--hmi-btn-icon-color')).toBe('');
+      expect(screen.getByRole('button')).not.toHaveClass('hmi-button__btn--start');
+    });
+
+    it('aligns its content to the start on request', () => {
+      renderButton({ label: 'Home', align: 'start' });
+
+      expect(screen.getByRole('button')).toHaveClass('hmi-button__btn--start');
+    });
+  });
 });

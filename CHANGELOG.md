@@ -150,6 +150,14 @@ heading.
   like a Button. A press on a Button or an input inside it stays with that
   control. A Container without actions behaves as before.
 
+- **A Button can carry a second line, a badge and its own label style.**
+  Six new Button properties: a **Second line** of smaller text under the
+  label, a **Badge** chip in the top-right corner — a text or a count such
+  as an Alarm Count, hidden when empty or 0 — an **Icon color**, **Content
+  alignment** (center, or start for a menu-style tile), **Text case**
+  (uppercase) and **Letter spacing** for the label. Each one left at its
+  default keeps today's look.
+
 ### Changed
 
 - **A project opened in 1.1.0 no longer opens in 1.0.x (breaking).** The

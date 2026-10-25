@@ -36,8 +36,11 @@
   border-radius: var(--hmi-btn-radius, var(--hmi-radius));
   font-size: var(--hmi-type-body-size);
   font-weight: var(--hmi-type-subheading-weight);
-  letter-spacing: var(--hmi-type-body-tracking);
+  letter-spacing: var(--hmi-btn-tracking, var(--hmi-type-body-tracking));
+  text-transform: var(--hmi-btn-transform, none);
   cursor: pointer;
+  /* Anchors the badge; with no offsets of its own it moves nothing. */
+  position: relative;
   transition:
     background var(--hmi-motion-fast) ease,
     border-color var(--hmi-motion-fast) ease,
@@ -46,6 +49,7 @@
 }
 
 .hmi-button__icon {
+  color: var(--hmi-btn-icon-color, currentColor);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -75,6 +79,57 @@
 
 .hmi-button__btn--icon-top {
   flex-direction: column;
+}
+
+/* The second line stacks under the label; Text case and Letter spacing style
+   the label alone. */
+.hmi-button__text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--hmi-space-hair);
+  min-width: 0;
+  text-align: center;
+}
+
+.hmi-button__sub {
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-body-weight);
+  letter-spacing: var(--hmi-type-caption-tracking);
+  text-transform: none;
+  opacity: 0.8;
+}
+
+.hmi-button__btn--start {
+  justify-content: flex-start;
+}
+
+.hmi-button__btn--start.hmi-button__btn--icon-top,
+.hmi-button__btn--start .hmi-button__text {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.hmi-button__badge {
+  position: absolute;
+  top: var(--hmi-space-tight);
+  right: var(--hmi-space-tight);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  height: 1.6em;
+  padding: 0 var(--hmi-space-tight);
+  box-sizing: border-box;
+  border-radius: var(--hmi-radius-full);
+  background: var(--hmi-fault);
+  color: var(--hmi-white);
+  font-size: var(--hmi-type-caption-size);
+  font-weight: var(--hmi-type-subheading-weight);
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1;
+  pointer-events: none;
 }
 
 /* Icon-only takes the vertical padding on every side, so hug sizing gives a

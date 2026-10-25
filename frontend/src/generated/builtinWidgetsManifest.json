@@ -67,7 +67,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "abaf0b0d9a565c92",
+    "buildTs": "f3b2fb76e72cd35e",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -77,6 +77,15 @@
       "label": {
         "type": "string"
       },
+      "subLabel": {
+        "type": "string"
+      },
+      "badge": {
+        "type": [
+          "string",
+          "integer"
+        ]
+      },
       "iconName": {
         "type": "icon"
       },
@@ -84,6 +93,9 @@
         "type": "string"
       },
       "color": {
+        "type": "color"
+      },
+      "iconColor": {
         "type": "color"
       },
       "variant": {
@@ -97,6 +109,15 @@
       },
       "borderWidth": {
         "type": "integer"
+      },
+      "align": {
+        "type": "string"
+      },
+      "textTransform": {
+        "type": "string"
+      },
+      "letterSpacing": {
+        "type": "string"
       },
       "iconSize": {
         "type": "integer"

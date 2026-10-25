@@ -103,6 +103,16 @@
         "defaultValue": "Button",
         "group": "Content"
       },
+      "subLabel": {
+        "label": "Second line",
+        "description": "Smaller text under the label. Empty hides it.",
+        "group": "Content"
+      },
+      "badge": {
+        "label": "Badge",
+        "description": "A small chip in the top-right corner, such as an alarm count. Empty or 0 hides it.",
+        "group": "Content"
+      },
       "iconName": {
         "label": "Icon",
         "group": "Content"
@@ -127,6 +137,11 @@
       "color": {
         "label": "Color",
         "defaultToken": "--hmi-accent",
+        "group": "Appearance"
+      },
+      "iconColor": {
+        "label": "Icon color",
+        "description": "Empty uses the text color.",
         "group": "Appearance"
       },
       "variant": {
@@ -164,6 +179,45 @@
         "label": "Border width (px)",
         "min": 0,
         "step": 1,
+        "group": "Appearance"
+      },
+      "align": {
+        "format": "select",
+        "label": "Content alignment",
+        "display": "button-text",
+        "group": "Appearance",
+        "defaultValue": "center",
+        "options": [
+          {
+            "label": "Center",
+            "value": "center"
+          },
+          {
+            "label": "Start",
+            "value": "start"
+          }
+        ]
+      },
+      "textTransform": {
+        "format": "select",
+        "label": "Text case",
+        "display": "button-text",
+        "group": "Appearance",
+        "defaultValue": "none",
+        "options": [
+          {
+            "label": "As typed",
+            "value": "none"
+          },
+          {
+            "label": "Uppercase",
+            "value": "uppercase"
+          }
+        ]
+      },
+      "letterSpacing": {
+        "label": "Letter spacing",
+        "description": "Any CSS letter-spacing for the label, e.g. 0.08em.",
         "group": "Appearance"
       },
       "iconSize": {
