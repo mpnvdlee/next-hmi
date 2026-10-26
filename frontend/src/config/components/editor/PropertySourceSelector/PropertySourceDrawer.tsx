@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import '../BindingPickerShell/style.css';
+import { useMemo, useState } from 'react';
 import SelectionDrawer, {
   SelectionDrawerCard,
   type SelectionDrawerCategory,
@@ -6,6 +7,7 @@ import SelectionDrawer, {
 import SearchHighlight from '@config/components/ui/SearchHighlight';
 import { matchesSearchWords } from '@shared/utils/search';
 import { PROPERTY_SOURCES, type PropertySource } from '@hmi/utils/propertySourceRegistry';
+import { typeLabel } from '@shared/types/componentProperty';
 import PropertySourceBadge from './PropertySourceBadge';
 import { propertySourceColorStyle } from './propertySourceStyle';
 
@@ -15,7 +17,13 @@ interface PropertySourceItem {
   label: string;
   description: string;
   category: string;
+  /** Base types the source yields, as the card's badge shows them. */
+  produces: string;
+  /** Listed under "Show all" only — the field does not take this source. */
+  refused: boolean;
 }
+
+const ALL_SOURCES = Object.keys(PROPERTY_SOURCES) as PropertySource[];
 
 interface PropertySourceDrawerProps {
   /** Property name shown before the drawer's own action. */
@@ -27,13 +35,18 @@ interface PropertySourceDrawerProps {
   onSelect(source: PropertySource): void;
 }
 
-function buildCatalog(sources: PropertySource[]): SelectionDrawerCategory<PropertySourceItem>[] {
+function buildCatalog(
+  sources: PropertySource[],
+  showAll: boolean,
+): SelectionDrawerCategory<PropertySourceItem>[] {
   const categories: SelectionDrawerCategory<PropertySourceItem>[] = [
     { category: 'Flexible sources', items: [] },
     { category: 'Fixed-type sources', items: [] },
   ];
 
-  for (const source of sources) {
+  // Refused sources follow the offered ones, so the top result stays pickable.
+  const listed = showAll ? [...sources, ...ALL_SOURCES.filter((s) => !sources.includes(s))] : sources;
+  for (const source of listed) {
     const descriptor = PROPERTY_SOURCES[source];
     const category = descriptor.produces.includes('any') ? categories[0] : categories[1];
     category.items.push({
@@ -42,6 +55,8 @@ function buildCatalog(sources: PropertySource[]): SelectionDrawerCategory<Proper
       label: descriptor.label,
       description: descriptor.description,
       category: category.category,
+      produces: descriptor.produces.map(typeLabel).join(', '),
+      refused: !sources.includes(source),
     });
   }
 
@@ -49,7 +64,13 @@ function buildCatalog(sources: PropertySource[]): SelectionDrawerCategory<Proper
 }
 
 function itemMatches(item: PropertySourceItem, query: string): boolean {
-  return matchesSearchWords(query, [item.category, item.label, item.key, item.description]);
+  return matchesSearchWords(query, [
+    item.category,
+    item.label,
+    item.key,
+    item.description,
+    item.produces,
+  ]);
 }
 
 export default function PropertySourceDrawer({
@@ -59,7 +80,8 @@ export default function PropertySourceDrawer({
   onClose,
   onSelect,
 }: PropertySourceDrawerProps) {
-  const catalog = useMemo(() => buildCatalog(sources), [sources]);
+  const [showAll, setShowAll] = useState(false);
+  const catalog = useMemo(() => buildCatalog(sources, showAll), [sources, showAll]);
 
   return (
     <SelectionDrawer
@@ -70,9 +92,23 @@ export default function PropertySourceDrawer({
       categories={catalog}
       itemKey={(item) => item.source}
       itemMatches={itemMatches}
-      onSelectItem={(item) => onSelect(item.source)}
+      onSelectItem={(item) => {
+        if (!item.refused) onSelect(item.source);
+      }}
       emptyMessage={(query) => `No property sources match “${query}”.`}
       onClose={onClose}
+      headerMeta={
+        sources.length < ALL_SOURCES.length && (
+          <label className="editor-binding-showall">
+            <input
+              type="checkbox"
+              checked={showAll}
+              onChange={(e) => setShowAll(e.target.checked)}
+            />
+            Show all
+          </label>
+        )
+      }
       renderItem={(item, onSelectItem) => (
         <SelectionDrawerCard
           className="cfg-property-source-card"
@@ -84,7 +120,18 @@ export default function PropertySourceDrawer({
               <code className="cfg-property-source-card__key">{item.key}</code>
             </>
           }
-          description={<SearchHighlight text={item.description} />}
+          badge={<SearchHighlight text={item.produces} />}
+          description={
+            <>
+              <SearchHighlight text={item.description} />
+              {item.refused && (
+                <span className="cfg-property-source-card__refused">
+                  ✗ Not available on this field.
+                </span>
+              )}
+            </>
+          }
+          disabled={item.refused}
           selected={item.source === activeSource}
           onClick={onSelectItem}
         />
