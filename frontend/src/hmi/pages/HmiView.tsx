@@ -8,7 +8,7 @@ import { useDisableBrowserZoom } from '@shared/hooks/useDisableBrowserZoom';
 import { useConfigStore } from '@shared/store/configStore';
 import { useComponentStore } from '@shared/store/componentStore';
 import { useHmiStore } from '../store/hmiStore';
-import { sendWsMessage } from '../hooks/useWebSocket';
+import { sendWsMessage, setBackendRestartHandler } from '../hooks/useWebSocket';
 import { useVariableStore } from '../store/variableStore';
 import { resolveMainStyle, resolvePageContext } from '@shared/utils/pageTree';
 import { getPageChildren } from '@shared/utils/pageContent';
@@ -37,6 +37,10 @@ import { ContentSpinner } from '@shared/components/Spinner';
 import { useGlobalEvents } from '../hooks/useGlobalEvents';
 import { usePageEvents } from '../hooks/usePageEvents';
 import { useProjectWidgetWarmup } from '../hooks/useProjectWidgetWarmup';
+import ConnectionLostOverlay from '@shared/components/ConnectionLostOverlay';
+import { loadSessionToken } from '../utils/runtimeSession';
+
+const reloadPage = () => window.location.reload();
 
 export default function HmiView() {
   useConfig();
@@ -96,11 +100,18 @@ export default function HmiView() {
   // Hydrate content for every open overlay page so their component children are available.
   usePages(openPageOverlayIds);
 
-  // Request auto-login identity for this scope when WS connects (or reconnects).
+  // Request this scope's identity when WS connects (or reconnects): the tab's
+  // login when it can still be resumed, the auto-login user otherwise.
   useEffect(() => {
     if (!wsConnected) return;
-    sendWsMessage({ type: 'request_identity', scope });
+    sendWsMessage({ type: 'request_identity', scope, sessionToken: loadSessionToken() });
   }, [wsConnected, scope]);
+  // A restarted backend may serve newer config: load it fresh. A reconnect to
+  // the same backend needs nothing, and the tab's login survives either way.
+  useEffect(() => {
+    setBackendRestartHandler(reloadPage);
+    return () => setBackendRestartHandler(null);
+  }, []);
 
   // Send active runtime context. Backend computes the full variable set so
   // nested expressions (for example $if/$switch/$compare) are included.
@@ -260,6 +271,8 @@ export default function HmiView() {
           <FullscreenPrompt />
         </div>
       </PageDataSettleGate>
+      {/* Outside the zoomed root so it covers the viewport. */}
+      <ConnectionLostOverlay />
     </HmiScopeContext.Provider>
   );
 }

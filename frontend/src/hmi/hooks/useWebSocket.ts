@@ -24,6 +24,7 @@ import type { RecipeConfig, LoadedDataset, DownloadResult } from '@shared/types/
 import type { ActionResultReason } from '@shared/types/config';
 import { flushAllAsDisconnected, resolvePending } from '../utils/actionDispatcher';
 import { wsUrl } from '@shared/utils/runtimeBase';
+import { saveSessionToken } from '../utils/runtimeSession';
 
 // ── Inbound message schema ────────────────────────────────────────────────────
 // Discriminated union of every message the backend can send. The handler below
@@ -31,7 +32,7 @@ import { wsUrl } from '@shared/utils/runtimeBase';
 // here so the switch loses exhaustiveness if not handled.
 
 type WsMessage =
-  | { type: 'var_snapshot'; values?: Record<string, unknown> }
+  | { type: 'var_snapshot'; values?: Record<string, unknown>; bootId?: string }
   | { type: 'var_update'; values?: Record<string, unknown> }
   | { type: 'var_removed'; ids?: string[] }
   | { type: 'var_metadata'; meta?: Record<string, VarMeta> }
@@ -45,6 +46,8 @@ type WsMessage =
       groupLabels?: Record<string, string>;
       /** Echoed by the backend only when this is a login/logout response. */
       requestId?: string;
+      /** Present while the identity is a login a new socket can resume. */
+      sessionToken?: string;
     }
   | { type: 'auth_error'; scope: string; reason: ActionResultReason; requestId?: string }
   | {
@@ -221,6 +224,16 @@ export function sendWsMessage(msg: unknown): void {
   }
 }
 
+// The backend process the last socket reached, from its first var_snapshot. A
+// different one on a reconnect means the backend restarted.
+let _bootId: string | null = null;
+let _onBackendRestart: (() => void) | null = null;
+
+/** Register what the mounted surface does when a reconnect reaches a restarted backend. */
+export function setBackendRestartHandler(handler: (() => void) | null): void {
+  _onBackendRestart = handler;
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────────────
 /**
  * Call once at the top of the component tree (App.tsx).
@@ -313,6 +326,12 @@ export function useWebSocket(): void {
 
         switch (msg.type) {
           case 'var_snapshot':
+            if (msg.bootId) {
+              if (_bootId && msg.bootId !== _bootId) _onBackendRestart?.();
+              _bootId = msg.bootId;
+            }
+            enqueueVarUpdate(msg.type, msg.values);
+            return;
           case 'var_update':
             enqueueVarUpdate(msg.type, msg.values);
             return;
@@ -342,6 +361,7 @@ export function useWebSocket(): void {
                 groupLabels: msg.groupLabels ?? {},
               });
               setLoginErrorRef.current(msg.scope, null);
+              saveSessionToken(msg.sessionToken);
             }
             // requestId is present only on responses to login/logout (never
             // for auto-login via request_identity), so this resolve cannot

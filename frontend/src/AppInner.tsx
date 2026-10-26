@@ -13,6 +13,7 @@ import { useDeviceInfoStore } from '@hmi/store/deviceInfoStore';
 import { useVariableStore } from '@hmi/store/variableStore';
 import { useThemeRuntimeStore } from '@hmi/store/themeRuntimeStore';
 import { useComponentStore } from '@shared/store/componentStore';
+import { useProjectStore } from '@shared/store/projectStore';
 import {
   ensureThemeTokens,
   loadAndApplyThemeTokens,
@@ -158,7 +159,15 @@ export default function AppInner() {
   // retried off that signal instead of a timer.
   useEffect(() => {
     return useVariableStore.subscribe((state, prev) => {
-      if (state.wsConnected && !prev.wsConnected) void ensureThemeTokens();
+      if (!state.wsConnected || prev.wsConnected) return;
+      void ensureThemeTokens();
+      // The instance answers again, so the unavailable notice no longer holds.
+      // Lift it over unsaved edits so they can be saved; with none to keep, a
+      // reload is the sure way to show what the instance now serves.
+      if (useProjectAvailabilityStore.getState().reason) {
+        if (useProjectStore.getState().dirty) useProjectAvailabilityStore.setState({ reason: null });
+        else window.location.reload();
+      }
     });
   }, []);
 
