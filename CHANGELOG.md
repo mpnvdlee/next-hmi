@@ -300,6 +300,12 @@ heading.
   variable and type named; pick a supported type for that variable in the
   test-server editor, which marks the old one unsupported.
 
+- **A disabled tag can no longer be bound.** **Show all** in the variable
+  picker listed disabled tags and let one be confirmed. The binding then showed
+  a value in the editor while the warnings pill called it *unknown variable*.
+  A disabled tag is now marked ✗ with *Disabled in its datasource*, and
+  Confirm, double-click and Enter all refuse it.
+
 ### Fixed
 
 - **An input inside a component's actions is not flagged.** The warnings
@@ -430,6 +436,11 @@ heading.
   (`9999-12-31T23:59:59-01:00`) has no UTC form, which OPC-UA requires. It is
   now refused as an invalid value, in the runtime as well as on the server, and
   a recipe download containing one carries on with the rest.
+
+- **A bound tag that was disabled afterwards is reported as disabled.** The
+  warnings pill said *unknown variable* for it. It now reports a
+  `var-disabled` warning, *disabled in its datasource — enable it there*. A
+  tag that is also gone from the server is still reported as unknown.
 
 ## [1.0.1] - 2026-10-24
 

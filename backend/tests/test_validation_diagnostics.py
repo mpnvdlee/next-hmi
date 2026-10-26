@@ -60,6 +60,39 @@ def test_var_unknown(ctx):
     assert (w.code, w.severity) == ("var-unknown", "error")
 
 
+def test_var_disabled_is_a_warning_not_an_unknown_variable(ctx):
+    disabled = {("PLC", "Motor/Off"), ("PLC", "Counts")}
+    ctx = replace(ctx, datasource_disabled=lambda ds, path: (ds, path) in disabled)
+    for var_path in ("PLC:Motor/Off", "PLC:Counts[2]"):
+        report = ValidationReport()
+        validate_var_ref({"path": var_path}, ctx, "/p", report, {"type": "float"})
+        w = _warn(report)
+        assert (w.code, w.severity) == ("var-disabled", "warning")
+        assert "disabled" in w.message
+    report = ValidationReport()
+    validate_var_ref({"path": "PLC:Missing/Thing"}, ctx, "/p", report, {"type": "string"})
+    assert _warn(report).code == "var-unknown"
+
+
+def test_var_disabled_in_a_datasource_with_nothing_enabled(ctx):
+    ctx.datasource_registry["Line"] = {}
+    ctx = replace(ctx, datasource_disabled=lambda ds, path: (ds, path) == ("Line", "Speed"))
+    report = ValidationReport()
+    validate_var_ref({"path": "Line:Speed"}, ctx, "/p", report, {"type": "float"})
+    assert _warn(report).code == "var-disabled"
+
+
+def test_write_target_disabled_variable(ctx):
+    ctx = replace(ctx, datasource_disabled=lambda ds, path: (ds, path) == ("PLC", "Motor/Off"))
+    report = ValidationReport()
+    _validate_action(
+        {"type": "writeDataVariable", "target": {"$var": {"path": "PLC:Motor/Off"}}, "value": 1},
+        ctx, "/a", report,
+    )
+    w = _warn(report)
+    assert (w.code, w.severity, w.path) == ("var-disabled", "warning", "/a/target")
+
+
 def test_var_unknown_datasource(ctx):
     report = ValidationReport()
     validate_var_ref({"path": "Nope:Motor/Speed"}, ctx, "/p", report, {"type": "string"})
