@@ -51,12 +51,23 @@ describe('propertySourceRules', () => {
   });
 
   it('offers a source only where its produced type is the field type', () => {
-    expect(getDefaultPropertySources('integer')).not.toContain('$formula');
+    expect(getDefaultPropertySources('integer')).not.toContain('$time');
     expect(getDefaultPropertySources('float')).not.toContain('$alarmCount');
     expect(getDefaultPropertySources('string')).not.toContain('$compare');
     expect(getDefaultPropertySources('datetime')).not.toContain('$stringExpr');
     expect(getDefaultPropertySources('datetime')).toContain('$time');
     expect(getDefaultPropertySources('integer')).toContain('$random');
+  });
+
+  it('offers a formula on a whole-number field, rounding from the start there', () => {
+    expect(getDefaultPropertySources('integer')).toContain('$formula');
+    const create = PROPERTY_SOURCES.$formula.createDefault;
+    expect(create('integer', undefined, ['integer'])).toEqual({
+      $formula: { expression: '', wildcards: {}, round: true },
+    });
+    expect(create('float', undefined, ['float', 'integer'])).toEqual({
+      $formula: { expression: '', wildcards: {} },
+    });
   });
 
   it('offers a number-producing source on a duration field', () => {

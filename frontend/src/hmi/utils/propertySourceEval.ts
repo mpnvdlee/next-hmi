@@ -427,9 +427,10 @@ function evaluateFormulaSource(
   const node = parseFormula(payload.expression);
   if (!node) return null;
   const wildcards = wildcardsOf(payload);
-  return evaluateFormula(node, (key) =>
+  const result = evaluateFormula(node, (key) =>
     toNumber(evaluatePropertyValueInternal(wildcards[key], context, depth)),
   );
+  return result !== null && payload.round === true ? Math.round(result) : result;
 }
 
 function evaluateRandom(randObj: unknown): ResolvedValue {

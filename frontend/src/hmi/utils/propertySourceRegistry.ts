@@ -350,8 +350,11 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     label: 'Formula',
     description: 'A number calculated from values with + − × ÷ and parentheses.',
     abbr: 'fx',
-    produces: ['float'],
-    createDefault: () => ({ $formula: { expression: '', wildcards: {} } }),
+    // A fraction unless `round: true`, which a whole-number field starts with.
+    produces: ['float', 'integer'],
+    createDefault: (fieldType) => ({
+      $formula: { expression: '', wildcards: {}, ...(fieldType === 'integer' && { round: true }) },
+    }),
   },
   {
     source: '$random',

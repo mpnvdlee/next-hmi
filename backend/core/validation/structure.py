@@ -2825,6 +2825,15 @@ def _check_overlay(payload: dict, ctx: ValidationContext, path: str, report: Val
         )
 
 
+def _takes_only_whole_numbers(schema_field: dict | None) -> bool:
+    """An `Integer` field that no fraction fits — a union with `Float` or
+    `Duration` takes the formula's own result."""
+    if not isinstance(schema_field, dict):
+        return False
+    accepted = {t.lower() for t in vartype.accepted_value_types(schema_field.get("type"))}
+    return "integer" in accepted and not accepted & {"float", "duration"}
+
+
 def _validate_property_value(
     value: Any,
     schema_field: dict | None,
@@ -2976,6 +2985,12 @@ def _validate_property_value(
             )
         else:
             _validate_wildcards([expression], payload, "$formula", ctx, path, report)
+        if payload.get("round") is not True and _takes_only_whole_numbers(schema_field):
+            report.warn(
+                f"{path}/$formula",
+                "this field takes whole numbers, but the formula is not rounded",
+                severity="warning", code="formula-fraction",
+            )
     elif source_key == "$stringExpr" and isinstance(payload, dict):
         template = payload.get("template")
         if not isinstance(template, str) or template == "":

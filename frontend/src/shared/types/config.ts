@@ -188,6 +188,8 @@ export interface FormulaSource {
   $formula: {
     expression: string;
     wildcards: Record<string, unknown>; // keyed by placeholder number, like $stringExpr
+    /** Round the result to the nearest whole number. */
+    round?: boolean;
   };
 }
 
