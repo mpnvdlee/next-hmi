@@ -229,7 +229,9 @@ disabled, and double-clicking a row is held to the same verdict; Enter in the
 search box takes the first result the field accepts. Every way of picking, a
 Repeat item row included, goes through one check in
 `VariableBindingPicker/index.tsx` (`isConfirmable`; `WidgetPropPicker` does the
-same). **Show all** still lists everything, to browse. A selection whose
+same). **Show all** still lists everything, to browse, disabled variables
+included — but a disabled one is marked ✗ with *Disabled in its datasource*,
+since the pool serves it no value. A selection whose
 datasource has not loaded yet has no verdict and stays confirmable. For a
 writing field the tree lists only a variable whose `writable` flag is `true` —
 one that states no access is read-only there, as the drawer and the backend
@@ -642,6 +644,7 @@ exports) is skipped, never guessed.
 | `literal-type` | error | A literal fits none of its field's types. A bare scalar fits when it matches *any* scalar type of a union (`["string", "integer", "float"]`); an array fits an `X[]` the field lists when every element is an X; a `$static` payload is held to the same rule. A mismatch in an array, a `$static`, a component instance's value, an action's field or a field whose first type is an array is this code; a bare scalar anywhere else is still rejected |
 | `literal-format` | warning | A string that only fits as a `Date`, `DateTime`, `Time` or `Duration` does not read as one: ISO 8601 (`2026-06-16`, `2026-06-16T14:30:00Z`, `14:30:00`, `PT1H30M`), or a number of seconds for a `Duration`. Empty is unset, not malformed |
 | `source-type` | error | A fixed-type source its field's type does not offer, or a stored `field` choice that yields another type (see [Sources](#sources)) |
+| `var-disabled` | warning | A `$var` or write target naming a variable its datasource holds, still present on the server, but has disabled — the registry leaves it out, so this replaces `var-unknown`. Typically a tag disabled after it was bound; enabling it in the datasource clears it |
 | `var-index` | error | A bound `index` that names no element (see [Array fields](#array-fields)) |
 | `var-type` / `repeatitem-type` / `var-readonly` | error | A `$var` or `$repeatItem` whose variable does not fit the field, or is not writable where the field writes (see [Which variable fits a field](#which-variable-fits-a-field)) |
 | `componentprop-type` / `componentprop-unknown` | error / warning | See [Which variable fits a field](#which-variable-fits-a-field) |

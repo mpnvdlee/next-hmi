@@ -105,6 +105,7 @@ const VARIABLE_CASES: [string, Filter | undefined, string, string][] = [
   ['Color', { type: 'Color' }, 'PLC:Label', '✓'],
   ['Color', { type: 'Color' }, 'PLC:Speed', '✗'],
   ['Boolean', { type: 'Boolean' }, 'PLC:Run', '✓'],
+  ['Boolean', { type: 'Boolean' }, 'PLC:Fan/Run', '✗'],
   ['Boolean', { type: 'Boolean' }, 'PLC:Speed', '✗'],
   ['Float[]', { type: 'float[]' }, 'PLC:Setpoints', '✓'],
   ['Float[]', { type: 'float[]' }, 'PLC:Setpoints[1]', '✗'],
@@ -278,6 +279,38 @@ describe('variable picker verdicts', () => {
     await waitFor(() => {
       expect(document.querySelector('.editor-binding-list > div')).toHaveStyle({ height: '52px' });
     });
+  });
+
+  it('refuses a disabled variable "Show all" lists, and says why', async () => {
+    open({ type: 'Boolean' }, 'PLC:Fan/Run');
+    await waitFor(() => expect(verdict()).toBe('✗'));
+    expect(confirmDisabled()).toBe(true);
+    expect(document.querySelector('.editor-binding-req-reason')?.textContent).toMatch(/Disabled/);
+  });
+
+  it('passes over a disabled variable when Enter takes the first fitting result', async () => {
+    const onPick = vi.fn();
+    mockedApiJson.mockImplementation(async (url: string) =>
+      url === '/api/datasources'
+        ? ([{ name: 'PLC', type: 'static' }] as never)
+        : ({
+            variables: [{ ...leaf('Level', 'Float'), enabled: false }, leaf('Level2', 'Float')],
+          } as never),
+    );
+    useEditorDomainStore.getState().openBindingPicker('', 'field', {
+      filter: { type: 'Float' },
+      onPick,
+    });
+    render(<VariableBindingPicker />);
+    await waitFor(() => expect(mockedApiJson).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Show all/ }));
+    const search = screen.getByRole('searchbox');
+    fireEvent.change(search, { target: { value: 'level' } });
+    await waitFor(() => {
+      expect(document.querySelector('.editor-binding-list > div')).toHaveStyle({ height: '78px' });
+    });
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(onPick).toHaveBeenCalledWith({ path: 'PLC:Level2' }, expect.anything());
   });
 
   it('judges each struct field too, not only the header', async () => {

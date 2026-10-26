@@ -680,6 +680,7 @@ export default function VariableBindingPicker() {
 
     let scalarIsValid: boolean | null = null;
     let wholeArrayElement = false;
+    let scalarReason: string | undefined;
     if (key && !isStruct) {
       const varToCheck = selectedVar ?? selectedParentVar;
       if (repeatPick && repeatOptions) {
@@ -697,7 +698,13 @@ export default function VariableBindingPicker() {
           !!selectedVar &&
           allowed.some((t) => nodeAcceptsOrElement(parseTypeToken(t), resolved));
         const accessOk = !needsWrite || varToCheck.writable === true;
-        scalarIsValid = (typeOk || wholeArrayElement) && accessOk;
+        // "Show all" lists disabled variables too, but the pool serves them no
+        // value and the backend knows them only as disabled.
+        const enabled = varToCheck.enabled !== false;
+        scalarIsValid = (typeOk || wholeArrayElement) && accessOk && enabled;
+        if ((typeOk || wholeArrayElement) && accessOk && !enabled) {
+          scalarReason = 'Disabled in its datasource — enable it there first';
+        }
       } else if (rawSelectedFolder) {
         scalarIsValid = strictFolderSelectable;
       } else if (!pendingDatasource) {
@@ -727,6 +734,7 @@ export default function VariableBindingPicker() {
         rawSelectedFolder,
         scalarIsValid,
         wholeArrayElement,
+        scalarReason,
         isStruct,
       },
     };

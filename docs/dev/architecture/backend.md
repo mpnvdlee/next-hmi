@@ -457,7 +457,7 @@ Errors still 422 with `to_message()` describing the head finding + count. Warnin
 - `GET /api/config/validate` returns advisory and blocking diagnostics for the persisted project. Realtime editor diagnostics use `POST /api/config/validate`; page/config write responses do not embed warning arrays.
 - MCP page-mutation tools (`pages_add_widget`, `pages_set_widget_property`, `pages_set_metadata`, `pages_delete_widget`) include the warnings array on their `applied_response`.
 
-Advisory rather than blocking: empty `$var.datasource`, empty `$var.path`, unknown datasource, unknown variable. Structural corruption (non-object `$var` payload) is a hard error. Rationale: the editor produces empty bindings transiently while the user picks a datasource; the registry can grow at runtime (late OPC-UA pools, project imports); the frontend resolver returns null for unresolved bindings.
+Advisory rather than blocking: empty `$var.datasource`, empty `$var.path`, unknown datasource, unknown variable, disabled variable (`var-disabled`, a warning in place of `var-unknown` when the datasource holds the variable but has it disabled). Structural corruption (non-object `$var` payload) is a hard error. Rationale: the editor produces empty bindings transiently while the user picks a datasource; the registry can grow at runtime (late OPC-UA pools, project imports); the frontend resolver returns null for unresolved bindings.
 
 ## Project Format Migration
 

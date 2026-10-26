@@ -107,7 +107,9 @@ Open the datasource and browse. Each variable is recorded with its real OPC-UA *
 | **Struct array** | A struct repeated N times. | the array of objects, or one struct |
 | **Folder** | Pure organisation (only folders inside). | not bindable |
 
-OPC-UA's many data types collapse to eight simple ones at the HMI boundary — `Boolean`, `Integer`, `Float`, `String`, `DateTime`, `Date`, `Time` and `Duration`: every `Int16/UInt32/…` becomes `Integer`, every `Float/Double` becomes `Float` — so a widget field never sees a wire type. A tag binds only to a field of its own simple type; see [Coercion, in short](properties.md#coercion-in-short).
+OPC-UA's many data types collapse to eight simple ones at the HMI boundary — `Boolean`, `Integer`, `Float`, `String`, `DateTime`, `Date`, `Time` and `Duration`: every `Int16/UInt32/…` becomes `Integer`, every `Float/Double` becomes `Float` — so a widget field never sees a wire type. A tag binds only to a field of its own simple type, except that an `Integer` tag also fills a `Float` field that only reads; see [Coercion, in short](properties.md#coercion-in-short).
+
+A browsed tag arrives disabled. Tick its enable checkbox before binding it: the variable picker lists only enabled tags, and refuses a disabled one even under **Show all**. Disable a tag that is already bound and the warnings pill reports it as *disabled in its datasource* until you enable it again or rebind the widget.
 
 **Browse PLC** starts at the server's *Objects* folder, or at the **Browse Root Node** set in the datasource's properties. From *Objects* it skips the server's own `Server` object — its diagnostics, capabilities and namespace table: hundreds of nodes and no PLC tags. To bind one of those, such as `ServerStatus/CurrentTime`, set **Browse Root Node** to `i=2253` (or to the node inside it you want) and browse again.
 
