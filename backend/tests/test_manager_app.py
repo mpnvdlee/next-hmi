@@ -860,14 +860,24 @@ def test_non_document_requests_still_get_the_503(client: TestClient) -> None:
     assert resp.status_code == 503
 
 
-def test_help_redirects_to_public_docs_when_none_are_bundled(client: TestClient) -> None:
+def test_help_redirects_to_public_docs_when_none_are_bundled(
+    client: TestClient, monkeypatch
+) -> None:
     """A source checkout ships no rendered docs, so the Help button falls back
-    to the public page rather than 404ing."""
-    from api.docs_api import PUBLIC_DOCS_URL
+    to the public page of its own minor line rather than 404ing."""
+    from api import docs_api
 
+    monkeypatch.setattr(docs_api, "app_version", lambda: "1.0.1-121-g1825877")
     resp = client.get("/help", follow_redirects=False)
     assert resp.status_code == 307
-    assert resp.headers["location"] == PUBLIC_DOCS_URL
+    assert resp.headers["location"] == f"{docs_api.PUBLIC_DOCS_URL}v1.0/"
+
+
+def test_public_docs_url_falls_back_to_latest_for_dev() -> None:
+    from api.docs_api import PUBLIC_DOCS_URL, public_docs_url
+
+    assert public_docs_url("dev") == PUBLIC_DOCS_URL
+    assert public_docs_url("1.1.0-rc1") == f"{PUBLIC_DOCS_URL}v1.1/"
 
 
 def test_bundled_help_is_reachable_without_a_trailing_slash(

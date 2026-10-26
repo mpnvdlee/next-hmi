@@ -51,6 +51,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 from core import net, runtime_home, tls_settings  # noqa: E402
 from core.banner import BannerFields, print_banner  # noqa: E402
+from core.version import app_version  # noqa: E402
 
 
 def pids_on_port(port: int) -> list[int]:
@@ -407,6 +408,7 @@ def start(*, quiet: bool, edition: str) -> None:
         "dev",
         BannerFields(
             runtime_home=runtime_home.runtime_home_path(),
+            version=app_version(),
             edition=edition,
             open_url=net.display_url(scheme, bind_host, BACKEND_PORT),
             frontend_url=net.display_url(scheme, bind_host, FRONTEND_PORT),
