@@ -304,6 +304,14 @@ heading.
   a value in the editor while the warnings pill called it *unknown variable*.
   A disabled tag is now left out of the picker, **Show all** included.
 
+- **A field that writes a value back takes only a variable.** A writing field
+  (`write: true`, such as a Button Row's value) offered every source its type
+  allowed, so a formula, a condition or a fixed value could be put where the
+  control writes. The control then had nothing to write to. Such a field now
+  offers only a variable binding, a paste of anything else is refused, and the
+  warnings pill reports `write-source` for one that already holds something
+  else.
+
 ### Fixed
 
 - **An input inside a component's actions is not flagged.** The warnings
