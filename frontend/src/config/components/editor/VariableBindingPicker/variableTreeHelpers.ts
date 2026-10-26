@@ -131,8 +131,8 @@ function structShapes(allowed: string[]) {
   };
 }
 
-/** Walk the full tree and mark array-of-struct / struct folders as selectable
- *  without removing any nodes. Used when "Show all variables" is active. */
+/** Walk the full tree and mark array-of-struct / struct folders as selectable,
+ *  dropping only disabled variables. Used when "Show all variables" is active. */
 export function annotateSelectable(
   nodes: TreeNode[],
   schemaField: {
@@ -140,19 +140,18 @@ export function annotateSelectable(
     requiredFields?: RequiredFieldEntry[];
   } | null,
 ): TreeNode[] {
-  if (!schemaField) return nodes;
   const shapes = structShapes(
-    schemaField.type !== undefined ? acceptedValueTypes(schemaField.type) : [],
+    schemaField?.type !== undefined ? acceptedValueTypes(schemaField.type) : [],
   );
   // "Show all" lets any struct folder be picked for any struct field; the
   // drawer's ✓/✗ then says whether it fits.
   const takesStruct = shapes.single || shapes.array;
   const annotate = (level: TreeNode[]): TreeNode[] =>
-    level.map((n): TreeNode => {
-      if (!isFolder(n)) return n;
+    level.flatMap((n): TreeNode[] => {
+      if (!isFolder(n)) return n.enabled ? [n] : [];
       const children = annotate(n.children);
-      const selectable = takesStruct && (isArrayOfStructFolder(n) || n.children.length > 0);
-      return { ...n, selectable, children } as FolderEntry;
+      const selectable = takesStruct && (isArrayOfStructFolder(n) || children.length > 0);
+      return [{ ...n, selectable, children } as FolderEntry];
     });
   return annotate(nodes);
 }
@@ -165,7 +164,6 @@ export function typeFilter(
     requiredFields?: RequiredFieldEntry[];
     write?: boolean;
   } | null,
-  includeDisabled = false,
 ): TreeNode[] {
   const allowed = schemaField?.type !== undefined ? acceptedValueTypes(schemaField.type) : [];
   const shapes = structShapes(allowed);
@@ -193,7 +191,7 @@ export function typeFilter(
         }
         return recurse();
       }
-      if (!includeDisabled && !n.enabled) return [];
+      if (!n.enabled) return [];
       if (shapes.only) return [];
       if (n.data_type === 'struct') return [];
       if (allowed.length) {
