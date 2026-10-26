@@ -426,6 +426,13 @@
   background: color-mix(in srgb, var(--cfg-accent) 5%, var(--cfg-surface));
 }
 
+.cfg-selection-card:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: var(--cfg-border);
+  background: var(--cfg-surface);
+}
+
 .cfg-selection-card--selected {
   border-color: var(--cfg-accent);
   background: color-mix(in srgb, var(--cfg-accent) 9%, var(--cfg-surface));
