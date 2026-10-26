@@ -494,6 +494,15 @@ describe('propertySourceEval', () => {
       expect(formula('{1} / {2}', { 1: 10, 2: 0 })).toBeNull();
     });
 
+    it('rounds the result to a whole number only when asked', () => {
+      const rounded = (expression: string, wildcards: Record<string, unknown> = {}) =>
+        evaluatePropertyValue({ $formula: { expression, wildcards, round: true } }, mockContext);
+      expect(formula('7 / 2')).toBe(3.5);
+      expect(rounded('7 / 2')).toBe(4);
+      expect(rounded('{1} * 0.4', { 1: 3 })).toBe(1);
+      expect(rounded('{1} / {2}', { 1: 1, 2: 0 })).toBeNull();
+    });
+
     it('returns null when a placeholder has no numeric value', () => {
       expect(formula('{1} + 1', {})).toBeNull();
       expect(formula('{1} + 1', { 1: 'abc' })).toBeNull();
