@@ -329,6 +329,11 @@ heading.
   A disabled tag is now marked ✗ with *Disabled in its datasource*, and
   Confirm, double-click and Enter all refuse it.
 
+- **A Gauge and a Trend take an Integer tag.** Their **Value** took only a
+  `Float` variable, so a PLC counter (an S7 `Int` or `DInt`, a CODESYS `INT`)
+  needed a formula to reach them. They now take `Float` or `Integer`, as the
+  Value Display, Progress Bar and Ring Gauge already did.
+
 - **A field that writes a value back takes only a variable.** A writing field
   (`write: true`, such as a Button Row's value) offered every source its type
   allowed, so a formula, a condition or a fixed value could be put where the

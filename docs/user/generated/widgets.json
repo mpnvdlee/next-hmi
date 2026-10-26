@@ -2178,7 +2178,7 @@
           {
             "key": "variable",
             "label": "Value",
-            "type": "Float",
+            "type": "Float | Integer",
             "group": "Data"
           },
           {
@@ -2532,7 +2532,7 @@
           {
             "key": "variable",
             "label": "Value",
-            "type": "Float",
+            "type": "Float | Integer",
             "group": "Data"
           },
           {
