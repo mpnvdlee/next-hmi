@@ -5,7 +5,7 @@ Every property value answers two questions:
 1. **What type is it?** — the kind of value (`String`, `Integer`, `Float`, `Boolean`, `DateTime`, `Date`, `Time`, `Duration`, `color`, `icon`, `image`, `video`). Any type can also be an **array** of that type.
 2. **Where does it come from?** — the source (a literal you typed, a datasource variable, the logged-in user, a computed expression, …).
 
-The **type is decided by the field**. A label's `text` field needs a `String`; a gauge's `value` field needs a `Float`. You don't pick the type — you pick a **source** that produces the type the field wants.
+The **type is decided by the field**. A label's `text` field needs a `String`; a gauge's `value` field needs a `Float` or an `Integer`. You don't pick the type — you pick a **source** that produces the type the field wants.
 
 ```
 property value = a SOURCE that produces the TYPE the field needs
