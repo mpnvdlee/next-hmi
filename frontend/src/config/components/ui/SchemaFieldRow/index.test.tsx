@@ -260,6 +260,25 @@ describe('SchemaFieldRow mixed source badge', () => {
     expect(screen.queryByLabelText('Static Value')).not.toBeInTheDocument();
   });
 
+  // A writing field needs a variable to write to: no literal, no calculation.
+  it('offers a writing number field a variable binding and nothing else', async () => {
+    const write: SchemaField = { type: 'float', label: 'Setpoint', write: true };
+    render(
+      <SchemaFieldRow
+        schema={write}
+        value={{ $formula: { expression: '{1} * 2', wildcards: { 1: 3 } } }}
+        onChange={vi.fn()}
+        propKey="setpoint"
+      />,
+    );
+
+    expect(screen.queryByLabelText('Formula')).not.toBeInTheDocument();
+    const pill = screen.getByLabelText('Variable').closest('button')!;
+    expect(pill).toHaveClass('cfg-source-pill--single');
+    await userEvent.click(pill);
+    expect(document.querySelector('.cfg-source-pill__option-label')).toBeNull();
+  });
+
   it('gives a shared static value when Static is picked on a mixed static row', async () => {
     const onChange = renderRow({ source: 'static' });
 

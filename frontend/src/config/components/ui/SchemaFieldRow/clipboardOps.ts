@@ -45,6 +45,9 @@ function normalizeForClipboard(value: unknown): unknown {
 // scope / action-result handler), not the field type — the PropertySourceSelector
 // appends them at render time. They produce `any`, so a copied binding pastes
 // into any source-capable field; scope correctness is the operator's call.
+/** What a writing field may hold: a variable, or a scope source standing in for one. */
+const WRITABLE_SOURCES = new Set(['$var', '$componentProp', '$repeatItem']);
+
 function isScopePasteSource(sourceKey: string, fieldType: string): boolean {
   return (
     isPropertySourceKey(sourceKey) &&
@@ -90,6 +93,10 @@ export async function pastePropertyValue(
   const check = isPropertySourceAllowed(schema.type, sourceKey);
   if (!check.valid && !isScopePasteSource(sourceKey, fieldType)) {
     toast('error', check.reason ?? 'Incompatible value');
+    return;
+  }
+  if (schema.write === true && !WRITABLE_SOURCES.has(sourceKey)) {
+    toast('error', 'This field writes to a variable — paste a variable binding');
     return;
   }
 
