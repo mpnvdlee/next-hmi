@@ -312,6 +312,12 @@ heading.
   warnings pill reports `write-source` for one that already holds something
   else.
 
+- **A formula can fill a whole-number field.** The Formula source was offered
+  only on `Float` fields. It now has a **Round to a whole number** switch that
+  rounds the result to the nearest integer. A formula on an `Integer` field
+  starts with it on, and the warnings pill reports `formula-fraction` for a
+  formula there that is not rounded.
+
 ### Fixed
 
 - **An input inside a component's actions is not flagged.** The warnings

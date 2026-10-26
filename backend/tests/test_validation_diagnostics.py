@@ -717,6 +717,29 @@ def test_formula_wildcard_empty(ctx):
 
 
 @pytest.mark.parametrize(
+    ("field_type", "round_", "codes"),
+    [
+        ("integer", None, ["formula-fraction"]),
+        ("integer", False, ["formula-fraction"]),
+        ("integer", True, []),
+        ("float", None, []),
+        (["float", "integer"], None, []),
+        ("duration", None, []),
+    ],
+)
+def test_formula_on_a_whole_number_field_must_round(ctx, field_type, round_, codes):
+    payload = {"expression": "{1} / 2", "wildcards": {"1": {"$static": 3}}}
+    if round_ is not None:
+        payload["round"] = round_
+    report = ValidationReport()
+    _validate_property_value({"$formula": payload}, {"type": field_type}, ctx, "/p", report)
+    assert report.findings == []
+    assert [w.code for w in report.warnings] == codes
+    if codes:
+        assert (report.warnings[0].severity, report.warnings[0].path) == ("warning", "/p/$formula")
+
+
+@pytest.mark.parametrize(
     ("value", "codes"),
     [
         ({"$var": {"path": "PLC:Motor/Speed"}}, []),

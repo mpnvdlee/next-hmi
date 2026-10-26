@@ -10,7 +10,7 @@
     "$not": ["boolean"],
     "$and": ["boolean"],
     "$or": ["boolean"],
-    "$formula": ["float"],
+    "$formula": ["float", "integer"],
     "$random": ["integer", "float"],
     "$switch": ["any"],
     "$user": ["string", "string[]"],
@@ -71,6 +71,7 @@
       "$static",
       "$var",
       "$if",
+      "$formula",
       "$random",
       "$switch",
       "$widgetProp",
@@ -316,6 +317,7 @@
         "$overlay",
         "$page",
         "$viewport",
+        "$formula",
         "$random",
         "$alarmCount"
       ]
