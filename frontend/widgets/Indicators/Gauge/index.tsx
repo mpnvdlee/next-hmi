@@ -1,6 +1,6 @@
 /* @jsxRuntime classic */
 export const schema = {
-  variable: { type: 'float' as const, label: 'Value', group: 'Data' },
+  variable: { type: ['float', 'integer'] as const, label: 'Value', group: 'Data' },
   min: { type: 'float' as const, label: 'Min value', group: 'Data', step: 1, defaultValue: 0 },
   max: { type: 'float' as const, label: 'Max value', group: 'Data', step: 1, defaultValue: 100 },
   label: { type: 'string' as const, label: 'Label', group: 'Content' },
