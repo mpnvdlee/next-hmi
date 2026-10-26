@@ -30,6 +30,14 @@ import { useSaveErrorToast } from './useSaveErrorToast';
 import TransferProjectButton from './TransferProjectButton';
 import Button from '@config/components/ui/Button';
 import ConnectionLostOverlay from '@shared/components/ConnectionLostOverlay';
+import { setBackendRestartHandler } from '@hmi/hooks/useWebSocket';
+
+/** A restarted backend may serve newer config; show it, unless that drops unsaved edits. */
+function reloadUnlessDirty() {
+  if (!useProjectStore.getState().dirty && !useUsersDomainStore.getState().dirty) {
+    window.location.reload();
+  }
+}
 
 interface NavItem {
   to: string;
@@ -141,6 +149,11 @@ export default function ConfigShell() {
     const { registerAfterSave, unregisterAfterSave } = useProjectStore.getState();
     registerAfterSave('thumbnail', captureThumbnail);
     return () => unregisterAfterSave('thumbnail');
+  }, []);
+
+  useEffect(() => {
+    setBackendRestartHandler(reloadUnlessDirty);
+    return () => setBackendRestartHandler(null);
   }, []);
 
   return (

@@ -65,6 +65,8 @@ def _config_path():
 _MAX_PAGE_IDS = 2000
 _MAX_PRIORITY_KEYS = 5000
 _MAX_WS_MESSAGE_BYTES = 64 * 1024
+# Names this backend process, so a client can tell a reconnect from a restart.
+_BOOT_ID = uuid.uuid4().hex
 # How long a runtime login can be resumed on a new socket after it was last used.
 _SESSION_TTL_S = 12 * 3600
 # Matches "[N]" suffix used in array-element paths (e.g. "MyArray[2]")
@@ -358,7 +360,9 @@ class WebSocketManager:
         try:
             # Send an empty snapshot immediately so the client marks snapshotReceived=true
             # and the UI becomes interactive, then stream the actual values in chunks.
-            await websocket.send_text(json.dumps({"type": "var_snapshot", "values": {}}))
+            await websocket.send_text(
+                json.dumps({"type": "var_snapshot", "values": {}, "bootId": _BOOT_ID})
+            )
             # Metadata is an authoritative replacement snapshot. Send it even
             # when no datasource manager/variables exist so a reconnect cannot
             # retain metadata from the previous backend generation.

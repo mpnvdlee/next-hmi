@@ -92,7 +92,7 @@ leaving a half-initialised socket registered.
 
 | Type | Shape | When |
 |---|---|---|
-| `var_snapshot` | `{ type, values }` | Once on connect (empty `values`). |
+| `var_snapshot` | `{ type, values, bootId }` | Once on connect (empty `values`). `bootId` names the backend process; a client that sees it change on a reconnect knows the backend restarted, and the runtime (and an editor with nothing unsaved) reloads then. |
 | `var_metadata` | `{ type, meta }` | Once on connect; variable shape metadata. |
 | `var_update` | `{ type, values: { [compositeKey]: value } }` — see [Value forms](#value-forms) | Value changes. Batched in a 50 ms window; the per-datasource priority window is `settings.priority_ws_batch_ms`, clamped to `[0, 1000]`, default 10 ms. |
 | `var_removed` | `{ type, ids: [compositeKey, ...] }` | Variables no longer available. |

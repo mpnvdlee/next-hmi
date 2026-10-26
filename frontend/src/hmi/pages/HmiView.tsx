@@ -8,7 +8,7 @@ import { useDisableBrowserZoom } from '@shared/hooks/useDisableBrowserZoom';
 import { useConfigStore } from '@shared/store/configStore';
 import { useComponentStore } from '@shared/store/componentStore';
 import { useHmiStore } from '../store/hmiStore';
-import { sendWsMessage } from '../hooks/useWebSocket';
+import { sendWsMessage, setBackendRestartHandler } from '../hooks/useWebSocket';
 import { useVariableStore } from '../store/variableStore';
 import { resolveMainStyle, resolvePageContext } from '@shared/utils/pageTree';
 import { getPageChildren } from '@shared/utils/pageContent';
@@ -106,6 +106,12 @@ export default function HmiView() {
     if (!wsConnected) return;
     sendWsMessage({ type: 'request_identity', scope, sessionToken: loadSessionToken() });
   }, [wsConnected, scope]);
+  // A restarted backend may serve newer config: load it fresh. A reconnect to
+  // the same backend needs nothing, and the tab's login survives either way.
+  useEffect(() => {
+    setBackendRestartHandler(reloadPage);
+    return () => setBackendRestartHandler(null);
+  }, []);
 
   // Send active runtime context. Backend computes the full variable set so
   // nested expressions (for example $if/$switch/$compare) are included.
@@ -265,10 +271,8 @@ export default function HmiView() {
           <FullscreenPrompt />
         </div>
       </PageDataSettleGate>
-      {/* Outside the zoomed root so it covers the viewport. Back after a drop,
-          the backend may have restarted on newer config, so load it fresh; the
-          tab's login survives the reload. */}
-      <ConnectionLostOverlay onReturn={reloadPage} />
+      {/* Outside the zoomed root so it covers the viewport. */}
+      <ConnectionLostOverlay />
     </HmiScopeContext.Provider>
   );
 }

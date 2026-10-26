@@ -6,32 +6,23 @@ import Spinner from '@shared/components/Spinner';
 interface Props {
   /** Shown in a card under the title; without one only the title and spinner show. */
   message?: string;
-  /** Called once the connection is back after a drop. */
-  onReturn?: () => void;
 }
 
 /**
  * Blurs the page with a spinner while the server connection is down. Only a
- * drop counts: the first connect of a page load is not a return, so the boot
- * never flashes it.
+ * drop shows it: the page is still booting before the first connect, so that
+ * wait is the boot screen's to show.
  */
-export default function ConnectionLostOverlay({ message, onReturn }: Props) {
+export default function ConnectionLostOverlay({ message }: Props) {
   const [lost, setLost] = useState(false);
 
-  useEffect(() => {
-    let dropped = false;
-    return useVariableStore.subscribe((state, prev) => {
-      if (state.wsConnected === prev.wsConnected) return;
-      if (!state.wsConnected) {
-        dropped = true;
-        setLost(true);
-      } else if (dropped) {
-        dropped = false;
-        setLost(false);
-        onReturn?.();
-      }
-    });
-  }, [onReturn]);
+  useEffect(
+    () =>
+      useVariableStore.subscribe((state, prev) => {
+        if (state.wsConnected !== prev.wsConnected) setLost(!state.wsConnected);
+      }),
+    [],
+  );
 
   if (!lost) return null;
   if (!message) {
