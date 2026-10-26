@@ -50,9 +50,9 @@ export const useProjectAvailabilityStore = create<ProjectAvailabilityStore>((set
    * appear. Coalesced, because every gated call fails at once.
    */
   resolve: () => {
-    // A resolved reason is terminal — the overlay's only action navigates away,
-    // and nothing clears it — so re-probing after it is set can only repeat the
-    // same answer. Without this the instance's own polls keep 503-ing behind
+    // A resolved reason holds until the WebSocket reconnects (AppInner clears
+    // it then), so re-probing after it is set can only repeat the same answer.
+    // Without this the instance's own polls keep 503-ing behind
     // the overlay and each wave starts another pair of manager round-trips.
     if (useProjectAvailabilityStore.getState().reason) return Promise.resolve();
     if (inFlight) return inFlight;

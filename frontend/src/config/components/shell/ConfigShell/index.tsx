@@ -29,6 +29,15 @@ import { useUsersDomainStore } from '@config/store/domains/usersDomainStore';
 import { useSaveErrorToast } from './useSaveErrorToast';
 import TransferProjectButton from './TransferProjectButton';
 import Button from '@config/components/ui/Button';
+import ConnectionLostOverlay from '@shared/components/ConnectionLostOverlay';
+import { setBackendRestartHandler } from '@hmi/hooks/useWebSocket';
+
+/** A restarted backend may serve newer config; show it, unless that drops unsaved edits. */
+function reloadUnlessDirty() {
+  if (!useProjectStore.getState().dirty && !useUsersDomainStore.getState().dirty) {
+    window.location.reload();
+  }
+}
 
 interface NavItem {
   to: string;
@@ -142,6 +151,11 @@ export default function ConfigShell() {
     return () => unregisterAfterSave('thumbnail');
   }, []);
 
+  useEffect(() => {
+    setBackendRestartHandler(reloadUnlessDirty);
+    return () => setBackendRestartHandler(null);
+  }, []);
+
   return (
     <div className="cfg-shell">
       <ConfigTopBar
@@ -236,6 +250,7 @@ export default function ConfigShell() {
       <ImageSourcePicker />
       <VideoSourcePicker />
       <ConfigToastStack />
+      <ConnectionLostOverlay message="Reconnecting to the server… Your unsaved changes are kept; save them once this closes." />
     </div>
   );
 }

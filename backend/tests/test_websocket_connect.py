@@ -14,7 +14,7 @@ import asyncio
 import json
 
 from conftest import FakeDatasourceManager, FakeEngine, FakePool, FakeWebSocket
-from services.websocket_manager import WebSocketManager
+from services.websocket_manager import _BOOT_ID, WebSocketManager
 
 
 def _json(msg: dict) -> str:
@@ -42,7 +42,7 @@ def test_connect_sends_full_replay_sequence_and_registers_client() -> None:
     assert manager._client_users[client_id] == {}
     assert client_id in manager._client_connected_at
 
-    assert ws.messages[0] == {"type": "var_snapshot", "values": {}}
+    assert ws.messages[0] == {"type": "var_snapshot", "values": {}, "bootId": _BOOT_ID}
     assert ws.messages[1] == {
         "type": "var_metadata",
         "meta": {"DS:A": {"kind": "scalar", "base": "int", "array": False}},
@@ -63,7 +63,7 @@ def test_connect_with_no_datasource_manager_or_pool_sends_minimal_snapshot() -> 
     assert ws.accepted is True
     assert client_id in manager._connections
     assert ws.messages == [
-        {"type": "var_snapshot", "values": {}},
+        {"type": "var_snapshot", "values": {}, "bootId": _BOOT_ID},
         {"type": "var_metadata", "meta": {}},
     ]
 
