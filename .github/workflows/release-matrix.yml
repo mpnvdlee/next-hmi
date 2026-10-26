@@ -176,7 +176,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: nexthmi-docker-linux-x64
-          path: dist/nexthmi-docker-linux-x64-*.zip
+          path: dist/nexthmi-community-docker-linux-x64-*.zip
           if-no-files-found: error
           retention-days: 3
 
@@ -245,7 +245,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: nexthmi-docker-linux-arm64
-          path: dist/nexthmi-docker-linux-arm64-*.zip
+          path: dist/nexthmi-community-docker-linux-arm64-*.zip
           if-no-files-found: error
           retention-days: 3
 
@@ -291,13 +291,13 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: nexthmi-macos-arm64
-          path: dist/nexthmi-macos-arm64-*.zip
+          path: dist/nexthmi-community-macos-arm64-*.zip
           if-no-files-found: error
           retention-days: 3
       - name: Unzip artifact
         run: |
           mkdir -p "$RUNNER_TEMP/portable"
-          unzip -q dist/nexthmi-macos-arm64-*.zip -d "$RUNNER_TEMP/portable"
+          unzip -q dist/nexthmi-community-macos-arm64-*.zip -d "$RUNNER_TEMP/portable"
       - name: Bundled esbuild runs standalone (no Node/npm on PATH)
         run: |
           env -i PATH="/usr/bin:/bin" \
@@ -382,13 +382,13 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: nexthmi-linux-x64
-          path: dist/nexthmi-linux-x64-*.zip
+          path: dist/nexthmi-community-linux-x64-*.zip
           if-no-files-found: error
           retention-days: 3
       - name: Unzip artifact
         run: |
           mkdir -p "$RUNNER_TEMP/portable"
-          unzip -q dist/nexthmi-linux-x64-*.zip -d "$RUNNER_TEMP/portable"
+          unzip -q dist/nexthmi-community-linux-x64-*.zip -d "$RUNNER_TEMP/portable"
       - name: Bundled esbuild runs standalone (no Node/npm on PATH)
         run: |
           env -i PATH="/usr/bin:/bin" \
@@ -464,14 +464,14 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: nexthmi-windows-x64
-          path: dist\nexthmi-windows-x64-*.zip
+          path: dist\nexthmi-community-windows-x64-*.zip
           if-no-files-found: error
           retention-days: 3
       - name: Unzip artifact
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\portable" | Out-Null
-          $zip = Get-ChildItem -Path dist -Filter 'nexthmi-windows-x64-*.zip' | Select-Object -First 1
+          $zip = Get-ChildItem -Path dist -Filter 'nexthmi-community-windows-x64-*.zip' | Select-Object -First 1
           Expand-Archive -Path $zip.FullName -DestinationPath "$env:RUNNER_TEMP\portable" -Force
       - name: Bundled esbuild runs standalone (no Node/npm on PATH)
         shell: pwsh

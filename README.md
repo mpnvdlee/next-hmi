@@ -25,10 +25,10 @@ with acknowledgement, recipes, users and permissions are all in this build.
 A portable zip for Windows, Linux and Apple-silicon Macs. You do not need an
 installer, admin rights, Python or Node on the host.
 
-1. **Download** `nexthmi-windows-x64-<version>.zip`,
-   `nexthmi-linux-x64-<version>.zip` or `nexthmi-macos-arm64-<version>.zip`
+1. **Download** `nexthmi-community-windows-x64-<version>.zip`,
+   `nexthmi-community-linux-x64-<version>.zip` or `nexthmi-community-macos-arm64-<version>.zip`
    from the [latest release](https://github.com/mpnvdlee/next-hmi/releases/latest).
-   For Docker without a registry, take `nexthmi-docker-linux-<arch>-<version>.zip`
+   For Docker without a registry, take `nexthmi-community-docker-linux-<arch>-<version>.zip`
    and run its `install.sh`.
 2. **Unzip** anywhere you can write, and double-click `nexthmi.exe` or
    `nexthmi.command`, or run `./nexthmi` on Linux. A terminal opens and prints
