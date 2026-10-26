@@ -98,6 +98,7 @@ _prepend_lgpl_path()
 
 from core import bootstrap  # noqa: E402  — must follow the lgpl/ path insert above
 from core.banner import BannerFields, print_banner  # noqa: E402
+from core.version import app_edition  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -853,6 +854,7 @@ def _run_manager(data_dir: Path, args: argparse.Namespace) -> int:
             open_url=open_url,
             network_urls=(tuple(net.network_urls(scheme, host, app_port)),),
             version=_read_version(),
+            edition=app_edition(),
         ),
     )
     redirector = redirector_thread = None

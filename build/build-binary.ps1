@@ -5,7 +5,7 @@
 #
 # Produces (oss, the default):
 #   dist\nexthmi\                            one-folder PyInstaller output
-#   dist\nexthmi-windows-x64-<version>.zip   the distributable
+#   dist\nexthmi-community-windows-x64-<version>.zip   the distributable
 # and for ee, the same under nexthmi-enterprise.
 #
 # -PackageOnly runs steps 5-9 only (rename, version stamp, docs, zip, verify)
@@ -55,6 +55,8 @@ $OsTag   = 'windows'
 $ArchTag = 'x64'
 $ArtifactBase = if ($Edition -eq 'ee') { 'nexthmi-enterprise' } else { 'nexthmi' }
 $DistName = "$ArtifactBase-$OsTag-$ArchTag"
+# The zip names its edition; the folder inside keeps its name.
+$ZipName = "$(if ($Edition -eq 'ee') { 'nexthmi-enterprise' } else { 'nexthmi-community' })-$OsTag-$ArchTag"
 
 # Scratch artifacts that mutate the source tree. Declared up-front so the
 # finally-block can clean them up even if an exception aborts the build
@@ -262,10 +264,10 @@ try {
     Invoke-WithRetry -What "moving $DistTemp to $OutputDir" -Action { Move-Item $DistTemp $OutputDir }
   } elseif (-not (Test-Path $OutputDir)) {
     if (-not $PackageOnly) { throw "PyInstaller produced no output at $DistTemp." }
-    $PriorZip = Get-ChildItem -Path (Join-Path $RepoRoot 'dist') -Filter "$DistName-*.zip" -ErrorAction SilentlyContinue |
+    $PriorZip = Get-ChildItem -Path (Join-Path $RepoRoot 'dist') -Filter "$ZipName-*.zip" -ErrorAction SilentlyContinue |
       Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if (-not $PriorZip) {
-      throw "-PackageOnly has nothing to package: no $DistTemp, no $OutputDir, and no dist\$DistName-*.zip. Run a full build first."
+      throw "-PackageOnly has nothing to package: no $DistTemp, no $OutputDir, and no dist\$ZipName-*.zip. Run a full build first."
     }
     Write-Host "[build] unpacking $($PriorZip.Name) to re-package"
     Expand-Archive -Path $PriorZip.FullName -DestinationPath (Join-Path $RepoRoot 'dist') -Force
@@ -290,9 +292,9 @@ try {
   # 7. Zip. The name carries the version so two downloads of different releases
   #    don't collide in a downloads folder; the folder *inside* stays
   #    unversioned, because that's the path an operator's shortcuts point at.
-  Get-ChildItem -Path (Join-Path $RepoRoot 'dist') -Filter "$DistName*.zip" -ErrorAction SilentlyContinue |
+  Get-ChildItem -Path (Join-Path $RepoRoot 'dist') -Filter "$ZipName*.zip" -ErrorAction SilentlyContinue |
     Remove-Item -Force
-  $ZipPath = Join-Path $RepoRoot "dist\$DistName-$Version.zip"
+  $ZipPath = Join-Path $RepoRoot "dist\$ZipName-$Version.zip"
   # Not Compress-Archive: Windows PowerShell 5.1 writes entry names with
   # backslashes, which the ZIP spec forbids (APPNOTE 4.4.17.1) and which every
   # non-Windows unzip reads as literal characters in the filename rather than as

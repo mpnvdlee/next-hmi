@@ -40,6 +40,13 @@ heading.
 
 ### Changed
 
+- **Every download names its edition.** The public zips are now
+  `nexthmi-community-<os>-<arch>-<version>.zip` and
+  `nexthmi-community-docker-linux-<arch>-<version>.zip`; the folder inside keeps
+  its name, so shortcuts to it still work. The terminal splash prints
+  *Community Edition* or *Enterprise Edition* under the logo, and the runtime's
+  loading screen says *Community Edition* in the public build.
+
 - **Usage reporting says more, and still nothing about your projects.** The
   report now goes out every hour instead of once a day, and adds how NEXT HMI
   was installed, how long it has been running, whether the last run stopped

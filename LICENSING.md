@@ -33,9 +33,9 @@ Two notes sit alongside the AGPL and do not modify it:
 
 The licence follows the artifact, not the buyer.
 
-- **AGPL-3.0** — the public downloads `nexthmi-macos-arm64-<version>.zip`,
-  `nexthmi-windows-x64-<version>.zip`, `nexthmi-linux-x64-<version>.zip`,
-  `nexthmi-docker-linux-<arch>-<version>.zip`, and the
+- **AGPL-3.0** — the public downloads `nexthmi-community-macos-arm64-<version>.zip`,
+  `nexthmi-community-windows-x64-<version>.zip`, `nexthmi-community-linux-x64-<version>.zip`,
+  `nexthmi-community-docker-linux-<arch>-<version>.zip`, and the
   `ghcr.io/mpnvdlee/next-hmi` image. A commercial
   licensee is delivered something different — see
   [COMMERCIAL.md](COMMERCIAL.md#redistribution-licence) for what and why.

@@ -1,5 +1,6 @@
 """Terminal splash rendering (``core.banner``)."""
 import re
+from dataclasses import replace
 from pathlib import Path
 
 from core.banner import BannerFields, render_banner
@@ -158,3 +159,10 @@ def test_network_step_appears_only_when_there_is_a_network_address() -> None:
         network_urls=(("http://panel-pc:8000",),),
     )
     assert "On the network" in _ANSI.sub("", render_banner("runtime", fields)).split("Getting started")[1]
+
+
+def test_banner_names_the_edition_under_the_logo() -> None:
+    oss = _ANSI.sub("", render_banner("runtime", _fields()))
+    ee = _ANSI.sub("", render_banner("runtime", replace(_fields(), edition="ee")))
+    assert "Community Edition v1.0.0" in oss
+    assert "Enterprise Edition v1.0.0" in ee

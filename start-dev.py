@@ -407,6 +407,7 @@ def start(*, quiet: bool, edition: str) -> None:
         "dev",
         BannerFields(
             runtime_home=runtime_home.runtime_home_path(),
+            edition=edition,
             open_url=net.display_url(scheme, bind_host, BACKEND_PORT),
             frontend_url=net.display_url(scheme, bind_host, FRONTEND_PORT),
             network_urls=(
