@@ -542,7 +542,7 @@ Existing volumes retain their current project credentials unchanged.
 
 ### Installing
 
-1. Download `nexthmi-<os>-<arch>-<version>.zip` from the release.
+1. Download `nexthmi-community-<os>-<arch>-<version>.zip` from the release.
 2. Unzip anywhere you have write access (Downloads, Desktop, anywhere
    under your home directory).
 3. Launch:
