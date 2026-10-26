@@ -167,12 +167,9 @@ cd /tmp/nxd/nexthmi-docker-linux-x64
 # hot-reload, toggle MCP on/off, then `docker compose down`
 ```
 
-Optional — also publish to a registry for `docker pull` consumers:
-
-```bash
-docker tag nexthmi:1.1.0 nexthmi:latest
-# docker push <registry>/nexthmi:1.1.0 && docker push <registry>/nexthmi:latest
-```
+Don't push the image by hand: on a final tag `docker-publish` pushes the
+smoke-tested CI images to `ghcr.io/mpnvdlee/next-hmi` for `docker pull`
+consumers — see [Release, step by step](#release-step-by-step).
 
 ## Binaries
 

@@ -7,7 +7,7 @@ Install the runtime, start it, and open the Manager — the front door where eve
 All three paths run the same server against the same kind of project folder. Move between them freely.
 
 - **From source** — For developing. Hot reload for both the runtime and your custom widgets.
-- **From Docker** — For servers. One command brings up the server and the example project.
+- **From Docker** — For servers. One command brings up the server and the example project — pull the image, or download the offline installer zip from the release and run its `install.sh`.
 - **Portable zip** — For panel PCs. Unzip a self-contained Mac, Windows or Linux build and start it.
 
 ```
@@ -15,7 +15,8 @@ All three paths run the same server against the same kind of project folder. Mov
 $ python start-dev.py
 
 # 2 · From Docker (server)
-$ docker compose up
+$ docker run -d -p 8000:8000 -p 8443:8443 -v nexthmi-data:/data ghcr.io/mpnvdlee/next-hmi:latest
+$ ./install.sh          # or: the offline installer zip
 
 # 3 · Portable build (macOS; nexthmi.exe on Windows, ./nexthmi on Linux)
 $ ./nexthmi.command

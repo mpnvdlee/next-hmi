@@ -3,8 +3,9 @@
 NEXT HMI ships in two distributable forms:
 
 1. **Docker image** — single container; runtime home (and any projects
-   under it) mounted as a volume.
-2. **Portable Mac/Windows binary** — unzip + double-click. No installer,
+   under it) mounted as a volume. Pull it from `ghcr.io`, or download it as an
+   offline installer zip from the release.
+2. **Portable Mac/Windows/Linux binary** — unzip + double-click. No installer,
    no admin rights, no Python or Node toolchain on the host.
 
 Both formats run the same backend over the same on-disk layout. Move a
@@ -447,13 +448,18 @@ plain HTTP so local installs keep working.
 
 ## Docker
 
-### Quick start
+Three ways to get the same image. Each starts it on port 8000 (and 8443 once
+HTTPS is on) with the runtime home mounted as `/data`.
+
+### From the registry
 
 ```bash
-# from a clone of the repo
-docker build -t nexthmi .
-docker run --rm -p 8000:8000 -v "$PWD/project-data:/data" nexthmi
+docker run -d --name nexthmi -p 8000:8000 -p 8443:8443 \
+  -v nexthmi-data:/data ghcr.io/mpnvdlee/next-hmi:latest
 ```
+
+The image is multi-arch (`linux/amd64` + `linux/arm64`). Swap `:latest` for a
+version tag such as `:1.0.1` to pin a release.
 
 Open <http://localhost:8000> and set the device-admin password when the
 manager dashboard prompts. On first boot the bundled seed project is
@@ -465,30 +471,32 @@ exception: `http://192.168.1.10:8000` is not a secure context, so the browser
 withholds the editor's clipboard there. See [What plain HTTP costs the
 browser](#what-plain-http-costs-the-browser).
 
-Using compose:
+### As a file download, without a registry
 
-```bash
-docker compose up -d
-```
-
-`docker-compose.yml` at the repo root binds `./project-data` to `/data`.
-That bind-mount carries both the runtime home (`projects.json`, `.logs/`,
-`.widget-build/`) AND any project folders the operator places under it.
-Projects with absolute paths outside `/data` need their own bind-mounts.
-
-### From the release, without a registry or a clone
-
-Every release carries an offline installer per architecture,
-`nexthmi-docker-linux-x64-<version>.zip` and
+For a host that cannot reach `ghcr.io`, every release carries an offline
+installer per architecture, `nexthmi-docker-linux-x64-<version>.zip` and
 `nexthmi-docker-linux-arm64-<version>.zip`: the image as a file, a compose file
-that restarts the container with the host, and `install.sh`. Unzip it and run:
+that restarts the container with the host, and `install.sh`. Copy it over,
+unzip it and run:
 
 ```bash
 ./install.sh
 ```
 
-It loads the image and starts it on port 8000, with `./project-data` beside it
-as `/data`. `README.txt` in the zip covers stopping, logs and updating.
+It loads the image and starts it, with `./project-data` beside it as `/data`.
+`README.txt` in the zip covers stopping, logs and updating.
+
+### From a clone of the repo
+
+```bash
+docker compose up -d
+```
+
+`docker-compose.yml` at the repo root builds the image and binds
+`./project-data` to `/data`. That bind-mount carries both the runtime home
+(`projects.json`, `.logs/`, `.widget-build/`) AND any project folders the
+operator places under it. Projects with absolute paths outside `/data` need
+their own bind-mounts.
 
 Discovery note: mDNS requires host networking. Without it (default bridge
 mode) the runtime won't appear on peer pickers — operators can still use
@@ -512,10 +520,11 @@ manual `host:port` entries.
 
 ### Upgrading
 
-```bash
-docker pull nexthmi:latest         # or rebuild from source
-docker compose up -d               # picks up the new image
-```
+- **Registry** — `docker pull ghcr.io/mpnvdlee/next-hmi:latest`, then remove
+  the container and run the same `docker run` again.
+- **File download** — unzip the newer installer and run its `./install.sh`
+  from the folder that holds your `project-data/`.
+- **Clone** — `git pull`, then `docker compose up -d --build`.
 
 The data volume is untouched. The backend checks each project's stamped
 format version on activation and refuses to open one written by a newer

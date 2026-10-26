@@ -50,8 +50,8 @@ from the editor's **Users** area.
 
 ### Docker — Linux, servers and anything with a container runtime
 
-There is no portable Linux build; on Linux, use Docker. Same runtime, same
-project folder, same seeded example.
+Same runtime, same project folder, same seeded example. No registry access?
+Take the offline installer zip from step 1 instead.
 
 ```bash
 docker run -d --name nexthmi -p 8000:8000 -p 8443:8443 \
