@@ -13,6 +13,34 @@
   padding: var(--cfg-space-6);
 }
 
+/* Settings is read as prose, not scanned like the editor panels — one step up
+   the type scale, so every section keeps the same relative sizes. */
+.mgr-settings {
+  --cfg-text-xs: var(--text-sm);
+  --cfg-text-sm: 0.8125rem;
+  --cfg-text-base: var(--text-base);
+  --cfg-text-lg: var(--text-lg);
+  --cfg-hint-font-size: 0.8125rem;
+  --cfg-font-size-base: 14px;
+}
+
+.mgr-settings .cfg-admin-section__desc {
+  max-width: none;
+}
+
+.mgr-settings .projects-page__inner {
+  gap: var(--cfg-space-3);
+}
+
+.mgr-settings .cfg-admin-section {
+  gap: var(--cfg-space-3);
+  padding: var(--cfg-space-4);
+}
+
+.mgr-settings .cfg-admin-info-grid {
+  row-gap: var(--cfg-space-2);
+}
+
 /* ── auth ─────────────────────────────────────────────────── */
 .mgr-auth-card__brand {
   display: flex;
