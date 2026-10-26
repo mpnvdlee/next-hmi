@@ -18,8 +18,8 @@ heading.
   **Show all** checkbox lists the sources the field does not take as well,
   greyed out and marked *Not available on this field*; they cannot be picked.
 - **A Linux zip and an offline Docker installer in every release.** Next to the
-  Windows and macOS zips, a release now carries `nexthmi-linux-x64-<version>.zip`
-  and, per architecture, `nexthmi-docker-linux-<arch>-<version>.zip`: the image
+  Windows and macOS zips, a release now carries `nexthmi-community-linux-x64-<version>.zip`
+  and, per architecture, `nexthmi-community-docker-linux-<arch>-<version>.zip`: the image
   as a file, a compose file and `install.sh`, for a machine that cannot reach a
   registry.
 
@@ -234,6 +234,13 @@ heading.
   link card had to be handed a whole action list instead.
 
 ### Changed
+
+- **Every download names its edition.** The public zips are now
+  `nexthmi-community-<os>-<arch>-<version>.zip` and
+  `nexthmi-community-docker-linux-<arch>-<version>.zip`; the folder inside keeps
+  its name, so shortcuts to it still work. The terminal splash prints
+  *Community Edition* or *Enterprise Edition* under the logo, and the runtime's
+  loading screen says *Community Edition* in the public build.
 
 - **A project opened in 1.1.0 no longer opens in 1.0.x (breaking).** The
   project file format moves to 10, because 1.1.0 adds fields to the alarm and

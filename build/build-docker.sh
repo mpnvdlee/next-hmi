@@ -7,7 +7,7 @@
 #
 # Produces (oss, the default):
 #   dist/nexthmi-docker-linux-<arch>/        staged bundle
-#   dist/nexthmi-docker-linux-<arch>-<version>.zip   the distributable
+#   dist/nexthmi-community-docker-linux-<arch>-<version>.zip   the distributable
 # and for ee, the same under nexthmi-enterprise-docker-linux-<arch>.
 #
 # Bundle contents: a gzipped `docker save` tarball, a self-contained
@@ -31,8 +31,8 @@ esac
 
 EDITION="${NEXTHMI_EDITION:-oss}"
 case "$EDITION" in
-  oss) ARTIFACT_BASE="nexthmi" ;;
-  ee)  ARTIFACT_BASE="nexthmi-enterprise" ;;
+  oss) ARTIFACT_BASE="nexthmi"; ZIP_BASE="nexthmi-community" ;;
+  ee)  ARTIFACT_BASE="nexthmi-enterprise"; ZIP_BASE="nexthmi-enterprise" ;;
   *) echo "Unknown NEXTHMI_EDITION '$EDITION' — expected 'oss' or 'ee'." >&2; exit 1 ;;
 esac
 
@@ -159,8 +159,10 @@ Update:  replace the bundle with a newer version, run ./install.sh again
 README
 
 # 7. Zip
-ZIP_PATH="$REPO_ROOT/dist/${DIST_DIR_NAME}-${VERSION}.zip"
-rm -f "$REPO_ROOT/dist/${DIST_DIR_NAME}"-*.zip "$REPO_ROOT/dist/${DIST_DIR_NAME}.zip"
+# The zip names its edition; the folder inside keeps its name.
+ZIP_NAME="${ZIP_BASE}-docker-linux-${ARCH_TAG}"
+ZIP_PATH="$REPO_ROOT/dist/${ZIP_NAME}-${VERSION}.zip"
+rm -f "$REPO_ROOT/dist/${ZIP_NAME}"-*.zip
 (cd "$REPO_ROOT/dist" && zip -rqy "$ZIP_PATH" "$DIST_DIR_NAME")
 
 # 8. Remove the staged folder — the zip is the deliverable.

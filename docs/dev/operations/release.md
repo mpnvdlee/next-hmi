@@ -152,7 +152,7 @@ file runs the container on the host's network with the host's machine-id, which
 is what keeps a license bound across updates. That zip is never published to
 GitHub or GHCR.
 
-Output: `dist/nexthmi-docker-linux-<arch>-<version>.zip`, containing
+Output: `dist/nexthmi-community-docker-linux-<arch>-<version>.zip`, containing
 `nexthmi-image.tar.gz` (a gzipped `docker save`), a self-contained
 `docker-compose.yml` (no `build:`, no registry), `install.sh`,
 `version.txt`, and `README.txt`.
@@ -160,7 +160,7 @@ Output: `dist/nexthmi-docker-linux-<arch>-<version>.zip`, containing
 Smoke-test from a clean unzip, exactly as an operator would:
 
 ```bash
-unzip dist/nexthmi-docker-linux-x64-*.zip -d /tmp/nxd
+unzip dist/nexthmi-community-docker-linux-x64-*.zip -d /tmp/nxd
 cd /tmp/nxd/nexthmi-docker-linux-x64
 ./install.sh
 # open http://localhost:8000, click around, edit a custom widget, verify
@@ -183,12 +183,12 @@ of the matching OS and arch.
 ./build/build-binary.sh 1.1.0
 ```
 
-Output: `dist/nexthmi-macos-arm64-<version>.zip`.
+Output: `dist/nexthmi-community-macos-arm64-<version>.zip`.
 
 Smoke-test on a fresh macOS user account or a clean directory:
 
 ```bash
-unzip dist/nexthmi-macos-arm64-*.zip -d /tmp/nx
+unzip dist/nexthmi-community-macos-arm64-*.zip -d /tmp/nx
 xattr -dr com.apple.quarantine /tmp/nx/nexthmi-macos-arm64/
 /tmp/nx/nexthmi-macos-arm64/nexthmi.command
 ```
@@ -212,7 +212,7 @@ and `pyinstaller` installed:
 .\build\build-binary.ps1 -Version 1.1.0
 ```
 
-Output: `dist\nexthmi-windows-x64-<version>.zip`.
+Output: `dist\nexthmi-community-windows-x64-<version>.zip`.
 
 Smoke-test on a clean unzip: confirm the SmartScreen workaround, the
 banner, the UI in Edge, a custom-widget edit cycle, and a page save (same
@@ -239,10 +239,10 @@ After verifying every artifact:
    The `release-readiness` job fails the release if any of those is red,
    skipped or missing, and both publish jobs hang off it.
 2. Don't upload the portable zips by hand. On a green matrix `publish-release`
-   attaches `nexthmi-macos-arm64-<version>.zip`,
-   `nexthmi-linux-x64-<version>.zip`, `nexthmi-windows-x64-<version>.zip` and
-   the offline Docker installers `nexthmi-docker-linux-x64-<version>.zip` and
-   `nexthmi-docker-linux-arm64-<version>.zip` to the GitHub Release for the tag,
+   attaches `nexthmi-community-macos-arm64-<version>.zip`,
+   `nexthmi-community-linux-x64-<version>.zip`, `nexthmi-community-windows-x64-<version>.zip` and
+   the offline Docker installers `nexthmi-community-docker-linux-x64-<version>.zip` and
+   `nexthmi-community-docker-linux-arm64-<version>.zip` to the GitHub Release for the tag,
    creating it when it does not exist yet; a tag carrying a
    hyphen (`v1.1.0-rc.1`) is published `--prerelease`, so only a bare `vX.Y.Z`
    can become "Latest". The release description is a short form of the

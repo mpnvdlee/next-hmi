@@ -474,8 +474,8 @@ browser](#what-plain-http-costs-the-browser).
 ### As a file download, without a registry
 
 For a host that cannot reach `ghcr.io`, every release carries an offline
-installer per architecture, `nexthmi-docker-linux-x64-<version>.zip` and
-`nexthmi-docker-linux-arm64-<version>.zip`: the image as a file, a compose file
+installer per architecture, `nexthmi-community-docker-linux-x64-<version>.zip` and
+`nexthmi-community-docker-linux-arm64-<version>.zip`: the image as a file, a compose file
 that restarts the container with the host, and `install.sh`. Copy it over,
 unzip it and run:
 
@@ -664,7 +664,7 @@ lives wherever the bootstrap file points.
 
 ### Limitations
 
-- The macOS build is Apple silicon only: `nexthmi-macos-arm64-<version>.zip`.
+- The macOS build is Apple silicon only: `nexthmi-community-macos-arm64-<version>.zip`.
   There is no Intel (x64) macOS build.
 - No auto-update. Operators check the release page for new versions.
 - No process-level service install — the binary runs in the foreground
