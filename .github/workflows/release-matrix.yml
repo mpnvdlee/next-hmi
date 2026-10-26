@@ -747,9 +747,7 @@ jobs:
   # tagged <version> + latest with no QEMU. Because the per-arch images only
   # travel as run artifacts, nothing reaches the registry until this post-gate
   # job runs. `packages: write` is scoped here; the workflow default stays
-  # read-only. Note: while the repository is private the pushed package is
-  # private too (counts against the small free package quota); it becomes
-  # public and free when the repository is made public.
+  # read-only.
   docker-publish:
     needs: release-readiness
     if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
