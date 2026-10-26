@@ -33,6 +33,8 @@ interface SelectionDrawerProps<T> {
   emptyMessage(query: string): ReactNode;
   /** Screen edge the drawer is anchored to and slides in from. Defaults to 'right'. */
   side?: 'left' | 'right';
+  /** Extra header controls beside the search, such as a "Show all" checkbox. */
+  headerMeta?: ReactNode;
   onClose(): void;
 }
 
@@ -43,6 +45,8 @@ interface SelectionDrawerCardProps {
   /** Small label pinned to the card's top-right, beside the title. */
   badge?: ReactNode;
   selected?: boolean;
+  /** Listed but not pickable here. */
+  disabled?: boolean;
   className?: string;
   style?: CSSProperties;
   onClick(): void;
@@ -54,6 +58,7 @@ export function SelectionDrawerCard({
   description,
   badge,
   selected,
+  disabled,
   className = '',
   style,
   onClick,
@@ -68,6 +73,7 @@ export function SelectionDrawerCard({
       className={classes}
       style={style}
       aria-pressed={selected === undefined ? undefined : selected}
+      disabled={disabled}
       onClick={onClick}
     >
       <span className="cfg-selection-card__icon" aria-hidden="true">
@@ -93,6 +99,7 @@ export default function SelectionDrawer<T>({
   onSelectItem,
   emptyMessage,
   side = 'right',
+  headerMeta,
   onClose,
 }: SelectionDrawerProps<T>) {
   const [query, setQuery] = useState('');
@@ -191,6 +198,7 @@ export default function SelectionDrawer<T>({
         searchAriaLabel={searchAriaLabel}
         searchPlaceholder={searchPlaceholder}
         searchInputRef={searchInputRef}
+        meta={headerMeta}
         onClose={onClose}
       />
 

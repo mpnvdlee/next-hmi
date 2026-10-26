@@ -13,6 +13,10 @@ heading.
 
 ### Added
 
+- **Show all and value types in the property-source drawer.** Each source card
+  now names the type it produces (`Any`, `Boolean`, `Float, Integer`, …). A
+  **Show all** checkbox lists the sources the field does not take as well,
+  greyed out and marked *Not available on this field*; they cannot be picked.
 - **A Linux zip and an offline Docker installer in every release.** Next to the
   Windows and macOS zips, a release now carries `nexthmi-community-linux-x64-<version>.zip`
   and, per architecture, `nexthmi-community-docker-linux-<arch>-<version>.zip`: the image
