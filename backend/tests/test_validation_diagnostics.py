@@ -716,6 +716,32 @@ def test_formula_wildcard_empty(ctx):
     assert (w.code, w.path) == ("formula-wildcard-empty", "/p/$formula/wildcards/2")
 
 
+@pytest.mark.parametrize(
+    ("value", "codes"),
+    [
+        ({"$var": {"path": "PLC:Motor/Speed"}}, []),
+        ({"$componentProp": {"name": "setpoint"}}, []),
+        (4.5, ["write-source"]),
+        ({"$static": 4.5}, ["write-source"]),
+        ({"$formula": {"expression": "{1} * 2", "wildcards": {"1": {"$static": 3}}}}, ["write-source"]),
+        ({"$if": {"condition": True, "then": 1, "else": 2}}, ["write-source"]),
+    ],
+)
+def test_a_writing_field_takes_only_a_variable(ctx, value, codes):
+    report = ValidationReport()
+    _validate_property_value(value, {"type": "float", "write": True}, ctx, "/p", report)
+    assert report.findings == []
+    assert [w.code for w in report.warnings if w.code == "write-source"] == codes
+    if codes:
+        assert report.warnings[0].severity == "error"
+
+
+def test_a_cleared_writing_field_is_not_a_fixed_value(ctx):
+    report = ValidationReport()
+    _validate_property_value("", {"type": "string", "write": True}, ctx, "/p", report)
+    assert report.warnings == [] and report.findings == []
+
+
 def test_stringexpr_empty(ctx):
     report = ValidationReport()
     _validate_property_value(

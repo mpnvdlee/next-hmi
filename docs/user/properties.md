@@ -207,6 +207,7 @@ appears as soon as the request completes, and again on every refresh.
 ## Coercion, in short
 
 - **A variable must match the field's type exactly.** A `Float` field takes no `Integer` tag and a `String` field no `Boolean` one; the binding picker will not confirm a tag that does not fit. A field that takes either lists both types.
+- **A field that writes back takes only a tag.** A value field that a control writes to — a Button Row's value, a Video's state variable — offers just the **Variable** source (or Repeat Item / an input property standing in for one): no fixed value, formula or condition, since the control would have nothing to write to.
 - **A widget reading a number** takes a number as-is, and text only when it is a clean decimal number (`"42"`, `"-1.5"`); anything else is *absent* and the field falls back. Nothing is rounded.
 - **A widget reading text** turns a number or a boolean into its plain text (`3.5`, `true`); decimals and units are the widget's own formatting.
 - Impossible bindings (image → Float) are rejected by the editor at bind time — never at runtime.

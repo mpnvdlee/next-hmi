@@ -2610,6 +2610,29 @@ def _check_source_type(
     report.warn(path, message, severity="error", code="source-type")
 
 
+# What a field that writes its value back may hold: a variable, or a scope
+# source standing in for one. Mirrors `bindsOnly` in SchemaFieldRow.
+_WRITABLE_SOURCES = frozenset({"$var", "$componentProp", "$repeatItem"})
+
+
+def _check_write_source(
+    source_key: str | None, schema_field: dict | None, path: str, report: ValidationReport
+) -> None:
+    """Flag a literal or a computed source (a formula, a condition, …) in a
+    field with `write: true`: the control has no variable to write to."""
+    if not isinstance(schema_field, dict) or schema_field.get("write") is not True:
+        return
+    if source_key in _WRITABLE_SOURCES:
+        return
+    what = "a fixed value" if source_key in (None, "$static") else source_key
+    report.warn(
+        path,
+        f"this field writes to a variable, but holds {what} — bind a variable",
+        severity="error",
+        code="write-source",
+    )
+
+
 def _input_scope(ctx: ValidationContext, node_id: str, own: dict[str, dict]) -> dict[str, dict]:
     """The input parameters a Dialogs-folder node's widgets read: its own
     declarations over its enclosing groups', innermost winning."""
@@ -2823,6 +2846,8 @@ def _validate_property_value(
         _validate_menu_items(value, ctx, path, report)
 
     if not _has_property_source(value):
+        if value not in (None, ""):
+            _check_write_source(None, schema_field, path, report)
         _check_literal(value, schema_field, ctx, path, report, wrapped=False)
         return
     # Sourced value — recurse into its payload.
@@ -2830,6 +2855,7 @@ def _validate_property_value(
         return
     source_key = _property_source_key(value)
     payload = value.get(source_key)
+    _check_write_source(source_key, schema_field, path, report)
     _check_source_type(source_key, payload, schema_field, path, report)
     if source_key == "$var":
         validate_var_ref(payload, ctx, path, report, schema_field)
