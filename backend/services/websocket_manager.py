@@ -22,6 +22,7 @@ import itertools
 import json
 import logging
 import re
+import secrets
 import threading
 import time
 import uuid
@@ -64,6 +65,8 @@ def _config_path():
 _MAX_PAGE_IDS = 2000
 _MAX_PRIORITY_KEYS = 5000
 _MAX_WS_MESSAGE_BYTES = 64 * 1024
+# How long a runtime login can be resumed on a new socket after it was last used.
+_SESSION_TTL_S = 12 * 3600
 # Matches "[N]" suffix used in array-element paths (e.g. "MyArray[2]")
 _ARRAY_INDEX_RE = re.compile(r"\[(\d+)\]$")
 
@@ -110,6 +113,11 @@ class WebSocketManager:
         self._recipe_manager = None
         # Per-client identity store: client_id -> { scope -> {username, groups} }
         self._client_users: dict[str, dict[str, dict[str, Any]]] = {}
+        # Resumable logins: token -> (username, monotonic expiry). Outlive the
+        # socket so a reconnect or page reload stays logged in.
+        # shortcut: in memory, so a backend restart logs everyone out; persist
+        # (signed tokens) if operators must survive a restart.
+        self._sessions: dict[str, tuple[str, float]] = {}
         # Per-client connection timestamps: client_id -> ISO string
         self._client_connected_at: dict[str, str] = {}
         # Priority batch delay per datasource name, beside the entry it was read
@@ -846,8 +854,21 @@ class WebSocketManager:
                 identity["groups"],
                 group_labels,
                 request_id=request_id,
+                session_token=identity.get("session"),
             ),
         )
+
+    def _end_session(self, client_id: str, scope: str) -> None:
+        """Revoke the resumable login this connection holds for *scope*, if any."""
+        identity = self._client_users.get(client_id, {}).get(scope) or {}
+        self._sessions.pop(identity.get("session", ""), None)
+
+    def _start_session(self, username: str) -> str:
+        now = time.monotonic()
+        self._sessions = {t: s for t, s in self._sessions.items() if s[1] > now}
+        token = secrets.token_urlsafe(32)
+        self._sessions[token] = (username, now + _SESSION_TTL_S)
+        return token
 
     async def _handle_login(self, client_id: str, msg: LoginMessage) -> None:
         """Validate credentials and update the scoped identity."""
@@ -882,6 +903,8 @@ class WebSocketManager:
             return
 
         identity, doc = authenticated
+        self._end_session(client_id, scope)
+        identity = {**identity, "session": self._start_session(identity["username"])}
         await self._apply_and_respond_identity(client_id, scope, identity, doc, request_id=request_id)
         # The one login path with credentials behind it. Auto-login via
         # request_identity is deliberately not audited — every page open would
@@ -906,6 +929,10 @@ class WebSocketManager:
 
         from services import users_manager
         doc = users_manager.load()
+        resumed = self._resume_session(msg.get("sessionToken"), doc)
+        if resumed is not None:
+            await self._apply_and_respond_identity(client_id, scope, resumed, doc)
+            return
         settings = doc.get("settings", {})
         auto_login_name = settings.get("autoLoginName", "guest") if isinstance(settings, dict) else "guest"
         user = next(
@@ -919,6 +946,24 @@ class WebSocketManager:
         )
         await self._apply_and_respond_identity(client_id, scope, identity, doc)
 
+    def _resume_session(self, token: object, doc: dict) -> dict[str, Any] | None:
+        """Identity for a still-valid login token, with the user's current groups."""
+        if not isinstance(token, str):
+            return None
+        session = self._sessions.get(token)
+        if session is None:
+            return None
+        username, expires = session
+        user = next(
+            (u for u in doc.get("users", []) if isinstance(u, dict) and u.get("username") == username),
+            None,
+        )
+        if expires <= time.monotonic() or user is None:
+            del self._sessions[token]
+            return None
+        self._sessions[token] = (username, time.monotonic() + _SESSION_TTL_S)
+        return {"username": username, "groups": list(user.get("groups", ["guest"])), "session": token}
+
     async def _handle_logout(self, client_id: str, msg: LogoutMessage) -> None:
         """Revert scoped identity back to guest."""
         scope = msg.get("scope", "")
@@ -928,6 +973,7 @@ class WebSocketManager:
         request_id = msg.get("requestId")
         # Read before the revert overwrites it — this is who the session was.
         previous_actor = self._session_actor(client_id, scope)
+        self._end_session(client_id, scope)
 
         from services import users_manager
         doc = users_manager.load()

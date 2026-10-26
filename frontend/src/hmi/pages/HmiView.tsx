@@ -37,6 +37,10 @@ import { ContentSpinner } from '@shared/components/Spinner';
 import { useGlobalEvents } from '../hooks/useGlobalEvents';
 import { usePageEvents } from '../hooks/usePageEvents';
 import { useProjectWidgetWarmup } from '../hooks/useProjectWidgetWarmup';
+import ConnectionLostOverlay from '@shared/components/ConnectionLostOverlay';
+import { loadSessionToken } from '../utils/runtimeSession';
+
+const reloadPage = () => window.location.reload();
 
 export default function HmiView() {
   useConfig();
@@ -96,10 +100,11 @@ export default function HmiView() {
   // Hydrate content for every open overlay page so their component children are available.
   usePages(openPageOverlayIds);
 
-  // Request auto-login identity for this scope when WS connects (or reconnects).
+  // Request this scope's identity when WS connects (or reconnects): the tab's
+  // login when it can still be resumed, the auto-login user otherwise.
   useEffect(() => {
     if (!wsConnected) return;
-    sendWsMessage({ type: 'request_identity', scope });
+    sendWsMessage({ type: 'request_identity', scope, sessionToken: loadSessionToken() });
   }, [wsConnected, scope]);
 
   // Send active runtime context. Backend computes the full variable set so
@@ -260,6 +265,10 @@ export default function HmiView() {
           <FullscreenPrompt />
         </div>
       </PageDataSettleGate>
+      {/* Outside the zoomed root so it covers the viewport. Back after a drop,
+          the backend may have restarted on newer config, so load it fresh; the
+          tab's login survives the reload. */}
+      <ConnectionLostOverlay onReturn={reloadPage} />
     </HmiScopeContext.Provider>
   );
 }

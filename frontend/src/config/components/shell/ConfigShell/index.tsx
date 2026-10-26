@@ -29,6 +29,7 @@ import { useUsersDomainStore } from '@config/store/domains/usersDomainStore';
 import { useSaveErrorToast } from './useSaveErrorToast';
 import TransferProjectButton from './TransferProjectButton';
 import Button from '@config/components/ui/Button';
+import ConnectionLostOverlay from '@shared/components/ConnectionLostOverlay';
 
 interface NavItem {
   to: string;
@@ -236,6 +237,7 @@ export default function ConfigShell() {
       <ImageSourcePicker />
       <VideoSourcePicker />
       <ConfigToastStack />
+      <ConnectionLostOverlay message="Reconnecting to the server… Your unsaved changes are kept; save them once this closes." />
     </div>
   );
 }

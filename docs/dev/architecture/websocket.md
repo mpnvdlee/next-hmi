@@ -103,7 +103,7 @@ leaving a half-initialised socket registered.
 | `recipe_update` | same shape as `recipe_snapshot`, `type: "recipe_update"` | On config change / download / upload. |
 | `recipe_response` | `{ type, requestId, result }` | A correlated `recipe_load` / `recipe_save` succeeded — `result` is the `DownloadResult` (load) or `{ datasetId }` (save). |
 | `recipe_error` | `{ type, requestId, reason }` | A correlated `recipe_load` / `recipe_save` failed. |
-| `user_identity` | `{ type, scope, username, groups, groupLabels }` | After `login`, `logout`, or `request_identity`. |
+| `user_identity` | `{ type, scope, username, groups, groupLabels, sessionToken? }` | After `login`, `logout`, or `request_identity`. `sessionToken` is present while the identity is a resumable login (see `request_identity`). |
 | `auth_error` | `{ type, scope, reason }` | Failed `login`. `reason` is `"invalid_credentials"`, or `"rate_limited"` while the credential throttle is holding this username off. |
 | `write_response` | `{ type, requestId, datasource, path }` | A correlated `write_field` or `toggle_field` succeeded — see [Action result correlation](#action-result-correlation). |
 | `write_error` | `{ type, requestId, datasource, path, reason }` | A correlated `write_field` or `toggle_field` failed. |
@@ -261,6 +261,9 @@ integer digits keeps them too — and writes it back as a string.
 
   - On match the scope identity is updated and `user_identity` is sent back; on
     mismatch the server sends `auth_error`. Both echo `requestId` when supplied.
+  - A successful login carries a `sessionToken`. The runtime keeps it in
+    `sessionStorage` (per tab) and sends it with `request_identity`, so a
+    reconnect or reload stays logged in.
 
 - `logout` — revert a scope to `guest`.
 
@@ -268,16 +271,20 @@ integer digits keeps them too — and writes it back as a string.
   { "type": "logout", "scope": "runtime:main", "requestId": "…" }
   ```
 
-  - Sends a `user_identity` with the guest identity (echoing `requestId`).
+  - Sends a `user_identity` with the guest identity (echoing `requestId`), and
+    revokes the scope's `sessionToken`.
 
-- `request_identity` — auto-login the configured `settings.autoLoginName` user
-  for a scope (falls back to `guest`).
+- `request_identity` — resume the login `sessionToken` names, or else auto-login
+  the configured `settings.autoLoginName` user for a scope (falls back to `guest`).
 
   ```json
-  { "type": "request_identity", "scope": "runtime:main" }
+  { "type": "request_identity", "scope": "runtime:main", "sessionToken": "…" }
   ```
 
   - Always followed by a `user_identity`; never carries `requestId`.
+  - A token resumes while its user still exists and it was used in the last
+    12 hours; the user's groups are re-read. Tokens live in backend memory, so a
+    backend restart ends every login.
 
 All `scope` values must be non-empty strings; empty / missing scopes cause the
 message to be ignored silently.

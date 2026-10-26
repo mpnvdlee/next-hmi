@@ -24,6 +24,7 @@ import type { RecipeConfig, LoadedDataset, DownloadResult } from '@shared/types/
 import type { ActionResultReason } from '@shared/types/config';
 import { flushAllAsDisconnected, resolvePending } from '../utils/actionDispatcher';
 import { wsUrl } from '@shared/utils/runtimeBase';
+import { saveSessionToken } from '../utils/runtimeSession';
 
 // ── Inbound message schema ────────────────────────────────────────────────────
 // Discriminated union of every message the backend can send. The handler below
@@ -45,6 +46,8 @@ type WsMessage =
       groupLabels?: Record<string, string>;
       /** Echoed by the backend only when this is a login/logout response. */
       requestId?: string;
+      /** Present while the identity is a login a new socket can resume. */
+      sessionToken?: string;
     }
   | { type: 'auth_error'; scope: string; reason: ActionResultReason; requestId?: string }
   | {
@@ -342,6 +345,7 @@ export function useWebSocket(): void {
                 groupLabels: msg.groupLabels ?? {},
               });
               setLoginErrorRef.current(msg.scope, null);
+              saveSessionToken(msg.sessionToken);
             }
             // requestId is present only on responses to login/logout (never
             // for auto-login via request_identity), so this resolve cannot
