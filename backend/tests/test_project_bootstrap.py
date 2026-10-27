@@ -70,3 +70,16 @@ def test_seed_lookup_follows_the_install_root(monkeypatch, tmp_path: Path) -> No
     target = tmp_path / "fresh"
     assert project_bootstrap._seed_into(target) is True
     assert (target / "config.json").read_text(encoding="utf-8") == '{"pages": []}'
+
+
+def test_bootstrap_keeps_a_reused_projects_own_name(home: Path) -> None:
+    """A restart must not rename the default project back to "Default", nor escape its text."""
+    first = project_bootstrap.ensure_default_project()
+    target = Path(first.path)
+    renamed = manifest_mod.read_project_metadata(target).model_copy(update={"name": "Line 2 · CO₂"})
+    manifest_mod.write_project_metadata(target, renamed)
+
+    project_bootstrap.ensure_default_project()
+
+    assert manifest_mod.read_project_metadata(target).name == "Line 2 · CO₂"
+    assert "Line 2 · CO₂" in (target / "config.json").read_text(encoding="utf-8")
