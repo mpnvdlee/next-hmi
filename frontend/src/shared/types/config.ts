@@ -826,6 +826,9 @@ export interface ShellRegionConfig {
    *  height, flanking the header/main/footer column instead of sitting
    *  between them. */
   fullHeight?: unknown;
+  /** Bindable: when true, the region lies over the page without taking space,
+   *  and clicks on its empty space reach the page underneath. */
+  floating?: unknown;
   /** CSS color for the region's background, bindable. Defaults to white. */
   background?: unknown;
 }

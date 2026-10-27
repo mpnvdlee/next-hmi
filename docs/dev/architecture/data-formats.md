@@ -302,7 +302,10 @@ The sibling `shell` object holds the regions' *behaviour*, never their contents:
 Per region (`ShellRegionConfig`): `enabled` (default `true`), `expandedSize` /
 `collapsedSize` (CSS lengths — width for a sidebar, height for header/footer),
 `expanded`, `overlay`, `background`, `defaultState` (`expanded` | `collapsed` |
-`hidden`) and `fullHeight` (sidebars only). All of them except `defaultState`
+`hidden`), `fullHeight` (sidebars only) and `floating` (the region lies over
+`.hmi-main` without taking space, and only widgets catch clicks — a floating
+header/footer is rendered inside `.hmi-main`, a floating sidebar stays in its
+slot). All of them except `defaultState`
 are **bindable** — they accept any property source, not just a literal, and
 `ShellRegion` re-evaluates them as the bound values change.
 

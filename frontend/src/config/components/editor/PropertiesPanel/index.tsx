@@ -1452,6 +1452,13 @@ const SHELL_FULL_HEIGHT_SCHEMA: SchemaField = {
   defaultValue: false,
 };
 
+const SHELL_FLOATING_SCHEMA: SchemaField = {
+  type: 'Boolean',
+  label: 'Floating',
+  description: 'Lies on top of the page. Clicks on empty space go to the page underneath.',
+  defaultValue: false,
+};
+
 const SHELL_DEFAULT_STATES = ['expanded', 'collapsed', 'hidden'] as const;
 
 // The collapsed fallback differs by axis: sidebars collapse to zero width,
@@ -1562,6 +1569,20 @@ function ShellRegionFields({
           }
         />
       )}
+
+      <SchemaFieldRow
+        path={['floating']}
+        schema={SHELL_FLOATING_SCHEMA}
+        value={config.floating}
+        onChange={(v) => onPatch({ floating: v === false ? undefined : v })}
+        onOpenPicker={(onPick, currentBinding, slot) =>
+          openBindingPicker(bindingTargetId, 'floating', {
+            onPick,
+            currentBinding: currentBinding ?? varBindingOf(config.floating),
+            filter: slotFilter({ label: 'Floating', type: 'Boolean' }, slot),
+          })
+        }
+      />
 
       <SchemaFieldRow
         path={['background']}

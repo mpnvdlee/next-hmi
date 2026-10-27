@@ -65,6 +65,7 @@ import type { ThemeConfig } from '@shared/types/theme';
 import { renderRegionChildren } from '@hmi/components/renderRegion';
 import ShellRegion from '@hmi/components/ShellRegion';
 import { useSidebarFullHeight } from '@hmi/components/ShellRegion/useSidebarFullHeight';
+import { useFloatingBars } from '@hmi/components/ShellRegion/useFloatingBars';
 import PageGroupPageView from '@hmi/components/PageGroupPageView';
 import { PageDataSettleGate } from '@hmi/components/DataSettleGate';
 import { collectComponentPriorityKeys } from '@hmi/components/layoutUtils';
@@ -501,6 +502,7 @@ export default function PreviewView() {
     right: rightFullHeight,
     any: hasFullHeightSidebar,
   } = useSidebarFullHeight(shell.leftSidebar ?? {}, shell.rightSidebar ?? {});
+  const floatingBars = useFloatingBars(shell.header ?? {}, shell.footer ?? {});
 
   // ── Dialogs folder: the page as its overlay card, on a plain background ─────
   if (overlayNode) {
@@ -579,6 +581,17 @@ export default function PreviewView() {
     isRightSidebar,
     'Right sidebar — add components via the tree',
   );
+  // A floating header/footer moves into `.hmi-main` (see useFloatingBars).
+  const headerRegion = (
+    <ShellRegion id="header" config={shell.header ?? {}} focused={isHeader}>
+      {headerContent}
+    </ShellRegion>
+  );
+  const footerRegion = (
+    <ShellRegion id="footer" config={shell.footer ?? {}} focused={isFooter}>
+      {footerContent}
+    </ShellRegion>
+  );
 
   return (
     <HmiScopeContext.Provider value="runtime:preview">
@@ -605,9 +618,7 @@ export default function PreviewView() {
                   </ShellRegion>
                 )}
                 <div className="hmi-layout__column">
-                  <ShellRegion id="header" config={shell.header ?? {}} focused={isHeader}>
-                    {headerContent}
-                  </ShellRegion>
+                  {!floatingBars.header && headerRegion}
                   <div className="hmi-body">
                     {!leftFullHeight && (
                       <ShellRegion
@@ -629,6 +640,8 @@ export default function PreviewView() {
                           emptyMessage="No page found."
                         />
                       ) : null}
+                      {floatingBars.header && headerRegion}
+                      {floatingBars.footer && footerRegion}
                     </main>
                     {!rightFullHeight && (
                       <ShellRegion
@@ -640,9 +653,7 @@ export default function PreviewView() {
                       </ShellRegion>
                     )}
                   </div>
-                  <ShellRegion id="footer" config={shell.footer ?? {}} focused={isFooter}>
-                    {footerContent}
-                  </ShellRegion>
+                  {!floatingBars.footer && footerRegion}
                 </div>
                 {rightFullHeight && (
                   <ShellRegion
