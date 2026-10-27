@@ -260,7 +260,7 @@ async def test_a_lost_version_notification_is_caught_by_the_health_check(plc: Fa
 @pytest.mark.asyncio
 async def test_a_browse_that_sees_a_newer_program_reloads_the_engine(plc: FakePlc) -> None:
     # A health check that would not come round during the test.
-    engine, dm, _ = await _start(plc, reconnect_interval_s=60)
+    engine, dm, _ = await _start(plc, reconnect_interval_s=60, browse_mode="all")
     try:
         plc.online_change(symbol_entry("MAIN.nCounter", 600, 2, "INT"), b"", notify=False)
         tree = await engine.browse()
@@ -321,21 +321,48 @@ async def test_reconnects_after_the_connection_drops(plc: FakePlc, rig) -> None:
 
 
 @pytest.mark.asyncio
-async def test_browse(plc: FakePlc, rig) -> None:
+async def test_browse_shows_only_marked_variables_by_default(rig) -> None:
     engine, _dm, _ = rig
     tree = await engine.browse()
     assert tree["display_name"] == "Plc30 App"
-    assert tree["show_root"] is False
-    assert [c["node_id"] for c in tree["children"]] == ["MAIN", "GVL"]
-    assert "present_outside_browse" not in tree
+    assert (tree["show_root"], tree["browse_mode"]) == (False, "marked")
+    main, gvl = tree["children"]
+    assert [c["node_id"] for c in main["children"]] == ["MAIN.stMotor"]
+    assert [c["node_id"] for c in gvl["children"]] == ["GVL.sVersion"]
+    # Saved variables the browse left out still exist on the PLC.
+    assert "MAIN.nCounter" in tree["present_outside_browse"]
 
-    progress: list[dict] = []
-    gvl = await engine.browse("GVL", on_progress=progress.append)
-    assert gvl["show_root"] is True
-    assert [c["node_id"] for c in gvl["children"]] == ["GVL.sVersion", "GVL.nBig"]
-    # Saved variables outside the root still exist on the PLC.
-    assert "MAIN.nCounter" in gvl["present_outside_browse"]
-    assert progress[-1]["done"] == progress[-1]["total"]
+
+@pytest.mark.asyncio
+async def test_browse_modes(plc: FakePlc) -> None:
+    engine, _dm, _ = await _start(plc, browse_mode="all")
+    try:
+        tree = await engine.browse()
+        assert [c["node_id"] for c in tree["children"]] == ["MAIN", "GVL"]
+        assert "present_outside_browse" not in tree
+        progress: list[dict] = []
+        gvl = await engine.browse("GVL", on_progress=progress.append)
+        assert gvl["show_root"] is True
+        assert [c["node_id"] for c in gvl["children"]] == ["GVL.sVersion", "GVL.nBig"]
+        assert progress[-1]["done"] == progress[-1]["total"]
+    finally:
+        await engine.disconnect()
+
+    engine, _dm, _ = await _start(plc, browse_mode="lazy")
+    try:
+        tree = await engine.browse()
+        assert [(c["node_id"], c["has_children"]) for c in tree["children"]] == [("MAIN", True), ("GVL", True)]
+        motor = await engine.browse("MAIN.stMotor")
+        assert motor["browse_mode"] == "lazy"
+        assert [c["display_name"] for c in motor["children"]] == ["fSpeed", "bRunning", "eMode", "stLimits"]
+    finally:
+        await engine.disconnect()
+
+    engine, _dm, _ = await _start(plc, browse_attributes="Nothing, Else")
+    try:
+        assert (await engine.browse())["children"] == []
+    finally:
+        await engine.disconnect()
 
 
 @pytest.mark.asyncio

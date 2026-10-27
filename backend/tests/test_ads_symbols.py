@@ -1,5 +1,6 @@
 """Symbol and data-type tables: parsing, path resolution, browse (ads.symbols)."""
 
+from pathlib import Path
 from typing import Any
 
 from ads.symbols import SymbolTable, parse_datatypes, parse_symbols
@@ -12,6 +13,11 @@ from tests.ads_fake_plc import (
     member,
     symbol_entry,
 )
+
+# Beckhoff library types (Tc2_MC2.AXIS_REF, Tc2_System.FB_IecCriticalSection and
+# what they reference) exactly as a TwinCAT 3 PLC uploaded them: real GUID,
+# method-info and attribute blocks. No program symbols or names of its own.
+REAL_LIBRARY_TYPES = Path(__file__).parent / "fixtures" / "ads_twincat_library_types.bin"
 
 
 def _table() -> SymbolTable:
@@ -164,3 +170,150 @@ def test_self_referencing_alias_does_not_recurse_forever() -> None:
     )
     assert table.resolve("MAIN.x") is None
     assert table.browse() == []
+
+
+def _ids(nodes: list[dict[str, Any]]) -> list[str]:
+    out: list[str] = []
+    for node in nodes:
+        out.append(node["node_id"])
+        out.extend(_ids(node["children"]))
+    return out
+
+
+# ── Attributes and the marked browse ────────────────────────────────────────
+
+
+def test_attributes_after_the_optional_blocks() -> None:
+    symbols = parse_symbols(
+        symbol_entry("GVL.a", 0, 2, "INT", attributes={"OPC.UA.DA": "1", "TcLinkTo": "TIIB[x]"}, guid=True)
+        + symbol_entry("GVL.b", 2, 2, "INT"),
+    )
+    assert symbols[0].attributes == {"opc.ua.da": "1", "tclinkto": "TIIB[x]"}
+    assert symbols[1].attributes == {}
+    types = parse_datatypes(datatype_entry(
+        "FB_X", "", 8, sub_items=(member("n", "INT", 2, 0, attributes={"hide": ""}),),
+        guid=True, copy_mask=True, methods=(b"m1" * 9, b"m2" * 30), attributes={"PouType": "FunctionBlock"},
+    ))
+    assert types["fb_x"].attributes == {"poutype": "FunctionBlock"}
+    assert types["fb_x"].sub_items[0].attributes == {"hide": ""}
+
+
+def test_marked_browse_shows_only_what_is_marked() -> None:
+    table = _table()
+    tree = table.browse(attributes=("OPC.UA.DA",))
+    # A marked member is reached through its unmarked parents; a marked
+    # symbol comes with everything in it.
+    assert _ids(tree) == [
+        "MAIN", "MAIN.stMotor", "MAIN.stMotor.stLimits",
+        "MAIN.stMotor.stLimits.fMin", "MAIN.stMotor.stLimits.fMax",
+        "GVL", "GVL.sVersion",
+    ]
+    assert table.browse(attributes=("hmi",)) == []
+
+
+def test_marked_browse_rules() -> None:
+    types = b"".join([
+        datatype_entry("ST_Io", "", 4, sub_items=(
+            member("nIn", "INT", 2, 0),
+            member("nSecret", "INT", 2, 2, attributes={"hmi": "0"}),
+        )),
+        datatype_entry("ST_Unit", "", 8, sub_items=(
+            member("stIo", "ST_Io", 4, 0, attributes={"hmi": ""}),
+            member("nOther", "INT", 2, 4),
+        )),
+        datatype_entry("ST_Marked", "", 2, sub_items=(member("n", "INT", 2, 0),), attributes={"hmi": "1"}),
+        datatype_entry("ARRAY [1..2] OF ST_Unit", "ST_Unit", 16, array_dims=((1, 2),)),
+    ])
+    symbols = b"".join([
+        symbol_entry("MAIN.aUnits", 0, 16, "ARRAY [1..2] OF ST_Unit"),
+        symbol_entry("MAIN.stTyped", 16, 2, "ST_Marked"),
+        symbol_entry("MAIN.stAll", 20, 8, "ST_Unit", attributes={"hmi": "1"}),
+        symbol_entry("MAIN.stOff", 28, 8, "ST_Unit", attributes={"hmi": "0"}),
+        symbol_entry("MAIN.nPlain", 36, 2, "INT"),
+    ])
+    tree = SymbolTable.from_upload(symbols, types).browse(attributes=("HMI",))
+    assert _ids(tree) == [
+        "MAIN",
+        # An attribute without a value marks too; '0' hides below a mark.
+        "MAIN.aUnits", "MAIN.aUnits[1]", "MAIN.aUnits[1].stIo", "MAIN.aUnits[1].stIo.nIn",
+        "MAIN.aUnits[2]", "MAIN.aUnits[2].stIo", "MAIN.aUnits[2].stIo.nIn",
+        # A marked type marks its instances.
+        "MAIN.stTyped", "MAIN.stTyped.n",
+        "MAIN.stAll", "MAIN.stAll.stIo", "MAIN.stAll.stIo.nIn", "MAIN.stAll.nOther",
+    ]
+
+
+# ── Lazy browse ─────────────────────────────────────────────────────────────
+
+
+def test_lazy_browse_one_level_at_a_time() -> None:
+    table = _table()
+    top = table.browse_level()
+    assert [(n["node_id"], n["has_children"], n["children"]) for n in top] == [("MAIN", True, []), ("GVL", True, [])]
+    main = {n["display_name"]: n for n in table.browse_level("MAIN")}
+    assert list(main)[:4] == ["bStart", "nCounter", "fSpeed", "stMotor"]
+    assert main["nCounter"]["data_type"] == "Int16" and "has_children" not in main["nCounter"]
+    assert main["stMotor"] == {
+        "node_id": "MAIN.stMotor", "display_name": "stMotor", "data_type": "struct",
+        "children": [], "writable": False, "has_children": True,
+    }
+    assert main["aPoints"]["is_array"] and main["aPoints"]["has_children"]
+    assert main["aTemps"]["array_length"] == 4
+    assert [n["display_name"] for n in table.browse_level("MAIN.stMotor")] == ["fSpeed", "bRunning", "eMode", "stLimits"]
+    assert [n["node_id"] for n in table.browse_level("MAIN.aPoints")] == [
+        "MAIN.aPoints[1]", "MAIN.aPoints[2]", "MAIN.aPoints[3]",
+    ]
+    assert [n["display_name"] for n in table.browse_level("MAIN.aPoints[2]")] == ["x", "y"]
+    assert table.browse_level("MAIN.nCounter") == []
+    assert table.browse_level("Nowhere") == []
+
+
+# ── Real TwinCAT library types ──────────────────────────────────────────────
+
+
+def _axis_program() -> SymbolTable:
+    """A program around the real library types, laid out as TwinCAT does:
+    the I/O-linked NcToPlc inside the axis is also its own symbol, in the
+    input process image at the same offset."""
+    types = parse_datatypes(REAL_LIBRARY_TYPES.read_bytes())
+    axis = types["tc2_mc2.axis_ref"]
+    nc_to_plc = next(m for m in axis.sub_items if m.name == "NcToPlc")
+    symbols = b"".join([
+        symbol_entry(".TCPADS_MAXUDP_BUFFSIZE", 0, 4, "UDINT"),
+        symbol_entry("MAIN.stAxis", 1000, axis.size, "Tc2_MC2.AXIS_REF"),
+        symbol_entry(
+            "MAIN.stAxis.NcToPlc", 1000 + nc_to_plc.offset, nc_to_plc.size, "MC.NCTOPLC_AXIS_REF",
+            index_group=0xF020, guid=True, attributes={"TcLinkTo": "TINC^NC-Task 1-SAF^Axes^Axis 1^Inputs^FromNc"},
+        ),
+        symbol_entry("MAIN.fbLock", 3000, 32, "Tc2_System.FB_IecCriticalSection"),
+    ])
+    return SymbolTable(parse_symbols(symbols), types)
+
+
+def test_real_library_types_parse() -> None:
+    types = parse_datatypes(REAL_LIBRARY_TYPES.read_bytes())
+    assert len(types) == 44
+    axis = types["tc2_mc2.axis_ref"]
+    assert [m.name for m in axis.sub_items] == [
+        "PlcToNc", "NcToPlc", "ADS", "Status", "DriveAddress", "_internal", "Storage",
+    ]
+    assert axis.sub_items[1].attributes == {"tcdataarea": "Input"}
+    # Its attributes follow a method-info block, so they parse only when that is skipped right.
+    assert types["tc2_system.fb_ieccriticalsection"].attributes["poutype"] == "FunctionBlock"
+
+
+def test_real_axis_browse_and_resolve() -> None:
+    table = _axis_program()
+    tree = table.browse()
+    ids = _ids(tree)
+    # The process-image copy of NcToPlc is not shown a second time.
+    assert len(ids) == len(set(ids))
+    assert ids.count("MAIN.stAxis.NcToPlc") == 1
+    assert [n["node_id"] for n in tree] == [".TCPADS_MAXUDP_BUFFSIZE", "MAIN"]
+    act_pos = table.resolve("MAIN.stAxis.NcToPlc.ActPos")
+    assert (act_pos.codec.type_name, act_pos.size) == ("Double", 8)
+    assert table.resolve("main.stAxis.Status.Homed").codec.type_name == "Boolean"
+    assert [n["display_name"] for n in table.browse_level("MAIN.stAxis")][:5] == [
+        "PlcToNc", "NcToPlc", "ADS", "Status", "DriveAddress",
+    ]
+    assert _ids(table.browse("MAIN"))[:2] == ["MAIN.stAxis", "MAIN.stAxis.PlcToNc"]

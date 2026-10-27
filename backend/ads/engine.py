@@ -128,6 +128,13 @@ class DatasourceAdsEngine:
     def _priority_cycle_ms(self) -> float:
         return get_config_float(self._config, "priority_sampling_interval_ms", 20.0, minimum=1.0, maximum=5_000.0)
 
+    def _browse_attributes(self) -> tuple[str, ...]:
+        """Attribute names a marked browse looks for (``browse_attributes``:
+        a list or comma-separated text)."""
+        configured = self._config.get("browse_attributes") or "OPC.UA.DA"
+        names = configured.split(",") if isinstance(configured, str) else configured
+        return tuple(str(n).strip() for n in names if str(n).strip())
+
     def _background_enabled(self) -> bool:
         return not self._config.get("disable_background_sync", False)
 
@@ -638,7 +645,12 @@ class DatasourceAdsEngine:
         """The PLC's symbols below *node_id* (or the configured ``browse_root``),
         in the OPC-UA browse shape. The tables are uploaded again first, so a
         browse always shows the program running now; the engine's own table is
-        left to the reload a newer version starts, which re-resolves with it."""
+        left to the reload a newer version starts, which re-resolves with it.
+
+        ``browse_mode`` picks what comes back (see ``ads.symbols``): ``marked``
+        (default) only what a ``browse_attributes`` attribute marks, ``lazy``
+        the one level below *node_id*, ``all`` everything.
+        """
         conn = self._conn
         if not self._connected or conn is None:
             raise RuntimeError(f"Not connected: {self.datasource_name}")
@@ -648,11 +660,19 @@ class DatasourceAdsEngine:
         if version != self._symbol_version:
             self._request_reload()
         root = (node_id or self._config.get("browse_root") or "").strip()
+        mode = str(self._config.get("browse_mode") or "marked").strip().lower()
+        if mode == "lazy":
+            children = table.browse_level(root)
+        elif mode == "all":
+            children = table.browse(root)
+        else:
+            mode = "marked"
+            children = table.browse(root, attributes=self._browse_attributes())
         tree: dict[str, Any] = {
             "node_id": root,
             "display_name": root or self._device_name or self.datasource_name,
             "data_type": None,
-            "children": table.browse(root),
+            "children": children,
         }
         walked = _node_ids_in(tree)
         ds_entry = self._ds_entry()
@@ -666,6 +686,7 @@ class DatasourceAdsEngine:
             if outside:
                 tree["present_outside_browse"] = list(dict.fromkeys(outside))
         tree["show_root"] = bool(root)
+        tree["browse_mode"] = mode
         if on_progress is not None:
             on_progress({"done": 1, "total": 1, "nodes": len(walked), "level": 0})
         return tree

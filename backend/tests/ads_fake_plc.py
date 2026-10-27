@@ -27,10 +27,16 @@ ERR_INVALID_OFFSET = 0x703
 ERR_NOTIFICATION_HANDLE = 0x714
 
 SYMBOL_FLAG_BITVALUE = 0x0002
+SYMBOL_FLAG_TYPEGUID = 0x0008
 SYMBOL_FLAG_READONLY = 0x0020
+SYMBOL_FLAG_ATTRIBUTES = 0x1000
 DATATYPE_FLAG_DATATYPE = 0x0001
 DATATYPE_FLAG_DATAITEM = 0x0002
 DATATYPE_FLAG_PROPITEM = 0x0040
+DATATYPE_FLAG_TYPEGUID = 0x0080
+DATATYPE_FLAG_COPYMASK = 0x0200
+DATATYPE_FLAG_METHODINFOS = 0x0800
+DATATYPE_FLAG_ATTRIBUTES = 0x1000
 
 
 # ── Table encoding (the TwinCAT upload format) ───────────────────────────────
@@ -40,13 +46,29 @@ def _cstr(text: str) -> bytes:
     return text.encode("cp1252") + b"\0"
 
 
+def attribute_block(attributes: dict[str, str]) -> bytes:
+    """``{attribute 'name' := 'value'}`` pragmas as the upload carries them."""
+    out = struct.pack("<H", len(attributes))
+    for name, value in attributes.items():
+        out += bytes([len(name), len(value)]) + _cstr(name) + _cstr(value)
+    return out
+
+
 def symbol_entry(
     name: str, index_offset: int, size: int, type_name: str, *,
     index_group: int = PLC_MEMORY, flags: int = 0, comment: str = "", extra: bytes = b"",
+    attributes: dict[str, str] | None = None, guid: bool = False,
 ) -> bytes:
-    """One ADS_SYMBOL_ENTRY; *extra* stands in for the optional trailing data
-    (GUID, attributes) a parser must skip by entry length."""
-    body = _cstr(name) + _cstr(type_name) + _cstr(comment) + extra
+    """One ADS_SYMBOL_ENTRY; *extra* stands in for trailing data a newer
+    TwinCAT appends, which a parser must skip by entry length."""
+    body = _cstr(name) + _cstr(type_name) + _cstr(comment)
+    if guid:
+        flags |= SYMBOL_FLAG_TYPEGUID
+        body += b"\x5a" * 16
+    if attributes:
+        flags |= SYMBOL_FLAG_ATTRIBUTES
+        body += attribute_block(attributes)
+    body += extra
     header_size = 30
     return struct.pack(
         "<IIIIIIHHH", header_size + len(body), index_group, index_offset, size,
@@ -58,11 +80,28 @@ def datatype_entry(
     name: str, type_name: str, size: int, *, offset: int = 0,
     flags: int = DATATYPE_FLAG_DATATYPE, array_dims: tuple[tuple[int, int], ...] = (),
     sub_items: tuple[bytes, ...] = (), comment: str = "", extra: bytes = b"",
+    attributes: dict[str, str] | None = None, guid: bool = False, copy_mask: bool = False,
+    methods: tuple[bytes, ...] = (),
 ) -> bytes:
-    """One ADS_DATATYPE_ENTRY with its array bounds and encoded sub items."""
+    """One ADS_DATATYPE_ENTRY with its array bounds, encoded sub items and the
+    optional blocks in upload order: GUID, copy mask, methods, attributes."""
     body = _cstr(name) + _cstr(type_name) + _cstr(comment)
     body += b"".join(struct.pack("<iI", lower, count) for lower, count in array_dims)
-    body += b"".join(sub_items) + extra
+    body += b"".join(sub_items)
+    if guid:
+        flags |= DATATYPE_FLAG_TYPEGUID
+        body += b"\x5a" * 16
+    if copy_mask:
+        flags |= DATATYPE_FLAG_COPYMASK
+        body += b"\xff" * size
+    if methods:
+        flags |= DATATYPE_FLAG_METHODINFOS
+        body += struct.pack("<H", len(methods))
+        body += b"".join(struct.pack("<I", 4 + len(m)) + m for m in methods)
+    if attributes:
+        flags |= DATATYPE_FLAG_ATTRIBUTES
+        body += attribute_block(attributes)
+    body += extra
     header_size = 42
     return struct.pack(
         "<IIIIIIIIHHHHH", header_size + len(body), 1, 0, 0, size, offset, 65, flags,
@@ -70,16 +109,21 @@ def datatype_entry(
     ) + body
 
 
-def member(name: str, type_name: str, size: int, offset: int, *, flags: int = DATATYPE_FLAG_DATAITEM) -> bytes:
-    return datatype_entry(name, type_name, size, offset=offset, flags=flags)
+def member(
+    name: str, type_name: str, size: int, offset: int, *,
+    flags: int = DATATYPE_FLAG_DATAITEM, attributes: dict[str, str] | None = None,
+) -> bytes:
+    return datatype_entry(name, type_name, size, offset=offset, flags=flags, attributes=attributes)
 
 
 # ── The demo program ─────────────────────────────────────────────────────────
 #
 #   TYPE E_Mode : (Idle, Run) INT;  TYPE T_Speed : LREAL;
 #   ST_Limits { fMin, fMax : LREAL }
-#   ST_Motor  { fSpeed : LREAL; bRunning : BOOL; eMode : E_Mode; stLimits : ST_Limits;
+#   ST_Motor  { fSpeed : LREAL; bRunning : BOOL; eMode : E_Mode;
+#               {attribute 'OPC.UA.DA' := '1'} stLimits : ST_Limits;
 #               Speed : property (skipped) }
+#   {attribute 'OPC.UA.DA' := '1'} GVL.sVersion
 #   ST_Point  { x, y : REAL }
 
 OFFSETS = {
@@ -110,7 +154,7 @@ def demo_datatypes() -> bytes:
             member("fSpeed", "LREAL", 8, 0),
             member("bRunning", "BOOL", 1, 8),
             member("eMode", "E_Mode", 2, 10),
-            member("stLimits", "ST_Limits", 16, 16),
+            member("stLimits", "ST_Limits", 16, 16, attributes={"OPC.UA.DA": "1"}),
             member("Speed", "LREAL", 8, 0, flags=DATATYPE_FLAG_DATAITEM | DATATYPE_FLAG_PROPITEM),
         ), extra=b"\xaa" * 6),
         datatype_entry("ST_Point", "", 8, sub_items=(
@@ -136,7 +180,10 @@ def demo_symbols() -> bytes:
         symbol_entry("MAIN.dtStamp", o["MAIN.dtStamp"], 4, "DT"),
         symbol_entry("MAIN.pData", o["MAIN.pData"], 8, "POINTER TO INT"),
         symbol_entry("MAIN.xBit", 3, 1, "BIT", index_group=0xF021, flags=SYMBOL_FLAG_BITVALUE),
-        symbol_entry("GVL.sVersion", o["GVL.sVersion"], 11, "STRING(10)", flags=SYMBOL_FLAG_READONLY),
+        symbol_entry(
+            "GVL.sVersion", o["GVL.sVersion"], 11, "STRING(10)", flags=SYMBOL_FLAG_READONLY,
+            attributes={"OPC.UA.DA": "1"}, guid=True,
+        ),
         symbol_entry("GVL.nBig", o["GVL.nBig"], 8, "ULINT"),
     ])
 
