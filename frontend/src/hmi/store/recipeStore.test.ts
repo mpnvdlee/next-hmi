@@ -109,6 +109,28 @@ describe('getField', () => {
     expect(get('nope')).toBe(false);
   });
 
+  it('changedCount counts the parameters that differ from the loaded dataset', () => {
+    useRecipeStore
+      .getState()
+      .setSnapshot(CONFIG, { coffee: { datasetId: 'espresso', loadedAt: 'now' } }, null);
+    setLive({ 'DS:Temp': 92, 'DS:Steps': [1, 2, 3] });
+    expect(useRecipeStore.getState().getField('coffee', 'changedCount')).toBe(0);
+    setLive({ 'DS:Temp': 90, 'DS:Steps': [1, 9, 3] });
+    expect(useRecipeStore.getState().getField('coffee', 'changedCount')).toBe(2);
+  });
+
+  it('savedAt is when the loaded dataset was last saved', () => {
+    const saved = structuredClone(CONFIG);
+    saved.datasetTypes[0].datasets[0].updatedAt = '2026-10-27T08:45:00Z';
+    useRecipeStore
+      .getState()
+      .setSnapshot(saved, { coffee: { datasetId: 'espresso', loadedAt: 'now' } }, null);
+    expect(useRecipeStore.getState().getField('coffee', 'savedAt')).toBe('2026-10-27T08:45:00Z');
+
+    useRecipeStore.getState().setSnapshot(saved, {}, null);
+    expect(useRecipeStore.getState().getField('coffee', 'savedAt')).toBe('');
+  });
+
   it('parametersChanged is false when nothing is loaded', () => {
     useRecipeStore.getState().setSnapshot(CONFIG, {}, null);
     expect(useRecipeStore.getState().getField('coffee', 'parametersChanged')).toBe(false);

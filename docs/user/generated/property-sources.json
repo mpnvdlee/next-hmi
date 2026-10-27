@@ -189,7 +189,8 @@
       "boolean",
       "string",
       "float",
-      "integer"
+      "integer",
+      "datetime"
     ]
   },
   {

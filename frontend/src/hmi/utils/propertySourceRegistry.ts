@@ -125,6 +125,8 @@ export const SOURCE_FIELD_PRODUCES = {
     parameterChanged: 'boolean',
     // A parameter holds whatever its variable does.
     parameterValue: ['float', 'integer', 'string', 'boolean'],
+    changedCount: 'integer',
+    savedAt: ['datetime', 'string'],
   },
   // On a list field `userList` is every user and `groups` every group, as
   // options; on a text field `resolveUser` joins the names — the signed-in

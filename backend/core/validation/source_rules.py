@@ -33,6 +33,8 @@ SOURCE_FIELD_PRODUCES: dict[str, dict[str, str | list[str]]] = {
         "parameterChanged": "boolean",
         # A parameter holds whatever its variable does.
         "parameterValue": ["float", "integer", "string", "boolean"],
+        "changedCount": "integer",
+        "savedAt": ["datetime", "string"],
     },
     "$user": {
         "username": "string",

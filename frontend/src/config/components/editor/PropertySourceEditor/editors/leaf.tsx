@@ -803,6 +803,8 @@ const RECIPE_FIELD_OPTIONS = [
   { value: 'parametersChanged', label: 'Parameters changed' },
   { value: 'parameterValue', label: 'Saved value of a parameter' },
   { value: 'parameterChanged', label: 'Parameter changed' },
+  { value: 'changedCount', label: 'Number of changed parameters' },
+  { value: 'savedAt', label: 'Saved at' },
 ];
 const RECIPE_PARAMETER_FIELDS = new Set(['parameterValue', 'parameterChanged']);
 
@@ -822,8 +824,9 @@ export function RecipeEditor({
     void load();
   }, [load]);
 
-  const obj = (value as { $recipe?: { type?: string; field?: string; parameter?: string } })
-    ?.$recipe ?? {
+  const obj = (
+    value as { $recipe?: { type?: string; field?: string; parameter?: string; format?: string } }
+  )?.$recipe ?? {
     type: '',
     field: 'parametersChanged',
   };
@@ -859,6 +862,16 @@ export function RecipeEditor({
           ))}
         </Select>
       </PropRow>
+      {obj.field === 'savedAt' && (
+        <PropRow label="Format" tier={2}>
+          <input
+            className="cfg-prop-input"
+            placeholder="ISO"
+            value={obj.format ?? ''}
+            onChange={(e) => onChange({ $recipe: { ...obj, format: e.target.value || undefined } })}
+          />
+        </PropRow>
+      )}
       {RECIPE_PARAMETER_FIELDS.has(obj.field ?? '') && (
         <PropRow label="Parameter" tier={2}>
           <Select

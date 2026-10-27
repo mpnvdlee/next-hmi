@@ -21,7 +21,9 @@
     "loaded": "boolean",
     "activeName": "string",
     "parameterChanged": "boolean",
-    "parameterValue": ["float", "integer", "string", "boolean"]
+    "parameterValue": ["float", "integer", "string", "boolean"],
+    "changedCount": "integer",
+    "savedAt": ["datetime", "string"]
   },
   "$user": {
     "username": "string",

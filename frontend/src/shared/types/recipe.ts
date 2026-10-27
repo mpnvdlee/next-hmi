@@ -21,7 +21,9 @@ export type RecipeField =
   | 'loaded'
   | 'parametersChanged'
   | 'parameterValue'
-  | 'parameterChanged';
+  | 'parameterChanged'
+  | 'changedCount'
+  | 'savedAt';
 
 /**
  * One row of the $recipeList property source — a saved dataset flattened for a

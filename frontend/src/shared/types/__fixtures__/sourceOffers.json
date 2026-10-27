@@ -22,7 +22,7 @@
     "$stringExpr": ["string"],
     "$http": ["any"],
     "$alarmCount": ["integer"],
-    "$recipe": ["boolean", "string", "float", "integer"],
+    "$recipe": ["boolean", "string", "float", "integer", "datetime"],
     "$recipeList": ["record-list"],
     "$componentProp": ["any"],
     "$overlay": ["any"],
@@ -50,7 +50,7 @@
       "$page",
       "$viewport"
     ],
-    "datetime": ["$static", "$var", "$if", "$switch", "$time", "$widgetProp", "$http", "$overlay"],
+    "datetime": ["$static", "$var", "$if", "$switch", "$time", "$widgetProp", "$http", "$recipe", "$overlay"],
     "date": ["$static", "$var", "$if", "$switch", "$time", "$widgetProp", "$http", "$overlay"],
     "time": ["$static", "$var", "$if", "$switch", "$time", "$widgetProp", "$http", "$overlay"],
     "duration": [

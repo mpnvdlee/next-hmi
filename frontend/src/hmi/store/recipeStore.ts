@@ -88,6 +88,7 @@ export const useRecipeStore = create<RecipeStore>((set, get) => ({
     if (field === 'activeName') return dataset?.name ?? '';
 
     if (field === 'parameterValue') return (parameter && dataset?.values[parameter]) ?? null;
+    if (field === 'savedAt') return dataset?.updatedAt ?? '';
 
     // parametersChanged / parameterChanged: compare the loaded dataset's stored values to live values.
     if (!type || !dataset) return false;
@@ -102,6 +103,7 @@ export const useRecipeStore = create<RecipeStore>((set, get) => ({
       const param = type.parameters.find((p) => p.id === parameter);
       return param ? changed(param) : false;
     }
+    if (field === 'changedCount') return type.parameters.filter(changed).length;
     return type.parameters.some(changed);
   },
 
