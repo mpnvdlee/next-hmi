@@ -91,7 +91,7 @@ describe('NumberInput', () => {
     await user.keyboard('500{Enter}');
 
     expect(sendWsMessage).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toHaveTextContent('0 \u2013 100');
+    expect(screen.getByRole('alert')).toHaveTextContent('Min: 0 \u00b7 Max: 100');
   });
 
   it('says the configured message instead of the range when the entry is out of it', async () => {

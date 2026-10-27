@@ -37,13 +37,12 @@ heading.
   where its grammar wants them. A key missing from the dictionaries is flagged
   like an unknown `$loc`.
 
-- **The numpad and keyboard show icons and numbers, not English.** Back,
-  Clear, Enter, Shift, Caps Lock, Tab and Space are icons, the range reads
-  `80 – 200` (or `≥ 0`, `≤ 10`), and an entry outside it turns that range
-  into a red warning, so an operator reads the same panel in any language.
-  The names a screen reader announces for the keys are dictionary keys,
-  English as on any screen, so a project translates them by adding those
-  rows.
+- **The numpad and keyboard show icons, not English words.** Back, Clear,
+  Enter, Shift, Caps Lock, Tab and Space are icons, and an entry outside the
+  bounds turns the `Min: 80 · Max: 200` line into a red warning. *Min*,
+  *Max* and the names a screen reader announces for the keys are dictionary
+  keys, English as on any screen, so a project translates them by adding
+  those rows.
 
 - **A shell region can float over the page.** A new **Floating** setting on
   the header, footer and both sidebars lays the region over the page instead
@@ -335,7 +334,7 @@ heading.
   value inside min/max. Number Input and Numeric Stepper used to save the typed
   value on × and on a press outside, and silently clamped an out-of-range entry
   — a typed 5000 reached the machine as the max, 200. Now the numpad refuses
-  it and shows the range in red (`80 – 200`). An entry starts
+  it and shows its bounds in red (`Min: 80 · Max: 200`). An entry starts
   empty, with the current value as placeholder, so a key replaces the value
   instead of appending to it. The entry is a real field: a physical keyboard
   types into it by the same rules as the keys, Enter applies and Escape

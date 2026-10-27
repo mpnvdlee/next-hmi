@@ -48,10 +48,12 @@ function fitsRules(text: string, decimals: number | undefined, allowNegative: bo
   return decimals === undefined || (match[3] ?? '').length <= decimals;
 }
 
-/** The range as numbers, which need no translation: `80 – 200`, `≥ 0`, `≤ 10`. */
-function rangeText(min: number | undefined, max: number | undefined) {
-  if (min !== undefined && max !== undefined) return `${min} \u2013 ${max}`;
-  return min !== undefined ? `\u2265 ${min}` : `\u2264 ${max}`;
+/** The bounds by name, `Min: 80 · Max: 200`; the names go through the dictionaries. */
+function rangeText(min: number | undefined, max: number | undefined, t: (key: string) => string) {
+  const parts: string[] = [];
+  if (min !== undefined) parts.push(`${t('Min')}: ${min}`);
+  if (max !== undefined) parts.push(`${t('Max')}: ${max}`);
+  return parts.join(' \u00b7 ');
 }
 
 export function VirtualNumpad({
@@ -76,7 +78,7 @@ export function VirtualNumpad({
   autoFocus = true,
 }: VirtualNumpadProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
-  // The keys show icons and numbers; their names for a screen reader are
+  // The keys show icons; their names for a screen reader, and Min and Max, are
   // dictionary keys, English as on any screen. Subscribed so a language switch
   // re-renders an open numpad.
   useTranslationStore((s) => s.activeLanguage);
@@ -189,12 +191,12 @@ export function VirtualNumpad({
       </div>
       {/* Out of range, the range itself turns into the error, unless the widget says why in words. */}
       {hasRange && !(isOutOfRange && !customRangeMessage) && (
-        <div className="hmi-virtual-input__range">{rangeText(min, max)}</div>
+        <div className="hmi-virtual-input__range">{rangeText(min, max, t)}</div>
       )}
       {isOutOfRange && (
         <div className="hmi-virtual-input__error" role="alert">
           <VirtualKeyIcon name="warning" />
-          {customRangeMessage || rangeText(min, max)}
+          {customRangeMessage || rangeText(min, max, t)}
         </div>
       )}
       <div className="hmi-virtual-input__keys">
