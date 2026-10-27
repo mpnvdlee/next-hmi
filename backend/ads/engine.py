@@ -17,11 +17,14 @@ two mechanisms:
 
 A PLC download or online change moves symbols in memory. The symbol version
 is watched with a notification of its own; when it changes the symbol and
-data-type tables are uploaded again and every address re-resolved.
+data-type tables are uploaded again and every address re-resolved. The
+connection health check also compares the version each interval, which
+catches a notification lost in transit or dropped with its handle.
 """
 
 import asyncio
 import contextlib
+import ipaddress
 import logging
 from typing import Any
 
@@ -29,6 +32,8 @@ from asyncua import ua
 from core import telemetry
 from core.number_utils import get_config_float
 from models.datasource import build_var_key, is_present_on_server, is_subscribable
+from opcua.browse import _node_ids_in
+from opcua.engine import DatasourceOpcuaEngine
 from opcua.routing import _collect_struct_leaf_paths, _struct_field_routes
 
 from . import protocol as p
@@ -48,27 +53,6 @@ def _short_error(exc: BaseException) -> str:
     return msg[:300]
 
 
-def _leaf_paths(paths: set[str], ds_entry: Any) -> set[str]:
-    """Variable and folder bindings resolved to the leaf variables behind them."""
-    leaves: set[str] = set()
-    for path in paths:
-        if path in ds_entry.registry:
-            leaves.add(path)
-            continue
-        folder = ds_entry.folder_registry.get(path)
-        if folder is None:
-            continue
-        element_paths = folder.get("_element_paths", [])
-        sources = (
-            [ds_entry.folder_registry[e] for e in element_paths if e in ds_entry.folder_registry]
-            if element_paths
-            else [folder]
-        )
-        for source in sources:
-            leaves.update(child for _f, child in _collect_struct_leaf_paths(source, ds_entry.folder_registry))
-    return leaves
-
-
 def _set_member(target: dict, member_path: str, value: Any) -> None:
     """Set ``a/b/c`` inside nested dicts, creating the dicts on the way."""
     parts = member_path.split("/")
@@ -77,16 +61,6 @@ def _set_member(target: dict, member_path: str, value: Any) -> None:
             target[part] = {}
         target = target[part]
     target[parts[-1]] = value
-
-
-def _node_ids_in(node: dict) -> set[str]:
-    found: set[str] = set()
-    stack = [node]
-    while stack:
-        current = stack.pop()
-        found.add(current["node_id"])
-        stack.extend(current.get("children", []))
-    return found
 
 
 class DatasourceAdsEngine:
@@ -121,6 +95,7 @@ class DatasourceAdsEngine:
         # Paths already reported missing or unreadable, so a poll every
         # second does not repeat the same warning.
         self._reported_paths: set[str] = set()
+        self._poll_error: str | None = None
         # Serialises priority transitions, dynamic add/remove and reloads.
         self._lock = asyncio.Lock()
 
@@ -160,7 +135,14 @@ class DatasourceAdsEngine:
         host = str(self._config.get("host", "")).strip()
         if not host:
             raise ValueError("No host configured")
-        net_id = str(self._config.get("ams_net_id", "")).strip() or f"{host}.1.1"
+        net_id = str(self._config.get("ams_net_id", "")).strip()
+        if not net_id:
+            # TwinCAT's own default NetID is its IPv4 address plus ".1.1";
+            # a host name says nothing about it.
+            try:
+                net_id = f"{ipaddress.IPv4Address(host)}.1.1"
+            except ValueError:
+                raise ValueError("No AMS NetID configured") from None
         local_net_id = str(self._config.get("local_ams_net_id", "")).strip()
         return AdsConnection(
             host,
@@ -224,7 +206,9 @@ class DatasourceAdsEngine:
                 try:
                     if conn is None or not conn.is_open:
                         raise ConnectionError("connection closed")
-                    await conn.read_state()
+                    version = await conn.read(p.IndexGroup.SYM_VERSION, 0, 1)
+                    if version != self._symbol_version:
+                        self._request_reload()
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
@@ -240,9 +224,7 @@ class DatasourceAdsEngine:
             ads_state, _device_state = await conn.read_state()
             self._conn = conn
             await self._load_symbols()
-            self._symbol_version_handle = await conn.add_notification(
-                p.IndexGroup.SYM_VERSION, 0, 1, mode=p.TransMode.SERVER_ON_CHANGE,
-            )
+            await self._watch_symbol_version()
         except BaseException:
             self._conn = None
             await conn.close()
@@ -272,15 +254,34 @@ class DatasourceAdsEngine:
             await self._close_client()
             raise
 
+    @staticmethod
+    async def _upload_symbols(conn: AdsConnection) -> tuple[bytes, SymbolTable]:
+        """The symbol version and the tables it belongs to (read first, so a
+        change during the upload shows as a newer version afterwards)."""
+        version = await conn.read(p.IndexGroup.SYM_VERSION, 0, 1)
+        info = parse_upload_info(await conn.read(p.IndexGroup.SYM_UPLOAD_INFO2, 0, _UPLOAD_INFO2_SIZE))
+        symbol_data = await conn.read(p.IndexGroup.SYM_UPLOAD, 0, info.symbol_size)
+        datatype_data = await conn.read(p.IndexGroup.SYM_DT_UPLOAD, 0, info.datatype_size)
+        return version, SymbolTable.from_upload(symbol_data, datatype_data)
+
     async def _load_symbols(self) -> None:
         conn = self._conn
         if conn is None:
             raise ConnectionError("not connected")
-        self._symbol_version = await conn.read(p.IndexGroup.SYM_VERSION, 0, 1)
-        info = parse_upload_info(await conn.read(p.IndexGroup.SYM_UPLOAD_INFO2, 0, _UPLOAD_INFO2_SIZE))
-        symbol_data = await conn.read(p.IndexGroup.SYM_UPLOAD, 0, info.symbol_size)
-        datatype_data = await conn.read(p.IndexGroup.SYM_DT_UPLOAD, 0, info.datatype_size)
-        self._symbols = SymbolTable.from_upload(symbol_data, datatype_data)
+        self._symbol_version, self._symbols = await self._upload_symbols(conn)
+
+    async def _watch_symbol_version(self) -> None:
+        """(Re)register the version notification: a download can drop handles."""
+        conn = self._conn
+        if conn is None:
+            raise ConnectionError("not connected")
+        old, self._symbol_version_handle = self._symbol_version_handle, None
+        if old is not None:
+            with contextlib.suppress(p.AdsError):
+                await conn.delete_notification(old)
+        self._symbol_version_handle = await conn.add_notification(
+            p.IndexGroup.SYM_VERSION, 0, 1, mode=p.TransMode.SERVER_ON_CHANGE,
+        )
 
     # ── Reads ────────────────────────────────────────────────────────────────
 
@@ -316,11 +317,17 @@ class DatasourceAdsEngine:
         while True:
             try:
                 await self._poll_once()
+                self._poll_error = None
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                # A dead connection is the reconnect loop's to notice.
-                logger.debug("ADS background read failed for %s: %s", self.datasource_name, exc)
+                # A dead connection is the reconnect loop's to handle; a device
+                # refusing the sum read (TwinCAT 2, a BC controller) leaves the
+                # connection healthy, so say so — once per distinct error.
+                error = _short_error(exc)
+                if error != self._poll_error:
+                    self._poll_error = error
+                    logger.warning("ADS background read failed for %s: %s", self.datasource_name, error)
             await asyncio.sleep(self._bg_interval_ms() / 1000.0)
 
     async def _poll_once(self) -> None:
@@ -362,24 +369,35 @@ class DatasourceAdsEngine:
 
     def _on_notification(self, handle: int, data: bytes) -> None:
         if handle == self._symbol_version_handle:
-            if data != self._symbol_version and (self._reload_task is None or self._reload_task.done()):
-                self._symbol_version = data
-                self._reload_task = asyncio.create_task(self._reload_symbols())
+            if data != self._symbol_version:
+                self._request_reload()
             return
         target = self._handle_targets.get(handle)
         if target is not None:
             path, address = target
             self._publish(path, address, data, priority=True)
 
+    def _request_reload(self) -> None:
+        # A change arriving while a reload runs needs no second task: the
+        # running one re-checks the version before it finishes.
+        if self._reload_task is None or self._reload_task.done():
+            self._reload_task = asyncio.create_task(self._reload_symbols())
+
     async def _reload_symbols(self) -> None:
-        """Re-upload the tables after a PLC download or online change."""
+        """Re-upload the tables after a PLC download or online change, until
+        the version stays put across a whole reload."""
         logger.info("ADS symbols of %s changed on the PLC — reloading", self.datasource_name)
         try:
             async with self._lock:
-                await self._load_symbols()
-                await self._drop_priority_locked(set(self._priority_handles))
-                self._setup_reads_locked()
-                await self._set_priority_paths_locked(self._requested_priority_paths)
+                while True:
+                    await self._load_symbols()
+                    await self._watch_symbol_version()
+                    await self._drop_priority_locked(set(self._priority_handles))
+                    self._setup_reads_locked()
+                    await self._set_priority_paths_locked(self._requested_priority_paths)
+                    conn = self._conn
+                    if conn is None or await conn.read(p.IndexGroup.SYM_VERSION, 0, 1) == self._symbol_version:
+                        break
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -478,12 +496,15 @@ class DatasourceAdsEngine:
         """Write *value* to the symbol at *node_id*.
 
         *variant_type* is ignored: the PLC's symbol table decides the encoding.
+        Held behind a running reload, so a write never lands on an offset an
+        online change just gave to another variable.
         """
-        conn = self._conn
-        if not self._connected or conn is None:
-            raise RuntimeError(f"Not connected: {self.datasource_name}")
-        address = self._address_for(node_id)
-        await conn.write(address.index_group, address.index_offset, address.encode(value))
+        async with self._lock:
+            conn = self._conn
+            if not self._connected or conn is None:
+                raise RuntimeError(f"Not connected: {self.datasource_name}")
+            address = self._address_for(node_id)
+            await conn.write(address.index_group, address.index_offset, address.encode(value))
 
     # ── Dynamic subscribe/unsubscribe (for variable enable/disable) ──────────
 
@@ -543,7 +564,7 @@ class DatasourceAdsEngine:
         ds_entry = self._ds_entry()
         if not self._connected or conn is None or ds_entry is None:
             return
-        desired = _leaf_paths(paths, ds_entry)
+        desired = DatasourceOpcuaEngine._expand_priority_paths(paths, ds_entry)
         await self._drop_priority_locked(set(self._priority_handles) - desired)
 
         promote: list[tuple[str, Address]] = []
@@ -614,20 +635,22 @@ class DatasourceAdsEngine:
     async def browse(self, node_id: str | None = None, *, on_progress: Any = None) -> dict:
         """The PLC's symbols below *node_id* (or the configured ``browse_root``),
         in the OPC-UA browse shape. The tables are uploaded again first, so a
-        browse always shows the program running now."""
-        if not self._connected or self._conn is None:
+        browse always shows the program running now; the engine's own table is
+        left to the reload a newer version starts, which re-resolves with it."""
+        conn = self._conn
+        if not self._connected or conn is None:
             raise RuntimeError(f"Not connected: {self.datasource_name}")
         if on_progress is not None:
             on_progress({"done": 0, "total": 1, "nodes": 0, "level": 0})
-        async with self._lock:
-            await self._load_symbols()
-        assert self._symbols is not None
+        version, table = await self._upload_symbols(conn)
+        if version != self._symbol_version:
+            self._request_reload()
         root = (node_id or self._config.get("browse_root") or "").strip()
         tree: dict[str, Any] = {
             "node_id": root,
             "display_name": root or self._device_name or self.datasource_name,
             "data_type": None,
-            "children": self._symbols.browse(root),
+            "children": table.browse(root),
         }
         walked = _node_ids_in(tree)
         ds_entry = self._ds_entry()
@@ -636,7 +659,7 @@ class DatasourceAdsEngine:
                 entry["node_id"]
                 for entry in ds_entry.registry.values()
                 if entry.get("node_id") and entry["node_id"] not in walked
-                and self._symbols.resolve(entry["node_id"]) is not None
+                and table.resolve(entry["node_id"]) is not None
             ]
             if outside:
                 tree["present_outside_browse"] = list(dict.fromkeys(outside))

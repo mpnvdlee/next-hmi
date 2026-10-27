@@ -90,8 +90,8 @@ async def plc() -> AsyncIterator[FakePlc]:
     await fake.stop()
 
 
-@pytest_asyncio.fixture
-async def rig(plc: FakePlc) -> AsyncIterator[tuple[DatasourceAdsEngine, _RecordingDM, list[bool]]]:
+async def _start(plc: FakePlc, **extra: Any) -> tuple[DatasourceAdsEngine, _RecordingDM, list[bool]]:
+    """A connected engine over the demo program, every variable enabled."""
     tree = SymbolTable.from_upload(demo_symbols(), demo_datatypes()).browse()
     dm = _RecordingDM(DatasourceEntry({"name": DS, "type": "ads-client", "variables": _stored(tree)}))
     statuses: list[bool] = []
@@ -102,10 +102,16 @@ async def rig(plc: FakePlc) -> AsyncIterator[tuple[DatasourceAdsEngine, _Recordi
     engine = DatasourceAdsEngine(DS)
     engine.set_datasource_manager(dm)
     engine.set_status_callback(on_status)
-    await engine.connect(_config(plc))
+    await engine.connect(_config(plc, **extra))
     await _until(lambda: engine.connected)
-    yield engine, dm, statuses
-    await engine.disconnect()
+    return engine, dm, statuses
+
+
+@pytest_asyncio.fixture
+async def rig(plc: FakePlc) -> AsyncIterator[tuple[DatasourceAdsEngine, _RecordingDM, list[bool]]]:
+    started = await _start(plc)
+    yield started
+    await started[0].disconnect()
 
 
 @pytest.mark.asyncio
@@ -226,6 +232,67 @@ async def test_an_online_change_reresolves_every_address(plc: FakePlc, rig) -> N
     plc.write_memory(600, struct.pack("<h", 321))
     await _until(lambda: dm.values.get("MAIN/nCounter") == 321)
     assert engine.connected
+
+
+@pytest.mark.asyncio
+async def test_back_to_back_online_changes_end_on_the_last_layout(plc: FakePlc, rig) -> None:
+    engine, dm, _ = rig
+    plc.online_change(symbol_entry("MAIN.nCounter", 600, 2, "INT"), b"")
+    plc.online_change(symbol_entry("MAIN.nCounter", 700, 2, "INT"), b"")
+    await _until(lambda: engine._addresses.get("MAIN/nCounter") is not None
+                 and engine._addresses["MAIN/nCounter"].index_offset == 700)
+    # The version is watched again after each reload, by one notification.
+    assert plc.version_watch_count == 1
+    plc.write_memory(700, struct.pack("<h", 9))
+    await _until(lambda: dm.values.get("MAIN/nCounter") == 9)
+    await engine.write_node("MAIN.nCounter", 11)
+    assert struct.unpack_from("<h", plc.memory, 700) == (11,)
+
+
+@pytest.mark.asyncio
+async def test_a_lost_version_notification_is_caught_by_the_health_check(plc: FakePlc, rig) -> None:
+    _engine, dm, _ = rig
+    plc.online_change(symbol_entry("MAIN.nCounter", 600, 2, "INT"), b"", notify=False)
+    plc.write_memory(600, struct.pack("<h", 77))
+    await _until(lambda: dm.values.get("MAIN/nCounter") == 77)
+
+
+@pytest.mark.asyncio
+async def test_a_browse_that_sees_a_newer_program_reloads_the_engine(plc: FakePlc) -> None:
+    # A health check that would not come round during the test.
+    engine, dm, _ = await _start(plc, reconnect_interval_s=60)
+    try:
+        plc.online_change(symbol_entry("MAIN.nCounter", 600, 2, "INT"), b"", notify=False)
+        tree = await engine.browse()
+        assert [c["node_id"] for c in tree["children"][0]["children"]] == ["MAIN.nCounter"]
+        plc.write_memory(600, struct.pack("<h", 5))
+        await _until(lambda: dm.values.get("MAIN/nCounter") == 5)
+    finally:
+        await engine.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_a_refused_sum_read_is_reported_once(plc: FakePlc, rig, caplog) -> None:
+    engine, _dm, _ = rig
+    plc.refuse_sum_reads = True
+    sums = plc.sum_reads
+    with caplog.at_level("WARNING", logger="ads.engine"):
+        await _until(lambda: plc.sum_reads >= sums + 4)
+    warnings = [r for r in caplog.records if "background read failed" in r.getMessage()]
+    assert len(warnings) == 1
+    assert "0x0701" in warnings[0].getMessage()
+    assert engine.connected
+
+
+@pytest.mark.asyncio
+async def test_a_host_name_needs_a_net_id() -> None:
+    engine = DatasourceAdsEngine(DS)
+    await engine.connect({"host": "plc01.local"})
+    try:
+        await _until(lambda: engine.error is not None)
+        assert engine.error == "No AMS NetID configured"
+    finally:
+        await engine.disconnect()
 
 
 @pytest.mark.asyncio

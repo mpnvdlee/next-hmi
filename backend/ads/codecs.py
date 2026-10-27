@@ -61,7 +61,7 @@ def _numeric(fmt: str, type_name: str, *, is_float: bool = False) -> ScalarCodec
     def encode(value: Any) -> bytes:
         try:
             return packer.pack(float(value) if is_float else _int_value(value))
-        except struct.error as exc:
+        except (struct.error, OverflowError) as exc:
             raise ValueError(f"{value!r} out of range for {type_name}") from exc
 
     return ScalarCodec(type_name, packer.size, decode, encode)

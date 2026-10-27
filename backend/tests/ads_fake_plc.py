@@ -173,6 +173,8 @@ class FakePlc:
         self.symbol_version = 1
         self.commands: list[int] = []
         self.sum_reads = 0
+        # A device without sum commands (TwinCAT 2, BC controllers).
+        self.refuse_sum_reads = False
         self.port = 0
         self._server: asyncio.Server | None = None
         self._writers: set[asyncio.StreamWriter] = set()
@@ -200,6 +202,10 @@ class FakePlc:
     def notification_count(self) -> int:
         return sum(1 for n in self._notifications.values() if n.index_group == PLC_MEMORY)
 
+    @property
+    def version_watch_count(self) -> int:
+        return sum(1 for n in self._notifications.values() if n.index_group == SYM_VERSION)
+
     # ── Test controls ────────────────────────────────────────────────────────
 
     def poke(self, symbol: str, fmt: str, *values: object, offset: int = 0) -> None:
@@ -212,14 +218,20 @@ class FakePlc:
         self.memory[offset:offset + len(data)] = data
         self._fire_changes()
 
-    def online_change(self, symbol_data: bytes, datatype_data: bytes) -> None:
-        """A new program: new tables, bumped version, existing handles gone."""
+    def online_change(self, symbol_data: bytes, datatype_data: bytes, *, notify: bool = True) -> None:
+        """A new program: new tables, bumped version, memory handles gone.
+
+        ``notify=False`` loses the symbol-version notification, as a dropped
+        handle or a sample sent before the client knew its handle would.
+        """
         self.symbol_data = symbol_data
         self.datatype_data = datatype_data
         self.symbol_version = (self.symbol_version + 1) & 0xFF
         for handle, n in list(self._notifications.items()):
             if n.index_group == PLC_MEMORY:
                 del self._notifications[handle]
+            elif not notify:
+                n.last = bytes([self.symbol_version])
         self._fire_changes()
 
     # ── Protocol ─────────────────────────────────────────────────────────────
@@ -321,6 +333,8 @@ class FakePlc:
         payload = data[16:16 + write_length]
         if group == SUM_READ:
             self.sum_reads += 1
+            if self.refuse_sum_reads:
+                return struct.pack("<II", 0x701, 0), None
             items = [struct.unpack_from("<III", payload, 12 * i) for i in range(count)]
             errors, blocks = b"", b""
             for g, o, n in items:

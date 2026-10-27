@@ -63,9 +63,13 @@ class AdsConnection:
         )
         if self._source_net_id is None:
             # Without a configured NetID, use the convention TwinCAT itself
-            # follows: the local IP of this connection plus ".1.1".
+            # follows: the local IPv4 address of this connection plus ".1.1".
             local_ip = self._writer.get_extra_info("sockname")[0]
-            self._source_net_id = p.parse_net_id(f"{local_ip}.1.1")
+            try:
+                self._source_net_id = p.parse_net_id(f"{local_ip}.1.1")
+            except ValueError:
+                await self.close()
+                raise ValueError(f"No local AMS NetID configured and {local_ip} is not IPv4") from None
         self._closed_reason = None
         self._reader_task = asyncio.create_task(self._read_loop())
 

@@ -65,7 +65,10 @@ def test_encodes_the_objects_the_write_coercion_produces() -> None:
 
 @pytest.mark.parametrize(
     ("type_name", "value"),
-    [("INT", 40000), ("USINT", -1), ("STRING(3)", "four"), ("DINT", "1.5"), ("TIME", 2**40), ("DATE", "27-10-2026")],
+    [
+        ("INT", 40000), ("USINT", -1), ("REAL", 1e40), ("STRING(3)", "four"), ("DINT", "1.5"),
+        ("TIME", 2**40), ("DATE", "27-10-2026"),
+    ],
 )
 def test_out_of_range_or_malformed_values_are_refused(type_name: str, value: object) -> None:
     with pytest.raises(ValueError):
