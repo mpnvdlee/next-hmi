@@ -1449,6 +1449,7 @@ export const ACTION_EDITORS: ActionEditors = {
   recipeSave: RecipeSaveEditor,
   loginUser: LoginUserEditor,
   logoutUser: LogoutUserEditor,
+  acknowledgeAllAlarms: () => null,
   setLanguage: SetLanguageEditor,
   setActiveTheme: SetThemeEditor,
   showToast: ShowToastEditor,

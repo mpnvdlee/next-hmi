@@ -66,6 +66,7 @@
     "onFailed": "actions",
     "onSettled": "actions"
   },
+  "acknowledgeAllAlarms": {},
   "setLanguage": { "language": "String" },
   "setActiveTheme": { "theme": "String" },
   "showAlert": {

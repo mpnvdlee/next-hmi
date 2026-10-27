@@ -13,6 +13,7 @@ import { useTranslationStore } from '@shared/store/translationStore';
 import { randomUuid } from '@shared/utils/id';
 import { hasPropertySourceKey } from '@shared/types/propertyValueGuards';
 import { beginAsyncAction } from '@hmi/utils/actionDispatcher';
+import { ackAllAlarms } from '@hmi/components/alarmUtils';
 import { useConfigStore } from '@shared/store/configStore';
 import { findPageNodeById } from '@shared/utils/pageTree';
 
@@ -287,6 +288,12 @@ export function executeWidgetActions(
     if (action.type === 'logoutUser') {
       const requestId = beginAsyncAction(action, scope, inputScopeProps);
       sendWsMessage({ type: 'logout', ...(requestId && { requestId }), scope });
+      continue;
+    }
+
+    if (action.type === 'acknowledgeAllAlarms') {
+      // A refusal toasts inside ackAllAlarms, so the list need not wait for it.
+      void ackAllAlarms(useHmiStore.getState().currentUsersByScope[scope]?.username || 'operator');
       continue;
     }
 

@@ -426,6 +426,8 @@ function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets)
     }
     case 'logoutUser':
       return K('Log out user');
+    case 'acknowledgeAllAlarms':
+      return K('Acknowledge all alarms');
     case 'setLanguage': {
       const lang = propertyValuePreview(action.language, 'string');
       return lang !== '—' ? (

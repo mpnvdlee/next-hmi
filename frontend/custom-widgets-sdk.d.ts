@@ -370,6 +370,7 @@ type ComponentAction =
       onFailed?: ComponentAction[];
       onSettled?: ComponentAction[];
     }
+  | { type: 'acknowledgeAllAlarms' }
   | { type: 'setLanguage'; language: unknown }
   | { type: 'setActiveTheme'; theme: unknown }
   | {
