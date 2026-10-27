@@ -62,6 +62,8 @@
 }
 
 .hmi-layout {
+  /* Containing block for a floating full-height sidebar. */
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -91,6 +93,8 @@
 }
 
 .hmi-body {
+  /* Containing block for a floating sidebar. */
+  position: relative;
   display: flex;
   flex: 1;
   overflow: hidden;

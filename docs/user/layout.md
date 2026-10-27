@@ -89,6 +89,7 @@ Each region appears in the page tree above the page list. Select one and its pro
 | **Default state** | `expanded`, `collapsed`, or `hidden` on load. |
 | **Overlay** | When expanded, float over the content instead of pushing it aside — the usual choice on a phone. |
 | **Full height** (sidebars) | Span the whole layout height, flanking the header and footer instead of sitting between them. |
+| **Floating** | Lie over the page instead of next to it. The page fills the space underneath, the region is transparent unless it has a **Background**, and a click on its empty space reaches the page. Widgets in the region, and a Container with press actions, still take their own clicks. A floating header or footer covers only the page, never a sidebar. Keep page content clear of the widgets yourself, for example with page padding. |
 | **Background** | The region's background colour. |
 
 Those settings are project-wide, and every one of them except **Default state** is bindable — so a region that should behave differently on one page gets a binding, not a per-page copy of the settings. Bind **Enabled** to an `$if` over `$pageIsActive` and a full-screen trend, or a login screen with no navigation at all, costs one expression on the region instead of a setting repeated on every page.
