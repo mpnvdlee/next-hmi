@@ -94,6 +94,18 @@ def test_namespaced_symbol_names_become_nested_folders() -> None:
     assert tree[0]["children"][0]["children"][0]["node_id"] == "Lib.GVL_Io.nIn"
 
 
+def test_library_globals_named_with_a_leading_dot() -> None:
+    table = SymbolTable.from_upload(
+        symbol_entry(".TCPADS_MAXUDP_BUFFSIZE", 0, 4, "UDINT") + symbol_entry("MAIN.n", 4, 2, "INT"), b"",
+    )
+    tree = table.browse()
+    assert [(n["node_id"], n["display_name"]) for n in tree] == [
+        (".TCPADS_MAXUDP_BUFFSIZE", ".TCPADS_MAXUDP_BUFFSIZE"), ("MAIN", "MAIN"),
+    ]
+    assert table.resolve(".TCPADS_MAXUDP_BUFFSIZE").index_offset == 0
+    assert table.resolve("TCPADS_MAXUDP_BUFFSIZE") is None
+
+
 def test_resolves_member_paths_to_byte_addresses() -> None:
     table = _table()
     base = OFFSETS["MAIN.stMotor"]

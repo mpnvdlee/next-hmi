@@ -252,7 +252,9 @@ def _path_tokens(path: str) -> list[str | tuple[int, ...]] | None:
         if match is None:
             return None
         if match.group(1) is not None:
-            tokens.append(match.group(1).strip())
+            name = match.group(1).strip()
+            # Some library globals are named with a leading dot (".TCPADS_MAXUDP_BUFFSIZE").
+            tokens.append("." + name if pos == 0 and path.startswith(".") else name)
         else:
             try:
                 tokens.append(tuple(int(i) for i in match.group(2).split(",")))
@@ -398,6 +400,9 @@ class SymbolTable:
             if description is None:
                 continue
             parts = symbol.name.split(".")
+            if not parts[0] and len(parts) > 1:
+                # A leading dot belongs to the first name, not an unnamed folder.
+                parts = ["." + parts[1], *parts[2:]]
             node = _node(symbol.name, parts[-1], description, not symbol.flags & SYMBOL_FLAG_READONLY)
             if node is None:
                 continue

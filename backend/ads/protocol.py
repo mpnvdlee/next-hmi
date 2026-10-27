@@ -67,7 +67,7 @@ class AdsState(IntEnum):
 
 _ERROR_TEXTS: dict[int, str] = {
     0x0006: "target port not found (ADS server not running)",
-    0x0007: "target machine not found (no AMS route to this client)",
+    0x0007: "target machine not found (the router has no AMS route to the target)",
     0x0700: "general device error",
     0x0701: "service not supported by the server",
     0x0702: "invalid index group",
