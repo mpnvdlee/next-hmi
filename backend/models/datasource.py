@@ -14,7 +14,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-DatasourceType = Literal["opcua-client", "static", "opcua-test-server"]
+DatasourceType = Literal["opcua-client", "ads-client", "static", "opcua-test-server"]
+
+# Types the connection pool runs a live client engine for.
+CLIENT_DATASOURCE_TYPES = frozenset({"opcua-client", "ads-client"})
 
 
 # ── Request models ────────────────────────────────────────────────────────────
@@ -100,6 +103,32 @@ class TestConnectionResult(BaseModel):
     error: str | None = None
     server_name: str | None = None
     namespace_count: int | None = None
+
+
+class AdsTestConnectionBody(BaseModel):
+    """Body for POST /api/datasources/ads/test-connection.
+
+    The same keys an ``ads-client`` datasource's settings hold. Extra fields
+    (e.g. timeouts) are forwarded to the probe unchanged.
+    """
+
+    host: str
+    ams_net_id: str = ""
+    ams_port: int | None = None
+    tcp_port: int | None = None
+    local_ams_net_id: str = ""
+    local_router: bool = False
+
+    model_config = ConfigDict(extra="allow")
+
+
+class AdsTestConnectionResult(BaseModel):
+    ok: bool
+    error: str | None = None
+    device_name: str | None = None
+    version: str | None = None
+    # "RUN", "STOP", or the state number for any other ADS state.
+    ads_state: str | None = None
 
 
 class CertUploadResult(BaseModel):

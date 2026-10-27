@@ -1,0 +1,228 @@
+"""The ads-client datasource type: pool, REST API and validation wiring."""
+
+import asyncio
+import json
+import socket
+from collections.abc import AsyncIterator
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
+
+import api.datasource_api as datasource_api_module
+import core.storage as storage
+import core.validation.structure as structure
+import httpx
+import pytest
+import pytest_asyncio
+import services.datasource_manager as datasource_manager_module
+from ads.engine import DatasourceAdsEngine
+from core.exceptions import register_exception_handlers
+from core.validation.report import ValidationReport
+from fastapi import FastAPI
+from opcua.engine import DatasourceOpcuaEngine
+from opcua.pool import OpcuaPool
+from services.datasource_manager import DatasourceManager
+from tests.ads_fake_plc import FakePlc
+
+
+async def _until(check: Any, timeout: float = 5.0) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while not check():
+        if asyncio.get_running_loop().time() > deadline:
+            raise AssertionError("condition not met in time")
+        await asyncio.sleep(0.01)
+
+
+def _settings(plc: FakePlc, **extra: Any) -> dict[str, Any]:
+    return {"host": "127.0.0.1", "tcp_port": plc.port, "ams_net_id": "127.0.0.1.1.1", **extra}
+
+
+def _closed_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+@pytest_asyncio.fixture
+async def plc() -> AsyncIterator[FakePlc]:
+    fake = FakePlc()
+    await fake.start()
+    yield fake
+    await fake.stop()
+
+
+# ── Pool ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_pool_starts_the_engine_each_client_type_needs() -> None:
+    pool = OpcuaPool()
+    entries = {
+        "opc": SimpleNamespace(ds_type="opcua-client", config={"settings": {"server_url": "opc.tcp://127.0.0.1:1"}}),
+        "ads": SimpleNamespace(ds_type="ads-client", config={"settings": {"host": "127.0.0.1", "tcp_port": 1}}),
+        "mem": SimpleNamespace(ds_type="static", config={}),
+        "sim": SimpleNamespace(ds_type="opcua-test-server", config={}),
+    }
+    try:
+        await pool.start_all(SimpleNamespace(datasources=entries))
+        assert isinstance(pool.get("opc"), DatasourceOpcuaEngine)
+        assert isinstance(pool.get("ads"), DatasourceAdsEngine)
+        assert pool.get("mem") is None and pool.get("sim") is None
+
+        await pool.restart("ads", {"host": "127.0.0.1", "tcp_port": 1}, "ads-client")
+        assert isinstance(pool.get("ads"), DatasourceAdsEngine)
+        # The test server's paired client starts with no type: OPC-UA.
+        await pool.start("sim", {"server_url": "opc.tcp://127.0.0.1:1"})
+        assert isinstance(pool.get("sim"), DatasourceOpcuaEngine)
+    finally:
+        await pool.stop_all()
+
+
+# ── REST API ──────────────────────────────────────────────────────────────────
+
+
+@pytest_asyncio.fixture
+async def api(monkeypatch, live_project_root: Path) -> AsyncIterator[tuple[httpx.AsyncClient, DatasourceManager, OpcuaPool]]:
+    """The datasource router over a real manager and pool, on this test's loop
+    so engines reach the fake PLC."""
+    storage.active_datasources_dir().mkdir(parents=True, exist_ok=True)
+    manager = DatasourceManager()
+    pool = OpcuaPool()
+    pool.set_datasource_manager(manager)
+    monkeypatch.setattr(datasource_api_module, "datasource_manager", manager)
+    monkeypatch.setattr(datasource_api_module, "_opcua_pool", pool)
+    monkeypatch.setattr(datasource_api_module, "_test_server_pool", None)
+    app = FastAPI()
+    register_exception_handlers(app)
+    app.include_router(datasource_api_module.router)
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            yield client, manager, pool
+    finally:
+        await pool.stop_all()
+
+
+def _ads_body(plc: FakePlc, **extra: Any) -> dict[str, Any]:
+    return {"type": "ads-client", "settings": _settings(plc, reconnect_interval_s=1, **extra), "variables": []}
+
+
+@pytest.mark.asyncio
+async def test_ads_datasource_lifecycle(plc: FakePlc, api) -> None:
+    client, manager, pool = api
+    resp = await client.put("/api/datasources/plc", json=_ads_body(plc, browse_mode="lazy"))
+    assert resp.status_code == 200
+    assert resp.json()["settings"]["browse_mode"] == "lazy"
+    assert manager.get("plc").ds_type == "ads-client"
+    engine = pool.get("plc")
+    assert isinstance(engine, DatasourceAdsEngine)
+    await _until(lambda: engine.connected)
+    listed = (await client.get("/api/datasources")).json()
+    assert [(d["type"], d["connected"]) for d in listed] == [("ads-client", True)]
+
+    # A settings change replaces the engine with a new one for the new settings.
+    resp = await client.put("/api/datasources/plc", json=_ads_body(plc, browse_mode="all"))
+    assert resp.status_code == 200
+    engine = pool.get("plc")
+    assert isinstance(engine, DatasourceAdsEngine)
+    await _until(lambda: engine.connected)
+
+    assert (await client.post("/api/datasources/plc/stop")).json() == {"status": "disconnected"}
+    assert pool.get("plc") is None
+    assert (await client.post("/api/datasources/plc/start")).json() == {"status": "connected"}
+    assert isinstance(pool.get("plc"), DatasourceAdsEngine)
+    assert (await client.post("/api/datasources/plc/restart")).json() == {"status": "reconnecting"}
+    engine = pool.get("plc")
+    assert isinstance(engine, DatasourceAdsEngine)
+    await _until(lambda: engine.connected)
+
+    # Changing type stops the ADS engine.
+    resp = await client.put("/api/datasources/plc", json={"type": "static", "variables": []})
+    assert resp.status_code == 200
+    assert pool.get("plc") is None
+
+    await client.put("/api/datasources/plc", json=_ads_body(plc))
+    assert isinstance(pool.get("plc"), DatasourceAdsEngine)
+    assert (await client.delete("/api/datasources/plc")).json() == {"status": "deleted"}
+    assert pool.get("plc") is None
+    assert manager.get("plc") is None
+
+
+@pytest.mark.asyncio
+async def test_ads_browse_takes_a_node_id(plc: FakePlc, api) -> None:
+    client, _manager, pool = api
+    await client.put("/api/datasources/plc", json=_ads_body(plc, browse_mode="lazy"))
+    await _until(lambda: pool.get("plc").connected)
+
+    top = (await client.get("/api/datasources/plc/browse")).json()
+    assert [(c["node_id"], c["has_children"]) for c in top["children"]] == [("MAIN", True), ("GVL", True)]
+    motor = (await client.get("/api/datasources/plc/browse", params={"node_id": "MAIN.stMotor"})).json()
+    assert motor["node_id"] == "MAIN.stMotor"
+    assert [c["display_name"] for c in motor["children"]] == ["fSpeed", "bRunning", "eMode", "stLimits"]
+
+    resp = await client.get("/api/datasources/plc/browse/stream", params={"node_id": "MAIN.stMotor"})
+    lines = [json.loads(line) for line in resp.text.splitlines()]
+    assert lines[-1]["type"] == "result"
+    assert lines[-1]["tree"]["node_id"] == "MAIN.stMotor"
+
+
+@pytest.mark.asyncio
+async def test_ads_test_connection_reports_the_device(plc: FakePlc, api) -> None:
+    client, _manager, _pool = api
+    resp = await client.post(
+        "/api/datasources/ads/test-connection",
+        json={"host": "127.0.0.1", "tcp_port": plc.port, "ams_net_id": "127.0.0.1.1.1"},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "ok": True, "error": None, "device_name": "Plc30 App", "version": "3.1.4024", "ads_state": "RUN",
+    }
+
+
+@pytest.mark.asyncio
+async def test_ads_test_connection_failure_is_a_result_not_an_error(api) -> None:
+    client, _manager, _pool = api
+    resp = await client.post(
+        "/api/datasources/ads/test-connection", json={"host": "127.0.0.1", "tcp_port": _closed_port()},
+    )
+    assert resp.status_code == 200
+    result = resp.json()
+    assert result["ok"] is False
+    assert result["error"]
+    assert result["device_name"] is None
+
+    # A host name gives no default NetID.
+    resp = await client.post("/api/datasources/ads/test-connection", json={"host": "plc.local"})
+    assert resp.json()["ok"] is False
+    assert resp.json()["error"] == "No AMS NetID configured"
+
+
+# ── Validation ────────────────────────────────────────────────────────────────
+
+
+def test_var_bindings_to_an_ads_datasource_validate(monkeypatch, live_project_root: Path) -> None:
+    storage.active_datasources_dir().mkdir(parents=True, exist_ok=True)
+    manager = DatasourceManager()
+    manager.save("plc", {
+        "name": "plc",
+        "type": "ads-client",
+        "settings": {"host": "127.0.0.1"},
+        "variables": [{"kind": "folder", "name": "MAIN", "node_id": "MAIN", "children": [
+            {"kind": "variable", "display_name": "fSpeed", "node_id": "MAIN.fSpeed",
+             "data_type": "Double", "enabled": True, "writable": True},
+        ]}],
+    })
+    monkeypatch.setattr(datasource_manager_module, "datasource_manager", manager)
+    monkeypatch.setattr(structure, "_live_registry_cache", None)
+    ctx = structure.build_context()
+    assert ctx.datasource_types["plc"] == "ads-client"
+
+    report = ValidationReport()
+    structure.validate_var_ref({"path": "plc:MAIN/fSpeed"}, ctx, "/p", report, {"type": "float"})
+    structure._validate_action(
+        {"type": "writeDataVariable", "target": {"$var": {"path": "plc:MAIN/fSpeed"}}, "value": 1},
+        ctx, "/a", report,
+    )
+    assert (report.findings, report.warnings) == ([], [])
+
+    structure.validate_var_ref({"path": "plc:MAIN/missing"}, ctx, "/p", report, {"type": "float"})
+    assert [w.code for w in report.warnings] == ["var-unknown"]

@@ -672,6 +672,7 @@ Each datasource is stored in `<project>/datasources/<safeName>.json`.
 Supported datasource types:
 
 - `opcua-client`
+- `ads-client` — a Beckhoff TwinCAT PLC over ADS (shape below)
 - `static`
 - `opcua-test-server`
 
@@ -699,6 +700,41 @@ Example shape:
   "variables": []
 }
 ```
+
+An `ads-client` has the same file shape with its own settings:
+
+```json
+{
+  "type": "ads-client",
+  "name": "Line1",
+  "settings": {
+    "host": "192.168.1.10",
+    "ams_net_id": "192.168.1.10.1.1",
+    "ams_port": 851,
+    "tcp_port": 48898,
+    "local_ams_net_id": "",
+    "local_router": false,
+    "request_timeout_s": 5,
+    "connect_timeout_s": 10,
+    "reconnect_interval_s": 5,
+    "bg_publish_interval_ms": 1000,
+    "priority_publish_interval_ms": 50,
+    "priority_sampling_interval_ms": 20,
+    "priority_ws_batch_ms": 10,
+    "disable_background_sync": false,
+    "browse_root": "",
+    "browse_mode": "marked",
+    "browse_attributes": "OPC.UA.DA"
+  },
+  "variables": []
+}
+```
+
+- `host` is the only required key. `ams_net_id` defaults to an IPv4 `host` plus `.1.1` (TwinCAT's own default; a host name needs it set), `ams_port` to `851` (the first TwinCAT 3 PLC runtime), `tcp_port` to `48898`
+- `local_ams_net_id` is this client's NetID, which the PLC needs a static route for; empty takes the local IPv4 address plus `.1.1`. `local_router: true` connects through a TwinCAT router on `127.0.0.1` instead, which assigns the NetID and uses its own routes — for a PC that runs TwinCAT itself
+- `bg_publish_interval_ms` is the poll period for enabled variables; on-screen, alarm and historized variables get a device notification sampled every `priority_sampling_interval_ms`, which the PLC may hold back for up to `priority_publish_interval_ms` (the notification's max delay)
+- `browse_root` is the member path a browse starts from (empty: the whole program). `browse_mode` is `marked` (only symbols an attribute named in `browse_attributes` marks — a list or comma-separated text), `lazy` (one level per browse) or `all`
+- a variable's and folder's `node_id` is the PLC member path, as TwinCAT names the symbol: `MAIN.stMotor.fSpeed`, `GVL.aAxis[2].fPos`. `data_type` is the OPC-UA builtin name of the IEC type (`INT` → `Int16`, `LREAL` → `Double`, `TIME` → `Duration`), so the rest of the variable tree model below applies unchanged
 
 Filename behavior:
 

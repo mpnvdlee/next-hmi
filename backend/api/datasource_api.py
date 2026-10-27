@@ -8,6 +8,8 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
+from ads.engine import probe_connection as probe_ads_connection
+from asyncua import ua
 from core.cert_info import describe_certificate
 from core.exceptions import DatasourceNotFoundError, DatasourceValidationError
 from core.project_packer import safe_filename
@@ -17,6 +19,9 @@ from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile, s
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from models.datasource import (
+    CLIENT_DATASOURCE_TYPES,
+    AdsTestConnectionBody,
+    AdsTestConnectionResult,
     CertGenerateBody,
     CertGenerateResult,
     CertInfo,
@@ -110,16 +115,16 @@ async def _sync_datasource_runtime(
     if not runtime_stopped and old_type is not None and old_type != ds_type:
         if old_type == "opcua-test-server" and _test_server_pool:
             await _test_server_pool.stop(name)
-        elif old_type == "opcua-client" and pool:
+        elif old_type in CLIENT_DATASOURCE_TYPES and pool:
             await pool.stop(name)
 
-    if ds_type == "opcua-client":
+    if ds_type in CLIENT_DATASOURCE_TYPES:
         if not pool:
             return
         if runtime_stopped or old_entry is None or old_type != ds_type:
-            await pool.start(name, payload["settings"])
+            await pool.start(name, payload["settings"], ds_type)
         else:
-            await pool.restart(name, payload["settings"])
+            await pool.restart(name, payload["settings"], ds_type)
         return
 
     if ds_type == "opcua-test-server":
@@ -156,7 +161,7 @@ async def _broadcast_current_values(entry: DatasourceEntry | None) -> None:
 
 
 async def _stop_datasource_runtime(name: str, ds_type: str | None = None) -> None:
-    if ds_type in (None, "opcua-client") and _opcua_pool:
+    if (ds_type is None or ds_type in CLIENT_DATASOURCE_TYPES) and _opcua_pool:
         await _opcua_pool.stop(name)
     # TestServerPool.stop also stops its paired OPC-UA client.
     if ds_type in (None, "opcua-test-server") and _test_server_pool:
@@ -188,15 +193,15 @@ async def _run_datasource_action(name: str, entry: Any, action: DatasourceAction
         await ts_pool.restart(name, entry.config)
         return {"status": "restarted"}
 
-    if entry.ds_type == "opcua-client":
+    if entry.ds_type in CLIENT_DATASOURCE_TYPES:
         pool = _require_opcua_pool()
         if action == "start":
-            await pool.start(name, entry.config.get("settings", {}))
+            await pool.start(name, entry.config.get("settings", {}), entry.ds_type)
             return {"status": "connected"}
-        await pool.restart(name, entry.config.get("settings", {}))
+        await pool.restart(name, entry.config.get("settings", {}), entry.ds_type)
         return {"status": "reconnecting"}
 
-    raise DatasourceValidationError(f"Only OPC-UA datasources support {action}")
+    raise DatasourceValidationError(f"Only OPC-UA and ADS datasources support {action}")
 
 
 @router.get("")
@@ -219,6 +224,12 @@ async def discover_datasource_endpoints(body: DiscoverBody) -> DiscoveryResult:
 async def test_datasource_connection(body: TestConnectionBody) -> TestConnectionResult:
     """Open a throwaway session to verify a candidate connection pre-save."""
     return TestConnectionResult(**await probe_connection(body.model_dump()))
+
+
+@router.post("/ads/test-connection")
+async def test_ads_datasource_connection(body: AdsTestConnectionBody) -> AdsTestConnectionResult:
+    """Open a throwaway ADS connection to verify a candidate target pre-save."""
+    return AdsTestConnectionResult(**await probe_ads_connection(body.model_dump()))
 
 
 @router.post("/certs")
@@ -433,11 +444,18 @@ async def put_variables(name: str, body: list[Any]) -> list[Any]:
     return body
 
 
-def _browse_engine(name: str) -> Any:
+def _browse_engine(name: str, node_id: str | None = None) -> Any:
     """The connected engine to browse *name* with, or the HTTP error why not."""
     entry = _require_datasource(name)
-    if entry.ds_type not in ("opcua-client", "opcua-test-server"):
-        raise DatasourceValidationError("Only OPC-UA datasources support browse")
+    if entry.ds_type not in (*CLIENT_DATASOURCE_TYPES, "opcua-test-server"):
+        raise DatasourceValidationError("Only OPC-UA and ADS datasources support browse")
+    if node_id and entry.ds_type != "ads-client":
+        # An ADS path that names nothing browses to nothing; an OPC-UA NodeId
+        # that does not parse would surface as a 500 from asyncua.
+        try:
+            ua.NodeId.from_string(node_id)
+        except Exception:
+            raise DatasourceValidationError(f"Not an OPC-UA NodeId: {node_id}") from None
 
     pool = _opcua_pool
     if not pool:
@@ -451,12 +469,12 @@ def _browse_engine(name: str) -> Any:
 
 
 @router.get("/{name}/browse")
-async def browse_datasource(name: str) -> Any:
-    """Browse the OPC-UA server for a datasource."""
-    return await _browse_engine(name).browse()
+async def browse_datasource(name: str, node_id: str | None = None) -> Any:
+    """Browse a datasource's server or PLC, below *node_id* when given."""
+    return await _browse_engine(name, node_id).browse(node_id)
 
 
-async def _browse_stream_lines(engine: Any) -> AsyncIterator[bytes]:
+async def _browse_stream_lines(engine: Any, node_id: str | None = None) -> AsyncIterator[bytes]:
     """NDJSON for a browse: progress lines as it walks, then one result line.
 
     A full browse of a large server runs for a long time with nothing to show,
@@ -469,7 +487,7 @@ async def _browse_stream_lines(engine: Any) -> AsyncIterator[bytes]:
     running for nobody.
     """
     updates: asyncio.Queue[dict[str, int]] = asyncio.Queue()
-    task = asyncio.create_task(engine.browse(on_progress=updates.put_nowait))
+    task = asyncio.create_task(engine.browse(node_id, on_progress=updates.put_nowait))
     try:
         while not task.done():
             getter = asyncio.ensure_future(updates.get())
@@ -500,16 +518,16 @@ def _ndjson(payload: dict[str, Any]) -> bytes:
 
 
 @router.get("/{name}/browse/stream")
-async def browse_datasource_stream(name: str) -> StreamingResponse:
+async def browse_datasource_stream(name: str, node_id: str | None = None) -> StreamingResponse:
     """Browse with live progress, as NDJSON. See _browse_stream_lines.
 
     The checks run before the stream opens, so a datasource that cannot be
     browsed still answers with its HTTP status rather than a 200 and an error
     line — only a failure *during* the walk arrives in-band.
     """
-    engine = _browse_engine(name)
+    engine = _browse_engine(name, node_id)
     return StreamingResponse(
-        _browse_stream_lines(engine),
+        _browse_stream_lines(engine, node_id),
         media_type="application/x-ndjson",
         # Proxies that buffer would hold every progress line until the end.
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
@@ -520,29 +538,29 @@ async def browse_datasource_stream(name: str) -> StreamingResponse:
 
 @router.post("/{name}/start")
 async def start_datasource(name: str) -> dict[str, str]:
-    """Start a test server or connect an OPC-UA client."""
+    """Start a test server or connect an OPC-UA or ADS client."""
     entry = _require_datasource(name)
     return await _run_datasource_action(name, entry, "start")
 
 
 @router.post("/{name}/stop")
 async def stop_datasource(name: str) -> dict[str, str]:
-    """Stop a test server (and its paired client) or disconnect an OPC-UA client."""
+    """Stop a test server (and its paired client) or disconnect an OPC-UA or ADS client."""
     entry = _require_datasource(name)
     if entry.ds_type == "opcua-test-server":
         ts_pool = _require_test_server_pool()
         await ts_pool.stop(name)
         return {"status": "stopped"}
-    if entry.ds_type == "opcua-client":
+    if entry.ds_type in CLIENT_DATASOURCE_TYPES:
         pool = _require_opcua_pool()
         await pool.stop(name)
         return {"status": "disconnected"}
-    raise DatasourceValidationError("Only OPC-UA datasources can be stopped")
+    raise DatasourceValidationError("Only OPC-UA and ADS datasources can be stopped")
 
 
 @router.post("/{name}/restart")
 async def restart_datasource(name: str) -> dict[str, str]:
-    """Restart a test server or reconnect an OPC-UA client."""
+    """Restart a test server or reconnect an OPC-UA or ADS client."""
     entry = _require_datasource(name)
     return await _run_datasource_action(name, entry, "restart")
 

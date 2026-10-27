@@ -61,7 +61,7 @@ class _RestartingPool(_FakePool):
         super().__init__(engine)
         self.restarts: list[tuple[str, dict[str, Any]]] = []
 
-    async def restart(self, name: str, settings: dict[str, Any]) -> None:
+    async def restart(self, name: str, settings: dict[str, Any], ds_type: str = "opcua-client") -> None:
         self.restarts.append((name, settings))
         self._engine = _FakeEngine()
 

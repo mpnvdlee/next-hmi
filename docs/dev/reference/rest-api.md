@@ -191,15 +191,15 @@ These endpoints take the same validated `?dict=<name>` query (default `Default`)
 
 ## Datasource API
 
-Base prefix: `/api/datasources`. Datasource types supported (`models/datasource.py`): `opcua-client`, `static`, `opcua-test-server`.
+Base prefix: `/api/datasources`. Datasource types supported (`models/datasource.py`): `opcua-client`, `ads-client`, `static`, `opcua-test-server`. `opcua-client` and `ads-client` are the client types (`CLIENT_DATASOURCE_TYPES`): each runs one engine in the client pool and behaves alike in every endpoint below.
 
 ### CRUD
 
 - `GET /api/datasources`
   - Returns summary items shaped as
     `{ name, type, connected, variable_count, enabled_count, error }`.
-  - `connected` is filled from the OPC-UA pool for `opcua-client` entries and from the test-server pool for `opcua-test-server` entries.
-  - `error` is a user-facing reason the datasource is not running (or `null`). For an `opcua-test-server` it carries the start failure — e.g. a port already in use — captured when the server can't bind. For an `opcua-client` it carries the reason the last connect attempt failed (`DatasourceOpcuaEngine.error`), cleared on the next successful connect. Either way the editor shows it as an error status dot + message instead of the backend aborting startup.
+  - `connected` is filled from the client pool for `opcua-client` and `ads-client` entries and from the test-server pool for `opcua-test-server` entries.
+  - `error` is a user-facing reason the datasource is not running (or `null`). For an `opcua-test-server` it carries the start failure — e.g. a port already in use — captured when the server can't bind. For a client datasource it carries the reason the last connect attempt failed (the engine's `error`), cleared on the next successful connect. Either way the editor shows it as an error status dot + message instead of the backend aborting startup.
 - `GET /api/datasources/{name}`
   - Returns the full datasource config (settings + variables).
   - Query: `include_variables=true|false` (default `true`). When `false`, the `variables` key is stripped from the response.
@@ -209,7 +209,7 @@ Base prefix: `/api/datasources`. Datasource types supported (`models/datasource.
 
     ```json
     {
-      "type": "opcua-client | static | opcua-test-server",
+      "type": "opcua-client | ads-client | static | opcua-test-server",
       "settings": { ... },
       "variables": [ ... ],
       "...extra fields...": "kept as-is (model extras allowed, e.g. certs, ports)"
@@ -219,11 +219,11 @@ Base prefix: `/api/datasources`. Datasource types supported (`models/datasource.
   - Stored payload always includes `"name": <name>` so the on-disk file is self-identifying. An omitted or `null` `variables` keeps the stored tree; only `[]` clears it. Returns the stored payload.
   - A `static` datasource's variables are checked against the supported data types (`422`).
   - Runtime sync after save: an existing datasource's engine is stopped first and its old keys are broadcast as `var_removed`; fresh `var_metadata` and values follow the restart. Then
-    - `opcua-client` — the pool engine is started.
+    - `opcua-client`, `ads-client` — the pool engine is started.
     - `opcua-test-server` — the test-server instance is started.
     - `static` — no runtime engine.
 - `DELETE /api/datasources/{name}`
-  - Stops the OPC-UA engine and any paired test server, broadcasts `var_removed` for previously enabled variables and folder paths, deletes the config.
+  - Stops the client engine and any paired test server, broadcasts `var_removed` for previously enabled variables and folder paths, deletes the config.
   - `404` if missing. Returns `{ "status": "deleted" }`.
 
 ### Variable tree
@@ -234,7 +234,7 @@ Base prefix: `/api/datasources`. Datasource types supported (`models/datasource.
 - `PUT /api/datasources/{name}/variables`
   - Body is the new `variables` array (replaces only the variable tree).
   - Computes the enabled-path delta:
-    - For `opcua-client`: subscribes new paths and unsubscribes removed ones on the live engine; evicts cached values for unsubscribed paths.
+    - For `opcua-client` and `ads-client`: subscribes new paths and unsubscribes removed ones on the live engine; evicts cached values for unsubscribed paths.
     - For `opcua-test-server`: updates writable flags on the live sim loop.
     - Broadcasts `var_removed` for removed enabled paths.
   - Returns the variables array as written.
@@ -259,6 +259,9 @@ Pre-save helpers. None of them touch the live pool or persist a datasource.
 - `POST /api/datasources/test-connection`
   - Body: `{ server_url, username?, password?, security_policy?, security_mode?, ...extra }`. Extra fields (certificate paths, key password) are forwarded to the probe unchanged.
   - Opens a throwaway session. Returns `{ ok, error, server_name, namespace_count }`.
+- `POST /api/datasources/ads/test-connection`
+  - Body: `{ host, ams_net_id?, ams_port?, tcp_port?, local_ams_net_id?, local_router?, ...extra }` — the keys an `ads-client` datasource's settings hold, with the same defaults (see [Datasource Files](../architecture/data-formats.md#datasource-files)). Extra fields (`connect_timeout_s`, `request_timeout_s`) are forwarded to the probe unchanged.
+  - Opens a throwaway ADS connection and reads the device info and state. Returns `{ ok, error, device_name, version, ads_state }`; `ads_state` is `"RUN"`, `"STOP"`, or the state number for any other ADS state. A failed probe (unreachable host, no route, no NetID for a host name) is `ok: false` with a short `error`, not an HTTP error.
 - `POST /api/datasources/certs`
   - Multipart: `file`. Called once per file in the secure-connection step (client certificate, private key, server certificate) — never for the key password, which stays a plain settings field.
   - Stores the upload under `<live-project>/certs/` with a sanitized filename and returns `{ "path": "certs/<filename>" }`, the value the caller stores in `client_certificate` / `client_private_key` / `server_certificate`. A filename that would escape the certs folder is `422`.
@@ -273,14 +276,15 @@ Pre-save helpers. None of them touch the live pool or persist a datasource.
 
 ### Browse
 
-- `GET /api/datasources/{name}/browse`
-  - Only valid for `opcua-client` and `opcua-test-server` (`422` for `static`).
-  - Returns the engine's `browse()` result (the OPC-UA node tree), walked from the datasource's `browse_root_node` or, without one, from the Objects folder. `show_root` is `true` when a root was configured.
+- `GET /api/datasources/{name}/browse?node_id=<id>`
+  - Only valid for `opcua-client`, `ads-client` and `opcua-test-server` (`422` for `static`).
+  - Returns the engine's `browse()` result (the OPC-UA node tree), walked from `node_id` when given, else from the datasource's `browse_root_node` or, without one, from the Objects folder. `show_root` is `true` when the walk started from a given or configured root.
+  - For an `ads-client` the tree is the PLC's symbols in the same shape: `node_id` is a member path (`MAIN.stMotor`), the default root is the settings' `browse_root` (else the whole program), and `browse_mode` in the result says what was walked — `marked` (only attribute-marked symbols), `all`, or `lazy`: one level below `node_id`, with each struct carrying `has_children: true` and empty `children`, so a client expands a node by browsing again with its `node_id`.
   - A browse from the default Objects root leaves out the standard `Server` object (`i=2253`) and everything under it — the server's own capabilities, diagnostics and namespace table, none of them a PLC tag. A `browse_root_node` at or inside it walks it as usual.
   - `present_outside_browse` (only when non-empty): the `node_id`s of the datasource's saved variables that this walk did not reach but that the server still has — checked with one NodeClass Read per chunk, where only `BadNodeIdUnknown`/`BadNodeIdInvalid` count as gone and a chunk that cannot be read counts as present. A variable saved from under `Server`, or from outside the configured root, is not browsed rather than removed; **Browse PLC** neither lists it under *Removed from server* nor marks it stale.
-  - `503` if the OPC-UA pool is unavailable, no engine exists for the datasource, or the engine is not connected.
-- `GET /api/datasources/{name}/browse/stream`
-  - The same browse, with live progress — what **Browse PLC** uses. `application/x-ndjson`, one object per line:
+  - `503` if the client pool is unavailable, no engine exists for the datasource, or the engine is not connected.
+- `GET /api/datasources/{name}/browse/stream?node_id=<id>`
+  - The same browse (same optional `node_id`), with live progress — what **Browse PLC** uses. `application/x-ndjson`, one object per line:
     - `{ "type": "progress", done, total, nodes, level }` after every Browse and attribute-Read chunk. `total` is the work known *so far* (each parent still to browse, each variable still to type); it grows as levels reveal children and equals `done` when the walk ends. `nodes` is the count found so far, `level` the Browse rounds walked. Progress that queues up while the client reads is coalesced to the newest.
     - then exactly one of `{ "type": "result", "tree" }` (the `/browse` body) or `{ "type": "error", "error" }` for a failure during the walk.
   - The checks above run before the stream opens, so `422`/`503` arrive as HTTP statuses, never as an error line.
@@ -290,15 +294,15 @@ Pre-save helpers. None of them touch the live pool or persist a datasource.
 
 - `POST /api/datasources/{name}/start`
   - `opcua-test-server` → starts the test server (`{ "status": "started" }`).
-  - `opcua-client` → connects the client (`{ "status": "connected" }`).
+  - `opcua-client`, `ads-client` → connects the client (`{ "status": "connected" }`).
   - `422` for `static`.
 - `POST /api/datasources/{name}/stop`
   - `opcua-test-server` → stops the test server, and its paired client (`{ "status": "stopped" }`).
-  - `opcua-client` → disconnects the client (`{ "status": "disconnected" }`).
+  - `opcua-client`, `ads-client` → disconnects the client (`{ "status": "disconnected" }`).
   - `422` for `static`.
 - `POST /api/datasources/{name}/restart`
   - `opcua-test-server` → restarts (`{ "status": "restarted" }`).
-  - `opcua-client` → reconnects (`{ "status": "reconnecting" }`).
+  - `opcua-client`, `ads-client` → reconnects (`{ "status": "reconnecting" }`).
   - `422` for `static`.
 
 Starting or restarting an `opcua-test-server` whose port cannot be bound is `409`.
@@ -580,7 +584,7 @@ Base prefix: `/api/system`.
 - `GET /api/system/info`
   - `{ "uptime_seconds": int, "python": "3.x.y", "pid": int }`.
 - `GET /api/system/subscriptions`
-  - Returns the OPC-UA pool's fast-subscription state, keyed by datasource name.
+  - Returns the client pool's fast-subscription state (OPC-UA and ADS engines), keyed by datasource name.
   - `opcua-test-server` entries (the back-side of a paired test server + client) are filtered out.
 - `GET /api/system/alarm-triggers`
   - Returns `{ <datasource_name>: ["<path1>", ...] }` listing the OPC-UA paths kept on the fast subscription by the alarm manager.

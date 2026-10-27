@@ -63,6 +63,58 @@ def _set_member(target: dict, member_path: str, value: Any) -> None:
     target[parts[-1]] = value
 
 
+def new_connection(settings: dict, *, on_notification: Any = None) -> AdsConnection:
+    """An unopened connection to the device an ``ads-client`` datasource's
+    *settings* name."""
+    host = str(settings.get("host", "")).strip()
+    if not host:
+        raise ValueError("No host configured")
+    net_id = str(settings.get("ams_net_id", "")).strip()
+    if not net_id:
+        # TwinCAT's own default NetID is its IPv4 address plus ".1.1";
+        # a host name says nothing about it.
+        try:
+            net_id = f"{ipaddress.IPv4Address(host)}.1.1"
+        except ValueError:
+            raise ValueError("No AMS NetID configured") from None
+    local_net_id = str(settings.get("local_ams_net_id", "")).strip()
+    via_router = bool(settings.get("local_router", False))
+    return AdsConnection(
+        "127.0.0.1" if via_router else host,
+        p.AmsAddress(p.parse_net_id(net_id), int(settings.get("ams_port") or p.TC3_PLC_PORT)),
+        source_net_id=p.parse_net_id(local_net_id) if local_net_id else None,
+        tcp_port=int(settings.get("tcp_port") or p.AMS_TCP_PORT),
+        timeout_s=get_config_float(settings, "request_timeout_s", 5.0, minimum=0.5, maximum=60.0),
+        on_notification=on_notification,
+        via_router=via_router,
+    )
+
+
+async def probe_connection(settings: dict) -> dict:
+    """Open a throwaway connection to verify a candidate ADS target pre-save.
+
+    Returns ``{ok, error, device_name, version, ads_state}``; never raises.
+    """
+    result: dict[str, Any] = {"ok": False, "error": None, "device_name": None, "version": None, "ads_state": None}
+    conn: AdsConnection | None = None
+    try:
+        conn = new_connection(settings)
+        await conn.open(get_config_float(settings, "connect_timeout_s", 5.0, minimum=1.0, maximum=120.0))
+        info = await conn.read_device_info()
+        ads_state, _device_state = await conn.read_state()
+    except Exception as exc:  # surfaced to the caller as a string
+        result["error"] = _short_error(exc)
+        return result
+    finally:
+        if conn is not None:
+            await conn.close()
+    try:
+        state_name = p.AdsState(ads_state).name
+    except ValueError:
+        state_name = str(ads_state)
+    return {**result, "ok": True, "device_name": info.name, "version": info.version, "ads_state": state_name}
+
+
 class DatasourceAdsEngine:
     """ADS engine for a single datasource, using path-based variable keys."""
 
@@ -138,30 +190,6 @@ class DatasourceAdsEngine:
     def _background_enabled(self) -> bool:
         return not self._config.get("disable_background_sync", False)
 
-    def _new_connection(self) -> AdsConnection:
-        host = str(self._config.get("host", "")).strip()
-        if not host:
-            raise ValueError("No host configured")
-        net_id = str(self._config.get("ams_net_id", "")).strip()
-        if not net_id:
-            # TwinCAT's own default NetID is its IPv4 address plus ".1.1";
-            # a host name says nothing about it.
-            try:
-                net_id = f"{ipaddress.IPv4Address(host)}.1.1"
-            except ValueError:
-                raise ValueError("No AMS NetID configured") from None
-        local_net_id = str(self._config.get("local_ams_net_id", "")).strip()
-        via_router = bool(self._config.get("local_router", False))
-        return AdsConnection(
-            "127.0.0.1" if via_router else host,
-            p.AmsAddress(p.parse_net_id(net_id), int(self._config.get("ams_port") or p.TC3_PLC_PORT)),
-            source_net_id=p.parse_net_id(local_net_id) if local_net_id else None,
-            tcp_port=int(self._config.get("tcp_port") or p.AMS_TCP_PORT),
-            timeout_s=get_config_float(self._config, "request_timeout_s", 5.0, minimum=0.5, maximum=60.0),
-            on_notification=self._on_notification,
-            via_router=via_router,
-        )
-
     # ── Lifecycle ────────────────────────────────────────────────────────────
 
     async def connect(self, config: dict) -> None:
@@ -226,7 +254,7 @@ class DatasourceAdsEngine:
                     await self._close_client()
 
     async def _do_connect(self) -> None:
-        conn = self._new_connection()
+        conn = new_connection(self._config, on_notification=self._on_notification)
         await conn.open(get_config_float(self._config, "connect_timeout_s", 10.0, minimum=1.0, maximum=120.0))
         try:
             info = await conn.read_device_info()

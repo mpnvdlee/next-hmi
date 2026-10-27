@@ -560,7 +560,7 @@ def test_start_opcua_client_connects(ds_client, monkeypatch):
     started = []
 
     class _FakePool:
-        async def start(self, name, settings):
+        async def start(self, name, settings, ds_type="opcua-client"):
             started.append((name, settings))
 
     monkeypatch.setattr(datasource_api_module, "_opcua_pool", _FakePool())
@@ -579,6 +579,31 @@ def test_browse_static_datasource_returns_422(ds_client):
     resp = client.get("/api/datasources/plc1/browse")
     assert resp.status_code == 422
     assert "OPC-UA" in resp.json()["detail"]
+
+
+def test_browse_with_a_malformed_opcua_node_id_returns_422(ds_client, monkeypatch):
+    client, manager = ds_client
+    manager.save("plc1", {"name": "plc1", "type": "opcua-client", "settings": {}})
+    browsed = []
+
+    class _FakeEngine:
+        connected = True
+
+        async def browse(self, node_id=None, *, on_progress=None):
+            browsed.append(node_id)
+            return {"node_id": node_id, "children": []}
+
+    class _FakePool:
+        def get(self, name):
+            return _FakeEngine()
+
+    monkeypatch.setattr(datasource_api_module, "_opcua_pool", _FakePool())
+    for path in ("/api/datasources/plc1/browse", "/api/datasources/plc1/browse/stream"):
+        resp = client.get(path, params={"node_id": "garbage"})
+        assert resp.status_code == 422
+        assert "garbage" in resp.json()["detail"]
+    assert client.get("/api/datasources/plc1/browse", params={"node_id": "ns=2;s=Line1"}).status_code == 200
+    assert browsed == ["ns=2;s=Line1"]
 
 
 # ── POST /certs ───────────────────────────────────────────────────────────────

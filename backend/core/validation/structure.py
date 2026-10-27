@@ -138,7 +138,7 @@ class ValidationContext:
     # knows but this map does not — or a datasource missing here altogether —
     # is read-only, as the binding picker reads it.
     datasource_writable: dict[str, dict[str, bool]] = field(default_factory=dict)
-    # datasource -> declared type ('opcua-client' | 'static' | 'opcua-test-server').
+    # datasource -> declared type ('opcua-client' | 'ads-client' | 'static' | 'opcua-test-server').
     # A test server is a simulator the product *serves*, never a binding target:
     # bindings must go through an opcua-client pointed at it (see validate_var_ref).
     datasource_types: dict[str, str] = field(default_factory=dict)

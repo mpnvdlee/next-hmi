@@ -1,7 +1,7 @@
 """Subscription-delta helpers shared by the REST API and the MCP write tools.
 
 Both call sites have already persisted the new variable tree and updated the
-in-memory ``datasource_manager`` entry. This module then drives the OPC-UA
+in-memory ``datasource_manager`` entry. This module then drives the client
 side-effects: subscribe newly enabled variables, unsubscribe newly disabled
 ones, and refresh the live test-server writable flags. Returns the list of
 composite keys that should be broadcast as ``var_removed`` to WebSocket
@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from models.datasource import build_var_key, is_subscribable
+from models.datasource import CLIENT_DATASOURCE_TYPES, build_var_key, is_subscribable
 
 from services.datasource_manager import DatasourceEntry, datasource_manager
 
@@ -128,7 +128,7 @@ async def apply_subscription_delta(
         else {build_var_key(name, path) for path in old_enabled}
     )
 
-    if opcua_pool is not None and new_entry.ds_type == "opcua-client":
+    if opcua_pool is not None and new_entry.ds_type in CLIENT_DATASOURCE_TYPES:
         engine = opcua_pool.get(name)
         if engine is not None:
             changed_identity: set[str] = set()
@@ -160,7 +160,7 @@ async def apply_subscription_delta(
                         "Restarting %s after subscription removal failed",
                         name,
                     )
-                    await restart(name, new_entry.config.get("settings", {}))
+                    await restart(name, new_entry.config.get("settings", {}), new_entry.ds_type)
                     engine = opcua_pool.get(name)
                     restarted = True
                 else:

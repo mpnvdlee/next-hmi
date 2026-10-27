@@ -96,7 +96,7 @@ leaving a half-initialised socket registered.
 | `var_metadata` | `{ type, meta }` | Once on connect; variable shape metadata. |
 | `var_update` | `{ type, values: { [compositeKey]: value } }` — see [Value forms](#value-forms) | Value changes. Batched in a 50 ms window; the per-datasource priority window is `settings.priority_ws_batch_ms`, clamped to `[0, 1000]`, default 10 ms. |
 | `var_removed` | `{ type, ids: [compositeKey, ...] }` | Variables no longer available. |
-| `opcua_status` | `{ type, datasource, connected }` | Per-datasource connection-state change. |
+| `opcua_status` | `{ type, datasource, connected }` | Per-datasource connection-state change, for every engine in the client pool — `opcua-client`, `ads-client` and a test server's paired client alike; the name predates ADS. |
 | `alarm_snapshot` | `{ type, active: AlarmInstance[], summary: AlarmSummary }` — an instance carries `value_refs` (its definition's `values` bindings) and `values` (their raw values at fire time), see [Alarm Files](data-formats.md#alarm-files) | On connect. |
 | `alarm_update` | same shape as `alarm_snapshot`, `type: "alarm_update"` | On fire / clear / ack. |
 | `recipe_snapshot` | `{ type, config: RecipeConfig, loaded: { [typeId]: { datasetId, loadedAt } }, lastResult }` | On connect. |

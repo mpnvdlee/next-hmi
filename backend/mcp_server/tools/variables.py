@@ -227,7 +227,7 @@ async def variables_add(
     type (``boolean``, ``integer``, ``float``, ``string``, ``datetime``); it is
     persisted as its representative OPC-UA type (e.g. ``integer`` → ``Int32``,
     ``float`` → ``Double``). ``settings`` may override defaults — recognised keys
-    are ``writable`` (bool), ``value`` (any), ``node_id`` (str, for OPC-UA),
+    are ``writable`` (bool), ``value`` (any), ``node_id`` (str: an OPC-UA NodeId, or an ADS symbol path),
     ``is_array`` (bool) with optional ``array_length`` (positive int; omitted
     means dynamic/unknown length — ``array_length`` must not be set without
     ``is_array``), ``enabled`` (bool, default ``true``), ``min``/``max``

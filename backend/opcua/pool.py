@@ -1,19 +1,37 @@
 """
-opcua.pool — the OPC-UA connection pool.
+opcua.pool — the client connection pool.
 
-Manages one DatasourceOpcuaEngine per opcua-client datasource.
+Manages one engine per client datasource: a DatasourceOpcuaEngine per
+opcua-client (and per test server's paired client), a DatasourceAdsEngine per
+ads-client. Both expose the same surface, so callers never ask which.
 """
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from models.datasource import CLIENT_DATASOURCE_TYPES
 
 from .engine import DatasourceOpcuaEngine
 
+if TYPE_CHECKING:
+    from ads.engine import DatasourceAdsEngine
+
+
+def _new_engine(name: str, ds_type: str) -> DatasourceOpcuaEngine | DatasourceAdsEngine:
+    if ds_type == "ads-client":
+        # Imported here: ads.engine imports from this package.
+        from ads.engine import DatasourceAdsEngine
+
+        return DatasourceAdsEngine(name)
+    return DatasourceOpcuaEngine(name)
+
 
 class OpcuaPool:
-    """Manages multiple DatasourceOpcuaEngine instances."""
+    """Manages multiple client engines, keyed by datasource name."""
 
     def __init__(self) -> None:
-        self._engines: dict[str, DatasourceOpcuaEngine] = {}
+        self._engines: dict[str, DatasourceOpcuaEngine | DatasourceAdsEngine] = {}
         self._datasource_manager = None
         self._status_callback = None
         self._priority_recompute_callback = None
@@ -27,13 +45,13 @@ class OpcuaPool:
     def set_priority_recompute_callback(self, cb: Any) -> None:
         self._priority_recompute_callback = cb
 
-    def get(self, name: str) -> DatasourceOpcuaEngine | None:
+    def get(self, name: str) -> DatasourceOpcuaEngine | DatasourceAdsEngine | None:
         return self._engines.get(name)
 
-    async def start(self, name: str, settings: dict) -> None:
+    async def start(self, name: str, settings: dict, ds_type: str = "opcua-client") -> None:
         if name in self._engines:
             await self.stop(name)
-        engine = DatasourceOpcuaEngine(name)
+        engine = _new_engine(name, ds_type)
         engine.set_datasource_manager(self._datasource_manager)
         if self._status_callback:
             engine.set_status_callback(self._status_callback)
@@ -47,9 +65,9 @@ class OpcuaPool:
         if engine:
             await engine.disconnect()
 
-    async def restart(self, name: str, settings: dict) -> None:
+    async def restart(self, name: str, settings: dict, ds_type: str = "opcua-client") -> None:
         await self.stop(name)
-        await self.start(name, settings)
+        await self.start(name, settings, ds_type)
 
     def connection_status(self) -> dict[str, bool]:
         """Point-in-time snapshot of connected state for all active engines.
@@ -63,10 +81,10 @@ class OpcuaPool:
         return {name: engine.subscription_status() for name, engine in self._engines.items()}
 
     async def start_all(self, datasource_manager: Any) -> None:
-        """Start engines for all opcua-client datasources."""
+        """Start engines for all client datasources."""
         for name, entry in datasource_manager.datasources.items():
-            if entry.ds_type == "opcua-client":
-                await self.start(name, entry.config.get("settings", {}))
+            if entry.ds_type in CLIENT_DATASOURCE_TYPES:
+                await self.start(name, entry.config.get("settings", {}), entry.ds_type)
 
     async def stop_all(self) -> None:
         names = list(self._engines.keys())

@@ -40,7 +40,7 @@ async def get_system_info():
 
 @router.get("/subscriptions")
 async def get_subscription_status():
-    """Return current fast-subscription (priority) paths per OPC-UA client datasource.
+    """Return current fast-subscription (priority) paths per OPC-UA or ADS client datasource.
 
     Test-server-backed engines are excluded — they appear in opcua_pool under the
     same name but their type in the datasource registry is 'opcua-test-server'.
