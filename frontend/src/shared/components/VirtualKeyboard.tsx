@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import CloseButton from './CloseButton';
+import { VirtualKeyIcon, type VirtualKeyIconName } from './VirtualKeyIcon';
 
 type KeyWidth = '1' | '1-5' | '1-75' | '2' | '2-25' | '2-75' | '3' | '12';
 
@@ -82,16 +83,15 @@ const KEYBOARD_ROWS: KeyboardKey[][] = [
   ],
 ];
 
-function keyLabel(key: KeyboardKey): string {
-  if (key.kind === 'tab') return 'Tab';
-  if (key.kind === 'space') return 'Space';
-  if (key.kind === 'backspace') return 'Backspace';
-  if (key.kind === 'clear') return 'Clear';
-  if (key.kind === 'enter') return 'Enter';
-  if (key.kind === 'capsLock') return 'Caps Lock';
-  if (key.kind === 'shift') return `Shift ${key.side}`;
-  return key.value;
-}
+const KEY_ICON: Record<Exclude<KeyboardKey['kind'], 'char'>, VirtualKeyIconName> = {
+  tab: 'tab',
+  space: 'space',
+  backspace: 'backspace',
+  clear: 'clear',
+  enter: 'enter',
+  capsLock: 'capsLock',
+  shift: 'shift',
+};
 
 function keyWidth(key: KeyboardKey): KeyWidth {
   return key.width ?? '1';
@@ -209,7 +209,6 @@ export function VirtualKeyboard({
           {title && <span className="hmi-virtual-input__title">{title}</span>}
           <CloseButton
             className="hmi-virtual-input__close"
-            label="Close keyboard"
             onMouseDown={(event) => event.preventDefault()}
             onClick={onClose}
           />
@@ -231,9 +230,6 @@ export function VirtualKeyboard({
               {row.map((key, keyIndex) => {
                 const isPressed =
                   (key.kind === 'shift' && shift) || (key.kind === 'capsLock' && capsLock);
-                const label =
-                  key.kind === 'char' ? characterFor(key, shift, capsLock) : keyLabel(key);
-
                 return (
                   <button
                     type="button"
@@ -259,8 +255,10 @@ export function VirtualKeyboard({
                           {key.value}
                         </span>
                       </span>
+                    ) : key.kind === 'char' ? (
+                      <span aria-hidden="true">{characterFor(key, shift, capsLock)}</span>
                     ) : (
-                      <span aria-hidden="true">{label}</span>
+                      <VirtualKeyIcon name={KEY_ICON[key.kind]} />
                     )}
                   </button>
                 );

@@ -23,32 +23,41 @@
   gap: var(--hmi-space-sm);
   flex: 1;
   min-width: 0;
+  min-height: var(--hmi-select-height);
+  box-sizing: border-box;
+  padding: var(--hmi-space-sm) var(--hmi-input-padding-x);
+  background: var(--hmi-surface-raised);
+  border: 1px solid transparent;
+  border-radius: var(--hmi-radius);
+  transition: border-color var(--hmi-motion-fast) ease;
+}
+
+.hmi-number-input__input-wrap:focus-within {
+  border-color: var(--hmi-accent);
 }
 
 .hmi-number-input__field {
   flex: 1;
   min-width: 0;
-  height: var(--hmi-select-height);
-  box-sizing: border-box;
-  padding: 0 var(--hmi-input-padding-x);
-  background: var(--hmi-bg);
-  color: var(--hmi-text);
-  border: 1px solid var(--hmi-border);
-  border-radius: var(--hmi-radius);
-  font-family: var(--hmi-type-body-font);
-  font-size: var(--hmi-type-body-size);
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--hmi-number-input-color, var(--hmi-text));
+  border: 0;
+  text-align: right;
+  font-family: var(--hmi-type-value-font);
+  font-size: var(--hmi-type-value-size);
+  font-weight: var(--hmi-type-value-weight);
   font-variant-numeric: tabular-nums;
-  transition: border-color var(--hmi-motion-fast) ease;
+  cursor: pointer;
 }
 
 .hmi-number-input__field:focus {
   outline: none;
-  border-color: var(--hmi-accent);
 }
 
 .hmi-number-input__field--invalid {
   color: var(--hmi-fault);
-  border-color: var(--hmi-fault);
 }
 
 .hmi-number-input__unit {
@@ -57,7 +66,10 @@
   white-space: nowrap;
 }
 
-.hmi-number-input--disabled .hmi-number-input__field {
+.hmi-number-input--disabled .hmi-number-input__input-wrap {
   opacity: 0.5;
+}
+
+.hmi-number-input--disabled .hmi-number-input__field {
   cursor: not-allowed;
 }

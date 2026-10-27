@@ -91,7 +91,67 @@ describe('NumberInput', () => {
     await user.keyboard('500{Enter}');
 
     expect(sendWsMessage).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toHaveTextContent('Enter a value between 0 and 100');
+    expect(screen.getByRole('alert')).toHaveTextContent('Min: 0 \u00b7 Max: 100');
+  });
+
+  it('says the configured message instead of the range when the entry is out of it', async () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: -30 } });
+    const user = userEvent.setup();
+    renderInput({
+      variable: BINDING,
+      min: -500,
+      max: -11,
+      rangeMessage: 'Must lie outside the 10 g band',
+    });
+
+    await user.click(screen.getByRole('textbox'));
+    await user.keyboard('-5{Enter}');
+
+    expect(sendWsMessage).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Must lie outside the 10 g band');
+  });
+
+  it('runs On Change after a committed write, and not after a refused one', async () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: 12 } });
+    const user = userEvent.setup();
+    renderInput({
+      variable: BINDING,
+      max: 100,
+      onChange: { onChange: [{ type: 'showToast', message: 'Level set' }] },
+    });
+
+    await user.click(screen.getByRole('textbox'));
+    await user.keyboard('500{Enter}');
+    expect(useHmiStore.getState().pendingToasts).toHaveLength(0);
+
+    await user.keyboard('{Backspace}{Backspace}{Backspace}42{Enter}');
+    expect(sendWsMessage).toHaveBeenCalledTimes(1);
+    expect(useHmiStore.getState().pendingToasts).toEqual([
+      expect.objectContaining({ message: 'Level set' }),
+    ]);
+  });
+
+  it('hands a Value color to its stylesheet, so a binding can mark the value', () => {
+    const { container } = renderInput({ variable: BINDING, color: 'var(--hmi-warn)' });
+    const root = container.querySelector('.hmi-number-input') as HTMLElement;
+    expect(root.style.getPropertyValue('--hmi-number-input-color')).toBe('var(--hmi-warn)');
+  });
+
+  it('groups digits and writes a typographic minus', () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: 4920 } });
+    const { unmount } = renderInput({ variable: BINDING });
+    expect(screen.getByRole('textbox')).toHaveValue('4,920');
+    unmount();
+
+    useVariableStore.setState({ values: { [VAR_KEY]: -30 } });
+    const negative = renderInput({ variable: BINDING });
+    expect(screen.getByRole('textbox')).toHaveValue('\u221230');
+    negative.unmount();
+
+    // A value that rounds to zero carries no minus.
+    useVariableStore.setState({ values: { [VAR_KEY]: -0.04 } });
+    renderInput({ variable: BINDING, decimals: 1 });
+    expect(screen.getByRole('textbox')).toHaveValue('0.0');
   });
 
   it('refuses a numpad entry above the widget max instead of clamping it', async () => {
@@ -104,7 +164,7 @@ describe('NumberInput', () => {
     for (const digit of '5000') {
       await user.click(screen.getByRole('button', { name: digit }));
     }
-    await user.click(screen.getByRole('button', { name: 'Enter' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
 
     expect(sendWsMessage).not.toHaveBeenCalled();
   });
@@ -215,7 +275,7 @@ describe('NumberInput', () => {
     });
     const { container } = renderInput({ variable: BINDING });
 
-    expect(screen.getByRole('textbox')).toHaveValue('9007199254740992');
+    expect(screen.getByRole('textbox')).toHaveValue('9,007,199,254,740,992');
     expect(container.querySelector('.hmi-number-input__field--invalid')).not.toBeNull();
   });
 

@@ -75,7 +75,7 @@ describe('editValue', () => {
     render(<EditValueNumpad />);
     act(() => executeWidgetActions([edit()], { scope: 'runtime' }));
     press('5', '0');
-    expect(screen.getByRole('alert').textContent).toBe('Enter a value between 80 and 200');
+    expect(screen.getByRole('alert').textContent).toBe('Min: 80 \u00b7 Max: 200');
 
     act(() => executeWidgetActions([edit({ min: 0 })], { scope: 'runtime' }));
     press('5', '0', 'Enter');

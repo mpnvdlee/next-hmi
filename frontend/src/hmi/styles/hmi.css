@@ -644,7 +644,26 @@
 }
 
 .hmi-virtual-input__error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--hmi-space-sm);
   color: var(--hmi-fault);
+}
+
+/* Sized from the key's own font, so a theme's key size scales the icon with it. */
+.hmi-virtual-input__key-icon {
+  display: block;
+  width: 1.4em;
+  height: 1.4em;
+  margin: 0 auto;
+  flex-shrink: 0;
+}
+
+.hmi-virtual-input__error .hmi-virtual-input__key-icon {
+  width: 1.2em;
+  height: 1.2em;
+  margin: 0;
 }
 
 .hmi-virtual-input__row {

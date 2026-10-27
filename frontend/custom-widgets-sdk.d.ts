@@ -1116,6 +1116,8 @@ interface VirtualNumpadProps {
   unit?: string;
   /** Whether min/max show as a hint under the title. They gate Enter either way. Default true. */
   showRange?: boolean;
+  /** Said instead of the range when the entry is outside min/max, such as why a limit depends on another setting. */
+  rangeMessage?: string;
   /** The value being replaced: the entry field's placeholder while the entry is empty. */
   currentValue?: string;
   /** Digits allowed after the point; 0 disables the point. Omit for no limit. */

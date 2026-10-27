@@ -13,6 +13,20 @@ heading.
 
 ### Added
 
+- **A Number Input says why it refuses a value, and acts on a change.** An
+  **Out-of-range message** is what the numpad says when the entry falls
+  outside min/max, so a limit that depends on another setting can say "Must
+  lie outside the 10 g band". **On Change** runs its actions after each value
+  the operator applies, such as a toast that the change is not saved yet.
+  Custom widgets get the message through the SDK numpad's new `rangeMessage`
+  prop.
+
+- **The numpad and keyboard show icons, not English words.** Back, Clear,
+  Enter, Shift, Caps Lock, Tab and Space are icons, and an entry outside the
+  bounds turns the `Min: 80 · Max: 200` line into a red warning. *Min* and
+  *Max* are dictionary keys, English as on any screen, so a project
+  translates them by adding those rows.
+
 - **A shell region can float over the page.** A new **Floating** setting on
   the header, footer and both sidebars lays the region over the page instead
   of next to it: the page fills the space underneath, the region is
@@ -232,6 +246,11 @@ heading.
   link card had to be handed a whole action list instead.
 
 ### Changed
+
+- **A Number Input reads as a value, not a form field.** The number is
+  right-aligned in the theme's Value typography, with digit groups (4,920)
+  and a typographic minus, on a raised surface with the unit inside it. While
+  the numpad is open the field shows the entry as typed.
 
 - **Every download names its edition.** The public zips are now
   `nexthmi-community-<os>-<arch>-<version>.zip` and
