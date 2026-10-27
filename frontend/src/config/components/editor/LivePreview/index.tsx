@@ -25,7 +25,7 @@ import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import TabBar from '../TabBar';
 import { PencilSimple, Play, Plus, Minus } from '@phosphor-icons/react';
 import ViewportSelector from '../ViewportSelector';
-import { VIEWPORTS } from '../viewportPresets';
+import { CUSTOM_VIEWPORT, VIEWPORTS, storeViewport, storedViewport } from '../viewportPresets';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { useConfigStore } from '@shared/store/configStore';
 import { useTranslationStore } from '@shared/store/translationStore';
@@ -216,7 +216,8 @@ export default function LivePreview({ pageId }: { pageId: string }) {
   const translationRows = useTranslationStore((s) => s.translations);
   const draftComponents = useComponentStore((s) => s.draftComponents);
   const components = useComponentStore((s) => s.components);
-  const [vpIdx, setVpIdx] = useState(0); // default: Fit panel
+  const [viewport, setViewport] = useState(storedViewport);
+  useEffect(() => storeViewport(viewport), [viewport]);
   const [previewMode, setPreviewMode] = useState<'config' | 'test'>('config');
   const [ctxMenu, setCtxMenu] = useState<{
     x: number;
@@ -595,7 +596,7 @@ export default function LivePreview({ pageId }: { pageId: string }) {
     [ctxMenu, insertIntoTarget],
   );
 
-  const vp = VIEWPORTS[vpIdx];
+  const vp = viewport.idx === CUSTOM_VIEWPORT ? viewport : VIEWPORTS[viewport.idx];
   const isFit = vp.w === 0;
   const scale = scalePct / 100;
   // Fixed device presets: `transform: scale` paints the frame bigger/smaller
@@ -649,7 +650,7 @@ export default function LivePreview({ pageId }: { pageId: string }) {
       className="editor-preview-panel"
       actions={
         <>
-          <ViewportSelector vpIdx={vpIdx} onChange={setVpIdx} />
+          <ViewportSelector viewport={viewport} onChange={setViewport} />
 
           <span className="editor-preview-toolbar__label">Scaling</span>
           <div
