@@ -371,6 +371,7 @@ type ComponentAction =
       onSettled?: ComponentAction[];
     }
   | { type: 'acknowledgeAllAlarms' }
+  | { type: 'delay'; duration: number }
   | { type: 'setLanguage'; language: unknown }
   | { type: 'setActiveTheme'; theme: unknown }
   | {

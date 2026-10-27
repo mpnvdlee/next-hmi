@@ -47,6 +47,13 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
     </Icon>
   ),
   // A path forking in two — one branch or the other.
+  // Clock — waits.
+  delay: (
+    <Icon>
+      <circle cx="8" cy="8" r="5.5" />
+      <path d="M8 5 v3 l2 1.5" />
+    </Icon>
+  ),
   if: (
     <Icon>
       <path d="M8 13.5 v-5" />

@@ -679,6 +679,7 @@ export type ButtonAction =
       onSettled?: ButtonAction[];
     }
   | { type: 'acknowledgeAllAlarms' }
+  | { type: 'delay'; duration: number }
   | { type: 'setLanguage'; language: unknown }
   | { type: 'setActiveTheme'; theme: unknown }
   | {
