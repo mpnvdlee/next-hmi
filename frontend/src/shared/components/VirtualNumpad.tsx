@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import CloseButton from './CloseButton';
+import { useTranslationStore } from '@shared/store/translationStore';
+import { VirtualKeyIcon } from './VirtualKeyIcon';
 
 // One flat grid so the theme's column count (hmi.css) can move Back/Clear/Enter beside the digits.
 const NUMPAD_KEYS = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '0', '.', '-'] as const;
@@ -23,6 +25,8 @@ interface VirtualNumpadProps {
   unit?: string;
   /** Whether min/max show as a hint under the title. They gate Enter either way. Default true. */
   showRange?: boolean;
+  /** Said instead of the range when the entry is outside min/max, such as why a limit depends on another setting. */
+  rangeMessage?: string;
   /** The value being replaced: the entry field's placeholder while the entry is empty. */
   currentValue?: string;
   /** Digits allowed after the point; 0 disables the point. Omit for no limit. */
@@ -44,12 +48,12 @@ function fitsRules(text: string, decimals: number | undefined, allowNegative: bo
   return decimals === undefined || (match[3] ?? '').length <= decimals;
 }
 
-function rangeMessage(min: number | undefined, max: number | undefined, unit: string | undefined) {
-  const suffix = unit ? ` ${unit}` : '';
-  if (min !== undefined && max !== undefined)
-    return `Enter a value between ${min} and ${max}${suffix}`;
-  if (min !== undefined) return `Enter a value of at least ${min}${suffix}`;
-  return `Enter a value of at most ${max}${suffix}`;
+/** The bounds by name, `Min: 80 · Max: 200`; the names go through the dictionaries. */
+function rangeText(min: number | undefined, max: number | undefined, t: (key: string) => string) {
+  const parts: string[] = [];
+  if (min !== undefined) parts.push(`${t('Min')}: ${min}`);
+  if (max !== undefined) parts.push(`${t('Max')}: ${max}`);
+  return parts.join(' \u00b7 ');
 }
 
 export function VirtualNumpad({
@@ -65,6 +69,7 @@ export function VirtualNumpad({
   max,
   unit,
   showRange = true,
+  rangeMessage: customRangeMessage,
   currentValue,
   decimals,
   allowNegative = !(min !== undefined && min >= 0),
@@ -73,6 +78,12 @@ export function VirtualNumpad({
   autoFocus = true,
 }: VirtualNumpadProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  // The keys show icons; their names for a screen reader, and Min and Max, are
+  // dictionary keys, English as on any screen. Subscribed so a language switch
+  // re-renders an open numpad.
+  useTranslationStore((s) => s.activeLanguage);
+  useTranslationStore((s) => s.translations);
+  const t = useTranslationStore.getState().resolve;
 
   useEffect(() => {
     if (!isOpen || inline) return;
@@ -147,7 +158,7 @@ export function VirtualNumpad({
             <CloseButton
               className="hmi-virtual-input__close"
               onClick={onCancel}
-              label="Close numpad"
+              label={t('Close numpad')}
             />
           )}
         </div>
@@ -177,16 +188,14 @@ export function VirtualNumpad({
         />
         {unit && <span className="hmi-virtual-input__value-unit">{unit}</span>}
       </div>
-      {hasRange && (
-        <div className="hmi-virtual-input__range">
-          {min !== undefined && `Min: ${min}`}
-          {min !== undefined && max !== undefined && ' · '}
-          {max !== undefined && `Max: ${max}`}
-        </div>
+      {/* Out of range, the range itself turns into the error, unless the widget says why in words. */}
+      {hasRange && !(isOutOfRange && !customRangeMessage) && (
+        <div className="hmi-virtual-input__range">{rangeText(min, max, t)}</div>
       )}
       {isOutOfRange && (
         <div className="hmi-virtual-input__error" role="alert">
-          {rangeMessage(min, max, unit)}
+          <VirtualKeyIcon name="warning" />
+          {customRangeMessage || rangeText(min, max, t)}
         </div>
       )}
       <div className="hmi-virtual-input__keys">
@@ -208,7 +217,7 @@ export function VirtualNumpad({
           onClick={() => onChange(value.slice(0, -1))}
           tabIndex={-1}
         >
-          Back
+          <VirtualKeyIcon name="backspace" />
         </button>
         <button
           type="button"
@@ -216,7 +225,7 @@ export function VirtualNumpad({
           onClick={() => onChange('')}
           tabIndex={-1}
         >
-          Clear
+          <VirtualKeyIcon name="clear" />
         </button>
         <button
           type="button"
@@ -225,7 +234,7 @@ export function VirtualNumpad({
           disabled={!canApply}
           tabIndex={-1}
         >
-          Enter
+          <VirtualKeyIcon name="enter" />
         </button>
       </div>
     </div>

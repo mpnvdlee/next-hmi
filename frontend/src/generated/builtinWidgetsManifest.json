@@ -1082,7 +1082,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "bc9df9b4dc39da9b",
+    "buildTs": "460d03913f430f8a",
     "displayName": "Number Input",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1101,6 +1101,9 @@
       "max": {
         "type": "float"
       },
+      "rangeMessage": {
+        "type": "string"
+      },
       "variable": {
         "type": [
           "float",
@@ -1114,11 +1117,17 @@
       "decimals": {
         "type": "integer"
       },
+      "color": {
+        "type": "color"
+      },
       "showRangeOnNumpad": {
         "type": "boolean"
       },
       "numpadPosition": {
         "type": "string"
+      },
+      "onChange": {
+        "type": "actions"
       }
     },
     "schemaError": null

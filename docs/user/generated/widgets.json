@@ -1702,6 +1702,12 @@
             "group": "Data"
           },
           {
+            "key": "rangeMessage",
+            "label": "Out-of-range message",
+            "type": "String",
+            "group": "Data"
+          },
+          {
             "key": "variable",
             "label": "Variable",
             "type": "Float | Integer",
@@ -1721,6 +1727,12 @@
             "group": "Appearance"
           },
           {
+            "key": "color",
+            "label": "Value color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
             "key": "showRangeOnNumpad",
             "label": "Show range on numpad",
             "type": "Boolean",
@@ -1733,6 +1745,11 @@
             "type": "String",
             "group": "Appearance",
             "defaultValue": "bottom-right"
+          },
+          {
+            "key": "onChange",
+            "label": "On Change",
+            "type": "actions"
           },
           {
             "key": "visible",
