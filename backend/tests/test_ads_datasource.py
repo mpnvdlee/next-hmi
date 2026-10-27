@@ -1,6 +1,7 @@
 """The ads-client datasource type: pool, REST API and validation wiring."""
 
 import asyncio
+import errno
 import json
 import logging
 import socket
@@ -406,7 +407,7 @@ def test_probe_errors_name_what_to_check() -> None:
     assert _probe_error(socket.gaierror(-2, "Name or service not known"), {"host": "plc.local"}) == (
         "Host name plc.local could not be resolved: check the PLC IP / host"
     )
-    assert _probe_error(OSError(113, "No route to host"), settings) == (
+    assert _probe_error(OSError(errno.EHOSTUNREACH, "No route to host"), settings) == (
         "10.0.0.20 cannot be reached from this machine: check the PLC IP and the network"
     )
     assert _probe_error(ConnectionRefusedError(), {**settings, "local_router": True}) == (
