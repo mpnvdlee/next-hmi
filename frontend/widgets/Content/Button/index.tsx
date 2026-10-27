@@ -128,7 +128,7 @@ export const description = 'Runs actions and can write true to a bound boolean o
 export const category = 'Content & controls';
 export const icon = { type: 'builtin', name: 'cursor-click' } as const;
 
-export default function Button({ properties, layout }: HmiWidgetProps) {
+export default function Button({ name, properties, layout }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
   const scope = useHmiScope();
   const writeVariable = useWriteVariable(properties, 'variable');
@@ -186,7 +186,7 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
       <button
         className={`hmi-button__btn${isOutline ? ' hmi-button__btn--outline' : ''}${iconTop ? ' hmi-button__btn--icon-top' : ''}${iconOnly ? ' hmi-button__btn--icon-only' : ''}${alignStart ? ' hmi-button__btn--start' : ''}`}
         style={colorStyle}
-        aria-label={iconOnly && IconComp ? iconName : undefined}
+        aria-label={iconOnly ? name || (IconComp ? iconName : undefined) : undefined}
         onClick={handleClick}
       >
         {iconName && (

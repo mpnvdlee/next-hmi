@@ -81,12 +81,6 @@
             "defaultValue": "none"
           },
           {
-            "key": "ariaLabel",
-            "label": "Accessible name",
-            "type": "String",
-            "group": "Content"
-          },
-          {
             "key": "actions",
             "label": "Actions",
             "type": "actions"
@@ -2755,12 +2749,6 @@
             "label": "Icon (expanded)",
             "type": "icon",
             "defaultValue": "×"
-          },
-          {
-            "key": "ariaLabel",
-            "label": "Aria label",
-            "type": "String",
-            "defaultValue": "Toggle menu"
           },
           {
             "key": "actions",

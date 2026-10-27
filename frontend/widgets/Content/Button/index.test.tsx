@@ -16,10 +16,10 @@ function sentFrame(): Record<string, unknown> {
   return vi.mocked(sendWsMessage).mock.calls[0][0] as Record<string, unknown>;
 }
 
-function renderButton(properties: Record<string, unknown>) {
+function renderButton(properties: Record<string, unknown>, name?: string) {
   return render(
     <MemoryRouter>
-      <Button properties={properties} />
+      <Button name={name} properties={properties} />
     </MemoryRouter>,
   );
 }
@@ -110,6 +110,12 @@ describe('Button', () => {
     expect(btn).toHaveClass('hmi-button__btn--icon-only');
     expect(btn).not.toHaveAttribute('title');
     expect(btn.querySelector('.hmi-button__label')).toBeNull();
+  });
+
+  it('names an icon-only button by its Identity name when it has one', () => {
+    renderButton({ label: '', iconName: 'pencil-simple' }, 'Edit target quantity');
+
+    expect(screen.getByRole('button', { name: 'Edit target quantity' })).toBeInTheDocument();
   });
 
   it('keeps the text padding while the label is filled in', async () => {

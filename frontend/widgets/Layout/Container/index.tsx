@@ -39,13 +39,6 @@ export const schema = {
     description: 'Any CSS box-shadow, e.g. var(--hmi-shadow).',
     group: 'Appearance',
   },
-  ariaLabel: {
-    type: 'string' as const,
-    label: 'Accessible name',
-    description:
-      'What a screen reader announces for a container with press actions, when its children carry no text of their own.',
-    group: 'Content',
-  },
   actions: { type: 'actions' as const, label: 'Actions' },
 };
 
@@ -62,10 +55,9 @@ export const hostsChildren = true;
  *  without flowing, and declares only `hostsChildren`. */
 export const flowsChildren = true;
 
-export default function Container({ properties, layout, children }: HmiWidgetProps) {
+export default function Container({ name, properties, layout, children }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
   const scope = useHmiScope();
-  const ariaLabel = usePropString(properties, 'ariaLabel', '').trim();
   const title = getPropString(properties, 'title', '', evalCtx);
   const showWhenEmpty = getPropBoolean(properties, 'showWhenEmpty', false, evalCtx);
   const background = getPropString(properties, 'background', '', evalCtx);
@@ -125,7 +117,7 @@ export default function Container({ properties, layout, children }: HmiWidgetPro
     ? {
         role: 'button',
         tabIndex: 0,
-        'aria-label': ariaLabel || undefined,
+        'aria-label': name || undefined,
         onClick: (e: React.MouseEvent<HTMLDivElement>) => {
           // A press on a control inside (a Button, an input, a nested pressable
           // Container) belongs to that control, not to this one as well.

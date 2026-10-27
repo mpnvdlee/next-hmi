@@ -67,7 +67,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "f3b2fb76e72cd35e",
+    "buildTs": "2f9207fbf2466824",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1292,7 +1292,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "598d0d63aa1e279a",
+    "buildTs": "96d583b7217c15ef",
     "displayName": null,
     "hostsChildren": true,
     "flowsChildren": true,
@@ -1315,9 +1315,6 @@
         "type": "string"
       },
       "shadow": {
-        "type": "string"
-      },
-      "ariaLabel": {
         "type": "string"
       },
       "actions": {
@@ -1537,7 +1534,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "bb4a7d49cd813d5e",
+    "buildTs": "9a39808943f6d1b1",
     "displayName": "Menu Toggle",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1552,9 +1549,6 @@
       },
       "iconExpanded": {
         "type": "icon"
-      },
-      "ariaLabel": {
-        "type": "string"
       },
       "actions": {
         "type": "actions"

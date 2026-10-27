@@ -2183,11 +2183,6 @@
         "description": "Any CSS box-shadow, e.g. var(--hmi-shadow).",
         "group": "Appearance"
       },
-      "ariaLabel": {
-        "label": "Accessible name",
-        "description": "What a screen reader announces for a container with press actions, when its children carry no text of their own.",
-        "group": "Content"
-      },
       "actions": {
         "label": "Actions"
       }
@@ -2467,10 +2462,6 @@
       "iconExpanded": {
         "label": "Icon (expanded)",
         "defaultValue": "×"
-      },
-      "ariaLabel": {
-        "label": "Aria label",
-        "defaultValue": "Toggle menu"
       },
       "actions": {
         "label": "Actions"

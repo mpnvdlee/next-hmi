@@ -11,10 +11,10 @@ vi.mock('@hmi/hooks/useWebSocket', () => ({
   sendWsMessage: vi.fn(),
 }));
 
-function renderToggle(properties: Record<string, unknown>) {
+function renderToggle(properties: Record<string, unknown>, name?: string) {
   return render(
     <MemoryRouter>
-      <MenuToggleButton properties={properties} />
+      <MenuToggleButton name={name} properties={properties} />
     </MemoryRouter>,
   );
 }
@@ -29,6 +29,16 @@ describe('MenuToggleButton', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     __resetForTests();
+  });
+
+  it('is named by its Identity name', () => {
+    renderToggle({}, 'Open navigation');
+    expect(screen.getByRole('button', { name: 'Open navigation' })).toBeInTheDocument();
+  });
+
+  it('falls back to "Toggle menu" without an Identity name', () => {
+    renderToggle({});
+    expect(screen.getByRole('button', { name: 'Toggle menu' })).toBeInTheDocument();
   });
 
   it('shows the collapsed glyph and aria-pressed=false when the bound value is falsy', () => {

@@ -149,6 +149,7 @@ The whitelist is whole-word matched against `frontend/src/shared/utils/nextHmiSd
 - Do not import React, hooks, or internal app helpers — use the SDK globals listed below.
 - Use `selfLayoutStyle(layout)` on the outermost wrapper so the editor's layout fields (Width/Height mode, Fill weight, min/max size, etc.) take effect.
 - Use `widgetColorStyle(color)` when a schema `color` field should override a default theme color.
+- Use the `name` prop — the node's Identity name — as the accessible name of a control with no text of its own (`aria-label={name}`), rather than a schema field for it.
 - Type declarations for the SDK live in `frontend/custom-widgets-sdk.d.ts`; copy or reference it from your project's `tsconfig` to get editor completion.
 
 Minimal example:

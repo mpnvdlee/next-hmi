@@ -157,12 +157,12 @@ heading.
   variable-store listener.
 
 - **A Container can run actions when it is pressed.** The Container gets the
-  Button's **Actions** field and an **Accessible name**. With press actions
-  it becomes one control around whatever it holds — a tile, a list row, a
-  header logo: it takes the keyboard (**Enter** or **Space**), shows the
-  focus ring and a pressed look, and dims and blocks under **Interactable**
-  like a Button. A press on a Button or an input inside it stays with that
-  control. A Container without actions behaves as before.
+  Button's **Actions** field. With press actions it becomes one control
+  around whatever it holds — a tile, a list row, a header logo: it takes the
+  keyboard (**Enter** or **Space**), shows the focus ring and a pressed look,
+  and dims and blocks under **Interactable** like a Button. A screen reader
+  announces it by its **Name**. A press on a Button or an input inside it
+  stays with that control. A Container without actions behaves as before.
 
 - **A Button can carry a second line, a badge and its own label style.**
   Six new Button properties: a **Second line** of smaller text under the
@@ -234,6 +234,11 @@ heading.
   link card had to be handed a whole action list instead.
 
 ### Changed
+
+- **A widget's Name is what a screen reader announces.** An icon-only
+  **Button**, a pressable **Container** and the **Menu Toggle** use the
+  **Name** under **Identity** as their accessible name. The Menu Toggle's
+  **Aria label** property is gone.
 
 - **Every download names its edition.** The public zips are now
   `nexthmi-community-<os>-<arch>-<version>.zip` and

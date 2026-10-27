@@ -8,14 +8,18 @@ import { useHmiStore } from '@hmi/store/hmiStore';
 import { useVariableStore } from '@hmi/store/variableStore';
 import WidgetRenderer from '@hmi/components/WidgetRenderer';
 
-function renderContainer(properties?: Record<string, unknown>, route = '/pages/test') {
+function renderContainer(
+  properties?: Record<string, unknown>,
+  route = '/pages/test',
+  name = 'Container',
+) {
   return render(
     <MemoryRouter initialEntries={[route]}>
       <WidgetRenderer
         node={{
           id: 'container',
           type: 'Container',
-          name: 'Container',
+          name,
           properties: { showWhenEmpty: true, ...properties },
         }}
       />
@@ -133,7 +137,7 @@ describe('WidgetRenderer visible property', () => {
     const openOverlays = () => useHmiStore.getState().openPageOverlays.map((o) => o.pageId);
 
     it('stays a plain box without press actions', async () => {
-      renderContainer({ title: 'Main Container', ariaLabel: 'Ignored', actions: { onPress: [] } });
+      renderContainer({ title: 'Main Container', actions: { onPress: [] } });
 
       const el = (await screen.findByText('Main Container')).closest(
         '.hmi-container',
@@ -146,7 +150,7 @@ describe('WidgetRenderer visible property', () => {
 
     it('runs its actions when pressed', async () => {
       const user = userEvent.setup();
-      renderContainer({ title: 'Settings', ariaLabel: 'Open settings', actions: openSettings });
+      renderContainer({ title: 'Settings', actions: openSettings }, undefined, 'Open settings');
 
       await user.click(await screen.findByRole('button', { name: 'Open settings' }));
 
@@ -173,8 +177,8 @@ describe('WidgetRenderer visible property', () => {
             node={{
               id: 'container',
               type: 'Container',
-              name: 'Container',
-              properties: { ariaLabel: 'Tile', actions: openSettings },
+              name: 'Tile',
+              properties: { actions: openSettings },
               children: [
                 {
                   id: 'inner',

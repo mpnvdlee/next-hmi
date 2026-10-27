@@ -30,7 +30,6 @@ Groups and lays out child widgets in a row or column. Hosts other widgets, and r
 | `background` | Background | `color` |
 | `border` | Border | `String` |
 | `shadow` | Shadow | `String` |
-| `ariaLabel` | Accessible name | `String` |
 | `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
@@ -652,7 +651,6 @@ Collapses or expands a bound menu state; swaps icon per state.
 | `bound` | Bound state | `Boolean` |
 | `iconCollapsed` | Icon (collapsed) | `icon` |
 | `iconExpanded` | Icon (expanded) | `icon` |
-| `ariaLabel` | Aria label | `String` |
 | `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
