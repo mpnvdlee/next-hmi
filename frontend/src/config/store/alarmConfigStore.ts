@@ -45,6 +45,7 @@ function createAlarmDefinition(taken: Iterable<string>): AlarmDefinition {
     auto_popup: false,
     resolutions: [],
     trigger: { ...DEFAULT_TRIGGER },
+    ack_required: true,
     ack_groups: [],
     values: [],
   };

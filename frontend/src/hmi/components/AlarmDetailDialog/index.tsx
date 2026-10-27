@@ -10,11 +10,18 @@ import styles from './index.module.css';
 
 interface AlarmDetailDialogProps {
   alarm: AlarmInstance;
+  /** Set for an alarm from the history: shown in the details, and nothing left to acknowledge. */
+  clearedAt?: string;
   username: string;
   onClose: () => void;
 }
 
-export default function AlarmDetailDialog({ alarm, username, onClose }: AlarmDetailDialogProps) {
+export default function AlarmDetailDialog({
+  alarm,
+  clearedAt,
+  username,
+  onClose,
+}: AlarmDetailDialogProps) {
   // Dialog renders outside the widget tree, so subscribe to any `$var` / `$time`
   // a resolution string binds to (evalCtx no longer re-renders on ticks).
   const evalCtx = useReactiveEval(alarm.resolutions);
@@ -52,7 +59,9 @@ export default function AlarmDetailDialog({ alarm, username, onClose }: AlarmDet
         meta={
           <>
             <span>Triggered: {formatAlarmDateTime(alarm.triggered_at)}</span>
-            {alarm.acked && (
+            {clearedAt && <span>Cleared: {formatAlarmDateTime(clearedAt)}</span>}
+            {/* One that needed no acknowledgement has nobody to name. */}
+            {alarm.acked && alarm.acked_by && (
               <>
                 <span>Acknowledged by: {alarm.acked_by}</span>
                 <span>Acknowledged at: {formatAlarmDateTime(alarm.acked_at)}</span>
@@ -60,7 +69,7 @@ export default function AlarmDetailDialog({ alarm, username, onClose }: AlarmDet
             )}
           </>
         }
-        onAck={alarm.acked ? undefined : handleAck}
+        onAck={alarm.acked || clearedAt ? undefined : handleAck}
         onClose={onClose}
       />
     </div>,
