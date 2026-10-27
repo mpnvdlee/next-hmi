@@ -408,6 +408,11 @@ heading.
 
 ### Fixed
 
+- **A Button's custom SVG icon shows in Safari.** A project SVG on a Button
+  rendered at zero size in Safari and other WebKit browsers, so the button
+  showed no icon. It now fills the icon size, as it already did in Chrome
+  and Firefox.
+
 - **A Button stays inside a narrow fixed tile.** A Button in a fixed size
   narrower than its label plus padding grew past it, and its badge sat
   outside the tile. It now keeps the size it was given.

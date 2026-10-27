@@ -76,6 +76,13 @@
   height: var(--hmi-btn-icon-size);
 }
 
+/* A custom icon's svg usually carries only a viewBox; WebKit sizes such a flex
+   item to 0×0 instead of filling the span. */
+.hmi-button__icon-svg > svg {
+  width: 100%;
+  height: 100%;
+}
+
 .hmi-button__label {
   min-width: 0;
 }
