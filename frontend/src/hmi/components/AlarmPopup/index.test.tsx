@@ -88,6 +88,17 @@ describe('AlarmPopup', () => {
     expect(screen.getByText('[A-002] Pump Fault')).toBeInTheDocument();
   });
 
+  it('still pops up an alarm that needs no acknowledgement, without an ACK', () => {
+    useAlarmStore.setState({
+      active: [mkAlarm({ acked: true, ack_required: false })],
+      summary: EMPTY_SUMMARY,
+    });
+    renderPopup();
+
+    expect(screen.getByText('[A-001] Motor Overheat')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'ACK' })).not.toBeInTheDocument();
+  });
+
   it('caps rendered popups at 5', () => {
     const many = Array.from({ length: 7 }, (_, i) =>
       mkAlarm({ id: `inst-${i}`, code: `A-00${i}`, title: `Alarm ${i}` }),

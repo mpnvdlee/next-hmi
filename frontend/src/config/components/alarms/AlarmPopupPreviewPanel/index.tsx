@@ -39,7 +39,13 @@ function ToastPreview({ alarm }: { alarm: AlarmDefinition }) {
     <div className="cfg-alarm-preview__section">
       <div className="cfg-alarm-preview__label">Popup notification</div>
       <div className="cfg-alarm-preview__toast">
-        <AlarmToastCard level={alarm.level} code={alarm.code} title={alarmTitle(alarm)} disabled />
+        <AlarmToastCard
+          level={alarm.level}
+          code={alarm.code}
+          title={alarmTitle(alarm)}
+          disabled
+          ackable={alarm.ack_required !== false}
+        />
       </div>
       {!alarm.auto_popup && (
         <div className="cfg-alarm-preview__note">
@@ -70,7 +76,7 @@ function DetailPreview({ alarm }: { alarm: AlarmDefinition }) {
           descriptionPlaceholder="No description."
           resolutions={resolutions}
           meta={<span>Triggered: —</span>}
-          disabled
+          disabled={alarm.ack_required !== false}
         />
       </div>
     </div>

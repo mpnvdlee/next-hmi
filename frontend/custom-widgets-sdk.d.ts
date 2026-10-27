@@ -665,6 +665,8 @@ interface AlarmInstance {
   resolutions: unknown[];
   group_title: string;
   auto_popup: boolean;
+  /** False: the alarm fired already acknowledged; absent means it needed acknowledgement. */
+  ack_required?: boolean;
   ack_groups: string[];
   /** `$var` bindings of the alarm's `values`, read live while it is active. */
   value_refs?: unknown[];
@@ -727,6 +729,8 @@ declare function ackAllAlarms(username: string, options?: AckAlarmOptions): Prom
 /** The product's alarm detail dialog, rendered as a modal over the page. */
 declare const AlarmDetailDialog: (props: {
   alarm: AlarmInstance;
+  /** Set for an alarm from the history: shown in the details, and nothing left to acknowledge. */
+  clearedAt?: string;
   username: string;
   onClose: () => void;
 }) => JSX.Element;

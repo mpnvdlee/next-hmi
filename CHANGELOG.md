@@ -180,6 +180,12 @@ heading.
   (uppercase) and **Letter spacing** for the label. Each one left at its
   default keeps today's look.
 
+- **An alarm can do without acknowledgement.** A **Needs acknowledgement**
+  switch on each alarm, on by default. Off, the alarm fires already
+  acknowledged: no ACK, not counted as unacknowledged, skipped by Acknowledge
+  All. A cleared alarm in the Alarm List now opens its detail popup too, with
+  its description, image and resolutions kept in the history.
+
 - **An action acknowledges every alarm.** **Acknowledge All Alarms**
   acknowledges each unacknowledged alarm in the name of the signed-in user,
   so any Button can be the screen's acknowledge button.

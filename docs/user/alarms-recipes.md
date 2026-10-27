@@ -16,9 +16,11 @@ Three more fields turn a definition into something an operator can act on:
 - **Auto popup** — **On** raises the alarm popup on every display the moment the alarm goes active. Leave it **Off** and it only shows up in the lists.
 - **Resolutions** — an ordered list of what to check or do, shown in the alarm's detail dialog. This is where the tribal knowledge goes, instead of in a folder nobody opens.
 - **Values** — variables whose value you want in the alarm text. Each row is numbered: `{1}` in the **Title** or **Description** shows the first one, `{2}` the second, with the same functions a String Expression takes (`{Round1(1)}`, `{Signed(2)}`). While the alarm is active the text shows the live value; once it has cleared, and in the history, it shows the value from the moment the alarm went off. Write `Tank temperature {Round1(1)} °C` and the operator reads `Tank temperature 81.5 °C`. A value can also be one element of an array, with its index fixed or bound to another value, or a member of one element of a struct array; history keeps the element the index named when the alarm went off.
-- **Acknowledgment permissions → Allowed groups** — who may acknowledge it. Empty means anyone; set it and only those groups can clear the alarm. See [Users, groups & permissions](users.md).
+- **Acknowledgment → Needs acknowledgement** — off for an alarm nobody has to acknowledge (see below). **Allowed groups** — who may acknowledge it. Empty means anyone; set it and only those groups can clear the alarm. See [Users, groups & permissions](users.md).
 
 The centre of the editor previews both surfaces live — the popup notification and the detail dialog — so you can see what the operator will read while you write it.
+
+Each alarm has a **Needs acknowledgement** switch, on by default. Turned off, the alarm fires already acknowledged: it shows no ACK, is not counted as unacknowledged and Acknowledge All passes it by, while it still appears, pops up and goes to the history like any other. Use it for messages the operator only needs to see, such as *Zeroing required*.
 
 Surface them with the **Alarm List** and **Alarm History** widgets, and show a live count anywhere with the `$alarmCount` source (filter by `all` / `unacked` / `error` / `warning` / `info`). Both widgets carry an **Own frame** toggle — turn it off when the widget sits in a card that already draws one, and clear the **Title** to drop its header band too.
 
