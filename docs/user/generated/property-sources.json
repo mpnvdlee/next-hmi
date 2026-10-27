@@ -187,7 +187,9 @@
     "description": "State from a selected recipe dataset type.",
     "produces": [
       "boolean",
-      "string"
+      "string",
+      "float",
+      "integer"
     ]
   },
   {

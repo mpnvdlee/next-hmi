@@ -37,7 +37,7 @@ export interface EvaluationContext {
   /** An input parameter of the open dialog `page`, or null while it is closed. */
   resolveOverlayParam?: (page: string, param: string) => unknown;
   resolveAlarmCount?: (filter: AlarmCountFilter) => number;
-  resolveRecipe?: (typeId: string, field: RecipeField) => string | boolean;
+  resolveRecipe?: (typeId: string, field: RecipeField, parameter?: string) => unknown;
   /** Resolve the $recipeList property source: the datasets of a type as grid rows.
    *  Returns an array (not an ResolvedValue), so it is read via
    *  `useRecordListProp`, not the scalar `evaluatePropertyValue` path. */
@@ -874,11 +874,15 @@ function evaluateAlarmCount(payload: unknown, context: EvaluationContext): Resol
 
 function evaluateRecipe(payload: unknown, context: EvaluationContext): ResolvedValue {
   if (typeof payload !== 'object' || payload === null) return false;
-  const { type, field } = payload as Record<string, unknown>;
+  const { type, field, parameter } = payload as Record<string, unknown>;
   if (typeof type !== 'string' || typeof field !== 'string') return false;
-  return (
-    context.resolveRecipe?.(type, field as RecipeField) ?? (field === 'activeName' ? '' : false)
+  const fallback = field === 'activeName' ? '' : field === 'parameterValue' ? null : false;
+  const value = context.resolveRecipe?.(
+    type,
+    field as RecipeField,
+    typeof parameter === 'string' ? parameter : undefined,
   );
+  return (value ?? fallback) as ResolvedValue;
 }
 
 function formatDateByPattern(date: Date, format: string, timezone?: string): string {

@@ -3085,6 +3085,11 @@ def _validate_property_value(
                 f"{path}/$recipe/type", "recipe type is empty",
                 severity="warning", code="recipe-type-empty",
             )
+        if payload.get("field") in ("parameterValue", "parameterChanged") and not payload.get("parameter"):
+            report.warn(
+                f"{path}/$recipe/parameter", "recipe parameter is empty",
+                severity="warning", code="recipe-parameter-empty",
+            )
 
 
 def validate_widget_node(

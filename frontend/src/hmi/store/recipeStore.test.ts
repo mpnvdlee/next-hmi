@@ -87,6 +87,28 @@ describe('getField', () => {
     expect(useRecipeStore.getState().getField('coffee', 'parametersChanged')).toBe(true);
   });
 
+  it('parameterValue reads one stored value of the loaded dataset', () => {
+    useRecipeStore
+      .getState()
+      .setSnapshot(CONFIG, { coffee: { datasetId: 'espresso', loadedAt: 'now' } }, null);
+    expect(useRecipeStore.getState().getField('coffee', 'parameterValue', 'temp')).toBe(92);
+    expect(useRecipeStore.getState().getField('coffee', 'parameterValue', 'nope')).toBeNull();
+
+    useRecipeStore.getState().setSnapshot(CONFIG, {}, null);
+    expect(useRecipeStore.getState().getField('coffee', 'parameterValue', 'temp')).toBeNull();
+  });
+
+  it('parameterChanged compares one parameter, not the others', () => {
+    setLive({ 'DS:Temp': 92, 'DS:Steps': [1, 9, 3] });
+    useRecipeStore
+      .getState()
+      .setSnapshot(CONFIG, { coffee: { datasetId: 'espresso', loadedAt: 'now' } }, null);
+    const get = (p: string) => useRecipeStore.getState().getField('coffee', 'parameterChanged', p);
+    expect(get('temp')).toBe(false);
+    expect(get('steps')).toBe(true);
+    expect(get('nope')).toBe(false);
+  });
+
   it('parametersChanged is false when nothing is loaded', () => {
     useRecipeStore.getState().setSnapshot(CONFIG, {}, null);
     expect(useRecipeStore.getState().getField('coffee', 'parametersChanged')).toBe(false);
@@ -105,7 +127,7 @@ const MULTI: RecipeConfig = {
           id: 'espresso',
           name: 'Espresso',
           description: 'Strong',
-          values: {},
+          values: { shots: 1 },
           updatedAt: '',
           updatedBy: '',
           loadedAt: '2026-07-01T00:00:00Z',
@@ -149,8 +171,9 @@ describe('getList', () => {
         name: 'Espresso',
         description: 'Strong',
         lastLoaded: '2026-07-01T00:00:00Z',
+        values: { shots: 1 },
       },
-      { id: 'lungo', name: 'Lungo', description: '', lastLoaded: '' },
+      { id: 'lungo', name: 'Lungo', description: '', lastLoaded: '', values: {} },
     ]);
   });
 

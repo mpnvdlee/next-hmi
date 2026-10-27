@@ -21,6 +21,15 @@ heading.
   Custom widgets get the message through the SDK numpad's new `rangeMessage`
   prop.
 
+- **A screen can mark each setting that differs from the saved recipe.**
+  `$recipe` gets two per-parameter fields: **Parameter changed**, true while
+  that one live value differs from the loaded dataset, and **Saved value of a
+  parameter**, the stored value itself. Bind a Number Input's new **Value
+  color** to the first to turn an unsaved value amber, or list "saved → live"
+  rows that show only while they differ. Each `$recipeList` row now also
+  carries the dataset's `values`, so a recipe list shows its target or
+  quantity without a custom widget.
+
 - **A String Expression can be translated as a whole sentence.** With
   **Translate the template** on, the template is a dictionary key like any
   Localizable Text, placeholders included: `Tank {1} of {2}` becomes

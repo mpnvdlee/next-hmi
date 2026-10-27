@@ -128,7 +128,8 @@ export function useEvalContext(): EvaluationContext {
 
         resolveAlarmCount: (filter) => useAlarmStore.getState().getCount(filter),
 
-        resolveRecipe: (typeId, field) => useRecipeStore.getState().getField(typeId, field),
+        resolveRecipe: (typeId, field, parameter) =>
+          useRecipeStore.getState().getField(typeId, field, parameter),
 
         resolveRecipeList: (typeId) => useRecipeStore.getState().getList(typeId),
 

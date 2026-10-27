@@ -416,6 +416,22 @@ def test_translated_string_expr_template_is_a_key(ctx):
     assert report.warnings == []
 
 
+def test_recipe_parameter_field_needs_a_parameter(ctx):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$recipe": {"type": "machine", "field": "parameterChanged"}}, None, ctx, "/p", report
+    )
+    w = _warn(report)
+    assert (w.code, w.path) == ("recipe-parameter-empty", "/p/$recipe/parameter")
+
+    report = ValidationReport()
+    _validate_property_value(
+        {"$recipe": {"type": "machine", "field": "parameterChanged", "parameter": "lower"}},
+        None, ctx, "/p", report,
+    )
+    assert report.warnings == []
+
+
 def test_icon_unknown_builtin(ctx):
     report = ValidationReport()
     _validate_property_value(

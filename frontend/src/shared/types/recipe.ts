@@ -14,8 +14,14 @@ export type RecipeDataType =
 
 type DownloadResultKind = 'success' | 'partial' | 'failed';
 
-/** Dynamic property fields exposed by the $recipe wrapper, scoped to a type. */
-export type RecipeField = 'activeName' | 'loaded' | 'parametersChanged';
+/** Dynamic property fields exposed by the $recipe wrapper, scoped to a type.
+ *  The `parameter…` fields also name one parameter of that type. */
+export type RecipeField =
+  | 'activeName'
+  | 'loaded'
+  | 'parametersChanged'
+  | 'parameterValue'
+  | 'parameterChanged';
 
 /**
  * One row of the $recipeList property source — a saved dataset flattened for a
@@ -27,6 +33,8 @@ export interface RecipeRow {
   name: string;
   description: string;
   lastLoaded: string;
+  /** The dataset's stored parameter values, by parameter id. */
+  values: Record<string, unknown>;
 }
 
 export interface RecipeParameter {

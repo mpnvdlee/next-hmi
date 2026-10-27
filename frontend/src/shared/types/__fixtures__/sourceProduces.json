@@ -19,7 +19,9 @@
   "$recipe": {
     "parametersChanged": "boolean",
     "loaded": "boolean",
-    "activeName": "string"
+    "activeName": "string",
+    "parameterChanged": "boolean",
+    "parameterValue": ["float", "integer", "string", "boolean"]
   },
   "$user": {
     "username": "string",

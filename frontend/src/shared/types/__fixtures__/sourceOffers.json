@@ -22,7 +22,7 @@
     "$stringExpr": ["string"],
     "$http": ["any"],
     "$alarmCount": ["integer"],
-    "$recipe": ["boolean", "string"],
+    "$recipe": ["boolean", "string", "float", "integer"],
     "$recipeList": ["record-list"],
     "$componentProp": ["any"],
     "$overlay": ["any"],
@@ -63,6 +63,7 @@
       "$widgetProp",
       "$http",
       "$alarmCount",
+      "$recipe",
       "$overlay",
       "$page",
       "$viewport"
@@ -77,6 +78,7 @@
       "$widgetProp",
       "$http",
       "$alarmCount",
+      "$recipe",
       "$overlay",
       "$page",
       "$viewport"
@@ -90,6 +92,7 @@
       "$switch",
       "$widgetProp",
       "$http",
+      "$recipe",
       "$overlay"
     ],
     "boolean": [
@@ -292,6 +295,7 @@
         "$switch",
         "$widgetProp",
         "$http",
+        "$recipe",
         "$overlay",
         "$alarmCount",
         "$page",
