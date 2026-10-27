@@ -45,6 +45,8 @@ export interface BrowseNode {
   is_array?: boolean;
   array_length?: number;
   children?: BrowseNode[];
+  /** One-level (ADS lazy) browse: a node with children not loaded yet. */
+  has_children?: boolean;
 }
 
 export interface PickerFolderEntry extends FolderEntry {

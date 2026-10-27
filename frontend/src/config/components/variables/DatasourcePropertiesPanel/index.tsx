@@ -3,6 +3,7 @@
  *
  * Renders a property editor form based on the selected datasource's type.
  * - OPC-UA Client: server URL, credentials, security, reconnect interval
+ * - Beckhoff ADS: AdsSettingsForm (connection, route, advanced)
  * - Static Variables: no connection settings
  * - OPC-UA Test Server: port, endpoint path, start/stop
  */
@@ -17,12 +18,17 @@ import PropRow from '@config/components/ui/PropRow';
 import BoolButtonGroup from '@config/components/ui/BoolButtonGroup';
 import Select from '@config/components/ui/Select';
 import CertificateControls from '../CertificateControls';
+import AdsSettingsForm from '../AdsSettingsForm';
 import type {
   DatasourceConfig,
   OpcuaClientSettings,
   TestServerSettings,
 } from '@shared/types/datasource';
-import { isOpcuaClientSettings, isTestServerSettings } from '@shared/types/datasource';
+import {
+  isAdsClientSettings,
+  isOpcuaClientSettings,
+  isTestServerSettings,
+} from '@shared/types/datasource';
 import { apiJson } from '@shared/utils/api';
 
 interface Props {
@@ -55,6 +61,13 @@ export default function DatasourcePropertiesPanel({
   onStatusChange,
 }: Props) {
   const setPropsDraft = useVariablesDomainStore((s) => s.setPropsDraft);
+  // A connected ADS datasource reports the NetID / IP its route names.
+  const adsNetId = useVariablesDomainStore(
+    (s) => s.datasources.find((d) => d.name === config?.name)?.local_net_id,
+  );
+  const adsIp = useVariablesDomainStore(
+    (s) => s.datasources.find((d) => d.name === config?.name)?.local_ip ?? null,
+  );
   const clearPropsDraft = useVariablesDomainStore((s) => s.clearPropsDraft);
 
   const [settingsDraft, setSettingsDraft] = useState<Record<string, unknown> | null>(null);
@@ -177,7 +190,7 @@ export default function DatasourcePropertiesPanel({
         </div>
       )}
 
-      {config.type === 'opcua-client' && (
+      {(config.type === 'opcua-client' || config.type === 'ads-client') && (
         <div className="cfg-section">
           <div className="cfg-section__title">Control</div>
           <ConnectionButtons
@@ -189,8 +202,17 @@ export default function DatasourcePropertiesPanel({
         </div>
       )}
 
+      {/* ADS brings its own sections: connection, route, advanced */}
+      {config.type === 'ads-client' && isAdsClientSettings(settings) && (
+        <AdsSettingsForm
+          settings={settings}
+          onChange={updateSetting}
+          connectedIdentity={connected && adsNetId ? { netId: adsNetId, ip: adsIp } : null}
+        />
+      )}
+
       {/* Settings — only for OPC-UA types */}
-      {config.type !== 'static' && (
+      {(config.type === 'opcua-client' || config.type === 'opcua-test-server') && (
         <div className="cfg-section">
           <div className="cfg-section__title">Settings</div>
 

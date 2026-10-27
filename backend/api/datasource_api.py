@@ -6,9 +6,9 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
 
-from ads.engine import create_route
+from ads.engine import DatasourceAdsEngine, create_route
 from ads.engine import probe_connection as probe_ads_connection
 from asyncua import ua
 from core.cert_info import describe_certificate
@@ -79,6 +79,9 @@ class DatasourceSummary(TypedDict):
     variable_count: int
     enabled_count: int
     error: str | None
+    # A connected ads-client: the AMS NetID and IP its route on the PLC names.
+    local_net_id: NotRequired[str]
+    local_ip: NotRequired[str | None]
 
 
 def _require_opcua_pool() -> Any:
@@ -184,6 +187,8 @@ def _apply_connection_status(items: list[DatasourceSummary]) -> list[DatasourceS
             if engine is not None:
                 item["connected"] = engine.connected
                 item["error"] = engine.error
+                if isinstance(engine, DatasourceAdsEngine) and (identity := engine.local_identity):
+                    item["local_net_id"], item["local_ip"] = identity
     return items
 
 
@@ -549,6 +554,25 @@ async def browse_datasource_stream(name: str, node_id: str | None = None) -> Str
         # Proxies that buffer would hold every progress line until the end.
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/{name}/check-variables")
+async def check_datasource_variables(name: str) -> dict[str, list[str]]:
+    """The saved variables of an ADS datasource the PLC no longer has.
+
+    Changes nothing: the editor marks them stale and saves the tree through
+    the normal PUT, so removing one stays the operator's own action.
+    """
+    if _require_datasource(name).ds_type != "ads-client":
+        raise DatasourceValidationError("Only ADS datasources support check-variables")
+    engine = _browse_engine(name)
+    try:
+        missing = await engine.missing_node_ids()
+    except Exception as exc:  # the connection dropped, or the upload failed
+        logger.warning("Check of %s against the PLC failed: %s", name, exc)
+        detail = str(exc).strip() or exc.__class__.__name__
+        raise HTTPException(status_code=503, detail=f"Could not read the PLC's symbols: {detail}") from None
+    return {"missing": missing}
 
 
 # ── Test server lifecycle ─────────────────────────────────────────────────────

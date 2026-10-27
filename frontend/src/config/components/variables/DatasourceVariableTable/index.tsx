@@ -4,6 +4,7 @@
  * Shows the variable tree table for the selected datasource.
  * Supports:
  * - OPC-UA Client: browse PLC, enable/disable, save
+ * - Beckhoff ADS: browse dialog with add-only import, check against PLC
  * - Static Variables: inline add/edit/remove, name + type + value
  * - OPC-UA Test Server: tree editor with add folder/variable
  *
@@ -14,11 +15,13 @@
 
 import './style.css';
 import type { DatasourceConfig, TreeNode } from '@shared/types/datasource';
+import AdsBrowseDialog from './AdsBrowseDialog';
 import DatasourceBrowseDiffBanner from './DatasourceBrowseDiffBanner';
 import DatasourceBrowseProgress from './DatasourceBrowseProgress';
 import DatasourceVariableToolbar from './DatasourceVariableToolbar';
 import DatasourceVariableVirtualTable from './DatasourceVariableVirtualTable';
 import { useDatasourceVariableTableController } from './useDatasourceVariableTableController';
+import Button from '../../ui/Button';
 import ConfigWorkspace from '../../ui/ConfigWorkspace';
 
 // ── Props ───────────────────────────────────────────────────────────────────
@@ -37,6 +40,15 @@ export default function DatasourceVariableTable({
   error = null,
 }: Props) {
   const {
+    tree,
+    adsBrowseOpen,
+    closeAdsBrowse,
+    importAdsSelection,
+    checking,
+    checkResult,
+    dismissCheckResult,
+    canCheck,
+    checkAgainstPlc,
     dsName,
     dsType,
     isEditable,
@@ -76,7 +88,11 @@ export default function DatasourceVariableTable({
     dsType,
     showLive,
     filter,
-    browsing: browsing || hasPendingBrowse,
+    browsing,
+    // A pending review blocks a new browse, which keeps its label.
+    browseDisabled: hasPendingBrowse,
+    checking,
+    canCheck,
   };
 
   const toolbarActions = {
@@ -84,7 +100,8 @@ export default function DatasourceVariableTable({
     onCollapseAll: collapseAll,
     onExpandAll: expandAll,
     onFilterChange: setFilter,
-    onBrowse: handleBrowse,
+    onBrowse: () => void handleBrowse(),
+    onCheck: () => void checkAgainstPlc(),
   };
 
   const tableState = {
@@ -130,12 +147,41 @@ export default function DatasourceVariableTable({
         <>
           {browseProgress && <DatasourceBrowseProgress progress={browseProgress} />}
           {browseError && <div className="cfg-error-banner">{browseError}</div>}
+          {checkResult && (
+            <div
+              className={`cfg-var-check-banner ${checkResult.ok ? 'cfg-success-banner' : 'cfg-error-banner'}`}
+              role="status"
+            >
+              <span>{checkResult.message}</span>
+              <Button variant="ghost" size="sm" onClick={dismissCheckResult}>
+                Dismiss
+              </Button>
+            </div>
+          )}
 
           {hasPendingBrowse && (
-            <DatasourceBrowseDiffBanner dsName={dsName} onApply={applyPendingBrowse} />
+            <DatasourceBrowseDiffBanner
+              dsName={dsName}
+              onApply={applyPendingBrowse}
+              plcCheck={dsType === 'ads-client'}
+            />
           )}
 
           <DatasourceVariableVirtualTable state={tableState} actions={tableActions} />
+
+          {adsBrowseOpen && (
+            <AdsBrowseDialog
+              dsName={dsName}
+              savedTree={tree}
+              attributes={
+                datasource.type === 'ads-client' && 'browse_attributes' in datasource.settings
+                  ? datasource.settings.browse_attributes
+                  : undefined
+              }
+              onImport={importAdsSelection}
+              onClose={closeAdsBrowse}
+            />
+          )}
         </>
       )}
     </ConfigWorkspace>

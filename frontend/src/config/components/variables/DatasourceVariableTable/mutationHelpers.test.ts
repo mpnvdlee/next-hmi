@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { setFolderEnabledByIdentity, renameFolderCollapsedKeys } from './mutationHelpers';
+import {
+  normalizeArrayStructIndices,
+  renameFolderCollapsedKeys,
+  setFolderEnabledByIdentity,
+} from './mutationHelpers';
 import { setEnabledInSubtree } from '@config/components/ui/datasourceTreeHelpers';
 import type { FolderEntry, TreeNode, VariableEntry } from '@shared/types/datasource';
 
@@ -84,5 +88,51 @@ describe('renameFolderCollapsedKeys', () => {
 
     expect(result.has('A/Devices')).toBe(true);
     expect(result.has('A/Devices/Diagnostics')).toBe(true);
+  });
+});
+
+describe('normalizeArrayStructIndices node ids', () => {
+  const element = (name: string, nodeId: string, children: TreeNode[]): TreeNode => ({
+    kind: 'folder',
+    name,
+    node_id: nodeId,
+    children,
+  });
+  const variable = (name: string, nodeId: string): TreeNode => ({
+    kind: 'variable',
+    display_name: name,
+    node_id: nodeId,
+    data_type: 'Float',
+    enabled: true,
+  });
+  const copiedId = (tree: TreeNode[]) =>
+    ((tree[0] as FolderEntry).children[1] as FolderEntry).children.map((c) => c.node_id);
+
+  it('moves a copied member to its element when the id is a path below the element', () => {
+    const tree: TreeNode[] = [
+      {
+        kind: 'folder',
+        name: 'a',
+        children: [
+          element('[0]', 'ns=4;s=GVL.a[0]', [variable('x', 'ns=4;s=GVL.a[0].x')]),
+          element('[1]', 'ns=4;s=GVL.a[1]', []),
+        ],
+      },
+    ];
+    expect(copiedId(normalizeArrayStructIndices(tree))).toEqual(['ns=4;s=GVL.a[1].x']);
+  });
+
+  it('keeps an opaque OPC-UA id it cannot derive, as before', () => {
+    const tree: TreeNode[] = [
+      {
+        kind: 'folder',
+        name: 'a',
+        children: [
+          element('[0]', 'ns=2;i=10', [variable('x', 'ns=2;i=101')]),
+          element('[1]', 'ns=2;i=20', []),
+        ],
+      },
+    ];
+    expect(copiedId(normalizeArrayStructIndices(tree))).toEqual(['ns=2;i=101']);
   });
 });

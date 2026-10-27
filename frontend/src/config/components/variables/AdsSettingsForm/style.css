@@ -1,0 +1,76 @@
+/* ── ADS connection settings (create dialog and properties panel) ─────────── */
+
+.ds-ads__hint {
+  margin: var(--cfg-space-1) 0 var(--cfg-space-2);
+  font-size: var(--cfg-text-sm);
+  line-height: 1.5;
+  color: var(--cfg-text-muted);
+}
+
+.ds-ads__action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--cfg-space-2);
+  margin-top: var(--cfg-space-2);
+}
+
+.ds-ads__outcome {
+  font-size: var(--cfg-text-sm);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.ds-ads__outcome--ok {
+  color: var(--cfg-success-fg);
+}
+
+.ds-ads__outcome--fail {
+  color: var(--cfg-danger-fg);
+}
+
+.ds-ads__steps {
+  margin: 0 0 var(--cfg-space-2);
+  padding-left: var(--cfg-space-5);
+  font-size: var(--cfg-text-sm);
+  line-height: 1.5;
+  color: var(--cfg-text);
+}
+
+.ds-ads__steps li + li {
+  margin-top: var(--cfg-space-1);
+}
+
+.ds-ads__values {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--cfg-space-1) var(--cfg-space-3);
+  margin: var(--cfg-space-2) 0 0;
+  padding: var(--cfg-space-2) var(--cfg-space-3);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: var(--cfg-surface-dark);
+}
+
+.ds-ads__values dt {
+  color: var(--cfg-text-muted);
+}
+
+.ds-ads__values dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ds-ads__values code {
+  font-family: var(--cfg-font-mono);
+  user-select: all;
+}
+
+/* The create dialog: the form's sections carry their own padding, and the
+   advanced settings need room to scroll. */
+.ds-wizard__body.ds-ads-dialog__body {
+  gap: 0;
+  padding: 0;
+  max-height: min(70vh, 44rem);
+  overflow-y: auto;
+}

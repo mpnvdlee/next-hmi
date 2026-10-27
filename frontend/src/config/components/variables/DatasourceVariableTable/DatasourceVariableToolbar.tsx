@@ -6,6 +6,11 @@ interface ToolbarState {
   showLive: boolean;
   filter: string;
   browsing: boolean;
+  /** Browse PLC is unavailable (a review is pending) without a browse running. */
+  browseDisabled?: boolean;
+  checking?: boolean;
+  /** Check against PLC has saved variables to check. */
+  canCheck?: boolean;
 }
 
 interface ToolbarActions {
@@ -14,6 +19,7 @@ interface ToolbarActions {
   onExpandAll: () => void;
   onFilterChange: (value: string) => void;
   onBrowse: () => void;
+  onCheck?: () => void;
 }
 
 interface Props {
@@ -22,8 +28,16 @@ interface Props {
 }
 
 export default function DatasourceVariableToolbar({ state, actions }: Props) {
-  const { dsType, showLive, filter, browsing } = state;
-  const { onToggleLive, onCollapseAll, onExpandAll, onFilterChange, onBrowse } = actions;
+  const {
+    dsType,
+    showLive,
+    filter,
+    browsing,
+    browseDisabled = false,
+    checking = false,
+    canCheck = true,
+  } = state;
+  const { onToggleLive, onCollapseAll, onExpandAll, onFilterChange, onBrowse, onCheck } = actions;
 
   return (
     <>
@@ -68,8 +82,48 @@ export default function DatasourceVariableToolbar({ state, actions }: Props) {
         ariaLabel="Filter datasource variables"
       />
 
+      {dsType === 'ads-client' && onCheck && (
+        // An icon, like the collapse pair: a text label pushes Browse PLC off
+        // the header at 1280 px.
+        <Button
+          variant="icon"
+          size="sm"
+          type="button"
+          className="cfg-var-check-btn cfg-header-control"
+          onClick={onCheck}
+          disabled={checking || !canCheck}
+          aria-label="Check against PLC"
+          title={
+            !canCheck
+              ? 'Check against PLC: no saved variables to check'
+              : checking
+                ? 'Checking against the PLC…'
+                : 'Check against PLC: mark saved variables the PLC no longer has as stale'
+          }
+        >
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <rect x="3" y="2.5" width="10" height="11.5" rx="1.5" />
+            <path d="M6 2.5V1.75h4v.75" />
+            <path d="M5.5 8.5l1.75 1.75L10.5 7" />
+          </svg>
+        </Button>
+      )}
+
       {dsType !== 'static' && (
-        <Button variant="primary" size="sm" onClick={onBrowse} disabled={browsing}>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={onBrowse}
+          disabled={browsing || browseDisabled}
+        >
           {browsing ? 'Browsing…' : 'Browse PLC'}
         </Button>
       )}

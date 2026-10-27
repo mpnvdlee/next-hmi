@@ -23,27 +23,64 @@ function uniqueName(base: string, existing: Set<string>): string {
 }
 
 /**
+ * `nodeId` moved from the template element to the target element, when it is a
+ * path below the template's own id (`MAIN.aPoints[1].x` → `MAIN.aPoints[4].x`,
+ * or an OPC-UA string id spelled the same way). An id that is not such a path
+ * (a numeric OPC-UA id) cannot be derived and is kept as it is.
+ */
+function rebaseNodeId(nodeId: string | undefined, from?: string, to?: string): string | undefined {
+  if (!nodeId || !from || !to || !nodeId.startsWith(from)) return nodeId;
+  const rest = nodeId.slice(from.length);
+  return rest.startsWith('.') || rest.startsWith('[') ? to + rest : nodeId;
+}
+
+function rebaseNode(node: TreeNode, from?: string, to?: string): TreeNode {
+  const nodeId = rebaseNodeId(node.node_id, from, to);
+  const moved = nodeId === undefined ? node : { ...node, node_id: nodeId };
+  return isFolder(moved)
+    ? { ...moved, children: moved.children.map((c) => rebaseNode(c, from, to)) }
+    : moved;
+}
+
+/**
  * Merge the structure of `template` children into `existing` children.
  * Variables are matched by display_name, folders by name.
  * Fields present in the template but missing from existing are added (copied
  * from the template). Existing values/children are preserved. Fields present
  * in existing but absent from the template are removed so all elements stay
- * structurally identical.
+ * structurally identical. A copied node takes the target element's node id
+ * (`rebaseNodeId`), so it reads its own element, not the template's.
  */
-function syncStructChildren(template: TreeNode[], existing: TreeNode[]): TreeNode[] {
+function syncStructChildren(
+  template: TreeNode[],
+  existing: TreeNode[],
+  fromId?: string,
+  toId?: string,
+): TreeNode[] {
   return template.map((tplNode) => {
     if (isFolder(tplNode)) {
       const existingFolder = existing.find(
         (n): n is FolderEntry => isFolder(n) && n.name === tplNode.name,
       );
-      const mergedChildren = syncStructChildren(tplNode.children, existingFolder?.children ?? []);
-      return { ...tplNode, ...existingFolder, name: tplNode.name, children: mergedChildren };
+      const mergedChildren = syncStructChildren(
+        tplNode.children,
+        existingFolder?.children ?? [],
+        fromId,
+        toId,
+      );
+      return {
+        ...tplNode,
+        node_id: rebaseNodeId(tplNode.node_id, fromId, toId),
+        ...existingFolder,
+        name: tplNode.name,
+        children: mergedChildren,
+      };
     } else {
       const existingVar = existing.find(
         (n): n is VariableEntry =>
           !isFolder(n) && n.display_name === (tplNode as VariableEntry).display_name,
       );
-      return existingVar ?? tplNode;
+      return existingVar ?? rebaseNode(tplNode, fromId, toId);
     }
   });
 }
@@ -73,7 +110,12 @@ export function normalizeArrayStructIndices(tree: TreeNode[]): TreeNode[] {
     const reindexed = subFolders.map((f, i) => ({ ...f, name: `${node.name}[${i}]` }));
     const first = reindexed[0];
     const synced = reindexed.map((f, i) =>
-      i === 0 ? f : { ...f, children: syncStructChildren(first.children, f.children) },
+      i === 0
+        ? f
+        : {
+            ...f,
+            children: syncStructChildren(first.children, f.children, first.node_id, f.node_id),
+          },
     );
     return { ...node, is_array: true, children: synced };
   });

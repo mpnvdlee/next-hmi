@@ -1,6 +1,6 @@
 # Connecting to data
 
-A **datasource** is a named connection with a tree of variables under it. Connect to a PLC over OPC-UA with the guided wizard, or use a static datasource to mock values while you design. Then browse the address space into a tree your pages can bind to.
+A **datasource** is a named connection with a tree of variables under it. Connect to a PLC over OPC-UA with the guided wizard or to a Beckhoff TwinCAT PLC over ADS, or use a static datasource to mock values while you design. Then browse the address space into a tree your pages can bind to.
 
 ![The datasource browser: every folder and tag under a connection, with per-variable enable checkboxes, data types, access badges and live values, and the connection's own panel on the right showing its status, Disconnect button and security settings.](images/datasources-area.png)
 
@@ -64,7 +64,7 @@ failing.
 
 ![An OPC-UA datasource's properties panel: the header's green dot and Connected state, the Control section's Disconnect button, and the security settings with the Generate certificate / Certificate info pair.](images/datasource-connection.png)
 
-An OPC-UA datasource's properties panel opens with a **Control** section
+An OPC-UA or ADS datasource's properties panel opens with a **Control** section
 holding **Connect** and **Disconnect**. They do what they say: the connection
 stays down until you ask for it, and stays down after you disconnect rather
 than quietly retrying. The button reads *Connecting…* / *Disconnecting…* while
@@ -82,6 +82,56 @@ screen shows no data; [Diagnostics](diagnostics.md) covers the rest.
 > Its **Security Endpoints** checkboxes decide which secured policies it
 > advertises — NoSecurity is always available — which is how you exercise the
 > discovery and certificate flow above without a real PLC on the bench.
+
+## Connect to a Beckhoff PLC over ADS
+
+A **Beckhoff ADS** datasource talks to a TwinCAT PLC directly over ADS, with no OPC-UA server on the PLC. Click the `+` on the **Datasources** row, choose **Beckhoff ADS**, and fill in the dialog; the same fields sit in the datasource's properties panel afterwards.
+
+1. **Name and address** — Give it a **Name** (the binding prefix, as for any datasource) and the **PLC IP / Host**.
+2. **PLC AMS NetID** — The PLC's address in ADS terms. It is usually the PLC's IP address followed by `.1.1` (`192.168.1.10.1.1`); leave it empty to use exactly that. A host name instead of an IP address needs it filled in.
+3. **AMS Port** — `851` is the first TwinCAT 3 PLC runtime, `852` the second; TwinCAT 2 uses `801`.
+4. **Test connection** — A green *Plc30 App · v3.1.4024 · ADS state RUN* names the device, its TwinCAT version and whether the PLC is running. A red line says why not, naming the address and port it tried and what to check: *refused the connection* (wrong IP or TCP port, or TwinCAT not running on the PLC), *no answer* (wrong IP, the network, or a firewall), a host name that *could not be resolved*, or a PLC that takes the connection and answers nothing — which almost always means the route below is missing.
+
+### The route on the PLC
+
+A TwinCAT PLC answers ADS only from a client it has a **static route** for: the route names the client's AMS NetID and IP address. **Route Method** picks who makes it.
+
+- **TwinCAT route** (the default) — you add it in TwinCAT. The **Route** section lists the steps and the exact values to enter: this HMI's **AMS NetID** and **IP address**, which **Test connection** fills in, and which a connected datasource's properties panel shows on its own (until then they read *this HMI's IP address* and *this HMI's IP address followed by .1.1*). On the PLC, open **Router → Edit Routes** from the TwinCAT icon in the taskbar, **Add…** a route manually of type **Static** with those values and transport TCP/IP, then test again.
+- **Custom route** — NEXT HMI asks the PLC to add the route — the same request TwinCAT's own **Add Route** dialog sends — using a user account on the PLC. Enter the **PLC User** and **PLC Password** (on a Beckhoff IPC usually `Administrator` and its password) and click **Create route now**; the result names the route and the NetID and address it points at. With **Custom route** set, the HMI also creates the route by itself whenever it connects and finds it missing. A refused password is not tried again until the datasource is saved, so a wrong one cannot lock the account. **Route Name** and **Route Address** are optional: the address matters only when a NAT sits between the HMI and the PLC.
+
+The PLC user name and password are stored in the datasource settings in the project, as the OPC-UA password is — and only with **Custom route**: switching back to **TwinCAT route** drops them.
+
+> [!NOTE]
+> **On a PC that runs TwinCAT itself**, switch **Local TwinCAT Router** on under **Advanced**. The HMI then connects through that router, which owns the routes: add or check the route to the PLC with TwinCAT there, and the **Route** section says so instead of offering either method.
+
+### Advanced settings
+
+The **Advanced** section, collapsed by default, holds what rarely changes: **This HMI's AMS NetID** (empty: this machine's IP address plus `.1.1`), **Local TwinCAT Router**, the **TCP Port** (`48898`), the **Connect** and **Request Timeout**s, the **Reconnect** interval, and how values are kept fresh — **Poll Interval** for every enabled variable, **Fast Max Delay** and **Fast Sampling** for the variables on screen, **Fast WS Batch** for how long their changes are gathered before going to the browser, **Background Sync** on or off — and how the PLC is browsed, below.
+
+### Browse a TwinCAT program
+
+A PLC program publishes every variable it has — on a real machine that runs to a million entries once function-block internals and struct arrays are counted — so **Browse PLC** does not walk all of it at once. **Browse Mode** decides what it shows:
+
+- **Marked by attribute** (the default) — only the variables marked for the HMI in the PLC code with `{attribute 'OPC.UA.DA' := '1'}`, on a variable, a struct member or a whole type — the same mark TwinCAT's own OPC-UA server uses, so a program already set up for it needs nothing more. **Browse Attributes** names the attribute to look for, or several separated by commas. If nothing in the program (or below the browse root) carries it, the browse says so plainly: mark the variables, change the attribute, or switch to lazy mode. If everything it finds is already in the datasource, it says that too.
+- **Lazy (one level)** — the program one level at a time: expanding a folder or struct in the browse dialog loads what is inside it.
+- **All** — everything at once. Fine for a small test program, slow on a real machine.
+
+**Browse Root** starts the browse at a part of the program (`GVL_HMI`, `MAIN.stLine`) instead of all of it. Names are not case-sensitive in TwinCAT, so `main.stline` works as well; variables are always saved with the PLC's own spelling.
+
+### Add variables — nothing is replaced
+
+**Browse PLC** opens a dialog with the PLC's tree. Variables already in the datasource show as *added*; tick the new ones — or **Select all new** — and **Add**. Each lands under the same folders as its PLC path (`MAIN.stMotor.bRunning` under `MAIN` › `stMotor`), with the folders and struct folders it needs created, and arrives disabled, as from an OPC-UA browse. In an array of structs a member ticked in one element is added to every element, so the elements stay alike.
+
+Adding never changes or removes what is already there, so you can browse a level, add a few variables, and come back for more.
+
+### Check against PLC
+
+A PLC download can rename or delete variables. The **Check against PLC** button (the clipboard-with-a-tick icon beside the filter in the variable table's toolbar) asks the PLC which of the datasource's **saved** variables it no longer has. Variables added since the last save are not checked: save first. The button stays disabled while nothing is saved.
+
+- **Everything is there** — a green line says every saved variable exists on the PLC; **Dismiss** it, or it goes away by itself at the next change to the tree.
+- **Something is missing** — those variables are marked stale straight away (greyed out, and no longer read), and any marked stale before that the PLC has again are cleared. A panel above the table lists them under *Missing on PLC*. Nothing is deleted unless you say so: tick the ones to remove and click **Apply (remove N, keep M stale)**, or **Keep all** to leave them stale.
+
+Save the project to keep the result. In an array of structs, every element holds the same members, so a member removed from one element only goes when it is removed from the first element too.
 
 ## Design offline with a static datasource
 

@@ -29,7 +29,7 @@ alarms, recipes, the historian, users and custom widgets.
 
 | Page | What it covers |
 |---|---|
-| [Connecting to data](datasources.md) | The OPC-UA wizard, certificates and connect/disconnect, and designing offline with a static datasource |
+| [Connecting to data](datasources.md) | The OPC-UA wizard, certificates and connect/disconnect, Beckhoff ADS connections and routes, and designing offline with a static datasource |
 | [Binding & subscribing](subscribing.md) | How a bound value reaches the screen, what a subscription costs, and what the marks on a widget mean |
 | [Dynamic properties](properties.md) | Type vs. source, the value types, every source, and how they nest |
 | [Historian & trends](historian.md) | Recording tag history, sampling and retention, and plotting it |

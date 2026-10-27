@@ -456,4 +456,63 @@ describe('DatasourcePropertiesPanel', () => {
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
   });
+
+  describe('ads-client', () => {
+    it('offers Connect and the ADS settings, and keeps an edit as the draft', () => {
+      render(
+        <DatasourcePropertiesPanel
+          config={{
+            type: 'ads-client',
+            name: 'Line1',
+            settings: { host: '192.168.1.10', route_method: 'twincat' },
+            variables: [],
+          }}
+          connected={false}
+          onSave={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByRole('button', { name: 'Connect' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Test connection' })).toBeEnabled();
+      expect(screen.getByText('Route Method')).toBeInTheDocument();
+      const host = screen.getByDisplayValue('192.168.1.10');
+      fireEvent.change(host, { target: { value: '192.168.1.11' } });
+
+      // Kept as the panel's draft until the project is saved, like every setting.
+      expect(useVariablesDomainStore.getState().propsDrafts.Line1).toMatchObject({
+        host: '192.168.1.11',
+      });
+    });
+
+    it('fills the TwinCAT route steps in from the connected datasource', () => {
+      useVariablesDomainStore.setState({
+        datasources: [
+          {
+            name: 'Line1',
+            type: 'ads-client',
+            connected: true,
+            variable_count: 0,
+            enabled_count: 0,
+            local_net_id: '10.0.0.5.1.1',
+            local_ip: '10.0.0.5',
+          },
+        ],
+      });
+      render(
+        <DatasourcePropertiesPanel
+          config={{
+            type: 'ads-client',
+            name: 'Line1',
+            settings: { host: '10.0.0.20' },
+            variables: [],
+          }}
+          connected={true}
+          onSave={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('10.0.0.5.1.1')).toBeInTheDocument();
+      expect(screen.getByText('10.0.0.5')).toBeInTheDocument();
+      act(() => useVariablesDomainStore.setState({ datasources: [] }));
+    });
+  });
 });

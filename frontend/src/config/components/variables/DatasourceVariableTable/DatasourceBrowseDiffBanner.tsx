@@ -22,6 +22,9 @@ const CATEGORY_LABEL: Record<Category, string> = {
 interface Props {
   dsName: string;
   onApply: (diff: BrowseDiff, selected: ReadonlySet<string>) => void;
+  /** The result of Check against PLC (ADS): only stale rows, already marked
+   *  stale, each removed only when ticked. */
+  plcCheck?: boolean;
 }
 
 function formatField(field: ChangedField): string {
@@ -131,7 +134,7 @@ function FolderRenameRowItem({
   );
 }
 
-export default function DatasourceBrowseDiffBanner({ dsName, onApply }: Props) {
+export default function DatasourceBrowseDiffBanner({ dsName, onApply, plcCheck = false }: Props) {
   const pending = useVariablesDomainStore((s) => s.pendingBrowse[dsName]);
   const toggle = useVariablesDomainStore((s) => s.togglePendingSelection);
   const setCategorySelection = useVariablesDomainStore((s) => s.setCategorySelection);
@@ -179,22 +182,37 @@ export default function DatasourceBrowseDiffBanner({ dsName, onApply }: Props) {
   return (
     <div className="cfg-browse-diff" role="region" aria-label="Pending browse changes">
       <div className="cfg-browse-diff__header">
-        <span className="cfg-browse-diff__title">
-          {counts.added + counts.modified + counts.removed} changes pending
-        </span>
-        <span className="cfg-browse-diff__summary">
-          {counts.added} added · {counts.modified} modified · {counts.removed} removed
-        </span>
+        {plcCheck ? (
+          <>
+            <span className="cfg-browse-diff__title">
+              {counts.removed === 1
+                ? '1 saved variable is missing on the PLC'
+                : `${counts.removed} saved variables are missing on the PLC`}
+            </span>
+            <span className="cfg-browse-diff__summary">Marked stale · tick the ones to remove</span>
+          </>
+        ) : (
+          <>
+            <span className="cfg-browse-diff__title">
+              {counts.added + counts.modified + counts.removed} changes pending
+            </span>
+            <span className="cfg-browse-diff__summary">
+              {counts.added} added · {counts.modified} modified · {counts.removed} removed
+            </span>
+          </>
+        )}
         <div className="cfg-browse-diff__actions">
           <Button size="sm" variant="ghost" onClick={handleDiscard}>
-            Discard
+            {plcCheck ? 'Keep all' : 'Discard'}
           </Button>
           <Button size="sm" variant="primary" onClick={handleApply} disabled={!canApply}>
-            {selectedCount > 0
-              ? `Apply (${selectedCount})`
-              : counts.removed > 0
-                ? `Apply (mark ${counts.removed} stale)`
-                : 'Apply'}
+            {plcCheck
+              ? `Apply (remove ${selectedCount}, keep ${counts.removed - selectedCount} stale)`
+              : selectedCount > 0
+                ? `Apply (${selectedCount})`
+                : counts.removed > 0
+                  ? `Apply (mark ${counts.removed} stale)`
+                  : 'Apply'}
           </Button>
         </div>
       </div>
@@ -217,7 +235,9 @@ export default function DatasourceBrowseDiffBanner({ dsName, onApply }: Props) {
                 aria-expanded={open}
               >
                 <span className="cfg-browse-diff__group-caret">{open ? '▾' : '▸'}</span>
-                <span>{CATEGORY_LABEL[category]}</span>
+                <span>
+                  {plcCheck && category === 'removed' ? 'Missing on PLC' : CATEGORY_LABEL[category]}
+                </span>
                 <span className="cfg-browse-diff__group-count">{rows.length}</span>
               </button>
               <label className="cfg-browse-diff__group-selectall">

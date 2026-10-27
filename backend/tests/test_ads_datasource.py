@@ -168,6 +168,88 @@ async def test_ads_browse_takes_a_node_id(plc: FakePlc, api) -> None:
 
 
 @pytest.mark.asyncio
+async def test_ads_check_variables_lists_what_the_plc_no_longer_has(plc: FakePlc, api) -> None:
+    client, manager, pool = api
+    body = _ads_body(plc)
+    body["variables"] = [{"kind": "folder", "name": "MAIN", "node_id": "MAIN", "children": [
+        {"kind": "variable", "display_name": "fSpeed", "node_id": "MAIN.fSpeed", "data_type": "Double", "enabled": True},
+        {"kind": "variable", "display_name": "bGone", "node_id": "MAIN.bGone", "data_type": "Boolean", "enabled": False},
+        {"kind": "struct", "display_name": "stMotor", "node_id": "MAIN.stMotor", "data_type": "struct", "enabled": False},
+        # Saved as a value, but a struct on the PLC now: it no longer reads.
+        {"kind": "variable", "display_name": "stLimits", "node_id": "MAIN.stMotor.stLimits", "data_type": "Double",
+         "enabled": False},
+        {"kind": "folder", "name": "aPoints", "node_id": "MAIN.aPoints", "is_array": True, "children": [
+            {"kind": "folder", "name": "[1]", "node_id": "MAIN.aPoints[1]", "children": [
+                {"kind": "variable", "display_name": "x", "node_id": "MAIN.aPoints[1].x", "data_type": "Float", "enabled": False},
+                {"kind": "variable", "display_name": "z", "node_id": "MAIN.aPoints[1].z", "data_type": "Float", "enabled": False},
+            ]},
+        ]},
+    ]}]
+    await client.put("/api/datasources/plc", json=body)
+    await _until(lambda: pool.get("plc").connected)
+
+    resp = await client.post("/api/datasources/plc/check-variables")
+    assert resp.status_code == 200
+    assert resp.json() == {"missing": ["MAIN.bGone", "MAIN.stMotor.stLimits", "MAIN.aPoints[1].z"]}
+    # Nothing is written: marking them stale is the editor's save.
+    assert "present_on_server" not in json.dumps(manager.get("plc").config["variables"])
+
+
+@pytest.mark.asyncio
+async def test_ads_check_variables_needs_a_connected_ads_datasource(api) -> None:
+    client, _manager, _pool = api
+    await client.put("/api/datasources/mem", json={"type": "static", "variables": []})
+    assert (await client.post("/api/datasources/mem/check-variables")).status_code == 422
+    await client.put("/api/datasources/plc", json={
+        "type": "ads-client", "variables": [], "settings": {"host": "127.0.0.1", "tcp_port": _closed_port()},
+    })
+    assert (await client.post("/api/datasources/plc/check-variables")).status_code == 503
+    assert (await client.post("/api/datasources/nope/check-variables")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_ads_check_variables_failure_is_a_503_with_the_reason(plc: FakePlc, api, monkeypatch) -> None:
+    client, _manager, pool = api
+    await client.put("/api/datasources/plc", json=_ads_body(plc))
+    await _until(lambda: pool.get("plc").connected)
+
+    async def lost() -> list[str]:
+        raise ConnectionError("connection closed")
+
+    monkeypatch.setattr(pool.get("plc"), "missing_node_ids", lost)
+    resp = await client.post("/api/datasources/plc/check-variables")
+    assert resp.status_code == 503
+    assert resp.json()["detail"] == "Could not read the PLC's symbols: connection closed"
+
+
+@pytest.mark.asyncio
+async def test_ads_browse_spells_a_typed_root_as_the_plc_does(plc: FakePlc, api) -> None:
+    client, _manager, pool = api
+    await client.put("/api/datasources/plc", json=_ads_body(plc, browse_mode="lazy", browse_root="main.stmotor"))
+    await _until(lambda: pool.get("plc").connected)
+
+    tree = (await client.get("/api/datasources/plc/browse")).json()
+    assert (tree["node_id"], tree["display_name"]) == ("MAIN.stMotor", "MAIN.stMotor")
+    assert [c["node_id"] for c in tree["children"]][:2] == ["MAIN.stMotor.fSpeed", "MAIN.stMotor.bRunning"]
+    level = (await client.get("/api/datasources/plc/browse", params={"node_id": "main"})).json()
+    assert level["node_id"] == "MAIN"
+    assert "MAIN.stMotor" in [c["node_id"] for c in level["children"]]
+
+
+@pytest.mark.asyncio
+async def test_a_connected_ads_datasource_lists_the_identity_its_route_names(plc: FakePlc, api) -> None:
+    client, _manager, pool = api
+    await client.put("/api/datasources/plc", json=_ads_body(plc, local_ams_net_id="10.0.0.5.1.1"))
+    await _until(lambda: pool.get("plc").connected)
+    [item] = (await client.get("/api/datasources")).json()
+    assert (item["local_net_id"], item["local_ip"]) == ("10.0.0.5.1.1", "127.0.0.1")
+
+    await client.post("/api/datasources/plc/stop")
+    [item] = (await client.get("/api/datasources")).json()
+    assert "local_net_id" not in item
+
+
+@pytest.mark.asyncio
 async def test_ads_test_connection_reports_the_device(plc: FakePlc, api) -> None:
     client, _manager, _pool = api
     resp = await client.post(
@@ -254,13 +336,17 @@ async def test_route_password_is_stored_and_returned_like_the_opcua_password(plc
 @pytest.mark.asyncio
 async def test_ads_test_connection_failure_is_a_result_not_an_error(api) -> None:
     client, _manager, _pool = api
+    port = _closed_port()
     resp = await client.post(
-        "/api/datasources/ads/test-connection", json={"host": "127.0.0.1", "tcp_port": _closed_port()},
+        "/api/datasources/ads/test-connection", json={"host": "127.0.0.1", "tcp_port": port},
     )
     assert resp.status_code == 200
     result = resp.json()
     assert result["ok"] is False
-    assert result["error"]
+    assert result["error"] == (
+        f"127.0.0.1:{port} refused the connection: check the PLC IP and the TCP port, "
+        "and that TwinCAT runs on the PLC"
+    )
     assert result["device_name"] is None
 
     # A host that is not a valid name at all is a failed probe too.
@@ -308,3 +394,22 @@ def test_var_bindings_to_an_ads_datasource_validate(monkeypatch, live_project_ro
 
     structure.validate_var_ref({"path": "plc:MAIN/missing"}, ctx, "/p", report, {"type": "float"})
     assert [w.code for w in report.warnings] == ["var-unknown"]
+
+
+def test_probe_errors_name_what_to_check() -> None:
+    from ads.engine import _probe_error
+
+    settings = {"host": "10.0.0.20", "tcp_port": 48898}
+    assert _probe_error(TimeoutError(), settings) == (
+        "No answer from 10.0.0.20:48898: check the PLC IP, the network and any firewall between them"
+    )
+    assert _probe_error(socket.gaierror(-2, "Name or service not known"), {"host": "plc.local"}) == (
+        "Host name plc.local could not be resolved: check the PLC IP / host"
+    )
+    assert _probe_error(OSError(113, "No route to host"), settings) == (
+        "10.0.0.20 cannot be reached from this machine: check the PLC IP and the network"
+    )
+    assert _probe_error(ConnectionRefusedError(), {**settings, "local_router": True}) == (
+        "Nothing answers at 127.0.0.1:48898: check that TwinCAT runs on this PC"
+    )
+    assert _probe_error(ValueError("No AMS NetID configured"), settings) == "No AMS NetID configured"

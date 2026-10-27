@@ -30,8 +30,10 @@ once per reconnect attempt.
 
 import asyncio
 import contextlib
+import errno
 import ipaddress
 import logging
+import socket
 from typing import Any
 
 from asyncua import ua
@@ -65,6 +67,28 @@ def _short_error(exc: BaseException) -> str:
         return "Connection timed out"
     msg = str(exc).strip() or exc.__class__.__name__
     return msg[:300]
+
+
+def _probe_error(exc: BaseException, settings: dict) -> str:
+    """Why a test connection failed, in words naming what to check; anything
+    unrecognised falls back to the error itself."""
+    via_router = bool(settings.get("local_router", False))
+    host = "127.0.0.1" if via_router else str(settings.get("host", "")).strip()
+    target = f"{host}:{int(settings.get('tcp_port') or p.AMS_TCP_PORT)}"
+    if isinstance(exc, socket.gaierror):
+        return f"Host name {host} could not be resolved: check the PLC IP / host"
+    if isinstance(exc, ConnectionRefusedError):
+        if via_router:
+            return f"Nothing answers at {target}: check that TwinCAT runs on this PC"
+        return (
+            f"{target} refused the connection: check the PLC IP and the TCP port, "
+            "and that TwinCAT runs on the PLC"
+        )
+    if isinstance(exc, TimeoutError):
+        return f"No answer from {target}: check the PLC IP, the network and any firewall between them"
+    if isinstance(exc, OSError) and exc.errno in (errno.EHOSTUNREACH, errno.ENETUNREACH):
+        return f"{host} cannot be reached from this machine: check the PLC IP and the network"
+    return _short_error(exc)
 
 
 def _set_member(target: dict, member_path: str, value: Any) -> None:
@@ -229,7 +253,7 @@ async def probe_connection(settings: dict) -> dict:
         result["local_net_id"] = p.format_net_id(exc.net_id)
         return result
     except Exception as exc:  # surfaced to the caller as a string
-        result["error"] = _short_error(exc)
+        result["error"] = _probe_error(exc, settings)
         return result
     result["local_net_id"] = p.format_net_id(conn.source.net_id)
     await conn.close()
@@ -288,6 +312,15 @@ class DatasourceAdsEngine:
     def error(self) -> str | None:
         """Reason the last connect attempt failed, or ``None`` while healthy."""
         return self._error
+
+    @property
+    def local_identity(self) -> tuple[str, str | None] | None:
+        """The AMS NetID and IP address this connection presents to the PLC —
+        what its route there names — while connected, else None."""
+        conn = self._conn
+        if not self._connected or conn is None:
+            return None
+        return p.format_net_id(conn.source.net_id), conn.local_ip
 
     def set_datasource_manager(self, dm: Any) -> None:
         self._datasource_manager = dm
@@ -849,6 +882,8 @@ class DatasourceAdsEngine:
         if version != self._symbol_version:
             self._request_reload()
         root = (node_id or self._config.get("browse_root") or "").strip()
+        # As the PLC spells it: node ids are compared with saved ones.
+        root = (table.canonical(root) or root) if root else root
         mode = str(self._config.get("browse_mode") or "marked").strip().lower()
         if mode == "lazy":
             children = table.browse_level(root)
@@ -879,3 +914,30 @@ class DatasourceAdsEngine:
         if on_progress is not None:
             on_progress({"done": 1, "total": 1, "nodes": len(walked), "level": 0})
         return tree
+
+    async def missing_node_ids(self) -> list[str]:
+        """The saved variables' node_ids the PLC's current symbol table no
+        longer has, uploaded again as for a browse. A value must still resolve
+        to one read whole — a scalar that became a struct counts as missing —
+        while a saved struct only needs its path to exist."""
+        conn = self._conn
+        if not self._connected or conn is None:
+            raise RuntimeError(f"Not connected: {self.datasource_name}")
+        version, table = await self._upload_symbols(conn)
+        if version != self._symbol_version:
+            self._request_reload()
+        ds_entry = self._ds_entry()
+        if ds_entry is None:
+            return []
+        missing: dict[str, None] = {}
+        for entry in ds_entry.registry.values():
+            node_id = entry.get("node_id")
+            if not node_id:
+                continue
+            if entry.get("kind") == "struct" or entry.get("data_type") == "struct":
+                present = table.exists(node_id)
+            else:
+                present = table.resolve(node_id) is not None
+            if not present:
+                missing[node_id] = None
+        return list(missing)

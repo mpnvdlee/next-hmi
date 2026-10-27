@@ -224,7 +224,7 @@ export function computeBrowseDiff(
   return { added, removed, modified: groupFolderRenames(modified), silentReactivations };
 }
 
-function cloneTree(nodes: TreeNode[]): TreeNode[] {
+export function cloneTree(nodes: TreeNode[]): TreeNode[] {
   return nodes.map((n) => (isFolder(n) ? { ...n, children: cloneTree(n.children) } : { ...n }));
 }
 

@@ -317,3 +317,21 @@ def test_real_axis_browse_and_resolve() -> None:
         "PlcToNc", "NcToPlc", "ADS", "Status", "DriveAddress",
     ]
     assert _ids(table.browse("MAIN"))[:2] == ["MAIN.stAxis", "MAIN.stAxis.PlcToNc"]
+
+
+def test_canonical_spells_a_path_as_the_plc_names_it() -> None:
+    table = _table()
+    assert table.canonical("main.stmotor.stlimits.FMAX") == "MAIN.stMotor.stLimits.fMax"
+    assert table.canonical("Main.APoints[2].X") == "MAIN.aPoints[2].x"
+    assert table.canonical("main") == "MAIN"  # a symbol-name prefix
+    assert table.canonical("MAIN.stMotor.nope") is None
+    assert table.canonical("MAIN.aPoints[9]") is None
+    assert table.canonical("nothing") is None
+
+
+def test_exists_answers_for_structs_that_resolve_does_not() -> None:
+    table = _table()
+    assert table.exists("MAIN.stMotor") and table.resolve("MAIN.stMotor") is None
+    assert table.exists("main.apoints[1]")
+    assert table.exists("MAIN.fSpeed")
+    assert not table.exists("MAIN.bGone")

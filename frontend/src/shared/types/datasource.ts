@@ -1,6 +1,6 @@
 // ── Datasource types ─────────────────────────────────────────────────────────
 
-export type DatasourceType = 'opcua-client' | 'static' | 'opcua-test-server';
+export type DatasourceType = 'opcua-client' | 'ads-client' | 'static' | 'opcua-test-server';
 
 /** How the variable-table UI treats each datasource type, so call sites look up
  *  a capability instead of branching on the type string. */
@@ -15,6 +15,7 @@ interface DatasourceCapabilities {
 
 export const DATASOURCE_CAPABILITIES: Record<DatasourceType, DatasourceCapabilities> = {
   'opcua-client': { editable: false, typeEditor: 'simple', dualType: true },
+  'ads-client': { editable: false, typeEditor: 'simple', dualType: true },
   static: { editable: true, typeEditor: 'simple', dualType: false },
   'opcua-test-server': { editable: true, typeEditor: 'opcua', dualType: false },
 };
@@ -40,6 +41,33 @@ export interface OpcuaClientSettings {
   browse_root_node?: string;
 }
 
+/** Settings of an `ads-client` datasource; every key but `host` has a backend
+ *  default (docs/dev/architecture/data-formats.md, Datasource Files). */
+export interface AdsClientSettings {
+  host: string;
+  ams_net_id?: string;
+  ams_port?: number;
+  tcp_port?: number;
+  local_ams_net_id?: string;
+  local_router?: boolean;
+  route_method?: 'twincat' | 'custom';
+  route_user?: string;
+  route_password?: string;
+  route_name?: string;
+  route_address?: string;
+  request_timeout_s?: number;
+  connect_timeout_s?: number;
+  reconnect_interval_s?: number;
+  bg_publish_interval_ms?: number;
+  priority_publish_interval_ms?: number;
+  priority_sampling_interval_ms?: number;
+  priority_ws_batch_ms?: number;
+  disable_background_sync?: boolean;
+  browse_root?: string;
+  browse_mode?: 'marked' | 'lazy' | 'all';
+  browse_attributes?: string;
+}
+
 interface StaticSettings {
   // No connection settings for static variables
 }
@@ -52,7 +80,8 @@ export interface TestServerSettings {
   security_policies?: string[];
 }
 
-export type DatasourceSettings = OpcuaClientSettings | StaticSettings | TestServerSettings;
+export type DatasourceSettings =
+  OpcuaClientSettings | AdsClientSettings | StaticSettings | TestServerSettings;
 
 /** GET /api/datasources/certs/info — a stored certificate's lifecycle.
  *  Every field but `readable` is empty when the path holds no certificate this
@@ -133,6 +162,9 @@ export interface DatasourceListItem {
   variable_count: number;
   enabled_count: number;
   error?: string | null;
+  /** A connected ads-client: the AMS NetID and IP its route on the PLC names. */
+  local_net_id?: string;
+  local_ip?: string | null;
 }
 
 // ── Connection-wizard discovery / probe (POST /discover, /test-connection) ────
@@ -166,6 +198,27 @@ export interface TestConnectionResult {
   namespace_count?: number | null;
 }
 
+/** POST /api/datasources/ads/test-connection. `local_net_id` / `local_ip` are
+ *  what this HMI presents to the PLC — the values its route there needs. */
+export interface AdsTestConnectionResult {
+  ok: boolean;
+  error?: string | null;
+  device_name?: string | null;
+  version?: string | null;
+  ads_state?: string | null;
+  local_net_id?: string | null;
+  local_ip?: string | null;
+}
+
+/** POST /api/datasources/ads/add-route. */
+export interface AdsAddRouteResult {
+  ok: boolean;
+  error?: string | null;
+  route_name?: string | null;
+  net_id?: string | null;
+  address?: string | null;
+}
+
 // ── Composite key helpers ────────────────────────────────────────────────────
 
 export function buildVarKey(datasource: string, path: string): string {
@@ -186,6 +239,10 @@ export function isFolder(node: TreeNode): node is FolderEntry {
 
 export function isOpcuaClientSettings(s: DatasourceSettings): s is OpcuaClientSettings {
   return 'server_url' in s;
+}
+
+export function isAdsClientSettings(s: DatasourceSettings): s is AdsClientSettings {
+  return 'host' in s;
 }
 
 export function isTestServerSettings(s: DatasourceSettings): s is TestServerSettings {
@@ -212,6 +269,15 @@ function defaultSettings(type: DatasourceType): DatasourceSettings {
         priority_publish_interval_ms: 50,
         priority_sampling_interval_ms: 20,
         priority_ws_batch_ms: 10,
+      };
+    case 'ads-client':
+      return {
+        host: '',
+        ams_net_id: '',
+        ams_port: 851,
+        route_method: 'twincat',
+        browse_mode: 'marked',
+        browse_attributes: 'OPC.UA.DA',
       };
     case 'static':
       return {};

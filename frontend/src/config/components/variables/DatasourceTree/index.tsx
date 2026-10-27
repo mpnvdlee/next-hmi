@@ -25,6 +25,7 @@ import { TreeRowActionButton } from '../../ui/TreeAffordances';
 import TreeRow from '../../ui/TreeRow';
 import NameInputModal from '../../ui/NameInputModal';
 import OpcuaConnectionWizard from '../OpcuaConnectionWizard';
+import AdsConnectionDialog from '../AdsSettingsForm/AdsConnectionDialog';
 import { useContextMenu } from '@config/hooks/useContextMenu';
 import { useDeleteConfirm } from '@config/hooks/useDeleteConfirm';
 
@@ -40,17 +41,23 @@ interface Props {
 
 const TYPE_ICONS: Record<DatasourceType, string> = {
   'opcua-client': '◉',
+  'ads-client': '◈',
   static: '≡',
   'opcua-test-server': '○',
 };
 
 const TYPE_LABELS: Record<DatasourceType, string> = {
   'opcua-client': 'OPC-UA Client',
+  'ads-client': 'Beckhoff ADS',
   static: 'Static Variables',
   'opcua-test-server': 'OPC-UA Test Server',
 };
 
-const DS_TYPES = ['opcua-client', 'static'] as const satisfies readonly DatasourceType[];
+const DS_TYPES = [
+  'opcua-client',
+  'ads-client',
+  'static',
+] as const satisfies readonly DatasourceType[];
 
 function DatasourceTypeItems({
   onClose,
@@ -294,8 +301,18 @@ export default function DatasourceTree({
         />
       )}
 
+      {/* ── Add Beckhoff ADS client via its connection dialog ── */}
+      {addType === 'ads-client' && (
+        <AdsConnectionDialog
+          existingNames={existingNames}
+          onCreate={(name, settings) => onAdd('ads-client', name, settings)}
+          onBrowseVariables={onBrowseVariables}
+          onClose={() => setAddType(null)}
+        />
+      )}
+
       {/* ── Add other datasource types (name-only) ── */}
-      {addType && addType !== 'opcua-client' && (
+      {addType === 'static' && (
         <NameInputModal
           title={`New ${TYPE_LABELS[addType]}`}
           placeholder="Datasource name…"

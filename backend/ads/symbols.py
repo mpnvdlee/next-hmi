@@ -441,6 +441,48 @@ class SymbolTable:
                 description = description.element
         return offset, description
 
+    def exists(self, path: str) -> bool:
+        """Whether member *path* names anything on the PLC: a value, an array or
+        a struct (``resolve`` answers only for what is read whole)."""
+        return self._locate(path) is not None
+
+    def canonical(self, path: str) -> str | None:
+        """*path* spelled as the PLC names it, or None when it names nothing.
+
+        ADS names are case-insensitive (``main.stline`` is ``MAIN.stLine``), so
+        a path typed by hand is spelled from the tables before it becomes a
+        node id. A symbol-name prefix (``gvl``) takes the spelling of a symbol
+        below it.
+        """
+        tokens = _path_tokens(path.strip())
+        if not tokens:
+            return None
+        found = self._symbol_for(tokens)
+        if found is None:
+            if not all(isinstance(t, str) for t in tokens):
+                return None
+            prefix = ".".join(str(t) for t in tokens).lower()
+            for symbol in self.symbols:
+                if symbol.name.lower().startswith(prefix + "."):
+                    return symbol.name[:len(prefix)]
+            return None
+        symbol, taken = found
+        spelled = symbol.name
+        description = self.describe(symbol.type_name, symbol.size)
+        for token in tokens[taken:]:
+            if isinstance(token, str):
+                member = description.member(token) if isinstance(description, Struct) else None
+                if member is None:
+                    return None
+                spelled += f".{member.name}"
+                description = member.description
+            else:
+                if not isinstance(description, ArrayOf) or description.flat_index(token) is None:
+                    return None
+                spelled += "[" + ",".join(str(i) for i in token) + "]"
+                description = description.element
+        return spelled
+
     def resolve(self, path: str) -> Address | None:
         """The address of the scalar or scalar array at member *path*.
 
