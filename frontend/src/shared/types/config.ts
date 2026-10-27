@@ -888,6 +888,16 @@ export interface ShellConfig {
    * plain setting, never a runtime licence check. See COMMERCIAL.md.
    */
   bootLogo?: string;
+  /** The editor's preview viewport for this project; unset is "Fit to screen". Not read by the runtime. */
+  editorViewport?: EditorViewport;
+}
+
+export interface EditorViewport {
+  /** `fit`, `laptop`, `tablet`, `phone` or `custom`. */
+  preset: string;
+  /** The custom size in px, kept while a preset is active. */
+  width: number;
+  height: number;
 }
 
 /** Props interface shared by every HMI component in the registry */
