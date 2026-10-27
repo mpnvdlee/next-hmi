@@ -1,12 +1,6 @@
 /* @jsxRuntime classic */
 export const schema = {
   text: { type: 'string' as const, label: 'Text', group: 'Content' },
-  unit: {
-    type: 'string' as const,
-    label: 'Unit',
-    description: 'Shown after the text in a style of its own, e.g. g or °C.',
-    group: 'Content',
-  },
   typography: {
     type: 'string' as const,
     format: 'select' as const,
@@ -32,13 +26,27 @@ export const schema = {
   align: {
     type: 'string' as const,
     format: 'select' as const,
-    label: 'Align',
+    label: 'Content alignment',
+    display: 'button-text' as const,
     group: 'Appearance',
     defaultValue: 'left',
     options: [
       { label: 'Left', value: 'left' },
       { label: 'Center', value: 'center' },
       { label: 'Right', value: 'right' },
+    ],
+  },
+  textTransform: {
+    type: 'string' as const,
+    format: 'select' as const,
+    label: 'Text case',
+    display: 'button-text' as const,
+    group: 'Appearance',
+    defaultValue: 'theme',
+    options: [
+      { label: 'Typography', value: 'theme' },
+      { label: 'As typed', value: 'none' },
+      { label: 'Uppercase', value: 'uppercase' },
     ],
   },
   wrap: {
@@ -66,36 +74,6 @@ export const schema = {
     step: 100,
     group: 'Appearance',
   },
-  padding: {
-    type: 'string' as const,
-    label: 'Padding override',
-    description: 'Any CSS padding, e.g. 4px 8px.',
-    group: 'Appearance',
-  },
-  lineHeight: {
-    type: 'string' as const,
-    label: 'Line height',
-    description: 'A factor such as 1.2, or a length.',
-    group: 'Appearance',
-  },
-  letterSpacing: {
-    type: 'string' as const,
-    label: 'Letter spacing',
-    description: 'Any CSS letter-spacing, e.g. 0.08em or -0.02em.',
-    group: 'Appearance',
-  },
-  unitSize: {
-    type: 'string' as const,
-    label: 'Unit size',
-    description: 'Font size of the unit; empty uses the text size.',
-    group: 'Appearance',
-  },
-  unitColor: {
-    type: 'color' as const,
-    label: 'Unit color',
-    defaultToken: '--hmi-text-muted',
-    group: 'Appearance',
-  },
 };
 
 export const description = 'Text in one of the theme typography combos, with translation support.';
@@ -111,16 +89,11 @@ export default function Label({ properties, layout }: HmiWidgetProps) {
   const typography = getPropString(properties, 'typography', 'body', evalCtx);
   const align = getPropString(properties, 'align', 'left', evalCtx);
   const wrap = getPropString(properties, 'wrap', 'wrap', evalCtx);
+  const textTransform = getPropString(properties, 'textTransform', 'theme', evalCtx);
   const color = getPropString(properties, 'color', '', evalCtx);
   // Escape hatches for the one-off sizes the seven theme combos don't cover.
   const size = getPropString(properties, 'size', '', evalCtx);
   const weight = getPropNumber(properties, 'weight', 0, evalCtx);
-  const lineHeight = usePropString(properties, 'lineHeight', '');
-  const letterSpacing = usePropString(properties, 'letterSpacing', '');
-  const unit = usePropString(properties, 'unit', '');
-  const unitSize = usePropString(properties, 'unitSize', '');
-  const unitColor = usePropString(properties, 'unitColor', '');
-  const padding = usePropString(properties, 'padding', '');
 
   if (!text) return null;
 
@@ -128,11 +101,9 @@ export default function Label({ properties, layout }: HmiWidgetProps) {
   if (color) style['--hmi-label-color'] = color;
   if (size) style['--hmi-label-size'] = size;
   if (weight) style['--hmi-label-weight'] = String(weight);
-  if (lineHeight) style['--hmi-label-line-height'] = lineHeight;
-  if (letterSpacing) style['--hmi-label-tracking'] = letterSpacing;
-  if (unitSize) style['--hmi-label-unit-size'] = unitSize;
-  if (unitColor) style['--hmi-label-unit-color'] = unitColor;
-  if (padding) style['--hmi-label-padding'] = padding;
+  // Typography keeps the combo's own case: the Label combo is uppercase by default.
+  if (textTransform === 'none' || textTransform === 'uppercase')
+    style['--hmi-label-transform'] = textTransform;
 
   const className = [
     'hmi-component',
@@ -145,8 +116,6 @@ export default function Label({ properties, layout }: HmiWidgetProps) {
   return (
     <span className={className} style={style}>
       {text}
-      {unit && ' '}
-      {unit && <span className="hmi-label__unit">{unit}</span>}
     </span>
   );
 }

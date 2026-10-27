@@ -190,11 +190,6 @@
         "defaultValue": "Button",
         "group": "Content"
       },
-      "subLabel": {
-        "label": "Second line",
-        "description": "Smaller text under the label. Empty hides it.",
-        "group": "Content"
-      },
       "badge": {
         "label": "Badge",
         "description": "A small chip in the top-right corner, such as an alarm count. Empty or 0 hides it.",
@@ -224,11 +219,6 @@
       "color": {
         "label": "Color",
         "defaultToken": "--hmi-accent",
-        "group": "Appearance"
-      },
-      "iconColor": {
-        "label": "Icon color",
-        "description": "Empty uses the text color.",
         "group": "Appearance"
       },
       "variant": {
@@ -306,28 +296,6 @@
             "value": "uppercase"
           }
         ]
-      },
-      "letterSpacing": {
-        "label": "Letter spacing",
-        "description": "Any CSS letter-spacing for the label, e.g. 0.08em.",
-        "group": "Appearance"
-      },
-      "size": {
-        "label": "Size override",
-        "description": "One-off font size for the label, e.g. 13px.",
-        "group": "Appearance"
-      },
-      "weight": {
-        "label": "Weight override",
-        "min": 100,
-        "max": 900,
-        "step": 100,
-        "group": "Appearance"
-      },
-      "padding": {
-        "label": "Padding override",
-        "description": "Any CSS padding, e.g. 0 or 6px 12px. Empty uses the theme spacing.",
-        "group": "Appearance"
       },
       "iconSize": {
         "label": "Icon size (px)",
@@ -456,11 +424,6 @@
         "label": "Text",
         "group": "Content"
       },
-      "unit": {
-        "label": "Unit",
-        "description": "Shown after the text in a style of its own, e.g. g or °C.",
-        "group": "Content"
-      },
       "typography": {
         "format": "select",
         "label": "Typography",
@@ -504,7 +467,8 @@
       },
       "align": {
         "format": "select",
-        "label": "Align",
+        "label": "Content alignment",
+        "display": "button-text",
         "group": "Appearance",
         "defaultValue": "left",
         "options": [
@@ -519,6 +483,27 @@
           {
             "label": "Right",
             "value": "right"
+          }
+        ]
+      },
+      "textTransform": {
+        "format": "select",
+        "label": "Text case",
+        "display": "button-text",
+        "group": "Appearance",
+        "defaultValue": "theme",
+        "options": [
+          {
+            "label": "Typography",
+            "value": "theme"
+          },
+          {
+            "label": "As typed",
+            "value": "none"
+          },
+          {
+            "label": "Uppercase",
+            "value": "uppercase"
           }
         ]
       },
@@ -548,31 +533,6 @@
         "min": 100,
         "max": 900,
         "step": 100,
-        "group": "Appearance"
-      },
-      "padding": {
-        "label": "Padding override",
-        "description": "Any CSS padding, e.g. 4px 8px.",
-        "group": "Appearance"
-      },
-      "lineHeight": {
-        "label": "Line height",
-        "description": "A factor such as 1.2, or a length.",
-        "group": "Appearance"
-      },
-      "letterSpacing": {
-        "label": "Letter spacing",
-        "description": "Any CSS letter-spacing, e.g. 0.08em or -0.02em.",
-        "group": "Appearance"
-      },
-      "unitSize": {
-        "label": "Unit size",
-        "description": "Font size of the unit; empty uses the text size.",
-        "group": "Appearance"
-      },
-      "unitColor": {
-        "label": "Unit color",
-        "defaultToken": "--hmi-text-muted",
         "group": "Appearance"
       }
     }
@@ -2303,12 +2263,6 @@
         "label": "Border",
         "defaultValue": "none",
         "description": "Any CSS border shorthand, e.g. 1px solid var(--hmi-border).",
-        "group": "Appearance"
-      },
-      "shadow": {
-        "label": "Shadow",
-        "defaultValue": "none",
-        "description": "Any CSS box-shadow, e.g. var(--hmi-shadow).",
         "group": "Appearance"
       },
       "actions": {

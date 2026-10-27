@@ -130,10 +130,9 @@ const LazyComponentRenderer = settledLazy(
 
 // ── Shared schema fragments ───────────────────────────────────────────────────
 
-// Standard visibility gate present on every widget. Both gates are plain
+// Standard visibility gate present on every widget. Both fields are plain
 // booleans, expression-capable — switch either to the `$userGroups` source to
 // gate by user group (empty group list = everyone), or nest `$if` etc.
-// `lockedMessage` is the text a press on a non-interactable widget shows.
 //
 // The key set is pinned against `UNIVERSAL_PROPERTY_KEYS` (and through it the
 // backend's copy) by widgetRegistry.test.ts, so a gate property added here
@@ -152,14 +151,6 @@ export const VISIBILITY_SCHEMA: Record<string, SchemaField> = {
     label: 'Interactable',
     group: 'Visibility',
     defaultValue: true,
-  },
-  lockedMessage: {
-    type: 'String',
-    label: 'Locked message',
-    group: 'Visibility',
-    defaultValue: '',
-    description:
-      'Why the widget is locked, shown as the notification and the tooltip when Interactable is false. Empty: "Interaction not permitted".',
   },
 };
 

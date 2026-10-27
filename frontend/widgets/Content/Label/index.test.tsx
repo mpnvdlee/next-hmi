@@ -44,15 +44,7 @@ describe('Label', () => {
   it('emits the size and weight overrides as custom properties, not literal styles', () => {
     const { container } = render(
       <MemoryRouter>
-        <Label
-          properties={{
-            text: 'AQUAVANE',
-            size: '17px',
-            weight: 800,
-            color: '#123456',
-            padding: '4px 8px',
-          }}
-        />
+        <Label properties={{ text: 'AQUAVANE', size: '17px', weight: 800, color: '#123456' }} />
       </MemoryRouter>,
     );
     const el = container.firstElementChild as HTMLElement;
@@ -60,7 +52,6 @@ describe('Label', () => {
     expect(el.style.getPropertyValue('--hmi-label-size')).toBe('17px');
     expect(el.style.getPropertyValue('--hmi-label-weight')).toBe('800');
     expect(el.style.getPropertyValue('--hmi-label-color')).toBe('#123456');
-    expect(el.style.getPropertyValue('--hmi-label-padding')).toBe('4px 8px');
   });
 
   it('leaves the overrides unset when no size or weight is configured', () => {
@@ -73,7 +64,21 @@ describe('Label', () => {
 
     expect(el.style.getPropertyValue('--hmi-label-size')).toBe('');
     expect(el.style.getPropertyValue('--hmi-label-weight')).toBe('');
-    expect(el.style.getPropertyValue('--hmi-label-padding')).toBe('');
+  });
+
+  it('overrides the text case only when one is picked', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <Label properties={{ text: 'a', typography: 'label', textTransform: 'none' }} />
+        <Label properties={{ text: 'b', textTransform: 'uppercase' }} />
+        <Label properties={{ text: 'c', textTransform: 'theme' }} />
+      </MemoryRouter>,
+    );
+    const [asTyped, upper, theme] = Array.from(container.children) as HTMLElement[];
+
+    expect(asTyped.style.getPropertyValue('--hmi-label-transform')).toBe('none');
+    expect(upper.style.getPropertyValue('--hmi-label-transform')).toBe('uppercase');
+    expect(theme.style.getPropertyValue('--hmi-label-transform')).toBe('');
   });
 
   it('resolves the text through a property source', () => {
@@ -83,44 +88,5 @@ describe('Label', () => {
       </MemoryRouter>,
     );
     expect(screen.getByText('From a source')).toBeInTheDocument();
-  });
-
-  it('emits line height, letter spacing and the unit style as custom properties', () => {
-    const { container } = render(
-      <MemoryRouter>
-        <Label
-          properties={{
-            text: '12.4',
-            lineHeight: '1',
-            letterSpacing: '-0.02em',
-            unit: 'g',
-            unitSize: '15px',
-            unitColor: 'var(--hmi-text)',
-          }}
-        />
-      </MemoryRouter>,
-    );
-    const el = container.firstElementChild as HTMLElement;
-
-    expect(el.style.getPropertyValue('--hmi-label-line-height')).toBe('1');
-    expect(el.style.getPropertyValue('--hmi-label-tracking')).toBe('-0.02em');
-    expect(el.style.getPropertyValue('--hmi-label-unit-size')).toBe('15px');
-    expect(el.style.getPropertyValue('--hmi-label-unit-color')).toBe('var(--hmi-text)');
-    expect(el).toHaveTextContent('12.4 g');
-    expect(el.querySelector('.hmi-label__unit')).toHaveTextContent('g');
-  });
-
-  it('renders the text alone without a unit', () => {
-    const { container } = render(
-      <MemoryRouter>
-        <Label properties={{ text: '12.4' }} />
-      </MemoryRouter>,
-    );
-    const el = container.firstElementChild as HTMLElement;
-
-    expect(el.textContent).toBe('12.4');
-    expect(el.querySelector('.hmi-label__unit')).toBeNull();
-    expect(el.style.getPropertyValue('--hmi-label-line-height')).toBe('');
-    expect(el.style.getPropertyValue('--hmi-label-tracking')).toBe('');
   });
 });

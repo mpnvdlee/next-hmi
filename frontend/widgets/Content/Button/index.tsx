@@ -7,12 +7,6 @@ export const schema = {
     defaultValue: 'Button',
     group: 'Content',
   },
-  subLabel: {
-    type: 'string' as const,
-    label: 'Second line',
-    description: 'Smaller text under the label. Empty hides it.',
-    group: 'Content',
-  },
   badge: {
     type: ['string', 'integer'] as const,
     label: 'Badge',
@@ -37,12 +31,6 @@ export const schema = {
     type: 'color' as const,
     label: 'Color',
     defaultToken: '--hmi-accent',
-    group: 'Appearance',
-  },
-  iconColor: {
-    type: 'color' as const,
-    label: 'Icon color',
-    description: 'Empty uses the text color.',
     group: 'Appearance',
   },
   variant: {
@@ -107,32 +95,6 @@ export const schema = {
       { label: 'Uppercase', value: 'uppercase' },
     ],
   },
-  letterSpacing: {
-    type: 'string' as const,
-    label: 'Letter spacing',
-    description: 'Any CSS letter-spacing for the label, e.g. 0.08em.',
-    group: 'Appearance',
-  },
-  size: {
-    type: 'string' as const,
-    label: 'Size override',
-    description: 'One-off font size for the label, e.g. 13px.',
-    group: 'Appearance',
-  },
-  weight: {
-    type: 'integer' as const,
-    label: 'Weight override',
-    min: 100,
-    max: 900,
-    step: 100,
-    group: 'Appearance',
-  },
-  padding: {
-    type: 'string' as const,
-    label: 'Padding override',
-    description: 'Any CSS padding, e.g. 0 or 6px 12px. Empty uses the theme spacing.',
-    group: 'Appearance',
-  },
   iconSize: {
     type: 'integer' as const,
     label: 'Icon size (px)',
@@ -168,16 +130,10 @@ export default function Button({ name, properties, layout }: HmiWidgetProps) {
   const fill = getPropString(properties, 'fill', '', evalCtx);
   const borderWidth = getPropNumber(properties, 'borderWidth', NaN, evalCtx);
   const iconSize = getPropNumber(properties, 'iconSize', NaN, evalCtx);
-  const subLabel = usePropString(properties, 'subLabel', '');
   const badge = usePropString(properties, 'badge', '').trim();
-  const iconColor = usePropString(properties, 'iconColor', '');
   const alignStart = usePropString(properties, 'align', 'center') === 'start';
   const uppercase = usePropString(properties, 'textTransform', 'none') === 'uppercase';
-  const letterSpacing = usePropString(properties, 'letterSpacing', '');
   const borderColor = usePropString(properties, 'borderColor', '') || color;
-  const size = usePropString(properties, 'size', '');
-  const weight = getPropNumber(properties, 'weight', 0, evalCtx);
-  const padding = usePropString(properties, 'padding', '');
   const isOutline = variant === 'outline';
   const colorStyle: React.CSSProperties = {
     ...(color ? (isOutline ? { color } : { backgroundColor: color }) : {}),
@@ -192,12 +148,7 @@ export default function Button({ name, properties, layout }: HmiWidgetProps) {
   if (fill) style['--hmi-btn-fill'] = fill;
   if (Number.isFinite(borderWidth)) style['--hmi-btn-border-width'] = `${borderWidth}px`;
   if (Number.isFinite(iconSize)) style['--hmi-btn-icon-size'] = `${iconSize}px`;
-  if (iconColor) style['--hmi-btn-icon-color'] = iconColor;
   if (uppercase) style['--hmi-btn-transform'] = 'uppercase';
-  if (letterSpacing) style['--hmi-btn-tracking'] = letterSpacing;
-  if (size) style['--hmi-btn-size'] = size;
-  if (weight) style['--hmi-btn-weight'] = String(weight);
-  if (padding) style['--hmi-btn-padding'] = padding;
 
   const IconComp = iconName && isBuiltinIconId(iconName) ? getBuiltinIconComponent(iconName) : null;
   // An empty label is the icon-only button; without an icon it stays an empty text button.
@@ -235,17 +186,7 @@ export default function Button({ name, properties, layout }: HmiWidgetProps) {
             ) : null}
           </span>
         )}
-        {!iconOnly &&
-          (subLabel ? (
-            <span className="hmi-button__text">
-              <span className="hmi-button__label">{label}</span>
-              {/* Keeps the two lines apart in the accessible name; a flex
-                  column drops the whitespace from the layout. */}{' '}
-              <span className="hmi-button__sub">{subLabel}</span>
-            </span>
-          ) : (
-            <span className="hmi-button__label">{label}</span>
-          ))}
+        {!iconOnly && <span className="hmi-button__label">{label}</span>}
         {badge && badge !== '0' && <span className="hmi-button__badge">{badge}</span>}
       </button>
     </div>

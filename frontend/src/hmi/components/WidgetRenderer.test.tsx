@@ -290,21 +290,6 @@ describe('WidgetRenderer', () => {
       expect(useHmiStore.getState().pendingToasts[0].message).toBe('Interaction not permitted');
     });
 
-    it("says the widget's own locked message in the toast and the tooltip", async () => {
-      await setShell({ lockedFeedback: 'toast' });
-      const { container } = renderNode({
-        ...lockedButton,
-        properties: { ...lockedButton.properties, lockedMessage: 'Stop the pump first' },
-      });
-
-      fireEvent.click(container.querySelector('.hmi-lock-overlay')!);
-
-      expect(useHmiStore.getState().pendingToasts[0].message).toBe('Stop the pump first');
-      expect(container.querySelector('.hmi-lock-wrapper')!.getAttribute('title')).toBe(
-        'Stop the pump first',
-      );
-    });
-
     it('runs the onInteractionDenied global event on a locked press', async () => {
       const { useConfigStore } = await import('@shared/store/configStore');
       useConfigStore.setState({

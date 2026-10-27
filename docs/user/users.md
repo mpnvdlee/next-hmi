@@ -118,8 +118,6 @@ Whether the press *says* anything is a project-wide choice: the editor's **Setti
 
 Pick **Notification** for a panel where a small flash is easy to miss, **None** where a locked control should read as plain decoration.
 
-To say *why* a widget is locked, fill in its **Locked message**, next to **Interactable** in the **Visibility** group: *Stop the pump first*. The notification and the tooltip then read that instead of *Interaction not permitted*. Like any text field it takes a translation key or another source, so one message can follow the reason: an **If** on the same variable that locks the widget.
-
 To offer a sign-in instead, attach an **Open Dialog** pointing at your sign-in dialog to the **onInteractionDenied** global event (see [Global events](actions.md#global-events)). It fires on every locked press, whatever the mode, so pair it with **None** if the dialog should be the only answer. It fires for any locked widget, including one locked by a variable rather than by a group.
 
 Two more sources read the identity directly, for labels and lists rather than gates: **`$user`** gives the signed-in **username** or their **groups** as text. On a list field — a Dropdown's **Options**, a Repeater's **Items** — it lists **All users** (each valued by username) or **All user groups** instead, the raw material for a user-picker screen.

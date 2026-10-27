@@ -32,13 +32,6 @@ export const schema = {
     description: 'Any CSS border shorthand, e.g. 1px solid var(--hmi-border).',
     group: 'Appearance',
   },
-  shadow: {
-    type: 'string' as const,
-    label: 'Shadow',
-    defaultValue: 'none',
-    description: 'Any CSS box-shadow, e.g. var(--hmi-shadow).',
-    group: 'Appearance',
-  },
   actions: { type: 'actions' as const, label: 'Actions' },
 };
 
@@ -62,7 +55,6 @@ export default function Container({ name, properties, layout, children }: HmiWid
   const showWhenEmpty = getPropBoolean(properties, 'showWhenEmpty', false, evalCtx);
   const background = getPropString(properties, 'background', '', evalCtx);
   const border = getPropString(properties, 'border', '', evalCtx);
-  const shadow = getPropString(properties, 'shadow', '', evalCtx);
   const overflow = getPropString(properties, 'overflow', 'visible', evalCtx);
   const isEmpty = React.Children.count(children) === 0;
 
@@ -74,11 +66,10 @@ export default function Container({ name, properties, layout, children }: HmiWid
   const { style, ...flowAttrs } = containerLayoutProps(layout);
   // Only set fields are emitted. An unset one must NOT inherit from an ancestor
   // container — the layout barrier in hmi.css resets every `--container-*` the
-  // SDK emits and `.hmi-container` the three skin vars below, so omitting a
+  // SDK emits and `.hmi-container` the two skin vars below, so omitting a
   // field here lands on the documented default instead.
   if (background) style['--container-bg'] = background;
   if (border) style['--container-border'] = border;
-  if (shadow) style['--container-shadow'] = shadow;
 
   // Padding moves off `.hmi-container` itself and onto its title/content
   // children instead of staying in `style`: `.hmi-container` is also the box

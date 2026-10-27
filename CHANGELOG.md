@@ -204,13 +204,13 @@ heading.
   announces it by its **Name**. A press on a Button or an input inside it
   stays with that control. A Container without actions behaves as before.
 
-- **A Button can carry a second line, a badge and its own label style.**
-  Six new Button properties: a **Second line** of smaller text under the
-  label, a **Badge** chip in the top-right corner — a text or a count such
-  as an Alarm Count, hidden when empty or 0 — an **Icon color**, **Content
-  alignment** (center, or start for a menu-style tile), **Text case**
-  (uppercase) and **Letter spacing** for the label. Each one left at its
-  default keeps today's look.
+- **A Button carries a badge and sets its alignment and text case.** A
+  **Badge** chip in the top-right corner — a text or a count such as an Alarm
+  Count, hidden when empty or 0 — **Content alignment** (center, or start for
+  a menu-style tile) and **Text case** (uppercase). A Label's **Align** is now
+  called **Content alignment**, and its new **Text case** follows the
+  typography by default or picks *As typed* or *Uppercase*. Each one left at
+  its default keeps today's look.
 
 - **The Alarm List fits a touch panel.** Six new options: **Row size** (Touch
   gives tap-sized rows and buttons), **Severity mark** (a stripe, the whole
@@ -232,20 +232,9 @@ heading.
   acknowledges each unacknowledged alarm in the name of the signed-in user,
   so any Button can be the screen's acknowledge button.
 
-- **A Button sets its border color, its label's size and weight, and its
-  padding.** A **Border color** that differs from the button color, such as a
-  ring that marks the active page, and a **Size override** and **Weight
-  override** for the label, as on a Label. A **Padding override** on both the
-  Button and the Label takes any CSS padding, such as `0` for a narrow tile.
-  Left empty, each keeps today's look.
-
-- **A Label sets its line height and letter spacing, and shows a unit.**
-  New **Line height** and **Letter spacing** properties override the
-  typography combo's, and a **Unit** shows after the text in a style of its
-  own — normal weight and the muted text colour by default, with a **Unit
-  size** and **Unit color** to change it — so a readout like `12.4 g` is one
-  Label with a String Expression for the number. Left empty, each keeps
-  today's look.
+- **A Button sets its border color.** A **Border color** that differs from
+  the button color, such as a ring that marks the active page. Left empty, it
+  keeps today's look.
 
 - **A String Input can open the numpad.** A new **Keyboard** property set to
   **Numeric** opens the numpad instead of the on-screen keyboard, with
@@ -278,12 +267,6 @@ heading.
   `[data-widget-id="pump-start"]`. The element takes no space, so layouts look
   the same; a Navigation Menu placed straight in a shell region now gets its
   sidebar background and border in the editor preview too.
-
-- **A locked widget can say why.** Every widget gets a **Locked message**
-  next to **Interactable**. A press on the locked widget shows it in the
-  notification and the tooltip instead of *Interaction not permitted*, so a
-  Start button can read *Stop the pump first*. Left empty, the text is the
-  same as before.
 
 - **An action in a component writes through its input.** Write Data
   Variable, Toggle Boolean Variable and Edit Value inside a component can
@@ -442,6 +425,10 @@ heading.
   its own, as every example already placed it, so it takes the look of the card
   or page around it. A stored `chrome` key is ignored and the warnings pill
   flags it as an unknown property; delete it there.
+
+- **The Container's Shadow.** A Container now always draws without a shadow.
+  A stored `shadow` key is ignored and the warnings pill flags it as an
+  unknown property; delete it there.
 
 ### Fixed
 

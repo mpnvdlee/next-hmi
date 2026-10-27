@@ -50,7 +50,6 @@ import {
   layoutHasPropertySource,
   useResolvedLayout,
   usePropBoolean,
-  usePropString,
   selfFlexChildStyle,
 } from './layoutUtils';
 
@@ -189,7 +188,6 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
   // Lock-denied flash: tracks click position within the lock overlay
   const [lockFlash, setLockFlash] = useState<{ x: number; y: number } | null>(null);
   const lockedFeedback = useConfigStore((s) => s.shell.lockedFeedback ?? 'flash');
-  const lockedMessage = usePropString(node.properties, 'lockedMessage', '') || LOCKED_MESSAGE;
   const scope = useHmiScope();
   const lockedContentId = useId();
 
@@ -214,7 +212,7 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
       if (!pendingToasts.some((t) => t.id === toastId)) {
         showToast({
           id: toastId,
-          message: lockedMessage,
+          message: LOCKED_MESSAGE,
           severity: 'warning',
           discard: 'auto',
           duration: 4000,
@@ -276,7 +274,7 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
         <div
           className="hmi-lock-wrapper"
           style={wrapperStyle(layout)}
-          title={lockedFeedback === 'none' ? undefined : lockedMessage}
+          title={lockedFeedback === 'none' ? undefined : LOCKED_MESSAGE}
           // `inert` takes the widget out of the accessibility tree along with
           // focus, so the wrapper stands in for it: named by the widget's own
           // text (a label reference reaches into an inert subtree) and disabled.

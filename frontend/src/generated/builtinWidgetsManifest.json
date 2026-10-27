@@ -82,7 +82,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "342c8f1a327f7f9f",
+    "buildTs": "89e06a67231d5de0",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -90,9 +90,6 @@
     "category": "Content & controls",
     "schema": {
       "label": {
-        "type": "string"
-      },
-      "subLabel": {
         "type": "string"
       },
       "badge": {
@@ -108,9 +105,6 @@
         "type": "string"
       },
       "color": {
-        "type": "color"
-      },
-      "iconColor": {
         "type": "color"
       },
       "variant": {
@@ -132,18 +126,6 @@
         "type": "string"
       },
       "textTransform": {
-        "type": "string"
-      },
-      "letterSpacing": {
-        "type": "string"
-      },
-      "size": {
-        "type": "string"
-      },
-      "weight": {
-        "type": "integer"
-      },
-      "padding": {
         "type": "string"
       },
       "iconSize": {
@@ -257,7 +239,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "080b45df5801ce88",
+    "buildTs": "19fd8cc1aa37eefa",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -265,9 +247,6 @@
     "category": "Content & controls",
     "schema": {
       "text": {
-        "type": "string"
-      },
-      "unit": {
         "type": "string"
       },
       "typography": {
@@ -279,6 +258,9 @@
       "align": {
         "type": "string"
       },
+      "textTransform": {
+        "type": "string"
+      },
       "wrap": {
         "type": "string"
       },
@@ -287,21 +269,6 @@
       },
       "weight": {
         "type": "integer"
-      },
-      "padding": {
-        "type": "string"
-      },
-      "lineHeight": {
-        "type": "string"
-      },
-      "letterSpacing": {
-        "type": "string"
-      },
-      "unitSize": {
-        "type": "string"
-      },
-      "unitColor": {
-        "type": "color"
       }
     },
     "schemaError": null
@@ -1331,7 +1298,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "96d583b7217c15ef",
+    "buildTs": "10950b08a39fb830",
     "displayName": null,
     "hostsChildren": true,
     "flowsChildren": true,
@@ -1351,9 +1318,6 @@
         "type": "color"
       },
       "border": {
-        "type": "string"
-      },
-      "shadow": {
         "type": "string"
       },
       "actions": {

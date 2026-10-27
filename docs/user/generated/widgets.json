@@ -25,13 +25,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -74,13 +67,6 @@
             "defaultValue": "none"
           },
           {
-            "key": "shadow",
-            "label": "Shadow",
-            "type": "String",
-            "group": "Appearance",
-            "defaultValue": "none"
-          },
-          {
             "key": "actions",
             "label": "Actions",
             "type": "actions"
@@ -98,13 +84,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -132,13 +111,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -192,13 +164,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -253,13 +218,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -304,13 +262,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -350,13 +301,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       }
@@ -407,13 +351,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -483,13 +420,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -504,12 +434,6 @@
             "type": "String",
             "group": "Content",
             "defaultValue": "Button"
-          },
-          {
-            "key": "subLabel",
-            "label": "Second line",
-            "type": "String",
-            "group": "Content"
           },
           {
             "key": "badge",
@@ -533,12 +457,6 @@
           {
             "key": "color",
             "label": "Color",
-            "type": "color",
-            "group": "Appearance"
-          },
-          {
-            "key": "iconColor",
-            "label": "Icon color",
             "type": "color",
             "group": "Appearance"
           },
@@ -588,30 +506,6 @@
             "defaultValue": "none"
           },
           {
-            "key": "letterSpacing",
-            "label": "Letter spacing",
-            "type": "String",
-            "group": "Appearance"
-          },
-          {
-            "key": "size",
-            "label": "Size override",
-            "type": "String",
-            "group": "Appearance"
-          },
-          {
-            "key": "weight",
-            "label": "Weight override",
-            "type": "Integer",
-            "group": "Appearance"
-          },
-          {
-            "key": "padding",
-            "label": "Padding override",
-            "type": "String",
-            "group": "Appearance"
-          },
-          {
             "key": "iconSize",
             "label": "Icon size (px)",
             "type": "Integer",
@@ -641,13 +535,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -688,13 +575,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -738,13 +618,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -787,13 +660,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -805,12 +671,6 @@
           {
             "key": "text",
             "label": "Text",
-            "type": "String",
-            "group": "Content"
-          },
-          {
-            "key": "unit",
-            "label": "Unit",
             "type": "String",
             "group": "Content"
           },
@@ -829,10 +689,17 @@
           },
           {
             "key": "align",
-            "label": "Align",
+            "label": "Content alignment",
             "type": "String",
             "group": "Appearance",
             "defaultValue": "left"
+          },
+          {
+            "key": "textTransform",
+            "label": "Text case",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "theme"
           },
           {
             "key": "wrap",
@@ -854,36 +721,6 @@
             "group": "Appearance"
           },
           {
-            "key": "padding",
-            "label": "Padding override",
-            "type": "String",
-            "group": "Appearance"
-          },
-          {
-            "key": "lineHeight",
-            "label": "Line height",
-            "type": "String",
-            "group": "Appearance"
-          },
-          {
-            "key": "letterSpacing",
-            "label": "Letter spacing",
-            "type": "String",
-            "group": "Appearance"
-          },
-          {
-            "key": "unitSize",
-            "label": "Unit size",
-            "type": "String",
-            "group": "Appearance"
-          },
-          {
-            "key": "unitColor",
-            "label": "Unit color",
-            "type": "color",
-            "group": "Appearance"
-          },
-          {
             "key": "visible",
             "label": "Visible",
             "type": "Boolean",
@@ -896,13 +733,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -943,13 +773,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -989,13 +812,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -1055,13 +871,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -1137,13 +946,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -1227,13 +1029,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -1464,13 +1259,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -1782,13 +1570,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       }
@@ -1850,13 +1631,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -1907,13 +1681,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -2009,13 +1776,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -2102,13 +1862,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -2173,13 +1926,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -2226,13 +1972,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       }
@@ -2291,13 +2030,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -2331,13 +2063,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -2431,13 +2156,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -2519,13 +2237,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -2585,13 +2296,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -2651,13 +2355,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -2704,13 +2401,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       }
@@ -2760,13 +2450,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -2794,13 +2477,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -2845,13 +2521,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -2949,13 +2618,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -3022,13 +2684,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       },
@@ -3069,13 +2724,6 @@
             "type": "Boolean",
             "group": "Visibility",
             "defaultValue": true
-          },
-          {
-            "key": "lockedMessage",
-            "label": "Locked message",
-            "type": "String",
-            "group": "Visibility",
-            "defaultValue": ""
           }
         ]
       }

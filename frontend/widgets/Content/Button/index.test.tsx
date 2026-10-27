@@ -165,7 +165,6 @@ describe('Button', () => {
       '--hmi-btn-icon-size',
       '--hmi-btn-border-width',
       '--hmi-btn-fill',
-      '--hmi-btn-padding',
     ]) {
       expect(el.style.getPropertyValue(prop)).toBe('');
     }
@@ -177,20 +176,6 @@ describe('Button', () => {
     expect(screen.getByRole('button', { name: 'Alarms' }).style.borderColor).toBe(
       'rgb(208, 69, 47)',
     );
-  });
-
-  it('emits the size, weight and padding overrides as custom properties', () => {
-    const { container } = renderButton({
-      label: 'Alarms',
-      size: '13px',
-      weight: 600,
-      padding: '0',
-    });
-    const el = container.firstElementChild as HTMLElement;
-
-    expect(el.style.getPropertyValue('--hmi-btn-size')).toBe('13px');
-    expect(el.style.getPropertyValue('--hmi-btn-weight')).toBe('600');
-    expect(el.style.getPropertyValue('--hmi-btn-padding')).toBe('0');
   });
 
   it('dispatches configured onPress actions', async () => {
@@ -206,21 +191,6 @@ describe('Button', () => {
   });
 
   describe('label styling', () => {
-    it('stacks a second line under the label', () => {
-      renderButton({ label: 'Product', subLabel: 'Tolerances' });
-
-      const button = screen.getByRole('button', { name: 'Product Tolerances' });
-      expect(button.querySelector('.hmi-button__text .hmi-button__sub')).toHaveTextContent(
-        'Tolerances',
-      );
-    });
-
-    it('keeps the plain label markup without a second line', () => {
-      renderButton({ label: 'Product' });
-
-      expect(screen.getByRole('button').querySelector('.hmi-button__text')).toBeNull();
-    });
-
     it.each([
       [3, '3'],
       ['NEW', 'NEW'],
@@ -238,27 +208,18 @@ describe('Button', () => {
       expect(screen.getByRole('button').querySelector('.hmi-button__badge')).toBeNull();
     });
 
-    it('emits case, letter spacing and icon color as custom properties', () => {
-      const { container } = renderButton({
-        label: 'Start',
-        textTransform: 'uppercase',
-        letterSpacing: '0.08em',
-        iconColor: 'var(--hmi-ok)',
-      });
+    it('emits the text case as a custom property', () => {
+      const { container } = renderButton({ label: 'Start', textTransform: 'uppercase' });
       const el = container.firstElementChild as HTMLElement;
 
       expect(el.style.getPropertyValue('--hmi-btn-transform')).toBe('uppercase');
-      expect(el.style.getPropertyValue('--hmi-btn-tracking')).toBe('0.08em');
-      expect(el.style.getPropertyValue('--hmi-btn-icon-color')).toBe('var(--hmi-ok)');
     });
 
-    it('sets none of them by default', () => {
+    it('sets neither case nor alignment by default', () => {
       const { container } = renderButton({ label: 'Start' });
       const el = container.firstElementChild as HTMLElement;
 
       expect(el.style.getPropertyValue('--hmi-btn-transform')).toBe('');
-      expect(el.style.getPropertyValue('--hmi-btn-tracking')).toBe('');
-      expect(el.style.getPropertyValue('--hmi-btn-icon-color')).toBe('');
       expect(screen.getByRole('button')).not.toHaveClass('hmi-button__btn--start');
     });
 

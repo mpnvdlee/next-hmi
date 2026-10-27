@@ -16,7 +16,6 @@ Marks where content the caller supplies is rendered. Put one in a reusable compo
 | `slot` | Slot name | `slot` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Container
 
@@ -29,11 +28,9 @@ Groups and lays out child widgets in a row or column. Hosts other widgets, and r
 | `overflow` | Overflow | `String` |
 | `background` | Background | `color` |
 | `border` | Border | `String` |
-| `shadow` | Shadow | `String` |
 | `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Fixed Spacer
 
@@ -44,7 +41,6 @@ A precise pixel gap between widgets.
 | `size` | Size (px) | `Integer` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Image Container
 
@@ -59,7 +55,6 @@ Places children at absolute spots over a background image. Collapses below a set
 | `childPositions` | Child placement | `child-positions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Repeater
 
@@ -74,7 +69,6 @@ Draws its child widgets once per element of an array, each copy bound to its own
 | `placement` | Place copies | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Separator
 
@@ -88,7 +82,6 @@ A thin divider line between widgets.
 | `inset` | Inset (px) | `Integer` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Stretch Spacer
 
@@ -101,7 +94,6 @@ Flexible gap that pushes neighbours apart, by ratio or percent.
 | `percent` | Percent (%) | `Integer` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ## Content & controls
 
@@ -117,7 +109,6 @@ The rolling log of past alarm events.
 | `chrome` | Own frame | `Boolean` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Alarm List
 
@@ -135,7 +126,6 @@ Live active alarms, filterable by level, with acknowledgement.
 | `secondLine` | Second line | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Button
 
@@ -144,12 +134,10 @@ Runs actions and can write true to a bound boolean on press.
 | Property | Label | Type |
 |---|---|---|
 | `label` | Label | `String` |
-| `subLabel` | Second line | `String` |
 | `badge` | Badge | `String | Integer` |
 | `iconName` | Icon | `icon` |
 | `iconPosition` | Icon position | `String` |
 | `color` | Color | `color` |
-| `iconColor` | Icon color | `color` |
 | `variant` | Style | `String` |
 | `fill` | Fill | `color` |
 | `radius` | Radius | `String` |
@@ -157,16 +145,11 @@ Runs actions and can write true to a bound boolean on press.
 | `borderColor` | Border color | `color` |
 | `align` | Content alignment | `String` |
 | `textTransform` | Text case | `String` |
-| `letterSpacing` | Letter spacing | `String` |
-| `size` | Size override | `String` |
-| `weight` | Weight override | `Integer` |
-| `padding` | Padding override | `String` |
 | `iconSize` | Icon size (px) | `Integer` |
 | `variable` | Variable | `Boolean` |
 | `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Clock
 
@@ -179,7 +162,6 @@ A live clock, formatted with the same patterns as the $time source.
 | `value` | Value override | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Icon
 
@@ -193,7 +175,6 @@ A themeable Phosphor icon at any size and colour.
 | `chrome` | Chip background | `Boolean` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Image
 
@@ -207,7 +188,6 @@ Shows an asset with a fit mode and optional data-driven indicators.
 | `indicators` | Indicators | `image-indicators` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Label
 
@@ -216,21 +196,15 @@ Text in one of the theme typography combos, with translation support.
 | Property | Label | Type |
 |---|---|---|
 | `text` | Text | `String` |
-| `unit` | Unit | `String` |
 | `typography` | Typography | `String` |
 | `color` | Color | `color` |
-| `align` | Align | `String` |
+| `align` | Content alignment | `String` |
+| `textTransform` | Text case | `String` |
 | `wrap` | Overflow | `String` |
 | `size` | Size override | `String` |
 | `weight` | Weight override | `Integer` |
-| `padding` | Padding override | `String` |
-| `lineHeight` | Line height | `String` |
-| `letterSpacing` | Letter spacing | `String` |
-| `unitSize` | Unit size | `String` |
-| `unitColor` | Unit color | `color` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Logo Title
 
@@ -243,7 +217,6 @@ A logo image paired with a title and an optional subtitle.
 | `subtitle` | Subtitle | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Page Title
 
@@ -256,7 +229,6 @@ The current page's title and icon, or your own override text.
 | `iconName` | Icon | `icon` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Status Pill
 
@@ -272,7 +244,6 @@ A tone-colored status pill, with an optional second line and pulsing dot.
 | `radius` | Radius | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Trend Chart
 
@@ -290,7 +261,6 @@ Plots recorded tag history over selectable time ranges, or buffers live values w
 | `seriesColors` | Line colors | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### User Badge
 
@@ -310,7 +280,6 @@ Shows the signed-in user as an initialled badge, with optional sign-in and sign-
 | `onSignOut` | On Sign Out | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Video
 
@@ -352,7 +321,6 @@ Plays a recorded video from a project asset or a URL.
 | `onError` | On Error | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Web Frame
 
@@ -405,7 +373,6 @@ Embeds an external web page in an iframe.
 | `onMessage` | On Message | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ## Inputs
 
@@ -423,7 +390,6 @@ A row of mutually-exclusive buttons — pick 1 of N. Writes the chosen option to
 | `onChange` | On Change | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Dropdown
 
@@ -438,7 +404,6 @@ Pick one option from a list. Publishes the selection for sibling widgets to read
 | `onChange` | On Change | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Number Input
 
@@ -460,7 +425,6 @@ A numeric entry field that writes a number to a variable.
 | `onChange` | On Change | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Numeric Stepper
 
@@ -480,7 +444,6 @@ Increment / decrement a numeric variable with + / − buttons.
 | `numpadPosition` | Numpad position | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### String Input
 
@@ -497,7 +460,6 @@ A text field whose typed value is published for sibling widgets to read.
 | `onSubmit` | On Submit | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Switch
 
@@ -511,7 +473,6 @@ A toggle that writes a boolean on/off to a variable.
 | `color` | On color | `color` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ## Indicators
 
@@ -528,7 +489,6 @@ A round analog gauge with min/max and a value binding.
 | `unit` | Unit | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### LED Indicator
 
@@ -540,7 +500,6 @@ A status light that changes colour with a boolean.
 | `label` | Label | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Progress Bar
 
@@ -561,7 +520,6 @@ A horizontal bar showing a percentage or progress value.
 | `dense` | Dense | `Boolean` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Ring Gauge
 
@@ -580,7 +538,6 @@ A donut ring showing a value as a share of its range, with the reading in the ho
 | `color` | Ring color | `color` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Stat Tile
 
@@ -596,7 +553,6 @@ KPI tile: label, value and unit, with a tinted icon in row mode.
 | `size` | Size | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Trend
 
@@ -612,7 +568,6 @@ A live sparkline of one variable with its current reading — buffered in the pa
 | `color` | Line color | `color` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Value Display
 
@@ -626,7 +581,6 @@ Displays a numeric value with a label and unit.
 | `decimals` | Decimal places | `Integer` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ## Navigation
 
@@ -642,7 +596,6 @@ The trail of pages to where you are, with optional home icon.
 | `homePageId` | Home page | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Language Switcher
 
@@ -653,7 +606,6 @@ Lets operators change the interface language.
 | `label` | Label | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Menu Toggle
 
@@ -667,7 +619,6 @@ Collapses or expands a bound menu state; swaps icon per state.
 | `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Navigation Menu
 
@@ -688,7 +639,6 @@ Sidebar or top-bar menu mirroring the page tree, with rich display options.
 | `collapsed` | Collapsed | `Boolean` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Page Navigator
 
@@ -705,7 +655,6 @@ Previous / next controls stepping through a page group. Either control can be re
 | `nextEnabled` | Next enabled | `Boolean` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 ### Tab Bar
 
@@ -718,7 +667,6 @@ Switches between the sibling pages of a group as tabs.
 | `showIcons` | Show icons | `Boolean` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
-| `lockedMessage` | Locked message | `String` |
 
 Beyond these you have **Components** (reusable page fragments with input
 properties) and every **custom widget** in the active project. They all live in

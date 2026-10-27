@@ -6,21 +6,9 @@
 .hmi-component.hmi-label {
   margin: 0;
   min-width: 0;
-  padding: var(--hmi-label-padding, 0);
   color: var(--hmi-label-color, var(--hmi-text));
   font-size: var(--hmi-label-size, var(--hmi-label-combo-size));
   font-weight: var(--hmi-label-weight, var(--hmi-label-combo-weight));
-  letter-spacing: var(--hmi-label-tracking, var(--hmi-label-combo-tracking));
-  /* No fallback on purpose: unset, the declaration is invalid and the
-     inherited line height applies, exactly as with no declaration at all. */
-  line-height: var(--hmi-label-line-height);
-}
-
-/* Same trick: an unset unit size inherits the text size. */
-.hmi-label__unit {
-  font-size: var(--hmi-label-unit-size);
-  font-weight: var(--hmi-type-body-weight);
-  color: var(--hmi-label-unit-color, var(--hmi-text-muted));
 }
 
 /* ── Typography combos ─────────────────────────────────────────────────── */
@@ -29,8 +17,8 @@
   --hmi-label-combo-weight: var(--hmi-type-heading-weight);
 
   font-family: var(--hmi-type-heading-font);
-  --hmi-label-combo-tracking: var(--hmi-type-heading-tracking);
-  text-transform: var(--hmi-type-heading-transform);
+  letter-spacing: var(--hmi-type-heading-tracking);
+  text-transform: var(--hmi-label-transform, var(--hmi-type-heading-transform));
 }
 
 .hmi-component.hmi-label--type-subheading {
@@ -38,8 +26,8 @@
   --hmi-label-combo-weight: var(--hmi-type-subheading-weight);
 
   font-family: var(--hmi-type-subheading-font);
-  --hmi-label-combo-tracking: var(--hmi-type-subheading-tracking);
-  text-transform: var(--hmi-type-subheading-transform);
+  letter-spacing: var(--hmi-type-subheading-tracking);
+  text-transform: var(--hmi-label-transform, var(--hmi-type-subheading-transform));
 }
 
 .hmi-component.hmi-label--type-body {
@@ -47,8 +35,8 @@
   --hmi-label-combo-weight: var(--hmi-type-body-weight);
 
   font-family: var(--hmi-type-body-font);
-  --hmi-label-combo-tracking: var(--hmi-type-body-tracking);
-  text-transform: var(--hmi-type-body-transform);
+  letter-spacing: var(--hmi-type-body-tracking);
+  text-transform: var(--hmi-label-transform, var(--hmi-type-body-transform));
 }
 
 .hmi-component.hmi-label--type-caption {
@@ -56,8 +44,8 @@
   --hmi-label-combo-weight: var(--hmi-type-caption-weight);
 
   font-family: var(--hmi-type-caption-font);
-  --hmi-label-combo-tracking: var(--hmi-type-caption-tracking);
-  text-transform: var(--hmi-type-caption-transform);
+  letter-spacing: var(--hmi-type-caption-tracking);
+  text-transform: var(--hmi-label-transform, var(--hmi-type-caption-transform));
 }
 
 .hmi-component.hmi-label--type-code {
@@ -65,8 +53,8 @@
   --hmi-label-combo-weight: var(--hmi-type-code-weight);
 
   font-family: var(--hmi-type-code-font);
-  --hmi-label-combo-tracking: var(--hmi-type-code-tracking);
-  text-transform: var(--hmi-type-code-transform);
+  letter-spacing: var(--hmi-type-code-tracking);
+  text-transform: var(--hmi-label-transform, var(--hmi-type-code-transform));
 }
 
 .hmi-component.hmi-label--type-value {
@@ -74,8 +62,8 @@
   --hmi-label-combo-weight: var(--hmi-type-value-weight);
 
   font-family: var(--hmi-type-value-font);
-  --hmi-label-combo-tracking: var(--hmi-type-value-tracking);
-  text-transform: var(--hmi-type-value-transform);
+  letter-spacing: var(--hmi-type-value-tracking);
+  text-transform: var(--hmi-label-transform, var(--hmi-type-value-transform));
 }
 
 .hmi-component.hmi-label--type-label {
@@ -83,8 +71,8 @@
   --hmi-label-combo-weight: var(--hmi-type-label-weight);
 
   font-family: var(--hmi-type-label-font);
-  --hmi-label-combo-tracking: var(--hmi-type-label-tracking);
-  text-transform: var(--hmi-type-label-transform);
+  letter-spacing: var(--hmi-type-label-tracking);
+  text-transform: var(--hmi-label-transform, var(--hmi-type-label-transform));
 }
 
 /* ── Alignment ─────────────────────────────────────────────────────────── */
