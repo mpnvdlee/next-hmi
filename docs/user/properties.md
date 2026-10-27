@@ -117,10 +117,13 @@ A placeholder may wrap its value in transform functions, applied inside-out:
 
 A placeholder whose wildcard is missing is left in the text as-is, so a typo shows up on screen rather than silently blanking the label.
 
-The **template itself is literal text** — it is not a bindable property. To keep a
-templated line translatable, put the words in the wildcards (`$loc`) and leave
-only structure and punctuation in the template: `"{1}: {Round1(2)} °C"` with
-wildcard `1` a `$loc`. See [Translations](translations.md#use-a-translation-on-a-screen).
+The template is literal text unless **Translate the template** is on
+(`"translate": true`). Then the template is a dictionary key like any `$loc`,
+placeholders included: add the row `Must lie outside the {1} g band` and give
+the Dutch column `Moet buiten de band van {1} g liggen`. Each language writes
+the whole sentence and puts the values where its grammar wants them; a
+language without the row shows the template as typed. See
+[Translations](translations.md#use-a-translation-on-a-screen).
 
 ## Passing values into components
 

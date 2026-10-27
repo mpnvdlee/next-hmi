@@ -21,6 +21,13 @@ heading.
   Custom widgets get the message through the SDK numpad's new `rangeMessage`
   prop.
 
+- **A String Expression can be translated as a whole sentence.** With
+  **Translate the template** on, the template is a dictionary key like any
+  Localizable Text, placeholders included: `Tank {1} of {2}` becomes
+  `Tank {1} van {2}` in the Dutch column, so each language puts the values
+  where its grammar wants them. A key missing from the dictionaries is flagged
+  like an unknown `$loc`.
+
 - **The numpad and keyboard show icons and numbers, not English.** Back,
   Clear, Enter, Shift, Caps Lock, Tab and Space are icons, the range reads
   `80 – 200` (or `≥ 0`, `≤ 10`), and an entry outside it turns that range

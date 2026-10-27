@@ -293,6 +293,8 @@ export interface StringExprSource {
   $stringExpr: {
     template: string; // e.g. "{ToLower(1)} - {2}, {Trim(ToLower(3))}"
     wildcards: Record<string, unknown>; // keyed by placeholder number; each value is a standard property value (plain, $var, $loc, etc.)
+    /** Look the template up as a translation key, placeholders included. */
+    translate?: boolean;
   };
 }
 

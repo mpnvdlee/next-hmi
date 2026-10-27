@@ -53,6 +53,29 @@ describe('placeholder rows the editor adds', () => {
     });
   });
 
+  it('keeps Translate on while the template is retyped', () => {
+    const onChange = vi.fn();
+    render(
+      <Harness
+        Editor={StringExprEditor}
+        initial={{ $stringExpr: { template: '{1}', wildcards: { 1: '' } } }}
+        onChange={onChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /Translate the template/ }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      $stringExpr: { template: '{1}', wildcards: { 1: '' }, translate: true },
+    });
+
+    fireEvent.change(screen.getByPlaceholderText('{1} - {ToLower(2)}, {3}'), {
+      target: { value: 'Band {1}' },
+    });
+    expect(onChange).toHaveBeenLastCalledWith({
+      $stringExpr: { template: 'Band {1}', wildcards: { 1: '' }, translate: true },
+    });
+  });
+
   it('start a typed HTTP Request placeholder unbound', () => {
     const onChange = vi.fn();
     render(<Harness Editor={HttpEditor} initial={{ $http: { url: '' } }} onChange={onChange} />);
