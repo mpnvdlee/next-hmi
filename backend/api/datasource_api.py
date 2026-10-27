@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
+from ads.engine import create_route
 from ads.engine import probe_connection as probe_ads_connection
 from asyncua import ua
 from core.cert_info import describe_certificate
@@ -20,6 +21,8 @@ from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from models.datasource import (
     CLIENT_DATASOURCE_TYPES,
+    AdsAddRouteBody,
+    AdsAddRouteResult,
     AdsTestConnectionBody,
     AdsTestConnectionResult,
     CertGenerateBody,
@@ -230,6 +233,20 @@ async def test_datasource_connection(body: TestConnectionBody) -> TestConnection
 async def test_ads_datasource_connection(body: AdsTestConnectionBody) -> AdsTestConnectionResult:
     """Open a throwaway ADS connection to verify a candidate target pre-save."""
     return AdsTestConnectionResult(**await probe_ads_connection(body.model_dump()))
+
+
+@router.post("/ads/add-route")
+async def add_ads_route(body: AdsAddRouteBody) -> AdsAddRouteResult:
+    """Create this HMI's static AMS route on the PLC over UDP 48899, as
+    TwinCAT's Add Route dialog does. A failure is ``ok: false`` with a short
+    error, never an HTTP error; the password is never logged."""
+    settings = body.model_dump(exclude={"user", "password"})
+    settings.update(route_user=body.user, route_password=body.password)
+    try:
+        route_name, net_id, address = await create_route(settings)
+    except Exception as exc:  # surfaced to the caller as a string
+        return AdsAddRouteResult(ok=False, error=str(exc)[:300] or exc.__class__.__name__)
+    return AdsAddRouteResult(ok=True, route_name=route_name, net_id=net_id, address=address)
 
 
 @router.post("/certs")

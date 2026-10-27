@@ -1,6 +1,7 @@
 """DatasourceAdsEngine against a fake TwinCAT PLC on loopback (ads.engine)."""
 
 import asyncio
+import logging
 import struct
 from collections.abc import AsyncIterator, Callable
 from typing import Any
@@ -377,5 +378,148 @@ async def test_unreachable_device_reports_why(plc: FakePlc) -> None:
         assert await engine.read_current_values({"MAIN/nCounter"}) == {}
         with pytest.raises(RuntimeError):
             await engine.write_node("MAIN.nCounter", 1)
+    finally:
+        await engine.disconnect()
+
+
+# ── Routes ───────────────────────────────────────────────────────────────────
+
+_ROUTED = {"request_timeout_s": 0.5, "route_user": "Administrator"}
+
+
+@pytest.mark.asyncio
+async def test_a_custom_route_method_creates_the_missing_route(plc: FakePlc, caplog) -> None:
+    caplog.set_level(logging.DEBUG)
+    plc.require_route = True
+    plc.route_password = "s3cr3t-pw"
+    engine, dm, _ = await _start(
+        plc, route_method="custom", route_password="s3cr3t-pw", udp_port=plc.udp_port, **_ROUTED,
+    )
+    try:
+        assert plc.routes == {bytes([127, 0, 0, 1, 1, 1])}
+        [request] = plc.route_requests
+        assert request[5] == b"127.0.0.1\0"
+        assert request[12].endswith(b"-nexthmi\0")
+        assert engine.error is None
+        plc.poke("MAIN.nCounter", "h", 9)
+        await _until(lambda: dm.values.get("MAIN/nCounter") == 9)
+    finally:
+        await engine.disconnect()
+    assert "ADS route" in caplog.text
+    assert "s3cr3t-pw" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_refused_route_is_reported_and_never_sent_again(plc: FakePlc, caplog) -> None:
+    caplog.set_level(logging.DEBUG)
+    plc.require_route = True
+    engine = DatasourceAdsEngine(DS)
+    await engine.connect(_config(
+        plc, route_method="custom", route_password="s3cr3t-pw", udp_port=plc.udp_port, **_ROUTED,
+    ))
+    try:
+        await _until(lambda: engine.error is not None)
+        assert engine.error.startswith("Route refused by the PLC: check the PLC user name and password")
+        refusal = engine.error
+        await asyncio.sleep(2.5)
+        # Refused once, never asked again: a lockout policy counts each try.
+        assert len(plc.route_requests) == 1
+        assert engine.error == refusal
+        assert not engine.connected and plc.routes == set()
+
+        # Connect attempts go on, so a route added by hand is picked up.
+        plc.routes.add(bytes([127, 0, 0, 1, 1, 1]))
+        await _until(lambda: engine.connected)
+        assert len(plc.route_requests) == 1
+    finally:
+        await engine.disconnect()
+    assert "s3cr3t-pw" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_route_that_changes_nothing_is_not_added_again(plc: FakePlc) -> None:
+    class Forgetful(set):
+        def add(self, _item: bytes) -> None:
+            pass
+
+    plc.require_route = True
+    plc.routes = Forgetful()
+    engine = DatasourceAdsEngine(DS)
+    await engine.connect(_config(plc, route_method="custom", route_password="1", udp_port=plc.udp_port, **_ROUTED))
+    try:
+        await _until(lambda: engine.error is not None)
+        assert "added on the PLC, but it still answers no request" in engine.error
+        await asyncio.sleep(2.5)
+        assert len(plc.route_requests) == 1
+        assert "added on the PLC, but it still answers no request" in engine.error
+    finally:
+        await engine.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_an_unanswered_route_request_is_retried_each_interval(plc: FakePlc) -> None:
+    received: list[bytes] = []
+
+    class Silent(asyncio.DatagramProtocol):
+        def datagram_received(self, data: bytes, _addr: Any) -> None:
+            received.append(data)
+
+    transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(Silent, local_addr=("127.0.0.1", 0))
+    plc.require_route = True
+    engine = DatasourceAdsEngine(DS)
+    await engine.connect(_config(
+        plc, route_method="custom", route_password="1", udp_port=transport.get_extra_info("sockname")[1], **_ROUTED,
+    ))
+    try:
+        await _until(lambda: len(received) >= 2, timeout=8.0)
+        assert engine.error.startswith("No answer from 127.0.0.1 on UDP")
+    finally:
+        await engine.disconnect()
+        transport.close()
+
+
+@pytest.mark.asyncio
+async def test_a_timeout_after_the_first_answer_is_not_a_missing_route(plc: FakePlc) -> None:
+    plc.ignore_commands = {4}  # READ_STATE
+    engine = DatasourceAdsEngine(DS)
+    await engine.connect(_config(plc, route_method="custom", route_password="1", udp_port=plc.udp_port, **_ROUTED))
+    try:
+        await _until(lambda: engine.error is not None)
+        assert engine.error == "Connection timed out"
+        await asyncio.sleep(1.2)
+        assert plc.route_requests == []
+    finally:
+        await engine.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_the_twincat_route_method_never_creates_a_route(plc: FakePlc) -> None:
+    plc.require_route = True
+    engine = DatasourceAdsEngine(DS)
+    await engine.connect(_config(plc, route_password="1", udp_port=plc.udp_port, **_ROUTED))
+    try:
+        await _until(lambda: engine.error is not None)
+        assert engine.error == (
+            "No answer to ADS requests: the PLC probably has no route for this HMI "
+            "(AMS NetID 127.0.0.1.1.1, IP 127.0.0.1)"
+        )
+        await asyncio.sleep(1.2)
+        assert plc.route_requests == []
+    finally:
+        await engine.disconnect()
+
+
+@pytest.mark.asyncio
+async def test_a_local_router_owns_its_routes(plc: FakePlc) -> None:
+    plc.require_route = True
+    engine = DatasourceAdsEngine(DS)
+    await engine.connect(_config(
+        plc, local_router=True, route_method="custom", route_password="1", udp_port=plc.udp_port, **_ROUTED,
+    ))
+    try:
+        await _until(lambda: engine.error is not None)
+        assert engine.error.startswith("No answer through the local TwinCAT router")
+        assert "with TwinCAT" in engine.error
+        assert plc.route_requests == []
     finally:
         await engine.disconnect()

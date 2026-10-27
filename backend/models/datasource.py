@@ -129,6 +129,39 @@ class AdsTestConnectionResult(BaseModel):
     version: str | None = None
     # "RUN", "STOP", or the state number for any other ADS state.
     ads_state: str | None = None
+    # What this HMI presents to the PLC: the NetID and IP its route names.
+    # local_net_id is None in local_router mode until the router assigns it.
+    local_net_id: str | None = None
+    local_ip: str | None = None
+
+
+class AdsAddRouteBody(BaseModel):
+    """Body for POST /api/datasources/ads/add-route.
+
+    ``user``/``password`` are a user account on the PLC (the datasource's
+    ``route_user``/``route_password``). Extra fields (e.g. ``udp_port``,
+    ``request_timeout_s``) are forwarded unchanged.
+    """
+
+    host: str
+    # Accepted so a form can post its settings as they are; the route request
+    # does not name the PLC's NetID.
+    ams_net_id: str = ""
+    local_ams_net_id: str = ""
+    route_name: str = ""
+    route_address: str = ""
+    user: str
+    password: str = ""
+
+    model_config = ConfigDict(extra="allow")
+
+
+class AdsAddRouteResult(BaseModel):
+    ok: bool
+    error: str | None = None
+    route_name: str | None = None
+    net_id: str | None = None
+    address: str | None = None
 
 
 class CertUploadResult(BaseModel):

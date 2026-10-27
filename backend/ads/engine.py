@@ -20,6 +20,12 @@ is watched with a notification of its own; when it changes the symbol and
 data-type tables are uploaded again and every address re-resolved. The
 connection health check also compares the version each interval, which
 catches a notification lost in transit or dropped with its handle.
+
+A PLC answers only a client it has an AMS route for. ``route_method``
+``twincat`` (default) leaves creating that route to TwinCAT's tools;
+``custom`` lets the engine create it itself (``ads.route``) when a direct
+connect fails the way a missing route fails, then connect again — at most
+once per reconnect attempt.
 """
 
 import asyncio
@@ -39,6 +45,14 @@ from opcua.routing import _collect_struct_leaf_paths, _struct_field_routes
 from . import protocol as p
 from .codecs import WIRE_VARIANT_NAMES
 from .connection import AdsConnection
+from .route import (
+    ADS_UDP_PORT,
+    RouteError,
+    RouteRefused,
+    add_route,
+    default_route_name,
+    local_ip,
+)
 from .symbols import Address, SymbolTable, parse_upload_info
 
 logger = logging.getLogger(__name__)
@@ -90,24 +104,135 @@ def new_connection(settings: dict, *, on_notification: Any = None) -> AdsConnect
     )
 
 
+class NoRoute(ConnectionError):
+    """The device took the TCP connection but answers no request, the way a
+    PLC without an AMS route for this client fails (a timeout, or ADS error
+    0x0007 through a router)."""
+
+    def __init__(self, message: str, *, net_id: bytes, local_ip: str | None, via_router: bool) -> None:
+        super().__init__(message)
+        self.net_id = net_id
+        self.local_ip = local_ip
+        self.via_router = via_router
+
+
+async def open_device(
+    settings: dict, *, connect_timeout_s: float, on_notification: Any = None,
+) -> tuple[AdsConnection, p.DeviceInfo, int]:
+    """An open connection with the device's info and ADS state read, or
+    ``NoRoute`` when the device answers not even the first request."""
+    conn = new_connection(settings, on_notification=on_notification)
+    await conn.open(connect_timeout_s)
+    try:
+        try:
+            info = await conn.read_device_info()
+        except (TimeoutError, p.AdsError) as exc:
+            # Only the first request tells a missing route: once the device
+            # has answered, a later timeout is an ordinary error.
+            if isinstance(exc, p.AdsError) and exc.code != 0x0007:
+                raise
+            raise _no_route(conn, exc) from exc
+        ads_state, _device_state = await conn.read_state()
+    except BaseException:
+        await conn.close()
+        raise
+    return conn, info, ads_state
+
+
+def _no_route(conn: AdsConnection, exc: BaseException) -> NoRoute:
+    net_id = conn.source.net_id
+    if conn.via_router:
+        message = (
+            f"No answer through the local TwinCAT router ({_short_error(exc)}): add or check its route "
+            "to the PLC with TwinCAT, which owns the routes in local router mode"
+        )
+    else:
+        message = (
+            "No answer to ADS requests: the PLC probably has no route for this HMI "
+            f"(AMS NetID {p.format_net_id(net_id)}, IP {conn.local_ip})"
+        )
+    return NoRoute(message, net_id=net_id, local_ip=conn.local_ip, via_router=conn.via_router)
+
+
+async def local_identity(settings: dict) -> tuple[str | None, str | None]:
+    """The AMS NetID and IPv4 address this HMI presents to the PLC *settings*
+    name, as the operator enters them in TwinCAT's route dialog. ``None`` for
+    what is unknown: a local router assigns the NetID only on connect."""
+    host = str(settings.get("host", "")).strip()
+    try:
+        ip = await asyncio.to_thread(local_ip, host) if host else None
+    except Exception:  # unresolvable, or not a host name at all
+        ip = None
+    if settings.get("local_router", False):
+        return None, ip
+    net_id = str(settings.get("local_ams_net_id", "")).strip() or (f"{ip}.1.1" if ip else None)
+    return net_id, ip
+
+
+async def create_route(
+    settings: dict, *, net_id: str | None = None, address: str | None = None,
+) -> tuple[str, str, str]:
+    """Create the route on the PLC that ``route_user``/``route_password`` in
+    *settings* authorise, for *net_id* at *address* (default: this HMI's own,
+    see ``local_identity``; ``route_address`` overrides for NAT).
+
+    Returns ``(route_name, net_id, address)``; raises ``RouteError``.
+    """
+    host = str(settings.get("host", "")).strip()
+    user = str(settings.get("route_user", "") or "").strip()
+    if not host:
+        raise RouteError("No host configured")
+    if not user:
+        raise RouteError("No PLC user name configured to create the route with")
+    if net_id is None or address is None:
+        own_net_id, own_ip = await local_identity({**settings, "local_router": False})
+        net_id, address = net_id or own_net_id, address or own_ip
+    address = str(settings.get("route_address", "") or "").strip() or address
+    if not net_id or not address:
+        raise RouteError(f"No local IPv4 address toward {host}: set the local AMS NetID and route address")
+    try:
+        raw_net_id = p.parse_net_id(net_id)
+    except ValueError as exc:
+        raise RouteError(str(exc)) from None
+    route_name = str(settings.get("route_name", "") or "").strip() or default_route_name()
+    await add_route(
+        host,
+        net_id=raw_net_id,
+        address=address,
+        user=user,
+        password=str(settings.get("route_password", "") or ""),
+        route_name=route_name,
+        udp_port=int(settings.get("udp_port") or ADS_UDP_PORT),
+        timeout_s=get_config_float(settings, "request_timeout_s", 5.0, minimum=0.5, maximum=60.0),
+    )
+    return route_name, net_id, address
+
+
 async def probe_connection(settings: dict) -> dict:
     """Open a throwaway connection to verify a candidate ADS target pre-save.
 
-    Returns ``{ok, error, device_name, version, ads_state}``; never raises.
+    Returns ``{ok, error, device_name, version, ads_state, local_net_id,
+    local_ip}`` — the last two what this HMI presents to the PLC, for the
+    route the operator makes in TwinCAT; never raises.
     """
-    result: dict[str, Any] = {"ok": False, "error": None, "device_name": None, "version": None, "ads_state": None}
-    conn: AdsConnection | None = None
+    result: dict[str, Any] = {
+        "ok": False, "error": None, "device_name": None, "version": None, "ads_state": None,
+        "local_net_id": None, "local_ip": None,
+    }
+    result["local_net_id"], result["local_ip"] = await local_identity(settings)
     try:
-        conn = new_connection(settings)
-        await conn.open(get_config_float(settings, "connect_timeout_s", 5.0, minimum=1.0, maximum=120.0))
-        info = await conn.read_device_info()
-        ads_state, _device_state = await conn.read_state()
+        conn, info, ads_state = await open_device(
+            settings, connect_timeout_s=get_config_float(settings, "connect_timeout_s", 5.0, minimum=1.0, maximum=120.0),
+        )
+    except NoRoute as exc:
+        result["error"] = str(exc)
+        result["local_net_id"] = p.format_net_id(exc.net_id)
+        return result
     except Exception as exc:  # surfaced to the caller as a string
         result["error"] = _short_error(exc)
         return result
-    finally:
-        if conn is not None:
-            await conn.close()
+    result["local_net_id"] = p.format_net_id(conn.source.net_id)
+    await conn.close()
     try:
         state_name = p.AdsState(ads_state).name
     except ValueError:
@@ -150,6 +275,10 @@ class DatasourceAdsEngine:
         self._poll_error: str | None = None
         # Serialises priority transitions, dynamic add/remove and reloads.
         self._lock = asyncio.Lock()
+        # Why this engine stopped creating routes (refused, or added without
+        # effect): resending a wrong password every interval could lock the
+        # PLC account. New settings make a new engine, which tries again.
+        self._route_given_up: str | None = None
 
     @property
     def connected(self) -> bool:
@@ -253,12 +382,44 @@ class DatasourceAdsEngine:
                     self._error = _short_error(exc)
                     await self._close_client()
 
+    async def _open_device(self) -> tuple[AdsConnection, p.DeviceInfo, int]:
+        return await open_device(
+            self._config,
+            connect_timeout_s=get_config_float(self._config, "connect_timeout_s", 10.0, minimum=1.0, maximum=120.0),
+            on_notification=self._on_notification,
+        )
+
     async def _do_connect(self) -> None:
-        conn = new_connection(self._config, on_notification=self._on_notification)
-        await conn.open(get_config_float(self._config, "connect_timeout_s", 10.0, minimum=1.0, maximum=120.0))
         try:
-            info = await conn.read_device_info()
-            ads_state, _device_state = await conn.read_state()
+            conn, info, ads_state = await self._open_device()
+        except NoRoute as missing:
+            if self._config.get("route_method") != "custom" or missing.via_router:
+                raise
+            if self._route_given_up is not None:
+                # Still connecting each interval: the route may be added by hand.
+                raise ConnectionError(self._route_given_up) from None
+            # One add-route per attempt: a failure fails this attempt, and the
+            # reconnect loop waits its interval before the next.
+            try:
+                route_name, net_id, address = await create_route(
+                    self._config, net_id=p.format_net_id(missing.net_id), address=missing.local_ip,
+                )
+            except RouteRefused as exc:
+                self._route_given_up = str(exc)
+                raise
+            logger.info(
+                "ADS route %r added on %s for %s (%s at %s)",
+                route_name, self._config.get("host"), self.datasource_name, net_id, address,
+            )
+            try:
+                conn, info, ads_state = await self._open_device()
+            except NoRoute:
+                self._route_given_up = (
+                    f"Route {route_name!r} added on the PLC, but it still answers no request: "
+                    "check the AMS NetID, AMS port and route address"
+                )
+                raise ConnectionError(self._route_given_up) from None
+        try:
             self._conn = conn
             await self._load_symbols()
             await self._watch_symbol_version()

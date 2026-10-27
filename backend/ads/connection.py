@@ -56,6 +56,8 @@ class AdsConnection:
         self._pending: dict[int, asyncio.Future[p.AmsPacket]] = {}
         self._invoke_ids = itertools.count(1)
         self._closed_reason: str | None = None
+        # This side's IP address of the TCP connection, once open.
+        self.local_ip: str | None = None
 
     @property
     def source(self) -> p.AmsAddress:
@@ -70,6 +72,7 @@ class AdsConnection:
         self._reader, self._writer = await asyncio.wait_for(
             asyncio.open_connection(self.host, self.tcp_port), timeout=connect_timeout_s,
         )
+        self.local_ip = self._writer.get_extra_info("sockname")[0]
         if self.via_router:
             try:
                 source = await asyncio.wait_for(self._register_port(), timeout=connect_timeout_s)
@@ -80,12 +83,11 @@ class AdsConnection:
         elif self._source_net_id is None:
             # Without a configured NetID, use the convention TwinCAT itself
             # follows: the local IPv4 address of this connection plus ".1.1".
-            local_ip = self._writer.get_extra_info("sockname")[0]
             try:
-                self._source_net_id = p.parse_net_id(f"{local_ip}.1.1")
+                self._source_net_id = p.parse_net_id(f"{self.local_ip}.1.1")
             except ValueError:
                 await self.close()
-                raise ValueError(f"No local AMS NetID configured and {local_ip} is not IPv4") from None
+                raise ValueError(f"No local AMS NetID configured and {self.local_ip} is not IPv4") from None
         self._closed_reason = None
         self._reader_task = asyncio.create_task(self._read_loop())
 

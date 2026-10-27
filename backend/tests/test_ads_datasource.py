@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import socket
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -19,6 +20,7 @@ from ads.engine import DatasourceAdsEngine
 from core.exceptions import register_exception_handlers
 from core.validation.report import ValidationReport
 from fastapi import FastAPI
+from mcp_server.tools.datasources import _get_datasource_payload
 from opcua.engine import DatasourceOpcuaEngine
 from opcua.pool import OpcuaPool
 from services.datasource_manager import DatasourceManager
@@ -175,7 +177,78 @@ async def test_ads_test_connection_reports_the_device(plc: FakePlc, api) -> None
     assert resp.status_code == 200
     assert resp.json() == {
         "ok": True, "error": None, "device_name": "Plc30 App", "version": "3.1.4024", "ads_state": "RUN",
+        "local_net_id": "127.0.0.1.1.1", "local_ip": "127.0.0.1",
     }
+
+
+@pytest.mark.asyncio
+async def test_ads_test_connection_says_when_a_route_is_missing(plc: FakePlc, api) -> None:
+    client, _manager, _pool = api
+    plc.require_route = True
+    resp = await client.post(
+        "/api/datasources/ads/test-connection",
+        json={"host": "127.0.0.1", "tcp_port": plc.port, "ams_net_id": "127.0.0.1.1.1",
+              "local_ams_net_id": "10.0.0.5.1.1", "request_timeout_s": 0.5},
+    )
+    result = resp.json()
+    assert result["ok"] is False
+    assert result["error"] == (
+        "No answer to ADS requests: the PLC probably has no route for this HMI (AMS NetID 10.0.0.5.1.1, IP 127.0.0.1)"
+    )
+    assert (result["local_net_id"], result["local_ip"]) == ("10.0.0.5.1.1", "127.0.0.1")
+
+
+@pytest.mark.asyncio
+async def test_ads_add_route_creates_the_route(plc: FakePlc, api, caplog) -> None:
+    client, _manager, _pool = api
+    caplog.set_level(logging.DEBUG)
+    plc.route_password = "s3cr3t-pw"
+    body = {"host": "127.0.0.1", "udp_port": plc.udp_port, "user": "Administrator", "route_name": "panel"}
+
+    resp = await client.post("/api/datasources/ads/add-route", json={**body, "password": "wrong-pw"})
+    assert resp.status_code == 200
+    result = resp.json()
+    assert result["ok"] is False
+    assert result["error"].startswith("Route refused by the PLC: check the PLC user name and password")
+    assert plc.routes == set()
+
+    resp = await client.post(
+        "/api/datasources/ads/add-route", json={**body, "password": "s3cr3t-pw", "route_address": "203.0.113.7"},
+    )
+    assert resp.json() == {
+        "ok": True, "error": None, "route_name": "panel", "net_id": "127.0.0.1.1.1", "address": "203.0.113.7",
+    }
+    assert plc.routes == {bytes([127, 0, 0, 1, 1, 1])}
+    assert plc.route_requests[-1][5] == b"203.0.113.7\0"
+    assert "s3cr3t-pw" not in caplog.text and "wrong-pw" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_ads_add_route_failure_is_a_result_not_an_error(api) -> None:
+    client, _manager, _pool = api
+    resp = await client.post("/api/datasources/ads/add-route", json={"host": "127.0.0.1", "user": "", "password": "x"})
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is False
+    assert resp.json()["error"] == "No PLC user name configured to create the route with"
+
+
+@pytest.mark.asyncio
+async def test_route_password_is_stored_and_returned_like_the_opcua_password(plc: FakePlc, api) -> None:
+    """Both are plain settings fields: saved as given and returned as-is by
+    the REST API and the MCP read tool."""
+    client, _manager, _pool = api
+    await client.put("/api/datasources/opc", json={
+        "type": "opcua-client", "variables": [],
+        "settings": {"server_url": "opc.tcp://127.0.0.1:1", "username": "op", "password": "opc-pw"},
+    })
+    await client.put("/api/datasources/plc", json=_ads_body(
+        plc, route_method="custom", route_user="Administrator", route_password="ads-pw",
+    ))
+    opc = (await client.get("/api/datasources/opc")).json()["settings"]
+    ads = (await client.get("/api/datasources/plc", params={"include_variables": False})).json()["settings"]
+    assert (opc["password"], ads["route_password"]) == ("opc-pw", "ads-pw")
+    assert _get_datasource_payload("opc")["settings"]["password"] == "opc-pw"
+    assert _get_datasource_payload("plc")["settings"]["route_password"] == "ads-pw"
 
 
 @pytest.mark.asyncio
@@ -189,6 +262,15 @@ async def test_ads_test_connection_failure_is_a_result_not_an_error(api) -> None
     assert result["ok"] is False
     assert result["error"]
     assert result["device_name"] is None
+
+    # A host that is not a valid name at all is a failed probe too.
+    for host in ("a\x00b", "\u00e4" * 70 + ".example"):
+        resp = await client.post(
+            "/api/datasources/ads/test-connection", json={"host": host, "ams_net_id": "1.2.3.4.1.1"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is False
+        assert resp.json()["error"]
 
     # A host name gives no default NetID.
     resp = await client.post("/api/datasources/ads/test-connection", json={"host": "plc.local"})

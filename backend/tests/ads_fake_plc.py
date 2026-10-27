@@ -5,6 +5,10 @@ read-write with sum read/write, add/delete notification — over symbol and
 data-type tables encoded here, independently of ``ads.symbols``'s parser,
 from a small demo program (``demo_tables``). PLC memory is index group
 0x4040; a change to it fires the on-change notifications that cover it.
+
+With ``require_route`` it ignores AMS frames from a NetID it has no route
+for, as a real PLC does, and answers the ADS UDP add-route request on
+``udp_port``, adding the route when the user name and password match.
 """
 
 from __future__ import annotations
@@ -227,6 +231,16 @@ class FakePlc:
         self.port_registrations = 0
         # The AMS source (NetID + port) of every packet received.
         self.sources: list[bytes] = []
+        # Static routes: AMS frames from another source NetID go unanswered.
+        self.require_route = False
+        # ADS commands left unanswered, as a device that hangs would.
+        self.ignore_commands: set[int] = set()
+        self.routes: set[bytes] = set()
+        self.route_user, self.route_password = "Administrator", "1"
+        # Each add-route request received, as ``{tag: value}``.
+        self.route_requests: list[dict[int, bytes]] = []
+        self.udp_port = 0
+        self._udp: asyncio.DatagramTransport | None = None
         self.port = 0
         self._server: asyncio.Server | None = None
         self._writers: set[asyncio.StreamWriter] = set()
@@ -236,9 +250,15 @@ class FakePlc:
     async def start(self) -> int:
         self._server = await asyncio.start_server(self._serve, "127.0.0.1", 0)
         self.port = self._server.sockets[0].getsockname()[1]
+        self._udp, _ = await asyncio.get_running_loop().create_datagram_endpoint(
+            lambda: _RouteService(self), local_addr=("127.0.0.1", 0),
+        )
+        self.udp_port = self._udp.get_extra_info("sockname")[1]
         return self.port
 
     async def stop(self) -> None:
+        if self._udp is not None:
+            self._udp.close()
         self.drop_connections()
         if self._server is not None:
             self._server.close()
@@ -306,9 +326,13 @@ class FakePlc:
                     continue
                 target, source = body[0:8], body[8:16]
                 self.sources.append(source)
+                if self.require_route and source[:6] not in self.routes:
+                    continue
                 command, _flags, length, _error, invoke_id = struct.unpack_from("<HHIII", body, 16)
                 data = body[32:32 + length]
                 self.commands.append(command)
+                if command in self.ignore_commands:
+                    continue
                 reply, after = self._handle(command, data, writer, source)
                 self._send(writer, source, target, command, invoke_id, reply, flags=0x0005)
                 if after is not None:
@@ -430,3 +454,37 @@ class FakePlc:
             if current != n.last:
                 n.last = current
                 self._notify(handle)
+
+
+class _RouteService(asyncio.DatagramProtocol):
+    """The ADS UDP service's add-route request (service 6)."""
+
+    def __init__(self, plc: FakePlc) -> None:
+        self.plc = plc
+        self.transport: asyncio.DatagramTransport | None = None
+
+    def connection_made(self, transport) -> None:
+        self.transport = transport
+
+    def datagram_received(self, data: bytes, addr) -> None:
+        magic = data[:4]
+        invoke_id, service = struct.unpack_from("<II", data, 4)
+        if magic != b"\x03\x66\x14\x71" or service != 6:
+            return
+        (count,) = struct.unpack_from("<I", data, 20)
+        tags, pos = {}, 24
+        for _ in range(count):
+            tag, length = struct.unpack_from("<HH", data, pos)
+            tags[tag] = data[pos + 4:pos + 4 + length]
+            pos += 4 + length
+        self.plc.route_requests.append(tags)
+        user, password = tags.get(13, b"").rstrip(b"\0"), tags.get(2, b"").rstrip(b"\0")
+        if (user.decode(), password.decode()) == (self.plc.route_user, self.plc.route_password):
+            self.plc.routes.add(tags[7])
+            status = 0
+        else:
+            status = 0x704
+        reply = magic + struct.pack("<II", invoke_id, 0x80000006) + bytes([127, 0, 0, 1, 1, 1])
+        reply += struct.pack("<HI", 10000, 1) + struct.pack("<HHI", 1, 4, status)
+        assert self.transport is not None
+        self.transport.sendto(reply, addr)

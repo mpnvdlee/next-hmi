@@ -714,6 +714,12 @@ An `ads-client` has the same file shape with its own settings:
     "tcp_port": 48898,
     "local_ams_net_id": "",
     "local_router": false,
+    "route_method": "twincat",
+    "route_user": "",
+    "route_password": "",
+    "route_name": "",
+    "route_address": "",
+    "udp_port": 48899,
     "request_timeout_s": 5,
     "connect_timeout_s": 10,
     "reconnect_interval_s": 5,
@@ -732,6 +738,10 @@ An `ads-client` has the same file shape with its own settings:
 
 - `host` is the only required key. `ams_net_id` defaults to an IPv4 `host` plus `.1.1` (TwinCAT's own default; a host name needs it set), `ams_port` to `851` (the first TwinCAT 3 PLC runtime), `tcp_port` to `48898`
 - `local_ams_net_id` is this client's NetID, which the PLC needs a static route for; empty takes the local IPv4 address plus `.1.1`. `local_router: true` connects through a TwinCAT router on `127.0.0.1` instead, which assigns the NetID and uses its own routes — for a PC that runs TwinCAT itself
+- a direct connection needs a static route on the PLC for this client's NetID and IP: without one the PLC takes the TCP connection and answers no request. `route_method` `twincat` (default) leaves the route to TwinCAT's own tools — `POST /api/datasources/ads/test-connection` returns the `local_net_id` and `local_ip` to enter there. `custom` lets the HMI create it: when the first request after a connect goes unanswered (or fails with ADS error 0x0007), the engine sends the ADS UDP add-route request on `udp_port` (default 48899), then connects again — once per reconnect attempt. Once the PLC refuses the route, or takes it and still answers nothing, that engine sends no further request (a wrong password resent each interval could lock the account) but keeps connecting, in case the route is added by hand; saving the datasource starts over. `local_router: true` ignores `route_method`: its routes belong to the TwinCAT router
+- `route_user` / `route_password` are the user account on the PLC that authorises the route (TwinCAT's Add Route dialog asks for the same). `route_password` is a plain settings field like an `opcua-client`'s `password`: stored as given, returned as-is by the REST API and MCP reads, never logged
+- `route_name` is the name the route gets in the PLC's route list; empty is `<hostname>-nexthmi`
+- `route_address` is the address the route points back at; empty is this machine's IPv4 address toward the PLC. Set it when a NAT sits between the HMI and the PLC, to the address the PLC sees the HMI as
 - `bg_publish_interval_ms` is the poll period for enabled variables; on-screen, alarm and historized variables get a device notification sampled every `priority_sampling_interval_ms`, which the PLC may hold back for up to `priority_publish_interval_ms` (the notification's max delay)
 - `browse_root` is the member path a browse starts from (empty: the whole program). `browse_mode` is `marked` (only symbols an attribute named in `browse_attributes` marks — a list or comma-separated text), `lazy` (one level per browse) or `all`
 - a variable's and folder's `node_id` is the PLC member path, as TwinCAT names the symbol: `MAIN.stMotor.fSpeed`, `GVL.aAxis[2].fPos`. `data_type` is the OPC-UA builtin name of the IEC type (`INT` → `Int16`, `LREAL` → `Double`, `TIME` → `Duration`), so the rest of the variable tree model below applies unchanged
