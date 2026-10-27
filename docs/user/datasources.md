@@ -120,7 +120,7 @@ A PLC program publishes every variable it has — on a real machine that runs to
 
 ### Add variables — nothing is replaced
 
-**Browse PLC** opens a dialog with the PLC's tree. Variables already in the datasource show as *added*; tick the new ones — or **Select all new** — and **Add**. Each lands under the same folders as its PLC path (`MAIN.stMotor.bRunning` under `MAIN` › `stMotor`), with the folders and struct folders it needs created, and arrives disabled, as from an OPC-UA browse. In an array of structs a member ticked in one element is added to every element, so the elements stay alike.
+**Browse PLC** opens a dialog with the PLC's tree. Variables already in the datasource show as *added*; tick the new ones — or **Select all new** — and **Add**. Each lands under the same folders as its PLC path (`MAIN.stMotor.bRunning` under `MAIN` › `stMotor`), with the folders and struct folders it needs created, and arrives disabled, as from an OPC-UA browse. In an array of structs a member ticked in one element is added to every element, so the elements stay alike. Struct-array elements are numbered from 0 in the table and in bindings, as for OPC-UA: `aPoints[1]` on the PLC is `aPoints[0]` here; hover an element's row to see its PLC path.
 
 Adding never changes or removes what is already there, so you can browse a level, add a few variables, and come back for more.
 
@@ -129,9 +129,9 @@ Adding never changes or removes what is already there, so you can browse a level
 A PLC download can rename or delete variables. The **Check against PLC** button (the clipboard-with-a-tick icon beside the filter in the variable table's toolbar) asks the PLC which of the datasource's **saved** variables it no longer has. Variables added since the last save are not checked: save first. The button stays disabled while nothing is saved.
 
 - **Everything is there** — a green line says every saved variable exists on the PLC; **Dismiss** it, or it goes away by itself at the next change to the tree.
-- **Something is missing** — those variables are marked stale straight away (greyed out, and no longer read), and any marked stale before that the PLC has again are cleared. A panel above the table lists them under *Missing on PLC*. Nothing is deleted unless you say so: tick the ones to remove and click **Apply (remove N, keep M stale)**, or **Keep all** to leave them stale.
+- **Something is missing** — those variables are marked stale straight away (greyed out, and no longer read), and any marked stale before that the PLC has again are cleared. A panel above the table lists them under *Missing on PLC*. Nothing is deleted unless you say so: tick the ones to remove and click **Apply (remove N, keep M stale)** — it stays disabled until something is ticked — or **Keep all** to leave them stale.
 
-Save the project to keep the result. In an array of structs, every element holds the same members, so a member removed from one element only goes when it is removed from the first element too.
+Save the project to keep the result. Every element of a struct array holds the same members: to remove a member, remove it from the first element, which removes it from every element.
 
 ## Design offline with a static datasource
 

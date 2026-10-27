@@ -22,14 +22,24 @@ function uniqueName(base: string, existing: Set<string>): string {
   return `${base}_${i}`;
 }
 
+// The OPC-UA id prefix (`ns=4;s=`, `nsu=urn:x;i=`, `s=`); empty for an ADS path.
+const OPCUA_ID_PREFIX = /^(?:(?:ns|nsu)=[^;]*;)?[isgb]=/;
+
+function idShape(id: string): string {
+  return OPCUA_ID_PREFIX.exec(id)?.[0] ?? '';
+}
+
 /**
  * `nodeId` moved from the template element to the target element, when it is a
  * path below the template's own id (`MAIN.aPoints[1].x` → `MAIN.aPoints[4].x`,
  * or an OPC-UA string id spelled the same way). An id that is not such a path
- * (a numeric OPC-UA id) cannot be derived and is kept as it is.
+ * (a numeric OPC-UA id) cannot be derived and is kept as it is, as is one
+ * whose target element id has another shape (`ns=4;s=…` vs `ns=4;i=77`), which
+ * would otherwise come out as an invalid `ns=4;i=77.x`.
  */
 function rebaseNodeId(nodeId: string | undefined, from?: string, to?: string): string | undefined {
   if (!nodeId || !from || !to || !nodeId.startsWith(from)) return nodeId;
+  if (idShape(from) !== idShape(to)) return nodeId;
   const rest = nodeId.slice(from.length);
   return rest.startsWith('.') || rest.startsWith('[') ? to + rest : nodeId;
 }

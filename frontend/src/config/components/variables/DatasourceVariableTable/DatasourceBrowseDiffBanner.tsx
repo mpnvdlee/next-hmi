@@ -205,7 +205,13 @@ export default function DatasourceBrowseDiffBanner({ dsName, onApply, plcCheck =
           <Button size="sm" variant="ghost" onClick={handleDiscard}>
             {plcCheck ? 'Keep all' : 'Discard'}
           </Button>
-          <Button size="sm" variant="primary" onClick={handleApply} disabled={!canApply}>
+          <Button
+            size="sm"
+            variant="primary"
+            onClick={handleApply}
+            // A PLC check's rows are stale already: applying none is Keep all.
+            disabled={!canApply || (plcCheck && selectedCount === 0)}
+          >
             {plcCheck
               ? `Apply (remove ${selectedCount}, keep ${counts.removed - selectedCount} stale)`
               : selectedCount > 0

@@ -257,7 +257,8 @@ export default function AdsBrowseDialog({
             <p className="cfg-ads-browse__note">
               Tick variables to add. Variables already in this datasource show as added; nothing
               saved is changed or removed. A member ticked in one element of a struct array is added
-              for every element.
+              for every element. Struct-array elements are numbered from 0 in the table and in
+              bindings, as for OPC-UA: aPoints[1] on the PLC is aPoints[0] there.
             </p>
             <div className="cfg-ads-browse__tree">{renderNodes(nodes, 0)}</div>
           </>

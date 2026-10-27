@@ -135,4 +135,32 @@ describe('normalizeArrayStructIndices node ids', () => {
     ];
     expect(copiedId(normalizeArrayStructIndices(tree))).toEqual(['ns=2;i=101']);
   });
+
+  it('keeps the id when the target element id has another shape', () => {
+    const tree: TreeNode[] = [
+      {
+        kind: 'folder',
+        name: 'a',
+        children: [
+          element('[0]', 'ns=4;s=GVL.a[0]', [variable('x', 'ns=4;s=GVL.a[0].x')]),
+          element('[1]', 'ns=4;i=77', []),
+        ],
+      },
+    ];
+    expect(copiedId(normalizeArrayStructIndices(tree))).toEqual(['ns=4;s=GVL.a[0].x']);
+  });
+
+  it('rebases an ADS path onto an ADS path', () => {
+    const tree: TreeNode[] = [
+      {
+        kind: 'folder',
+        name: 'aPoints',
+        children: [
+          element('[0]', 'MAIN.aPoints[1]', [variable('x', 'MAIN.aPoints[1].x')]),
+          element('[1]', 'MAIN.aPoints[2]', []),
+        ],
+      },
+    ];
+    expect(copiedId(normalizeArrayStructIndices(tree))).toEqual(['MAIN.aPoints[2].x']);
+  });
 });

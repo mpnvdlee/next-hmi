@@ -33,7 +33,7 @@ describe('DatasourceBrowseDiffBanner', () => {
 
     expect(screen.getByText('2 saved variables are missing on the PLC')).toBeInTheDocument();
     expect(screen.getByText('Missing on PLC')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Apply (remove 0, keep 2 stale)' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Apply (remove 0, keep 2 stale)' })).toBeDisabled();
     fireEvent.click(screen.getByText('MAIN/a'));
     expect(screen.getByRole('button', { name: 'Apply (remove 1, keep 1 stale)' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Keep all' })).toBeInTheDocument();
