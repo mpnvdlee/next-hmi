@@ -664,7 +664,7 @@ def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
             dir=path.parent,
             delete=False,
         ) as f:
-            json.dump(data, f, indent=2)
+            json.dump(data, f, indent=2, ensure_ascii=False)
             tmp_path = Path(f.name)
         os.replace(tmp_path, path)
     except OSError:
