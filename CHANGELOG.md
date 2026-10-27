@@ -371,6 +371,11 @@ heading.
 
 ### Fixed
 
+- **A Button's custom SVG icon shows in Safari.** A project SVG on a Button
+  rendered at zero size in Safari and other WebKit browsers, so the button
+  showed no icon. It now fills the icon size, as it already did in Chrome
+  and Firefox.
+
 - **A restart keeps the default project's name.** Each start renamed the
   default project back to *Default*, so a name given in the manager did not
   survive a restart. Writing the project block also escaped characters such
