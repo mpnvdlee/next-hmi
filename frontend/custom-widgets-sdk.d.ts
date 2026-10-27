@@ -219,6 +219,8 @@ interface PageGroupStackEntry {
 
 interface HmiWidgetProps {
   id?: string;
+  /** The node's Identity name. */
+  name?: string;
   properties?: Record<string, unknown>;
   layout?: LayoutConfig;
   children?: unknown;

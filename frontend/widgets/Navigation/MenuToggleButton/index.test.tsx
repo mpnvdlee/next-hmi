@@ -11,10 +11,10 @@ vi.mock('@hmi/hooks/useWebSocket', () => ({
   sendWsMessage: vi.fn(),
 }));
 
-function renderToggle(properties: Record<string, unknown>) {
+function renderToggle(properties: Record<string, unknown>, name?: string) {
   return render(
     <MemoryRouter>
-      <MenuToggleButton properties={properties} />
+      <MenuToggleButton name={name} properties={properties} />
     </MemoryRouter>,
   );
 }

@@ -205,6 +205,11 @@ heading.
 
 ### Changed
 
+- **A widget's Name is what a screen reader announces.** An icon-only
+  **Button**, a pressable **Container** and the **Menu Toggle** use the
+  **Name** under **Identity** as their accessible name. The Menu Toggle's
+  **Aria label** property is gone.
+
 - **Every download names its edition.** The public zips are now
   `nexthmi-community-<os>-<arch>-<version>.zip` and
   `nexthmi-community-docker-linux-<arch>-<version>.zip`; the folder inside keeps

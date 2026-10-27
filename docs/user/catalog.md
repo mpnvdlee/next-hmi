@@ -606,7 +606,6 @@ Collapses or expands a bound menu state; swaps icon per state.
 | `bound` | Bound state | `Boolean` |
 | `iconCollapsed` | Icon (collapsed) | `icon` |
 | `iconExpanded` | Icon (expanded) | `icon` |
-| `ariaLabel` | Aria label | `String` |
 | `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |

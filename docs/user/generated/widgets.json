@@ -2445,12 +2445,6 @@
             "defaultValue": "×"
           },
           {
-            "key": "ariaLabel",
-            "label": "Aria label",
-            "type": "String",
-            "defaultValue": "Toggle menu"
-          },
-          {
             "key": "actions",
             "label": "Actions",
             "type": "actions"

@@ -1504,7 +1504,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "bb4a7d49cd813d5e",
+    "buildTs": "8f5f7bac677e80b0",
     "displayName": "Menu Toggle",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1519,9 +1519,6 @@
       },
       "iconExpanded": {
         "type": "icon"
-      },
-      "ariaLabel": {
-        "type": "string"
       },
       "actions": {
         "type": "actions"
