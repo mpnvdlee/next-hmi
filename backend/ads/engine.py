@@ -144,13 +144,15 @@ class DatasourceAdsEngine:
             except ValueError:
                 raise ValueError("No AMS NetID configured") from None
         local_net_id = str(self._config.get("local_ams_net_id", "")).strip()
+        via_router = bool(self._config.get("local_router", False))
         return AdsConnection(
-            host,
+            "127.0.0.1" if via_router else host,
             p.AmsAddress(p.parse_net_id(net_id), int(self._config.get("ams_port") or p.TC3_PLC_PORT)),
             source_net_id=p.parse_net_id(local_net_id) if local_net_id else None,
             tcp_port=int(self._config.get("tcp_port") or p.AMS_TCP_PORT),
             timeout_s=get_config_float(self._config, "request_timeout_s", 5.0, minimum=0.5, maximum=60.0),
             on_notification=self._on_notification,
+            via_router=via_router,
         )
 
     # ── Lifecycle ────────────────────────────────────────────────────────────

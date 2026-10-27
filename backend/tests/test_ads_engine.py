@@ -285,6 +285,21 @@ async def test_a_refused_sum_read_is_reported_once(plc: FakePlc, rig, caplog) ->
 
 
 @pytest.mark.asyncio
+async def test_through_a_local_router(plc: FakePlc) -> None:
+    """The router assigns the NetID and port; router notes are skipped."""
+    engine, dm, _ = await _start(plc, host="192.168.168.18", local_router=True)
+    try:
+        assert plc.port_registrations == 1
+        assert set(plc.sources) == {plc.router_address}
+        plc.router_note()
+        plc.poke("MAIN.nCounter", "h", 3)
+        await _until(lambda: dm.values.get("MAIN/nCounter") == 3)
+        assert engine.connected
+    finally:
+        await engine.disconnect()
+
+
+@pytest.mark.asyncio
 async def test_a_host_name_needs_a_net_id() -> None:
     engine = DatasourceAdsEngine(DS)
     await engine.connect({"host": "plc01.local"})

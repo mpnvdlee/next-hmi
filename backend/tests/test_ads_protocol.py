@@ -42,6 +42,15 @@ def test_frame_layout_matches_the_spec() -> None:
     assert p.frame_length(frame[:p.TCP_HEADER_SIZE]) == 34
 
 
+def test_router_port_registration() -> None:
+    assert p.encode_port_connect() == bytes.fromhex("0010" "02000000" "0000")
+    assert p.decode_tcp_header(bytes.fromhex("0010" "08000000")) == (p.AMS_TCP_PORT_CONNECT, 8)
+    address = p.decode_port_connect(bytes([10, 1, 2, 3, 1, 1]) + struct.pack("<H", 32905))
+    assert (p.format_net_id(address.net_id), address.port) == ("10.1.2.3.1.1", 32905)
+    with pytest.raises(ValueError):
+        p.decode_port_connect(b"\x01\x02")
+
+
 def test_result_codes_raise_with_their_meaning() -> None:
     with pytest.raises(p.AdsError) as info:
         p.decode_data_response(struct.pack("<II", 0x710, 0))

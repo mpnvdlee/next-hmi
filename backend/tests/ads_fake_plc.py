@@ -175,6 +175,11 @@ class FakePlc:
         self.sum_reads = 0
         # A device without sum commands (TwinCAT 2, BC controllers).
         self.refuse_sum_reads = False
+        # What a local TwinCAT router hands out on PORT_CONNECT (0x1000).
+        self.router_address = bytes([10, 1, 2, 3, 1, 1]) + struct.pack("<H", 32905)
+        self.port_registrations = 0
+        # The AMS source (NetID + port) of every packet received.
+        self.sources: list[bytes] = []
         self.port = 0
         self._server: asyncio.Server | None = None
         self._writers: set[asyncio.StreamWriter] = set()
@@ -191,6 +196,11 @@ class FakePlc:
         if self._server is not None:
             self._server.close()
             await self._server.wait_closed()
+
+    def router_note(self) -> None:
+        """A router state note (AMS/TCP command 0x1001) to every client."""
+        for writer in self._writers:
+            writer.write(struct.pack("<HII", 0x1001, 4, 0))
 
     def drop_connections(self) -> None:
         for writer in list(self._writers):
@@ -241,8 +251,14 @@ class FakePlc:
         try:
             while True:
                 header = await reader.readexactly(6)
-                body = await reader.readexactly(struct.unpack("<HI", header)[1])
+                tcp_command, tcp_length = struct.unpack("<HI", header)
+                body = await reader.readexactly(tcp_length)
+                if tcp_command == 0x1000:
+                    self.port_registrations += 1
+                    writer.write(struct.pack("<HI", 0x1000, 8) + self.router_address)
+                    continue
                 target, source = body[0:8], body[8:16]
+                self.sources.append(source)
                 command, _flags, length, _error, invoke_id = struct.unpack_from("<HHIII", body, 16)
                 data = body[32:32 + length]
                 self.commands.append(command)

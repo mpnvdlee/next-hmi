@@ -4,9 +4,11 @@ ads.protocol — the AMS/TCP wire format: frames, ADS command payloads, errors.
 Beckhoff ADS over TCP (port 48898). Every integer is little-endian. Pure
 encode/decode with no I/O; ``ads.connection`` owns the socket.
 
-A frame is a 6-byte AMS/TCP header (reserved, length) followed by the 32-byte
+A frame is a 6-byte AMS/TCP header (command, length) followed by the 32-byte
 AMS header and the command payload. Requests carry state flag 0x0004, the
-device answers with 0x0005 and the same invoke id.
+device answers with 0x0005 and the same invoke id. An AMS/TCP command other
+than 0 is addressed to the router itself, not to a device: a client of a
+local TwinCAT router registers an AMS port with PORT_CONNECT first.
 """
 
 from __future__ import annotations
@@ -26,6 +28,10 @@ STATE_FLAGS_RESPONSE = 0x0005
 
 # Beckhoff caps a sum command at 500 sub-commands.
 MAX_SUM_ITEMS = 500
+
+# AMS/TCP header commands: 0 carries an AMS packet, the rest talk to the router.
+AMS_TCP_PACKET = 0x0000
+AMS_TCP_PORT_CONNECT = 0x1000
 
 
 class Command(IntEnum):
@@ -155,6 +161,23 @@ def encode_frame(
 def frame_length(tcp_header: bytes) -> int:
     """Bytes following the 6-byte AMS/TCP header."""
     return _TCP_HEADER.unpack(tcp_header)[1]
+
+
+def decode_tcp_header(tcp_header: bytes) -> tuple[int, int]:
+    """``(AMS/TCP command, bytes following)``."""
+    return _TCP_HEADER.unpack(tcp_header)
+
+
+def encode_port_connect(port: int = 0) -> bytes:
+    """Ask a local router for an AMS port (0: any free one). It answers with
+    the same command and this client's NetID and port."""
+    return _TCP_HEADER.pack(AMS_TCP_PORT_CONNECT, 2) + struct.pack("<H", port)
+
+
+def decode_port_connect(data: bytes) -> AmsAddress:
+    if len(data) < 8:
+        raise ValueError("router answered the port registration without an address")
+    return AmsAddress(data[:6], struct.unpack_from("<H", data, 6)[0])
 
 
 def decode_packet(body: bytes) -> AmsPacket:

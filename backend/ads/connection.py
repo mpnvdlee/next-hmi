@@ -2,9 +2,16 @@
 ads.connection — one AMS/TCP connection to one ADS device.
 
 Requests are matched to responses by invoke id; a single reader task resolves
-them and hands DeviceNotification samples to ``on_notification``. The
-connection talks to the device directly: the device needs a static AMS route
-for this client's NetID and IP, or ``host`` is the local TwinCAT router.
+them and hands DeviceNotification samples to ``on_notification``.
+
+Two ways to reach a device:
+
+- **Direct** (default): ``host`` is the device. It needs a static AMS route
+  for this client's NetID and IP, and accepts one connection per IP — so not
+  from a PC whose own TwinCAT router is already connected to it.
+- **Local router** (``via_router``): ``host`` is a TwinCAT router on this
+  machine (``127.0.0.1``), which assigns this client its NetID and AMS port
+  and forwards over the routes it already has.
 """
 
 from __future__ import annotations
@@ -33,8 +40,10 @@ class AdsConnection:
         tcp_port: int = p.AMS_TCP_PORT,
         timeout_s: float = 5.0,
         on_notification: NotificationSink | None = None,
+        via_router: bool = False,
     ) -> None:
         self.host = host
+        self.via_router = via_router
         self.target = target
         self.tcp_port = tcp_port
         self.timeout_s = timeout_s
@@ -61,7 +70,14 @@ class AdsConnection:
         self._reader, self._writer = await asyncio.wait_for(
             asyncio.open_connection(self.host, self.tcp_port), timeout=connect_timeout_s,
         )
-        if self._source_net_id is None:
+        if self.via_router:
+            try:
+                source = await asyncio.wait_for(self._register_port(), timeout=connect_timeout_s)
+            except BaseException:
+                await self.close()
+                raise
+            self._source_net_id, self._source_port = source.net_id, source.port
+        elif self._source_net_id is None:
             # Without a configured NetID, use the convention TwinCAT itself
             # follows: the local IPv4 address of this connection plus ".1.1".
             local_ip = self._writer.get_extra_info("sockname")[0]
@@ -72,6 +88,16 @@ class AdsConnection:
                 raise ValueError(f"No local AMS NetID configured and {local_ip} is not IPv4") from None
         self._closed_reason = None
         self._reader_task = asyncio.create_task(self._read_loop())
+
+    async def _register_port(self) -> p.AmsAddress:
+        assert self._reader is not None and self._writer is not None
+        self._writer.write(p.encode_port_connect())
+        await self._writer.drain()
+        command, length = p.decode_tcp_header(await self._reader.readexactly(p.TCP_HEADER_SIZE))
+        data = await self._reader.readexactly(length)
+        if command != p.AMS_TCP_PORT_CONNECT:
+            raise ConnectionError(f"{self.host} is not a TwinCAT router (answered AMS/TCP command 0x{command:04X})")
+        return p.decode_port_connect(data)
 
     async def close(self) -> None:
         self._fail_pending("connection closed")
@@ -98,8 +124,11 @@ class AdsConnection:
         assert reader is not None
         try:
             while True:
-                header = await reader.readexactly(p.TCP_HEADER_SIZE)
-                body = await reader.readexactly(p.frame_length(header))
+                command, length = p.decode_tcp_header(await reader.readexactly(p.TCP_HEADER_SIZE))
+                body = await reader.readexactly(length)
+                if command != p.AMS_TCP_PACKET:
+                    # Router housekeeping (state notes), nothing a request awaits.
+                    continue
                 packet = p.decode_packet(body)
                 if packet.command == p.Command.NOTIFICATION:
                     self._dispatch_notification(packet.data)
