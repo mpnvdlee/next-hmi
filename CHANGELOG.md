@@ -374,6 +374,12 @@ heading.
 
 ### Fixed
 
+- **A restart keeps the default project's name.** Each start renamed the
+  default project back to *Default*, so a name given in the manager did not
+  survive a restart. Writing the project block also escaped characters such
+  as `·` and `₂` in `config.json` (`·`); they are now written as they
+  are.
+
 - **An input inside a component's actions is not flagged.** The warnings
   pill said a `$componentProp` nested in another source "renders once and
   then stops updating" inside actions too, such as an Edit Value title built
