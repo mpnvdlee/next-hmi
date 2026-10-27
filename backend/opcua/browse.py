@@ -338,8 +338,19 @@ class AddressSpaceBrowser:
                 params.NodesToBrowse.append(desc)
             results = await self._client.uaclient.browse(params)
             all_refs: list[list[ua.ReferenceDescription]] = [[] for _ in nodes]
+            # A server keeps only a few continuation points per session (an
+            # S7-1500 a handful): once a request has used them up, every
+            # further node that has more references than fit in one answer
+            # comes back BadNoContinuationPoints with no references at all —
+            # a large struct then read as one without members.
+            starved: list[int] = []
             for slot, result in enumerate(results):
+                if result.StatusCode.value == ua.StatusCodes.BadNoContinuationPoints:
+                    starved.append(slot)
+                    continue
                 all_refs[slot].extend(result.References)
+            if len(starved) == len(nodes) > 1:
+                raise ua.UaStatusCodeError(ua.StatusCodes.BadNoContinuationPoints)
             pending = [
                 (i, r.ContinuationPoint)
                 for i, r in enumerate(results)
@@ -356,6 +367,17 @@ class AddressSpaceBrowser:
                     all_refs[idx].extend(result.References)
                     if result.ContinuationPoint:
                         pending.append((idx, result.ContinuationPoint))
+            if starved and len(starved) < len(nodes):
+                # Every point this request was given is released now that its
+                # nodes have been read to the end, so ask again for the rest.
+                retried = await self._browse_chunk([nodes[i] for i in starved])
+                for slot, refs in zip(starved, retried, strict=True):
+                    all_refs[slot] = refs
+            elif starved:
+                logger.warning(
+                    "Server has no continuation point to browse %s on %s",
+                    nodes[0].nodeid.to_string(), self.datasource_name,
+                )
             return all_refs
         except asyncio.CancelledError:
             raise
@@ -617,6 +639,9 @@ class AddressSpaceBrowser:
                         "children": [],
                     }
                     parent_entry["children"].append(child_entry)
+                    if parent_entry["data_type"] == "Unknown":
+                        # Members make it a struct whatever its type read said.
+                        parent_entry["data_type"] = "struct"
                     progress.nodes += 1
                     if ref.NodeClass == ua.NodeClass.Variable:
                         var_node_ids.append(ref.NodeId)
@@ -647,8 +672,10 @@ class AddressSpaceBrowser:
                                 entry["array_length"] = al
                         # Only a struct has members, so only a struct is worth
                         # another Browse — a scalar would cost one operation per
-                        # tag and return nothing but its own properties.
-                        if dt == "struct":
+                        # tag and return nothing but its own properties. A node
+                        # whose type could not be read may be a struct too: the
+                        # Browse tells, by whether it finds members.
+                        if dt in ("struct", "Unknown"):
                             next_queue.append(
                                 (Node(self._client.uaclient, nid), entry, True)
                             )
