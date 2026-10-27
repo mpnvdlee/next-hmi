@@ -669,6 +669,7 @@ Supported action types (see `frontend/src/config/components/editor/PropertiesPan
 - `setLanguage` — switches the active HMI language; the `language` property is resolved from component properties at runtime.
 - `setActiveTheme` — switches the runtime theme for this session; `theme` resolves to a theme id.
 - `acknowledgeAllAlarms` — `{}`; acknowledges every unacknowledged alarm as the scope's signed-in user.
+- `delay` — `{ duration }`; waits `duration` ms, then runs the actions after it in the list, which then read the values of that moment.
 - `loginUser` / `logoutUser` — scope-based authentication (the scope defaults to the current `useHmiScope()`).
 - `recipeLoad` (`{ datasetId, verify? }`) / `recipeSave` (`{ datasetId? }`) — download a recipe dataset to its variables, or save the live values into one.
 

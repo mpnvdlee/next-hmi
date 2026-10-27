@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ButtonAction } from '@shared/types/config';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { executeWidgetActions } from './widgetActions';
@@ -142,5 +142,31 @@ describe('executeWidgetActions — openDialog component properties', () => {
     const overlays = useHmiStore.getState().openPageOverlays;
     expect(overlays.map((o) => o.pageId)).toEqual(['device', 'confirm']);
     expect(overlays[0].componentProperties).toEqual({ device: 4 });
+  });
+});
+
+describe('executeWidgetActions — delay', () => {
+  beforeEach(() => {
+    useHmiStore.setState({ pendingToasts: [] });
+  });
+
+  it('runs the actions after a Delay once it has passed, reading values of that moment', () => {
+    vi.useFakeTimers();
+    try {
+      executeWidgetActions([
+        { type: 'showToast', message: 'Before' },
+        { type: 'delay', duration: 500 },
+        { type: 'showToast', message: 'After' },
+      ] as ButtonAction[]);
+      const messages = () => useHmiStore.getState().pendingToasts.map((t) => t.message);
+
+      expect(messages()).toEqual(['Before']);
+      vi.advanceTimersByTime(499);
+      expect(messages()).toEqual(['Before']);
+      vi.advanceTimersByTime(1);
+      expect(messages()).toEqual(['Before', 'After']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

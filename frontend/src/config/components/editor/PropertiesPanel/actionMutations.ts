@@ -61,6 +61,8 @@ export function makeDefaultAction(
       return { type: 'logoutUser' };
     case 'acknowledgeAllAlarms':
       return { type: 'acknowledgeAllAlarms' };
+    case 'delay':
+      return { type: 'delay', duration: 500 };
     case 'setLanguage':
       return { type: 'setLanguage', language: { $static: '' } };
     case 'setActiveTheme':
