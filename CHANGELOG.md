@@ -13,6 +13,11 @@ heading.
 
 ### Added
 
+- **The editor opens each project at its own viewport.** The preview's
+  viewport choice and custom width and height are saved in the project with
+  **Save**, so everyone who opens it gets the same frame. Scaling stays
+  per session.
+
 - **Actions on a variable change.** **Global Events** gets a **Variable
   Changed** list: each trigger names a variable and runs its actions whenever
   that value changes, and once at start-up. Put an **If** on the same

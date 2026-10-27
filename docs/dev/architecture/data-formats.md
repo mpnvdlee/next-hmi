@@ -319,7 +319,10 @@ keeps them scrollable but chromeless), `lockedFeedback` (what a press on a
 non-interactable component produces — `flash`, the default ⊘ marker at the
 pointer, `toast` for a warning notification, or `none`; the component is dimmed
 and blocked in every mode), `appTitle`
-(browser tab), `appIcon` (path under `assets/`, or an absolute URL), and
+(browser tab), `appIcon` (path under `assets/`, or an absolute URL),
+`editorViewport` (`{ preset, width, height }` — the editor preview's viewport:
+`preset` is `fit`, `laptop`, `tablet`, `phone` or `custom`, and `width`/`height`
+the custom size; editor-only, the runtime ignores it; unset is `fit`), and
 `bootLogo` (path under `assets/`) — the boot-screen logo, which replaces the
 product mark and name. Edition-bound: only the `ee` build offers a setting for
 it *and* reads it, so the public build shows the product branding whatever the
