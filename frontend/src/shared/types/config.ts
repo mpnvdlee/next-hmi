@@ -676,6 +676,7 @@ export type ButtonAction =
       onFailed?: ButtonAction[];
       onSettled?: ButtonAction[];
     }
+  | { type: 'acknowledgeAllAlarms' }
   | { type: 'setLanguage'; language: unknown }
   | { type: 'setActiveTheme'; theme: unknown }
   | {

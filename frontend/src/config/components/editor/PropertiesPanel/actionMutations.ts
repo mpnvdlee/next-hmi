@@ -59,6 +59,8 @@ export function makeDefaultAction(
       };
     case 'logoutUser':
       return { type: 'logoutUser' };
+    case 'acknowledgeAllAlarms':
+      return { type: 'acknowledgeAllAlarms' };
     case 'setLanguage':
       return { type: 'setLanguage', language: { $static: '' } };
     case 'setActiveTheme':

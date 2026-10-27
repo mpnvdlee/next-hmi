@@ -76,6 +76,12 @@ export const ACTION_TYPES = [
     description: 'Drops back to the auto-login user.',
   },
   {
+    type: 'acknowledgeAllAlarms' as const,
+    label: 'Acknowledge All Alarms',
+    category: 'Machine',
+    description: 'Acknowledges every unacknowledged alarm as the signed-in user.',
+  },
+  {
     type: 'setLanguage' as const,
     label: 'Set Language',
     category: 'Interface',
@@ -124,6 +130,7 @@ export const ACTION_TYPE_TINT: Record<ButtonAction['type'], string> = {
   recipeSave: 'recipeList',
   loginUser: 'user',
   logoutUser: 'userGroups',
+  acknowledgeAllAlarms: 'alarmCount',
   setLanguage: 'languages',
   setActiveTheme: 'viewport',
   showAlert: 'alarmCount',

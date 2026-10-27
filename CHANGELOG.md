@@ -180,6 +180,10 @@ heading.
   (uppercase) and **Letter spacing** for the label. Each one left at its
   default keeps today's look.
 
+- **An action acknowledges every alarm.** **Acknowledge All Alarms**
+  acknowledges each unacknowledged alarm in the name of the signed-in user,
+  so any Button can be the screen's acknowledge button.
+
 - **A Button sets its border color, its label's size and weight, and its
   padding.** A **Border color** that differs from the button color, such as a
   ring that marks the active page, and a **Size override** and **Weight
