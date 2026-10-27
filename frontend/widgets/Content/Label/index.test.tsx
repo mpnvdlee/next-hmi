@@ -44,7 +44,15 @@ describe('Label', () => {
   it('emits the size and weight overrides as custom properties, not literal styles', () => {
     const { container } = render(
       <MemoryRouter>
-        <Label properties={{ text: 'AQUAVANE', size: '17px', weight: 800, color: '#123456' }} />
+        <Label
+          properties={{
+            text: 'AQUAVANE',
+            size: '17px',
+            weight: 800,
+            color: '#123456',
+            padding: '4px 8px',
+          }}
+        />
       </MemoryRouter>,
     );
     const el = container.firstElementChild as HTMLElement;
@@ -52,6 +60,7 @@ describe('Label', () => {
     expect(el.style.getPropertyValue('--hmi-label-size')).toBe('17px');
     expect(el.style.getPropertyValue('--hmi-label-weight')).toBe('800');
     expect(el.style.getPropertyValue('--hmi-label-color')).toBe('#123456');
+    expect(el.style.getPropertyValue('--hmi-label-padding')).toBe('4px 8px');
   });
 
   it('leaves the overrides unset when no size or weight is configured', () => {
@@ -64,6 +73,7 @@ describe('Label', () => {
 
     expect(el.style.getPropertyValue('--hmi-label-size')).toBe('');
     expect(el.style.getPropertyValue('--hmi-label-weight')).toBe('');
+    expect(el.style.getPropertyValue('--hmi-label-padding')).toBe('');
   });
 
   it('resolves the text through a property source', () => {

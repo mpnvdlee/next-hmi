@@ -6,6 +6,7 @@
 .hmi-component.hmi-label {
   margin: 0;
   min-width: 0;
+  padding: var(--hmi-label-padding, 0);
   color: var(--hmi-label-color, var(--hmi-text));
   font-size: var(--hmi-label-size, var(--hmi-label-combo-size));
   font-weight: var(--hmi-label-weight, var(--hmi-label-combo-weight));

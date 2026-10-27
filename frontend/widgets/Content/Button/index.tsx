@@ -77,6 +77,12 @@ export const schema = {
     step: 1,
     group: 'Appearance',
   },
+  borderColor: {
+    type: 'color' as const,
+    label: 'Border color',
+    description: 'Empty uses the button color.',
+    group: 'Appearance',
+  },
   align: {
     type: 'string' as const,
     format: 'select' as const,
@@ -105,6 +111,26 @@ export const schema = {
     type: 'string' as const,
     label: 'Letter spacing',
     description: 'Any CSS letter-spacing for the label, e.g. 0.08em.',
+    group: 'Appearance',
+  },
+  size: {
+    type: 'string' as const,
+    label: 'Size override',
+    description: 'One-off font size for the label, e.g. 13px.',
+    group: 'Appearance',
+  },
+  weight: {
+    type: 'integer' as const,
+    label: 'Weight override',
+    min: 100,
+    max: 900,
+    step: 100,
+    group: 'Appearance',
+  },
+  padding: {
+    type: 'string' as const,
+    label: 'Padding override',
+    description: 'Any CSS padding, e.g. 0 or 6px 12px. Empty uses the theme spacing.',
     group: 'Appearance',
   },
   iconSize: {
@@ -148,12 +174,15 @@ export default function Button({ name, properties, layout }: HmiWidgetProps) {
   const alignStart = usePropString(properties, 'align', 'center') === 'start';
   const uppercase = usePropString(properties, 'textTransform', 'none') === 'uppercase';
   const letterSpacing = usePropString(properties, 'letterSpacing', '');
+  const borderColor = usePropString(properties, 'borderColor', '') || color;
+  const size = usePropString(properties, 'size', '');
+  const weight = getPropNumber(properties, 'weight', 0, evalCtx);
+  const padding = usePropString(properties, 'padding', '');
   const isOutline = variant === 'outline';
-  const colorStyle: React.CSSProperties = color
-    ? isOutline
-      ? { color, borderColor: color }
-      : { backgroundColor: color, borderColor: color }
-    : {};
+  const colorStyle: React.CSSProperties = {
+    ...(color ? (isOutline ? { color } : { backgroundColor: color }) : {}),
+    ...(borderColor ? { borderColor } : {}),
+  };
 
   // The radius rides a custom property rather than a literal inline
   // `borderRadius`: the value is consumed by `.hmi-button__btn` one level down,
@@ -166,6 +195,9 @@ export default function Button({ name, properties, layout }: HmiWidgetProps) {
   if (iconColor) style['--hmi-btn-icon-color'] = iconColor;
   if (uppercase) style['--hmi-btn-transform'] = 'uppercase';
   if (letterSpacing) style['--hmi-btn-tracking'] = letterSpacing;
+  if (size) style['--hmi-btn-size'] = size;
+  if (weight) style['--hmi-btn-weight'] = String(weight);
+  if (padding) style['--hmi-btn-padding'] = padding;
 
   const IconComp = iconName && isBuiltinIconId(iconName) ? getBuiltinIconComponent(iconName) : null;
   // An empty label is the icon-only button; without an icon it stays an empty text button.

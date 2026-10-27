@@ -67,7 +67,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "2f9207fbf2466824",
+    "buildTs": "247861b3a4217bb9",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -110,6 +110,9 @@
       "borderWidth": {
         "type": "integer"
       },
+      "borderColor": {
+        "type": "color"
+      },
       "align": {
         "type": "string"
       },
@@ -117,6 +120,15 @@
         "type": "string"
       },
       "letterSpacing": {
+        "type": "string"
+      },
+      "size": {
+        "type": "string"
+      },
+      "weight": {
+        "type": "integer"
+      },
+      "padding": {
         "type": "string"
       },
       "iconSize": {
@@ -230,7 +242,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "eeff52deb49070f8",
+    "buildTs": "080b45df5801ce88",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -260,6 +272,9 @@
       },
       "weight": {
         "type": "integer"
+      },
+      "padding": {
+        "type": "string"
       },
       "lineHeight": {
         "type": "string"

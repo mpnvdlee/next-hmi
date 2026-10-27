@@ -180,6 +180,13 @@ heading.
   (uppercase) and **Letter spacing** for the label. Each one left at its
   default keeps today's look.
 
+- **A Button sets its border color, its label's size and weight, and its
+  padding.** A **Border color** that differs from the button color, such as a
+  ring that marks the active page, and a **Size override** and **Weight
+  override** for the label, as on a Label. A **Padding override** on both the
+  Button and the Label takes any CSS padding, such as `0` for a narrow tile.
+  Left empty, each keeps today's look.
+
 - **A Label sets its line height and letter spacing, and shows a unit.**
   New **Line height** and **Letter spacing** properties override the
   typography combo's, and a **Unit** shows after the text in a style of its
@@ -373,6 +380,10 @@ heading.
   formula there that is not rounded.
 
 ### Fixed
+
+- **A Button stays inside a narrow fixed tile.** A Button in a fixed size
+  narrower than its label plus padding grew past it, and its badge sat
+  outside the tile. It now keeps the size it was given.
 
 - **A restart keeps the default project's name.** Each start renamed the
   default project back to *Default*, so a name given in the manager did not

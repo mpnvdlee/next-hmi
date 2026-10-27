@@ -66,6 +66,12 @@ export const schema = {
     step: 100,
     group: 'Appearance',
   },
+  padding: {
+    type: 'string' as const,
+    label: 'Padding override',
+    description: 'Any CSS padding, e.g. 4px 8px.',
+    group: 'Appearance',
+  },
   lineHeight: {
     type: 'string' as const,
     label: 'Line height',
@@ -114,6 +120,7 @@ export default function Label({ properties, layout }: HmiWidgetProps) {
   const unit = usePropString(properties, 'unit', '');
   const unitSize = usePropString(properties, 'unitSize', '');
   const unitColor = usePropString(properties, 'unitColor', '');
+  const padding = usePropString(properties, 'padding', '');
 
   if (!text) return null;
 
@@ -125,6 +132,7 @@ export default function Label({ properties, layout }: HmiWidgetProps) {
   if (letterSpacing) style['--hmi-label-tracking'] = letterSpacing;
   if (unitSize) style['--hmi-label-unit-size'] = unitSize;
   if (unitColor) style['--hmi-label-unit-color'] = unitColor;
+  if (padding) style['--hmi-label-padding'] = padding;
 
   const className = [
     'hmi-component',

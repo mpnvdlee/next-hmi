@@ -538,6 +538,12 @@
             "group": "Appearance"
           },
           {
+            "key": "borderColor",
+            "label": "Border color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
             "key": "align",
             "label": "Content alignment",
             "type": "String",
@@ -554,6 +560,24 @@
           {
             "key": "letterSpacing",
             "label": "Letter spacing",
+            "type": "String",
+            "group": "Appearance"
+          },
+          {
+            "key": "size",
+            "label": "Size override",
+            "type": "String",
+            "group": "Appearance"
+          },
+          {
+            "key": "weight",
+            "label": "Weight override",
+            "type": "Integer",
+            "group": "Appearance"
+          },
+          {
+            "key": "padding",
+            "label": "Padding override",
             "type": "String",
             "group": "Appearance"
           },
@@ -797,6 +821,12 @@
             "key": "weight",
             "label": "Weight override",
             "type": "Integer",
+            "group": "Appearance"
+          },
+          {
+            "key": "padding",
+            "label": "Padding override",
+            "type": "String",
             "group": "Appearance"
           },
           {

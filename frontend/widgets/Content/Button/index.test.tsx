@@ -161,10 +161,36 @@ describe('Button', () => {
     const { container } = renderButton({ label: 'Jog' });
     const el = container.firstElementChild as HTMLElement;
 
-    for (const prop of ['--hmi-btn-icon-size', '--hmi-btn-border-width', '--hmi-btn-fill']) {
+    for (const prop of [
+      '--hmi-btn-icon-size',
+      '--hmi-btn-border-width',
+      '--hmi-btn-fill',
+      '--hmi-btn-padding',
+    ]) {
       expect(el.style.getPropertyValue(prop)).toBe('');
     }
     expect(screen.getByRole('button', { name: 'Jog' })).not.toHaveAttribute('title');
+  });
+
+  it('gives the border its own color, falling back to the button color', () => {
+    renderButton({ label: 'Alarms', color: '#22a7e0', borderColor: '#d0452f' });
+    expect(screen.getByRole('button', { name: 'Alarms' }).style.borderColor).toBe(
+      'rgb(208, 69, 47)',
+    );
+  });
+
+  it('emits the size, weight and padding overrides as custom properties', () => {
+    const { container } = renderButton({
+      label: 'Alarms',
+      size: '13px',
+      weight: 600,
+      padding: '0',
+    });
+    const el = container.firstElementChild as HTMLElement;
+
+    expect(el.style.getPropertyValue('--hmi-btn-size')).toBe('13px');
+    expect(el.style.getPropertyValue('--hmi-btn-weight')).toBe('600');
+    expect(el.style.getPropertyValue('--hmi-btn-padding')).toBe('0');
   });
 
   it('dispatches configured onPress actions', async () => {

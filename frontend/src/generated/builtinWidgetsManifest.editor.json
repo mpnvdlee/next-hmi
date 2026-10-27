@@ -181,6 +181,11 @@
         "step": 1,
         "group": "Appearance"
       },
+      "borderColor": {
+        "label": "Border color",
+        "description": "Empty uses the button color.",
+        "group": "Appearance"
+      },
       "align": {
         "format": "select",
         "label": "Content alignment",
@@ -218,6 +223,23 @@
       "letterSpacing": {
         "label": "Letter spacing",
         "description": "Any CSS letter-spacing for the label, e.g. 0.08em.",
+        "group": "Appearance"
+      },
+      "size": {
+        "label": "Size override",
+        "description": "One-off font size for the label, e.g. 13px.",
+        "group": "Appearance"
+      },
+      "weight": {
+        "label": "Weight override",
+        "min": 100,
+        "max": 900,
+        "step": 100,
+        "group": "Appearance"
+      },
+      "padding": {
+        "label": "Padding override",
+        "description": "Any CSS padding, e.g. 0 or 6px 12px. Empty uses the theme spacing.",
         "group": "Appearance"
       },
       "iconSize": {
@@ -439,6 +461,11 @@
         "min": 100,
         "max": 900,
         "step": 100,
+        "group": "Appearance"
+      },
+      "padding": {
+        "label": "Padding override",
+        "description": "Any CSS padding, e.g. 4px 8px.",
         "group": "Appearance"
       },
       "lineHeight": {

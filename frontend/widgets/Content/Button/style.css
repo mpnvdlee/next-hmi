@@ -24,18 +24,21 @@
 
 .hmi-button__btn {
   flex: 1;
+  /* A fixed tile narrower than the label plus padding keeps its width; without
+     this the button grew past it and its badge sat outside the tile. */
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--hmi-btn-gap);
   min-height: var(--hmi-btn-min-height);
-  padding: var(--hmi-btn-padding-y) var(--hmi-btn-padding-x);
+  padding: var(--hmi-btn-padding, var(--hmi-btn-padding-y) var(--hmi-btn-padding-x));
   background: var(--hmi-accent);
   color: var(--hmi-accent-on);
   border: var(--hmi-btn-border-width, 1px) solid var(--hmi-accent);
   border-radius: var(--hmi-btn-radius, var(--hmi-radius));
-  font-size: var(--hmi-type-body-size);
-  font-weight: var(--hmi-type-subheading-weight);
+  font-size: var(--hmi-btn-size, var(--hmi-type-body-size));
+  font-weight: var(--hmi-btn-weight, var(--hmi-type-subheading-weight));
   letter-spacing: var(--hmi-btn-tracking, var(--hmi-type-body-tracking));
   text-transform: var(--hmi-btn-transform, none);
   cursor: pointer;
@@ -135,7 +138,7 @@
 /* Icon-only takes the vertical padding on every side, so hug sizing gives a
    square-ish tile instead of a text button's wide pill. */
 .hmi-button__btn--icon-only {
-  padding: var(--hmi-btn-padding-y);
+  padding: var(--hmi-btn-padding, var(--hmi-btn-padding-y));
   /* Square in hug mode: as wide as the touch-target height. */
   min-width: var(--hmi-btn-min-height);
 }

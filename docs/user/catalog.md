@@ -149,9 +149,13 @@ Runs actions and can write true to a bound boolean on press.
 | `fill` | Fill | `color` |
 | `radius` | Radius | `String` |
 | `borderWidth` | Border width (px) | `Integer` |
+| `borderColor` | Border color | `color` |
 | `align` | Content alignment | `String` |
 | `textTransform` | Text case | `String` |
 | `letterSpacing` | Letter spacing | `String` |
+| `size` | Size override | `String` |
+| `weight` | Weight override | `Integer` |
+| `padding` | Padding override | `String` |
 | `iconSize` | Icon size (px) | `Integer` |
 | `variable` | Variable | `Boolean` |
 | `actions` | Actions | `actions` |
@@ -214,6 +218,7 @@ Text in one of the theme typography combos, with translation support.
 | `wrap` | Overflow | `String` |
 | `size` | Size override | `String` |
 | `weight` | Weight override | `Integer` |
+| `padding` | Padding override | `String` |
 | `lineHeight` | Line height | `String` |
 | `letterSpacing` | Letter spacing | `String` |
 | `unitSize` | Unit size | `String` |
