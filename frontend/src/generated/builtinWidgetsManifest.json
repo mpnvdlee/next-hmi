@@ -82,7 +82,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "247861b3a4217bb9",
+    "buildTs": "342c8f1a327f7f9f",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1127,7 +1127,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "bc9df9b4dc39da9b",
+    "buildTs": "460d03913f430f8a",
     "displayName": "Number Input",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1146,6 +1146,9 @@
       "max": {
         "type": "float"
       },
+      "rangeMessage": {
+        "type": "string"
+      },
       "variable": {
         "type": [
           "float",
@@ -1159,11 +1162,17 @@
       "decimals": {
         "type": "integer"
       },
+      "color": {
+        "type": "color"
+      },
       "showRangeOnNumpad": {
         "type": "boolean"
       },
       "numpadPosition": {
         "type": "string"
+      },
+      "onChange": {
+        "type": "actions"
       }
     },
     "schemaError": null

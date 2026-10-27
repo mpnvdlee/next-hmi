@@ -13,6 +13,22 @@ heading.
 
 ### Added
 
+- **A Number Input says why it refuses a value, and acts on a change.** An
+  **Out-of-range message** is what the numpad says when the entry falls
+  outside min/max, so a limit that depends on another setting can say "Must
+  lie outside the 10 g band". **On Change** runs its actions after each value
+  the operator applies, such as a toast that the change is not saved yet.
+  Custom widgets get the message through the SDK numpad's new `rangeMessage`
+  prop.
+
+- **The numpad and keyboard show icons and numbers, not English.** Back,
+  Clear, Enter, Shift, Caps Lock, Tab and Space are icons, the range reads
+  `80 – 200` (or `≥ 0`, `≤ 10`), and an entry outside it turns that range
+  into a red warning, so an operator reads the same panel in any language.
+  The names a screen reader announces for the keys are dictionary keys,
+  English as on any screen, so a project translates them by adding those
+  rows.
+
 - **A shell region can float over the page.** A new **Floating** setting on
   the header, footer and both sidebars lays the region over the page instead
   of next to it: the page fills the space underneath, the region is
@@ -270,6 +286,11 @@ heading.
 
 ### Changed
 
+- **A Number Input reads as a value, not a form field.** The number is
+  right-aligned in the theme's Value typography, with digit groups (4,920)
+  and a typographic minus, on a raised surface with the unit inside it. While
+  the numpad is open the field shows the entry as typed.
+
 - **A widget's Name is what a screen reader announces.** An icon-only
   **Button**, a pressable **Container** and the **Menu Toggle** use the
   **Name** under **Identity** as their accessible name. The Menu Toggle's
@@ -315,7 +336,7 @@ heading.
   value inside min/max. Number Input and Numeric Stepper used to save the typed
   value on × and on a press outside, and silently clamped an out-of-range entry
   — a typed 5000 reached the machine as the max, 200. Now the numpad refuses
-  it and says why ("Enter a value between 80 and 200 ms"). An entry starts
+  it and shows the range in red (`80 – 200`). An entry starts
   empty, with the current value as placeholder, so a key replaces the value
   instead of appending to it. The entry is a real field: a physical keyboard
   types into it by the same rules as the keys, Enter applies and Escape

@@ -450,11 +450,14 @@ A numeric entry field that writes a number to a variable.
 | `unit` | Unit | `String` |
 | `min` | Min value | `Float` |
 | `max` | Max value | `Float` |
+| `rangeMessage` | Out-of-range message | `String` |
 | `variable` | Variable | `Float | Integer` |
 | `allowNegative` | Allow negative values | `Boolean` |
 | `decimals` | Decimal places | `Integer` |
+| `color` | Value color | `color` |
 | `showRangeOnNumpad` | Show range on numpad | `Boolean` |
 | `numpadPosition` | Numpad position | `String` |
+| `onChange` | On Change | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 | `lockedMessage` | Locked message | `String` |

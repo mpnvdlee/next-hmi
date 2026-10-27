@@ -2016,6 +2016,11 @@
         "label": "Max value",
         "group": "Data"
       },
+      "rangeMessage": {
+        "label": "Out-of-range message",
+        "description": "Said on the numpad outside min/max. Empty shows the range.",
+        "group": "Data"
+      },
       "variable": {
         "label": "Variable",
         "group": "Data"
@@ -2031,6 +2036,11 @@
         "min": 0,
         "max": 6,
         "step": 1
+      },
+      "color": {
+        "label": "Value color",
+        "defaultToken": "--hmi-text",
+        "group": "Appearance"
       },
       "showRangeOnNumpad": {
         "label": "Show range on numpad",
@@ -2052,6 +2062,10 @@
             "value": "center"
           }
         ]
+      },
+      "onChange": {
+        "label": "On Change",
+        "event": "onChange"
       }
     }
   },

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { VirtualNumpad } from './VirtualNumpad';
+import { useTranslationStore } from '@shared/store/translationStore';
 
 function NumpadHarness({
   onApply = () => undefined,
@@ -17,6 +18,7 @@ function NumpadHarness({
   decimals?: number;
   allowNegative?: boolean;
   showRange?: boolean;
+  rangeMessage?: string;
   dockPosition?: 'center' | 'bottom-right';
 }) {
   const [value, setValue] = useState('');
@@ -42,6 +44,41 @@ async function press(user: ReturnType<typeof userEvent.setup>, ...keys: string[]
 }
 
 describe('VirtualNumpad', () => {
+  beforeEach(() => {
+    useTranslationStore.setState({ languages: [], translations: {}, activeLanguage: '' } as never);
+  });
+
+  it('shows the range in numbers and names its icon keys in the operator\'s language', async () => {
+    useTranslationStore.setState({
+      languages: [{ code: 'en-EN' }, { code: 'nl-NL' }],
+      translations: { Enter: { 'nl-NL': 'Invoeren' }, Clear: { 'nl-NL': 'Wissen' } },
+      activeLanguage: 'nl-NL',
+    } as never);
+    const user = userEvent.setup();
+    render(<NumpadHarness min={0} max={100} unit="ms" />);
+
+    expect(screen.getByText('0 \u2013 100')).toBeInTheDocument();
+    await user.type(field(), '500');
+
+    expect(screen.getByRole('button', { name: 'Invoeren' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Wissen' })).toBeInTheDocument();
+    // A name without a dictionary row stays English.
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+    // Out of range, the range itself is the error, in place of the hint.
+    expect(screen.getByRole('alert')).toHaveTextContent('0 \u2013 100');
+    expect(screen.getAllByText('0 \u2013 100')).toHaveLength(1);
+  });
+
+  it('says the widget\'s own words when it gives them, beside the range', async () => {
+    const user = userEvent.setup();
+    render(
+      <NumpadHarness min={-500} max={-11} rangeMessage="Must lie outside the 10 g band" />,
+    );
+    await user.type(field(), '-5');
+    expect(screen.getByRole('alert')).toHaveTextContent('Must lie outside the 10 g band');
+    expect(screen.getByText('-500 \u2013 -11')).toBeInTheDocument();
+  });
+
   it('types digits and applies on Enter', async () => {
     const user = userEvent.setup();
     const onApply = vi.fn();
@@ -96,7 +133,7 @@ describe('VirtualNumpad', () => {
     render(<NumpadHarness onApply={onApply} min={80} max={200} unit="ms" />);
 
     await press(user, '5', '0', '0', '0');
-    expect(screen.getByRole('alert')).toHaveTextContent('Enter a value between 80 and 200 ms');
+    expect(screen.getByRole('alert')).toHaveTextContent('80 \u2013 200');
     expect(screen.getByRole('button', { name: 'Enter' })).toBeDisabled();
 
     await press(user, 'Enter');
@@ -107,7 +144,7 @@ describe('VirtualNumpad', () => {
     const user = userEvent.setup();
     render(<NumpadHarness max={10} />);
     await press(user, '1', '1');
-    expect(screen.getByRole('alert')).toHaveTextContent('Enter a value of at most 10');
+    expect(screen.getByRole('alert')).toHaveTextContent('\u2264 10');
   });
 
   it('still refuses out-of-range values when the range hint is hidden', async () => {

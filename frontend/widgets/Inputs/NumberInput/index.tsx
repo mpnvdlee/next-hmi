@@ -4,6 +4,12 @@ export const schema = {
   unit: { type: 'string' as const, label: 'Unit', group: 'Content' },
   min: { type: 'float' as const, label: 'Min value', group: 'Data' },
   max: { type: 'float' as const, label: 'Max value', group: 'Data' },
+  rangeMessage: {
+    type: 'string' as const,
+    label: 'Out-of-range message',
+    description: 'Said on the numpad outside min/max. Empty shows the range.',
+    group: 'Data',
+  },
   variable: {
     type: ['float', 'integer'] as const,
     label: 'Variable',
@@ -24,6 +30,12 @@ export const schema = {
     max: 6,
     step: 1,
   },
+  color: {
+    type: 'color' as const,
+    label: 'Value color',
+    defaultToken: '--hmi-text',
+    group: 'Appearance',
+  },
   showRangeOnNumpad: {
     type: 'boolean' as const,
     label: 'Show range on numpad',
@@ -41,7 +53,18 @@ export const schema = {
       { label: 'Center', value: 'center' },
     ],
   },
+  onChange: { type: 'actions' as const, label: 'On Change', event: 'onChange' },
 };
+
+/** The value as the field shows it at rest: digit groups and a typographic minus. */
+function formatShown(value: number, places: number | undefined): string {
+  const text = places !== undefined ? Math.abs(value).toFixed(places) : String(Math.abs(value));
+  const [int, frac] = text.split('.');
+  const body = int.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (frac ? `.${frac}` : '');
+  // Compare the shown digits, so a -0.04 at one decimal reads 0.0, not −0.0.
+  if (Number(text) === 0) return body;
+  return value < 0 ? `\u2212${body}` : body;
+}
 
 export const displayName = 'Number Input';
 export const description = 'A numeric entry field that writes a number to a variable.';
@@ -50,6 +73,7 @@ export const icon = { type: 'builtin', name: 'sliders-horizontal' } as const;
 
 export default function NumberInput({ properties, layout }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
+  const scope = useHmiScope();
   const meta = useVariableMeta(bindingKey(getPropBinding(properties, 'variable')));
   const value = usePropNumber(properties, 'variable', null);
   const writeVariable = useWriteVariable(properties, 'variable');
@@ -62,6 +86,8 @@ export default function NumberInput({ properties, layout }: HmiWidgetProps) {
   const unit = getPropString(properties, 'unit', '', evalCtx);
   const showRangeOnNumpad = getPropBoolean(properties, 'showRangeOnNumpad', true, evalCtx);
   const allowNegative = getPropBoolean(properties, 'allowNegative', true, evalCtx);
+  const rangeMessage = usePropString(properties, 'rangeMessage', '');
+  const color = usePropString(properties, 'color', '');
   const decimals = usePropNumber(properties, 'decimals', null);
   const numpadPosition =
     getPropString(properties, 'numpadPosition', 'bottom-right', evalCtx) === 'center'
@@ -83,7 +109,7 @@ export default function NumberInput({ properties, layout }: HmiWidgetProps) {
   const places = decimals != null ? Math.min(6, Math.max(0, Math.trunc(decimals))) : undefined;
   const shownValue =
     value == null ? '---' : places !== undefined ? value.toFixed(places) : String(value);
-  const displayValue = isEditing ? localValue : shownValue;
+  const displayValue = isEditing ? localValue : value == null ? '---' : formatShown(value, places);
   const isOutOfRange =
     !isEditing &&
     value != null &&
@@ -108,12 +134,20 @@ export default function NumberInput({ properties, layout }: HmiWidgetProps) {
     if (!Number.isFinite(parsed) || parsed < min || parsed > max) return;
     setIsEditing(false);
     writeVariable(parsed);
+    executeWidgetActions((properties?.onChange as ActionsConfig | undefined)?.onChange, {
+      scope,
+      evalCtx,
+    });
   };
 
   return (
     <div
       className={`hmi-component hmi-number-input${!canWrite ? ' hmi-number-input--disabled' : ''}`}
-      style={selfLayoutStyle(layout)}
+      style={
+        color
+          ? { ...selfLayoutStyle(layout), '--hmi-number-input-color': color }
+          : selfLayoutStyle(layout)
+      }
       ref={wrapperRef}
     >
       {label && <span className="hmi-number-input__label">{label}</span>}
@@ -146,6 +180,7 @@ export default function NumberInput({ properties, layout }: HmiWidgetProps) {
         min={Number.isFinite(min) ? min : undefined}
         max={Number.isFinite(max) ? max : undefined}
         showRange={showRangeOnNumpad}
+        rangeMessage={rangeMessage || undefined}
         currentValue={value != null ? shownValue : undefined}
         decimals={isInteger ? 0 : places}
         allowNegative={allowNegative && !(min >= 0)}

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import CloseButton from './CloseButton';
+import { useTranslationStore } from '@shared/store/translationStore';
+import { VirtualKeyIcon, type VirtualKeyIconName } from './VirtualKeyIcon';
 
 type KeyWidth = '1' | '1-5' | '1-75' | '2' | '2-25' | '2-75' | '3' | '12';
 
@@ -93,6 +95,16 @@ function keyLabel(key: KeyboardKey): string {
   return key.value;
 }
 
+const KEY_ICON: Record<Exclude<KeyboardKey['kind'], 'char'>, VirtualKeyIconName> = {
+  tab: 'tab',
+  space: 'space',
+  backspace: 'backspace',
+  clear: 'clear',
+  enter: 'enter',
+  capsLock: 'capsLock',
+  shift: 'shift',
+};
+
 function keyWidth(key: KeyboardKey): KeyWidth {
   return key.width ?? '1';
 }
@@ -132,6 +144,11 @@ export function VirtualKeyboard({
   password = false,
 }: VirtualKeyboardProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  // Keys show icons; their names for a screen reader are dictionary keys,
+  // English as on any screen. Subscribed so a language switch re-renders it.
+  useTranslationStore((s) => s.activeLanguage);
+  useTranslationStore((s) => s.translations);
+  const t = useTranslationStore.getState().resolve;
   const previewRef = useRef<HTMLDivElement | null>(null);
   const [shift, setShift] = useState(false);
   const [capsLock, setCapsLock] = useState(false);
@@ -209,7 +226,7 @@ export function VirtualKeyboard({
           {title && <span className="hmi-virtual-input__title">{title}</span>}
           <CloseButton
             className="hmi-virtual-input__close"
-            label="Close keyboard"
+            label={t('Close keyboard')}
             onMouseDown={(event) => event.preventDefault()}
             onClick={onClose}
           />
@@ -232,7 +249,7 @@ export function VirtualKeyboard({
                 const isPressed =
                   (key.kind === 'shift' && shift) || (key.kind === 'capsLock' && capsLock);
                 const label =
-                  key.kind === 'char' ? characterFor(key, shift, capsLock) : keyLabel(key);
+                  key.kind === 'char' ? characterFor(key, shift, capsLock) : t(keyLabel(key));
 
                 return (
                   <button
@@ -260,8 +277,10 @@ export function VirtualKeyboard({
                           {key.value}
                         </span>
                       </span>
-                    ) : (
+                    ) : key.kind === 'char' ? (
                       <span aria-hidden="true">{label}</span>
+                    ) : (
+                      <VirtualKeyIcon name={KEY_ICON[key.kind]} />
                     )}
                   </button>
                 );
