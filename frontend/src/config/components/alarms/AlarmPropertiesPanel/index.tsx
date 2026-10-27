@@ -449,15 +449,27 @@ function AlarmPanel({
 
       {/* ── Ack Permissions ── */}
       <div className="cfg-section">
-        <div className="cfg-section__title">Acknowledgment Permissions</div>
-        <GroupsField
-          label="Allowed groups"
-          description="Empty → any user may acknowledge."
-          value={alarm.ack_groups}
-          onChange={(v) =>
-            onPatch(alarm.id, { ack_groups: Array.isArray(v) ? (v as string[]) : [] })
-          }
-        />
+        <div className="cfg-section__title">Acknowledgment</div>
+        <PropRow
+          label="Needs acknowledgement"
+          description="Off: the alarm fires already acknowledged, so it shows no ACK and is not counted as unacknowledged."
+        >
+          <BoolButtonGroup
+            value={alarm.ack_required !== false}
+            onChange={(v) => onPatch(alarm.id, { ack_required: v })}
+            labels={['On', 'Off']}
+          />
+        </PropRow>
+        {alarm.ack_required !== false && (
+          <GroupsField
+            label="Allowed groups"
+            description="Empty → any user may acknowledge."
+            value={alarm.ack_groups}
+            onChange={(v) =>
+              onPatch(alarm.id, { ack_groups: Array.isArray(v) ? (v as string[]) : [] })
+            }
+          />
+        )}
       </div>
     </div>
   );

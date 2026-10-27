@@ -532,6 +532,7 @@ the `/api/themes` endpoints in [../reference/rest-api.md](../reference/rest-api.
             "max": { "$static": 100 },
             "on_true": true
           },
+          "ack_required": true,
           "ack_groups": [],
           "values": [{ "$var": { "path": "MyPLC:Motor1/Temp" } }]
         }

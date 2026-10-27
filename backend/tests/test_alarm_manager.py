@@ -145,6 +145,42 @@ def test_fire_captures_values_and_clear_keeps_them(live_project_root: Path, monk
     assert reloaded.get_history()[0].values == [81.5, 3, None]
 
 
+def test_a_cleared_alarm_keeps_what_its_detail_popup_shows(live_project_root: Path):
+    config = _config_with_trigger()
+    alarm = config.groups[0].alarms[0]
+    alarm.description = "Check the fan"
+    alarm.image = "fan.png"
+    alarm.resolutions = ["Clean the filter"]
+    manager = AlarmManager()
+    manager.set_config(config)
+
+    manager.on_variable_change("DS:Overheat", True)
+    manager.on_variable_change("DS:Overheat", False)
+
+    [entry] = manager.get_history()
+    assert (entry.description, entry.image, entry.resolutions) == (
+        "Check the fan",
+        "images/fan.png",
+        ["Clean the filter"],
+    )
+
+
+def test_an_alarm_that_needs_no_acknowledgement_fires_already_acknowledged(
+    live_project_root: Path,
+):
+    config = _config_with_trigger()
+    config.groups[0].alarms[0].ack_required = False
+    manager = AlarmManager()
+    manager.set_config(config)
+
+    manager.on_variable_change("DS:Overheat", True)
+
+    [active] = manager.get_active()
+    assert active.acked and not active.ack_required
+    assert manager.get_summary().unacked == 0
+    assert manager.ack_all("operator") == 0
+
+
 def test_a_value_missing_at_fire_time_is_filled_by_its_next_update(
     live_project_root: Path, monkeypatch
 ):
