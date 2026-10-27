@@ -801,7 +801,12 @@ const RECIPE_FIELD_OPTIONS = [
   { value: 'activeName', label: 'Loaded recipe name' },
   { value: 'loaded', label: 'Is loaded' },
   { value: 'parametersChanged', label: 'Parameters changed' },
+  { value: 'parameterValue', label: 'Saved value of a parameter' },
+  { value: 'parameterChanged', label: 'Parameter changed' },
+  { value: 'changedCount', label: 'Number of changed parameters' },
+  { value: 'savedAt', label: 'Saved at' },
 ];
+const RECIPE_PARAMETER_FIELDS = new Set(['parameterValue', 'parameterChanged']);
 
 export function RecipeEditor({
   value,
@@ -819,11 +824,14 @@ export function RecipeEditor({
     void load();
   }, [load]);
 
-  const obj = (value as { $recipe?: { type?: string; field?: string } })?.$recipe ?? {
+  const obj = (
+    value as { $recipe?: { type?: string; field?: string; parameter?: string; format?: string } }
+  )?.$recipe ?? {
     type: '',
     field: 'parametersChanged',
   };
   const types = config?.datasetTypes ?? [];
+  const parameters = types.find((t) => t.id === obj.type)?.parameters ?? [];
 
   return (
     <>
@@ -854,6 +862,31 @@ export function RecipeEditor({
           ))}
         </Select>
       </PropRow>
+      {obj.field === 'savedAt' && (
+        <PropRow label="Format" tier={2}>
+          <input
+            className="cfg-prop-input"
+            placeholder="ISO"
+            value={obj.format ?? ''}
+            onChange={(e) => onChange({ $recipe: { ...obj, format: e.target.value || undefined } })}
+          />
+        </PropRow>
+      )}
+      {RECIPE_PARAMETER_FIELDS.has(obj.field ?? '') && (
+        <PropRow label="Parameter" tier={2}>
+          <Select
+            value={obj.parameter ?? ''}
+            onChange={(v) => onChange({ $recipe: { ...obj, parameter: v } })}
+          >
+            <option value="">Select a parameter…</option>
+            {parameters.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label || p.id}
+              </option>
+            ))}
+          </Select>
+        </PropRow>
+      )}
     </>
   );
 }

@@ -234,9 +234,12 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
     return v?.field ? `viewport.${v.field}` : 'viewport(…)';
   }
   if (key === '$recipe') {
-    const r = obj.$recipe as { type?: string; field?: string } | undefined;
+    const r = obj.$recipe as { type?: string; field?: string; parameter?: string } | undefined;
     if (!r?.type) return 'recipe(…)';
-    return `recipe(${r.type}).${r.field ?? 'parametersChanged'}`;
+    const field = r.field ?? 'parametersChanged';
+    return r.parameter && field.startsWith('parameter') && field !== 'parametersChanged'
+      ? `recipe(${r.type}).${field}(${r.parameter})`
+      : `recipe(${r.type}).${field}`;
   }
   if (key === '$time') {
     const t = obj.$time as { format?: string; timezone?: string } | undefined;

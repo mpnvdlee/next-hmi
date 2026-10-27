@@ -22,7 +22,7 @@
     "$stringExpr": ["string"],
     "$http": ["any"],
     "$alarmCount": ["integer"],
-    "$recipe": ["boolean", "string"],
+    "$recipe": ["boolean", "string", "float", "integer", "datetime"],
     "$recipeList": ["record-list"],
     "$componentProp": ["any"],
     "$overlay": ["any"],
@@ -50,7 +50,17 @@
       "$page",
       "$viewport"
     ],
-    "datetime": ["$static", "$var", "$if", "$switch", "$time", "$widgetProp", "$http", "$overlay"],
+    "datetime": [
+      "$static",
+      "$var",
+      "$if",
+      "$switch",
+      "$time",
+      "$widgetProp",
+      "$http",
+      "$recipe",
+      "$overlay"
+    ],
     "date": ["$static", "$var", "$if", "$switch", "$time", "$widgetProp", "$http", "$overlay"],
     "time": ["$static", "$var", "$if", "$switch", "$time", "$widgetProp", "$http", "$overlay"],
     "duration": [
@@ -63,6 +73,7 @@
       "$widgetProp",
       "$http",
       "$alarmCount",
+      "$recipe",
       "$overlay",
       "$page",
       "$viewport"
@@ -77,6 +88,7 @@
       "$widgetProp",
       "$http",
       "$alarmCount",
+      "$recipe",
       "$overlay",
       "$page",
       "$viewport"
@@ -90,6 +102,7 @@
       "$switch",
       "$widgetProp",
       "$http",
+      "$recipe",
       "$overlay"
     ],
     "boolean": [
@@ -292,6 +305,7 @@
         "$switch",
         "$widgetProp",
         "$http",
+        "$recipe",
         "$overlay",
         "$alarmCount",
         "$page",

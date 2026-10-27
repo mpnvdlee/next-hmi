@@ -26,7 +26,16 @@ SOURCE_FIELD_PRODUCES: dict[str, dict[str, str | list[str]]] = {
         "pathSegments": "string[]",
     },
     "$viewport": {"size": "string", "orientation": "string", "width": "integer", "height": "integer"},
-    "$recipe": {"parametersChanged": "boolean", "loaded": "boolean", "activeName": "string"},
+    "$recipe": {
+        "parametersChanged": "boolean",
+        "loaded": "boolean",
+        "activeName": "string",
+        "parameterChanged": "boolean",
+        # A parameter holds whatever its variable does.
+        "parameterValue": ["float", "integer", "string", "boolean"],
+        "changedCount": "integer",
+        "savedAt": ["datetime", "string"],
+    },
     "$user": {
         "username": "string",
         "userList": ["string[]", "string"],

@@ -21,6 +21,17 @@ heading.
   Custom widgets get the message through the SDK numpad's new `rangeMessage`
   prop.
 
+- **A screen can mark each setting that differs from the saved recipe.**
+  `$recipe` gets two per-parameter fields: **Parameter changed**, true while
+  that one live value differs from the loaded dataset, and **Saved value of a
+  parameter**, the stored value itself. Bind a Number Input's new **Value
+  color** to the first to turn an unsaved value amber, or list "saved → live"
+  rows that show only while they differ. **Number of changed parameters**
+  and **Saved at**, formatted like the clock, give a heading such as *3
+  unsaved changes · last saved 08:45*. Each `$recipeList` row now also
+  carries the dataset's `values`, so a recipe list shows its target or
+  quantity without a custom widget.
+
 - **The numpad and keyboard show icons, not English words.** Back, Clear,
   Enter, Shift, Caps Lock, Tab and Space are icons, and an entry outside the
   bounds turns the `Min: 80 · Max: 200` line into a red warning. *Min* and
