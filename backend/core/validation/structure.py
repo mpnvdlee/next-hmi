@@ -3251,6 +3251,7 @@ _SHELL_BINDABLE_FIELDS: dict[str, dict[str, str]] = {
     "expanded": {"type": "boolean"},
     "overlay": {"type": "boolean"},
     "fullHeight": {"type": "boolean"},
+    "floating": {"type": "boolean"},
     "expandedSize": {"type": "string"},
     "collapsedSize": {"type": "string"},
     "background": {"type": "color"},

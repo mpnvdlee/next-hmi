@@ -35,6 +35,61 @@
   z-index: 1;
 }
 
+/* Floating: lies over the page without taking space. Only widgets catch
+   clicks — empty space (the region's own, a plain Container's, a spacer's)
+   passes them to the page underneath. A sidebar floats inside `.hmi-body` (or the whole
+   `.hmi-layout` when full-height); HmiView places a floating header/footer
+   inside `.hmi-main`, so neither ever covers a docked sidebar. */
+.floating {
+  position: absolute;
+  z-index: 6; /* above .hmi-page-pending */
+  background: var(--hmi-region-bg, transparent);
+  pointer-events: none;
+}
+
+.floating [data-widget-id] > * {
+  pointer-events: auto;
+}
+
+/* A spacer is empty space with a widget id. */
+.floating
+  [data-widget-id]
+  > :is(
+    :global(.hmi-container):not(:global(.hmi-container--pressable)),
+    :global(.hmi-fixed-spacer),
+    :global(.hmi-stretch-spacer)
+  ) {
+  pointer-events: none;
+}
+
+.floating.region-leftSidebar {
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.floating.region-rightSidebar {
+  top: 0;
+  bottom: 0;
+  right: 0;
+}
+
+.floating.region-header,
+.floating.region-footer {
+  left: 0;
+  right: 0;
+  /* Over a floating sidebar where the two meet in a corner. */
+  z-index: 7;
+}
+
+.floating.region-header {
+  top: 0;
+}
+
+.floating.region-footer {
+  bottom: 0;
+}
+
 .overlay {
   /* Position values are inlined per-region from JS (left / right / top / bottom). */
   /* The wrapping element is fixed via inline style. */

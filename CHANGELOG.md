@@ -13,6 +13,14 @@ heading.
 
 ### Added
 
+- **A shell region can float over the page.** A new **Floating** setting on
+  the header, footer and both sidebars lays the region over the page instead
+  of next to it: the page fills the space underneath, the region is
+  transparent unless it has a **Background**, and a click on its empty space
+  reaches the page. Widgets in the region, and a Container with press
+  actions, still take their own clicks. Bindable, like the other region
+  settings.
+
 - **Show all and value types in the property-source drawer.** Each source card
   now names the type it produces (`Any`, `Boolean`, `Float, Integer`, …). A
   **Show all** checkbox lists the sources the field does not take as well,
