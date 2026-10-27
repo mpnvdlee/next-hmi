@@ -16,10 +16,10 @@ function sentFrame(): Record<string, unknown> {
   return vi.mocked(sendWsMessage).mock.calls[0][0] as Record<string, unknown>;
 }
 
-function renderButton(properties: Record<string, unknown>) {
+function renderButton(properties: Record<string, unknown>, name?: string) {
   return render(
     <MemoryRouter>
-      <Button properties={properties} />
+      <Button name={name} properties={properties} />
     </MemoryRouter>,
   );
 }

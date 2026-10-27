@@ -248,6 +248,7 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
     const comp = (
       <Comp
         id={node.id}
+        name={node.name}
         properties={resolvedProperties}
         layout={layout}
         childConfigs={isContainerHostType(node.type) ? node.children : undefined}

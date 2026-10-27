@@ -2418,10 +2418,6 @@
         "label": "Icon (expanded)",
         "defaultValue": "×"
       },
-      "ariaLabel": {
-        "label": "Aria label",
-        "defaultValue": "Toggle menu"
-      },
       "actions": {
         "label": "Actions"
       }

@@ -328,6 +328,11 @@ heading.
   starts with it on, and the warnings pill reports `formula-fraction` for a
   formula there that is not rounded.
 
+### Removed
+
+- **The Menu Toggle's Aria label.** The property is gone. A custom widget
+  gets its node's **Name** under **Identity** as the `name` prop.
+
 ### Fixed
 
 - **An input inside a component's actions is not flagged.** The warnings
