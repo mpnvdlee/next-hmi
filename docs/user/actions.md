@@ -73,6 +73,7 @@ See [Users, groups & permissions](users.md#sign-in-and-out-on-a-screen) for the 
 
 | Action | Does |
 |---|---|
+| **Delay** | Waits **Duration** milliseconds, then runs the actions after it. A write goes to the PLC and comes back; a **Show Toast** after a short Delay reads the value the PLC confirmed, so it can say *Lower limit set to −25 g*. |
 | **If / Else** | Evaluates a **Condition** — a Boolean variable, a comparison (`$compare`: *Mode = 2*, *Level > 80*), a negation, a user-group check — and runs its **Then** list when it holds, its **Else** list when it does not. Branches take any actions, including another **If / Else**. The condition reads the value the panel has at that moment. |
 
 ## Async actions and `$result`

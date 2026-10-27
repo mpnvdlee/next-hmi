@@ -1311,6 +1311,19 @@ const ShowToastEditor: EditorFor<'showToast'> = ({ action, ctx }) => (
   </>
 );
 
+const DelayEditor: EditorFor<'delay'> = ({ action, ctx }) => (
+  <ActionFieldRow ctx={ctx} fieldKey="duration" schema={DURATION_SCHEMA} label="Duration (ms)">
+    <input
+      type="number"
+      className="cfg-prop-input"
+      min={0}
+      step={100}
+      value={action.duration ?? 500}
+      onChange={(e) => ctx.update({ duration: e.target.value === '' ? 0 : Number(e.target.value) })}
+    />
+  </ActionFieldRow>
+);
+
 const ShowAlertEditor: EditorFor<'showAlert'> = ({ action, ctx }) => {
   const NestedActions = ctx.ActionsInput;
   return (
@@ -1450,6 +1463,7 @@ export const ACTION_EDITORS: ActionEditors = {
   loginUser: LoginUserEditor,
   logoutUser: LogoutUserEditor,
   acknowledgeAllAlarms: () => null,
+  delay: DelayEditor,
   setLanguage: SetLanguageEditor,
   setActiveTheme: SetThemeEditor,
   showToast: ShowToastEditor,

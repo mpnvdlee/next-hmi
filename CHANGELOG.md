@@ -21,6 +21,11 @@ heading.
   Custom widgets get the message through the SDK numpad's new `rangeMessage`
   prop.
 
+- **A Delay action.** **Delay** waits a number of milliseconds, then runs
+  the actions after it. A write goes to the PLC and back; a **Show Toast**
+  after a short Delay reads the value the PLC confirmed, so it can say *Lower
+  limit set to −25 g*.
+
 - **A screen can mark each setting that differs from the saved recipe.**
   `$recipe` gets two per-parameter fields: **Parameter changed**, true while
   that one live value differs from the loaded dataset, and **Saved value of a

@@ -443,6 +443,7 @@ nested inside other actions (`onSuccess` / `onFailed` / `onSettled`, `then` /
 | `recipeLoad` | `datasetId`, `verify`, `onSuccess` / `onFailed` / `onSettled` |
 | `recipeSave` | `datasetId` (absent = the loaded one), `onSuccess` / `onFailed` / `onSettled` |
 | `acknowledgeAllAlarms` | none |
+| `delay` | `duration` (ms) |
 | `setLanguage` / `setActiveTheme` | `language` / `theme` |
 | `showAlert` | `title`, `description`, `cancelText`, `okText`, `dismissible`, `onCancel`, `onOk` |
 | `showToast` | `message`, `severity` (`info` \| `success` \| `warning` \| `error`), `discard` (`auto` \| `manual`), `duration` (ms) |

@@ -106,6 +106,13 @@ export const ACTION_TYPES = [
     description: 'Shows a transient message with an info, success, warning or error severity.',
   },
   {
+    type: 'delay' as const,
+    label: 'Delay',
+    category: 'Logic',
+    description:
+      'Waits before the actions after it, so they read a value the PLC has confirmed in the meantime.',
+  },
+  {
     type: 'if' as const,
     label: 'If / Else',
     category: 'Logic',
@@ -131,6 +138,7 @@ export const ACTION_TYPE_TINT: Record<ButtonAction['type'], string> = {
   loginUser: 'user',
   logoutUser: 'userGroups',
   acknowledgeAllAlarms: 'alarmCount',
+  delay: 'time',
   setLanguage: 'languages',
   setActiveTheme: 'viewport',
   showAlert: 'alarmCount',
