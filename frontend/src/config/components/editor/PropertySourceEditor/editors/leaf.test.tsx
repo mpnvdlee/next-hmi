@@ -330,6 +330,8 @@ describe('field choices that fit the field', () => {
     expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
       'Is loaded',
       'Parameters changed',
+      'Saved value of a parameter',
+      'Parameter changed',
     ]);
   });
 

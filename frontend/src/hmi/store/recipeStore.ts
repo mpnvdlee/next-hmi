@@ -22,8 +22,9 @@ interface RecipeStore {
     lastResult: DownloadResult | null,
   ): void;
 
-  /** Resolve a $recipe dynamic property scoped to a dataset type. */
-  getField(typeId: string, field: RecipeField): string | boolean;
+  /** Resolve a $recipe dynamic property scoped to a dataset type; the
+   *  `parameter…` fields read one parameter of the loaded dataset. */
+  getField(typeId: string, field: RecipeField, parameter?: string): unknown;
 
   /**
    * The $recipeList property source: saved datasets flattened to rows. When
@@ -75,7 +76,7 @@ export const useRecipeStore = create<RecipeStore>((set, get) => ({
 
   setSnapshot: (config, loaded, lastResult) => set({ config, loaded, lastResult }),
 
-  getField: (typeId, field) => {
+  getField: (typeId, field, parameter) => {
     const { config, loaded } = get();
     const entry = loaded[typeId];
 
@@ -86,15 +87,24 @@ export const useRecipeStore = create<RecipeStore>((set, get) => ({
 
     if (field === 'activeName') return dataset?.name ?? '';
 
-    // parametersChanged: compare the loaded dataset's stored values to live values.
+    if (field === 'parameterValue') return (parameter && dataset?.values[parameter]) ?? null;
+    if (field === 'savedAt') return dataset?.updatedAt ?? '';
+
+    // parametersChanged / parameterChanged: compare the loaded dataset's stored values to live values.
     if (!type || !dataset) return false;
     const values = useVariableStore.getState().values;
-    return type.parameters.some((param) => {
+    const changed = (param: (typeof type.parameters)[number]) => {
       if (!(param.id in dataset.values)) return false;
       const live = liveValue(param.binding, values);
       if (live === undefined) return false; // live value not known yet — not "changed"
       return !valuesEqual(dataset.values[param.id], live);
-    });
+    };
+    if (field === 'parameterChanged') {
+      const param = type.parameters.find((p) => p.id === parameter);
+      return param ? changed(param) : false;
+    }
+    if (field === 'changedCount') return type.parameters.filter(changed).length;
+    return type.parameters.some(changed);
   },
 
   getList: (typeId) => {
@@ -110,6 +120,7 @@ export const useRecipeStore = create<RecipeStore>((set, get) => ({
           name: dataset.name,
           description: dataset.description,
           lastLoaded: dataset.loadedAt,
+          values: dataset.values,
         });
       }
     }
