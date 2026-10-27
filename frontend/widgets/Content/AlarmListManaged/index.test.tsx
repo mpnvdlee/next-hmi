@@ -220,6 +220,143 @@ describe('AlarmListManaged', () => {
     expect(screen.getByText('Active Faults')).toBeInTheDocument();
   });
 
+  describe('touch options', () => {
+    const cleared = {
+      id: 'h-1',
+      alarm_id: 'def-2',
+      code: 'W-002',
+      level: 'warning',
+      title: 'Belt slip',
+      triggered_at: '2026-01-01T09:00:00Z',
+      cleared_at: '2026-01-01T09:30:00Z',
+      acked: false,
+      acked_by: '',
+      acked_at: '',
+      description: 'Tension the belt',
+    };
+
+    it('keeps today’s list when no option is set', () => {
+      useAlarmStore.setState({ active: [mkAlarm()], summary: mkSummary({ unacked: 1 }) });
+      const { container } = renderList();
+
+      expect(container.querySelector('.hmi-alarm-list--touch')).toBeNull();
+      expect(screen.queryByRole('group', { name: 'Show' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'ACK' })).toBeInTheDocument();
+      expect(apiJson).not.toHaveBeenCalled();
+    });
+
+    it('draws touch rows as cards with the alarm state beside the time', () => {
+      useAlarmStore.setState({
+        active: [
+          mkAlarm(),
+          mkAlarm({ id: 'inst-2', code: 'A-002', title: 'Pump Fault', acked: true }),
+        ],
+        summary: mkSummary({ unacked: 1 }),
+      });
+      const { container } = renderList({ rowSize: 'touch' });
+
+      expect(container.querySelector('.hmi-alarm-list--touch')).not.toBeNull();
+      expect(screen.getByText('New')).toBeInTheDocument();
+      expect(screen.getByText('Acked')).toBeInTheDocument();
+    });
+
+    it('switches between active and cleared alarms with the filter chips', async () => {
+      vi.mocked(apiJson).mockImplementation(async (url: string) =>
+        url.startsWith('/api/alarms/history') ? [cleared] : undefined,
+      );
+      const user = userEvent.setup();
+      useAlarmStore.setState({ active: [mkAlarm()], summary: mkSummary({ unacked: 1 }) });
+      renderList({ showFilter: true, show: 'all' });
+
+      expect(await screen.findByText('[W-002] Belt slip')).toBeInTheDocument();
+      expect(screen.getByText('[A-001] Motor Overheat')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Active (1)' }));
+      expect(screen.queryByText('[W-002] Belt slip')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'History' }));
+      expect(screen.queryByText('[A-001] Motor Overheat')).not.toBeInTheDocument();
+      expect(screen.getByText('[W-002] Belt slip')).toBeInTheDocument();
+    });
+
+    it('shows the view the Show property names, and follows it when it changes', async () => {
+      vi.mocked(apiJson).mockImplementation(async (url: string) =>
+        url.startsWith('/api/alarms/history') ? [cleared] : undefined,
+      );
+      useAlarmStore.setState({ active: [mkAlarm()], summary: mkSummary({ unacked: 1 }) });
+      const { rerender } = renderList({ show: 'history' });
+
+      expect(await screen.findByText('[W-002] Belt slip')).toBeInTheDocument();
+      expect(screen.queryByText('[A-001] Motor Overheat')).not.toBeInTheDocument();
+
+      rerender(
+        <MemoryRouter>
+          <AlarmListManaged properties={{ show: 'active' }} />
+        </MemoryRouter>,
+      );
+      expect(screen.getByText('[A-001] Motor Overheat')).toBeInTheDocument();
+      expect(screen.queryByText('[W-002] Belt slip')).not.toBeInTheDocument();
+    });
+
+    it('opens the detail popup of a cleared alarm, with nothing left to acknowledge', async () => {
+      vi.mocked(apiJson).mockImplementation(async (url: string) =>
+        url.startsWith('/api/alarms/history') ? [cleared] : undefined,
+      );
+      const user = userEvent.setup();
+      renderList({ show: 'history' });
+
+      await user.click(await screen.findByText('[W-002] Belt slip'));
+
+      expect(screen.getByText(/^Cleared:/)).toBeInTheDocument();
+      expect(screen.getByText('Tension the belt')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Acknowledge' })).not.toBeInTheDocument();
+    });
+
+    it('marks an alarm that needs no acknowledgement as active, without an ACK', () => {
+      useAlarmStore.setState({
+        active: [mkAlarm({ ack_required: false, acked: true })],
+        summary: mkSummary(),
+      });
+      renderList({ rowSize: 'touch' });
+
+      expect(screen.getByText('Active')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'ACK' })).not.toBeInTheDocument();
+    });
+
+    it('marks severity with a stripe by default, or with the row color or the icon alone', () => {
+      const { container, rerender } = renderList({ rowSize: 'touch' });
+      const list = () => container.querySelector('.hmi-alarm-list') as HTMLElement;
+      expect(list().className).not.toMatch(/--mark-/);
+
+      for (const mark of ['tint', 'icon']) {
+        rerender(
+          <MemoryRouter>
+            <AlarmListManaged properties={{ rowSize: 'touch', mark }} />
+          </MemoryRouter>,
+        );
+        expect(list()).toHaveClass(`hmi-alarm-list--mark-${mark}`);
+      }
+    });
+
+    it('leaves acknowledging to a separate button when Acknowledge is off', () => {
+      useAlarmStore.setState({ active: [mkAlarm()], summary: mkSummary({ unacked: 1 }) });
+      renderList({ ackMode: 'off' });
+
+      expect(screen.queryByRole('button', { name: 'ACK' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Acknowledge All' })).not.toBeInTheDocument();
+    });
+
+    it('shows the description before the time on the second line', () => {
+      useAlarmStore.setState({
+        active: [mkAlarm({ description: 'Check the fan' })],
+        summary: mkSummary({ unacked: 1 }),
+      });
+      renderList({ secondLine: 'description' });
+
+      expect(screen.getByText(/^Check the fan · /)).toBeInTheDocument();
+    });
+  });
+
   it('drops the header row, count chip included, when the title is empty', () => {
     useAlarmStore.setState({ active: [mkAlarm()], summary: mkSummary({ unacked: 1 }) });
     const { container } = renderList({ title: '' });

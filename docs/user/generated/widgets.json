@@ -379,10 +379,40 @@
             "defaultValue": ""
           },
           {
-            "key": "chrome",
-            "label": "Own frame",
+            "key": "rowSize",
+            "label": "Row size",
+            "type": "String",
+            "defaultValue": "compact"
+          },
+          {
+            "key": "mark",
+            "label": "Severity mark",
+            "type": "String",
+            "defaultValue": "stripe"
+          },
+          {
+            "key": "show",
+            "label": "Show",
+            "type": "String",
+            "defaultValue": "active"
+          },
+          {
+            "key": "showFilter",
+            "label": "Filter chips",
             "type": "Boolean",
-            "defaultValue": true
+            "defaultValue": false
+          },
+          {
+            "key": "ackMode",
+            "label": "Acknowledge",
+            "type": "String",
+            "defaultValue": "row"
+          },
+          {
+            "key": "secondLine",
+            "label": "Second line",
+            "type": "String",
+            "defaultValue": "time"
           },
           {
             "key": "visible",
