@@ -100,6 +100,12 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
       <path d="M14.2 8.2 h-3.2 M12.4 6.6 l-1.6 1.6 1.6 1.6" />
     </Icon>
   ),
+  // Check mark — acknowledge.
+  acknowledgeAllAlarms: (
+    <Icon>
+      <path d="M3.2 8.6 l3.1 3.1 L12.8 4.6" />
+    </Icon>
+  ),
   // Globe.
   setLanguage: (
     <Icon>

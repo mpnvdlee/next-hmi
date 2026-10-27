@@ -164,6 +164,10 @@ heading.
   or `NaN` as no value. A property with no variable bound no longer costs a
   variable-store listener.
 
+- **An action acknowledges every alarm.** **Acknowledge All Alarms**
+  acknowledges each unacknowledged alarm in the name of the signed-in user,
+  so any Button can be the screen's acknowledge button.
+
 - **A String Input can open the numpad.** A new **Keyboard** property set to
   **Numeric** opens the numpad instead of the on-screen keyboard, with
   digits only, so a PIN or a code needs no letters to tap past. With

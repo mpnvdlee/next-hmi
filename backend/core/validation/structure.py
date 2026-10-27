@@ -2082,6 +2082,7 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
         "onFailed": "actions",
         "onSettled": "actions",
     },
+    "acknowledgeAllAlarms": {},
     "setLanguage": {"language": "String"},
     "setActiveTheme": {"theme": "String"},
     "showAlert": {
