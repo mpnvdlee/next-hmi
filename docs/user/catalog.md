@@ -127,7 +127,12 @@ Live active alarms, filterable by level, with acknowledgement.
 |---|---|---|
 | `title` | Title | `String` |
 | `filterLevel` | Filter level | `String` |
-| `chrome` | Own frame | `Boolean` |
+| `rowSize` | Row size | `String` |
+| `mark` | Severity mark | `String` |
+| `show` | Show | `String` |
+| `showFilter` | Filter chips | `Boolean` |
+| `ackMode` | Acknowledge | `String` |
+| `secondLine` | Second line | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 | `lockedMessage` | Locked message | `String` |

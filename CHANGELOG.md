@@ -180,6 +180,16 @@ heading.
   (uppercase) and **Letter spacing** for the label. Each one left at its
   default keeps today's look.
 
+- **The Alarm List fits a touch panel.** Six new options: **Row size** (Touch
+  gives tap-sized rows and buttons), **Severity mark** (a stripe, the whole
+  row in the level colour, or only the coloured icon), **Show** (the active
+  alarms, the cleared ones or both; bind it to switch from elsewhere),
+  **Filter chips** (All / Active / History in the header, starting from Show),
+  **Acknowledge** (Off leaves it to a Button with the new action below) and
+  **Second line** (the alarm's description). Touch rows are cards with a
+  severity edge, the alarm's value, its time and whether it is new,
+  acknowledged or cleared. Left at their defaults, the list looks as before.
+
 - **An alarm can do without acknowledgement.** A **Needs acknowledgement**
   switch on each alarm, on by default. Off, the alarm fires already
   acknowledged: no ACK, not counted as unacknowledged, skipped by Acknowledge
@@ -388,6 +398,13 @@ heading.
   rounds the result to the nearest integer. A formula on an `Integer` field
   starts with it on, and the warnings pill reports `formula-fraction` for a
   formula there that is not rounded.
+
+### Removed
+
+- **The Alarm List's Own frame.** The list now always draws without a frame of
+  its own, as every example already placed it, so it takes the look of the card
+  or page around it. A stored `chrome` key is ignored and the warnings pill
+  flags it as an unknown property; delete it there.
 
 ### Fixed
 

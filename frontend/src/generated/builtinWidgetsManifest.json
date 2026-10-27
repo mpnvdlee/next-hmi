@@ -39,7 +39,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "d2597e06823a9afb",
+    "buildTs": "bbbebfa53ce68c57",
     "displayName": "Alarm List",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -52,8 +52,23 @@
       "filterLevel": {
         "type": "string"
       },
-      "chrome": {
+      "rowSize": {
+        "type": "string"
+      },
+      "mark": {
+        "type": "string"
+      },
+      "show": {
+        "type": "string"
+      },
+      "showFilter": {
         "type": "boolean"
+      },
+      "ackMode": {
+        "type": "string"
+      },
+      "secondLine": {
+        "type": "string"
       }
     },
     "schemaError": null

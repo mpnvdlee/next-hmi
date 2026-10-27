@@ -82,11 +82,98 @@
           }
         ]
       },
-      "chrome": {
+      "rowSize": {
+        "format": "select",
+        "label": "Row size",
+        "defaultValue": "compact",
+        "description": "Touch gives each row and button a tap-sized height and a larger title.",
+        "options": [
+          {
+            "label": "Compact",
+            "value": "compact"
+          },
+          {
+            "label": "Touch",
+            "value": "touch"
+          }
+        ]
+      },
+      "mark": {
+        "format": "select",
+        "label": "Severity mark",
+        "defaultValue": "stripe",
+        "description": "How a row shows its level: a stripe on the left, the whole row in the level colour, or only the coloured icon.",
+        "options": [
+          {
+            "label": "Stripe",
+            "value": "stripe"
+          },
+          {
+            "label": "Row color",
+            "value": "tint"
+          },
+          {
+            "label": "Icon only",
+            "value": "icon"
+          }
+        ]
+      },
+      "show": {
+        "format": "select",
+        "label": "Show",
+        "defaultValue": "active",
+        "description": "Active alarms, cleared ones (History) or both. With Filter chips on, the chips start here.",
+        "options": [
+          {
+            "label": "Active",
+            "value": "active"
+          },
+          {
+            "label": "All",
+            "value": "all"
+          },
+          {
+            "label": "History",
+            "value": "history"
+          }
+        ]
+      },
+      "showFilter": {
         "format": "show",
-        "label": "Own frame",
-        "defaultValue": true,
-        "description": "Turn off when the widget sits inside a card that already draws a frame."
+        "label": "Filter chips",
+        "defaultValue": false,
+        "description": "All / Active / History chips in the header, so the operator can switch."
+      },
+      "ackMode": {
+        "format": "select",
+        "label": "Acknowledge",
+        "defaultValue": "row",
+        "description": "Off leaves acknowledging to a Button with the Acknowledge All Alarms action.",
+        "options": [
+          {
+            "label": "Per row",
+            "value": "row"
+          },
+          {
+            "label": "Off",
+            "value": "off"
+          }
+        ]
+      },
+      "secondLine": {
+        "format": "select",
+        "label": "Second line",
+        "defaultValue": "time",
+        "options": [
+          {
+            "label": "Time",
+            "value": "time"
+          },
+          {
+            "label": "Description and time",
+            "value": "description"
+          }
+        ]
       }
     }
   },

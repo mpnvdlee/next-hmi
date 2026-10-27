@@ -82,9 +82,11 @@ const ICON_CHUNK_GZIP_BUDGET = 100 * 1024;
 // Container, Button, Label and String Input took the options that had kept
 // three example projects on custom widgets (~+2.6 kB gzip, mostly schema text
 // the editor shows): the set grew in what it covers rather than in count.
+// Raised from 108 kB for the same reason when Button and Label took a padding
+// override and Alarm List its touch options (~+3.4 kB gzip), plus 1 kB margin.
 const BUILTIN_WIDGET_RAW_BUDGET = 32 * 1024;
 const BUILTIN_WIDGET_GZIP_BUDGET = 10 * 1024;
-const BUILTIN_WIDGETS_TREE_GZIP_BUDGET = 108 * 1024;
+const BUILTIN_WIDGETS_TREE_GZIP_BUDGET = 111.6 * 1024;
 
 const ROUTE_BUDGETS_GZIP = {
   manager: 150 * 1024,
