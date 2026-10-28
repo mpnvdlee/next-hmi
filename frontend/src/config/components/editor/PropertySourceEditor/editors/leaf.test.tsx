@@ -355,8 +355,8 @@ describe('LocEditor', () => {
   it('opens one field per placeholder of the picked translation', () => {
     render(<LocEditor value={value} onChange={vi.fn()} />);
 
-    expect(screen.getByText('{1}')).toBeInTheDocument();
-    expect(screen.getByText('{2}')).toBeInTheDocument();
+    expect(screen.getByText('Value for {1}')).toBeInTheDocument();
+    expect(screen.getByText('Value for {2}')).toBeInTheDocument();
   });
 
   it('leaves the placeholders to the alarm where an alarm fills them', () => {
@@ -366,6 +366,6 @@ describe('LocEditor', () => {
       </LocPlaceholdersContext.Provider>,
     );
 
-    expect(screen.queryByText('{1}')).not.toBeInTheDocument();
+    expect(screen.queryByText('Value for {1}')).not.toBeInTheDocument();
   });
 });
