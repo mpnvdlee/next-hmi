@@ -122,6 +122,12 @@ export interface LocSource {
   $loc: string; // translation key
 }
 
+/** A translation whose key holds `{1}`, `{2}` …, each filled by its own binding
+ *  after the key is translated, so every language orders the values itself. */
+export interface LocTemplateSource {
+  $loc: { key: string; wildcards: Record<string, unknown> };
+}
+
 /** $urlParam: URL query parameter (with optional static fallback) */
 export interface UrlParamSource {
   $urlParam: {

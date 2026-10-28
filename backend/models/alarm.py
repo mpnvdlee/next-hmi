@@ -86,6 +86,8 @@ class AlarmDefinition(BaseModel):
             if isinstance(static, str):
                 return static
             loc = value.get("$loc")
+            if isinstance(loc, dict):
+                loc = loc.get("key")
             if isinstance(loc, str):
                 return loc
             string_expr = value.get("$stringExpr")

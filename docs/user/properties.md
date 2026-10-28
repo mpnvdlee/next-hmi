@@ -117,10 +117,10 @@ A placeholder may wrap its value in transform functions, applied inside-out:
 
 A placeholder whose wildcard is missing is left in the text as-is, so a typo shows up on screen rather than silently blanking the label.
 
-The **template itself is literal text** — it is not a bindable property. To keep a
-templated line translatable, put the words in the wildcards (`$loc`) and leave
-only structure and punctuation in the template: `"{1}: {Round1(2)} °C"` with
-wildcard `1` a `$loc`. See [Translations](translations.md#use-a-translation-on-a-screen).
+The **template itself is literal text** — it is not translated. For a sentence
+that must read naturally in every language, use **Localizable Text** instead:
+its phrase holds the `{1}`, `{2}` placeholders and each language orders them
+itself. See [Translations](translations.md#use-a-translation-on-a-screen).
 
 ## Passing values into components
 

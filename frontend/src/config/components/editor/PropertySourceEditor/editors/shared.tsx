@@ -590,8 +590,12 @@ export function WildcardCard({
   return (
     // A placeholder prints one value, so a whole array there asks for its element.
     <TakesOneValueContext.Provider value={true}>
+      {/* Named like an array's Index row: a quiet line under the field, so the
+          field it belongs to keeps the only bold label. */}
       <CollapsiblePropertyCard
         title={`{${wcKey}}`}
+        hideLabel
+        description={`Value for {${wcKey}}`}
         value={value}
         onChange={onChange}
         schema={schema}

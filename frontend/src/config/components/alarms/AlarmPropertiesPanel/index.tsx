@@ -25,6 +25,7 @@ import { varBindingOf } from '../../editor/bindingPickerUtils';
 import { findAlarm, resolveAlarmString } from '../alarmDisplayUtils';
 import { ClearIcon } from '../../ui/actionIcons';
 import type { SchemaField } from '@shared/types/widgetSchema';
+import { LocPlaceholdersContext } from '../../editor/PropertySourceEditor/locPlaceholdersContext';
 
 const NUMERIC_DATA_TYPES = ['Integer', 'Float'];
 
@@ -54,7 +55,12 @@ export default function AlarmPropertiesPanel({
   if (selection.type === 'alarm') {
     const alarm = findAlarm(config, selection.id);
     if (!alarm) return null;
-    return <AlarmPanel alarm={alarm} onPatch={onPatchAlarm} />;
+    // An alarm fills its text's {1}, {2} from its own values when it fires.
+    return (
+      <LocPlaceholdersContext.Provider value={false}>
+        <AlarmPanel alarm={alarm} onPatch={onPatchAlarm} />
+      </LocPlaceholdersContext.Provider>
+    );
   }
 
   return null;

@@ -94,7 +94,7 @@ type SourceHandler = (payload: unknown, context: EvaluationContext, depth: numbe
 const SOURCE_HANDLERS: Record<string, SourceHandler> = {
   $static: (payload) => resolveStaticValue(payload),
   $var: (payload, ctx, d) => evaluateVar(payload, ctx, d),
-  $loc: (payload, ctx) => evaluateLoc(payload, ctx),
+  $loc: (payload, ctx, d) => evaluateLoc(payload, ctx, d),
   $urlParam: (payload, ctx) => evaluateUrlParam(payload, ctx),
   $pageIsActive: (payload, ctx) => evaluatePageIsActive(payload, ctx),
   $if: (payload, ctx, d) => evaluateIf(payload, ctx, d),
@@ -278,7 +278,15 @@ function evaluateVar(varObj: unknown, context: EvaluationContext, depth: number)
   return value;
 }
 
-function evaluateLoc(locObj: unknown, context: EvaluationContext): ResolvedValue {
+function evaluateLoc(locObj: unknown, context: EvaluationContext, depth: number): ResolvedValue {
+  // A key with placeholders: translate first, then fill, so each language
+  // puts the values where its grammar wants them.
+  if (isRecord(locObj) && typeof locObj.key === 'string') {
+    const text = context.resolveTranslation
+      ? String(context.resolveTranslation(locObj.key))
+      : locObj.key;
+    return renderTemplate(text, wildcardsOf(locObj), context, depth);
+  }
   if (typeof locObj !== 'string') {
     return null;
   }

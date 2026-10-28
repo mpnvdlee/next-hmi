@@ -1,5 +1,7 @@
 import { useContext, useEffect, useState } from 'react';
-import { BranchEditor } from './shared';
+import { BranchEditor, WildcardCard } from './shared';
+import { LocPlaceholdersContext } from '../locPlaceholdersContext';
+import type { PropertySource } from '../../propertyValueUtils';
 import { ParentPathContext, useParentPath, withSegs } from '../parentPathContext';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import ReadOnlyValue from '../../../ui/ReadOnlyValue';
@@ -14,10 +16,11 @@ import { REPEAT_INDEX_SUFFIX, repeatPickLabel } from '../../VariableBindingPicke
 import { useResultFields } from '../resultFieldsContext';
 import { useRepeatEditorScope } from '../repeatScopeContext';
 import { varBindingOf } from '../../bindingPickerUtils';
-import type { OpenBindingPicker, SlotType } from './utils';
+import { extractWildcardKeys, wrapPicker, type OpenBindingPicker, type SlotType } from './utils';
 import type {
   DeviceSource,
   LocSource,
+  LocTemplateSource,
   OverlaySource,
   PageField,
   PageIsActiveSource,
@@ -313,21 +316,76 @@ export function RepeatItemEditor({
   );
 }
 
-export function LocEditor({ value, onChange }: { value: unknown; onChange: (v: unknown) => void }) {
-  const locKey = (value as LocSource)?.$loc ?? '';
+const LOC_WILDCARD_SOURCES: PropertySource[] = ['static', '$var', '$loc'];
+const LOC_WILDCARD_SCHEMA: SchemaField = { type: 'String', label: '' };
+
+export function LocEditor({
+  value,
+  onChange,
+  onOpenBindingPicker,
+}: {
+  value: unknown;
+  onChange: (v: unknown) => void;
+  onOpenBindingPicker?: OpenBindingPicker;
+}) {
+  const fillsPlaceholders = useContext(LocPlaceholdersContext);
+  const parent = useParentPath();
+  const loc = (value as { $loc?: LocSource['$loc'] | LocTemplateSource['$loc'] })?.$loc;
+  const locKey = typeof loc === 'string' ? loc : (loc?.key ?? '');
+  const wildcards: Record<string, unknown> = (typeof loc === 'object' && loc?.wildcards) || {};
+  const keys = fillsPlaceholders ? extractWildcardKeys(locKey) : [];
+
+  // A key with placeholders carries one binding per placeholder; a plain key
+  // stays the bare string every older project stores.
+  const pick = (key: string) => {
+    const nextKeys = fillsPlaceholders ? extractWildcardKeys(key) : [];
+    if (nextKeys.length === 0) return onChange({ $loc: key });
+    const next: Record<string, unknown> = {};
+    // A new placeholder starts unbound, so diagnostics warn until it is.
+    for (const k of nextKeys) next[k] = wildcards[k] ?? { $var: { path: '' } };
+    onChange({ $loc: { key, wildcards: next } });
+  };
 
   return (
-    <TranslationInput
-      value={{ $loc: locKey }}
-      onChange={(next) => {
-        if (next && typeof next === 'object' && '$loc' in (next as Record<string, unknown>)) {
-          onChange(next);
-          return;
-        }
-        onChange({ $loc: String(next ?? '') });
-      }}
-      translationOnly
-    />
+    <>
+      <TranslationInput
+        value={{ $loc: locKey }}
+        onChange={(next) => {
+          if (next && typeof next === 'object' && '$loc' in (next as Record<string, unknown>)) {
+            pick(String((next as LocSource).$loc));
+            return;
+          }
+          pick(String(next ?? ''));
+        }}
+        translationOnly
+      />
+      {keys.length > 0 && (
+        <FieldRowBelow>
+          {keys.map((k) => (
+            <ParentPathContext.Provider key={k} value={withSegs(parent, '$loc', 'wildcards', k)}>
+              <WildcardCard
+                wcKey={k}
+                value={wildcards[k] ?? ''}
+                onChange={(v) =>
+                  onChange({ $loc: { key: locKey, wildcards: { ...wildcards, [k]: v } } })
+                }
+                onOpenBindingPicker={wrapPicker(
+                  onOpenBindingPicker,
+                  (b) =>
+                    onChange({
+                      $loc: { key: locKey, wildcards: { ...wildcards, [k]: { $var: b } } },
+                    }),
+                  wildcards[k],
+                  true,
+                )}
+                schema={LOC_WILDCARD_SCHEMA}
+                forcedSources={LOC_WILDCARD_SOURCES}
+              />
+            </ParentPathContext.Provider>
+          ))}
+        </FieldRowBelow>
+      )}
+    </>
   );
 }
 
