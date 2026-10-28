@@ -24,7 +24,6 @@ interface SelectionDrawerProps<T> {
   /** What is being picked: "Add widget", "Select source". */
   action: string;
   searchPlaceholder: string;
-  searchAriaLabel: string;
   categories: SelectionDrawerCategory<T>[];
   itemKey(item: T): string;
   itemMatches(item: T, query: string): boolean;
@@ -91,7 +90,6 @@ export default function SelectionDrawer<T>({
   title,
   action,
   searchPlaceholder,
-  searchAriaLabel,
   categories,
   itemKey,
   itemMatches,
@@ -195,7 +193,6 @@ export default function SelectionDrawer<T>({
         onSearchEnter={() => {
           if (topItem) onSelectItem(topItem);
         }}
-        searchAriaLabel={searchAriaLabel}
         searchPlaceholder={searchPlaceholder}
         searchInputRef={searchInputRef}
         meta={headerMeta}
@@ -204,7 +201,7 @@ export default function SelectionDrawer<T>({
 
       <SearchHighlightProvider query={query}>
         <div className="cfg-selection-drawer__body">
-          <nav className="cfg-selection-drawer__rail" aria-label={`${action} categories`}>
+          <nav className="cfg-selection-drawer__rail">
             {filtered.map((category) => (
               <button
                 key={category.category}

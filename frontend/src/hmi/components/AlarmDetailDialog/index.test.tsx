@@ -123,7 +123,7 @@ describe('AlarmDetailDialog', () => {
     const user = userEvent.setup();
     const { onClose } = renderDialog(mkAlarm());
 
-    await user.click(screen.getByRole('button', { name: 'Close' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-modal__close')!);
 
     expect(apiJson).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);

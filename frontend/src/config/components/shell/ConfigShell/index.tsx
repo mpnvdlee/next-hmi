@@ -186,7 +186,6 @@ export default function ConfigShell() {
           title="Undo (Ctrl+Z)"
           disabled={!canUndo}
           onClick={undo}
-          aria-label="Undo"
         >
           ↶
         </button>
@@ -195,7 +194,6 @@ export default function ConfigShell() {
           title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
           disabled={!canRedo}
           onClick={redo}
-          aria-label="Redo"
         >
           ↷
         </button>
@@ -214,7 +212,6 @@ export default function ConfigShell() {
             window.open(slug ? `/runtime/${slug}/` : withBase('/'), '_blank');
           }}
           title="Open live version"
-          aria-label="Open live version"
         >
           ↗ Live View
         </button>
@@ -224,7 +221,7 @@ export default function ConfigShell() {
       <ConfigUpdatedBanner />
 
       <div className="cfg-shell__body">
-        <nav className="cfg-nav" aria-label="Config navigation">
+        <nav className="cfg-nav">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -234,7 +231,6 @@ export default function ConfigShell() {
                 `cfg-nav__link${isActive ? ' cfg-nav__link--active' : ''}`
               }
               title={item.title}
-              aria-label={item.title}
             >
               {item.icon}
             </NavLink>

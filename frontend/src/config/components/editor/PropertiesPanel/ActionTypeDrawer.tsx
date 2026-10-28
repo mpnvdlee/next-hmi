@@ -42,7 +42,6 @@ export default function ActionTypeDrawer({ label, onClose, onSelect }: ActionTyp
       title={label}
       action="Add action"
       searchPlaceholder="Search actions"
-      searchAriaLabel="Search actions"
       categories={CATALOG}
       itemKey={(item) => item.type}
       itemMatches={itemMatches}

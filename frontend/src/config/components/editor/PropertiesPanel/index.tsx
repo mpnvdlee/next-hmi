@@ -1281,7 +1281,6 @@ function SettingsPanel() {
                 if (Number.isFinite(next)) commit(next);
               }}
               className="cfg-settings-scale__slider"
-              aria-label="HMI scale"
             />
             <input
               type="number"
@@ -1294,7 +1293,6 @@ function SettingsPanel() {
                 if (Number.isFinite(next)) commit(next);
               }}
               className="cfg-prop-input cfg-settings-scale__input"
-              aria-label="HMI scale value"
             />
           </div>
         </PropRow>

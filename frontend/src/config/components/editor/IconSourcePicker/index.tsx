@@ -90,7 +90,7 @@ export default function IconSourcePicker() {
   const selPath = selected?.type === 'custom' ? selected.path : null;
 
   const tabs = (
-    <div className="cfg-asset-picker-tabs" role="tablist" aria-label="Icon source">
+    <div className="cfg-asset-picker-tabs" role="tablist">
       <button
         type="button"
         role="tab"

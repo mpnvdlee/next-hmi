@@ -115,10 +115,6 @@ export default function UserBadge({ properties, layout }: HmiWidgetProps) {
   const signInIcon = getPropString(properties, 'signInIcon', '', evalCtx) || SIGN_IN_ICON;
   const signOutIcon = getPropString(properties, 'signOutIcon', '', evalCtx) || SIGN_OUT_ICON;
   const radius = getPropString(properties, 'radius', '', evalCtx);
-  // Icon-only, so its accessible name is the only text a screen reader gets.
-  // Routed through the project's own translations rather than hard-coded, the
-  // way the label the button replaced was.
-  const signOutLabel = evalCtx.resolveTranslation?.('Log out') || 'Log out';
 
   // The radius rides a custom property rather than a literal inline
   // `borderRadius`: leaving it unset keeps the fully-round default in the
@@ -181,7 +177,6 @@ export default function UserBadge({ properties, layout }: HmiWidgetProps) {
             <button
               type="button"
               className="hmi-user-badge__action hmi-user-badge__signout"
-              aria-label={signOutLabel}
               onClick={() => run(signOutActions)}
             >
               <span className="hmi-user-badge__glyph" aria-hidden="true">

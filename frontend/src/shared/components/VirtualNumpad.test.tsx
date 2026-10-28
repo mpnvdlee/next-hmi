@@ -142,7 +142,7 @@ describe('VirtualNumpad', () => {
 
     await press(user, '5', '0', '0', '0');
     expect(screen.getByRole('alert')).toHaveTextContent('Min: 80 \u00b7 Max: 200');
-    expect(screen.getByRole('button', { name: 'Enter' })).toBeDisabled();
+    expect(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!).toBeDisabled();
 
     await press(user, 'Enter');
     expect(onApply).not.toHaveBeenCalled();
@@ -169,7 +169,7 @@ describe('VirtualNumpad', () => {
     render(<NumpadHarness onApply={onApply} min={0} max={100} />);
 
     await press(user, '1', '0', '1');
-    expect(screen.getByRole('button', { name: 'Enter' })).toBeDisabled();
+    expect(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!).toBeDisabled();
 
     await press(user, 'Back');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();

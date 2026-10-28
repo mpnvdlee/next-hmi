@@ -34,7 +34,6 @@ export default function WidgetSelector({
       title={contextName}
       action="Add widget/component"
       searchPlaceholder="Search widgets and components"
-      searchAriaLabel="Search widgets and components"
       categories={catalog}
       itemKey={(item) => item.type}
       itemMatches={itemMatches}

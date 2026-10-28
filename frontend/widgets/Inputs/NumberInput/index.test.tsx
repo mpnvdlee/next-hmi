@@ -164,7 +164,7 @@ describe('NumberInput', () => {
     for (const digit of '5000') {
       await user.click(screen.getByRole('button', { name: digit }));
     }
-    await user.click(screen.getByRole('button', { name: 'Enter' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
 
     expect(sendWsMessage).not.toHaveBeenCalled();
   });

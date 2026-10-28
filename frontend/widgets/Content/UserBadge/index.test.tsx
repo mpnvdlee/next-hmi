@@ -141,7 +141,7 @@ describe('UserBadge', () => {
       signIn('operator', ['ops'], { ops: 'Operators' });
       renderBadge({ onSignOut: { onSignOut: [{ type: 'logoutUser' }] } });
 
-      await userEvent.click(screen.getByLabelText('Log out'));
+      await userEvent.click(document.querySelector<HTMLElement>('.hmi-user-badge__signout')!);
 
       expect(vi.mocked(sendWsMessage).mock.calls[0][0]).toMatchObject({ type: 'logout' });
     });

@@ -83,17 +83,6 @@ const KEYBOARD_ROWS: KeyboardKey[][] = [
   ],
 ];
 
-function keyLabel(key: KeyboardKey): string {
-  if (key.kind === 'tab') return 'Tab';
-  if (key.kind === 'space') return 'Space';
-  if (key.kind === 'backspace') return 'Backspace';
-  if (key.kind === 'clear') return 'Clear';
-  if (key.kind === 'enter') return 'Enter';
-  if (key.kind === 'capsLock') return 'Caps Lock';
-  if (key.kind === 'shift') return `Shift ${key.side}`;
-  return key.value;
-}
-
 const KEY_ICON: Record<Exclude<KeyboardKey['kind'], 'char'>, VirtualKeyIconName> = {
   tab: 'tab',
   space: 'space',
@@ -214,7 +203,6 @@ export function VirtualKeyboard({
         className="hmi-virtual-input__panel hmi-virtual-input__panel--keyboard"
         ref={panelRef}
         role="group"
-        aria-label={title ?? 'Keyboard'}
       >
         <div className="hmi-virtual-input__header">
           {title && <span className="hmi-virtual-input__title">{title}</span>}
@@ -227,8 +215,6 @@ export function VirtualKeyboard({
         <div
           className="hmi-virtual-input__value hmi-virtual-input__value--keyboard"
           ref={previewRef}
-          aria-label={password ? `Password value, ${valueLength} characters` : 'Keyboard value'}
-          aria-live="polite"
         >
           {previewValue || '\u00a0'}
         </div>
@@ -241,9 +227,6 @@ export function VirtualKeyboard({
               {row.map((key, keyIndex) => {
                 const isPressed =
                   (key.kind === 'shift' && shift) || (key.kind === 'capsLock' && capsLock);
-                const label =
-                  key.kind === 'char' ? characterFor(key, shift, capsLock) : t(keyLabel(key));
-
                 return (
                   <button
                     type="button"
@@ -270,7 +253,7 @@ export function VirtualKeyboard({
                         </span>
                       </span>
                     ) : key.kind === 'char' ? (
-                      <span aria-hidden="true">{label}</span>
+                      <span aria-hidden="true">{characterFor(key, shift, capsLock)}</span>
                     ) : (
                       <VirtualKeyIcon name={KEY_ICON[key.kind]} />
                     )}

@@ -71,7 +71,6 @@ export default function EndpointDiscovery({ address, onAddressChange, onSelect }
           type="text"
           value={address}
           placeholder="opc.tcp://192.168.1.10:4840 or host:port"
-          aria-label="Server address"
           onChange={(e) => onAddressChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
@@ -93,7 +92,7 @@ export default function EndpointDiscovery({ address, onAddressChange, onSelect }
       {error && <div className="ds-wizard__discover-error">{error}</div>}
 
       {endpoints && endpoints.length > 0 && (
-        <ul className="ds-wizard__endpoints" role="listbox" aria-label="Discovered endpoints">
+        <ul className="ds-wizard__endpoints" role="listbox">
           {endpoints.map((ep, i) => {
             const open = ep.security_mode === 'None';
             const supported = isSupported(ep);

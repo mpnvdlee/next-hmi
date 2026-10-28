@@ -690,7 +690,6 @@ export default function WidgetTree() {
           <TreeSearchBar
             value={searchQuery}
             onChange={setSearchQuery}
-            label="Search widget tree"
             // The widget selector drawer owns `/` while it's open.
             shortcutDisabled={selectorTarget !== null}
             onCollapseAll={() => {

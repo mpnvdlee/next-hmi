@@ -177,7 +177,7 @@ export default function DatasourceBrowseDiffBanner({ dsName, onApply }: Props) {
   };
 
   return (
-    <div className="cfg-browse-diff" role="region" aria-label="Pending browse changes">
+    <div className="cfg-browse-diff" role="region">
       <div className="cfg-browse-diff__header">
         <span className="cfg-browse-diff__title">
           {counts.added + counts.modified + counts.removed} changes pending

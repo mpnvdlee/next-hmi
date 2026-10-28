@@ -90,7 +90,6 @@ export default function AssetPickerShell({
         search={search}
         onSearchChange={onSearchChange}
         onSearchEnter={onSearchEnter ?? (confirmDisabled ? undefined : onConfirm)}
-        searchAriaLabel={`Search ${action.toLowerCase()}`}
         searchPlaceholder={searchPlaceholder}
         searchInputRef={searchInputRef}
         meta={countLabel}

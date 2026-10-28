@@ -78,9 +78,8 @@ export function VirtualNumpad({
   autoFocus = true,
 }: VirtualNumpadProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
-  // The keys show icons; their names for a screen reader, and Min and Max, are
-  // dictionary keys, English as on any screen. Subscribed so a language switch
-  // re-renders an open numpad.
+  // Min and Max are dictionary keys, English as on any screen. Subscribed so a
+  // language switch re-renders an open numpad.
   useTranslationStore((s) => s.activeLanguage);
   useTranslationStore((s) => s.translations);
   const t = useTranslationStore.getState().resolve;
@@ -154,13 +153,7 @@ export function VirtualNumpad({
       {(title || !inline) && (
         <div className="hmi-virtual-input__header">
           {title && <span className="hmi-virtual-input__title">{title}</span>}
-          {!inline && (
-            <CloseButton
-              className="hmi-virtual-input__close"
-              onClick={onCancel}
-              label={t('Close numpad')}
-            />
-          )}
+          {!inline && <CloseButton className="hmi-virtual-input__close" onClick={onCancel} />}
         </div>
       )}
       <div

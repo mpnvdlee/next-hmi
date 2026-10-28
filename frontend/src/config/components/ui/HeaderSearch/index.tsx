@@ -8,7 +8,6 @@ interface Props {
   onChange: (value: string) => void;
   onEnter?: () => void;
   placeholder?: string;
-  ariaLabel?: string;
   width?: number | string;
   /** `header` keeps a toolbar's fixed width; `fill` stretches to its flex row. */
   variant?: 'header' | 'fill';
@@ -22,7 +21,6 @@ const HeaderSearch = forwardRef<HTMLInputElement, Props>(function HeaderSearch(
     onChange,
     onEnter,
     placeholder = 'Search…',
-    ariaLabel = 'Search',
     width,
     variant = 'header',
     shortcutDisabled = false,
@@ -67,7 +65,6 @@ const HeaderSearch = forwardRef<HTMLInputElement, Props>(function HeaderSearch(
         ref={inputRef}
         type="search"
         className="cfg-tree__search-input"
-        aria-label={ariaLabel}
         aria-keyshortcuts={shortcutDisabled ? undefined : '/'}
         placeholder={placeholder}
         value={value}
@@ -86,7 +83,6 @@ const HeaderSearch = forwardRef<HTMLInputElement, Props>(function HeaderSearch(
         <button
           type="button"
           className="cfg-tree__search-clear"
-          aria-label={`Clear ${ariaLabel.toLowerCase()}`}
           title="Clear search"
           onClick={() => {
             onChange('');

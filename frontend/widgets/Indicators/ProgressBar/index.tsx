@@ -127,7 +127,6 @@ export default function ProgressBar({ properties, layout }: HmiWidgetProps) {
         aria-valuemin={min}
         aria-valuemax={max}
         aria-valuenow={numericValue}
-        aria-label={label || undefined}
       >
         <div className="hmi-progress-bar__fill" />
       </div>

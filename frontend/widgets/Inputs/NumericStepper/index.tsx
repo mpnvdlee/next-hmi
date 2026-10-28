@@ -207,7 +207,6 @@ export default function NumericStepper({ properties, layout }: HmiWidgetProps) {
           className="hmi-numeric-stepper__btn"
           onClick={handleDecrement}
           disabled={!canDecrement}
-          aria-label="Decrement"
         >
           −
         </button>
@@ -216,7 +215,6 @@ export default function NumericStepper({ properties, layout }: HmiWidgetProps) {
           className="hmi-numeric-stepper__display"
           onClick={openNumpad}
           disabled={isIdle}
-          aria-label={label ? `Edit ${label}` : 'Edit value'}
         >
           <span
             className={`hmi-numeric-stepper__value${isOutOfRange ? ' hmi-numeric-stepper__value--invalid' : ''}`}
@@ -230,7 +228,6 @@ export default function NumericStepper({ properties, layout }: HmiWidgetProps) {
           className="hmi-numeric-stepper__btn"
           onClick={handleIncrement}
           disabled={!canIncrement}
-          aria-label="Increment"
         >
           +
         </button>

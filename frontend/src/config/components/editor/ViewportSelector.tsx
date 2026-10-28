@@ -10,11 +10,7 @@ export default function ViewportSelector({
   return (
     <>
       <span className="editor-preview-toolbar__label">Viewport</span>
-      <div
-        className="editor-preview-toolbar__seg cfg-header-control"
-        role="group"
-        aria-label="Viewport"
-      >
+      <div className="editor-preview-toolbar__seg cfg-header-control" role="group">
         {VIEWPORTS.map((v, i) => {
           const VpIcon = v.icon;
           const active = vpIdx === i;

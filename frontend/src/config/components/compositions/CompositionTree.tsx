@@ -223,7 +223,6 @@ export default function CompositionTree({
         <TreeSearchBar
           value={searchQuery}
           onChange={setSearchQuery}
-          label="Search component tree"
           shortcutDisabled={ctxMenu !== null}
           onCollapseAll={collapseAll}
         />

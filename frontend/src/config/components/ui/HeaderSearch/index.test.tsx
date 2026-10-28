@@ -4,16 +4,14 @@ import HeaderSearch from './index';
 describe('HeaderSearch', () => {
   it('updates and clears the search value', () => {
     const onChange = vi.fn();
-    const { rerender } = render(
-      <HeaderSearch value="" onChange={onChange} ariaLabel="Search translations" />,
-    );
+    const { rerender } = render(<HeaderSearch value="" onChange={onChange} />);
 
-    const input = screen.getByRole('searchbox', { name: 'Search translations' });
+    const input = screen.getByRole('searchbox');
     fireEvent.change(input, { target: { value: 'motor' } });
     expect(onChange).toHaveBeenLastCalledWith('motor');
 
-    rerender(<HeaderSearch value="motor" onChange={onChange} ariaLabel="Search translations" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Clear search translations' }));
+    rerender(<HeaderSearch value="motor" onChange={onChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
     expect(onChange).toHaveBeenLastCalledWith('');
   });
 
@@ -21,7 +19,7 @@ describe('HeaderSearch', () => {
     const onChange = vi.fn();
     render(<HeaderSearch value="motor" onChange={onChange} />);
 
-    const input = screen.getByRole('searchbox', { name: 'Search' });
+    const input = screen.getByRole('searchbox');
     input.focus();
     fireEvent.keyDown(input, { key: 'Escape' });
 
@@ -30,9 +28,9 @@ describe('HeaderSearch', () => {
   });
 
   it('shows the slash shortcut and focuses the search from the keyboard', async () => {
-    render(<HeaderSearch value="" onChange={vi.fn()} ariaLabel="Search translations" />);
+    render(<HeaderSearch value="" onChange={vi.fn()} />);
 
-    const input = screen.getByRole('searchbox', { name: 'Search translations' });
+    const input = screen.getByRole('searchbox');
     expect(screen.getByText('/')).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: '/' });
@@ -52,7 +50,7 @@ describe('HeaderSearch', () => {
     otherInput.focus();
     fireEvent.keyDown(otherInput, { key: '/' });
 
-    expect(screen.getByRole('searchbox', { name: 'Search' })).not.toHaveFocus();
+    expect(screen.getByRole('searchbox')).not.toHaveFocus();
     expect(otherInput).toHaveFocus();
   });
 });

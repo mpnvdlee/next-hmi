@@ -192,7 +192,7 @@ describe('ActionsInput — browse drawer', () => {
     render(<Harness onChangeSpy={onChangeSpy} />);
     await pick(user, screen.getByRole('combobox'), 'Browse actions…');
 
-    const search = screen.getByRole('searchbox', { name: 'Search actions' });
+    const search = screen.getByRole('searchbox');
     fireEvent.change(search, { target: { value: 'theme' } });
     fireEvent.keyDown(search, { key: 'Enter' });
 
