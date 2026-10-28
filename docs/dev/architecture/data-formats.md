@@ -407,6 +407,19 @@ Localization references use the `$loc` source:
 }
 ```
 
+A key that holds `{1}`, `{2}` … carries one binding per placeholder; the key is
+translated first and the placeholders filled after, with the `$stringExpr`
+transforms (`{Round1(1)}`):
+
+```json
+{
+  "$loc": {
+    "key": "Must lie outside the {1} g band",
+    "wildcards": { "1": { "$var": { "path": "CW:Params/Band" } } }
+  }
+}
+```
+
 ### Stored actions
 
 An action list is a JSON array of action objects, each discriminated by `type`

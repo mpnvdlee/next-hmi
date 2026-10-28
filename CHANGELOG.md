@@ -37,6 +37,13 @@ heading.
   carries the dataset's `values`, so a recipe list shows its target or
   quantity without a custom widget.
 
+- **A translation can hold live values.** Write `{1}`, `{2}` in a phrase,
+  `Tank {1} of {2}`, and translate it as a whole sentence, `Tank {1} van
+  {2}`. Picking that phrase in a **Localizable Text** field opens one row per
+  placeholder, to fill with a fixed value, a tag or another translation; each
+  language puts the values where its grammar wants them. An alarm's title and
+  description keep filling `{1}`, `{2}` from the alarm's own values.
+
 - **The numpad and keyboard show icons, not English words.** Back, Clear,
   Enter, Shift, Caps Lock, Tab and Space are icons, and an entry outside the
   bounds turns the `Min: 80 · Max: 200` line into a red warning. *Min*,

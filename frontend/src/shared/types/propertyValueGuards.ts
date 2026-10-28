@@ -29,6 +29,12 @@ export function isLocSource(value: unknown): value is { $loc: string } {
   return isRecord(value) && typeof value.$loc === 'string';
 }
 
+export function isLocTemplate(
+  value: unknown,
+): value is { $loc: { key: string; wildcards?: Record<string, unknown> } } {
+  return isRecord(value) && isRecord(value.$loc) && typeof value.$loc.key === 'string';
+}
+
 export function isHttpSource(value: unknown): value is { $http: UnknownRecord } {
   return isRecord(value) && isRecord((value as { $http?: unknown }).$http);
 }

@@ -1202,6 +1202,26 @@ describe('propertySourceEval', () => {
       expect(evaluatePropertyValue({ $http: { url: 'https://x/y' } }, {})).toBeNull();
     });
   });
+  describe('$loc with placeholders', () => {
+    const ctx: EvaluationContext = {
+      resolveTranslation: (key) =>
+        key === 'Must lie outside the {1} g band' ? 'Moet buiten de band van {1} g liggen' : key,
+    };
+
+    it('translates the key, then fills each placeholder from its own binding', () => {
+      const value = {
+        $loc: { key: 'Must lie outside the {1} g band', wildcards: { 1: { $static: 10 } } },
+      };
+      expect(evaluatePropertyValue(value, ctx)).toBe('Moet buiten de band van 10 g liggen');
+    });
+
+    it('keeps a plain key a plain translation', () => {
+      expect(evaluatePropertyValue({ $loc: 'Must lie outside the {1} g band' }, ctx)).toBe(
+        'Moet buiten de band van {1} g liggen',
+      );
+    });
+  });
+
   describe('$recipe savedAt', () => {
     const ctx: EvaluationContext = {
       resolveRecipe: (_type, field) => (field === 'savedAt' ? '2026-10-27T08:45:00' : false),

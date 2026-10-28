@@ -1,6 +1,7 @@
 import {
   hasPropertySourceKey,
   isLocSource,
+  isLocTemplate,
   isRecord,
   getVarBinding,
 } from '@shared/types/propertyValueGuards';
@@ -173,6 +174,7 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
     return v.index !== undefined ? `${base}[${v.index}]` : base;
   }
   if (isLocSource(obj)) return `"${obj.$loc}"`;
+  if (isLocTemplate(obj)) return `"${obj.$loc.key}"`;
   const branch = unwrapBranch(obj);
   if (branch) {
     if (typeof branch === 'string') return `${branch}(…)`;

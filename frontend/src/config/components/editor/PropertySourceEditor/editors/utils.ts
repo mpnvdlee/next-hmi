@@ -146,3 +146,20 @@ export const COMPARE_OPERAND_SCHEMA: SchemaField = {
   type: 'String',
   label: 'Value',
 };
+
+/** Extract unique wildcard numbers from a template string. */
+export function extractWildcardKeys(template: string): string[] {
+  const keys = new Set<string>();
+  const re = /\{([^{}]+)\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(template)) !== null) {
+    let body = m[1].trim();
+    while (true) {
+      const fn = /^[A-Za-z]\w*\((.+)\)$/.exec(body);
+      if (!fn) break;
+      body = fn[1].trim();
+    }
+    if (/^\d+$/.test(body)) keys.add(body);
+  }
+  return Array.from(keys).sort((a, b) => Number(a) - Number(b));
+}
