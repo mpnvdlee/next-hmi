@@ -21,11 +21,9 @@ export default function ContactPrompt({ status, onDismiss }: Props) {
   const dismiss = () => void onDismiss().catch(() => undefined);
 
   return (
-    <section className="cfg-contact-prompt" aria-labelledby="cfg-contact-prompt-title">
+    <section className="cfg-contact-prompt">
       <div className="cfg-contact-prompt__body">
-        <h2 id="cfg-contact-prompt-title" className="cfg-contact-prompt__title">
-          Using NEXT HMI in a machine or product?
-        </h2>
+        <h2 className="cfg-contact-prompt__title">Using NEXT HMI in a machine or product?</h2>
         <p className="cfg-contact-prompt__text">
           We would like to hear what you are building. A short conversation helps decide what comes
           next, and you get a direct line to the people who make it.{' '}

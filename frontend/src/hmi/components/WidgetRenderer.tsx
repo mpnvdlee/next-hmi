@@ -27,7 +27,7 @@
  */
 
 import './WidgetRenderer.css';
-import { Component, useContext, useId, useState } from 'react';
+import { Component, useContext, useState } from 'react';
 import type { CSSProperties, MouseEvent, ReactNode, ErrorInfo } from 'react';
 import type { WidgetConfig, LayoutConfig } from '@shared/types/config';
 import { useConfigStore } from '@shared/store/configStore';
@@ -38,7 +38,7 @@ import { executeWidgetActions } from '../utils/widgetActions';
 import { PreviewContext } from '@shared/context/PreviewContext';
 import { DefinitionScopeContext } from '../context/DefinitionScopeContext';
 import { useRepeatScope } from '../context/RepeatScopeContext';
-import { useBindingStatus, type BindingStatus } from '../utils/bindingValidation';
+import { useBindingStatus } from '../utils/bindingValidation';
 import { useResolvedProperties } from '../hooks/useResolvedProperties';
 import { useLiveScalars } from '../hooks/useLiveScalars';
 import { useTimeTick } from '../hooks/useTimeTick';
@@ -129,12 +129,6 @@ class WidgetErrorBoundary extends Component<EBProps, EBState> {
 
 const LOCKED_MESSAGE = 'Interaction not permitted';
 
-const BINDING_OVERLAY_LABELS: Record<Exclude<BindingStatus, 'ok'>, string> = {
-  disabled: 'Variable disabled',
-  disconnected: 'OPC UA disconnected',
-  nodata: 'No data',
-};
-
 /**
  * Build a flex-child style for the binding-unavailable wrapper.
  * The wrapper takes over the layout role normally played by .hmi-component,
@@ -189,7 +183,6 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
   const [lockFlash, setLockFlash] = useState<{ x: number; y: number } | null>(null);
   const lockedFeedback = useConfigStore((s) => s.shell.lockedFeedback ?? 'flash');
   const scope = useHmiScope();
-  const lockedContentId = useId();
 
   // ── Visibility gate ───────────────────────────────────────────────────────
   // All hooks are called above; early return is safe here. `visible` /
@@ -263,10 +256,7 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
       bindingStatus !== 'ok' ? (
         <div className="hmi-binding-wrapper" style={wrapperStyle(layout)}>
           {comp}
-          <div
-            className={`hmi-binding-overlay hmi-binding-overlay--${bindingStatus}`}
-            aria-label={BINDING_OVERLAY_LABELS[bindingStatus]}
-          >
+          <div className={`hmi-binding-overlay hmi-binding-overlay--${bindingStatus}`}>
             <span className="hmi-binding-overlay__icon" aria-hidden="true" />
           </div>
         </div>
@@ -275,16 +265,12 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
           className="hmi-lock-wrapper"
           style={wrapperStyle(layout)}
           title={lockedFeedback === 'none' ? undefined : LOCKED_MESSAGE}
-          // `inert` takes the widget out of the accessibility tree along with
-          // focus, so the wrapper stands in for it: named by the widget's own
-          // text (a label reference reaches into an inert subtree) and disabled.
           role="group"
           aria-disabled="true"
-          aria-labelledby={lockedContentId}
         >
           {/* The overlay stops the pointer; `inert` stops Tab, Enter and Space,
               which reach the widget underneath straight past it. */}
-          <div className="hmi-lock-content" id={lockedContentId} inert>
+          <div className="hmi-lock-content" inert>
             {comp}
           </div>
           <div className="hmi-lock-overlay" onClick={handleLockedClick} aria-hidden="true">

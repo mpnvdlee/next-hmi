@@ -102,20 +102,14 @@ describe('Button', () => {
     expect(btn.style.backgroundColor).toBe('rgb(34, 167, 224)');
   });
 
-  it('renders an empty label with an icon as an icon-only button named after the icon', async () => {
+  it('renders an empty label with an icon as an icon-only button', async () => {
     renderButton({ label: ' ', iconName: 'house' });
 
-    const btn = screen.getByRole('button', { name: 'house' });
+    const btn = screen.getByRole('button');
     await waitFor(() => expect(btn.querySelector('svg')).not.toBeNull());
     expect(btn).toHaveClass('hmi-button__btn--icon-only');
     expect(btn).not.toHaveAttribute('title');
     expect(btn.querySelector('.hmi-button__label')).toBeNull();
-  });
-
-  it('names an icon-only button by its Identity name when it has one', () => {
-    renderButton({ label: '', iconName: 'pencil-simple' }, 'Edit target quantity');
-
-    expect(screen.getByRole('button', { name: 'Edit target quantity' })).toBeInTheDocument();
   });
 
   it('keeps the text padding while the label is filled in', async () => {
@@ -161,11 +155,7 @@ describe('Button', () => {
     const { container } = renderButton({ label: 'Jog' });
     const el = container.firstElementChild as HTMLElement;
 
-    for (const prop of [
-      '--hmi-btn-icon-size',
-      '--hmi-btn-border-width',
-      '--hmi-btn-fill',
-    ]) {
+    for (const prop of ['--hmi-btn-icon-size', '--hmi-btn-border-width', '--hmi-btn-fill']) {
       expect(el.style.getPropertyValue(prop)).toBe('');
     }
     expect(screen.getByRole('button', { name: 'Jog' })).not.toHaveAttribute('title');

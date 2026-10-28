@@ -45,7 +45,9 @@ function buildCatalog(
   ];
 
   // Refused sources follow the offered ones, so the top result stays pickable.
-  const listed = showAll ? [...sources, ...ALL_SOURCES.filter((s) => !sources.includes(s))] : sources;
+  const listed = showAll
+    ? [...sources, ...ALL_SOURCES.filter((s) => !sources.includes(s))]
+    : sources;
   for (const source of listed) {
     const descriptor = PROPERTY_SOURCES[source];
     const category = descriptor.produces.includes('any') ? categories[0] : categories[1];
@@ -88,7 +90,6 @@ export default function PropertySourceDrawer({
       title={label}
       action="Select source"
       searchPlaceholder="Search property sources"
-      searchAriaLabel="Search property sources"
       categories={catalog}
       itemKey={(item) => item.source}
       itemMatches={itemMatches}

@@ -67,7 +67,7 @@ describe('HmiToastStack', () => {
     pushToast();
     render(<HmiToastStack />);
 
-    screen.getByRole('button', { name: 'Dismiss notification' }).click();
+    document.querySelector<HTMLElement>('.hmi-toast__close')!.click();
 
     expect(useHmiStore.getState().pendingToasts).toHaveLength(0);
     // The now-orphaned timer firing later must not throw.

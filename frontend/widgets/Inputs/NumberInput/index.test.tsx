@@ -64,7 +64,7 @@ describe('NumberInput', () => {
 
     // Typed on a physical keyboard after a tap: the keys land in the numpad's field, once.
     await user.click(screen.getByRole('textbox'));
-    expect(screen.getByRole('textbox', { name: 'Value' })).toHaveFocus();
+    expect(document.querySelector<HTMLElement>('.hmi-virtual-input__field')!).toHaveFocus();
     await user.keyboard('42{Enter}');
 
     expect(sendWsMessage).toHaveBeenCalledTimes(1);
@@ -97,7 +97,12 @@ describe('NumberInput', () => {
   it('says the configured message instead of the range when the entry is out of it', async () => {
     useVariableStore.setState({ values: { [VAR_KEY]: -30 } });
     const user = userEvent.setup();
-    renderInput({ variable: BINDING, min: -500, max: -11, rangeMessage: 'Must lie outside the 10 g band' });
+    renderInput({
+      variable: BINDING,
+      min: -500,
+      max: -11,
+      rangeMessage: 'Must lie outside the 10 g band',
+    });
 
     await user.click(screen.getByRole('textbox'));
     await user.keyboard('-5{Enter}');
@@ -159,7 +164,7 @@ describe('NumberInput', () => {
     for (const digit of '5000') {
       await user.click(screen.getByRole('button', { name: digit }));
     }
-    await user.click(screen.getByRole('button', { name: 'Enter' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
 
     expect(sendWsMessage).not.toHaveBeenCalled();
   });
@@ -171,7 +176,7 @@ describe('NumberInput', () => {
 
     await user.click(screen.getByRole('textbox'));
     await user.click(screen.getByRole('button', { name: '7' }));
-    await user.click(screen.getByRole('button', { name: 'Close numpad' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__close')!);
 
     expect(sendWsMessage).not.toHaveBeenCalled();
     expect(screen.getByRole('textbox')).toHaveValue('12');
@@ -184,11 +189,13 @@ describe('NumberInput', () => {
 
     const field = screen.getByRole('textbox');
     await user.click(field);
-    await user.click(screen.getByRole('button', { name: 'Close numpad' }));
-    expect(screen.queryByRole('button', { name: 'Enter' })).not.toBeInTheDocument();
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__close')!);
+    expect(document.querySelector('.hmi-virtual-input__key--accent')).not.toBeInTheDocument();
 
     await user.click(field);
-    expect(screen.getByRole('button', { name: 'Enter' })).toBeInTheDocument();
+    expect(
+      document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!,
+    ).toBeInTheDocument();
   });
 
   it('keeps the entry and the typing focus in the numpad when the field is tapped again', async () => {
@@ -202,8 +209,8 @@ describe('NumberInput', () => {
     await user.click(field);
     await user.keyboard('4');
 
-    expect(screen.getByRole('textbox', { name: 'Value' })).toHaveFocus();
-    expect(screen.getByRole('textbox', { name: 'Value' })).toHaveValue('34');
+    expect(document.querySelector<HTMLElement>('.hmi-virtual-input__field')!).toHaveFocus();
+    expect(document.querySelector<HTMLElement>('.hmi-virtual-input__field')!).toHaveValue('34');
   });
 
   it('starts the entry empty, so a key replaces the value instead of appending', async () => {
@@ -212,9 +219,12 @@ describe('NumberInput', () => {
     renderInput({ variable: BINDING });
 
     await user.click(screen.getByRole('textbox'));
-    expect(screen.getByRole('textbox', { name: 'Value' })).toHaveAttribute('placeholder', '35');
+    expect(document.querySelector<HTMLElement>('.hmi-virtual-input__field')!).toHaveAttribute(
+      'placeholder',
+      '35',
+    );
     await user.click(screen.getByRole('button', { name: '7' }));
-    await user.click(screen.getByRole('button', { name: 'Enter' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
 
     expect(sentFrame().value).toBe(7);
   });

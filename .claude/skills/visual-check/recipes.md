@@ -315,7 +315,7 @@ NEXTHMI_DATA_DIR=$SCRATCH/peer2home NEXTHMI_PORT=8002 \
 | Actions | `.cfg-header__actions` — in order `↶ | ↷ | Save | ↗ Live View | Transfer | ? Help | Sign out` |
 | Save | `.cfg-header__save-btn` |
 | Unsaved marker | `.cfg-header__unsaved` (`● Unsaved changes`) |
-| Undo / Redo | `button[aria-label="Undo"]` / `"Redo"` — `isDisabled()` mirrors history depth |
+| Undo / Redo | `button[title^="Undo"]` / `button[title^="Redo"]` — `isDisabled()` mirrors history depth |
 
 **Nothing reaches disk without Save.** Edits, drags, pastes and undo live in
 the tab's store and die with the browser context, so a drive script can
@@ -445,7 +445,7 @@ await ed.mouse.up();
 | Segmented buttons | `.cfg-seg-btn` (`--active`) |
 | Row trailing buttons | `.cfg-row-action-btn` (`--unit` px/rem toggle, `--chevron`) |
 | Unset hint | `.cfg-unset-hint` (`· default`) |
-| Source pill / badge | `.cfg-source-pill-wrapper button` · `.cfg-property-source-badge` (`aria-label` = source label) |
+| Source pill / badge | `.cfg-source-pill-wrapper button` · `.cfg-property-source-badge` (`title` = source label) |
 | Source menu | `.cfg-source-pill__popup`, labels `.cfg-source-pill__option-label`; **Browse property sources…** opens `.cfg-selection-drawer` |
 | Context menu (tree and canvas) | `.cfg-context-menu`, items `__item`, submenu parents `__item--has-sub`, header `__label` |
 
@@ -619,7 +619,7 @@ counting `[placeholder="Mixed"]` undercounts.
 Testbench subject: `db-tank-1` / `-2` / `-3` on the dashboard — three
 `TankLevel` siblings. `Level` is `$var` on each (badge `Variable`), `Tank name`
 `$loc`, `Low-level limit` a shared `40` (`Static Value`, not mixed); set one
-tank's Level to Static Value for `Mixed sources`. Read `aria-label`, not the glyph.
+tank's Level to Static Value for `Mixed sources`. Read `title`, not the glyph.
 
 ### Preview toolbar
 
@@ -724,8 +724,8 @@ first, or the row is not in the DOM.
 | Surface | Selector |
 |---|---|
 | Datasource list | `.cfg-ds-tree .cfg-tree-item__label` (`.cfg-tree-item` alone matches nothing there) |
-| Filter | `input[aria-label="Filter datasource variables"]` |
-| Min / Max | `[aria-label="Minimum value"]` / `"Maximum value"`, refused input `aria-invalid="true"` |
+| Filter | `input[placeholder^="Filter by name"]` |
+| Min / Max | `input[placeholder="min"]` / `"max"`, refused input `aria-invalid="true"` |
 | Live column / write | `.cfg-var-live-btn` (off by default); `.cfg-vtable-cell--live` → `.cfg-var-write-input`, Enter |
 | Expand all folders | `.cfg-var-collapse-btn` `.last()` |
 | Rename | double-click `.cfg-var-inline-name`, fill `-input`, Enter |

@@ -40,7 +40,6 @@ interface SelectProps {
   style?: CSSProperties;
   placeholder?: string;
   onClick?: (e: ReactMouseEvent<HTMLButtonElement>) => void;
-  'aria-label'?: string;
 }
 
 function nodeText(node: ReactNode): string {
@@ -116,7 +115,6 @@ export default function Select({
   style,
   placeholder,
   onClick,
-  'aria-label': ariaLabel,
 }: SelectProps) {
   const options = useMemo(() => parseOptions(children), [children]);
   const baseId = useId();
@@ -304,7 +302,6 @@ export default function Select({
         className={triggerCls}
         disabled={disabled}
         role="combobox"
-        aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}

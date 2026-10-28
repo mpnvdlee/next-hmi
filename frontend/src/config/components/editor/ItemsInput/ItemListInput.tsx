@@ -57,7 +57,6 @@ export default function ItemListInput({ value, onChange }: Props) {
         <>
           <textarea
             className="cfg-prop-input"
-            aria-label="Items as JSON"
             rows={8}
             spellCheck={false}
             value={draft ?? JSON.stringify(items, null, 2)}

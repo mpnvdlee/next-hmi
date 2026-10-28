@@ -80,16 +80,16 @@ describe('TranslationsView', () => {
     });
     render(<TranslationsView />);
 
-    await userEvent.type(screen.getByLabelText('Search translations'), 'Stoppen');
+    await userEvent.type(screen.getByRole('searchbox'), 'Stoppen');
 
     await waitFor(() => expect(screen.getAllByTitle('Immutable translation key')).toHaveLength(1));
-    expect(screen.getByLabelText('Translation key: Stop')).toBeInTheDocument();
+    expect(screen.getByTitle('Immutable translation key')).toHaveTextContent('Stop');
   });
 
   it('says nothing matched rather than showing an empty table', async () => {
     render(<TranslationsView />);
 
-    await userEvent.type(screen.getByLabelText('Search translations'), 'zzz');
+    await userEvent.type(screen.getByRole('searchbox'), 'zzz');
 
     expect(await screen.findByText('No translations match the search.')).toBeInTheDocument();
   });

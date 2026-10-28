@@ -199,7 +199,7 @@ describe('AlarmListManaged', () => {
     await user.click(screen.getByText('[A-001] Motor Overheat'));
     expect(screen.getByRole('button', { name: 'Acknowledge' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Close' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-modal__close')!);
     expect(screen.queryByRole('button', { name: 'Acknowledge' })).not.toBeInTheDocument();
   });
 

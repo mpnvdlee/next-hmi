@@ -65,7 +65,7 @@ describe('NumericStepper', () => {
     const user = userEvent.setup();
     renderStepper({ variable: BINDING, step: 5 });
 
-    await user.click(screen.getByRole('button', { name: 'Increment' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:last-child')!);
 
     expect(sendWsMessage).toHaveBeenCalledWith({
       type: 'write_field',
@@ -83,7 +83,7 @@ describe('NumericStepper', () => {
     const user = userEvent.setup();
     renderStepper({ variable: BINDING, step: 2 });
 
-    await user.click(screen.getByRole('button', { name: 'Decrement' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:first-child')!);
 
     expect(frames()[0].value).toBe(8);
   });
@@ -96,8 +96,8 @@ describe('NumericStepper', () => {
     expect(container.querySelector('.hmi-numeric-stepper__value')?.textContent).toBe(
       '9007199254740993',
     );
-    await user.click(screen.getByRole('button', { name: 'Increment' }));
-    await user.click(screen.getByRole('button', { name: 'Decrement' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:last-child')!);
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:first-child')!);
 
     expect(frames().map((frame) => frame.value)).toEqual(['9007199254740994', '9007199254740992']);
   });
@@ -112,12 +112,16 @@ describe('NumericStepper', () => {
       max: '18446744073709551614',
     });
 
-    await user.click(screen.getByRole('button', { name: 'Increment' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:last-child')!);
     act(() => useVariableStore.setState({ values: { [VAR_KEY]: '18446744073709551614' } }));
 
     expect(frames().map((frame) => frame.value)).toEqual(['18446744073709551614']);
-    expect(screen.getByRole('button', { name: 'Increment' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Decrement' })).toBeEnabled();
+    expect(
+      document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:last-child')!,
+    ).toBeDisabled();
+    expect(
+      document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:first-child')!,
+    ).toBeEnabled();
   });
 
   it('clamps a big step to a big widget min as digits, not an unsafe number', async () => {
@@ -125,13 +129,15 @@ describe('NumericStepper', () => {
     const user = userEvent.setup();
     renderStepper({ variable: BINDING, step: 1, min: '9007199254740995' });
 
-    await user.click(screen.getByRole('button', { name: 'Decrement' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:first-child')!);
     act(() => useVariableStore.setState({ values: { [VAR_KEY]: '9007199254740996' } }));
-    await user.click(screen.getByRole('button', { name: 'Decrement' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:first-child')!);
 
     expect(frames().map((frame) => frame.value)).toEqual(['9007199254740999', '9007199254740995']);
     act(() => useVariableStore.setState({ values: { [VAR_KEY]: '9007199254740995' } }));
-    expect(screen.getByRole('button', { name: 'Decrement' })).toBeDisabled();
+    expect(
+      document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:first-child')!,
+    ).toBeDisabled();
   });
 
   it('commits a numpad entry beyond 2**53 by its exact digits', async () => {
@@ -139,12 +145,12 @@ describe('NumericStepper', () => {
     const user = userEvent.setup();
     renderStepper({ variable: BINDING, showRangeOnNumpad: false });
 
-    await user.click(screen.getByRole('button', { name: 'Edit value' }));
-    await user.click(screen.getByRole('button', { name: 'Clear' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__display')!);
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--clear')!);
     for (const digit of '18446744073709551615') {
       await user.click(screen.getByRole('button', { name: digit }));
     }
-    await user.click(screen.getByRole('button', { name: 'Enter' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
 
     expect(frames()[0].value).toBe('18446744073709551615');
   });
@@ -153,8 +159,12 @@ describe('NumericStepper', () => {
     useVariableStore.setState({ values: { [VAR_KEY]: 100 } });
     renderStepper({ variable: BINDING, step: 1, min: 0, max: 100 });
 
-    expect(screen.getByRole('button', { name: 'Increment' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Decrement' })).toBeEnabled();
+    expect(
+      document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:last-child')!,
+    ).toBeDisabled();
+    expect(
+      document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:first-child')!,
+    ).toBeEnabled();
   });
 
   it('lets a widget range override the variable range', () => {
@@ -166,7 +176,9 @@ describe('NumericStepper', () => {
 
     // 50 is well inside the variable's own 0..1000, so only the widget's
     // max: 50 can be what stops the increment.
-    expect(screen.getByRole('button', { name: 'Increment' })).toBeDisabled();
+    expect(
+      document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:last-child')!,
+    ).toBeDisabled();
   });
 
   it('refuses a numpad entry above the widget max instead of clamping it', async () => {
@@ -175,11 +187,11 @@ describe('NumericStepper', () => {
     // The range hint hidden: the bounds must hold all the same.
     renderStepper({ variable: BINDING, min: 0, max: 100, showRangeOnNumpad: false });
 
-    await user.click(screen.getByRole('button', { name: 'Edit value' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__display')!);
     for (const digit of '5000') {
       await user.click(screen.getByRole('button', { name: digit }));
     }
-    await user.click(screen.getByRole('button', { name: 'Enter' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
 
     expect(frames()).toHaveLength(0);
     expect(screen.getByRole('alert')).toHaveTextContent('Min: 0 \u00b7 Max: 100');
@@ -190,9 +202,9 @@ describe('NumericStepper', () => {
     const user = userEvent.setup();
     renderStepper({ variable: BINDING });
 
-    await user.click(screen.getByRole('button', { name: 'Edit value' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__display')!);
     await user.click(screen.getByRole('button', { name: '7' }));
-    await user.click(screen.getByRole('button', { name: 'Close numpad' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__close')!);
 
     expect(frames()).toHaveLength(0);
   });
@@ -202,10 +214,13 @@ describe('NumericStepper', () => {
     const user = userEvent.setup();
     renderStepper({ variable: BINDING });
 
-    await user.click(screen.getByRole('button', { name: 'Edit value' }));
-    expect(screen.getByRole('textbox', { name: 'Value' })).toHaveAttribute('placeholder', '35');
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__display')!);
+    expect(document.querySelector<HTMLElement>('.hmi-virtual-input__field')!).toHaveAttribute(
+      'placeholder',
+      '35',
+    );
     await user.click(screen.getByRole('button', { name: '7' }));
-    await user.click(screen.getByRole('button', { name: 'Enter' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
 
     expect(frames()[0].value).toBe(7);
   });
@@ -220,7 +235,7 @@ describe('NumericStepper', () => {
     const user = userEvent.setup();
     renderStepper({ variable: BINDING, decimals: 2 });
 
-    await user.click(screen.getByRole('button', { name: 'Edit value' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__display')!);
     expect(screen.getByRole('button', { name: '.' })).toBeDisabled();
   });
 
@@ -236,7 +251,7 @@ describe('NumericStepper', () => {
     const user = userEvent.setup();
     renderStepper({ variable: BINDING, step: 1 });
 
-    const increment = screen.getByRole('button', { name: 'Increment' });
+    const increment = document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:last-child')!;
     await user.click(increment);
     await user.click(increment);
     await user.click(increment);
@@ -257,10 +272,12 @@ describe('NumericStepper', () => {
     const user = userEvent.setup();
     renderStepper({ variable: { $static: 10 }, step: 1 });
 
-    expect(screen.getByRole('button', { name: 'Increment' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Edit value' })).toBeDisabled();
+    expect(
+      document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:last-child')!,
+    ).toBeDisabled();
+    expect(document.querySelector<HTMLElement>('.hmi-numeric-stepper__display')!).toBeDisabled();
 
-    await user.click(screen.getByRole('button', { name: 'Increment' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:last-child')!);
 
     expect(sendWsMessage).not.toHaveBeenCalled();
   });

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import CloseButton from './CloseButton';
-import { useTranslationStore } from '@shared/store/translationStore';
 import { VirtualKeyIcon, type VirtualKeyIconName } from './VirtualKeyIcon';
 
 type KeyWidth = '1' | '1-5' | '1-75' | '2' | '2-25' | '2-75' | '3' | '12';
@@ -84,17 +83,6 @@ const KEYBOARD_ROWS: KeyboardKey[][] = [
   ],
 ];
 
-function keyLabel(key: KeyboardKey): string {
-  if (key.kind === 'tab') return 'Tab';
-  if (key.kind === 'space') return 'Space';
-  if (key.kind === 'backspace') return 'Backspace';
-  if (key.kind === 'clear') return 'Clear';
-  if (key.kind === 'enter') return 'Enter';
-  if (key.kind === 'capsLock') return 'Caps Lock';
-  if (key.kind === 'shift') return `Shift ${key.side}`;
-  return key.value;
-}
-
 const KEY_ICON: Record<Exclude<KeyboardKey['kind'], 'char'>, VirtualKeyIconName> = {
   tab: 'tab',
   space: 'space',
@@ -144,11 +132,6 @@ export function VirtualKeyboard({
   password = false,
 }: VirtualKeyboardProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
-  // Keys show icons; their names for a screen reader are dictionary keys,
-  // English as on any screen. Subscribed so a language switch re-renders it.
-  useTranslationStore((s) => s.activeLanguage);
-  useTranslationStore((s) => s.translations);
-  const t = useTranslationStore.getState().resolve;
   const previewRef = useRef<HTMLDivElement | null>(null);
   const [shift, setShift] = useState(false);
   const [capsLock, setCapsLock] = useState(false);
@@ -220,13 +203,11 @@ export function VirtualKeyboard({
         className="hmi-virtual-input__panel hmi-virtual-input__panel--keyboard"
         ref={panelRef}
         role="group"
-        aria-label={title ?? 'Keyboard'}
       >
         <div className="hmi-virtual-input__header">
           {title && <span className="hmi-virtual-input__title">{title}</span>}
           <CloseButton
             className="hmi-virtual-input__close"
-            label={t('Close keyboard')}
             onMouseDown={(event) => event.preventDefault()}
             onClick={onClose}
           />
@@ -234,8 +215,6 @@ export function VirtualKeyboard({
         <div
           className="hmi-virtual-input__value hmi-virtual-input__value--keyboard"
           ref={previewRef}
-          aria-label={password ? `Password value, ${valueLength} characters` : 'Keyboard value'}
-          aria-live="polite"
         >
           {previewValue || '\u00a0'}
         </div>
@@ -248,9 +227,6 @@ export function VirtualKeyboard({
               {row.map((key, keyIndex) => {
                 const isPressed =
                   (key.kind === 'shift' && shift) || (key.kind === 'capsLock' && capsLock);
-                const label =
-                  key.kind === 'char' ? characterFor(key, shift, capsLock) : t(keyLabel(key));
-
                 return (
                   <button
                     type="button"
@@ -258,7 +234,6 @@ export function VirtualKeyboard({
                     className={keyClassName(key, isPressed)}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => applyKey(key)}
-                    aria-label={label}
                     aria-pressed={
                       key.kind === 'shift' || key.kind === 'capsLock' ? isPressed : undefined
                     }
@@ -278,7 +253,7 @@ export function VirtualKeyboard({
                         </span>
                       </span>
                     ) : key.kind === 'char' ? (
-                      <span aria-hidden="true">{label}</span>
+                      <span aria-hidden="true">{characterFor(key, shift, capsLock)}</span>
                     ) : (
                       <VirtualKeyIcon name={KEY_ICON[key.kind]} />
                     )}

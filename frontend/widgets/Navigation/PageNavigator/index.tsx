@@ -83,7 +83,6 @@ export default function PageNavigator({ properties, layout }: HmiWidgetProps) {
           className="hmi-page-navigator__btn"
           disabled={!prevPage || !prevEnabled}
           onClick={() => prevPage && prevEnabled && onNavigate(prevPage.id)}
-          aria-label="Previous page"
         >
           {previousLabel}
         </button>
@@ -94,7 +93,6 @@ export default function PageNavigator({ properties, layout }: HmiWidgetProps) {
           className="hmi-page-navigator__btn"
           disabled={!nextPage || !nextEnabled}
           onClick={() => nextPage && nextEnabled && onNavigate(nextPage.id)}
-          aria-label="Next page"
         >
           {nextLabel}
         </button>

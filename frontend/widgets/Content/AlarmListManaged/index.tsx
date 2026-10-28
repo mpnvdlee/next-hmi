@@ -312,7 +312,7 @@ export default function AlarmListManaged({ properties, layout }: HmiWidgetProps)
         <div className="hmi-alarm-header hmi-alarm-list__header">
           {title && <span className="hmi-alarm-header__title">{title}</span>}
           {showFilter ? (
-            <div className="hmi-alarm-list__chips" role="group" aria-label="Show">
+            <div className="hmi-alarm-list__chips" role="group">
               {chip('all', 'All')}
               {chip('active', `Active (${filtered.length})`)}
               {chip('history', 'History')}

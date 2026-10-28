@@ -152,7 +152,7 @@ describe('WidgetRenderer visible property', () => {
       const user = userEvent.setup();
       renderContainer({ title: 'Settings', actions: openSettings }, undefined, 'Open settings');
 
-      await user.click(await screen.findByRole('button', { name: 'Open settings' }));
+      await user.click(await screen.findByRole('button'));
 
       expect(openOverlays()).toEqual(['settings']);
     });
@@ -195,7 +195,7 @@ describe('WidgetRenderer visible property', () => {
         </MemoryRouter>,
       );
 
-      await user.click(await screen.findByRole('button', { name: 'Inner' }));
+      await user.click((await screen.findByText('Inner')).closest('button')!);
 
       expect(openOverlays()).toEqual(['inner']);
     });

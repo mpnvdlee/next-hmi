@@ -56,12 +56,12 @@ describe('StringInput', () => {
 
     const field = screen.getByRole('textbox');
     await user.click(field);
-    await user.click(screen.getByRole('button', { name: 'Close keyboard' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__close')!);
     expect(field).toHaveFocus();
-    expect(screen.queryByRole('button', { name: 'Close keyboard' })).not.toBeInTheDocument();
+    expect(document.querySelector('.hmi-virtual-input__close')).not.toBeInTheDocument();
 
     await user.click(field);
-    expect(screen.getByRole('button', { name: 'Close keyboard' })).toBeInTheDocument();
+    expect(document.querySelector<HTMLElement>('.hmi-virtual-input__close')!).toBeInTheDocument();
   });
 
   it('masks the field and toggles it with the reveal button', async () => {
@@ -72,10 +72,9 @@ describe('StringInput', () => {
     const field = container.querySelector('.hmi-string-input__input') as HTMLInputElement;
     expect(field.className).toContain('hmi-string-input__input--masked');
 
-    await user.click(screen.getByRole('button', { name: 'Show password' }));
+    await user.click(container.querySelector<HTMLElement>('.hmi-string-input__eye-btn')!);
 
     expect(field.className).not.toContain('hmi-string-input__input--masked');
-    expect(screen.getByRole('button', { name: 'Hide password' })).toBeInTheDocument();
   });
 
   it('stays invisible to the browser password manager while masked', () => {
@@ -109,7 +108,7 @@ describe('StringInput', () => {
       renderInput({ keyboard: 'numeric', label: 'PIN' });
 
       await user.click(screen.getByRole('textbox'));
-      expect(screen.queryByRole('button', { name: 'Close keyboard' })).not.toBeInTheDocument();
+      expect(document.querySelector('.hmi-virtual-input__panel--keyboard')).not.toBeInTheDocument();
       for (const key of ['0', '4', '2'])
         await user.click(screen.getByRole('button', { name: key }));
 
@@ -117,8 +116,8 @@ describe('StringInput', () => {
       expect(screen.getByRole('button', { name: '.' })).toBeDisabled();
       expect(screen.getByRole('button', { name: '-' })).toBeDisabled();
 
-      await user.click(screen.getByRole('button', { name: 'Enter' }));
-      expect(screen.queryByRole('button', { name: 'Close numpad' })).not.toBeInTheDocument();
+      await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
+      expect(document.querySelector('.hmi-virtual-input__close')).not.toBeInTheDocument();
       expect(useComponentPropStore.getState().props.entry.value).toBe('042');
     });
 
@@ -128,7 +127,7 @@ describe('StringInput', () => {
       renderInput({ keyboard: 'numeric', isPassword: true, label: 'PIN' });
 
       await user.click(screen.getByRole('textbox'));
-      const entry = screen.getByLabelText('PIN', { selector: '.hmi-virtual-input__field' });
+      const entry = document.querySelector<HTMLElement>('.hmi-virtual-input__field')!;
 
       expect(entry).toHaveClass('hmi-virtual-input__field--masked');
       expect(entry).toHaveAttribute('type', 'text');
@@ -140,7 +139,7 @@ describe('StringInput', () => {
       renderInput({ keyboard: 'numeric', isPassword: true, label: 'PIN' });
 
       await user.click(document.querySelector('.hmi-string-input__input') as HTMLElement);
-      const entry = screen.getByLabelText('PIN', { selector: '.hmi-virtual-input__field' });
+      const entry = document.querySelector<HTMLElement>('.hmi-virtual-input__field')!;
 
       expect(entry).toHaveAttribute('type', 'password');
     });
@@ -168,7 +167,7 @@ describe('StringInput', () => {
     it('opens the numpad centred as soon as it appears with Focus when shown', () => {
       renderInput({ keyboard: 'numeric', autoFocus: true, label: 'PIN' });
 
-      expect(screen.getByRole('button', { name: 'Close numpad' })).toBeInTheDocument();
+      expect(document.querySelector<HTMLElement>('.hmi-virtual-input__close')!).toBeInTheDocument();
       expect(document.querySelector('.hmi-virtual-input__dock--middle')).not.toBeNull();
     });
 
@@ -181,7 +180,7 @@ describe('StringInput', () => {
         </MemoryRouter>,
       );
 
-      expect(screen.queryByRole('button', { name: 'Close numpad' })).not.toBeInTheDocument();
+      expect(document.querySelector('.hmi-virtual-input__close')).not.toBeInTheDocument();
     });
 
     it('runs On Submit with the entered value on the numpad Enter, and closes it', async () => {
@@ -190,10 +189,10 @@ describe('StringInput', () => {
 
       for (const key of ['1', '2', '3', '4'])
         await user.click(screen.getByRole('button', { name: key }));
-      await user.click(screen.getByRole('button', { name: 'Enter' }));
+      await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
 
       expect(toasts()).toEqual(['1234']);
-      expect(screen.queryByRole('button', { name: 'Close numpad' })).not.toBeInTheDocument();
+      expect(document.querySelector('.hmi-virtual-input__close')).not.toBeInTheDocument();
     });
 
     it('runs On Submit on Enter from a physical keyboard', async () => {
@@ -210,7 +209,7 @@ describe('StringInput', () => {
 
       expect(container.querySelector('.hmi-virtual-input__panel--inline')).not.toBeNull();
       expect(document.querySelector('.hmi-virtual-input__dock')).toBeNull();
-      expect(screen.queryByRole('button', { name: 'Close numpad' })).not.toBeInTheDocument();
+      expect(document.querySelector('.hmi-virtual-input__close')).not.toBeInTheDocument();
     });
 
     it('runs On Submit with the Keypad entry on Enter, then clears it for the next try', async () => {
@@ -219,11 +218,13 @@ describe('StringInput', () => {
 
       for (const key of ['1', '2', '3', '4'])
         await user.click(screen.getByRole('button', { name: key }));
-      await user.click(screen.getByRole('button', { name: 'Enter' }));
+      await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
 
       expect(toasts()).toEqual(['1234']);
       expect(useComponentPropStore.getState().props.entry.value).toBe('');
-      expect(screen.getByRole('button', { name: 'Enter' })).toBeInTheDocument();
+      expect(
+        document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!,
+      ).toBeInTheDocument();
     });
 
     it('does not run On Submit when the numpad is closed with ×', async () => {
@@ -231,7 +232,7 @@ describe('StringInput', () => {
       renderInput({ keyboard: 'numeric', autoFocus: true, onSubmit: toastValue });
 
       await user.click(screen.getByRole('button', { name: '7' }));
-      await user.click(screen.getByRole('button', { name: 'Close numpad' }));
+      await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__close')!);
 
       expect(toasts()).toEqual([]);
     });

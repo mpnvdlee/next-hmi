@@ -41,7 +41,6 @@ export default function ViewportSelector({
             if (e.key === 'Escape') e.currentTarget.value = String(viewport[side]);
             if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur();
           }}
-          aria-label={`Viewport ${label.toLowerCase()} in pixels`}
         />
       </label>
     );
@@ -50,11 +49,7 @@ export default function ViewportSelector({
   return (
     <>
       <span className="editor-preview-toolbar__label">Viewport</span>
-      <div
-        className="editor-preview-toolbar__seg cfg-header-control"
-        role="group"
-        aria-label="Viewport"
-      >
+      <div className="editor-preview-toolbar__seg cfg-header-control" role="group">
         {buttons.map((v, i) => {
           const VpIcon = v.icon;
           const active = viewport.idx === i;

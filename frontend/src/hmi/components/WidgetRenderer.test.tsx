@@ -322,13 +322,13 @@ describe('WidgetRenderer', () => {
 
     // The overlay only stops the pointer; Tab, Enter and Space went straight
     // past it to a locked Start button until its contents were made inert.
-    it('takes a locked widget out of keyboard reach and announces it as disabled', () => {
+    it('takes a locked widget out of keyboard reach and marks it disabled', () => {
       const { container } = renderNode(lockedButton);
 
       const content = container.querySelector('.hmi-lock-content')!;
       expect(content).toHaveAttribute('inert');
       expect(content).toContainElement(container.querySelector('button'));
-      expect(screen.getByRole('group', { name: 'Start' })).toHaveAttribute('aria-disabled', 'true');
+      expect(container.querySelector('.hmi-lock-wrapper')).toHaveAttribute('aria-disabled', 'true');
     });
 
     it('leaves an unlocked widget focusable and unwrapped', () => {

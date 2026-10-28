@@ -34,16 +34,9 @@ export default function ConnectionLostOverlay({ message }: Props) {
     );
   }
   return (
-    <div
-      className="blocking-overlay blocking-overlay--blur"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="connection-lost-title"
-    >
+    <div className="blocking-overlay blocking-overlay--blur" role="alertdialog" aria-modal="true">
       <div className="name-modal blocking-overlay__dialog">
-        <h2 className="name-modal__title" id="connection-lost-title">
-          Connection lost
-        </h2>
+        <h2 className="name-modal__title">Connection lost</h2>
         <div className="name-modal__message blocking-overlay__busy">
           <Spinner variant="cfg" size="sm" />
           {message}

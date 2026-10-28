@@ -37,10 +37,22 @@ function NumpadHarness({
   );
 }
 
-const field = () => screen.getByRole('textbox', { name: 'Value' });
+const field = () => document.querySelector<HTMLElement>('.hmi-virtual-input__field')!;
+
+// The icon keys carry no names; the digit keys are named by their text.
+const ICON_KEYS: Record<string, string> = {
+  Back: '.hmi-virtual-input__key--back',
+  Clear: '.hmi-virtual-input__key--clear',
+  Enter: '.hmi-virtual-input__key--accent',
+  'Close numpad': '.hmi-virtual-input__close',
+};
+const keyFor = (key: string) =>
+  key in ICON_KEYS
+    ? document.querySelector<HTMLElement>(ICON_KEYS[key])!
+    : screen.getByRole('button', { name: key });
 
 async function press(user: ReturnType<typeof userEvent.setup>, ...keys: string[]) {
-  for (const key of keys) await user.click(screen.getByRole('button', { name: key }));
+  for (const key of keys) await user.click(keyFor(key));
 }
 
 describe('VirtualNumpad', () => {
@@ -48,14 +60,10 @@ describe('VirtualNumpad', () => {
     useTranslationStore.setState({ languages: [], translations: {}, activeLanguage: '' } as never);
   });
 
-  it('names its bounds and its icon keys in the operator\'s language', async () => {
+  it("names its bounds in the operator's language", async () => {
     useTranslationStore.setState({
       languages: [{ code: 'en-EN' }, { code: 'nl-NL' }],
-      translations: {
-        Enter: { 'nl-NL': 'Invoeren' },
-        Clear: { 'nl-NL': 'Wissen' },
-        Max: { 'nl-NL': 'Maximaal' },
-      },
+      translations: { Max: { 'nl-NL': 'Maximaal' } },
       activeLanguage: 'nl-NL',
     } as never);
     const user = userEvent.setup();
@@ -65,20 +73,15 @@ describe('VirtualNumpad', () => {
     expect(screen.getByText('Min: 0 \u00b7 Maximaal: 100')).toBeInTheDocument();
     await user.type(field(), '500');
 
-    expect(screen.getByRole('button', { name: 'Invoeren' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Wissen' })).toBeInTheDocument();
-    // A name without a dictionary row stays English.
-    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+    expect(document.querySelector('.hmi-virtual-input__key--accent')).toBeDisabled();
     // Out of range, the range itself is the error, in place of the hint.
     expect(screen.getByRole('alert')).toHaveTextContent('Min: 0 \u00b7 Maximaal: 100');
     expect(screen.getAllByText('Min: 0 \u00b7 Maximaal: 100')).toHaveLength(1);
   });
 
-  it('says the widget\'s own words when it gives them, beside the range', async () => {
+  it("says the widget's own words when it gives them, beside the range", async () => {
     const user = userEvent.setup();
-    render(
-      <NumpadHarness min={-500} max={-11} rangeMessage="Must lie outside the 10 g band" />,
-    );
+    render(<NumpadHarness min={-500} max={-11} rangeMessage="Must lie outside the 10 g band" />);
     await user.type(field(), '-5');
     expect(screen.getByRole('alert')).toHaveTextContent('Must lie outside the 10 g band');
     expect(screen.getByText('Min: -500 \u00b7 Max: -11')).toBeInTheDocument();
@@ -139,7 +142,7 @@ describe('VirtualNumpad', () => {
 
     await press(user, '5', '0', '0', '0');
     expect(screen.getByRole('alert')).toHaveTextContent('Min: 80 \u00b7 Max: 200');
-    expect(screen.getByRole('button', { name: 'Enter' })).toBeDisabled();
+    expect(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!).toBeDisabled();
 
     await press(user, 'Enter');
     expect(onApply).not.toHaveBeenCalled();
@@ -157,7 +160,7 @@ describe('VirtualNumpad', () => {
     render(<NumpadHarness min={0} max={100} showRange={false} />);
     expect(screen.queryByText(/Min:/)).not.toBeInTheDocument();
     await press(user, '1', '0', '1');
-    expect(screen.getByRole('button', { name: 'Enter' })).toBeDisabled();
+    expect(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!).toBeDisabled();
   });
 
   it('re-enables Enter once the value is corrected back into range', async () => {
@@ -166,7 +169,7 @@ describe('VirtualNumpad', () => {
     render(<NumpadHarness onApply={onApply} min={0} max={100} />);
 
     await press(user, '1', '0', '1');
-    expect(screen.getByRole('button', { name: 'Enter' })).toBeDisabled();
+    expect(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!).toBeDisabled();
 
     await press(user, 'Back');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -176,7 +179,7 @@ describe('VirtualNumpad', () => {
 
   it('cannot apply an empty entry', () => {
     render(<NumpadHarness />);
-    expect(screen.getByRole('button', { name: 'Enter' })).toBeDisabled();
+    expect(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!).toBeDisabled();
   });
 
   it('starts empty with the current value as placeholder, and no current-setpoint line', async () => {
@@ -277,13 +280,13 @@ describe('VirtualNumpad', () => {
     const grid = document.querySelector('.hmi-virtual-input__keys');
 
     expect(grid?.querySelectorAll('button')).toHaveLength(15);
-    expect(screen.getByRole('button', { name: 'Back' })).toHaveClass(
+    expect(document.querySelector<HTMLElement>('.hmi-virtual-input__key--back')!).toHaveClass(
       'hmi-virtual-input__key--back',
     );
-    expect(screen.getByRole('button', { name: 'Clear' })).toHaveClass(
+    expect(document.querySelector<HTMLElement>('.hmi-virtual-input__key--clear')!).toHaveClass(
       'hmi-virtual-input__key--clear',
     );
-    expect(screen.getByRole('button', { name: 'Enter' })).toHaveClass(
+    expect(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!).toHaveClass(
       'hmi-virtual-input__key--accent',
     );
   });
@@ -302,7 +305,9 @@ describe('VirtualNumpad', () => {
 
   it("docks a centred numpad in the middle of the screen, not at the keyboard's bottom dock", async () => {
     render(<NumpadHarness dockPosition="center" />);
-    const dock = screen.getByRole('button', { name: 'Enter' }).closest('.hmi-virtual-input__dock');
+    const dock = document
+      .querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!
+      .closest('.hmi-virtual-input__dock');
     expect(dock).toHaveClass('hmi-virtual-input__dock--middle');
     expect(dock).not.toHaveClass('hmi-virtual-input__dock--center');
 

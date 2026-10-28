@@ -42,7 +42,7 @@ describe('CollapsibleExpressionCard — ⤢ drawer', () => {
     expect(screen.getByRole('heading', { name: 'When True' })).toBeInTheDocument();
     expect(screen.getByDisplayValue('100')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    fireEvent.click(document.querySelector<HTMLElement>('.cfg-modal-close')!);
 
     expect(screen.queryByRole('heading', { name: 'When True' })).not.toBeInTheDocument();
     // inline row is back to its collapsed preview — no live editor mounted.

@@ -78,9 +78,8 @@ export function VirtualNumpad({
   autoFocus = true,
 }: VirtualNumpadProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
-  // The keys show icons; their names for a screen reader, and Min and Max, are
-  // dictionary keys, English as on any screen. Subscribed so a language switch
-  // re-renders an open numpad.
+  // Min and Max are dictionary keys, English as on any screen. Subscribed so a
+  // language switch re-renders an open numpad.
   useTranslationStore((s) => s.activeLanguage);
   useTranslationStore((s) => s.translations);
   const t = useTranslationStore.getState().resolve;
@@ -154,13 +153,7 @@ export function VirtualNumpad({
       {(title || !inline) && (
         <div className="hmi-virtual-input__header">
           {title && <span className="hmi-virtual-input__title">{title}</span>}
-          {!inline && (
-            <CloseButton
-              className="hmi-virtual-input__close"
-              onClick={onCancel}
-              label={t('Close numpad')}
-            />
-          )}
+          {!inline && <CloseButton className="hmi-virtual-input__close" onClick={onCancel} />}
         </div>
       )}
       <div
@@ -173,7 +166,6 @@ export function VirtualNumpad({
           type={password && !maskedByCss ? 'password' : 'text'}
           inputMode="none"
           autoFocus={autoFocus}
-          aria-label={title || 'Value'}
           value={value}
           placeholder={currentValue || '0'}
           onChange={(e) => {
@@ -217,7 +209,6 @@ export function VirtualNumpad({
           className="hmi-virtual-input__key hmi-virtual-input__key--action hmi-virtual-input__key--back"
           onClick={() => onChange(value.slice(0, -1))}
           tabIndex={-1}
-          aria-label={t('Back')}
         >
           <VirtualKeyIcon name="backspace" />
         </button>
@@ -226,7 +217,6 @@ export function VirtualNumpad({
           className="hmi-virtual-input__key hmi-virtual-input__key--action hmi-virtual-input__key--clear"
           onClick={() => onChange('')}
           tabIndex={-1}
-          aria-label={t('Clear')}
         >
           <VirtualKeyIcon name="clear" />
         </button>
@@ -236,7 +226,6 @@ export function VirtualNumpad({
           onClick={apply}
           disabled={!canApply}
           tabIndex={-1}
-          aria-label={t('Enter')}
         >
           <VirtualKeyIcon name="enter" />
         </button>

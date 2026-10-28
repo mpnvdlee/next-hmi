@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useProjectsStore, type PeerProject, type ProjectEntry } from '@config/store/projectsStore';
 import PeerTransferModal from './PeerTransferModal';
@@ -199,7 +199,10 @@ async function pairWith(user: ReturnType<typeof userEvent.setup>) {
 }
 
 async function pick(user: ReturnType<typeof userEvent.setup>, combobox: string, option: RegExp) {
-  await user.click(await screen.findByRole('combobox', { name: combobox }));
+  const label = await screen.findByText(combobox, { selector: '.project-form__label' });
+  await user.click(
+    within(label.closest('.project-form__field') as HTMLElement).getByRole('combobox'),
+  );
   await user.click(await screen.findByRole('option', { name: option }));
 }
 
@@ -874,7 +877,9 @@ it('will not offer a peer project outside its projects root as a replacement', a
   expect(
     screen.getByText('10.0.0.4 has no project in its projects root to replace.'),
   ).toBeInTheDocument();
-  expect(screen.queryByRole('combobox', { name: 'Destination project' })).not.toBeInTheDocument();
+  expect(
+    screen.queryByText('Destination project', { selector: '.project-form__label' }),
+  ).not.toBeInTheDocument();
 });
 
 it('moves off a refused folder even when the clash it could see was an id clash', async () => {

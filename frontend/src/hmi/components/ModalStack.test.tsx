@@ -242,8 +242,6 @@ describe('ModalStack header bar', () => {
     expect(container.querySelector('.hmi-modal__header')).toBeNull();
     expect(container.querySelector('.hmi-modal__close')).toBeNull();
     expect(container.querySelector('.hmi-modal__content')).not.toBeNull();
-    // The title still names the card for a screen reader.
-    expect(screen.getByRole('dialog', { name: 'Dialog keypad' })).toBeTruthy();
   });
 
   it('honours the flag on a page outside the Dialogs folder too', () => {

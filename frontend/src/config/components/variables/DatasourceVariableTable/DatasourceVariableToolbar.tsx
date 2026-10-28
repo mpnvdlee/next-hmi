@@ -65,7 +65,6 @@ export default function DatasourceVariableToolbar({ state, actions }: Props) {
         value={filter}
         onChange={onFilterChange}
         placeholder="Filter by name, node ID or type…"
-        ariaLabel="Filter datasource variables"
       />
 
       {dsType !== 'static' && (

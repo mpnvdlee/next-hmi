@@ -20,7 +20,6 @@ describe('SelectionDrawer rail', () => {
       <SelectionDrawer
         action="Add action"
         searchPlaceholder="Search"
-        searchAriaLabel="Search"
         categories={['Screens', 'Machine', 'Logic'].map((category) => ({
           category,
           items: [category.toLowerCase()],
@@ -59,7 +58,7 @@ describe('SelectionDrawer rail', () => {
 
     // Typing a search moves the sections too, so it ends the hold as a scroll does.
     fireEvent.click(rail('Logic'));
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Search' }), {
+    fireEvent.change(screen.getByRole('searchbox'), {
       target: { value: 'm' },
     });
     spyOn('Machine');

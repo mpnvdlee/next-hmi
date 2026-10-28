@@ -18,11 +18,7 @@ function Toast({ toast }: { toast: ToastEntry }) {
   }, [toast.id, toast.discard, toast.duration, dismissToast]);
 
   return (
-    <div
-      className={`hmi-toast hmi-toast--${toast.severity}`}
-      role="alert"
-      aria-live={toast.severity === 'error' ? 'assertive' : 'polite'}
-    >
+    <div className={`hmi-toast hmi-toast--${toast.severity}`} role="alert">
       <span className="hmi-toast__icon" aria-hidden="true">
         {toast.severity === 'info' && '●'}
         {toast.severity === 'success' && '✓'}
@@ -30,11 +26,7 @@ function Toast({ toast }: { toast: ToastEntry }) {
         {toast.severity === 'error' && '✕'}
       </span>
       <span className="hmi-toast__message">{toast.message}</span>
-      <CloseButton
-        className="hmi-toast__close"
-        label="Dismiss notification"
-        onClick={() => dismissToast(toast.id)}
-      />
+      <CloseButton className="hmi-toast__close" onClick={() => dismissToast(toast.id)} />
     </div>
   );
 }
@@ -46,7 +38,7 @@ export function HmiToastStack() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="hmi-toast-stack" role="region" aria-label="Notifications">
+    <div className="hmi-toast-stack" role="region">
       {toasts.map((toast) => (
         <Toast key={toast.id} toast={toast} />
       ))}

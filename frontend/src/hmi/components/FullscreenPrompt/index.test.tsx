@@ -62,7 +62,7 @@ describe('FullscreenPrompt', () => {
     const user = userEvent.setup();
     render(<FullscreenPrompt />);
 
-    await user.click(screen.getByRole('button', { name: 'Close' }));
+    await user.click(document.querySelector<HTMLElement>('.fullscreen-prompt-modal__close')!);
 
     expect(screen.queryByText('Enter fullscreen?')).not.toBeInTheDocument();
   });

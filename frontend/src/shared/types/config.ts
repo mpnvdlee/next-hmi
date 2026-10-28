@@ -878,7 +878,7 @@ export interface ShellConfig {
 /** Props interface shared by every HMI component in the registry */
 export interface HmiWidgetProps {
   id?: string;
-  /** The node's Identity name. Widgets use it as their accessible name. */
+  /** The node's Identity name. */
   name?: string;
   properties?: Record<string, unknown>;
   layout?: LayoutConfig;

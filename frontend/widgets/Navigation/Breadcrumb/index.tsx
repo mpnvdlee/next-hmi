@@ -55,11 +55,7 @@ export default function Breadcrumb({ properties, layout }: HmiWidgetProps) {
   if (allSegments.length === 0) return null;
 
   return (
-    <nav
-      className="hmi-component hmi-breadcrumb"
-      style={selfLayoutStyle(layout)}
-      aria-label="breadcrumb"
-    >
+    <nav className="hmi-component hmi-breadcrumb" style={selfLayoutStyle(layout)}>
       {allSegments.map((segment, idx) => {
         const isLast = idx === allSegments.length - 1;
         const iconEl =

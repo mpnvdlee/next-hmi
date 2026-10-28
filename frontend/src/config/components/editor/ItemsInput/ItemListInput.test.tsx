@@ -7,7 +7,7 @@ describe('ItemListInput', () => {
     const onChange = vi.fn();
     render(<ItemListInput value={[{ x: 0.1, y: 0.2, side: 'top' }]} onChange={onChange} />);
 
-    const text = screen.getByLabelText('Items as JSON');
+    const text = screen.getByRole('textbox');
     fireEvent.change(text, { target: { value: '[{"x": 0.5, "y": 0.5, "device": 3}]' } });
 
     expect(onChange).toHaveBeenCalledWith([{ x: 0.5, y: 0.5, device: 3 }]);
@@ -17,7 +17,7 @@ describe('ItemListInput', () => {
     const onChange = vi.fn();
     render(<ItemListInput value={[{ x: 0.1, y: 0.2 }]} onChange={onChange} />);
 
-    const text = screen.getByLabelText('Items as JSON');
+    const text = screen.getByRole('textbox');
     fireEvent.change(text, { target: { value: '[{"x": 0.5,' } });
     fireEvent.change(text, { target: { value: '{"x": 0.5}' } });
 
@@ -31,7 +31,7 @@ describe('ItemListInput', () => {
 
     expect(screen.getByDisplayValue('Auto')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Edit as JSON'));
-    expect(screen.getByLabelText('Items as JSON')).toHaveValue(
+    expect(screen.getByRole('textbox')).toHaveValue(
       JSON.stringify([{ label: 'Auto', value: 'auto' }], null, 2),
     );
   });

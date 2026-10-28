@@ -19,7 +19,7 @@ export const icon = { type: 'builtin', name: 'list' } as const;
 
 // `bound` must be a $var binding for the toggle to write back; non-$var
 // expressions are read-only and require an `actions.onPress` for side effects.
-export default function MenuToggleButton({ name, properties, layout }: HmiWidgetProps) {
+export default function MenuToggleButton({ properties, layout }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
   const scope = useHmiScope();
   // Left unset, the field means its declared default (false) — a toggle driven by
@@ -48,7 +48,6 @@ export default function MenuToggleButton({ name, properties, layout }: HmiWidget
       className={`hmi-component hmi-menu-toggle${bound === null ? ' hmi-menu-toggle--unknown' : ''}`}
       style={selfLayoutStyle(layout)}
       onClick={handleClick}
-      aria-label={name || 'Toggle menu'}
       aria-pressed={bound ?? 'mixed'}
     >
       {IconComp ? (

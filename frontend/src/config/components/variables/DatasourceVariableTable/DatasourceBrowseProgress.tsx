@@ -15,7 +15,7 @@ export default function DatasourceBrowseProgress({ progress }: Props) {
   const { percent, nodes, level } = progress;
   const started = percent !== null;
   return (
-    <div className="cfg-browse-progress" role="status" aria-live="polite">
+    <div className="cfg-browse-progress" role="status">
       <div className="cfg-browse-progress__label">
         <span>{started ? `Browsing PLC… ${percent}%` : 'Browsing PLC…'}</span>
         {started && (
@@ -24,12 +24,7 @@ export default function DatasourceBrowseProgress({ progress }: Props) {
           </span>
         )}
       </div>
-      <progress
-        className="cfg-browse-progress__bar"
-        max={100}
-        value={percent ?? undefined}
-        aria-label="Browse progress"
-      />
+      <progress className="cfg-browse-progress__bar" max={100} value={percent ?? undefined} />
     </div>
   );
 }

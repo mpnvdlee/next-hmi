@@ -31,16 +31,6 @@ describe('MenuToggleButton', () => {
     __resetForTests();
   });
 
-  it('is named by its Identity name', () => {
-    renderToggle({}, 'Open navigation');
-    expect(screen.getByRole('button', { name: 'Open navigation' })).toBeInTheDocument();
-  });
-
-  it('falls back to "Toggle menu" without an Identity name', () => {
-    renderToggle({});
-    expect(screen.getByRole('button', { name: 'Toggle menu' })).toBeInTheDocument();
-  });
-
   it('shows the collapsed glyph and aria-pressed=false when the bound value is falsy', () => {
     useVariableStore.setState({ values: { 'PLC:Menu/Open': false } });
     renderToggle({ bound: { $var: { path: 'PLC:Menu/Open' } } });

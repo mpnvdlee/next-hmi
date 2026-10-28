@@ -196,8 +196,7 @@ export function ModalStack() {
 /**
  * The modal-card shape every page overlay shares: a header (title + optional
  * close button) over a content body, inside a `ModalCard`. With `showHeader`
- * off the header bar goes, close button included; the title still names the
- * card for assistive tech.
+ * off the header bar goes, close button included.
  */
 function renderModalCard({
   key,
@@ -230,7 +229,6 @@ function renderModalCard({
       className={className}
       style={style}
       zIndex={zIndex}
-      label={title}
     >
       {showHeader && (
         <div className="hmi-modal__header">
@@ -256,7 +254,6 @@ function ModalCard({
   className,
   style,
   zIndex,
-  label,
   children,
 }: {
   anchorRect?: AnchorRect | null;
@@ -264,7 +261,6 @@ function ModalCard({
   className: string;
   style?: CSSProperties;
   zIndex: number;
-  label: string;
   children: ReactNode;
 }) {
   const anchored = anchorRect != null && isAnchoredPlacement(placement);
@@ -276,7 +272,6 @@ function ModalCard({
       style={{ ...style, ...pos, zIndex }}
       role="dialog"
       aria-modal="true"
-      aria-label={label}
       onClick={(e) => e.stopPropagation()}
     >
       {children}

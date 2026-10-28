@@ -18,8 +18,20 @@ const edit = (extra: Partial<Extract<ButtonAction, { type: 'editValue' }>> = {})
   ...extra,
 });
 
+// The icon keys carry no names; the digit keys are named by their text.
+const ICON_KEYS: Record<string, string> = {
+  Back: '.hmi-virtual-input__key--back',
+  Clear: '.hmi-virtual-input__key--clear',
+  Enter: '.hmi-virtual-input__key--accent',
+  'Close numpad': '.hmi-virtual-input__close',
+};
+const keyFor = (key: string) =>
+  key in ICON_KEYS
+    ? document.querySelector<HTMLElement>(ICON_KEYS[key])!
+    : screen.getByRole('button', { name: key });
+
 function press(...keys: string[]) {
-  for (const key of keys) fireEvent.click(screen.getByRole('button', { name: key }));
+  for (const key of keys) fireEvent.click(keyFor(key));
 }
 
 beforeEach(() => {
@@ -77,7 +89,7 @@ describe('editValue', () => {
     ];
     act(() => executeWidgetActions([edit({ onSettled })], { scope: 'runtime' }));
     press('9');
-    fireEvent.click(screen.getByRole('button', { name: 'Close numpad' }));
+    fireEvent.click(document.querySelector<HTMLElement>('.hmi-virtual-input__close')!);
 
     expect(sendWsMessage).not.toHaveBeenCalled();
     expect(useHmiStore.getState().pendingToasts).toEqual([]);
