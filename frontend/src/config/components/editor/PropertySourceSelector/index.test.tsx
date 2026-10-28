@@ -64,7 +64,7 @@ describe('PropertySourceSelector', () => {
     fireEvent.click(screen.getByRole('button', { name: /Static/ }));
     fireEvent.click(screen.getByRole('button', { name: /Browse property sources/ }));
 
-    const search = screen.getByRole('searchbox', { name: 'Search property sources' });
+    const search = screen.getByRole('searchbox');
     fireEvent.change(search, { target: { value: 'Localizable' } });
     fireEvent.keyDown(search, { key: 'Enter' });
 

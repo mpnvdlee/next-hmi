@@ -83,7 +83,6 @@ export default function RecipeTree({
         <TreeSearchBar
           value={searchQuery}
           onChange={setSearchQuery}
-          label="Search recipe tree"
           shortcutDisabled={addingType || typeMenu.state !== null || datasetMenu.state !== null}
           onCollapseAll={() => {
             // A search force-expands the tree, so the collapse would be invisible.

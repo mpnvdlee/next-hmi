@@ -340,7 +340,6 @@ export default function Dropdown({ id, properties, layout }: HmiWidgetProps) {
           className={`hmi-dropdown__trigger${open ? ' hmi-dropdown__trigger--open' : ''}`}
           disabled={disabled}
           role="combobox"
-          aria-label={label || 'Select an option'}
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-controls={open ? listboxId : undefined}

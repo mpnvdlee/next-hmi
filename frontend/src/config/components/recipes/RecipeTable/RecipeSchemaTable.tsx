@@ -143,7 +143,6 @@ export default function RecipeSchemaTable({ type, filter, showLive }: Props) {
                           <span
                             className="cfg-recipe-warn"
                             title="recipe parameter is not bound to a variable"
-                            aria-label="recipe parameter is not bound to a variable"
                           >
                             ⚠
                           </span>

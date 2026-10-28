@@ -15,7 +15,7 @@ describe('virtual input titles', () => {
     );
 
     expect(screen.queryByText('Numpad')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Close numpad')).toBeInTheDocument();
+    expect(document.querySelector<HTMLElement>('.hmi-virtual-input__close')!).toBeInTheDocument();
   });
 
   it('shows a supplied numpad label', () => {

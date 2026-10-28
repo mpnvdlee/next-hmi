@@ -37,7 +37,7 @@ describe('VariableBindingPicker search', () => {
     render(<VariableBindingPicker />);
 
     await waitFor(() => expect(mockedApiJson).toHaveBeenCalledTimes(1));
-    const search = screen.getByRole('searchbox', { name: 'Search speed' });
+    const search = screen.getByRole('searchbox');
     fireEvent.change(search, { target: { value: 'speed' } });
 
     await waitFor(() => {

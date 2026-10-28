@@ -287,7 +287,7 @@ export default function HttpsSection({
         passwords and project data cross the network in the clear otherwise.
       </p>
 
-      <div className="cfg-admin-https__switch" role="group" aria-label="Protocol">
+      <div className="cfg-admin-https__switch" role="group">
         <button
           type="button"
           className={`cfg-admin-https__choice${!tls.enabled ? ' cfg-admin-https__choice--active' : ''}`}

@@ -265,7 +265,7 @@ export default function OpcuaConnectionWizard({
         <ModalCloseButton onClose={onClose} />
       </header>
 
-      <ol className="ds-wizard__steps" aria-label="Wizard steps">
+      <ol className="ds-wizard__steps">
         {STEPS.map((label, i) => (
           <li
             key={label}

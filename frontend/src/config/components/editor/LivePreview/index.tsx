@@ -655,7 +655,6 @@ export default function LivePreview({ pageId }: { pageId: string }) {
           <div
             className="editor-preview-toolbar__seg editor-preview-toolbar__scale cfg-header-control"
             role="group"
-            aria-label="Preview scaling"
           >
             <button
               type="button"
@@ -663,7 +662,6 @@ export default function LivePreview({ pageId }: { pageId: string }) {
               onClick={() => adjustScale('out')}
               disabled={scalePct <= SCALE_MIN}
               title="Decrease scaling"
-              aria-label="Decrease scaling"
             >
               <Minus size={16} weight="regular" />
             </button>
@@ -684,7 +682,6 @@ export default function LivePreview({ pageId }: { pageId: string }) {
                     e.currentTarget.blur();
                   }
                 }}
-                aria-label="Scaling percentage"
               />
               %
             </span>
@@ -694,18 +691,13 @@ export default function LivePreview({ pageId }: { pageId: string }) {
               onClick={() => adjustScale('in')}
               disabled={scalePct >= SCALE_MAX}
               title="Increase scaling"
-              aria-label="Increase scaling"
             >
               <Plus size={16} weight="regular" />
             </button>
           </div>
 
           <span className="editor-preview-toolbar__label">Mode</span>
-          <div
-            className="editor-preview-toolbar__seg cfg-header-control"
-            role="group"
-            aria-label="Preview mode"
-          >
+          <div className="editor-preview-toolbar__seg cfg-header-control" role="group">
             <button
               type="button"
               className={`editor-preview-toolbar__seg-btn${

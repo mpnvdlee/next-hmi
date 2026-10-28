@@ -203,7 +203,6 @@ export function VirtualKeyboard({
         className="hmi-virtual-input__panel hmi-virtual-input__panel--keyboard"
         ref={panelRef}
         role="group"
-        aria-label={title ?? 'Keyboard'}
       >
         <div className="hmi-virtual-input__header">
           {title && <span className="hmi-virtual-input__title">{title}</span>}
@@ -216,8 +215,6 @@ export function VirtualKeyboard({
         <div
           className="hmi-virtual-input__value hmi-virtual-input__value--keyboard"
           ref={previewRef}
-          aria-label={password ? `Password value, ${valueLength} characters` : 'Keyboard value'}
-          aria-live="polite"
         >
           {previewValue || '\u00a0'}
         </div>

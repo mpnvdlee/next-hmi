@@ -57,12 +57,7 @@ export default function AlarmDetailCard({
         </span>
         <span className={styles.dialogTitle}>{title}</span>
         {code && <span className={styles.code}>{code}</span>}
-        <CloseButton
-          className="hmi-modal__close"
-          onClick={onClose}
-          disabled={disabled}
-          label={disabled ? 'Close alarm detail preview' : 'Close'}
-        />
+        <CloseButton className="hmi-modal__close" onClick={onClose} disabled={disabled} />
       </div>
 
       <div className={`${styles.dialogBody} ${imageSrc ? styles.dialogBodyTwoCol : ''}`}>

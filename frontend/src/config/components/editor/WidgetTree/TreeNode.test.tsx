@@ -64,7 +64,7 @@ describe('TreeNode diagnostics dot', () => {
   it('marks the widget that owns the diagnostic', () => {
     useProjectDiagnosticsStore.setState({ swept: [diagnostic('widget-1', 'error')] });
     renderTree();
-    expect(screen.getByLabelText('This widget has an error')).toBeInTheDocument();
+    expect(screen.getByTitle('This widget has an error')).toBeInTheDocument();
   });
 
   it('rolls a child diagnostic up to its collapsed container', () => {

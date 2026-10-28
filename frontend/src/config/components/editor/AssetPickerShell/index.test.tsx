@@ -27,7 +27,7 @@ describe('AssetPickerShell', () => {
     const onConfirm = vi.fn();
     renderPicker(onConfirm);
 
-    fireEvent.keyDown(screen.getByRole('searchbox', { name: 'Search select icon' }), {
+    fireEvent.keyDown(screen.getByRole('searchbox'), {
       key: 'Enter',
     });
 
@@ -38,7 +38,7 @@ describe('AssetPickerShell', () => {
     const onConfirm = vi.fn();
     renderPicker(onConfirm, true);
 
-    fireEvent.keyDown(screen.getByRole('searchbox', { name: 'Search select icon' }), {
+    fireEvent.keyDown(screen.getByRole('searchbox'), {
       key: 'Enter',
     });
 
@@ -50,7 +50,7 @@ describe('AssetPickerShell', () => {
     const onSearchEnter = vi.fn();
     renderPicker(onConfirm, true, onSearchEnter);
 
-    fireEvent.keyDown(screen.getByRole('searchbox', { name: 'Search select icon' }), {
+    fireEvent.keyDown(screen.getByRole('searchbox'), {
       key: 'Enter',
     });
 

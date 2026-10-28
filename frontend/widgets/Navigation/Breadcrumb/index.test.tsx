@@ -49,13 +49,12 @@ describe('Breadcrumb', () => {
     expect(container.querySelector('.hmi-breadcrumb')).not.toBeNull();
   });
 
-  it('roots itself in a labelled nav carrying both component classes', () => {
+  it('roots itself in a nav carrying both component classes', () => {
     const { container } = renderBreadcrumb({});
     const root = container.firstElementChild as HTMLElement;
     expect(root.tagName).toBe('NAV');
     expect(root.className).toContain('hmi-component');
     expect(root.className).toContain('hmi-breadcrumb');
-    expect(root).toHaveAttribute('aria-label', 'breadcrumb');
   });
 
   it('builds one segment per ancestor, ending at the active page', () => {

@@ -16,7 +16,7 @@ export function ConfigUpdatedBanner() {
 
   if (!visible) return null;
   return (
-    <div className="config-updated-banner" role="status" aria-live="polite">
+    <div className="config-updated-banner" role="status">
       <span className="config-updated-banner__msg">Config was updated by another writer.</span>
       <button
         type="button"

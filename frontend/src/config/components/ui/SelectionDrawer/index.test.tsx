@@ -20,7 +20,6 @@ describe('SelectionDrawer rail', () => {
       <SelectionDrawer
         action="Add action"
         searchPlaceholder="Search"
-        searchAriaLabel="Search"
         categories={['Screens', 'Machine', 'Logic'].map((category) => ({
           category,
           items: [category.toLowerCase()],

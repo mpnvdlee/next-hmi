@@ -61,7 +61,7 @@ describe('AlertModal', () => {
     useHmiStore.setState({ pendingAlerts: [mkAlert()] });
     renderAlertModal();
 
-    await user.click(screen.getByRole('button', { name: 'Close' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-modal__close')!);
 
     expect(useHmiStore.getState().pendingAlerts).toHaveLength(0);
   });
@@ -81,7 +81,7 @@ describe('AlertModal', () => {
     useHmiStore.setState({ pendingAlerts: [mkAlert({ dismissible: false })] });
     const { container } = renderAlertModal();
 
-    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+    expect(document.querySelector('.hmi-modal__close')).not.toBeInTheDocument();
 
     await user.click(container.querySelector('.hmi-alert-backdrop') as HTMLElement);
 

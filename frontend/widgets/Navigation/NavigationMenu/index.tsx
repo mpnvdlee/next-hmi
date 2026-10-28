@@ -544,7 +544,6 @@ export default function NavigationMenu({ properties, layout }: HmiWidgetProps = 
                 toggleGroupInline(group);
               }
             }}
-            aria-label={expanded ? 'Collapse section' : 'Expand section'}
             data-testid={`group-toggle-${group.id}`}
           >
             {expanded ? '▾' : '▸'}
@@ -659,12 +658,7 @@ export default function NavigationMenu({ properties, layout }: HmiWidgetProps = 
               {renderIcon({ title: item.label, icon: staticIconToString(item.icon) })}
               {renderLabel(item.label)}
             </button>
-            <button
-              type="button"
-              className="hmi-navmenu__expand"
-              onClick={toggle}
-              aria-label={expanded ? 'Collapse section' : 'Expand section'}
-            >
+            <button type="button" className="hmi-navmenu__expand" onClick={toggle}>
               {expanded ? '▾' : '▸'}
             </button>
           </div>

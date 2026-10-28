@@ -112,7 +112,6 @@ export default function AppTopBarNav() {
           onClick={() => setOpen((o) => !o)}
           aria-haspopup="menu"
           aria-expanded={open}
-          aria-label="Navigation menu"
         >
           <span className="app-brand__title">{triggerLabel}</span>
           <svg

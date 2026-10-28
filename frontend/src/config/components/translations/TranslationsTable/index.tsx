@@ -73,12 +73,7 @@ export default function TranslationsTable({
     <ConfigWorkspace
       title="Translations"
       actions={
-        <HeaderSearch
-          value={filter}
-          onChange={onFilterChange}
-          placeholder="Search translations…"
-          ariaLabel="Search translations"
-        />
+        <HeaderSearch value={filter} onChange={onFilterChange} placeholder="Search translations…" />
       }
     >
       {/* ── Table ────────────────────────────────────────────── */}
@@ -136,11 +131,7 @@ export default function TranslationsTable({
                 {languages.map((lang, i) => (
                   <td key={lang.code} className="cfg-td">
                     {i === 0 ? (
-                      <span
-                        className="cfg-trans-key-text"
-                        title="Immutable translation key"
-                        aria-label={`Translation key: ${key}`}
-                      >
+                      <span className="cfg-trans-key-text" title="Immutable translation key">
                         <SearchHighlight text={key} query={filter} />
                       </span>
                     ) : (

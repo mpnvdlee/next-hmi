@@ -410,8 +410,11 @@ heading.
 
 ### Removed
 
-- **The Menu Toggle's Aria label.** The property is gone. A custom widget
-  gets its node's **Name** under **Identity** as the `name` prop.
+- **Screen-reader names.** The app and the built-in widgets no longer set
+  `aria-label`, `aria-labelledby` or `aria-live`; roles and state attributes
+  such as `aria-pressed` stay. The Menu Toggle's **Aria label** property is
+  gone. A custom widget gets its node's **Name** under **Identity** as the
+  `name` prop.
 
 - **The Alarm List's Own frame.** The list now always draws without a frame of
   its own, as every example already placed it, so it takes the look of the card
