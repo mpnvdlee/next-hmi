@@ -1354,6 +1354,8 @@
 /* Table-cell input with a highlighted ghost copy behind it (ui/HighlightedInput). */
 .cfg-highlight-input {
   position: relative;
+  /* Keeps the input's z-index inside the cell, under the sticky .cfg-th. */
+  isolation: isolate;
   display: block;
   width: 100%;
   min-width: 0;
