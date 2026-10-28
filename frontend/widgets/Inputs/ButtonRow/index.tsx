@@ -37,15 +37,8 @@ interface OptionEntry {
   value: string | number;
 }
 
-function resolveOptions(raw: unknown, varValue: unknown): OptionEntry[] {
-  const isVarSource =
-    raw !== null &&
-    typeof raw === 'object' &&
-    !Array.isArray(raw) &&
-    '$var' in (raw as Record<string, unknown>);
-  const source = isVarSource ? varValue : raw;
-  if (!Array.isArray(source)) return [];
-  return source.map((el) => {
+function toOptions(items: unknown[]): OptionEntry[] {
+  return items.map((el) => {
     if (el !== null && typeof el === 'object') {
       const entry = el as Record<string, unknown>;
       const rawValue = entry.value ?? entry.label ?? '';
@@ -74,13 +67,8 @@ export default function ButtonRow({ id, properties, layout }: HmiWidgetProps) {
     if (!varKey) setLocalSelected(propSelectedValue);
   }, [propSelectedValue, varKey]);
 
-  const optionsRaw = properties?.options;
-  const optionsVarBinding = (optionsRaw as { $var?: { path: string } } | undefined)?.$var ?? null;
-  const optionsVarValue = useVariable(optionsVarBinding?.path ?? '');
-  const options = useMemo(
-    () => resolveOptions(optionsRaw, optionsVarValue),
-    [optionsRaw, optionsVarValue],
-  );
+  const { items } = useItemListProp(properties, 'options');
+  const options = useMemo(() => toOptions(items), [items]);
 
   const activeValue = varKey ? boundValue : localSelected;
   const activeStr = activeValue == null ? '' : String(activeValue);
