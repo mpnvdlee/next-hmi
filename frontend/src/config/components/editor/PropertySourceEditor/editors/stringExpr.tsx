@@ -59,7 +59,7 @@ export function StringExprEditor({
     for (const k of newKeys) {
       next[k] = wildcards[k] ?? { $var: { path: '' } };
     }
-    onChange({ $stringExpr: { ...exprObj, template: newTemplate, wildcards: next } });
+    onChange({ $stringExpr: { template: newTemplate, wildcards: next } });
   }
 
   return (
@@ -67,17 +67,6 @@ export function StringExprEditor({
       <div className="cfg-string-expr__template">
         {renderSchemaField(TEMPLATE_SCHEMA, template, (v) => handleTemplateChange(String(v ?? '')))}
       </div>
-      <label className="cfg-string-expr__translate">
-        <input
-          type="checkbox"
-          checked={exprObj.translate === true}
-          onChange={(e) => {
-            const { translate: _drop, ...rest } = exprObj;
-            onChange({ $stringExpr: e.target.checked ? { ...rest, translate: true } : rest });
-          }}
-        />
-        Translate the template
-      </label>
 
       <p className="cfg-prop-hint">
         Use <code>{'{1}'}</code>, <code>{'{2}'}</code>, … as placeholders. Functions:{' '}
@@ -86,9 +75,6 @@ export function StringExprEditor({
         <code>Signed</code>
         <br />
         Example: <code>{'{Trim(ToLower(1))}'}</code>
-        <br />
-        Translated, the template is the dictionary key: each language writes the sentence with
-        the same placeholders, in its own word order.
       </p>
 
       {keys.map((key) => {

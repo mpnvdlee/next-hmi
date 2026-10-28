@@ -37,13 +37,6 @@ heading.
   carries the dataset's `values`, so a recipe list shows its target or
   quantity without a custom widget.
 
-- **A String Expression can be translated as a whole sentence.** With
-  **Translate the template** on, the template is a dictionary key like any
-  Localizable Text, placeholders included: `Tank {1} of {2}` becomes
-  `Tank {1} van {2}` in the Dutch column, so each language puts the values
-  where its grammar wants them. A key missing from the dictionaries is flagged
-  like an unknown `$loc`.
-
 - **The numpad and keyboard show icons, not English words.** Back, Clear,
   Enter, Shift, Caps Lock, Tab and Space are icons, and an entry outside the
   bounds turns the `Min: 80 · Max: 200` line into a red warning. *Min*,

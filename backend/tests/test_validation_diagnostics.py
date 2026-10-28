@@ -404,18 +404,6 @@ def test_loc_unknown(ctx):
     assert (w.code, w.severity) == ("loc-unknown", "error")
 
 
-def test_translated_string_expr_template_is_a_key(ctx):
-    report = ValidationReport()
-    payload = {"template": "missing {1}", "wildcards": {"1": "x"}, "translate": True}
-    _validate_property_value({"$stringExpr": payload}, None, ctx, "/p", report)
-    w = _warn(report)
-    assert (w.code, w.severity, w.path) == ("loc-unknown", "error", "/p/$stringExpr/template")
-
-    report = ValidationReport()
-    _validate_property_value({"$stringExpr": {**payload, "translate": False}}, None, ctx, "/p", report)
-    assert report.warnings == []
-
-
 def test_recipe_parameter_field_needs_a_parameter(ctx):
     report = ValidationReport()
     _validate_property_value(

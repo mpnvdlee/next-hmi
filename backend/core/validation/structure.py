@@ -3001,15 +3001,6 @@ def _validate_property_value(
                 severity="warning", code="stringexpr-empty",
             )
         else:
-            if (
-                payload.get("translate") is True
-                and ctx.translation_keys
-                and template not in ctx.translation_keys
-            ):
-                report.warn(
-                    f"{path}/$stringExpr/template", f"unknown translation key '{template}'",
-                    severity="error", code="loc-unknown",
-                )
             _validate_wildcards([template], payload, "$stringExpr", ctx, path, report)
     elif source_key == "$http" and isinstance(payload, dict):
         url = payload.get("url")

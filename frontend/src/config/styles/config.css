@@ -1556,14 +1556,6 @@
   padding-right: var(--cfg-body-gutter);
 }
 
-.cfg-string-expr__translate {
-  display: flex;
-  align-items: center;
-  gap: var(--cfg-space-2);
-  font-size: var(--cfg-text-sm);
-  color: var(--cfg-text);
-}
-
 /* $http body — same grid as $stringExpr, same track cap for the same reason. */
 .cfg-http-source {
   display: grid;

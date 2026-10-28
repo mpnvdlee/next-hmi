@@ -1224,29 +1224,6 @@ describe('propertySourceEval', () => {
     });
   });
 
-  describe('$stringExpr translate', () => {
-    const ctx: EvaluationContext = {
-      resolveTranslation: (key) =>
-        key === 'Must lie outside the {1} g band' ? 'Moet buiten de band van {1} g liggen' : key,
-    };
-    const expr = (translate?: boolean) => ({
-      $stringExpr: {
-        template: 'Must lie outside the {1} g band',
-        wildcards: { '1': { $static: 10 } },
-        ...(translate === undefined ? {} : { translate }),
-      },
-    });
-
-    it('looks the template up as a key and fills the translation', () => {
-      expect(evaluatePropertyValue(expr(true), ctx)).toBe('Moet buiten de band van 10 g liggen');
-    });
-
-    it('keeps the template literal unless asked', () => {
-      expect(evaluatePropertyValue(expr(), ctx)).toBe('Must lie outside the 10 g band');
-      expect(evaluatePropertyValue(expr(false), ctx)).toBe('Must lie outside the 10 g band');
-    });
-  });
-
   describe('$stringExpr Signed()', () => {
     const signed = (value: unknown, template = '{Signed(1)}') =>
       evaluatePropertyValue(

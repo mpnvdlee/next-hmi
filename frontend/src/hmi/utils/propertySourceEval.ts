@@ -711,14 +711,8 @@ function evaluateStringExpr(
   depth: number,
 ): ResolvedValue {
   if (!isRecord(exprObj)) return null;
-  const raw = typeof exprObj.template === 'string' ? exprObj.template : '';
-  if (!raw) return '';
-  // A translated template is a key like any $loc, placeholders included, so
-  // each language orders its words around the values itself.
-  const template =
-    exprObj.translate === true && context.resolveTranslation
-      ? String(context.resolveTranslation(raw))
-      : raw;
+  const template = typeof exprObj.template === 'string' ? exprObj.template : '';
+  if (!template) return '';
   return renderTemplate(template, wildcardsOf(exprObj), context, depth);
 }
 
