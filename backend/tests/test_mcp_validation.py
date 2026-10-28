@@ -153,15 +153,24 @@ def test_validate_widget_node_accepts_loc_string(ctx):
     assert report.ok
 
 
-def test_validate_widget_node_rejects_loc_object_payload(ctx):
-    # Common agent mistake: `{ "$loc": { "key": "..." } }` silently resolves to
-    # null at render time. The validator must catch this on write.
+def test_validate_widget_node_accepts_loc_key_object(ctx):
+    # `{key, wildcards}` is the shape a phrase with {1}, {2} … placeholders takes.
     report = validate_widget_node(
         {"type": "Container", "properties": {"title": {"$loc": {"key": "page.title"}}}},
         ctx,
     )
+    assert report.ok
+
+
+def test_validate_widget_node_rejects_loc_object_without_key(ctx):
+    # Common agent mistake: `{ "$loc": { "text": "..." } }` silently resolves to
+    # null at render time. The validator must catch this on write.
+    report = validate_widget_node(
+        {"type": "Container", "properties": {"title": {"$loc": {"text": "page.title"}}}},
+        ctx,
+    )
     assert not report.ok
-    assert any("$loc payload must be a string" in f.message for f in report.findings)
+    assert any("$loc payload must be a translation key" in f.message for f in report.findings)
 
 
 # ── Repeater scope ──────────────────────────────────────────────────────────────

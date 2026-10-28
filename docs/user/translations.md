@@ -34,7 +34,7 @@ Set any `String` field's source to **Localizable Text (`$loc`)** and pick the ph
 "label": { "$loc": "Motor speed" }
 ```
 
-Need translated text with live values beside it? Combine the two: **`$stringExpr`** builds a string from a template with `{1}`, `{2}` placeholders, and each placeholder is its own binding — so a placeholder can be a `$loc` while the next one is a tag. The template itself is literal, so keep the translatable words in the wildcards and only structure in the template. See [Dynamic properties](properties.md#build-a-string-from-parts-stringexpr).
+Need live values in the sentence? Write them as placeholders in the phrase itself: add the row `Tank {1} of {2}`, and give the Dutch column `Tank {1} van {2}` — each language puts the values where its grammar wants them. Pick that phrase in a **Localizable Text** field and the field opens one row per placeholder, **{1}** and **{2}**; fill each with a fixed value, a tag or another translation. A language without the row shows the phrase as written, with the values filled in. An alarm's title and description are the exception: there `{1}`, `{2}` come from the alarm's own values when it fires, so the field does not open them.
 
 ## Let operators switch language
 
