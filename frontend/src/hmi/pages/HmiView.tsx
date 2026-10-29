@@ -139,9 +139,12 @@ export default function HmiView() {
     ];
     // onHmiLoaded's variables too: useGlobalEvents holds that event back until
     // this context's values have arrived, so its `if` reads them, not "no value".
+    // A variable trigger watches its variable on every page.
+    const { onHmiLoaded, onVariableChanged } = useConfigStore.getState().globalEvents;
     const priorityKeys = [
       ...collectComponentPriorityKeys(components),
-      ...extractVarKeys(useConfigStore.getState().globalEvents.onHmiLoaded),
+      ...extractVarKeys(onHmiLoaded),
+      ...extractVarKeys(onVariableChanged),
     ];
 
     sendWsMessage({ type: 'set_context', currentPageIds, priorityKeys });

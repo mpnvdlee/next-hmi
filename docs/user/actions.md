@@ -124,8 +124,12 @@ Some things should happen because *the system reached a state*, not because some
 | **onUserLoggedOut** | When it goes back to guest. |
 | **onLocaleChanged** | When the active language changes (not on the initial load). |
 | **onInteractionDenied** | When someone presses a widget that is not **Interactable** — the place to open your sign-in dialog. Runs whatever the **Locked feedback** mode is. |
+| **Variable Changed** | Per variable you add: whenever its value changes, and once at start-up with the value it already has. It watches its variable on every page. To act on one value only, put an **If** on that same variable around the actions — for example *If* `Line/DoorOpen` *then* **Open Dialog** opens a popup when the bool goes high, and does nothing when it goes low. |
 
 They are scoped to the runtime that triggered them, so on a multi-panel installation each screen runs its own — one operator signing in on the line-side panel does not fire `onUserLoggedIn` in the control room.
+
+> [!WARNING]
+> **Variable Changed runs on every open screen.** Each runtime watching the variable runs the actions itself. A popup or toast per screen is what you want; a **Write Variable** writes once per open screen, so leave writes that must happen exactly once to the PLC.
 
 ## Page events
 
