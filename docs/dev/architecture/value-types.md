@@ -229,9 +229,9 @@ disabled, and double-clicking a row is held to the same verdict; Enter in the
 search box takes the first result the field accepts. Every way of picking, a
 Repeat item row included, goes through one check in
 `VariableBindingPicker/index.tsx` (`isConfirmable`; `WidgetPropPicker` does the
-same). **Show all** still lists everything, to browse, disabled variables
-included — but a disabled one is marked ✗ with *Disabled in its datasource*,
-since the pool serves it no value. A selection whose
+same). **Show all** lists everything to browse except disabled variables: no list
+shows those, since the pool serves them no value. A binding made before its
+variable was disabled opens marked ✗ with *Disabled in its datasource*. A selection whose
 datasource has not loaded yet has no verdict and stays confirmable. For a
 writing field the tree lists only a variable whose `writable` flag is `true` —
 one that states no access is read-only there, as the drawer and the backend

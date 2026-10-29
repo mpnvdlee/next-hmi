@@ -69,7 +69,6 @@ interface BindingPickerOptions extends PickerExtras {
     type?: string | string[];
     requiredFields?: RequiredFieldEntry[];
     write?: boolean;
-    includeDisabled?: boolean;
   };
   /** When set, switches the picker to component-prop mode (widget or dialog scope) */
   componentPropSource?: ComponentPropSource;

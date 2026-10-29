@@ -281,14 +281,14 @@ describe('variable picker verdicts', () => {
     });
   });
 
-  it('refuses a disabled variable "Show all" lists, and says why', async () => {
+  it('refuses a binding to a variable disabled since, and says why', async () => {
     open({ type: 'Boolean' }, 'PLC:Fan/Run');
     await waitFor(() => expect(verdict()).toBe('✗'));
     expect(confirmDisabled()).toBe(true);
     expect(document.querySelector('.editor-binding-req-reason')?.textContent).toMatch(/Disabled/);
   });
 
-  it('passes over a disabled variable when Enter takes the first fitting result', async () => {
+  it('leaves disabled variables out, even under "Show all"', async () => {
     const onPick = vi.fn();
     mockedApiJson.mockImplementation(async (url: string) =>
       url === '/api/datasources'
@@ -307,7 +307,7 @@ describe('variable picker verdicts', () => {
     const search = screen.getByRole('searchbox');
     fireEvent.change(search, { target: { value: 'level' } });
     await waitFor(() => {
-      expect(document.querySelector('.editor-binding-list > div')).toHaveStyle({ height: '78px' });
+      expect(document.querySelector('.editor-binding-list > div')).toHaveStyle({ height: '52px' });
     });
     fireEvent.keyDown(search, { key: 'Enter' });
     expect(onPick).toHaveBeenCalledWith({ path: 'PLC:Level2' }, expect.anything());
