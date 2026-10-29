@@ -70,6 +70,52 @@ describe('Button', () => {
       value: true,
     });
     expect(sentFrame().requestId).toBeTruthy();
+    expect(sendWsMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes false on release when momentary', async () => {
+    const user = userEvent.setup();
+    renderButton({ label: 'Jog', momentary: true, variable: { $var: { path: 'PLC:Motor/Jog' } } });
+    const button = screen.getByRole('button', { name: 'Jog' });
+
+    await user.pointer({ keys: '[MouseLeft>]', target: button });
+    expect(
+      vi.mocked(sendWsMessage).mock.calls.map(([f]) => (f as { value: unknown }).value),
+    ).toEqual([true]);
+
+    await user.pointer({ keys: '[/MouseLeft]', target: button });
+    expect(
+      vi.mocked(sendWsMessage).mock.calls.map(([f]) => (f as { value: unknown }).value),
+    ).toEqual([true, false]);
+  });
+
+  it('swallows the click that follows its own release', async () => {
+    const user = userEvent.setup();
+    renderButton({ label: 'Open' });
+    const clicked = vi.fn();
+    document.addEventListener('click', clicked);
+
+    await user.click(screen.getByRole('button', { name: 'Open' }));
+    document.removeEventListener('click', clicked);
+
+    expect(clicked).not.toHaveBeenCalled();
+  });
+
+  it('runs On Pressed on press and On Released on release', async () => {
+    const user = userEvent.setup();
+    renderButton({
+      label: 'Hold',
+      actions: { onPress: [{ type: 'openPageOverlay', pageId: 'pressed' }] },
+      onRelease: { onRelease: [{ type: 'openPageOverlay', pageId: 'released' }] },
+    });
+    const button = screen.getByRole('button', { name: 'Hold' });
+    const overlays = () => useHmiStore.getState().openPageOverlays.map((o) => o.pageId);
+
+    await user.pointer({ keys: '[MouseLeft>]', target: button });
+    expect(overlays()).toEqual(['pressed']);
+
+    await user.pointer({ keys: '[/MouseLeft]', target: button });
+    expect(overlays()).toEqual(['pressed', 'released']);
   });
 
   it('toasts the rejection the backend correlates back to the write', async () => {
