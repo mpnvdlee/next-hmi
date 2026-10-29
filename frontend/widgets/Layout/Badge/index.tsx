@@ -53,7 +53,7 @@ export default function Badge({ properties, layout, children }: HmiWidgetProps) 
     <div className="hmi-badge" style={selfLayoutStyle(layout)}>
       {/* shortcut: the editor still accepts more children and only the first renders;
           add a child limit to the manifest when more widgets need one. */}
-      {React.Children.toArray(children as Parameters<typeof React.Children.toArray>[0])[0]}
+      {React.Children.toArray(children)[0]}
       {badge && badge !== '0' && (
         <span className="hmi-badge__chip" style={chipStyle}>
           {badge}
