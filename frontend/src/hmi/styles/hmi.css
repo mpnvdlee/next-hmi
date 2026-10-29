@@ -114,9 +114,7 @@
   /* A flex column with a definite height, always — not only when the page has a
      header or footer. `.hmi-page__content` is the one scrollport below this, and
      it can only own the scrolling (and hand its children free space for a
-     `grow`) if every ancestor down to it has a definite height. Guarding this on
-     `:has(header/footer)` used to leave a plain page as nested auto-height
-     blocks, where `grow: 1` and `height: 100%` both silently did nothing.
+     `grow`) if every ancestor down to it has a definite height.
      Still `auto`, not `hidden`: a page routes its own overflow into
      `.hmi-page__content`, but `.hmi-main` also renders things that are not a
      page — the "no page" notice, the page-switch overlay — and clipping those
@@ -190,41 +188,22 @@
 }
 
 /* ── Flow translation ───────────────────────────────────────────
-   Each flex child emits its own two axes' flow-intent as axis-neutral custom
-   properties — `--w-*` for the screen's width axis, `--h-*` for height —
-   written by `selfLayoutStyle()` (layoutUtils.ts) from nothing but its own
-   `widthMode`/`heightMode`, with no idea which one its parent treats as main.
-   That is this block's job: read here, off the flex *parent*'s own
-   `data-flow-direction` (which screen axis is main) and `data-flow-align`
-   (whether an unset cross-axis child already stretches), never off the child.
-   A `$var`/`$switch`-bound `direction` just works — the runtime resolves it
-   like any other property source and writes the plain result into the
-   attribute (`containerLayoutProps` in layoutUtils.ts), so this rule sees the
-   same DOM state a literal `row`/`column` would have produced.
-   Three selector paths per rule, one per nesting depth, each matching any of
-   the four classes that can be the flex item: plain; inside the widget wrapper
-   `WidgetRenderer` draws in the runtime and the editor preview alike
-   (`.hmi-preview-node` is `display: contents`, so the actual flex item is the
-   element inside it); and a *second*, nested preview node — a `$component:`
-   instance gets one `.hmi-preview-node` for the instance
-   (`WidgetRenderer` for the `$component:` node itself) and another for the
-   definition's root widget (the recursive `WidgetRenderer` call
-   `ComponentRenderer` makes), so its root widget sits two `display: contents`
-   layers down, not one. The binding/lock wrapper is in the `:is()` list
-   because it is itself `position: relative`, so it — not the widget it wraps
-   — is the flex item; at each depth it needs the same declarations the plain
-   classes get, which is why one list covers both. That is more depth than the
-   shrink pins below need, since those only pin the plain and editor-preview
-   shapes. A component definition whose
-   own root is itself a `$component:` instance nests a third nothing-lost
-   `display: contents` layer this block does not reach — not a shape any
-   project actually builds today, but worth knowing if one ever does.
-   Placed before the shrink pins on purpose: both this block's rules and the
-   pins carry the same specificity (one attribute or `:is()` group, plus one
-   class), so for the one case they overlap — a Fill child inside page/page-
-   group chrome, which leaves `--w-shrink`/`--h-shrink` unset — the *later*
-   rule wins the tie. The pins must stay later so `flex-shrink: 0` keeps
-   beating this block's `var(--w-shrink, 1)` fallback there. */
+   Each flex child emits its two axes' flow-intent as axis-neutral custom
+   properties — `--w-*` for width, `--h-*` for height — written by
+   `selfLayoutStyle()` (layoutUtils.ts) from its own `widthMode`/`heightMode`
+   alone. This block decides which half applies, from the flex *parent*'s
+   `data-flow-direction` (which axis is main) and `data-flow-align` (whether an
+   unset cross-axis child already stretches). A bound `direction` works too:
+   the runtime writes the resolved value into the attribute.
+   Three selector paths per rule, one per nesting depth: plain; inside the
+   `display: contents` `.hmi-preview-node` wrapper `WidgetRenderer` draws; and
+   inside two of them, which is where a `$component:` instance's root widget
+   sits (one wrapper for the instance, one for the definition root). The
+   binding/lock wrapper is in the `:is()` list because it is `position:
+   relative`, so it — not the widget it wraps — is the flex item.
+   Placed before the shrink pins on purpose: both carry the same specificity,
+   and where they overlap (a Fill child in page/page-group chrome) the pins'
+   `flex-shrink: 0` must win over this block's `var(--w-shrink, 1)`. */
 [data-flow-direction='row']
   > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
 [data-flow-direction='row']

@@ -7,7 +7,7 @@
  *
  * `@tanstack/react-virtual` and `requestAnimationFrame` are both replaced with
  * synchronous, fully controlled fakes so the retry/cap logic is exercised
- * without depending on real browser layout — real geometry is item 37's job.
+ * without depending on real browser layout.
  */
 import { cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

@@ -81,14 +81,11 @@ export const FLOW_CSS_VARS: readonly string[] = (['w', 'h'] as const).flatMap((p
  * supplies. Written only when this axis's own mode is one of the three literal
  * values; an unset, still-bound, or otherwise unrecognised mode leaves the
  * axis silent, so CSS falls through to the plain `.hmi-component,
- * .hmi-container` default same as it always did.
+ * .hmi-container` default.
  *
- * Every value here is the same one `axisModePatch` used to write directly onto
- * `flexGrow`/`flexBasis`/`flexShrink`/`alignSelf` before this axis's *role*
- * (main or cross) was known — the difference fase 3 makes is that the role is
- * no longer this function's business. Both a main-role triple
- * (`grow`/`basis`/`shrink`) and a cross-role pair (`alignself` under a
- * `stretch`-aligned parent, and under a non-`stretch` one) are written
+ * The axis's *role* (main or cross) is not this function's business. Both a
+ * main-role triple (`grow`/`basis`/`shrink`) and a cross-role pair (`alignself`
+ * under a `stretch`-aligned parent, and under a non-`stretch` one) are written
  * unconditionally; `hmi.css` picks whichever half actually applies once it
  * knows which axis is main, from the parent's own `data-flow-direction` /
  * `data-flow-align` — never from this widget.

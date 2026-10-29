@@ -68,7 +68,7 @@ def tools(monkeypatch, tmp_path: Path):
 
     prepare_workspace_tools()
     # A manager session carries full workspace access, same as an operator
-    # driving the dashboard — the transport-level auth boundary (item 12) is
+    # driving the dashboard — the transport-level auth boundary is
     # covered separately in test_mcp_auth.py.
     with identity_for_tests(McpIdentity(kind="session")):
         yield _ToolManagerFacade(mcp_app._tool_manager, mcp_app)

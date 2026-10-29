@@ -261,7 +261,7 @@ export default function VariableBindingPicker() {
     [repeatOptions, showAll, schemaField],
   );
 
-  // ── Var mode: Phase 1 — load datasource headers on open ──────────────────
+  // ── Var mode: load datasource headers on open ───────────────────────────
 
   useEffect(() => {
     if (!open || !loadsDatasources) return;
@@ -309,7 +309,7 @@ export default function VariableBindingPicker() {
     })();
   }, [open, loadsDatasources, setCollapsed]);
 
-  // ── Var mode: Phase 2 — load variables for a specific datasource ──────────
+  // ── Var mode: load variables for a specific datasource ──────────────────
 
   const loadDatasource = useCallback(
     async (name: string) => {

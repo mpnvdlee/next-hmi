@@ -79,9 +79,8 @@ export function Kw({ tint, children }: { tint: string; children: ReactNode }) {
  * `unwrapBranch` for the $if/$switch/$compare shapes, but wraps each
  * construct's own literal tokens (if/then/else, switch cases, compare
  * operator) in a mode-tinted `.kw` span instead of returning a flat string, so
- * nested logic reads at a glance (see property-panel-redesign doc's sandbox
- * parity notes). Non-branching leaves delegate straight to `propertyValuePreview`,
- * unchanged.
+ * nested logic reads at a glance. Non-branching leaves delegate straight to
+ * `propertyValuePreview`.
  */
 interface PreviewLookups {
   groupLabels?: Record<string, string>;
@@ -467,7 +466,7 @@ export function CollapsiblePropertyCard({
   const selection = path ? { path, schema } : undefined;
   // Content-tier shape follows this branch/case/operand's own current source —
   // a plain $static/$var leaf inside an $if renders inline, not boxed, same
-  // as a top-level leaf (redesign doc's Content-tier model).
+  // as a top-level leaf.
   const { tier, summary, kindLabel, drawerTitle } = sourceFieldGroupProps({
     source: currentSource,
     title,

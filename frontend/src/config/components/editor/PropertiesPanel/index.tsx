@@ -1,14 +1,14 @@
 /**
  * PropertiesPanel — right panel of /editor.
  *
- * Auto-generates a form from the selected component's schema (Phase 12.1)
- * and layout sub-panel (Phase 12.2).
+ * Auto-generates a form from the selected component's schema, plus the layout
+ * sub-panel.
  *
  * All field changes update configStore immediately so the live preview
- * reflects them at once. Backend persist is debounced 300 ms (Phase 12.3).
+ * reflects them at once. Backend persist is debounced 300 ms.
  *
  * The "Change…" button for variable/struct fields opens the
- * VariableBindingPicker overlay (Phase 13).
+ * VariableBindingPicker overlay.
  *
  * Style: zero style={} props. All classes are cfg-prop-* or editor-props-*.
  */

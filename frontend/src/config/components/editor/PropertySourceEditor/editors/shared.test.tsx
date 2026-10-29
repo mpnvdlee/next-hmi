@@ -10,9 +10,9 @@ beforeEach(() => {
   useEditorDomainStore.getState().setSelectedParam(null);
 });
 
-// A tier-3 (multi-field) value — the drawer only applies to tier-3 branches
-// (redesign doc's Content-tier model); a plain static/var leaf branch has
-// no drawer trigger at all, see the dedicated test below.
+// A tier-3 (multi-field) value — the drawer only applies to tier-3 branches; a
+// plain static/var leaf branch has no drawer trigger at all, see the dedicated
+// test below.
 const RANDOM_VALUE = { $random: { min: 0, max: 100, integer: true } };
 
 describe('CollapsibleExpressionCard — ⤢ drawer', () => {
