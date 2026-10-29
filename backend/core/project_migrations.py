@@ -25,9 +25,10 @@ into one sourced ``target`` (see ``core.migration_write_targets``). The
 fourth, 9 → 10, rewrites nothing: it marks the fields 1.1.0 added to files a
 1.0.x build parses strictly (alarm ``values``, the theme ``numpad`` and
 ``toasts`` sections), so that build refuses the project instead of parsing
-the alarm files as empty and saving over them. The fifth, 10 → 11, turns
-every Container with press or release actions into a Button Container (see
-``core.migration_button_container``).
+the alarm files as empty and saving over them. The fifth, 10 → 11, rebuilds
+every retired ``UserBadge`` widget from built-ins (see
+``core.migration_user_badge``), then turns every Container with press or release
+actions into a Button Container (see ``core.migration_button_container``).
 
 ``PROJECT_FORMAT_VERSION`` only ever counts up, including when steps are
 retired: the number is stamped into user data that travels between builds
@@ -100,6 +101,7 @@ from core.migration_dialogs_folder import STEP_NAME as DIALOGS_FOLDER_STEP_NAME
 from core.migration_dialogs_folder import migrate_dialogs_folder
 from core.migration_padding import migrate_padding
 from core.migration_size_modes import migrate_size_modes
+from core.migration_user_badge import migrate_user_badge
 from core.migration_write_targets import STEP_NAME as WRITE_TARGETS_STEP_NAME
 from core.migration_write_targets import migrate_write_targets
 from core.project_packer import BACKUPS_SUBDIR, pack_project, safe_filename
@@ -248,6 +250,21 @@ def _retire_flex_and_collapse_padding(staged: Mapping[str, Path], project_root: 
     )
 
 
+def _retire_user_badge_and_pressable_container(
+    staged: Mapping[str, Path], project_root: Path
+) -> StepResult:
+    """Combined step: rebuild each UserBadge from built-ins, then move press
+    actions off Container onto Button Container — same staged copy, in
+    sequence. See `core.migration_user_badge` / `core.migration_button_container`."""
+    badge_result = migrate_user_badge(staged, project_root)
+    container_result = migrate_button_container(staged, project_root)
+    return StepResult(
+        files_changed=list(
+            dict.fromkeys([*badge_result.files_changed, *container_result.files_changed])
+        ),
+    )
+
+
 def _mark_release_1_1_fields(staged: Mapping[str, Path], project_root: Path) -> StepResult:
     """No-op: the step exists for the stamp it leaves (see the module docstring)."""
     return StepResult()
@@ -285,9 +302,9 @@ _STEPS: list[MigrationStep] = [
     MigrationStep(
         from_version=10,
         to_version=11,
-        name="pressable-container-to-button-container",
+        name="retire-user-badge-and-pressable-container",
         targets=("config", "pages", "dialogs", "components"),
-        run=migrate_button_container,
+        run=_retire_user_badge_and_pressable_container,
     ),
 ]
 

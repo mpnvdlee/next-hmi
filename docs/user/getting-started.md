@@ -49,9 +49,9 @@ and two languages — with nothing to wire up first.
 Open its runtime and try the things that are hard to picture from a
 description:
 
-1. **Sign in.** The header carries a [User Badge](users.md#sign-in-and-out-on-a-screen) reading **Log in**. The sign-in dialog lists the project's users in a dropdown, and the demo accounts are printed on the dialog itself — `brewer` / `espresso` (in the `admin` group) and `barista` / `latte` (an operator).
+1. **Sign in.** The header carries a **Sign in** button ([how it is built](users.md#sign-in-and-out-on-a-screen)). The sign-in dialog lists the project's users in a dropdown, and the demo accounts are printed on the dialog itself — `brewer` / `espresso` (in the `admin` group) and `barista` / `latte` (an operator).
 2. **Watch the Machine page change.** Signing in as `brewer` is not cosmetic. The setpoint steppers become operable — they are **Interactable** gated on the `admin` group — and a **Service** card appears that was hidden entirely, gated on **Visible**. While you are a guest, a caption sits in the card's place naming what is missing and why, so the mechanism is legible before you unlock it. Sign in as `barista` instead and neither unlocks: an operator is not in `admin`.
-3. **Sign out again** from the same badge, and watch both go away.
+3. **Sign out again** with the sign-out button beside your name, and watch both go away.
 
 That is the whole of [users, groups and permissions](users.md) in one screen.
 Then open the editor on the same project and look at how it was done — the
