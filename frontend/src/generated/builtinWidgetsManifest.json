@@ -1262,6 +1262,40 @@
     "schemaError": null
   },
   {
+    "key": "Layout/Badge",
+    "name": "Badge",
+    "group": "Layout",
+    "origin": "builtin",
+    "hasStyle": true,
+    "hasFonts": false,
+    "usesRecharts": false,
+    "buildOk": true,
+    "buildTs": "97eb86a077b4bf90",
+    "displayName": null,
+    "hostsChildren": true,
+    "flowsChildren": null,
+    "repeatsChildren": null,
+    "category": "Layout & structure",
+    "schema": {
+      "badge": {
+        "type": [
+          "string",
+          "integer"
+        ]
+      },
+      "color": {
+        "type": "color"
+      },
+      "offset": {
+        "type": "integer"
+      },
+      "size": {
+        "type": "integer"
+      }
+    },
+    "schemaError": null
+  },
+  {
     "key": "Layout/ComponentSlot",
     "name": "ComponentSlot",
     "group": "Layout",

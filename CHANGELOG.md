@@ -202,6 +202,11 @@ heading.
   or `NaN` as no value. A property with no variable bound no longer costs a
   variable-store listener.
 
+- **A Badge widget.** It wraps one widget and puts a chip on its top-right
+  corner — a text or a count such as an Alarm Count, hidden when empty or 0.
+  The chip sits centred on the corner, half outside; **Offset** moves it in or
+  further out, and **Color** and **Size** set its look.
+
 - **A Button sets its alignment and text case.** **Content alignment**
   (center, or start for a menu-style tile) and **Text case** (uppercase). A Label's **Align** is now
   called **Content alignment**, and its new **Text case** follows the
