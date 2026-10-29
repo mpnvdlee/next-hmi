@@ -23,7 +23,7 @@ from core.storage import (
     read_json,
     write_json,
 )
-from core.validation import build_context, validate_page
+from core.validation import build_context, validate_global_events, validate_page
 from core.validation.ids import is_valid_page_id
 from core.validation.structure import load_widget_manifest
 from services.websocket_manager import invalidate_runtime_pages_config_cache
@@ -574,6 +574,84 @@ async def pages_set_widget_property(
     await emit_change(
         artifact_type="page",
         artifact_ids=[page_id],
+        summary=response["summary"],
+        diff=response["diff"]
+    )
+    if idempotency_key:
+        idempotency.put(label, idempotency_key, response)
+    return response
+
+
+# Mirrors `GlobalEventsConfig` in frontend/src/shared/types/config.ts.
+_GLOBAL_EVENTS = frozenset({
+    "onHmiLoaded",
+    "onPageLoaded",
+    "onLocaleChanged",
+    "onUserLoggedIn",
+    "onUserLoggedOut",
+    "onInteractionDenied",
+    "onVariableChanged",
+})
+
+
+def _global_events_payload() -> dict[str, Any]:
+    events = _read_config_index().get("globalEvents")
+    return events if isinstance(events, dict) else {}
+
+
+global_events_get = expose_read_tool(
+    _global_events_payload,
+    name="global_events_get",
+    description=(
+        "The project's global events: a map of event name to its list. Every "
+        "event holds an action list, except ``onVariableChanged``, which holds "
+        "triggers ``{ variable: {$var: {path}}, actions: [...] }``."
+    ),
+)
+
+
+@register_tool()
+async def global_events_set(
+    event: str,
+    value: list[Any],
+    idempotency_key: str | None = None,
+) -> dict[str, Any]:
+    """Replace one global event's list; an empty list removes the event.
+
+    ``event`` is one of ``onHmiLoaded``, ``onPageLoaded``, ``onLocaleChanged``,
+    ``onUserLoggedIn``, ``onUserLoggedOut``, ``onInteractionDenied`` (each an
+    action list) or ``onVariableChanged``: a list of triggers
+    ``{"variable": {"$var": {"path": "datasource:location"}}, "actions": [...]}``.
+    A trigger runs its actions on every open runtime whenever the variable's
+    value changes, and once at start-up; gate them with an ``if`` action on the
+    same variable to act on one value only (e.g. open a dialog when a Boolean
+    goes true).
+    """
+    label = get_agent_label()
+    if idempotency_key:
+        cached = idempotency.get(label, idempotency_key)
+        if cached is not None:
+            return cached
+    if event not in _GLOBAL_EVENTS:
+        raise ConfigValidationError(f"event must be one of {sorted(_GLOBAL_EVENTS)}; got {event!r}")
+    if not isinstance(value, list):
+        raise ConfigValidationError("value must be a list")
+    async with locks.acquire(("config", "config")):
+        config = _read_config_index()
+        before = _global_events_payload()
+        after = {k: v for k, v in before.items() if k != event}
+        if value:
+            after[event] = value
+        report = validate_global_events(after, build_context())
+        raise_if_findings(report)
+        config["globalEvents"] = after
+        _write_config_index(config)
+        response = applied_response(
+            f"Set global event '{event}'", before, after, warnings=report.to_dict()["warnings"]
+        )
+    await emit_change(
+        artifact_type="page",
+        artifact_ids=["globalEvents"],
         summary=response["summary"],
         diff=response["diff"]
     )

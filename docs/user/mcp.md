@@ -110,6 +110,7 @@ Tokens do **not** expire on their own. One stays valid until it is revoked by id
 | Area | Agent may |
 |---|---|
 | Pages, widget trees, widget properties | read + write |
+| Global events, variable triggers included | read + write |
 | Variables on a datasource | read + write |
 | Alarms (definitions) | read + write — groups are UI-only |
 | Translations (languages, keys, cells) | read + write |

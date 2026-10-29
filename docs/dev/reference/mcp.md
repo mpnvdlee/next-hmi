@@ -99,6 +99,10 @@ max 500). MCP resources are not exposed; clients that only surface tools
 - `pages_delete_widget(page_id, widget_id, confirm?)` *destructive*
 - `pages_set_widget_property(page_id, widget_id, property, value)` — `property` is a JSON Pointer (RFC 6901) into the widget's properties
 
+### Global events
+- `global_events_get()` — the `globalEvents` map from `config.json`
+- `global_events_set(event, value)` — replaces one event's list; an empty list removes it. Every event takes an action list except `onVariableChanged`, which takes triggers `{ variable: { $var: { path } }, actions: [...] }` (see [data formats](../architecture/data-formats.md)). Validated like a save from the editor.
+
 ### Datasources (read-only over MCP)
 - `datasources_list(cursor?, limit?)` — datasource summaries
 - `datasources_get(name)` — full datasource config (settings + variable tree)
