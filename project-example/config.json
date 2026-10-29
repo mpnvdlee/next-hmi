@@ -445,35 +445,176 @@
             },
             {
               "id": "hdr-user",
-              "type": "UserBadge",
+              "type": "Container",
               "name": "User",
-              "properties": {
-                "signInLabel": {
-                  "$loc": "Sign in"
-                },
-                "onSignIn": {
-                  "onSignIn": [
-                    {
-                      "type": "openDialog",
-                      "pageId": "login",
-                      "size": "small",
-                      "placement": "center",
-                      "backdrop": "dim"
-                    }
-                  ]
-                },
-                "onSignOut": {
-                  "onSignOut": [
-                    {
-                      "type": "logoutUser"
-                    }
-                  ]
-                }
-              },
+              "properties": {},
               "layout": {
                 "widthMode": "hug",
-                "heightMode": "hug"
-              }
+                "heightMode": "hug",
+                "direction": "row",
+                "align": "center",
+                "gap": "0.5rem",
+                "wrap": false
+              },
+              "children": [
+                {
+                  "id": "hdr-user-sign-in",
+                  "type": "Button",
+                  "name": "Sign in",
+                  "properties": {
+                    "visible": {
+                      "$compare": {
+                        "left": {
+                          "$user": {
+                            "field": "username"
+                          }
+                        },
+                        "operator": "===",
+                        "right": "guest"
+                      }
+                    },
+                    "label": {
+                      "$loc": "Sign in"
+                    },
+                    "iconName": "lock",
+                    "actions": {
+                      "onPress": [
+                        {
+                          "type": "openDialog",
+                          "pageId": "login",
+                          "size": "small",
+                          "placement": "center",
+                          "backdrop": "dim"
+                        }
+                      ]
+                    }
+                  },
+                  "layout": {
+                    "widthMode": "hug",
+                    "heightMode": "hug"
+                  }
+                },
+                {
+                  "id": "hdr-user-identity",
+                  "type": "Container",
+                  "name": "Identity",
+                  "properties": {
+                    "visible": {
+                      "$not": {
+                        "value": {
+                          "$compare": {
+                            "left": {
+                              "$user": {
+                                "field": "username"
+                              }
+                            },
+                            "operator": "===",
+                            "right": "guest"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "layout": {
+                    "direction": "row",
+                    "align": "center",
+                    "gap": "0.5rem",
+                    "wrap": false,
+                    "widthMode": "hug",
+                    "heightMode": "hug"
+                  },
+                  "children": [
+                    {
+                      "id": "hdr-user-avatar",
+                      "type": "Icon",
+                      "name": "Avatar",
+                      "properties": {
+                        "iconName": "user",
+                        "size": 20
+                      }
+                    },
+                    {
+                      "id": "hdr-user-text",
+                      "type": "Container",
+                      "name": "Text",
+                      "properties": {},
+                      "layout": {
+                        "direction": "column",
+                        "gap": "0px",
+                        "wrap": false,
+                        "widthMode": "hug",
+                        "heightMode": "hug"
+                      },
+                      "children": [
+                        {
+                          "id": "hdr-user-username",
+                          "type": "Label",
+                          "name": "Username",
+                          "properties": {
+                            "text": {
+                              "$user": {
+                                "field": "username"
+                              }
+                            },
+                            "typography": "subheading",
+                            "wrap": "truncate"
+                          }
+                        },
+                        {
+                          "id": "hdr-user-groups",
+                          "type": "Label",
+                          "name": "Groups",
+                          "properties": {
+                            "text": {
+                              "$user": {
+                                "field": "groups"
+                              }
+                            },
+                            "typography": "caption",
+                            "wrap": "truncate"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "hdr-user-sign-out",
+                  "type": "Button",
+                  "name": "Sign out",
+                  "properties": {
+                    "visible": {
+                      "$not": {
+                        "value": {
+                          "$compare": {
+                            "left": {
+                              "$user": {
+                                "field": "username"
+                              }
+                            },
+                            "operator": "===",
+                            "right": "guest"
+                          }
+                        }
+                      }
+                    },
+                    "label": "",
+                    "iconName": "sign-out",
+                    "variant": "outline",
+                    "actions": {
+                      "onPress": [
+                        {
+                          "type": "logoutUser"
+                        }
+                      ]
+                    }
+                  },
+                  "layout": {
+                    "widthMode": "hug",
+                    "heightMode": "hug"
+                  }
+                }
+              ]
             }
           ]
         },

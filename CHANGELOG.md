@@ -441,6 +441,12 @@ heading.
 
 ### Removed
 
+- **The User Badge.** Opening a project upgrades each one to built-in widgets
+  that show the same: a Container holding a user Icon, the username and groups
+  as Labels, a sign-in Button for the guest and a sign-out Button for everyone
+  else, each kept only where the badge had actions for it. The initials avatar
+  becomes the user icon.
+
 - **The Alarm List's Own frame.** The list now always draws without a frame of
   its own, as every example already placed it, so it takes the look of the card
   or page around it. A stored `chrome` key is ignored and the warnings pill

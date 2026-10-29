@@ -58,7 +58,7 @@ def test_min_app_names_a_release_that_exists():
 def test_a_format_9_project_is_stamped_current_with_nothing_rewritten(project_root: Path) -> None:
     """9 → 10 only marks the fields 1.1.0 added, so a 1.0.x build refuses the
     project rather than parsing those files as empty and saving over them; 10 →
-    11 finds no pressable Container to rewrite."""
+    11 finds no User Badge or pressable Container to rewrite."""
     _stamp(project_root, 9, min_app="1.0.0")
     result = pm.run_baseline_migration(project_root)
     assert (result.from_version, result.to_version) == (9, 11)

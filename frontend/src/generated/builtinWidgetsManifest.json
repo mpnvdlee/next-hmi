@@ -410,55 +410,6 @@
     "schemaError": null
   },
   {
-    "key": "Content/UserBadge",
-    "name": "UserBadge",
-    "group": "Content",
-    "origin": "builtin",
-    "hasStyle": true,
-    "hasFonts": false,
-    "usesRecharts": false,
-    "buildOk": true,
-    "buildTs": "8f4cf7cd5407b7ee",
-    "displayName": "User Badge",
-    "hostsChildren": null,
-    "flowsChildren": null,
-    "repeatsChildren": null,
-    "category": "Content & controls",
-    "schema": {
-      "usernameText": {
-        "type": "string"
-      },
-      "groupsText": {
-        "type": "string"
-      },
-      "signInLabel": {
-        "type": "string"
-      },
-      "showGroups": {
-        "type": "boolean"
-      },
-      "signInIcon": {
-        "type": "icon"
-      },
-      "signOutIcon": {
-        "type": "icon"
-      },
-      "radius": {
-        "type": "string"
-      },
-      "actions": {
-        "type": "actions"
-      },
-      "onSignIn": {
-        "type": "actions"
-      },
-      "onSignOut": {
-        "type": "actions"
-      }
-    },
-    "schemaError": null
-  },
-  {
     "key": "Content/Video",
     "name": "Video",
     "group": "Content",

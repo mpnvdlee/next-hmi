@@ -47,4 +47,4 @@ The six that cross the wire carry `onSuccess` / `onFailed` / `onSettled` handler
 > **Visibility & permissions.** Every widget exposes **Visible** and **Interactable** booleans, and both arrive already wired to the `$userGroups` source with no groups ticked. Tick the groups and it becomes a group test — a Start button restricted to *operator* renders read-only for everyone else, with no scripting and no source to switch first. See [Users, groups & permissions](users.md#gate-what-a-group-can-see-and-do).
 
 > [!TIP]
-> **Showing who is signed in.** The **User Badge** widget puts the current user in the header and carries the sign-in and sign-out buttons with it — see [Sign in and out on a screen](users.md#sign-in-and-out-on-a-screen).
+> **Showing who is signed in.** A Label bound to `$user` names the current user, and two Buttons gated on the guest sign in and out — see [Sign in and out on a screen](users.md#sign-in-and-out-on-a-screen).
