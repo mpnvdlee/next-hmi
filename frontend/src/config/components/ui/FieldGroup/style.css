@@ -364,14 +364,10 @@
   gap: var(--cfg-space-2);
 }
 
-/* Tier-3 collapsed one-line recursive summary (Phase 0's `propertyValuePreview`,
-   Fix 2's `previewNodes` for the colored `.kw` keyword spans). Full-width
-   wrapping sentence, not a truncated right-aligned snippet. */
-/* The trailing `__actions` column is a flex sibling with no background of its
-   own, so anything the summary can't break (a variable path like
-   `Machine:Measurement/RunNumber`, a twenty-action list) used to run straight
-   underneath the chevron/drawer/remove buttons. Break inside those tokens and
-   clamp the block so a long summary grows a few lines and then stops. */
+/* Tier-3 collapsed recursive summary: a full-width wrapping sentence, not a
+   truncated right-aligned snippet. The trailing `__actions` column has no
+   background, so an unbreakable token (a variable path, a long action list)
+   would run under its buttons: break inside tokens and clamp to a few lines. */
 .cfg-field-group__preview {
   display: -webkit-box;
   -webkit-box-orient: vertical;

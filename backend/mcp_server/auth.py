@@ -1,4 +1,4 @@
-"""HTTP-transport authentication for the workspace MCP endpoint (item 12).
+"""HTTP-transport authentication for the workspace MCP endpoint.
 
 Every ``/mcp`` request must present one of two credentials, checked by
 ``McpAuthMiddleware`` before the request reaches FastMCP's streamable-HTTP

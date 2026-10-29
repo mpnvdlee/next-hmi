@@ -314,8 +314,8 @@ def test_password_change_revokes_mcp_tokens(manager_client: TestClient):
 
 def test_write_scoped_token_still_blocked_by_mcp_disabled(monkeypatch, tmp_path: Path):
     """A token with write access to a project doesn't bypass that project's
-    own mcpEnabled=False — the two gates are independent (item 12's decision
-    explicitly retains mcpEnabled as an *additional* write gate). Drives a
+    own mcpEnabled=False — the two gates are independent: mcpEnabled is an
+    *additional* write gate. Drives a
     real tool call through the registered scoped wrapper (mcp_server.scoped),
     not just the auth helper in isolation."""
     import json

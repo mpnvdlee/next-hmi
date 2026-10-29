@@ -307,9 +307,8 @@ export default function SchemaFieldRow({
   }
 
   // Content-tier shape drives whether the row is a plain inline control
-  // (tier 1/2) or an expandable multi-field box (tier 3) — see the redesign
-  // doc's Content-tier model. Sourceless compound fields (`actions`,
-  // `groups`) are handled above and never reach this fallback.
+  // (tier 1/2) or an expandable multi-field box (tier 3). Sourceless compound
+  // fields (`actions`, `groups`) are handled above and never reach this fallback.
   const sourceForTier = bindsOnly ? structSource : isSourceCapable ? currentSource : null;
   const { tier, summary, kindLabel, drawerTitle } = sourceFieldGroupProps({
     source: sourceForTier,

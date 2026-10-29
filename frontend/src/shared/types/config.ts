@@ -838,7 +838,7 @@ export interface ShellRegionConfig {
   collapsedSize?: unknown; // string, bindable — e.g. '48px', '0'
   expanded?: unknown; // boolean, bindable
   defaultState?: 'expanded' | 'collapsed' | 'hidden';
-  overlay?: unknown; // boolean, bindable — Phase 7
+  overlay?: unknown; // boolean, bindable
   /** Sidebars only, bindable: when true, the sidebar spans the full layout
    *  height, flanking the header/main/footer column instead of sitting
    *  between them. */

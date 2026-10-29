@@ -180,14 +180,9 @@ class CompileTarget:
     """One compile target: a source root, a build root, and the build-status
     map that belongs to that pair.
 
-    Status used to be a single module-level dict re-keyed on whichever root the
-    last caller passed, which meant every status-touching function had to be
-    handed the same ``out_dir`` or a built-in-widgets build would rewrite the live
-    project's ``.build-status.json``. Binding each target to the state of *its
-    own* status file makes that mistake unrepresentable while every target on
-    one file still shares one map (see ``_StatusState``), and the two parallel
-    ``src_dir`` / ``out_dir`` optionals collapse into one object below the
-    public API.
+    Each target is bound to the state of *its own* status file, so a built-in
+    widgets build cannot rewrite the live project's ``.build-status.json``,
+    while every target on one file still shares one map (see ``_StatusState``).
 
     Roots are resolved by ``compile_target()`` rather than here, so the
     defaults — which move when the active project switches, and which tests
@@ -883,43 +878,30 @@ def generate_builtin_widgets_manifest(
 ) -> bool:
     """Emit the baked built-in-widgets manifest the frontend imports statically.
 
+    Baking it keeps the registry synchronous at module eval: schemas,
+    categories and icons are present before first render, and only the
+    component modules load lazily.
+
     Written as two files — ``manifest_path`` and the ``.editor.json`` sibling
-    ``core.builtin_widgets_manifest.editor_manifest_path`` names — because the
-    frontend pays for them in different places. The runtime half is imported by
-    ``widgetRegistry.tsx``, which every route reaches, so it lands in the shared
-    entry chunk that a plain HMI page loads; the editor half is imported only
-    from ``src/config/``, so it lands in the editor's own chunk and an operator
-    running an HMI page never fetches it. Both halves are static imports: the
-    palette is still fully populated at first paint, editor descriptions and
-    icons included. Splitting is what makes an editor-only byte free for the
-    runtime; deferring it would not.
+    ``core.builtin_widgets_manifest.editor_manifest_path`` names — so editor-only
+    bytes cost the runtime nothing: the runtime half is imported by
+    ``widgetRegistry.tsx`` and lands in the shared entry chunk, the editor half
+    only from ``src/config/`` and lands in the editor's chunk. Readers that need
+    the whole picture (config validation, the MCP tools) go through
+    ``core.builtin_widgets_manifest``, which merges the pair back.
 
-    Every reader that needs the whole picture — config validation, the MCP
-    tools — goes through ``core.builtin_widgets_manifest``, which merges the
-    pair back.
-
-    Same row shape as ``GET /api/widgets`` so one registration path serves both,
-    plus two fields the runtime endpoint has no need for:
+    Same row shape as ``GET /api/widgets``, plus two fields:
 
     * ``origin`` — tells the loader to fetch from ``/builtin-widgets-js/`` rather
       than ``/widget-js/``.
-    * ``usesRecharts`` — whether the compiled module actually references the
-      Recharts global. Without it the loader must populate ``window.__nextHMI__
-      .Recharts`` before *every* built-in import, which would drag the chart
-      library into first paint on pages that have no chart. Recorded by the
-      compile that wrote the module, which already scanned it to build the SDK
-      banner; re-reading every artifact here would ask the same question twice.
+    * ``usesRecharts`` — whether the compiled module references the Recharts
+      global, recorded by the compile that wrote it. Without it the loader would
+      populate ``window.__nextHMI__.Recharts`` before *every* built-in import and
+      drag the chart library into first paint.
 
-    Baking this at build time is what keeps the registry synchronous at module
-    eval: schemas, categories and icons are present before first render, and only
-    the component modules load lazily.
-
-    ``buildTs`` carries the compile's *content hash* here, not its timestamp:
-    this file is tracked and every ``npm run dev`` regenerates it, so a
-    wall-clock stamp would dirty the working tree and conflict on every rebase.
-    The loader only ever appends it as the ``?t=`` cache-buster, and a digest
-    busts the cache exactly when the served bytes change. The runtime endpoint
-    keeps a real timestamp — the admin panel renders that one as a clock time.
+    ``buildTs`` carries the compile's *content hash*, not a timestamp: this file
+    is tracked and every ``npm run dev`` regenerates it, so a wall-clock stamp
+    would dirty the tree. The loader only uses it as the ``?t=`` cache-buster.
     """
     target = compile_target(src_dir, out_dir)
     root = target.src_dir
