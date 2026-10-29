@@ -202,6 +202,11 @@ heading.
   or `NaN` as no value. A property with no variable bound no longer costs a
   variable-store listener.
 
+- **A Badge widget.** It wraps one widget and puts a chip on its top-right
+  corner — a text or a count such as an Alarm Count, hidden when empty or 0.
+  The chip sits centred on the corner, half outside; **Offset** moves it in or
+  further out, and **Color** and **Size** set its look.
+
 - **A Container can run actions when it is pressed.** The Container gets the
   Button's **Actions** field. With press actions it becomes one control
   around whatever it holds — a tile, a list row, a header logo: it takes the
@@ -210,10 +215,8 @@ heading.
   announces it by its **Name**. A press on a Button or an input inside it
   stays with that control. A Container without actions behaves as before.
 
-- **A Button carries a badge and sets its alignment and text case.** A
-  **Badge** chip in the top-right corner — a text or a count such as an Alarm
-  Count, hidden when empty or 0 — **Content alignment** (center, or start for
-  a menu-style tile) and **Text case** (uppercase). A Label's **Align** is now
+- **A Button sets its alignment and text case.** **Content alignment**
+  (center, or start for a menu-style tile) and **Text case** (uppercase). A Label's **Align** is now
   called **Content alignment**, and its new **Text case** follows the
   typography by default or picks *As typed* or *Uppercase*. Each one left at
   its default keeps today's look.
@@ -444,8 +447,8 @@ heading.
   and Firefox.
 
 - **A Button stays inside a narrow fixed tile.** A Button in a fixed size
-  narrower than its label plus padding grew past it, and its badge sat
-  outside the tile. It now keeps the size it was given.
+  narrower than its label plus padding grew past it. It now keeps the size it
+  was given.
 
 - **A restart keeps the default project's name.** Each start renamed the
   default project back to *Default*, so a name given in the manager did not
