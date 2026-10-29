@@ -30,7 +30,7 @@ Most fields also carry a small **source pill** — that's where a static value b
 
 ## Make controls do something: actions
 
-Interactive widgets (**Button**, **Menu Toggle**, and a **Container** you want to press as a whole) have an **Actions** field holding a list that runs, top to bottom, when the control is pressed; others, such as a Dropdown's **On Change**, run one on their own event. The fourteen action types cover five jobs:
+Interactive widgets (**Button**, **Menu Toggle**, and a **Button Container** — a Container you press as a whole) have an **Actions** field holding a list that runs, top to bottom, when the control is pressed; others, such as a Dropdown's **On Change**, run one on their own event. The fourteen action types cover five jobs:
 
 - **Screens** — open or close a **dialog**, or open an ordinary page as a **page overlay**.
 - **Machine** — **write a variable** (set a coil, a mode, a setpoint), **toggle a Boolean**, or **load / save a recipe**.
