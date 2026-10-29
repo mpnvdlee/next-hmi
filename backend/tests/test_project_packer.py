@@ -1,4 +1,4 @@
-"""Phase 5 — zip pack/unpack for projects.
+"""Zip pack/unpack for projects.
 
 Covers the standalone packer functions; endpoint coverage lives in
 ``test_projects_api.py``.

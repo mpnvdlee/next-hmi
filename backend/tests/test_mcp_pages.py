@@ -329,7 +329,7 @@ def test_pages_set_metadata_merge_patch_null_deletes():
     assert "route" not in page
 
 
-# ── Missing/unindexed page mutation semantics (item 10) ─────────────────────
+# ── Missing/unindexed page mutation semantics ───────────────────────────────
 
 
 def test_pages_set_metadata_on_absent_id_is_not_found_and_writes_nothing():

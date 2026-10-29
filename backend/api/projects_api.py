@@ -152,10 +152,8 @@ def _entry_dict(entry: ProjectEntry, manifest: ManifestV1) -> dict[str, Any]:
         # Resolved the same way `path` was stored (see `_resolve_path`), against
         # a root resolved the same way — see `default_projects_root` — so a
         # symlink anywhere above the root can't make an in-root project read as
-        # outside it. The peer-transfer modal used to re-derive this itself
-        # from `defaultProjectsRoot` and a project's raw path; this is that
-        # same fact, computed once, correctly, on the side that actually knows
-        # the root.
+        # outside it. Computed here, where the root is known, so no client
+        # re-derives it.
         "inProjectsRoot": path.resolve().parent == root,
         "addedAt": entry.addedAt,
         "lastOpenedAt": entry.lastOpenedAt,

@@ -87,14 +87,9 @@ def ack_alarm(instance_id: str, body: AckRequest) -> dict[str, str]:
     be tied back to. Nothing else gates the route either — on the instance's
     loopback port anyone who can reach it can post any name.
 
-    So the name goes into the trail tagged ``ACTOR_CLAIMED`` and an auditor can
-    see that nothing stood behind it. The tempting alternative — checking the
-    claimed name against whoever is currently logged in over some WebSocket —
-    is rejected on purpose: it would launder a guess into a "verified" record,
-    and it succeeds exactly when the impersonated operator is on shift. Real
-    attribution here needs the acknowledgement to carry a verified session
-    (a WebSocket ack message, or a session token on this route), which is a
-    feature, not something this handler can fake.
+    So the name goes into the trail tagged ``ACTOR_CLAIMED``. Matching it against
+    whoever is logged in over some WebSocket would launder a guess into a
+    "verified" record.
     """
     if not body.username:
         raise AlarmValidationError("Username is required")

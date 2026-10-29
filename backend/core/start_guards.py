@@ -2,7 +2,7 @@
 
 Generic plumbing with no policy of its own, mirroring ``core.audit``. **The
 public build registers no guards**, so :func:`refusal` always returns ``None``
-there and the supervisor behaves exactly as it did before this module existed.
+there and every start proceeds.
 
 A guard answers one question — may the supervisor spawn a child for this
 project right now? — and returns either ``None`` (yes) or a short operator-

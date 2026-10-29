@@ -68,13 +68,9 @@ export default function StretchSpacer({ properties, layout }: HmiWidgetProps) {
     <div
       className="hmi-stretch-spacer"
       // `selfLayoutStyle` also carries `minWidth`/`maxWidth`/`minHeight`/
-      // `maxHeight` when the panel has them set. Before this widget switched
-      // from custom properties to direct CSS properties, those four were inert
-      // here too (no `.hmi-component` class to consume the old `--self-*`
-      // vars) — now they apply, same as `width`/`height` already did.
-      // Accepted, not overridden: they constrain rather than size, so they do
-      // not compete with this widget's own Ratio/Percent the way a stored
-      // `grow` would.
+      // `maxHeight` when the panel has them set. Accepted, not overridden: they
+      // constrain rather than size, so they do not compete with this widget's
+      // own Ratio/Percent the way a stored `grow` would.
       style={{ ...selfLayoutStyle(layout), ...size }}
       aria-hidden="true"
     />
