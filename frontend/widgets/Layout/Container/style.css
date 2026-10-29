@@ -97,24 +97,3 @@
   pointer-events: none;
   user-select: none;
 }
-
-/* A container with press actions is a control: the same pointer, focus ring
-   and pressed feedback a Button gives. */
-.hmi-container.hmi-container--pressable {
-  cursor: pointer;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  transition:
-    filter var(--hmi-motion-fast) ease,
-    transform 80ms ease;
-}
-
-.hmi-container.hmi-container--pressable:active {
-  filter: brightness(1.18);
-  transform: translateY(1px);
-}
-
-.hmi-container.hmi-container--pressable:focus-visible {
-  outline: var(--hmi-accent-outline);
-  outline-offset: var(--hmi-accent-outline-offset);
-}

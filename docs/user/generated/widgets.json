@@ -48,35 +48,9 @@
         ]
       },
       {
-        "type": "ComponentSlot",
-        "name": "Component Slot",
-        "description": "Marks where content the caller supplies is rendered. Put one in a reusable component and instances of it gain a named slot — in the widget tree, and in the properties panel when a \"Widget slot\" property names it.",
-        "props": [
-          {
-            "key": "slot",
-            "label": "Slot name",
-            "type": "slot"
-          },
-          {
-            "key": "visible",
-            "label": "Visible",
-            "type": "Boolean",
-            "group": "Visibility",
-            "defaultValue": true
-          },
-          {
-            "key": "interactable",
-            "label": "Interactable",
-            "type": "Boolean",
-            "group": "Visibility",
-            "defaultValue": true
-          }
-        ]
-      },
-      {
-        "type": "Container",
-        "name": "Container",
-        "description": "Groups and lays out child widgets in a row or column. Hosts other widgets, and runs its actions when pressed.",
+        "type": "ButtonContainer",
+        "name": "Button Container",
+        "description": "A Container that is one big control around whatever it holds — a tile, a list row — running actions when pressed and released.",
         "props": [
           {
             "key": "title",
@@ -115,6 +89,91 @@
             "key": "actions",
             "label": "Actions",
             "type": "actions"
+          },
+          {
+            "key": "onRelease",
+            "label": "On Released",
+            "type": "actions"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "ComponentSlot",
+        "name": "Component Slot",
+        "description": "Marks where content the caller supplies is rendered. Put one in a reusable component and instances of it gain a named slot — in the widget tree, and in the properties panel when a \"Widget slot\" property names it.",
+        "props": [
+          {
+            "key": "slot",
+            "label": "Slot name",
+            "type": "slot"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "Container",
+        "name": "Container",
+        "description": "Groups and lays out child widgets in a row or column. Hosts other widgets; a Button Container does the same and runs actions when pressed.",
+        "props": [
+          {
+            "key": "title",
+            "label": "Title",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "showWhenEmpty",
+            "label": "Show when empty",
+            "type": "Boolean",
+            "group": "Content",
+            "defaultValue": false
+          },
+          {
+            "key": "overflow",
+            "label": "Overflow",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "visible"
+          },
+          {
+            "key": "background",
+            "label": "Background",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "border",
+            "label": "Border",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "none"
           },
           {
             "key": "visible",

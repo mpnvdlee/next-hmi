@@ -214,13 +214,12 @@ heading.
   button needs. Keep a watchdog in the PLC for anything that moves: a release
   the panel never sees, such as a dropped connection, leaves the value true.
 
-- **A Container can run actions when it is pressed.** The Container gets the
-  Button's **Actions** field. With press actions it becomes one control
-  around whatever it holds — a tile, a list row, a header logo: it takes the
-  keyboard (**Enter** or **Space**), shows the focus ring and a pressed look,
-  and dims and blocks under **Interactable** like a Button. A screen reader
-  announces it by its **Name**. A press on a Button or an input inside it
-  stays with that control. A Container without actions behaves as before.
+- **A Button Container.** A Container that is one control around whatever
+  it holds — a tile, a list row, a header logo — with the Button's **On
+  Pressed** and **On Released**. It takes the keyboard (**Enter** or
+  **Space**), shows the focus ring and a pressed look, and dims and blocks
+  under **Interactable** like a Button. A press on a Button or an input inside
+  it stays with that control.
 
 - **A Button sets its alignment and text case.** **Content alignment**
   (center, or start for a menu-style tile) and **Text case** (uppercase). A Label's **Align** is now

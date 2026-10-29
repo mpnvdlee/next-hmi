@@ -20,6 +20,22 @@ Puts a small chip, such as an alarm count, on the top-right corner of the one wi
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
+### Button Container
+
+A Container that is one big control around whatever it holds — a tile, a list row — running actions when pressed and released.
+
+| Property | Label | Type |
+|---|---|---|
+| `title` | Title | `String` |
+| `showWhenEmpty` | Show when empty | `Boolean` |
+| `overflow` | Overflow | `String` |
+| `background` | Background | `color` |
+| `border` | Border | `String` |
+| `actions` | Actions | `actions` |
+| `onRelease` | On Released | `actions` |
+| `visible` | Visible | `Boolean` |
+| `interactable` | Interactable | `Boolean` |
+
 ### Component Slot
 
 Marks where content the caller supplies is rendered. Put one in a reusable component and instances of it gain a named slot — in the widget tree, and in the properties panel when a "Widget slot" property names it.
@@ -32,7 +48,7 @@ Marks where content the caller supplies is rendered. Put one in a reusable compo
 
 ### Container
 
-Groups and lays out child widgets in a row or column. Hosts other widgets, and runs its actions when pressed.
+Groups and lays out child widgets in a row or column. Hosts other widgets; a Button Container does the same and runs actions when pressed.
 
 | Property | Label | Type |
 |---|---|---|
@@ -41,7 +57,6 @@ Groups and lays out child widgets in a row or column. Hosts other widgets, and r
 | `overflow` | Overflow | `String` |
 | `background` | Background | `color` |
 | `border` | Border | `String` |
-| `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
