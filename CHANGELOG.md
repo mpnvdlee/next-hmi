@@ -13,6 +13,14 @@ heading.
 
 ### Added
 
+- **Actions on a variable change.** **Global Events** gets a **Variable
+  Changed** list: each trigger names a variable and runs its actions whenever
+  that value changes, and once at start-up. Put an **If** on the same
+  variable around the actions to react to one value, such as opening a dialog
+  when a Boolean goes high. Each open screen runs its triggers itself. MCP
+  clients read and write global events with `global_events_get` and
+  `global_events_set`.
+
 - **A Number Input says why it refuses a value, and acts on a change.** An
   **Out-of-range message** is what the numpad says when the entry falls
   outside min/max, so a limit that depends on another setting can say "Must

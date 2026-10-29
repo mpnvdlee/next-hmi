@@ -186,6 +186,9 @@ dashboard via `POST /api/projects/{id}/mcp` and reported by `projects_list`. A
 - `onUserLoggedIn`
 - `onUserLoggedOut`
 - `onInteractionDenied` (a press on a non-interactable widget)
+- `onVariableChanged` — not an action list but a list of triggers,
+  `{ variable: { $var: … }, actions: [...] }`, each run when its variable's
+  value changes (its first value included)
 
 Index page node — structural only. Saving the index strips everything else, so
 a page's title, icon and the rest of its metadata live in its page document:

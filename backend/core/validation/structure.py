@@ -3408,7 +3408,16 @@ def validate_global_events(events: Any, ctx: ValidationContext) -> ValidationRep
     ctx = replace(ctx, input_scope=False)
     if isinstance(events, dict):
         for event_name, actions in events.items():
-            validate_action_targets(actions, ctx, f"/{event_name}", report)
+            if event_name != "onVariableChanged":
+                validate_action_targets(actions, ctx, f"/{event_name}", report)
+        triggers = events.get("onVariableChanged")
+        for i, trigger in enumerate(triggers if isinstance(triggers, list) else []):
+            if not isinstance(trigger, dict):
+                continue
+            path = f"/onVariableChanged/{i}"
+            if "variable" in trigger:
+                _validate_action_value(trigger["variable"], None, ctx, f"{path}/variable", report)
+            validate_action_targets(trigger.get("actions"), ctx, f"{path}/actions", report)
     return report
 
 

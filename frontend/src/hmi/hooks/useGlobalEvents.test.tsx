@@ -75,3 +75,42 @@ describe('onHmiLoaded', () => {
     expect(toasts()).toEqual(['seeded']);
   });
 });
+
+describe('onVariableChanged', () => {
+  // "Open a popup when the bool goes high": fire on change, gate with an If.
+  const alarm = { $var: { path: 'M:Alarm' } };
+  beforeEach(() => {
+    useConfigStore.setState({
+      globalEvents: {
+        onVariableChanged: [
+          {
+            variable: alarm,
+            actions: [
+              {
+                type: 'if',
+                condition: alarm,
+                then: [{ type: 'showToast', message: 'high', severity: 'info', discard: 'auto' }],
+              },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
+  it('fires on the first value and on every change, not on a repeat', () => {
+    renderHook(() => useGlobalEvents('runtime'), { wrapper });
+    act(() => useVariableStore.setState({ values: { 'M:Alarm': true } }));
+    expect(toasts()).toEqual(['high']);
+
+    act(() => useVariableStore.setState({ values: { 'M:Alarm': true, 'M:Other': 1 } }));
+    act(() => useVariableStore.setState({ values: { 'M:Alarm': false } }));
+    expect(toasts()).toEqual(['high']);
+
+    // A reconnect that drops the value and restores it is no change.
+    act(() => useVariableStore.setState({ values: {} }));
+    act(() => useVariableStore.setState({ values: { 'M:Alarm': false } }));
+    act(() => useVariableStore.setState({ values: { 'M:Alarm': true } }));
+    expect(toasts()).toEqual(['high', 'high']);
+  });
+});

@@ -76,6 +76,7 @@ import { isBuiltinIconId } from '@shared/utils/phosphorIcons';
 import { getEdition } from '@shared/utils/runtimeBase';
 import WidgetIcon from '../../ui/WidgetIcon';
 import ActionsInput from './ActionsInput';
+import VariableTriggersInput from './VariableTriggersInput';
 import PanelDiagnosticsBanner from './PanelDiagnosticsBanner';
 import MultiComponentPanel from './MultiComponentPanel';
 import { classifySelection } from '@config/store/domains/selectionScope';
@@ -1359,7 +1360,9 @@ function SettingsPanel() {
 
 // ── GlobalEventsPanel ─────────────────────────────────────────────────────────
 
-const GLOBAL_EVENT_FIELDS: { eventKey: keyof GlobalEventsConfig; label: string }[] = [
+type GlobalActionEvent = Exclude<keyof GlobalEventsConfig, 'onVariableChanged'>;
+
+const GLOBAL_EVENT_FIELDS: { eventKey: GlobalActionEvent; label: string }[] = [
   { eventKey: 'onUserLoggedIn', label: 'User Logged In' },
   { eventKey: 'onUserLoggedOut', label: 'User Logged Out' },
   { eventKey: 'onPageLoaded', label: 'Page Loaded' },
@@ -1372,7 +1375,7 @@ function GlobalEventsPanel() {
   const globalEvents = useConfigStore((s) => s.globalEvents);
   const updateGlobalEvents = useConfigStore((s) => s.updateGlobalEvents);
 
-  function handleChange(eventKey: keyof GlobalEventsConfig, value: unknown) {
+  function handleChange(eventKey: GlobalActionEvent, value: unknown) {
     const actionsConfig = value as ActionsConfig | undefined;
     updateGlobalEvents({ ...globalEvents, [eventKey]: actionsConfig?.[eventKey] });
   }
@@ -1400,6 +1403,12 @@ function GlobalEventsPanel() {
             />
           </div>
         ))}
+        <VariableTriggersInput
+          value={globalEvents.onVariableChanged}
+          onChange={(onVariableChanged) =>
+            updateGlobalEvents({ ...globalEvents, onVariableChanged })
+          }
+        />
       </div>
     </PanelScopeContext.Provider>
   );

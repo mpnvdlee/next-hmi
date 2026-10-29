@@ -730,6 +730,15 @@ export interface GlobalEventsConfig {
   onLocaleChanged?: ButtonAction[];
   /** A press on a widget whose `interactable` resolves false. */
   onInteractionDenied?: ButtonAction[];
+  /** Each runs its actions whenever its variable's value changes, its first
+   *  value included. */
+  onVariableChanged?: VariableTrigger[];
+}
+
+export interface VariableTrigger {
+  /** Absent until a variable is picked. */
+  variable?: { $var: VariableBinding };
+  actions?: ButtonAction[];
 }
 
 /**
