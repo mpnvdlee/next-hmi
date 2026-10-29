@@ -1406,6 +1406,24 @@ def test_post_validate_global_events_owned_by_the_events_panel(client):
     assert diagnostic["breadcrumb"].startswith("onPageLoaded")
 
 
+def test_post_validate_variable_triggers(client):
+    """A trigger's variable and its nested actions are checked; the trigger list
+    itself is not mistaken for an action list."""
+    draft = {
+        "onVariableChanged": [
+            {
+                "variable": {"$var": {"path": "Missing:Alarm"}},
+                "actions": [{"type": "openPageOverlay", "pageId": "does-not-exist"}],
+            }
+        ]
+    }
+    resp = client.post("/api/config/validate", json={"kind": "globalEvents", "draft": draft})
+    assert resp.status_code == 200
+    paths = {tuple(d["fieldPath"][:4]) for d in resp.json()["diagnostics"]}
+    assert ("onVariableChanged", "0", "variable") in {p[:3] for p in paths}
+    assert ("onVariableChanged", "0", "actions", "0") in paths
+
+
 def test_post_validate_component(client):
     draft = {
         "name": "Bad",
