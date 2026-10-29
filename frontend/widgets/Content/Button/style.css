@@ -25,7 +25,7 @@
 .hmi-button__btn {
   flex: 1;
   /* A fixed tile narrower than the label plus padding keeps its width; without
-     this the button grew past it and its badge sat outside the tile. */
+     this the button grew past it. */
   min-width: 0;
   display: inline-flex;
   align-items: center;
@@ -42,8 +42,6 @@
   letter-spacing: var(--hmi-type-body-tracking);
   text-transform: var(--hmi-btn-transform, none);
   cursor: pointer;
-  /* Anchors the badge; with no offsets of its own it moves nothing. */
-  position: relative;
   transition:
     background var(--hmi-motion-fast) ease,
     border-color var(--hmi-motion-fast) ease,
@@ -127,24 +125,3 @@
   border-color: currentColor;
 }
 
-.hmi-button__badge {
-  position: absolute;
-  top: var(--hmi-space-tight);
-  right: var(--hmi-space-tight);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 1.6em;
-  height: 1.6em;
-  padding: 0 var(--hmi-space-tight);
-  box-sizing: border-box;
-  border-radius: var(--hmi-radius-full);
-  background: var(--hmi-fault);
-  color: var(--hmi-white);
-  font-size: var(--hmi-type-caption-size);
-  font-weight: var(--hmi-type-subheading-weight);
-  letter-spacing: 0;
-  text-transform: none;
-  line-height: 1;
-  pointer-events: none;
-}

@@ -181,23 +181,6 @@ describe('Button', () => {
   });
 
   describe('label styling', () => {
-    it.each([
-      [3, '3'],
-      ['NEW', 'NEW'],
-    ])('shows a badge of %s', (badge, text) => {
-      renderButton({ label: 'Alarms', badge });
-
-      expect(screen.getByRole('button').querySelector('.hmi-button__badge')).toHaveTextContent(
-        text,
-      );
-    });
-
-    it.each([0, '', '  '])('hides the badge for %j', (badge) => {
-      renderButton({ label: 'Alarms', badge });
-
-      expect(screen.getByRole('button').querySelector('.hmi-button__badge')).toBeNull();
-    });
-
     it('emits the text case as a custom property', () => {
       const { container } = renderButton({ label: 'Start', textTransform: 'uppercase' });
       const el = container.firstElementChild as HTMLElement;

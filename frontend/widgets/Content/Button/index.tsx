@@ -7,13 +7,6 @@ export const schema = {
     defaultValue: 'Button',
     group: 'Content',
   },
-  badge: {
-    type: ['string', 'integer'] as const,
-    label: 'Badge',
-    description:
-      'A small chip in the top-right corner, such as an alarm count. Empty or 0 hides it.',
-    group: 'Content',
-  },
   iconName: { type: 'icon' as const, label: 'Icon', group: 'Content' },
   iconPosition: {
     type: 'string' as const,
@@ -130,7 +123,6 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   const fill = getPropString(properties, 'fill', '', evalCtx);
   const borderWidth = getPropNumber(properties, 'borderWidth', NaN, evalCtx);
   const iconSize = getPropNumber(properties, 'iconSize', NaN, evalCtx);
-  const badge = usePropString(properties, 'badge', '').trim();
   const alignStart = usePropString(properties, 'align', 'center') === 'start';
   const uppercase = usePropString(properties, 'textTransform', 'none') === 'uppercase';
   const borderColor = usePropString(properties, 'borderColor', '') || color;
@@ -186,7 +178,6 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
           </span>
         )}
         {!iconOnly && <span className="hmi-button__label">{label}</span>}
-        {badge && badge !== '0' && <span className="hmi-button__badge">{badge}</span>}
       </button>
     </div>
   );

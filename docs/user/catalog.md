@@ -7,6 +7,19 @@ can set. Bind any of them to live data like any other field.
 
 ## Layout & structure
 
+### Badge
+
+Puts a small chip, such as an alarm count, on the top-right corner of the one widget placed inside it.
+
+| Property | Label | Type |
+|---|---|---|
+| `badge` | Badge | `String | Integer` |
+| `color` | Color | `color` |
+| `offset` | Offset (px) | `Integer` |
+| `size` | Size (px) | `Integer` |
+| `visible` | Visible | `Boolean` |
+| `interactable` | Interactable | `Boolean` |
+
 ### Component Slot
 
 Marks where content the caller supplies is rendered. Put one in a reusable component and instances of it gain a named slot — in the widget tree, and in the properties panel when a "Widget slot" property names it.
@@ -134,7 +147,6 @@ Runs actions and can write true to a bound boolean on press.
 | Property | Label | Type |
 |---|---|---|
 | `label` | Label | `String` |
-| `badge` | Badge | `String | Integer` |
 | `iconName` | Icon | `icon` |
 | `iconPosition` | Icon position | `String` |
 | `color` | Color | `color` |

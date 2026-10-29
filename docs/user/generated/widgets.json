@@ -3,6 +3,51 @@
     "category": "Layout & structure",
     "widgets": [
       {
+        "type": "Badge",
+        "name": "Badge",
+        "description": "Puts a small chip, such as an alarm count, on the top-right corner of the one widget placed inside it.",
+        "props": [
+          {
+            "key": "badge",
+            "label": "Badge",
+            "type": "String | Integer",
+            "group": "Content"
+          },
+          {
+            "key": "color",
+            "label": "Color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "offset",
+            "label": "Offset (px)",
+            "type": "Integer",
+            "group": "Appearance"
+          },
+          {
+            "key": "size",
+            "label": "Size (px)",
+            "type": "Integer",
+            "group": "Appearance"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
         "type": "ComponentSlot",
         "name": "Component Slot",
         "description": "Marks where content the caller supplies is rendered. Put one in a reusable component and instances of it gain a named slot — in the widget tree, and in the properties panel when a \"Widget slot\" property names it.",
@@ -434,12 +479,6 @@
             "type": "String",
             "group": "Content",
             "defaultValue": "Button"
-          },
-          {
-            "key": "badge",
-            "label": "Badge",
-            "type": "String | Integer",
-            "group": "Content"
           },
           {
             "key": "iconName",

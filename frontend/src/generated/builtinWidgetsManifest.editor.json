@@ -190,11 +190,6 @@
         "defaultValue": "Button",
         "group": "Content"
       },
-      "badge": {
-        "label": "Badge",
-        "description": "A small chip in the top-right corner, such as an alarm count. Empty or 0 hides it.",
-        "group": "Content"
-      },
       "iconName": {
         "label": "Icon",
         "group": "Content"
@@ -2198,6 +2193,39 @@
         "label": "On color",
         "description": "Replaces the theme accent while the switch is on.",
         "defaultToken": "--hmi-accent",
+        "group": "Appearance"
+      }
+    }
+  },
+  "Layout/Badge": {
+    "description": "Puts a small chip, such as an alarm count, on the top-right corner of the one widget placed inside it.",
+    "icon": {
+      "type": "builtin",
+      "name": "tag"
+    },
+    "schema": {
+      "badge": {
+        "label": "Badge",
+        "description": "A small chip on the top-right corner, such as an alarm count. Empty or 0 hides it.",
+        "group": "Content"
+      },
+      "color": {
+        "label": "Color",
+        "defaultToken": "--hmi-fault",
+        "group": "Appearance"
+      },
+      "offset": {
+        "label": "Offset (px)",
+        "description": "Moves the chip inward from the corner; negative moves it further out. 0 centres it on the corner.",
+        "step": 1,
+        "group": "Appearance"
+      },
+      "size": {
+        "label": "Size (px)",
+        "description": "Text size of the chip; the chip scales with it.",
+        "min": 6,
+        "max": 96,
+        "step": 1,
         "group": "Appearance"
       }
     }
