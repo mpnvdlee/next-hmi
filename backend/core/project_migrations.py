@@ -7,7 +7,7 @@ A project's stamped format version lives at ``config.json``'s
 every project activation (see ``main.py``'s lifespan) because it is a no-op
 once a project is already stamped at ``PROJECT_FORMAT_VERSION``.
 
-``_STEPS`` holds four steps. The first, 4 → 7, rewrites stored layouts into
+``_STEPS`` holds five steps. The first, 4 → 7, rewrites stored layouts into
 the Hug/Fill/Fixed sizing model, retiring the raw flex keys and margin from
 authored projects (see ``core.migration_size_modes``), then collapses the
 `padding` shorthand into the four side keys it overlapped with (see
@@ -25,7 +25,9 @@ into one sourced ``target`` (see ``core.migration_write_targets``). The
 fourth, 9 → 10, rewrites nothing: it marks the fields 1.1.0 added to files a
 1.0.x build parses strictly (alarm ``values``, the theme ``numpad`` and
 ``toasts`` sections), so that build refuses the project instead of parsing
-the alarm files as empty and saving over them.
+the alarm files as empty and saving over them. The fifth, 10 → 11, turns
+every Container with press or release actions into a Button Container (see
+``core.migration_button_container``).
 
 ``PROJECT_FORMAT_VERSION`` only ever counts up, including when steps are
 retired: the number is stamped into user data that travels between builds
@@ -93,6 +95,7 @@ from core.manifest import (
     read_project_metadata,
     write_project_metadata,
 )
+from core.migration_button_container import migrate_button_container
 from core.migration_dialogs_folder import STEP_NAME as DIALOGS_FOLDER_STEP_NAME
 from core.migration_dialogs_folder import migrate_dialogs_folder
 from core.migration_padding import migrate_padding
@@ -103,8 +106,8 @@ from core.project_packer import BACKUPS_SUBDIR, pack_project, safe_filename
 from core.time_utils import iso_now
 from core.version import app_version
 
-PROJECT_FORMAT_VERSION = 10
-# The release that introduced format 10. See the module docstring; bump with it.
+PROJECT_FORMAT_VERSION = 11
+# The release that introduced format 11. See the module docstring; bump with it.
 PROJECT_FORMAT_MIN_APP = "1.1.0"
 
 @dataclass(frozen=True)
@@ -278,6 +281,13 @@ _STEPS: list[MigrationStep] = [
         name="release-1-1-fields",
         targets=(),
         run=_mark_release_1_1_fields,
+    ),
+    MigrationStep(
+        from_version=10,
+        to_version=11,
+        name="pressable-container-to-button-container",
+        targets=("config", "pages", "dialogs", "components"),
+        run=migrate_button_container,
     ),
 ]
 
