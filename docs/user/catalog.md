@@ -142,7 +142,7 @@ Live active alarms, filterable by level, with acknowledgement.
 
 ### Button
 
-Runs actions and can write true to a bound boolean on press.
+Runs actions on press and on release, and can write a bound boolean true on press (and false on release when momentary).
 
 | Property | Label | Type |
 |---|---|---|
@@ -159,7 +159,9 @@ Runs actions and can write true to a bound boolean on press.
 | `textTransform` | Text case | `String` |
 | `iconSize` | Icon size (px) | `Integer` |
 | `variable` | Variable | `Boolean` |
+| `momentary` | Momentary | `Boolean` |
 | `actions` | Actions | `actions` |
+| `onRelease` | On Released | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 

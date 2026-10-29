@@ -310,7 +310,7 @@ describe('ComponentRenderer actions', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Edit' }));
 
     expect(useHmiStore.getState().pendingToasts.map((t) => t.message)).toEqual([
       'Editing Max pressure',

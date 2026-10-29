@@ -178,7 +178,7 @@
     }
   },
   "Content/Button": {
-    "description": "Runs actions and can write true to a bound boolean on press.",
+    "description": "Runs actions on press and on release, and can write a bound boolean true on press (and false on release when momentary).",
     "icon": {
       "type": "builtin",
       "name": "cursor-click"
@@ -304,8 +304,19 @@
         "description": "Optional boolean written true on press.",
         "group": "Data"
       },
+      "momentary": {
+        "format": "onoff",
+        "label": "Momentary",
+        "description": "Writes false to Variable on release, so it is true only while held.",
+        "defaultValue": false,
+        "group": "Data"
+      },
       "actions": {
         "label": "Actions"
+      },
+      "onRelease": {
+        "label": "On Released",
+        "event": "onRelease"
       }
     }
   },

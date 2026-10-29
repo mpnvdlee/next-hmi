@@ -90,9 +90,12 @@ function closeSettings(root: PageRoot, target: PageNode) {
  *  of the overlay stack. */
 function passPressThrough(backdrop: Element, x: number, y: number) {
   const beneath = document.elementsFromPoint(x, y).find((el) => !backdrop.contains(el));
-  beneath?.dispatchEvent(
-    new MouseEvent('click', { bubbles: true, cancelable: true, clientX: x, clientY: y }),
-  );
+  if (!beneath) return;
+  const init = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, pointerId: 1 };
+  // Button and Container act on pointer-down and -up; native controls on click.
+  beneath.dispatchEvent(new PointerEvent('pointerdown', init));
+  beneath.dispatchEvent(new PointerEvent('pointerup', init));
+  beneath.dispatchEvent(new MouseEvent('click', init));
 }
 
 /**

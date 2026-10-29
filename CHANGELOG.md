@@ -207,6 +207,13 @@ heading.
   The chip sits centred on the corner, half outside; **Offset** moves it in or
   further out, and **Color** and **Size** set its look.
 
+- **Buttons act on release too.** A new **On Released** list
+  runs when the press ends — on lifting the finger, on a cancelled touch, or
+  on the key coming back up — and a Button's new **Momentary** switch writes
+  its **Variable** false again then, so it is true only while held, as a jog
+  button needs. Keep a watchdog in the PLC for anything that moves: a release
+  the panel never sees, such as a dropped connection, leaves the value true.
+
 - **A Button sets its alignment and text case.** **Content alignment**
   (center, or start for a menu-style tile) and **Text case** (uppercase). A Label's **Align** is now
   called **Content alignment**, and its new **Text case** follows the
@@ -284,6 +291,11 @@ heading.
   link card had to be handed a whole action list instead.
 
 ### Changed
+
+- **On Pressed runs when the press starts.** A Button's press
+  actions used to run on the click, when the finger lifted; they now run the
+  moment it lands (or the key goes down), so **On Released** has a moment of
+  its own to follow it. A press that slides off the control still runs.
 
 - **A Number Input reads as a value, not a form field.** The number is
   right-aligned in the theme's Value typography, with digit groups (4,920)
