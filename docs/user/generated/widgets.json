@@ -471,7 +471,7 @@
       {
         "type": "Button",
         "name": "Button",
-        "description": "Runs actions and can write true to a bound boolean on press.",
+        "description": "Runs actions on press and on release, and can write a bound boolean true on press (and false on release when momentary).",
         "props": [
           {
             "key": "label",
@@ -557,8 +557,20 @@
             "group": "Data"
           },
           {
+            "key": "momentary",
+            "label": "Momentary",
+            "type": "Boolean",
+            "group": "Data",
+            "defaultValue": false
+          },
+          {
             "key": "actions",
             "label": "Actions",
+            "type": "actions"
+          },
+          {
+            "key": "onRelease",
+            "label": "On Released",
             "type": "actions"
           },
           {

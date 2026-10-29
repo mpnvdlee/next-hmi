@@ -124,4 +124,3 @@
   background: color-mix(in oklch, currentColor 12%, var(--hmi-btn-fill, transparent));
   border-color: currentColor;
 }
-

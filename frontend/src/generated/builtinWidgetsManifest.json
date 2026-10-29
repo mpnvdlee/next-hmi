@@ -82,7 +82,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "2edc7e5cdab67261",
+    "buildTs": "5e46acc42abfd10a",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -128,7 +128,13 @@
       "variable": {
         "type": "boolean"
       },
+      "momentary": {
+        "type": "boolean"
+      },
       "actions": {
+        "type": "actions"
+      },
+      "onRelease": {
         "type": "actions"
       }
     },

@@ -207,6 +207,13 @@ heading.
   The chip sits centred on the corner, half outside; **Offset** moves it in or
   further out, and **Color** and **Size** set its look.
 
+- **Buttons act on release too.** A new **On Released** list
+  runs when the press ends — on lifting the finger, on a cancelled touch, or
+  on the key coming back up — and a Button's new **Momentary** switch writes
+  its **Variable** false again then, so it is true only while held, as a jog
+  button needs. Keep a watchdog in the PLC for anything that moves: a release
+  the panel never sees, such as a dropped connection, leaves the value true.
+
 - **A Container can run actions when it is pressed.** The Container gets the
   Button's **Actions** field. With press actions it becomes one control
   around whatever it holds — a tile, a list row, a header logo: it takes the
@@ -293,6 +300,11 @@ heading.
   link card had to be handed a whole action list instead.
 
 ### Changed
+
+- **On Pressed runs when the press starts.** A Button's press
+  actions used to run on the click, when the finger lifted; they now run the
+  moment it lands (or the key goes down), so **On Released** has a moment of
+  its own to follow it. A press that slides off the control still runs.
 
 - **A Number Input reads as a value, not a form field.** The number is
   right-aligned in the theme's Value typography, with digit groups (4,920)
