@@ -1,36 +1,24 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { CUSTOM_VIEWPORT, storeViewport, storedViewport } from './viewportPresets';
+import { describe, expect, it } from 'vitest';
+import type { EditorViewport } from '@shared/types/config';
+import { CUSTOM_VIEWPORT, viewportFromShell, viewportToShell } from './viewportPresets';
 
-describe('stored viewport', () => {
-  afterEach(() => {
-    window.localStorage.clear();
-    delete window.__NEXTHMI_BASE__;
+describe('editor viewport in the project shell', () => {
+  it('round-trips a preset and a custom size', () => {
+    for (const choice of [
+      { idx: 2, w: 1920, h: 1080 },
+      { idx: CUSTOM_VIEWPORT, w: 1280, h: 800 },
+    ]) {
+      expect(viewportFromShell(viewportToShell(choice))).toEqual(choice);
+    }
+    expect(viewportToShell({ idx: 2, w: 1920, h: 1080 }).preset).toBe('tablet');
   });
 
-  it('round-trips a custom size', () => {
-    storeViewport({ idx: CUSTOM_VIEWPORT, w: 1280, h: 800 });
-    expect(storedViewport()).toEqual({ idx: CUSTOM_VIEWPORT, w: 1280, h: 800 });
+  it('defaults to Fit when the project has none', () => {
+    expect(viewportFromShell(undefined).idx).toBe(0);
   });
 
-  it('clamps an out-of-range size', () => {
-    storeViewport({ idx: CUSTOM_VIEWPORT, w: 5, h: 99999 });
-    expect(storedViewport()).toEqual({ idx: CUSTOM_VIEWPORT, w: 200, h: 7680 });
-  });
-
-  it('falls back to Fit for a corrupt or unknown value', () => {
-    window.localStorage.setItem('cfg-preview:viewport', '{not json');
-    expect(storedViewport().idx).toBe(0);
-    storeViewport({ idx: CUSTOM_VIEWPORT + 1, w: 800, h: 600 });
-    expect(storedViewport().idx).toBe(0);
-  });
-
-  it('keeps a separate viewport per project', () => {
-    window.__NEXTHMI_BASE__ = '/editor/alpha/';
-    storeViewport({ idx: 3, w: 1920, h: 1080 });
-    window.__NEXTHMI_BASE__ = '/editor/beta/';
-    expect(storedViewport().idx).toBe(0);
-    storeViewport({ idx: 1, w: 1920, h: 1080 });
-    window.__NEXTHMI_BASE__ = '/editor/alpha/';
-    expect(storedViewport().idx).toBe(3);
+  it('falls back per field for a hand-edited value', () => {
+    const edited = { preset: 'watch', width: 5, height: 'x' } as unknown as EditorViewport;
+    expect(viewportFromShell(edited)).toEqual({ idx: 0, w: 200, h: 1080 });
   });
 });

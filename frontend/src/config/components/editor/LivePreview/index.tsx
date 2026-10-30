@@ -25,7 +25,13 @@ import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import TabBar from '../TabBar';
 import { PencilSimple, Play, Plus, Minus } from '@phosphor-icons/react';
 import ViewportSelector from '../ViewportSelector';
-import { CUSTOM_VIEWPORT, VIEWPORTS, storeViewport, storedViewport } from '../viewportPresets';
+import {
+  CUSTOM_VIEWPORT,
+  VIEWPORTS,
+  viewportFromShell,
+  viewportToShell,
+  type ViewportChoice,
+} from '../viewportPresets';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { useConfigStore } from '@shared/store/configStore';
 import { useTranslationStore } from '@shared/store/translationStore';
@@ -217,8 +223,14 @@ export default function LivePreview({ pageId }: { pageId: string }) {
   const translationRows = useTranslationStore((s) => s.translations);
   const draftComponents = useComponentStore((s) => s.draftComponents);
   const components = useComponentStore((s) => s.components);
-  const [viewport, setViewport] = useState(storedViewport);
-  useEffect(() => storeViewport(viewport), [viewport]);
+  // Saved in the project (shell.editorViewport), so it travels with the project, not the browser.
+  const savedViewport = useConfigStore((s) => s.shell.editorViewport);
+  const updateShell = useConfigStore((s) => s.updateShell);
+  const viewport = useMemo(() => viewportFromShell(savedViewport), [savedViewport]);
+  const setViewport = useCallback(
+    (choice: ViewportChoice) => updateShell({ editorViewport: viewportToShell(choice) }),
+    [updateShell],
+  );
   const [previewMode, setPreviewMode] = useState<'config' | 'test'>('config');
   const [ctxMenu, setCtxMenu] = useState<{
     x: number;
