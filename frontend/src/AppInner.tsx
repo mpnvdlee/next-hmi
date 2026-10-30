@@ -165,7 +165,8 @@ export default function AppInner() {
       // Lift it over unsaved edits so they can be saved; with none to keep, a
       // reload is the sure way to show what the instance now serves.
       if (useProjectAvailabilityStore.getState().reason) {
-        if (useProjectStore.getState().dirty) useProjectAvailabilityStore.setState({ reason: null });
+        if (useProjectStore.getState().dirty)
+          useProjectAvailabilityStore.setState({ reason: null });
         else window.location.reload();
       }
     });

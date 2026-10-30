@@ -59,10 +59,9 @@ heading.
 
 - **The numpad and keyboard show icons, not English words.** Back, Clear,
   Enter, Shift, Caps Lock, Tab and Space are icons, and an entry outside the
-  bounds turns the `Min: 80 · Max: 200` line into a red warning. *Min*,
-  *Max* and the names a screen reader announces for the keys are dictionary
-  keys, English as on any screen, so a project translates them by adding
-  those rows.
+  bounds turns the `Min: 80 · Max: 200` line into a red warning. *Min* and
+  *Max* are dictionary keys, English as on any screen, so a project
+  translates them by adding those rows.
 
 - **A shell region can float over the page.** A new **Floating** setting on
   the header, footer and both sidebars lays the region over the page instead
@@ -76,6 +75,7 @@ heading.
   now names the type it produces (`Any`, `Boolean`, `Float, Integer`, …). A
   **Show all** checkbox lists the sources the field does not take as well,
   greyed out and marked *Not available on this field*; they cannot be picked.
+
 - **A Linux zip and an offline Docker installer in every release.** Next to the
   Windows and macOS zips, a release now carries `nexthmi-community-linux-x64-<version>.zip`
   and, per architecture, `nexthmi-community-docker-linux-<arch>-<version>.zip`: the image
@@ -288,8 +288,7 @@ heading.
   not **Interactable** already ignored a press, but **Tab** still reached
   the Button or field underneath, and **Enter** or **Space** fired it,
   so a keyboard got past a lock that guards a setpoint. A locked widget
-  now takes no focus and no keys, and a screen reader announces it as
-  unavailable under its own name. Unlocked widgets behave as before.
+  now takes no focus and no keys. Unlocked widgets behave as before.
 
 - **`Round3` and `Round4` in text templates.** Next to `Round1` and
   `Round2`, a String Expression and alarm text can show a value with three
@@ -328,11 +327,6 @@ heading.
   right-aligned in the theme's Value typography, with digit groups (4,920)
   and a typographic minus, on a raised surface with the unit inside it. While
   the numpad is open the field shows the entry as typed.
-
-- **A widget's Name is what a screen reader announces.** An icon-only
-  **Button**, a pressable **Container** and the **Menu Toggle** use the
-  **Name** under **Identity** as their accessible name. The Menu Toggle's
-  **Aria label** property is gone.
 
 - **Every download names its edition.** The public zips are now
   `nexthmi-community-<os>-<arch>-<version>.zip` and
@@ -436,8 +430,7 @@ heading.
 - **A disabled tag can no longer be bound.** **Show all** in the variable
   picker listed disabled tags and let one be confirmed. The binding then showed
   a value in the editor while the warnings pill called it *unknown variable*.
-  A disabled tag is now marked ✗ with *Disabled in its datasource*, and
-  Confirm, double-click and Enter all refuse it.
+  A disabled tag is now left out of the picker, **Show all** included.
 
 - **A Gauge and a Trend take an Integer tag.** Their **Value** took only a
   `Float` variable, so a PLC counter (an S7 `Int` or `DInt`, a CODESYS `INT`)
@@ -459,6 +452,12 @@ heading.
   formula there that is not rounded.
 
 ### Removed
+
+- **Screen-reader names.** The app and the built-in widgets no longer set
+  `aria-label`, `aria-labelledby` or `aria-live`; roles and state attributes
+  such as `aria-pressed` stay. The Menu Toggle's **Aria label** property is
+  gone. A custom widget gets its node's **Name** under **Identity** as the
+  `name` prop.
 
 - **The User Badge.** Opening a project upgrades each one to built-in widgets
   that show the same: a Container holding a user Icon, the username and groups

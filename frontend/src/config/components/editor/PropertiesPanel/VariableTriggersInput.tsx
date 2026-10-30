@@ -63,8 +63,8 @@ export default function VariableTriggersInput({ value = [], onChange }: Props) {
         <AddButton title="Add variable trigger" onClick={addTrigger} />
       </div>
       <p className="cfg-field-group__desc">
-        Runs the actions when the variable&apos;s value changes, and once at start-up. Use an If
-        to act on one value only.
+        Runs the actions when the variable&apos;s value changes, and once at start-up. Use an If to
+        act on one value only.
       </p>
       {value.length === 0 && <div className="cfg-prop-hint">No variable triggers yet</div>}
       {value.map((trigger, idx) => (
@@ -73,9 +73,7 @@ export default function VariableTriggersInput({ value = [], onChange }: Props) {
           trigger={trigger}
           idx={idx}
           onPick={() => pickInto(idx)}
-          onUpdate={(patch) =>
-            onChange(value.map((t, i) => (i === idx ? { ...t, ...patch } : t)))
-          }
+          onUpdate={(patch) => onChange(value.map((t, i) => (i === idx ? { ...t, ...patch } : t)))}
           onRemove={() => onChange(value.filter((_, i) => i !== idx))}
         />
       ))}
