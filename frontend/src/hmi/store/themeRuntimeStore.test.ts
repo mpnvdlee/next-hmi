@@ -1,5 +1,6 @@
 import { useThemeRuntimeStore } from './themeRuntimeStore';
 import {
+  DEFAULT_THEME,
   applyThemeById,
   loadAndApplyThemeTokens,
   setLoadedThemes,
@@ -66,6 +67,8 @@ function theme(accent: string): ThemeConfig {
       radius_lg: '8px',
       shadow: 'none',
     },
+    numpad: DEFAULT_THEME.numpad,
+    toasts: DEFAULT_THEME.toasts,
   };
 }
 

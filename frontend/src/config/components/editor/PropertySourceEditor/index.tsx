@@ -13,6 +13,7 @@ import {
   LanguagesEditor,
   LocEditor,
   PageEditor,
+  OverlayEditor,
   PageIsActiveEditor,
   RandomEditor,
   RecipeEditor,
@@ -26,7 +27,13 @@ import {
   VarEditor,
   ViewportEditor,
 } from './editors/leaf';
-import { CompareEditor, IfEditor, NotEditor, SwitchEditor } from './editors/conditional';
+import {
+  CompareEditor,
+  ConditionListEditor,
+  IfEditor,
+  NotEditor,
+  SwitchEditor,
+} from './editors/conditional';
 import { WidgetPropEditor, ComponentPropEditor } from './editors/picker';
 import { StringExprEditor } from './editors/stringExpr';
 import { FormulaEditor } from './editors/formula';
@@ -70,12 +77,20 @@ type SourceEditorRenderer = (props: {
 const SOURCE_EDITORS: Record<PropertySource, SourceEditorRenderer> = {
   static: ({ staticEditor }) =>
     staticEditor ? <div className="cfg-property-source-editor__static">{staticEditor}</div> : null,
-  $var: ({ value, onChange, onOpenBindingPicker }) => (
-    <VarEditor value={value} onChange={onChange} onOpenBindingPicker={onOpenBindingPicker} />
+  $var: ({ value, onChange, fieldType, onOpenBindingPicker }) => (
+    <VarEditor
+      value={value}
+      onChange={onChange}
+      fieldType={fieldType}
+      onOpenBindingPicker={onOpenBindingPicker}
+    />
   ),
-  $loc: ({ value, onChange }) => <LocEditor value={value} onChange={onChange} />,
+  $loc: ({ value, onChange, onOpenBindingPicker }) => (
+    <LocEditor value={value} onChange={onChange} onOpenBindingPicker={onOpenBindingPicker} />
+  ),
   $urlParam: ({ value, onChange }) => <UrlParamEditor value={value} onChange={onChange} />,
   $pageIsActive: ({ value, onChange }) => <PageIsActiveEditor value={value} onChange={onChange} />,
+  $overlay: ({ value, onChange }) => <OverlayEditor value={value} onChange={onChange} />,
   $if: ({ value, onChange, schema, onOpenBindingPicker }) => (
     <IfEditor
       value={value}
@@ -89,6 +104,22 @@ const SOURCE_EDITORS: Record<PropertySource, SourceEditorRenderer> = {
   ),
   $not: ({ value, onChange, onOpenBindingPicker }) => (
     <NotEditor value={value} onChange={onChange} onOpenBindingPicker={onOpenBindingPicker} />
+  ),
+  $and: ({ value, onChange, onOpenBindingPicker }) => (
+    <ConditionListEditor
+      op="$and"
+      value={value}
+      onChange={onChange}
+      onOpenBindingPicker={onOpenBindingPicker}
+    />
+  ),
+  $or: ({ value, onChange, onOpenBindingPicker }) => (
+    <ConditionListEditor
+      op="$or"
+      value={value}
+      onChange={onChange}
+      onOpenBindingPicker={onOpenBindingPicker}
+    />
   ),
   $formula: ({ value, onChange, onOpenBindingPicker }) => (
     <FormulaEditor value={value} onChange={onChange} onOpenBindingPicker={onOpenBindingPicker} />

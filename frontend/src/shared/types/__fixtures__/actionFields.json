@@ -17,6 +17,7 @@
     "height": "Integer"
   },
   "closePageOverlay": { "pageId": "page" },
+  "navigateToPage": { "pageId": "page" },
   "writeDataVariable": {
     "target": "target",
     "value": "writeValue",
@@ -27,6 +28,19 @@
   "if": { "condition": "Boolean", "then": "actions", "else": "actions" },
   "toggleDataVariable": {
     "target": "target",
+    "onSuccess": "actions",
+    "onFailed": "actions",
+    "onSettled": "actions"
+  },
+  "editValue": {
+    "target": "target",
+    "title": "String",
+    "unit": "String",
+    "min": "Float",
+    "max": "Float",
+    "decimals": "Integer",
+    "allowNegative": "Boolean",
+    "position": "String",
     "onSuccess": "actions",
     "onFailed": "actions",
     "onSettled": "actions"
@@ -52,6 +66,9 @@
     "onFailed": "actions",
     "onSettled": "actions"
   },
+  "acknowledgeAllAlarms": {},
+  "runComponentActions": { "property": "actionsProperty" },
+  "delay": { "duration": "Integer" },
   "setLanguage": { "language": "String" },
   "setActiveTheme": { "theme": "String" },
   "showAlert": {

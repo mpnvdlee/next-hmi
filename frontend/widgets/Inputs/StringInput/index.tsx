@@ -3,7 +3,36 @@ export const schema = {
   label: { type: 'string' as const, label: 'Label', group: 'Content' },
   placeholder: { type: 'string' as const, label: 'Placeholder', group: 'Content' },
   isPassword: { type: 'boolean' as const, label: 'Password field', group: 'Appearance' },
+  keyboard: {
+    type: 'string' as const,
+    format: 'select' as const,
+    label: 'Keyboard',
+    description:
+      'Numeric opens the numpad instead, for digits only — a PIN or a code. Keypad draws that numpad in the field itself, so a PIN dialog is one panel.',
+    display: 'button-text' as const,
+    group: 'Appearance',
+    defaultValue: 'text',
+    options: [
+      { label: 'Text', value: 'text' },
+      { label: 'Numeric', value: 'numeric' },
+      { label: 'Keypad', value: 'keypad' },
+    ],
+  },
+  autoFocus: {
+    type: 'boolean' as const,
+    label: 'Focus when shown',
+    description:
+      'Opens the keyboard or numpad as soon as the field appears, as a PIN dialog wants.',
+    group: 'Appearance',
+  },
   disabled: { type: 'boolean' as const, label: 'Disabled', group: 'Appearance' },
+  onSubmit: {
+    type: 'actions' as const,
+    label: 'On Submit',
+    description: 'Runs on Enter, on the numpad or a physical keyboard.',
+    group: 'Actions',
+    event: 'onSubmit',
+  },
 };
 
 export const exportedProperties: ExportedProperty[] = [
@@ -18,6 +47,8 @@ export const icon = { type: 'builtin', name: 'text-t' } as const;
 
 export default function StringInput({ id, properties, layout }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
+  const scope = useHmiScope();
+  const isPreview = useIsPreview();
   const [value, setValue] = useState<string>('');
   const [showPassword, setShowPassword] = useState(false);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
@@ -28,8 +59,55 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
   const placeholder = getPropString(properties, 'placeholder', '', evalCtx);
   const isPassword = getPropBoolean(properties, 'isPassword', false, evalCtx);
   const disabled = getPropBoolean(properties, 'disabled', false, evalCtx);
+  const keyboard = usePropString(properties, 'keyboard', 'text');
+  const numeric = keyboard === 'numeric';
+  const autoFocus = usePropBoolean(properties, 'autoFocus', false);
 
   usePublishWidgetProp(id, 'value', value);
+
+  // Focus opens the keyboard or numpad. Not in the editor canvas, where it
+  // would pop up over the page being edited.
+  useEffect(() => {
+    if (autoFocus && !isPreview) inputRef.current?.focus();
+  }, [autoFocus, isPreview]);
+
+  const submit = () => {
+    setIsKeyboardOpen(false);
+    const actions = (properties?.onSubmit as ActionsConfig | undefined)?.onSubmit;
+    executeWidgetActions(actions, { scope, evalCtx, anchorEl: wrapperRef.current });
+  };
+
+  if (keyboard === 'keypad') {
+    // The numpad is the field: always shown, Enter submits, and the entry is
+    // only masked, never revealed, since there is no field to put an eye on.
+    return (
+      <div
+        className={`hmi-component hmi-string-input${disabled ? ' hmi-string-input--disabled' : ''}`}
+        style={selfLayoutStyle(layout)}
+        ref={wrapperRef}
+      >
+        <VirtualNumpad
+          inline
+          isOpen
+          value={value}
+          onChange={setValue}
+          // Actions read the entry as they start, so clearing it straight after
+          // leaves a fresh keypad for the next try, as a PIN pad does.
+          onApply={() => {
+            submit();
+            setValue('');
+          }}
+          onCancel={() => setValue('')}
+          title={label || undefined}
+          currentValue={placeholder || undefined}
+          decimals={0}
+          allowNegative={false}
+          password={isPassword}
+          autoFocus={autoFocus && !isPreview}
+        />
+      </div>
+    );
+  }
 
   // Masked through CSS on a plain text field rather than `type="password"`:
   // that attribute is the only thing a browser keychain keys off, and every one
@@ -46,6 +124,12 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
   const inputType = masked && !maskedByCss ? 'password' : 'text';
   const PasswordVisibilityIcon = getBuiltinIconComponent(showPassword ? 'eye-slash' : 'eye');
 
+  // A tap opens it too: the field keeps focus after ×, so focus alone would
+  // not fire again.
+  const openKeyboard = () => {
+    if (!disabled) setIsKeyboardOpen(true);
+  };
+
   return (
     <div
       className={`hmi-component hmi-string-input${disabled ? ' hmi-string-input--disabled' : ''}`}
@@ -61,6 +145,8 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
           value={value}
           placeholder={placeholder}
           disabled={disabled}
+          // The numpad takes the focus and every key, as on a Number Input.
+          readOnly={numeric}
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"
@@ -68,13 +154,12 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
           data-1p-ignore=""
           data-lpignore="true"
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
-          onFocus={() => {
-            if (!disabled) setIsKeyboardOpen(true);
-          }}
+          onFocus={openKeyboard}
+          onClick={openKeyboard}
           onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
             if (e.key === 'Enter') {
-              setIsKeyboardOpen(false);
               e.currentTarget.blur();
+              submit();
             }
           }}
         />
@@ -82,7 +167,6 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
           <button
             type="button"
             className="hmi-string-input__eye-btn"
-            aria-label={showPassword ? 'Hide password' : 'Show password'}
             onClick={() => setShowPassword((v: boolean) => !v)}
             tabIndex={-1}
           >
@@ -96,18 +180,35 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
           </button>
         )}
       </div>
-      <VirtualKeyboard
-        isOpen={isKeyboardOpen}
-        value={value}
-        onChange={(v: string) => {
-          setValue(v);
-          inputRef.current?.focus();
-        }}
-        onClose={() => setIsKeyboardOpen(false)}
-        anchorRef={wrapperRef}
-        title={label || undefined}
-        password={masked}
-      />
+      {numeric ? (
+        <VirtualNumpad
+          isOpen={isKeyboardOpen}
+          value={value}
+          onChange={setValue}
+          onApply={submit}
+          onCancel={() => setIsKeyboardOpen(false)}
+          anchorRef={wrapperRef}
+          title={label || undefined}
+          // Centred like Edit Value's, over the dialog a PIN field sits in.
+          dockPosition="center"
+          decimals={0}
+          allowNegative={false}
+          password={masked}
+        />
+      ) : (
+        <VirtualKeyboard
+          isOpen={isKeyboardOpen}
+          value={value}
+          onChange={(v: string) => {
+            setValue(v);
+            inputRef.current?.focus();
+          }}
+          onClose={() => setIsKeyboardOpen(false)}
+          anchorRef={wrapperRef}
+          title={label || undefined}
+          password={masked}
+        />
+      )}
     </div>
   );
 }

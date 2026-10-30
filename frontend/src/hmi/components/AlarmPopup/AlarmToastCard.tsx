@@ -19,6 +19,8 @@ interface AlarmToastCardProps {
   onDismiss?: (e: React.MouseEvent) => void;
   /** Renders the controls inert — for the alarm editor's preview of this card. */
   disabled?: boolean;
+  /** False for an alarm with nothing left to acknowledge: no ACK button. */
+  ackable?: boolean;
 }
 
 /**
@@ -34,6 +36,7 @@ export default function AlarmToastCard({
   onAck,
   onDismiss,
   disabled = false,
+  ackable = true,
 }: AlarmToastCardProps) {
   return (
     <div
@@ -49,15 +52,12 @@ export default function AlarmToastCard({
         <div className={styles.popupTitle}>{code ? `[${code}] ${title}` : title}</div>
         <div className={styles.popupMeta}>{level}</div>
       </div>
-      <button className={styles.ackBtn} onClick={onAck} disabled={disabled}>
-        ACK
-      </button>
-      <CloseButton
-        className="hmi-toast__close"
-        onClick={onDismiss}
-        disabled={disabled}
-        label={disabled ? 'Close alarm preview' : 'Dismiss alarm'}
-      />
+      {ackable && (
+        <button className={styles.ackBtn} onClick={onAck} disabled={disabled}>
+          ACK
+        </button>
+      )}
+      <CloseButton className="hmi-toast__close" onClick={onDismiss} disabled={disabled} />
     </div>
   );
 }

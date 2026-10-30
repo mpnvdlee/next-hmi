@@ -308,7 +308,16 @@ resolved *page* — never a group id — that is hydrated, sent in `set_context`
 and waited on by the settle gate.
 
 A press on the backdrop closes the top-most overlay, unless its node — a
-Dialogs-folder page or group — sets `closeOnBackgroundPress: false`.
+Dialogs-folder page or group — sets `closeOnBackgroundPress: false`. When no
+overlay dims (backdrop `none`) and the node leaves `tapThrough` on, `ModalStack`
+then re-dispatches the click to the topmost element under that point outside the
+stack (`document.elementsFromPoint`), so the next hotspot opens in the same tap.
+`openPageOverlay` on the `pageId` already on top replaces that entry — new
+inputs, new anchor — instead of being refused; lower in the stack it is refused.
+
+A node with `showModalHeader: false` — from either root — renders its card
+without the `hmi-modal__header` bar, so without the title and the close button
+too. The flag is read on the node the action named, like the close settings.
 
 ## Component Registry
 
@@ -325,7 +334,9 @@ project's custom widgets and reusable components on top. A widget that renders
 other widgets itself — `NavigationMenu` (a page-tree menu with a footer slot),
 `ImageContainer` (children placed absolutely over a background image),
 `Repeater` (its children drawn once per array element, each copy in a
-`RepeatScope`) and `ComponentSlot` (the component system's own machinery) — is
+`RepeatScope`; with `placement: "items"` each copy is its own box at the
+element's `x` / `y`, and an `ImageContainer` gives such a Repeater the whole
+image instead of a point) and `ComponentSlot` (the component system's own machinery) — is
 authored against
 the SDK's [composition primitives](../reference/custom-widgets.md#composition)
 like any other built-in widget. Like any built-in widget it arrives as a lazy
@@ -531,9 +542,9 @@ Editor implementation:
 
 Runtime implementation:
 
-- `frontend/src/hmi/utils/propertySourceEval.ts` evaluates the scalar property sources through one `SOURCE_HANDLERS` map (`$static`, `$var`, `$loc`, `$urlParam`, `$pageIsActive`, `$if`, `$compare`, `$not`, `$formula`, `$random`, `$switch`, `$user`, `$userGroups`, `$device`, `$time`, `$widgetProp`, `$componentProp`, `$repeatItem`, `$result`, `$stringExpr`, `$http`, `$alarmCount`, `$recipe`, `$page`, `$viewport`); the list-valued `$languages` and `$recipeList` are resolved on the list paths (`useItemListProp`, `useRecordListProp`, the Dropdown's options) instead; icon and image values are plain `$static` payloads (`{ type, name }` / `{ path }`) resolved by the `$static` handler
-- `$result` is only meaningful inside async-action result handlers (`onSuccess` / `onFailed` / `onSettled` on `loginUser`, `logoutUser`, `writeDataVariable`, `toggleDataVariable`, `recipeLoad`, `recipeSave`); `{ $result: 'field' }` reads the named field off the response payload (e.g. `reason`, `username`); outside that context, or for an unknown field, it resolves to `null`
-- `$stringExpr` parses `{N}` placeholders inside a template, where `N` is a wildcard key. Placeholders may wrap the wildcard with chained transforms — `ToLower`, `ToUpper`, `Trim`, `Capitalize`, `Round`, `Round1`, `Round2` — applied inside-out
+- `frontend/src/hmi/utils/propertySourceEval.ts` evaluates the scalar property sources through one `SOURCE_HANDLERS` map (`$static`, `$var`, `$loc`, `$urlParam`, `$pageIsActive`, `$if`, `$compare`, `$not`, `$and`, `$or`, `$formula`, `$random`, `$switch`, `$user`, `$userGroups`, `$device`, `$time`, `$widgetProp`, `$componentProp`, `$overlay`, `$repeatItem`, `$result`, `$stringExpr`, `$http`, `$alarmCount`, `$recipe`, `$page`, `$viewport`); the list-valued `$languages` and `$recipeList` are resolved on the list paths (`useItemListProp`, `useRecordListProp`, the Dropdown's options) instead; icon and image values are plain `$static` payloads (`{ type, name }` / `{ path }`) resolved by the `$static` handler
+- `$result` is only meaningful inside async-action result handlers (`onSuccess` / `onFailed` / `onSettled` on `loginUser`, `logoutUser`, `writeDataVariable`, `toggleDataVariable`, `editValue`, `recipeLoad`, `recipeSave`); `{ $result: 'field' }` reads the named field off the response payload (e.g. `reason`, `username`); outside that context, or for an unknown field, it resolves to `null`
+- `$stringExpr` parses `{N}` placeholders inside a template, where `N` is a wildcard key. Placeholders may wrap the wildcard with chained transforms — `ToLower`, `ToUpper`, `Trim`, `Capitalize`, `Round`, `Round1` … `Round4`, `Thousands`, `Signed` — applied inside-out
 - `$user` with `field: 'userList'` is list-valued: an `option-list` or `item-list` field resolves it to the project's users, while a scalar field gets the usernames joined. On an `option-list`, `field: 'groups'` lists every user group (the Dropdown resolves both itself); elsewhere it is the signed-in user's groups. `$languages` is likewise resolved by the widget
 - `$widgetProp` reads another widget's export from `widgetPropStore` through the eval context's `resolveComponentProp` (keyed by the exporting widget's id, and per copy inside a Repeater); `path` drills into a struct or array export
 - bad-quality and disconnected `$var` reads resolve to the field's fallback (not a crash); coercion between mismatched base types follows the rules in [value-types.md](value-types.md) (`frontend/src/hmi/utils/coercion.ts`)
@@ -542,9 +553,11 @@ Runtime implementation:
 - `nodeVarType` and the array-shape helpers in `frontend/src/shared/types/` derive array types from `is_array`; an optional positive `array_length` records only a fixed size.
 - `layoutUtils` getters (`getPropString`, `getPropNumber`, `getPropBoolean`) accept an optional `EvaluationContext` to resolve property sources at render time
 - `layoutUtils` hooks (`usePropVar`, `usePropString`, `usePropNumber`, `usePropBoolean`, `usePropStruct`, `useCssVar`) call `useEvalContext()` internally and simplify the most common per-component patterns; `usePropVar`, `usePropString`, `usePropNumber` and `usePropBoolean` also subscribe to a `$var` binding's live value themselves, through `useBindingValue` — and only when the property holds one: an unbound property registers no variable-store listener (`useSyncExternalStore` with a no-op subscribe, as `useLiveScalars` does for a widget with no `$var`), so a widget's static properties cost nothing on a variable tick. Prefer these over the plain getters inside component render functions
-- `frontend/src/hmi/utils/widgetActions.ts` centralizes action execution so components define actions and delegate runtime behavior to one executor; supported action types (`ButtonAction` in `shared/types/config.ts`): `openDialog`, `openPageOverlay`, `closePageOverlay`, `writeDataVariable`, `toggleDataVariable`, `if`, `setLanguage`, `setActiveTheme`, `loginUser`, `logoutUser`, `recipeLoad`, `recipeSave`, `showAlert`, `showToast`; `ActionsConfig` supports both `onPress` and `onChange` event keys; schema fields of type `actions` carry an optional `event` string to indicate which key is used
-- `loginUser`, `logoutUser`, `writeDataVariable`, `toggleDataVariable`, `recipeLoad` and `recipeSave` are async — each generates a `requestId` per invocation, registers a pending entry with `frontend/src/hmi/utils/actionDispatcher.ts`, and the backend echoes the `requestId` on its response. On response, the dispatcher invokes the authored `onSuccess` or `onFailed` followed by `onSettled`, replaying the original firing site's `inputScopeProps` so nested `$widgetProp` references still resolve. Pending entries expire after 10 s as `reason: 'timeout'`, and flush as `reason: 'disconnected'` when the WebSocket closes (`useWebSocket.ts` → `flushAllAsDisconnected`). The outer action list is still fire-and-forget — sequencing across an async action must use its `onSuccess` slot, not list ordering
-- `frontend/src/hmi/hooks/useGlobalEvents.ts` runs the configured `globalEvents` action arrays on app/page/locale/auth lifecycle (`onHmiLoaded`, `onPageLoaded`, `onLocaleChanged`, `onUserLoggedIn`, `onUserLoggedOut`)
+- `frontend/src/hmi/utils/widgetActions.ts` centralizes action execution so components define actions and delegate runtime behavior to one executor; supported action types (`ButtonAction` in `shared/types/config.ts`): `openDialog`, `openPageOverlay`, `closePageOverlay`, `navigateToPage`, `writeDataVariable`, `toggleDataVariable`, `editValue`, `if`, `setLanguage`, `setActiveTheme`, `loginUser`, `logoutUser`, `recipeLoad`, `recipeSave`, `acknowledgeAllAlarms`, `delay`, `showAlert`, `showToast`; `ActionsConfig` supports both `onPress` and `onChange` event keys; schema fields of type `actions` carry an optional `event` string to indicate which key is used
+- `navigateToPage` resolves `pageId`, and when it names a node of the `pages` root calls `hmiStore.navigateToPage`, which empties `openPageOverlays` and sets `pendingNavigation`; `ActionNavigation` (mounted in `HmiView` and `PreviewView` beside `AlertModal`) routes there through `useNavigateToPage`, the hook the navigation widgets use, so the route-driven page events fire as for a menu press
+- `editValue` sets `hmiStore.numpadRequest`; `EditValueNumpad` (mounted in `HmiView` beside `AlertModal`) renders the shared `VirtualNumpad` for it and sends the `write_field` on Apply, passing `{ value, previous }` to `beginAsyncAction` so the handlers' `$result` carries both. Cancel clears the request without registering anything
+- `loginUser`, `logoutUser`, `writeDataVariable`, `toggleDataVariable`, `editValue`, `recipeLoad` and `recipeSave` are async — each generates a `requestId` per invocation, registers a pending entry with `frontend/src/hmi/utils/actionDispatcher.ts`, and the backend echoes the `requestId` on its response. On response, the dispatcher invokes the authored `onSuccess` or `onFailed` followed by `onSettled`, replaying the original firing site's `inputScopeProps` so nested `$widgetProp` references still resolve. Pending entries expire after 10 s as `reason: 'timeout'`, and flush as `reason: 'disconnected'` when the WebSocket closes (`useWebSocket.ts` → `flushAllAsDisconnected`). The outer action list is still fire-and-forget — sequencing across an async action must use its `onSuccess` slot, not list ordering
+- `frontend/src/hmi/hooks/useGlobalEvents.ts` runs the configured `globalEvents` action arrays on app/page/locale/auth lifecycle (`onHmiLoaded`, `onPageLoaded`, `onLocaleChanged`, `onUserLoggedIn`, `onUserLoggedOut`). `onHmiLoaded` and the first `onPageLoaded` wait for the first `context_ready` (or `NO_DATA_GRACE_MS`); `HmiView` adds the `$var` keys of `onHmiLoaded` to the `set_context` priority keys, so that ack covers the values its actions read
 
 ## Runtime Views
 
@@ -555,6 +568,12 @@ Runtime implementation:
 - loads config and translations
 - renders the shell regions (header, sidebars, footer), the page body and the open overlays
 - sends visible binding keys to the backend
+
+Both views draw each widget inside a `display: contents`
+`<div class="hmi-preview-node" data-widget-id="…" data-widget-type="…">` from
+`WidgetRenderer`, so a test or script can find a runtime widget by its node id
+(`[data-widget-id="pump-start"]`). Ids are unique per tree, not per screen: a
+component definition's widgets and every Repeater copy carry their own tree's ids.
 
 ### PreviewView
 
@@ -600,8 +619,9 @@ conventions is restated here, so the two cannot drift apart.
 
 ## Runtime SDK For Custom Components
 
-`frontend/src/nextHmiSdk.ts` builds `window.__nextHMI__` (installed at boot by
-`main.tsx`) so compiled custom components can reuse the app's React instance and
+`frontend/src/nextHmiSdk.ts` builds `window.__nextHMI__` (installed by
+`App.tsx` as the lazy `AppInner` loads, so the manager dashboard, which renders
+no widgets, never loads it or the HMI runtime it reaches) so compiled custom components can reuse the app's React instance and
 helper functions instead of importing app modules. The canonical name list and every hook signature are
 documented in [../reference/custom-widgets.md](../reference/custom-widgets.md)
 (source of truth: `frontend/src/shared/utils/nextHmiSdkNames.ts` and

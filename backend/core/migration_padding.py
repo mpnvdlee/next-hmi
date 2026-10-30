@@ -21,23 +21,17 @@ like `padding-top` cannot itself take a multi-value string, so a 2- or 3-value
 shorthand copied whole would silently go invalid (the CSSOM refuses the
 assignment outright) on every side.
 
-A `$switch` of literal shorthands is just as readable as a literal one — every
-branch is in the file — so it is rewritten branch-by-branch into four
-`$switch`es of sides (`_switch_sides`), the same way `_mode_switch` in
-`migration_size_modes.py` rewrites a `$switch` of lengths into a `$switch` of
-modes. A bare `$var`, a `$switch` with a branch this step cannot read as a
-literal string, any other property source (`$if` included — it declares the
-same `any` result type a shorthand does, so it is authorable here too, just
-not branch-splittable by this step), or a literal string this step's own
-space-split parse cannot make sense of (a value with a space inside a function
-call, `calc(8px + 2px) 4px`) is treated as unreadable: nothing safely says what
-each side should get, so it is not parsed, and copying it onto every side
-verbatim — as an earlier version of this step did — carries the same risk a
-multi-value literal does, except silent, since nothing here can rule out a
-multi-value result at the far end of the binding. That case is dropped and
-reported, same as the size-mode half reports the flex keys it cannot express under
-a mode: a key with no row is a key the panel can no longer show, edit or
-revert, so it does not get to linger.
+A `$switch` of literal shorthands is just as readable — every branch is in the
+file — so it is rewritten branch-by-branch into four `$switch`es of sides
+(`_switch_sides`), the way `_mode_switch` in `migration_size_modes.py` turns a
+`$switch` of lengths into one of modes.
+
+Anything else is unreadable: a bare `$var`, a `$switch` with a non-literal
+branch, any other property source (`$if` included), or a literal the
+space-split parse cannot make sense of (`calc(8px + 2px) 4px`). Copying it onto
+every side verbatim could silently produce an invalid multi-value longhand, so
+it is dropped and reported, like the flex keys the size-mode half cannot
+express: a key with no row is one the panel can no longer show, edit or revert.
 """
 
 from __future__ import annotations

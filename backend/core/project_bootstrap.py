@@ -23,6 +23,7 @@ from core.manifest import (
     ensure_project_metadata,
     find_project,
     manifest_transaction,
+    read_project_metadata,
     save_manifest,
     write_project_metadata,
 )
@@ -116,7 +117,8 @@ def ensure_default_project() -> ProjectEntry:
     else:
         logger.info("Bootstrap: reusing existing project at %s", target)
 
-    metadata = ensure_project_metadata(target, name=name)
+    # A reused project keeps the name its owner gave it; only a new one is called "Default".
+    metadata = read_project_metadata(target) or ensure_project_metadata(target, name=name)
     if freshly_seeded:
         # project-seed/ is already canonical, so stamp it here. A reused
         # pre-existing target (dev's project-testbench/ from a prior boot) is
@@ -132,7 +134,7 @@ def ensure_default_project() -> ProjectEntry:
         if entry is None:
             entry = ProjectEntry(
                 id=metadata.id,
-                name=name,
+                name=metadata.name or name,
                 path=str(target),
                 addedAt=iso_now(),
                 lastOpenedAt=iso_now(),

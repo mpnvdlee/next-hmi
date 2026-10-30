@@ -19,7 +19,7 @@ export default function Spinner({ size = 'md', variant = 'hmi', className = '' }
   ]
     .filter(Boolean)
     .join(' ');
-  return <div className={cls} role="status" aria-label="Loading" />;
+  return <div className={cls} role="status" />;
 }
 
 /** Spinner centred in the full viewport — for top-level route fallbacks. */

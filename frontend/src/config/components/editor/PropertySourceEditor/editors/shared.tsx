@@ -23,7 +23,7 @@ import type { PropertySource } from '../../propertyValueUtils';
 import { isRecord } from '@shared/types/propertyValueGuards';
 import PropertySourceEditor from '..';
 import { ParentPathContext, useParentPath, withSegs } from '../parentPathContext';
-import { SlotContext, useSlotType } from '../slotContext';
+import { SlotContext, TakesOneValueContext, useSlotType } from '../slotContext';
 import { primaryType } from '@shared/utils/valueTypes';
 import { useUsersDomainStore, type UserGroup } from '@config/store/domains/usersDomainStore';
 import { useConfigStore } from '@shared/store/configStore';
@@ -79,9 +79,8 @@ export function Kw({ tint, children }: { tint: string; children: ReactNode }) {
  * `unwrapBranch` for the $if/$switch/$compare shapes, but wraps each
  * construct's own literal tokens (if/then/else, switch cases, compare
  * operator) in a mode-tinted `.kw` span instead of returning a flat string, so
- * nested logic reads at a glance (see property-panel-redesign doc's sandbox
- * parity notes). Non-branching leaves delegate straight to `propertyValuePreview`,
- * unchanged.
+ * nested logic reads at a glance. Non-branching leaves delegate straight to
+ * `propertyValuePreview`.
  */
 interface PreviewLookups {
   groupLabels?: Record<string, string>;
@@ -165,6 +164,25 @@ function previewNodes(
       </>
     );
   }
+  for (const key of ['$and', '$or'] as const) {
+    if (!(key in value)) continue;
+    const op = key.slice(1);
+    const name = op.toUpperCase();
+    const items = value[key];
+    if (!Array.isArray(items) || depth >= MAX_PREVIEW_DEPTH) return <Kw tint={op}>{name}(…)</Kw>;
+    return (
+      <>
+        <Kw tint={op}>{name}(</Kw>
+        {items.map((c, i) => (
+          <Fragment key={i}>
+            {i > 0 && <Kw tint={op}>, </Kw>}
+            {previewNodes(c, undefined, depth + 1, lookups)}
+          </Fragment>
+        ))}
+        <Kw tint={op}>)</Kw>
+      </>
+    );
+  }
   if ('$userGroups' in value) {
     const groupLabels = lookups.groupLabels ?? EMPTY_GROUP_LABELS;
     const groups = (value.$userGroups as { groups?: string[] } | undefined)?.groups ?? [];
@@ -182,6 +200,10 @@ function previewNodes(
     return (
       <Kw tint="pageIsActive">{pageId ? (pageTitles[pageId] ?? pageId) : '(current page)'}</Kw>
     );
+  }
+  if ('$overlay' in value) {
+    const o = value.$overlay as { page?: string; param?: string } | undefined;
+    return <Kw tint="overlay">{o?.page ? `${o.page}.${o.param || '?'}` : '(dialog input)'}</Kw>;
   }
   if ('$random' in value) {
     if (depth >= MAX_PREVIEW_DEPTH) return <Kw tint="random">random(…)</Kw>;
@@ -444,7 +466,7 @@ export function CollapsiblePropertyCard({
   const selection = path ? { path, schema } : undefined;
   // Content-tier shape follows this branch/case/operand's own current source —
   // a plain $static/$var leaf inside an $if renders inline, not boxed, same
-  // as a top-level leaf (redesign doc's Content-tier model).
+  // as a top-level leaf.
   const { tier, summary, kindLabel, drawerTitle } = sourceFieldGroupProps({
     source: currentSource,
     title,
@@ -510,29 +532,40 @@ export function CollapsiblePropertyCard({
  */
 export function BranchEditor({
   label,
+  hideLabel,
+  description,
   value,
   onChange,
   schema,
   slot,
   onOpenBindingPicker,
+  actions,
 }: {
   label: string;
+  /** See `CollapsiblePropertyCard`. */
+  hideLabel?: boolean;
+  description?: ReactNode;
   value: unknown;
   onChange: (v: unknown) => void;
   schema: SchemaField;
   /** What this slot's picker lists when it is not what the property takes. */
   slot?: SlotType;
   onOpenBindingPicker?: OpenBindingPicker;
+  /** Row actions, e.g. a list entry's remove `×`. */
+  actions?: ReactNode;
 }) {
   const branchPicker = wrapPicker(onOpenBindingPicker, (b) => onChange({ $var: b }), value, slot);
   return (
     <CollapsiblePropertyCard
       title={label}
+      hideLabel={hideLabel}
+      description={description}
       value={value}
       onChange={onChange}
       schema={schema}
       slot={slot}
       onOpenBindingPicker={branchPicker}
+      actions={actions}
     />
   );
 }
@@ -554,15 +587,22 @@ export function WildcardCard({
   forcedSources: PropertySource[];
 }) {
   return (
-    <CollapsiblePropertyCard
-      title={`{${wcKey}}`}
-      value={value}
-      onChange={onChange}
-      schema={schema}
-      slot={true}
-      forcedSources={forcedSources}
-      includeStatic
-      onOpenBindingPicker={onOpenBindingPicker}
-    />
+    // A placeholder prints one value, so a whole array there asks for its element.
+    <TakesOneValueContext.Provider value={true}>
+      {/* Named like an array's Index row: a quiet line under the field, so the
+          field it belongs to keeps the only bold label. */}
+      <CollapsiblePropertyCard
+        title={`{${wcKey}}`}
+        hideLabel
+        description={`Value for {${wcKey}}`}
+        value={value}
+        onChange={onChange}
+        schema={schema}
+        slot={true}
+        forcedSources={forcedSources}
+        includeStatic
+        onOpenBindingPicker={onOpenBindingPicker}
+      />
+    </TakesOneValueContext.Provider>
   );
 }

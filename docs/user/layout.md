@@ -89,6 +89,7 @@ Each region appears in the page tree above the page list. Select one and its pro
 | **Default state** | `expanded`, `collapsed`, or `hidden` on load. |
 | **Overlay** | When expanded, float over the content instead of pushing it aside — the usual choice on a phone. |
 | **Full height** (sidebars) | Span the whole layout height, flanking the header and footer instead of sitting between them. |
+| **Floating** | Lie over the page instead of next to it. The page fills the space underneath, the region is transparent unless it has a **Background**, and a click on its empty space reaches the page. Widgets in the region, a Button Container included, still take their own clicks. A floating header or footer covers only the page, never a sidebar. Keep page content clear of the widgets yourself, for example with page padding. |
 | **Background** | The region's background colour. |
 
 Those settings are project-wide, and every one of them except **Default state** is bindable — so a region that should behave differently on one page gets a binding, not a per-page copy of the settings. Bind **Enabled** to an `$if` over `$pageIsActive` and a full-screen trend, or a login screen with no navigation at all, costs one expression on the region instead of a setting repeated on every page.
@@ -98,6 +99,23 @@ Project-wide shell settings also cover the browser **tab title**, the **favicon*
 ## Place freely over an image
 
 For a P&ID, a floor plan, or a machine photo, use an **Image Container** instead of a flex Container. It hosts children at **absolute positions** on top of a background image — a valve indicator here, a temperature readout there. Set **Fit** for how the image scales, and **Collapse below** to a pixel width under which the absolute placement is abandoned and children stack normally, so a phone doesn't get a postage-stamp overview.
+
+### Place one design many times from a list
+
+Twenty-seven door switches on a machine photo are one design drawn twenty-seven times. Put a **Repeater** in the Image Container, set its **Place copies** to **At item x / y**, and give it a list of elements that each say where their copy goes:
+
+```json
+[
+  { "x": 0.104, "y": 0.278, "side": "top",   "label": "6.1", "device": 0 },
+  { "x": 0.906, "y": 0.352, "side": "right", "label": "6.7", "device": 6 }
+]
+```
+
+- **`x`, `y`** — the point on the image, from 0 to 1 across and down, the same numbers **Place children…** stores for a single child. A copy without them sits in the middle.
+- **`side`** (optional) — `top`, `bottom`, `left` or `right`: the copy sits on that side of its point, stacked so that its **last** widget touches the point. Design one copy outward-in — tag, button, lead line, the edge mark last — and every copy ends on its own edge of the machine, whichever side that is. Without `side` the copy is centred on its point and lined up by the Repeater's Layout.
+- **Anything else** is yours: inside the copy, read it with **Repeat Item** (a label, a dialog's input), or use it as the index of an array tag — `{"$var": {"path": "CF:Safety/Open", "index": {"$repeatItem": {"member": "device"}}}}` reads the element the copy's `device` names.
+
+Type the list into **Items** with **Edit as JSON** (a list whose elements carry more than a label and a value opens that way), or bind Items to an array tag of structs with `x` and `y` members. The positions live in the list: on the editor canvas the copies are drawn where they will appear, but are moved by editing their numbers, not by dragging. The warnings pill flags a typed-in element whose `x`, `y` or `side` cannot place it. Below **Collapse below**, the copies stack in the list like any other child.
 
 ![The preview toolbar: VIEWPORT switches the canvas between fit-to-screen, laptop, tablet and phone, SCALING zooms it, and MODE toggles between editing and testing the screen.](images/editor-viewport-selector.png)
 

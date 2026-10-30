@@ -101,7 +101,7 @@ def _action(ctx, action) -> ValidationReport:
         ({"$recipe": {"type": "r", "field": "activeName"}}, {"type": "boolean"}),
         # A produced type fits its own field type only.
         ({"$compare": {"left": 1, "operator": ">", "right": 0}}, {"type": "string"}),
-        ({"$formula": {"expression": "1"}}, {"type": "integer"}),
+        ({"$formula": {"expression": "1"}}, {"type": "boolean"}),
         ({"$alarmCount": {"filter": "all"}}, {"type": "float"}),
         ({"$stringExpr": {"template": "x"}}, {"type": "datetime"}),
         ({"$recipe": {"type": "r", "field": "loaded"}}, {"type": "string"}),
@@ -118,6 +118,7 @@ def test_a_fixed_type_source_the_field_does_not_take(ctx, value, field):
     [
         ({"$alarmCount": {"filter": "all"}}, {"type": "integer"}),
         ({"$random": {"min": 0, "max": 1}}, {"type": "integer"}),
+        ({"$formula": {"expression": "1", "round": True}}, {"type": "integer"}),
         ({"$compare": {"left": 1, "operator": ">", "right": 0}}, {"type": "boolean"}),
         # A number fills a duration.
         ({"$formula": {"expression": "1"}}, {"type": "duration"}),
@@ -539,14 +540,19 @@ def _toggle(path: str, **ref) -> dict:
     return {"type": "toggleDataVariable", "target": {"$var": {"path": path, **ref}}}
 
 
+def _edit(path: str, **fields) -> dict:
+    return {"type": "editValue", "target": {"$var": {"path": path}}, **fields}
+
+
 @pytest.mark.parametrize(
     ("action", "code"),
     [
         (_write("PLC:Motor"), "write-target-type"),
         (_write("PLC:Speed"), "write-target-type"),
         (_toggle("PLC:Count"), "toggle-target-type"),
-        (_toggle("PLC:Flags"), "toggle-target-type"),
         (_toggle("PLC:Flags", index=7), "var-index"),
+        (_edit("PLC:Run"), "edit-target-type"),
+        (_edit("PLC:Speed"), "write-target-type"),
         # Access the registry does not state is read-only.
         (_write("PLC:Levels", [1.5]), "write-target-type"),
     ],
@@ -558,16 +564,40 @@ def test_a_target_the_action_cannot_write(ctx, action, code):
 
 
 @pytest.mark.parametrize(
+    ("action", "found"),
+    [
+        (_toggle("PLC:Flags"), [("/a/target/$var/index", "toggle-target-type")]),
+        # Levels states no access, so it is read-only too — said on the target.
+        (
+            _edit("PLC:Levels"),
+            [("/a/target/$var/index", "edit-target-type"), ("/a/target", "write-target-type")],
+        ),
+    ],
+)
+def test_a_whole_array_toggle_or_edit_target_asks_for_its_element(ctx, action, found):
+    report = _action(ctx, action)
+    assert [(w.path, w.code) for w in report.warnings] == found
+
+
+@pytest.mark.parametrize(
     "action",
     [
         _write("PLC:Count", 1),
         _write("PLC:Flags", [True, False, True, False]),
         _toggle("PLC:Run"),
         _toggle("PLC:Flags", index=2),
+        _edit("PLC:Count", min=0, max=50.5, decimals=1, title="Cycles", position="bottom-right"),
+        _edit("PLC:Setpoint"),
     ],
 )
 def test_a_target_the_action_can_write(ctx, action):
     assert _codes(_action(ctx, action)) == []
+
+
+def test_an_edit_value_names_a_known_numpad_position(ctx):
+    report = _action(ctx, _edit("PLC:Count", position="left"))
+    assert _codes(report) == ["numpad-position-invalid"]
+    assert report.warnings[0].path == "/a/position"
 
 
 def _entries(entries: dict):
@@ -644,7 +674,7 @@ def test_a_repeat_item_target_is_judged_on_the_element(repeat_ctx):
     assert _codes(_action(levels, toggle)) == ["toggle-target-type"]
 
 
-# ── review follow-ups ────────────────────────────────────────────────────────
+# ── edge cases ───────────────────────────────────────────────────────────────
 
 
 @pytest.mark.parametrize(

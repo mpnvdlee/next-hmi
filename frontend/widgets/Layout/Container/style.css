@@ -15,7 +15,6 @@
      layoutUtils.test.ts guards that. */
   --container-bg: initial;
   --container-border: initial;
-  --container-shadow: initial;
 
   display: flex;
   flex-direction: column;
@@ -25,16 +24,11 @@
   /* No default margin. A container's spacing is its parent's job — every region
      that hosts widgets sets a `gap` (`.hmi-page__content`, `.hmi-page__header`
      and `__footer`, the page-group shell chrome, `ShellRegion`'s `.region`, and
-     every Container) — so a margin of its own only stacked on top of that, and an
-     author reaching for an edge-to-edge layout had to zero a value they never
-     set. The Layout panel no longer offers margin at all, and `SELF_DIRECT_PROPS`
-     in layoutUtils.ts no longer emits one, so a margin an older project still
-     stores is simply not read.
+     every Container) — so a margin of its own only stacks on top of that.
      Theme-driven defaults below; a per-instance layout value (inline style /
      --container-radius) overrides. Switching theme re-skins these. */
   background: var(--container-bg, transparent);
   border: var(--container-border, none);
-  box-shadow: var(--container-shadow, none);
   border-radius: var(--container-radius, var(--hmi-radius));
 }
 

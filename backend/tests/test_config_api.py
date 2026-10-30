@@ -46,6 +46,12 @@ def tmp_dirs(live_project_root: Path, monkeypatch, tmp_path: Path):
                     "category": "Navigation",
                     "schema": {"items": {"type": "menu-items"}},
                 },
+                # A named event: an actions-typed field that is not `actions`.
+                "StringInput": {
+                    "name": "String Input",
+                    "category": "Inputs",
+                    "schema": {"onSubmit": {"type": "actions"}},
+                },
             },
             "custom": {},
         },
@@ -800,6 +806,15 @@ def test_put_page_persists_main_padding_and_background(client, tmp_dirs):
     assert fetched["mainBackground"] == "#123456"
 
 
+def test_put_dialog_persists_show_modal_header(client, tmp_dirs, dialogs_dir):
+    resp = client.put(
+        "/api/config/dialogs/keypad",
+        json={"id": "keypad", "showModalHeader": False, "sections": {"content": []}},
+    )
+    assert resp.status_code == 200
+    assert client.get("/api/config/dialogs/keypad").json()["showModalHeader"] is False
+
+
 def test_put_page_persists_lifecycle_events(client, tmp_dirs):
     page_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     events = {"onOpen": [{"type": "closePageOverlay"}], "onClose": [{"type": "closePageOverlay"}]}
@@ -1391,6 +1406,24 @@ def test_post_validate_global_events_owned_by_the_events_panel(client):
     assert diagnostic["breadcrumb"].startswith("onPageLoaded")
 
 
+def test_post_validate_variable_triggers(client):
+    """A trigger's variable and its nested actions are checked; the trigger list
+    itself is not mistaken for an action list."""
+    draft = {
+        "onVariableChanged": [
+            {
+                "variable": {"$var": {"path": "Missing:Alarm"}},
+                "actions": [{"type": "openPageOverlay", "pageId": "does-not-exist"}],
+            }
+        ]
+    }
+    resp = client.post("/api/config/validate", json={"kind": "globalEvents", "draft": draft})
+    assert resp.status_code == 200
+    paths = {tuple(d["fieldPath"][:4]) for d in resp.json()["diagnostics"]}
+    assert ("onVariableChanged", "0", "variable") in {p[:3] for p in paths}
+    assert ("onVariableChanged", "0", "actions", "0") in paths
+
+
 def test_post_validate_component(client):
     draft = {
         "name": "Bad",
@@ -1558,6 +1591,47 @@ def test_post_validate_component_flags_component_props_the_runtime_cannot_keep_l
         "/children/0/layout/width/$componentProp",
         "/componentProperties/fallback/defaultValue/$componentProp",
     }
+
+
+def test_post_validate_component_lets_actions_nest_component_props(client):
+    """An action reads its fields when it fires, so a nested $componentProp in
+    any action list stays current; a rendered property still warns."""
+    label = {"$componentProp": "label"}
+    toast = {
+        "type": "showToast",
+        "message": {"$stringExpr": {"template": "Set {1}", "wildcards": {"1": label}}},
+    }
+    edit = {"type": "editValue", "target": {"$componentProp": "value"}, "title": label}
+    draft = {
+        "name": "ParamRow",
+        "componentProperties": {
+            "label": {"type": "string", "label": "Name"},
+            "value": {"type": "float", "label": "Value", "write": True},
+        },
+        "children": [
+            {
+                "id": "edit",
+                "type": "Button",
+                "properties": {
+                    "label": {"$stringExpr": {"template": "Edit {1}", "wildcards": {"1": label}}},
+                    "actions": {
+                        "onPress": [
+                            {"type": "if", "condition": True, "then": [edit], "else": [toast]},
+                            {**edit, "onSuccess": [toast]},
+                        ]
+                    },
+                },
+            },
+            {"id": "entry", "type": "StringInput", "properties": {"onSubmit": [toast]}},
+        ],
+    }
+
+    resp = client.post("/api/config/validate", json={"kind": "component", "draft": draft})
+
+    nested = {
+        d["sourcePath"] for d in resp.json()["diagnostics"] if d["code"] == "componentprop-nested"
+    }
+    assert nested == {"/children/0/properties/label/$stringExpr/wildcards/1/$componentProp"}
 
 
 def test_post_validate_component_keeps_nested_component_props_a_warning(client):

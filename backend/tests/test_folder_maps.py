@@ -515,6 +515,40 @@ def test_validator_reads_writability_off_the_live_pool(monkeypatch):
     assert writable == {"DS": {"Setpoint": True, "Actual": False, "Motor/Speed": True}}
 
 
+def test_validator_tells_a_disabled_variable_from_an_unknown_one(monkeypatch, tmp_path):
+    import json
+
+    import core.storage as storage
+    import services.datasource_manager as datasource_module
+    from core.validation import structure
+
+    variables = [
+        _make_folder("Motor", [
+            _make_var("Speed"),
+            _make_var("Off", enabled=False),
+            {**_make_var("Gone", enabled=False), "present_on_server": False},
+        ]),
+    ]
+    mgr = DatasourceManager()
+    mgr.datasources["DS"] = DatasourceEntry({"name": "DS", "type": "opcua-client", "variables": variables})
+    monkeypatch.setattr(datasource_module, "datasource_manager", mgr)
+    live = structure._disabled_variable_lookup()
+    assert live("DS", "Motor/Off")
+    # Gone from the server: enabling it would bring no value back.
+    assert not any(live("DS", p) for p in ("Motor/Speed", "Motor/Gone", "Motor/Ghost"))
+
+    (tmp_path / "datasources").mkdir()
+    (tmp_path / "datasources" / "DS.json").write_text(
+        json.dumps({"name": "DS", "type": "opcua-client", "variables": variables})
+    )
+    monkeypatch.setattr(datasource_module, "datasource_manager", DatasourceManager())
+    monkeypatch.setattr(storage, "_active_project_path", lambda: tmp_path)
+    monkeypatch.setattr(structure, "_ds_scan_cache", None)
+    disk = structure._disabled_variable_lookup()
+    assert disk("DS", "Motor/Off")
+    assert not any(disk("DS", p) for p in ("Motor/Speed", "Motor/Gone", "Motor/Ghost"))
+
+
 # ── min/max range metadata ────────────────────────────────────────────────────
 
 

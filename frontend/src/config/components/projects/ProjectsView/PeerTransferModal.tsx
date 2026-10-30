@@ -513,7 +513,6 @@ export default function PeerTransferModal({
         <div className="project-form__field">
           <span className="project-form__label">Protocol</span>
           <Select
-            aria-label="Protocol"
             value={scheme}
             disabled={paired || !!transfer}
             onChange={(value) => setScheme(value as PeerScheme)}
@@ -611,11 +610,7 @@ export default function PeerTransferModal({
           {isPull && (
             <div className="project-form__field">
               <span className="project-form__label">Source project on peer</span>
-              <Select
-                aria-label="Source project on peer"
-                value={pullSourceId}
-                onChange={setPullSourceId}
-              >
+              <Select value={pullSourceId} onChange={setPullSourceId}>
                 <option value="">Select a project…</option>
                 {remoteProjects.map((project) => (
                   <option key={project.id} value={project.id}>
@@ -671,11 +666,7 @@ export default function PeerTransferModal({
                           <>
                             <div className="project-form__field">
                               <span className="project-form__label">{replacePickerLabel}</span>
-                              <Select
-                                aria-label={replacePickerLabel}
-                                value={replacementId}
-                                onChange={setReplacementId}
-                              >
+                              <Select value={replacementId} onChange={setReplacementId}>
                                 <option value="">Select a stopped {replaceLabel}…</option>
                                 {replaceable.map((target) => (
                                   <option

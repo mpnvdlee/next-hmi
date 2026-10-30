@@ -1,4 +1,4 @@
-"""Phase 6 — peer_discovery unit tests.
+"""peer_discovery unit tests.
 
 Skipped on hosts where the mDNS responder can't bind (CI sandboxes, Docker
 without host networking). The live loopback test is opt-in via

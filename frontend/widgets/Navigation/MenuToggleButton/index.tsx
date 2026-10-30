@@ -9,11 +9,6 @@ export const schema = {
   },
   iconCollapsed: { type: 'icon' as const, label: 'Icon (collapsed)', defaultValue: '☰' },
   iconExpanded: { type: 'icon' as const, label: 'Icon (expanded)', defaultValue: '×' },
-  ariaLabel: {
-    type: 'string' as const,
-    label: 'Aria label',
-    defaultValue: 'Toggle menu',
-  },
   actions: { type: 'actions' as const, label: 'Actions' },
 };
 
@@ -34,7 +29,6 @@ export default function MenuToggleButton({ properties, layout }: HmiWidgetProps)
 
   const iconCollapsed = getPropString(properties, 'iconCollapsed', '☰', evalCtx);
   const iconExpanded = getPropString(properties, 'iconExpanded', '×', evalCtx);
-  const ariaLabel = getPropString(properties, 'ariaLabel', 'Toggle menu', evalCtx);
 
   const iconName = bound ? iconExpanded : iconCollapsed;
   const IconComp = isBuiltinIconId(iconName) ? getBuiltinIconComponent(iconName) : null;
@@ -54,7 +48,6 @@ export default function MenuToggleButton({ properties, layout }: HmiWidgetProps)
       className={`hmi-component hmi-menu-toggle${bound === null ? ' hmi-menu-toggle--unknown' : ''}`}
       style={selfLayoutStyle(layout)}
       onClick={handleClick}
-      aria-label={ariaLabel}
       aria-pressed={bound ?? 'mixed'}
     >
       {IconComp ? (

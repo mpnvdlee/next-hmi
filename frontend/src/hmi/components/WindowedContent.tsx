@@ -30,13 +30,13 @@ import { useHostPageId } from '../context/HostPageContext';
  * mounted for the rest of the page's life, and scrolling back finds it intact.
  * Pure display widgets (the common case) hold no such state and re-derive from
  * the variable store on remount, so they window freely. `content-visibility`
- * (lever 1, in hmi.css) skips paint for the mounted-but-off-screen remainder.
+ * (in hmi.css) skips paint for the mounted-but-off-screen remainder.
  *
  * Above `WINDOW_THRESHOLD` items the editor preview behaves like the live
  * runtime, with one concession: the window item whose subtree contains the
  * current selection is force-mounted (via `PreviewSelectionContext`) so a widget
  * picked from the editor tree can still be highlighted/scrolled to while
- * off-screen. Below the threshold it renders children exactly as before — no
+ * off-screen. Below the threshold it renders children directly — no
  * wrappers — and once a page has crossed the threshold it stays windowed (a
  * later dip back under it would otherwise remount every child and drop state).
  */

@@ -11,8 +11,6 @@ import HeaderSearch from '../HeaderSearch';
 interface TreeSearchBarProps {
   value: string;
   onChange: (value: string) => void;
-  /** Accessible name of the field — each tree names what it searches. */
-  label: string;
   placeholder?: string;
   /** Suspends the `/` shortcut while an overlay owns the key. */
   shortcutDisabled?: boolean;
@@ -23,7 +21,6 @@ interface TreeSearchBarProps {
 export default function TreeSearchBar({
   value,
   onChange,
-  label,
   placeholder = 'Search tree',
   shortcutDisabled,
   onCollapseAll,
@@ -34,7 +31,6 @@ export default function TreeSearchBar({
         variant="fill"
         value={value}
         onChange={onChange}
-        ariaLabel={label}
         placeholder={placeholder}
         shortcutDisabled={shortcutDisabled}
       />
@@ -42,7 +38,6 @@ export default function TreeSearchBar({
         <button
           type="button"
           className="cfg-tree__searchbar-btn"
-          aria-label="Collapse whole tree"
           title="Collapse whole tree"
           onClick={onCollapseAll}
         >

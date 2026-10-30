@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ButtonAction } from '@shared/types/config';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { executeWidgetActions } from './widgetActions';
@@ -105,5 +105,92 @@ describe('executeWidgetActions — openDialog component properties', () => {
   it('passes none for a page opened as an overlay, which declares none', () => {
     executeWidgetActions([{ type: 'openPageOverlay', pageId: 'p1' }], {});
     expect(useHmiStore.getState().openPageOverlays[0].componentProperties).toEqual({});
+  });
+  it('swaps the inputs and anchor of the dialog on top when it is opened again', () => {
+    const open = (device: number, left: number) =>
+      executeWidgetActions(
+        [
+          {
+            type: 'openDialog',
+            pageId: 'device',
+            componentProperties: { device },
+            placement: 'trigger-below',
+          },
+        ],
+        { anchorEl: anchorElement({ left, width: 20, height: 20 }) },
+      );
+    open(4, 10);
+    open(5, 300);
+
+    const overlays = useHmiStore.getState().openPageOverlays;
+    expect(overlays).toHaveLength(1);
+    expect(overlays[0].componentProperties).toEqual({ device: 5 });
+    expect(overlays[0].anchorRect?.left).toBe(300);
+  });
+
+  it('leaves a dialog lower in the stack alone when it is opened again', () => {
+    executeWidgetActions(
+      [{ type: 'openDialog', pageId: 'device', componentProperties: { device: 4 } }],
+      {},
+    );
+    executeWidgetActions([{ type: 'openDialog', pageId: 'confirm' }], {});
+    executeWidgetActions(
+      [{ type: 'openDialog', pageId: 'device', componentProperties: { device: 5 } }],
+      {},
+    );
+
+    const overlays = useHmiStore.getState().openPageOverlays;
+    expect(overlays.map((o) => o.pageId)).toEqual(['device', 'confirm']);
+    expect(overlays[0].componentProperties).toEqual({ device: 4 });
+  });
+});
+
+describe('executeWidgetActions — delay', () => {
+  beforeEach(() => {
+    useHmiStore.setState({ pendingToasts: [] });
+  });
+
+  it('runs the actions after a Delay once it has passed, reading values of that moment', () => {
+    vi.useFakeTimers();
+    try {
+      executeWidgetActions([
+        { type: 'showToast', message: 'Before' },
+        { type: 'delay', duration: 500 },
+        { type: 'showToast', message: 'After' },
+      ] as ButtonAction[]);
+      const messages = () => useHmiStore.getState().pendingToasts.map((t) => t.message);
+
+      expect(messages()).toEqual(['Before']);
+      vi.advanceTimersByTime(499);
+      expect(messages()).toEqual(['Before']);
+      vi.advanceTimersByTime(1);
+      expect(messages()).toEqual(['Before', 'After']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('executeWidgetActions — runComponentActions', () => {
+  beforeEach(() => {
+    useHmiStore.setState({ openPageOverlays: [] });
+  });
+
+  it('runs the list the instance passes in through the named property', () => {
+    executeWidgetActions([{ type: 'runComponentActions', property: 'actions' }], {
+      evalCtx: {
+        inputScopeProps: { actions: { onPress: [{ type: 'openPageOverlay', pageId: 'p1' }] } },
+      },
+    });
+
+    expect(useHmiStore.getState().openPageOverlays.map((o) => o.pageId)).toEqual(['p1']);
+  });
+
+  it('does nothing when the instance sets no actions', () => {
+    executeWidgetActions([{ type: 'runComponentActions', property: 'actions' }], {
+      evalCtx: { inputScopeProps: {} },
+    });
+
+    expect(useHmiStore.getState().openPageOverlays).toEqual([]);
   });
 });

@@ -5,6 +5,7 @@ recompute callback raises or is entirely unset.
 """
 from pathlib import Path
 
+import pytest
 from models.alarm import AlarmConfig, AlarmDefinition, AlarmGroup, AlarmTrigger
 from services.alarm_manager import AlarmManager
 
@@ -98,3 +99,233 @@ def test_value_range_trigger_reads_a_counter_beyond_two_to_the_53():
     manager = AlarmManager()
     assert manager._evaluate_trigger(trigger, str(2**63)) is True
     assert manager._evaluate_trigger(trigger, str(2**59)) is False
+
+
+@pytest.mark.parametrize(
+    "value, fires",
+    [(79.9, False), (80, True), (95, True), (100, True), (100.1, False)],
+)
+def test_value_range_trigger_fires_inside_min_and_max(value, fires):
+    # Min / Max bound the alarm range, both included — the documented meaning.
+    trigger = AlarmTrigger(
+        type="value_range", source_value={"$var": {"path": "DS:Temp"}}, min=80, max=100,
+    )
+    assert AlarmManager()._evaluate_trigger(trigger, value) is fires
+
+
+def test_fire_captures_values_and_clear_keeps_them(live_project_root: Path, monkeypatch):
+    from services.datasource_manager import datasource_manager
+
+    cache = {"DS:Temp": 81.5, "DS:Arr": [1, 2, 3]}
+    monkeypatch.setattr(
+        datasource_manager, "get_cached_values", lambda keys: {k: cache[k] for k in keys if k in cache}
+    )
+    config = _config_with_trigger()
+    config.groups[0].alarms[0].values = [
+        {"$var": {"path": "DS:Temp"}},
+        {"$var": {"path": "DS:Arr", "index": 2}},
+        {"$var": {"path": "DS:Missing"}},
+    ]
+    manager = AlarmManager()
+    manager.set_config(config)
+    assert manager.get_trigger_paths_by_datasource() == {"DS": {"Overheat", "Temp", "Arr", "Missing"}}
+
+    manager.on_variable_change("DS:Overheat", True)
+    cache["DS:Temp"] = 20.0  # a later change must not reach the captured value
+    [active] = manager.get_active()
+    assert active.values == [81.5, 3, None]
+    assert active.value_refs == config.groups[0].alarms[0].values
+
+    manager.on_variable_change("DS:Overheat", False)
+    [entry] = manager.get_history()
+    assert entry.values == [81.5, 3, None]
+
+    reloaded = AlarmManager()
+    reloaded.load()
+    assert reloaded.get_history()[0].values == [81.5, 3, None]
+
+
+def test_a_cleared_alarm_keeps_what_its_detail_popup_shows(live_project_root: Path):
+    config = _config_with_trigger()
+    alarm = config.groups[0].alarms[0]
+    alarm.description = "Check the fan"
+    alarm.image = "fan.png"
+    alarm.resolutions = ["Clean the filter"]
+    manager = AlarmManager()
+    manager.set_config(config)
+
+    manager.on_variable_change("DS:Overheat", True)
+    manager.on_variable_change("DS:Overheat", False)
+
+    [entry] = manager.get_history()
+    assert (entry.description, entry.image, entry.resolutions) == (
+        "Check the fan",
+        "images/fan.png",
+        ["Clean the filter"],
+    )
+
+
+def test_an_alarm_that_needs_no_acknowledgement_fires_already_acknowledged(
+    live_project_root: Path,
+):
+    config = _config_with_trigger()
+    config.groups[0].alarms[0].ack_required = False
+    manager = AlarmManager()
+    manager.set_config(config)
+
+    manager.on_variable_change("DS:Overheat", True)
+
+    [active] = manager.get_active()
+    assert active.acked and not active.ack_required
+    assert manager.get_summary().unacked == 0
+    assert manager.ack_all("operator") == 0
+
+
+def test_a_value_missing_at_fire_time_is_filled_by_its_next_update(
+    live_project_root: Path, monkeypatch
+):
+    from services.datasource_manager import datasource_manager
+
+    cache = {"DS:Temp": 81.5}
+    monkeypatch.setattr(
+        datasource_manager, "get_cached_values", lambda keys: {k: cache[k] for k in keys if k in cache}
+    )
+    config = _config_with_trigger()
+    config.groups[0].alarms[0].values = [
+        {"$var": {"path": "DS:Temp"}},
+        {"$var": {"path": "DS:Arr", "index": 1}},
+    ]
+    manager = AlarmManager()
+    manager.set_config(config)
+    manager.on_variable_change("DS:Overheat", True)
+    assert manager.get_active()[0].values == [81.5, None]
+
+    manager.on_variable_change("DS:Arr", [7, 8])
+    manager.on_variable_change("DS:Temp", 90.0)  # captured already: not overwritten
+    manager.on_variable_change("DS:Arr", [0, 0])
+    assert manager.get_active()[0].values == [81.5, 8]
+
+    manager.on_variable_change("DS:Overheat", False)
+    assert manager.get_history()[0].values == [81.5, 8]
+
+
+def _stations_datasource(monkeypatch):
+    """A static datasource as the cache holds it: a struct array counted from 1
+    (each element under its own folder, each member under its own leaf key), a
+    scalar array, and an Integer to index it with."""
+    from services.datasource_manager import DatasourceEntry, datasource_manager
+
+    entry = DatasourceEntry({
+        "name": "DS",
+        "type": "static",
+        "variables": [
+            {"kind": "folder", "name": "Stations", "is_array": True, "children": [
+                {"kind": "folder", "name": f"Stations[{i}]", "children": [
+                    {"display_name": "Temp", "data_type": "Float", "enabled": True},
+                ]}
+                for i in (1, 2, 3)
+            ]},
+            {"display_name": "Arr", "data_type": "Float", "is_array": True, "array_length": 4, "enabled": True},
+            {"display_name": "Idx", "data_type": "Integer", "enabled": True},
+        ],
+    })
+    monkeypatch.setitem(datasource_manager.datasources, "DS", entry)
+    datasource_manager._load_static_values(entry)
+    datasource_manager.update_static_value("DS", "Stations/Stations[3]/Temp", 33.0)
+    datasource_manager.update_static_value("DS", "Arr", [0.5, 1.5, 2.5, 3.5])
+    datasource_manager.update_static_value("DS", "Idx", 1)
+    return datasource_manager
+
+
+def test_fire_captures_a_struct_array_member_and_array_elements(live_project_root: Path, monkeypatch):
+    dm = _stations_datasource(monkeypatch)
+    config = _config_with_trigger()
+    config.groups[0].alarms[0].values = [
+        # The binding picker's shape for a member of a struct-array element: its leaf key.
+        {"$var": {"path": "DS:Stations/Stations[3]/Temp"}},
+        {"$var": {"path": "DS:Arr", "index": 2}},
+        {"$var": {"path": "DS:Arr", "index": {"$static": 3}}},
+        {"$var": {"path": "DS:Arr", "index": {"$var": {"path": "DS:Idx"}}}},
+        {"$var": {"path": "DS:Arr", "index": {"$componentProp": "device"}}},
+    ]
+    manager = AlarmManager()
+    manager.set_config(config)
+    assert manager.get_trigger_paths_by_datasource() == {
+        "DS": {"Overheat", "Stations/Stations[3]/Temp", "Arr", "Idx"}
+    }
+
+    manager.on_variable_change("DS:Overheat", True)
+    dm.update_static_value("DS", "Idx", 0)  # the element was picked when it fired
+    assert manager.get_active()[0].values == [33.0, 2.5, 3.5, 1.5, None]
+    manager.on_variable_change("DS:Overheat", False)
+    assert manager.get_history()[0].values == [33.0, 2.5, 3.5, 1.5, None]
+
+
+def test_an_element_whose_bound_index_arrives_late_is_filled_in(live_project_root: Path, monkeypatch):
+    dm = _stations_datasource(monkeypatch)
+    dm.datasources["DS"].cache.pop("DS:Idx")
+    config = _config_with_trigger()
+    config.groups[0].alarms[0].values = [
+        {"$var": {"path": "DS:Arr", "index": {"$var": {"path": "DS:Idx"}}}},
+    ]
+    manager = AlarmManager()
+    manager.set_config(config)
+    manager.on_variable_change("DS:Overheat", True)
+    assert manager.get_active()[0].values == [None]
+
+    manager.on_variable_change("DS:Idx", 2)
+    assert manager.get_active()[0].values == [2.5]
+
+
+@pytest.mark.parametrize("value, still_active", [(False, 0), (True, 1)])
+def test_a_restored_alarm_follows_the_values_cached_at_start(
+    live_project_root: Path, monkeypatch, value, still_active
+):
+    # A static datasource seeds its cache on start without emitting a change,
+    # so a door alarm restored from alarm_state.json must be checked against it.
+    from services.datasource_manager import datasource_manager
+
+    manager = AlarmManager()
+    manager.set_config(_config_with_trigger())
+    manager.on_variable_change("DS:Overheat", True)
+    assert len(manager.get_active()) == 1
+
+    cache = {"DS:Overheat": value}
+    monkeypatch.setattr(
+        datasource_manager, "get_cached_values", lambda keys: {k: cache[k] for k in keys if k in cache}
+    )
+    restarted = AlarmManager()
+    restarted.load()
+    restarted.evaluate_cached()
+
+    assert len(restarted.get_active()) == still_active
+    assert len(restarted.get_history()) == 1 - still_active
+
+
+def test_saving_a_static_datasource_clears_an_alarm_its_reset_variable_ends(
+    live_project_root: Path, monkeypatch
+):
+    # A reshaped variable restarts at its default without a change event.
+    from services.alarm_manager import alarm_manager
+    from services.datasource_manager import datasource_manager
+
+    monkeypatch.setattr(datasource_manager, "datasources", {})
+    monkeypatch.setattr(datasource_manager, "_name_to_filename", {})
+    monkeypatch.setattr(alarm_manager, "_state", type(alarm_manager._state)())
+
+    def door(data_type: str) -> dict:
+        variable = {"display_name": "Overheat", "data_type": data_type, "enabled": True}
+        return {"name": "DS", "type": "static", "variables": [variable]}
+
+    datasource_manager.apply_config("DS", door("Boolean"))
+    alarm_manager.set_config(_config_with_trigger())
+    try:
+        datasource_manager.update_static_value("DS", "Overheat", True)
+        alarm_manager.on_variable_change("DS:Overheat", True)  # main.py wires the listener
+        assert len(alarm_manager.get_active()) == 1
+
+        datasource_manager.apply_config("DS", door("Integer"))
+        assert alarm_manager.get_active() == []
+        assert len(alarm_manager.get_history()) == 1
+    finally:
+        alarm_manager.set_config(AlarmConfig(groups=[]))

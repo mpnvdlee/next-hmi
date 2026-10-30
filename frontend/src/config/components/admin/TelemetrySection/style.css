@@ -10,9 +10,9 @@
 
 .cfg-admin-telemetry__legend {
   font-size: var(--cfg-text-sm);
-  font-weight: var(--cfg-fw-medium);
-  color: var(--cfg-text-muted);
-  padding: 0;
+  font-weight: var(--cfg-fw-bold);
+  color: var(--cfg-text);
+  padding: 0 0 var(--cfg-space-2);
 }
 
 .cfg-admin-telemetry__id {
@@ -20,7 +20,7 @@
   align-items: baseline;
   gap: var(--cfg-space-3);
   flex-wrap: wrap;
-  font-size: var(--cfg-text-sm);
+  font-size: var(--cfg-text-base);
 }
 
 .cfg-admin-telemetry__id-label {
@@ -36,4 +36,9 @@
   padding: 0 var(--cfg-space-1);
   border-radius: var(--cfg-radius-sm);
   word-break: break-all;
+}
+
+.cfg-admin-telemetry__link {
+  color: var(--cfg-accent);
+  font-weight: var(--cfg-fw-medium);
 }

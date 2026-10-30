@@ -49,7 +49,7 @@ export default function TabBar({ properties, layout }: HmiWidgetProps) {
       className={`hmi-component hmi-tab-bar hmi-tab-bar--${variant}`}
       style={selfLayoutStyle(layout)}
     >
-      <div className="hmi-tab-bar__tabs" role="tablist" aria-label={resolvePageTitle(group.title)}>
+      <div className="hmi-tab-bar__tabs" role="tablist">
         {group.children.map((child) => {
           const IconComp =
             showIcons && child.icon && isBuiltinIconId(child.icon)

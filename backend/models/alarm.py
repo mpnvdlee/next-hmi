@@ -70,7 +70,11 @@ class AlarmDefinition(BaseModel):
     auto_popup: bool = True
     resolutions: list[Any] = Field(default_factory=list)
     trigger: AlarmTrigger = Field(default_factory=lambda: AlarmTrigger(type="value_range"))
+    # False: the alarm fires already acknowledged, so it never waits for an operator.
+    ack_required: bool = True
     ack_groups: list[str] = Field(default_factory=list)
+    # `$var` bindings the `{1}`, `{2}` … placeholders in title/description name.
+    values: list[Any] = Field(default_factory=list)
 
     @staticmethod
     def resolve_string(value: Any) -> str:
@@ -82,6 +86,8 @@ class AlarmDefinition(BaseModel):
             if isinstance(static, str):
                 return static
             loc = value.get("$loc")
+            if isinstance(loc, dict):
+                loc = loc.get("key")
             if isinstance(loc, str):
                 return loc
             string_expr = value.get("$stringExpr")
@@ -146,7 +152,12 @@ class AlarmInstance(BaseModel):
     resolutions: list[Any] = Field(default_factory=list)
     group_title: str = ""
     auto_popup: bool = True
+    ack_required: bool = True
     ack_groups: list[str] = Field(default_factory=list)
+    # The definition's `values` bindings, so a client can show them live while
+    # active, and their raw values at fire time, which history keeps.
+    value_refs: list[Any] = Field(default_factory=list)
+    values: list[Any] = Field(default_factory=list)
     triggered_at: str = ""
     acked: bool = False
     acked_by: str = ""
@@ -163,7 +174,13 @@ class AlarmHistoryEntry(BaseModel):
     code: str = ""
     level: AlarmLevel = "error"
     title: str = ""
+    # Kept from the instance so a cleared alarm still opens its detail popup;
+    # empty on entries written before they were kept.
+    description: str = ""
+    image: str = ""
+    resolutions: list[Any] = Field(default_factory=list)
     group_title: str = ""
+    values: list[Any] = Field(default_factory=list)
     triggered_at: str = ""
     cleared_at: str = ""
     acked: bool = False

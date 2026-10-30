@@ -93,7 +93,7 @@ const VARIABLE_CASES: [string, Filter | undefined, string, string][] = [
   ['Float', { type: 'Float' }, 'PLC:Speed', '✓'],
   ['Float', { type: 'Float' }, 'PLC:SpeedRO', '✓'],
   ['Float', { type: 'Float' }, 'PLC:Run', '✗'],
-  ['Float', { type: 'Float' }, 'PLC:Setpoints', '✗'],
+  ['Float', { type: 'Float' }, 'PLC:Setpoints', '✓'],
   ['Float', { type: 'Float' }, 'PLC:Setpoints[1]', '✓'],
   ['Float', { type: 'Float' }, 'PLC:Setpoints[#]', '✓'],
   ['Float', { type: 'Float' }, 'PLC:Motor', '✗'],
@@ -105,6 +105,7 @@ const VARIABLE_CASES: [string, Filter | undefined, string, string][] = [
   ['Color', { type: 'Color' }, 'PLC:Label', '✓'],
   ['Color', { type: 'Color' }, 'PLC:Speed', '✗'],
   ['Boolean', { type: 'Boolean' }, 'PLC:Run', '✓'],
+  ['Boolean', { type: 'Boolean' }, 'PLC:Fan/Run', '✗'],
   ['Boolean', { type: 'Boolean' }, 'PLC:Speed', '✗'],
   ['Float[]', { type: 'float[]' }, 'PLC:Setpoints', '✓'],
   ['Float[]', { type: 'float[]' }, 'PLC:Setpoints[1]', '✗'],
@@ -169,6 +170,28 @@ describe('variable picker verdicts', () => {
     open(filter, key);
     await waitFor(() => expect(verdict()).toBe(expected));
     expect(confirmDisabled()).toBe(expected === '✗');
+  });
+
+  it('confirms a whole array on a one-value field as the bare array, which its Index row then names', async () => {
+    const onPick = vi.fn();
+    mockedApiJson.mockImplementation(async (url: string) =>
+      url === '/api/datasources'
+        ? ([{ name: 'PLC', type: 'static' }] as never)
+        : ({ variables: PLC_VARIABLES } as never),
+    );
+    useEditorDomainStore.getState().openBindingPicker('', 'field', {
+      filter: { type: 'Float' },
+      currentBinding: { path: 'PLC:Setpoints' },
+      onPick,
+    });
+    render(<VariableBindingPicker />);
+    await waitFor(() => expect(verdict()).toBe('✓'));
+    expect(screen.getByText(/Whole array — choose its element/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(onPick).toHaveBeenCalledWith(
+      { path: 'PLC:Setpoints' },
+      expect.objectContaining({ isArray: true, index: undefined }),
+    );
   });
 
   it('keeps a selection confirmable while its datasource is still loading', async () => {
@@ -256,6 +279,38 @@ describe('variable picker verdicts', () => {
     await waitFor(() => {
       expect(document.querySelector('.editor-binding-list > div')).toHaveStyle({ height: '52px' });
     });
+  });
+
+  it('refuses a binding to a variable disabled since, and says why', async () => {
+    open({ type: 'Boolean' }, 'PLC:Fan/Run');
+    await waitFor(() => expect(verdict()).toBe('✗'));
+    expect(confirmDisabled()).toBe(true);
+    expect(document.querySelector('.editor-binding-req-reason')?.textContent).toMatch(/Disabled/);
+  });
+
+  it('leaves disabled variables out, even under "Show all"', async () => {
+    const onPick = vi.fn();
+    mockedApiJson.mockImplementation(async (url: string) =>
+      url === '/api/datasources'
+        ? ([{ name: 'PLC', type: 'static' }] as never)
+        : ({
+            variables: [{ ...leaf('Level', 'Float'), enabled: false }, leaf('Level2', 'Float')],
+          } as never),
+    );
+    useEditorDomainStore.getState().openBindingPicker('', 'field', {
+      filter: { type: 'Float' },
+      onPick,
+    });
+    render(<VariableBindingPicker />);
+    await waitFor(() => expect(mockedApiJson).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Show all/ }));
+    const search = screen.getByRole('searchbox');
+    fireEvent.change(search, { target: { value: 'level' } });
+    await waitFor(() => {
+      expect(document.querySelector('.editor-binding-list > div')).toHaveStyle({ height: '52px' });
+    });
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(onPick).toHaveBeenCalledWith({ path: 'PLC:Level2' }, expect.anything());
   });
 
   it('judges each struct field too, not only the header', async () => {

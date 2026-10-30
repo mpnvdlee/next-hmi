@@ -7,8 +7,8 @@
 #
 # Produces (oss, the default):
 #   dist/nexthmi/                            one-folder PyInstaller output
-#   dist/nexthmi-<os>-<arch>-<version>.zip   the distributable
-# and for ee, the same under nexthmi-enterprise/.
+#   dist/nexthmi-community-<os>-<arch>-<version>.zip   the distributable
+# and for ee, nexthmi-enterprise-<os>-<arch>-<version>.zip.
 #
 # Prerequisites: Python 3.14 with the project's deps + pyinstaller
 # installed in the active venv, Node 20.11+ on PATH, esbuild installed
@@ -47,8 +47,10 @@ fi
 
 if [ "$EDITION" = "ee" ]; then
   ARTIFACT_BASE="nexthmi-enterprise"
+  ZIP_BASE="nexthmi-enterprise"
 else
   ARTIFACT_BASE="nexthmi"
+  ZIP_BASE="nexthmi-community"
 fi
 
 OS_NAME="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -167,8 +169,10 @@ python "$REPO_ROOT/build/render-docs.py" "$OUTPUT_DIR/docs" "$VERSION"
 # 7. Zip. The name carries the version so two downloads of different releases
 #    don't collide in a downloads folder; the folder *inside* stays
 #    unversioned, because that's the path an operator's shortcuts point at.
-ZIP_PATH="$REPO_ROOT/dist/${DIST_DIR_NAME}-${VERSION}.zip"
-rm -f "$REPO_ROOT/dist/${DIST_DIR_NAME}"-*.zip "$REPO_ROOT/dist/${DIST_DIR_NAME}.zip"
+#    The zip names its edition; the folder keeps its name for the same reason.
+ZIP_NAME="${ZIP_BASE}-${OS_TAG}-${ARCH_TAG}"
+ZIP_PATH="$REPO_ROOT/dist/${ZIP_NAME}-${VERSION}.zip"
+rm -f "$REPO_ROOT/dist/${ZIP_NAME}"-*.zip
 (cd "$REPO_ROOT/dist" && zip -rqy "$ZIP_PATH" "$DIST_DIR_NAME")
 
 # 8. Remove the staged folder — the zip is the deliverable.

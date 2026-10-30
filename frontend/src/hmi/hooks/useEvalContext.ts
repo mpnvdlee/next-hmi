@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useVariableStore } from '../store/variableStore';
 import { useTranslationStore } from '@shared/store/translationStore';
-import { useHmiStore } from '../store/hmiStore';
+import { resolveUserField, useHmiStore } from '../store/hmiStore';
 import { useUsersData } from './useUsersData';
 import { useHmiScope } from '../context/HmiScopeContext';
 import { useHostPageId } from '../context/HostPageContext';
@@ -16,8 +16,10 @@ import { useRecipeStore } from '../store/recipeStore';
 import { useDeviceInfoStore } from '../store/deviceInfoStore';
 import { readHttpSource } from '../store/httpSourceStore';
 import { useConfigStore } from '@shared/store/configStore';
+import { withDeclaredDefaults } from '../utils/componentPropResolution';
 import {
   allPageRootNodes,
+  findPageNodeById,
   findPagePath,
   resolvePageContext,
   resolvePageTitle,
@@ -46,6 +48,8 @@ export function useEvalContext(): EvaluationContext {
   const inputScopeProps = useInputScope()?.properties;
   const repeatScope = useRepeatScope();
   const currentUsersByScope = useHmiStore((s) => s.currentUsersByScope);
+  // Subscribed so a `$overlay` re-reads when a dialog opens, swaps or closes.
+  const openPageOverlays = useHmiStore((s) => s.openPageOverlays);
   // The project's account list, for `$user` with `field: 'userList'` — distinct
   // from `currentUsersByScope`, which is only who is signed in per scope.
   const allUsers = useUsersData();
@@ -106,14 +110,7 @@ export function useEvalContext(): EvaluationContext {
 
         hostPageId,
 
-        resolveUser: (field) => {
-          const user = currentUsersByScope[scope];
-          if (!user) return null;
-          if (field === 'username') return user.username;
-          if (field === 'groups')
-            return user.groups.map((id) => user.groupLabels[id] ?? id).join(', ');
-          return null;
-        },
+        resolveUser: (field) => resolveUserField(currentUsersByScope[scope], field),
 
         resolveUserGroups: () => currentUsersByScope[scope]?.groups ?? ['guest'],
 
@@ -131,7 +128,8 @@ export function useEvalContext(): EvaluationContext {
 
         resolveAlarmCount: (filter) => useAlarmStore.getState().getCount(filter),
 
-        resolveRecipe: (typeId, field) => useRecipeStore.getState().getField(typeId, field),
+        resolveRecipe: (typeId, field, parameter) =>
+          useRecipeStore.getState().getField(typeId, field, parameter),
 
         resolveRecipeList: (typeId) => useRecipeStore.getState().getList(typeId),
 
@@ -211,6 +209,16 @@ export function useEvalContext(): EvaluationContext {
         // `$var`/`useLiveScalars`.
         resolveHttpRequest: (spec) => readHttpSource(spec),
 
+        resolveOverlayParam: (page, param) => {
+          const entry = [...openPageOverlays].reverse().find((e) => e.pageId === page);
+          if (!entry) return null;
+          const declared = findPageNodeById(
+            pageRootsRef.current.dialogs,
+            page,
+          )?.componentProperties;
+          return withDeclaredDefaults(entry.componentProperties, declared)[param] ?? null;
+        },
+
         inputScopeProps,
 
         ...(repeatScope && {
@@ -235,6 +243,7 @@ export function useEvalContext(): EvaluationContext {
       inputScopeProps,
       repeatScope,
       currentUsersByScope,
+      openPageOverlays,
       allUsernames,
       widgetProps,
       alarmSummary,

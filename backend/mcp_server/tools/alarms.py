@@ -85,7 +85,9 @@ async def alarms_add(
     or ``{ type: "value_range", source_value: ..., min: ..., max: ... }``. Falls
     back to a default ``bool`` trigger when omitted. ``settings`` may override
     other ``AlarmDefinition`` fields (``code``, ``description``, ``image``,
-    ``auto_popup``, ``resolutions``, ``ack_groups``).
+    ``auto_popup``, ``resolutions``, ``ack_required``, ``ack_groups``, ``values`` — a list of
+    ``{ "$var": ... }`` refs that ``{1}``, ``{2}`` … in the title and
+    description show).
     """
     label = get_agent_label()
     if idempotency_key:
@@ -111,6 +113,7 @@ async def alarms_add(
             "auto_popup": False,
             "resolutions": [],
             "trigger": trigger if trigger is not None else {"type": "bool"},
+            "ack_required": True,
             "ack_groups": [],
         }
         if settings:

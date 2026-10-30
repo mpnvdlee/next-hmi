@@ -52,7 +52,7 @@ export default function CustomWidgetsSection({
               <th>Status</th>
               <th>CSS</th>
               <th>Compiled</th>
-              <th aria-label="Actions" />
+              <th />
             </tr>
           </thead>
           <tbody>

@@ -1,14 +1,14 @@
 /**
  * PropertiesPanel — right panel of /editor.
  *
- * Auto-generates a form from the selected component's schema (Phase 12.1)
- * and layout sub-panel (Phase 12.2).
+ * Auto-generates a form from the selected component's schema, plus the layout
+ * sub-panel.
  *
  * All field changes update configStore immediately so the live preview
- * reflects them at once. Backend persist is debounced 300 ms (Phase 12.3).
+ * reflects them at once. Backend persist is debounced 300 ms.
  *
  * The "Change…" button for variable/struct fields opens the
- * VariableBindingPicker overlay (Phase 13).
+ * VariableBindingPicker overlay.
  *
  * Style: zero style={} props. All classes are cfg-prop-* or editor-props-*.
  */
@@ -76,6 +76,7 @@ import { isBuiltinIconId } from '@shared/utils/phosphorIcons';
 import { getEdition } from '@shared/utils/runtimeBase';
 import WidgetIcon from '../../ui/WidgetIcon';
 import ActionsInput from './ActionsInput';
+import VariableTriggersInput from './VariableTriggersInput';
 import PanelDiagnosticsBanner from './PanelDiagnosticsBanner';
 import MultiComponentPanel from './MultiComponentPanel';
 import { classifySelection } from '@config/store/domains/selectionScope';
@@ -159,6 +160,33 @@ function useCopyPasteShortcut(handle: CopyPasteHandler) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedParam, setSelectedParam]);
+}
+
+/** Ctrl+V on an action row: insert the clipboard action after the selected
+ *  one (`path` ends in its list index) rather than replacing it. */
+function pasteActionAfter(
+  root: unknown,
+  path: string[],
+  label: string,
+  write: (newRoot: unknown) => void,
+) {
+  const listPath = path.slice(0, -1);
+  const idx = Number(path[path.length - 1]);
+  void pasteActionValue(label, (action) => {
+    const list = getAtPath(root, listPath) as unknown[];
+    write(setAtPath(root, listPath, [...list.slice(0, idx + 1), action, ...list.slice(idx + 1)]));
+  });
+}
+
+/** Copy/paste for event panels, whose selection paths index straight into
+ *  `root` (`[eventKey, idx, …]`). Only action rows are selectable there. */
+function useEventActionsCopyPaste(root: unknown, write: (newRoot: unknown) => void) {
+  useCopyPasteShortcut((key, { path, schema }) => {
+    if (schema.type !== '_action') return;
+    const label = schema.label || path[0];
+    if (key === 'c') void copyPropertyValue(getAtPath(root, path), label);
+    else pasteActionAfter(root, path, label, write);
+  });
 }
 
 /** Candidate struct-field keys for a component's struct exports, taken from a
@@ -502,33 +530,73 @@ function PageComponentPropertyScope({
 }
 
 // ── OverlaySection ───────────────────────────────────────────────────────────
-// How the overlay card of a Dialogs-folder page or group closes. The node the
-// Open Page Overlay action names decides it; absent means yes, as for any page
-// opened as an overlay.
+// How the overlay card of a page or group looks and closes. The node the
+// overlay action names decides it; absent means yes, as for any page opened as
+// an overlay. Only the header bar is read outside the Dialogs folder.
+
+interface OverlaySettings {
+  showModalHeader?: boolean;
+  showCloseButton?: boolean;
+  closeOnBackgroundPress?: boolean;
+  tapThrough?: boolean;
+}
 
 function OverlaySection({
   node,
+  inDialogs,
   onPatch,
 }: {
-  node: { showCloseButton?: boolean; closeOnBackgroundPress?: boolean };
-  onPatch: (patch: { showCloseButton?: boolean; closeOnBackgroundPress?: boolean }) => void;
+  node: OverlaySettings;
+  inDialogs: boolean;
+  onPatch: (patch: OverlaySettings) => void;
 }) {
   return (
     <div className="cfg-section">
       <div className="cfg-section__title">Overlay</div>
-      <PropRow label="Show close button">
+      <PropRow
+        label="Show header bar"
+        description={
+          // Outside the Dialogs folder a backdrop press always closes.
+          inDialogs && node.showModalHeader === false && node.closeOnBackgroundPress === false
+            ? 'Without the header bar there is no ×; add a Close Dialog/Overlay button on the page.'
+            : undefined
+        }
+      >
         <BoolButtonGroup
-          value={node.showCloseButton !== false}
-          onChange={(v) => onPatch({ showCloseButton: v })}
+          value={node.showModalHeader !== false}
+          onChange={(v) => onPatch({ showModalHeader: v })}
           labels={['Show', 'Hide']}
         />
       </PropRow>
-      <PropRow label="Close on backdrop">
-        <BoolButtonGroup
-          value={node.closeOnBackgroundPress !== false}
-          onChange={(v) => onPatch({ closeOnBackgroundPress: v })}
-        />
-      </PropRow>
+      {inDialogs && (
+        <>
+          {/* The close button sits in the header bar. */}
+          {node.showModalHeader !== false && (
+            <PropRow label="Show close button">
+              <BoolButtonGroup
+                value={node.showCloseButton !== false}
+                onChange={(v) => onPatch({ showCloseButton: v })}
+                labels={['Show', 'Hide']}
+              />
+            </PropRow>
+          )}
+          <PropRow label="Close on backdrop">
+            <BoolButtonGroup
+              value={node.closeOnBackgroundPress !== false}
+              onChange={(v) => onPatch({ closeOnBackgroundPress: v })}
+            />
+          </PropRow>
+          {/* Only a backdrop press that closes can be handed on. */}
+          {node.closeOnBackgroundPress !== false && (
+            <PropRow label="Tap through">
+              <BoolButtonGroup
+                value={node.tapThrough !== false}
+                onChange={(v) => onPatch({ tapThrough: v })}
+              />
+            </PropRow>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -618,14 +686,17 @@ function PagePanel({
             />
           </PropRow>
         </div>
-        {inDialogs ? (
-          <OverlaySection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
-        ) : (
+        {!inDialogs && (
           <>
             <PageMetadataSection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
             <MainSection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
           </>
         )}
+        <OverlaySection
+          node={page}
+          inDialogs={inDialogs}
+          onPatch={(patch) => updatePage(page.id, patch)}
+        />
         <PageEventsSection
           node={page}
           kindLabel={inDialogs ? 'Dialog' : 'Page'}
@@ -833,6 +904,8 @@ function PageEventsSection({
     onPatch({ events: Object.keys(next).length > 0 ? next : undefined });
   }
 
+  useEventActionsCopyPaste(events, (next) => onPatch({ events: next }));
+
   const inputScope = useMemo(
     () => (inputs && Object.keys(inputs).length > 0 ? { properties: inputs } : null),
     [inputs],
@@ -904,12 +977,7 @@ function PageGroupPanel({
             </PropRow>
           )}
         </div>
-        {inDialogs ? (
-          <OverlaySection
-            node={pageGroup}
-            onPatch={(patch) => updatePageGroup(pageGroup.id, patch)}
-          />
-        ) : (
+        {!inDialogs && (
           <>
             <PageMetadataSection
               node={pageGroup}
@@ -921,6 +989,11 @@ function PageGroupPanel({
             />
           </>
         )}
+        <OverlaySection
+          node={pageGroup}
+          inDialogs={inDialogs}
+          onPatch={(patch) => updatePageGroup(pageGroup.id, patch)}
+        />
         <PageEventsSection
           node={pageGroup}
           kindLabel={inDialogs ? 'Dialog Group' : 'Group'}
@@ -1067,16 +1140,15 @@ function ComponentPanel({
     if (key === 'c') {
       const valueAtPath = subPath.length === 0 ? root : getAtPath(root, subPath);
       void copyPropertyValue(valueAtPath, label);
+    } else if (targetSchema.type === '_action') {
+      pasteActionAfter(root, subPath, label, (newRoot) =>
+        updateComponent(compRef.current.id, { properties: { [topKey]: newRoot } }),
+      );
     } else {
-      const apply = (v: unknown) => {
+      void pastePropertyValue(targetSchema, label, (v) => {
         const newRoot = subPath.length === 0 ? v : setAtPath(root, subPath, v);
         updateComponent(compRef.current.id, { properties: { [topKey]: newRoot } });
-      };
-      if (targetSchema.type === '_action') {
-        void pasteActionValue(label, apply);
-      } else {
-        void pastePropertyValue(targetSchema, label, apply);
-      }
+      });
     }
   });
 
@@ -1210,7 +1282,6 @@ function SettingsPanel() {
                 if (Number.isFinite(next)) commit(next);
               }}
               className="cfg-settings-scale__slider"
-              aria-label="HMI scale"
             />
             <input
               type="number"
@@ -1223,7 +1294,6 @@ function SettingsPanel() {
                 if (Number.isFinite(next)) commit(next);
               }}
               className="cfg-prop-input cfg-settings-scale__input"
-              aria-label="HMI scale value"
             />
           </div>
         </PropRow>
@@ -1257,9 +1327,9 @@ function SettingsPanel() {
           </Select>
         </PropRow>
       </div>
-      {getEdition() === 'ee' && (
-        <div className="cfg-section">
-          <div className="cfg-section__title">Branding</div>
+      <div className="cfg-section">
+        <div className="cfg-section__title">Branding</div>
+        {getEdition() === 'ee' ? (
           <PropRow
             label="Boot logo"
             description="Shown on the HMI boot screen in place of the product logo and name. Leave empty for the default branding."
@@ -1271,30 +1341,46 @@ function SettingsPanel() {
               onBrowse={browseBootLogo}
             />
           </PropRow>
-        </div>
-      )}
+        ) : (
+          <p className="cfg-section__note">
+            Your own logo on the boot screen, in place of ours, comes with the Enterprise build.{' '}
+            <a
+              href="https://next-hmi.com/pricing?from=boot-logo#situations"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              What it costs ↗
+            </a>
+          </p>
+        )}
+      </div>
     </>
   );
 }
 
 // ── GlobalEventsPanel ─────────────────────────────────────────────────────────
 
-const GLOBAL_EVENT_FIELDS: { eventKey: keyof GlobalEventsConfig; label: string }[] = [
+type GlobalActionEvent = Exclude<keyof GlobalEventsConfig, 'onVariableChanged'>;
+
+const GLOBAL_EVENT_FIELDS: { eventKey: GlobalActionEvent; label: string }[] = [
   { eventKey: 'onUserLoggedIn', label: 'User Logged In' },
   { eventKey: 'onUserLoggedOut', label: 'User Logged Out' },
   { eventKey: 'onPageLoaded', label: 'Page Loaded' },
   { eventKey: 'onHmiLoaded', label: 'HMI Loaded' },
   { eventKey: 'onLocaleChanged', label: 'Locale Changed' },
+  { eventKey: 'onInteractionDenied', label: 'Interaction Denied' },
 ];
 
 function GlobalEventsPanel() {
   const globalEvents = useConfigStore((s) => s.globalEvents);
   const updateGlobalEvents = useConfigStore((s) => s.updateGlobalEvents);
 
-  function handleChange(eventKey: keyof GlobalEventsConfig, value: unknown) {
+  function handleChange(eventKey: GlobalActionEvent, value: unknown) {
     const actionsConfig = value as ActionsConfig | undefined;
     updateGlobalEvents({ ...globalEvents, [eventKey]: actionsConfig?.[eventKey] });
   }
+
+  useEventActionsCopyPaste(globalEvents, (next) => updateGlobalEvents(next as GlobalEventsConfig));
 
   return (
     // Global event handlers belong to no widget node; the backend stamps this
@@ -1317,6 +1403,10 @@ function GlobalEventsPanel() {
             />
           </div>
         ))}
+        <VariableTriggersInput
+          value={globalEvents.onVariableChanged}
+          onChange={(onVariableChanged) => updateGlobalEvents({ ...globalEvents, onVariableChanged })}
+        />
       </div>
     </PanelScopeContext.Provider>
   );
@@ -1364,6 +1454,13 @@ const SHELL_BACKGROUND_SCHEMA: SchemaField = {
 const SHELL_FULL_HEIGHT_SCHEMA: SchemaField = {
   type: 'Boolean',
   label: 'Full height',
+  defaultValue: false,
+};
+
+const SHELL_FLOATING_SCHEMA: SchemaField = {
+  type: 'Boolean',
+  label: 'Floating',
+  description: 'Lies on top of the page. Clicks on empty space go to the page underneath.',
   defaultValue: false,
 };
 
@@ -1477,6 +1574,20 @@ function ShellRegionFields({
           }
         />
       )}
+
+      <SchemaFieldRow
+        path={['floating']}
+        schema={SHELL_FLOATING_SCHEMA}
+        value={config.floating}
+        onChange={(v) => onPatch({ floating: v === false ? undefined : v })}
+        onOpenPicker={(onPick, currentBinding, slot) =>
+          openBindingPicker(bindingTargetId, 'floating', {
+            onPick,
+            currentBinding: currentBinding ?? varBindingOf(config.floating),
+            filter: slotFilter({ label: 'Floating', type: 'Boolean' }, slot),
+          })
+        }
+      />
 
       <SchemaFieldRow
         path={['background']}

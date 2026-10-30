@@ -1,6 +1,6 @@
 {
   "name": "Card",
-  "description": "The standard surface: border, shadow, an optional title row with a trailing action, and a body the caller fills.",
+  "description": "The standard surface: border, an optional title row with a trailing action, and a body the caller fills.",
   "category": "Brew",
   "icon": {
     "type": "builtin",
@@ -38,8 +38,7 @@
         "visible": true,
         "showWhenEmpty": true,
         "background": "var(--hmi-surface)",
-        "border": "1px solid var(--hmi-border)",
-        "shadow": "var(--hmi-shadow)"
+        "border": "1px solid var(--hmi-border)"
       },
       "layout": {
         "direction": "column",

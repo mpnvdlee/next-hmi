@@ -24,13 +24,13 @@ Every widget declares a **schema** — the list of fields it exposes and the typ
 - a `color` field opens a color picker (with theme-token support),
 - an `icon` field opens the icon picker, an `image` field the asset picker,
 - a `select` shows a dropdown of allowed values,
-- a `struct` field (like a Number Input's bound variable) binds a struct variable that carries every member the field asks for.
+- a `struct` field (custom widgets can declare one) binds a struct variable that carries every member the field asks for.
 
 Most fields also carry a small **source pill** — that's where a static value becomes a live binding. Full detail in [Dynamic properties](properties.md).
 
 ## Make controls do something: actions
 
-Interactive widgets (**Button**, **Menu Toggle**) have an **Actions** field holding a list that runs, top to bottom, when the control is pressed; others, such as a Dropdown's **On Change**, run one on their own event. The fourteen action types cover five jobs:
+Interactive widgets (**Button**, **Menu Toggle**, and a **Button Container** — a Container you press as a whole) have an **Actions** field holding a list that runs, top to bottom, when the control is pressed; others, such as a Dropdown's **On Change**, run one on their own event. The fourteen action types cover five jobs:
 
 - **Screens** — open or close a **dialog**, or open an ordinary page as a **page overlay**.
 - **Machine** — **write a variable** (set a coil, a mode, a setpoint), **toggle a Boolean**, or **load / save a recipe**.
@@ -47,4 +47,4 @@ The six that cross the wire carry `onSuccess` / `onFailed` / `onSettled` handler
 > **Visibility & permissions.** Every widget exposes **Visible** and **Interactable** booleans, and both arrive already wired to the `$userGroups` source with no groups ticked. Tick the groups and it becomes a group test — a Start button restricted to *operator* renders read-only for everyone else, with no scripting and no source to switch first. See [Users, groups & permissions](users.md#gate-what-a-group-can-see-and-do).
 
 > [!TIP]
-> **Showing who is signed in.** The **User Badge** widget puts the current user in the header and carries the sign-in and sign-out buttons with it — see [Sign in and out on a screen](users.md#sign-in-and-out-on-a-screen).
+> **Showing who is signed in.** A Label bound to `$user` names the current user, and two Buttons gated on the guest sign in and out — see [Sign in and out on a screen](users.md#sign-in-and-out-on-a-screen).

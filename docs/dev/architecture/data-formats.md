@@ -26,7 +26,7 @@ A project is a self-contained folder anywhere on disk, registered in the runtime
     <DatasourceName>.json
   config.json             ← page index + globalEvents + embedded project metadata/defaultTheme
   themes/
-    <themeId>.json        ← one theme each (colors, typography, spacing)
+    <themeId>.json        ← one theme each (colors, typography, spacing, numpad, toasts)
   pages/
     <pageId>.json         ← per-page component tree (the navigable tree)
   dialogs/
@@ -88,7 +88,7 @@ Outside any project, the runtime keeps its own state:
 - `<project>/config.json`
   - Page index: HMI page list, header, footer, the Dialogs folder's page list, global lifecycle events (v2 — no component children for pages). Also holds `project.defaultTheme` — the id of the default theme
 - `<project>/themes/<themeId>.json`
-  - One theme per file (colors, typography, and spacing tokens editable in Theme Editor). The id is the file stem
+  - One theme per file (colors, typography, spacing, numpad, and toasts tokens editable in Theme Editor). The id is the file stem
 - `<project>/pages/<pageId>.json`
   - Page document for one page of the navigable tree: its metadata and component tree
 - `<project>/dialogs/<pageId>.json`
@@ -131,8 +131,8 @@ Outside any project, the runtime keeps its own state:
 
 ### Format versions
 
-This build writes format **9** (`PROJECT_FORMAT_VERSION`) and stamps
-`minAppVersion` `1.0.0` (`PROJECT_FORMAT_MIN_APP`) beside it. A project stamped
+This build writes format **11** (`PROJECT_FORMAT_VERSION`) and stamps
+`minAppVersion` `1.1.0` (`PROJECT_FORMAT_MIN_APP`) beside it. A project stamped
 lower is carried up through every step of `_STEPS` in
 `core/project_migrations.py`, in order; each one rewrites only the shape below
 and skips what it has already converted:
@@ -142,6 +142,8 @@ and skips what it has already converted:
 | 4 → 7 | `retire-flex-and-collapse-padding` | `core/migration_size_modes.py`, then `core/migration_padding.py` | Widget `layout`s in `config.json`, `pages/` and `components/`: the raw flex keys (`basis`, `shrink`, `alignSelf`, a stale `grow`) become `widthMode` / `heightMode` or are dropped, as are `margin` and the container keys of a widget type that does not flow children, and the `padding` shorthand is split into `paddingTop` / `paddingRight` / `paddingBottom` / `paddingLeft`. A project stamped below 4 runs through this step too. Formats 5 and 6 were never stamped by a release and have no step of their own |
 | 7 → 8 | `dialogs-to-pages` | `core/migration_dialogs_folder.py` | Each inline entry of `config.json`'s `dialogs` list becomes an index node `{ id, type: "page" }` with its document in `dialogs/<id>.json` (title, `componentProperties`, both close flags written out, widgets as `sections.content` — more than one wrapped in a wrapping-row `Container`). In every stored action, `openDialog` renames `dialogId` to `pageId` (and gets `size: "auto"` when it had no size) and `closeDialog` becomes `closePageOverlay` |
 | 8 → 9 | `write-target-source` | `core/migration_write_targets.py` | Every `writeDataVariable` / `toggleDataVariable` swaps its `datasource` / `path` pair for one `target`, `{ "$var": { "path": "<datasource>:<path>" } }`; a pair with an empty half becomes no `target` |
+| 9 → 10 | `release-1-1-fields` | `core/project_migrations.py` | Nothing — the stamp marks the fields 1.1.0 added to files a 1.0.x build parses strictly: `values` in `alarms.json` and `values` / `value_refs` in `alarm_state.json`, the `numpad` and `toasts` sections of a theme. That build would read either alarm file as invalid, fall back to an empty one and save it over the original, and would fail to load the theme; the stamp makes it refuse the project instead |
+| 10 → 11 | `retire-user-badge-and-pressable-container` | `core/migration_user_badge.py`, then `core/migration_button_container.py` | Every `UserBadge` becomes a row `Container` that keeps its id, name, layout and visibility, holding a `user` Icon and username / groups Labels (a Button Container when the badge had press actions), a guest-only sign-in Button for `onSignIn` and a sign-out Button for `onSignOut`. Then every `Container` with `actions.onPress` or `onRelease.onRelease` actions becomes a `ButtonContainer`; one whose lists are empty only loses those keys |
 
 How a migration is staged, backed up and swapped in is in
 [backend.md](backend.md#project-format-migration).
@@ -184,6 +186,10 @@ dashboard via `POST /api/projects/{id}/mcp` and reported by `projects_list`. A
 - `onLocaleChanged`
 - `onUserLoggedIn`
 - `onUserLoggedOut`
+- `onInteractionDenied` (a press on a non-interactable widget)
+- `onVariableChanged` — not an action list but a list of triggers,
+  `{ variable: { $var: … }, actions: [...] }`, each run when its variable's
+  value changes (its first value included)
 
 Index page node — structural only. Saving the index strips everything else, so
 a page's title, icon and the rest of its metadata live in its page document:
@@ -248,7 +254,8 @@ page of the Dialogs folder — one shape, two directories):
 only the keys in `_PAGE_PERSISTED_FIELDS` (`api/config_api.py`) — `title`,
 `icon`, `description`, `breadcrumbLabel`, `hidden`, `role`, `order`, `route`,
 `layout`, `showHeader`, `showFooter`, `mainPadding`, `mainBackground`, `events`,
-`componentProperties`, `showCloseButton`, `closeOnBackgroundPress` — and drops
+`componentProperties`, `showCloseButton`, `closeOnBackgroundPress`, `tapThrough`,
+`showModalHeader` — and drops
 any other key on save.
 
 A widget node carries `id`, `type`, `name`, `properties`, `layout`, optional
@@ -299,7 +306,10 @@ The sibling `shell` object holds the regions' *behaviour*, never their contents:
 Per region (`ShellRegionConfig`): `enabled` (default `true`), `expandedSize` /
 `collapsedSize` (CSS lengths — width for a sidebar, height for header/footer),
 `expanded`, `overlay`, `background`, `defaultState` (`expanded` | `collapsed` |
-`hidden`) and `fullHeight` (sidebars only). All of them except `defaultState`
+`hidden`), `fullHeight` (sidebars only) and `floating` (the region lies over
+`.hmi-main` without taking space, and only widgets catch clicks — a floating
+header/footer is rendered inside `.hmi-main`, a floating sidebar stays in its
+slot). All of them except `defaultState`
 are **bindable** — they accept any property source, not just a literal, and
 `ShellRegion` re-evaluates them as the bound values change.
 
@@ -309,7 +319,10 @@ keeps them scrollable but chromeless), `lockedFeedback` (what a press on a
 non-interactable component produces — `flash`, the default ⊘ marker at the
 pointer, `toast` for a warning notification, or `none`; the component is dimmed
 and blocked in every mode), `appTitle`
-(browser tab), `appIcon` (path under `assets/`, or an absolute URL), and
+(browser tab), `appIcon` (path under `assets/`, or an absolute URL),
+`editorViewport` (`{ preset, width, height }` — the editor preview's viewport:
+`preset` is `fit`, `laptop`, `tablet`, `phone` or `custom`, and `width`/`height`
+the custom size; editor-only, the runtime ignores it; unset is `fit`), and
 `bootLogo` (path under `assets/`) — the boot-screen logo, which replaces the
 product mark and name. Edition-bound: only the `ee` build offers a setting for
 it *and* reads it, so the public build shows the product branding whatever the
@@ -339,8 +352,14 @@ and page-group nodes, each page's widgets in its own document under
 `dialogs/`. It is the **Dialogs folder**: the nodes in it are never navigated
 to, only opened by `openDialog` — `openPageOverlay` is the same modal over a
 node in the `pages` root, and takes no parameters. An overlay action naming a
-node of the other root is an `overlay-wrong-root` error, and a menu item or
-`format: 'page'` field naming a Dialogs-folder page is `page-not-navigable`.
+node of the other root is an `overlay-wrong-root` error, and a menu item,
+`navigateToPage` or `format: 'page'` field naming a Dialogs-folder page is
+`page-not-navigable` (one naming no node of the `pages` root is `page-unknown`). An input
+parameter declared `format: 'page'` (the editor's **Page** type) gets the page picker in `openDialog`, and is
+what a `navigateToPage` inside the dialog may read. A reusable component's
+`componentProperties` entry takes the same `format: 'page'`: the instance's
+property row is the page picker, its value is checked like any `format: 'page'`
+field, and a `navigateToPage` inside the component may read it.
 A node moves between the two roots unchanged — apart from its document, which
 moves to the other directory with it (see below).
 
@@ -348,6 +367,14 @@ Two optional keys are read only on a node in this root, on both kinds:
 
 - `showCloseButton` — the modal's close button. Absent means shown
 - `closeOnBackgroundPress` — a press on the backdrop closes it. Absent means it does
+- `tapThrough` — with backdrop `none`, that closing press also reaches the element
+  under it, so tapping the next hotspot closes this popover and opens its own in one
+  tap. Absent means it does; ignored when `closeOnBackgroundPress` is off
+
+`showModalHeader` is read on a node in either root, on both kinds: `false` drops
+the modal's header bar — title and close button — while the node is open as an
+overlay. Absent means shown. Like the keys above it belongs to the node the
+action named, so a group's flag decides, not its active page's.
 
 `componentProperties` is likewise only read here — declared on a page in its
 page document, on a group in its index node, exactly as above.
@@ -387,6 +414,19 @@ Localization references use the `$loc` source:
 }
 ```
 
+A key that holds `{1}`, `{2}` … carries one binding per placeholder; the key is
+translated first and the placeholders filled after, with the `$stringExpr`
+transforms (`{Round1(1)}`):
+
+```json
+{
+  "$loc": {
+    "key": "Must lie outside the {1} g band",
+    "wildcards": { "1": { "$var": { "path": "CW:Params/Band" } } }
+  }
+}
+```
+
 ### Stored actions
 
 An action list is a JSON array of action objects, each discriminated by `type`
@@ -413,20 +453,27 @@ nested inside other actions (`onSuccess` / `onFailed` / `onSettled`, `then` /
 | `openDialog` | `pageId` (a page or group of the Dialogs folder), `componentProperties` (input values), `size` (`auto` \| `small` \| `medium` \| `fullscreen` \| `fixed`), `placement`, `backdrop` (`dim` \| `none`), `width` / `height` (for `fixed`) |
 | `openPageOverlay` | as `openDialog`, on a node of the `pages` root, without `componentProperties` |
 | `closePageOverlay` | `pageId` — the overlay to close; empty closes the top-most |
-| `writeDataVariable` | `target`, `value` (a literal, a `$componentProp` or a `$repeatItem`), `onSuccess` / `onFailed` / `onSettled` |
+| `navigateToPage` | `pageId` — a node of the `pages` root, or `{ "$componentProp": "<input>" }` naming an input parameter declared `format: "page"`; closes every overlay first |
+| `writeDataVariable` | `target`, `value` (a literal, or a property source such as `$componentProp`, `$repeatItem` or `$formula`, resolved when the action fires; a `$formula` into an integer tag must come out whole), `onSuccess` / `onFailed` / `onSettled` |
 | `toggleDataVariable` | `target`, `onSuccess` / `onFailed` / `onSettled` |
+| `editValue` | `target`, `title`, `unit`, `min`, `max`, `decimals`, `allowNegative`, `position` (`center` \| `bottom-right`), `onSuccess` / `onFailed` / `onSettled` |
 | `if` | `condition` (a Boolean property value), `then`, `else` |
 | `loginUser` | `username`, `password`, `onSuccess` / `onFailed` / `onSettled` |
 | `logoutUser` | `onSuccess` / `onFailed` / `onSettled` |
 | `recipeLoad` | `datasetId`, `verify`, `onSuccess` / `onFailed` / `onSettled` |
 | `recipeSave` | `datasetId` (absent = the loaded one), `onSuccess` / `onFailed` / `onSettled` |
+| `acknowledgeAllAlarms` | none |
+| `delay` | `duration` (ms) |
 | `setLanguage` / `setActiveTheme` | `language` / `theme` |
 | `showAlert` | `title`, `description`, `cancelText`, `okText`, `dismissible`, `onCancel`, `onOk` |
 | `showToast` | `message`, `severity` (`info` \| `success` \| `warning` \| `error`), `discard` (`auto` \| `manual`), `duration` (ms) |
 
-A write or toggle `target` is a property source naming one variable — a `$var`,
-or inside a Repeater `{ "$repeatItem": { "member": "..." } }` — and is absent
-until one is picked. The backend walks every field through `ACTION_FIELDS`
+A write, toggle or edit `target` is a property source naming one variable — a
+`$var`, inside a Repeater `{ "$repeatItem": { "member": "..." } }`, or inside a
+component or dialog `{ "$componentProp": "<input>" }`, an input declared
+`write: true` that the caller fills with a `$var` (resolved when the action
+fires; a `name/member` path writes that member) — and is absent until one is
+picked. The backend walks every field through `ACTION_FIELDS`
 (`backend/core/validation/structure.py`); what each field is checked as is in
 [value-types.md](value-types.md#type-diagnostics).
 
@@ -443,7 +490,7 @@ registry.
 On first access the backend seeds `themes/default.json` from defaults if no
 theme exists yet. A theme file is read as-is, with no read-time normalization.
 
-One theme file has three sections:
+One theme file has five sections:
 
 - **colors** — `bg`, `surface`, `surface_raised`, `text`, `text_muted`,
   `accent`, `border`, `ok`, `warn`, and `fault`.
@@ -452,9 +499,25 @@ One theme file has three sections:
   `_tracking`, and `_transform`.
 - **spacing** — `space_sm`, `space_md`, `space_lg`, `radius_sm`, `radius_md`,
   `radius_lg`, and `shadow`.
+- **numpad** — the on-screen numpad of every numeric input: `columns` (`3`, or
+  `4` to move Back / Clear / Enter into a column beside the digits), `key_size`
+  (key width and minimum height), `gap`, `key_font`, `key_font_size` (digit
+  keys), `key_font_weight`, and `accent` (the Enter key). Every field but
+  `columns` may be empty (`""`, or `null` for the weight): the numpad then
+  derives it from the rest of the theme — body font, accent colour, a 188px
+  three-column panel — as it did before the section existed. A theme file
+  without the section reads as these defaults.
+- **toasts** — the Show Toast notifications: `position` (`top-left`,
+  `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right`;
+  default `top-center`), `shape` (`rounded` = the theme radius, or `pill`), and
+  a background and text colour per severity: `info_bg`, `info_text`,
+  `success_bg`, `success_text`, `warning_bg`, `warning_text`, `error_bg`,
+  `error_text`. An empty colour keeps the severity tint derived from the
+  theme. A theme file without the section reads as these defaults, which is
+  the look toasts had before the section existed.
 
-That is 52 editable fields: 10 colors, 35 typography values, and 7 spacing
-values. `frontend/src/shared/themeDefaults.json` is the exact canonical JSON
+That is 69 editable fields: 10 colors, 35 typography values, 7 spacing
+values, 7 numpad values, and 10 toasts values. `frontend/src/shared/themeDefaults.json` is the exact canonical JSON
 shape and `project-seed/themes/light.json` is kept byte-for-byte equivalent.
 Extra fields are rejected by the backend (`extra="forbid"`).
 
@@ -490,7 +553,9 @@ the `/api/themes` endpoints in [../reference/rest-api.md](../reference/rest-api.
             "max": { "$static": 100 },
             "on_true": true
           },
-          "ack_groups": []
+          "ack_required": true,
+          "ack_groups": [],
+          "values": [{ "$var": { "path": "MyPLC:Motor1/Temp" } }]
         }
       ]
     }
@@ -505,14 +570,18 @@ Trigger types:
 
 Group and alarm ids are slugs the service layer assigns from the title or `code`. `source_value` carries the `$var` binding for the monitored variable; the binding's own `index` selects an array element. Title/description/image fields accept plain strings, `$static` (an image carries a `{ path }` payload), or `$loc` keys.
 
+`values` is an optional list of `$var` bindings. A `{1}`, `{2}` … placeholder in the title or description (or in the translation a `$loc` key names) is entry 1, 2 … of that list, with the same chained transforms `$stringExpr` takes (`{Round1(1)}`, `{Signed(2)}`). The backend formats no text: when the alarm fires it stores each binding's raw value as cached at that moment with the instance — a binding with no cached value yet stores `null`, filled in by that variable's first update while the alarm is still active — and the client fills the placeholders — live from the bindings while the alarm is active, from the stored values once it has cleared, and `—` where neither exists. An entry that is not a `$var` is the `alarm-value-not-var` error, since only a variable has a value to store. A placeholder in literal title/description text with no matching entry is the `alarm-value-missing` warning; an entry naming an unknown variable gets the same error as the trigger binding. The `values` variables stay on the priority subscription like trigger variables. A binding with an `index` stores that element. A bound index is resolved first, as the client resolves it: `$static`, or a `$var` read from the cache, whose variable is on the priority subscription too; any other source names no element. A member of a struct-array element is bound by its own leaf key (`MyPLC:Stations/Stations[3]/Temp`), as the binding picker writes it.
+
 `alarm_state.json` is owned by the backend and tracks runtime state:
 
 ```json
 {
-  "active": [ /* AlarmInstance entries with triggered_at, acked, acked_by, acked_at */ ],
-  "history": [ /* AlarmHistoryEntry entries, newest first; capped at 500 */ ]
+  "active": [ /* AlarmInstance entries with triggered_at, acked, acked_by, acked_at, value_refs, values */ ],
+  "history": [ /* AlarmHistoryEntry entries with values, newest first; capped at 500 */ ]
 }
 ```
+
+An instance's `value_refs` is its definition's `values` bindings, copied at fire time, and `values` their raw values at that moment; a history entry keeps `values`. A file written before these fields existed reads them as `[]`.
 
 ## Recipe Files
 

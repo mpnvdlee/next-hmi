@@ -9,8 +9,8 @@ This file only routes you there.
 
 **Read [Hard rules](docs/dev/operations/agents.md#hard-rules) before your first edit in a
 session** — atomic storage helpers, path resolvers, property-resolver hooks, zero inline
-styles, generated files, backend config caching. Breaking one of those passes review and
-fails at runtime.
+styles, generated files, backend config caching. Lint and tests catch three of them;
+the rest pass review and fail at runtime.
 
 Then read the row that matches what you are about to do:
 
@@ -32,11 +32,17 @@ Architecture and behaviour: `docs/dev/INDEX.md`. Operator-facing guide: `docs/us
 
 ## Always
 
-- Keep changes scoped — don't refactor adjacent code unless asked.
-- Prefer editing existing files; never create docs (`*.md`) unless asked.
-- No comments unless they explain a non-obvious *why*.
-- Commit only when explicitly asked.
-- Never put Claude references in a commit or pull request — no session/run IDs, no
+- **Simplicity first: the least code that fully solves the asked problem.** Reach
+  for the existing pattern, the stdlib, a platform feature or an installed
+  dependency before writing new code; build only the options, abstractions and
+  dependencies the task names. When a simpler route than the one asked for
+  exists, name it in one line before building.
+- Keep changes scoped to the task; refactor adjacent code only when asked.
+- Comments explain a non-obvious *why*; identifiers carry the *what*.
+- Create a `*.md` file only when asked.
+- **Other sessions may be editing this tree.** Stage your own paths by name and
+  leave changes you did not make as you found them.
+- Commits, pull requests, branch names, tags and committed files describe the change
+  and nothing else. Never put Claude references in them — no session/run IDs, no
   `Generated with Claude Code`, no `Co-Authored-By: Claude`, no claude.ai/claude.com
-  links. Same for branch names, tags and committed files. The commit message and the
-  PR body describe the change, nothing else.
+  links.

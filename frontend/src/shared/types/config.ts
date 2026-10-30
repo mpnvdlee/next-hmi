@@ -46,11 +46,27 @@ export interface VariableBinding {
    *  datasource name before the first ':' selects the connection; the rest is
    *  the slash-separated location of the variable within that datasource. */
   path: string;
-  /** Array element index (0-based). When set, resolves to value[index] at runtime. Absent means whole variable. */
-  index?: number;
+  /** Array element index (0-based). When set, resolves to value[index] at runtime. Absent means whole variable.
+   *  May itself be an Integer property source — a dialog's `$componentProp`, a
+   *  `$var` — which the runtime resolves to a number before any widget or write
+   *  sees the binding (see `isBoundIndex`). */
+  index?: number | BoundIndex;
   /** Take `index` from the surrounding Repeater copy instead. Replaced by a
    *  concrete `index` before any widget sees the binding. */
   repeatIndex?: boolean;
+}
+
+/** A `$var.index` given as a property source instead of a number. */
+export type BoundIndex = { [source: `$${string}`]: unknown };
+
+/** Whether a binding's index is a property source still to be resolved. */
+export function isBoundIndex(index: unknown): index is BoundIndex {
+  return typeof index === 'object' && index !== null;
+}
+
+/** The element a binding names: a bound index no one resolved names none (-1). */
+export function bindingIndex(b: VariableBinding | undefined | null): number | undefined {
+  return isBoundIndex(b?.index) ? -1 : b?.index;
 }
 
 /** Extract the composite "datasource:location" key from a VariableBinding. */
@@ -77,9 +93,10 @@ export function writeTargetAddress(target: unknown): { datasource: string; path:
   const binding = (target as VarSource).$var;
   const { datasource, location } = bindingParts(binding);
   if (!datasource || !location) return null;
+  const index = bindingIndex(binding);
   return {
     datasource,
-    path: binding.index !== undefined ? `${location}[${binding.index}]` : location,
+    path: index !== undefined ? `${location}[${index}]` : location,
   };
 }
 
@@ -105,6 +122,12 @@ export interface LocSource {
   $loc: string; // translation key
 }
 
+/** A translation whose key holds `{1}`, `{2}` …, each filled by its own binding
+ *  after the key is translated, so every language orders the values itself. */
+export interface LocTemplateSource {
+  $loc: { key: string; wildcards: Record<string, unknown> };
+}
+
 /** $urlParam: URL query parameter (with optional static fallback) */
 export interface UrlParamSource {
   $urlParam: {
@@ -118,6 +141,16 @@ export interface PageIsActiveSource {
   $pageIsActive: {
     /** Target page id; omitted/empty means the host page (current renderer scope). */
     page?: string;
+  };
+}
+
+/** $overlay: an input parameter of a Dialogs-folder page, while it is open */
+export interface OverlaySource {
+  $overlay: {
+    /** The dialog page (or page group) id. */
+    page: string;
+    /** The input parameter it declares. */
+    param: string;
   };
 }
 
@@ -146,11 +179,23 @@ export interface NotSource {
   };
 }
 
+/** $and: true when every listed boolean is true */
+export interface AndSource {
+  $and: unknown[];
+}
+
+/** $or: true when any listed boolean is true */
+export interface OrSource {
+  $or: unknown[];
+}
+
 /** $formula: arithmetic over `{n}` placeholders, e.g. "({1} - 32) / 1.8" */
 export interface FormulaSource {
   $formula: {
     expression: string;
     wildcards: Record<string, unknown>; // keyed by placeholder number, like $stringExpr
+    /** Round the result to the nearest whole number. */
+    round?: boolean;
   };
 }
 
@@ -325,7 +370,10 @@ export interface RepeatItemSource {
 /** The variable a write or toggle action writes: a `$var`, or — inside a
  *  Repeater — the copy's element (`member` of a struct element), which becomes
  *  that copy's `$var` before the action fires. */
-export type WriteTarget = VarSource | { $repeatItem: { member?: string } };
+/** What a write action writes: a variable, the Repeater copy's element, or — inside
+ *  a component or a dialog — an input parameter the caller filled with a variable. */
+export type WriteTarget =
+  VarSource | { $repeatItem: { member?: string } } | { $componentProp: string };
 
 /** Logical viewport size class. Driven by configurable breakpoints. */
 export type ViewportSize = 'phone' | 'tablet' | 'laptop';
@@ -406,6 +454,13 @@ interface PageNodeBase {
   /** Whether pressing the backdrop closes this node's page overlay. Read only
    *  for a node in the Dialogs folder; absent = closes. */
   closeOnBackgroundPress?: boolean;
+  /** Whether that press, with no backdrop drawn, also reaches what lies under
+   *  it — so tapping the next hotspot closes this popover and opens its own in
+   *  one tap. Read only for a node in the Dialogs folder; absent = it does. */
+  tapThrough?: boolean;
+  /** Whether the modal card shows its header bar (title and close button) while
+   *  this node is open as a page overlay, from either root; absent = shown. */
+  showModalHeader?: boolean;
 }
 
 export interface PageConfig extends PageNodeBase {
@@ -542,6 +597,13 @@ export type ButtonAction =
    *  closes the top-most overlay. */
   | { type: 'closePageOverlay'; pageId?: string }
   | {
+      /** Closes every open overlay, then navigates to a page or page group in
+       *  the `pages` root: a fixed id, or a dialog input parameter declared
+       *  `format: 'page'`. One that resolves to no navigable page does nothing. */
+      type: 'navigateToPage';
+      pageId: string | { $componentProp: string };
+    }
+  | {
       type: 'writeDataVariable';
       /** Absent until a target is picked. */
       target?: WriteTarget;
@@ -563,6 +625,25 @@ export type ButtonAction =
       type: 'toggleDataVariable';
       /** Absent until a target is picked. */
       target?: WriteTarget;
+      onSuccess?: ButtonAction[];
+      onFailed?: ButtonAction[];
+      onSettled?: ButtonAction[];
+    }
+  | {
+      /** Opens the numpad on a numeric variable; Apply writes, Cancel does nothing. */
+      type: 'editValue';
+      /** Absent until a target is picked. */
+      target?: WriteTarget;
+      title?: unknown;
+      unit?: unknown;
+      /** Empty falls back to the variable's own configured range. */
+      min?: unknown;
+      max?: unknown;
+      /** Empty: none for an Integer variable, no limit otherwise. */
+      decimals?: unknown;
+      /** Empty: allowed unless the lower bound is 0 or more. */
+      allowNegative?: unknown;
+      position?: 'center' | 'bottom-right';
       onSuccess?: ButtonAction[];
       onFailed?: ButtonAction[];
       onSettled?: ButtonAction[];
@@ -601,6 +682,8 @@ export type ButtonAction =
       onFailed?: ButtonAction[];
       onSettled?: ButtonAction[];
     }
+  | { type: 'acknowledgeAllAlarms' }
+  | { type: 'delay'; duration: number }
   | { type: 'setLanguage'; language: unknown }
   | { type: 'setActiveTheme'; theme: unknown }
   | {
@@ -612,6 +695,12 @@ export type ButtonAction =
       dismissible?: boolean;
       onCancel?: ButtonAction[];
       onOk?: ButtonAction[];
+    }
+  | {
+      /** Inside a component definition: runs the action list the instance
+       *  passes in through the component's `actions`-type property `property`. */
+      type: 'runComponentActions';
+      property: string;
     }
   | {
       type: 'showToast';
@@ -645,6 +734,17 @@ export interface GlobalEventsConfig {
   onPageLoaded?: ButtonAction[];
   onHmiLoaded?: ButtonAction[];
   onLocaleChanged?: ButtonAction[];
+  /** A press on a widget whose `interactable` resolves false. */
+  onInteractionDenied?: ButtonAction[];
+  /** Each runs its actions whenever its variable's value changes, its first
+   *  value included. */
+  onVariableChanged?: VariableTrigger[];
+}
+
+export interface VariableTrigger {
+  /** Absent until a variable is picked. */
+  variable?: { $var: VariableBinding };
+  actions?: ButtonAction[];
 }
 
 /**
@@ -744,11 +844,14 @@ export interface ShellRegionConfig {
   collapsedSize?: unknown; // string, bindable — e.g. '48px', '0'
   expanded?: unknown; // boolean, bindable
   defaultState?: 'expanded' | 'collapsed' | 'hidden';
-  overlay?: unknown; // boolean, bindable — Phase 7
+  overlay?: unknown; // boolean, bindable
   /** Sidebars only, bindable: when true, the sidebar spans the full layout
    *  height, flanking the header/main/footer column instead of sitting
    *  between them. */
   fullHeight?: unknown;
+  /** Bindable: when true, the region lies over the page without taking space,
+   *  and clicks on its empty space reach the page underneath. */
+  floating?: unknown;
   /** CSS color for the region's background, bindable. Defaults to white. */
   background?: unknown;
 }
@@ -785,11 +888,23 @@ export interface ShellConfig {
    * plain setting, never a runtime licence check. See COMMERCIAL.md.
    */
   bootLogo?: string;
+  /** The editor's preview viewport for this project; unset is "Fit to screen". Not read by the runtime. */
+  editorViewport?: EditorViewport;
+}
+
+export interface EditorViewport {
+  /** `fit`, `laptop`, `tablet`, `phone` or `custom`. */
+  preset: string;
+  /** The custom size in px, kept while a preset is active. */
+  width: number;
+  height: number;
 }
 
 /** Props interface shared by every HMI component in the registry */
 export interface HmiWidgetProps {
   id?: string;
+  /** The node's Identity name. */
+  name?: string;
   properties?: Record<string, unknown>;
   layout?: LayoutConfig;
   children?: ReactNode;

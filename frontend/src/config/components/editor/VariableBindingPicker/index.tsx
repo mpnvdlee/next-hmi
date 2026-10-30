@@ -32,6 +32,7 @@ import {
   accepts,
   elementOf,
   formatVarType,
+  nodeAcceptsOrElement,
   nodeVarType,
   parseTypeToken,
 } from '@shared/types/varType';
@@ -248,8 +249,6 @@ export default function VariableBindingPicker() {
     return widgetRegistry[comp.type]?.schema[target.propertyKey] ?? null;
   }, [isComponentPropMode, comp, target]);
 
-  const includeDisabled = target?.filter?.includeDisabled === true;
-
   // The Repeat item rows follow the same type filter as the variables.
   const repeatProperties = useMemo(
     () =>
@@ -262,7 +261,7 @@ export default function VariableBindingPicker() {
     [repeatOptions, showAll, schemaField],
   );
 
-  // ── Var mode: Phase 1 — load datasource headers on open ──────────────────
+  // ── Var mode: load datasource headers on open ───────────────────────────
 
   useEffect(() => {
     if (!open || !loadsDatasources) return;
@@ -310,7 +309,7 @@ export default function VariableBindingPicker() {
     })();
   }, [open, loadsDatasources, setCollapsed]);
 
-  // ── Var mode: Phase 2 — load variables for a specific datasource ──────────
+  // ── Var mode: load variables for a specific datasource ──────────────────
 
   const loadDatasource = useCallback(
     async (name: string) => {
@@ -417,9 +416,9 @@ export default function VariableBindingPicker() {
       ...ds,
       children: showAll
         ? annotateSelectable(ds.children, schemaField)
-        : typeFilter(ds.children, schemaField, includeDisabled),
+        : typeFilter(ds.children, schemaField),
     }));
-  }, [isComponentPropMode, dsTree, schemaField, includeDisabled, showAll]);
+  }, [isComponentPropMode, dsTree, schemaField, showAll]);
 
   const rows = useMemo((): RowItem[] => {
     if (isComponentPropMode && target?.componentPropSource) {
@@ -501,9 +500,9 @@ export default function VariableBindingPicker() {
         ? typedDsTree
         : dsTree.map((ds) => ({
             ...ds,
-            children: typeFilter(ds.children, schemaField, includeDisabled),
+            children: typeFilter(ds.children, schemaField),
           })),
-    [isComponentPropMode, showAll, dsTree, typedDsTree, schemaField, includeDisabled],
+    [isComponentPropMode, showAll, dsTree, typedDsTree, schemaField],
   );
 
   // Scroll container for the virtual list
@@ -678,6 +677,8 @@ export default function VariableBindingPicker() {
       !dsFailed.has(selectedParsed.datasource);
 
     let scalarIsValid: boolean | null = null;
+    let wholeArrayElement = false;
+    let scalarReason: string | undefined;
     if (key && !isStruct) {
       const varToCheck = selectedVar ?? selectedParentVar;
       if (repeatPick && repeatOptions) {
@@ -688,8 +689,20 @@ export default function VariableBindingPicker() {
         const resolved = selectedVar ? nodeVarType(varToCheck) : elementOf(nodeVarType(varToCheck));
         const typeOk =
           allowed.length === 0 || allowed.some((t) => accepts(parseTypeToken(t), resolved));
+        // A whole array whose element fits a one-value slot binds too: the
+        // field's Index row below it then names the element.
+        wholeArrayElement =
+          !typeOk &&
+          !!selectedVar &&
+          allowed.some((t) => nodeAcceptsOrElement(parseTypeToken(t), resolved));
         const accessOk = !needsWrite || varToCheck.writable === true;
-        scalarIsValid = typeOk && accessOk;
+        // No list shows a disabled variable, but a binding made before it was
+        // disabled still opens on it: the pool serves it no value.
+        const enabled = varToCheck.enabled !== false;
+        scalarIsValid = (typeOk || wholeArrayElement) && accessOk && enabled;
+        if ((typeOk || wholeArrayElement) && accessOk && !enabled) {
+          scalarReason = 'Disabled in its datasource — enable it there first';
+        }
       } else if (rawSelectedFolder) {
         scalarIsValid = strictFolderSelectable;
       } else if (!pendingDatasource) {
@@ -718,6 +731,8 @@ export default function VariableBindingPicker() {
         selectedElementIndex,
         rawSelectedFolder,
         scalarIsValid,
+        wholeArrayElement,
+        scalarReason,
         isStruct,
       },
     };

@@ -290,7 +290,7 @@ The **manager** (`backend/manager.py`) is the ASGI app the launcher runs by defa
 - **Auth gate** — an HTTP middleware (`_auth_gate`) requires a valid device-admin session cookie for every `/api/*` and `/editor/*` request (and for the manager's own `openapi.json` / `docs` / `redoc`), except `/api/manager/auth/*`, bearer-authenticated `/api/manager/peer/*`, `/api/manager/mcp/pair`, `/api/health`, and `/mcp`, which authenticates itself (session or MCP bearer token, `mcp_server/auth.py`). `/runtime/*` is public for a deny-by-default allowlist of child routes a live view needs (`_RUNTIME_PUBLIC_ROUTES`) and gated for everything else; segments whose decoded forms contain a separator or a dot segment are refused before matching, so the gate cannot approve one route while the child serves another. Classification of the first segment reads the name underneath it — truncated at a NUL, cut at a `;` path parameter, with whitespace, control characters and a trailing dot trimmed, and a segment that leaves nothing behind skipped — because `api\x00`, `api;`, `api.`, `api ` and a leading `;/` are all the API subtree to a stack that normalizes differently from this one. The gate matches on `get_route_path(scope)`, not `request.url.path`, so a `root_path` mount cannot slip past it. The SPA shell + bundle stay public so the login screen can render. A rejected request answers `401 {"detail": …, "code": "manager_session_required"}`, except a top-level browser navigation to `/runtime/*` or `/editor/*`, which is redirected (303) to `/?signIn=<original path>` so it lands on the sign-in screen and is returned to its destination afterwards (`safe_sign_in_target` restricts the round-trip to same-origin project paths). The frontend keys its "signed out" overlay off that code — see [Frontend](frontend.md). Auth lives in `core/manager_auth.py`: a PBKDF2-HMAC-SHA256 password digest in `<runtime_home>/.manager-auth.json`, stateless HMAC-signed session tokens (cookie `nexthmi_manager_session`) that expire 24 h after sign-in (`SESSION_TTL_SECONDS`, which the cookie's `Max-Age` reads too) — an absolute lifetime, not an idle timeout, so nothing refreshes a token and an editor left open is signed out a day after its sign-in, and an in-memory login throttle (lock after 5 failures for 60 s → HTTP 429 `RateLimitError`).
 - **Reverse proxy** — `GET/POST/... /runtime/{project_id}/{path}` (and the `/editor/{project_id}/...` alias) streams to the matching child over `httpx` (loopback `127.0.0.1:<port>` from `supervisor.port_for`); `/runtime/{id}/ws` / `/editor/{id}/ws` bridges the browser WebSocket to the child's `/ws`. Hop-by-hop headers are dropped and the manager session cookie is stripped before forwarding (children are trusted localhost processes). A request for a project that isn't running returns 503, and a request target `httpx` cannot build a URL from (a NUL inside a segment) returns 400 rather than an unhandled 500.
 - **Routers** — mounts the manager-auth, peer (public and session-gated), MCP-auth (public pairing and token management), supervisor, projects, thumbnail, system (read-only slice), TLS, and telemetry routers, `/help`, and the workspace MCP at `/mcp` (see [../reference/mcp.md](../reference/mcp.md)).
-- **Usage reporting** — `core/telemetry.py` starts a background task in the manager lifespan that POSTs an install-count ping (installation ID, version, edition, platform) at start-up and every 24 h. Best-effort by contract: failures are debug-logged and never retried. Off through `NEXTHMI_TELEMETRY=off` or the Settings switch; see the [Telemetry API](../reference/rest-api.md#telemetry-api).
+- **Usage reporting** — `core/telemetry.py` starts a background task in the manager lifespan that POSTs an install-count ping (installation ID, build, platform, install method, session uptime, first-time flags and coarse size classes) at start-up and every hour. Best-effort by contract: failures are debug-logged and never retried. Off through `NEXTHMI_TELEMETRY=off` or the Settings switch; see the [Telemetry API](../reference/rest-api.md#telemetry-api).
 - **Manager SPA** — serves the same frontend bundle at the origin root with `mode="manager"` (the dashboard) and base `"/"`; project instances are served their HMI/config app under `/runtime/<slug>/` or `/editor/<slug>/` with `mode="instance"`.
 
 The **supervisor** (`backend/services/supervisor.py`) is a singleton owned by the manager:
@@ -429,11 +429,13 @@ Mounts are registered at module-import time against the project this instance is
 1. looks up matching alarm definitions by composite key
 2. extracts the array element value if the trigger binding includes an `index`
 3. evaluates `bool` (compare to `on_true`) or `value_range` (`min`/`max` thresholds, both can be plain numbers, `$static`, or `$var`) trigger
-4. fires a new `AlarmInstance` if the trigger transitions from inactive → active
+4. fires a new `AlarmInstance` if the trigger transitions from inactive → active, capturing the cached raw value of each `values` binding
 5. clears the active instance and writes a `AlarmHistoryEntry` (capped at 500 entries) on the reverse transition
 6. persists `alarm_state.json` and broadcasts `alarm_update` to all clients
 
-`get_trigger_paths_by_datasource()` is consumed by the websocket manager to keep alarm-trigger variables permanently on the priority OPC-UA subscription.
+Active alarms are restored from `alarm_state.json` on start. Right after `datasource_manager.load_all()`, `evaluate_cached()` runs the same steps for every trigger key that already has a cached value — a static datasource seeds its cache without a change event — so a restored alarm whose trigger no longer holds clears into the history at once; an OPC-UA tag does so on its first value. `datasource_manager.apply_config()` runs it again after re-seeding a static datasource, whose new or reshaped variables restart at their defaults without a change event.
+
+`get_trigger_paths_by_datasource()` is consumed by the websocket manager to keep alarm-trigger and `values` variables permanently on the priority OPC-UA subscription.
 
 ## Widget Storage
 
@@ -455,7 +457,7 @@ Errors still 422 with `to_message()` describing the head finding + count. Warnin
 - `GET /api/config/validate` returns advisory and blocking diagnostics for the persisted project. Realtime editor diagnostics use `POST /api/config/validate`; page/config write responses do not embed warning arrays.
 - MCP page-mutation tools (`pages_add_widget`, `pages_set_widget_property`, `pages_set_metadata`, `pages_delete_widget`) include the warnings array on their `applied_response`.
 
-Advisory rather than blocking: empty `$var.datasource`, empty `$var.path`, unknown datasource, unknown variable. Structural corruption (non-object `$var` payload) is a hard error. Rationale: the editor produces empty bindings transiently while the user picks a datasource; the registry can grow at runtime (late OPC-UA pools, project imports); the frontend resolver returns null for unresolved bindings.
+Advisory rather than blocking: empty `$var.datasource`, empty `$var.path`, unknown datasource, unknown variable, disabled variable (`var-disabled`, a warning in place of `var-unknown` when the datasource holds the variable but has it disabled). Structural corruption (non-object `$var` payload) is a hard error. Rationale: the editor produces empty bindings transiently while the user picks a datasource; the registry can grow at runtime (late OPC-UA pools, project imports); the frontend resolver returns null for unresolved bindings.
 
 ## Project Format Migration
 
@@ -488,8 +490,8 @@ left as clean as it started — the zip from step 1 is the only durable record.
 `main.py`'s lifespan logs the version span, the file count, the backup path and
 every step diagnostic under the `nexthmi.migration` logger.
 
-`PROJECT_FORMAT_VERSION` is `9`, stamped beside `PROJECT_FORMAT_MIN_APP`
-(`"1.0.0"`). What each of the three `_STEPS` rewrites on disk is in
+`PROJECT_FORMAT_VERSION` is `11`, stamped beside `PROJECT_FORMAT_MIN_APP`
+(`"1.1.0"`). What each of the five `_STEPS` rewrites on disk is in
 [data-formats.md](data-formats.md#format-versions).
 
 Adding a step and bumping the version is described in the module docstring; the

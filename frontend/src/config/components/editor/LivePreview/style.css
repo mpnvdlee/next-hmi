@@ -98,6 +98,12 @@
   outline: none;
 }
 
+.editor-preview-toolbar__size-input {
+  width: 5.25rem;
+  margin-left: 0.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .editor-preview-scroller {
   flex: 1;
   overflow: auto;

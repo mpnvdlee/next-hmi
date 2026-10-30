@@ -62,10 +62,10 @@ function renderNavigator(
   );
 }
 
-const prevButton = () => screen.getByRole('button', { name: 'Previous page' });
-const nextButton = () => screen.getByRole('button', { name: 'Next page' });
-const queryPrev = () => screen.queryByRole('button', { name: 'Previous page' });
-const queryNext = () => screen.queryByRole('button', { name: 'Next page' });
+const prevButton = () => screen.getByRole('button', { name: '← Previous' });
+const nextButton = () => screen.getByRole('button', { name: 'Next →' });
+const queryPrev = () => screen.queryByRole('button', { name: '← Previous' });
+const queryNext = () => screen.queryByRole('button', { name: 'Next →' });
 
 describe('PageNavigator', () => {
   beforeEach(() => {

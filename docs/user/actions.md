@@ -4,7 +4,7 @@ A property answers *what a widget shows*. An **action** answers *what happens wh
 
 ## Where actions live
 
-- **On a widget** — **Button** and **Menu Toggle** carry an **Actions** field, and a **Navigation Menu** item can be an action item. The list runs top to bottom on **press**. Other widgets run lists on their own events: **On Change** on a Dropdown or Button Row, **On Sign In** / **On Sign Out** / **On Press** on a User Badge, **On Play** / **On Pause** / **On Ended** / **On Error** on a Video, **On Load** / **On Error** / **On Message** on a Web Frame.
+- **On a widget** — **Button**, **Button Container** and **Menu Toggle** carry an **Actions** field, and a **Navigation Menu** item can be an action item. The list runs top to bottom the moment the **press** starts; a Button and a Button Container also carry **On Released**, which runs when it ends — the finger lifts, the touch is cancelled or the key comes back up. A Button Container is a Container that is one big control around whatever it holds — a tile, a row in a list — that takes the keyboard too (**Enter** or **Space**). A press on a Button or an input inside it stays with that control. Other widgets run lists on their own events: **On Change** on a Dropdown or Button Row, and on a Number Input after each value the operator applies, **On Submit** (Enter) on a String Input, **On Play** / **On Pause** / **On Ended** / **On Error** on a Video, **On Load** / **On Error** / **On Message** on a Web Frame.
 - **Inside another action** — an alert's **OK** / **Cancel** buttons, and the `onSuccess` / `onFailed` / `onSettled` handlers of the async actions below, are themselves action lists. Nesting is how a confirm-then-write flow is built.
 - **On the project** — the **Global Events** node in the editor tree runs actions at lifecycle moments rather than on a press. See [Global events](#global-events).
 - **On a page or page group** — an **Events** section in the node's properties runs actions as the operator arrives and leaves. See [Page events](#page-events).
@@ -13,7 +13,7 @@ Custom widgets fire the same lists through the SDK's `executeWidgetActions`, so 
 
 ## The action catalog
 
-Fourteen types, in the order the **Add action** menu lists them. **Browse actions…** at the top of that menu opens the same catalog as a searchable drawer, grouped as below.
+Nineteen types, in the order the **Add action** menu lists them. **Browse actions…** at the top of that menu opens the same catalog as a searchable drawer, grouped as below.
 
 ### Screens
 
@@ -22,6 +22,7 @@ Fourteen types, in the order the **Add action** menu lists them. **Browse action
 | **Open Dialog** | Opens a page from the **Dialogs** folder — or a whole **dialog group**, which brings its tabs and chrome along — as a modal on top of the current screen. It also fills in the target's **input parameters**, which the widgets inside read with `$componentProp`. |
 | **Open Page As Overlay** | Opens a navigable page from the **Pages** section — or a page group — as a modal on top of the current screen. Same presentation fields, no parameters: a navigation destination declares none. |
 | **Close Dialog/Overlay** | Closes either kind, by name, or the current one when left empty. Name the page or page group the overlay was opened with — switching tabs inside it doesn't change that. |
+| **Navigate To Page** | Closes every open dialog and overlay, then goes to a page from the **Pages** section, firing its page events as a menu press does. **Page** is a fixed page, or — inside a dialog — one of its input parameters of type **Page**, so the caller decides where it leads. A parameter that names no navigable page does nothing. |
 
 > [!NOTE]
 > **Two open actions, one close.** The two open actions differ only in which
@@ -33,20 +34,22 @@ Fourteen types, in the order the **Add action** menu lists them. **Browse action
 Both open actions carry the presentation fields:
 
 - **Size** — `auto`, `small`, `medium`, `fullscreen`, or `fixed` (then set **Width** / **Height** in pixels).
-- **Placement** — `center`, `top`, `bottom`, `left`, `right`, or one of the **trigger-anchored** values (`trigger-above`, `trigger-below`, `trigger-left`, `trigger-right`) which pins the panel to the control that opened it, popover-style. Anchored placement and `fullscreen` are mutually exclusive.
+- **Placement** — `center`, `top`, `bottom`, `left`, `right`, or one of the **trigger-anchored** values (`trigger-above`, `trigger-below`, `trigger-left`, `trigger-right`) which pins the panel to the control that opened it, popover-style. A panel with no room on its side opens on the opposite side of the control when that side has room, and is otherwise kept inside the screen. Anchored placement and `fullscreen` are mutually exclusive.
 - **Backdrop** — `dim` darkens the screen behind, `none` leaves it untouched (right for a small anchored popover).
 
 > [!NOTE]
-> **Page-to-page navigation is not an action.** Moving between screens is the job of the navigation widgets — **Navigation Menu**, **Tab Bar**, **Breadcrumb**, **Page Navigator** — which read the page tree and stay correct as it changes. See [Pages & navigation](pages.md#give-operators-a-way-around). Actions cover the things *on top of* a page: overlays.
+> **Navigation widgets are still the way around.** Moving between screens is the job of **Navigation Menu**, **Tab Bar**, **Breadcrumb** and **Page Navigator**, which read the page tree and stay correct as it changes. See [Pages & navigation](pages.md#give-operators-a-way-around). **Navigate To Page** is for a destination chosen at runtime: a station popup's *Open station page* button, where each caller of the dialog passes its own station's page.
 
 ### Machine
 
 | Action | Does |
 |---|---|
-| **Write Data Variable** | Pushes a value to a writable tag — a coil, a mode, a setpoint. The **Variable** row names the tag, picked from the variable picker; the **value** is a fixed literal typed to match the tag (true/false, a number, text — or a JSON array for a whole-array tag). The value's source pill can take it from one of the dialog's input parameters instead (inside a dialog's own actions and events), or from the copy's element (inside a [Repeater](properties.md#repeating-widgets-over-an-array-repeater)). Inside a Repeater the **Variable** row's source pill switches the target to **Repeat Item**: the copy's own element, or — for a struct element — the member you pick. The server coerces it to the tag's data type on write, and refuses it with `read_only` when the tag is not writable. |
-| **Toggle Boolean Variable** | Flips a writable Boolean tag — `true` becomes `false` and back. The server reads the tag's current value and writes the opposite, so a stale screen or a second panel cannot make it write the wrong state. Only Boolean variables can be picked. Fails with `value_unavailable` when the tag has no known value yet, and with `read_only` when it is not writable. |
+| **Write Data Variable** | Pushes a value to a writable tag — a coil, a mode, a setpoint. The **Variable** row names the tag, picked from the variable picker; the **value** is a fixed literal typed to match the tag (true/false, a number, text — or a JSON array for a whole-array tag). The value's source pill can take it from one of the dialog's input parameters instead (inside a dialog's own actions and events), or from the copy's element (inside a [Repeater](properties.md#repeating-widgets-over-an-array-repeater)). Inside a component or a dialog the same pill switches it to an **input parameter** that was given a variable (see [Passing values into components](properties.md#passing-values-into-components)). Inside a Repeater the **Variable** row's source pill switches the target to **Repeat Item**: the copy's own element, or — for a struct element — the member you pick. Pick an element of an array tag (`Steps[2]`) to write that one, or the array itself: the index box under it then names one element to write — a number, or another value such as a dialog's input parameter; left empty, the action writes the whole array. The server coerces it to the tag's data type on write, and refuses it with `read_only` when the tag is not writable. |
+| **Toggle Boolean Variable** | Flips a writable Boolean tag — `true` becomes `false` and back. The server reads the tag's current value and writes the opposite, so a stale screen or a second panel cannot make it write the wrong state. Only Boolean variables can be picked; pick an element of a Boolean array, or the whole array and then the element to flip in the index box under it — a number, or another value such as a dialog's input parameter. Fails with `value_unavailable` when the tag has no known value yet, and with `read_only` when it is not writable. |
+| **Edit Value** | Opens the numpad on a numeric tag — a setpoint behind a tile, a value in a table row — without a Number Input on the screen. **Apply** writes the entered value, **Cancel** (×, Escape, a press outside) writes nothing and runs no handler. **Title** and **Unit** label the numpad. **Min** and **Max** refuse a value outside them; left empty, the tag's own configured range applies, and without one there is no limit. **Decimals** limits the digits after the point — empty means none for an Integer tag and no limit otherwise — and **Allow negative** turns the minus key on or off (by default it is off when the lower bound is 0 or more). **Position** puts the numpad in the center (the default) or bottom right. Only Integer and Float tags can be picked; the target takes a Repeat item inside a Repeater and an input parameter inside a component or dialog, as for **Write Data Variable**, and a whole-array tag asks for its element in an index box under the variable, like **Toggle Boolean Variable**. |
 | **Recipe: Load** | Downloads a saved dataset into its variables. **Dataset** may be fixed or bound (a row id from a `$recipeList` grid). **Verify** reads the values back after writing and fails the action if they didn't take. A parameter bound to a variable that is not writable is skipped and listed in `failures` as `read_only`. |
 | **Recipe: Save** | Captures current live values into a dataset. Leave **Dataset** empty to update the one that is loaded. |
+| **Acknowledge All Alarms** | Acknowledges every unacknowledged alarm in the name of the user signed in on this panel. Put it on a Button next to an [Alarm List](alarms-recipes.md) whose **Acknowledge** is **Off**, for one large acknowledge button styled like the rest of the screen. A refusal shows a toast. |
 
 ### Session
 
@@ -70,11 +73,13 @@ See [Users, groups & permissions](users.md#sign-in-and-out-on-a-screen) for the 
 
 | Action | Does |
 |---|---|
+| **Delay** | Waits **Duration** milliseconds, then runs the actions after it. A write goes to the PLC and comes back; a **Show Toast** after a short Delay reads the value the PLC confirmed, so it can say *Lower limit set to −25 g*. |
 | **If / Else** | Evaluates a **Condition** — a Boolean variable, a comparison (`$compare`: *Mode = 2*, *Level > 80*), a negation, a user-group check — and runs its **Then** list when it holds, its **Else** list when it does not. Branches take any actions, including another **If / Else**. The condition reads the value the panel has at that moment. |
+| **Run Component Actions** | Inside a [component](properties.md#passing-values-into-components): runs the actions each instance sets on one of the component's **Actions** properties, picked under **Actions**. A menu tile built as a component carries one in its Button Container's list, and every tile on the page then does what its own instance says. It sits in the list like any other action, so the tile can do something of its own before or after. |
 
 ## Async actions and `$result`
 
-Six actions cross the wire and therefore *may fail*: **Write Data Variable**, **Toggle Boolean Variable**, **Recipe: Load**, **Recipe: Save**, **Login User**, **Logout User**. Each carries three optional handler lists:
+Seven actions cross the wire and therefore *may fail*: **Write Data Variable**, **Toggle Boolean Variable**, **Edit Value**, **Recipe: Load**, **Recipe: Save**, **Login User**, **Logout User**. Each carries three optional handler lists:
 
 - **onSuccess** — the server acknowledged.
 - **onFailed** — the server refused, or the request timed out (10 seconds) or the connection dropped.
@@ -86,6 +91,7 @@ Inside those handlers the **`$result`** source reads fields of what came back. W
 |---|---|---|
 | **Login / Logout User** | `username`, `groups`, `groupLabels` | `reason` |
 | **Write Data Variable** · **Toggle Boolean Variable** | `datasource`, `path` | `datasource`, `path`, `reason` |
+| **Edit Value** | `value` (what was entered), `previous` (what the tag held when the numpad opened), `datasource`, `path` | the same, plus `reason` |
 | **Recipe: Load** | `result`, `datasetId`, `written`, `total`, `verified`, `failures` | `reason` |
 | **Recipe: Save** | `datasetId` | `reason` |
 
@@ -113,13 +119,18 @@ Some things should happen because *the system reached a state*, not because some
 
 | Event | Fires |
 |---|---|
-| **onHmiLoaded** | Once, when a runtime finishes loading. The place for start-up state: pick a theme from the device, raise a "connecting" toast, open a lock-screen overlay. |
+| **onHmiLoaded** | Once, when a runtime finishes loading. The place for start-up state: pick a theme from the device, raise a "connecting" toast, open a lock-screen overlay. It waits until the values of the first page and of the variables its own actions read have arrived, up to 3 seconds, so a first-start guard such as an **If** on `Machine/Initialized` reads the tag, not "no value yet". The first **onPageLoaded** runs right after it. |
 | **onPageLoaded** | On the first page and on every navigation afterwards. |
 | **onUserLoggedIn** | When this runtime goes from the guest identity to a signed-in user. |
 | **onUserLoggedOut** | When it goes back to guest. |
 | **onLocaleChanged** | When the active language changes (not on the initial load). |
+| **onInteractionDenied** | When someone presses a widget that is not **Interactable** — the place to open your sign-in dialog. Runs whatever the **Locked feedback** mode is. |
+| **Variable Changed** | Per variable you add: whenever its value changes, and once at start-up with the value it already has. It watches its variable on every page. To act on one value only, put an **If** on that same variable around the actions — for example *If* `Line/DoorOpen` *then* **Open Dialog** opens a popup when the bool goes high, and does nothing when it goes low. |
 
 They are scoped to the runtime that triggered them, so on a multi-panel installation each screen runs its own — one operator signing in on the line-side panel does not fire `onUserLoggedIn` in the control room.
+
+> [!WARNING]
+> **Variable Changed runs on every open screen.** Each runtime watching the variable runs the actions itself. A popup or toast per screen is what you want; a **Write Variable** writes once per open screen, so leave writes that must happen exactly once to the PLC.
 
 ## Page events
 

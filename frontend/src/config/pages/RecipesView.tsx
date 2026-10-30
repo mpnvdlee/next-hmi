@@ -76,12 +76,7 @@ export default function RecipesView() {
               >
                 ⚡ Live
               </Button>
-              <HeaderSearch
-                value={filter}
-                onChange={setFilter}
-                placeholder="Search parameters…"
-                ariaLabel="Search recipe parameters"
-              />
+              <HeaderSearch value={filter} onChange={setFilter} placeholder="Search parameters…" />
             </>
           }
         >

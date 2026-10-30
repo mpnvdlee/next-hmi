@@ -17,7 +17,7 @@ describe('ProjectUnavailableOverlay', () => {
     render(<ProjectUnavailableOverlay />);
 
     const dialog = screen.getByRole('alertdialog');
-    expect(dialog).toHaveAccessibleName('Can’t open Line 1');
+    expect(dialog).toHaveTextContent('Can’t open Line 1');
     expect(dialog).toHaveTextContent('It is not running.');
     // The shared modal card, so it matches every other dialog in the app.
     expect(dialog.querySelector('.name-modal')).not.toBeNull();
@@ -39,7 +39,7 @@ describe('ProjectUnavailableOverlay', () => {
     useProjectAvailabilityStore.setState({ reason: 'stopped', projectName: null });
     render(<ProjectUnavailableOverlay />);
 
-    expect(screen.getByRole('alertdialog')).toHaveAccessibleName('Can’t open line-1');
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Can’t open line-1');
     delete window.__NEXTHMI_BASE__;
   });
 

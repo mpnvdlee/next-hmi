@@ -42,6 +42,14 @@ const ICONS: Record<PropertySource, ReactNode> = {
       <path d="M6 8.3 L7.4 9.7 L10.3 6.6" />
     </Icon>
   ),
+  // $overlay — a dialog card with a marked input.
+  $overlay: (
+    <Icon>
+      <rect x="2.5" y="3.5" width="11" height="9" rx="1" />
+      <path d="M2.5 6 h11" />
+      <circle cx="8" cy="9.2" r="1.3" />
+    </Icon>
+  ),
   // $if — branch fork.
   $if: (
     <Icon viewBox="0 0 24 24" strokeWidth={2}>
@@ -68,6 +76,20 @@ const ICONS: Record<PropertySource, ReactNode> = {
       <rect x="2" y="7" width="20" height="10" rx="5" />
       <circle cx="16" cy="12" r="2.5" fill="currentColor" stroke="none" />
       <path d="M4 3l16 18" />
+    </Icon>
+  ),
+  // $and — an AND gate.
+  $and: (
+    <Icon viewBox="0 0 24 24" strokeWidth={2}>
+      <path d="M6 5h6a7 7 0 0 1 0 14H6z" />
+      <path d="M2 9h4M2 15h4M19 12h3" />
+    </Icon>
+  ),
+  // $or — an OR gate.
+  $or: (
+    <Icon viewBox="0 0 24 24" strokeWidth={2}>
+      <path d="M5 5c4 0 9 1 13 7c-4 6-9 7-13 7c2-4 2-10 0-14z" />
+      <path d="M2 9h5M2 15h5M18 12h4" />
     </Icon>
   ),
   // $formula — the four operators as a calculator keypad.

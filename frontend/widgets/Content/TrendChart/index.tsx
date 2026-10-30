@@ -290,9 +290,7 @@ export default function TrendChart({ properties, layout }: HmiWidgetProps) {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-    // variables.join(',') is the stable identity we actually depend on.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variables.join(','), timeRange]);
+  }, [variables, timeRange]);
 
   useEffect(() => {
     if (isLive) return;

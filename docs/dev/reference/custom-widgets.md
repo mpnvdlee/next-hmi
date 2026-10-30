@@ -183,7 +183,7 @@ The canonical list of names exposed on `window.__nextHMI__` lives in `frontend/s
 - `useBindingValue(binding)` — same, but takes a `VariableBinding` (or `undefined`).
 - `useStructVariable(key)` — subscribe to a struct (returns `Record<string, unknown>`) or an array-of-struct (returns `unknown[]`).
 - `useVariableMeta(key)` — subscribe to `{ type, min?, max?, writable?, fieldRanges? }`. `type` is the canonical scalar/struct `VarType` with `array: boolean` and an optional fixed `length`; `min`/`max` apply to scalar numeric variables, `writable` says whether a scalar variable accepts writes, and `fieldRanges` carries per-field struct ranges. Returns `undefined` if the key isn't known.
-- `useEvalContext()` — returns the active `EvaluationContext` used to resolve `$var` / `$loc` / `$urlParam` / `$user` / `$userGroups` / `$device` / `$time` / `$pageIsActive` / `$random` / `$if` / `$compare` / `$not` / `$formula` / `$switch` / `$widgetProp` / `$componentProp` / `$repeatItem` / `$stringExpr` / `$http` / `$alarmCount` / `$recipe` / `$page` / `$viewport` / `$result` property sources. The full source/type model is in [../architecture/value-types.md](../architecture/value-types.md).
+- `useEvalContext()` — returns the active `EvaluationContext` used to resolve `$var` / `$loc` / `$urlParam` / `$user` / `$userGroups` / `$device` / `$time` / `$pageIsActive` / `$random` / `$if` / `$compare` / `$not` / `$and` / `$or` / `$formula` / `$switch` / `$widgetProp` / `$componentProp` / `$overlay` / `$repeatItem` / `$stringExpr` / `$http` / `$alarmCount` / `$recipe` / `$page` / `$viewport` / `$result` property sources. The full source/type model is in [../architecture/value-types.md](../architecture/value-types.md).
 - `bindingKey(binding)` — composes a `"datasource:path"` key from a `VariableBinding`.
 - `parseVarKey(key)` — splits `"datasource:path"` back into `{ datasource, path }`.
 - `useWriteVariable(properties, propKey, options?)` — returns `(value, opts?) => void`, the supported way to write a bound variable. See [Writing values](#writing-values).
@@ -243,7 +243,7 @@ worked examples.
 
 - `useActiveAlarms()` → `AlarmInstance[]` — the live active-alarm list.
 - `useAlarmSummary()` → `AlarmSummary` (`{ total, unacked, error_count, warning_count, info_count }`) — the counts pushed alongside that list, so a badge doesn't re-derive them. For a single count in a plain property, the `$alarmCount` property source is simpler than this hook.
-- `useAlarmText()` — returns a `(text: string) => string` resolver for an instance's `title` and `description`. Those arrive already flattened to a bare `$loc` key: one instance is broadcast to every client and stored in history, so it stays language-agnostic and the operator's language is applied at render. A literal string passes through unchanged. Calling the hook also subscribes the component, so alarm text follows a language switch.
+- `useAlarmText()` — returns a `(text: string) => string` resolver for an instance's `title` and `description`. Those arrive already flattened to a bare `$loc` key: one instance is broadcast to every client and stored in history, so it stays language-agnostic and the operator's language is applied at render. A literal string passes through unchanged. Pass the instance or history row as a second argument to fill its `{1}`, `{2}` … placeholders from the alarm's `values`: live while it is active, the value stored at fire time once cleared, `—` where there is none. Calling the hook also subscribes the component, so alarm text follows a language switch and an active alarm's live values.
 - `useAlarmUsername()` → `string` — the signed-in user of the current scope, falling back to `'operator'`. This is the `username` the ack calls and `AlarmDetailDialog` expect.
 - `ackAlarm(instanceId, username, options?)` → `Promise<boolean>` — acknowledge one instance.
 - `ackAllAlarms(username, options?)` → `Promise<boolean>` — acknowledge every active alarm.
@@ -367,7 +367,7 @@ widget that renders one branches on both pairs below — as the built-in `Icon`,
 
 ### Virtual input
 
-- `VirtualKeyboard` / `VirtualNumpad` — modal soft input components driven by `{ isOpen, value, onChange, onClose, anchorRef?, title?, dockPosition? }`. `VirtualKeyboard` also takes optional `password?` to mask its value preview. `VirtualNumpad` also takes optional `min?`, `max?`, `unit?` — shown as a range/unit hint under the title and used to redden the value preview when the entered value is out of bounds.
+- `VirtualKeyboard` / `VirtualNumpad` — modal soft input components driven by `{ isOpen, value, onChange, anchorRef?, title?, dockPosition? }`. `VirtualKeyboard` closes through `onClose()` and also takes optional `password?` to mask its value preview. `VirtualNumpad` has no `onClose`: Enter calls `onApply(value)` — only with a value that parses and sits inside `min?`/`max?` — and ×, Escape or a press outside call `onCancel()`, so backing out never writes. Out of range, Enter is disabled and the bounds line (`Min: 80 · Max: 200`) turns into a red warning, or `rangeMessage?` shows beneath it when given. Its keys are icons; *Min* and *Max* go through the project's dictionaries. It also takes optional `unit?`, `showRange?` (the min/max hint; the bounds gate Enter either way), `rangeMessage?` (said instead of the range when the entry is out of it, such as why a limit depends on another setting), `currentValue?` (the entry field's placeholder — start `value` empty so the first key replaces it), `decimals?` (0 disables the point), `allowNegative?` (default: off when `min` ≥ 0) `password?` (masks the entry, for a PIN), `inline?` (drawn in place inside the widget instead of as a floating panel: no × and no outside-press cancel, so keep `isOpen` true) and `autoFocus?` (default true). Its entry is a real field that takes the focus when the numpad opens: a physical keyboard or a paste goes through the same rules as the keys, Enter applies and Escape cancels, and `inputMode="none"` keeps a tablet's own keyboard shut.
 - `CloseButton` — the standard themed close/dismiss control, driven by `{ onClick?, label?, tone?, className? }`.
 
 ### Charts
@@ -661,15 +661,19 @@ export default function MyActionButton({ properties, layout }: HmiWidgetProps) {
 Supported action types (see `frontend/src/config/components/editor/PropertiesPanel/actionsPreview.ts` for the canonical list):
 
 - `openDialog` (a Dialogs-folder node, with `componentProperties`) / `openPageOverlay` (a node in the `pages` root) / `closePageOverlay` (either)
+- `navigateToPage` — `{ pageId }`, a node in the `pages` root or `{ $componentProp }` naming a dialog input declared `format: 'page'`; closes every overlay, then navigates. One that resolves to no navigable page does nothing.
 - `writeDataVariable` — `{ target, value }`; `target` is `{ $var: { path: 'ds:path' } }`, or inside a Repeater `{ $repeatItem: { member? } }` for the copy's element; value is a literal (`string | number | boolean`, or an array for a whole-array target), or a property source (`$componentProp`, `$var`, …) evaluated when the action fires.
 - `toggleDataVariable` — `{ target }`, the same shape; inverts a Boolean variable from its current server-side value.
+- `editValue` — `{ target, title?, unit?, min?, max?, decimals?, allowNegative?, position? }`; opens the numpad on a numeric variable and writes on Apply. Empty `min` / `max` fall back to the variable's configured range; `$result` carries `value` and `previous`.
 - `if` — `{ condition, then, else }`; evaluates `condition` (any property-source value, e.g. a `$var` or `$compare`) and runs the `then` or `else` action list.
 - `setLanguage` — switches the active HMI language; the `language` property is resolved from component properties at runtime.
 - `setActiveTheme` — switches the runtime theme for this session; `theme` resolves to a theme id.
+- `acknowledgeAllAlarms` — `{}`; acknowledges every unacknowledged alarm as the scope's signed-in user.
+- `delay` — `{ duration }`; waits `duration` ms, then runs the actions after it in the list, which then read the values of that moment.
 - `loginUser` / `logoutUser` — scope-based authentication (the scope defaults to the current `useHmiScope()`).
 - `recipeLoad` (`{ datasetId, verify? }`) / `recipeSave` (`{ datasetId? }`) — download a recipe dataset to its variables, or save the live values into one.
 
-`writeDataVariable`, `toggleDataVariable`, `loginUser`, `logoutUser`, `recipeLoad` and `recipeSave` are asynchronous: each takes optional `onSuccess` / `onFailed` / `onSettled` action lists that run when the backend answers (or the request times out), and inside those lists `$result` reads fields off the response.
+`writeDataVariable`, `toggleDataVariable`, `editValue`, `loginUser`, `logoutUser`, `recipeLoad` and `recipeSave` are asynchronous: each takes optional `onSuccess` / `onFailed` / `onSettled` action lists that run when the backend answers (or the request times out), and inside those lists `$result` reads fields off the response.
 - `showAlert` — modal alert with `onCancel` / `onOk` nested action lists.
 - `showToast` — transient toast (`info` | `success` | `warning` | `error`); `discard: 'auto' | 'manual'` with optional `duration`.
 
@@ -791,7 +795,7 @@ All optional unless marked **required**.
 - `placeholder` — empty-state hint (used by `string` and `integer`/`float` inputs; the asset pickers hardcode their own).
 - `min`, `max`, `step` — numeric input constraints (`integer` / `float`).
 - The variable picker filter is the `type` itself: list non-editor entries (e.g. `['float','integer']`, `'string[]'`) restrict which variables can be bound. There is no separate `dataType` field.
-- `write: true` — restrict the picker to writable variables: only one whose metadata says `writable: true`, so one that states no access counts as read-only. A read-only variable bound anyway raises the runtime's red overlay and a `var-readonly` warning, and the backend refuses every write to it with `read_only`.
+- `write: true` — the field only takes a variable binding (`$var`, or a `$componentProp` / `$repeatItem` standing in for one): no static value, formula or other computed source, which the editor stops offering and the backend reports as `write-source`. It also restricts the picker to writable variables: only one whose metadata says `writable: true`, so one that states no access counts as read-only. A read-only variable bound anyway raises the runtime's red overlay and a `var-readonly` warning, and the backend refuses every write to it with `read_only`.
 - The set of property **sources** offered for a field is determined entirely by its `type` — there is no per-field source allowlist. A source appears only where its produced type is exactly the field's type; the one exception is a `Duration` field, which a number-producing source also fills.
 - `visibleWhen` — conditional visibility. A `VisibilityCondition` or an `AND`-joined array; conditions reference sibling property keys in the same schema.
 - `event` — only for `actions`: the key used to store the action array within the property value (default `'onPress'`).

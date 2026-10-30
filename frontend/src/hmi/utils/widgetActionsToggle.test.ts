@@ -68,6 +68,30 @@ describe('writeDataVariable value resolution', () => {
   });
 });
 
+describe('a write target with a bound index', () => {
+  const target = { $var: { path: 'CF:Safety/Open', index: { $componentProp: 'device' } } };
+
+  it('toggles the element the dialog input names', () => {
+    executeWidgetActions([{ type: 'toggleDataVariable', target } as ButtonAction], {
+      scope: 'runtime',
+      evalCtx: { inputScopeProps: { device: 4 } },
+    });
+    expect(sendWsMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'toggle_field', path: 'Safety/Open[4]' }),
+    );
+  });
+
+  it('sends an index the server refuses as out of bounds when the input is missing', () => {
+    executeWidgetActions([{ type: 'writeDataVariable', target, value: true } as ButtonAction], {
+      scope: 'runtime',
+      evalCtx: { inputScopeProps: {} },
+    });
+    expect(sendWsMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'write_field', path: 'Safety/Open[-1]' }),
+    );
+  });
+});
+
 describe('if action', () => {
   const write = (path: string): ButtonAction => ({
     type: 'writeDataVariable',
@@ -115,5 +139,84 @@ describe('if action', () => {
       {},
     );
     expect(sendWsMessage).toHaveBeenCalledWith(expect.objectContaining({ path: 'Two' }));
+  });
+
+  it("checks the scope's signed-in user when the context has no user reader", async () => {
+    const { useHmiStore } = await import('@hmi/store/hmiStore');
+    useHmiStore.setState({
+      currentUsersByScope: {
+        'runtime:a': { username: 'mark', groups: ['admin'], groupLabels: {} },
+      },
+    });
+    // A page's onOpen guard: the event hook passes no reader of its own.
+    executeWidgetActions(
+      [
+        {
+          type: 'if',
+          condition: { $userGroups: { groups: ['admin'] } },
+          then: [write('Admin')],
+          else: [write('Other')],
+        },
+      ],
+      { scope: 'runtime:a' },
+    );
+    expect(sendWsMessage).toHaveBeenCalledWith(expect.objectContaining({ path: 'Admin' }));
+  });
+});
+
+describe('a $componentProp write target', () => {
+  // Inside a component the instance passes the variable as an input; the
+  // action's target names that input instead of a variable of its own.
+  const ctx = {
+    scope: 'runtime',
+    evalCtx: { inputScopeProps: { value: { $var: { path: 'CP:Params/MaxPressure' } } } },
+  };
+  const target = { $componentProp: 'value' };
+
+  it('writes the variable the instance passed in', () => {
+    executeWidgetActions([{ type: 'writeDataVariable', target, value: 7 }], ctx);
+    expect(sendWsMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'write_field',
+        datasource: 'CP',
+        path: 'Params/MaxPressure',
+        value: 7,
+      }),
+    );
+  });
+
+  it('toggles the variable the instance passed in', () => {
+    executeWidgetActions([{ type: 'toggleDataVariable', target }], ctx);
+    expect(sendWsMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'toggle_field',
+        datasource: 'CP',
+        path: 'Params/MaxPressure',
+      }),
+    );
+  });
+
+  it('opens Edit Value on the variable the instance passed in', async () => {
+    const { useHmiStore } = await import('@hmi/store/hmiStore');
+    executeWidgetActions([{ type: 'editValue', target }], ctx);
+    const numpad = useHmiStore.getState().numpadRequest;
+    expect(numpad).not.toBeNull();
+    numpad!.apply(12.5);
+    expect(sendWsMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'write_field',
+        datasource: 'CP',
+        path: 'Params/MaxPressure',
+        value: 12.5,
+      }),
+    );
+  });
+
+  it('writes nothing when the input is not a variable', () => {
+    executeWidgetActions([{ type: 'writeDataVariable', target, value: 7 }], {
+      scope: 'runtime',
+      evalCtx: { inputScopeProps: { value: 3 } },
+    });
+    expect(sendWsMessage).not.toHaveBeenCalled();
   });
 });

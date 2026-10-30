@@ -30,17 +30,13 @@ export default function ProjectUnavailableOverlay() {
   if (!reason) return null;
   const label = name ?? projectSlug() ?? 'This project';
   return (
-    <div
-      className="blocking-overlay"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="project-unavailable-title"
-    >
+    <div className="blocking-overlay" role="alertdialog" aria-modal="true">
       <div className="name-modal blocking-overlay__dialog">
-        <h2 className="name-modal__title" id="project-unavailable-title">
-          Can&rsquo;t open {label}
-        </h2>
-        <div className="name-modal__message">{MESSAGES[reason]}</div>
+        <h2 className="name-modal__title">Can&rsquo;t open {label}</h2>
+        <div className="name-modal__message">
+          {MESSAGES[reason]} Once it runs again this notice closes by itself, and unsaved changes
+          are kept.
+        </div>
         <div className="name-modal__actions">
           <Button variant="primary" onClick={() => window.location.assign('/projects')}>
             Go to projects

@@ -72,6 +72,8 @@ const PAGE_SAVE_FIELDS = [
   'componentProperties',
   'showCloseButton',
   'closeOnBackgroundPress',
+  'tapThrough',
+  'showModalHeader',
 ] as const satisfies readonly (keyof PageConfig)[];
 
 // Compile-time invariant: every non-structural PageConfig key must appear in PAGE_SAVE_FIELDS.
@@ -463,7 +465,7 @@ interface ConfigStore {
   /** Persist the current runtime config state to the backend via PUT /api/config/config. */
   saveConfigToBackend(): Promise<boolean>;
 
-  // ── Phase 12 component property mutations ──────────────────────────────────
+  // ── Component property mutations ───────────────────────────────────────────
   /**
    * Shallow-merge name/properties/layout into a single component anywhere in
    * the tree. properties and layout keys are merged individually — existing

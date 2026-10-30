@@ -41,36 +41,18 @@ Select **Settings** in the tree for the one project-wide choice:
 
 ## Sign in and out on a screen
 
-The **User Badge** widget is the ready-made way in. Drop it in the header and it
-shows who is signed in — an initialled avatar, the username, and their groups —
-and carries the sign-in and sign-out affordances with it.
+Who is signed in, and the way in and out, are ordinary widgets in the header:
 
-It reads the session itself, so there is nothing to bind for the common case:
+| Widget | Shows | Bound to |
+|---|---|---|
+| **Label** | The username, or their groups | **Text** → `$user` → **Username** or **Groups** |
+| **Button** *Sign in* | Only to the guest | **Visible** → **Compare** `$user` → **Username** `===` `guest`; **On Pressed** → **Open Dialog** on your sign-in dialog |
+| **Button** *Sign out* | To everyone else | **Visible** → **Not** of that same comparison; **On Pressed** → **Logout User** |
 
-| While signed in as | The badge shows |
-|---|---|
-| `guest` | A **Log in** button — your **Sign-in label**, with a sign-in icon. |
-| A real user | The avatar, username and groups, plus a sign-out icon button. |
+Leave the buttons out on a panel that never signs anyone out. The NEXT BREW
+example template wires exactly this in its header, around a user **Icon**.
 
-Each half appears only once you give it something to run, which is what keeps
-the badge usable on a panel that never signs anyone out:
-
-- **On Sign In** — the actions the Log in button runs. Usually a single **Open
-  Dialog** pointing at your sign-in dialog.
-- **On Sign Out** — the actions the sign-out button runs. Usually just **Logout
-  User**.
-- **On Press** — optional, makes the identity itself pressable, for a profile or
-  shift-handover dialog.
-
-**Appearance** carries **Show groups**, your own **Sign-in icon** and **Sign-out
-icon**, and a **Radius** if the theme's fully-round default doesn't suit the
-header. **Username text** and **Groups text** override what it displays, for the
-rare screen that should name someone other than the session user.
-
-The NEXT BREW example template wires exactly this — the badge in the header,
-opening a login dialog for guests and calling `logoutUser` for everyone else.
-
-**Building the dialog itself.** The sign-in dialog behind the badge is layout
+**Building the dialog itself.** The sign-in dialog behind that button is layout
 like any other screen, wired with actions ([Actions](actions.md)):
 
 - **Log in** — a **Login User** action whose **Username** and **Password** are bound to wherever the operator typed them (a Dropdown's or String Input's `$widgetProp`, a component input, a `$static` for a fixed kiosk account). A Dropdown whose **Options** come from `$user` → **All users** offers every account by name and hands over the username, which is what Login User takes — the NEXT BREW sign-in dialog does exactly this. It runs asynchronously: use `onFailed` to show a toast on a wrong password, `onSuccess` to close the dialog.
@@ -80,6 +62,13 @@ like any other screen, wired with actions ([Actions](actions.md)):
 > Tick **Password field** on the String Input holding the password so the entry
 > is masked. It deliberately keeps browser keychains out, so a panel PC never
 > offers to save — or auto-fill — an operator's credentials.
+>
+> For a PIN, set its **Keyboard** to **Keypad** as well: the field becomes the
+> numpad itself, digits only and masked, so the dialog is one panel. Put the
+> Login User action in the field's **On Submit** and it signs in on **Enter**,
+> then clears the entry for the next try. **Numeric** instead keeps a plain
+> field that opens the numpad over the dialog when tapped; **Focus when shown**
+> opens it straight away.
 
 Sign-in is **per open runtime**, not per browser and not per installation: two tabs on the same panel PC can be two different operators, and each keeps its own identity until it is closed or logged out.
 
@@ -99,7 +88,7 @@ Both already arrive on that source. A newly placed widget has **Visible** and **
 
 ### What a locked widget does
 
-A widget that is not **Interactable** renders read-only rather than disappearing — the operator can see the setpoint and see that it is not theirs to change. It is dimmed, and pressing it does nothing.
+A widget that is not **Interactable** renders read-only rather than disappearing — the operator can see the setpoint and see that it is not theirs to change. It is dimmed, and pressing it does nothing. The keyboard cannot reach it either: **Tab** skips it, so **Enter** or **Space** cannot fire it, and a screen reader announces it as unavailable.
 
 Whether the press *says* anything is a project-wide choice: the editor's **Settings** panel (see [Layout & the shell](layout.md)) carries **Locked feedback** with three modes.
 
@@ -110,6 +99,8 @@ Whether the press *says* anything is a project-wide choice: the editor's **Setti
 | **None** | Nothing — the press is swallowed silently, and the widget carries no tooltip either. |
 
 Pick **Notification** for a panel where a small flash is easy to miss, **None** where a locked control should read as plain decoration.
+
+To offer a sign-in instead, attach an **Open Dialog** pointing at your sign-in dialog to the **onInteractionDenied** global event (see [Global events](actions.md#global-events)). It fires on every locked press, whatever the mode, so pair it with **None** if the dialog should be the only answer. It fires for any locked widget, including one locked by a variable rather than by a group.
 
 Two more sources read the identity directly, for labels and lists rather than gates: **`$user`** gives the signed-in **username** or their **groups** as text. On a list field — a Dropdown's **Options**, a Repeater's **Items** — it lists **All users** (each valued by username) or **All user groups** instead, the raw material for a user-picker screen.
 

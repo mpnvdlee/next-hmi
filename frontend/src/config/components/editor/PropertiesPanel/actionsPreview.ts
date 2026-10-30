@@ -25,6 +25,13 @@ export const ACTION_TYPES = [
     description: 'Closes a named dialog or page overlay, or the top-most one when left empty.',
   },
   {
+    type: 'navigateToPage' as const,
+    label: 'Navigate To Page',
+    category: 'Screens',
+    description:
+      'Closes every open dialog and overlay, then goes to a page — a fixed one, or the one a dialog input parameter names.',
+  },
+  {
     type: 'writeDataVariable' as const,
     label: 'Write Data Variable',
     category: 'Machine',
@@ -36,6 +43,13 @@ export const ACTION_TYPES = [
     category: 'Machine',
     description:
       'Flips a writable Boolean variable — true becomes false, false becomes true — from its current value on the server.',
+  },
+  {
+    type: 'editValue' as const,
+    label: 'Edit Value',
+    category: 'Machine',
+    description:
+      'Opens the numpad on a numeric variable; Apply writes the entered value, Cancel writes nothing.',
   },
   {
     type: 'recipeLoad' as const,
@@ -62,6 +76,12 @@ export const ACTION_TYPES = [
     description: 'Drops back to the auto-login user.',
   },
   {
+    type: 'acknowledgeAllAlarms' as const,
+    label: 'Acknowledge All Alarms',
+    category: 'Machine',
+    description: 'Acknowledges every unacknowledged alarm as the signed-in user.',
+  },
+  {
     type: 'setLanguage' as const,
     label: 'Set Language',
     category: 'Interface',
@@ -86,11 +106,25 @@ export const ACTION_TYPES = [
     description: 'Shows a transient message with an info, success, warning or error severity.',
   },
   {
+    type: 'delay' as const,
+    label: 'Delay',
+    category: 'Logic',
+    description:
+      'Waits before the actions after it, so they read a value the PLC has confirmed in the meantime.',
+  },
+  {
     type: 'if' as const,
     label: 'If / Else',
     category: 'Logic',
     description:
       'Runs one list of actions when a condition holds — a variable, a comparison — and another when it does not.',
+  },
+  {
+    type: 'runComponentActions' as const,
+    label: 'Run Component Actions',
+    category: 'Logic',
+    description:
+      'Inside a component: runs the actions each instance sets on one of the component’s Actions properties.',
   },
 ] as const;
 
@@ -101,17 +135,22 @@ export const ACTION_TYPE_TINT: Record<ButtonAction['type'], string> = {
   openDialog: 'componentProp',
   openPageOverlay: 'page',
   closePageOverlay: 'static',
+  navigateToPage: 'pageIsActive',
   writeDataVariable: 'var',
   toggleDataVariable: 'not',
+  editValue: 'formula',
   if: 'if',
   recipeLoad: 'recipe',
   recipeSave: 'recipeList',
   loginUser: 'user',
   logoutUser: 'userGroups',
+  acknowledgeAllAlarms: 'alarmCount',
+  delay: 'time',
   setLanguage: 'languages',
   setActiveTheme: 'viewport',
   showAlert: 'alarmCount',
   showToast: 'result',
+  runComponentActions: 'componentProp',
 };
 
 /** Sets `--option-color` to the action's tint, the hook badges and popup rows

@@ -267,7 +267,7 @@ def test_variables_delete_not_found():
         _run(variables_tools.variables_delete(datasource="PLC", path="ghost"))
 
 
-# ── Variable extension-field policy (item 11) ────────────────────────────────
+# ── Variable extension-field policy ──────────────────────────────────────────
 
 
 def test_variables_add_settings_accepts_extensions_and_round_trips():
@@ -367,8 +367,8 @@ def test_variables_set_property_extensions_round_trip_and_merge_delete():
 
 
 def test_datasource_manager_registry_preserves_extension_fields():
-    """Storage/datasource-sync leg of item 11: the registry built from a
-    variable tree is a dict of references to the original nodes (never
+    """Storage/datasource-sync leg of the extension-field policy: the registry
+    built from a variable tree is a dict of references to the original nodes (never
     reconstructed field-by-field), so an ``extensions`` object — or any other
     field a client wrote — round-trips through the live pipeline unchanged."""
     from services.datasource_manager import DatasourceEntry, DatasourceManager

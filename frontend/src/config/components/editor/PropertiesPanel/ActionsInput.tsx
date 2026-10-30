@@ -17,10 +17,10 @@ import {
 import { useConfigStore } from '@shared/store/configStore';
 import { flattenPageNodes, resolvePageTitle } from '@shared/utils/pageTree';
 import type { ActionsConfig, ButtonAction, VariableBinding } from '@shared/types/config';
-import { writeTargetAddress } from '@shared/types/config';
+import { isBoundIndex } from '@shared/types/config';
 import { varBindingOf } from '../bindingPickerUtils';
 import type { SchemaField } from '@shared/types/widgetSchema';
-import Select from '@config/components/ui/Select';
+import AddButton from '@config/components/ui/AddButton';
 import { ClearIcon } from '@config/components/ui/actionIcons';
 import FieldGroup from '@config/components/ui/FieldGroup';
 import { PanelScopeContext, usePanelExpansionStore } from '@config/store/panelExpansionStore';
@@ -28,22 +28,16 @@ import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
 import { BreakableToken, Kw, KindLabel, PreviewText } from '../PropertySourceEditor/editors/shared';
 import { propertyValuePreview } from '../propertyValueUtils';
 import { ActionTypeBadge } from './actionTypeIcons';
-import {
-  ACTION_TYPES,
-  ACTION_TYPE_TINT,
-  actionTypeColorStyle,
-  actionTypeLabel,
-} from './actionsPreview';
+import { ACTION_TYPE_TINT, actionTypeLabel } from './actionsPreview';
 import { getDefaultValueForKind, makeDefaultAction } from './actionMutations';
 import {
   ACTION_EDITORS,
+  editorTargetAddress,
   findOverlayTarget,
   type ActionEditorCtx,
   type OverlayTargets,
 } from './actionEditors';
 import ActionTypeDrawer from './ActionTypeDrawer';
-
-const BROWSE_ACTIONS = '__browse';
 
 interface Props {
   value: ActionsConfig | undefined;
@@ -106,7 +100,10 @@ export default function ActionsInput({
 
   function addAction(type: string) {
     const next = makeDefaultAction(type, { overlayTargets });
-    if (!next) return;
+    if (next) appendAction(next);
+  }
+
+  function appendAction(next: ButtonAction) {
     const idx = actions.length;
     update([...actions, next]);
     // Existing actions load collapsed; the one the user just added opens so
@@ -128,8 +125,13 @@ export default function ActionsInput({
 
     async function ensureDataTypes() {
       for (const action of actions) {
-        if (action.type !== 'writeDataVariable' && action.type !== 'toggleDataVariable') continue;
-        const address = writeTargetAddress(action.target);
+        if (
+          action.type !== 'writeDataVariable' &&
+          action.type !== 'toggleDataVariable' &&
+          action.type !== 'editValue'
+        )
+          continue;
+        const address = editorTargetAddress(action.target);
         if (!address) continue;
 
         const key = `${address.datasource}:${address.path}`;
@@ -154,16 +156,25 @@ export default function ActionsInput({
     const current = actions[actionIdx];
     // The picked element index is baked into the path as a `[N]` suffix — the
     // same shape a migrated pair takes — so the path is also the picker's key.
-    const currentBinding =
-      current?.type === 'writeDataVariable' || current?.type === 'toggleDataVariable'
+    const targetBinding =
+      current?.type === 'writeDataVariable' ||
+      current?.type === 'toggleDataVariable' ||
+      current?.type === 'editValue'
         ? varBindingOf(current.target)
         : undefined;
+    // A bound index names no element, so the picker opens on the array itself.
+    // Confirming that array keeps the bound index; picking an element replaces it.
+    const bound = targetBinding && isBoundIndex(targetBinding.index);
+    const currentBinding = bound ? { path: targetBinding.path } : targetBinding;
+    const keepsBoundIndex = (binding: VariableBinding, metadata?: BindingPickMetadata) =>
+      bound && metadata?.index === undefined && binding.path === targetBinding.path;
     const pickedKey = (binding: VariableBinding, metadata?: BindingPickMetadata) =>
       metadata?.index !== undefined ? `${binding.path}[${metadata.index}]` : binding.path;
-    if (current?.type === 'toggleDataVariable') {
-      openBindingPicker('', 'toggleDataVariable', {
+    if (current?.type === 'toggleDataVariable' || current?.type === 'editValue') {
+      openBindingPicker('', current.type, {
         currentBinding,
         onPick: (binding: VariableBinding, metadata?: BindingPickMetadata) => {
+          if (keepsBoundIndex(binding, metadata)) return;
           const key = pickedKey(binding, metadata);
           updateAction(actionIdx, { target: { $var: { path: key } } });
           if (metadata?.dataType) {
@@ -177,7 +188,10 @@ export default function ActionsInput({
             }));
           }
         },
-        filter: { label: 'Toggle target', write: true, type: ['Boolean'] },
+        filter:
+          current.type === 'editValue'
+            ? { label: 'Edit Value target', write: true, type: ['Integer', 'Float'] }
+            : { label: 'Toggle target', write: true, type: ['Boolean'] },
       });
       return;
     }
@@ -185,6 +199,7 @@ export default function ActionsInput({
       currentBinding,
       onPick: (binding: VariableBinding, metadata?: BindingPickMetadata) => {
         const action = actions[actionIdx];
+        if (keepsBoundIndex(binding, metadata)) return;
         if (action && action.type === 'writeDataVariable') {
           const dataType = metadata?.dataType;
           const kind = getWriteCoercionKind(dataType);
@@ -229,33 +244,9 @@ export default function ActionsInput({
 
   const effectivePathPrefix = pathPrefix ?? [];
 
-  // "Add" is the placeholder, not an option, so the browse row leads the list
-  // the way it leads the property-source popup.
-  const addControl = (
-    <Select
-      className="cfg-editor-actions__add"
-      popupClassName="cfg-editor-actions__add-popup"
-      value=""
-      placeholder="Add"
-      onChange={(v) => {
-        if (v === BROWSE_ACTIONS) setDrawerOpen(true);
-        else if (v) addAction(v);
-      }}
-    >
-      <option value={BROWSE_ACTIONS} className="cfg-editor-actions__browse">
-        <span className="cfg-source-pill__abbr" aria-hidden="true">
-          ?
-        </span>
-        Browse actions…
-      </option>
-      {ACTION_TYPES.map((t) => (
-        <option key={t.type} value={t.type} style={actionTypeColorStyle(t.type)}>
-          <ActionTypeBadge type={t.type} variant="pill" />
-          {t.label}
-        </option>
-      ))}
-    </Select>
-  );
+  // Ctrl+V on a selected action replaces it; the drawer's paste is the only way
+  // to paste into another (or an empty) trigger.
+  const addControl = <AddButton title="Add action" onClick={() => setDrawerOpen(true)} />;
 
   return (
     <div className="cfg-editor-actions">
@@ -293,6 +284,10 @@ export default function ActionsInput({
             addAction(type);
             setDrawerOpen(false);
           }}
+          onPaste={(action) => {
+            appendAction(action);
+            setDrawerOpen(false);
+          }}
         />
       )}
     </div>
@@ -328,8 +323,14 @@ function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets)
       const p = findOverlayTarget(overlayTargets, action.pageId)?.node;
       return p ? K('Close', resolvePageTitle(p.title), ' overlay') : K('Close top-most overlay');
     }
+    case 'navigateToPage': {
+      if (typeof action.pageId !== 'string')
+        return K('Go to input', action.pageId.$componentProp || undefined);
+      const p = findOverlayTarget(overlayTargets, action.pageId)?.node;
+      return p ? K('Go to', resolvePageTitle(p.title)) : K('Navigate to page');
+    }
     case 'writeDataVariable': {
-      const address = writeTargetAddress(action.target);
+      const address = editorTargetAddress(action.target);
       return address ? (
         // NBSP, not a plain space: a normal space is a wrap opportunity, so a
         // path too long to follow the keyword moves down whole and strands
@@ -349,7 +350,7 @@ function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets)
       return condition !== '—' ? K('If', condition) : K('If condition');
     }
     case 'toggleDataVariable': {
-      const address = writeTargetAddress(action.target);
+      const address = editorTargetAddress(action.target);
       return address ? (
         <>
           <Kw tint={tint}>Toggle</Kw>
@@ -358,6 +359,18 @@ function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets)
         </>
       ) : (
         K('Toggle boolean variable')
+      );
+    }
+    case 'editValue': {
+      const address = editorTargetAddress(action.target);
+      return address ? (
+        <>
+          <Kw tint={tint}>Edit</Kw>
+          {'\u00a0'}
+          <BreakableToken text={`${address.datasource}:${address.path}`} />
+        </>
+      ) : (
+        K('Edit value')
       );
     }
     case 'recipeLoad': {
@@ -374,6 +387,12 @@ function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets)
     }
     case 'logoutUser':
       return K('Log out user');
+    case 'acknowledgeAllAlarms':
+      return K('Acknowledge all alarms');
+    case 'runComponentActions':
+      return action.property ? K('Run', action.property) : K('Run component actions');
+    case 'delay':
+      return K('Wait', `${action.duration ?? 0} ms`);
     case 'setLanguage': {
       const lang = propertyValuePreview(action.language, 'string');
       return lang !== '—' ? (

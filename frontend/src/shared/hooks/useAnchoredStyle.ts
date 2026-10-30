@@ -5,9 +5,10 @@ import { computeAnchorStyle } from '@shared/utils/anchorPosition';
 
 /**
  * Positions a panel against a trigger's anchor rect (popover style): renders at
- * the raw offset first, then measures itself and repositions clamped into the
- * viewport once its real size is known. Pass `null` for `rect`/`placement` when
- * the panel isn't anchored — the returned style is then just `{}`.
+ * the raw offset first, then measures itself and repositions into the viewport
+ * once its real size is known, and again whenever that size changes. Pass
+ * `null` for `rect`/`placement` when the panel isn't anchored — the returned
+ * style is then just `{}`.
  */
 export function useAnchoredStyle(
   rect: AnchorRect | null | undefined,
@@ -20,9 +21,16 @@ export function useAnchoredStyle(
   useLayoutEffect(() => {
     const el = ref.current;
     if (!rect || !placement || !el) return;
-    setStyle(
-      computeAnchorStyle(rect, placement, { width: el.offsetWidth, height: el.offsetHeight }),
-    );
+    const place = () =>
+      setStyle(
+        computeAnchorStyle(rect, placement, { width: el.offsetWidth, height: el.offsetHeight }),
+      );
+    place();
+    // A dialog's content mounts after the panel does, so its first size is not its final one.
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(place);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [rect, placement]);
   return [ref, style];
 }

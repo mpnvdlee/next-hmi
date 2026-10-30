@@ -8,7 +8,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "5cfb688510672d5b",
+    "buildTs": "2a185142561c1d0c",
     "displayName": "Alarm History",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -39,7 +39,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "64c87471d3e339ef",
+    "buildTs": "db993ce47d5914ec",
     "displayName": "Alarm List",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -52,8 +52,23 @@
       "filterLevel": {
         "type": "string"
       },
-      "chrome": {
+      "rowSize": {
+        "type": "string"
+      },
+      "mark": {
+        "type": "string"
+      },
+      "show": {
+        "type": "string"
+      },
+      "showFilter": {
         "type": "boolean"
+      },
+      "ackMode": {
+        "type": "string"
+      },
+      "secondLine": {
+        "type": "string"
       }
     },
     "schemaError": null
@@ -67,7 +82,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "42cd64cf0558eb6a",
+    "buildTs": "5e46acc42abfd10a",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -80,19 +95,46 @@
       "iconName": {
         "type": "icon"
       },
+      "iconPosition": {
+        "type": "string"
+      },
       "color": {
         "type": "color"
       },
       "variant": {
         "type": "string"
       },
+      "fill": {
+        "type": "color"
+      },
       "radius": {
         "type": "string"
+      },
+      "borderWidth": {
+        "type": "integer"
+      },
+      "borderColor": {
+        "type": "color"
+      },
+      "align": {
+        "type": "string"
+      },
+      "textTransform": {
+        "type": "string"
+      },
+      "iconSize": {
+        "type": "integer"
       },
       "variable": {
         "type": "boolean"
       },
+      "momentary": {
+        "type": "boolean"
+      },
       "actions": {
+        "type": "actions"
+      },
+      "onRelease": {
         "type": "actions"
       }
     },
@@ -197,7 +239,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "e2a11193fad2cb17",
+    "buildTs": "19fd8cc1aa37eefa",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -214,6 +256,9 @@
         "type": "color"
       },
       "align": {
+        "type": "string"
+      },
+      "textTransform": {
         "type": "string"
       },
       "wrap": {
@@ -330,7 +375,7 @@
     "hasFonts": false,
     "usesRecharts": true,
     "buildOk": true,
-    "buildTs": "568e8db83dda3a5a",
+    "buildTs": "21b287560789008f",
     "displayName": "Trend Chart",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -360,55 +405,6 @@
       },
       "seriesColors": {
         "type": "string"
-      }
-    },
-    "schemaError": null
-  },
-  {
-    "key": "Content/UserBadge",
-    "name": "UserBadge",
-    "group": "Content",
-    "origin": "builtin",
-    "hasStyle": true,
-    "hasFonts": false,
-    "usesRecharts": false,
-    "buildOk": true,
-    "buildTs": "9bd731bf496e06a6",
-    "displayName": "User Badge",
-    "hostsChildren": null,
-    "flowsChildren": null,
-    "repeatsChildren": null,
-    "category": "Content & controls",
-    "schema": {
-      "usernameText": {
-        "type": "string"
-      },
-      "groupsText": {
-        "type": "string"
-      },
-      "signInLabel": {
-        "type": "string"
-      },
-      "showGroups": {
-        "type": "boolean"
-      },
-      "signInIcon": {
-        "type": "icon"
-      },
-      "signOutIcon": {
-        "type": "icon"
-      },
-      "radius": {
-        "type": "string"
-      },
-      "actions": {
-        "type": "actions"
-      },
-      "onSignIn": {
-        "type": "actions"
-      },
-      "onSignOut": {
-        "type": "actions"
       }
     },
     "schemaError": null
@@ -688,7 +684,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "e3976d9d22ee7bf9",
+    "buildTs": "960fda05a02cada5",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -696,7 +692,10 @@
     "category": "Indicators",
     "schema": {
       "variable": {
-        "type": "float"
+        "type": [
+          "float",
+          "integer"
+        ]
       },
       "min": {
         "type": "float"
@@ -747,7 +746,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "bbaab2768bcbb094",
+    "buildTs": "f02a298c1cb874e5",
     "displayName": "Progress Bar",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -888,7 +887,7 @@
     "hasFonts": false,
     "usesRecharts": true,
     "buildOk": true,
-    "buildTs": "93077c8c5675c55f",
+    "buildTs": "4fa187eac72ae511",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -896,7 +895,10 @@
     "category": "Indicators",
     "schema": {
       "variable": {
-        "type": "float"
+        "type": [
+          "float",
+          "integer"
+        ]
       },
       "historyLength": {
         "type": "integer"
@@ -959,7 +961,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "afe6a4fe530523c3",
+    "buildTs": "0506222783f0abc4",
     "displayName": "Button Row",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1005,7 +1007,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "e13434cb953a0f25",
+    "buildTs": "ba035769cbc00049",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1043,7 +1045,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "4f1acec6194cd73e",
+    "buildTs": "460d03913f430f8a",
     "displayName": "Number Input",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1062,26 +1064,33 @@
       "max": {
         "type": "float"
       },
+      "rangeMessage": {
+        "type": "string"
+      },
       "variable": {
-        "type": "struct",
-        "requiredFields": [
-          {
-            "name": "bVisible",
-            "type": "Boolean"
-          },
-          {
-            "name": "bEnabled",
-            "type": "Boolean"
-          },
-          {
-            "name": "fValue",
-            "type": "Float",
-            "write": true
-          }
-        ]
+        "type": [
+          "float",
+          "integer"
+        ],
+        "write": true
+      },
+      "allowNegative": {
+        "type": "boolean"
+      },
+      "decimals": {
+        "type": "integer"
+      },
+      "color": {
+        "type": "color"
       },
       "showRangeOnNumpad": {
         "type": "boolean"
+      },
+      "numpadPosition": {
+        "type": "string"
+      },
+      "onChange": {
+        "type": "actions"
       }
     },
     "schemaError": null
@@ -1095,7 +1104,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "1af3ac5aef6d3439",
+    "buildTs": "66595ccd0488d2fe",
     "displayName": "Numeric Stepper",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1123,11 +1132,17 @@
       "max": {
         "type": "float"
       },
+      "allowNegative": {
+        "type": "boolean"
+      },
       "decimals": {
         "type": "integer"
       },
       "showRangeOnNumpad": {
         "type": "boolean"
+      },
+      "numpadPosition": {
+        "type": "string"
       }
     },
     "schemaError": null
@@ -1141,7 +1156,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "c526f306e50211a7",
+    "buildTs": "df5b803a7e1b208a",
     "displayName": "String Input",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1157,8 +1172,17 @@
       "isPassword": {
         "type": "boolean"
       },
+      "keyboard": {
+        "type": "string"
+      },
+      "autoFocus": {
+        "type": "boolean"
+      },
       "disabled": {
         "type": "boolean"
+      },
+      "onSubmit": {
+        "type": "actions"
       }
     },
     "schemaError": null
@@ -1195,6 +1219,80 @@
     "schemaError": null
   },
   {
+    "key": "Layout/Badge",
+    "name": "Badge",
+    "group": "Layout",
+    "origin": "builtin",
+    "hasStyle": true,
+    "hasFonts": false,
+    "usesRecharts": false,
+    "buildOk": true,
+    "buildTs": "97eb86a077b4bf90",
+    "displayName": null,
+    "hostsChildren": true,
+    "flowsChildren": null,
+    "repeatsChildren": null,
+    "category": "Layout & structure",
+    "schema": {
+      "badge": {
+        "type": [
+          "string",
+          "integer"
+        ]
+      },
+      "color": {
+        "type": "color"
+      },
+      "offset": {
+        "type": "integer"
+      },
+      "size": {
+        "type": "integer"
+      }
+    },
+    "schemaError": null
+  },
+  {
+    "key": "Layout/ButtonContainer",
+    "name": "ButtonContainer",
+    "group": "Layout",
+    "origin": "builtin",
+    "hasStyle": true,
+    "hasFonts": false,
+    "usesRecharts": false,
+    "buildOk": true,
+    "buildTs": "e8636cd2e5923563",
+    "displayName": "Button Container",
+    "hostsChildren": true,
+    "flowsChildren": true,
+    "repeatsChildren": null,
+    "category": "Layout & structure",
+    "schema": {
+      "title": {
+        "type": "string"
+      },
+      "showWhenEmpty": {
+        "type": "boolean"
+      },
+      "overflow": {
+        "type": "string"
+      },
+      "background": {
+        "type": "color"
+      },
+      "border": {
+        "type": "string"
+      },
+      "actions": {
+        "type": "actions"
+      },
+      "onRelease": {
+        "type": "actions"
+      }
+    },
+    "schemaError": null
+  },
+  {
     "key": "Layout/ComponentSlot",
     "name": "ComponentSlot",
     "group": "Layout",
@@ -1225,7 +1323,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "c6561f624875680f",
+    "buildTs": "6b9d05afa9e78366",
     "displayName": null,
     "hostsChildren": true,
     "flowsChildren": true,
@@ -1245,9 +1343,6 @@
         "type": "color"
       },
       "border": {
-        "type": "string"
-      },
-      "shadow": {
         "type": "string"
       }
     },
@@ -1284,7 +1379,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "9fbc34106611c4c2",
+    "buildTs": "28c9cd4d847073cb",
     "displayName": "Image Container",
     "hostsChildren": true,
     "flowsChildren": null,
@@ -1318,7 +1413,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "428dad1c10dddb25",
+    "buildTs": "a4c3c230407a5dab",
     "displayName": null,
     "hostsChildren": true,
     "flowsChildren": true,
@@ -1336,6 +1431,9 @@
       },
       "emptyText": {
         "type": "string"
+      },
+      "placement": {
+        "type": "String"
       }
     },
     "schemaError": null
@@ -1408,7 +1506,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "433258f13a799856",
+    "buildTs": "392547aa3b97b640",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1461,7 +1559,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "bb4a7d49cd813d5e",
+    "buildTs": "8f5f7bac677e80b0",
     "displayName": "Menu Toggle",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1476,9 +1574,6 @@
       },
       "iconExpanded": {
         "type": "icon"
-      },
-      "ariaLabel": {
-        "type": "string"
       },
       "actions": {
         "type": "actions"
@@ -1495,7 +1590,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "d9e0db76b0c983a3",
+    "buildTs": "4bf952a244745d03",
     "displayName": "Navigation Menu",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1547,7 +1642,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "848afa85bdb44835",
+    "buildTs": "ad0d94e92d8c11e7",
     "displayName": "Page Navigator",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1587,7 +1682,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "53d60005f90d153b",
+    "buildTs": "57c75e7045239a0f",
     "displayName": "Tab Bar",
     "hostsChildren": null,
     "flowsChildren": null,

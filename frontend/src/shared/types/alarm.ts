@@ -28,7 +28,11 @@ export interface AlarmDefinition {
   auto_popup: boolean;
   resolutions: unknown[];
   trigger: AlarmTrigger;
+  /** False: the alarm fires already acknowledged and never waits for an operator. */
+  ack_required: boolean;
   ack_groups: string[];
+  /** `$var` bindings the `{1}`, `{2}` … placeholders in title / description name. */
+  values: unknown[];
 }
 
 export interface AlarmGroup {
@@ -54,7 +58,13 @@ export interface AlarmInstance {
   resolutions: unknown[];
   group_title: string;
   auto_popup: boolean;
+  /** Absent on instances from before the setting: they needed acknowledgement. */
+  ack_required?: boolean;
   ack_groups: string[];
+  /** The definition's `values` bindings, read live while the alarm is active. */
+  value_refs?: unknown[];
+  /** Raw values of those bindings when the alarm fired (null: none cached). */
+  values?: unknown[];
   triggered_at: string;
   acked: boolean;
   acked_by: string;
@@ -67,7 +77,13 @@ export interface AlarmHistoryEntry {
   code: string;
   level: AlarmLevel;
   title: string;
+  /** Kept from the instance for the detail popup; absent on rows from before. */
+  description?: string;
+  image?: string;
+  resolutions?: unknown[];
   group_title: string;
+  /** Raw `values` captured when the alarm fired; empty on rows from before them. */
+  values?: unknown[];
   triggered_at: string;
   cleared_at: string;
   acked: boolean;

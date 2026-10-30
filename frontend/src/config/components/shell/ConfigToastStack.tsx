@@ -18,7 +18,6 @@ function ConfigToast({ toast }: { toast: ToastEntry }) {
     <div
       className={`cfg-toast cfg-toast--${toast.severity}`}
       role={toast.severity === 'error' ? 'alert' : 'status'}
-      aria-live={toast.severity === 'error' ? 'assertive' : 'polite'}
     >
       <span className="cfg-toast__icon" aria-hidden="true">
         {toast.severity === 'info' && '✓'}
@@ -30,7 +29,6 @@ function ConfigToast({ toast }: { toast: ToastEntry }) {
       <CloseButton
         tone="config"
         className="cfg-toast__close"
-        label="Dismiss notification"
         onClick={() => dismissToast(toast.id)}
       />
     </div>
@@ -44,7 +42,7 @@ export function ConfigToastStack() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="cfg-toast-stack" role="region" aria-label="Notifications">
+    <div className="cfg-toast-stack" role="region">
       {toasts.map((toast) => (
         <ConfigToast key={toast.id} toast={toast} />
       ))}

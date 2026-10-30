@@ -1,17 +1,12 @@
 import type { ButtonHTMLAttributes } from 'react';
 import styles from './style.module.css';
 
-interface CloseButtonProps extends Omit<
-  ButtonHTMLAttributes<HTMLButtonElement>,
-  'children' | 'aria-label'
-> {
-  label?: string;
+interface CloseButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   tone?: 'hmi' | 'config' | 'inverse';
 }
 
 /** The single close/dismiss control used across runtime and configuration UI. */
 export default function CloseButton({
-  label = 'Close',
   tone = 'hmi',
   className = '',
   type = 'button',
@@ -20,7 +15,7 @@ export default function CloseButton({
   const classes = [styles.button, styles[tone], className].filter(Boolean).join(' ');
 
   return (
-    <button {...buttonProps} type={type} className={classes} aria-label={label}>
+    <button {...buttonProps} type={type} className={classes}>
       <span aria-hidden="true">×</span>
     </button>
   );

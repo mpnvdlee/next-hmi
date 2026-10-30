@@ -53,7 +53,7 @@ Everywhere else a placeholder is irrelevant. In the *path*, *query* or
 part of the authority that names no origin: ``https://{user}:{pass}@plant.local``
 pins ``https://plant.local:443`` exactly as a literal credential would, because
 both this module and every url parser drop credentials before comparing.
-Counting that as a dynamic host is what let one ordinary credentialed source
+Counting that as a dynamic host would let one ordinary credentialed source
 open the proxy project-wide. And a template with no ``://`` at all —
 ``/api/status/{machineId}``, ``{base}/api/x`` — names no origin: it adds nothing
 to the allowlist and, just as importantly, opts out of nothing. Treating it as
@@ -115,7 +115,7 @@ def _is_local_destination(url: str) -> bool:
     and this check gates an anonymous, LAN-reachable endpoint — a caller
     could name a black-holed nameserver and stall that loop for the length
     of the system resolver's own timeout, once per redirect hop. A DNS
-    lookup traded the SSRF this module closes for a DoS, which is worse.
+    lookup would trade the SSRF this module closes for a DoS, which is worse.
 
     What is checked instead is every *numeric* IPv4 spelling, not just the
     canonical dotted-quad ``ipaddress.ip_address`` accepts: ``inet_aton`` is

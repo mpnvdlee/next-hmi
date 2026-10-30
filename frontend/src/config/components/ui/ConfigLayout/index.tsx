@@ -102,7 +102,6 @@ export default function ConfigLayout({
         min={minPanelWidth}
         max={maxPanelWidth}
         defaultWidth={defaultLeftWidth}
-        label="Resize left panel"
       />
       <div className="cfg-center cfg-flex-col">{center}</div>
       {right && (
@@ -115,7 +114,6 @@ export default function ConfigLayout({
             min={minPanelWidth}
             max={maxPanelWidth}
             defaultWidth={defaultRightWidth}
-            label="Resize right panel"
           />
           <aside className="cfg-props-panel cfg-flex-col">
             <div className="cfg-props-panel__scroll">

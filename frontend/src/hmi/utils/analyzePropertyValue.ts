@@ -114,7 +114,8 @@ function walk(
       }
       if (onScreen) rendered.add(path);
     }
-    // A `$var` source only carries { path, index } — nothing else to walk.
+    // A bound index is a source of its own, which may read another variable.
+    walk(value.$var.index, keys, seen, rendered, state, onScreen);
     return;
   }
 

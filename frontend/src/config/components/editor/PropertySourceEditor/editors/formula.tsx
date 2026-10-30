@@ -1,4 +1,6 @@
 import { renderSchemaField } from '../../../../utils/renderSchemaField';
+import PropRow from '../../../ui/PropRow';
+import BoolButtonGroup from '../../../ui/BoolButtonGroup';
 import { BranchEditor } from './shared';
 import { ParentPathContext, useParentPath, withSegs } from '../parentPathContext';
 import { NUMERIC_SLOT, NUMERIC_TYPES, type OpenBindingPicker } from './utils';
@@ -36,7 +38,7 @@ export function FormulaEditor({
   function handleExpressionChange(next: string) {
     const nextWildcards: Record<string, unknown> = {};
     for (const k of formulaWildcardKeys(next)) nextWildcards[k] = wildcards[k] ?? 0;
-    onChange({ $formula: { expression: next, wildcards: nextWildcards } });
+    onChange({ $formula: { ...formulaObj, expression: next, wildcards: nextWildcards } });
   }
 
   return (
@@ -75,6 +77,13 @@ export function FormulaEditor({
           />
         </ParentPathContext.Provider>
       ))}
+
+      <PropRow label="Round to a whole number">
+        <BoolButtonGroup
+          value={formulaObj.round === true}
+          onChange={(v) => onChange({ $formula: { ...formulaObj, round: v } })}
+        />
+      </PropRow>
     </div>
   );
 }

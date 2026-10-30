@@ -1,4 +1,5 @@
 import type { ButtonAction } from '@shared/types/config';
+import { isPageGroup } from '@shared/utils/pageTree';
 import type { OverlayTargets } from './actionEditors';
 import type { getWriteCoercionKind } from '@config/utils/variableType';
 
@@ -33,12 +34,19 @@ export function makeDefaultAction(
       };
     case 'closePageOverlay':
       return { type: 'closePageOverlay' };
+    case 'navigateToPage':
+      return {
+        type: 'navigateToPage',
+        pageId: context.overlayTargets.pages.find((node) => !isPageGroup(node))?.id ?? '',
+      };
     case 'writeDataVariable':
       return { type: 'writeDataVariable', value: '' };
     case 'if':
       return { type: 'if', condition: { $var: { path: '' } }, then: [], else: [] };
     case 'toggleDataVariable':
       return { type: 'toggleDataVariable' };
+    case 'editValue':
+      return { type: 'editValue', position: 'center' };
     case 'recipeLoad':
       return { type: 'recipeLoad', datasetId: { $static: '' }, verify: false };
     case 'recipeSave':
@@ -51,6 +59,12 @@ export function makeDefaultAction(
       };
     case 'logoutUser':
       return { type: 'logoutUser' };
+    case 'acknowledgeAllAlarms':
+      return { type: 'acknowledgeAllAlarms' };
+    case 'runComponentActions':
+      return { type: 'runComponentActions', property: '' };
+    case 'delay':
+      return { type: 'delay', duration: 500 };
     case 'setLanguage':
       return { type: 'setLanguage', language: { $static: '' } };
     case 'setActiveTheme':

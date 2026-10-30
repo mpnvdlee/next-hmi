@@ -29,6 +29,15 @@ import { useUsersDomainStore } from '@config/store/domains/usersDomainStore';
 import { useSaveErrorToast } from './useSaveErrorToast';
 import TransferProjectButton from './TransferProjectButton';
 import Button from '@config/components/ui/Button';
+import ConnectionLostOverlay from '@shared/components/ConnectionLostOverlay';
+import { setBackendRestartHandler } from '@hmi/hooks/useWebSocket';
+
+/** A restarted backend may serve newer config; show it, unless that drops unsaved edits. */
+function reloadUnlessDirty() {
+  if (!useProjectStore.getState().dirty && !useUsersDomainStore.getState().dirty) {
+    window.location.reload();
+  }
+}
 
 interface NavItem {
   to: string;
@@ -142,6 +151,11 @@ export default function ConfigShell() {
     return () => unregisterAfterSave('thumbnail');
   }, []);
 
+  useEffect(() => {
+    setBackendRestartHandler(reloadUnlessDirty);
+    return () => setBackendRestartHandler(null);
+  }, []);
+
   return (
     <div className="cfg-shell">
       <ConfigTopBar
@@ -172,7 +186,6 @@ export default function ConfigShell() {
           title="Undo (Ctrl+Z)"
           disabled={!canUndo}
           onClick={undo}
-          aria-label="Undo"
         >
           ↶
         </button>
@@ -181,7 +194,6 @@ export default function ConfigShell() {
           title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
           disabled={!canRedo}
           onClick={redo}
-          aria-label="Redo"
         >
           ↷
         </button>
@@ -200,7 +212,6 @@ export default function ConfigShell() {
             window.open(slug ? `/runtime/${slug}/` : withBase('/'), '_blank');
           }}
           title="Open live version"
-          aria-label="Open live version"
         >
           ↗ Live View
         </button>
@@ -210,7 +221,7 @@ export default function ConfigShell() {
       <ConfigUpdatedBanner />
 
       <div className="cfg-shell__body">
-        <nav className="cfg-nav" aria-label="Config navigation">
+        <nav className="cfg-nav">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -220,7 +231,6 @@ export default function ConfigShell() {
                 `cfg-nav__link${isActive ? ' cfg-nav__link--active' : ''}`
               }
               title={item.title}
-              aria-label={item.title}
             >
               {item.icon}
             </NavLink>
@@ -236,6 +246,7 @@ export default function ConfigShell() {
       <ImageSourcePicker />
       <VideoSourcePicker />
       <ConfigToastStack />
+      <ConnectionLostOverlay message="Reconnecting to the server… Your unsaved changes are kept; save them once this closes." />
     </div>
   );
 }

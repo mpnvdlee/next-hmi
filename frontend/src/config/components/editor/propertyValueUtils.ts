@@ -1,6 +1,7 @@
 import {
   hasPropertySourceKey,
   isLocSource,
+  isLocTemplate,
   isRecord,
   getVarBinding,
 } from '@shared/types/propertyValueGuards';
@@ -173,6 +174,7 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
     return v.index !== undefined ? `${base}[${v.index}]` : base;
   }
   if (isLocSource(obj)) return `"${obj.$loc}"`;
+  if (isLocTemplate(obj)) return `"${obj.$loc.key}"`;
   const branch = unwrapBranch(obj);
   if (branch) {
     if (typeof branch === 'string') return `${branch}(…)`;
@@ -207,6 +209,10 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
     const p = obj.$pageIsActive as { page?: string } | undefined;
     return p?.page ? p.page : '(current page)';
   }
+  if (key === '$overlay') {
+    const o = obj.$overlay as { page?: string; param?: string } | undefined;
+    return o?.page ? `${o.page}.${o.param || '?'}` : '(dialog input)';
+  }
   if (key === '$user') {
     const u = obj.$user as { field?: string } | undefined;
     if (u?.field === 'userList') return 'User list';
@@ -230,9 +236,12 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
     return v?.field ? `viewport.${v.field}` : 'viewport(…)';
   }
   if (key === '$recipe') {
-    const r = obj.$recipe as { type?: string; field?: string } | undefined;
+    const r = obj.$recipe as { type?: string; field?: string; parameter?: string } | undefined;
     if (!r?.type) return 'recipe(…)';
-    return `recipe(${r.type}).${r.field ?? 'parametersChanged'}`;
+    const field = r.field ?? 'parametersChanged';
+    return r.parameter && field.startsWith('parameter') && field !== 'parametersChanged'
+      ? `recipe(${r.type}).${field}(${r.parameter})`
+      : `recipe(${r.type}).${field}`;
   }
   if (key === '$time') {
     const t = obj.$time as { format?: string; timezone?: string } | undefined;
@@ -269,6 +278,12 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
     const n = obj.$not as { value?: unknown } | undefined;
     if (!n || depth >= MAX_PREVIEW_DEPTH) return 'not(…)';
     return `not(${propertyValuePreview(n.value, undefined, depth + 1)})`;
+  }
+  if (key === '$and' || key === '$or') {
+    const items = obj[key];
+    const op = key.slice(1).toUpperCase();
+    if (!Array.isArray(items) || depth >= MAX_PREVIEW_DEPTH) return `${op}(…)`;
+    return `${op}(${items.map((c) => propertyValuePreview(c, undefined, depth + 1)).join(', ')})`;
   }
   if (key === '$alarmCount') {
     const ac = obj.$alarmCount as { filter?: string } | undefined;

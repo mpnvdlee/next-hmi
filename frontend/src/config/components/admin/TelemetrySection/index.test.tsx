@@ -8,6 +8,7 @@ function status(overrides: Partial<TelemetryStatus> = {}): TelemetryStatus {
     enabled: true,
     envOverride: null,
     installId: 'b'.repeat(32),
+    contactPrompt: false,
     ...overrides,
   };
 }
@@ -50,5 +51,13 @@ describe('TelemetrySection', () => {
     await userEvent.click(screen.getByRole('button', { name: 'No' }));
     await waitFor(() => expect(screen.getByText(/pinned by the environment/)).toBeInTheDocument());
     expect(props.onLoad).toHaveBeenCalled();
+  });
+
+  it('keeps the way to the contact form after the dashboard prompt is gone', () => {
+    renderSection({ enabled: true, contactPrompt: false });
+    expect(screen.getByRole('link', { name: /Tell us about it/ })).toHaveAttribute(
+      'href',
+      `https://next-hmi.com/contact?from=app&install=${'b'.repeat(32)}`,
+    );
   });
 });

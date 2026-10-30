@@ -117,6 +117,21 @@ describe('substituteRepeatRefs', () => {
   });
 });
 
+describe('a Repeat item inside a static icon', () => {
+  const icon = { $static: { type: 'custom', path: { $repeatItem: { member: 'icon' } } } };
+  const show = (sc: RepeatScopeValue) =>
+    evaluatePropertyValue(substituteRepeatRefs(icon, sc, META), {});
+
+  it('takes the path from an item of a list', () => {
+    expect(show(scope({ item: { icon: 'icons/door.svg' } }))).toBe('/assets/icons/door.svg');
+  });
+
+  it('gives no icon for an element of a tag array, whose member is a variable', () => {
+    const sc = scope({ index: 1, arrayKey: 'PLC:Motors', structArray: true });
+    expect(show(sc)).toBeNull();
+  });
+});
+
 describe('$repeatItem through an evaluation context', () => {
   it('evaluates to the concrete source the context resolves it to', () => {
     const ctx = {

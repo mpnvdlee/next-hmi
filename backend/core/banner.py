@@ -137,6 +137,7 @@ class BannerFields:
     runtime_home: Path
     open_url: str
     version: str = "dev"
+    edition: str = "oss"  # "oss" or "ee"
     # The same listeners as another machine reaches them, one tuple per row:
     # name and address within a row, one row per port — dev serves the app on
     # :8000 and its API on :8001, and a tablet may want either. One block under
@@ -168,8 +169,9 @@ def render_banner(mode: Literal["runtime", "dev"], fields: BannerFields) -> str:
     """Assemble the full splash string (logo + rows + footer). No trailing newline."""
     out: list[str] = ["", _render_logo(), ""]
 
-    # Version sits one space in, dimmed, just under the logo.
-    out.append(_muted(f"  v{fields.version}"))
+    # Edition and version sit one space in, just under the logo.
+    edition = "Enterprise Edition" if fields.edition == "ee" else "Community Edition"
+    out.append(f"  {_wrap(edition, _ANSI_BOLD)} {_muted(f'v{fields.version}')}")
     out.append("")
 
     out.append(_row("Runtime home", str(fields.runtime_home)))

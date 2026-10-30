@@ -30,9 +30,16 @@ declare namespace React {
     currentTarget: T;
     target: T & { value: string; checked: boolean };
   }
+  interface PointerEvent<T = Element> extends MouseEvent<T> {
+    button: number;
+    pointerId: number;
+  }
   interface KeyboardEvent<T = Element> {
     currentTarget: T;
+    target: EventTarget;
     key: string;
+    /** True for the auto-repeat events of a held key. */
+    repeat: boolean;
     preventDefault(): void;
     stopPropagation(): void;
   }
@@ -130,9 +137,11 @@ interface VariableBinding {
   repeatIndex?: boolean;
 }
 
-/** The variable a write or toggle action writes: a `$var`, or — inside a
- *  Repeater — the copy's element (`member` of a struct element). */
-type WriteTarget = { $var: VariableBinding } | { $repeatItem: { member?: string } };
+/** The variable a write or toggle action writes: a `$var`, inside a Repeater
+ *  the copy's element (`member` of a struct element), or inside a component or
+ *  dialog an input parameter the caller filled with a variable. */
+type WriteTarget =
+  { $var: VariableBinding } | { $repeatItem: { member?: string } } | { $componentProp: string };
 
 /** Mirrors `EvaluationContext` in `hmi/utils/propertySourceEval.ts` — one resolver
  *  per property source. Everything is optional: a context that omits a resolver
@@ -216,6 +225,8 @@ interface PageGroupStackEntry {
 
 interface HmiWidgetProps {
   id?: string;
+  /** The node's Identity name. */
+  name?: string;
   properties?: Record<string, unknown>;
   layout?: LayoutConfig;
   children?: unknown;
@@ -289,6 +300,12 @@ type ComponentAction =
     }
   | { type: 'closePageOverlay'; pageId?: string }
   | {
+      /** Closes every open overlay, then navigates to a page in the `pages` root. */
+      type: 'navigateToPage';
+      /** A page id, or a dialog input parameter declared `format: 'page'`. */
+      pageId: string | { $componentProp: string };
+    }
+  | {
       type: 'writeDataVariable';
       /** `{ $var: { path: 'ds:path' } }`, or inside a Repeater the copy's element. */
       target?: WriteTarget;
@@ -309,6 +326,23 @@ type ComponentAction =
       type: 'toggleDataVariable';
       /** `{ $var: { path: 'ds:path' } }`, or inside a Repeater the copy's element. */
       target?: WriteTarget;
+      onSuccess?: ComponentAction[];
+      onFailed?: ComponentAction[];
+      onSettled?: ComponentAction[];
+    }
+  | {
+      /** Opens the numpad on a numeric variable; Apply writes, Cancel does nothing. */
+      type: 'editValue';
+      /** `{ $var: { path: 'ds:path' } }`, or inside a Repeater the copy's element. */
+      target?: WriteTarget;
+      title?: unknown;
+      unit?: unknown;
+      /** Empty falls back to the variable's own configured range. */
+      min?: unknown;
+      max?: unknown;
+      decimals?: unknown;
+      allowNegative?: unknown;
+      position?: 'center' | 'bottom-right';
       onSuccess?: ComponentAction[];
       onFailed?: ComponentAction[];
       onSettled?: ComponentAction[];
@@ -342,6 +376,8 @@ type ComponentAction =
       onFailed?: ComponentAction[];
       onSettled?: ComponentAction[];
     }
+  | { type: 'acknowledgeAllAlarms' }
+  | { type: 'delay'; duration: number }
   | { type: 'setLanguage'; language: unknown }
   | { type: 'setActiveTheme'; theme: unknown }
   | {
@@ -354,6 +390,7 @@ type ComponentAction =
       onCancel?: ComponentAction[];
       onOk?: ComponentAction[];
     }
+  | { type: 'runComponentActions'; property: string }
   | {
       type: 'showToast';
       message: unknown;
@@ -636,7 +673,13 @@ interface AlarmInstance {
   resolutions: unknown[];
   group_title: string;
   auto_popup: boolean;
+  /** False: the alarm fired already acknowledged; absent means it needed acknowledgement. */
+  ack_required?: boolean;
   ack_groups: string[];
+  /** `$var` bindings of the alarm's `values`, read live while it is active. */
+  value_refs?: unknown[];
+  /** Raw `values` when the alarm fired. */
+  values?: unknown[];
   triggered_at: string;
   acked: boolean;
   acked_by: string;
@@ -656,8 +699,13 @@ declare function useActiveAlarms(): AlarmInstance[];
 /** Live alarm counts, pushed alongside the active list. */
 declare function useAlarmSummary(): AlarmSummary;
 /** Resolves alarm text through the active language's dictionary, and re-renders
- *  the caller when the language changes. */
-declare function useAlarmText(): (text: string) => string;
+ *  the caller when the language changes. Pass the alarm instance or history row
+ *  to fill its `{1}`, `{2}` … placeholders: live while it is active, else the
+ *  value stored when it fired, '—' where there is none. */
+declare function useAlarmText(): (
+  text: string,
+  alarm?: { id?: string; values?: unknown[] },
+) => string;
 /** The current HMI actor username, falling back to 'operator'. */
 declare function useAlarmUsername(): string;
 /** Class publishing a severity as `--hmi-alarm-level` on an alarm surface. */
@@ -689,6 +737,8 @@ declare function ackAllAlarms(username: string, options?: AckAlarmOptions): Prom
 /** The product's alarm detail dialog, rendered as a modal over the page. */
 declare const AlarmDetailDialog: (props: {
   alarm: AlarmInstance;
+  /** Set for an alarm from the history: shown in the details, and nothing left to acknowledge. */
+  clearedAt?: string;
   username: string;
   onClose: () => void;
 }) => JSX.Element;
@@ -1061,14 +1111,33 @@ interface VirtualNumpadProps {
   isOpen: boolean;
   value: string;
   onChange: (value: string) => void;
-  onClose: (value: string) => void;
+  /** Called on Enter with a value that parses and sits inside min/max. */
+  onApply: (value: string) => void;
+  /** Called on ×, Escape, or a press outside the panel: the entry is dropped. */
+  onCancel: () => void;
   anchorRef?: { readonly current: Element | null };
   title?: string;
   dockPosition?: 'center' | 'bottom-right';
-  /** Range/unit hint shown under the title. Reddens the value preview and disables Enter when out of range. Omit to hide. */
+  /** Bounds a value must sit inside to be applied; out of range, Enter is disabled and the panel says why. */
   min?: number;
   max?: number;
   unit?: string;
+  /** Whether min/max show as a hint under the title. They gate Enter either way. Default true. */
+  showRange?: boolean;
+  /** Said instead of the range when the entry is outside min/max, such as why a limit depends on another setting. */
+  rangeMessage?: string;
+  /** The value being replaced: the entry field's placeholder while the entry is empty. */
+  currentValue?: string;
+  /** Digits allowed after the point; 0 disables the point. Omit for no limit. */
+  decimals?: number;
+  /** Whether the minus key works. Default: true unless min is 0 or more. */
+  allowNegative?: boolean;
+  /** Masks the entry, for a PIN. */
+  password?: boolean;
+  /** Drawn in place inside its widget rather than as a floating panel: no ×, and a press outside cancels nothing. */
+  inline?: boolean;
+  /** Whether the entry field takes focus as it appears. Default true. */
+  autoFocus?: boolean;
 }
 
 interface CloseButtonProps {

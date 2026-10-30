@@ -1,4 +1,9 @@
-import { useEffect } from 'react';
+import { useContext, useEffect, useState } from 'react';
+import { BranchEditor, WildcardCard } from './shared';
+import { LocPlaceholdersContext } from '../locPlaceholdersContext';
+import type { PropertySource } from '../../propertyValueUtils';
+import { ParentPathContext, useParentPath, withSegs } from '../parentPathContext';
+import type { SchemaField } from '@shared/types/widgetSchema';
 import ReadOnlyValue from '../../../ui/ReadOnlyValue';
 import TranslationInput from '../../TranslationInput';
 import PropRow from '../../../ui/PropRow';
@@ -11,10 +16,12 @@ import { REPEAT_INDEX_SUFFIX, repeatPickLabel } from '../../VariableBindingPicke
 import { useResultFields } from '../resultFieldsContext';
 import { useRepeatEditorScope } from '../repeatScopeContext';
 import { varBindingOf } from '../../bindingPickerUtils';
-import type { OpenBindingPicker } from './utils';
+import { extractWildcardKeys, wrapPicker, type OpenBindingPicker, type SlotType } from './utils';
 import type {
   DeviceSource,
   LocSource,
+  LocTemplateSource,
+  OverlaySource,
   PageField,
   PageIsActiveSource,
   PageSource,
@@ -28,7 +35,15 @@ import type {
   VarSource,
   ViewportSource,
 } from '@shared/types/config';
+import { bindingParts, isBoundIndex } from '@shared/types/config';
+import { loadVariableWriteDescriptor } from '@config/utils/variableType';
+import { acceptedValueTypes, isArrayType } from '@shared/utils/valueTypes';
+import { FieldRowBelow } from '../../../ui/FieldGroup';
+import { useFieldLabel } from '../../../ui/FieldGroup/fieldPathContext';
+import { TakesOneValueContext } from '../slotContext';
 import { useRecipeConfigStore } from '@config/store/recipeConfigStore';
+import { useConfigStore } from '@shared/store/configStore';
+import { findPageNodeById, flattenPageNodes, resolvePageTitle } from '@shared/utils/pageTree';
 import { sourceFieldFits, type FieldSelectingSource } from '@hmi/utils/propertySourceRegistry';
 
 /** Parse a typed `datasource:location[n]` string into a VariableBinding. */
@@ -59,69 +74,189 @@ function fittingFieldOptions<T extends string>(
   );
 }
 
+/** Whether a field of `fieldType` takes one value, so not a whole array. No
+ *  type takes any variable, an array among them. */
+function takesOneValue(fieldType: string | readonly string[] | undefined): boolean {
+  const accepted = fieldType ? acceptedValueTypes(fieldType as string | string[]) : [];
+  return accepted.length > 0 && !accepted.some(isArrayType);
+}
+
 /**
  * Sub-editor for $var wrapper — a typable `datasource:location[n]` path with a
  * picker button shortcut. Commits on blur/Enter; Escape reverts to the value at
  * focus time. The `✎` button still opens the full binding picker overlay.
+ * A whole array on a field that takes one value gets an Index row below it.
  */
 export function VarEditor({
   value,
   onChange,
   onOpenBindingPicker,
+  fieldType,
 }: {
   value: unknown;
   onChange: (v: unknown) => void;
   onOpenBindingPicker?: OpenBindingPicker;
+  /** What the slot takes; absent for a slot that takes any type. */
+  fieldType?: string | readonly string[];
 }) {
   const repeatScope = useRepeatEditorScope();
+  const takesOne = useContext(TakesOneValueContext) || takesOneValue(fieldType);
+  const fieldLabel = useFieldLabel();
   const varObj = (value as VarSource)?.$var ?? { path: '' };
   const basePath = varObj.path ?? '';
   const repeatIndex = varObj.repeatIndex === true;
+  // A bound index lives in its own row below, so the path shows without one.
+  const boundIndex = isBoundIndex(varObj.index) ? varObj.index : undefined;
   const committedText = !basePath
     ? ''
     : repeatIndex
       ? `${basePath}${REPEAT_INDEX_SUFFIX}`
-      : varObj.index !== undefined
+      : varObj.index !== undefined && !boundIndex
         ? `${basePath}[${varObj.index}]`
         : basePath;
+  // Whether the path names a whole array, which the variable's metadata tells,
+  // and how long it is.
+  const [wholeArray, setWholeArray] = useState<{ path: string; length?: number }>();
+  const asksIndex = takesOne && varObj.index === undefined && !repeatIndex;
+  useEffect(() => {
+    const { datasource, location } = bindingParts({ path: basePath });
+    if (!datasource || !location || !asksIndex) return;
+    let live = true;
+    void loadVariableWriteDescriptor(datasource, location).then((d) => {
+      if (live && d?.isArray && !d.indexed)
+        setWholeArray({ path: basePath, length: d.arrayLength });
+    });
+    return () => {
+      live = false;
+    };
+  }, [basePath, asksIndex]);
 
   return (
-    <PathInputField
-      value={committedText}
-      placeholder={
-        repeatScope ? `datasource:location${REPEAT_INDEX_SUFFIX}` : 'datasource:location'
-      }
-      titleFromDraft
-      onCommit={(text) => {
-        const trimmed = text.trim();
-        const next: VariableBinding = trimmed.endsWith(REPEAT_INDEX_SUFFIX)
-          ? { path: trimmed.slice(0, -REPEAT_INDEX_SUFFIX.length), repeatIndex: true }
-          : parseVarPathInput(text);
-        if (
-          next.path === basePath &&
-          next.index === varObj.index &&
-          next.repeatIndex === varObj.repeatIndex
-        )
-          return;
-        onChange({ $var: next });
-      }}
-      pickTitle="Change variable binding"
-      // This field is the innermost slot that knows its own binding, so it names
-      // the preselect outright rather than letting an enclosing `wrapPicker`
-      // guess from a composite value.
-      onPick={
-        onOpenBindingPicker
-          ? () =>
-              onOpenBindingPicker(
-                undefined,
-                varBindingOf(value),
-                undefined,
-                repeatScope ? { repeatIndex: true } : undefined,
-              )
-          : undefined
-      }
-      onClear={onOpenBindingPicker && committedText ? () => onChange(undefined) : undefined}
-    />
+    <>
+      <PathInputField
+        value={committedText}
+        placeholder={
+          repeatScope ? `datasource:location${REPEAT_INDEX_SUFFIX}` : 'datasource:location'
+        }
+        titleFromDraft
+        onCommit={(text) => {
+          const trimmed = text.trim();
+          const parsed: VariableBinding = trimmed.endsWith(REPEAT_INDEX_SUFFIX)
+            ? { path: trimmed.slice(0, -REPEAT_INDEX_SUFFIX.length), repeatIndex: true }
+            : parseVarPathInput(text);
+          // A typed `[n]` replaces a bound index; a bare path keeps it.
+          const next =
+            boundIndex && parsed.index === undefined && !parsed.repeatIndex
+              ? { ...parsed, index: boundIndex }
+              : parsed;
+          if (
+            next.path === basePath &&
+            next.index === varObj.index &&
+            next.repeatIndex === varObj.repeatIndex
+          )
+            return;
+          onChange({ $var: next });
+        }}
+        pickTitle="Change variable binding"
+        // This field is the innermost slot that knows its own binding, so it names
+        // the preselect outright rather than letting an enclosing `wrapPicker`
+        // guess from a composite value.
+        onPick={
+          onOpenBindingPicker
+            ? () =>
+                onOpenBindingPicker(
+                  // A bound index names no element, so the picker opens on the
+                  // array; confirming that array keeps the index, an element
+                  // replaces it — as on an action's target.
+                  boundIndex
+                    ? (b) =>
+                        onChange({
+                          $var:
+                            b.path === basePath && b.index === undefined && !b.repeatIndex
+                              ? { ...b, index: boundIndex }
+                              : b,
+                        })
+                    : undefined,
+                  boundIndex ? { path: basePath } : varBindingOf(value),
+                  undefined,
+                  repeatScope ? { repeatIndex: true } : undefined,
+                )
+            : undefined
+        }
+        onClear={onOpenBindingPicker && committedText ? () => onChange(undefined) : undefined}
+      />
+      {(boundIndex || (asksIndex && wholeArray?.path === basePath)) && (
+        <FieldRowBelow>
+          <IndexRow
+            label={fieldLabel}
+            arrayLength={wholeArray?.path === basePath ? wholeArray.length : undefined}
+            binding={varObj}
+            onChange={(b) => onChange({ $var: b })}
+            onOpenBindingPicker={onOpenBindingPicker}
+          />
+        </FieldRowBelow>
+      )}
+    </>
+  );
+}
+
+const INDEX_SLOT: SlotType = { type: 'Integer' };
+const INDEX_SCHEMA: SchemaField = {
+  type: 'Integer',
+  label: 'Index',
+  placeholder: 'Choose an element',
+};
+const OPTIONAL_INDEX_SCHEMA: SchemaField = { ...INDEX_SCHEMA, placeholder: 'Whole array' };
+
+/**
+ * The row under a field's box, bound to a whole array, that names the element
+ * it reads or writes: a number, or a source such as a dialog's input parameter.
+ * It shows no title of its own, only a hint above its box.
+ * Either is stored as a source (`{ $static: n }`), which keeps it apart from
+ * an element picked in the picker, a plain `index` the path shows as `[n]`.
+ * Cleared, the binding names the whole array again.
+ */
+export function IndexRow({
+  label,
+  arrayLength,
+  binding,
+  optional,
+  onChange,
+  onOpenBindingPicker,
+}: {
+  /** The field's own label; the row's drawer reads `<label> - Index`. */
+  label?: string;
+  /** Puts the valid range in the hint, when the variable knows it. */
+  arrayLength?: number;
+  binding: VariableBinding;
+  /** The field also takes the whole array, which an empty row then means. */
+  optional?: boolean;
+  onChange: (b: VariableBinding) => void;
+  onOpenBindingPicker?: OpenBindingPicker;
+}) {
+  const parent = useParentPath();
+  const { index, ...whole } = binding;
+  return (
+    <ParentPathContext.Provider value={withSegs(parent, '$var', 'index')}>
+      <BranchEditor
+        label={label ? `${label} - Index` : 'Index'}
+        hideLabel
+        description={
+          arrayLength ? `Element of the array, 0 to ${arrayLength - 1}` : 'Element of the array'
+        }
+        value={index}
+        onChange={(v) =>
+          onChange(
+            v === undefined || v === null
+              ? whole
+              : { ...whole, index: isBoundIndex(v) ? v : { $static: v } },
+          )
+        }
+        schema={optional ? OPTIONAL_INDEX_SCHEMA : INDEX_SCHEMA}
+        slot={INDEX_SLOT}
+        onOpenBindingPicker={onOpenBindingPicker}
+      />
+    </ParentPathContext.Provider>
   );
 }
 
@@ -181,21 +316,76 @@ export function RepeatItemEditor({
   );
 }
 
-export function LocEditor({ value, onChange }: { value: unknown; onChange: (v: unknown) => void }) {
-  const locKey = (value as LocSource)?.$loc ?? '';
+const LOC_WILDCARD_SOURCES: PropertySource[] = ['static', '$var', '$loc'];
+const LOC_WILDCARD_SCHEMA: SchemaField = { type: 'String', label: '' };
+
+export function LocEditor({
+  value,
+  onChange,
+  onOpenBindingPicker,
+}: {
+  value: unknown;
+  onChange: (v: unknown) => void;
+  onOpenBindingPicker?: OpenBindingPicker;
+}) {
+  const fillsPlaceholders = useContext(LocPlaceholdersContext);
+  const parent = useParentPath();
+  const loc = (value as { $loc?: LocSource['$loc'] | LocTemplateSource['$loc'] })?.$loc;
+  const locKey = typeof loc === 'string' ? loc : (loc?.key ?? '');
+  const wildcards: Record<string, unknown> = (typeof loc === 'object' && loc?.wildcards) || {};
+  const keys = fillsPlaceholders ? extractWildcardKeys(locKey) : [];
+
+  // A key with placeholders carries one binding per placeholder; a plain key
+  // stays the bare string every older project stores.
+  const pick = (key: string) => {
+    const nextKeys = fillsPlaceholders ? extractWildcardKeys(key) : [];
+    if (nextKeys.length === 0) return onChange({ $loc: key });
+    const next: Record<string, unknown> = {};
+    // A new placeholder starts unbound, so diagnostics warn until it is.
+    for (const k of nextKeys) next[k] = wildcards[k] ?? { $var: { path: '' } };
+    onChange({ $loc: { key, wildcards: next } });
+  };
 
   return (
-    <TranslationInput
-      value={{ $loc: locKey }}
-      onChange={(next) => {
-        if (next && typeof next === 'object' && '$loc' in (next as Record<string, unknown>)) {
-          onChange(next);
-          return;
-        }
-        onChange({ $loc: String(next ?? '') });
-      }}
-      translationOnly
-    />
+    <>
+      <TranslationInput
+        value={{ $loc: locKey }}
+        onChange={(next) => {
+          if (next && typeof next === 'object' && '$loc' in (next as Record<string, unknown>)) {
+            pick(String((next as LocSource).$loc));
+            return;
+          }
+          pick(String(next ?? ''));
+        }}
+        translationOnly
+      />
+      {keys.length > 0 && (
+        <FieldRowBelow>
+          {keys.map((k) => (
+            <ParentPathContext.Provider key={k} value={withSegs(parent, '$loc', 'wildcards', k)}>
+              <WildcardCard
+                wcKey={k}
+                value={wildcards[k] ?? ''}
+                onChange={(v) =>
+                  onChange({ $loc: { key: locKey, wildcards: { ...wildcards, [k]: v } } })
+                }
+                onOpenBindingPicker={wrapPicker(
+                  onOpenBindingPicker,
+                  (b) =>
+                    onChange({
+                      $loc: { key: locKey, wildcards: { ...wildcards, [k]: { $var: b } } },
+                    }),
+                  wildcards[k],
+                  true,
+                )}
+                schema={LOC_WILDCARD_SCHEMA}
+                forcedSources={LOC_WILDCARD_SOURCES}
+              />
+            </ParentPathContext.Provider>
+          ))}
+        </FieldRowBelow>
+      )}
+    </>
   );
 }
 
@@ -257,6 +447,52 @@ export function PageIsActiveEditor({
           onChange={(v) => onChange({ $pageIsActive: v ? { page: v } : {} })}
           emptyLabel="(Current page)"
         />
+      </PropRow>
+    </>
+  );
+}
+
+export function OverlayEditor({
+  value,
+  onChange,
+}: {
+  value: unknown;
+  onChange: (v: unknown) => void;
+}) {
+  const overlay = (value as OverlaySource)?.$overlay ?? { page: '', param: '' };
+  const dialogs = useConfigStore((s) => s.dialogs);
+  const inputs = Object.keys(findPageNodeById(dialogs, overlay.page)?.componentProperties ?? {});
+
+  return (
+    <>
+      <p className="cfg-prop-hint">
+        The input a dialog was opened with, while it is open; empty once it closes.
+      </p>
+      <PropRow label="Dialog">
+        <Select
+          value={overlay.page}
+          onChange={(v) => onChange({ $overlay: { page: v, param: '' } })}
+        >
+          <option value="">(Pick a dialog)</option>
+          {flattenPageNodes(dialogs).map((n) => (
+            <option key={n.id} value={n.id}>
+              {resolvePageTitle(n.title) || n.id}
+            </option>
+          ))}
+        </Select>
+      </PropRow>
+      <PropRow label="Input">
+        <Select
+          value={overlay.param}
+          onChange={(v) => onChange({ $overlay: { ...overlay, param: v } })}
+        >
+          <option value="">(Pick an input)</option>
+          {inputs.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </Select>
       </PropRow>
     </>
   );
@@ -623,7 +859,12 @@ const RECIPE_FIELD_OPTIONS = [
   { value: 'activeName', label: 'Loaded recipe name' },
   { value: 'loaded', label: 'Is loaded' },
   { value: 'parametersChanged', label: 'Parameters changed' },
+  { value: 'parameterValue', label: 'Saved value of a parameter' },
+  { value: 'parameterChanged', label: 'Parameter changed' },
+  { value: 'changedCount', label: 'Number of changed parameters' },
+  { value: 'savedAt', label: 'Saved at' },
 ];
+const RECIPE_PARAMETER_FIELDS = new Set(['parameterValue', 'parameterChanged']);
 
 export function RecipeEditor({
   value,
@@ -641,11 +882,14 @@ export function RecipeEditor({
     void load();
   }, [load]);
 
-  const obj = (value as { $recipe?: { type?: string; field?: string } })?.$recipe ?? {
+  const obj = (
+    value as { $recipe?: { type?: string; field?: string; parameter?: string; format?: string } }
+  )?.$recipe ?? {
     type: '',
     field: 'parametersChanged',
   };
   const types = config?.datasetTypes ?? [];
+  const parameters = types.find((t) => t.id === obj.type)?.parameters ?? [];
 
   return (
     <>
@@ -676,6 +920,31 @@ export function RecipeEditor({
           ))}
         </Select>
       </PropRow>
+      {obj.field === 'savedAt' && (
+        <PropRow label="Format" tier={2}>
+          <input
+            className="cfg-prop-input"
+            placeholder="ISO"
+            value={obj.format ?? ''}
+            onChange={(e) => onChange({ $recipe: { ...obj, format: e.target.value || undefined } })}
+          />
+        </PropRow>
+      )}
+      {RECIPE_PARAMETER_FIELDS.has(obj.field ?? '') && (
+        <PropRow label="Parameter" tier={2}>
+          <Select
+            value={obj.parameter ?? ''}
+            onChange={(v) => onChange({ $recipe: { ...obj, parameter: v } })}
+          >
+            <option value="">Select a parameter…</option>
+            {parameters.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label || p.id}
+              </option>
+            ))}
+          </Select>
+        </PropRow>
+      )}
     </>
   );
 }

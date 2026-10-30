@@ -108,10 +108,17 @@ describe('ComponentRenderer instance sizing', () => {
   });
 
   it('does not introduce a wrapper element around the definition', () => {
-    // A wrapper would re-parent the roots and flip which axis their flex
-    // properties resolve against — a Fill root collapsing to no height.
+    // A box-drawing wrapper would re-parent the roots and flip which axis their
+    // flex properties resolve against — a Fill root collapsing to no height.
+    // Only the `display: contents` widget wrappers (instance, then root) sit
+    // between, and the flow rules in hmi.css look through both.
     const { container } = renderInstance({ grow: 1 });
-    expect(container.firstElementChild?.classList.contains('hmi-container')).toBe(true);
+    const root = container.querySelector('.hmi-container') as HTMLElement;
+    let el = root.parentElement;
+    while (el && el !== container) {
+      expect(el.classList.contains('hmi-preview-node')).toBe(true);
+      el = el.parentElement;
+    }
   });
 
   it('sizes only the first root when a definition has more than one', () => {
@@ -260,5 +267,54 @@ describe('ComponentRenderer property defaults', () => {
   it('resolves to nothing when no default is declared', () => {
     defineWithProps({ title: { type: 'string', label: 'Title' } });
     expect(renderWith({}).container.textContent).toBe('');
+  });
+});
+
+describe('ComponentRenderer actions', () => {
+  it('resolves a $componentProp nested in an action when the action fires', async () => {
+    const { useHmiStore } = await import('@hmi/store/hmiStore');
+    const { fireEvent } = await import('@testing-library/react');
+    useHmiStore.setState({ pendingToasts: [], numpadRequest: null });
+    const label = { $componentProp: 'label' };
+    defineComponent([
+      {
+        id: 'edit',
+        type: 'Button',
+        name: 'Edit',
+        properties: {
+          label: 'Edit',
+          actions: {
+            onPress: [
+              {
+                type: 'showToast',
+                message: { $stringExpr: { template: 'Editing {1}', wildcards: { '1': label } } },
+                severity: 'info',
+                discard: 'auto',
+              },
+              {
+                type: 'editValue',
+                target: { $componentProp: 'value' },
+                title: { $stringExpr: { template: 'Set {1}', wildcards: { '1': label } } },
+              },
+            ],
+          },
+        },
+      },
+    ]);
+    render(
+      <MemoryRouter>
+        <ComponentRenderer
+          _widgetId="cmp"
+          properties={{ label: 'Max pressure', value: { $var: { path: 'CP:Params/Max' } } }}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Edit' }));
+
+    expect(useHmiStore.getState().pendingToasts.map((t) => t.message)).toEqual([
+      'Editing Max pressure',
+    ]);
+    expect(useHmiStore.getState().numpadRequest?.title).toBe('Set Max pressure');
   });
 });

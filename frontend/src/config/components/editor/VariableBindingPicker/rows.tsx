@@ -15,6 +15,7 @@ import type { PickerVariableEntry } from '@config/components/ui/datasourceTreeHe
 import { isStructType, primaryType } from '@shared/utils/valueTypes';
 import { arrayBadgeSuffix, isArrayShape } from '@shared/types/arrayShape';
 import { ToggleSlot, EmptyToggleSlot, GroupHeaderRow } from '../BindingPickerShell/rowParts';
+import { propertyTypeLabel } from '@shared/types/componentProperty';
 import { formatTypeBadge } from './helpers';
 import { folderKey, arrayExpansionKey, rowSelectionKey, type RowItem } from './variableTreeHelpers';
 import { REPEAT_INDEX_SUFFIX } from './repeatItemRows';
@@ -71,7 +72,7 @@ function ComponentPropRow({
         <SearchHighlight text={propKey} />
       </span>
       <span className="editor-binding-char-row__type cfg-text-truncate">
-        <SearchHighlight text={formatTypeBadge(schema.type)} />
+        <SearchHighlight text={propertyTypeLabel(schema)} />
       </span>
       {schema.write !== undefined && <AccessBadge writable={schema.write} />}
     </div>

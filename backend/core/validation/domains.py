@@ -15,10 +15,17 @@ from __future__ import annotations
 
 from typing import Any, get_args
 
+from models.alarm import AlarmDefinition
+from models.binding import resolve_var_binding
 from models.recipe import RecipeDataType
 
 from .report import ValidationReport
-from .structure import ValidationContext, validate_property_value, validate_var_ref
+from .structure import (
+    ValidationContext,
+    template_placeholder_keys,
+    validate_property_value,
+    validate_var_ref,
+)
 
 _STRING_FIELD = {"type": "string"}
 
@@ -42,6 +49,10 @@ def _dicts(value: Any) -> list[dict]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def _is_var(value: Any) -> bool:
+    return isinstance(value, dict) and set(value) == {"$var"}
 
 
 def _element_index(composite: str) -> int | None:
@@ -117,6 +128,33 @@ def validate_alarms(alarms: Any, ctx: ValidationContext) -> ValidationReport:
                 )
 
             _check_groups(alarm.get("ack_groups"), ctx, f"{base}/ack_groups", report, "alarm")
+
+            values = alarm.get("values") if isinstance(alarm.get("values"), list) else []
+            for vi, ref in enumerate(values):
+                # Only a `$var` has a value the backend can store when the alarm fires.
+                if not _is_var(ref):
+                    report.warn(
+                        f"{base}/values/{vi}",
+                        "an alarm value must be a variable binding",
+                        severity="error",
+                        code="alarm-value-not-var",
+                    )
+                    continue
+                validate_property_value(ref, None, ctx, f"{base}/values/{vi}", report)
+            # `{n}` in the text names entry n of `values`, counted from 1.
+            for field_name in ("title", "description"):
+                text = AlarmDefinition.resolve_string(alarm.get(field_name))
+                for key in sorted(template_placeholder_keys([text]), key=int):
+                    n = int(key)
+                    # A non-`$var` entry already has its own error.
+                    ref = values[n - 1] if 1 <= n <= len(values) else None
+                    if ref is None or (_is_var(ref) and not resolve_var_binding(ref)[1]):
+                        report.warn(
+                            f"{base}/{field_name}",
+                            f"placeholder {{{n}}} has no variable in the alarm's values",
+                            severity="warning",
+                            code="alarm-value-missing",
+                        )
 
             trigger = alarm.get("trigger")
             if not isinstance(trigger, dict):

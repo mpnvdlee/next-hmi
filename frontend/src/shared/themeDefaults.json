@@ -56,5 +56,26 @@
     "radius_md": "6px",
     "radius_lg": "8px",
     "shadow": "0 1px 0 rgba(15, 23, 34, 0.04), 0 4px 12px rgba(15, 23, 34, 0.06)"
+  },
+  "numpad": {
+    "columns": 3,
+    "key_size": "",
+    "gap": "",
+    "key_font": "",
+    "key_font_size": "",
+    "key_font_weight": null,
+    "accent": "#0a84ff"
+  },
+  "toasts": {
+    "position": "top-center",
+    "shape": "rounded",
+    "info_bg": "#f4f9ff",
+    "info_text": "#0f1722",
+    "success_bg": "#f5faf6",
+    "success_text": "#0f1722",
+    "warning_bg": "#fcf7f2",
+    "warning_text": "#0f1722",
+    "error_bg": "#fef5f4",
+    "error_text": "#0f1722"
   }
 }

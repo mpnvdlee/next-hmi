@@ -64,11 +64,28 @@
     ]
   },
   {
+    "key": "$and",
+    "label": "AND",
+    "description": "True when every condition is true.",
+    "produces": [
+      "boolean"
+    ]
+  },
+  {
+    "key": "$or",
+    "label": "OR",
+    "description": "True when any condition is true.",
+    "produces": [
+      "boolean"
+    ]
+  },
+  {
     "key": "$formula",
     "label": "Formula",
     "description": "A number calculated from values with + − × ÷ and parentheses.",
     "produces": [
-      "float"
+      "float",
+      "integer"
     ]
   },
   {
@@ -170,7 +187,10 @@
     "description": "State from a selected recipe dataset type.",
     "produces": [
       "boolean",
-      "string"
+      "string",
+      "float",
+      "integer",
+      "datetime"
     ]
   },
   {
@@ -185,6 +205,14 @@
     "key": "$componentProp",
     "label": "Component Property",
     "description": "A value passed in by the parent component, or by the action that opened this page overlay.",
+    "produces": [
+      "any"
+    ]
+  },
+  {
+    "key": "$overlay",
+    "label": "Open Dialog Input",
+    "description": "An input parameter of a dialog while it is open — empty once it closes. Lights a selection that follows the open popover.",
     "produces": [
       "any"
     ]

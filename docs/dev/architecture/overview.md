@@ -66,7 +66,7 @@ NEXT HMI is split into three primary areas:
   - `projects.json` — manifest of every project known to this runtime, plus the `running` set (which projects the supervisor keeps up)
   - sibling state files: `.manager-auth.json` (device-admin password digest), `.mcp-tokens.json`, `.peer-tokens.json`, `.peer-trust.json`, `tls/`
   - `.logs/`, `.widget-build/`
-- **Projects** — self-contained folders anywhere on disk, each holding project data, translations, datasources, alarms, widgets, assets, and custom components. `project-seed/` in this repository is the clean template used to bootstrap the first project, by binary/Docker builds, and by the projects API. During development a separate private project, `project-testbench/` (real content plus intentional diagnostics and scale fixtures), can be cloned into the repo root; when present it is bootstrapped as the first project instead.
+- **Projects** — self-contained folders anywhere on disk, each holding project data, translations, datasources, alarms, widgets, assets, and custom components. `project-seed/` in this repository is the clean template used to bootstrap the first project, by binary/Docker builds, and by the projects API. During development a separate private project, `project-testbench/` (a symlink to the `aquavane/` example of the private `next-hmi-testbench` repository), can sit in the repo root; when present it is bootstrapped as the first project instead.
 - **Manager + instances** — the always-on **manager** process (`backend/manager.py`) is the front door: it serves the dashboard, gates everything behind a device-admin password, supervises one **child instance** per *running* project, and reverse-proxies `/runtime/<slug>/*` and `/editor/<slug>/*` to the matching child. Each child is the ordinary single-project app (`backend/main.py`) run in instance mode, pinned to one project. There is no single system-wide live project: the operator runs a *set* of projects concurrently. See [backend.md](backend.md) for the supervisor/proxy details.
 - **Editions** — this repository builds one edition, `oss`: no feature gate, no license check, no `/api/admin` route group. A separate `ee` build exists in a private repository. It mounts additional routers on top of the same core app, and registers callbacks with the two generic seams core exposes for it (`core/audit.py`, `core/start_guards.py`) — the second is how an `ee` build holds project startup behind licence activation. Nothing is registered with either here, so both are no-ops in this build. See [backend.md](backend.md#edition-seam).
 
@@ -103,9 +103,12 @@ Runtime evaluation lives in `frontend/src/hmi/utils/propertySourceEval.ts`.
 
 The project pages document's `globalEvents` field is a singleton config of
 action lists fired on lifecycle events: `onHmiLoaded`, `onPageLoaded`,
-`onLocaleChanged`, `onUserLoggedIn`, and `onUserLoggedOut`. It is represented by
-the shared `PagesConfig` type and wired in
-`frontend/src/hmi/hooks/useGlobalEvents.ts`.
+`onLocaleChanged`, `onUserLoggedIn`, `onUserLoggedOut` and `onInteractionDenied`,
+plus `onVariableChanged`, a list of per-variable triggers whose variables
+`HmiView` keeps subscribed on every page.
+It is represented by the shared `PagesConfig` type and wired in
+`frontend/src/hmi/hooks/useGlobalEvents.ts`, except `onInteractionDenied`, which
+`WidgetRenderer`'s lock overlay fires on a press.
 
 ## How To Use This Documentation
 

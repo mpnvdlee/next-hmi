@@ -7,6 +7,35 @@ can set. Bind any of them to live data like any other field.
 
 ## Layout & structure
 
+### Badge
+
+Puts a small chip, such as an alarm count, on the top-right corner of the one widget placed inside it.
+
+| Property | Label | Type |
+|---|---|---|
+| `badge` | Badge | `String | Integer` |
+| `color` | Color | `color` |
+| `offset` | Offset (px) | `Integer` |
+| `size` | Size (px) | `Integer` |
+| `visible` | Visible | `Boolean` |
+| `interactable` | Interactable | `Boolean` |
+
+### Button Container
+
+A Container that is one big control around whatever it holds — a tile, a list row — running actions when pressed and released.
+
+| Property | Label | Type |
+|---|---|---|
+| `title` | Title | `String` |
+| `showWhenEmpty` | Show when empty | `Boolean` |
+| `overflow` | Overflow | `String` |
+| `background` | Background | `color` |
+| `border` | Border | `String` |
+| `actions` | Actions | `actions` |
+| `onRelease` | On Released | `actions` |
+| `visible` | Visible | `Boolean` |
+| `interactable` | Interactable | `Boolean` |
+
 ### Component Slot
 
 Marks where content the caller supplies is rendered. Put one in a reusable component and instances of it gain a named slot — in the widget tree, and in the properties panel when a "Widget slot" property names it.
@@ -19,7 +48,7 @@ Marks where content the caller supplies is rendered. Put one in a reusable compo
 
 ### Container
 
-Groups and lays out child widgets in a row or column. Hosts other widgets.
+Groups and lays out child widgets in a row or column. Hosts other widgets; a Button Container does the same and runs actions when pressed.
 
 | Property | Label | Type |
 |---|---|---|
@@ -28,7 +57,6 @@ Groups and lays out child widgets in a row or column. Hosts other widgets.
 | `overflow` | Overflow | `String` |
 | `background` | Background | `color` |
 | `border` | Border | `String` |
-| `shadow` | Shadow | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
@@ -66,6 +94,7 @@ Draws its child widgets once per element of an array, each copy bound to its own
 | `startOffset` | Start at | `Integer` |
 | `maxItems` | Max items | `Integer` |
 | `emptyText` | Empty text | `String` |
+| `placement` | Place copies | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
@@ -117,23 +146,37 @@ Live active alarms, filterable by level, with acknowledgement.
 |---|---|---|
 | `title` | Title | `String` |
 | `filterLevel` | Filter level | `String` |
-| `chrome` | Own frame | `Boolean` |
+| `rowSize` | Row size | `String` |
+| `mark` | Severity mark | `String` |
+| `show` | Show | `String` |
+| `showFilter` | Filter chips | `Boolean` |
+| `ackMode` | Acknowledge | `String` |
+| `secondLine` | Second line | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
 ### Button
 
-Runs actions and can write true to a bound boolean on press.
+Runs actions on press and on release, and can write a bound boolean true on press (and false on release when momentary).
 
 | Property | Label | Type |
 |---|---|---|
 | `label` | Label | `String` |
 | `iconName` | Icon | `icon` |
+| `iconPosition` | Icon position | `String` |
 | `color` | Color | `color` |
 | `variant` | Style | `String` |
+| `fill` | Fill | `color` |
 | `radius` | Radius | `String` |
+| `borderWidth` | Border width (px) | `Integer` |
+| `borderColor` | Border color | `color` |
+| `align` | Content alignment | `String` |
+| `textTransform` | Text case | `String` |
+| `iconSize` | Icon size (px) | `Integer` |
 | `variable` | Variable | `Boolean` |
+| `momentary` | Momentary | `Boolean` |
 | `actions` | Actions | `actions` |
+| `onRelease` | On Released | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
@@ -184,7 +227,8 @@ Text in one of the theme typography combos, with translation support.
 | `text` | Text | `String` |
 | `typography` | Typography | `String` |
 | `color` | Color | `color` |
-| `align` | Align | `String` |
+| `align` | Content alignment | `String` |
+| `textTransform` | Text case | `String` |
 | `wrap` | Overflow | `String` |
 | `size` | Size override | `String` |
 | `weight` | Weight override | `Integer` |
@@ -244,25 +288,6 @@ Plots recorded tag history over selectable time ranges, or buffers live values w
 | `liveMaxSamples` | Max samples per variable | `Integer` |
 | `showControls` | Show zoom buttons | `Boolean` |
 | `seriesColors` | Line colors | `String` |
-| `visible` | Visible | `Boolean` |
-| `interactable` | Interactable | `Boolean` |
-
-### User Badge
-
-Shows the signed-in user as an initialled badge, with optional sign-in and sign-out affordances.
-
-| Property | Label | Type |
-|---|---|---|
-| `usernameText` | Username text | `String` |
-| `groupsText` | Groups text | `String` |
-| `signInLabel` | Sign-in label | `String` |
-| `showGroups` | Show groups | `Boolean` |
-| `signInIcon` | Sign-in icon | `icon` |
-| `signOutIcon` | Sign-out icon | `icon` |
-| `radius` | Radius | `String` |
-| `actions` | On Press | `actions` |
-| `onSignIn` | On Sign In | `actions` |
-| `onSignOut` | On Sign Out | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
@@ -400,8 +425,14 @@ A numeric entry field that writes a number to a variable.
 | `unit` | Unit | `String` |
 | `min` | Min value | `Float` |
 | `max` | Max value | `Float` |
-| `variable` | Variable | `struct` |
+| `rangeMessage` | Out-of-range message | `String` |
+| `variable` | Variable | `Float | Integer` |
+| `allowNegative` | Allow negative values | `Boolean` |
+| `decimals` | Decimal places | `Integer` |
+| `color` | Value color | `color` |
 | `showRangeOnNumpad` | Show range on numpad | `Boolean` |
+| `numpadPosition` | Numpad position | `String` |
+| `onChange` | On Change | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
@@ -417,8 +448,10 @@ Increment / decrement a numeric variable with + / − buttons.
 | `step` | Step | `Float` |
 | `min` | Min value | `Float` |
 | `max` | Max value | `Float` |
+| `allowNegative` | Allow negative values | `Boolean` |
 | `decimals` | Decimal places | `Integer` |
 | `showRangeOnNumpad` | Show range on numpad | `Boolean` |
+| `numpadPosition` | Numpad position | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
@@ -431,7 +464,10 @@ A text field whose typed value is published for sibling widgets to read.
 | `label` | Label | `String` |
 | `placeholder` | Placeholder | `String` |
 | `isPassword` | Password field | `Boolean` |
+| `keyboard` | Keyboard | `String` |
+| `autoFocus` | Focus when shown | `Boolean` |
 | `disabled` | Disabled | `Boolean` |
+| `onSubmit` | On Submit | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
@@ -456,7 +492,7 @@ A round analog gauge with min/max and a value binding.
 
 | Property | Label | Type |
 |---|---|---|
-| `variable` | Value | `Float` |
+| `variable` | Value | `Float | Integer` |
 | `min` | Min value | `Float` |
 | `max` | Max value | `Float` |
 | `label` | Label | `String` |
@@ -534,7 +570,7 @@ A live sparkline of one variable with its current reading — buffered in the pa
 
 | Property | Label | Type |
 |---|---|---|
-| `variable` | Value | `Float` |
+| `variable` | Value | `Float | Integer` |
 | `historyLength` | History length (samples) | `Integer` |
 | `label` | Label | `String` |
 | `unit` | Unit | `String` |
@@ -590,7 +626,6 @@ Collapses or expands a bound menu state; swaps icon per state.
 | `bound` | Bound state | `Boolean` |
 | `iconCollapsed` | Icon (collapsed) | `icon` |
 | `iconExpanded` | Icon (expanded) | `icon` |
-| `ariaLabel` | Aria label | `String` |
 | `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |

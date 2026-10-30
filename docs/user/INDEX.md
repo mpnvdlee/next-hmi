@@ -48,9 +48,10 @@ alarms, recipes, the historian, users and custom widgets.
 
 | Page | What it covers |
 |---|---|
-| [Users, groups & permissions](users.md) | Accounts and groups, the User Badge, gating what each role sees and may change |
+| [Users, groups & permissions](users.md) | Accounts and groups, signing in and out on a screen, gating what each role sees and may change |
 | [Diagnostics & troubleshooting](diagnostics.md) | The Admin area, the manager's Settings page, the warnings pill, and the common symptoms |
 | [AI agents over MCP](mcp.md) | Letting an assistant read and edit a project — enabling it, tokens, connecting a client, the starter prompts, and the limits |
+| [Shipping it on a machine](shipping.md) | Which build ships, activation on the commissioning bench, locking it down, and what to hand your customer |
 
 ## Project
 

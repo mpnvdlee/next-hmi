@@ -94,6 +94,48 @@ describe('ComponentPropertiesEditor', () => {
     expect(onChange).toHaveBeenCalledWith({ title: { type: 'string', label: 'title' } });
   });
 
+  it('adds a Page input as a String that names a page, and states it as Page', async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <ComponentPropertiesEditor
+        properties={{}}
+        title="Input Parameters"
+        itemNoun="input parameter"
+        onChange={onChange}
+      />,
+    );
+
+    await user.click(screen.getByTitle('Add input parameter'));
+    await user.type(screen.getByPlaceholderText('e.g. motorVar'), 'target');
+    await user.click(screen.getByRole('combobox'));
+    await user.click(screen.getByRole('option', { name: 'Page' }));
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    const stored = { target: { type: 'string', format: 'page', label: 'target' } };
+    expect(onChange).toHaveBeenCalledWith(stored);
+
+    rerender(<ComponentPropertiesEditor properties={stored} onChange={onChange} />);
+    const type = screen.getByText('Type').closest('.cfg-component-prop-stated-row') as HTMLElement;
+    expect(within(type).getByText('Page')).toBeInTheDocument();
+    expect(screen.queryByText('Holds a page')).not.toBeInTheDocument();
+    // A page names no variable, so there is no write access to grant.
+    expect(screen.queryByText('Write access')).not.toBeInTheDocument();
+  });
+
+  it("offers the Page type on a Component's properties too", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const user = userEvent.setup();
+    render(<ComponentPropertiesEditor properties={{}} onChange={vi.fn()} />);
+
+    await user.click(screen.getByTitle('Add component property'));
+    await user.click(screen.getByRole('combobox'));
+
+    expect(screen.getByRole('option', { name: 'String' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Page' })).toBeInTheDocument();
+  });
+
   it('updates component-property references, including a struct path', () => {
     expect(
       renameComponentPropertyReferences(

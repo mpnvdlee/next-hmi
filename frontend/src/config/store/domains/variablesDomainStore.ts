@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { apiJson } from '@shared/utils/api';
+import { forgetVariableTrees } from '@config/utils/variableType';
 import { makeAbortableLoader } from '@shared/utils/abortableLoader';
 import type {
   DatasourceConfig,
@@ -184,6 +185,7 @@ export const useVariablesDomainStore = create<VariablesDomainStore>((set, get) =
     deleteDatasource: async (name) => {
       try {
         await apiJson(`/api/datasources/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        forgetVariableTrees();
         set((state) => {
           const nextPending = { ...state.pendingBrowse };
           delete nextPending[name];

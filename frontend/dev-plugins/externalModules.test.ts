@@ -6,6 +6,7 @@ import {
   buildImportMap,
   readOverrides,
   resolveLiveProjectDir,
+  resolveProjectDirById,
   resolveRuntimeHome,
   scanExternalLibraries,
 } from './externalModules';
@@ -244,6 +245,19 @@ describe('resolveLiveProjectDir', () => {
       projects: [{ id: 'a', path: path.join(tmpRoot, 'sibling-testbench') }],
     });
     expect(resolveLiveProjectDir(tmpRoot)).toBe(path.join(tmpRoot, 'sibling-testbench'));
+  });
+
+  test('finds a registered project by id, for an instance document of that project', () => {
+    process.env.NEXTHMI_DATA_DIR = path.join(tmpRoot, 'home');
+    writeManifest(path.join(tmpRoot, 'home'), {
+      defaultProjectId: 'a',
+      projects: [
+        { id: 'a', path: path.join(tmpRoot, 'line-a') },
+        { id: 'b', path: path.join(tmpRoot, 'line-b') },
+      ],
+    });
+    expect(resolveProjectDirById(tmpRoot, 'b')).toBe(path.join(tmpRoot, 'line-b'));
+    expect(resolveProjectDirById(tmpRoot, 'missing')).toBeUndefined();
   });
 
   test('refuses to guess between several projects with no default', () => {

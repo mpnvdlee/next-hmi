@@ -82,16 +82,103 @@
           }
         ]
       },
-      "chrome": {
+      "rowSize": {
+        "format": "select",
+        "label": "Row size",
+        "defaultValue": "compact",
+        "description": "Touch gives each row and button a tap-sized height and a larger title.",
+        "options": [
+          {
+            "label": "Compact",
+            "value": "compact"
+          },
+          {
+            "label": "Touch",
+            "value": "touch"
+          }
+        ]
+      },
+      "mark": {
+        "format": "select",
+        "label": "Severity mark",
+        "defaultValue": "stripe",
+        "description": "How a row shows its level: a stripe on the left, the whole row in the level colour, or only the coloured icon.",
+        "options": [
+          {
+            "label": "Stripe",
+            "value": "stripe"
+          },
+          {
+            "label": "Row color",
+            "value": "tint"
+          },
+          {
+            "label": "Icon only",
+            "value": "icon"
+          }
+        ]
+      },
+      "show": {
+        "format": "select",
+        "label": "Show",
+        "defaultValue": "active",
+        "description": "Active alarms, cleared ones (History) or both. With Filter chips on, the chips start here.",
+        "options": [
+          {
+            "label": "Active",
+            "value": "active"
+          },
+          {
+            "label": "All",
+            "value": "all"
+          },
+          {
+            "label": "History",
+            "value": "history"
+          }
+        ]
+      },
+      "showFilter": {
         "format": "show",
-        "label": "Own frame",
-        "defaultValue": true,
-        "description": "Turn off when the widget sits inside a card that already draws a frame."
+        "label": "Filter chips",
+        "defaultValue": false,
+        "description": "All / Active / History chips in the header, so the operator can switch."
+      },
+      "ackMode": {
+        "format": "select",
+        "label": "Acknowledge",
+        "defaultValue": "row",
+        "description": "Off leaves acknowledging to a Button with the Acknowledge All Alarms action.",
+        "options": [
+          {
+            "label": "Per row",
+            "value": "row"
+          },
+          {
+            "label": "Off",
+            "value": "off"
+          }
+        ]
+      },
+      "secondLine": {
+        "format": "select",
+        "label": "Second line",
+        "defaultValue": "time",
+        "options": [
+          {
+            "label": "Time",
+            "value": "time"
+          },
+          {
+            "label": "Description and time",
+            "value": "description"
+          }
+        ]
       }
     }
   },
   "Content/Button": {
-    "description": "Runs actions and can write true to a bound boolean on press.",
+    "description": "Runs actions on press and on release, and can write a bound boolean true on press (and false on release when momentary).",
     "icon": {
       "type": "builtin",
       "name": "cursor-click"
@@ -99,12 +186,30 @@
     "schema": {
       "label": {
         "label": "Label",
+        "description": "Leave it empty with an icon set for an icon-only button.",
         "defaultValue": "Button",
         "group": "Content"
       },
       "iconName": {
         "label": "Icon",
         "group": "Content"
+      },
+      "iconPosition": {
+        "format": "select",
+        "label": "Icon position",
+        "display": "button-text",
+        "group": "Content",
+        "defaultValue": "left",
+        "options": [
+          {
+            "label": "Left",
+            "value": "left"
+          },
+          {
+            "label": "Top",
+            "value": "top"
+          }
+        ]
       },
       "color": {
         "label": "Color",
@@ -127,10 +232,71 @@
           }
         ]
       },
+      "fill": {
+        "label": "Fill",
+        "description": "Background of the outline button; empty keeps it transparent.",
+        "group": "Appearance",
+        "visibleWhen": {
+          "property": "variant",
+          "equals": "outline"
+        }
+      },
       "radius": {
         "format": "length",
         "label": "Radius",
         "defaultToken": "--hmi-radius",
+        "group": "Appearance"
+      },
+      "borderWidth": {
+        "label": "Border width (px)",
+        "min": 0,
+        "step": 1,
+        "group": "Appearance"
+      },
+      "borderColor": {
+        "label": "Border color",
+        "description": "Empty uses the button color.",
+        "group": "Appearance"
+      },
+      "align": {
+        "format": "select",
+        "label": "Content alignment",
+        "display": "button-text",
+        "group": "Appearance",
+        "defaultValue": "center",
+        "options": [
+          {
+            "label": "Center",
+            "value": "center"
+          },
+          {
+            "label": "Start",
+            "value": "start"
+          }
+        ]
+      },
+      "textTransform": {
+        "format": "select",
+        "label": "Text case",
+        "display": "button-text",
+        "group": "Appearance",
+        "defaultValue": "none",
+        "options": [
+          {
+            "label": "As typed",
+            "value": "none"
+          },
+          {
+            "label": "Uppercase",
+            "value": "uppercase"
+          }
+        ]
+      },
+      "iconSize": {
+        "label": "Icon size (px)",
+        "min": 8,
+        "max": 512,
+        "step": 1,
         "group": "Appearance"
       },
       "variable": {
@@ -138,8 +304,19 @@
         "description": "Optional boolean written true on press.",
         "group": "Data"
       },
+      "momentary": {
+        "format": "onoff",
+        "label": "Momentary",
+        "description": "Writes false to Variable on release, so it is true only while held.",
+        "defaultValue": false,
+        "group": "Data"
+      },
       "actions": {
         "label": "Actions"
+      },
+      "onRelease": {
+        "label": "On Released",
+        "event": "onRelease"
       }
     }
   },
@@ -296,7 +473,8 @@
       },
       "align": {
         "format": "select",
-        "label": "Align",
+        "label": "Content alignment",
+        "display": "button-text",
         "group": "Appearance",
         "defaultValue": "left",
         "options": [
@@ -311,6 +489,27 @@
           {
             "label": "Right",
             "value": "right"
+          }
+        ]
+      },
+      "textTransform": {
+        "format": "select",
+        "label": "Text case",
+        "display": "button-text",
+        "group": "Appearance",
+        "defaultValue": "theme",
+        "options": [
+          {
+            "label": "Typography",
+            "value": "theme"
+          },
+          {
+            "label": "As typed",
+            "value": "none"
+          },
+          {
+            "label": "Uppercase",
+            "value": "uppercase"
           }
         ]
       },
@@ -587,69 +786,6 @@
         "label": "Line colors",
         "group": "Appearance",
         "description": "Comma-separated colours, one per series. Left empty, the theme series palette is used."
-      }
-    }
-  },
-  "Content/UserBadge": {
-    "description": "Shows the signed-in user as an initialled badge, with optional sign-in and sign-out affordances.",
-    "icon": {
-      "type": "builtin",
-      "name": "user"
-    },
-    "schema": {
-      "usernameText": {
-        "label": "Username text",
-        "group": "Content",
-        "description": "Overrides the signed-in username."
-      },
-      "groupsText": {
-        "label": "Groups text",
-        "group": "Content",
-        "description": "Overrides the signed-in user's group list."
-      },
-      "signInLabel": {
-        "label": "Sign-in label",
-        "group": "Content",
-        "defaultValue": "Log in",
-        "description": "Shown on the sign-in affordance while nobody is signed in."
-      },
-      "showGroups": {
-        "format": "onoff",
-        "label": "Show groups",
-        "group": "Appearance",
-        "defaultValue": true
-      },
-      "signInIcon": {
-        "label": "Sign-in icon",
-        "group": "Appearance",
-        "description": "Defaults to the lock glyph."
-      },
-      "signOutIcon": {
-        "label": "Sign-out icon",
-        "group": "Appearance",
-        "description": "Defaults to the sign-out glyph."
-      },
-      "radius": {
-        "format": "length",
-        "label": "Radius",
-        "defaultToken": "--hmi-radius-full",
-        "group": "Appearance"
-      },
-      "actions": {
-        "label": "On Press",
-        "group": "Actions"
-      },
-      "onSignIn": {
-        "label": "On Sign In",
-        "group": "Actions",
-        "event": "onSignIn",
-        "description": "Run by the sign-in affordance, which only appears once this is set."
-      },
-      "onSignOut": {
-        "label": "On Sign Out",
-        "group": "Actions",
-        "event": "onSignOut",
-        "description": "Run by the sign-out button, which only appears once this is set."
       }
     }
   },
@@ -1783,15 +1919,56 @@
         "label": "Max value",
         "group": "Data"
       },
+      "rangeMessage": {
+        "label": "Out-of-range message",
+        "description": "Said on the numpad outside min/max. Empty shows the range.",
+        "group": "Data"
+      },
       "variable": {
         "label": "Variable",
+        "group": "Data"
+      },
+      "allowNegative": {
+        "label": "Allow negative values",
         "group": "Data",
-        "description": "Struct driving the field from the PLC: bVisible and bEnabled gate it, fValue is shown and written."
+        "defaultValue": true
+      },
+      "decimals": {
+        "label": "Decimal places",
+        "group": "Appearance",
+        "min": 0,
+        "max": 6,
+        "step": 1
+      },
+      "color": {
+        "label": "Value color",
+        "defaultToken": "--hmi-text",
+        "group": "Appearance"
       },
       "showRangeOnNumpad": {
         "label": "Show range on numpad",
         "group": "Appearance",
         "defaultValue": true
+      },
+      "numpadPosition": {
+        "format": "select",
+        "label": "Numpad position",
+        "group": "Appearance",
+        "defaultValue": "bottom-right",
+        "options": [
+          {
+            "label": "Bottom right",
+            "value": "bottom-right"
+          },
+          {
+            "label": "Center",
+            "value": "center"
+          }
+        ]
+      },
+      "onChange": {
+        "label": "On Change",
+        "event": "onChange"
       }
     }
   },
@@ -1828,6 +2005,11 @@
         "label": "Max value",
         "group": "Data"
       },
+      "allowNegative": {
+        "label": "Allow negative values",
+        "group": "Data",
+        "defaultValue": true
+      },
       "decimals": {
         "label": "Decimal places",
         "group": "Appearance",
@@ -1840,6 +2022,22 @@
         "label": "Show range on numpad",
         "group": "Appearance",
         "defaultValue": true
+      },
+      "numpadPosition": {
+        "format": "select",
+        "label": "Numpad position",
+        "group": "Appearance",
+        "defaultValue": "bottom-right",
+        "options": [
+          {
+            "label": "Bottom right",
+            "value": "bottom-right"
+          },
+          {
+            "label": "Center",
+            "value": "center"
+          }
+        ]
       }
     }
   },
@@ -1869,9 +2067,42 @@
         "label": "Password field",
         "group": "Appearance"
       },
+      "keyboard": {
+        "format": "select",
+        "label": "Keyboard",
+        "description": "Numeric opens the numpad instead, for digits only — a PIN or a code. Keypad draws that numpad in the field itself, so a PIN dialog is one panel.",
+        "display": "button-text",
+        "group": "Appearance",
+        "defaultValue": "text",
+        "options": [
+          {
+            "label": "Text",
+            "value": "text"
+          },
+          {
+            "label": "Numeric",
+            "value": "numeric"
+          },
+          {
+            "label": "Keypad",
+            "value": "keypad"
+          }
+        ]
+      },
+      "autoFocus": {
+        "label": "Focus when shown",
+        "description": "Opens the keyboard or numpad as soon as the field appears, as a PIN dialog wants.",
+        "group": "Appearance"
+      },
       "disabled": {
         "label": "Disabled",
         "group": "Appearance"
+      },
+      "onSubmit": {
+        "label": "On Submit",
+        "description": "Runs on Enter, on the numpad or a physical keyboard.",
+        "group": "Actions",
+        "event": "onSubmit"
       }
     }
   },
@@ -1914,6 +2145,97 @@
       }
     }
   },
+  "Layout/Badge": {
+    "description": "Puts a small chip, such as an alarm count, on the top-right corner of the one widget placed inside it.",
+    "icon": {
+      "type": "builtin",
+      "name": "tag"
+    },
+    "schema": {
+      "badge": {
+        "label": "Badge",
+        "description": "A small chip on the top-right corner, such as an alarm count. Empty or 0 hides it.",
+        "group": "Content"
+      },
+      "color": {
+        "label": "Color",
+        "defaultToken": "--hmi-fault",
+        "group": "Appearance"
+      },
+      "offset": {
+        "label": "Offset (px)",
+        "description": "Moves the chip inward from the corner; negative moves it further out. 0 centres it on the corner.",
+        "step": 1,
+        "group": "Appearance"
+      },
+      "size": {
+        "label": "Size (px)",
+        "description": "Text size of the chip; the chip scales with it.",
+        "min": 6,
+        "max": 96,
+        "step": 1,
+        "group": "Appearance"
+      }
+    }
+  },
+  "Layout/ButtonContainer": {
+    "description": "A Container that is one big control around whatever it holds — a tile, a list row — running actions when pressed and released.",
+    "icon": {
+      "type": "builtin",
+      "name": "cursor-click"
+    },
+    "schema": {
+      "title": {
+        "label": "Title",
+        "group": "Content"
+      },
+      "showWhenEmpty": {
+        "format": "show",
+        "label": "Show when empty",
+        "group": "Content",
+        "defaultValue": false,
+        "description": "Keep the frame and background even when every child is hidden, instead of collapsing away."
+      },
+      "overflow": {
+        "format": "select",
+        "label": "Overflow",
+        "group": "Content",
+        "defaultValue": "visible",
+        "options": [
+          {
+            "label": "Visible",
+            "value": "visible"
+          },
+          {
+            "label": "Clip",
+            "value": "clip"
+          },
+          {
+            "label": "Scroll",
+            "value": "scroll"
+          }
+        ],
+        "description": "What happens to children that do not fit. Clip and Scroll need a bounded size (Fixed or Fill); a Hug container grows to fit its children instead."
+      },
+      "background": {
+        "label": "Background",
+        "group": "Appearance"
+      },
+      "border": {
+        "label": "Border",
+        "defaultValue": "none",
+        "description": "Any CSS border shorthand, e.g. 1px solid var(--hmi-border).",
+        "group": "Appearance"
+      },
+      "actions": {
+        "label": "Actions"
+      },
+      "onRelease": {
+        "label": "On Released",
+        "event": "onRelease"
+      }
+    }
+  },
   "Layout/ComponentSlot": {
     "description": "Marks where content the caller supplies is rendered. Put one in a reusable component and instances of it gain a named slot — in the widget tree, and in the properties panel when a \"Widget slot\" property names it.",
     "icon": {
@@ -1929,7 +2251,7 @@
     }
   },
   "Layout/Container": {
-    "description": "Groups and lays out child widgets in a row or column. Hosts other widgets.",
+    "description": "Groups and lays out child widgets in a row or column. Hosts other widgets; a Button Container does the same and runs actions when pressed.",
     "icon": {
       "type": "builtin",
       "name": "stack"
@@ -1975,12 +2297,6 @@
         "label": "Border",
         "defaultValue": "none",
         "description": "Any CSS border shorthand, e.g. 1px solid var(--hmi-border).",
-        "group": "Appearance"
-      },
-      "shadow": {
-        "label": "Shadow",
-        "defaultValue": "none",
-        "description": "Any CSS box-shadow, e.g. var(--hmi-shadow).",
         "group": "Appearance"
       }
     }
@@ -2089,6 +2405,23 @@
         "label": "Empty text",
         "group": "Content",
         "description": "Shown instead when there are no elements to draw. Empty shows nothing."
+      },
+      "placement": {
+        "format": "select",
+        "label": "Place copies",
+        "group": "Content",
+        "defaultValue": "flow",
+        "options": [
+          {
+            "label": "In a row or column",
+            "value": "flow"
+          },
+          {
+            "label": "At item x / y",
+            "value": "items"
+          }
+        ],
+        "description": "At item x / y draws each copy at its element's x and y (0–1) over an Image Container's image, on the element's side (top, bottom, left, right) of that point when it names one."
       }
     }
   },
@@ -2242,10 +2575,6 @@
       "iconExpanded": {
         "label": "Icon (expanded)",
         "defaultValue": "×"
-      },
-      "ariaLabel": {
-        "label": "Aria label",
-        "defaultValue": "Toggle menu"
       },
       "actions": {
         "label": "Actions"

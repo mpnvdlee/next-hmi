@@ -13,7 +13,9 @@ function alarm(id: string, code: string, title: unknown): AlarmDefinition {
     auto_popup: false,
     resolutions: [],
     trigger: { type: 'bool', source_value: undefined, min: null, max: null, on_true: true },
+    ack_required: true,
     ack_groups: [],
+    values: [],
   };
 }
 

@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useConfigStore } from '@shared/store/configStore';
 import { useRecipeConfigStore } from '@config/store/recipeConfigStore';
 import {
+  LocEditor,
   PageEditor,
   PageIsActiveEditor,
   RecipeEditor,
@@ -11,8 +12,142 @@ import {
   VarEditor,
   ViewportEditor,
 } from './leaf';
+import PropRow from '../../../ui/PropRow';
+import { TakesOneValueContext } from '../slotContext';
+import { LocPlaceholdersContext } from '../locPlaceholdersContext';
+import { loadVariableWriteDescriptor } from '@config/utils/variableType';
+
+vi.mock('@config/utils/variableType', () => ({
+  loadVariableWriteDescriptor: vi.fn(async () => undefined),
+}));
 
 describe('VarEditor', () => {
+  beforeEach(() => {
+    vi.mocked(loadVariableWriteDescriptor).mockReset().mockResolvedValue(undefined);
+  });
+
+  function renderValueField(value: unknown, onChange = vi.fn(), fieldType = 'Float') {
+    render(
+      <PropRow label="Value">
+        <VarEditor value={value} onChange={onChange} fieldType={fieldType} />
+      </PropRow>,
+    );
+    return onChange;
+  }
+  const valueRow = () => screen.getByText('Value').closest('.cfg-field-group') as HTMLElement;
+
+  it('asks a whole array on a one-value field for its element in a row below the field', async () => {
+    vi.mocked(loadVariableWriteDescriptor).mockResolvedValueOnce({
+      dataType: 'Float',
+      isArray: true,
+      arrayLength: 5,
+    });
+    const onChange = renderValueField({ $var: { path: 'CF:Temps' } });
+    // No title of its own: a hint naming the range sits above its box.
+    const hint = await screen.findByText('Element of the array, 0 to 4');
+    expect(screen.queryByText('Value - Index')).toBeNull();
+    expect(loadVariableWriteDescriptor).toHaveBeenCalledWith('CF', 'Temps');
+    // Part of the Value field, under its box rather than inside it.
+    const indexRow = hint.closest('.cfg-field-group') as HTMLElement;
+    expect(valueRow().contains(indexRow)).toBe(true);
+    expect(valueRow().querySelector('.cfg-field-group__box')!.contains(indexRow)).toBe(false);
+    const input = within(indexRow).getByPlaceholderText('Choose an element');
+    fireEvent.change(input, { target: { value: '3' } });
+    expect(onChange).toHaveBeenLastCalledWith({
+      $var: { path: 'CF:Temps', index: { $static: 3 } },
+    });
+  });
+
+  it.each([
+    ['a picked element', { path: 'CF:Temps', index: 2 }, { isArray: true }],
+    ['an element in the path', { path: 'CF:Temps[2]' }, { isArray: true, indexed: true }],
+    ['a variable that is no array', { path: 'CF:Setpoint' }, { isArray: false }],
+  ])('adds no Index row for %s', async (_, binding, descriptor) => {
+    vi.mocked(loadVariableWriteDescriptor).mockResolvedValueOnce({
+      dataType: 'Float',
+      ...descriptor,
+    });
+    renderValueField({ $var: binding });
+    await new Promise((r) => setTimeout(r));
+    expect(screen.queryByText(/Element of the array/)).toBeNull();
+  });
+
+  it('adds no Index row on a field that takes the whole array', async () => {
+    vi.mocked(loadVariableWriteDescriptor).mockResolvedValue({ dataType: 'Float', isArray: true });
+    renderValueField({ $var: { path: 'CF:Temps' } }, vi.fn(), 'Float[]');
+    await new Promise((r) => setTimeout(r));
+    expect(screen.queryByText(/Element of the array/)).toBeNull();
+  });
+
+  it('asks an alarm-style any-type slot that takes one value for the element too', async () => {
+    vi.mocked(loadVariableWriteDescriptor).mockResolvedValueOnce({
+      dataType: 'Float',
+      isArray: true,
+    });
+    render(
+      <TakesOneValueContext.Provider value={true}>
+        <PropRow label="{3}">
+          <VarEditor value={{ $var: { path: 'CF:Temps' } }} onChange={vi.fn()} />
+        </PropRow>
+      </TakesOneValueContext.Provider>,
+    );
+    expect(await screen.findByText('Element of the array')).toBeInTheDocument();
+  });
+
+  it('shows a bound index in its row and the path without brackets; clearing it binds the whole array', () => {
+    const onChange = renderValueField({
+      $var: { path: 'CF:Safety/Open', index: { $static: 4 } },
+    });
+    expect(within(valueRow()).getByRole('textbox')).toHaveValue('CF:Safety/Open');
+    const indexRow = screen
+      .getByText('Element of the array')
+      .closest('.cfg-field-group') as HTMLElement;
+    const input = within(indexRow).getByRole('spinbutton');
+    expect(input).toHaveValue(4);
+    fireEvent.change(input, { target: { value: '' } });
+    expect(onChange).toHaveBeenLastCalledWith({ $var: { path: 'CF:Safety/Open' } });
+  });
+
+  it('keeps a bound index when the picker confirms the same array, and replaces it with a picked element', async () => {
+    const onChange = vi.fn();
+    const open = vi.fn();
+    const bound = { $componentProp: 'device' };
+    render(
+      <VarEditor
+        value={{ $var: { path: 'CF:Safety/Open', index: bound } }}
+        onChange={onChange}
+        onOpenBindingPicker={open}
+      />,
+    );
+    await userEvent.click(screen.getByTitle('Change variable binding'));
+    const [onPick, current] = open.mock.calls[0];
+    expect(current).toEqual({ path: 'CF:Safety/Open' });
+    onPick({ path: 'CF:Safety/Open' });
+    expect(onChange).toHaveBeenLastCalledWith({ $var: { path: 'CF:Safety/Open', index: bound } });
+    onPick({ path: 'CF:Safety/Open', index: 2 });
+    expect(onChange).toHaveBeenLastCalledWith({ $var: { path: 'CF:Safety/Open', index: 2 } });
+    onPick({ path: 'CF:Safety/Closed' });
+    expect(onChange).toHaveBeenLastCalledWith({ $var: { path: 'CF:Safety/Closed' } });
+  });
+
+  it('keeps a bound index when the bare path is retyped, and drops it for a typed [n]', () => {
+    const onChange = vi.fn();
+    const bound = { $componentProp: 'device' };
+    render(
+      <VarEditor value={{ $var: { path: 'CF:Safety/Open', index: bound } }} onChange={onChange} />,
+    );
+    const input = screen.getAllByRole('textbox')[0];
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'CF:Safety/Closed' } });
+    fireEvent.blur(input);
+    expect(onChange).toHaveBeenLastCalledWith({ $var: { path: 'CF:Safety/Closed', index: bound } });
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'CF:Safety/Open[5]' } });
+    fireEvent.blur(input);
+    expect(onChange).toHaveBeenLastCalledWith({ $var: { path: 'CF:Safety/Open', index: 5 } });
+  });
+
   it('shows the composite path with index suffix', () => {
     render(
       <VarEditor value={{ $var: { path: 'PLC:Motor1/Speed', index: 2 } }} onChange={vi.fn()} />,
@@ -197,6 +332,8 @@ describe('field choices that fit the field', () => {
     expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
       'Is loaded',
       'Parameters changed',
+      'Saved value of a parameter',
+      'Parameter changed',
     ]);
   });
 
@@ -209,5 +346,26 @@ describe('field choices that fit the field', () => {
       />,
     );
     expect(await fieldOptions()).toEqual(['username', 'groups', 'User list']);
+  });
+});
+
+describe('LocEditor', () => {
+  const value = { $loc: { key: 'Tank {1} of {2}', wildcards: { 1: 'A' } } };
+
+  it('opens one field per placeholder of the picked translation', () => {
+    render(<LocEditor value={value} onChange={vi.fn()} />);
+
+    expect(screen.getByText('Value for {1}')).toBeInTheDocument();
+    expect(screen.getByText('Value for {2}')).toBeInTheDocument();
+  });
+
+  it('leaves the placeholders to the alarm where an alarm fills them', () => {
+    render(
+      <LocPlaceholdersContext.Provider value={false}>
+        <LocEditor value={value} onChange={vi.fn()} />
+      </LocPlaceholdersContext.Provider>,
+    );
+
+    expect(screen.queryByText('Value for {1}')).not.toBeInTheDocument();
   });
 });

@@ -442,6 +442,32 @@ describe('propertySourceEval', () => {
     });
   });
 
+  describe('$and / $or', () => {
+    const status = { $var: { path: 'PLC1:Status' } };
+    const below = { $compare: { left: 5, operator: '<', right: 3 } };
+
+    it('is true for $and only when every item is', () => {
+      expect(evaluatePropertyValue({ $and: [true, status] }, mockContext)).toBe(true);
+      expect(evaluatePropertyValue({ $and: [status, below] }, mockContext)).toBe(false);
+    });
+
+    it('is true for $or when any item is', () => {
+      expect(evaluatePropertyValue({ $or: [below, status] }, mockContext)).toBe(true);
+      expect(evaluatePropertyValue({ $or: [below, false] }, mockContext)).toBe(false);
+    });
+
+    it('nests, and reads a missing value as false', () => {
+      const nested = { $or: [{ $and: [status, { $var: { path: 'PLC1:Nope' } }] }, below] };
+      expect(evaluatePropertyValue(nested, mockContext)).toBe(false);
+    });
+
+    it('is false for an empty or malformed list', () => {
+      expect(evaluatePropertyValue({ $and: [] }, mockContext)).toBe(false);
+      expect(evaluatePropertyValue({ $or: [] }, mockContext)).toBe(false);
+      expect(evaluatePropertyValue({ $and: { value: true } }, mockContext)).toBe(false);
+    });
+  });
+
   describe('$formula wrapper', () => {
     const formula = (expression: string, wildcards: Record<string, unknown> = {}) =>
       evaluatePropertyValue({ $formula: { expression, wildcards } }, mockContext);
@@ -466,6 +492,15 @@ describe('propertySourceEval', () => {
 
     it('returns null for division by zero', () => {
       expect(formula('{1} / {2}', { 1: 10, 2: 0 })).toBeNull();
+    });
+
+    it('rounds the result to a whole number only when asked', () => {
+      const rounded = (expression: string, wildcards: Record<string, unknown> = {}) =>
+        evaluatePropertyValue({ $formula: { expression, wildcards, round: true } }, mockContext);
+      expect(formula('7 / 2')).toBe(3.5);
+      expect(rounded('7 / 2')).toBe(4);
+      expect(rounded('{1} * 0.4', { 1: 3 })).toBe(1);
+      expect(rounded('{1} / {2}', { 1: 1, 2: 0 })).toBeNull();
     });
 
     it('returns null when a placeholder has no numeric value', () => {
@@ -1165,6 +1200,93 @@ describe('propertySourceEval', () => {
 
     it('returns null with no resolver in context', () => {
       expect(evaluatePropertyValue({ $http: { url: 'https://x/y' } }, {})).toBeNull();
+    });
+  });
+  describe('$loc with placeholders', () => {
+    const ctx: EvaluationContext = {
+      resolveTranslation: (key) =>
+        key === 'Must lie outside the {1} g band' ? 'Moet buiten de band van {1} g liggen' : key,
+    };
+
+    it('translates the key, then fills each placeholder from its own binding', () => {
+      const value = {
+        $loc: { key: 'Must lie outside the {1} g band', wildcards: { 1: { $static: 10 } } },
+      };
+      expect(evaluatePropertyValue(value, ctx)).toBe('Moet buiten de band van 10 g liggen');
+    });
+
+    it('keeps a plain key a plain translation', () => {
+      expect(evaluatePropertyValue({ $loc: 'Must lie outside the {1} g band' }, ctx)).toBe(
+        'Moet buiten de band van {1} g liggen',
+      );
+    });
+  });
+
+  describe('$recipe savedAt', () => {
+    const ctx: EvaluationContext = {
+      resolveRecipe: (_type, field) => (field === 'savedAt' ? '2026-10-27T08:45:00' : false),
+    };
+
+    it('formats the saved moment like $time, or gives the ISO stamp without a format', () => {
+      expect(
+        evaluatePropertyValue({ $recipe: { type: 'm', field: 'savedAt', format: 'HH:mm' } }, ctx),
+      ).toBe('08:45');
+      expect(evaluatePropertyValue({ $recipe: { type: 'm', field: 'savedAt' } }, ctx)).toBe(
+        '2026-10-27T08:45:00',
+      );
+    });
+
+    it('is empty for a dataset never saved', () => {
+      const never: EvaluationContext = { resolveRecipe: () => '' };
+      expect(
+        evaluatePropertyValue({ $recipe: { type: 'm', field: 'savedAt', format: 'HH:mm' } }, never),
+      ).toBe('');
+    });
+  });
+
+  describe('$stringExpr Signed()', () => {
+    const signed = (value: unknown, template = '{Signed(1)}') =>
+      evaluatePropertyValue(
+        { $stringExpr: { template, wildcards: { '1': { $static: value } } } },
+        mockContext,
+      );
+
+    it('prefixes positives with + and negatives with a true minus sign', () => {
+      expect(signed(6)).toBe('+6');
+      expect(signed(-4)).toBe('\u22124');
+    });
+
+    it('leaves zero unsigned, including negative zero', () => {
+      expect(signed(0)).toBe('0');
+      expect(signed('-0.0')).toBe('0.0');
+    });
+
+    it('keeps the decimals an inner rounding produced', () => {
+      expect(signed(6, '{Signed(Round1(1))} g')).toBe('+6.0 g');
+      expect(signed(-3.456, '{Signed(Round2(1))}')).toBe('\u22123.46');
+    });
+
+    it('passes non-numeric text through', () => {
+      expect(signed('n/a')).toBe('n/a');
+    });
+  });
+  describe('$stringExpr Round3, Round4 and Thousands()', () => {
+    const fill = (value: unknown, template: string) =>
+      evaluatePropertyValue(
+        { $stringExpr: { template, wildcards: { '1': { $static: value } } } },
+        mockContext,
+      );
+
+    it('rounds to three and four decimals', () => {
+      expect(fill(1.23456, '{Round3(1)}')).toBe('1.235');
+      expect(fill(2, '{Round4(1)}')).toBe('2.0000');
+    });
+
+    it('groups digits and keeps the decimals its input has', () => {
+      expect(fill(41280, '{Thousands(1)}')).toBe('41,280');
+      expect(fill(41280, '{Thousands(Round1(1))}')).toBe('41,280.0');
+      expect(fill(-1234567.891, '{Thousands(Round2(1))}')).toBe('-1,234,567.89');
+      expect(fill('n/a', '{Thousands(1)}')).toBe('n/a');
     });
   });
 });

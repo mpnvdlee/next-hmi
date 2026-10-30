@@ -13,6 +13,7 @@ from core.validation.report import ValidationReport
 from core.validation.structure import (
     _validate_action,
     _validate_property_value,
+    validate_action_targets,
     validate_var_ref,
     validate_widget_node,
 )
@@ -57,6 +58,39 @@ def test_var_unknown(ctx):
     validate_var_ref({"path": "PLC:Missing/Thing"}, ctx, "/p", report, {"type": "string"})
     w = _warn(report)
     assert (w.code, w.severity) == ("var-unknown", "error")
+
+
+def test_var_disabled_is_a_warning_not_an_unknown_variable(ctx):
+    disabled = {("PLC", "Motor/Off"), ("PLC", "Counts")}
+    ctx = replace(ctx, datasource_disabled=lambda ds, path: (ds, path) in disabled)
+    for var_path in ("PLC:Motor/Off", "PLC:Counts[2]"):
+        report = ValidationReport()
+        validate_var_ref({"path": var_path}, ctx, "/p", report, {"type": "float"})
+        w = _warn(report)
+        assert (w.code, w.severity) == ("var-disabled", "warning")
+        assert "disabled" in w.message
+    report = ValidationReport()
+    validate_var_ref({"path": "PLC:Missing/Thing"}, ctx, "/p", report, {"type": "string"})
+    assert _warn(report).code == "var-unknown"
+
+
+def test_var_disabled_in_a_datasource_with_nothing_enabled(ctx):
+    ctx.datasource_registry["Line"] = {}
+    ctx = replace(ctx, datasource_disabled=lambda ds, path: (ds, path) == ("Line", "Speed"))
+    report = ValidationReport()
+    validate_var_ref({"path": "Line:Speed"}, ctx, "/p", report, {"type": "float"})
+    assert _warn(report).code == "var-disabled"
+
+
+def test_write_target_disabled_variable(ctx):
+    ctx = replace(ctx, datasource_disabled=lambda ds, path: (ds, path) == ("PLC", "Motor/Off"))
+    report = ValidationReport()
+    _validate_action(
+        {"type": "writeDataVariable", "target": {"$var": {"path": "PLC:Motor/Off"}}, "value": 1},
+        ctx, "/a", report,
+    )
+    w = _warn(report)
+    assert (w.code, w.severity, w.path) == ("var-disabled", "warning", "/a/target")
 
 
 def test_var_unknown_datasource(ctx):
@@ -370,6 +404,36 @@ def test_loc_unknown(ctx):
     assert (w.code, w.severity) == ("loc-unknown", "error")
 
 
+def test_recipe_parameter_field_needs_a_parameter(ctx):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$recipe": {"type": "machine", "field": "parameterChanged"}}, None, ctx, "/p", report
+    )
+    w = _warn(report)
+    assert (w.code, w.path) == ("recipe-parameter-empty", "/p/$recipe/parameter")
+
+    report = ValidationReport()
+    _validate_property_value(
+        {"$recipe": {"type": "machine", "field": "parameterChanged", "parameter": "lower"}},
+        None, ctx, "/p", report,
+    )
+    assert report.warnings == []
+
+
+def test_loc_template_checks_its_key_and_placeholders(ctx):
+    report = ValidationReport()
+    payload = {"key": "app.title", "wildcards": {}}
+    _validate_property_value({"$loc": payload}, None, ctx, "/p", report)
+    assert report.findings == [] and report.warnings == []
+
+    report = ValidationReport()
+    payload = {"key": "missing {1}", "wildcards": {"1": {"$var": {"path": ""}}}}
+    _validate_property_value({"$loc": payload}, None, ctx, "/p", report)
+    codes = {(w.code, w.path) for w in report.warnings}
+    assert ("loc-unknown", "/p") in codes
+    assert ("loc-wildcard-empty", "/p/$loc/wildcards/1") in codes
+
+
 def test_icon_unknown_builtin(ctx):
     report = ValidationReport()
     _validate_property_value(
@@ -528,18 +592,20 @@ def _condition_codes(ctx, where: str, condition) -> list[str]:
         _validate_property_value(
             {"$if": {"condition": condition, "true": 1, "false": 2}}, None, ctx, "/p", report,
         )
+    elif where in ("$and", "$or"):
+        _validate_property_value({where: [{"$static": True}, condition]}, None, ctx, "/p", report)
     else:
         _validate_property_value({"$not": {"value": condition}}, None, ctx, "/p", report)
     return [w.code for w in report.warnings]
 
 
-@pytest.mark.parametrize("where", ["action", "$if", "$not"])
+@pytest.mark.parametrize("where", ["action", "$if", "$not", "$and", "$or"])
 def test_condition_takes_a_boolean_not_any_value_truthiness(ctx, where):
     assert _condition_codes(ctx, where, {"$var": {"path": "PLC:Motor/Running"}}) == []
     assert _condition_codes(ctx, where, {"$var": {"path": "PLC:Motor/Speed"}}) == ["var-type"]
 
 
-@pytest.mark.parametrize("where", ["action", "$if", "$not"])
+@pytest.mark.parametrize("where", ["action", "$if", "$not", "$and", "$or"])
 def test_condition_compares_a_number_through_compare(ctx, where):
     compare = {"$compare": {
         "left": {"$var": {"path": "PLC:Motor/Speed"}}, "operator": ">", "right": 80,
@@ -613,6 +679,35 @@ def test_not_validates_nested_value(ctx):
     assert "compare-operand-empty" in {w.code for w in report.warnings}
 
 
+@pytest.mark.parametrize("key", ["$and", "$or"])
+def test_and_or_reports(ctx, key):
+    name = key[1:]
+    report = ValidationReport()
+    _validate_property_value({key: []}, None, ctx, "/p", report)
+    assert (_warn(report).code, _warn(report).severity) == (f"{name}-empty", "error")
+
+    report = ValidationReport()
+    _validate_property_value({key: [{"$static": True}, None]}, None, ctx, "/p", report)
+    w = _warn(report)
+    assert (w.path, w.code, w.severity) == (f"/p/{key}/1", f"{name}-item-empty", "warning")
+
+    report = ValidationReport()
+    _validate_property_value({key: {"value": True}}, None, ctx, "/p", report)
+    assert [f.message for f in report.findings] == [f"{key} payload must be a list of conditions"]
+
+
+@pytest.mark.parametrize("key", ["$and", "$or"])
+def test_and_or_fill_a_boolean_field_and_nest(ctx, key):
+    report = ValidationReport()
+    value = {key: [{"$not": {"value": {"$static": False}}}, {"$and": [{"$static": True}]}]}
+    _validate_property_value(value, {"type": "Boolean"}, ctx, "/p", report)
+    assert report.warnings == [] and report.findings == []
+
+    report = ValidationReport()
+    _validate_property_value({key: [{"$static": True}]}, {"type": "Integer"}, ctx, "/p", report)
+    assert _warn(report).code == "source-type"
+
+
 def test_formula_empty(ctx):
     report = ValidationReport()
     _validate_property_value({"$formula": {"expression": " ", "wildcards": {}}}, None, ctx, "/p", report)
@@ -651,6 +746,55 @@ def test_formula_wildcard_empty(ctx):
     assert (w.code, w.path) == ("formula-wildcard-empty", "/p/$formula/wildcards/2")
 
 
+@pytest.mark.parametrize(
+    ("field_type", "round_", "codes"),
+    [
+        ("integer", None, ["formula-fraction"]),
+        ("integer", False, ["formula-fraction"]),
+        ("integer", True, []),
+        ("float", None, []),
+        (["float", "integer"], None, []),
+        ("duration", None, []),
+    ],
+)
+def test_formula_on_a_whole_number_field_must_round(ctx, field_type, round_, codes):
+    payload = {"expression": "{1} / 2", "wildcards": {"1": {"$static": 3}}}
+    if round_ is not None:
+        payload["round"] = round_
+    report = ValidationReport()
+    _validate_property_value({"$formula": payload}, {"type": field_type}, ctx, "/p", report)
+    assert report.findings == []
+    assert [w.code for w in report.warnings] == codes
+    if codes:
+        assert (report.warnings[0].severity, report.warnings[0].path) == ("warning", "/p/$formula")
+
+
+@pytest.mark.parametrize(
+    ("value", "codes"),
+    [
+        ({"$var": {"path": "PLC:Motor/Speed"}}, []),
+        ({"$componentProp": {"name": "setpoint"}}, []),
+        (4.5, ["write-source"]),
+        ({"$static": 4.5}, ["write-source"]),
+        ({"$formula": {"expression": "{1} * 2", "wildcards": {"1": {"$static": 3}}}}, ["write-source"]),
+        ({"$if": {"condition": True, "then": 1, "else": 2}}, ["write-source"]),
+    ],
+)
+def test_a_writing_field_takes_only_a_variable(ctx, value, codes):
+    report = ValidationReport()
+    _validate_property_value(value, {"type": "float", "write": True}, ctx, "/p", report)
+    assert report.findings == []
+    assert [w.code for w in report.warnings if w.code == "write-source"] == codes
+    if codes:
+        assert report.warnings[0].severity == "error"
+
+
+def test_a_cleared_writing_field_is_not_a_fixed_value(ctx):
+    report = ValidationReport()
+    _validate_property_value("", {"type": "string", "write": True}, ctx, "/p", report)
+    assert report.warnings == [] and report.findings == []
+
+
 def test_stringexpr_empty(ctx):
     report = ValidationReport()
     _validate_property_value(
@@ -669,6 +813,42 @@ def test_stringexpr_wildcard_empty(ctx):
     codes = {w.code for w in report.warnings}
     assert codes == {"stringexpr-wildcard-empty"}
     assert report.warnings[0].path.endswith("/wildcards/2")
+
+
+def test_stringexpr_wildcard_row_the_editor_added_is_unbound_but_a_cleared_static_is_not(ctx):
+    # The editor seeds a typed placeholder's row as an empty $var; a Static the
+    # author cleared is stored as "" and is a value (an optional query part, say).
+    report = ValidationReport()
+    _validate_property_value(
+        {"$stringExpr": {"template": "{1} {2}", "wildcards": {"1": "", "2": {"$var": {"path": ""}}}}},
+        None, ctx, "/p", report,
+    )
+    assert [(w.code, w.path) for w in report.warnings] == [
+        ("stringexpr-wildcard-empty", "/p/$stringExpr/wildcards/2"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "template",
+    ["{Round2(1)}", "{Trim(Round1(1))} g", "{ Signed( Round2(1) ) }", "{Thousands(Round4(1))}"],
+)
+def test_stringexpr_digits_in_function_names_are_not_wildcards(ctx, template):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$stringExpr": {"template": template, "wildcards": {"1": {"$static": 3}}}},
+        None, ctx, "/p", report,
+    )
+    assert report.warnings == []
+
+
+@pytest.mark.parametrize("template", ["{Round2}", "{abc}", "{1.5}", "{Round2()}"])
+def test_stringexpr_non_wildcard_braces_are_not_wildcards(ctx, template):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$stringExpr": {"template": template, "wildcards": {}}},
+        None, ctx, "/p", report,
+    )
+    assert report.warnings == []
 
 
 def test_stringexpr_all_wildcards_bound_does_not_warn(ctx):
@@ -701,6 +881,118 @@ def test_componentprop_empty(ctx):
     _validate_property_value({"$componentProp": ""}, None, ctx, "/p", report)
     w = _warn(report)
     assert (w.code, w.severity) == ("componentprop-empty", "warning")
+
+
+def _array_ctx(ctx: ValidationContext) -> ValidationContext:
+    registry = dict(ctx.datasource_registry)
+    registry["PLC"] = {
+        **registry["PLC"],
+        "Safety/Open": {"kind": "scalar", "base": "Boolean", "array": True, "length": 27},
+    }
+    return replace(
+        ctx,
+        datasource_registry=registry,
+        datasource_writable={"PLC": {**ctx.datasource_writable["PLC"], "Safety/Open": True}},
+        input_schema={"device": {"type": "Integer"}, "label": {"type": "String"}},
+    )
+
+
+def test_bound_index_reading_an_integer_input_is_clean(ctx):
+    report = ValidationReport()
+    value = {"$var": {"path": "PLC:Safety/Open", "index": {"$componentProp": "device"}}}
+    _validate_property_value(value, {"type": "Boolean"}, _array_ctx(ctx), "/p", report)
+    assert report.warnings == [] and report.findings == []
+
+
+@pytest.mark.parametrize(
+    "index, code",
+    [
+        ({"$loc": "app.title"}, "source-type"),
+        ({"$componentProp": "label"}, "componentprop-type"),
+    ],
+)
+def test_bound_index_must_give_an_integer(ctx, index, code):
+    report = ValidationReport()
+    value = {"$var": {"path": "PLC:Safety/Open", "index": index}}
+    _validate_property_value(value, {"type": "Boolean"}, _array_ctx(ctx), "/p", report)
+    w = _warn(report)
+    assert w.code == code
+    assert w.path == "/p/$var/index"
+
+
+@pytest.mark.parametrize(
+    "index, codes",
+    [({"$componentProp": "device"}, []), ({"$componentProp": "label"}, ["componentprop-type"])],
+)
+def test_bound_index_on_a_write_target(ctx, index, codes):
+    report = ValidationReport()
+    action = {"type": "toggleDataVariable", "target": {"$var": {"path": "PLC:Safety/Open", "index": index}}}
+    validate_action_targets([action], _array_ctx(ctx), "/a", report)
+    assert [w.code for w in report.warnings] == codes
+
+
+def test_whole_array_on_a_one_value_field_anchors_on_its_index(ctx):
+    report = ValidationReport()
+    value = {"$var": {"path": "PLC:Safety/Open"}}
+    _validate_property_value(value, {"type": "Boolean"}, _array_ctx(ctx), "/p", report)
+    w = _warn(report)
+    assert (w.code, w.path) == ("var-type", "/p/$var/index")
+    assert "choose an element" in w.message
+
+
+@pytest.mark.parametrize("kind", ["toggleDataVariable", "writeDataVariable"])
+def test_whole_array_toggle_target_anchors_on_its_index(ctx, kind):
+    report = ValidationReport()
+    action = {"type": kind, "target": {"$var": {"path": "PLC:Safety/Open"}}}
+    validate_action_targets([action], _array_ctx(ctx), "/a", report)
+    # A write may write the whole array; a toggle needs one element.
+    expected = [("/a/0/target/$var/index", "toggle-target-type")] if kind == "toggleDataVariable" else []
+    assert [(w.path, w.code) for w in report.warnings] == expected
+
+
+def test_read_only_whole_array_toggle_target_asks_for_its_element_and_says_read_only(ctx):
+    array_ctx = _array_ctx(ctx)
+    array_ctx.datasource_writable["PLC"]["Safety/Open"] = False
+    report = ValidationReport()
+    action = {"type": "toggleDataVariable", "target": {"$var": {"path": "PLC:Safety/Open"}}}
+    validate_action_targets([action], array_ctx, "/a", report)
+    assert [(w.path, w.code) for w in report.warnings] == [
+        ("/a/0/target/$var/index", "toggle-target-type"),
+        ("/a/0/target", "write-target-type"),
+    ]
+    assert "read-only" in report.warnings[1].message
+
+
+def _overlay_ctx(ctx: ValidationContext) -> ValidationContext:
+    return replace(
+        ctx,
+        dialogs_page_ids=frozenset({"device"}),
+        page_property_keys={"device": frozenset({"device"})},
+    )
+
+
+@pytest.mark.parametrize(
+    "payload, code, severity",
+    [
+        ({"page": "", "param": ""}, "overlay-empty", "warning"),
+        ({"page": "device", "param": ""}, "overlay-empty", "warning"),
+        ({"page": "dashboard", "param": "device"}, "overlay-page", "error"),
+        ({"page": "device", "param": "motor"}, "overlay-param-unknown", "error"),
+    ],
+)
+def test_overlay_reports(ctx, payload, code, severity):
+    report = ValidationReport()
+    _validate_property_value({"$overlay": payload}, None, _overlay_ctx(ctx), "/p", report)
+    w = _warn(report)
+    assert (w.code, w.severity) == (code, severity)
+
+
+def test_overlay_reading_a_declared_input_is_clean(ctx):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$overlay": {"page": "device", "param": "device"}}, None, _overlay_ctx(ctx), "/p", report,
+    )
+    assert report.warnings == [] and report.findings == []
 
 
 def test_recipe_type_empty(ctx):
@@ -857,6 +1149,35 @@ def _root_ctx() -> ValidationContext:
     )
 
 
+def _station_link_instance(target: str) -> ValidationReport:
+    decl = {"target": {"type": "string", "label": "Target", "format": "page"}}
+    ctx = replace(
+        _root_ctx(),
+        component_ids={"station-link"},
+        component_property_keys={"station-link": frozenset(decl)},
+        component_properties={"station-link": decl},
+    )
+    return validate_widget_node(_node("$component:station-link", {"target": target}), ctx)
+
+
+def test_a_component_page_input_takes_a_navigable_page():
+    report = _station_link_instance("home")
+    assert (report.findings, report.warnings) == ([], [])
+
+
+@pytest.mark.parametrize(
+    "target, code", [("motor-detail", "page-not-navigable"), ("gone", "page-unknown")]
+)
+def test_a_component_page_input_flags_a_page_navigation_cannot_reach(target, code):
+    w = _warn(_station_link_instance(target))
+    assert (w.code, w.path) == (code, "/properties/target")
+
+
+def test_navigate_inside_a_component_to_its_page_input():
+    ctx = _dialog_scope(target={"type": "string", "label": "Target", "format": "page"})
+    assert _navigate({"$componentProp": "target"}, ctx).warnings == []
+
+
 def test_open_dialog_naming_a_navigable_page():
     report = ValidationReport()
     _validate_action({"type": "openDialog", "pageId": "home"}, _root_ctx(), "/a", report)
@@ -958,5 +1279,229 @@ def test_menu_item_linking_to_a_navigable_page_is_silent(nav_ctx):
     _validate_property_value(
         [{"type": "page-link", "pageId": "home"}],
         {"type": "menu-items"}, nav_ctx, "/p", report,
+    )
+    assert report.warnings == []
+
+
+def test_page_field_naming_no_page():
+    report = ValidationReport()
+    _validate_property_value("gone", {"type": "String", "format": "page"}, _root_ctx(), "/p", report)
+    assert (_warn(report).code, _warn(report).severity) == ("page-unknown", "error")
+
+
+def _navigate(page_id, ctx: ValidationContext) -> ValidationReport:
+    report = ValidationReport()
+    _validate_action({"type": "navigateToPage", "pageId": page_id}, ctx, "/a", report)
+    return report
+
+
+def _dialog_scope(**inputs) -> ValidationContext:
+    return replace(_root_ctx(), input_schema=inputs)
+
+
+def test_navigate_to_a_navigable_page_is_silent():
+    report = _navigate("home", _root_ctx())
+    assert (report.findings, report.warnings) == ([], [])
+
+
+def test_navigate_to_an_unknown_page():
+    report = _navigate("gone", _root_ctx())
+    assert [f.message for f in report.findings] == ["action target page 'gone' does not exist"]
+    assert report.warnings == []
+
+
+def test_navigate_to_a_page_file_no_root_lists():
+    # The file exists, so the page-field finding stays quiet, but nothing routes there.
+    ctx = replace(_root_ctx(), page_ids={"motor-detail", "home", "orphan"})
+    report = _navigate("orphan", ctx)
+    assert report.findings == []
+    assert [(w.code, w.path) for w in report.warnings] == [("page-unknown", "/a/pageId")]
+
+
+def test_navigate_to_the_dialogs_folder():
+    w = _warn(_navigate("motor-detail", _root_ctx()))
+    assert (w.code, w.severity, w.path) == ("page-not-navigable", "error", "/a/pageId")
+    assert "Open Dialog" in w.message
+
+
+def test_navigate_to_a_page_input():
+    ctx = _dialog_scope(stationPage={"type": "String", "format": "page"})
+    assert _navigate({"$componentProp": "stationPage"}, ctx).warnings == []
+
+
+@pytest.mark.parametrize(
+    "inputs",
+    [{"stationPage": {"type": "String"}}, {}],
+    ids=["not-format-page", "undeclared"],
+)
+def test_navigate_to_an_input_that_is_not_a_page(inputs):
+    w = _warn(_navigate({"$componentProp": "stationPage"}, _dialog_scope(**inputs)))
+    assert (w.code, w.severity) == ("navigate-input-not-page", "error")
+
+
+def test_navigate_to_an_input_outside_a_dialog():
+    ctx = replace(_root_ctx(), input_scope=False)
+    assert _warn(_navigate({"$componentProp": "stationPage"}, ctx)).code == "navigate-input-not-page"
+
+
+
+def _run_component_actions(action: dict, ctx: ValidationContext) -> ValidationReport:
+    report = ValidationReport()
+    _validate_action({"type": "runComponentActions", **action}, ctx, "/a", report)
+    return report
+
+
+def test_run_component_actions_naming_an_actions_property_is_silent():
+    ctx = _dialog_scope(actions={"type": "actions", "label": "On press"})
+    report = _run_component_actions({"property": "actions"}, ctx)
+    assert (report.findings, report.warnings) == ([], [])
+
+
+@pytest.mark.parametrize(
+    "action, inputs, code, severity",
+    [
+        ({}, {}, "runcomponentactions-invalid", "error"),
+        ({"property": 3}, {}, "runcomponentactions-invalid", "error"),
+        ({"property": {"$componentProp": "actions"}}, {}, "runcomponentactions-invalid", "error"),
+        ({"property": ""}, {}, "componentprop-empty", "warning"),
+        ({"property": "onTap"}, {"actions": {"type": "actions"}}, "runcomponentactions-unknown", "error"),
+        ({"property": "label"}, {"label": {"type": "string"}}, "runcomponentactions-not-actions", "error"),
+    ],
+    ids=["missing", "not-a-string", "a-binding", "empty", "undeclared", "not-actions"],
+)
+def test_run_component_actions_with_a_bad_property(action, inputs, code, severity):
+    w = _warn(_run_component_actions(action, _dialog_scope(**inputs)))
+    assert (w.code, w.severity, w.path) == (code, severity, "/a/property")
+
+
+def test_run_component_actions_outside_a_component():
+    ctx = replace(_root_ctx(), input_scope=False)
+    w = _warn(_run_component_actions({"property": "actions"}, ctx))
+    assert (w.code, w.severity) == ("runcomponentactions-no-scope", "error")
+
+
+_REPEATED_ICON = {"$static": {"type": "custom", "path": {"$repeatItem": {"member": "icon"}}}}
+
+
+@pytest.mark.parametrize(
+    "value, field_type",
+    [
+        (_REPEATED_ICON, "icon"),
+        ({"$static": {"type": "builtin", "name": {"$repeatItem": {"member": "icon"}}}}, "icon"),
+        ({"$static": {"path": {"$repeatItem": {"member": "photo"}}}}, "image"),
+    ],
+)
+def test_a_repeat_item_naming_the_asset_over_a_list_is_not_an_unknown_asset(ctx, value, field_type):
+    # Each copy gets its item's text as the path (substituteRepeatRefs).
+    rctx = replace(ctx, repeat_scope=True, repeat_items=[{"icon": "icons/door.svg"}])
+    report = ValidationReport()
+    _validate_property_value(value, {"type": field_type}, rctx, "/p", report)
+    assert (report.findings, report.warnings) == ([], [])
+
+
+def test_a_repeat_item_naming_the_asset_over_a_variable_says_to_bind_the_field(ctx):
+    rctx = replace(ctx, repeat_scope=True, repeat_items={"$var": {"path": "PLC:Doors"}})
+    report = ValidationReport()
+    _validate_property_value(_REPEATED_ICON, {"type": "icon"}, rctx, "/p", report)
+    assert _warn(report).code == "repeatitem-in-static"
+
+
+def test_a_repeat_item_naming_the_asset_outside_a_repeater(ctx):
+    report = ValidationReport()
+    _validate_property_value(_REPEATED_ICON, {"type": "icon"}, ctx, "/p", report)
+    assert _warn(report).code == "repeatitem-no-scope"
+
+
+def _write_formula(target_base: str) -> ValidationReport:
+    ctx = ValidationContext(
+        widget_schemas={"version": 2, "builtin": {}, "custom": {}},
+        datasource_registry={
+            "PLC": {"Count": {"kind": "scalar", "base": target_base, "array": False}}
+        },
+        datasource_writable={"PLC": {"Count": True}},
+        datasource_types={"PLC": "opcua-client"},
+    )
+    report = ValidationReport()
+    formula = {"$formula": {"expression": "{1} + 1", "wildcards": {"1": {"$var": {"path": "PLC:Count"}}}}}
+    _validate_action(
+        {"type": "writeDataVariable", "target": {"$var": {"path": "PLC:Count"}}, "value": formula},
+        ctx, "/a", report,
+    )
+    return report
+
+
+@pytest.mark.parametrize("base", ["Integer", "Float"])
+def test_a_formula_value_can_be_written_to_a_number_tag(base):
+    # Into an integer tag the write path takes a whole result and refuses a
+    # fraction as lossy (test_write_service), so validation does not refuse it.
+    assert _write_formula(base).warnings == []
+
+
+def test_a_formula_value_still_does_not_fit_a_boolean_tag():
+    assert _warn(_write_formula("Boolean")).code == "source-type"
+
+
+def _write_to_input(kind: str, ctx: ValidationContext, name: str = "value") -> ValidationReport:
+    report = ValidationReport()
+    action = {"type": kind, "target": {"$componentProp": name}}
+    if kind == "writeDataVariable":
+        action["value"] = 1
+    _validate_action(action, ctx, "/a", report)
+    return report
+
+
+@pytest.mark.parametrize("kind", ["writeDataVariable", "editValue"])
+def test_write_target_naming_a_writable_input_is_clean(kind):
+    # The compressor parameter row: the instance passes the variable as `value`.
+    ctx = _dialog_scope(value={"type": "float", "label": "Value", "write": True})
+    report = _write_to_input(kind, ctx)
+    assert (report.findings, report.warnings) == ([], [])
+
+
+def test_toggle_target_naming_a_writable_boolean_input_is_clean():
+    ctx = _dialog_scope(run={"type": "boolean", "write": True})
+    assert _write_to_input("toggleDataVariable", ctx, "run").warnings == []
+
+
+@pytest.mark.parametrize(
+    "inputs, code",
+    [
+        ({"value": {"type": "float"}}, "componentprop-type"),
+        ({"value": {"type": "string", "write": True}}, "componentprop-type"),
+        ({}, "componentprop-unknown"),
+    ],
+    ids=["not-writable", "wrong-type", "undeclared"],
+)
+def test_edit_value_target_naming_an_input_that_cannot_take_it(inputs, code):
+    w = _warn(_write_to_input("editValue", _dialog_scope(**inputs)))
+    assert (w.code, w.path) == (code, "/a/target")
+
+
+def test_write_target_naming_an_input_outside_any_input_scope():
+    ctx = replace(_root_ctx(), input_scope=False)
+    assert _warn(_write_to_input("editValue", ctx)).code == "componentprop-no-scope"
+
+
+@pytest.mark.parametrize("page_id", [{"$static": "home"}, {"$var": {"path": "PLC:Page"}}])
+def test_navigate_takes_nothing_else(page_id):
+    assert _warn(_navigate(page_id, _root_ctx())).code == "navigate-target-invalid"
+
+
+def test_open_dialog_passing_a_page_input_checks_the_page():
+    ctx = replace(
+        _root_ctx(),
+        page_properties={"motor-detail": {"stationPage": {"type": "String", "format": "page"}}},
+    )
+    for value, code in [("gone", "page-unknown"), ("motor-detail", "page-not-navigable")]:
+        report = ValidationReport()
+        _validate_action(
+            {"type": "openDialog", "pageId": "motor-detail", "componentProperties": {"stationPage": value}},
+            ctx, "/a", report,
+        )
+        assert [w.code for w in report.warnings] == [code]
+    report = ValidationReport()
+    _validate_action(
+        {"type": "openDialog", "pageId": "motor-detail", "componentProperties": {"stationPage": "home"}},
+        ctx, "/a", report,
     )
     assert report.warnings == []

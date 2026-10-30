@@ -9,7 +9,7 @@
  *                              "/runtime/<slug>/" / "/editor/<slug>/" for a
  *                              proxied project instance.
  *   window.__NEXTHMI_MODE__  — "manager" or "instance".
- *   window.__NEXTHMI_VERSION__ — the build's version string ("dev" in a checkout).
+ *   window.__NEXTHMI_VERSION__ — the build's version string (`git describe` in a checkout, "dev" without git).
  *   window.__NEXTHMI_EDITION__ — "oss" or "ee".
  *
  * In dev (Vite) no globals are injected, so we default to base "/" + mode

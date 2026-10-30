@@ -44,10 +44,9 @@ export interface PageOverlayEntry {
  * (`pageId`, its immutable identity) or as the page it currently shows
  * (`activePageId`, after in-overlay navigation)?
  *
- * Every id comparison against an open overlay goes through here. Opening,
- * collapsing and closing each used to test a different subset of the two
- * fields, which let a second card stack on a page another overlay had
- * navigated to, and let one `closePageOverlay` remove two overlays.
+ * Every id comparison against an open overlay goes through here. Testing a
+ * different subset of the two fields per operation lets a second card stack on
+ * a page another overlay navigated to, and one `closePageOverlay` remove two.
  */
 function overlayMatches(entry: PageOverlayEntry, id: string): boolean {
   return entry.pageId === id || entry.activePageId === id;
@@ -57,6 +56,16 @@ interface UserIdentity {
   username: string;
   groups: string[];
   groupLabels: Record<string, string>;
+}
+
+/** What `$user` reads for a scope's signed-in user. */
+export function resolveUserField(
+  user: UserIdentity | undefined,
+  field: 'username' | 'groups',
+): string | null {
+  if (!user) return null;
+  if (field === 'username') return user.username;
+  return user.groups.map((id) => user.groupLabels[id] ?? id).join(', ');
 }
 
 export interface AlertEntry {
@@ -83,9 +92,27 @@ export interface ToastEntry {
   duration: number;
 }
 
+/** A numpad opened by an `editValue` action, rendered at the top of HmiView. */
+export interface NumpadRequest {
+  id: string;
+  title?: string;
+  unit?: string;
+  min?: number;
+  max?: number;
+  decimals?: number;
+  allowNegative?: boolean;
+  position: 'center' | 'bottom-right';
+  currentValue?: string;
+  apply: (value: number) => void;
+}
+
 interface HmiStore {
   openPageOverlays: PageOverlayEntry[];
   pendingAlerts: AlertEntry[];
+  /** Opening another replaces it: one numpad is on screen at a time. */
+  numpadRequest: NumpadRequest | null;
+  /** A page a `navigateToPage` action routes to; `ActionNavigation` takes it. */
+  pendingNavigation: string | null;
   pendingToasts: ToastEntry[];
   currentUsersByScope: Record<string, UserIdentity>;
   loginErrorsByScope: Record<string, string | null>;
@@ -95,6 +122,9 @@ interface HmiStore {
   /** Moves the overlay identified by `overlayId` onto `nextPageId`. */
   updatePageOverlay: (overlayId: string, nextPageId: string) => void;
   showAlert: (entry: AlertEntry) => void;
+  openNumpad: (request: NumpadRequest | null) => void;
+  /** Closes every open overlay, then queues the route change. */
+  navigateToPage: (pageId: string) => void;
   dismissAlert: (id: string) => void;
   showToast: (entry: ToastEntry) => void;
   dismissToast: (id: string) => void;
@@ -105,14 +135,22 @@ interface HmiStore {
 export const useHmiStore = create<HmiStore>((set) => ({
   openPageOverlays: [],
   pendingAlerts: [],
+  numpadRequest: null,
+  pendingNavigation: null,
   pendingToasts: [],
   currentUsersByScope: {},
   loginErrorsByScope: {},
   openPageOverlay: (entry) =>
     set((state) => {
-      if (!entry.pageId || state.openPageOverlays.some((e) => overlayMatches(e, entry.pageId)))
-        return state;
-      return { openPageOverlays: [...state.openPageOverlays, entry] };
+      if (!entry.pageId) return state;
+      const overlays = state.openPageOverlays;
+      // Opening the dialog on top again swaps its inputs and anchor — a popover
+      // moving on to the next hotspot — instead of being refused.
+      if (overlays[overlays.length - 1]?.pageId === entry.pageId) {
+        return { openPageOverlays: [...overlays.slice(0, -1), entry] };
+      }
+      if (overlays.some((e) => overlayMatches(e, entry.pageId))) return state;
+      return { openPageOverlays: [...overlays, entry] };
     }),
   closePageOverlay: (id) =>
     set((state) => {
@@ -159,6 +197,8 @@ export const useHmiStore = create<HmiStore>((set) => ({
       };
     }),
   showAlert: (entry) => set((state) => ({ pendingAlerts: [...state.pendingAlerts, entry] })),
+  openNumpad: (request) => set({ numpadRequest: request }),
+  navigateToPage: (pageId) => set({ openPageOverlays: [], pendingNavigation: pageId }),
   dismissAlert: (id) =>
     set((state) => ({
       pendingAlerts: state.pendingAlerts.filter((a) => a.id !== id),

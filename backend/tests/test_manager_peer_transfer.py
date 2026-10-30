@@ -438,9 +438,8 @@ def test_start_is_opt_in_and_transfer_id_cannot_escape_staging(
 
 
 def test_copy_transfer_keeps_the_source_format_stamp(monkeypatch, tmp_path: Path):
-    """3.5 regression: rebuilding metadata from id/name/createdAt reset
-    formatVersion to 0 and minAppVersion to None, so a copy of an
-    already-current project read as needing an upgrade."""
+    """Rebuilding metadata from id/name/createdAt keeps formatVersion and
+    minAppVersion, so a copy of an already-current project needs no upgrade."""
     _, root = _configure_home(monkeypatch, tmp_path)
     archive = _archive_at_current_format(tmp_path)
     with TestClient(_app()) as client:
@@ -462,7 +461,7 @@ def test_copy_transfer_keeps_the_source_format_stamp(monkeypatch, tmp_path: Path
 
 
 def test_replace_transfer_keeps_the_source_format_stamp(monkeypatch, tmp_path: Path):
-    """3.5 regression, `replace` side: same rebuild, same reset to unstamped."""
+    """`replace` side of the same rebuild: must not reset to unstamped."""
     _, root = _configure_home(monkeypatch, tmp_path)
     destination = root / "destination-format"
     destination.mkdir()
@@ -503,13 +502,11 @@ def test_replace_transfer_keeps_the_source_format_stamp(monkeypatch, tmp_path: P
 def test_copy_transfer_with_start_runs_the_real_upgrade_gate(
     monkeypatch, tmp_path: Path
 ):
-    """3.5 regression, exercised through the actual start path.
+    """The kept formatVersion, exercised through the actual start path.
 
-    The existing opt-in-start test stubs `supervisor.start` wholesale, which
-    is exactly why this bug shipped unnoticed: the stub never looks at the
-    installed metadata, so it could not have caught formatVersion being reset
-    to 0. Here only the spawn/health-check innards are stubbed — `start`
-    itself, and the upgrade gate inside it, run for real.
+    The opt-in-start test stubs `supervisor.start` wholesale, so it never looks
+    at the installed metadata. Here only the spawn/health-check innards are
+    stubbed — `start` itself, and the upgrade gate inside it, run for real.
     """
     _configure_home(monkeypatch, tmp_path)
     monkeypatch.setattr(
@@ -644,11 +641,10 @@ def test_a_tilde_relative_projects_root_still_owns_its_own_projects(
 def test_project_directly_in_root_is_in_root_through_a_symlinked_ancestor(
     monkeypatch, tmp_path: Path, require_symlinks
 ):
-    """3.6 regression: `default_projects_root` returned `.absolute()` while a
-    project's stored path is `.resolve()`d (symlink-free). A symlink anywhere
-    above the root then leaves the root's own path carrying it while the
-    stored, resolved entry path does not, so an in-root project's parent no
-    longer equals the root and the peer-transfer clash check goes dark.
+    """`default_projects_root` must be `.resolve()`d like a project's stored
+    path. With `.absolute()`, a symlink anywhere above the root stays in the
+    root but not in the resolved entry path, so an in-root project's parent
+    stops equalling the root and the peer-transfer clash check goes dark.
     """
     real_parent = tmp_path / "realparent"
     real_parent.mkdir()
@@ -1887,10 +1883,6 @@ async def test_deferred_cleanup_does_not_wait_for_a_job_that_never_started(
 
 
 # ── sender-side endpoints ────────────────────────────────────────────────────
-#
-# These were entirely untested for three review rounds, which is how a
-# `TypeError` in `TransferState.public()` — fatal to every sender endpoint the
-# moment a transfer was actually running — survived.
 
 
 def _sender_app_with_project(monkeypatch, tmp_path: Path) -> tuple[FastAPI, Path]:

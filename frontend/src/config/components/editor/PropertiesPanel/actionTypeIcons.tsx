@@ -33,6 +33,13 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
       <path d="M5 8 l4.5 4.5 M9.5 8 l-4.5 4.5" />
     </Icon>
   ),
+  // An arrow into a page — goes there.
+  navigateToPage: (
+    <Icon>
+      <rect x="6.5" y="2.5" width="7" height="11" rx="1" />
+      <path d="M1.5 8 h7.5 M6.5 5.5 L9 8 l-2.5 2.5" />
+    </Icon>
+  ),
   // Link — writes a live signal.
   writeDataVariable: (
     <Icon viewBox="0 0 24 24" strokeWidth={2}>
@@ -40,6 +47,13 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
     </Icon>
   ),
   // A path forking in two — one branch or the other.
+  // Clock — waits.
+  delay: (
+    <Icon>
+      <circle cx="8" cy="8" r="5.5" />
+      <path d="M8 5 v3 l2 1.5" />
+    </Icon>
+  ),
   if: (
     <Icon>
       <path d="M8 13.5 v-5" />
@@ -52,6 +66,13 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
     <Icon>
       <path d="M2.5 5.5 h10 M10 3 l2.5 2.5 L10 8" />
       <path d="M13.5 10.5 h-10 M6 8 l-2.5 2.5 L6 13" />
+    </Icon>
+  ),
+  // A keypad — three by three keys.
+  editValue: (
+    <Icon>
+      <rect x="2.5" y="2.5" width="11" height="11" rx="1" />
+      <path d="M6 2.5 v11 M10 2.5 v11 M2.5 6 h11 M2.5 10 h11" />
     </Icon>
   ),
   // Tray, arrow down — load into the form.
@@ -84,6 +105,19 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
       <circle cx="6.3" cy="5.2" r="2.3" />
       <path d="M2.3 13.2 a4 3.6 0 0 1 8 0" />
       <path d="M14.2 8.2 h-3.2 M12.4 6.6 l-1.6 1.6 1.6 1.6" />
+    </Icon>
+  ),
+  // A play mark inside a component's box.
+  runComponentActions: (
+    <Icon>
+      <rect x="1.5" y="2.5" width="13" height="11" rx="2" />
+      <path d="M6.5 5.6 v4.8 l4 -2.4 Z" />
+    </Icon>
+  ),
+  // Check mark — acknowledge.
+  acknowledgeAllAlarms: (
+    <Icon>
+      <path d="M3.2 8.6 l3.1 3.1 L12.8 4.6" />
     </Icon>
   ),
   // Globe.

@@ -1,5 +1,5 @@
 import '../../testSdk';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useVariableStore } from '@hmi/store/variableStore';
@@ -16,10 +16,10 @@ function sentFrame(): Record<string, unknown> {
   return vi.mocked(sendWsMessage).mock.calls[0][0] as Record<string, unknown>;
 }
 
-function renderButton(properties: Record<string, unknown>) {
+function renderButton(properties: Record<string, unknown>, name?: string) {
   return render(
     <MemoryRouter>
-      <Button properties={properties} />
+      <Button name={name} properties={properties} />
     </MemoryRouter>,
   );
 }
@@ -70,6 +70,52 @@ describe('Button', () => {
       value: true,
     });
     expect(sentFrame().requestId).toBeTruthy();
+    expect(sendWsMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('writes false on release when momentary', async () => {
+    const user = userEvent.setup();
+    renderButton({ label: 'Jog', momentary: true, variable: { $var: { path: 'PLC:Motor/Jog' } } });
+    const button = screen.getByRole('button', { name: 'Jog' });
+
+    await user.pointer({ keys: '[MouseLeft>]', target: button });
+    expect(
+      vi.mocked(sendWsMessage).mock.calls.map(([f]) => (f as { value: unknown }).value),
+    ).toEqual([true]);
+
+    await user.pointer({ keys: '[/MouseLeft]', target: button });
+    expect(
+      vi.mocked(sendWsMessage).mock.calls.map(([f]) => (f as { value: unknown }).value),
+    ).toEqual([true, false]);
+  });
+
+  it('swallows the click that follows its own release', async () => {
+    const user = userEvent.setup();
+    renderButton({ label: 'Open' });
+    const clicked = vi.fn();
+    document.addEventListener('click', clicked);
+
+    await user.click(screen.getByRole('button', { name: 'Open' }));
+    document.removeEventListener('click', clicked);
+
+    expect(clicked).not.toHaveBeenCalled();
+  });
+
+  it('runs On Pressed on press and On Released on release', async () => {
+    const user = userEvent.setup();
+    renderButton({
+      label: 'Hold',
+      actions: { onPress: [{ type: 'openPageOverlay', pageId: 'pressed' }] },
+      onRelease: { onRelease: [{ type: 'openPageOverlay', pageId: 'released' }] },
+    });
+    const button = screen.getByRole('button', { name: 'Hold' });
+    const overlays = () => useHmiStore.getState().openPageOverlays.map((o) => o.pageId);
+
+    await user.pointer({ keys: '[MouseLeft>]', target: button });
+    expect(overlays()).toEqual(['pressed']);
+
+    await user.pointer({ keys: '[/MouseLeft]', target: button });
+    expect(overlays()).toEqual(['pressed', 'released']);
   });
 
   it('toasts the rejection the backend correlates back to the write', async () => {
@@ -102,6 +148,72 @@ describe('Button', () => {
     expect(btn.style.backgroundColor).toBe('rgb(34, 167, 224)');
   });
 
+  it('renders an empty label with an icon as an icon-only button', async () => {
+    renderButton({ label: ' ', iconName: 'house' });
+
+    const btn = screen.getByRole('button');
+    await waitFor(() => expect(btn.querySelector('svg')).not.toBeNull());
+    expect(btn).toHaveClass('hmi-button__btn--icon-only');
+    expect(btn).not.toHaveAttribute('title');
+    expect(btn.querySelector('.hmi-button__label')).toBeNull();
+  });
+
+  it('keeps the text padding while the label is filled in', async () => {
+    renderButton({ label: 'Reset', iconName: 'house' });
+
+    const btn = screen.getByRole('button', { name: 'Reset' });
+    await waitFor(() => expect(btn.querySelector('svg')).not.toBeNull());
+    expect(btn).not.toHaveClass('hmi-button__btn--icon-only');
+    expect(btn).not.toHaveAttribute('aria-label');
+  });
+
+  it('stays a plain text button with neither icon nor label', () => {
+    renderButton({ label: '' });
+
+    const btn = screen.getByRole('button');
+    expect(btn).not.toHaveClass('hmi-button__btn--icon-only');
+    expect(btn).not.toHaveAttribute('aria-label');
+    expect(btn.querySelector('.hmi-button__label')).not.toBeNull();
+  });
+
+  it('stacks the icon above the text with the top icon position', () => {
+    renderButton({ label: 'Home', iconPosition: 'top' });
+
+    expect(screen.getByRole('button', { name: 'Home' })).toHaveClass('hmi-button__btn--icon-top');
+  });
+
+  it('emits icon size, border width and outline fill as custom properties', () => {
+    const { container } = renderButton({
+      label: 'Jog',
+      variant: 'outline',
+      iconSize: 32,
+      borderWidth: 3,
+      fill: '#102030',
+    });
+    const el = container.firstElementChild as HTMLElement;
+
+    expect(el.style.getPropertyValue('--hmi-btn-icon-size')).toBe('32px');
+    expect(el.style.getPropertyValue('--hmi-btn-border-width')).toBe('3px');
+    expect(el.style.getPropertyValue('--hmi-btn-fill')).toBe('#102030');
+  });
+
+  it('leaves the new overrides unset so the default look stays', () => {
+    const { container } = renderButton({ label: 'Jog' });
+    const el = container.firstElementChild as HTMLElement;
+
+    for (const prop of ['--hmi-btn-icon-size', '--hmi-btn-border-width', '--hmi-btn-fill']) {
+      expect(el.style.getPropertyValue(prop)).toBe('');
+    }
+    expect(screen.getByRole('button', { name: 'Jog' })).not.toHaveAttribute('title');
+  });
+
+  it('gives the border its own color, falling back to the button color', () => {
+    renderButton({ label: 'Alarms', color: '#22a7e0', borderColor: '#d0452f' });
+    expect(screen.getByRole('button', { name: 'Alarms' }).style.borderColor).toBe(
+      'rgb(208, 69, 47)',
+    );
+  });
+
   it('dispatches configured onPress actions', async () => {
     const user = userEvent.setup();
     renderButton({
@@ -112,5 +224,28 @@ describe('Button', () => {
     await user.click(screen.getByRole('button', { name: 'Open' }));
 
     expect(useHmiStore.getState().openPageOverlays.map((o) => o.pageId)).toContain('settings');
+  });
+
+  describe('label styling', () => {
+    it('emits the text case as a custom property', () => {
+      const { container } = renderButton({ label: 'Start', textTransform: 'uppercase' });
+      const el = container.firstElementChild as HTMLElement;
+
+      expect(el.style.getPropertyValue('--hmi-btn-transform')).toBe('uppercase');
+    });
+
+    it('sets neither case nor alignment by default', () => {
+      const { container } = renderButton({ label: 'Start' });
+      const el = container.firstElementChild as HTMLElement;
+
+      expect(el.style.getPropertyValue('--hmi-btn-transform')).toBe('');
+      expect(screen.getByRole('button')).not.toHaveClass('hmi-button__btn--start');
+    });
+
+    it('aligns its content to the start on request', () => {
+      renderButton({ label: 'Home', align: 'start' });
+
+      expect(screen.getByRole('button')).toHaveClass('hmi-button__btn--start');
+    });
   });
 });

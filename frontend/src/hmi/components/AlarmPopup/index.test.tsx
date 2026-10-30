@@ -88,6 +88,17 @@ describe('AlarmPopup', () => {
     expect(screen.getByText('[A-002] Pump Fault')).toBeInTheDocument();
   });
 
+  it('still pops up an alarm that needs no acknowledgement, without an ACK', () => {
+    useAlarmStore.setState({
+      active: [mkAlarm({ acked: true, ack_required: false })],
+      summary: EMPTY_SUMMARY,
+    });
+    renderPopup();
+
+    expect(screen.getByText('[A-001] Motor Overheat')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'ACK' })).not.toBeInTheDocument();
+  });
+
   it('caps rendered popups at 5', () => {
     const many = Array.from({ length: 7 }, (_, i) =>
       mkAlarm({ id: `inst-${i}`, code: `A-00${i}`, title: `Alarm ${i}` }),
@@ -118,7 +129,7 @@ describe('AlarmPopup', () => {
     useAlarmStore.setState({ active: [mkAlarm()], summary: EMPTY_SUMMARY });
     const { container } = renderPopup();
 
-    await user.click(screen.getByRole('button', { name: 'Dismiss alarm' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-toast__close')!);
 
     expect(container.firstChild).toBeNull();
     expect(apiJson).not.toHaveBeenCalled();
@@ -146,7 +157,7 @@ describe('AlarmPopup', () => {
     await user.click(screen.getByText('[A-001] Motor Overheat'));
     expect(screen.getByRole('button', { name: 'Acknowledge' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Close' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-modal__close')!);
     expect(screen.queryByRole('button', { name: 'Acknowledge' })).not.toBeInTheDocument();
   });
 });

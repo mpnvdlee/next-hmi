@@ -51,6 +51,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 from core import net, runtime_home, tls_settings  # noqa: E402
 from core.banner import BannerFields, print_banner  # noqa: E402
+from core.version import app_version  # noqa: E402
 
 
 def pids_on_port(port: int) -> list[int]:
@@ -364,6 +365,26 @@ def _consume_restart_sentinel() -> bool:
     return True
 
 
+def _warn_if_dist_stale() -> None:
+    # The launcher hands every project instance frontend/dist when it exists,
+    # so built-in widgets come from there, not from the public/ copy that
+    # `npm run dev` just rebuilt. An edited widget then looks unchanged.
+    dist = FRONTEND_DIR / "dist" / "builtin-widgets-js"
+    if not dist.is_dir():
+        return
+    newest_source = max(
+        (p.stat().st_mtime for p in (FRONTEND_DIR / "widgets").rglob("*") if p.is_file() and ".test." not in p.name),
+        default=0,
+    )
+    newest_build = max((p.stat().st_mtime for p in dist.rglob("*") if p.is_file()), default=0)
+    if newest_source > newest_build:
+        print(
+            "  WARNING: frontend/dist is older than frontend/widgets/ — projects serve the stale "
+            "built-in widgets. Run `npm run build` in frontend/ or delete frontend/dist.",
+            flush=True,
+        )
+
+
 def start(*, quiet: bool, edition: str) -> None:
     if edition == "ee":
         _check_enterprise()
@@ -387,6 +408,8 @@ def start(*, quiet: bool, edition: str) -> None:
         "dev",
         BannerFields(
             runtime_home=runtime_home.runtime_home_path(),
+            version=app_version(),
+            edition=edition,
             open_url=net.display_url(scheme, bind_host, BACKEND_PORT),
             frontend_url=net.display_url(scheme, bind_host, FRONTEND_PORT),
             network_urls=(
@@ -395,6 +418,7 @@ def start(*, quiet: bool, edition: str) -> None:
             ),
         ),
     )
+    _warn_if_dist_stale()
 
     try:
         # Backend respawn loop: when /api/system/restart shuts the worker

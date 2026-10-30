@@ -8,7 +8,9 @@ rest of the app is importable.
 """
 from __future__ import annotations
 
+import functools
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -25,8 +27,29 @@ def _resource_path(relative: str) -> Path:
     return Path(__file__).resolve().parent.parent.parent / relative
 
 
+@functools.cache
+def _git_version() -> str:
+    """``git describe`` of a checkout (``1.0.1-121-g1825877``), else ``"dev"``.
+
+    Lets telemetry and the Help link tell a checkout's release line apart; a
+    source zip without ``.git`` or a machine without git still reads ``"dev"``.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "describe", "--tags", "--match", "v[0-9]*"],
+            cwd=Path(__file__).resolve().parent,
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return "dev"
+    return out.removeprefix("v") or "dev"
+
+
 def app_version() -> str:
-    """Version from the bundled ``version.txt``; ``"dev"`` in a checkout.
+    """Version from the bundled ``version.txt``; ``git describe`` in a checkout.
 
     Best-effort by contract: a missing or unreadable file must never take down
     the launcher or a page render.
@@ -34,7 +57,7 @@ def app_version() -> str:
     try:
         return _resource_path("version.txt").read_text(encoding="utf-8").strip() or "dev"
     except OSError:
-        return "dev"
+        return _git_version()
 
 
 def app_edition() -> str:
