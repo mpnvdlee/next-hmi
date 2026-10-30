@@ -47,7 +47,7 @@ One finding means a whole file is lost: **"alarms.json does not load (…)"**, a
 Two findings are specific to reusable components:
 
 - **"component has no slot 'x'"** — the widget names a slot the component no longer declares, so it renders in the component's first slot instead. Drag it into the group you meant, or put the slot back. A widget placed on a component that declares *no* slots renders nowhere and is flagged the same way.
-- **"`$componentProp` is only substituted as a property's whole value"** — inside the component, a `$componentProp` is nested in another source or sits on a Layout field. It fills in once and then stops updating. See [Passing values into components](properties.md#passing-values-into-components).
+- **"`$componentProp` is only substituted as a property's whole value"** — inside the component, a `$componentProp` is nested in another source or sits on a Layout field. It fills in once and then stops updating. Inside an action list — a Button's **Actions**, a String Input's **On Submit**, an **If** or an **On Success** in them — nesting is fine and not flagged: an action reads its fields when it fires. See [Passing values into components](properties.md#passing-values-into-components).
 
 > [!NOTE]
 > While you have unsaved edits, the pill can only re-check the artifact you have open. Save to get the whole project re-validated.

@@ -211,6 +211,12 @@ export default function SchemaFieldRow({
   // empty tier-3 box. Source-capable types (scalars, `record-list`, …) keep their
   // own editors, so they are excluded even though `record-list` is struct-like.
   const isStruct = isStructType(fieldType) && !isSourceCapable;
+  // A field that writes its value back needs a variable to write to — a
+  // formula, a literal or any other computed source leaves the control nothing
+  // to write — so it binds like a struct: `$var`, or a scope source standing in
+  // for one.
+  const writesBack = schema.write === true && isSourceCapable;
+  const bindsOnly = isStruct || writesBack;
   // The row's own union — exported as `bindsVariable` so the panels that decide
   // whether to *offer* the picker ask exactly the question this row answers.
   const hasSourcePill = bindsVariable(fieldType);
@@ -248,10 +254,10 @@ export default function SchemaFieldRow({
   // inside a Repeater via $repeatItem. The
   // body editor and source pill stay in sync via the detected source.
   const structSource: PropertySource =
-    isStruct && (detectedSource === '$componentProp' || detectedSource === '$repeatItem')
+    bindsOnly && (detectedSource === '$componentProp' || detectedSource === '$repeatItem')
       ? detectedSource
       : '$var';
-  const structValueForEditor = isStruct
+  const structValueForEditor = bindsOnly
     ? structSource === '$var'
       ? structVarDefault(effectiveValue)
       : effectiveValue
@@ -304,7 +310,7 @@ export default function SchemaFieldRow({
   // (tier 1/2) or an expandable multi-field box (tier 3) — see the redesign
   // doc's Content-tier model. Sourceless compound fields (`actions`,
   // `groups`) are handled above and never reach this fallback.
-  const sourceForTier = isSourceCapable ? currentSource : isStruct ? structSource : null;
+  const sourceForTier = bindsOnly ? structSource : isSourceCapable ? currentSource : null;
   const { tier, summary, kindLabel, drawerTitle } = sourceFieldGroupProps({
     source: sourceForTier,
     title: titleText,
@@ -318,24 +324,24 @@ export default function SchemaFieldRow({
 
   const badge = sourceless ? undefined : hasSourcePill ? (
     <PropertySourceSelector
-      value={isStruct ? structValueForEditor : effectiveValue}
+      value={bindsOnly ? structValueForEditor : effectiveValue}
       onChange={onChange}
       fieldType={schema.type}
       defaultValue={schema.defaultValue}
-      forcedSources={isStruct ? (['$var'] as PropertySource[]) : undefined}
-      includeStatic={!isStruct && fieldType !== 'record-list'}
-      showWhenSingle={isStruct}
+      forcedSources={bindsOnly ? (['$var'] as PropertySource[]) : undefined}
+      includeStatic={!bindsOnly && fieldType !== 'record-list'}
+      showWhenSingle={bindsOnly}
       label={schema.label}
       // A struct row binds one way whatever the selection disagrees about, so it
       // badges the source its body actually renders. `mixed.source` is derived
       // from the raw values, where an unbound widget reads as `static` — a source
       // this row does not even offer.
-      mixed={isStruct && mixed ? { source: structSource } : mixed}
+      mixed={bindsOnly && mixed ? { source: structSource } : mixed}
       // The row has already decided which source it renders. The pill must
       // badge and switch against that same decision: picking the source already
       // in effect is a no-op, while a pill that read the value's shape instead
       // would treat it as a switch and overwrite the value with a fresh default.
-      source={isStruct ? structSource : (detectedSource ?? undefined)}
+      source={bindsOnly ? structSource : (detectedSource ?? undefined)}
       compact
     />
   ) : (
@@ -344,50 +350,49 @@ export default function SchemaFieldRow({
 
   // Widgets that disagree on the source have no editor to show — picking one from
   // the pill is the only meaningful next step, and it applies to all of them.
-  const body =
-    isSourceCapable && currentSource === null ? (
-      <p className="cfg-prop-hint">Mixed sources — pick one to apply to every selection.</p>
-    ) : isSourceCapable ? (
-      <ParentPathContext.Provider value={path}>
-        <PropertySourceEditor
-          value={effectiveValue}
-          onChange={onChange}
-          source={currentSource!}
-          onOpenBindingPicker={onOpenPicker}
-          schema={schema}
-          staticEditor={
-            currentSource === 'static' ? (
-              fieldType === 'item-list' ? (
-                <ItemListInput value={effectiveValue} onChange={onChange} />
-              ) : fieldType === 'option-list' ? (
-                <ItemsInput
-                  value={effectiveValue as ItemEntry[] | undefined}
-                  onChange={onChange as (v: ItemEntry[]) => void}
-                />
-              ) : (
-                // Raw `value` (not the defaulted `effectiveValue`) so the
-                // static editor can tell unset apart from an explicit
-                // override and show the unset→default hint accordingly.
-                // A mixed row instead reads "Mixed" on whichever control it
-                // renders and offers no revert — "revert to default" and
-                // "leave the widgets disagreeing" are different things.
-                renderSchemaField(schema, value, onChange, tokenValues, mixed !== undefined)
-              )
-            ) : undefined
-          }
-        />
-      </ParentPathContext.Provider>
-    ) : isStruct ? (
-      <ParentPathContext.Provider value={path}>
-        <PropertySourceEditor
-          value={structValueForEditor}
-          onChange={onChange}
-          source={structSource}
-          onOpenBindingPicker={onOpenPicker}
-          schema={schema}
-        />
-      </ParentPathContext.Provider>
-    ) : null;
+  const body = bindsOnly ? (
+    <ParentPathContext.Provider value={path}>
+      <PropertySourceEditor
+        value={structValueForEditor}
+        onChange={onChange}
+        source={structSource}
+        onOpenBindingPicker={onOpenPicker}
+        schema={schema}
+      />
+    </ParentPathContext.Provider>
+  ) : isSourceCapable && currentSource === null ? (
+    <p className="cfg-prop-hint">Mixed sources — pick one to apply to every selection.</p>
+  ) : isSourceCapable ? (
+    <ParentPathContext.Provider value={path}>
+      <PropertySourceEditor
+        value={effectiveValue}
+        onChange={onChange}
+        source={currentSource!}
+        onOpenBindingPicker={onOpenPicker}
+        schema={schema}
+        staticEditor={
+          currentSource === 'static' ? (
+            fieldType === 'item-list' ? (
+              <ItemListInput value={effectiveValue} onChange={onChange} />
+            ) : fieldType === 'option-list' ? (
+              <ItemsInput
+                value={effectiveValue as ItemEntry[] | undefined}
+                onChange={onChange as (v: ItemEntry[]) => void}
+              />
+            ) : (
+              // Raw `value` (not the defaulted `effectiveValue`) so the
+              // static editor can tell unset apart from an explicit
+              // override and show the unset→default hint accordingly.
+              // A mixed row instead reads "Mixed" on whichever control it
+              // renders and offers no revert — "revert to default" and
+              // "leave the widgets disagreeing" are different things.
+              renderSchemaField(schema, value, onChange, tokenValues, mixed !== undefined)
+            )
+          ) : undefined
+        }
+      />
+    </ParentPathContext.Provider>
+  ) : null;
 
   return (
     <FieldGroup

@@ -101,7 +101,7 @@ def _action(ctx, action) -> ValidationReport:
         ({"$recipe": {"type": "r", "field": "activeName"}}, {"type": "boolean"}),
         # A produced type fits its own field type only.
         ({"$compare": {"left": 1, "operator": ">", "right": 0}}, {"type": "string"}),
-        ({"$formula": {"expression": "1"}}, {"type": "integer"}),
+        ({"$formula": {"expression": "1"}}, {"type": "boolean"}),
         ({"$alarmCount": {"filter": "all"}}, {"type": "float"}),
         ({"$stringExpr": {"template": "x"}}, {"type": "datetime"}),
         ({"$recipe": {"type": "r", "field": "loaded"}}, {"type": "string"}),
@@ -118,6 +118,7 @@ def test_a_fixed_type_source_the_field_does_not_take(ctx, value, field):
     [
         ({"$alarmCount": {"filter": "all"}}, {"type": "integer"}),
         ({"$random": {"min": 0, "max": 1}}, {"type": "integer"}),
+        ({"$formula": {"expression": "1", "round": True}}, {"type": "integer"}),
         ({"$compare": {"left": 1, "operator": ">", "right": 0}}, {"type": "boolean"}),
         # A number fills a duration.
         ({"$formula": {"expression": "1"}}, {"type": "duration"}),

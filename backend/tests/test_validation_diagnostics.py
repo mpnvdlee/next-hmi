@@ -60,6 +60,39 @@ def test_var_unknown(ctx):
     assert (w.code, w.severity) == ("var-unknown", "error")
 
 
+def test_var_disabled_is_a_warning_not_an_unknown_variable(ctx):
+    disabled = {("PLC", "Motor/Off"), ("PLC", "Counts")}
+    ctx = replace(ctx, datasource_disabled=lambda ds, path: (ds, path) in disabled)
+    for var_path in ("PLC:Motor/Off", "PLC:Counts[2]"):
+        report = ValidationReport()
+        validate_var_ref({"path": var_path}, ctx, "/p", report, {"type": "float"})
+        w = _warn(report)
+        assert (w.code, w.severity) == ("var-disabled", "warning")
+        assert "disabled" in w.message
+    report = ValidationReport()
+    validate_var_ref({"path": "PLC:Missing/Thing"}, ctx, "/p", report, {"type": "string"})
+    assert _warn(report).code == "var-unknown"
+
+
+def test_var_disabled_in_a_datasource_with_nothing_enabled(ctx):
+    ctx.datasource_registry["Line"] = {}
+    ctx = replace(ctx, datasource_disabled=lambda ds, path: (ds, path) == ("Line", "Speed"))
+    report = ValidationReport()
+    validate_var_ref({"path": "Line:Speed"}, ctx, "/p", report, {"type": "float"})
+    assert _warn(report).code == "var-disabled"
+
+
+def test_write_target_disabled_variable(ctx):
+    ctx = replace(ctx, datasource_disabled=lambda ds, path: (ds, path) == ("PLC", "Motor/Off"))
+    report = ValidationReport()
+    _validate_action(
+        {"type": "writeDataVariable", "target": {"$var": {"path": "PLC:Motor/Off"}}, "value": 1},
+        ctx, "/a", report,
+    )
+    w = _warn(report)
+    assert (w.code, w.severity, w.path) == ("var-disabled", "warning", "/a/target")
+
+
 def test_var_unknown_datasource(ctx):
     report = ValidationReport()
     validate_var_ref({"path": "Nope:Motor/Speed"}, ctx, "/p", report, {"type": "string"})
@@ -683,6 +716,55 @@ def test_formula_wildcard_empty(ctx):
     assert (w.code, w.path) == ("formula-wildcard-empty", "/p/$formula/wildcards/2")
 
 
+@pytest.mark.parametrize(
+    ("field_type", "round_", "codes"),
+    [
+        ("integer", None, ["formula-fraction"]),
+        ("integer", False, ["formula-fraction"]),
+        ("integer", True, []),
+        ("float", None, []),
+        (["float", "integer"], None, []),
+        ("duration", None, []),
+    ],
+)
+def test_formula_on_a_whole_number_field_must_round(ctx, field_type, round_, codes):
+    payload = {"expression": "{1} / 2", "wildcards": {"1": {"$static": 3}}}
+    if round_ is not None:
+        payload["round"] = round_
+    report = ValidationReport()
+    _validate_property_value({"$formula": payload}, {"type": field_type}, ctx, "/p", report)
+    assert report.findings == []
+    assert [w.code for w in report.warnings] == codes
+    if codes:
+        assert (report.warnings[0].severity, report.warnings[0].path) == ("warning", "/p/$formula")
+
+
+@pytest.mark.parametrize(
+    ("value", "codes"),
+    [
+        ({"$var": {"path": "PLC:Motor/Speed"}}, []),
+        ({"$componentProp": {"name": "setpoint"}}, []),
+        (4.5, ["write-source"]),
+        ({"$static": 4.5}, ["write-source"]),
+        ({"$formula": {"expression": "{1} * 2", "wildcards": {"1": {"$static": 3}}}}, ["write-source"]),
+        ({"$if": {"condition": True, "then": 1, "else": 2}}, ["write-source"]),
+    ],
+)
+def test_a_writing_field_takes_only_a_variable(ctx, value, codes):
+    report = ValidationReport()
+    _validate_property_value(value, {"type": "float", "write": True}, ctx, "/p", report)
+    assert report.findings == []
+    assert [w.code for w in report.warnings if w.code == "write-source"] == codes
+    if codes:
+        assert report.warnings[0].severity == "error"
+
+
+def test_a_cleared_writing_field_is_not_a_fixed_value(ctx):
+    report = ValidationReport()
+    _validate_property_value("", {"type": "string", "write": True}, ctx, "/p", report)
+    assert report.warnings == [] and report.findings == []
+
+
 def test_stringexpr_empty(ctx):
     report = ValidationReport()
     _validate_property_value(
@@ -1037,6 +1119,35 @@ def _root_ctx() -> ValidationContext:
     )
 
 
+def _station_link_instance(target: str) -> ValidationReport:
+    decl = {"target": {"type": "string", "label": "Target", "format": "page"}}
+    ctx = replace(
+        _root_ctx(),
+        component_ids={"station-link"},
+        component_property_keys={"station-link": frozenset(decl)},
+        component_properties={"station-link": decl},
+    )
+    return validate_widget_node(_node("$component:station-link", {"target": target}), ctx)
+
+
+def test_a_component_page_input_takes_a_navigable_page():
+    report = _station_link_instance("home")
+    assert (report.findings, report.warnings) == ([], [])
+
+
+@pytest.mark.parametrize(
+    "target, code", [("motor-detail", "page-not-navigable"), ("gone", "page-unknown")]
+)
+def test_a_component_page_input_flags_a_page_navigation_cannot_reach(target, code):
+    w = _warn(_station_link_instance(target))
+    assert (w.code, w.path) == (code, "/properties/target")
+
+
+def test_navigate_inside_a_component_to_its_page_input():
+    ctx = _dialog_scope(target={"type": "string", "label": "Target", "format": "page"})
+    assert _navigate({"$componentProp": "target"}, ctx).warnings == []
+
+
 def test_open_dialog_naming_a_navigable_page():
     report = ValidationReport()
     _validate_action({"type": "openDialog", "pageId": "home"}, _root_ctx(), "/a", report)
@@ -1201,6 +1312,67 @@ def test_navigate_to_an_input_that_is_not_a_page(inputs):
 def test_navigate_to_an_input_outside_a_dialog():
     ctx = replace(_root_ctx(), input_scope=False)
     assert _warn(_navigate({"$componentProp": "stationPage"}, ctx)).code == "navigate-input-not-page"
+
+
+_REPEATED_ICON = {"$static": {"type": "custom", "path": {"$repeatItem": {"member": "icon"}}}}
+
+
+@pytest.mark.parametrize(
+    "value, field_type",
+    [
+        (_REPEATED_ICON, "icon"),
+        ({"$static": {"type": "builtin", "name": {"$repeatItem": {"member": "icon"}}}}, "icon"),
+        ({"$static": {"path": {"$repeatItem": {"member": "photo"}}}}, "image"),
+    ],
+)
+def test_a_repeat_item_naming_the_asset_over_a_list_is_not_an_unknown_asset(ctx, value, field_type):
+    # Each copy gets its item's text as the path (substituteRepeatRefs).
+    rctx = replace(ctx, repeat_scope=True, repeat_items=[{"icon": "icons/door.svg"}])
+    report = ValidationReport()
+    _validate_property_value(value, {"type": field_type}, rctx, "/p", report)
+    assert (report.findings, report.warnings) == ([], [])
+
+
+def test_a_repeat_item_naming_the_asset_over_a_variable_says_to_bind_the_field(ctx):
+    rctx = replace(ctx, repeat_scope=True, repeat_items={"$var": {"path": "PLC:Doors"}})
+    report = ValidationReport()
+    _validate_property_value(_REPEATED_ICON, {"type": "icon"}, rctx, "/p", report)
+    assert _warn(report).code == "repeatitem-in-static"
+
+
+def test_a_repeat_item_naming_the_asset_outside_a_repeater(ctx):
+    report = ValidationReport()
+    _validate_property_value(_REPEATED_ICON, {"type": "icon"}, ctx, "/p", report)
+    assert _warn(report).code == "repeatitem-no-scope"
+
+
+def _write_formula(target_base: str) -> ValidationReport:
+    ctx = ValidationContext(
+        widget_schemas={"version": 2, "builtin": {}, "custom": {}},
+        datasource_registry={
+            "PLC": {"Count": {"kind": "scalar", "base": target_base, "array": False}}
+        },
+        datasource_writable={"PLC": {"Count": True}},
+        datasource_types={"PLC": "opcua-client"},
+    )
+    report = ValidationReport()
+    formula = {"$formula": {"expression": "{1} + 1", "wildcards": {"1": {"$var": {"path": "PLC:Count"}}}}}
+    _validate_action(
+        {"type": "writeDataVariable", "target": {"$var": {"path": "PLC:Count"}}, "value": formula},
+        ctx, "/a", report,
+    )
+    return report
+
+
+@pytest.mark.parametrize("base", ["Integer", "Float"])
+def test_a_formula_value_can_be_written_to_a_number_tag(base):
+    # Into an integer tag the write path takes a whole result and refuses a
+    # fraction as lossy (test_write_service), so validation does not refuse it.
+    assert _write_formula(base).warnings == []
+
+
+def test_a_formula_value_still_does_not_fit_a_boolean_tag():
+    assert _warn(_write_formula("Boolean")).code == "source-type"
 
 
 def _write_to_input(kind: str, ctx: ValidationContext, name: str = "value") -> ValidationReport:

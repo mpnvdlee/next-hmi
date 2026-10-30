@@ -706,7 +706,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "e3976d9d22ee7bf9",
+    "buildTs": "960fda05a02cada5",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -714,7 +714,10 @@
     "category": "Indicators",
     "schema": {
       "variable": {
-        "type": "float"
+        "type": [
+          "float",
+          "integer"
+        ]
       },
       "min": {
         "type": "float"
@@ -906,7 +909,7 @@
     "hasFonts": false,
     "usesRecharts": true,
     "buildOk": true,
-    "buildTs": "93077c8c5675c55f",
+    "buildTs": "4fa187eac72ae511",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -914,7 +917,10 @@
     "category": "Indicators",
     "schema": {
       "variable": {
-        "type": "float"
+        "type": [
+          "float",
+          "integer"
+        ]
       },
       "historyLength": {
         "type": "integer"
@@ -1163,7 +1169,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "bfc4badb66f19f8b",
+    "buildTs": "d97df9e1f68cf161",
     "displayName": "String Input",
     "hostsChildren": null,
     "flowsChildren": null,

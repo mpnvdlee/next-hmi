@@ -10,7 +10,7 @@ from datetime import time as time_of_day
 from pathlib import Path
 from typing import Any
 
-from models.datasource import is_subscribable
+from models.datasource import is_present_on_server, is_subscribable
 
 from core.builtin_widgets_manifest import CatalogVersion, builtin_widgets_catalog
 from core.page_index import (
@@ -203,6 +203,10 @@ class ValidationContext:
     # `max`): the live pool's, else the datasource file's. None skips
     # `write-value-type`.
     datasource_entry: Callable[[str, str], dict | None] | None = field(default=None, repr=False)
+    # (datasource, variable path) -> whether the datasource holds that variable
+    # but has it disabled: the registry leaves it out, yet it is no unknown
+    # variable. None reports every variable the registry lacks as unknown.
+    datasource_disabled: Callable[[str, str], bool] | None = field(default=None, repr=False)
     # True while walking the children of a Repeater: only there does
     # `$repeatItem` (or a Repeat-item write target) have an element to read.
     repeat_scope: bool = False
@@ -736,7 +740,10 @@ _Writable = dict[str, dict[str, bool]]
 # datasource -> variable path -> the leaf as its datasource file declares it.
 _Entries = dict[str, dict[str, dict]]
 
-_ds_scan_cache: tuple[frozenset[tuple[str, int]], _Registry, _Writable, dict[str, str], _Entries] | None = None
+_ds_scan_cache: (
+    tuple[frozenset[tuple[str, int]], _Registry, _Writable, dict[str, str], _Entries, dict[str, set[str]]]
+    | None
+) = None
 
 # variable_metadata() walks every subscribable variable across all datasources
 # under datasource_manager's lock — real cost on a live plant with many tags.
@@ -831,6 +838,7 @@ def _walk_variable_tree(
     out: dict[str, dict],
     writable: dict[str, bool],
     entries: dict[str, dict] | None = None,
+    disabled: set[str] | None = None,
 ) -> None:
     """Recursively derive typed VarTypes (into `out`) and leaf writability
     (into `writable`) from a datasource JSON's declared ``variables`` tree
@@ -852,7 +860,7 @@ def _walk_variable_tree(
             children = node.get("children")
             if not isinstance(children, list):
                 continue
-            _walk_variable_tree(children, path, out, writable, entries)
+            _walk_variable_tree(children, path, out, writable, entries, disabled)
             is_array = bool(node.get("is_array"))
             field_names = _disk_struct_fields(children, path, is_array, out)
             if field_names or is_array:
@@ -876,6 +884,8 @@ def _walk_variable_tree(
             writable[path] = node.get("writable") is True
             if entries is not None:
                 entries[path] = node
+        elif disabled is not None and is_present_on_server(node):
+            disabled.add(path)
 
 
 def _scan_datasources_from_disk() -> tuple[_Registry, _Writable, dict[str, str]]:
@@ -899,6 +909,7 @@ def _scan_datasources_from_disk() -> tuple[_Registry, _Writable, dict[str, str]]
     writable: _Writable = {}
     ds_types: dict[str, str] = {}
     entries: _Entries = {}
+    disabled: dict[str, set[str]] = {}
     for path in files:
         try:
             doc = read_json(path)
@@ -910,15 +921,17 @@ def _scan_datasources_from_disk() -> tuple[_Registry, _Writable, dict[str, str]]
         types: dict[str, dict] = {}
         access: dict[str, bool] = {}
         leaves: dict[str, dict] = {}
+        off: set[str] = set()
         variables = doc.get("variables") if isinstance(doc, dict) else None
-        _walk_variable_tree(variables, "", types, access, leaves)
+        _walk_variable_tree(variables, "", types, access, leaves, off)
         registry[name] = types
         writable[name] = access
         entries[name] = leaves
+        disabled[name] = off
         ds_type = doc.get("type") if isinstance(doc, dict) else None
         if isinstance(ds_type, str):
             ds_types[name] = ds_type
-    _ds_scan_cache = (fingerprint, registry, writable, ds_types, entries)
+    _ds_scan_cache = (fingerprint, registry, writable, ds_types, entries, disabled)
     return registry, writable, ds_types
 
 
@@ -947,6 +960,56 @@ def _datasource_entry_lookup() -> Callable[[str, str], dict | None]:
         return (disk.get(ds_name) or {}).get(var_path)
 
     return lookup
+
+
+def _disabled_variable_lookup() -> Callable[[str, str], bool]:
+    """Whether a datasource holds a variable, still on its server, but has it
+    disabled — the live
+    pool's config when it serves the datasource, else the datasource file.
+    Resolved only for a binding the registry lacks, so a page whose bindings
+    all resolve never reads it."""
+    disk: dict[str, set[str]] | None = None
+
+    def lookup(ds_name: str, var_path: str) -> bool:
+        nonlocal disk
+        try:
+            from services.datasource_manager import datasource_manager
+
+            entry = datasource_manager.datasources.get(ds_name)
+            if entry is not None:
+                var_entry = entry.registry.get(var_path)
+                return (
+                    isinstance(var_entry, dict)
+                    and not is_subscribable(var_entry)
+                    and is_present_on_server(var_entry)
+                )
+        except Exception:
+            pass
+        if disk is None:
+            _scan_datasources_from_disk()
+            disk = _ds_scan_cache[5] if _ds_scan_cache is not None else {}
+        return var_path in (disk.get(ds_name) or ())
+
+    return lookup
+
+
+def _report_disabled(
+    ctx: ValidationContext, ds_name: str, var_path: str, path: str, report: ValidationReport
+) -> bool:
+    """Report a binding to a variable its datasource has disabled: the pool
+    serves it no value, but enabling it there is all it takes. True when
+    reported."""
+    if ctx.datasource_disabled is None:
+        return False
+    if not any(ctx.datasource_disabled(ds_name, p) for p in {var_path, var_path.split("[")[0]}):
+        return False
+    report.warn(
+        path,
+        f"variable '{ds_name}:{var_path}' is disabled in its datasource — enable it there",
+        severity="warning",
+        code="var-disabled",
+    )
+    return True
 
 
 def _collect_datasource_types() -> dict[str, str]:
@@ -1112,6 +1175,7 @@ def build_context() -> ValidationContext:
             **_config_widgets(config),
         },
         datasource_entry=_datasource_entry_lookup(),
+        datasource_disabled=_disabled_variable_lookup(),
         translation_keys=_collect_translation_keys(),
         user_groups=_collect_user_groups(),
         icon_assets=_collect_asset_names(active_icons_dir()),
@@ -1204,6 +1268,10 @@ def validate_var_ref(
         return
     paths = ctx.datasource_registry[ds_name]
     resolved_key = var_path
+    if var_path not in paths and var_path.split("[")[0] not in paths and _report_disabled(
+        ctx, ds_name, var_path, path, report
+    ):
+        return
     if paths and var_path not in paths:
         base = var_path.split("[")[0]
         if base not in paths:
@@ -1511,6 +1579,30 @@ _LABEL_VALUE_RECORD: tuple[dict, dict[str, dict]] = (
 )
 
 
+def _repeat_bound_asset(ref: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> bool:
+    """Whether a `$static` icon/image/video payload names its asset with a
+    `$repeatItem` — which the runtime fills in per Repeater copy
+    (`substituteRepeatRefs`), so there is no literal asset to look up. Over a
+    list it becomes the item's text; over a variable it becomes a binding, which
+    names no asset, and outside a Repeater it is never filled in."""
+    if not (isinstance(ref, dict) and "$repeatItem" in ref):
+        return False
+    if not ctx.repeat_scope:
+        report.warn(
+            path,
+            "the Repeat item has no Repeater copy here, so this names no asset",
+            severity="warning", code="repeatitem-no-scope",
+        )
+    elif _repeat_items_source(ctx) is not None:
+        report.warn(
+            path,
+            "a Repeat item inside a fixed icon or image names no asset when the Repeater "
+            "repeats a variable — set the field's own source to Repeat Item instead",
+            severity="error", code="repeatitem-in-static",
+        )
+    return True
+
+
 def _repeats_values(ctx: ValidationContext) -> bool:
     """Whether the innermost Repeater repeats over a list of values rather
     than a variable — so its element cannot be written."""
@@ -1799,6 +1891,8 @@ def _validate_write_target(
         return None
     paths = ctx.datasource_registry[ds_name]
     key = var_path if var_path in paths else var_path.split("[")[0]
+    if key not in paths and _report_disabled(ctx, ds_name, var_path, target_path, report):
+        return None
     if paths and key not in paths:
         report.warn(
             target_path,
@@ -1867,6 +1961,11 @@ def _validate_write_value(
         schema = {"type": f"{base}[]" if element.get("array") else base}
     wrapped = _has_property_source(value)
     if wrapped and _property_source_key(value) != "$static":
+        if _property_source_key(value) == "$formula" and schema == {"type": "Integer"}:
+            # A formula computes a Float, but the write path takes a whole one
+            # into an integer tag and refuses a fraction as lossy, as it does
+            # for any number — so only the formula itself is checked here.
+            schema = {"type": "Float"}
         _validate_action_value(value, schema, ctx, value_path, report)
         return
     if schema is None or written is None or ctx.datasource_entry is None:
@@ -2511,6 +2610,29 @@ def _check_source_type(
     report.warn(path, message, severity="error", code="source-type")
 
 
+# What a field that writes its value back may hold: a variable, or a scope
+# source standing in for one. Mirrors `bindsOnly` in SchemaFieldRow.
+_WRITABLE_SOURCES = frozenset({"$var", "$componentProp", "$repeatItem"})
+
+
+def _check_write_source(
+    source_key: str | None, schema_field: dict | None, path: str, report: ValidationReport
+) -> None:
+    """Flag a literal or a computed source (a formula, a condition, …) in a
+    field with `write: true`: the control has no variable to write to."""
+    if not isinstance(schema_field, dict) or schema_field.get("write") is not True:
+        return
+    if source_key in _WRITABLE_SOURCES:
+        return
+    what = "a fixed value" if source_key in (None, "$static") else source_key
+    report.warn(
+        path,
+        f"this field writes to a variable, but holds {what} — bind a variable",
+        severity="error",
+        code="write-source",
+    )
+
+
 def _input_scope(ctx: ValidationContext, node_id: str, own: dict[str, dict]) -> dict[str, dict]:
     """The input parameters a Dialogs-folder node's widgets read: its own
     declarations over its enclosing groups', innermost winning."""
@@ -2703,6 +2825,15 @@ def _check_overlay(payload: dict, ctx: ValidationContext, path: str, report: Val
         )
 
 
+def _takes_only_whole_numbers(schema_field: dict | None) -> bool:
+    """An `Integer` field that no fraction fits — a union with `Float` or
+    `Duration` takes the formula's own result."""
+    if not isinstance(schema_field, dict):
+        return False
+    accepted = {t.lower() for t in vartype.accepted_value_types(schema_field.get("type"))}
+    return "integer" in accepted and not accepted & {"float", "duration"}
+
+
 def _validate_property_value(
     value: Any,
     schema_field: dict | None,
@@ -2724,6 +2855,8 @@ def _validate_property_value(
         _validate_menu_items(value, ctx, path, report)
 
     if not _has_property_source(value):
+        if value not in (None, ""):
+            _check_write_source(None, schema_field, path, report)
         _check_literal(value, schema_field, ctx, path, report, wrapped=False)
         return
     # Sourced value — recurse into its payload.
@@ -2731,6 +2864,7 @@ def _validate_property_value(
         return
     source_key = _property_source_key(value)
     payload = value.get(source_key)
+    _check_write_source(source_key, schema_field, path, report)
     _check_source_type(source_key, payload, schema_field, path, report)
     if source_key == "$var":
         validate_var_ref(payload, ctx, path, report, schema_field)
@@ -2747,21 +2881,29 @@ def _validate_property_value(
             icon_type = payload.get("type")
             if icon_type == "builtin":
                 name = payload.get("name")
-                if not isinstance(name, str) or name not in ctx.builtin_icons:
+                if _repeat_bound_asset(name, ctx, path, report):
+                    pass
+                elif not isinstance(name, str) or name not in ctx.builtin_icons:
                     report.warn(path, f"unknown built-in icon '{name}'", severity="error", code="icon-unknown")
             elif icon_type == "custom":
                 icon_path = payload.get("path")
-                if not isinstance(icon_path, str) or icon_path not in ctx.icon_assets:
+                if _repeat_bound_asset(icon_path, ctx, path, report):
+                    pass
+                elif not isinstance(icon_path, str) or icon_path not in ctx.icon_assets:
                     report.warn(path, f"unknown icon asset '{icon_path}'", severity="error", code="icon-unknown")
         elif field_type == "image":
             image_path = payload.get("path")
-            if not _is_absolute_asset_url(image_path) and (
+            if _repeat_bound_asset(image_path, ctx, path, report):
+                pass
+            elif not _is_absolute_asset_url(image_path) and (
                 not isinstance(image_path, str) or image_path not in ctx.image_assets
             ):
                 report.warn(path, f"unknown image asset '{image_path}'", severity="error", code="image-unknown")
         elif field_type == "video":
             video_path = payload.get("path")
-            if not _is_absolute_asset_url(video_path) and (
+            if _repeat_bound_asset(video_path, ctx, path, report):
+                pass
+            elif not _is_absolute_asset_url(video_path) and (
                 not isinstance(video_path, str) or video_path not in ctx.video_assets
             ):
                 report.warn(path, f"unknown video asset '{video_path}'", severity="error", code="video-unknown")
@@ -2843,6 +2985,12 @@ def _validate_property_value(
             )
         else:
             _validate_wildcards([expression], payload, "$formula", ctx, path, report)
+        if payload.get("round") is not True and _takes_only_whole_numbers(schema_field):
+            report.warn(
+                f"{path}/$formula",
+                "this field takes whole numbers, but the formula is not rounded",
+                severity="warning", code="formula-fraction",
+            )
     elif source_key == "$stringExpr" and isinstance(payload, dict):
         template = payload.get("template")
         if not isinstance(template, str) or template == "":

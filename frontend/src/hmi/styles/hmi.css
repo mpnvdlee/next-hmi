@@ -817,6 +817,17 @@
   font-size: var(--hmi-virtual-key-font-size-actions-compact);
 }
 
+/* A keypad drawn inside its widget: the widget's card is the panel, so no
+   frame of its own, and it fills the width it is given. Two classes so the
+   compact panel's mobile width further down cannot win. */
+.hmi-virtual-input__panel.hmi-virtual-input__panel--inline {
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
 @media (max-width: 820px) {
   .hmi-virtual-input__dock--center {
     bottom: var(--hmi-virtual-dock-offset-mobile);

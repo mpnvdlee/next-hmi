@@ -472,7 +472,7 @@ A round analog gauge with min/max and a value binding.
 
 | Property | Label | Type |
 |---|---|---|
-| `variable` | Value | `Float` |
+| `variable` | Value | `Float | Integer` |
 | `min` | Min value | `Float` |
 | `max` | Max value | `Float` |
 | `label` | Label | `String` |
@@ -550,7 +550,7 @@ A live sparkline of one variable with its current reading — buffered in the pa
 
 | Property | Label | Type |
 |---|---|---|
-| `variable` | Value | `Float` |
+| `variable` | Value | `Float | Integer` |
 | `historyLength` | History length (samples) | `Integer` |
 | `label` | Label | `String` |
 | `unit` | Unit | `String` |

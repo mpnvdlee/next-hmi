@@ -249,8 +249,6 @@ export default function VariableBindingPicker() {
     return widgetRegistry[comp.type]?.schema[target.propertyKey] ?? null;
   }, [isComponentPropMode, comp, target]);
 
-  const includeDisabled = target?.filter?.includeDisabled === true;
-
   // The Repeat item rows follow the same type filter as the variables.
   const repeatProperties = useMemo(
     () =>
@@ -418,9 +416,9 @@ export default function VariableBindingPicker() {
       ...ds,
       children: showAll
         ? annotateSelectable(ds.children, schemaField)
-        : typeFilter(ds.children, schemaField, includeDisabled),
+        : typeFilter(ds.children, schemaField),
     }));
-  }, [isComponentPropMode, dsTree, schemaField, includeDisabled, showAll]);
+  }, [isComponentPropMode, dsTree, schemaField, showAll]);
 
   const rows = useMemo((): RowItem[] => {
     if (isComponentPropMode && target?.componentPropSource) {
@@ -502,9 +500,9 @@ export default function VariableBindingPicker() {
         ? typedDsTree
         : dsTree.map((ds) => ({
             ...ds,
-            children: typeFilter(ds.children, schemaField, includeDisabled),
+            children: typeFilter(ds.children, schemaField),
           })),
-    [isComponentPropMode, showAll, dsTree, typedDsTree, schemaField, includeDisabled],
+    [isComponentPropMode, showAll, dsTree, typedDsTree, schemaField],
   );
 
   // Scroll container for the virtual list
@@ -680,6 +678,7 @@ export default function VariableBindingPicker() {
 
     let scalarIsValid: boolean | null = null;
     let wholeArrayElement = false;
+    let scalarReason: string | undefined;
     if (key && !isStruct) {
       const varToCheck = selectedVar ?? selectedParentVar;
       if (repeatPick && repeatOptions) {
@@ -697,7 +696,13 @@ export default function VariableBindingPicker() {
           !!selectedVar &&
           allowed.some((t) => nodeAcceptsOrElement(parseTypeToken(t), resolved));
         const accessOk = !needsWrite || varToCheck.writable === true;
-        scalarIsValid = (typeOk || wholeArrayElement) && accessOk;
+        // No list shows a disabled variable, but a binding made before it was
+        // disabled still opens on it: the pool serves it no value.
+        const enabled = varToCheck.enabled !== false;
+        scalarIsValid = (typeOk || wholeArrayElement) && accessOk && enabled;
+        if ((typeOk || wholeArrayElement) && accessOk && !enabled) {
+          scalarReason = 'Disabled in its datasource — enable it there first';
+        }
       } else if (rawSelectedFolder) {
         scalarIsValid = strictFolderSelectable;
       } else if (!pendingDatasource) {
@@ -727,6 +732,7 @@ export default function VariableBindingPicker() {
         rawSelectedFolder,
         scalarIsValid,
         wholeArrayElement,
+        scalarReason,
         isStruct,
       },
     };

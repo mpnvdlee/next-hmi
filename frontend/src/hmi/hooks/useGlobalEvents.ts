@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useConfigStore } from '@shared/store/configStore';
 import { useHmiStore } from '../store/hmiStore';
+import { useVariableStore } from '../store/variableStore';
+import { NO_DATA_GRACE_MS } from '../components/DataSettleGate';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { executeWidgetActions } from '../utils/widgetActions';
 import { resolvePageContext } from '@shared/utils/pageTree';
@@ -13,7 +15,8 @@ import type { GlobalEventsConfig } from '@shared/types/config';
  * Must be called once inside HmiView, after the scope context is established.
  *
  * Events:
- * - onHmiLoaded:     fires once when the HMI view first mounts
+ * - onHmiLoaded:     fires once when the HMI view first mounts, once the first
+ *                    context's values have arrived (or after a grace)
  * - onPageLoaded:    fires on every page navigation
  * - onLocaleChanged: fires when the active language changes (skips initial)
  * - onUserLoggedIn:  fires when a user identity appears for this scope
@@ -39,26 +42,37 @@ export function useGlobalEvents(scope: string): void {
   }, []);
 
   // ── onHmiLoaded + initial onPageLoaded ──────────────────────────────────
-  // Both fire once when the config is hydrated from the API (configStore.loaded).
-  // Subscribing to the loaded flag — instead of using setTimeout — ensures we
-  // never fire before globalEvents is available, and handles React StrictMode's
-  // double-mount correctly (refs survive cleanup, subscription is re-established).
+  // Both fire once, after the config is hydrated from the API (configStore.loaded)
+  // and the first `context_ready` says the values HmiView asked for — the
+  // page's and onHmiLoaded's own — are in the store, so an `if` on a tag reads
+  // its value rather than "no value yet". A context_ready that never comes
+  // (backend down, no page) is waited out for the same grace the binding marks
+  // get. Store subscriptions rather than one timer handle React StrictMode's
+  // double-mount (refs survive cleanup, subscriptions are re-established).
   const initialFiredRef = useRef(false);
   useEffect(() => {
-    function tryFireInitial() {
+    let grace: ReturnType<typeof setTimeout> | undefined;
+    function fireInitial() {
       if (initialFiredRef.current) return;
       initialFiredRef.current = true;
       const ge = useConfigStore.getState().globalEvents;
       executeWidgetActions(ge.onHmiLoaded, { scope });
       executeWidgetActions(ge.onPageLoaded, { scope });
     }
-    if (useConfigStore.getState().loaded) {
-      tryFireInitial();
-      return;
+    function tryFireInitial() {
+      if (initialFiredRef.current || !useConfigStore.getState().loaded) return;
+      if (useVariableStore.getState().contextReadyPageIds.length > 0) fireInitial();
+      else grace ??= setTimeout(fireInitial, NO_DATA_GRACE_MS);
     }
-    return useConfigStore.subscribe((s) => {
-      if (s.loaded) tryFireInitial();
-    });
+    tryFireInitial();
+    const unsubscribe = [
+      useConfigStore.subscribe(tryFireInitial),
+      useVariableStore.subscribe(tryFireInitial),
+    ];
+    return () => {
+      unsubscribe.forEach((u) => u());
+      clearTimeout(grace);
+    };
   }, [scope]);
 
   // ── onPageLoaded for subsequent navigations ──────────────────────────────

@@ -40,7 +40,10 @@ export default function ProjectUnavailableOverlay() {
         <h2 className="name-modal__title" id="project-unavailable-title">
           Can&rsquo;t open {label}
         </h2>
-        <div className="name-modal__message">{MESSAGES[reason]}</div>
+        <div className="name-modal__message">
+          {MESSAGES[reason]} Once it runs again this notice closes by itself, and unsaved changes
+          are kept.
+        </div>
         <div className="name-modal__actions">
           <Button variant="primary" onClick={() => window.location.assign('/projects')}>
             Go to projects

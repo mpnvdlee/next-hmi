@@ -364,6 +364,8 @@ export interface VarMode {
   /** The selection is a whole array that fits by its element, which the
    *  field's Index row then names. */
   wholeArrayElement?: boolean;
+  /** Why a selection of the right type is still refused. */
+  scalarReason?: string;
   isStruct: boolean;
 }
 
@@ -588,6 +590,9 @@ function VarScalarPanel({
               <AccessBadge writable={false} readOnlyLabel="RO / RW" />
             )}
           </div>
+          {scalarIsValid === false && mode?.scalarReason && (
+            <div className="editor-binding-req-reason">{mode.scalarReason}</div>
+          )}
         </div>
       </div>
       <div className="editor-binding-mid">

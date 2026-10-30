@@ -5,7 +5,7 @@ Every property value answers two questions:
 1. **What type is it?** — the kind of value (`String`, `Integer`, `Float`, `Boolean`, `DateTime`, `Date`, `Time`, `Duration`, `color`, `icon`, `image`, `video`). Any type can also be an **array** of that type.
 2. **Where does it come from?** — the source (a literal you typed, a datasource variable, the logged-in user, a computed expression, …).
 
-The **type is decided by the field**. A label's `text` field needs a `String`; a gauge's `value` field needs a `Float`. You don't pick the type — you pick a **source** that produces the type the field wants.
+The **type is decided by the field**. A label's `text` field needs a `String`; a gauge's `value` field needs a `Float` or an `Integer`. You don't pick the type — you pick a **source** that produces the type the field wants.
 
 ```
 property value = a SOURCE that produces the TYPE the field needs
@@ -114,7 +114,7 @@ Each of these only works in a field of the matching type.
 | `$compare` | Boolean | `{ $compare: { left, operator, right } }` | A comparison result (`>` `<` `>=` `<=` `===` `!==`). The ordering operators coerce both sides to numbers, treating a non-numeric side as `0`. `===` / `!==` are **not** strict despite the spelling: `looseEquals` compares identity first, then number-vs-string by `parseFloat`, so `5 === "5"` is `true` while `true === 1` is `false` |
 | `$not` | Boolean | `{ $not: { value } }` | The inverse of a boolean `value`. A number counts as a 0/1 flag (`0` → `true`, anything else → `false`); any other input, or none, is *absent* |
 | `$and` / `$or` | Boolean | `{ $and: [cond, …] }` / `{ $or: [cond, …] }` | `$and` is `true` when every item is truthy, `$or` when any is; items are Boolean property values of any source, nested `$and` / `$or` included. An empty or non-list payload is `false` (the validator reports `and-empty` / `or-empty` as an error, and a non-list as a structural error) |
-| `$formula` | Float | `{ $formula: { expression, wildcards } }` | Arithmetic like `({1} - 32) / 1.8`: numbers, `{n}` placeholders filled from `wildcards` (each a full property value, coerced with `toNumber`), `+ - * /`, unary minus and parentheses. An unparseable expression, a placeholder with no numeric value, a division by zero or a non-finite result makes the whole value *absent*. The grammar lives in `frontend/src/hmi/utils/formula.ts`; the backend mirrors it only to flag syntax errors |
+| `$formula` | Float / Integer | `{ $formula: { expression, wildcards, round? } }` | Arithmetic like `({1} - 32) / 1.8`: numbers, `{n}` placeholders filled from `wildcards` (each a full property value, coerced with `toNumber`), `+ - * /`, unary minus and parentheses. An unparseable expression, a placeholder with no numeric value, a division by zero or a non-finite result makes the whole value *absent*. `round: true` rounds the result to the nearest whole number (`Math.round`); a formula created on an `Integer`-only field starts with it on, and the backend warns `formula-fraction` when such a field holds one without it. The grammar lives in `frontend/src/hmi/utils/formula.ts`; the backend mirrors it only to flag syntax errors |
 | `$pageIsActive` | Boolean | `{ $pageIsActive: { page? } }` | `true` when the target page is active |
 | `$languages` | String[] | `{ $languages: {} }` | The project's language list |
 | `$user`, username | String | `{ $user: { field } }` `field: username` | The logged-in user's name |
@@ -229,7 +229,9 @@ disabled, and double-clicking a row is held to the same verdict; Enter in the
 search box takes the first result the field accepts. Every way of picking, a
 Repeat item row included, goes through one check in
 `VariableBindingPicker/index.tsx` (`isConfirmable`; `WidgetPropPicker` does the
-same). **Show all** still lists everything, to browse. A selection whose
+same). **Show all** lists everything to browse except disabled variables: no list
+shows those, since the pool serves them no value. A binding made before its
+variable was disabled opens marked ✗ with *Disabled in its datasource*. A selection whose
 datasource has not loaded yet has no verdict and stays confirmable. For a
 writing field the tree lists only a variable whose `writable` flag is `true` —
 one that states no access is read-only there, as the drawer and the backend
@@ -642,6 +644,8 @@ exports) is skipped, never guessed.
 | `literal-type` | error | A literal fits none of its field's types. A bare scalar fits when it matches *any* scalar type of a union (`["string", "integer", "float"]`); an array fits an `X[]` the field lists when every element is an X; a `$static` payload is held to the same rule. A mismatch in an array, a `$static`, a component instance's value, an action's field or a field whose first type is an array is this code; a bare scalar anywhere else is still rejected |
 | `literal-format` | warning | A string that only fits as a `Date`, `DateTime`, `Time` or `Duration` does not read as one: ISO 8601 (`2026-06-16`, `2026-06-16T14:30:00Z`, `14:30:00`, `PT1H30M`), or a number of seconds for a `Duration`. Empty is unset, not malformed |
 | `source-type` | error | A fixed-type source its field's type does not offer, or a stored `field` choice that yields another type (see [Sources](#sources)) |
+| `var-disabled` | warning | A `$var` or write target naming a variable its datasource holds, still present on the server, but has disabled — the registry leaves it out, so this replaces `var-unknown`. Typically a tag disabled after it was bound; enabling it in the datasource clears it |
+| `write-source` | error | A field with `write: true` holding anything but a `$var`, `$componentProp` or `$repeatItem`: a literal, a `$static`, a `$formula`, an `$if` and every other computed source leave the control no variable to write to. The editor offers a writing field only a variable binding, as it does a struct field, and refuses such a paste |
 | `var-index` | error | A bound `index` that names no element (see [Array fields](#array-fields)) |
 | `var-type` / `repeatitem-type` / `var-readonly` | error | A `$var` or `$repeatItem` whose variable does not fit the field, or is not writable where the field writes (see [Which variable fits a field](#which-variable-fits-a-field)) |
 | `componentprop-type` / `componentprop-unknown` | error / warning | See [Which variable fits a field](#which-variable-fits-a-field) |

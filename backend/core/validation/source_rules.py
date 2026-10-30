@@ -63,7 +63,8 @@ SOURCE_PRODUCES: dict[str, tuple[str, ...]] = {
     "$not": ("boolean",),
     "$and": ("boolean",),
     "$or": ("boolean",),
-    "$formula": ("float",),
+    # A fraction unless `round: true`.
+    "$formula": ("float", "integer"),
     # Whole numbers unless `integer: false`.
     "$random": ("integer", "float"),
     "$switch": ("any",),

@@ -346,7 +346,10 @@ node of the other root is an `overlay-wrong-root` error, and a menu item,
 `navigateToPage` or `format: 'page'` field naming a Dialogs-folder page is
 `page-not-navigable` (one naming no node of the `pages` root is `page-unknown`). An input
 parameter declared `format: 'page'` (the editor's **Page** type) gets the page picker in `openDialog`, and is
-what a `navigateToPage` inside the dialog may read.
+what a `navigateToPage` inside the dialog may read. A reusable component's
+`componentProperties` entry takes the same `format: 'page'`: the instance's
+property row is the page picker, its value is checked like any `format: 'page'`
+field, and a `navigateToPage` inside the component may read it.
 A node moves between the two roots unchanged — apart from its document, which
 moves to the other directory with it (see below).
 
@@ -428,7 +431,7 @@ nested inside other actions (`onSuccess` / `onFailed` / `onSettled`, `then` /
 | `openPageOverlay` | as `openDialog`, on a node of the `pages` root, without `componentProperties` |
 | `closePageOverlay` | `pageId` — the overlay to close; empty closes the top-most |
 | `navigateToPage` | `pageId` — a node of the `pages` root, or `{ "$componentProp": "<input>" }` naming an input parameter declared `format: "page"`; closes every overlay first |
-| `writeDataVariable` | `target`, `value` (a literal, a `$componentProp` or a `$repeatItem`), `onSuccess` / `onFailed` / `onSettled` |
+| `writeDataVariable` | `target`, `value` (a literal, or a property source such as `$componentProp`, `$repeatItem` or `$formula`, resolved when the action fires; a `$formula` into an integer tag must come out whole), `onSuccess` / `onFailed` / `onSettled` |
 | `toggleDataVariable` | `target`, `onSuccess` / `onFailed` / `onSettled` |
 | `editValue` | `target`, `title`, `unit`, `min`, `max`, `decimals`, `allowNegative`, `position` (`center` \| `bottom-right`), `onSuccess` / `onFailed` / `onSettled` |
 | `if` | `condition` (a Boolean property value), `then`, `else` |

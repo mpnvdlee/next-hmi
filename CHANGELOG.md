@@ -13,6 +13,10 @@ heading.
 
 ### Added
 
+- **Show all and value types in the property-source drawer.** Each source card
+  now names the type it produces (`Any`, `Boolean`, `Float, Integer`, …). A
+  **Show all** checkbox lists the sources the field does not take as well,
+  greyed out and marked *Not available on this field*; they cannot be picked.
 - **A Linux zip and an offline Docker installer in every release.** Next to the
   Windows and macOS zips, a release now carries `nexthmi-community-linux-x64-<version>.zip`
   and, per architecture, `nexthmi-community-docker-linux-<arch>-<version>.zip`: the image
@@ -193,6 +197,12 @@ heading.
   warnings pill flags an input that is not writable or not of a type the
   action writes.
 
+- **A component input can hold a page.** A component's properties take the
+  **Page** type that dialog input parameters already had: the instance picks
+  the page from a page picker, and a **Navigate To Page** inside the
+  component goes to it. Before, saving such a component was refused, so a
+  link card had to be handed a whole action list instead.
+
 ### Changed
 
 - **Every download names its edition.** The public zips are now
@@ -294,7 +304,69 @@ heading.
   variable and type named; pick a supported type for that variable in the
   test-server editor, which marks the old one unsupported.
 
+- **A disabled tag can no longer be bound.** **Show all** in the variable
+  picker listed disabled tags and let one be confirmed. The binding then showed
+  a value in the editor while the warnings pill called it *unknown variable*.
+  A disabled tag is now marked ✗ with *Disabled in its datasource*, and
+  Confirm, double-click and Enter all refuse it.
+
+- **A Gauge and a Trend take an Integer tag.** Their **Value** took only a
+  `Float` variable, so a PLC counter (an S7 `Int` or `DInt`, a CODESYS `INT`)
+  needed a formula to reach them. They now take `Float` or `Integer`, as the
+  Value Display, Progress Bar and Ring Gauge already did.
+
+- **A field that writes a value back takes only a variable.** A writing field
+  (`write: true`, such as a Button Row's value) offered every source its type
+  allowed, so a formula, a condition or a fixed value could be put where the
+  control writes. The control then had nothing to write to. Such a field now
+  offers only a variable binding, a paste of anything else is refused, and the
+  warnings pill reports `write-source` for one that already holds something
+  else.
+
+- **A formula can fill a whole-number field.** The Formula source was offered
+  only on `Float` fields. It now has a **Round to a whole number** switch that
+  rounds the result to the nearest integer. A formula on an `Integer` field
+  starts with it on, and the warnings pill reports `formula-fraction` for a
+  formula there that is not rounded.
+
 ### Fixed
+
+- **An input inside a component's actions is not flagged.** The warnings
+  pill said a `$componentProp` nested in another source "renders once and
+  then stops updating" inside actions too, such as an Edit Value title built
+  from the input, although an action reads its fields when it fires. Action
+  lists — Actions, On Submit and other events, their If branches and On
+  Success / On Failed lists — are no longer flagged; a rendered property
+  still is.
+
+- **An icon path taken from the Repeat item is not an unknown asset.** A
+  fixed icon or image whose path is a Repeat item member, as in
+  `{ "$static": { "type": "custom", "path": { "$repeatItem": { "member": "icon" } } } }`,
+  was flagged as an unknown asset although each copy fills it in from its
+  item. It no longer is over a list; over a tag array, where it names no
+  asset, the pill now says to set the field's own source to Repeat Item.
+
+- **Alarms restored after a restart follow the tags.** An alarm active when
+  the project stopped came back active on start even when its tag no longer
+  held the condition: a static datasource's tags start at their defaults
+  without a change, so seven open-door alarms stayed lit until a door was
+  toggled. Every restored alarm is now checked against the tag values as soon
+  as they are known, and one whose condition has gone clears into the history.
+  The same check runs when a static datasource is saved while the project
+  runs, since a new or reshaped variable restarts at its default too.
+
+- **HMI Loaded sees the tag values.** `onHmiLoaded` ran as soon as the
+  configuration had loaded, before any tag value had arrived, so a first-start
+  guard such as an **If** on `Machine/Initialized` read "no value yet" and
+  took the wrong branch. It now waits until the first page's values and those
+  of the variables its own actions read are in, up to 3 seconds; the first
+  **onPageLoaded** follows it as before.
+
+- **A formula can be written to an Integer tag.** A Write Data Variable
+  whose value is a `$formula` was flagged by the warnings pill as not fitting
+  an Integer tag, although the write itself goes through. It is no longer
+  flagged; a whole result is written, and a result with decimals is refused
+  with `invalid_value`, as any other number with decimals is.
 
 - **The alarm guide says what Value Range does.** It said the trigger fires
   outside **Min** / **Max**; it fires while the value lies between them, both
@@ -387,6 +459,11 @@ heading.
   (`9999-12-31T23:59:59-01:00`) has no UTC form, which OPC-UA requires. It is
   now refused as an invalid value, in the runtime as well as on the server, and
   a recipe download containing one carries on with the rest.
+
+- **A bound tag that was disabled afterwards is reported as disabled.** The
+  warnings pill said *unknown variable* for it. It now reports a
+  `var-disabled` warning, *disabled in its datasource — enable it there*. A
+  tag that is also gone from the server is still reported as unknown.
 
 ## [1.0.1] - 2026-10-24
 

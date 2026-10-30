@@ -39,6 +39,26 @@ describe('FormulaEditor', () => {
     expect(screen.getAllByText('{2}')).toHaveLength(2);
   });
 
+  it('switches rounding and keeps it when the formula changes', () => {
+    const onChange = vi.fn();
+    render(
+      <Harness
+        initial={{ $formula: { expression: '{1} / 2', wildcards: { 1: 5 } } }}
+        onChange={onChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      $formula: { expression: '{1} / 2', wildcards: { 1: 5 }, round: true },
+    });
+    fireEvent.change(screen.getByPlaceholderText('({1} - 32) / 1.8'), {
+      target: { value: '{1} / 3' },
+    });
+    expect(onChange).toHaveBeenLastCalledWith({
+      $formula: { expression: '{1} / 3', wildcards: { 1: 5 }, round: true },
+    });
+  });
+
   it('flags a formula that does not parse', () => {
     render(
       <Harness initial={{ $formula: { expression: '1 +', wildcards: {} } }} onChange={vi.fn()} />,

@@ -741,7 +741,7 @@ function SettingsPage() {
   );
 
   return (
-    <div className="projects-page">
+    <div className="projects-page mgr-settings">
       <div className="projects-page__inner">
         <InsecureConnectionNotice />
         <SystemInfoSection info={systemInfo} />

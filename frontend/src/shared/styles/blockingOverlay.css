@@ -27,3 +27,31 @@
 .blocking-overlay__dialog {
   max-width: min(32rem, 100%);
 }
+
+/* Connection lost: the page stays in view, blurred, so it reads as "paused"
+ * rather than "gone" — it returns as-is once the socket reconnects. */
+.blocking-overlay--blur {
+  backdrop-filter: blur(var(--cfg-space-1));
+}
+
+/* Runtime form: just the spinner and the words, white on the runtime's darker
+ * scrim, so they read over any page colour and any theme accent. */
+.blocking-overlay--plain {
+  background: var(--hmi-overlay-bg);
+  flex-direction: column;
+  gap: var(--cfg-space-3);
+  color: var(--cfg-white);
+  font-size: var(--cfg-text-xl);
+  font-weight: 600;
+}
+
+.blocking-overlay--plain .app-spinner {
+  --_accent: var(--cfg-white);
+}
+
+/* Spinner beside the message, so a paused page reads as working, not frozen. */
+.blocking-overlay__busy {
+  display: flex;
+  align-items: center;
+  gap: var(--cfg-space-3);
+}

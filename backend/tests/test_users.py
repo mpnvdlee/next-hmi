@@ -790,6 +790,38 @@ def test_request_identity_fallback_when_user_not_found(ws_manager, users_tmp):
     assert resp["username"] == "guest"
 
 
+
+def test_login_session_resumes_on_a_new_socket_until_logout(ws_manager):
+    """A reconnect or reload opens a new socket; the login token carries the user over."""
+    first = FakeWebSocket()
+    ws_manager._connections["c1"] = first
+    ws_manager._client_users["c1"] = {}
+    asyncio.run(ws_manager._handle_login("c1", {
+        "type": "login", "scope": "runtime:a", "username": "operator1", "password": "op1pass",
+    }))
+    token = first.messages[-1]["sessionToken"]
+    asyncio.run(ws_manager.disconnect("c1"))
+
+    def request_identity(client_id: str, session_token: str) -> dict:
+        ws = FakeWebSocket()
+        ws_manager._connections[client_id] = ws
+        ws_manager._client_users[client_id] = {}
+        asyncio.run(ws_manager.handle_message(client_id, json.dumps(
+            {"type": "request_identity", "scope": "runtime:b", "sessionToken": session_token}
+        )))
+        return ws.messages[-1]
+
+    resumed = request_identity("c2", token)
+    assert resumed["username"] == "operator1"
+    assert "operator" in resumed["groups"]
+    assert resumed["sessionToken"] == token
+
+    asyncio.run(ws_manager._handle_logout("c2", {"type": "logout", "scope": "runtime:b"}))
+    after_logout = request_identity("c3", token)
+    assert after_logout["username"] == "guest"
+    assert "sessionToken" not in after_logout
+
+
 # ─── requestId echoing for action-result correlation ───────────────────────
 
 
