@@ -674,7 +674,7 @@ def test_a_repeat_item_target_is_judged_on_the_element(repeat_ctx):
     assert _codes(_action(levels, toggle)) == ["toggle-target-type"]
 
 
-# ── review follow-ups ────────────────────────────────────────────────────────
+# ── edge cases ───────────────────────────────────────────────────────────────
 
 
 @pytest.mark.parametrize(

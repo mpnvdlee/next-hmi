@@ -1,4 +1,4 @@
-"""Regression guard for the LGPL carve-out in ``build/nexthmi.spec`` (item 1a/16).
+"""Regression guard for the LGPL carve-out in ``build/nexthmi.spec``.
 
 asyncua (LGPL-3.0) and zeroconf (LGPL-2.1) must ship as *loose, replaceable*
 package directories under ``lgpl/`` — never sealed inside the frozen PYZ — or the

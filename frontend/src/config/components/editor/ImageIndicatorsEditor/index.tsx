@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, type CSSProperties } from 'react';
 import { ClearIcon } from '@config/components/ui/actionIcons';
 import AddButton from '@config/components/ui/AddButton';
 import type { ImageIndicator } from '@shared/types/config';
@@ -122,72 +122,78 @@ export default function ImageIndicatorsEditor({ value, src, onChange }: Props) {
           {/* Body — two columns */}
           <div className="cfg-ind-modal-body">
             {/* Left: image canvas */}
-            <div
-              ref={containerRef}
-              className="cfg-ind-image-area"
-              style={imgSize ? { aspectRatio: `${imgSize.w} / ${imgSize.h}` } : {}}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-            >
-              {imageUrl ? (
-                <img
-                  src={imageUrl}
-                  alt=""
-                  draggable={false}
-                  onLoad={(e) => {
-                    const img = e.currentTarget;
-                    setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
-                  }}
-                />
-              ) : (
-                <span className="cfg-ind-no-image">Image not set — cannot preview</span>
-              )}
+            <div className="cfg-ind-image-stage">
+              <div
+                ref={containerRef}
+                className={'cfg-ind-image-area' + (imgSize ? ' cfg-ind-image-area--sized' : '')}
+                style={
+                  imgSize
+                    ? ({ '--cfg-ind-aspect': imgSize.w / imgSize.h } as CSSProperties)
+                    : undefined
+                }
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+              >
+                {imageUrl ? (
+                  <img
+                    src={imageUrl}
+                    alt=""
+                    draggable={false}
+                    onLoad={(e) => {
+                      const img = e.currentTarget;
+                      setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
+                    }}
+                  />
+                ) : (
+                  <span className="cfg-ind-no-image">Image not set — cannot preview</span>
+                )}
 
-              {local.map((ind) => {
-                const pillX = ind.rx ?? ind.x;
-                const pillY = ind.ry ?? ind.y;
-                const circDragging = dragging?.id === ind.id && dragging.part === 'circle';
-                const pillDragging = dragging?.id === ind.id && dragging.part === 'pill';
-                const isSelected = ind.id === selectedId;
-                return (
-                  <div key={ind.id}>
-                    {/* Black circle */}
-                    <div
-                      className={
-                        'cfg-ind-circle' +
-                        (circDragging ? ' cfg-ind-circle--dragging' : '') +
-                        (isSelected ? ' cfg-ind-circle--selected' : '')
-                      }
-                      style={{ left: `${ind.x * 100}%`, top: `${ind.y * 100}%` }}
-                      onPointerDown={(e) => {
-                        setSelectedId(ind.id);
-                        onPointerDown(e, ind.id, 'circle');
-                      }}
-                      title={`Circle: ${ind.label || '(no label)'}`}
-                    >
-                      {ind.label || '?'}
+                {local.map((ind) => {
+                  const pillX = ind.rx ?? ind.x;
+                  const pillY = ind.ry ?? ind.y;
+                  const circDragging = dragging?.id === ind.id && dragging.part === 'circle';
+                  const pillDragging = dragging?.id === ind.id && dragging.part === 'pill';
+                  const isSelected = ind.id === selectedId;
+                  return (
+                    <div key={ind.id}>
+                      {/* Black circle */}
+                      <div
+                        className={
+                          'cfg-ind-circle' +
+                          (circDragging ? ' cfg-ind-circle--dragging' : '') +
+                          (isSelected ? ' cfg-ind-circle--selected' : '')
+                        }
+                        style={{ left: `${ind.x * 100}%`, top: `${ind.y * 100}%` }}
+                        onPointerDown={(e) => {
+                          setSelectedId(ind.id);
+                          onPointerDown(e, ind.id, 'circle');
+                        }}
+                        title={`Circle: ${ind.label || '(no label)'}`}
+                      >
+                        {ind.label || '?'}
+                      </div>
+                      {/* Red dashed circle */}
+                      <div
+                        className={
+                          'cfg-ind-pill' +
+                          (pillDragging ? ' cfg-ind-pill--dragging' : '') +
+                          (isSelected ? ' cfg-ind-pill--selected' : '')
+                        }
+                        style={{
+                          left: `${pillX * 100}%`,
+                          top: `${pillY * 100}%`,
+                          width: `${ind.rSize ?? 10}%`,
+                        }}
+                        onPointerDown={(e) => {
+                          setSelectedId(ind.id);
+                          onPointerDown(e, ind.id, 'pill');
+                        }}
+                        title={`Red circle: ${ind.label || '(no label)'}`}
+                      />
                     </div>
-                    {/* Red dashed circle */}
-                    <div
-                      className={
-                        'cfg-ind-pill' +
-                        (pillDragging ? ' cfg-ind-pill--dragging' : '') +
-                        (isSelected ? ' cfg-ind-pill--selected' : '')
-                      }
-                      style={{
-                        left: `${pillX * 100}%`,
-                        top: `${pillY * 100}%`,
-                        width: `${ind.rSize ?? 10}%`,
-                      }}
-                      onPointerDown={(e) => {
-                        setSelectedId(ind.id);
-                        onPointerDown(e, ind.id, 'pill');
-                      }}
-                      title={`Red circle: ${ind.label || '(no label)'}`}
-                    />
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
 
             {/* Right: indicator list */}

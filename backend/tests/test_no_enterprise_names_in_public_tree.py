@@ -1,4 +1,4 @@
-"""No enterprise *feature* is named in the public source or docs tree (item 34).
+"""No enterprise *feature* is named in the public source or docs tree.
 
 The artifact/import checks elsewhere prove the public *build* carries no
 enterprise code:
@@ -57,8 +57,7 @@ ENTERPRISE_FEATURE_NAMES: dict[str, str] = {
 }
 
 # Reviewed exceptions: lines that name an enterprise thing *only to mark it
-# excluded from the public build/repo*, which is compliant with item 34 (they
-# exclude, they do not describe). Matched as an exact substring of the line.
+# excluded from the public build/repo* (they exclude, they do not describe). Matched as an exact substring of the line.
 # Each entry is a (repo-relative path, substring) pair.
 ALLOWED: set[tuple[str, str]] = {
     (

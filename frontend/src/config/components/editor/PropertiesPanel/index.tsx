@@ -1,14 +1,14 @@
 /**
  * PropertiesPanel — right panel of /editor.
  *
- * Auto-generates a form from the selected component's schema (Phase 12.1)
- * and layout sub-panel (Phase 12.2).
+ * Auto-generates a form from the selected component's schema, plus the layout
+ * sub-panel.
  *
  * All field changes update configStore immediately so the live preview
- * reflects them at once. Backend persist is debounced 300 ms (Phase 12.3).
+ * reflects them at once. Backend persist is debounced 300 ms.
  *
  * The "Change…" button for variable/struct fields opens the
- * VariableBindingPicker overlay (Phase 13).
+ * VariableBindingPicker overlay.
  *
  * Style: zero style={} props. All classes are cfg-prop-* or editor-props-*.
  */
@@ -76,6 +76,7 @@ import { isBuiltinIconId } from '@shared/utils/phosphorIcons';
 import { getEdition } from '@shared/utils/runtimeBase';
 import WidgetIcon from '../../ui/WidgetIcon';
 import ActionsInput from './ActionsInput';
+import VariableTriggersInput from './VariableTriggersInput';
 import PanelDiagnosticsBanner from './PanelDiagnosticsBanner';
 import MultiComponentPanel from './MultiComponentPanel';
 import { classifySelection } from '@config/store/domains/selectionScope';
@@ -1281,7 +1282,6 @@ function SettingsPanel() {
                 if (Number.isFinite(next)) commit(next);
               }}
               className="cfg-settings-scale__slider"
-              aria-label="HMI scale"
             />
             <input
               type="number"
@@ -1294,7 +1294,6 @@ function SettingsPanel() {
                 if (Number.isFinite(next)) commit(next);
               }}
               className="cfg-prop-input cfg-settings-scale__input"
-              aria-label="HMI scale value"
             />
           </div>
         </PropRow>
@@ -1361,7 +1360,9 @@ function SettingsPanel() {
 
 // ── GlobalEventsPanel ─────────────────────────────────────────────────────────
 
-const GLOBAL_EVENT_FIELDS: { eventKey: keyof GlobalEventsConfig; label: string }[] = [
+type GlobalActionEvent = Exclude<keyof GlobalEventsConfig, 'onVariableChanged'>;
+
+const GLOBAL_EVENT_FIELDS: { eventKey: GlobalActionEvent; label: string }[] = [
   { eventKey: 'onUserLoggedIn', label: 'User Logged In' },
   { eventKey: 'onUserLoggedOut', label: 'User Logged Out' },
   { eventKey: 'onPageLoaded', label: 'Page Loaded' },
@@ -1374,7 +1375,7 @@ function GlobalEventsPanel() {
   const globalEvents = useConfigStore((s) => s.globalEvents);
   const updateGlobalEvents = useConfigStore((s) => s.updateGlobalEvents);
 
-  function handleChange(eventKey: keyof GlobalEventsConfig, value: unknown) {
+  function handleChange(eventKey: GlobalActionEvent, value: unknown) {
     const actionsConfig = value as ActionsConfig | undefined;
     updateGlobalEvents({ ...globalEvents, [eventKey]: actionsConfig?.[eventKey] });
   }
@@ -1402,6 +1403,10 @@ function GlobalEventsPanel() {
             />
           </div>
         ))}
+        <VariableTriggersInput
+          value={globalEvents.onVariableChanged}
+          onChange={(onVariableChanged) => updateGlobalEvents({ ...globalEvents, onVariableChanged })}
+        />
       </div>
     </PanelScopeContext.Provider>
   );

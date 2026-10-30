@@ -107,8 +107,8 @@ describe('VariableRowCells min/max range editing', () => {
   }
 
   it('commits a typed bound on blur, patching the variable at its own path', () => {
-    const { getByLabelText, onUpdateVar } = renderRow(numericEntry);
-    const min = getByLabelText('Minimum value');
+    const { getByPlaceholderText, onUpdateVar } = renderRow(numericEntry);
+    const min = getByPlaceholderText('min');
 
     fireEvent.change(min, { target: { value: '10' } });
     fireEvent.blur(min);
@@ -117,8 +117,8 @@ describe('VariableRowCells min/max range editing', () => {
   });
 
   it('clears a bound when the field is emptied', () => {
-    const { getByLabelText, onUpdateVar } = renderRow({ ...numericEntry, max: 100 });
-    const max = getByLabelText('Maximum value');
+    const { getByPlaceholderText, onUpdateVar } = renderRow({ ...numericEntry, max: 100 });
+    const max = getByPlaceholderText('max');
     expect((max as HTMLInputElement).value).toBe('100');
 
     fireEvent.change(max, { target: { value: '' } });
@@ -128,8 +128,8 @@ describe('VariableRowCells min/max range editing', () => {
   });
 
   it('refuses an inverted range instead of persisting one the write path cannot enforce', () => {
-    const { getByLabelText, onUpdateVar } = renderRow({ ...numericEntry, max: 50 });
-    const min = getByLabelText('Minimum value');
+    const { getByPlaceholderText, onUpdateVar } = renderRow({ ...numericEntry, max: 50 });
+    const min = getByPlaceholderText('min');
 
     fireEvent.change(min, { target: { value: '80' } });
     expect(min).toHaveAttribute('aria-invalid', 'true');
@@ -141,8 +141,8 @@ describe('VariableRowCells min/max range editing', () => {
   });
 
   it('refuses text that is not a number', () => {
-    const { getByLabelText, onUpdateVar } = renderRow(numericEntry);
-    const max = getByLabelText('Maximum value');
+    const { getByPlaceholderText, onUpdateVar } = renderRow(numericEntry);
+    const max = getByPlaceholderText('max');
 
     fireEvent.change(max, { target: { value: 'abc' } });
     fireEvent.blur(max);
@@ -152,8 +152,8 @@ describe('VariableRowCells min/max range editing', () => {
   });
 
   it('reverts the draft on Escape', () => {
-    const { getByLabelText, onUpdateVar } = renderRow({ ...numericEntry, min: 5 });
-    const min = getByLabelText('Minimum value');
+    const { getByPlaceholderText, onUpdateVar } = renderRow({ ...numericEntry, min: 5 });
+    const min = getByPlaceholderText('min');
 
     fireEvent.change(min, { target: { value: '7' } });
     fireEvent.keyDown(min, { key: 'Escape' });
@@ -164,17 +164,17 @@ describe('VariableRowCells min/max range editing', () => {
   });
 
   it('offers no range editor on a non-numeric variable', () => {
-    const { queryByLabelText } = renderRow({ ...numericEntry, data_type: 'String' });
-    expect(queryByLabelText('Minimum value')).toBeNull();
-    expect(queryByLabelText('Maximum value')).toBeNull();
+    const { queryByPlaceholderText } = renderRow({ ...numericEntry, data_type: 'String' });
+    expect(queryByPlaceholderText('min')).toBeNull();
+    expect(queryByPlaceholderText('max')).toBeNull();
   });
 
   it('shows a stored bound read-only on a cloned array-struct element', () => {
-    const { queryByLabelText, getByText } = renderRow(
+    const { queryByPlaceholderText, getByText } = renderRow(
       { ...numericEntry, min: 0, max: 3000 },
       { rangeEditable: false },
     );
-    expect(queryByLabelText('Minimum value')).toBeNull();
+    expect(queryByPlaceholderText('min')).toBeNull();
     expect(getByText('3000')).toBeTruthy();
   });
 });

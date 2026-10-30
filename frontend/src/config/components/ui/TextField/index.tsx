@@ -22,10 +22,9 @@ interface Props {
 /**
  * The plain free-text property control: `.cfg-prop-input` over
  * `useCommittableDraft`, so every panel field shares one commit story — local
- * draft while focused, commit on blur/Enter, revert on Escape.
- *
- * Property panels used to write to the store on every keystroke, which put a
- * half-typed value into the live preview and one undo entry per character.
+ * draft while focused, commit on blur/Enter, revert on Escape. Writing per
+ * keystroke would put a half-typed value into the live preview and one undo
+ * entry per character.
  */
 export default function TextField({
   value,

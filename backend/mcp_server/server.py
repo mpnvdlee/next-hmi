@@ -190,9 +190,8 @@ class _McpSlashMiddleware:
 def build_mcp_asgi_app() -> ASGIApp:
     """The ``/mcp`` ASGI app: auth gate, then agent-label capture, then MCPServer.
 
-    ``McpAuthMiddleware`` (item 12) wraps everything else so an
-    unauthenticated request never reaches the label middleware or MCPServer's
-    own session logic.
+    ``McpAuthMiddleware`` wraps everything else so an unauthenticated request
+    never reaches the label middleware or MCPServer's own session logic.
     """
     from . import auth as mcp_auth
 

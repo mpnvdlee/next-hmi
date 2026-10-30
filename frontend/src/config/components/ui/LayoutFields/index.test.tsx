@@ -98,7 +98,7 @@ describe('LayoutFields size mode', () => {
   it('disables the other axis once a literal mode makes it the effective Hug', () => {
     setup({ widthMode: 'fixed', width: '200px' }); // heightMode left unset
 
-    expect(screen.getByLabelText('Height (set by Hug)')).toBeDisabled();
+    expect(screen.getByDisplayValue('—')).toBeDisabled();
   });
 
   // The mirror case: with neither axis carrying a literal mode, a bare stored
@@ -119,14 +119,14 @@ describe('LayoutFields size mode', () => {
     // dash into the query — see the dedicated hedge tests above for the
     // genuinely-unset case.
     setup({ widthMode: 'fill', grow: 2, heightMode: 'fixed', height: '50px' });
-    expect(screen.getByLabelText('Width (set by Fill)')).toBeDisabled();
+    expect(screen.getByDisplayValue('—')).toBeDisabled();
     expect(screen.getByText('Fill weight')).toBeInTheDocument();
     expect(screen.getByDisplayValue(2)).toBeEnabled();
 
     cleanup();
     setup({ widthMode: 'hug', heightMode: 'fixed', height: '50px' });
     expect(screen.getByText('Width')).toBeInTheDocument();
-    expect(screen.getByLabelText('Width (set by Hug)')).toBeDisabled();
+    expect(screen.getByDisplayValue('—')).toBeDisabled();
   });
 
   // Like the length row, the Fill weight is a plain `renderRow` field once
@@ -143,7 +143,9 @@ describe('LayoutFields size mode', () => {
 
     const label = screen.getByText('Fill weight', { selector: '.cfg-field-group__label' });
     const row = label.closest('.cfg-field-group') as HTMLElement;
-    expect(within(row).getByLabelText('Static Value')).toBeInTheDocument();
+    expect(
+      row.querySelector<HTMLElement>('.cfg-property-source-badge[title="Static Value"]')!,
+    ).toBeInTheDocument();
   });
 
   // Either axis on Fill is enough to surface the weight, since the panel has
@@ -151,15 +153,15 @@ describe('LayoutFields size mode', () => {
   // axis itself gets the derived dash either way — Hug and Fill differ only in
   // the mode the dash names. Width pinned to Fixed so its own row stays out of
   // the way of what this test is checking.
-  it('names the mode that derived an axis length, Fill as well as Hug', () => {
+  it('shows the derived dash under Fill as well as Hug', () => {
     setup({ widthMode: 'fixed', heightMode: 'fill', height: '80px' });
-    expect(screen.getByLabelText('Height (set by Fill)')).toBeDisabled();
+    expect(screen.getByDisplayValue('—')).toBeDisabled();
     expect(screen.queryByDisplayValue(80)).not.toBeInTheDocument();
     expect(screen.getByText('Fill weight')).toBeInTheDocument();
 
     cleanup();
     setup({ widthMode: 'fixed', heightMode: 'hug', height: '80px' });
-    expect(screen.getByLabelText('Height (set by Hug)')).toBeDisabled();
+    expect(screen.getByDisplayValue('—')).toBeDisabled();
   });
 
   // Unlike the panel's old main/cross split, an *unresolved* mode — including
@@ -330,7 +332,7 @@ describe('LayoutFields size mode', () => {
   it('still offers the grow weight for a genuinely unset mode, even once its length derives to Hug', () => {
     setup({ width: '150px', grow: 2, heightMode: 'fixed', height: '50px' });
 
-    expect(screen.getByLabelText('Width (set by Hug)')).toBeDisabled();
+    expect(screen.getByDisplayValue('—')).toBeDisabled();
     expect(screen.getByDisplayValue(2)).toBeEnabled();
   });
 

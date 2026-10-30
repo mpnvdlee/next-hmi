@@ -17,16 +17,9 @@ export default function SessionExpiredOverlay() {
   const expired = useSessionStore((s) => s.managerSessionExpired);
   if (!expired) return null;
   return (
-    <div
-      className="blocking-overlay"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="session-expired-title"
-    >
+    <div className="blocking-overlay" role="alertdialog" aria-modal="true">
       <div className="name-modal blocking-overlay__dialog">
-        <h2 className="name-modal__title" id="session-expired-title">
-          Signed out
-        </h2>
+        <h2 className="name-modal__title">Signed out</h2>
         <div className="name-modal__message">
           This device&rsquo;s manager session is no longer valid, so the project cannot be loaded.
           Sign in with the device-admin password to continue.

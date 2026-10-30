@@ -830,9 +830,8 @@ async def put_config(body: dict) -> Any:
         payload["project"] = existing_project_block
 
     # Validate the widget trees this document carries (shell component arrays,
-    # globalEvents, shell region bindings) before persisting — the per-page
-    # endpoint validates page sections, but this surface was previously written
-    # unchecked. Resolve page cross-references against the incoming body so a
+    # globalEvents, shell region bindings) before persisting; the per-page
+    # endpoint validates page sections. Resolve page cross-references against the incoming body so a
     # page created — or moved between the two page-tree roots — in the same
     # save validates against its new assignment, not the on-disk index this
     # request is about to replace.

@@ -1,4 +1,6 @@
 /* @jsxRuntime classic */
+import { usePress } from '../../usePress';
+
 export const schema = {
   label: {
     type: 'string' as const,
@@ -102,10 +104,20 @@ export const schema = {
     description: 'Optional boolean written true on press.',
     group: 'Data',
   },
+  momentary: {
+    type: 'boolean' as const,
+    format: 'onoff' as const,
+    label: 'Momentary',
+    description: 'Writes false to Variable on release, so it is true only while held.',
+    defaultValue: false,
+    group: 'Data',
+  },
   actions: { type: 'actions' as const, label: 'Actions' },
+  onRelease: { type: 'actions' as const, label: 'On Released', event: 'onRelease' },
 };
 
-export const description = 'Runs actions and can write true to a bound boolean on press.';
+export const description =
+  'Runs actions on press and on release, and can write a bound boolean true on press (and false on release when momentary).';
 export const category = 'Content & controls';
 export const icon = { type: 'builtin', name: 'cursor-click' } as const;
 
@@ -148,20 +160,26 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   const iconIsCustomAsset = iconName ? isCustomIconAssetPath(iconName) : false;
   const customSvgContent = useInlineSvg(iconIsCustomAsset ? iconName : null);
 
-  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    // Execute configured actions
-    const actions = properties?.actions as ActionsConfig | undefined;
-    executeWidgetActions(actions?.onPress, { scope, evalCtx, anchorEl: e.currentTarget });
-
-    writeVariable(true);
-  };
+  const momentary = usePropBoolean(properties, 'momentary', false);
+  const pressHandlers = usePress(
+    (el) => {
+      const actions = properties?.actions as ActionsConfig | undefined;
+      executeWidgetActions(actions?.onPress, { scope, evalCtx, anchorEl: el });
+      writeVariable(true);
+    },
+    (el) => {
+      const actions = properties?.onRelease as ActionsConfig | undefined;
+      executeWidgetActions(actions?.onRelease, { scope, evalCtx, anchorEl: el });
+      if (momentary) writeVariable(false);
+    },
+  );
 
   return (
     <div className="hmi-component hmi-button" style={style}>
       <button
         className={`hmi-button__btn${isOutline ? ' hmi-button__btn--outline' : ''}${iconTop ? ' hmi-button__btn--icon-top' : ''}${iconOnly ? ' hmi-button__btn--icon-only' : ''}${alignStart ? ' hmi-button__btn--start' : ''}`}
         style={colorStyle}
-        onClick={handleClick}
+        {...pressHandlers}
       >
         {iconName && (
           <span className="hmi-button__icon" aria-hidden="true">

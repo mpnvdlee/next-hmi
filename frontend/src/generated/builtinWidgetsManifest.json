@@ -82,7 +82,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "2edc7e5cdab67261",
+    "buildTs": "5e46acc42abfd10a",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -128,7 +128,13 @@
       "variable": {
         "type": "boolean"
       },
+      "momentary": {
+        "type": "boolean"
+      },
       "actions": {
+        "type": "actions"
+      },
+      "onRelease": {
         "type": "actions"
       }
     },
@@ -369,7 +375,7 @@
     "hasFonts": false,
     "usesRecharts": true,
     "buildOk": true,
-    "buildTs": "568e8db83dda3a5a",
+    "buildTs": "21b287560789008f",
     "displayName": "Trend Chart",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -399,55 +405,6 @@
       },
       "seriesColors": {
         "type": "string"
-      }
-    },
-    "schemaError": null
-  },
-  {
-    "key": "Content/UserBadge",
-    "name": "UserBadge",
-    "group": "Content",
-    "origin": "builtin",
-    "hasStyle": true,
-    "hasFonts": false,
-    "usesRecharts": false,
-    "buildOk": true,
-    "buildTs": "9bd731bf496e06a6",
-    "displayName": "User Badge",
-    "hostsChildren": null,
-    "flowsChildren": null,
-    "repeatsChildren": null,
-    "category": "Content & controls",
-    "schema": {
-      "usernameText": {
-        "type": "string"
-      },
-      "groupsText": {
-        "type": "string"
-      },
-      "signInLabel": {
-        "type": "string"
-      },
-      "showGroups": {
-        "type": "boolean"
-      },
-      "signInIcon": {
-        "type": "icon"
-      },
-      "signOutIcon": {
-        "type": "icon"
-      },
-      "radius": {
-        "type": "string"
-      },
-      "actions": {
-        "type": "actions"
-      },
-      "onSignIn": {
-        "type": "actions"
-      },
-      "onSignOut": {
-        "type": "actions"
       }
     },
     "schemaError": null
@@ -789,7 +746,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "bbaab2768bcbb094",
+    "buildTs": "f02a298c1cb874e5",
     "displayName": "Progress Bar",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1004,7 +961,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "afe6a4fe530523c3",
+    "buildTs": "0506222783f0abc4",
     "displayName": "Button Row",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1050,7 +1007,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "e13434cb953a0f25",
+    "buildTs": "ba035769cbc00049",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1147,7 +1104,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "c47a67c5bf243cf8",
+    "buildTs": "66595ccd0488d2fe",
     "displayName": "Numeric Stepper",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1199,7 +1156,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "d97df9e1f68cf161",
+    "buildTs": "df5b803a7e1b208a",
     "displayName": "String Input",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1262,6 +1219,80 @@
     "schemaError": null
   },
   {
+    "key": "Layout/Badge",
+    "name": "Badge",
+    "group": "Layout",
+    "origin": "builtin",
+    "hasStyle": true,
+    "hasFonts": false,
+    "usesRecharts": false,
+    "buildOk": true,
+    "buildTs": "97eb86a077b4bf90",
+    "displayName": null,
+    "hostsChildren": true,
+    "flowsChildren": null,
+    "repeatsChildren": null,
+    "category": "Layout & structure",
+    "schema": {
+      "badge": {
+        "type": [
+          "string",
+          "integer"
+        ]
+      },
+      "color": {
+        "type": "color"
+      },
+      "offset": {
+        "type": "integer"
+      },
+      "size": {
+        "type": "integer"
+      }
+    },
+    "schemaError": null
+  },
+  {
+    "key": "Layout/ButtonContainer",
+    "name": "ButtonContainer",
+    "group": "Layout",
+    "origin": "builtin",
+    "hasStyle": true,
+    "hasFonts": false,
+    "usesRecharts": false,
+    "buildOk": true,
+    "buildTs": "e8636cd2e5923563",
+    "displayName": "Button Container",
+    "hostsChildren": true,
+    "flowsChildren": true,
+    "repeatsChildren": null,
+    "category": "Layout & structure",
+    "schema": {
+      "title": {
+        "type": "string"
+      },
+      "showWhenEmpty": {
+        "type": "boolean"
+      },
+      "overflow": {
+        "type": "string"
+      },
+      "background": {
+        "type": "color"
+      },
+      "border": {
+        "type": "string"
+      },
+      "actions": {
+        "type": "actions"
+      },
+      "onRelease": {
+        "type": "actions"
+      }
+    },
+    "schemaError": null
+  },
+  {
     "key": "Layout/ComponentSlot",
     "name": "ComponentSlot",
     "group": "Layout",
@@ -1292,7 +1323,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "a1bbdb23dff401c6",
+    "buildTs": "6b9d05afa9e78366",
     "displayName": null,
     "hostsChildren": true,
     "flowsChildren": true,
@@ -1313,9 +1344,6 @@
       },
       "border": {
         "type": "string"
-      },
-      "actions": {
-        "type": "actions"
       }
     },
     "schemaError": null
@@ -1351,7 +1379,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "ec118521a94b7a2c",
+    "buildTs": "28c9cd4d847073cb",
     "displayName": "Image Container",
     "hostsChildren": true,
     "flowsChildren": null,
@@ -1478,7 +1506,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "433258f13a799856",
+    "buildTs": "392547aa3b97b640",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1562,7 +1590,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "55228dc1142ffa8e",
+    "buildTs": "4bf952a244745d03",
     "displayName": "Navigation Menu",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1614,7 +1642,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "848afa85bdb44835",
+    "buildTs": "ad0d94e92d8c11e7",
     "displayName": "Page Navigator",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1654,7 +1682,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "53d60005f90d153b",
+    "buildTs": "57c75e7045239a0f",
     "displayName": "Tab Bar",
     "hostsChildren": null,
     "flowsChildren": null,

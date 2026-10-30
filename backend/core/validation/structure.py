@@ -2083,6 +2083,7 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
         "onSettled": "actions",
     },
     "acknowledgeAllAlarms": {},
+    "runComponentActions": {"property": "actionsProperty"},
     "delay": {"duration": "Integer"},
     "setLanguage": {"language": "String"},
     "setActiveTheme": {"theme": "String"},
@@ -2198,6 +2199,8 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
         names_target = isinstance(target, str) and (target != "" or kind != "closePageOverlay")
         if names_target and target not in ctx.page_ids:
             report.add(path, f"action target page '{target}' does not exist")
+    if kind == "runComponentActions":
+        _check_run_component_actions(action.get("property"), ctx, f"{path}/property", report)
     page_id = action.get("pageId")
     if kind == "navigateToPage":
         _check_navigate_target(page_id, ctx, f"{path}/pageId", report)
@@ -2459,6 +2462,40 @@ def _check_navigate_target(page_id: Any, ctx: ValidationContext, path: str, repo
             f"input parameter '{name}' is not declared here as a page (format: page)",
             severity="error", code="navigate-input-not-page",
         )
+
+
+def _check_run_component_actions(
+    name: Any, ctx: ValidationContext, path: str, report: ValidationReport
+) -> None:
+    """A Run Component Actions property: the name of an `actions`-type property
+    of the component the action sits in — the only scope that passes one in."""
+    if not isinstance(name, str):
+        report.warn(
+            path,
+            "the property is the name of one of the component's Actions properties",
+            severity="error", code="runcomponentactions-invalid",
+        )
+    elif not name:
+        report.warn(path, "property name is empty", severity="warning", code="componentprop-empty")
+    elif not ctx.input_scope:
+        report.warn(
+            path,
+            f"Actions property '{name}' runs nothing here — only a component passes one in",
+            severity="error", code="runcomponentactions-no-scope",
+        )
+    elif ctx.input_schema is not None:
+        declared = ctx.input_schema.get(name)
+        if declared is None:
+            report.warn(
+                path, f"no property '{name}' is declared here",
+                severity="error", code="runcomponentactions-unknown",
+            )
+        elif declared.get("type") != "actions":
+            report.warn(
+                path,
+                f"property '{name}' is declared as {declared.get('type')!r}, not as Actions",
+                severity="error", code="runcomponentactions-not-actions",
+            )
 
 
 def _validate_menu_items(items: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> None:
@@ -3408,7 +3445,16 @@ def validate_global_events(events: Any, ctx: ValidationContext) -> ValidationRep
     ctx = replace(ctx, input_scope=False)
     if isinstance(events, dict):
         for event_name, actions in events.items():
-            validate_action_targets(actions, ctx, f"/{event_name}", report)
+            if event_name != "onVariableChanged":
+                validate_action_targets(actions, ctx, f"/{event_name}", report)
+        triggers = events.get("onVariableChanged")
+        for i, trigger in enumerate(triggers if isinstance(triggers, list) else []):
+            if not isinstance(trigger, dict):
+                continue
+            path = f"/onVariableChanged/{i}"
+            if "variable" in trigger:
+                _validate_action_value(trigger["variable"], None, ctx, f"{path}/variable", report)
+            validate_action_targets(trigger.get("actions"), ctx, f"{path}/actions", report)
     return report
 
 

@@ -28,15 +28,10 @@ LOCALHOST = "localhost"
 # public Internet — the probe below can therefore never reach a real host.
 _PROBE_TARGET = ("192.0.2.1", 9)
 
-# The two spellings of "bind everywhere" that can actually arrive here — the
-# default above, and the literal IPv4 wildcard someone may still pin
-# NEXTHMI_HOST to — which are also the two `getsockname()` can report for a
-# socket with no source address. Both mean "every interface" to the callers
-# below, which only ask so they can name a reachable address instead of an
-# unopenable one; the family difference matters to the listener, not to them.
-# An IPv6 wildcard is deliberately absent: nothing in the tree sets it, and
-# ``launcher._port_bindable`` probes with an AF_INET socket, so it would fail
-# there as a phantom port conflict long before reaching this module.
+# The two spellings of "bind everywhere" that can arrive here: the default
+# above, and the IPv4 wildcard NEXTHMI_HOST may be pinned to. ``::`` is absent
+# because ``launcher._port_bindable`` probes with an AF_INET socket and would
+# reject it as a port conflict before it gets here.
 _WILDCARD_HOSTS = frozenset({"", "0.0.0.0"})
 
 

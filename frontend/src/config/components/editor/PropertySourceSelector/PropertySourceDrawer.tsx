@@ -90,7 +90,6 @@ export default function PropertySourceDrawer({
       title={label}
       action="Select source"
       searchPlaceholder="Search property sources"
-      searchAriaLabel="Search property sources"
       categories={catalog}
       itemKey={(item) => item.source}
       itemMatches={itemMatches}

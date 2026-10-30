@@ -72,10 +72,9 @@ describe('StringInput', () => {
     const field = container.querySelector('.hmi-string-input__input') as HTMLInputElement;
     expect(field.className).toContain('hmi-string-input__input--masked');
 
-    await user.click(screen.getByRole('button', { name: 'Show password' }));
+    await user.click(container.querySelector<HTMLElement>('.hmi-string-input__eye-btn')!);
 
     expect(field.className).not.toContain('hmi-string-input__input--masked');
-    expect(screen.getByRole('button', { name: 'Hide password' })).toBeInTheDocument();
   });
 
   it('stays invisible to the browser password manager while masked', () => {

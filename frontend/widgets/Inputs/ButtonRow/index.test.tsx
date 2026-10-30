@@ -7,6 +7,7 @@ import { useHmiStore } from '@hmi/store/hmiStore';
 import { useComponentPropStore } from '@hmi/store/widgetPropStore';
 import { sendWsMessage } from '@hmi/hooks/useWebSocket';
 import { __resetForTests } from '@hmi/utils/actionDispatcher';
+import { useTranslationStore } from '@shared/store/translationStore';
 import ButtonRow from './index';
 
 vi.mock('@hmi/hooks/useWebSocket', () => ({
@@ -52,6 +53,13 @@ describe('ButtonRow', () => {
     expect(el.className).toContain('hmi-component');
     expect(el.className).toContain('hmi-button-row');
     expect(screen.queryAllByRole('button')).toHaveLength(0);
+  });
+
+  it('offers the project languages as options', () => {
+    useTranslationStore.setState({ languages: [{ code: 'en-EN' }, { code: 'nl-NL' }] } as never);
+    renderRow({ options: { $languages: {} } });
+
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['en-EN', 'nl-NL']);
   });
 
   it('writes the chosen option with a correlating requestId', async () => {

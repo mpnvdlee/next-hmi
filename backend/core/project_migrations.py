@@ -1,80 +1,36 @@
 """One-time, atomic baseline migration for a project's on-disk format.
 
 A project's stamped format version lives at ``config.json``'s
-``project.formatVersion`` (see ``core.manifest.ProjectMetadata``). Version
-``0`` means unstamped — every project that predates the field.
-``run_baseline_migration`` is the single entry point: it is safe to call on
-every project activation (see ``main.py``'s lifespan) because it is a no-op
-once a project is already stamped at ``PROJECT_FORMAT_VERSION``.
-
-``_STEPS`` holds four steps. The first, 4 → 7, rewrites stored layouts into
-the Hug/Fill/Fixed sizing model, retiring the raw flex keys and margin from
-authored projects (see ``core.migration_size_modes``), then collapses the
-`padding` shorthand into the four side keys it overlapped with (see
-``core.migration_padding``) — both against the same staged copy, in one atomic
-swap. A project stamped below 4 is carried through it too — no shape
-older than the baseline is otherwise supported. (Formats 5 and 6 briefly
-existed as two separate steps during development; nothing was ever stamped at
-either in the wild, so they were retired and folded into this one combined
-step rather than kept as dead waypoints.) The second, 7 → 8, turns every
-dialog into a page in the Dialogs folder and rewrites the dialog actions into
-page-overlay actions, moving their documents into ``dialogs/``
-(see ``core.migration_dialogs_folder``). The third, 8 → 9, turns the
-``datasource``/``path`` pair a write or toggle action names its variable with
-into one sourced ``target`` (see ``core.migration_write_targets``). The
-fourth, 9 → 10, rewrites nothing: it marks the fields 1.1.0 added to files a
-1.0.x build parses strictly (alarm ``values``, the theme ``numpad`` and
-``toasts`` sections), so that build refuses the project instead of parsing
-the alarm files as empty and saving over them.
+``project.formatVersion`` (see ``core.manifest.ProjectMetadata``); ``0`` means
+unstamped. ``run_baseline_migration`` is the single entry point and is safe on
+every project activation (see ``main.py``'s lifespan): it is a no-op once a
+project is stamped at ``PROJECT_FORMAT_VERSION``. What each step in ``_STEPS``
+rewrites is in ``docs/dev/architecture/data-formats.md``; how the coordinator
+zips, stages and swaps is in ``docs/dev/architecture/backend.md``.
 
 ``PROJECT_FORMAT_VERSION`` only ever counts up, including when steps are
-retired: the number is stamped into user data that travels between builds
-and machines, so reusing a number a different on-disk shape already carried
-would make every project already stamped above it look like it came from a
-newer build and be rejected here.
+retired: the number travels with user data between builds and machines, so
+reusing one a different on-disk shape already carried would make every project
+stamped above it look like it came from a newer build.
 
 ``PROJECT_FORMAT_MIN_APP`` names the release that introduced the current
-``PROJECT_FORMAT_VERSION``, and is stamped beside it so a build too old to
-open a project can say which version the operator actually needs — a number
-no build can derive for a format that postdates it. Bump the two together,
-and only in a release whose minor or major moves: the published contract is
-that a patch update never makes a project unopenable. That rule governs
-released versions; a pre-release sorts below the release it is a candidate
-for, so ``1.0.0`` introducing formats 5 through 9 over the ``0.0.1-rc*`` line
-that carried 4 keeps the promise whole — "1.0.0 or newer" does exclude every
-rc, and no release ever stamped 5, 6, 7 or 8 on its own. It is a display string
-only — never parsed or compared. The integer stays the sole gate.
-
-Its absence carries meaning of its own: a project with no ``minAppVersion`` was
-stamped by a build from before the field, so the number it carries says where
-it landed without saying which code took it there. ``run_baseline_migration``
-replays the whole chain on such a project instead of trusting the number, and
-the manager routes it through the same upgrade confirmation as a stale one.
-
-Before any of that runs, the coordinator zips the whole project into
-``<project>/.backups/`` via ``core.project_packer.pack_project`` — one archive
-per migration, holding the project exactly as it stood going in. That zip is
-the backup an operator restores from; everything the staging machinery moves
-aside below is internal scaffolding, deleted on the success and the failure
-path alike, so a migrated project root is left as clean as it started. A
-project that cannot be zipped is not migrated: the archive is written first and
-a failure there aborts with nothing touched.
-
-Every target a pending step names is staged, including one the project does
-not have yet: a migrated project therefore ends up with the step's directory
-targets present, empty ones included.
+``PROJECT_FORMAT_VERSION``, so a build too old to open a project can say which
+version the operator needs. Bump the two together, in a release whose minor or
+major moves (see ``docs/dev/operations/release.md``). It is a display string,
+never parsed or compared; the integer is the sole gate. A project with no
+``minAppVersion`` was stamped before the field existed, so its number is not
+trusted and the whole chain is replayed.
 
 To add a step: append a ``MigrationStep`` to ``_STEPS`` whose
 ``from_version`` is the current ``PROJECT_FORMAT_VERSION``, then bump
-``PROJECT_FORMAT_VERSION`` to its ``to_version``. Each step declares one or
-more ``targets`` naming the top-level project paths it reads and writes;
-``_TARGET_PATHS`` maps each name to its project-relative path and shape —
-a directory (``datasources``) or a single file (``config.json``). Add a
-``_TARGET_PATHS`` entry if the step touches a path no existing target covers.
-The coordinator only stages a target when at least one pending step actually
-names it, and swaps each staged target back into place independently once
-every pending step across all targets has succeeded. The zip above is written
-whatever the targets are — it covers the whole project, not just them.
+``PROJECT_FORMAT_VERSION`` to its ``to_version``. Each step declares the
+``targets`` it reads and writes; ``_TARGET_PATHS`` maps each name to its
+project-relative path and shape — a directory (``datasources``) or a single
+file (``config.json``) — so add an entry if no existing target covers the path.
+Only targets a pending step names are staged, a missing one included (it is
+staged empty, so a migrated project ends up with it present), and each is
+swapped back once every pending step has succeeded. The backup zip covers the
+whole project regardless of targets.
 """
 from __future__ import annotations
 
@@ -93,18 +49,20 @@ from core.manifest import (
     read_project_metadata,
     write_project_metadata,
 )
+from core.migration_button_container import migrate_button_container
 from core.migration_dialogs_folder import STEP_NAME as DIALOGS_FOLDER_STEP_NAME
 from core.migration_dialogs_folder import migrate_dialogs_folder
 from core.migration_padding import migrate_padding
 from core.migration_size_modes import migrate_size_modes
+from core.migration_user_badge import migrate_user_badge
 from core.migration_write_targets import STEP_NAME as WRITE_TARGETS_STEP_NAME
 from core.migration_write_targets import migrate_write_targets
 from core.project_packer import BACKUPS_SUBDIR, pack_project, safe_filename
 from core.time_utils import iso_now
 from core.version import app_version
 
-PROJECT_FORMAT_VERSION = 10
-# The release that introduced format 10. See the module docstring; bump with it.
+PROJECT_FORMAT_VERSION = 11
+# The release that introduced format 11. See the module docstring; bump with it.
 PROJECT_FORMAT_MIN_APP = "1.1.0"
 
 @dataclass(frozen=True)
@@ -245,6 +203,21 @@ def _retire_flex_and_collapse_padding(staged: Mapping[str, Path], project_root: 
     )
 
 
+def _retire_user_badge_and_pressable_container(
+    staged: Mapping[str, Path], project_root: Path
+) -> StepResult:
+    """Combined step: rebuild each UserBadge from built-ins, then move press
+    actions off Container onto Button Container — same staged copy, in
+    sequence. See `core.migration_user_badge` / `core.migration_button_container`."""
+    badge_result = migrate_user_badge(staged, project_root)
+    container_result = migrate_button_container(staged, project_root)
+    return StepResult(
+        files_changed=list(
+            dict.fromkeys([*badge_result.files_changed, *container_result.files_changed])
+        ),
+    )
+
+
 def _mark_release_1_1_fields(staged: Mapping[str, Path], project_root: Path) -> StepResult:
     """No-op: the step exists for the stamp it leaves (see the module docstring)."""
     return StepResult()
@@ -278,6 +251,13 @@ _STEPS: list[MigrationStep] = [
         name="release-1-1-fields",
         targets=(),
         run=_mark_release_1_1_fields,
+    ),
+    MigrationStep(
+        from_version=10,
+        to_version=11,
+        name="retire-user-badge-and-pressable-container",
+        targets=("config", "pages", "dialogs", "components"),
+        run=_retire_user_badge_and_pressable_container,
     ),
 ]
 

@@ -55,15 +55,16 @@ def test_min_app_names_a_release_that_exists():
     assert PROJECT_FORMAT_MIN_APP == "1.1.0"
 
 
-def test_a_format_9_project_is_stamped_10_with_nothing_rewritten(project_root: Path) -> None:
+def test_a_format_9_project_is_stamped_current_with_nothing_rewritten(project_root: Path) -> None:
     """9 → 10 only marks the fields 1.1.0 added, so a 1.0.x build refuses the
-    project rather than parsing those files as empty and saving over them."""
+    project rather than parsing those files as empty and saving over them; 10 →
+    11 finds no User Badge or pressable Container to rewrite."""
     _stamp(project_root, 9, min_app="1.0.0")
     result = pm.run_baseline_migration(project_root)
-    assert (result.from_version, result.to_version) == (9, 10)
+    assert (result.from_version, result.to_version) == (9, 11)
     assert result.files_changed == []
     metadata = read_project_metadata(project_root)
-    assert (metadata.formatVersion, metadata.minAppVersion) == (10, "1.1.0")
+    assert (metadata.formatVersion, metadata.minAppVersion) == (11, "1.1.0")
 
 
 def test_already_current_is_a_no_op(project_root: Path) -> None:

@@ -57,12 +57,7 @@ export default function AlarmToastCard({
           ACK
         </button>
       )}
-      <CloseButton
-        className="hmi-toast__close"
-        onClick={onDismiss}
-        disabled={disabled}
-        label={disabled ? 'Close alarm preview' : 'Dismiss alarm'}
-      />
+      <CloseButton className="hmi-toast__close" onClick={onDismiss} disabled={disabled} />
     </div>
   );
 }

@@ -329,7 +329,7 @@ def test_pages_set_metadata_merge_patch_null_deletes():
     assert "route" not in page
 
 
-# ── Missing/unindexed page mutation semantics (item 10) ─────────────────────
+# ── Missing/unindexed page mutation semantics ───────────────────────────────
 
 
 def test_pages_set_metadata_on_absent_id_is_not_found_and_writes_nothing():
@@ -431,3 +431,32 @@ def test_concurrent_mutations_on_missing_page_both_fail_closed():
     results = _run(_both())
     assert all(isinstance(r, ConfigNotFoundError) for r in results)
     assert list(storage.active_pages_dir().glob("*.json")) == []
+
+
+def test_global_events_set_writes_a_variable_trigger_and_keeps_other_events():
+    _run(pages_tools.global_events_set(event="onHmiLoaded", value=[{"type": "delay", "duration": 0}]))
+    trigger = {
+        "variable": {"$var": {"path": "PLC:Alarm"}},
+        "actions": [{"type": "if", "condition": {"$var": {"path": "PLC:Alarm"}}, "then": []}],
+    }
+    response = _run(pages_tools.global_events_set(event="onVariableChanged", value=[trigger]))
+    assert response["result"] == "applied"
+    events = pages_tools.global_events_get()
+    assert events["onVariableChanged"] == [trigger]
+    assert "onHmiLoaded" in events
+
+    _run(pages_tools.global_events_set(event="onVariableChanged", value=[]))
+    assert "onVariableChanged" not in pages_tools.global_events_get()
+
+
+def test_global_events_set_rejects_an_unknown_event_and_a_broken_action():
+    from core.exceptions import ConfigValidationError
+
+    with pytest.raises(ConfigValidationError):
+        _run(pages_tools.global_events_set(event="onTypo", value=[]))
+    with pytest.raises(ConfigValidationError):
+        _run(pages_tools.global_events_set(
+            event="onVariableChanged",
+            value=[{"actions": [{"type": "openPageOverlay", "pageId": "does-not-exist"}]}],
+        ))
+    assert pages_tools.global_events_get() == {}

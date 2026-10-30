@@ -83,6 +83,8 @@ describe('ensurePositionsForChildren', () => {
     expect(out).toHaveLength(3);
     expect(out[0]).toEqual({ id: 'a', x: 0.1, y: 0.2 });
     expect(out.map((p) => p.id)).toEqual(['a', 'b', 'c']);
+    // A newcomer takes its own tree index's spot, not the next free count.
+    expect(out[2]).toEqual({ id: 'c', ...defaultPositionForIndex(2) });
   });
 
   it('returns empty list when no children configured', () => {
@@ -91,16 +93,19 @@ describe('ensurePositionsForChildren', () => {
 });
 
 describe('defaultPositionForIndex', () => {
-  it('starts at the inset edge', () => {
-    expect(defaultPositionForIndex(0)).toEqual({ x: 0.5 - 0.4, y: 0.5 - 0.4 });
+  it('fills an 8-wide grid row by row from the inset corner', () => {
+    expect(defaultPositionForIndex(0)).toEqual({ x: 0.1, y: 0.1 });
+    expect(defaultPositionForIndex(7).x).toBeCloseTo(0.8);
+    expect(defaultPositionForIndex(8)).toEqual({ x: 0.1, y: expect.closeTo(0.2) });
   });
 
-  it('cascades by 0.05 and wraps within 0.8 span', () => {
-    const p1 = defaultPositionForIndex(1);
-    expect(p1.x).toBeCloseTo(0.5 - 0.4 + 0.05);
-    const wrapped = defaultPositionForIndex(16);
-    // 16 * 0.05 = 0.8 → wraps to 0
-    expect(wrapped.x).toBeCloseTo(0.5 - 0.4);
+  it('gives the first 64 children a spot each, then starts over', () => {
+    const spots = Array.from({ length: 64 }, (_, i) => {
+      const p = defaultPositionForIndex(i);
+      return `${p.x.toFixed(3)},${p.y.toFixed(3)}`;
+    });
+    expect(new Set(spots).size).toBe(64);
+    expect(defaultPositionForIndex(64)).toEqual(defaultPositionForIndex(0));
   });
 });
 

@@ -38,7 +38,7 @@ import { executeWidgetActions } from '../utils/widgetActions';
 import { PreviewContext } from '@shared/context/PreviewContext';
 import { DefinitionScopeContext } from '../context/DefinitionScopeContext';
 import { useRepeatScope } from '../context/RepeatScopeContext';
-import { useBindingStatus, type BindingStatus } from '../utils/bindingValidation';
+import { useBindingStatus } from '../utils/bindingValidation';
 import { useResolvedProperties } from '../hooks/useResolvedProperties';
 import { useLiveScalars } from '../hooks/useLiveScalars';
 import { useTimeTick } from '../hooks/useTimeTick';
@@ -128,12 +128,6 @@ class WidgetErrorBoundary extends Component<EBProps, EBState> {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const LOCKED_MESSAGE = 'Interaction not permitted';
-
-const BINDING_OVERLAY_LABELS: Record<Exclude<BindingStatus, 'ok'>, string> = {
-  disabled: 'Variable disabled',
-  disconnected: 'OPC UA disconnected',
-  nodata: 'No data',
-};
 
 /**
  * Build a flex-child style for the binding-unavailable wrapper.
@@ -262,10 +256,7 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
       bindingStatus !== 'ok' ? (
         <div className="hmi-binding-wrapper" style={wrapperStyle(layout)}>
           {comp}
-          <div
-            className={`hmi-binding-overlay hmi-binding-overlay--${bindingStatus}`}
-            aria-label={BINDING_OVERLAY_LABELS[bindingStatus]}
-          >
+          <div className={`hmi-binding-overlay hmi-binding-overlay--${bindingStatus}`}>
             <span className="hmi-binding-overlay__icon" aria-hidden="true" />
           </div>
         </div>

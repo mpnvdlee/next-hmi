@@ -13,6 +13,19 @@ heading.
 
 ### Added
 
+- **The editor opens each project at its own viewport.** The preview's
+  viewport choice and custom width and height are saved in the project with
+  **Save**, so everyone who opens it gets the same frame. Scaling stays
+  per session.
+
+- **Actions on a variable change.** **Global Events** gets a **Variable
+  Changed** list: each trigger names a variable and runs its actions whenever
+  that value changes, and once at start-up. Put an **If** on the same
+  variable around the actions to react to one value, such as opening a dialog
+  when a Boolean goes high. Each open screen runs its triggers itself. MCP
+  clients read and write global events with `global_events_get` and
+  `global_events_set`.
+
 - **A Number Input says why it refuses a value, and acts on a change.** An
   **Out-of-range message** is what the numpad says when the entry falls
   outside min/max, so a limit that depends on another setting can say "Must
@@ -202,6 +215,31 @@ heading.
   or `NaN` as no value. A property with no variable bound no longer costs a
   variable-store listener.
 
+- **A Badge widget.** It wraps one widget and puts a chip on its top-right
+  corner — a text or a count such as an Alarm Count, hidden when empty or 0.
+  The chip sits centred on the corner, half outside; **Offset** moves it in or
+  further out, and **Color** and **Size** set its look.
+
+- **Buttons act on release too.** A new **On Released** list
+  runs when the press ends — on lifting the finger, on a cancelled touch, or
+  on the key coming back up — and a Button's new **Momentary** switch writes
+  its **Variable** false again then, so it is true only while held, as a jog
+  button needs. Keep a watchdog in the PLC for anything that moves: a release
+  the panel never sees, such as a dropped connection, leaves the value true.
+
+- **A Button Container.** A Container that is one control around whatever
+  it holds — a tile, a list row, a header logo — with the Button's **On
+  Pressed** and **On Released**. It takes the keyboard (**Enter** or
+  **Space**), shows the focus ring and a pressed look, and dims and blocks
+  under **Interactable** like a Button. A press on a Button or an input inside
+  it stays with that control.
+
+- **A Run Component Actions action.** Inside a component it runs the actions
+  each instance sets on one of the component's **Actions** properties, as one
+  item in the list next to the others. The upgrade to format 11 writes it
+  where a pressable Container bound its whole action list to a component
+  property, which it used to drop.
+
 - **A Button sets its alignment and text case.** **Content alignment**
   (center, or start for a menu-style tile) and **Text case** (uppercase). A Label's **Align** is now
   called **Content alignment**, and its new **Text case** follows the
@@ -280,6 +318,11 @@ heading.
   link card had to be handed a whole action list instead.
 
 ### Changed
+
+- **On Pressed runs when the press starts.** A Button's press
+  actions used to run on the click, when the finger lifted; they now run the
+  moment it lands (or the key goes down), so **On Released** has a moment of
+  its own to follow it. A press that slides off the control still runs.
 
 - **A Number Input reads as a value, not a form field.** The number is
   right-aligned in the theme's Value typography, with digit groups (4,920)
@@ -417,6 +460,12 @@ heading.
 
 ### Removed
 
+- **The User Badge.** Opening a project upgrades each one to built-in widgets
+  that show the same: a Container holding a user Icon, the username and groups
+  as Labels, a sign-in Button for the guest and a sign-out Button for everyone
+  else, each kept only where the badge had actions for it. The initials avatar
+  becomes the user icon.
+
 - **The Alarm List's Own frame.** The list now always draws without a frame of
   its own, as every example already placed it, so it takes the look of the card
   or page around it. A stored `chrome` key is ignored and the warnings pill
@@ -427,6 +476,15 @@ heading.
   unknown property; delete it there.
 
 ### Fixed
+
+- **An Image Container with many children stays workable.** Children added
+  to an Image Container no longer all sit in the middle of the image until
+  **Place children…** is opened: each starts at its own spot in an 8 × 8 grid,
+  so 64 children get a spot each where 16 did before. In **Place children…** a
+  child that draws nothing, such as an empty Container, can be dragged by its
+  marker. **Place children…** and an Image's **Edit indicators…** fit a tall
+  image inside the dialog, so its bottom edge can be reached. A child that
+  was never placed moves from the middle of the image to its grid spot.
 
 - **A Button's custom SVG icon shows in Safari.** A project SVG on a Button
   rendered at zero size in Safari and other WebKit browsers, so the button

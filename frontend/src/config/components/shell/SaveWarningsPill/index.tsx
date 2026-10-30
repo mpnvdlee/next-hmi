@@ -176,14 +176,13 @@ export default function SaveWarningsPill() {
         {pillLabel}
       </button>
       {open && (
-        <div className="cfg-save-warnings__panel" role="dialog" aria-label="Build diagnostics">
+        <div className="cfg-save-warnings__panel" role="dialog">
           <header className="cfg-save-warnings__panel-header">
             <strong>Diagnostics</strong>
             <CloseButton
               tone="config"
               className="cfg-save-warnings__close"
               onClick={() => setOpen(false)}
-              label="Close"
             />
           </header>
           {stale && <p className="cfg-save-warnings__stale-note">{staleNote}</p>}

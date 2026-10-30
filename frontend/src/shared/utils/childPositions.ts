@@ -51,20 +51,19 @@ export function clamp01(n: number): number {
 }
 
 /**
- * Default (x, y) for a newly added child not yet in `positions`.
- * Cascades diagonally through the inset 0.1–0.85 range so subsequent children
- * do not stack exactly; wraps after sixteen positions.
+ * Default (x, y) for the child at `index` among the placeable children.
+ * Row-major through an 8 × 8 grid inset to 0.1–0.8, so the first 64 children
+ * each get a spot of their own; the 65th starts the grid over.
  */
-export function defaultPositionForIndex(occupiedCount: number): { x: number; y: number } {
-  const step = 0.05;
-  const span = 0.8;
-  const offset = (occupiedCount * step) % span;
-  return { x: 0.5 + offset - span / 2, y: 0.5 + offset - span / 2 };
+export function defaultPositionForIndex(index: number): { x: number; y: number } {
+  const cell = index % 64;
+  return { x: 0.1 + (cell % 8) * 0.1, y: 0.1 + Math.floor(cell / 8) * 0.1 };
 }
 
 /**
  * Ensure every child in `childConfigs` has a corresponding position entry.
- * Missing entries are appended with a cascading default; existing entries kept as-is.
+ * A missing entry gets its child's grid spot — the spot the ImageContainer
+ * already draws it at while unplaced; existing entries are kept as-is.
  * Output preserves entry order: existing first (in their array order),
  * then newcomers in tree order.
  */
@@ -75,13 +74,13 @@ export function ensurePositionsForChildren(
   const list = Array.isArray(positions) ? [...positions] : [];
   if (!childConfigs || childConfigs.length === 0) return list;
   const have = new Set(list.map((p) => p.id));
-  for (const c of childConfigs) {
+  childConfigs.forEach((c, index) => {
     if (!have.has(c.id)) {
-      const { x, y } = defaultPositionForIndex(list.length);
+      const { x, y } = defaultPositionForIndex(index);
       list.push({ id: c.id, x, y });
       have.add(c.id);
     }
-  }
+  });
   return list;
 }
 

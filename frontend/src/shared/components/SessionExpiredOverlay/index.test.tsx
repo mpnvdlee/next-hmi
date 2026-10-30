@@ -17,7 +17,7 @@ describe('SessionExpiredOverlay', () => {
     render(<SessionExpiredOverlay />);
 
     const dialog = screen.getByRole('alertdialog');
-    expect(dialog).toHaveAccessibleName('Signed out');
+    expect(dialog).toHaveTextContent('Signed out');
     // The shared modal card, so it matches every other dialog in the app.
     expect(dialog.querySelector('.name-modal')).not.toBeNull();
   });

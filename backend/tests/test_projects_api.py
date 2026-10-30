@@ -222,11 +222,8 @@ def test_list_reports_project_version_fields(
 def test_list_reports_whether_each_project_sits_in_the_projects_root(
     client: TestClient, tmp_path: Path, home: Path
 ) -> None:
-    """3.6c: the browser used to re-derive this with its own string math
-
-    against `defaultProjectsRoot` (see `peerTransferParams.sitsDirectlyIn`,
-    now removed); the backend already has to compute it correctly for peers,
-    so a local project's own listing gets the same flag instead.
+    """The backend computes this flag for peers already, so a local project's
+    own listing gets the same one instead of the browser re-deriving it.
     """
     root = tmp_path / "Projects"
     root.mkdir()

@@ -77,7 +77,6 @@ function TabButton({
         tabIndex={-1}
         onClick={handleClose}
         title="Close tab"
-        label={`Close ${label}`}
       />
     </div>
   );

@@ -105,7 +105,6 @@ export default function ImageSourcePicker() {
         step={TILE_STEP}
         value={tileSize}
         onChange={(e) => changeTileSize(Number.parseFloat(e.target.value))}
-        aria-label="Thumbnail size"
         title="Thumbnail size"
         style={
           {

@@ -119,6 +119,13 @@ export const ACTION_TYPES = [
     description:
       'Runs one list of actions when a condition holds — a variable, a comparison — and another when it does not.',
   },
+  {
+    type: 'runComponentActions' as const,
+    label: 'Run Component Actions',
+    category: 'Logic',
+    description:
+      'Inside a component: runs the actions each instance sets on one of the component’s Actions properties.',
+  },
 ] as const;
 
 /** Tint token per action type, mirrored onto both the badge and the
@@ -143,6 +150,7 @@ export const ACTION_TYPE_TINT: Record<ButtonAction['type'], string> = {
   setActiveTheme: 'viewport',
   showAlert: 'alarmCount',
   showToast: 'result',
+  runComponentActions: 'componentProp',
 };
 
 /** Sets `--option-color` to the action's tint, the hook badges and popup rows

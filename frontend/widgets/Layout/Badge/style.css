@@ -1,0 +1,28 @@
+.hmi-badge {
+  position: relative;
+  display: flex;
+}
+
+/* Centred on the corner by default, so half of it sits outside the child; the
+   offset moves that centre inward along both axes. */
+.hmi-badge__chip {
+  position: absolute;
+  top: var(--hmi-badge-offset, 0px);
+  right: var(--hmi-badge-offset, 0px);
+  transform: translate(50%, -50%);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  height: 1.6em;
+  padding: 0 0.4em;
+  box-sizing: border-box;
+  border-radius: var(--hmi-radius-full);
+  background: var(--hmi-badge-color, var(--hmi-fault));
+  color: var(--hmi-white);
+  font-size: var(--hmi-badge-size, var(--hmi-type-caption-size));
+  font-weight: var(--hmi-type-subheading-weight);
+  line-height: 1;
+  pointer-events: none;
+}

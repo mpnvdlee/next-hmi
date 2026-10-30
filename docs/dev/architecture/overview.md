@@ -103,7 +103,9 @@ Runtime evaluation lives in `frontend/src/hmi/utils/propertySourceEval.ts`.
 
 The project pages document's `globalEvents` field is a singleton config of
 action lists fired on lifecycle events: `onHmiLoaded`, `onPageLoaded`,
-`onLocaleChanged`, `onUserLoggedIn`, `onUserLoggedOut` and `onInteractionDenied`.
+`onLocaleChanged`, `onUserLoggedIn`, `onUserLoggedOut` and `onInteractionDenied`,
+plus `onVariableChanged`, a list of per-variable triggers whose variables
+`HmiView` keeps subscribed on every page.
 It is represented by the shared `PagesConfig` type and wired in
 `frontend/src/hmi/hooks/useGlobalEvents.ts`, except `onInteractionDenied`, which
 `WidgetRenderer`'s lock overlay fires on a press.

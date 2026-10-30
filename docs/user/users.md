@@ -41,36 +41,18 @@ Select **Settings** in the tree for the one project-wide choice:
 
 ## Sign in and out on a screen
 
-The **User Badge** widget is the ready-made way in. Drop it in the header and it
-shows who is signed in — an initialled avatar, the username, and their groups —
-and carries the sign-in and sign-out affordances with it.
+Who is signed in, and the way in and out, are ordinary widgets in the header:
 
-It reads the session itself, so there is nothing to bind for the common case:
+| Widget | Shows | Bound to |
+|---|---|---|
+| **Label** | The username, or their groups | **Text** → `$user` → **Username** or **Groups** |
+| **Button** *Sign in* | Only to the guest | **Visible** → **Compare** `$user` → **Username** `===` `guest`; **On Pressed** → **Open Dialog** on your sign-in dialog |
+| **Button** *Sign out* | To everyone else | **Visible** → **Not** of that same comparison; **On Pressed** → **Logout User** |
 
-| While signed in as | The badge shows |
-|---|---|
-| `guest` | A **Log in** button — your **Sign-in label**, with a sign-in icon. |
-| A real user | The avatar, username and groups, plus a sign-out icon button. |
+Leave the buttons out on a panel that never signs anyone out. The NEXT BREW
+example template wires exactly this in its header, around a user **Icon**.
 
-Each half appears only once you give it something to run, which is what keeps
-the badge usable on a panel that never signs anyone out:
-
-- **On Sign In** — the actions the Log in button runs. Usually a single **Open
-  Dialog** pointing at your sign-in dialog.
-- **On Sign Out** — the actions the sign-out button runs. Usually just **Logout
-  User**.
-- **On Press** — optional, makes the identity itself pressable, for a profile or
-  shift-handover dialog.
-
-**Appearance** carries **Show groups**, your own **Sign-in icon** and **Sign-out
-icon**, and a **Radius** if the theme's fully-round default doesn't suit the
-header. **Username text** and **Groups text** override what it displays, for the
-rare screen that should name someone other than the session user.
-
-The NEXT BREW example template wires exactly this — the badge in the header,
-opening a login dialog for guests and calling `logoutUser` for everyone else.
-
-**Building the dialog itself.** The sign-in dialog behind the badge is layout
+**Building the dialog itself.** The sign-in dialog behind that button is layout
 like any other screen, wired with actions ([Actions](actions.md)):
 
 - **Log in** — a **Login User** action whose **Username** and **Password** are bound to wherever the operator typed them (a Dropdown's or String Input's `$widgetProp`, a component input, a `$static` for a fixed kiosk account). A Dropdown whose **Options** come from `$user` → **All users** offers every account by name and hands over the username, which is what Login User takes — the NEXT BREW sign-in dialog does exactly this. It runs asynchronously: use `onFailed` to show a toast on a wrong password, `onSuccess` to close the dialog.

@@ -20,7 +20,7 @@ import type { ActionsConfig, ButtonAction, VariableBinding } from '@shared/types
 import { isBoundIndex } from '@shared/types/config';
 import { varBindingOf } from '../bindingPickerUtils';
 import type { SchemaField } from '@shared/types/widgetSchema';
-import Select from '@config/components/ui/Select';
+import AddButton from '@config/components/ui/AddButton';
 import { ClearIcon } from '@config/components/ui/actionIcons';
 import FieldGroup from '@config/components/ui/FieldGroup';
 import { PanelScopeContext, usePanelExpansionStore } from '@config/store/panelExpansionStore';
@@ -28,12 +28,7 @@ import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
 import { BreakableToken, Kw, KindLabel, PreviewText } from '../PropertySourceEditor/editors/shared';
 import { propertyValuePreview } from '../propertyValueUtils';
 import { ActionTypeBadge } from './actionTypeIcons';
-import {
-  ACTION_TYPES,
-  ACTION_TYPE_TINT,
-  actionTypeColorStyle,
-  actionTypeLabel,
-} from './actionsPreview';
+import { ACTION_TYPE_TINT, actionTypeLabel } from './actionsPreview';
 import { getDefaultValueForKind, makeDefaultAction } from './actionMutations';
 import {
   ACTION_EDITORS,
@@ -43,10 +38,6 @@ import {
   type OverlayTargets,
 } from './actionEditors';
 import ActionTypeDrawer from './ActionTypeDrawer';
-import { pasteActionValue } from '@config/components/ui/SchemaFieldRow/clipboardOps';
-
-const BROWSE_ACTIONS = '__browse';
-const PASTE_ACTION = '__paste';
 
 interface Props {
   value: ActionsConfig | undefined;
@@ -253,43 +244,9 @@ export default function ActionsInput({
 
   const effectivePathPrefix = pathPrefix ?? [];
 
-  // "Add" is the placeholder, not an option, so the browse row leads the list
-  // the way it leads the property-source popup.
-  const addControl = (
-    <Select
-      className="cfg-editor-actions__add"
-      popupClassName="cfg-editor-actions__add-popup"
-      value=""
-      placeholder="Add"
-      onChange={(v) => {
-        if (v === BROWSE_ACTIONS) setDrawerOpen(true);
-        // Ctrl+V on a selected action replaces it; this is the only way to
-        // paste into another (or an empty) trigger.
-        else if (v === PASTE_ACTION)
-          void pasteActionValue(headerTitle ?? eventLabel, (a) => appendAction(a as ButtonAction));
-        else if (v) addAction(v);
-      }}
-    >
-      <option value={BROWSE_ACTIONS} className="cfg-editor-actions__browse">
-        <span className="cfg-source-pill__abbr" aria-hidden="true">
-          ?
-        </span>
-        Browse actions…
-      </option>
-      <option value={PASTE_ACTION} className="cfg-editor-actions__browse">
-        <span className="cfg-source-pill__abbr" aria-hidden="true">
-          ⎘
-        </span>
-        Paste action
-      </option>
-      {ACTION_TYPES.map((t) => (
-        <option key={t.type} value={t.type} style={actionTypeColorStyle(t.type)}>
-          <ActionTypeBadge type={t.type} variant="pill" />
-          {t.label}
-        </option>
-      ))}
-    </Select>
-  );
+  // Ctrl+V on a selected action replaces it; the drawer's paste is the only way
+  // to paste into another (or an empty) trigger.
+  const addControl = <AddButton title="Add action" onClick={() => setDrawerOpen(true)} />;
 
   return (
     <div className="cfg-editor-actions">
@@ -325,6 +282,10 @@ export default function ActionsInput({
           onClose={() => setDrawerOpen(false)}
           onSelect={(type) => {
             addAction(type);
+            setDrawerOpen(false);
+          }}
+          onPaste={(action) => {
+            appendAction(action);
             setDrawerOpen(false);
           }}
         />
@@ -428,6 +389,8 @@ function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets)
       return K('Log out user');
     case 'acknowledgeAllAlarms':
       return K('Acknowledge all alarms');
+    case 'runComponentActions':
+      return action.property ? K('Run', action.property) : K('Run component actions');
     case 'delay':
       return K('Wait', `${action.duration ?? 0} ms`);
     case 'setLanguage': {

@@ -264,6 +264,7 @@ describe('ModalStack header bar', () => {
 describe('ModalStack tap-through', () => {
   let beneath: HTMLButtonElement;
   const pressed = vi.fn();
+  const pointer = vi.fn();
 
   function renderOverlays() {
     return render(
@@ -282,8 +283,11 @@ describe('ModalStack tap-through', () => {
 
   beforeEach(() => {
     pressed.mockClear();
+    pointer.mockClear();
     beneath = document.createElement('button');
     beneath.addEventListener('click', pressed);
+    beneath.addEventListener('pointerdown', pointer);
+    beneath.addEventListener('pointerup', pointer);
     document.body.appendChild(beneath);
     // jsdom has no layout; hand back the backdrop first, then what lies under it.
     document.elementsFromPoint = vi.fn(() => [
@@ -310,6 +314,10 @@ describe('ModalStack tap-through', () => {
     pressBackdrop(container);
     expect(useHmiStore.getState().openPageOverlays).toEqual([]);
     expect(pressed).toHaveBeenCalledTimes(1);
+    expect(pointer.mock.calls.map(([e]) => (e as Event).type)).toEqual([
+      'pointerdown',
+      'pointerup',
+    ]);
   });
 
   it('only closes when the dialog turns tap-through off', () => {

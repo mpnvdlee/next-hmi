@@ -24,11 +24,7 @@
   /* No default margin. A container's spacing is its parent's job — every region
      that hosts widgets sets a `gap` (`.hmi-page__content`, `.hmi-page__header`
      and `__footer`, the page-group shell chrome, `ShellRegion`'s `.region`, and
-     every Container) — so a margin of its own only stacked on top of that, and an
-     author reaching for an edge-to-edge layout had to zero a value they never
-     set. The Layout panel no longer offers margin at all, and `SELF_DIRECT_PROPS`
-     in layoutUtils.ts no longer emits one, so a margin an older project still
-     stores is simply not read.
+     every Container) — so a margin of its own only stacks on top of that.
      Theme-driven defaults below; a per-instance layout value (inline style /
      --container-radius) overrides. Switching theme re-skins these. */
   background: var(--container-bg, transparent);
@@ -96,25 +92,4 @@
   text-overflow: ellipsis;
   pointer-events: none;
   user-select: none;
-}
-
-/* A container with press actions is a control: the same pointer, focus ring
-   and pressed feedback a Button gives. */
-.hmi-container.hmi-container--pressable {
-  cursor: pointer;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  transition:
-    filter var(--hmi-motion-fast) ease,
-    transform 80ms ease;
-}
-
-.hmi-container.hmi-container--pressable:active {
-  filter: brightness(1.18);
-  transform: translateY(1px);
-}
-
-.hmi-container.hmi-container--pressable:focus-visible {
-  outline: var(--hmi-accent-outline);
-  outline-offset: var(--hmi-accent-outline-offset);
 }

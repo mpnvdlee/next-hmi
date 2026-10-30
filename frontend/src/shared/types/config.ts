@@ -697,6 +697,12 @@ export type ButtonAction =
       onOk?: ButtonAction[];
     }
   | {
+      /** Inside a component definition: runs the action list the instance
+       *  passes in through the component's `actions`-type property `property`. */
+      type: 'runComponentActions';
+      property: string;
+    }
+  | {
       type: 'showToast';
       /** The message text (expression-capable: $static, $loc, $var) */
       message: unknown;
@@ -730,6 +736,15 @@ export interface GlobalEventsConfig {
   onLocaleChanged?: ButtonAction[];
   /** A press on a widget whose `interactable` resolves false. */
   onInteractionDenied?: ButtonAction[];
+  /** Each runs its actions whenever its variable's value changes, its first
+   *  value included. */
+  onVariableChanged?: VariableTrigger[];
+}
+
+export interface VariableTrigger {
+  /** Absent until a variable is picked. */
+  variable?: { $var: VariableBinding };
+  actions?: ButtonAction[];
 }
 
 /**
@@ -829,7 +844,7 @@ export interface ShellRegionConfig {
   collapsedSize?: unknown; // string, bindable — e.g. '48px', '0'
   expanded?: unknown; // boolean, bindable
   defaultState?: 'expanded' | 'collapsed' | 'hidden';
-  overlay?: unknown; // boolean, bindable — Phase 7
+  overlay?: unknown; // boolean, bindable
   /** Sidebars only, bindable: when true, the sidebar spans the full layout
    *  height, flanking the header/main/footer column instead of sitting
    *  between them. */
@@ -873,6 +888,16 @@ export interface ShellConfig {
    * plain setting, never a runtime licence check. See COMMERCIAL.md.
    */
   bootLogo?: string;
+  /** The editor's preview viewport for this project; unset is "Fit to screen". Not read by the runtime. */
+  editorViewport?: EditorViewport;
+}
+
+export interface EditorViewport {
+  /** `fit`, `laptop`, `tablet`, `phone` or `custom`. */
+  preset: string;
+  /** The custom size in px, kept while a preset is active. */
+  width: number;
+  height: number;
 }
 
 /** Props interface shared by every HMI component in the registry */

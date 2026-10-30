@@ -17,6 +17,7 @@ import { useLiveScalars } from '../hooks/useLiveScalars';
 import { getViewportSnapshot } from '../hooks/useViewport';
 import { useBindingValue, useVariableMeta } from '../hooks/useVariable';
 import { useUsersDocument } from '../hooks/useUsersDocument';
+import { useLanguagesData } from '../hooks/useLanguagesData';
 import { useHttpSourceStore } from '../store/httpSourceStore';
 import { useStructVariable } from '../hooks/useStructVariable';
 import { useThemeRuntimeStore } from '../store/themeRuntimeStore';
@@ -80,14 +81,11 @@ export const FLOW_CSS_VARS: readonly string[] = (['w', 'h'] as const).flatMap((p
  * supplies. Written only when this axis's own mode is one of the three literal
  * values; an unset, still-bound, or otherwise unrecognised mode leaves the
  * axis silent, so CSS falls through to the plain `.hmi-component,
- * .hmi-container` default same as it always did.
+ * .hmi-container` default.
  *
- * Every value here is the same one `axisModePatch` used to write directly onto
- * `flexGrow`/`flexBasis`/`flexShrink`/`alignSelf` before this axis's *role*
- * (main or cross) was known — the difference fase 3 makes is that the role is
- * no longer this function's business. Both a main-role triple
- * (`grow`/`basis`/`shrink`) and a cross-role pair (`alignself` under a
- * `stretch`-aligned parent, and under a non-`stretch` one) are written
+ * The axis's *role* (main or cross) is not this function's business. Both a
+ * main-role triple (`grow`/`basis`/`shrink`) and a cross-role pair (`alignself`
+ * under a `stretch`-aligned parent, and under a non-`stretch` one) are written
  * unconditionally; `hmi.css` picks whichever half actually applies once it
  * knows which axis is main, from the parent's own `data-flow-direction` /
  * `data-flow-align` — never from this widget.
@@ -755,8 +753,9 @@ const NO_ITEMS: unknown[] = [];
  * Hook: read an `item-list` property — any array, from any source that can
  * produce one. A `$var` array (scalar or struct) also reports its key, which is
  * what lets a Repeater copy bind to and write its own element. `$http` counts
- * when its pick is a JSON array; `$user` lists users or groups as
- * `{ label, value }` records, the same shape a static list holds.
+ * when its pick is a JSON array; `$user` lists users or groups and
+ * `$languages` the project's language codes as `{ label, value }` records, the
+ * same shape a static list holds.
  * @example
  *   const { items } = useItemListProp(properties, 'items');
  */
@@ -770,12 +769,14 @@ export function useItemListProp(
   const varValue = useStructVariable(arrayKey);
   const meta = useVariableMeta(arrayKey);
   const { users, groups } = useUsersDocument();
+  const languages = useLanguagesData();
   const evalCtx = useEvalContext();
   // The response cache is read through `getState()`, so nothing else here
   // changes when it lands; subscribe to it only when the items come from it.
   const isHttp = isRecord(raw) && '$http' in raw;
   const httpEntries = useHttpSourceStore((s) => (isHttp ? s.entries : null));
   const userField = isRecord(raw) && isRecord(raw.$user) ? String(raw.$user.field ?? '') : null;
+  const isLanguages = isRecord(raw) && '$languages' in raw;
 
   const httpText = useMemo(
     () => (isHttp ? evaluatePropertyValue(raw, evalCtx) : undefined),
@@ -786,7 +787,7 @@ export function useItemListProp(
   );
 
   // Only a record-list source reads the context; the rest must not re-run on it.
-  const recordListCtx = binding || userField !== null || isHttp ? null : evalCtx;
+  const recordListCtx = binding || userField !== null || isHttp || isLanguages ? null : evalCtx;
 
   const items = useMemo((): unknown[] => {
     if (binding) return Array.isArray(varValue) ? varValue : NO_ITEMS;
@@ -795,6 +796,7 @@ export function useItemListProp(
       return users.map((u) => ({ label: u.username, value: u.username }));
     }
     if (userField !== null) return NO_ITEMS;
+    if (isLanguages) return languages.map((l) => ({ label: l.code, value: l.code }));
     if (isHttp) {
       if (typeof httpText !== 'string') return NO_ITEMS;
       try {
@@ -805,7 +807,19 @@ export function useItemListProp(
       }
     }
     return recordListCtx ? resolveRecordListSource(raw, recordListCtx) : NO_ITEMS;
-  }, [binding, varValue, userField, users, groups, isHttp, httpText, raw, recordListCtx]);
+  }, [
+    binding,
+    varValue,
+    userField,
+    users,
+    groups,
+    isLanguages,
+    languages,
+    isHttp,
+    httpText,
+    raw,
+    recordListCtx,
+  ]);
 
   return {
     items,

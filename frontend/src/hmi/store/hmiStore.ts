@@ -44,10 +44,9 @@ export interface PageOverlayEntry {
  * (`pageId`, its immutable identity) or as the page it currently shows
  * (`activePageId`, after in-overlay navigation)?
  *
- * Every id comparison against an open overlay goes through here. Opening,
- * collapsing and closing each used to test a different subset of the two
- * fields, which let a second card stack on a page another overlay had
- * navigated to, and let one `closePageOverlay` remove two overlays.
+ * Every id comparison against an open overlay goes through here. Testing a
+ * different subset of the two fields per operation lets a second card stack on
+ * a page another overlay navigated to, and one `closePageOverlay` remove two.
  */
 function overlayMatches(entry: PageOverlayEntry, id: string): boolean {
   return entry.pageId === id || entry.activePageId === id;

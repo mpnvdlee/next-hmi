@@ -107,6 +107,13 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
       <path d="M14.2 8.2 h-3.2 M12.4 6.6 l-1.6 1.6 1.6 1.6" />
     </Icon>
   ),
+  // A play mark inside a component's box.
+  runComponentActions: (
+    <Icon>
+      <rect x="1.5" y="2.5" width="13" height="11" rx="2" />
+      <path d="M6.5 5.6 v4.8 l4 -2.4 Z" />
+    </Icon>
+  ),
   // Check mark — acknowledge.
   acknowledgeAllAlarms: (
     <Icon>

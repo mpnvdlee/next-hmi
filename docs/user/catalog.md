@@ -7,6 +7,35 @@ can set. Bind any of them to live data like any other field.
 
 ## Layout & structure
 
+### Badge
+
+Puts a small chip, such as an alarm count, on the top-right corner of the one widget placed inside it.
+
+| Property | Label | Type |
+|---|---|---|
+| `badge` | Badge | `String | Integer` |
+| `color` | Color | `color` |
+| `offset` | Offset (px) | `Integer` |
+| `size` | Size (px) | `Integer` |
+| `visible` | Visible | `Boolean` |
+| `interactable` | Interactable | `Boolean` |
+
+### Button Container
+
+A Container that is one big control around whatever it holds — a tile, a list row — running actions when pressed and released.
+
+| Property | Label | Type |
+|---|---|---|
+| `title` | Title | `String` |
+| `showWhenEmpty` | Show when empty | `Boolean` |
+| `overflow` | Overflow | `String` |
+| `background` | Background | `color` |
+| `border` | Border | `String` |
+| `actions` | Actions | `actions` |
+| `onRelease` | On Released | `actions` |
+| `visible` | Visible | `Boolean` |
+| `interactable` | Interactable | `Boolean` |
+
 ### Component Slot
 
 Marks where content the caller supplies is rendered. Put one in a reusable component and instances of it gain a named slot — in the widget tree, and in the properties panel when a "Widget slot" property names it.
@@ -19,7 +48,7 @@ Marks where content the caller supplies is rendered. Put one in a reusable compo
 
 ### Container
 
-Groups and lays out child widgets in a row or column. Hosts other widgets, and runs its actions when pressed.
+Groups and lays out child widgets in a row or column. Hosts other widgets; a Button Container does the same and runs actions when pressed.
 
 | Property | Label | Type |
 |---|---|---|
@@ -28,7 +57,6 @@ Groups and lays out child widgets in a row or column. Hosts other widgets, and r
 | `overflow` | Overflow | `String` |
 | `background` | Background | `color` |
 | `border` | Border | `String` |
-| `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
@@ -129,7 +157,7 @@ Live active alarms, filterable by level, with acknowledgement.
 
 ### Button
 
-Runs actions and can write true to a bound boolean on press.
+Runs actions on press and on release, and can write a bound boolean true on press (and false on release when momentary).
 
 | Property | Label | Type |
 |---|---|---|
@@ -146,7 +174,9 @@ Runs actions and can write true to a bound boolean on press.
 | `textTransform` | Text case | `String` |
 | `iconSize` | Icon size (px) | `Integer` |
 | `variable` | Variable | `Boolean` |
+| `momentary` | Momentary | `Boolean` |
 | `actions` | Actions | `actions` |
+| `onRelease` | On Released | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
@@ -258,25 +288,6 @@ Plots recorded tag history over selectable time ranges, or buffers live values w
 | `liveMaxSamples` | Max samples per variable | `Integer` |
 | `showControls` | Show zoom buttons | `Boolean` |
 | `seriesColors` | Line colors | `String` |
-| `visible` | Visible | `Boolean` |
-| `interactable` | Interactable | `Boolean` |
-
-### User Badge
-
-Shows the signed-in user as an initialled badge, with optional sign-in and sign-out affordances.
-
-| Property | Label | Type |
-|---|---|---|
-| `usernameText` | Username text | `String` |
-| `groupsText` | Groups text | `String` |
-| `signInLabel` | Sign-in label | `String` |
-| `showGroups` | Show groups | `Boolean` |
-| `signInIcon` | Sign-in icon | `icon` |
-| `signOutIcon` | Sign-out icon | `icon` |
-| `radius` | Radius | `String` |
-| `actions` | On Press | `actions` |
-| `onSignIn` | On Sign In | `actions` |
-| `onSignOut` | On Sign Out | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 

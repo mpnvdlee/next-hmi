@@ -1,4 +1,4 @@
-"""Phase 3 of the project-management redesign: self-restart mechanism.
+"""Self-restart mechanism.
 
 The endpoint ``POST /api/system/restart`` writes a sentinel under the
 runtime home, broadcasts ``{type: "restarting"}`` to every WS client, then

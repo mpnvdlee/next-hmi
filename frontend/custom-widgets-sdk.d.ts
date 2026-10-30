@@ -30,10 +30,16 @@ declare namespace React {
     currentTarget: T;
     target: T & { value: string; checked: boolean };
   }
+  interface PointerEvent<T = Element> extends MouseEvent<T> {
+    button: number;
+    pointerId: number;
+  }
   interface KeyboardEvent<T = Element> {
     currentTarget: T;
     target: EventTarget;
     key: string;
+    /** True for the auto-repeat events of a held key. */
+    repeat: boolean;
     preventDefault(): void;
     stopPropagation(): void;
   }
@@ -384,6 +390,7 @@ type ComponentAction =
       onCancel?: ComponentAction[];
       onOk?: ComponentAction[];
     }
+  | { type: 'runComponentActions'; property: string }
   | {
       type: 'showToast';
       message: unknown;

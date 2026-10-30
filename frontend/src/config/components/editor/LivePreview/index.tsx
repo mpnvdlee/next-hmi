@@ -25,7 +25,13 @@ import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import TabBar from '../TabBar';
 import { PencilSimple, Play, Plus, Minus } from '@phosphor-icons/react';
 import ViewportSelector from '../ViewportSelector';
-import { VIEWPORTS } from '../viewportPresets';
+import {
+  CUSTOM_VIEWPORT,
+  VIEWPORTS,
+  viewportFromShell,
+  viewportToShell,
+  type ViewportChoice,
+} from '../viewportPresets';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { useConfigStore } from '@shared/store/configStore';
 import { useTranslationStore } from '@shared/store/translationStore';
@@ -46,6 +52,7 @@ import { findInPages, isFound } from '@shared/utils/widgetTree';
 import type { CSSWithVars } from '@shared/types/style';
 import ConfigWorkspace from '@config/components/ui/ConfigWorkspace';
 import WidgetSelector from '@config/components/ui/WidgetSelector';
+import { PAGE_WIDGETS } from '@config/components/ui/WidgetSelector/catalog';
 import PreviewContextMenu from './PreviewContextMenu';
 import { resolvePreviewInsertTarget, type PreviewInsertTarget } from './previewInsertTarget';
 import { buildComponentsUpdate, buildPagesUpdate, buildTranslationsUpdate } from './previewSync';
@@ -216,7 +223,14 @@ export default function LivePreview({ pageId }: { pageId: string }) {
   const translationRows = useTranslationStore((s) => s.translations);
   const draftComponents = useComponentStore((s) => s.draftComponents);
   const components = useComponentStore((s) => s.components);
-  const [vpIdx, setVpIdx] = useState(0); // default: Fit panel
+  // Saved in the project (shell.editorViewport), so it travels with the project, not the browser.
+  const savedViewport = useConfigStore((s) => s.shell.editorViewport);
+  const updateShell = useConfigStore((s) => s.updateShell);
+  const viewport = useMemo(() => viewportFromShell(savedViewport), [savedViewport]);
+  const setViewport = useCallback(
+    (choice: ViewportChoice) => updateShell({ editorViewport: viewportToShell(choice) }),
+    [updateShell],
+  );
   const [previewMode, setPreviewMode] = useState<'config' | 'test'>('config');
   const [ctxMenu, setCtxMenu] = useState<{
     x: number;
@@ -595,7 +609,7 @@ export default function LivePreview({ pageId }: { pageId: string }) {
     [ctxMenu, insertIntoTarget],
   );
 
-  const vp = VIEWPORTS[vpIdx];
+  const vp = viewport.idx === CUSTOM_VIEWPORT ? viewport : VIEWPORTS[viewport.idx];
   const isFit = vp.w === 0;
   const scale = scalePct / 100;
   // Fixed device presets: `transform: scale` paints the frame bigger/smaller
@@ -649,13 +663,12 @@ export default function LivePreview({ pageId }: { pageId: string }) {
       className="editor-preview-panel"
       actions={
         <>
-          <ViewportSelector vpIdx={vpIdx} onChange={setVpIdx} />
+          <ViewportSelector viewport={viewport} onChange={setViewport} />
 
           <span className="editor-preview-toolbar__label">Scaling</span>
           <div
             className="editor-preview-toolbar__seg editor-preview-toolbar__scale cfg-header-control"
             role="group"
-            aria-label="Preview scaling"
           >
             <button
               type="button"
@@ -663,7 +676,6 @@ export default function LivePreview({ pageId }: { pageId: string }) {
               onClick={() => adjustScale('out')}
               disabled={scalePct <= SCALE_MIN}
               title="Decrease scaling"
-              aria-label="Decrease scaling"
             >
               <Minus size={16} weight="regular" />
             </button>
@@ -684,7 +696,6 @@ export default function LivePreview({ pageId }: { pageId: string }) {
                     e.currentTarget.blur();
                   }
                 }}
-                aria-label="Scaling percentage"
               />
               %
             </span>
@@ -694,18 +705,13 @@ export default function LivePreview({ pageId }: { pageId: string }) {
               onClick={() => adjustScale('in')}
               disabled={scalePct >= SCALE_MAX}
               title="Increase scaling"
-              aria-label="Increase scaling"
             >
               <Plus size={16} weight="regular" />
             </button>
           </div>
 
           <span className="editor-preview-toolbar__label">Mode</span>
-          <div
-            className="editor-preview-toolbar__seg cfg-header-control"
-            role="group"
-            aria-label="Preview mode"
-          >
+          <div className="editor-preview-toolbar__seg cfg-header-control" role="group">
             <button
               type="button"
               className={`editor-preview-toolbar__seg-btn${
@@ -765,6 +771,7 @@ export default function LivePreview({ pageId }: { pageId: string }) {
       {selectorTarget && (
         <WidgetSelector
           contextName={selectorTarget.name}
+          filter={PAGE_WIDGETS}
           onClose={() => setSelectorTarget(null)}
           onInsert={(type) => {
             insertIntoTarget(selectorTarget, type);

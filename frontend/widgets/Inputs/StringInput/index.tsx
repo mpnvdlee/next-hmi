@@ -167,7 +167,6 @@ export default function StringInput({ id, properties, layout }: HmiWidgetProps) 
           <button
             type="button"
             className="hmi-string-input__eye-btn"
-            aria-label={showPassword ? 'Hide password' : 'Show password'}
             onClick={() => setShowPassword((v: boolean) => !v)}
             tabIndex={-1}
           >

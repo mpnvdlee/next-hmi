@@ -178,7 +178,7 @@
     }
   },
   "Content/Button": {
-    "description": "Runs actions and can write true to a bound boolean on press.",
+    "description": "Runs actions on press and on release, and can write a bound boolean true on press (and false on release when momentary).",
     "icon": {
       "type": "builtin",
       "name": "cursor-click"
@@ -304,8 +304,19 @@
         "description": "Optional boolean written true on press.",
         "group": "Data"
       },
+      "momentary": {
+        "format": "onoff",
+        "label": "Momentary",
+        "description": "Writes false to Variable on release, so it is true only while held.",
+        "defaultValue": false,
+        "group": "Data"
+      },
       "actions": {
         "label": "Actions"
+      },
+      "onRelease": {
+        "label": "On Released",
+        "event": "onRelease"
       }
     }
   },
@@ -775,69 +786,6 @@
         "label": "Line colors",
         "group": "Appearance",
         "description": "Comma-separated colours, one per series. Left empty, the theme series palette is used."
-      }
-    }
-  },
-  "Content/UserBadge": {
-    "description": "Shows the signed-in user as an initialled badge, with optional sign-in and sign-out affordances.",
-    "icon": {
-      "type": "builtin",
-      "name": "user"
-    },
-    "schema": {
-      "usernameText": {
-        "label": "Username text",
-        "group": "Content",
-        "description": "Overrides the signed-in username."
-      },
-      "groupsText": {
-        "label": "Groups text",
-        "group": "Content",
-        "description": "Overrides the signed-in user's group list."
-      },
-      "signInLabel": {
-        "label": "Sign-in label",
-        "group": "Content",
-        "defaultValue": "Log in",
-        "description": "Shown on the sign-in affordance while nobody is signed in."
-      },
-      "showGroups": {
-        "format": "onoff",
-        "label": "Show groups",
-        "group": "Appearance",
-        "defaultValue": true
-      },
-      "signInIcon": {
-        "label": "Sign-in icon",
-        "group": "Appearance",
-        "description": "Defaults to the lock glyph."
-      },
-      "signOutIcon": {
-        "label": "Sign-out icon",
-        "group": "Appearance",
-        "description": "Defaults to the sign-out glyph."
-      },
-      "radius": {
-        "format": "length",
-        "label": "Radius",
-        "defaultToken": "--hmi-radius-full",
-        "group": "Appearance"
-      },
-      "actions": {
-        "label": "On Press",
-        "group": "Actions"
-      },
-      "onSignIn": {
-        "label": "On Sign In",
-        "group": "Actions",
-        "event": "onSignIn",
-        "description": "Run by the sign-in affordance, which only appears once this is set."
-      },
-      "onSignOut": {
-        "label": "On Sign Out",
-        "group": "Actions",
-        "event": "onSignOut",
-        "description": "Run by the sign-out button, which only appears once this is set."
       }
     }
   },
@@ -2197,25 +2145,44 @@
       }
     }
   },
-  "Layout/ComponentSlot": {
-    "description": "Marks where content the caller supplies is rendered. Put one in a reusable component and instances of it gain a named slot — in the widget tree, and in the properties panel when a \"Widget slot\" property names it.",
+  "Layout/Badge": {
+    "description": "Puts a small chip, such as an alarm count, on the top-right corner of the one widget placed inside it.",
     "icon": {
       "type": "builtin",
-      "name": "frame-corners"
+      "name": "tag"
     },
     "schema": {
-      "slot": {
-        "label": "Slot name",
-        "placeholder": "content",
-        "description": "Names this slot — pick one of the component’s \"Widget slot\" properties. Instances get that property as a row in their properties panel, and the widgets put there render here."
+      "badge": {
+        "label": "Badge",
+        "description": "A small chip on the top-right corner, such as an alarm count. Empty or 0 hides it.",
+        "group": "Content"
+      },
+      "color": {
+        "label": "Color",
+        "defaultToken": "--hmi-fault",
+        "group": "Appearance"
+      },
+      "offset": {
+        "label": "Offset (px)",
+        "description": "Moves the chip inward from the corner; negative moves it further out. 0 centres it on the corner.",
+        "step": 1,
+        "group": "Appearance"
+      },
+      "size": {
+        "label": "Size (px)",
+        "description": "Text size of the chip; the chip scales with it.",
+        "min": 6,
+        "max": 96,
+        "step": 1,
+        "group": "Appearance"
       }
     }
   },
-  "Layout/Container": {
-    "description": "Groups and lays out child widgets in a row or column. Hosts other widgets, and runs its actions when pressed.",
+  "Layout/ButtonContainer": {
+    "description": "A Container that is one big control around whatever it holds — a tile, a list row — running actions when pressed and released.",
     "icon": {
       "type": "builtin",
-      "name": "stack"
+      "name": "cursor-click"
     },
     "schema": {
       "title": {
@@ -2262,6 +2229,75 @@
       },
       "actions": {
         "label": "Actions"
+      },
+      "onRelease": {
+        "label": "On Released",
+        "event": "onRelease"
+      }
+    }
+  },
+  "Layout/ComponentSlot": {
+    "description": "Marks where content the caller supplies is rendered. Put one in a reusable component and instances of it gain a named slot — in the widget tree, and in the properties panel when a \"Widget slot\" property names it.",
+    "icon": {
+      "type": "builtin",
+      "name": "frame-corners"
+    },
+    "schema": {
+      "slot": {
+        "label": "Slot name",
+        "placeholder": "content",
+        "description": "Names this slot — pick one of the component’s \"Widget slot\" properties. Instances get that property as a row in their properties panel, and the widgets put there render here."
+      }
+    }
+  },
+  "Layout/Container": {
+    "description": "Groups and lays out child widgets in a row or column. Hosts other widgets; a Button Container does the same and runs actions when pressed.",
+    "icon": {
+      "type": "builtin",
+      "name": "stack"
+    },
+    "schema": {
+      "title": {
+        "label": "Title",
+        "group": "Content"
+      },
+      "showWhenEmpty": {
+        "format": "show",
+        "label": "Show when empty",
+        "group": "Content",
+        "defaultValue": false,
+        "description": "Keep the frame and background even when every child is hidden, instead of collapsing away."
+      },
+      "overflow": {
+        "format": "select",
+        "label": "Overflow",
+        "group": "Content",
+        "defaultValue": "visible",
+        "options": [
+          {
+            "label": "Visible",
+            "value": "visible"
+          },
+          {
+            "label": "Clip",
+            "value": "clip"
+          },
+          {
+            "label": "Scroll",
+            "value": "scroll"
+          }
+        ],
+        "description": "What happens to children that do not fit. Clip and Scroll need a bounded size (Fixed or Fill); a Hug container grows to fit its children instead."
+      },
+      "background": {
+        "label": "Background",
+        "group": "Appearance"
+      },
+      "border": {
+        "label": "Border",
+        "defaultValue": "none",
+        "description": "Any CSS border shorthand, e.g. 1px solid var(--hmi-border).",
+        "group": "Appearance"
       }
     }
   },
