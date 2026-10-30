@@ -194,17 +194,20 @@ The canonical list of names exposed on `window.__nextHMI__` lives in `frontend/s
 
 Hook variants (call internally `useEvalContext()`; safe to use inside a component body):
 
-- `usePropString(props, key, fallback?)`
-- `usePropNumber(props, key, fallback?)` — a string that is a clean decimal number (`"42"`) reads as that number, never rounded; any other non-number returns `fallback`.
-- `usePropBoolean(props, key, fallback?)`
-- `usePropVar(props, key)` — resolves either a `$var` binding (including array-element bindings with an `index`) or a static / expression value; returns `unknown`.
+`usePropString`, `usePropNumber` and `usePropBoolean` follow one rule. Each reads a property from any source — a static value, an expression, or a `$var` binding (including array-element bindings with an `index`), whose live value it follows and re-renders on — converts it to its type, and returns `fallback` when there is no value of that type. Pass `null` as the fallback — typed `string | null`, `number | null`, `boolean | null` — to tell "no value yet" apart from a real `''`, `0` or `false`. A property that holds no `$var` costs no variable subscription.
+
+- `usePropString(props, key, fallback?)` — a number or boolean as its plain text (`"42"`, `"true"`); an object is no value. Default fallback `''`.
+- `usePropNumber(props, key, fallback?)` — a string that is a clean decimal number (`"42"`, or an integer beyond ±(2**53 − 1) as the backend sends it) reads as that number — the nearest double for such an integer, while a fractional value is never rounded to a whole one; anything else is no value. Default fallback `0`; `usePropNumber(props, key, null)` lets a widget show `---`.
+- `usePropBoolean(props, key, fallback?)` — a boolean as-is, a number as non-zero = `true`; a string trimmed and lower-cased, `true` / `yes` / `on` / `1` reading `true` and `false` / `no` / `off` / `0` reading `false` (`""` reads `true`); any other value is truthy, except a plain object with no `$` key, which is no value. Default fallback `false`; `usePropBoolean(props, key, null)` lets an indicator show an unknown state until the first value arrives — in that form an empty text or `NaN` also reads as no value (`null`), so an empty string tag never lights a lamp.
+- `usePropVar(props, key)` — resolves either a `$var` binding (including array-element bindings with an `index`) or a static / expression value; returns `unknown`, for when the raw value itself matters.
 - `usePropStruct(props, key)` — for struct properties; returns the live struct (or array for an array struct `type` like `'struct[]'`).
 - `useRecordListProp(props, key)` — for a `record-list` property (array of records); resolves a `$var` struct-array binding, the `$recipeList` value source, a `$widgetProp` export, or a static array, and returns `unknown[]`.
 - `useItemListProp(props, key)` — for an `item-list` property (any array); resolves a scalar or struct `$var` array, a static list, an `$http` JSON-array pick, `$recipeList`, `$user` users/groups or a `$widgetProp` export, and returns `{ items, arrayKey?, structArray }` — `arrayKey` is set only for a `$var` array, which is what makes its elements writable.
 
 Non-hook variants (safe in event handlers, action callbacks, utilities — accept an optional `evalCtx`):
 
-- `getPropString`, `getPropNumber`, `getPropBoolean`
+- `getPropString`, `getPropNumber`, `getPropBoolean` — with an `evalCtx` they evaluate a `$var` binding to its value at call time, but cannot subscribe to it: in a component body use the hook variants.
+- `readNumberValue(value)` — a value that is not a property as a number: a struct field, a chart sample, a `useVariable` result, or a raw `usePropVar` value you also need as text. A number as-is, a clean decimal string as the nearest double, otherwise `undefined`. For a property, `usePropNumber` does this for you.
 - `getPropBinding(props, key)` — returns the underlying `VariableBinding | undefined` (no resolution).
 - `getPropBindingOrStatic(value)` — returns `{ binding, staticValue }` from a property value.
 
@@ -434,23 +437,41 @@ Libraries loaded this way run **outside** the SDK banner — they are not destru
 
 ### Scalar variable bindings
 
-For scalar value properties (e.g. `float` / `integer`), use `usePropVar` — it handles
-both the `$var`-wrapped binding (including array-element bindings with an `index`) and a plain
-static value in one call:
+For a numeric value property (`float` / `integer`), use `usePropNumber` — it handles
+the `$var`-wrapped binding (live, including array-element bindings with an `index`), a
+plain static value and an expression in one call. The `null` fallback tells a missing
+value apart from a real `0`:
 
 ```tsx
 export default function MyWidget({ properties, layout }: HmiWidgetProps) {
-  const value = usePropVar(properties, 'variable');
-  const num   = typeof value === 'number' ? value : 0;
+  const value = usePropNumber(properties, 'variable', null);
+  const num   = value ?? 0;
 
-  return <div style={selfLayoutStyle(layout)}>{num.toFixed(2)}</div>;
+  return (
+    <div style={selfLayoutStyle(layout)}>{value === null ? '---' : num.toFixed(2)}</div>
+  );
 }
 ```
+
+A `string` or `boolean` binding reads the same way through `usePropString` /
+`usePropBoolean`, with the same `null` form — `usePropBoolean(properties,
+'variable', null)` is `null` until the first value arrives, which an indicator
+should show as its own state rather than as off. For a value whose type you
+check yourself, `usePropVar` returns the resolved value as `unknown`.
 
 Schema:
 ```ts
 variable: { type: 'float', label: 'Value' }
 ```
+
+A live value arrives in the form the `/ws` contract lists under
+[Value forms](../architecture/websocket.md#value-forms). Two matter to a
+widget: an `integer` beyond ±9,007,199,254,740,991 (an `Int64`/`UInt64`
+counter) arrives as its decimal string, so `typeof value === 'number'` is
+false for it — `usePropNumber` reads it as the nearest number, and the string
+`usePropVar` returns shows every digit (`readNumberValue` parses that same raw
+value when you need both); a `datetime` arrives as ISO 8601 UTC with
+milliseconds (`"2026-01-02T03:04:05.678Z"`), which `new Date(value)` parses.
 
 If you also need the composite key for write-back, use `getPropBinding` to extract it:
 

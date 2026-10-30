@@ -39,8 +39,8 @@ function arcPath(fraction: number): string {
 }
 
 export default function Gauge({ properties, layout }: HmiWidgetProps) {
-  const rawValue = usePropVar(properties, 'variable');
-  const value = typeof rawValue === 'number' ? rawValue : 0;
+  const numericValue = usePropNumber(properties, 'variable', null);
+  const value = numericValue ?? 0;
 
   const min = usePropNumber(properties, 'min', 0);
   const max = usePropNumber(properties, 'max', 100);
@@ -48,7 +48,7 @@ export default function Gauge({ properties, layout }: HmiWidgetProps) {
   const unit = usePropString(properties, 'unit', '');
 
   const fraction = Math.min(1, Math.max(0, (value - min) / (max - min || 1)));
-  const displayValue = typeof rawValue === 'number' ? rawValue.toFixed(1) : '---';
+  const displayValue = numericValue !== null ? numericValue.toFixed(1) : '---';
 
   return (
     <div className="hmi-component hmi-gauge" style={selfLayoutStyle(layout)}>

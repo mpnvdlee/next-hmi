@@ -199,11 +199,22 @@ function scalar(value: unknown, rule: TypeRule, rawType: string): WriteCoercionR
     !dateTime ||
     !validDate(dateTime[1]) ||
     !validTime(dateTime[2]) ||
-    (dateTime[4] !== undefined && (Number(dateTime[4]) > 23 || Number(dateTime[5]) > 59))
+    (dateTime[4] !== undefined && (Number(dateTime[4]) > 23 || Number(dateTime[5]) > 59)) ||
+    !utcRepresentable(dateTime)
   ) {
     return reject('invalid_temporal');
   }
   return { ok: true, value: trimmed };
+}
+
+// The backend stores a DateTime in UTC; an offset that pushes the first or
+// last representable day past year 1 or 9999 has no UTC form there.
+function utcRepresentable([, datePart, timePart, sign, offH, offM]: RegExpExecArray): boolean {
+  if (sign === undefined || (datePart !== '0001-01-01' && datePart !== '9999-12-31')) return true;
+  const [hours, minutes] = timePart.split(':').map(Number);
+  const offset = (sign === '+' ? 1 : -1) * (Number(offH) * 60 + Number(offM));
+  const utcMinutes = hours * 60 + minutes - offset;
+  return datePart === '0001-01-01' ? utcMinutes >= 0 : utcMinutes < 24 * 60;
 }
 
 function rangeBounds(
@@ -218,10 +229,15 @@ function rangeBounds(
 function inRange(
   value: unknown,
   [min, max]: readonly [number | undefined, number | undefined],
+  integer: boolean,
 ): boolean {
-  if (typeof value !== 'number') return true;
-  if (min !== undefined && value < min) return false;
-  if (max !== undefined && value > max) return false;
+  // An Integer beyond ±(2**53 − 1) comes out of `integerValue` as its decimal
+  // string; a BigInt compares it against a number bound exactly, as Python does.
+  const comparable =
+    typeof value === 'number' ? value : integer && typeof value === 'string' ? BigInt(value) : null;
+  if (comparable === null) return true;
+  if (min !== undefined && comparable < min) return false;
+  if (max !== undefined && comparable > max) return false;
   return true;
 }
 
@@ -287,7 +303,10 @@ export function coerceOpcuaWrite(
   const bounds = rangeBounds(descriptor);
   if (bounds) {
     const values = Array.isArray(result.value) ? result.value : [result.value];
-    if (!values.every((item) => inRange(item, bounds))) return reject('value_out_of_range');
+    const integer = rule.canonical === 'Integer';
+    if (!values.every((item) => inRange(item, bounds, integer))) {
+      return reject('value_out_of_range');
+    }
   }
   if (!isFloat32(rawType)) return result;
   return {

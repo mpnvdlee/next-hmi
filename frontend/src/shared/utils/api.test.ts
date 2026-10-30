@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   apiErrorFrom,
   apiJson,
+  apiNdjson,
+  createNdjsonDecoder,
   isApiError,
   MANAGER_SESSION_REQUIRED,
   setProjectUnavailableHandler,
@@ -121,5 +123,65 @@ describe('apiErrorFrom', () => {
     setProjectUnavailableHandler(handler);
     await apiErrorFrom(jsonResponse(500, { detail: 'boom' }));
     expect(handler).not.toHaveBeenCalled();
+  });
+});
+
+describe('createNdjsonDecoder', () => {
+  const enc = new TextEncoder();
+
+  it('holds a line the transport cut in half until its newline arrives', () => {
+    const decoder = createNdjsonDecoder();
+    expect(decoder.push(enc.encode('{"a":1}\n{"b":'))).toEqual([{ a: 1 }]);
+    expect(decoder.push(enc.encode('2}\n'))).toEqual([{ b: 2 }]);
+  });
+
+  it('reassembles a multi-byte character split across chunks', () => {
+    const bytes = enc.encode('{"name":"Füllstand"}\n');
+    const cut = bytes.indexOf(0xc3) + 1; // inside the two-byte "ü"
+    const decoder = createNdjsonDecoder();
+    expect(decoder.push(bytes.slice(0, cut))).toEqual([]);
+    expect(decoder.push(bytes.slice(cut))).toEqual([{ name: 'Füllstand' }]);
+  });
+
+  it('hands over a last line sent without a newline on flush', () => {
+    const decoder = createNdjsonDecoder();
+    expect(decoder.push(enc.encode('{"a":1}\n{"done":true}'))).toEqual([{ a: 1 }]);
+    expect(decoder.flush()).toEqual([{ done: true }]);
+  });
+
+  it('skips blank lines', () => {
+    const decoder = createNdjsonDecoder();
+    expect(decoder.push(enc.encode('\n{"a":1}\n\n'))).toEqual([{ a: 1 }]);
+    expect(decoder.flush()).toEqual([]);
+  });
+});
+
+describe('apiNdjson', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('calls back once per line, in order', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{"n":1}\n{"n":2}\n{"n":3}\n', { status: 200 })),
+    );
+    const seen: unknown[] = [];
+
+    await apiNdjson('/api/stream', (line) => seen.push(line));
+
+    expect(seen).toEqual([{ n: 1 }, { n: 2 }, { n: 3 }]);
+  });
+
+  it('raises an HTTP failure before the stream like apiJson does', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(503, { detail: "Datasource 'PLC' is not connected" })),
+    );
+
+    const error = await apiNdjson('/api/stream', () => {}).catch((e: unknown) => e);
+
+    expect(isApiError(error)).toBe(true);
+    expect((error as Error).message).toBe("Datasource 'PLC' is not connected");
   });
 });

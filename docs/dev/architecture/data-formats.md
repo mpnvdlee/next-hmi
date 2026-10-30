@@ -548,7 +548,11 @@ per parameter). Persisted in camelCase (models in `models/recipe.py`).
 A parameter carries exactly `id`, `label`, `binding` and `dataType` — no unit,
 range or option metadata, and nothing else (`extra="forbid"`). `dataType` uses
 the canonical simple types (`boolean | integer | float | string
-| datetime`) plus their `[]` arrays (free length). `recipe_state.json` is owned
+| datetime`) plus their `[]` arrays (free length). A dataset's `values` hold
+what an upload read, in the live [value forms](websocket.md#value-forms) — an
+`integer` beyond 2**53 as its decimal string, a `datetime` as
+`"2026-01-02T03:04:05.678Z"` — both of which a download writes back as they
+are. `recipe_state.json` is owned
 by the backend and tracks the loaded dataset **per type** (multiple types can be
 loaded at once):
 
@@ -711,6 +715,9 @@ Examples:
 - `Constants:MaxSpeed`
 
 Helpers exist in both Python and TypeScript to build and parse these keys.
+The JSON forms of the values under them (a `DateTime` as ISO 8601 UTC with
+milliseconds, an integer beyond 2**53 as a decimal string, …) are listed under
+[Value forms](websocket.md#value-forms).
 
 ## Translation Dictionaries
 

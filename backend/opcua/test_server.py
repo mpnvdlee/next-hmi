@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from asyncua import Server, ua
-from core.exceptions import DatasourceConflictError
+from core.exceptions import DatasourceConflictError, DatasourceValidationError
 from core.project_packer import safe_filename
 from core.storage import active_certs_dir
 from core.value_types import is_array_shape, is_fixed_array
@@ -108,7 +108,7 @@ _SIM_LABELS = (
 )
 
 # Lower-cased data_type -> the VariantType a node is built with: OPCUA_TYPES
-# and its aliases in shared/utils/valueTypes.ts.
+# and its aliases in shared/utils/valueTypes.ts (parity: opcuaBuiltinTypes.json).
 _VARIANT_MAP: dict[str, ua.VariantType] = {
     "boolean": ua.VariantType.Boolean,
     "bool": ua.VariantType.Boolean,
@@ -128,6 +128,25 @@ _VARIANT_MAP: dict[str, ua.VariantType] = {
     "string": ua.VariantType.String,
     "datetime": ua.VariantType.DateTime,
 }
+
+
+def _variant_type(data_type: Any, display_name: str) -> ua.VariantType:
+    """The VariantType a test-server variable of *data_type* is built with.
+
+    Raises :class:`DatasourceValidationError` for a type the server cannot
+    simulate, rather than building a node of some other type: the paired
+    client would then read, and write, a type the config never declared.
+    """
+    variant_type = (
+        _VARIANT_MAP.get(data_type.strip().lower()) if isinstance(data_type, str) else None
+    )
+    if variant_type is None:
+        raise DatasourceValidationError(
+            f"Variable '{display_name}' has data type {data_type!r}, "
+            "which the test server cannot simulate"
+        )
+    return variant_type
+
 
 _DEFAULT_VALUES: dict[ua.VariantType, Any] = {
     ua.VariantType.Boolean: False,
@@ -207,7 +226,15 @@ class TestServerInstance:
 
         self._sim_nodes = []
         sim_idx = 0
-        await self._populate_nodes(objects, idx, variables, sim_idx)
+        try:
+            await self._populate_nodes(objects, idx, variables, sim_idx)
+        except DatasourceValidationError as exc:
+            self._error = str(exc)
+            self._running = False
+            with contextlib.suppress(Exception):
+                await server.stop()
+            logger.error("Test server '%s' failed to start: %s", self.name, exc)
+            raise
 
         try:
             await server.start()
@@ -257,10 +284,7 @@ class TestServerInstance:
                     fixed_length if fixed_length else
                     (_DYNAMIC_ARRAY_SIM_LENGTH if node_is_array else 0)
                 )
-                variant_type = (
-                    _VARIANT_MAP.get(data_type_str.strip().lower())
-                    if isinstance(data_type_str, str) else None
-                ) or ua.VariantType.Float
+                variant_type = _variant_type(data_type_str, display_name)
                 default = _DEFAULT_VALUES.get(variant_type, 0.0)
                 if node_is_array:
                     initial_value = ua.Variant(

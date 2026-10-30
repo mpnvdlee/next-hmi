@@ -41,7 +41,7 @@ export default function NumberInput({ properties, layout }: HmiWidgetProps) {
   // binding writes back, so a struct arriving from any other source renders its
   // value but must not look editable — the entry would be swallowed.
   const bEnabled = fieldRecord?.bEnabled !== false && writeVariable.canWrite;
-  const fValue = typeof fieldRecord?.fValue === 'number' ? fieldRecord.fValue : undefined;
+  const fValue = readNumberValue(fieldRecord?.fValue);
 
   const label = getPropString(properties, 'label', '', evalCtx);
   const unit = getPropString(properties, 'unit', '', evalCtx);

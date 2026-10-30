@@ -11,6 +11,90 @@ heading.
 
 ## [Unreleased]
 
+### Added
+
+- **Browse PLC shows its progress.** Browsing a whole server could run for
+  minutes on a large PLC with only a disabled button to show for it. A bar now
+  fills as the walk goes, with the number of nodes found and how deep it has
+  reached. Leaving the datasource stops the browse on the server too, instead
+  of letting it finish for nobody.
+
+- **`usePropNumber` can report "no value".** Custom widgets can pass `null` as
+  the fallback — `usePropNumber(properties, 'variable', null)` — to get `null`
+  instead of `0` when a bound variable has no numeric value yet, and show
+  `---`. The hook now also subscribes to a bound variable itself, so it stays
+  live outside a page as well; `readNumberValue(usePropVar(...))` is no longer
+  needed for a numeric binding.
+
+- **`usePropString` and `usePropBoolean` work the same way.** Both follow a
+  bound variable live and take a `null` fallback to tell "no value yet" apart
+  from `''` or `false`; `usePropBoolean`'s `null` form also reads an empty text
+  or `NaN` as no value. A property with no variable bound no longer costs a
+  variable-store listener.
+
+### Changed
+
+- **On/off widgets show "unknown" instead of "off" before a value arrives.**
+  An **LED Indicator** shows an empty ring, a **Switch** a hollow track with its
+  thumb midway — and it can't be pressed until it knows its state — and a
+  **Menu Toggle** is dimmed with a dashed outline; pressing it still runs its
+  actions but writes nothing. An empty text or an invalid number from a tag
+  counts as no value too.
+
+- **DateTime tags read as ISO 8601 UTC.** A Text widget bound to a DateTime tag
+  showed `2026-01-02 03:04:05+00:00`. It now shows `2026-01-02T03:04:05.678Z`:
+  the same form a write accepts and a recipe stores. The time is kept to the
+  millisecond, so a recipe that captures a DateTime writes it back without its
+  microseconds.
+
+- **Very large 64-bit integers arrive as text.** An `Int64`/`UInt64` beyond
+  ±9,007,199,254,740,991 reached the browser as a number and lost its last
+  digits. It now arrives as its exact decimal text. Number fields still read
+  it, and a recipe that captures it downloads it back instead of refusing it as
+  lossy.
+
+- **Browse PLC skips the server's own `Server` object.** A browse from the
+  default Objects root no longer walks `Server` (`i=2253`): its capabilities,
+  diagnostics and namespace table, hundreds of nodes with no PLC tags. Set
+  **Browse Root Node** to `i=2253`, or to a node inside it, to browse it. A tag
+  imported earlier from under `Server` stays as it is, enabled and bound.
+
+- **`readNumberValue` is a reserved SDK name.** A custom widget that declares
+  its own `readNumberValue` at module level no longer compiles until the
+  helper is renamed. One declared inside a component or function is
+  unaffected.
+
+- **The test server refuses a type it cannot simulate.** It used to publish a
+  Float for any type name it did not know. It now refuses to start, with the
+  variable and type named; pick a supported type for that variable in the
+  test-server editor, which marks the old one unsupported.
+
+### Fixed
+
+- **Counters beyond 2^53 drive numeric widgets.** Gauge, Progress Bar, Ring
+  Gauge, Trend, Trend Chart, Numeric Stepper and Number Input read an
+  `Int64`/`UInt64` value that arrives as text instead of showing `---` or 0,
+  and Numeric Stepper shows, steps and accepts it exactly, across the full
+  `UInt64` range, against a min/max given as exact digits too.
+  Custom widgets get the same reading from the new SDK helper
+  `readNumberValue`.
+
+- **Unsupported test-server types are shown, not hidden.** A variable whose
+  stored type the test server cannot simulate — a legacy `Integer`,
+  `Duration`, or none — shows that type, marked unsupported, instead of
+  **Float**; picking any supported type changes it.
+
+- **Range checks agree on very large integers.** A write of an integer beyond
+  2^53 is checked against the variable's min/max exactly in the runtime as
+  well as on the server, for a struct field too, which the runtime now also
+  checks against the member's own type.
+
+- **A timestamp beyond year 1 or 9999 in UTC is refused.** A DateTime whose
+  time zone pushes it past the first or last representable moment
+  (`9999-12-31T23:59:59-01:00`) has no UTC form, which OPC-UA requires. It is
+  now refused as an invalid value, in the runtime as well as on the server, and
+  a recipe download containing one carries on with the rest.
+
 ## [1.0.1] - 2026-10-24
 
 Fixes for OPC-UA browse and writes, most of them reported against CODESYS

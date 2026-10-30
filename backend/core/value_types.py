@@ -7,9 +7,11 @@ inside the OPC layer (the datasource config, the write path, the simulated
 server).  Conversion real → simple happens at the HMI boundaries.
 """
 
+import base64
+from datetime import UTC, datetime
 from typing import Any
 
-# Lower-cased real OPC-UA type -> simple type.
+# Lower-cased real OPC-UA type -> simple type. Parity: opcuaBuiltinTypes.json.
 OPCUA_TO_SIMPLE: dict[str, str] = {
     "boolean": "Boolean",
     "bool": "Boolean",
@@ -39,6 +41,9 @@ OPCUA_TO_SIMPLE: dict[str, str] = {
     "duration": "Duration",
     "timespan": "Duration",
 }
+
+# Number.MAX_SAFE_INTEGER: the largest integer a browser's JSON number holds exactly.
+MAX_SAFE_INTEGER = 2**53 - 1
 
 # Simple scalar types (no struct names, no arrays).
 VALUE_TYPES: frozenset[str] = frozenset(
@@ -144,3 +149,53 @@ def simplify_variable_tree(nodes: Any) -> list:
             new_node["children"] = simplify_variable_tree(children)
         out.append(new_node)
     return out
+
+
+def datetime_to_iso(value: datetime) -> str:
+    """ISO 8601 UTC with milliseconds and ``Z``: ``2026-01-02T03:04:05.678Z``.
+
+    A naive datetime is taken as UTC — OPC-UA DateTime is UTC by definition,
+    and the write path hands a naive one to the server as UTC as well.
+
+    An aware datetime whose instant falls outside years 1 to 9999 in UTC
+    (``9999-12-31T23:59:59-01:00``) has no UTC form here. It keeps its own
+    offset — the same instant, still ISO 8601 — rather than raising, which
+    would take down the broadcast carrying it, or being clamped, which would
+    silently report a different instant.
+    """
+    if value.tzinfo is None:
+        utc = value.replace(tzinfo=UTC)
+    else:
+        try:
+            utc = value.astimezone(UTC)
+        except OverflowError:
+            return value.isoformat(timespec="milliseconds")
+    return utc.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def json_ready_scalar(value: Any) -> Any:
+    """One non-container value in the form the value cache and ``/ws`` carry.
+
+    An integer beyond ``MAX_SAFE_INTEGER`` becomes its decimal string — the form
+    the write path takes it back in — because a browser would round the number.
+    """
+    if value is None or isinstance(value, (bool, float, str)):
+        return value
+    if isinstance(value, int):
+        return value if -MAX_SAFE_INTEGER <= value <= MAX_SAFE_INTEGER else str(value)
+    if isinstance(value, datetime):
+        return datetime_to_iso(value)
+    if isinstance(value, (bytes, bytearray)):
+        return base64.b64encode(value).decode()
+    return str(value)
+
+
+def json_ready(value: Any) -> Any:
+    """*value* with every leaf made JSON-ready (``json_ready_scalar``) and every
+    dict/list/tuple rebuilt; datasource-agnostic, so safe on a value already
+    normalized at its source."""
+    if isinstance(value, dict):
+        return {k: json_ready(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_ready(v) for v in value]
+    return json_ready_scalar(value)

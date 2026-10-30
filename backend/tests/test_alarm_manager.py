@@ -87,3 +87,14 @@ def test_trigger_paths_reflect_edit_and_delete(live_project_root: Path):
 
     manager.set_config(AlarmConfig(groups=[]))
     assert manager.get_trigger_paths_by_datasource() == {}
+
+
+def test_value_range_trigger_reads_a_counter_beyond_two_to_the_53():
+    # The cache holds such a counter as its decimal string, the form a browser
+    # carries exactly; the threshold compare still sees a number.
+    trigger = AlarmTrigger(
+        type="value_range", source_value={"$var": {"path": "DS:Count"}}, min=2**60,
+    )
+    manager = AlarmManager()
+    assert manager._evaluate_trigger(trigger, str(2**63)) is True
+    assert manager._evaluate_trigger(trigger, str(2**59)) is False

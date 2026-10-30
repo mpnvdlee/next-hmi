@@ -161,6 +161,64 @@
     "reason": "value_out_of_range"
   },
   {
+    "name": "int64 decimal string above maximum",
+    "dataType": "Int64",
+    "value": "9007199254740993",
+    "max": 100,
+    "ok": false,
+    "reason": "value_out_of_range"
+  },
+  {
+    "name": "int64 decimal string one above maximum, compared exactly",
+    "dataType": "Int64",
+    "value": "9007199254740993",
+    "max": 9007199254740992,
+    "ok": false,
+    "reason": "value_out_of_range"
+  },
+  {
+    "name": "int64 decimal string within maximum",
+    "dataType": "Int64",
+    "value": "9007199254740993",
+    "max": 9007199254740994,
+    "ok": true,
+    "output": "9007199254740993"
+  },
+  {
+    "name": "int64 decimal string below minimum",
+    "dataType": "Int64",
+    "value": "-9007199254740993",
+    "min": 0,
+    "ok": false,
+    "reason": "value_out_of_range"
+  },
+  {
+    "name": "int64 decimal string one below minimum, compared exactly",
+    "dataType": "Int64",
+    "value": "-9007199254740993",
+    "min": -9007199254740992,
+    "ok": false,
+    "reason": "value_out_of_range"
+  },
+  {
+    "name": "int64 decimal string within minimum",
+    "dataType": "Int64",
+    "value": "9007199254740993",
+    "min": 9007199254740992,
+    "ok": true,
+    "output": "9007199254740993"
+  },
+  {
+    "name": "uint64 array element decimal string above maximum",
+    "dataType": "UInt64",
+    "isArray": true,
+    "value": [5, "9007199254740993"],
+    "min": 0,
+    "max": 100,
+    "ok": false,
+    "reason": "value_out_of_range"
+  },
+  {
     "name": "float32 overflow",
     "dataType": "Single",
     "value": "3.5e38",
@@ -245,6 +303,41 @@
     "value": "2026-06-15",
     "ok": false,
     "reason": "invalid_temporal"
+  },
+  {
+    "name": "DateTime past year 9999 in UTC rejected",
+    "dataType": "DateTime",
+    "value": "9999-12-31T23:59:59-01:00",
+    "ok": false,
+    "reason": "invalid_temporal"
+  },
+  {
+    "name": "DateTime before year 1 in UTC rejected",
+    "dataType": "DateTime",
+    "value": "0001-01-01T00:30:00+01:00",
+    "ok": false,
+    "reason": "invalid_temporal"
+  },
+  {
+    "name": "DateTime at the last UTC day with a positive offset accepted",
+    "dataType": "DateTime",
+    "value": "9999-12-31T23:59:59+01:00",
+    "ok": true,
+    "output": "9999-12-31T23:59:59+01:00"
+  },
+  {
+    "name": "DateTime at the first UTC day with a negative offset accepted",
+    "dataType": "DateTime",
+    "value": "0001-01-01T00:30:00-01:00",
+    "ok": true,
+    "output": "0001-01-01T00:30:00-01:00"
+  },
+  {
+    "name": "DateTime on 0001-01-01 reaching exactly midnight UTC accepted",
+    "dataType": "DateTime",
+    "value": "0001-01-01T01:00:00+01:00",
+    "ok": true,
+    "output": "0001-01-01T01:00:00+01:00"
   },
   {
     "name": "valid leap date",

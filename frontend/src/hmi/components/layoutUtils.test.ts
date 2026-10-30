@@ -34,8 +34,15 @@ import {
   useRecordListProp,
   useItemListProp,
   usePropVar,
+  usePropNumber,
+  usePropString,
+  usePropBoolean,
   getPropNumber,
+  getPropString,
+  getPropBoolean,
+  readNumberValue,
 } from './layoutUtils';
+import { useEvalContext } from '../hooks/useEvalContext';
 import type { LayoutConfig, WidgetConfig } from '@shared/types/config';
 import selfLayoutKeys from '@shared/types/__fixtures__/selfLayoutKeys.json';
 import { useVariableStore } from '../store/variableStore';
@@ -813,6 +820,245 @@ describe('usePropVar', () => {
   });
 });
 
+describe('usePropNumber', () => {
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(MemoryRouter, null, children);
+  const read = (properties: Record<string, unknown>, fallback?: number | null) =>
+    renderHook(
+      () =>
+        fallback === null
+          ? usePropNumber(properties, 'n', null)
+          : usePropNumber(properties, 'n', fallback),
+      { wrapper },
+    ).result;
+
+  beforeEach(() => {
+    useVariableStore.setState({ values: {}, varMeta: {} });
+  });
+
+  it('reads a static number and a static numeric string', () => {
+    expect(read({ n: 12.5 }, 9).current).toBe(12.5);
+    expect(read({ n: { $static: 3 } }, 9).current).toBe(3);
+    expect(read({ n: ' -1.5 ' }, 9).current).toBe(-1.5);
+  });
+
+  it('reads what an expression source resolves to', () => {
+    const n = { $formula: { expression: '{1} * 2', wildcards: { 1: 21 } } };
+    expect(read({ n }, 9).current).toBe(42);
+  });
+
+  it('follows a $var binding live', () => {
+    useVariableStore.setState({ values: { 'PLC:Setpoint': 10 } });
+    const result = read({ n: { $var: { path: 'PLC:Setpoint' } } }, -1);
+    expect(result.current).toBe(10);
+    act(() => useVariableStore.setState({ values: { 'PLC:Setpoint': 11.5 } }));
+    expect(result.current).toBe(11.5);
+    act(() => useVariableStore.setState({ values: { 'PLC:Setpoint': 'off' } }));
+    expect(result.current).toBe(-1);
+  });
+
+  it('reads one element of an array binding by its index', () => {
+    useVariableStore.setState({
+      values: { 'PLC:Temps': [20, 21.5, 23] },
+      varMeta: { 'PLC:Temps': { type: { kind: 'scalar', base: 'Float', array: true } } },
+    });
+    const result = read({ n: { $var: { path: 'PLC:Temps', index: 1 } } }, -1);
+    expect(result.current).toBe(21.5);
+    act(() => useVariableStore.setState({ values: { 'PLC:Temps': [20, 22, 23] } }));
+    expect(result.current).toBe(22);
+  });
+
+  it('reads an integer beyond 2**53 from its decimal string', () => {
+    useVariableStore.setState({ values: { 'PLC:Counter': '9007199254740993' } });
+    expect(read({ n: { $var: { path: 'PLC:Counter' } } }, 0).current).toBe(2 ** 53);
+  });
+
+  it('returns the fallback when there is no numeric value', () => {
+    expect(read({ n: 'abc' }, 9).current).toBe(9);
+    expect(read({}, 9).current).toBe(9);
+    expect(read({ n: { $var: { path: '' } } }, 9).current).toBe(9);
+  });
+
+  it('returns null for the null fallback, 0 by default', () => {
+    expect(read({ n: 'abc' }, null).current).toBeNull();
+    expect(read({ n: { $var: { path: 'PLC:Missing' } } }, null).current).toBeNull();
+    expect(read({ n: 0 }, null).current).toBe(0);
+    expect(read({ n: 'abc' }).current).toBe(0);
+  });
+});
+
+describe('usePropString', () => {
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(MemoryRouter, null, children);
+  const read = (properties: Record<string, unknown>, fallback?: string | null) =>
+    renderHook(
+      () =>
+        fallback === null
+          ? usePropString(properties, 's', null)
+          : usePropString(properties, 's', fallback),
+      { wrapper },
+    ).result;
+
+  beforeEach(() => {
+    useVariableStore.setState({ values: {}, varMeta: {} });
+  });
+
+  it('reads a static value as its text', () => {
+    expect(read({ s: 'Pump' }).current).toBe('Pump');
+    expect(read({ s: { $static: 42 } }).current).toBe('42');
+    expect(read({ s: false }).current).toBe('false');
+  });
+
+  it('reads what an expression source resolves to', () => {
+    const s = { $stringExpr: { template: 'Line {1}', wildcards: { 1: 3 } } };
+    expect(read({ s }).current).toBe('Line 3');
+  });
+
+  it('follows a $var binding live, a number or boolean as its text', () => {
+    useVariableStore.setState({ values: { 'PLC:State': 'Running' } });
+    const result = read({ s: { $var: { path: 'PLC:State' } } }, 'FB');
+    expect(result.current).toBe('Running');
+    act(() => useVariableStore.getState().setScalar('PLC:State', 42));
+    expect(result.current).toBe('42');
+    act(() => useVariableStore.getState().setScalar('PLC:State', true));
+    expect(result.current).toBe('true');
+    act(() => useVariableStore.getState().setScalar('PLC:State', null));
+    expect(result.current).toBe('FB');
+    act(() => useVariableStore.getState().setScalar('PLC:State', { a: 1 }));
+    expect(result.current).toBe('FB');
+  });
+
+  it('returns null for the null fallback, an empty string by default', () => {
+    expect(read({}, null).current).toBeNull();
+    expect(read({ s: { $var: { path: 'PLC:Missing' } } }, null).current).toBeNull();
+    expect(read({ s: '' }, null).current).toBe('');
+    expect(read({}).current).toBe('');
+  });
+});
+
+describe('usePropBoolean', () => {
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(MemoryRouter, null, children);
+  const read = (properties: Record<string, unknown>, fallback?: boolean | null) =>
+    renderHook(
+      () =>
+        fallback === null
+          ? usePropBoolean(properties, 'b', null)
+          : usePropBoolean(properties, 'b', fallback),
+      { wrapper },
+    ).result;
+
+  beforeEach(() => {
+    useVariableStore.setState({ values: {}, varMeta: {} });
+  });
+
+  it('reads an empty text or NaN as no value only in the null form', () => {
+    for (const blank of ['', '  ', Number.NaN]) {
+      useVariableStore.setState({ values: { 'PLC:B': blank }, varMeta: {} });
+      expect(read({ b: { $var: { path: 'PLC:B' } } }, null).current).toBeNull();
+    }
+    useVariableStore.setState({ values: { 'PLC:B': '' }, varMeta: {} });
+    expect(read({ b: { $var: { path: 'PLC:B' } } }).current).toBe(true);
+  });
+
+  it('coerces a static value as getPropBoolean does', () => {
+    for (const [raw, expected] of [
+      [true, true],
+      [0, false],
+      [2, true],
+      ['false', false],
+      [' Off ', false],
+      ['0', false],
+      ['1', true],
+      ['yes', true],
+      [{ $static: 'no' }, false],
+    ] as const) {
+      expect(read({ b: raw }).current).toBe(expected);
+    }
+  });
+
+  it('reads what an expression source resolves to', () => {
+    const b = { $compare: { left: 5, operator: '>', right: 3 } };
+    expect(read({ b }).current).toBe(true);
+  });
+
+  it('follows a $var binding live', () => {
+    useVariableStore.setState({ values: { 'PLC:Pump/Running': true } });
+    const result = read({ b: { $var: { path: 'PLC:Pump/Running' } } }, null);
+    expect(result.current).toBe(true);
+    act(() => useVariableStore.getState().setScalar('PLC:Pump/Running', 'false'));
+    expect(result.current).toBe(false);
+    act(() => useVariableStore.getState().setScalar('PLC:Pump/Running', 1));
+    expect(result.current).toBe(true);
+    act(() => useVariableStore.getState().setScalar('PLC:Pump/Running', null));
+    expect(result.current).toBeNull();
+  });
+
+  it('returns null for the null fallback, false by default', () => {
+    expect(read({}, null).current).toBeNull();
+    expect(read({ b: { $var: { path: 'PLC:Missing' } } }, null).current).toBeNull();
+    expect(read({ b: false }, null).current).toBe(false);
+    expect(read({}).current).toBe(false);
+    expect(read({}, true).current).toBe(true);
+  });
+
+  it('reads a plain object with no source key as no value, as getPropBoolean does', () => {
+    expect(read({ b: { a: 1 } }, null).current).toBeNull();
+  });
+});
+
+describe('usePropString / usePropBoolean / usePropNumber', () => {
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(MemoryRouter, null, children);
+
+  beforeEach(() => {
+    useVariableStore.setState({ values: {}, varMeta: {} });
+  });
+
+  it('type the default and plain fallbacks as the value, the null forms as nullable', () => {
+    const p = {};
+    const maybe = null as boolean | null;
+    const { result } = renderHook(
+      () => {
+        const s: string = usePropString(p, 'k');
+        const n: number = usePropNumber(p, 'k', 1);
+        const b: boolean = usePropBoolean(p, 'k', true);
+        // @ts-expect-error — the null form returns null when there is no value
+        const sNull: string = usePropString(p, 'k', null);
+        // @ts-expect-error — so does a fallback typed `boolean | null`
+        const bMaybe: boolean = usePropBoolean(p, 'k', maybe);
+        return [s, n, b, sNull, bMaybe];
+      },
+      { wrapper },
+    );
+    expect(result.current).toEqual(['', 1, true, null, null]);
+  });
+
+  it('read every value as getPropString / getPropBoolean with an eval context do', () => {
+    const values = [true, false, 0, 1, 2.5, 'true', 'false', '0', '1', '', 'abc', null, [1], {}];
+    for (const value of values) {
+      useVariableStore.setState({ values: { 'PLC:X': value } });
+      for (const props of [
+        { k: value },
+        { k: { $static: value } },
+        { k: { $var: { path: 'PLC:X' } } },
+      ]) {
+        const { result } = renderHook(
+          () => {
+            const ctx = useEvalContext();
+            return {
+              old: [getPropString(props, 'k', 'FB', ctx), getPropBoolean(props, 'k', true, ctx)],
+              hook: [usePropString(props, 'k', 'FB'), usePropBoolean(props, 'k', true)],
+            };
+          },
+          { wrapper },
+        );
+        expect(result.current.hook).toEqual(result.current.old);
+      }
+    }
+  });
+});
+
 describe('getPropNumber', () => {
   const ctx = {
     resolveVariable: (ds: string, path: string) =>
@@ -851,6 +1097,26 @@ describe('getPropNumber', () => {
     expect(getPropNumber({ n: { $var: { path: 'PLC:Setpoint' } } }, 'n', 0, ctx)).toBe(12.5);
     useVariableStore.setState({ values: { 'PLC:Setpoint': 'off' } });
     expect(getPropNumber({ n: { $var: { path: 'PLC:Setpoint' } } }, 'n', 0, ctx)).toBe(0);
+  });
+});
+
+describe('readNumberValue', () => {
+  it('reads an integer beyond 2**53 from the decimal string it arrives as', () => {
+    expect(readNumberValue('9007199254740993')).toBe(2 ** 53);
+    expect(readNumberValue('-18446744073709551615')).toBe(-(2 ** 64));
+  });
+
+  it('passes a number through and reads a clean decimal string', () => {
+    expect(readNumberValue(12.5)).toBe(12.5);
+    expect(readNumberValue(Infinity)).toBe(Infinity);
+    expect(readNumberValue(' -1.5 ')).toBe(-1.5);
+    expect(readNumberValue('2e3')).toBe(2000);
+  });
+
+  it('returns undefined for anything that is not cleanly a number', () => {
+    for (const raw of [undefined, null, NaN, true, {}, [], '', 'abc', '12px', '0x10', '1e400']) {
+      expect(readNumberValue(raw)).toBeUndefined();
+    }
   });
 });
 

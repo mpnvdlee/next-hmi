@@ -7,7 +7,7 @@ none of the engine's subscription state — so it is its own class.
 
 import asyncio
 import logging
-from collections.abc import Iterable
+from collections.abc import Callable, Collection, Iterable
 from typing import Any
 
 from asyncua import Client, ua
@@ -36,9 +36,57 @@ _HAS_COMPONENT = ua.NodeId(ua.ObjectIds.HasComponent)
 
 _BROWSE_NODE_CLASSES = int(ua.NodeClass.Object) | int(ua.NodeClass.Variable)
 
+# The standard Server object under Objects: the server's own capabilities,
+# diagnostics and namespace table — hundreds of nodes, none of them a PLC tag.
+SERVER_OBJECT_NODE_ID = ua.NodeId(ua.ObjectIds.Server).to_string()
+
 # The only answers that say a node is gone. Anything else — access denied, a
 # busy server — still means the node is there.
 _NODE_MISSING = frozenset({ua.StatusCodes.BadNodeIdUnknown, ua.StatusCodes.BadNodeIdInvalid})
+
+
+BrowseProgressSink = Callable[[dict[str, int]], None]
+
+
+class _BrowseProgress:
+    """Work-unit accounting for one browse, reported as it advances.
+
+    The size of an address space is unknown until it has been walked, so the
+    total is what is known *so far*: every parent still to be browsed and
+    every variable still to be typed. It grows as levels reveal children and
+    reaches `done` exactly when the walk ends, which lets a client draw a bar
+    that only ever needs `done / total` — no estimate, no second pass.
+    """
+
+    def __init__(self, sink: BrowseProgressSink | None) -> None:
+        self._sink = sink
+        self.done = 0
+        self.total = 1  # the root's own Browse
+        self.nodes = 0
+        self.level = 0
+
+    def expect(self, units: int) -> None:
+        self.total += units
+
+    def advance(self, units: int) -> None:
+        self.done += units
+        self.emit()
+
+    def settle(self) -> None:
+        """Account for work a failed or cut-short level will never do."""
+        self.done = self.total
+        self.emit()
+
+    def emit(self) -> None:
+        if self._sink is None:
+            return
+        try:
+            self._sink(
+                {"done": self.done, "total": self.total, "nodes": self.nodes, "level": self.level}
+            )
+        except Exception:
+            # A broken listener must never cost the browse itself.
+            logger.debug("Browse progress listener failed", exc_info=True)
 
 
 def _node_ids_in(entry: dict[str, Any]) -> set[str]:
@@ -165,16 +213,30 @@ class AddressSpaceBrowser:
         # Server-defined DataType → builtin name, filled during a browse.
         self._data_type_names: dict[str, str] = {}
 
-    async def browse(self, node: Node, *, saved_node_ids: Iterable[str] = ()) -> dict[str, Any]:
+    async def browse(
+        self,
+        node: Node,
+        *,
+        on_progress: BrowseProgressSink | None = None,
+        skip_children: Collection[str] = (),
+        saved_node_ids: Iterable[str] = (),
+    ) -> dict[str, Any]:
         """Walk the address space below *node*.
 
-        Of *saved_node_ids* — the datasource's variables — those the walk did
-        not reach but the server still has are listed under
+        *on_progress* receives ``{done, total, nodes, level}`` after every
+        Browse and attribute-Read chunk; see _BrowseProgress for what the
+        numbers mean.
+
+        *skip_children* names children of *node* that are left out, subtree
+        and all. Of *saved_node_ids* — the datasource's variables — those the
+        walk did not reach but the server still has are listed under
         ``present_outside_browse``: not browsed is not removed.
         """
         # Types can change with a PLC download between two browses.
         self._data_type_names = {}
-        tree = await self._browse_node(node)
+        tree = await self._browse_node(
+            node, _BrowseProgress(on_progress), skip_children=frozenset(skip_children)
+        )
         walked = _node_ids_in(tree)
         outside = [nid for nid in dict.fromkeys(saved_node_ids) if nid and nid not in walked]
         present = await self.existing_node_ids(outside)
@@ -225,7 +287,10 @@ class AddressSpaceBrowser:
     # ── Batched browse helpers ────────────────────────────────────────────────
 
     async def _batch_browse_nodes(
-        self, nodes: list[Node], chunk_size: int | None = None
+        self,
+        nodes: list[Node],
+        chunk_size: int | None = None,
+        on_chunk: Callable[[int], None] | None = None,
     ) -> list[list[ua.ReferenceDescription]]:
         """Browse multiple parent nodes using one Browse request per chunk.
 
@@ -242,6 +307,8 @@ class AddressSpaceBrowser:
             chunk_refs = await self._browse_chunk(chunk)
             for slot, refs in enumerate(chunk_refs):
                 all_refs[start + slot].extend(refs)
+            if on_chunk is not None:
+                on_chunk(len(chunk))
         return all_refs
 
     async def _browse_chunk(
@@ -271,8 +338,19 @@ class AddressSpaceBrowser:
                 params.NodesToBrowse.append(desc)
             results = await self._client.uaclient.browse(params)
             all_refs: list[list[ua.ReferenceDescription]] = [[] for _ in nodes]
+            # A server keeps only a few continuation points per session (an
+            # S7-1500 a handful): once a request has used them up, every
+            # further node that has more references than fit in one answer
+            # comes back BadNoContinuationPoints with no references at all —
+            # a large struct then read as one without members.
+            starved: list[int] = []
             for slot, result in enumerate(results):
+                if result.StatusCode.value == ua.StatusCodes.BadNoContinuationPoints:
+                    starved.append(slot)
+                    continue
                 all_refs[slot].extend(result.References)
+            if len(starved) == len(nodes) > 1:
+                raise ua.UaStatusCodeError(ua.StatusCodes.BadNoContinuationPoints)
             pending = [
                 (i, r.ContinuationPoint)
                 for i, r in enumerate(results)
@@ -289,6 +367,17 @@ class AddressSpaceBrowser:
                     all_refs[idx].extend(result.References)
                     if result.ContinuationPoint:
                         pending.append((idx, result.ContinuationPoint))
+            if starved and len(starved) < len(nodes):
+                # Every point this request was given is released now that its
+                # nodes have been read to the end, so ask again for the rest.
+                retried = await self._browse_chunk([nodes[i] for i in starved])
+                for slot, refs in zip(starved, retried, strict=True):
+                    all_refs[slot] = refs
+            elif starved:
+                logger.warning(
+                    "Server has no continuation point to browse %s on %s",
+                    nodes[0].nodeid.to_string(), self.datasource_name,
+                )
             return all_refs
         except asyncio.CancelledError:
             raise
@@ -306,7 +395,10 @@ class AddressSpaceBrowser:
             )
 
     async def _batch_read_var_attrs(
-        self, node_ids: list[ua.NodeId], chunk_size: int | None = None
+        self,
+        node_ids: list[ua.NodeId],
+        chunk_size: int | None = None,
+        on_chunk: Callable[[int], None] | None = None,
     ) -> list[tuple[str, bool, int]]:
         """Batch-read DataType, ValueRank, ArrayDimensions and AccessLevel for a
         list of variable NodeIds.
@@ -330,6 +422,8 @@ class AddressSpaceBrowser:
         for start in range(0, len(node_ids), nodes_per_chunk):
             chunk = node_ids[start : start + nodes_per_chunk]
             results_all.extend(await self._read_var_attrs_chunk(chunk))
+            if on_chunk is not None:
+                on_chunk(len(chunk))
         return results_all
 
     async def _read_var_attrs_chunk(
@@ -433,7 +527,13 @@ class AddressSpaceBrowser:
             node = await get_node_supertype(node)
         raise ua.UaError(f"DataType {dt_nid.to_string()} derives from no builtin type")
 
-    async def _browse_node(self, node: Node) -> dict[str, Any]:
+    async def _browse_node(
+        self,
+        node: Node,
+        progress: _BrowseProgress | None = None,
+        *,
+        skip_children: frozenset[str] = frozenset(),
+    ) -> dict[str, Any]:
         """BFS browse: ~2 round-trips per tree level instead of 5 per node.
 
         Browse returns NodeClass + DisplayName for each child for free
@@ -475,6 +575,7 @@ class AddressSpaceBrowser:
         # must not become bindable rows.
         visited: set[str] = {node.nodeid.to_string()}
         queue: list[tuple[Node, dict, bool]] = []
+        progress = progress or _BrowseProgress(None)
 
         if root_nc == ua.NodeClass.Variable:
             try:
@@ -490,6 +591,7 @@ class AddressSpaceBrowser:
                 root_entry["data_type"] = "Unknown"
                 root_entry["writable"] = False
             if root_entry["data_type"] != "struct":
+                progress.settle()
                 return root_entry
             # A struct browsed as the root still has members to walk.
             queue.append((node, root_entry, True))
@@ -497,9 +599,12 @@ class AddressSpaceBrowser:
             queue.append((node, root_entry, False))
 
         while queue:
+            progress.level += 1
             parent_nodes = [n for n, _, _ in queue]
             try:
-                batch_refs = await self._batch_browse_nodes(parent_nodes)
+                batch_refs = await self._batch_browse_nodes(
+                    parent_nodes, on_chunk=progress.advance
+                )
             except Exception as exc:
                 logger.warning(
                     "Batch browse failed for %s: %s — skipping level",
@@ -524,6 +629,8 @@ class AddressSpaceBrowser:
                     cid_str = ref.NodeId.to_string()
                     if cid_str in visited:
                         continue
+                    if parent_entry is root_entry and cid_str in skip_children:
+                        continue
                     visited.add(cid_str)
                     child_entry: dict[str, Any] = {
                         "node_id": cid_str,
@@ -532,6 +639,10 @@ class AddressSpaceBrowser:
                         "children": [],
                     }
                     parent_entry["children"].append(child_entry)
+                    if parent_entry["data_type"] == "Unknown":
+                        # Members make it a struct whatever its type read said.
+                        parent_entry["data_type"] = "struct"
+                    progress.nodes += 1
                     if ref.NodeClass == ua.NodeClass.Variable:
                         var_node_ids.append(ref.NodeId)
                         var_entries.append(child_entry)
@@ -540,9 +651,16 @@ class AddressSpaceBrowser:
                             (Node(self._client.uaclient, ref.NodeId), child_entry, False)
                         )
 
+            # Everything this level revealed: a Browse per object parent next
+            # round, a typed Read per variable now.
+            progress.expect(len(next_queue) + len(var_node_ids))
+            progress.emit()
+
             if var_node_ids:
                 try:
-                    attrs = await self._batch_read_var_attrs(var_node_ids)
+                    attrs = await self._batch_read_var_attrs(
+                        var_node_ids, on_chunk=progress.advance
+                    )
                     for nid, entry, (dt, wr, al) in zip(
                         var_node_ids, var_entries, attrs, strict=False
                     ):
@@ -554,11 +672,14 @@ class AddressSpaceBrowser:
                                 entry["array_length"] = al
                         # Only a struct has members, so only a struct is worth
                         # another Browse — a scalar would cost one operation per
-                        # tag and return nothing but its own properties.
-                        if dt == "struct":
+                        # tag and return nothing but its own properties. A node
+                        # whose type could not be read may be a struct too: the
+                        # Browse tells, by whether it finds members.
+                        if dt in ("struct", "Unknown"):
                             next_queue.append(
                                 (Node(self._client.uaclient, nid), entry, True)
                             )
+                            progress.expect(1)
                 except Exception as exc:
                     logger.warning(
                         "Batch read var attrs failed for %s: %s",
@@ -571,4 +692,5 @@ class AddressSpaceBrowser:
                         entry["data_type"], entry["writable"], _ = _UNKNOWN_VAR_ATTRS
 
             queue = next_queue
+        progress.settle()
         return root_entry

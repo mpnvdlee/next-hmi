@@ -72,3 +72,16 @@
 .hmi-switch__track--on .hmi-switch__thumb {
   left: calc(var(--hmi-select-height) * 0.75 + 4px);
 }
+
+/* No value yet: a hollow track with the thumb parked midway, neither on nor off. */
+.hmi-switch__track--unknown {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--hmi-border);
+  cursor: not-allowed;
+}
+
+.hmi-switch__track--unknown .hmi-switch__thumb {
+  left: calc(var(--hmi-select-height) * 0.375 + 4px);
+  background: var(--hmi-border);
+  box-shadow: none;
+}

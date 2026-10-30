@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 from models.datasource import build_var_key
+from opcua.values import normalize_value
 from services import write_service
 from services.datasource_manager import DatasourceManager
 
@@ -68,6 +69,30 @@ def test_coerce_datetime_parses_iso8601() -> None:
 def test_coerce_datetime_rejects_garbage() -> None:
     with pytest.raises(ValueError):
         write_service.coerce_write_value("not-a-date", "datetime")
+
+
+_NO_UTC_FORM = ["9999-12-31T23:59:59-01:00", "0001-01-01T00:30:00+01:00"]
+
+
+@pytest.mark.parametrize(
+    "value", [*_NO_UTC_FORM, *(datetime.fromisoformat(text) for text in _NO_UTC_FORM)]
+)
+def test_coerce_datetime_rejects_an_instant_without_a_utc_form(value) -> None:
+    with pytest.raises(write_service.WriteCoercionError) as exc_info:
+        write_service.coerce_write_value(value, "DateTime")
+    assert exc_info.value.reason == write_service.COERCION_INVALID_TEMPORAL
+
+
+def test_coerce_datetime_accepts_the_edges_of_the_utc_range() -> None:
+    assert write_service.coerce_write_value("9999-12-31T23:59:59+01:00", "DateTime") == (
+        datetime(9999, 12, 31, 22, 59, 59, tzinfo=UTC)
+    )
+    assert write_service.coerce_write_value("0001-01-01T00:30:00-01:00", "DateTime") == (
+        datetime(1, 1, 1, 1, 30, tzinfo=UTC)
+    )
+    assert write_service.coerce_write_value("9999-12-31T23:59:59", "DateTime") == (
+        datetime(9999, 12, 31, 23, 59, 59)
+    )
 
 
 @pytest.mark.parametrize("data_type", [None, 3, ["Float"]])
@@ -184,7 +209,7 @@ class FakeEngine:
             node_id = f"ns=2;s={path}"
             if node_id in self._store:
                 value = self._store[node_id]
-                out[build_var_key("PLC", path)] = value if raw else DatasourceManager._coerce(value)
+                out[build_var_key("PLC", path)] = value if raw else normalize_value(value)
         return out
 
 
@@ -503,22 +528,108 @@ async def test_indexed_dynamic_array_requires_existing_element():
 
 
 @pytest.mark.asyncio
-async def test_indexed_write_sends_untouched_datetime_elements_as_the_server_holds_them():
+@pytest.mark.parametrize(
+    ("data_type", "current", "written", "sent", "cached"),
+    [
+        (
+            "UInt64", [2**63, 1, 2], "7", [2**63, 7, 2],
+            ["9223372036854775808", 7, 2],
+        ),
+        (
+            "DateTime",
+            [datetime(2026, 1, 2, 3, 4, 5, 678901, tzinfo=UTC)] * 2,
+            "2026-06-07T08:09:10Z",
+            [
+                datetime(2026, 1, 2, 3, 4, 5, 678901, tzinfo=UTC),
+                datetime(2026, 6, 7, 8, 9, 10, tzinfo=UTC),
+            ],
+            ["2026-01-02T03:04:05.678Z", "2026-06-07T08:09:10.000Z"],
+        ),
+    ],
+    ids=["uint64", "datetime"],
+)
+async def test_indexed_write_sends_untouched_elements_as_the_server_holds_them(
+    data_type, current, written, sent, cached,
+):
     # The cache holds these elements as strings; written back as strings, the
     # server would refuse the whole array.
-    first = datetime(2026, 1, 2, 3, 4, 5, 678901, tzinfo=UTC)
-    second = datetime(2026, 6, 7, 8, 9, 10, tzinfo=UTC)
     engine = FakeEngine()
     dm = FakeOpcuaDM({
-        "Steps": {"data_type": "DateTime", "writable": True, "is_array": True, "node_id": "ns=2;s=Steps"},
+        "Steps": {"data_type": data_type, "writable": True, "is_array": True, "node_id": "ns=2;s=Steps"},
     })
-    engine._store["ns=2;s=Steps"] = [first, first]
+    engine._store["ns=2;s=Steps"] = current
     outcome = await write_service.write_value(
-        dm, FakeOpcuaPool(engine), "PLC", "Steps[1]", "2026-06-07T08:09:10Z", verify=True,
+        dm, FakeOpcuaPool(engine), "PLC", "Steps[1]", written, verify=True,
     )
     assert outcome == write_service.WriteOutcome(True)
-    assert engine.writes == [("ns=2;s=Steps", [first, second])]
-    assert dm._entry.cache[build_var_key("PLC", "Steps")] == [str(first), str(second)]
+    assert engine.writes == [("ns=2;s=Steps", sent)]
+    assert dm._entry.cache[build_var_key("PLC", "Steps")] == cached
+
+
+@pytest.mark.asyncio
+async def test_opcua_verified_write_beyond_two_to_the_53_is_confirmed():
+    # The read-back arrives as the decimal string a browser can carry exactly.
+    engine = FakeEngine()
+    dm = FakeOpcuaDM({"Count": {"data_type": "UInt64", "writable": True, "node_id": "ns=2;s=Count"}})
+    outcome = await write_service.write_value(
+        dm, FakeOpcuaPool(engine), "PLC", "Count", "18446744073709551615", verify=True,
+    )
+    assert outcome == write_service.WriteOutcome(True)
+    assert engine.writes == [("ns=2;s=Count", 18446744073709551615)]
+
+
+def _static_dm(*variables: dict[str, Any]) -> DatasourceManager:
+    dm = DatasourceManager()
+    dm.apply_config("DS", {
+        "name": "DS",
+        "type": "static",
+        "variables": [{"kind": "variable", "enabled": True, "writable": True, **v} for v in variables],
+    })
+    return dm
+
+
+@pytest.mark.asyncio
+async def test_static_datetime_write_caches_iso_utc_with_milliseconds():
+    dm = _static_dm({"display_name": "Stamp", "data_type": "DateTime"})
+    outcome = await write_service.write_value(
+        dm, None, "DS", "Stamp", "2026-01-02T04:04:05.6789+01:00", verify=True,
+    )
+    assert outcome == write_service.WriteOutcome(True)
+    assert dm.get_cached_values({"DS:Stamp"}) == {"DS:Stamp": "2026-01-02T03:04:05.678Z"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", _NO_UTC_FORM)
+async def test_static_datetime_write_without_a_utc_form_is_an_invalid_value(value):
+    # It used to raise out of update_static_value, closing the operator's socket.
+    dm = _static_dm({"display_name": "Stamp", "data_type": "DateTime"})
+    outcome = await write_service.write_value(dm, None, "DS", "Stamp", value, verify=True)
+    assert outcome == write_service.WriteOutcome(False, write_service.REASON_INVALID_VALUE)
+    assert dm.get_cached_values({"DS:Stamp"}) == {"DS:Stamp": "1970-01-01T00:00:00.000Z"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", _NO_UTC_FORM)
+async def test_opcua_datetime_write_without_a_utc_form_is_never_dispatched(value):
+    # Written, the server would store the clamped bound and verify then raised.
+    engine = FakeEngine()
+    dm = FakeOpcuaDM({"Stamp": {"data_type": "DateTime", "writable": True, "node_id": "ns=2;s=Stamp"}})
+    outcome = await write_service.write_value(
+        dm, FakeOpcuaPool(engine), "PLC", "Stamp", value, verify=True,
+    )
+    assert outcome == write_service.WriteOutcome(False, write_service.REASON_INVALID_VALUE)
+    assert engine.writes == []
+
+
+@pytest.mark.asyncio
+async def test_static_int64_write_beyond_two_to_the_53_caches_the_decimal_string():
+    dm = _static_dm({"display_name": "Count", "data_type": "Int64"})
+    outcome = await write_service.write_value(
+        dm, None, "DS", "Count", "-9223372036854775808", verify=True,
+    )
+    assert outcome == write_service.WriteOutcome(True)
+    assert dm.get_cached_values({"DS:Count"}) == {"DS:Count": "-9223372036854775808"}
+    assert await write_service.read_value(dm, None, "DS", "Count") == "-9223372036854775808"
 
 
 @pytest.mark.asyncio
@@ -747,6 +858,33 @@ async def test_read_only_is_reported_before_any_value_error(path, value):
     outcome = await write_service.write_value(dm, FakeOpcuaPool(engine), "PLC", path, value)
     assert outcome == write_service.WriteOutcome(False, write_service.REASON_READ_ONLY)
     assert engine.writes == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("flag", [{"writable": False}, {"writable": "true"}])
+async def test_read_only_is_reported_first_for_a_variable_without_a_data_type(flag):
+    # Only a struct folder skips the access check; a plain variable missing
+    # its type is refused as read-only, as the editor's pre-flight says.
+    dm = _static_dm({"display_name": "NoType", **flag})
+    outcome = await write_service.write_value(dm, None, "DS", "NoType", "x")
+    assert outcome == write_service.WriteOutcome(False, write_service.REASON_READ_ONLY)
+
+
+@pytest.mark.asyncio
+async def test_a_registered_struct_folder_written_whole_is_still_an_invalid_value():
+    dm = DatasourceManager()
+    dm.apply_config("DS", {
+        "name": "DS",
+        "type": "static",
+        "variables": [{
+            "kind": "folder",
+            "name": "Motor",
+            "children": [{"kind": "variable", "display_name": "Speed", "data_type": "Float",
+                          "enabled": True, "writable": True}],
+        }],
+    })
+    outcome = await write_service.write_value(dm, None, "DS", "Motor", {"Speed": 1})
+    assert outcome == write_service.WriteOutcome(False, write_service.REASON_INVALID_VALUE)
 
 
 @pytest.mark.asyncio

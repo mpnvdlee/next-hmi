@@ -162,9 +162,9 @@ function groupFolderRenames(modified: ModifiedRow[]): ModifiedEntry[] {
 
 /**
  * `presentOutsideBrowse` holds saved node ids the browse did not walk but the
- * server confirmed still exist — anything outside an explicit browse root.
- * Not browsed is not removed: those are neither offered for deletion nor
- * marked stale.
+ * server confirmed still exist — the skipped Server object, or anything
+ * outside an explicit browse root. Not browsed is not removed: those are
+ * neither offered for deletion nor marked stale.
  */
 export function computeBrowseDiff(
   savedTree: TreeNode[],

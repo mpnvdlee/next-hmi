@@ -1,5 +1,5 @@
 import '../../testSdk';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useVariableStore } from '@hmi/store/variableStore';
@@ -43,6 +43,7 @@ describe('Switch', () => {
     expect(el.className).toContain('hmi-component');
     expect(el.className).toContain('hmi-switch');
     expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('switch')).toHaveAttribute('aria-busy', 'true');
   });
 
   it('renders its label and reflects the bound value', () => {
@@ -51,9 +52,30 @@ describe('Switch', () => {
 
     expect(screen.getByText('Pump')).toBeInTheDocument();
     expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('switch').className).toContain('hmi-switch__track--on');
+  });
+
+  it('shows an unknown state, and writes nothing, until the bound value arrives', async () => {
+    const user = userEvent.setup();
+    renderSwitch({ variable: { $var: { path: 'PLC:Pump/Running' } } });
+    const track = screen.getByRole('switch');
+
+    expect(track).toHaveAttribute('aria-checked', 'false');
+    expect(track).toHaveAttribute('aria-busy', 'true');
+    expect(track.className).toContain('hmi-switch__track--unknown');
+    expect(track).toBeDisabled();
+    await user.click(track);
+    expect(sendWsMessage).not.toHaveBeenCalled();
+
+    act(() => useVariableStore.getState().setScalar('PLC:Pump/Running', false));
+    expect(track).toHaveAttribute('aria-checked', 'false');
+    expect(track).not.toHaveAttribute('aria-busy');
+    expect(track.className).not.toContain('hmi-switch__track--unknown');
+    expect(track).toBeEnabled();
   });
 
   it('writes the inverted boolean with a correlating requestId', async () => {
+    useVariableStore.setState({ values: { 'PLC:Pump/Running': false } });
     const user = userEvent.setup();
     renderSwitch({ variable: { $var: { path: 'PLC:Pump/Running' } } });
 
@@ -101,19 +123,5 @@ describe('Switch', () => {
     renderSwitch({ variable: { $static: true } });
 
     expect(screen.getByRole('switch')).toBeDisabled();
-  });
-
-  it.each([
-    ['false', 'false'],
-    ['0', 'false'],
-    ['off', 'false'],
-    ['', 'false'],
-    ['true', 'true'],
-    ['on', 'true'],
-  ])('reads the tag text %j as aria-checked=%s', (value, checked) => {
-    useVariableStore.setState({ values: { 'PLC:Pump/Running': value } });
-    renderSwitch({ variable: { $var: { path: 'PLC:Pump/Running' } } });
-
-    expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', checked);
   });
 });

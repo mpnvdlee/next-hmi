@@ -56,7 +56,8 @@ function formatValue(value: number, decimals: number): string {
 
 export default function RingGauge({ properties, layout }: HmiWidgetProps) {
   const raw = usePropVar(properties, 'value');
-  const value = typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
+  const numeric = readNumberValue(raw);
+  const value = numeric !== undefined && Number.isFinite(numeric) ? numeric : 0;
   const min = usePropNumber(properties, 'min', 0);
   const max = usePropNumber(properties, 'max', 100);
   const decimals = usePropNumber(properties, 'decimals', 1);

@@ -1,6 +1,10 @@
 """REST API for datasource management (CRUD + browse)."""
 
 import asyncio
+import contextlib
+import json
+import logging
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
@@ -10,6 +14,7 @@ from core.project_packer import safe_filename
 from core.storage import active_certs_dir, write_bytes_atomic
 from core.value_types import simplify_variable_tree
 from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from models.datasource import (
     CertGenerateBody,
@@ -35,6 +40,8 @@ from services.datasource_sync import (
     enabled_paths,
     metadata_keys,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/datasources", tags=["datasources"])
 _write_credentials = HTTPBasic(auto_error=False)
@@ -426,9 +433,8 @@ async def put_variables(name: str, body: list[Any]) -> list[Any]:
     return body
 
 
-@router.get("/{name}/browse")
-async def browse_datasource(name: str) -> Any:
-    """Browse the OPC-UA server for a datasource."""
+def _browse_engine(name: str) -> Any:
+    """The connected engine to browse *name* with, or the HTTP error why not."""
     entry = _require_datasource(name)
     if entry.ds_type not in ("opcua-client", "opcua-test-server"):
         raise DatasourceValidationError("Only OPC-UA datasources support browse")
@@ -441,8 +447,73 @@ async def browse_datasource(name: str) -> Any:
         raise HTTPException(status_code=503, detail=f"No active connection for '{name}'")
     if not engine.connected:
         raise HTTPException(status_code=503, detail=f"Datasource '{name}' is not connected")
+    return engine
 
-    return await engine.browse()
+
+@router.get("/{name}/browse")
+async def browse_datasource(name: str) -> Any:
+    """Browse the OPC-UA server for a datasource."""
+    return await _browse_engine(name).browse()
+
+
+async def _browse_stream_lines(engine: Any) -> AsyncIterator[bytes]:
+    """NDJSON for a browse: progress lines as it walks, then one result line.
+
+    A full browse of a large server runs for a long time with nothing to show,
+    so progress is streamed rather than polled — no job state to keep or clean
+    up, and the manager proxy already streams. Progress that piles up while the
+    client reads is coalesced to the newest; only the last state matters.
+
+    The browse runs as its own task so a client that goes away cancels it: the
+    generator is closed on disconnect, and a whole-server walk must not keep
+    running for nobody.
+    """
+    updates: asyncio.Queue[dict[str, int]] = asyncio.Queue()
+    task = asyncio.create_task(engine.browse(on_progress=updates.put_nowait))
+    try:
+        while not task.done():
+            getter = asyncio.ensure_future(updates.get())
+            await asyncio.wait({task, getter}, return_when=asyncio.FIRST_COMPLETED)
+            if not getter.done():
+                getter.cancel()
+                continue
+            latest = getter.result()
+            while not updates.empty():
+                latest = updates.get_nowait()
+            yield _ndjson({"type": "progress", **latest})
+        try:
+            tree = task.result()
+        except Exception as exc:
+            logger.warning("Browse of %s failed: %s", engine.datasource_name, exc)
+            yield _ndjson({"type": "error", "error": str(exc) or exc.__class__.__name__})
+            return
+        yield _ndjson({"type": "result", "tree": tree})
+    finally:
+        if not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
+
+
+def _ndjson(payload: dict[str, Any]) -> bytes:
+    return (json.dumps(payload, separators=(",", ":")) + "\n").encode()
+
+
+@router.get("/{name}/browse/stream")
+async def browse_datasource_stream(name: str) -> StreamingResponse:
+    """Browse with live progress, as NDJSON. See _browse_stream_lines.
+
+    The checks run before the stream opens, so a datasource that cannot be
+    browsed still answers with its HTTP status rather than a 200 and an error
+    line — only a failure *during* the walk arrives in-band.
+    """
+    engine = _browse_engine(name)
+    return StreamingResponse(
+        _browse_stream_lines(engine),
+        media_type="application/x-ndjson",
+        # Proxies that buffer would hold every progress line until the end.
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── Test server lifecycle ─────────────────────────────────────────────────────
