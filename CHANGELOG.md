@@ -13,6 +13,52 @@ heading.
 
 ### Added
 
+- **A Number Input says why it refuses a value, and acts on a change.** An
+  **Out-of-range message** is what the numpad says when the entry falls
+  outside min/max, so a limit that depends on another setting can say "Must
+  lie outside the 10 g band". **On Change** runs its actions after each value
+  the operator applies, such as a toast that the change is not saved yet.
+  Custom widgets get the message through the SDK numpad's new `rangeMessage`
+  prop.
+
+- **A Delay action.** **Delay** waits a number of milliseconds, then runs
+  the actions after it. A write goes to the PLC and back; a **Show Toast**
+  after a short Delay reads the value the PLC confirmed, so it can say *Lower
+  limit set to −25 g*.
+
+- **A screen can mark each setting that differs from the saved recipe.**
+  `$recipe` gets two per-parameter fields: **Parameter changed**, true while
+  that one live value differs from the loaded dataset, and **Saved value of a
+  parameter**, the stored value itself. Bind a Number Input's new **Value
+  color** to the first to turn an unsaved value amber, or list "saved → live"
+  rows that show only while they differ. **Number of changed parameters**
+  and **Saved at**, formatted like the clock, give a heading such as *3
+  unsaved changes · last saved 08:45*. Each `$recipeList` row now also
+  carries the dataset's `values`, so a recipe list shows its target or
+  quantity without a custom widget.
+
+- **A translation can hold live values.** Write `{1}`, `{2}` in a phrase,
+  `Tank {1} of {2}`, and translate it as a whole sentence, `Tank {1} van
+  {2}`. Picking that phrase in a **Localizable Text** field opens one row per
+  placeholder, to fill with a fixed value, a tag or another translation; each
+  language puts the values where its grammar wants them. An alarm's title and
+  description keep filling `{1}`, `{2}` from the alarm's own values.
+
+- **The numpad and keyboard show icons, not English words.** Back, Clear,
+  Enter, Shift, Caps Lock, Tab and Space are icons, and an entry outside the
+  bounds turns the `Min: 80 · Max: 200` line into a red warning. *Min*,
+  *Max* and the names a screen reader announces for the keys are dictionary
+  keys, English as on any screen, so a project translates them by adding
+  those rows.
+
+- **A shell region can float over the page.** A new **Floating** setting on
+  the header, footer and both sidebars lays the region over the page instead
+  of next to it: the page fills the space underneath, the region is
+  transparent unless it has a **Background**, and a click on its empty space
+  reaches the page. Widgets in the region, and a Container with press
+  actions, still take their own clicks. Bindable, like the other region
+  settings.
+
 - **Show all and value types in the property-source drawer.** Each source card
   now names the type it produces (`Any`, `Boolean`, `Float, Integer`, …). A
   **Show all** checkbox lists the sources the field does not take as well,
@@ -156,6 +202,36 @@ heading.
   or `NaN` as no value. A property with no variable bound no longer costs a
   variable-store listener.
 
+- **A Button sets its alignment and text case.** **Content alignment**
+  (center, or start for a menu-style tile) and **Text case** (uppercase). A Label's **Align** is now
+  called **Content alignment**, and its new **Text case** follows the
+  typography by default or picks *As typed* or *Uppercase*. Each one left at
+  its default keeps today's look.
+
+- **The Alarm List fits a touch panel.** Six new options: **Row size** (Touch
+  gives tap-sized rows and buttons), **Severity mark** (a stripe, the whole
+  row in the level colour, or only the coloured icon), **Show** (the active
+  alarms, the cleared ones or both; bind it to switch from elsewhere),
+  **Filter chips** (All / Active / History in the header, starting from Show),
+  **Acknowledge** (Off leaves it to a Button with the new action below) and
+  **Second line** (the alarm's description). Touch rows are cards with a
+  severity edge, the alarm's value, its time and whether it is new,
+  acknowledged or cleared. Left at their defaults, the list looks as before.
+
+- **An alarm can do without acknowledgement.** A **Needs acknowledgement**
+  switch on each alarm, on by default. Off, the alarm fires already
+  acknowledged: no ACK, not counted as unacknowledged, skipped by Acknowledge
+  All. A cleared alarm in the Alarm List now opens its detail popup too, with
+  its description, image and resolutions kept in the history.
+
+- **An action acknowledges every alarm.** **Acknowledge All Alarms**
+  acknowledges each unacknowledged alarm in the name of the signed-in user,
+  so any Button can be the screen's acknowledge button.
+
+- **A Button sets its border color.** A **Border color** that differs from
+  the button color, such as a ring that marks the active page. Left empty, it
+  keeps today's look.
+
 - **A String Input can open the numpad.** A new **Keyboard** property set to
   **Numeric** opens the numpad instead of the on-screen keyboard, with
   digits only, so a PIN or a code needs no letters to tap past. With
@@ -204,6 +280,16 @@ heading.
   link card had to be handed a whole action list instead.
 
 ### Changed
+
+- **A Number Input reads as a value, not a form field.** The number is
+  right-aligned in the theme's Value typography, with digit groups (4,920)
+  and a typographic minus, on a raised surface with the unit inside it. While
+  the numpad is open the field shows the entry as typed.
+
+- **A widget's Name is what a screen reader announces.** An icon-only
+  **Button**, a pressable **Container** and the **Menu Toggle** use the
+  **Name** under **Identity** as their accessible name. The Menu Toggle's
+  **Aria label** property is gone.
 
 - **Every download names its edition.** The public zips are now
   `nexthmi-community-<os>-<arch>-<version>.zip` and
@@ -329,7 +415,33 @@ heading.
   starts with it on, and the warnings pill reports `formula-fraction` for a
   formula there that is not rounded.
 
+### Removed
+
+- **The Alarm List's Own frame.** The list now always draws without a frame of
+  its own, as every example already placed it, so it takes the look of the card
+  or page around it. A stored `chrome` key is ignored and the warnings pill
+  flags it as an unknown property; delete it there.
+
+- **The Container's Shadow.** A Container now always draws without a shadow.
+  A stored `shadow` key is ignored and the warnings pill flags it as an
+  unknown property; delete it there.
+
 ### Fixed
+
+- **A Button's custom SVG icon shows in Safari.** A project SVG on a Button
+  rendered at zero size in Safari and other WebKit browsers, so the button
+  showed no icon. It now fills the icon size, as it already did in Chrome
+  and Firefox.
+
+- **A Button stays inside a narrow fixed tile.** A Button in a fixed size
+  narrower than its label plus padding grew past it. It now keeps the size it
+  was given.
+
+- **A restart keeps the default project's name.** Each start renamed the
+  default project back to *Default*, so a name given in the manager did not
+  survive a restart. Writing the project block also escaped characters such
+  as `·` and `₂` in `config.json` (`·`); they are now written as they
+  are.
 
 - **An input inside a component's actions is not flagged.** The warnings
   pill said a `$componentProp` nested in another source "renders once and

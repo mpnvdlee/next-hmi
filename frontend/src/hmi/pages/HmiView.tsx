@@ -18,6 +18,7 @@ import { useResolvedPageOverlays } from '../hooks/useOpenOverlays';
 import { renderRegionChildren } from '../components/renderRegion';
 import ShellRegion from '../components/ShellRegion';
 import { useSidebarFullHeight } from '../components/ShellRegion/useSidebarFullHeight';
+import { useFloatingBars } from '../components/ShellRegion/useFloatingBars';
 import PageGroupPageView from '../components/PageGroupPageView';
 import type { ShellConfig, ShellRegionConfig } from '@shared/types/config';
 import type { CSSWithVars } from '@shared/types/style';
@@ -193,6 +194,7 @@ export default function HmiView() {
     right: rightFullHeight,
     any: hasFullHeightSidebar,
   } = useSidebarFullHeight(leftSidebarCfg, rightSidebarCfg);
+  const floatingBars = useFloatingBars(headerCfg, footerCfg);
 
   // Built once and placed at whichever of the two mutually-exclusive slots
   // below is active (full-height spans the whole column; otherwise it sits
@@ -205,6 +207,18 @@ export default function HmiView() {
   const rightSidebarRegion = (
     <ShellRegion id="rightSidebar" config={rightSidebarCfg}>
       {rightSidebarContent}
+    </ShellRegion>
+  );
+
+  // A floating header/footer moves into `.hmi-main` (see useFloatingBars).
+  const headerRegion = (
+    <ShellRegion id="header" config={headerCfg}>
+      {headerContent}
+    </ShellRegion>
+  );
+  const footerRegion = (
+    <ShellRegion id="footer" config={footerCfg}>
+      {footerContent}
     </ShellRegion>
   );
 
@@ -241,9 +255,7 @@ export default function HmiView() {
           <div className={`hmi-layout${hasFullHeightSidebar ? ' hmi-layout--row' : ''}`}>
             {leftFullHeight && leftSidebarRegion}
             <div className="hmi-layout__column">
-              <ShellRegion id="header" config={headerCfg}>
-                {headerContent}
-              </ShellRegion>
+              {!floatingBars.header && headerRegion}
               <div className="hmi-body">
                 {!leftFullHeight && leftSidebarRegion}
                 <main className="hmi-main" style={mainStyle}>
@@ -253,12 +265,12 @@ export default function HmiView() {
                       <ContentSpinner />
                     </div>
                   )}
+                  {floatingBars.header && headerRegion}
+                  {floatingBars.footer && footerRegion}
                 </main>
                 {!rightFullHeight && rightSidebarRegion}
               </div>
-              <ShellRegion id="footer" config={footerCfg}>
-                {footerContent}
-              </ShellRegion>
+              {!floatingBars.footer && footerRegion}
             </div>
             {rightFullHeight && rightSidebarRegion}
             <ModalStack />

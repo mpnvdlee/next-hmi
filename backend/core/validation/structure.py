@@ -2082,6 +2082,8 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
         "onFailed": "actions",
         "onSettled": "actions",
     },
+    "acknowledgeAllAlarms": {},
+    "delay": {"duration": "Integer"},
     "setLanguage": {"language": "String"},
     "setActiveTheme": {"theme": "String"},
     "showAlert": {
@@ -2908,14 +2910,18 @@ def _validate_property_value(
             ):
                 report.warn(path, f"unknown video asset '{video_path}'", severity="error", code="video-unknown")
     elif source_key == "$loc":
-        # Runtime resolver (frontend/src/hmi/utils/propertySourceEval.ts:evaluateLoc) only
-        # accepts a string payload; any other shape silently resolves to null at render.
-        if not isinstance(payload, str):
-            report.add(path, "$loc payload must be a string translation key")
-        elif payload == "":
+        # Runtime resolver (frontend/src/hmi/utils/propertySourceEval.ts:evaluateLoc) takes
+        # the key as a string, or as {key, wildcards} when the key holds {1}, {2} …;
+        # any other shape silently resolves to null at render.
+        key = payload.get("key") if isinstance(payload, dict) else payload
+        if not isinstance(key, str):
+            report.add(path, "$loc payload must be a translation key, or {key, wildcards}")
+        elif key == "":
             report.warn(path, "translation key is empty", severity="warning", code="loc-empty")
-        elif ctx.translation_keys and payload not in ctx.translation_keys:
-            report.warn(path, f"unknown translation key '{payload}'", severity="error", code="loc-unknown")
+        elif ctx.translation_keys and key not in ctx.translation_keys:
+            report.warn(path, f"unknown translation key '{key}'", severity="error", code="loc-unknown")
+        if isinstance(payload, dict) and isinstance(key, str) and key:
+            _validate_wildcards([key], payload, "$loc", ctx, path, report)
     elif source_key == "$if" and isinstance(payload, dict):
         _validate_slot(
             payload.get("condition"), _CONDITION_SCHEMA, ctx, f"{path}/$if/condition", report,
@@ -3074,6 +3080,11 @@ def _validate_property_value(
             report.warn(
                 f"{path}/$recipe/type", "recipe type is empty",
                 severity="warning", code="recipe-type-empty",
+            )
+        if payload.get("field") in ("parameterValue", "parameterChanged") and not payload.get("parameter"):
+            report.warn(
+                f"{path}/$recipe/parameter", "recipe parameter is empty",
+                severity="warning", code="recipe-parameter-empty",
             )
 
 
@@ -3251,6 +3262,7 @@ _SHELL_BINDABLE_FIELDS: dict[str, dict[str, str]] = {
     "expanded": {"type": "boolean"},
     "overlay": {"type": "boolean"},
     "fullHeight": {"type": "boolean"},
+    "floating": {"type": "boolean"},
     "expandedSize": {"type": "string"},
     "collapsedSize": {"type": "string"},
     "background": {"type": "color"},

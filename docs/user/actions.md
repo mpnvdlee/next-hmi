@@ -4,7 +4,7 @@ A property answers *what a widget shows*. An **action** answers *what happens wh
 
 ## Where actions live
 
-- **On a widget** — **Button**, **Container** and **Menu Toggle** carry an **Actions** field, and a **Navigation Menu** item can be an action item. The list runs top to bottom on **press**. A Container with press actions becomes one big control around whatever it holds — a tile, a row in a list — that takes the keyboard too (**Enter** or **Space**), and its **Name** (under **Identity**) is what a screen reader announces for it. A press on a Button or an input inside it stays with that control. Other widgets run lists on their own events: **On Change** on a Dropdown or Button Row, **On Submit** (Enter) on a String Input, **On Sign In** / **On Sign Out** / **On Press** on a User Badge, **On Play** / **On Pause** / **On Ended** / **On Error** on a Video, **On Load** / **On Error** / **On Message** on a Web Frame.
+- **On a widget** — **Button**, **Container** and **Menu Toggle** carry an **Actions** field, and a **Navigation Menu** item can be an action item. The list runs top to bottom on **press**. A Container with press actions becomes one big control around whatever it holds — a tile, a row in a list — that takes the keyboard too (**Enter** or **Space**). A press on a Button or an input inside it stays with that control. Other widgets run lists on their own events: **On Change** on a Dropdown or Button Row, and on a Number Input after each value the operator applies, **On Submit** (Enter) on a String Input, **On Sign In** / **On Sign Out** / **On Press** on a User Badge, **On Play** / **On Pause** / **On Ended** / **On Error** on a Video, **On Load** / **On Error** / **On Message** on a Web Frame.
 - **Inside another action** — an alert's **OK** / **Cancel** buttons, and the `onSuccess` / `onFailed` / `onSettled` handlers of the async actions below, are themselves action lists. Nesting is how a confirm-then-write flow is built.
 - **On the project** — the **Global Events** node in the editor tree runs actions at lifecycle moments rather than on a press. See [Global events](#global-events).
 - **On a page or page group** — an **Events** section in the node's properties runs actions as the operator arrives and leaves. See [Page events](#page-events).
@@ -49,6 +49,7 @@ Both open actions carry the presentation fields:
 | **Edit Value** | Opens the numpad on a numeric tag — a setpoint behind a tile, a value in a table row — without a Number Input on the screen. **Apply** writes the entered value, **Cancel** (×, Escape, a press outside) writes nothing and runs no handler. **Title** and **Unit** label the numpad. **Min** and **Max** refuse a value outside them; left empty, the tag's own configured range applies, and without one there is no limit. **Decimals** limits the digits after the point — empty means none for an Integer tag and no limit otherwise — and **Allow negative** turns the minus key on or off (by default it is off when the lower bound is 0 or more). **Position** puts the numpad in the center (the default) or bottom right. Only Integer and Float tags can be picked; the target takes a Repeat item inside a Repeater and an input parameter inside a component or dialog, as for **Write Data Variable**, and a whole-array tag asks for its element in an index box under the variable, like **Toggle Boolean Variable**. |
 | **Recipe: Load** | Downloads a saved dataset into its variables. **Dataset** may be fixed or bound (a row id from a `$recipeList` grid). **Verify** reads the values back after writing and fails the action if they didn't take. A parameter bound to a variable that is not writable is skipped and listed in `failures` as `read_only`. |
 | **Recipe: Save** | Captures current live values into a dataset. Leave **Dataset** empty to update the one that is loaded. |
+| **Acknowledge All Alarms** | Acknowledges every unacknowledged alarm in the name of the user signed in on this panel. Put it on a Button next to an [Alarm List](alarms-recipes.md) whose **Acknowledge** is **Off**, for one large acknowledge button styled like the rest of the screen. A refusal shows a toast. |
 
 ### Session
 
@@ -72,6 +73,7 @@ See [Users, groups & permissions](users.md#sign-in-and-out-on-a-screen) for the 
 
 | Action | Does |
 |---|---|
+| **Delay** | Waits **Duration** milliseconds, then runs the actions after it. A write goes to the PLC and comes back; a **Show Toast** after a short Delay reads the value the PLC confirmed, so it can say *Lower limit set to −25 g*. |
 | **If / Else** | Evaluates a **Condition** — a Boolean variable, a comparison (`$compare`: *Mode = 2*, *Level > 80*), a negation, a user-group check — and runs its **Then** list when it holds, its **Else** list when it does not. Branches take any actions, including another **If / Else**. The condition reads the value the panel has at that moment. |
 
 ## Async actions and `$result`

@@ -76,6 +76,12 @@ export const ACTION_TYPES = [
     description: 'Drops back to the auto-login user.',
   },
   {
+    type: 'acknowledgeAllAlarms' as const,
+    label: 'Acknowledge All Alarms',
+    category: 'Machine',
+    description: 'Acknowledges every unacknowledged alarm as the signed-in user.',
+  },
+  {
     type: 'setLanguage' as const,
     label: 'Set Language',
     category: 'Interface',
@@ -98,6 +104,13 @@ export const ACTION_TYPES = [
     label: 'Show Toast',
     category: 'Interface',
     description: 'Shows a transient message with an info, success, warning or error severity.',
+  },
+  {
+    type: 'delay' as const,
+    label: 'Delay',
+    category: 'Logic',
+    description:
+      'Waits before the actions after it, so they read a value the PLC has confirmed in the meantime.',
   },
   {
     type: 'if' as const,
@@ -124,6 +137,8 @@ export const ACTION_TYPE_TINT: Record<ButtonAction['type'], string> = {
   recipeSave: 'recipeList',
   loginUser: 'user',
   logoutUser: 'userGroups',
+  acknowledgeAllAlarms: 'alarmCount',
+  delay: 'time',
   setLanguage: 'languages',
   setActiveTheme: 'viewport',
   showAlert: 'alarmCount',

@@ -25,6 +25,7 @@ import { varBindingOf } from '../../editor/bindingPickerUtils';
 import { findAlarm, resolveAlarmString } from '../alarmDisplayUtils';
 import { ClearIcon } from '../../ui/actionIcons';
 import type { SchemaField } from '@shared/types/widgetSchema';
+import { LocPlaceholdersContext } from '../../editor/PropertySourceEditor/locPlaceholdersContext';
 
 const NUMERIC_DATA_TYPES = ['Integer', 'Float'];
 
@@ -54,7 +55,12 @@ export default function AlarmPropertiesPanel({
   if (selection.type === 'alarm') {
     const alarm = findAlarm(config, selection.id);
     if (!alarm) return null;
-    return <AlarmPanel alarm={alarm} onPatch={onPatchAlarm} />;
+    // An alarm fills its text's {1}, {2} from its own values when it fires.
+    return (
+      <LocPlaceholdersContext.Provider value={false}>
+        <AlarmPanel alarm={alarm} onPatch={onPatchAlarm} />
+      </LocPlaceholdersContext.Provider>
+    );
   }
 
   return null;
@@ -449,15 +455,27 @@ function AlarmPanel({
 
       {/* ── Ack Permissions ── */}
       <div className="cfg-section">
-        <div className="cfg-section__title">Acknowledgment Permissions</div>
-        <GroupsField
-          label="Allowed groups"
-          description="Empty → any user may acknowledge."
-          value={alarm.ack_groups}
-          onChange={(v) =>
-            onPatch(alarm.id, { ack_groups: Array.isArray(v) ? (v as string[]) : [] })
-          }
-        />
+        <div className="cfg-section__title">Acknowledgment</div>
+        <PropRow
+          label="Needs acknowledgement"
+          description="Off: the alarm fires already acknowledged, so it shows no ACK and is not counted as unacknowledged."
+        >
+          <BoolButtonGroup
+            value={alarm.ack_required !== false}
+            onChange={(v) => onPatch(alarm.id, { ack_required: v })}
+            labels={['On', 'Off']}
+          />
+        </PropRow>
+        {alarm.ack_required !== false && (
+          <GroupsField
+            label="Allowed groups"
+            description="Empty → any user may acknowledge."
+            value={alarm.ack_groups}
+            onChange={(v) =>
+              onPatch(alarm.id, { ack_groups: Array.isArray(v) ? (v as string[]) : [] })
+            }
+          />
+        )}
       </div>
     </div>
   );

@@ -302,7 +302,10 @@ The sibling `shell` object holds the regions' *behaviour*, never their contents:
 Per region (`ShellRegionConfig`): `enabled` (default `true`), `expandedSize` /
 `collapsedSize` (CSS lengths — width for a sidebar, height for header/footer),
 `expanded`, `overlay`, `background`, `defaultState` (`expanded` | `collapsed` |
-`hidden`) and `fullHeight` (sidebars only). All of them except `defaultState`
+`hidden`), `fullHeight` (sidebars only) and `floating` (the region lies over
+`.hmi-main` without taking space, and only widgets catch clicks — a floating
+header/footer is rendered inside `.hmi-main`, a floating sidebar stays in its
+slot). All of them except `defaultState`
 are **bindable** — they accept any property source, not just a literal, and
 `ShellRegion` re-evaluates them as the bound values change.
 
@@ -404,6 +407,19 @@ Localization references use the `$loc` source:
 }
 ```
 
+A key that holds `{1}`, `{2}` … carries one binding per placeholder; the key is
+translated first and the placeholders filled after, with the `$stringExpr`
+transforms (`{Round1(1)}`):
+
+```json
+{
+  "$loc": {
+    "key": "Must lie outside the {1} g band",
+    "wildcards": { "1": { "$var": { "path": "CW:Params/Band" } } }
+  }
+}
+```
+
 ### Stored actions
 
 An action list is a JSON array of action objects, each discriminated by `type`
@@ -439,6 +455,8 @@ nested inside other actions (`onSuccess` / `onFailed` / `onSettled`, `then` /
 | `logoutUser` | `onSuccess` / `onFailed` / `onSettled` |
 | `recipeLoad` | `datasetId`, `verify`, `onSuccess` / `onFailed` / `onSettled` |
 | `recipeSave` | `datasetId` (absent = the loaded one), `onSuccess` / `onFailed` / `onSettled` |
+| `acknowledgeAllAlarms` | none |
+| `delay` | `duration` (ms) |
 | `setLanguage` / `setActiveTheme` | `language` / `theme` |
 | `showAlert` | `title`, `description`, `cancelText`, `okText`, `dismissible`, `onCancel`, `onOk` |
 | `showToast` | `message`, `severity` (`info` \| `success` \| `warning` \| `error`), `discard` (`auto` \| `manual`), `duration` (ms) |
@@ -528,6 +546,7 @@ the `/api/themes` endpoints in [../reference/rest-api.md](../reference/rest-api.
             "max": { "$static": 100 },
             "on_true": true
           },
+          "ack_required": true,
           "ack_groups": [],
           "values": [{ "$var": { "path": "MyPLC:Motor1/Temp" } }]
         }

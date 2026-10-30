@@ -122,6 +122,12 @@ export interface LocSource {
   $loc: string; // translation key
 }
 
+/** A translation whose key holds `{1}`, `{2}` …, each filled by its own binding
+ *  after the key is translated, so every language orders the values itself. */
+export interface LocTemplateSource {
+  $loc: { key: string; wildcards: Record<string, unknown> };
+}
+
 /** $urlParam: URL query parameter (with optional static fallback) */
 export interface UrlParamSource {
   $urlParam: {
@@ -676,6 +682,8 @@ export type ButtonAction =
       onFailed?: ButtonAction[];
       onSettled?: ButtonAction[];
     }
+  | { type: 'acknowledgeAllAlarms' }
+  | { type: 'delay'; duration: number }
   | { type: 'setLanguage'; language: unknown }
   | { type: 'setActiveTheme'; theme: unknown }
   | {
@@ -826,6 +834,9 @@ export interface ShellRegionConfig {
    *  height, flanking the header/main/footer column instead of sitting
    *  between them. */
   fullHeight?: unknown;
+  /** Bindable: when true, the region lies over the page without taking space,
+   *  and clicks on its empty space reach the page underneath. */
+  floating?: unknown;
   /** CSS color for the region's background, bindable. Defaults to white. */
   background?: unknown;
 }
@@ -867,6 +878,8 @@ export interface ShellConfig {
 /** Props interface shared by every HMI component in the registry */
 export interface HmiWidgetProps {
   id?: string;
+  /** The node's Identity name. */
+  name?: string;
   properties?: Record<string, unknown>;
   layout?: LayoutConfig;
   children?: ReactNode;

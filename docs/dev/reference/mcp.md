@@ -113,9 +113,9 @@ max 500). MCP resources are not exposed; clients that only surface tools
 
 ### Alarms
 - `alarms_get_config()` — full `alarms.json` document (`{ version, groups: [{ id, title, alarms: [...] }] }`)
-- `alarms_add(group_id, title?, level?, trigger?, settings?)` — `group_id` must reference an existing group (group lifecycle stays in the UI editor). `level` ∈ `error` / `warning` / `info` (default `warning`). The returned `alarm_id` is a kebab slug derived from the alarm's `code` (falling back to `title`). `settings` may supply additional `AlarmDefinition` fields: `code`, `description`, `image`, `auto_popup`, `resolutions`, `ack_groups`.
+- `alarms_add(group_id, title?, level?, trigger?, settings?)` — `group_id` must reference an existing group (group lifecycle stays in the UI editor). `level` ∈ `error` / `warning` / `info` (default `warning`). The returned `alarm_id` is a kebab slug derived from the alarm's `code` (falling back to `title`). `settings` may supply additional `AlarmDefinition` fields: `code`, `description`, `image`, `auto_popup`, `resolutions`, `ack_required`, `ack_groups`.
 - `alarms_delete(alarm_id, confirm?)` *destructive*
-- `alarms_set(alarm_id, patch)` — JSON Merge Patch over an alarm's fields (`title`, `level`, `trigger`, `code`, `description`, `image`, `auto_popup`, `resolutions`, `ack_groups`). `id` is server-managed and must not appear in `patch`.
+- `alarms_set(alarm_id, patch)` — JSON Merge Patch over an alarm's fields (`title`, `level`, `trigger`, `code`, `description`, `image`, `auto_popup`, `resolutions`, `ack_required`, `ack_groups`). `id` is server-managed and must not appear in `patch`.
 - Group lifecycle (`alarms_add_group` / `alarms_delete_group` / `alarms_set_group`) is intentionally **not** exposed — create/rename groups in the UI editor.
 
 ### Translations

@@ -37,7 +37,7 @@ export interface EvaluationContext {
   /** An input parameter of the open dialog `page`, or null while it is closed. */
   resolveOverlayParam?: (page: string, param: string) => unknown;
   resolveAlarmCount?: (filter: AlarmCountFilter) => number;
-  resolveRecipe?: (typeId: string, field: RecipeField) => string | boolean;
+  resolveRecipe?: (typeId: string, field: RecipeField, parameter?: string) => unknown;
   /** Resolve the $recipeList property source: the datasets of a type as grid rows.
    *  Returns an array (not an ResolvedValue), so it is read via
    *  `useRecordListProp`, not the scalar `evaluatePropertyValue` path. */
@@ -94,7 +94,7 @@ type SourceHandler = (payload: unknown, context: EvaluationContext, depth: numbe
 const SOURCE_HANDLERS: Record<string, SourceHandler> = {
   $static: (payload) => resolveStaticValue(payload),
   $var: (payload, ctx, d) => evaluateVar(payload, ctx, d),
-  $loc: (payload, ctx) => evaluateLoc(payload, ctx),
+  $loc: (payload, ctx, d) => evaluateLoc(payload, ctx, d),
   $urlParam: (payload, ctx) => evaluateUrlParam(payload, ctx),
   $pageIsActive: (payload, ctx) => evaluatePageIsActive(payload, ctx),
   $if: (payload, ctx, d) => evaluateIf(payload, ctx, d),
@@ -278,7 +278,15 @@ function evaluateVar(varObj: unknown, context: EvaluationContext, depth: number)
   return value;
 }
 
-function evaluateLoc(locObj: unknown, context: EvaluationContext): ResolvedValue {
+function evaluateLoc(locObj: unknown, context: EvaluationContext, depth: number): ResolvedValue {
+  // A key with placeholders: translate first, then fill, so each language
+  // puts the values where its grammar wants them.
+  if (isRecord(locObj) && typeof locObj.key === 'string') {
+    const text = context.resolveTranslation
+      ? String(context.resolveTranslation(locObj.key))
+      : locObj.key;
+    return renderTemplate(text, wildcardsOf(locObj), context, depth);
+  }
   if (typeof locObj !== 'string') {
     return null;
   }
@@ -868,11 +876,28 @@ function evaluateAlarmCount(payload: unknown, context: EvaluationContext): Resol
 
 function evaluateRecipe(payload: unknown, context: EvaluationContext): ResolvedValue {
   if (typeof payload !== 'object' || payload === null) return false;
-  const { type, field } = payload as Record<string, unknown>;
+  const { type, field, parameter, format } = payload as Record<string, unknown>;
   if (typeof type !== 'string' || typeof field !== 'string') return false;
-  return (
-    context.resolveRecipe?.(type, field as RecipeField) ?? (field === 'activeName' ? '' : false)
+  if (field === 'savedAt') {
+    const raw = context.resolveRecipe?.(type, 'savedAt');
+    const stamp = typeof raw === 'string' ? raw : '';
+    const date = stamp ? new Date(stamp) : null;
+    if (!date || Number.isNaN(date.getTime())) return '';
+    // Formatted like $time; without a format it stays the ISO stamp a DateTime field takes.
+    return typeof format === 'string' && format.trim() ? formatDateByPattern(date, format) : stamp;
+  }
+  const fallbacks: Record<string, ResolvedValue> = {
+    activeName: '',
+    parameterValue: null,
+    changedCount: 0,
+  };
+  const fallback = field in fallbacks ? fallbacks[field] : false;
+  const value = context.resolveRecipe?.(
+    type,
+    field as RecipeField,
+    typeof parameter === 'string' ? parameter : undefined,
   );
+  return (value ?? fallback) as ResolvedValue;
 }
 
 function formatDateByPattern(date: Date, format: string, timezone?: string): string {

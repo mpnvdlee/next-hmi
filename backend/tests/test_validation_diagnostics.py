@@ -404,6 +404,36 @@ def test_loc_unknown(ctx):
     assert (w.code, w.severity) == ("loc-unknown", "error")
 
 
+def test_recipe_parameter_field_needs_a_parameter(ctx):
+    report = ValidationReport()
+    _validate_property_value(
+        {"$recipe": {"type": "machine", "field": "parameterChanged"}}, None, ctx, "/p", report
+    )
+    w = _warn(report)
+    assert (w.code, w.path) == ("recipe-parameter-empty", "/p/$recipe/parameter")
+
+    report = ValidationReport()
+    _validate_property_value(
+        {"$recipe": {"type": "machine", "field": "parameterChanged", "parameter": "lower"}},
+        None, ctx, "/p", report,
+    )
+    assert report.warnings == []
+
+
+def test_loc_template_checks_its_key_and_placeholders(ctx):
+    report = ValidationReport()
+    payload = {"key": "app.title", "wildcards": {}}
+    _validate_property_value({"$loc": payload}, None, ctx, "/p", report)
+    assert report.findings == [] and report.warnings == []
+
+    report = ValidationReport()
+    payload = {"key": "missing {1}", "wildcards": {"1": {"$var": {"path": ""}}}}
+    _validate_property_value({"$loc": payload}, None, ctx, "/p", report)
+    codes = {(w.code, w.path) for w in report.warnings}
+    assert ("loc-unknown", "/p") in codes
+    assert ("loc-wildcard-empty", "/p/$loc/wildcards/1") in codes
+
+
 def test_icon_unknown_builtin(ctx):
     report = ValidationReport()
     _validate_property_value(

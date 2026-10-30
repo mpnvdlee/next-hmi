@@ -19,7 +19,11 @@
   "$recipe": {
     "parametersChanged": "boolean",
     "loaded": "boolean",
-    "activeName": "string"
+    "activeName": "string",
+    "parameterChanged": "boolean",
+    "parameterValue": ["float", "integer", "string", "boolean"],
+    "changedCount": "integer",
+    "savedAt": ["datetime", "string"]
   },
   "$user": {
     "username": "string",

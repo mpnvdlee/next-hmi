@@ -188,7 +188,7 @@ describe('NumericStepper', () => {
     await user.click(screen.getByRole('button', { name: 'Enter' }));
 
     expect(frames()).toHaveLength(0);
-    expect(screen.getByRole('alert')).toHaveTextContent('Enter a value between 0 and 100');
+    expect(screen.getByRole('alert')).toHaveTextContent('Min: 0 \u00b7 Max: 100');
   });
 
   it('writes nothing when the operator closes the numpad with ×', async () => {

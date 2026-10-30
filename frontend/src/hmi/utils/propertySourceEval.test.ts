@@ -1202,6 +1202,48 @@ describe('propertySourceEval', () => {
       expect(evaluatePropertyValue({ $http: { url: 'https://x/y' } }, {})).toBeNull();
     });
   });
+  describe('$loc with placeholders', () => {
+    const ctx: EvaluationContext = {
+      resolveTranslation: (key) =>
+        key === 'Must lie outside the {1} g band' ? 'Moet buiten de band van {1} g liggen' : key,
+    };
+
+    it('translates the key, then fills each placeholder from its own binding', () => {
+      const value = {
+        $loc: { key: 'Must lie outside the {1} g band', wildcards: { 1: { $static: 10 } } },
+      };
+      expect(evaluatePropertyValue(value, ctx)).toBe('Moet buiten de band van 10 g liggen');
+    });
+
+    it('keeps a plain key a plain translation', () => {
+      expect(evaluatePropertyValue({ $loc: 'Must lie outside the {1} g band' }, ctx)).toBe(
+        'Moet buiten de band van {1} g liggen',
+      );
+    });
+  });
+
+  describe('$recipe savedAt', () => {
+    const ctx: EvaluationContext = {
+      resolveRecipe: (_type, field) => (field === 'savedAt' ? '2026-10-27T08:45:00' : false),
+    };
+
+    it('formats the saved moment like $time, or gives the ISO stamp without a format', () => {
+      expect(
+        evaluatePropertyValue({ $recipe: { type: 'm', field: 'savedAt', format: 'HH:mm' } }, ctx),
+      ).toBe('08:45');
+      expect(evaluatePropertyValue({ $recipe: { type: 'm', field: 'savedAt' } }, ctx)).toBe(
+        '2026-10-27T08:45:00',
+      );
+    });
+
+    it('is empty for a dataset never saved', () => {
+      const never: EvaluationContext = { resolveRecipe: () => '' };
+      expect(
+        evaluatePropertyValue({ $recipe: { type: 'm', field: 'savedAt', format: 'HH:mm' } }, never),
+      ).toBe('');
+    });
+  });
+
   describe('$stringExpr Signed()', () => {
     const signed = (value: unknown, template = '{Signed(1)}') =>
       evaluatePropertyValue(

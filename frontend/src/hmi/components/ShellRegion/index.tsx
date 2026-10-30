@@ -49,6 +49,7 @@ export default function ShellRegion({ id, config, children, focused }: Props) {
     config.expandedSize,
     config.collapsedSize,
     config.background,
+    config.floating,
   );
   const scope = useHmiScope();
   const regionRef = useRef<HTMLDivElement>(null);
@@ -127,6 +128,7 @@ export default function ShellRegion({ id, config, children, focused }: Props) {
   if (defaultState === 'hidden' && config.expanded === undefined) return null;
 
   const overlay = Boolean(evaluatePropertyValue(config.overlay, evalCtx));
+  const floating = Boolean(evaluatePropertyValue(config.floating, evalCtx));
 
   const hasContent = children !== undefined && children !== null && children !== false;
   if (!hasContent) return null;
@@ -158,9 +160,12 @@ export default function ShellRegion({ id, config, children, focused }: Props) {
     <div
       ref={regionRef}
       className={
-        `${styles.region} ${styles[`region-${id}`] ?? ''}` + (focused ? ' hmi-area--focus' : '')
+        `${styles.region} ${styles[`region-${id}`] ?? ''}` +
+        (floating ? ` ${styles.floating}` : '') +
+        (focused ? ' hmi-area--focus' : '')
       }
       data-region={id}
+      data-floating={floating ? 'true' : undefined}
       data-collapsed={!expanded ? 'true' : 'false'}
       data-flow-direction={isVertical ? 'column' : 'row'}
       data-flow-align={isVertical ? 'flex-start' : 'center'}

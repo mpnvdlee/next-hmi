@@ -118,7 +118,16 @@ export const SOURCE_FIELD_PRODUCES = {
     pathSegments: 'string[]',
   },
   $viewport: { size: 'string', orientation: 'string', width: 'integer', height: 'integer' },
-  $recipe: { parametersChanged: 'boolean', loaded: 'boolean', activeName: 'string' },
+  $recipe: {
+    parametersChanged: 'boolean',
+    loaded: 'boolean',
+    activeName: 'string',
+    parameterChanged: 'boolean',
+    // A parameter holds whatever its variable does.
+    parameterValue: ['float', 'integer', 'string', 'boolean'],
+    changedCount: 'integer',
+    savedAt: ['datetime', 'string'],
+  },
   // On a list field `userList` is every user and `groups` every group, as
   // options; on a text field `resolveUser` joins the names — the signed-in
   // user's group labels for `groups` — into one string. `userList` comes before

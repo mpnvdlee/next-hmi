@@ -28,7 +28,6 @@ Groups and lays out child widgets in a row or column. Hosts other widgets, and r
 | `overflow` | Overflow | `String` |
 | `background` | Background | `color` |
 | `border` | Border | `String` |
-| `shadow` | Shadow | `String` |
 | `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
@@ -119,7 +118,12 @@ Live active alarms, filterable by level, with acknowledgement.
 |---|---|---|
 | `title` | Title | `String` |
 | `filterLevel` | Filter level | `String` |
-| `chrome` | Own frame | `Boolean` |
+| `rowSize` | Row size | `String` |
+| `mark` | Severity mark | `String` |
+| `show` | Show | `String` |
+| `showFilter` | Filter chips | `Boolean` |
+| `ackMode` | Acknowledge | `String` |
+| `secondLine` | Second line | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
@@ -137,6 +141,7 @@ Runs actions and can write true to a bound boolean on press.
 | `fill` | Fill | `color` |
 | `radius` | Radius | `String` |
 | `borderWidth` | Border width (px) | `Integer` |
+| `borderColor` | Border color | `color` |
 | `align` | Content alignment | `String` |
 | `textTransform` | Text case | `String` |
 | `iconSize` | Icon size (px) | `Integer` |
@@ -192,7 +197,8 @@ Text in one of the theme typography combos, with translation support.
 | `text` | Text | `String` |
 | `typography` | Typography | `String` |
 | `color` | Color | `color` |
-| `align` | Align | `String` |
+| `align` | Content alignment | `String` |
+| `textTransform` | Text case | `String` |
 | `wrap` | Overflow | `String` |
 | `size` | Size override | `String` |
 | `weight` | Weight override | `Integer` |
@@ -408,11 +414,14 @@ A numeric entry field that writes a number to a variable.
 | `unit` | Unit | `String` |
 | `min` | Min value | `Float` |
 | `max` | Max value | `Float` |
+| `rangeMessage` | Out-of-range message | `String` |
 | `variable` | Variable | `Float | Integer` |
 | `allowNegative` | Allow negative values | `Boolean` |
 | `decimals` | Decimal places | `Integer` |
+| `color` | Value color | `color` |
 | `showRangeOnNumpad` | Show range on numpad | `Boolean` |
 | `numpadPosition` | Numpad position | `String` |
+| `onChange` | On Change | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
@@ -606,7 +615,6 @@ Collapses or expands a bound menu state; swaps icon per state.
 | `bound` | Bound state | `Boolean` |
 | `iconCollapsed` | Icon (collapsed) | `icon` |
 | `iconExpanded` | Icon (expanded) | `icon` |
-| `ariaLabel` | Aria label | `String` |
 | `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |

@@ -8,14 +8,18 @@ import { useHmiStore } from '@hmi/store/hmiStore';
 import { useVariableStore } from '@hmi/store/variableStore';
 import WidgetRenderer from '@hmi/components/WidgetRenderer';
 
-function renderContainer(properties?: Record<string, unknown>, route = '/pages/test') {
+function renderContainer(
+  properties?: Record<string, unknown>,
+  route = '/pages/test',
+  name = 'Container',
+) {
   return render(
     <MemoryRouter initialEntries={[route]}>
       <WidgetRenderer
         node={{
           id: 'container',
           type: 'Container',
-          name: 'Container',
+          name,
           properties: { showWhenEmpty: true, ...properties },
         }}
       />

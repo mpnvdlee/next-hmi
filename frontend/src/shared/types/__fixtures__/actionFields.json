@@ -66,6 +66,8 @@
     "onFailed": "actions",
     "onSettled": "actions"
   },
+  "acknowledgeAllAlarms": {},
+  "delay": { "duration": "Integer" },
   "setLanguage": { "language": "String" },
   "setActiveTheme": { "theme": "String" },
   "showAlert": {

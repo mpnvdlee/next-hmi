@@ -16,10 +16,10 @@ function sentFrame(): Record<string, unknown> {
   return vi.mocked(sendWsMessage).mock.calls[0][0] as Record<string, unknown>;
 }
 
-function renderButton(properties: Record<string, unknown>) {
+function renderButton(properties: Record<string, unknown>, name?: string) {
   return render(
     <MemoryRouter>
-      <Button properties={properties} />
+      <Button name={name} properties={properties} />
     </MemoryRouter>,
   );
 }
@@ -159,6 +159,13 @@ describe('Button', () => {
       expect(el.style.getPropertyValue(prop)).toBe('');
     }
     expect(screen.getByRole('button', { name: 'Jog' })).not.toHaveAttribute('title');
+  });
+
+  it('gives the border its own color, falling back to the button color', () => {
+    renderButton({ label: 'Alarms', color: '#22a7e0', borderColor: '#d0452f' });
+    expect(screen.getByRole('button', { name: 'Alarms' }).style.borderColor).toBe(
+      'rgb(208, 69, 47)',
+    );
   });
 
   it('dispatches configured onPress actions', async () => {

@@ -82,11 +82,98 @@
           }
         ]
       },
-      "chrome": {
+      "rowSize": {
+        "format": "select",
+        "label": "Row size",
+        "defaultValue": "compact",
+        "description": "Touch gives each row and button a tap-sized height and a larger title.",
+        "options": [
+          {
+            "label": "Compact",
+            "value": "compact"
+          },
+          {
+            "label": "Touch",
+            "value": "touch"
+          }
+        ]
+      },
+      "mark": {
+        "format": "select",
+        "label": "Severity mark",
+        "defaultValue": "stripe",
+        "description": "How a row shows its level: a stripe on the left, the whole row in the level colour, or only the coloured icon.",
+        "options": [
+          {
+            "label": "Stripe",
+            "value": "stripe"
+          },
+          {
+            "label": "Row color",
+            "value": "tint"
+          },
+          {
+            "label": "Icon only",
+            "value": "icon"
+          }
+        ]
+      },
+      "show": {
+        "format": "select",
+        "label": "Show",
+        "defaultValue": "active",
+        "description": "Active alarms, cleared ones (History) or both. With Filter chips on, the chips start here.",
+        "options": [
+          {
+            "label": "Active",
+            "value": "active"
+          },
+          {
+            "label": "All",
+            "value": "all"
+          },
+          {
+            "label": "History",
+            "value": "history"
+          }
+        ]
+      },
+      "showFilter": {
         "format": "show",
-        "label": "Own frame",
-        "defaultValue": true,
-        "description": "Turn off when the widget sits inside a card that already draws a frame."
+        "label": "Filter chips",
+        "defaultValue": false,
+        "description": "All / Active / History chips in the header, so the operator can switch."
+      },
+      "ackMode": {
+        "format": "select",
+        "label": "Acknowledge",
+        "defaultValue": "row",
+        "description": "Off leaves acknowledging to a Button with the Acknowledge All Alarms action.",
+        "options": [
+          {
+            "label": "Per row",
+            "value": "row"
+          },
+          {
+            "label": "Off",
+            "value": "off"
+          }
+        ]
+      },
+      "secondLine": {
+        "format": "select",
+        "label": "Second line",
+        "defaultValue": "time",
+        "options": [
+          {
+            "label": "Time",
+            "value": "time"
+          },
+          {
+            "label": "Description and time",
+            "value": "description"
+          }
+        ]
       }
     }
   },
@@ -164,6 +251,11 @@
         "label": "Border width (px)",
         "min": 0,
         "step": 1,
+        "group": "Appearance"
+      },
+      "borderColor": {
+        "label": "Border color",
+        "description": "Empty uses the button color.",
         "group": "Appearance"
       },
       "align": {
@@ -370,7 +462,8 @@
       },
       "align": {
         "format": "select",
-        "label": "Align",
+        "label": "Content alignment",
+        "display": "button-text",
         "group": "Appearance",
         "defaultValue": "left",
         "options": [
@@ -385,6 +478,27 @@
           {
             "label": "Right",
             "value": "right"
+          }
+        ]
+      },
+      "textTransform": {
+        "format": "select",
+        "label": "Text case",
+        "display": "button-text",
+        "group": "Appearance",
+        "defaultValue": "theme",
+        "options": [
+          {
+            "label": "Typography",
+            "value": "theme"
+          },
+          {
+            "label": "As typed",
+            "value": "none"
+          },
+          {
+            "label": "Uppercase",
+            "value": "uppercase"
           }
         ]
       },
@@ -1857,6 +1971,11 @@
         "label": "Max value",
         "group": "Data"
       },
+      "rangeMessage": {
+        "label": "Out-of-range message",
+        "description": "Said on the numpad outside min/max. Empty shows the range.",
+        "group": "Data"
+      },
       "variable": {
         "label": "Variable",
         "group": "Data"
@@ -1872,6 +1991,11 @@
         "min": 0,
         "max": 6,
         "step": 1
+      },
+      "color": {
+        "label": "Value color",
+        "defaultToken": "--hmi-text",
+        "group": "Appearance"
       },
       "showRangeOnNumpad": {
         "label": "Show range on numpad",
@@ -1893,6 +2017,10 @@
             "value": "center"
           }
         ]
+      },
+      "onChange": {
+        "label": "On Change",
+        "event": "onChange"
       }
     }
   },
@@ -2130,12 +2258,6 @@
         "label": "Border",
         "defaultValue": "none",
         "description": "Any CSS border shorthand, e.g. 1px solid var(--hmi-border).",
-        "group": "Appearance"
-      },
-      "shadow": {
-        "label": "Shadow",
-        "defaultValue": "none",
-        "description": "Any CSS box-shadow, e.g. var(--hmi-shadow).",
         "group": "Appearance"
       },
       "actions": {
@@ -2417,10 +2539,6 @@
       "iconExpanded": {
         "label": "Icon (expanded)",
         "defaultValue": "×"
-      },
-      "ariaLabel": {
-        "label": "Aria label",
-        "defaultValue": "Toggle menu"
       },
       "actions": {
         "label": "Actions"

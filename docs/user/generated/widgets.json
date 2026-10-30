@@ -67,13 +67,6 @@
             "defaultValue": "none"
           },
           {
-            "key": "shadow",
-            "label": "Shadow",
-            "type": "String",
-            "group": "Appearance",
-            "defaultValue": "none"
-          },
-          {
             "key": "actions",
             "label": "Actions",
             "type": "actions"
@@ -379,10 +372,40 @@
             "defaultValue": ""
           },
           {
-            "key": "chrome",
-            "label": "Own frame",
+            "key": "rowSize",
+            "label": "Row size",
+            "type": "String",
+            "defaultValue": "compact"
+          },
+          {
+            "key": "mark",
+            "label": "Severity mark",
+            "type": "String",
+            "defaultValue": "stripe"
+          },
+          {
+            "key": "show",
+            "label": "Show",
+            "type": "String",
+            "defaultValue": "active"
+          },
+          {
+            "key": "showFilter",
+            "label": "Filter chips",
             "type": "Boolean",
-            "defaultValue": true
+            "defaultValue": false
+          },
+          {
+            "key": "ackMode",
+            "label": "Acknowledge",
+            "type": "String",
+            "defaultValue": "row"
+          },
+          {
+            "key": "secondLine",
+            "label": "Second line",
+            "type": "String",
+            "defaultValue": "time"
           },
           {
             "key": "visible",
@@ -454,6 +477,12 @@
             "key": "borderWidth",
             "label": "Border width (px)",
             "type": "Integer",
+            "group": "Appearance"
+          },
+          {
+            "key": "borderColor",
+            "label": "Border color",
+            "type": "color",
             "group": "Appearance"
           },
           {
@@ -654,10 +683,17 @@
           },
           {
             "key": "align",
-            "label": "Align",
+            "label": "Content alignment",
             "type": "String",
             "group": "Appearance",
             "defaultValue": "left"
+          },
+          {
+            "key": "textTransform",
+            "label": "Text case",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "theme"
           },
           {
             "key": "wrap",
@@ -1672,6 +1708,12 @@
             "group": "Data"
           },
           {
+            "key": "rangeMessage",
+            "label": "Out-of-range message",
+            "type": "String",
+            "group": "Data"
+          },
+          {
             "key": "variable",
             "label": "Variable",
             "type": "Float | Integer",
@@ -1691,6 +1733,12 @@
             "group": "Appearance"
           },
           {
+            "key": "color",
+            "label": "Value color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
             "key": "showRangeOnNumpad",
             "label": "Show range on numpad",
             "type": "Boolean",
@@ -1703,6 +1751,11 @@
             "type": "String",
             "group": "Appearance",
             "defaultValue": "bottom-right"
+          },
+          {
+            "key": "onChange",
+            "label": "On Change",
+            "type": "actions"
           },
           {
             "key": "visible",
@@ -2443,12 +2496,6 @@
             "label": "Icon (expanded)",
             "type": "icon",
             "defaultValue": "×"
-          },
-          {
-            "key": "ariaLabel",
-            "label": "Aria label",
-            "type": "String",
-            "defaultValue": "Toggle menu"
           },
           {
             "key": "actions",

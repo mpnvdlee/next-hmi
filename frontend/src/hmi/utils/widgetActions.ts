@@ -13,6 +13,7 @@ import { useTranslationStore } from '@shared/store/translationStore';
 import { randomUuid } from '@shared/utils/id';
 import { hasPropertySourceKey } from '@shared/types/propertyValueGuards';
 import { beginAsyncAction } from '@hmi/utils/actionDispatcher';
+import { ackAllAlarms } from '@hmi/components/alarmUtils';
 import { useConfigStore } from '@shared/store/configStore';
 import { findPageNodeById } from '@shared/utils/pageTree';
 
@@ -120,7 +121,18 @@ export function executeWidgetActions(
   const evalCtx: EvaluationContext = { ...storeEvalContext(scope), ...context.evalCtx };
   const inputScopeProps = evalCtx.inputScopeProps;
 
-  for (const action of actions) {
+  for (const [i, action] of actions.entries()) {
+    if (action.type === 'delay') {
+      // The rest of the list runs later, so it reads what was written in the
+      // meantime, such as the value a PLC has just confirmed.
+      const rest = actions.slice(i + 1);
+      setTimeout(
+        () => executeWidgetActions(rest, context),
+        Math.max(0, Number(action.duration) || 0),
+      );
+      return;
+    }
+
     if (action.type === 'openDialog' || action.type === 'openPageOverlay') {
       // Only a Dialogs-folder node declares input parameters, so only
       // `openDialog` carries values to resolve against the opener's scope.
@@ -287,6 +299,12 @@ export function executeWidgetActions(
     if (action.type === 'logoutUser') {
       const requestId = beginAsyncAction(action, scope, inputScopeProps);
       sendWsMessage({ type: 'logout', ...(requestId && { requestId }), scope });
+      continue;
+    }
+
+    if (action.type === 'acknowledgeAllAlarms') {
+      // A refusal toasts inside ackAllAlarms, so the list need not wait for it.
+      void ackAllAlarms(useHmiStore.getState().currentUsersByScope[scope]?.username || 'operator');
       continue;
     }
 

@@ -47,6 +47,13 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
     </Icon>
   ),
   // A path forking in two — one branch or the other.
+  // Clock — waits.
+  delay: (
+    <Icon>
+      <circle cx="8" cy="8" r="5.5" />
+      <path d="M8 5 v3 l2 1.5" />
+    </Icon>
+  ),
   if: (
     <Icon>
       <path d="M8 13.5 v-5" />
@@ -98,6 +105,12 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
       <circle cx="6.3" cy="5.2" r="2.3" />
       <path d="M2.3 13.2 a4 3.6 0 0 1 8 0" />
       <path d="M14.2 8.2 h-3.2 M12.4 6.6 l-1.6 1.6 1.6 1.6" />
+    </Icon>
+  ),
+  // Check mark — acknowledge.
+  acknowledgeAllAlarms: (
+    <Icon>
+      <path d="M3.2 8.6 l3.1 3.1 L12.8 4.6" />
     </Icon>
   ),
   // Globe.

@@ -39,7 +39,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "d2597e06823a9afb",
+    "buildTs": "db993ce47d5914ec",
     "displayName": "Alarm List",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -52,8 +52,23 @@
       "filterLevel": {
         "type": "string"
       },
-      "chrome": {
+      "rowSize": {
+        "type": "string"
+      },
+      "mark": {
+        "type": "string"
+      },
+      "show": {
+        "type": "string"
+      },
+      "showFilter": {
         "type": "boolean"
+      },
+      "ackMode": {
+        "type": "string"
+      },
+      "secondLine": {
+        "type": "string"
       }
     },
     "schemaError": null
@@ -67,7 +82,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "db95980b0dd659d7",
+    "buildTs": "2edc7e5cdab67261",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -97,6 +112,9 @@
       },
       "borderWidth": {
         "type": "integer"
+      },
+      "borderColor": {
+        "type": "color"
       },
       "align": {
         "type": "string"
@@ -215,7 +233,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "e2a11193fad2cb17",
+    "buildTs": "19fd8cc1aa37eefa",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -232,6 +250,9 @@
         "type": "color"
       },
       "align": {
+        "type": "string"
+      },
+      "textTransform": {
         "type": "string"
       },
       "wrap": {
@@ -1067,7 +1088,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "bc9df9b4dc39da9b",
+    "buildTs": "460d03913f430f8a",
     "displayName": "Number Input",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1086,6 +1107,9 @@
       "max": {
         "type": "float"
       },
+      "rangeMessage": {
+        "type": "string"
+      },
       "variable": {
         "type": [
           "float",
@@ -1099,11 +1123,17 @@
       "decimals": {
         "type": "integer"
       },
+      "color": {
+        "type": "color"
+      },
       "showRangeOnNumpad": {
         "type": "boolean"
       },
       "numpadPosition": {
         "type": "string"
+      },
+      "onChange": {
+        "type": "actions"
       }
     },
     "schemaError": null
@@ -1262,7 +1292,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "e0bc552ea666e0a1",
+    "buildTs": "a1bbdb23dff401c6",
     "displayName": null,
     "hostsChildren": true,
     "flowsChildren": true,
@@ -1282,9 +1312,6 @@
         "type": "color"
       },
       "border": {
-        "type": "string"
-      },
-      "shadow": {
         "type": "string"
       },
       "actions": {
@@ -1504,7 +1531,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "bb4a7d49cd813d5e",
+    "buildTs": "8f5f7bac677e80b0",
     "displayName": "Menu Toggle",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1519,9 +1546,6 @@
       },
       "iconExpanded": {
         "type": "icon"
-      },
-      "ariaLabel": {
-        "type": "string"
       },
       "actions": {
         "type": "actions"

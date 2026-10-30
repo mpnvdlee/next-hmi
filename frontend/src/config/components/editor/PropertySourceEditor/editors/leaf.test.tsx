@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { useConfigStore } from '@shared/store/configStore';
 import { useRecipeConfigStore } from '@config/store/recipeConfigStore';
 import {
+  LocEditor,
   PageEditor,
   PageIsActiveEditor,
   RecipeEditor,
@@ -13,6 +14,7 @@ import {
 } from './leaf';
 import PropRow from '../../../ui/PropRow';
 import { TakesOneValueContext } from '../slotContext';
+import { LocPlaceholdersContext } from '../locPlaceholdersContext';
 import { loadVariableWriteDescriptor } from '@config/utils/variableType';
 
 vi.mock('@config/utils/variableType', () => ({
@@ -330,6 +332,8 @@ describe('field choices that fit the field', () => {
     expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
       'Is loaded',
       'Parameters changed',
+      'Saved value of a parameter',
+      'Parameter changed',
     ]);
   });
 
@@ -342,5 +346,26 @@ describe('field choices that fit the field', () => {
       />,
     );
     expect(await fieldOptions()).toEqual(['username', 'groups', 'User list']);
+  });
+});
+
+describe('LocEditor', () => {
+  const value = { $loc: { key: 'Tank {1} of {2}', wildcards: { 1: 'A' } } };
+
+  it('opens one field per placeholder of the picked translation', () => {
+    render(<LocEditor value={value} onChange={vi.fn()} />);
+
+    expect(screen.getByText('Value for {1}')).toBeInTheDocument();
+    expect(screen.getByText('Value for {2}')).toBeInTheDocument();
+  });
+
+  it('leaves the placeholders to the alarm where an alarm fills them', () => {
+    render(
+      <LocPlaceholdersContext.Provider value={false}>
+        <LocEditor value={value} onChange={vi.fn()} />
+      </LocPlaceholdersContext.Provider>,
+    );
+
+    expect(screen.queryByText('Value for {1}')).not.toBeInTheDocument();
   });
 });
