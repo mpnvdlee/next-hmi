@@ -476,6 +476,15 @@ heading.
 
 ### Fixed
 
+- **An Image Container with many children stays workable.** Children added
+  to an Image Container no longer all sit in the middle of the image until
+  **Place children…** is opened: each starts at its own spot in an 8 × 8 grid,
+  so 64 children get a spot each where 16 did before. In **Place children…** a
+  child that draws nothing, such as an empty Container, can be dragged by its
+  marker. **Place children…** and an Image's **Edit indicators…** fit a tall
+  image inside the dialog, so its bottom edge can be reached. A child that
+  was never placed moves from the middle of the image to its grid spot.
+
 - **A Button's custom SVG icon shows in Safari.** A project SVG on a Button
   rendered at zero size in Safari and other WebKit browsers, so the button
   showed no icon. It now fills the icon size, as it already did in Chrome

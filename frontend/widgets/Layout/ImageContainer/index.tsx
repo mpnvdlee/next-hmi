@@ -79,6 +79,12 @@ function autoMarkerLabel(index: number): string {
   return out;
 }
 
+/** Row-major spot in an 8 × 8 grid inset to 0.1–0.8; repeats after 64. */
+function defaultPositionForIndex(index: number): { x: number; y: number } {
+  const cell = index % 64;
+  return { x: 0.1 + (cell % 8) * 0.1, y: 0.1 + Math.floor(cell / 8) * 0.1 };
+}
+
 function markerLabel(entry: Placement | undefined, treeIndex: number): string {
   const manual = entry?.label?.trim();
   return manual ? manual : autoMarkerLabel(treeIndex);
@@ -123,20 +129,25 @@ export default function ImageContainer({ properties, layout, childConfigs }: Hmi
   const positionById = new Map(
     Array.isArray(rawPositions) ? rawPositions.map((p) => [p.id, p]) : [],
   );
+  // An unplaced child sits where the placement panel will first offer it, so
+  // children added without opening the panel do not all stack in the middle.
+  let placeableIndex = 0;
   const placedChildren = allChildren
     .map((child, treeIndex) => {
       const entry = positionById.get(child.id);
+      // A Repeater placing its copies at item x / y covers the whole image
+      // and has no point, no marker, of its own.
+      const fills =
+        child.type === 'Repeater' &&
+        getPropString(child.properties, 'placement', 'flow', evalCtx) === 'items';
+      const fallback = fills ? { x: 0.5, y: 0.5 } : defaultPositionForIndex(placeableIndex++);
       return {
         child,
-        x: clamp01(entry?.x ?? 0.5),
-        y: clamp01(entry?.y ?? 0.5),
+        x: clamp01(entry?.x ?? fallback.x),
+        y: clamp01(entry?.y ?? fallback.y),
         label: markerLabel(entry, treeIndex),
         visible: getPropBoolean(child.properties, 'visible', true, evalCtx),
-        // A Repeater placing its copies at item x / y covers the whole image
-        // and has no point, no marker, of its own.
-        fills:
-          child.type === 'Repeater' &&
-          getPropString(child.properties, 'placement', 'flow', evalCtx) === 'items',
+        fills,
       };
     })
     .filter((entry) => entry.visible);

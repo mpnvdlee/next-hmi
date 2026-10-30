@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { ChildPosition, WidgetConfig } from '@shared/types/config';
 import WidgetRenderer from '@hmi/components/WidgetRenderer';
 import { resolveImageSrc } from '@shared/utils/imageAsset';
@@ -128,61 +128,67 @@ export default function ChildPositionsEditor({ value, src, childConfigs, onChang
           </div>
 
           <div className="cfg-childpos-body">
-            <div
-              ref={canvasRef}
-              className="cfg-childpos-canvas"
-              style={imgSize ? { aspectRatio: `${imgSize.w} / ${imgSize.h}` } : undefined}
-            >
-              {imageUrl ? (
-                <img
-                  src={imageUrl}
-                  alt=""
-                  draggable={false}
-                  className="cfg-childpos-img"
-                  onLoad={(e) => {
-                    const img = e.currentTarget;
-                    setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
-                  }}
-                />
-              ) : (
-                <span className="cfg-childpos-noimage">Image not set — cannot preview</span>
-              )}
+            <div className="cfg-childpos-stage">
+              <div
+                ref={canvasRef}
+                className={'cfg-childpos-canvas' + (imgSize ? ' cfg-childpos-canvas--sized' : '')}
+                style={
+                  imgSize
+                    ? ({ '--cfg-childpos-aspect': imgSize.w / imgSize.h } as CSSProperties)
+                    : undefined
+                }
+              >
+                {imageUrl ? (
+                  <img
+                    src={imageUrl}
+                    alt=""
+                    draggable={false}
+                    className="cfg-childpos-img"
+                    onLoad={(e) => {
+                      const img = e.currentTarget;
+                      setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
+                    }}
+                  />
+                ) : (
+                  <span className="cfg-childpos-noimage">Image not set — cannot preview</span>
+                )}
 
-              {children.map((child, treeIndex) => {
-                const pos = positionsById.get(child.id);
-                if (!pos) return null;
-                const isSelected = child.id === selectedId;
-                const isDragging = dragId === child.id;
-                const label = resolveMarkerLabel(pos, treeIndex);
-                const widthStyle = pos.width != null ? { width: `${pos.width}%` } : undefined;
-                return (
-                  <div
-                    key={child.id}
-                    className={
-                      'cfg-childpos-slot' +
-                      (isSelected ? ' cfg-childpos-slot--selected' : '') +
-                      (isDragging ? ' cfg-childpos-slot--dragging' : '')
-                    }
-                    style={{
-                      left: `${pos.x * 100}%`,
-                      top: `${pos.y * 100}%`,
-                      ...widthStyle,
-                    }}
-                    onPointerDown={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setSelectedId(child.id);
-                      setDragId(child.id);
-                    }}
-                    title={child.name || child.type}
-                  >
-                    <div className="cfg-childpos-preview">
-                      <WidgetRenderer node={child} />
+                {children.map((child, treeIndex) => {
+                  const pos = positionsById.get(child.id);
+                  if (!pos) return null;
+                  const isSelected = child.id === selectedId;
+                  const isDragging = dragId === child.id;
+                  const label = resolveMarkerLabel(pos, treeIndex);
+                  const widthStyle = pos.width != null ? { width: `${pos.width}%` } : undefined;
+                  return (
+                    <div
+                      key={child.id}
+                      className={
+                        'cfg-childpos-slot' +
+                        (isSelected ? ' cfg-childpos-slot--selected' : '') +
+                        (isDragging ? ' cfg-childpos-slot--dragging' : '')
+                      }
+                      style={{
+                        left: `${pos.x * 100}%`,
+                        top: `${pos.y * 100}%`,
+                        ...widthStyle,
+                      }}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setSelectedId(child.id);
+                        setDragId(child.id);
+                      }}
+                      title={child.name || child.type}
+                    >
+                      <div className="cfg-childpos-preview">
+                        <WidgetRenderer node={child} />
+                      </div>
+                      <span className="cfg-childpos-marker">{label}</span>
                     </div>
-                    <span className="cfg-childpos-marker">{label}</span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
 
             <div className="cfg-marker-sidebar">
