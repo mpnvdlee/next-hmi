@@ -1,17 +1,26 @@
-import type { AnchorRect, ButtonAction, OverlayPlacement } from '@shared/types/config';
+import type {
+  ActionsConfig,
+  AnchorRect,
+  ButtonAction,
+  OverlayPlacement,
+} from '@shared/types/config';
 import { writeTargetAddress } from '@shared/types/config';
 import type { EvaluationContext, ResolvedValue } from '@hmi/utils/propertySourceEval';
 import { useVariableStore } from '@hmi/store/variableStore';
-import { evaluatePropertyValue } from '@hmi/utils/propertySourceEval';
+import { evaluatePropertyValue, resolveBoundIndex } from '@hmi/utils/propertySourceEval';
+import { substituteBoundIndexes } from '@hmi/utils/boundIndexResolution';
 import { isAnchoredPlacement } from '@shared/utils/anchorPosition';
 import { resolveComponentPropValue } from '@hmi/utils/componentPropResolution';
 import { sendWsMessage } from '@hmi/hooks/useWebSocket';
-import { useHmiStore } from '@hmi/store/hmiStore';
+import { resolveUserField, useHmiStore } from '@hmi/store/hmiStore';
 import { useThemeRuntimeStore } from '@hmi/store/themeRuntimeStore';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { randomUuid } from '@shared/utils/id';
 import { hasPropertySourceKey } from '@shared/types/propertyValueGuards';
 import { beginAsyncAction } from '@hmi/utils/actionDispatcher';
+import { ackAllAlarms } from '@hmi/components/alarmUtils';
+import { useConfigStore } from '@shared/store/configStore';
+import { findPageNodeById } from '@shared/utils/pageTree';
 
 interface ActionContext {
   scope?: string;
@@ -44,16 +53,91 @@ function readStoredVariable(datasource: string, path: string): ResolvedValue {
   return (value !== undefined ? value : null) as ResolvedValue;
 }
 
+/** A write target as it stands at the moment of the write: a component input it
+ *  names swapped for the binding the instance passed, and its bound index
+ *  resolved — an action fired by a page or global event never passed through a
+ *  widget's resolution. */
+function resolveWriteTarget(target: unknown, ctx: EvaluationContext): unknown {
+  const bound = resolveComponentPropValue(target, ctx.inputScopeProps);
+  return substituteBoundIndexes(bound, (index) => resolveBoundIndex(index, ctx));
+}
+
+/** The value a write address holds now. A struct member read outside a widget
+ *  has no subscription of its own, so it is picked off the struct's record. */
+function currentValueAt(target: unknown, ctx: EvaluationContext): unknown {
+  const value = evaluatePropertyValue(target, ctx);
+  if (value !== null) return value;
+  const address = writeTargetAddress(target);
+  const slash = address?.path.lastIndexOf('/') ?? -1;
+  if (!address || slash < 0) return null;
+  const parent = readStoredVariable(address.datasource, address.path.slice(0, slash));
+  const record = parent as unknown as Record<string, unknown> | null;
+  return typeof record === 'object' && record
+    ? (record[address.path.slice(slash + 1)] ?? null)
+    : null;
+}
+
+/** The range configured on the variable a write address names — its own, or a
+ *  struct member's — and whether it holds whole numbers only. */
+function configuredRange(address: { datasource: string; path: string }): {
+  min?: number;
+  max?: number;
+  integer: boolean;
+} {
+  const { varMeta } = useVariableStore.getState();
+  const location = address.path.replace(/\[-?\d+\]/g, '');
+  const own = varMeta[`${address.datasource}:${location}`];
+  if (own) {
+    const integer = own.type.kind === 'scalar' && own.type.base === 'Integer';
+    return { min: own.min, max: own.max, integer };
+  }
+  const slash = location.lastIndexOf('/');
+  const parent =
+    slash > 0 ? varMeta[`${address.datasource}:${location.slice(0, slash)}`] : undefined;
+  return { ...parent?.fieldRanges?.[location.slice(slash + 1)], integer: false };
+}
+
+/** A number an action field resolves to, or undefined when it is left empty. */
+function optionalNumber(value: unknown, ctx: EvaluationContext): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const n = Number(evaluatePropertyValue(value, ctx));
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/** Page and global events fire outside any widget, so their context has no
+ *  readers of its own; these read the live stores for the firing scope. */
+function storeEvalContext(scope: string): EvaluationContext {
+  const currentUser = () => useHmiStore.getState().currentUsersByScope[scope];
+  return {
+    resolveVariable: readStoredVariable,
+    resolveTranslation: (key) => useTranslationStore.getState().resolve(key),
+    resolveUser: (field) => resolveUserField(currentUser(), field),
+    resolveUserGroups: () => currentUser()?.groups ?? ['guest'],
+  };
+}
+
 export function executeWidgetActions(
   actions: ButtonAction[] | undefined,
   context: ActionContext = {},
 ): void {
   if (!actions || actions.length === 0) return;
 
-  const { scope = '', evalCtx = {}, anchorEl } = context;
+  const { scope = '', anchorEl } = context;
+  const evalCtx: EvaluationContext = { ...storeEvalContext(scope), ...context.evalCtx };
   const inputScopeProps = evalCtx.inputScopeProps;
 
-  for (const action of actions) {
+  for (const [i, action] of actions.entries()) {
+    if (action.type === 'delay') {
+      // The rest of the list runs later, so it reads what was written in the
+      // meantime, such as the value a PLC has just confirmed.
+      const rest = actions.slice(i + 1);
+      setTimeout(
+        () => executeWidgetActions(rest, context),
+        Math.max(0, Number(action.duration) || 0),
+      );
+      return;
+    }
+
     if (action.type === 'openDialog' || action.type === 'openPageOverlay') {
       // Only a Dialogs-folder node declares input parameters, so only
       // `openDialog` carries values to resolve against the opener's scope.
@@ -80,15 +164,14 @@ export function executeWidgetActions(
     }
 
     if (action.type === 'if') {
-      // Page and global events fire outside any widget, so their context has
-      // no variable reader of its own; the condition reads the live store.
-      const conditionCtx: EvaluationContext = evalCtx.resolveVariable
-        ? evalCtx
-        : { ...evalCtx, resolveVariable: readStoredVariable };
-      const branch = evaluatePropertyValue(action.condition, conditionCtx)
-        ? action.then
-        : action.else;
+      const branch = evaluatePropertyValue(action.condition, evalCtx) ? action.then : action.else;
       executeWidgetActions(branch, context);
+      continue;
+    }
+
+    if (action.type === 'runComponentActions') {
+      const passed = inputScopeProps?.[action.property] as ActionsConfig | undefined;
+      executeWidgetActions(passed?.onPress, context);
       continue;
     }
 
@@ -97,8 +180,17 @@ export function executeWidgetActions(
       continue;
     }
 
+    if (action.type === 'navigateToPage') {
+      const pageId = String(evaluatePropertyValue(action.pageId, evalCtx) ?? '');
+      // Only the `pages` root routes; an input naming nothing there does nothing.
+      if (pageId && findPageNodeById(useConfigStore.getState().pages, pageId)) {
+        useHmiStore.getState().navigateToPage(pageId);
+      }
+      continue;
+    }
+
     if (action.type === 'writeDataVariable') {
-      const address = writeTargetAddress(action.target);
+      const address = writeTargetAddress(resolveWriteTarget(action.target, evalCtx));
       if (!address) continue;
       const requestId = beginAsyncAction(action, scope, inputScopeProps);
       sendWsMessage({
@@ -116,7 +208,7 @@ export function executeWidgetActions(
     }
 
     if (action.type === 'toggleDataVariable') {
-      const address = writeTargetAddress(action.target);
+      const address = writeTargetAddress(resolveWriteTarget(action.target, evalCtx));
       if (!address) continue;
       const requestId = beginAsyncAction(action, scope, inputScopeProps);
       sendWsMessage({
@@ -124,6 +216,46 @@ export function executeWidgetActions(
         ...(requestId && { requestId }),
         scope,
         ...address,
+      });
+      continue;
+    }
+
+    if (action.type === 'editValue') {
+      const target = resolveWriteTarget(action.target, evalCtx);
+      const address = writeTargetAddress(target);
+      if (!address) continue;
+      const range = configuredRange(address);
+      const decimals = optionalNumber(action.decimals, evalCtx) ?? (range.integer ? 0 : undefined);
+      const previous = currentValueAt(target, evalCtx);
+      const negative = action.allowNegative;
+      useHmiStore.getState().openNumpad({
+        id: randomUuid(),
+        title: String(evaluatePropertyValue(action.title, evalCtx) ?? '') || undefined,
+        unit: String(evaluatePropertyValue(action.unit, evalCtx) ?? '') || undefined,
+        min: optionalNumber(action.min, evalCtx) ?? range.min,
+        max: optionalNumber(action.max, evalCtx) ?? range.max,
+        decimals,
+        allowNegative:
+          negative === undefined || negative === null
+            ? undefined
+            : Boolean(evaluatePropertyValue(negative, evalCtx)),
+        position: action.position ?? 'center',
+        currentValue:
+          typeof previous === 'number'
+            ? decimals !== undefined
+              ? previous.toFixed(decimals)
+              : String(previous)
+            : undefined,
+        apply: (value) => {
+          const requestId = beginAsyncAction(action, scope, inputScopeProps, { value, previous });
+          sendWsMessage({
+            type: 'write_field',
+            ...(requestId && { requestId }),
+            scope,
+            ...address,
+            value,
+          });
+        },
       });
       continue;
     }
@@ -178,6 +310,12 @@ export function executeWidgetActions(
     if (action.type === 'logoutUser') {
       const requestId = beginAsyncAction(action, scope, inputScopeProps);
       sendWsMessage({ type: 'logout', ...(requestId && { requestId }), scope });
+      continue;
+    }
+
+    if (action.type === 'acknowledgeAllAlarms') {
+      // A refusal toasts inside ackAllAlarms, so the list need not wait for it.
+      void ackAllAlarms(useHmiStore.getState().currentUsersByScope[scope]?.username || 'operator');
       continue;
     }
 

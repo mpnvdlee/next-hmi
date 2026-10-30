@@ -32,7 +32,10 @@ export default function AlarmPopup() {
     });
   }, [active]);
 
-  const popupAlarms = active.filter((a) => a.auto_popup && !a.acked && !dismissed.has(a.id));
+  // One that needs no acknowledgement fires acked, and still pops up until dismissed.
+  const popupAlarms = active.filter(
+    (a) => a.auto_popup && (!a.acked || a.ack_required === false) && !dismissed.has(a.id),
+  );
 
   const handleDismiss = useCallback((e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -57,9 +60,10 @@ export default function AlarmPopup() {
             key={alarm.id}
             level={alarm.level}
             code={alarm.code}
-            title={alarmText(alarm.title)}
+            title={alarmText(alarm.title, alarm)}
             onClick={() => setDetailAlarm(alarm)}
             onAck={(e) => handleAck(e, alarm.id)}
+            ackable={!alarm.acked}
             onDismiss={(e) => handleDismiss(e, alarm.id)}
           />
         ))}

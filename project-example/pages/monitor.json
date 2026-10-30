@@ -200,8 +200,7 @@
                         "type": "AlarmListManaged",
                         "name": "Active",
                         "properties": {
-                          "filterLevel": "",
-                          "chrome": false
+                          "filterLevel": ""
                         },
                         "layout": {
                           "width": "100%",

@@ -8,14 +8,10 @@ export type IconComponent = LazyExoticComponent<Icon>;
 
 // Per-icon lazy wrappers, cached by id so repeated calls return the same
 // component reference (a fresh `lazy()` per render would remount/re-suspend
-// forever). `phosphorIconComponents.tsx` (all 130 builtin
-// icons, ~94 kB gzip as the `vendor-icons` chunk) previously loaded as a
-// static import reachable from every route via this module. HMI runtime
-// consumers (Icon/Button/MenuToggleButton/NavigationMenu widgets, and the
-// custom-widget SDK exposed by nextHmiSdk.ts) now only fetch it once a widget
-// actually renders a builtin icon, via the dynamic import below, so routes
-// that render no icons (or only a couple) don't pay for the whole set
-// up front. Callers must render the returned component under a `<Suspense>`
+// forever). `phosphorIconComponents.tsx` (all 130 builtin icons, ~94 kB gzip as
+// the `vendor-icons` chunk) is fetched by the dynamic import below only once a
+// widget actually renders a builtin icon, so routes that render none don't pay
+// for the whole set. Callers must render the returned component under a `<Suspense>`
 // boundary (the page-level one in PageGroupPageView covers HMI widgets; a
 // local `fallback={null}` boundary wraps the icon slot itself so an
 // unresolved icon doesn't blank surrounding content — see Icon, Button,

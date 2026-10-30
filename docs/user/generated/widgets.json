@@ -3,14 +3,33 @@
     "category": "Layout & structure",
     "widgets": [
       {
-        "type": "ComponentSlot",
-        "name": "Component Slot",
-        "description": "Marks where content the caller supplies is rendered. Put one in a reusable component and instances of it gain a named slot — in the widget tree, and in the properties panel when a \"Widget slot\" property names it.",
+        "type": "Badge",
+        "name": "Badge",
+        "description": "Puts a small chip, such as an alarm count, on the top-right corner of the one widget placed inside it.",
         "props": [
           {
-            "key": "slot",
-            "label": "Slot name",
-            "type": "slot"
+            "key": "badge",
+            "label": "Badge",
+            "type": "String | Integer",
+            "group": "Content"
+          },
+          {
+            "key": "color",
+            "label": "Color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "offset",
+            "label": "Offset (px)",
+            "type": "Integer",
+            "group": "Appearance"
+          },
+          {
+            "key": "size",
+            "label": "Size (px)",
+            "type": "Integer",
+            "group": "Appearance"
           },
           {
             "key": "visible",
@@ -29,9 +48,9 @@
         ]
       },
       {
-        "type": "Container",
-        "name": "Container",
-        "description": "Groups and lays out child widgets in a row or column. Hosts other widgets.",
+        "type": "ButtonContainer",
+        "name": "Button Container",
+        "description": "A Container that is one big control around whatever it holds — a tile, a list row — running actions when pressed and released.",
         "props": [
           {
             "key": "title",
@@ -67,8 +86,91 @@
             "defaultValue": "none"
           },
           {
-            "key": "shadow",
-            "label": "Shadow",
+            "key": "actions",
+            "label": "Actions",
+            "type": "actions"
+          },
+          {
+            "key": "onRelease",
+            "label": "On Released",
+            "type": "actions"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "ComponentSlot",
+        "name": "Component Slot",
+        "description": "Marks where content the caller supplies is rendered. Put one in a reusable component and instances of it gain a named slot — in the widget tree, and in the properties panel when a \"Widget slot\" property names it.",
+        "props": [
+          {
+            "key": "slot",
+            "label": "Slot name",
+            "type": "slot"
+          },
+          {
+            "key": "visible",
+            "label": "Visible",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          },
+          {
+            "key": "interactable",
+            "label": "Interactable",
+            "type": "Boolean",
+            "group": "Visibility",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "type": "Container",
+        "name": "Container",
+        "description": "Groups and lays out child widgets in a row or column. Hosts other widgets; a Button Container does the same and runs actions when pressed.",
+        "props": [
+          {
+            "key": "title",
+            "label": "Title",
+            "type": "String",
+            "group": "Content"
+          },
+          {
+            "key": "showWhenEmpty",
+            "label": "Show when empty",
+            "type": "Boolean",
+            "group": "Content",
+            "defaultValue": false
+          },
+          {
+            "key": "overflow",
+            "label": "Overflow",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "visible"
+          },
+          {
+            "key": "background",
+            "label": "Background",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "border",
+            "label": "Border",
             "type": "String",
             "group": "Appearance",
             "defaultValue": "none"
@@ -199,6 +301,13 @@
             "label": "Empty text",
             "type": "String",
             "group": "Content"
+          },
+          {
+            "key": "placement",
+            "label": "Place copies",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "flow"
           },
           {
             "key": "visible",
@@ -367,10 +476,40 @@
             "defaultValue": ""
           },
           {
-            "key": "chrome",
-            "label": "Own frame",
+            "key": "rowSize",
+            "label": "Row size",
+            "type": "String",
+            "defaultValue": "compact"
+          },
+          {
+            "key": "mark",
+            "label": "Severity mark",
+            "type": "String",
+            "defaultValue": "stripe"
+          },
+          {
+            "key": "show",
+            "label": "Show",
+            "type": "String",
+            "defaultValue": "active"
+          },
+          {
+            "key": "showFilter",
+            "label": "Filter chips",
             "type": "Boolean",
-            "defaultValue": true
+            "defaultValue": false
+          },
+          {
+            "key": "ackMode",
+            "label": "Acknowledge",
+            "type": "String",
+            "defaultValue": "row"
+          },
+          {
+            "key": "secondLine",
+            "label": "Second line",
+            "type": "String",
+            "defaultValue": "time"
           },
           {
             "key": "visible",
@@ -391,7 +530,7 @@
       {
         "type": "Button",
         "name": "Button",
-        "description": "Runs actions and can write true to a bound boolean on press.",
+        "description": "Runs actions on press and on release, and can write a bound boolean true on press (and false on release when momentary).",
         "props": [
           {
             "key": "label",
@@ -407,6 +546,13 @@
             "group": "Content"
           },
           {
+            "key": "iconPosition",
+            "label": "Icon position",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "left"
+          },
+          {
             "key": "color",
             "label": "Color",
             "type": "color",
@@ -420,9 +566,47 @@
             "defaultValue": "solid"
           },
           {
+            "key": "fill",
+            "label": "Fill",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
             "key": "radius",
             "label": "Radius",
             "type": "String",
+            "group": "Appearance"
+          },
+          {
+            "key": "borderWidth",
+            "label": "Border width (px)",
+            "type": "Integer",
+            "group": "Appearance"
+          },
+          {
+            "key": "borderColor",
+            "label": "Border color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "align",
+            "label": "Content alignment",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "center"
+          },
+          {
+            "key": "textTransform",
+            "label": "Text case",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "none"
+          },
+          {
+            "key": "iconSize",
+            "label": "Icon size (px)",
+            "type": "Integer",
             "group": "Appearance"
           },
           {
@@ -432,8 +616,20 @@
             "group": "Data"
           },
           {
+            "key": "momentary",
+            "label": "Momentary",
+            "type": "Boolean",
+            "group": "Data",
+            "defaultValue": false
+          },
+          {
             "key": "actions",
             "label": "Actions",
+            "type": "actions"
+          },
+          {
+            "key": "onRelease",
+            "label": "On Released",
             "type": "actions"
           },
           {
@@ -603,10 +799,17 @@
           },
           {
             "key": "align",
-            "label": "Align",
+            "label": "Content alignment",
             "type": "String",
             "group": "Appearance",
             "defaultValue": "left"
+          },
+          {
+            "key": "textTransform",
+            "label": "Text case",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "theme"
           },
           {
             "key": "wrap",
@@ -839,89 +1042,6 @@
             "label": "Line colors",
             "type": "String",
             "group": "Appearance"
-          },
-          {
-            "key": "visible",
-            "label": "Visible",
-            "type": "Boolean",
-            "group": "Visibility",
-            "defaultValue": true
-          },
-          {
-            "key": "interactable",
-            "label": "Interactable",
-            "type": "Boolean",
-            "group": "Visibility",
-            "defaultValue": true
-          }
-        ]
-      },
-      {
-        "type": "UserBadge",
-        "name": "User Badge",
-        "description": "Shows the signed-in user as an initialled badge, with optional sign-in and sign-out affordances.",
-        "props": [
-          {
-            "key": "usernameText",
-            "label": "Username text",
-            "type": "String",
-            "group": "Content"
-          },
-          {
-            "key": "groupsText",
-            "label": "Groups text",
-            "type": "String",
-            "group": "Content"
-          },
-          {
-            "key": "signInLabel",
-            "label": "Sign-in label",
-            "type": "String",
-            "group": "Content",
-            "defaultValue": "Log in"
-          },
-          {
-            "key": "showGroups",
-            "label": "Show groups",
-            "type": "Boolean",
-            "group": "Appearance",
-            "defaultValue": true
-          },
-          {
-            "key": "signInIcon",
-            "label": "Sign-in icon",
-            "type": "icon",
-            "group": "Appearance"
-          },
-          {
-            "key": "signOutIcon",
-            "label": "Sign-out icon",
-            "type": "icon",
-            "group": "Appearance"
-          },
-          {
-            "key": "radius",
-            "label": "Radius",
-            "type": "String",
-            "group": "Appearance"
-          },
-          {
-            "key": "actions",
-            "label": "On Press",
-            "type": "actions",
-            "group": "Actions"
-          },
-          {
-            "key": "onSignIn",
-            "label": "On Sign In",
-            "type": "actions",
-            "group": "Actions"
-          },
-          {
-            "key": "onSignOut",
-            "label": "On Sign Out",
-            "type": "actions",
-            "group": "Actions"
           },
           {
             "key": "visible",
@@ -1621,10 +1741,35 @@
             "group": "Data"
           },
           {
+            "key": "rangeMessage",
+            "label": "Out-of-range message",
+            "type": "String",
+            "group": "Data"
+          },
+          {
             "key": "variable",
             "label": "Variable",
-            "type": "struct",
+            "type": "Float | Integer",
             "group": "Data"
+          },
+          {
+            "key": "allowNegative",
+            "label": "Allow negative values",
+            "type": "Boolean",
+            "group": "Data",
+            "defaultValue": true
+          },
+          {
+            "key": "decimals",
+            "label": "Decimal places",
+            "type": "Integer",
+            "group": "Appearance"
+          },
+          {
+            "key": "color",
+            "label": "Value color",
+            "type": "color",
+            "group": "Appearance"
           },
           {
             "key": "showRangeOnNumpad",
@@ -1632,6 +1777,18 @@
             "type": "Boolean",
             "group": "Appearance",
             "defaultValue": true
+          },
+          {
+            "key": "numpadPosition",
+            "label": "Numpad position",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "bottom-right"
+          },
+          {
+            "key": "onChange",
+            "label": "On Change",
+            "type": "actions"
           },
           {
             "key": "visible",
@@ -1692,6 +1849,13 @@
             "group": "Data"
           },
           {
+            "key": "allowNegative",
+            "label": "Allow negative values",
+            "type": "Boolean",
+            "group": "Data",
+            "defaultValue": true
+          },
+          {
             "key": "decimals",
             "label": "Decimal places",
             "type": "Integer",
@@ -1704,6 +1868,13 @@
             "type": "Boolean",
             "group": "Appearance",
             "defaultValue": true
+          },
+          {
+            "key": "numpadPosition",
+            "label": "Numpad position",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "bottom-right"
           },
           {
             "key": "visible",
@@ -1745,10 +1916,29 @@
             "group": "Appearance"
           },
           {
+            "key": "keyboard",
+            "label": "Keyboard",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "text"
+          },
+          {
+            "key": "autoFocus",
+            "label": "Focus when shown",
+            "type": "Boolean",
+            "group": "Appearance"
+          },
+          {
             "key": "disabled",
             "label": "Disabled",
             "type": "Boolean",
             "group": "Appearance"
+          },
+          {
+            "key": "onSubmit",
+            "label": "On Submit",
+            "type": "actions",
+            "group": "Actions"
           },
           {
             "key": "visible",
@@ -1825,7 +2015,7 @@
           {
             "key": "variable",
             "label": "Value",
-            "type": "Float",
+            "type": "Float | Integer",
             "group": "Data"
           },
           {
@@ -2144,7 +2334,7 @@
           {
             "key": "variable",
             "label": "Value",
-            "type": "Float",
+            "type": "Float | Integer",
             "group": "Data"
           },
           {
@@ -2339,12 +2529,6 @@
             "label": "Icon (expanded)",
             "type": "icon",
             "defaultValue": "×"
-          },
-          {
-            "key": "ariaLabel",
-            "label": "Aria label",
-            "type": "String",
-            "defaultValue": "Toggle menu"
           },
           {
             "key": "actions",

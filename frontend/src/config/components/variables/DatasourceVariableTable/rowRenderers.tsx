@@ -189,7 +189,6 @@ function RangeBoundInput({
       inputMode="decimal"
       value={draft ?? boundText(value)}
       placeholder={bound}
-      aria-label={RANGE_LABELS[bound]}
       aria-invalid={invalid || undefined}
       title={
         inverted

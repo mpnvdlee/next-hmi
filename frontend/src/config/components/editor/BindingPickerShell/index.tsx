@@ -93,7 +93,6 @@ export default function BindingPickerShell({
         search={search}
         onSearchChange={onSearchChange}
         onSearchEnter={onSearchEnter}
-        searchAriaLabel={`Search ${title}`}
         searchPlaceholder={searchPlaceholder}
         searchInputRef={searchInputRef}
         meta={

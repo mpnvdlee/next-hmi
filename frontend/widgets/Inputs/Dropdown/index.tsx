@@ -37,11 +37,6 @@ interface PopupRect {
   width: number;
 }
 
-interface UserEntry {
-  id: number;
-  username: string;
-}
-
 /** A key event carrying the modifier flags typeahead has to ignore — wider than
  *  the SDK's `React.KeyboardEvent`, which declares only `key`. */
 interface MenuKeyEvent {
@@ -51,8 +46,6 @@ interface MenuKeyEvent {
   altKey: boolean;
   preventDefault(): void;
 }
-
-const NO_EXPORTED: unknown[] = [];
 
 function toEntries(list: unknown[]): ItemEntry[] {
   return list.map((el) => {
@@ -66,50 +59,6 @@ function toEntries(list: unknown[]): ItemEntry[] {
     const text = el === null || el === undefined ? '' : String(el);
     return { label: text, value: text };
   });
-}
-
-/** Resolve the `options` property to a usable ItemEntry array.
- *  Accepts: raw ItemEntry[] ($static), { $user: { field: 'userList' | 'groups' } },
- *  { $var: {...} } (array variable), { $languages: {} } (language list), or
- *  { $widgetProp: {...} } (an array another widget exports, passed in resolved). */
-function resolveOptions(
-  raw: unknown,
-  users: UserEntry[],
-  userGroups: Array<{ id: string; label: string }>,
-  varValue: unknown,
-  languages: Array<{ code: string }>,
-  exported: unknown[],
-): ItemEntry[] {
-  if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
-    const obj = raw as Record<string, unknown>;
-    if ('$user' in obj) {
-      const field = (obj.$user as Record<string, unknown>)?.field;
-      if (field === 'userList') {
-        // Valued by username, not id: the list's usual consumer is a sign-in
-        // form, and `loginUser` authenticates by username.
-        return users.map((u) => ({ label: u.username, value: u.username }));
-      }
-      if (field === 'groups') {
-        return userGroups.map((group) => ({
-          label: group.label,
-          value: group.id,
-        }));
-      }
-    }
-    if ('$languages' in obj) {
-      return languages.map((l) => ({ label: l.code, value: l.code }));
-    }
-    if ('$var' in obj) {
-      return Array.isArray(varValue) ? toEntries(varValue) : [];
-    }
-    if ('$widgetProp' in obj) {
-      return toEntries(exported);
-    }
-  }
-  if (Array.isArray(raw)) {
-    return toEntries(raw);
-  }
-  return [];
 }
 
 function readTriggerRect(trigger: HTMLButtonElement | null): PopupRect | null {
@@ -126,9 +75,6 @@ function readTriggerRect(trigger: HTMLButtonElement | null): PopupRect | null {
 export default function Dropdown({ id, properties, layout }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
   const scope = useHmiScope();
-  const users = useUsersData();
-  const userGroups = useUserGroupsData();
-  const languages = useLanguagesData();
   const propSelectedValue = usePropString(properties, 'selectedValue', '');
   const [selected, setSelected] = useState<string>(propSelectedValue);
   const [open, setOpen] = useState(false);
@@ -138,27 +84,16 @@ export default function Dropdown({ id, properties, layout }: HmiWidgetProps) {
   const popupRef = useRef<HTMLDivElement | null>(null);
   const typeahead = useRef({ buffer: '', timestamp: 0 });
 
-  const optionsRaw = properties?.options;
   const label = getPropString(properties, 'label', '', evalCtx);
   const disabled = getPropBoolean(properties, 'disabled', false, evalCtx);
 
-  // Resolve $var binding key for array variable source
-  const varBinding = (optionsRaw as { $var?: { path: string } } | undefined)?.$var ?? null;
-  const varKey = varBinding?.path ?? '';
-  const varValue = useVariable(varKey);
-  const isExport =
-    optionsRaw !== null && typeof optionsRaw === 'object' && '$widgetProp' in optionsRaw;
-  const exportedRaw = useRecordListProp(isExport ? properties : undefined, 'options');
-  // The hook hands back a fresh empty array on every render when there is
-  // nothing to read; one shared constant keeps the options memo stable.
-  const exported = exportedRaw.length > 0 ? exportedRaw : NO_EXPORTED;
+  // Every list source (a bound array, users, languages, an export, a static
+  // list) resolves through the shared hook, the way the Repeater reads its items.
+  const { items } = useItemListProp(properties, 'options');
 
   const options = useMemo(
-    () =>
-      resolveOptions(optionsRaw, users, userGroups, varValue, languages, exported).filter(
-        (option) => option.label.trim().length > 0,
-      ),
-    [optionsRaw, users, userGroups, varValue, languages, exported],
+    () => toEntries(items).filter((option) => option.label.trim().length > 0),
+    [items],
   );
   const menuOptions = useMemo(() => [{ label: '—', value: '' }, ...options], [options]);
   const selectedIndex = menuOptions.findIndex((option) => option.value === selected);
@@ -340,7 +275,6 @@ export default function Dropdown({ id, properties, layout }: HmiWidgetProps) {
           className={`hmi-dropdown__trigger${open ? ' hmi-dropdown__trigger--open' : ''}`}
           disabled={disabled}
           role="combobox"
-          aria-label={label || 'Select an option'}
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-controls={open ? listboxId : undefined}

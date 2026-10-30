@@ -1,9 +1,49 @@
+import { useMemo } from 'react';
 import type { AlarmLevel } from '@shared/types/alarm';
 import { useHmiStore } from '@hmi/store/hmiStore';
+import { useAlarmStore } from '@hmi/store/alarmStore';
+import { useVariableStore } from '@hmi/store/variableStore';
+import { useLiveScalars } from '@hmi/hooks/useLiveScalars';
+import { extractVarKeys } from '@hmi/utils/extractVarKeys';
+import {
+  evaluatePropertyValue,
+  fillPlaceholders,
+  type EvaluationContext,
+  type ResolvedValue,
+} from '@hmi/utils/propertySourceEval';
 import { useHmiScope } from '@hmi/context/HmiScopeContext';
 import { useTranslationStore } from '@shared/store/translationStore';
 import { apiJson, errorMessage } from '@shared/utils/api';
 import './alarmShared.css';
+
+/** An alarm instance or history row, as far as its `{n}` placeholders need it. */
+export interface AlarmTextValues {
+  id?: string;
+  values?: unknown[];
+}
+
+const LIVE_CONTEXT: EvaluationContext = {
+  resolveVariable: (datasource, path) =>
+    (useVariableStore.getState().values[`${datasource}:${path}`] ?? null) as ResolvedValue,
+};
+
+/**
+ * Fill the `{1}`, `{Round1(2)}` … placeholders of alarm text with entry n of
+ * the alarm's values: read live from `liveRefs` (its `$var` bindings) while it
+ * is active, else the raw value stored when it fired. '—' where there is none —
+ * a row from before values were stored, or a variable with no value yet.
+ */
+export function formatAlarmValues(
+  text: string,
+  stored: unknown[] | undefined,
+  liveRefs?: unknown[],
+): string {
+  return fillPlaceholders(text, (key) => {
+    const i = Number(key) - 1;
+    const value = liveRefs ? evaluatePropertyValue(liveRefs[i], LIVE_CONTEXT) : stored?.[i];
+    return value == null ? '—' : String(value);
+  });
+}
 
 /**
  * Resolver for an alarm instance's title / description.
@@ -25,11 +65,21 @@ import './alarmShared.css';
  * `resolve`, so reading them is what keeps alarm surfaces in the current
  * language rather than the one that was active when they mounted.
  */
-export function useAlarmText(): (text: string) => string {
+export function useAlarmText(): (text: string, alarm?: AlarmTextValues) => string {
   const resolve = useTranslationStore((s) => s.resolve);
   useTranslationStore((s) => s.activeLanguage);
   useTranslationStore((s) => s.translations);
-  return resolve;
+  // Passing the alarm fills its `{n}` placeholders: live while it is in the
+  // active list (so re-render when one of those variables ticks), else from
+  // the values stored at fire time.
+  const active = useAlarmStore((s) => s.active);
+  useLiveScalars(useMemo(() => extractVarKeys(active.map((a) => a.value_refs ?? [])), [active]));
+  return (text, alarm) => {
+    const resolved = resolve(text);
+    if (!alarm) return resolved;
+    const live = active.find((a) => a.id === alarm.id)?.value_refs;
+    return formatAlarmValues(resolved, alarm.values, live);
+  };
 }
 
 /** Returns the current HMI actor username, falling back to 'operator'. */

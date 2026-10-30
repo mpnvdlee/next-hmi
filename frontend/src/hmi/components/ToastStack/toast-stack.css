@@ -15,6 +15,29 @@
   align-items: center;
 }
 
+/* Themes → Toasts → Position, mirrored on <html> because a custom property cannot
+   drive a selector. No attribute keeps the top-center stack. */
+[data-hmi-toast-position^='bottom'] .hmi-toast-stack {
+  top: auto;
+  bottom: var(--hmi-space-lg);
+  --hmi-toast-enter-offset: 8px;
+}
+
+[data-hmi-toast-position$='left'] .hmi-toast-stack {
+  left: var(--hmi-space-lg);
+  transform: none;
+}
+
+[data-hmi-toast-position$='right'] .hmi-toast-stack {
+  left: auto;
+  right: var(--hmi-space-lg);
+  transform: none;
+}
+
+[data-hmi-toast-shape='pill'] .hmi-toast-stack .hmi-toast {
+  border-radius: var(--hmi-radius-full);
+}
+
 .hmi-toast {
   display: flex;
   align-items: flex-start;
@@ -34,7 +57,7 @@
 @keyframes hmi-toast-in {
   from {
     opacity: 0;
-    transform: translateY(-8px);
+    transform: translateY(var(--hmi-toast-enter-offset, -8px));
   }
   to {
     opacity: 1;
@@ -81,6 +104,55 @@
 
 .hmi-toast--error .hmi-toast__icon {
   color: var(--hmi-fault);
+}
+
+/* Themes → Toasts colours. Scoped to the Show Toast stack: alarm cards (AlarmToastCard)
+   share the toast classes and keep the severity look. An empty theme colour leaves its
+   property unset, so each var() falls back to the default above. The icon keeps its
+   severity colour either way: the default theme sets every text colour. */
+.hmi-toast-stack .hmi-toast--info {
+  --hmi-toast-themed-text: var(--hmi-toast-info-text);
+  background: var(
+    --hmi-toast-info-bg,
+    color-mix(in oklch, var(--hmi-surface) 95%, var(--hmi-info))
+  );
+}
+
+.hmi-toast-stack .hmi-toast--success {
+  --hmi-toast-themed-text: var(--hmi-toast-success-text);
+  background: var(
+    --hmi-toast-success-bg,
+    color-mix(in oklch, var(--hmi-surface) 95%, var(--hmi-ok))
+  );
+}
+
+.hmi-toast-stack .hmi-toast--warning {
+  --hmi-toast-themed-text: var(--hmi-toast-warning-text);
+  background: var(
+    --hmi-toast-warning-bg,
+    color-mix(in oklch, var(--hmi-surface) 94%, var(--hmi-warn))
+  );
+}
+
+.hmi-toast-stack .hmi-toast--error {
+  --hmi-toast-themed-text: var(--hmi-toast-error-text);
+  background: var(
+    --hmi-toast-error-bg,
+    color-mix(in oklch, var(--hmi-surface) 95%, var(--hmi-fault))
+  );
+}
+
+.hmi-toast-stack .hmi-toast {
+  color: var(--hmi-toast-themed-text, var(--hmi-text));
+}
+
+/* The close × follows a themed text colour; unthemed it keeps CloseButton's own colours. */
+.hmi-toast-stack .hmi-toast__close {
+  color: var(--hmi-toast-themed-text, var(--hmi-text-muted));
+}
+
+.hmi-toast-stack .hmi-toast__close:hover {
+  color: var(--hmi-toast-themed-text, var(--hmi-text));
 }
 
 .hmi-toast__icon {

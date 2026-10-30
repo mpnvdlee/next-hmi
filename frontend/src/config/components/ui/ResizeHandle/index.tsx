@@ -18,7 +18,6 @@ interface Props {
   minCenter?: number;
   /** Width restored on double-click */
   defaultWidth?: number;
-  label?: string;
 }
 
 const KEY_STEP = 16;
@@ -43,7 +42,6 @@ export default function ResizeHandle({
   max = 600,
   minCenter = 320,
   defaultWidth,
-  label,
 }: Props) {
   const el = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
@@ -175,7 +173,6 @@ export default function ResizeHandle({
       className="cfg-resize-handle"
       role="separator"
       aria-orientation="vertical"
-      aria-label={label ?? 'Resize panel'}
       aria-valuenow={Math.round(width)}
       aria-valuemin={min}
       aria-valuemax={max}

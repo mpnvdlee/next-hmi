@@ -90,7 +90,7 @@ afterEach(() => {
 async function goToSignInWithSecureEndpoint() {
   routeApi();
   const helpers = renderWizard();
-  fireEvent.change(screen.getByLabelText('Server address'), {
+  fireEvent.change(screen.getByPlaceholderText('opc.tcp://192.168.1.10:4840 or host:port'), {
     target: { value: 'opc.tcp://plc.local:4840' },
   });
   fireEvent.click(screen.getByRole('button', { name: /Discover/ }));
@@ -134,7 +134,7 @@ describe('OpcuaConnectionWizard', () => {
   it('discovers endpoints, auto-fills name/URL, and pre-selects anonymous', async () => {
     routeApi();
     renderWizard();
-    fireEvent.change(screen.getByLabelText('Server address'), {
+    fireEvent.change(screen.getByPlaceholderText('opc.tcp://192.168.1.10:4840 or host:port'), {
       target: { value: 'opc.tcp://plc.local:4840' },
     });
     fireEvent.click(screen.getByRole('button', { name: /Discover/ }));
@@ -180,7 +180,7 @@ describe('OpcuaConnectionWizard', () => {
       },
     });
     renderWizard();
-    fireEvent.change(screen.getByLabelText('Server address'), {
+    fireEvent.change(screen.getByPlaceholderText('opc.tcp://192.168.1.10:4840 or host:port'), {
       target: { value: 'opc.tcp://plc.local:4840' },
     });
     fireEvent.click(screen.getByRole('button', { name: /Discover/ }));
@@ -216,7 +216,7 @@ describe('OpcuaConnectionWizard', () => {
       },
     });
     renderWizard();
-    fireEvent.change(screen.getByLabelText('Server address'), {
+    fireEvent.change(screen.getByPlaceholderText('opc.tcp://192.168.1.10:4840 or host:port'), {
       target: { value: 'opc.tcp://plc.local:4840' },
     });
     fireEvent.click(screen.getByRole('button', { name: /Discover/ }));

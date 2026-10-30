@@ -35,6 +35,7 @@ import ProjectThumbnail from './ProjectThumbnail';
 import SecuritySection from '@config/components/admin/SecuritySection';
 import HttpsSection from '@config/components/admin/HttpsSection';
 import InsecureConnectionNotice from '@config/components/admin/InsecureConnectionNotice';
+import ContactPrompt from '@config/components/admin/ContactPrompt';
 import TelemetrySection from '@config/components/admin/TelemetrySection';
 import { enterpriseAppGates, enterpriseSettingsPanels } from '@enterprise';
 
@@ -311,6 +312,9 @@ function ProjectsPage() {
   const stop = useManagerStore((s) => s.stop);
   const setProjectMcp = useManagerStore((s) => s.setProjectMcp);
   const exportProject = useProjectsStore((s) => s.exportProject);
+  const telemetry = useManagerStore((s) => s.telemetry);
+  const loadTelemetry = useManagerStore((s) => s.loadTelemetry);
+  const dismissContactPrompt = useManagerStore((s) => s.dismissContactPrompt);
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
@@ -329,6 +333,11 @@ function ProjectsPage() {
       ),
     [instances],
   );
+
+  useEffect(() => {
+    // Only feeds the contact prompt; a failure just means no prompt.
+    loadTelemetry().catch(() => undefined);
+  }, [loadTelemetry]);
 
   useEffect(() => {
     loadProjects();
@@ -401,6 +410,8 @@ function ProjectsPage() {
               </Button>
             </div>
           </header>
+
+          <ContactPrompt status={telemetry} onDismiss={dismissContactPrompt} />
 
           {rowError && (
             <div className="cfg-error-banner projects-page__error">
@@ -730,7 +741,7 @@ function SettingsPage() {
   );
 
   return (
-    <div className="projects-page">
+    <div className="projects-page mgr-settings">
       <div className="projects-page__inner">
         <InsecureConnectionNotice />
         <SystemInfoSection info={systemInfo} />

@@ -49,13 +49,12 @@ describe('Breadcrumb', () => {
     expect(container.querySelector('.hmi-breadcrumb')).not.toBeNull();
   });
 
-  it('roots itself in a labelled nav carrying both component classes', () => {
+  it('roots itself in a nav carrying both component classes', () => {
     const { container } = renderBreadcrumb({});
     const root = container.firstElementChild as HTMLElement;
     expect(root.tagName).toBe('NAV');
     expect(root.className).toContain('hmi-component');
     expect(root.className).toContain('hmi-breadcrumb');
-    expect(root).toHaveAttribute('aria-label', 'breadcrumb');
   });
 
   it('builds one segment per ancestor, ending at the active page', () => {
@@ -103,17 +102,12 @@ describe('Breadcrumb', () => {
   // home segment rendered text only.
   it('renders a house icon on the home segment', async () => {
     const { container } = renderBreadcrumb({ showHomeIcon: true, homePageId: 'home' });
-    // Builtin icon components are code-split — the first on-the-fly transform of
-    // `phosphorIconComponents` can outlast waitFor's 1s default under parallel load.
-    await waitFor(
-      () => {
-        expect(container.querySelector('.hmi-breadcrumb__icon svg')).not.toBeNull();
-      },
-      { timeout: 8000 },
-    );
+    await waitFor(() => {
+      expect(container.querySelector('.hmi-breadcrumb__icon svg')).not.toBeNull();
+    });
     // Only the home segment carries one.
     expect(container.querySelectorAll('.hmi-breadcrumb__icon')).toHaveLength(1);
-  }, 15000);
+  });
 
   it('renders no icon when the home segment is absent', () => {
     const { container } = renderBreadcrumb({});

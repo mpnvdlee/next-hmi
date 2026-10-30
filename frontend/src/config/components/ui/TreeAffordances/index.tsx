@@ -51,7 +51,6 @@ export function TreeDiagnosticDot({ severity, title }: TreeDiagnosticDotProps) {
     <span
       className={`cfg-tree-item__diag cfg-tree-item__diag--${severity}`}
       role="img"
-      aria-label={title}
       title={title}
     />
   );

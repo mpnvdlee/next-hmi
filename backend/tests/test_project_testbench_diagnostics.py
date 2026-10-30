@@ -1,15 +1,12 @@
-"""Golden-snapshot regression: project-testbench's known diagnostic findings.
+"""Golden-snapshot regression: project-testbench's diagnostic findings.
 
-``project-testbench`` intentionally keeps a handful of draft/nonexistent
-variable bindings (an unknown icon, an unbound switch, and the
-``LegacyPLC:StructTest`` binding repeated across the 163-widget scale-fixture
-page) to exercise the editor's diagnostics UI.
+``project-testbench`` points at the testbench's ``aquavane/`` example project,
+which an operator could ship as is, so its expected finding list is empty.
 This runs the same whole-project sweep as ``GET /api/config/validate``
 against the real ``project-testbench/`` tree and asserts the result against a
-checked-in golden list: a new, unapproved diagnostic finding
-fails this test, while the currently-known/intentional ones are allowed.
+checked-in golden list: a new, unapproved diagnostic finding fails this test.
 
-Adding a genuinely new intentional finding to project-testbench means
+Adding a genuinely intentional finding to project-testbench means
 regenerating ``fixtures/project_testbench_diagnostics.json`` deliberately, not
 silently — that's the point of checking it in.
 """

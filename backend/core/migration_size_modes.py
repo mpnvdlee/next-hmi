@@ -1,8 +1,8 @@
 """Format 4 → 7, first half: rewrite authored layouts into the Hug/Fill/Fixed sizing model.
 
-The layout panel used to offer the raw flex four — ``basis``, ``grow``,
-``shrink``, ``alignSelf`` — alongside Width and Height. It no longer does: a
-widget's size on each axis is a stored ``widthMode``/``heightMode`` (see
+The old layout panel offered the raw flex four — ``basis``, ``grow``,
+``shrink``, ``alignSelf`` — alongside Width and Height. Now a widget's size on
+each axis is a stored ``widthMode``/``heightMode`` (see
 ``LayoutConfig`` in ``frontend/src/shared/types/config.ts``), and the runtime
 emits axis-neutral custom properties for it (``selfLayoutStyle`` in
 ``frontend/src/hmi/components/layoutUtils.ts``) that a CSS translation block in
@@ -16,11 +16,9 @@ can edit**: a key with no row is translated into one that has a row wherever the
 translation is faithful, dropped where it is not, and never left in place. Every
 drop that can move a widget is reported as a diagnostic.
 
-The step runs as three passes over the project tree, in order. They were three
-registered format steps while the model was being built and are one now, because
-no build ever shipped a project stamped between them — but they stay separate
-passes rather than one fused rewrite, because each reads a shape the one before
-it produced and fusing them would change what a node converts to:
+The step runs as three passes over the project tree, in order. They stay
+separate rather than one fused rewrite because each reads a shape the one
+before it produced, and fusing them would change what a node converts to:
 
 1. ``_normalise_flex`` re-expresses the raw flex keys as the shape the mode
    derivation reads — promoting a length ``basis`` onto the axis's own key,
@@ -34,8 +32,7 @@ it produced and fusing them would change what a node converts to:
    owns keeps them either way; see ``_WidgetTypes``).
 
 Passes 2 and 3 both write a mode over a dropped ``basis``, so both owe
-``_write_content_floor`` — whichever reaches a node first. Stating that rule in
-only one of them is how it came to fire in neither.
+``_write_content_floor`` — whichever reaches a node first.
 
 Pass 3 is the only one that can read a ``$switch``: a switch's branches are in
 the file, so the mode each implies can be read off it and the whole switch
@@ -581,9 +578,9 @@ def _write_mode_fields(paths: Any, result: Any, types: _WidgetTypes) -> None:
 # * Every remaining `basis`/`shrink`/`alignSelf` is dropped.
 # * A sizing bound to a `$var` — or to a `$switch` with a branch that is one —
 #   becomes `Fixed` over that same bound length.
-# * `margin` and its four sides are dropped outright: no row, no replacement, and
-#   `SELF_DIRECT_PROPS` no longer emits them, so a stored one had stopped
-#   rendering anyway. Reported per removal, since losing one moves the widget.
+# * `margin` and its four sides are dropped outright: no row, no replacement,
+#   and `SELF_DIRECT_PROPS` does not render them. Reported per removal, since
+#   losing one moves the widget.
 # * A `grow` over a basis that is not `0` becomes Fill on a content floor.
 # * The container half of a layout is dropped from every non-`Container`.
 # * A `grow` the main axis's mode cannot read is dropped.

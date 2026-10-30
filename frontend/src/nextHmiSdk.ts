@@ -205,7 +205,7 @@ _assertSdkContract<_SdkContract_ExtraInAssignment>();
 /**
  * Publish the SDK on `window`.
  *
- * Called once at boot from main.tsx, and again from the test harness so a
+ * Called once at boot from App.tsx, as AppInner loads, and again from the test harness so a
  * built-in widget source — which references these names as free identifiers,
  * exactly as its compiled form does — can be imported directly by a unit test.
  */
@@ -225,7 +225,7 @@ export function installNextHmiSdk(): void {
 
 /**
  * Warm the SDK's `Recharts` slot. Separate from `installNextHmiSdk` and called
- * only from main.tsx: the loader fills the slot itself, and widgetRegistry
+ * only from App.tsx: the loader fills the slot itself, and widgetRegistry
  * awaits it before importing a module that needs it, so this is a head start,
  * not a dependency — and keeping it off the install path spares every jsdom
  * test that installs the SDK from importing recharts + d3.

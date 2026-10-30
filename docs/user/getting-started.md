@@ -7,17 +7,18 @@ Install the runtime, start it, and open the Manager — the front door where eve
 All three paths run the same server against the same kind of project folder. Move between them freely.
 
 - **From source** — For developing. Hot reload for both the runtime and your custom widgets.
-- **From Docker** — For servers. One command brings up the server and the example project.
-- **Portable zip** — For panel PCs. Unzip a self-contained Mac/Windows build and double-click.
+- **From Docker** — For servers. One command brings up the server and the example project — pull the image, or download the offline installer zip from the release and run its `install.sh`.
+- **Portable zip** — For panel PCs. Unzip a self-contained Mac, Windows or Linux build and start it.
 
 ```
 # 1 · From source (dev, hot reload)
 $ python start-dev.py
 
 # 2 · From Docker (server)
-$ docker compose up
+$ docker run -d -p 8000:8000 -p 8443:8443 -v nexthmi-data:/data ghcr.io/mpnvdlee/next-hmi:latest
+$ ./install.sh          # or: the offline installer zip
 
-# 3 · Portable build (macOS; double-click nexthmi.exe on Windows)
+# 3 · Portable build (macOS; nexthmi.exe on Windows, ./nexthmi on Linux)
 $ ./nexthmi.command
 → NEXT HMI running on http://localhost:8000
 ```
@@ -48,9 +49,9 @@ and two languages — with nothing to wire up first.
 Open its runtime and try the things that are hard to picture from a
 description:
 
-1. **Sign in.** The header carries a [User Badge](users.md#sign-in-and-out-on-a-screen) reading **Log in**. The sign-in dialog lists the project's users in a dropdown, and the demo accounts are printed on the dialog itself — `brewer` / `espresso` (in the `admin` group) and `barista` / `latte` (an operator).
+1. **Sign in.** The header carries a **Sign in** button ([how it is built](users.md#sign-in-and-out-on-a-screen)). The sign-in dialog lists the project's users in a dropdown, and the demo accounts are printed on the dialog itself — `brewer` / `espresso` (in the `admin` group) and `barista` / `latte` (an operator).
 2. **Watch the Machine page change.** Signing in as `brewer` is not cosmetic. The setpoint steppers become operable — they are **Interactable** gated on the `admin` group — and a **Service** card appears that was hidden entirely, gated on **Visible**. While you are a guest, a caption sits in the card's place naming what is missing and why, so the mechanism is legible before you unlock it. Sign in as `barista` instead and neither unlocks: an operator is not in `admin`.
-3. **Sign out again** from the same badge, and watch both go away.
+3. **Sign out again** with the sign-out button beside your name, and watch both go away.
 
 That is the whole of [users, groups and permissions](users.md) in one screen.
 Then open the editor on the same project and look at how it was done — the

@@ -196,6 +196,158 @@ describe('ModalStack overlay close settings', () => {
   });
 });
 
+// ── Header bar: the node the action named decides it, from either root ───────
+
+describe('ModalStack header bar', () => {
+  const bare = (id: string): PageConfig => ({ ...placementPage(id), showModalHeader: false });
+
+  function renderOverlays() {
+    return render(
+      <MemoryRouter>
+        <ModalStack />
+      </MemoryRouter>,
+    );
+  }
+
+  beforeEach(() => {
+    useConfigStore.setState({
+      pages: [bare('nav')],
+      dialogs: [
+        placementPage('a'),
+        bare('keypad'),
+        {
+          id: 'grp',
+          title: 'Group',
+          type: 'page-group',
+          showModalHeader: false,
+          children: [placementPage('inner')],
+        } as unknown as PageNode,
+      ],
+    });
+    useHmiStore.setState({ openPageOverlays: [] });
+  });
+
+  it('shows the header bar by default', () => {
+    openOverlayEntries([overlayEntry('a')]);
+    const { container } = renderOverlays();
+
+    expect(container.querySelector('.hmi-modal__header')).not.toBeNull();
+    expect(screen.getByText('Dialog a')).toBeTruthy();
+  });
+
+  it('drops the title and close button with the header bar', () => {
+    openOverlayEntries([overlayEntry('keypad')]);
+    const { container } = renderOverlays();
+
+    expect(container.querySelector('.hmi-modal__header')).toBeNull();
+    expect(container.querySelector('.hmi-modal__close')).toBeNull();
+    expect(container.querySelector('.hmi-modal__content')).not.toBeNull();
+  });
+
+  it('honours the flag on a page outside the Dialogs folder too', () => {
+    openOverlayEntries([overlayEntry('nav')]);
+    const { container } = renderOverlays();
+
+    expect(container.querySelector('.hmi-modal__header')).toBeNull();
+  });
+
+  it('follows the group the action named, not the page inside it', () => {
+    openOverlayEntries([overlayEntry('grp', { activePageId: 'inner' })]);
+    const { container } = renderOverlays();
+
+    expect(container.querySelector('.hmi-modal__header')).toBeNull();
+  });
+});
+
+// ── Tap-through: a press outside a backdrop-less popover reaches what is under it
+
+describe('ModalStack tap-through', () => {
+  let beneath: HTMLButtonElement;
+  const pressed = vi.fn();
+  const pointer = vi.fn();
+
+  function renderOverlays() {
+    return render(
+      <MemoryRouter>
+        <ModalStack />
+      </MemoryRouter>,
+    );
+  }
+
+  function pressBackdrop(container: HTMLElement) {
+    const backdrop = container.querySelector('.hmi-modal-backdrop') as HTMLElement;
+    act(() => {
+      backdrop.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 40, clientY: 50 }));
+    });
+  }
+
+  beforeEach(() => {
+    pressed.mockClear();
+    pointer.mockClear();
+    beneath = document.createElement('button');
+    beneath.addEventListener('click', pressed);
+    beneath.addEventListener('pointerdown', pointer);
+    beneath.addEventListener('pointerup', pointer);
+    document.body.appendChild(beneath);
+    // jsdom has no layout; hand back the backdrop first, then what lies under it.
+    document.elementsFromPoint = vi.fn(() => [
+      document.querySelector('.hmi-modal-backdrop') as Element,
+      beneath,
+    ]);
+    useConfigStore.setState({
+      pages: [],
+      dialogs: [
+        placementPage('pop'),
+        { ...placementPage('held'), tapThrough: false },
+        { ...placementPage('sealed'), closeOnBackgroundPress: false },
+      ],
+    });
+    useHmiStore.setState({ openPageOverlays: [] });
+  });
+
+  afterEach(() => beneath.remove());
+
+  it('closes a backdrop-less popover and hands the press to what lies under it', () => {
+    openOverlayEntries([overlayEntry('pop', { backdrop: 'none' })]);
+    const { container } = renderOverlays();
+
+    pressBackdrop(container);
+    expect(useHmiStore.getState().openPageOverlays).toEqual([]);
+    expect(pressed).toHaveBeenCalledTimes(1);
+    expect(pointer.mock.calls.map(([e]) => (e as Event).type)).toEqual([
+      'pointerdown',
+      'pointerup',
+    ]);
+  });
+
+  it('only closes when the dialog turns tap-through off', () => {
+    openOverlayEntries([overlayEntry('held', { backdrop: 'none' })]);
+    const { container } = renderOverlays();
+
+    pressBackdrop(container);
+    expect(useHmiStore.getState().openPageOverlays).toEqual([]);
+    expect(pressed).not.toHaveBeenCalled();
+  });
+
+  it('only closes behind a dimmed backdrop', () => {
+    openOverlayEntries([overlayEntry('pop', { backdrop: 'dim' })]);
+    const { container } = renderOverlays();
+
+    pressBackdrop(container);
+    expect(useHmiStore.getState().openPageOverlays).toEqual([]);
+    expect(pressed).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when the dialog does not close on a backdrop press', () => {
+    openOverlayEntries([overlayEntry('sealed', { backdrop: 'none' })]);
+    const { container } = renderOverlays();
+
+    pressBackdrop(container);
+    expect(useHmiStore.getState().openPageOverlays).toHaveLength(1);
+    expect(pressed).not.toHaveBeenCalled();
+  });
+});
+
 // ── Title: the node the action named decides it too ──────────────────────────
 
 describe('ModalStack overlay title', () => {

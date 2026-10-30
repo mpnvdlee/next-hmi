@@ -15,6 +15,8 @@ export type PropertySource =
   | '$if'
   | '$compare'
   | '$not'
+  | '$and'
+  | '$or'
   | '$formula'
   | '$random'
   | '$switch'
@@ -30,6 +32,7 @@ export type PropertySource =
   | '$recipe'
   | '$recipeList'
   | '$componentProp'
+  | '$overlay'
   | '$page'
   | '$viewport'
   | '$result'
@@ -115,7 +118,16 @@ export const SOURCE_FIELD_PRODUCES = {
     pathSegments: 'string[]',
   },
   $viewport: { size: 'string', orientation: 'string', width: 'integer', height: 'integer' },
-  $recipe: { parametersChanged: 'boolean', loaded: 'boolean', activeName: 'string' },
+  $recipe: {
+    parametersChanged: 'boolean',
+    loaded: 'boolean',
+    activeName: 'string',
+    parameterChanged: 'boolean',
+    // A parameter holds whatever its variable does.
+    parameterValue: ['float', 'integer', 'string', 'boolean'],
+    changedCount: 'integer',
+    savedAt: ['datetime', 'string'],
+  },
   // On a list field `userList` is every user and `groups` every group, as
   // options; on a text field `resolveUser` joins the names — the signed-in
   // user's group labels for `groups` — into one string. `userList` comes before
@@ -321,14 +333,37 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     createDefault: () => ({ $not: { value: { $var: { path: '' } } } }),
   },
   {
+    source: '$and',
+    key: '$and',
+    contentTier: 3,
+    label: 'AND',
+    description: 'True when every condition is true.',
+    abbr: 'AND',
+    produces: ['boolean'],
+    createDefault: () => ({ $and: [{ $var: { path: '' } }, { $var: { path: '' } }] }),
+  },
+  {
+    source: '$or',
+    key: '$or',
+    contentTier: 3,
+    label: 'OR',
+    description: 'True when any condition is true.',
+    abbr: 'OR',
+    produces: ['boolean'],
+    createDefault: () => ({ $or: [{ $var: { path: '' } }, { $var: { path: '' } }] }),
+  },
+  {
     source: '$formula',
     key: '$formula',
     contentTier: 3,
     label: 'Formula',
     description: 'A number calculated from values with + − × ÷ and parentheses.',
     abbr: 'fx',
-    produces: ['float'],
-    createDefault: () => ({ $formula: { expression: '', wildcards: {} } }),
+    // A fraction unless `round: true`, which a whole-number field starts with.
+    produces: ['float', 'integer'],
+    createDefault: (fieldType) => ({
+      $formula: { expression: '', wildcards: {}, ...(fieldType === 'integer' && { round: true }) },
+    }),
   },
   {
     source: '$random',
@@ -494,6 +529,18 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     abbr: 'CP',
     produces: ['any'],
     createDefault: () => ({ $componentProp: '' }),
+  },
+  {
+    source: '$overlay',
+    key: '$overlay',
+    contentTier: 3,
+    label: 'Open Dialog Input',
+    description:
+      'An input parameter of a dialog while it is open — empty once it closes. Lights a selection that follows the open popover.',
+    short: 'Dialog Input',
+    abbr: 'DI',
+    produces: ['any'],
+    createDefault: () => ({ $overlay: { page: '', param: '' } }),
   },
   {
     source: '$page',

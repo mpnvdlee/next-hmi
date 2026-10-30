@@ -24,6 +24,9 @@
 
 .hmi-button__btn {
   flex: 1;
+  /* A fixed tile narrower than the label plus padding keeps its width; without
+     this the button grew past it. */
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -32,11 +35,12 @@
   padding: var(--hmi-btn-padding-y) var(--hmi-btn-padding-x);
   background: var(--hmi-accent);
   color: var(--hmi-accent-on);
-  border: 1px solid var(--hmi-accent);
+  border: var(--hmi-btn-border-width, 1px) solid var(--hmi-accent);
   border-radius: var(--hmi-btn-radius, var(--hmi-radius));
   font-size: var(--hmi-type-body-size);
   font-weight: var(--hmi-type-subheading-weight);
   letter-spacing: var(--hmi-type-body-tracking);
+  text-transform: var(--hmi-btn-transform, none);
   cursor: pointer;
   transition:
     background var(--hmi-motion-fast) ease,
@@ -53,6 +57,13 @@
   line-height: 0;
 }
 
+/* The Phosphor svg's own width/height attributes lose to CSS, so the icon size
+   override reaches built-in and custom icons alike. */
+.hmi-button__icon > svg {
+  width: var(--hmi-btn-icon-size);
+  height: var(--hmi-btn-icon-size);
+}
+
 .hmi-button__icon-svg {
   display: flex;
   align-items: center;
@@ -62,8 +73,36 @@
   height: var(--hmi-btn-icon-size);
 }
 
+/* A custom icon's svg usually carries only a viewBox; WebKit sizes such a flex
+   item to 0×0 instead of filling the span. */
+.hmi-button__icon-svg > svg {
+  width: 100%;
+  height: 100%;
+}
+
 .hmi-button__label {
   min-width: 0;
+}
+
+.hmi-button__btn--icon-top {
+  flex-direction: column;
+}
+
+.hmi-button__btn--start {
+  justify-content: flex-start;
+}
+
+.hmi-button__btn--start.hmi-button__btn--icon-top {
+  align-items: flex-start;
+  text-align: left;
+}
+
+/* Icon-only takes the vertical padding on every side, so hug sizing gives a
+   square-ish tile instead of a text button's wide pill. */
+.hmi-button__btn--icon-only {
+  padding: var(--hmi-btn-padding-y);
+  /* Square in hug mode: as wide as the touch-target height. */
+  min-width: var(--hmi-btn-min-height);
 }
 
 .hmi-button__btn:hover:not(:disabled) {
@@ -77,11 +116,11 @@
 }
 
 .hmi-button__btn--outline {
-  background: transparent;
+  background: var(--hmi-btn-fill, transparent);
   color: var(--hmi-accent);
 }
 
 .hmi-button__btn--outline:hover:not(:disabled) {
-  background: color-mix(in oklch, currentColor 12%, transparent);
+  background: color-mix(in oklch, currentColor 12%, var(--hmi-btn-fill, transparent));
   border-color: currentColor;
 }

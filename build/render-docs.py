@@ -42,7 +42,8 @@ The guide is its own site, not a page of the promotion website. It borrows that
 site's palette and faces and nothing else: no marketing nav, no marketing
 footer. A reader is here to look something up, and every link that leaves for
 next-hmi.com is a link out of the thing they are reading. The promotion site
-links *in*; the guide does not link back out.
+links *in*; the guide links back out only to the contact form, for the reader
+the docs did not answer.
 
 Enterprise guide pages are appended only when ``NEXTHMI_EDITION=ee`` (or
 ``--edition ee``). Presence of ``enterprise/`` is deliberately *not* the test —
@@ -110,6 +111,7 @@ USER_SOURCES: list[tuple[str, str]] = [
     ("docs/user/users.md", "Operations"),
     ("docs/user/diagnostics.md", "Operations"),
     ("docs/user/mcp.md", "Operations"),
+    ("docs/user/shipping.md", "Operations"),
     ("CHANGELOG.md", "Project"),
     (".github/SECURITY.md", "Project"),
     ("docs/user/licence.md", "Licensing"),
@@ -282,7 +284,7 @@ def heading_slug(text: str) -> str:
 
 
 def apply_heading_ids(body: str) -> str:
-    """Give every h2–h4 a slug id. ``markdown-it`` emits bare heading tags, so
+    """Give every h2 to h4 a slug id. ``markdown-it`` emits bare heading tags, so
     without this every in-page anchor in the guide is a dead link on the site."""
     seen: dict[str, int] = {}
 
@@ -648,7 +650,7 @@ def _pager(pages: list[tuple[str, str, str]], index: int) -> str:
     return f'<div class="pager">{"".join(parts)}</div>'
 
 
-# The product mark, from enterprise/promotion-website/assets/logo.svg. Inlined
+# The product mark, from enterprise/promotion-website/public_html/assets/logo.svg. Inlined
 # rather than linked so the offline bundle stays self-contained, and its fixed
 # hex values are swapped for theme tokens so it survives the dark toggle: the
 # tile takes --ink and the knockouts --paper, which inverts cleanly. The indigo
@@ -760,7 +762,9 @@ VERSION_PICKER_SCRIPT = """
       data.versions.forEach(function (entry) {
         var option = document.createElement('option');
         option.value = entry.path;
-        option.textContent = entry.version + (entry.latest ? ' (latest)' : '');
+        // One copy per minor line, so the label names the line: 1.0.2 shows as 1.0.x.
+        option.textContent = entry.version.split('-')[0].split('.').slice(0, 2).join('.') + '.x' +
+          (entry.latest ? ' (latest)' : '');
         if (entry.version === '__VERSION__') option.selected = true;
         select.appendChild(option);
       });
@@ -1057,10 +1061,11 @@ def _document(
 ) -> str:
     # An offline panel has no internet; a link that cannot work is worse than
     # no link at all.
-    github_button = (
+    topbar_links = (
         ""
         if offline
-        else '<a class="btn btn-ghost" href="https://github.com/mpnvdlee/next-hmi" '
+        else '<a class="btn btn-ghost" href="https://next-hmi.com/contact">Contact</a>'
+        '<a class="btn btn-ghost" href="https://github.com/mpnvdlee/next-hmi" '
         'target="_blank" rel="noopener">GitHub</a>'
     )
 
@@ -1082,9 +1087,10 @@ def _document(
     version_label = f'<span class="doc-version">{html.escape(version)}</span>'
     picker_script = ""
     if not offline:
+        web_line = ".".join(version.split("-")[0].split(".")[:2]) + ".x"
         version_label = (
             '<div class="version-picker"><select id="version-select" '
-            f'aria-label="Documentation version"><option value="" selected>{html.escape(version)}'
+            f'aria-label="Documentation version"><option value="" selected>{html.escape(web_line)}'
             "</option></select></div>"
         )
         picker_script = VERSION_PICKER_SCRIPT.replace("__VERSIONS_URL__", versions_url).replace(
@@ -1131,7 +1137,7 @@ def _document(
         f'{SEARCH_ICON}<span class="st-label">Search</span>'
         f'<kbd class="kbd st-key">/</kbd></button>'
         f'<button class="icon-btn" id="theme-toggle" aria-label="Toggle color theme" '
-        f'title="Toggle theme">{TOPBAR_THEME_ICON}</button>{github_button}'
+        f'title="Toggle theme">{TOPBAR_THEME_ICON}</button>{topbar_links}'
         "</div></div></header>"
         '<div class="sidebar-backdrop" id="backdrop"></div>'
         f'<div class="layout">{_nav(pages, current)}'

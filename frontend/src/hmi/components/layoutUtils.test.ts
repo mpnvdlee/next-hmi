@@ -1225,7 +1225,7 @@ describe('useRecordListProp', () => {
       { wrapper },
     );
     expect(result.current).toEqual([
-      { id: 'ds-1', name: 'Recipe A', description: '', lastLoaded: '' },
+      { id: 'ds-1', name: 'Recipe A', description: '', lastLoaded: '', values: {} },
     ]);
   });
 

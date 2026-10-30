@@ -55,7 +55,7 @@ export default function BootSplash({ phase }: { phase: BootPhase }) {
   const showAgplNotice = !isEE;
 
   return (
-    <div className="hmi-boot-splash" role="status" aria-live="polite">
+    <div className="hmi-boot-splash" role="status">
       <div className="hmi-boot-splash__panel">
         <div className="hmi-boot-splash__brand">
           {logoUrl && <img className="hmi-boot-splash__logo" src={logoUrl} alt="" />}
@@ -67,7 +67,9 @@ export default function BootSplash({ phase }: { phase: BootPhase }) {
               </span>
             </>
           )}
-          <span className="hmi-boot-splash__version">v{getVersion()}</span>
+          <span className="hmi-boot-splash__version">
+            {!isEE && 'Community Edition · '}v{getVersion()}
+          </span>
         </div>
 
         <Spinner variant="cfg" />

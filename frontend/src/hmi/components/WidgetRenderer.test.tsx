@@ -44,6 +44,14 @@ describe('WidgetRenderer', () => {
     });
   });
 
+  it('marks each widget with its id in the runtime, outside the editor preview', () => {
+    renderNode({ id: 'pump-start', type: 'GateProbe', name: 'Probe', properties: {} });
+
+    const wrapper = document.querySelector('[data-widget-id="pump-start"]');
+    expect(wrapper?.getAttribute('data-widget-type')).toBe('GateProbe');
+    expect(wrapper?.querySelector('.hmi-gate-probe')).not.toBeNull();
+  });
+
   describe('visibility gate', () => {
     it('renders content by default when visible is unset', () => {
       renderNode({ id: 'a', type: 'GateProbe', name: 'Probe', properties: {} });
@@ -282,6 +290,24 @@ describe('WidgetRenderer', () => {
       expect(useHmiStore.getState().pendingToasts[0].message).toBe('Interaction not permitted');
     });
 
+    it('runs the onInteractionDenied global event on a locked press', async () => {
+      const { useConfigStore } = await import('@shared/store/configStore');
+      useConfigStore.setState({
+        shell: { lockedFeedback: 'none' },
+        globalEvents: {
+          onInteractionDenied: [
+            { type: 'showToast', message: 'Please log in', severity: 'info', discard: 'auto' },
+          ],
+        },
+      });
+      const { container } = renderNode(lockedButton);
+
+      fireEvent.click(container.querySelector('.hmi-lock-overlay')!);
+
+      expect(useHmiStore.getState().pendingToasts.map((t) => t.message)).toEqual(['Please log in']);
+      useConfigStore.setState({ globalEvents: {} });
+    });
+
     it('stays silent in none mode but keeps blocking the press', async () => {
       await setShell({ lockedFeedback: 'none' });
       const { container } = renderNode(lockedButton);
@@ -292,6 +318,25 @@ describe('WidgetRenderer', () => {
       expect(useHmiStore.getState().pendingToasts).toHaveLength(0);
       expect(container.querySelector('.hmi-lock-wrapper')).not.toBeNull();
       expect(container.querySelector('.hmi-lock-wrapper')!.getAttribute('title')).toBeNull();
+    });
+
+    // The overlay only stops the pointer; Tab, Enter and Space went straight
+    // past it to a locked Start button until its contents were made inert.
+    it('takes a locked widget out of keyboard reach and marks it disabled', () => {
+      const { container } = renderNode(lockedButton);
+
+      const content = container.querySelector('.hmi-lock-content')!;
+      expect(content).toHaveAttribute('inert');
+      expect(content).toContainElement(container.querySelector('button'));
+      expect(container.querySelector('.hmi-lock-wrapper')).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    it('leaves an unlocked widget focusable and unwrapped', () => {
+      const { container } = renderNode({ ...lockedButton, properties: { label: 'Start' } });
+
+      expect(container.querySelector('[inert]')).toBeNull();
+      expect(container.querySelector('.hmi-lock-wrapper')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Start' })).not.toHaveAttribute('aria-disabled');
     });
 
     // The wrapper takes over the flex-child role from the widget inside it,

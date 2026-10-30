@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { publishConfigChanged } from '@shared/events/configChangedBus';
 import {
+  forgetVariableTrees,
   getWriteCoercionKind,
   loadVariableWriteDescriptor,
   writeDescriptorNeedsRefresh,
@@ -20,6 +22,12 @@ vi.mock('@shared/utils/api', () => ({
 }));
 
 describe('write value classification', () => {
+  beforeEach(async () => {
+    forgetVariableTrees();
+    const { apiJson } = await import('@shared/utils/api');
+    vi.mocked(apiJson).mockClear();
+  });
+
   it('classifies canonical and persisted raw OPC-UA names', () => {
     expect(getWriteCoercionKind('Boolean')).toBe('boolean');
     expect(getWriteCoercionKind('UInt64')).toBe('number');
@@ -39,6 +47,35 @@ describe('write value classification', () => {
       complete: true,
     });
     expect(apiJson).toHaveBeenCalledWith('/api/datasources/PLC/variables?simple=false');
+  });
+
+  it('reads a bound index `[…]` as one element of the array, at no fixed index', async () => {
+    expect(await loadVariableWriteDescriptor('PLC', 'Count[…]')).toEqual({
+      dataType: 'UInt16',
+      isArray: true,
+      arrayLength: 2,
+      indexed: true,
+      complete: true,
+    });
+  });
+
+  it('downloads a datasource tree once for every field on it, until the datasource changes', async () => {
+    const { apiJson } = await import('@shared/utils/api');
+    await Promise.all([
+      loadVariableWriteDescriptor('PLC', 'Count[0]'),
+      loadVariableWriteDescriptor('PLC', 'Count[1]'),
+    ]);
+    await loadVariableWriteDescriptor('PLC', 'Count');
+    expect(apiJson).toHaveBeenCalledTimes(1);
+
+    publishConfigChanged({
+      artifact_type: 'variables',
+      artifact_ids: ['PLC'],
+      source: 'mcp',
+      summary: '',
+    });
+    await loadVariableWriteDescriptor('PLC', 'Count');
+    expect(apiJson).toHaveBeenCalledTimes(2);
   });
 
   it('carries numeric min/max onto the descriptor when configured', async () => {

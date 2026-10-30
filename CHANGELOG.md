@@ -13,6 +13,189 @@ heading.
 
 ### Added
 
+- **The editor opens each project at its own viewport.** The preview's
+  viewport choice and custom width and height are saved in the project with
+  **Save**, so everyone who opens it gets the same frame. Scaling stays
+  per session.
+
+- **Actions on a variable change.** **Global Events** gets a **Variable
+  Changed** list: each trigger names a variable and runs its actions whenever
+  that value changes, and once at start-up. Put an **If** on the same
+  variable around the actions to react to one value, such as opening a dialog
+  when a Boolean goes high. Each open screen runs its triggers itself. MCP
+  clients read and write global events with `global_events_get` and
+  `global_events_set`.
+
+- **A Number Input says why it refuses a value, and acts on a change.** An
+  **Out-of-range message** is what the numpad says when the entry falls
+  outside min/max, so a limit that depends on another setting can say "Must
+  lie outside the 10 g band". **On Change** runs its actions after each value
+  the operator applies, such as a toast that the change is not saved yet.
+  Custom widgets get the message through the SDK numpad's new `rangeMessage`
+  prop.
+
+- **A Delay action.** **Delay** waits a number of milliseconds, then runs
+  the actions after it. A write goes to the PLC and back; a **Show Toast**
+  after a short Delay reads the value the PLC confirmed, so it can say *Lower
+  limit set to −25 g*.
+
+- **A screen can mark each setting that differs from the saved recipe.**
+  `$recipe` gets two per-parameter fields: **Parameter changed**, true while
+  that one live value differs from the loaded dataset, and **Saved value of a
+  parameter**, the stored value itself. Bind a Number Input's new **Value
+  color** to the first to turn an unsaved value amber, or list "saved → live"
+  rows that show only while they differ. **Number of changed parameters**
+  and **Saved at**, formatted like the clock, give a heading such as *3
+  unsaved changes · last saved 08:45*. Each `$recipeList` row now also
+  carries the dataset's `values`, so a recipe list shows its target or
+  quantity without a custom widget.
+
+- **A translation can hold live values.** Write `{1}`, `{2}` in a phrase,
+  `Tank {1} of {2}`, and translate it as a whole sentence, `Tank {1} van
+  {2}`. Picking that phrase in a **Localizable Text** field opens one row per
+  placeholder, to fill with a fixed value, a tag or another translation; each
+  language puts the values where its grammar wants them. An alarm's title and
+  description keep filling `{1}`, `{2}` from the alarm's own values.
+
+- **The numpad and keyboard show icons, not English words.** Back, Clear,
+  Enter, Shift, Caps Lock, Tab and Space are icons, and an entry outside the
+  bounds turns the `Min: 80 · Max: 200` line into a red warning. *Min* and
+  *Max* are dictionary keys, English as on any screen, so a project
+  translates them by adding those rows.
+
+- **A shell region can float over the page.** A new **Floating** setting on
+  the header, footer and both sidebars lays the region over the page instead
+  of next to it: the page fills the space underneath, the region is
+  transparent unless it has a **Background**, and a click on its empty space
+  reaches the page. Widgets in the region, and a Container with press
+  actions, still take their own clicks. Bindable, like the other region
+  settings.
+
+- **Show all and value types in the property-source drawer.** Each source card
+  now names the type it produces (`Any`, `Boolean`, `Float, Integer`, …). A
+  **Show all** checkbox lists the sources the field does not take as well,
+  greyed out and marked *Not available on this field*; they cannot be picked.
+
+- **A Linux zip and an offline Docker installer in every release.** Next to the
+  Windows and macOS zips, a release now carries `nexthmi-community-linux-x64-<version>.zip`
+  and, per architecture, `nexthmi-community-docker-linux-<arch>-<version>.zip`: the image
+  as a file, a compose file and `install.sh`, for a machine that cannot reach a
+  registry.
+
+- **A guide to shipping it on a machine.** *Shipping it on a machine* in the
+  user guide covers which build ships, activation on the commissioning bench,
+  locking the installation down and what to hand the customer. The manager's
+  System Information names the edition and links to it, and in the community
+  build the editor's Branding section and the contact card point at what the
+  enterprise build adds and what shipping costs.
+
+- **A Repeater places its copies on an Image Container's image.** With
+  **Place copies** set to **At item x / y**, each copy is drawn at the point
+  its element names (`x` and `y`, 0 to 1 across and down the image), and an
+  optional `side` puts it on one side of that point with its last widget on
+  it, so one callout design serves every edge of a machine. The element's
+  other fields reach the copy through Repeat Item, also as the index of an
+  array tag. Items take a typed-in list of records through **Edit as JSON**,
+  and the warnings pill flags an element it cannot place. Positions are
+  edited in the list; the copies are not dragged on the canvas.
+
+- **Navigate To Page goes to a page chosen at runtime.** The new action
+  closes every open dialog and overlay, then goes to a page from the Pages
+  section, firing the page events a menu press would. The page is fixed, or
+  — inside a dialog — an input parameter of the new type **Page**, which
+  the Open Dialog action fills in with a page picker: one station popup's
+  *Open station page* button then leads to each caller's own station. The
+  warnings pill flags a page that does not exist, one in the Dialogs folder,
+  and an input that is not declared as a page.
+
+- **Alarm text can show live values.** An alarm gets a **Values** list of
+  variables, numbered `{1}`, `{2}` …, and those placeholders in its title and
+  description show them, with the same functions a String Expression takes
+  (`{Round1(1)}`, `{Signed(2)}`). While the alarm is active the text follows
+  the live value; once it has cleared, and in the alarm history, it shows the
+  value from the moment the alarm went off. A value can be a member of one
+  element of a struct array, or one element of an array, also with its index
+  bound to another value; the stored value is the element the index named
+  when the alarm went off. History rows from before this release show `—`.
+
+- **Exo 2 is a bundled font.** The theme settings offer **Exo 2** next to
+  Inter, Manrope and Lexend for every font token, in weights 400 to 700,
+  served from the HMI itself so it looks the same without internet access.
+
+- **A dialog can drop its header bar.** A new **Show header bar** switch in a
+  page's or group's **Overlay** section hides the title and the × of the
+  card it opens in, so a keypad or an access panel can be a real dialog
+  without a title strip. The page then closes through a **Close
+  Dialog/Overlay** button of its own, or through the backdrop when **Close
+  on backdrop** is on. For a group, the group's switch counts, not the page
+  inside it. It is on by default, so existing projects look the same.
+
+- **Toasts take their place, shape and colours from the theme.** A new
+  **Toasts** section in the theme settings puts Show Toast notifications in
+  one of six places — top or bottom, left, center or right — makes them
+  rounded or a pill, and sets a background and text colour per severity
+  (info, success, warning, error). The default is today's look: top center,
+  rounded, and an empty colour keeps the severity tint, so existing projects
+  look the same.
+
+- **Buttons can be icon-only, stacked, and sized.** A Button with an icon and
+  an empty label is icon-only: it takes even padding on every side so it sizes
+  to a near-square tile. The Button also gets four properties: **Icon
+  position** (left, or on top with the text below), **Icon size** and
+  **Border width** in pixels, and a **Fill** colour for the outline style.
+  Each one left at its default keeps today's look.
+
+- **AND (`$and`) and OR (`$or`) combine conditions.** Two new Boolean
+  sources take a list of conditions — a variable, a comparison, an Invert, a
+  group check, another AND / OR — and are true when every one, or any
+  one, is. A button can then be interactable only while the machine is ready
+  *and* the door is shut, without a helper tag in the PLC. They fit every
+  Boolean field, an `$if` condition and the If action's condition; the editor
+  lists one card per condition with **+ Add condition**, and the backend
+  flags a list with no conditions as an error.
+
+- **The numpad takes its look from the theme.** A new **Numpad** section in
+  the theme settings sets the key size, the gap between keys, the key font
+  and the Enter key colour, and picks one of two layouts: 3 columns, with
+  Back, Clear and Enter under the digits, or 4, with them in a column on the
+  right. Every numeric input gets it — Number Input, Numeric Stepper, Edit
+  Value and custom widgets that open the SDK numpad. A field left empty
+  follows the rest of the theme, so existing projects look the same.
+
+- **Edit Value opens the numpad on a tag without a Number Input.** The new
+  action puts the numpad over the screen for a numeric variable — a setpoint
+  behind a machine tile, a value in a table row, the element a dialog's input
+  names. **Apply** writes, **Cancel** writes nothing and runs no handler.
+  Min, max and decimals default to what the variable itself is configured
+  with, and `onSuccess` / `onFailed` / `onSettled` read the entered value and
+  the one it replaced as `$result` `value` and `previous`.
+
+- **A variable's array index can come from another value.** A binding such
+  as `Safety/Open` with its index bound to a dialog's input parameter reads,
+  writes and toggles the element of whichever device opened the dialog — one
+  popup instead of a 27-case **Switch**, and no hand-off variable for a
+  toggle. A field that takes one value, bound to a whole array — a property,
+  a **Toggle Boolean Variable** or **Edit Value** target, a String Expression,
+  HTTP Request or alarm placeholder — gets an index box right under the
+  variable, headed by a light *Element of the array, 0 to 4* hint, that asks
+  for the element: a number, or any whole-number source, including another
+  variable. On a **Write Data Variable** target the row is
+  optional, and empty writes the whole array. An element picked in the picker
+  shows in the path instead, with no row. An index that is empty or past the
+  end reads nothing and a write fails with `array_index_out_of_bounds`, never
+  the whole array.
+
+- **Open Dialog Input (`$overlay`) lights what a popover belongs to.** The new
+  source reads an input parameter of a dialog while it is open and is empty
+  once it closes, from anywhere on the screen. Bind a machine symbol's
+  selection ring to a comparison of `$overlay` (dialog *device*, input
+  *device*) with the symbol's own number, and it lights exactly while its
+  popover shows, moves along when the popover swaps to the next symbol and
+  clears when it closes — with no extra variable to set and reset. The
+  editor picks the dialog and then one of the inputs it declares; the
+  diagnostics flag a page outside the Dialogs folder or an input it does not
+  declare.
+
 - **Browse PLC shows its progress.** Browsing a whole server could run for
   minutes on a large PLC with only a disabled button to show for it. A bar now
   fills as the walk goes, with the number of nodes found and how deep it has
@@ -32,7 +215,182 @@ heading.
   or `NaN` as no value. A property with no variable bound no longer costs a
   variable-store listener.
 
+- **A Badge widget.** It wraps one widget and puts a chip on its top-right
+  corner — a text or a count such as an Alarm Count, hidden when empty or 0.
+  The chip sits centred on the corner, half outside; **Offset** moves it in or
+  further out, and **Color** and **Size** set its look.
+
+- **Buttons act on release too.** A new **On Released** list
+  runs when the press ends — on lifting the finger, on a cancelled touch, or
+  on the key coming back up — and a Button's new **Momentary** switch writes
+  its **Variable** false again then, so it is true only while held, as a jog
+  button needs. Keep a watchdog in the PLC for anything that moves: a release
+  the panel never sees, such as a dropped connection, leaves the value true.
+
+- **A Button Container.** A Container that is one control around whatever
+  it holds — a tile, a list row, a header logo — with the Button's **On
+  Pressed** and **On Released**. It takes the keyboard (**Enter** or
+  **Space**), shows the focus ring and a pressed look, and dims and blocks
+  under **Interactable** like a Button. A press on a Button or an input inside
+  it stays with that control.
+
+- **A Run Component Actions action.** Inside a component it runs the actions
+  each instance sets on one of the component's **Actions** properties, as one
+  item in the list next to the others. The upgrade to format 11 writes it
+  where a pressable Container bound its whole action list to a component
+  property, which it used to drop.
+
+- **A Button sets its alignment and text case.** **Content alignment**
+  (center, or start for a menu-style tile) and **Text case** (uppercase). A Label's **Align** is now
+  called **Content alignment**, and its new **Text case** follows the
+  typography by default or picks *As typed* or *Uppercase*. Each one left at
+  its default keeps today's look.
+
+- **The Alarm List fits a touch panel.** Six new options: **Row size** (Touch
+  gives tap-sized rows and buttons), **Severity mark** (a stripe, the whole
+  row in the level colour, or only the coloured icon), **Show** (the active
+  alarms, the cleared ones or both; bind it to switch from elsewhere),
+  **Filter chips** (All / Active / History in the header, starting from Show),
+  **Acknowledge** (Off leaves it to a Button with the new action below) and
+  **Second line** (the alarm's description). Touch rows are cards with a
+  severity edge, the alarm's value, its time and whether it is new,
+  acknowledged or cleared. Left at their defaults, the list looks as before.
+
+- **An alarm can do without acknowledgement.** A **Needs acknowledgement**
+  switch on each alarm, on by default. Off, the alarm fires already
+  acknowledged: no ACK, not counted as unacknowledged, skipped by Acknowledge
+  All. A cleared alarm in the Alarm List now opens its detail popup too, with
+  its description, image and resolutions kept in the history.
+
+- **An action acknowledges every alarm.** **Acknowledge All Alarms**
+  acknowledges each unacknowledged alarm in the name of the signed-in user,
+  so any Button can be the screen's acknowledge button.
+
+- **A Button sets its border color.** A **Border color** that differs from
+  the button color, such as a ring that marks the active page. Left empty, it
+  keeps today's look.
+
+- **A String Input can open the numpad.** A new **Keyboard** property set to
+  **Numeric** opens the numpad instead of the on-screen keyboard, with
+  digits only, so a PIN or a code needs no letters to tap past. With
+  **Password field** on, the numpad masks the entry too. Custom widgets get
+  the same masking through the SDK numpad's new `password` prop. The default
+  stays **Text**. Two more properties make a PIN dialog one tap shorter:
+  **Focus when shown** opens the keyboard or numpad as soon as the field
+  appears (not in the editor canvas), and **On Submit** runs its actions on
+  Enter, on the numpad or a physical keyboard — a Login User there signs in
+  without a separate button. The numpad opens centred on screen, over the
+  dialog, like Edit Value's. **Keypad** draws that numpad inside the field
+  itself instead, so a PIN dialog is one panel rather than a dialog with a
+  second panel over it; Enter submits and clears the entry for the next try.
+
+- **A locked widget is out of the keyboard's reach too.** A widget that is
+  not **Interactable** already ignored a press, but **Tab** still reached
+  the Button or field underneath, and **Enter** or **Space** fired it,
+  so a keyboard got past a lock that guards a setpoint. A locked widget
+  now takes no focus and no keys. Unlocked widgets behave as before.
+
+- **`Round3` and `Round4` in text templates.** Next to `Round1` and
+  `Round2`, a String Expression and alarm text can show a value with three
+  or four decimals: `{Round3(1)}`.
+
+- **Runtime widgets carry their id.** Every widget on an operator screen now
+  sits in an element with `data-widget-id` and `data-widget-type`, as it
+  already did in the editor, so a test or script can find it by its node id:
+  `[data-widget-id="pump-start"]`. The element takes no space, so layouts look
+  the same; a Navigation Menu placed straight in a shell region now gets its
+  sidebar background and border in the editor preview too.
+
+- **An action in a component writes through its input.** Write Data
+  Variable, Toggle Boolean Variable and Edit Value inside a component can
+  target an input declared with write access, `{ "$componentProp": "value" }`,
+  and write whatever variable the instance passed in. A parameter row with an
+  Edit Value button is then one component placed once per setpoint. The
+  Variable row's source pill offers the input, inside a dialog too, and the
+  warnings pill flags an input that is not writable or not of a type the
+  action writes.
+
+- **A component input can hold a page.** A component's properties take the
+  **Page** type that dialog input parameters already had: the instance picks
+  the page from a page picker, and a **Navigate To Page** inside the
+  component goes to it. Before, saving such a component was refused, so a
+  link card had to be handed a whole action list instead.
+
 ### Changed
+
+- **On Pressed runs when the press starts.** A Button's press
+  actions used to run on the click, when the finger lifted; they now run the
+  moment it lands (or the key goes down), so **On Released** has a moment of
+  its own to follow it. A press that slides off the control still runs.
+
+- **A Number Input reads as a value, not a form field.** The number is
+  right-aligned in the theme's Value typography, with digit groups (4,920)
+  and a typographic minus, on a raised surface with the unit inside it. While
+  the numpad is open the field shows the entry as typed.
+
+- **Every download names its edition.** The public zips are now
+  `nexthmi-community-<os>-<arch>-<version>.zip` and
+  `nexthmi-community-docker-linux-<arch>-<version>.zip`; the folder inside keeps
+  its name, so shortcuts to it still work. The terminal splash prints
+  *Community Edition* or *Enterprise Edition* under the logo, and the runtime's
+  loading screen says *Community Edition* in the public build.
+
+- **A project opened in 1.1.0 no longer opens in 1.0.x (breaking).** The
+  project file format moves to 10, because 1.1.0 adds fields to the alarm and
+  theme files that a 1.0.x build rejects: it would read the alarm files as
+  empty and save over them, and fail to load the themes. **Start** asks to
+  upgrade a project the first time 1.1.0 opens it, zipping it into
+  `.backups/` first; nothing in it is rewritten. A 1.0.x build then shows
+  **Requires update** and names 1.1.0 as the version it needs, instead of
+  losing the alarms.
+
+- **Number Input binds a plain Float or Integer variable (breaking).** Like
+  the Button and the Numeric Stepper, it no longer takes a
+  `bVisible` / `bEnabled` / `fValue` struct: bind the setpoint itself, and use
+  the widget's own **Visible** and **Interactable** properties to hide or lock
+  it. An Integer variable turns the numpad's point off, and with no min/max on
+  the widget the variable's own range applies. A Number Input still bound to a
+  struct shows `---` until it is rebound; there is no migration.
+
+- **A tap outside a popover reaches what is under it.** With the backdrop set
+  to *none*, a tap outside a dialog used to close it and stop there, so moving
+  from one machine symbol's popover to the next took two taps. Now that tap
+  closes the popover *and* lands on what lies under it, so the next symbol's
+  popover opens at once. A new **Tap through** switch in a dialog's **Overlay**
+  section turns it off; a dimmed backdrop only ever closes, and a dialog that
+  does not close on a backdrop press still ignores it. Opening the dialog that
+  is already on top now swaps in the new input parameters and moves it to the
+  new anchor, where it used to do nothing. Projects with backdrop-less dialogs
+  change behaviour without a migration.
+
+- **The numpad never writes when the operator backs out.** ×, a press outside
+  the numpad and Escape now cancel the entry; only Enter writes, and only a
+  value inside min/max. Number Input and Numeric Stepper used to save the typed
+  value on × and on a press outside, and silently clamped an out-of-range entry
+  — a typed 5000 reached the machine as the max, 200. Now the numpad refuses
+  it and shows its bounds in red (`Min: 80 · Max: 200`). An entry starts
+  empty, with the current value as placeholder, so a key replaces the value
+  instead of appending to it. The entry is a real field: a physical keyboard
+  types into it by the same rules as the keys, Enter applies and Escape
+  cancels, and a tablet's own keyboard stays shut. Both widgets get
+  **Allow negative values** (minus is off anyway when min is 0 or more) and
+  **Numpad position** (bottom right or center); Number Input also gets
+  **Decimal places**. Numeric Stepper's **Decimal places** now also limits what
+  can be typed, and an Integer variable never takes a point. The ± buttons
+  still stop at min/max. **Custom widgets:** `VirtualNumpad` replaces
+  `onClose(value)` with `onApply(value)` and `onCancel()`; a widget that passes
+  `onClose` must switch.
+
+- **Usage reporting says more, and still nothing about your projects.** The
+  report now goes out every hour instead of once a day, and adds how NEXT HMI
+  was installed, how long it has been running, whether the last run stopped
+  cleanly, whether this installation has ever connected to a PLC, saved a page
+  or been used over MCP, and the rough size of all projects together (0, 1–10,
+  11–100 or more pages, tags and OPC-UA connections). No names, values or
+  addresses are sent. [Usage reporting](docs/user/install.md#usage-reporting)
+  lists every field; the switch and `NEXTHMI_TELEMETRY=off` work as before.
+  An installation that has connected and saved a page is asked once, on the
+  Projects page, whether it is used in a machine or product.
 
 - **On/off widgets show "unknown" instead of "off" before a value arrives.**
   An **LED Indicator** shows an empty ring, a **Switch** a hollow track with its
@@ -69,7 +427,183 @@ heading.
   variable and type named; pick a supported type for that variable in the
   test-server editor, which marks the old one unsupported.
 
+- **A disabled tag can no longer be bound.** **Show all** in the variable
+  picker listed disabled tags and let one be confirmed. The binding then showed
+  a value in the editor while the warnings pill called it *unknown variable*.
+  A disabled tag is now left out of the picker, **Show all** included.
+
+- **A Gauge and a Trend take an Integer tag.** Their **Value** took only a
+  `Float` variable, so a PLC counter (an S7 `Int` or `DInt`, a CODESYS `INT`)
+  needed a formula to reach them. They now take `Float` or `Integer`, as the
+  Value Display, Progress Bar and Ring Gauge already did.
+
+- **A field that writes a value back takes only a variable.** A writing field
+  (`write: true`, such as a Button Row's value) offered every source its type
+  allowed, so a formula, a condition or a fixed value could be put where the
+  control writes. The control then had nothing to write to. Such a field now
+  offers only a variable binding, a paste of anything else is refused, and the
+  warnings pill reports `write-source` for one that already holds something
+  else.
+
+- **A formula can fill a whole-number field.** The Formula source was offered
+  only on `Float` fields. It now has a **Round to a whole number** switch that
+  rounds the result to the nearest integer. A formula on an `Integer` field
+  starts with it on, and the warnings pill reports `formula-fraction` for a
+  formula there that is not rounded.
+
+### Removed
+
+- **Screen-reader names.** The app and the built-in widgets no longer set
+  `aria-label`, `aria-labelledby` or `aria-live`; roles and state attributes
+  such as `aria-pressed` stay. The Menu Toggle's **Aria label** property is
+  gone. A custom widget gets its node's **Name** under **Identity** as the
+  `name` prop.
+
+- **The User Badge.** Opening a project upgrades each one to built-in widgets
+  that show the same: a Container holding a user Icon, the username and groups
+  as Labels, a sign-in Button for the guest and a sign-out Button for everyone
+  else, each kept only where the badge had actions for it. The initials avatar
+  becomes the user icon.
+
+- **The Alarm List's Own frame.** The list now always draws without a frame of
+  its own, as every example already placed it, so it takes the look of the card
+  or page around it. A stored `chrome` key is ignored and the warnings pill
+  flags it as an unknown property; delete it there.
+
+- **The Container's Shadow.** A Container now always draws without a shadow.
+  A stored `shadow` key is ignored and the warnings pill flags it as an
+  unknown property; delete it there.
+
 ### Fixed
+
+- **An Image Container with many children stays workable.** Children added
+  to an Image Container no longer all sit in the middle of the image until
+  **Place children…** is opened: each starts at its own spot in an 8 × 8 grid,
+  so 64 children get a spot each where 16 did before. In **Place children…** a
+  child that draws nothing, such as an empty Container, can be dragged by its
+  marker. **Place children…** and an Image's **Edit indicators…** fit a tall
+  image inside the dialog, so its bottom edge can be reached. A child that
+  was never placed moves from the middle of the image to its grid spot.
+
+- **A Button's custom SVG icon shows in Safari.** A project SVG on a Button
+  rendered at zero size in Safari and other WebKit browsers, so the button
+  showed no icon. It now fills the icon size, as it already did in Chrome
+  and Firefox.
+
+- **A Button stays inside a narrow fixed tile.** A Button in a fixed size
+  narrower than its label plus padding grew past it. It now keeps the size it
+  was given.
+
+- **A restart keeps the default project's name.** Each start renamed the
+  default project back to *Default*, so a name given in the manager did not
+  survive a restart. Writing the project block also escaped characters such
+  as `·` and `₂` in `config.json` (`·`); they are now written as they
+  are.
+
+- **An input inside a component's actions is not flagged.** The warnings
+  pill said a `$componentProp` nested in another source "renders once and
+  then stops updating" inside actions too, such as an Edit Value title built
+  from the input, although an action reads its fields when it fires. Action
+  lists — Actions, On Submit and other events, their If branches and On
+  Success / On Failed lists — are no longer flagged; a rendered property
+  still is.
+
+- **An icon path taken from the Repeat item is not an unknown asset.** A
+  fixed icon or image whose path is a Repeat item member, as in
+  `{ "$static": { "type": "custom", "path": { "$repeatItem": { "member": "icon" } } } }`,
+  was flagged as an unknown asset although each copy fills it in from its
+  item. It no longer is over a list; over a tag array, where it names no
+  asset, the pill now says to set the field's own source to Repeat Item.
+
+- **Alarms restored after a restart follow the tags.** An alarm active when
+  the project stopped came back active on start even when its tag no longer
+  held the condition: a static datasource's tags start at their defaults
+  without a change, so seven open-door alarms stayed lit until a door was
+  toggled. Every restored alarm is now checked against the tag values as soon
+  as they are known, and one whose condition has gone clears into the history.
+  The same check runs when a static datasource is saved while the project
+  runs, since a new or reshaped variable restarts at its default too.
+
+- **HMI Loaded sees the tag values.** `onHmiLoaded` ran as soon as the
+  configuration had loaded, before any tag value had arrived, so a first-start
+  guard such as an **If** on `Machine/Initialized` read "no value yet" and
+  took the wrong branch. It now waits until the first page's values and those
+  of the variables its own actions read are in, up to 3 seconds; the first
+  **onPageLoaded** follows it as before.
+
+- **A formula can be written to an Integer tag.** A Write Data Variable
+  whose value is a `$formula` was flagged by the warnings pill as not fitting
+  an Integer tag, although the write itself goes through. It is no longer
+  flagged; a whole result is written, and a result with decimals is refused
+  with `invalid_value`, as any other number with decimals is.
+
+- **The alarm guide says what Value Range does.** It said the trigger fires
+  outside **Min** / **Max**; it fires while the value lies between them, both
+  included, as it always has. The guide now says so, with what one empty
+  bound does.
+
+- **`Thousands` keeps the decimals it is given.** `{Thousands(Round1(1))}`
+  showed `41,280` for 41280, dropping the `.0` the inner `Round1` wrote. It
+  now groups the text it receives, so it shows `41,280.0`.
+
+- **An alarms file the app cannot load is flagged.** An `alarms.json` that
+  breaks the alarm format, such as an alarm with a key it does not know, was
+  replaced by an empty one at startup, and the warnings pill said nothing, so
+  every alarm was gone without a word. The pill now shows an error per field
+  the format rejects, and the log says the file was replaced. The same goes
+  for `recipes.json`.
+
+- **A popover opened near the bottom of the screen stays on it.** A dialog
+  placed `trigger-below` a button low on the screen opened below it anyway,
+  partly off the screen, because its size was read before its contents had
+  loaded. It now opens on the other side of the button when only that side
+  has room, and is pulled inside the screen when neither has; the same for
+  `trigger-above`, `trigger-left` and `trigger-right`.
+
+- **The category rail follows a click to its end.** In the Add action,
+  Add widget and source drawers, clicking a category near the end of the
+  list, such as **Interface**, scrolled to it but left the rail highlighting
+  one above it, because that section could not scroll to the top. The
+  clicked category now stays highlighted until you scroll yourself.
+
+- **A placeholder typed into a String Expr warns until it is bound.**
+  Typing `{2}` into a template added a `{2}` row holding an empty Static
+  text, which counts as a value, so the "placeholder {2} is unbound" warning
+  never showed. The new row now starts unbound, in an HTTP Request's URL and
+  body too. A Static value cleared on purpose still counts as set.
+
+- **An alarm's detail opens on screen from any page.** Tapping a row of an
+  Alarm List on a long page dimmed the screen but drew the detail dialog
+  off-screen, where it could not be read or acknowledged. The dialog now
+  always opens over the middle of the screen, from a custom widget too.
+
+- **A toast no longer covers the numpad.** A toast arriving while the
+  numpad or keyboard was open drew over its bottom row of keys. The keypad
+  the operator is typing on now sits above toasts, and below a Show Alert
+  confirm and an alarm's detail dialog. An open confirm now also dims the
+  toasts behind it; alarm popups keep their own layer above it.
+
+- **A custom widget's centred numpad is centred.** A `VirtualNumpad` with
+  `dockPosition="center"` sat at the left edge of a keyboard-wide strip
+  along the bottom of the screen. It now sits in the middle of the screen,
+  across and down; the keyboard stays docked at the bottom.
+
+- **A second tap on a Number Input or String Input opens its numpad or
+  keyboard again.** After × (or Enter, on a Number Input) the field kept
+  focus, and the keypad opened only when the field gained focus, so tapping
+  the same field again did nothing until the operator tapped somewhere else
+  first.
+
+- **Bundled fonts now carry their licence.** Inter, JetBrains Mono, Lexend,
+  Manrope and Roboto Mono ship their SIL OFL 1.1 text next to the font files
+  in `frontend/public/fonts/`, and `NOTICE` lists each family's copyright and
+  source, as it already did for Exo 2.
+
+- **A user-group check works in page and global events.** An **If** in a
+  page's `onOpen` or `onClose`, or in a global event such as `onPageLoaded`,
+  saw no signed-in user, so `$userGroups` was always false: a "is this an
+  admin?" guard turned the admin away too. Event actions now see the same
+  signed-in user, translations and variables as a button's actions.
 
 - **Counters beyond 2^53 drive numeric widgets.** Gauge, Progress Bar, Ring
   Gauge, Trend, Trend Chart, Numeric Stepper and Number Input read an
@@ -94,6 +628,11 @@ heading.
   (`9999-12-31T23:59:59-01:00`) has no UTC form, which OPC-UA requires. It is
   now refused as an invalid value, in the runtime as well as on the server, and
   a recipe download containing one carries on with the rest.
+
+- **A bound tag that was disabled afterwards is reported as disabled.** The
+  warnings pill said *unknown variable* for it. It now reports a
+  `var-disabled` warning, *disabled in its datasource — enable it there*. A
+  tag that is also gone from the server is still reported as unknown.
 
 ## [1.0.1] - 2026-10-24
 
@@ -582,6 +1121,7 @@ below ships in the initial open-source build.
   shipped loose (replaceable) in binary builds, with the LGPL texts and a
   written source offer bundled alongside.
 
+[1.0.1]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.0.1
 [1.0.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.0.0
 [0.0.1-rc2]: https://github.com/mpnvdlee/next-hmi/releases/tag/v0.0.1-rc2
 [0.0.1-rc1]: https://github.com/mpnvdlee/next-hmi/releases/tag/v0.0.1-rc1

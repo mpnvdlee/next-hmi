@@ -6,15 +6,10 @@ import path from 'path';
  * Where the dev server should read the live project's `external-libraries/`
  * and `external-modules.json` from.
  *
- * This used to be hardcoded to `<repo>/project-testbench/`. That folder is
- * gitignored and cloned in by hand, so on a machine whose live project lives
- * anywhere else the import map came out empty and every bare specifier failed
- * at runtime — `Failed to resolve module specifier "three"` — even though the
- * backend was serving the files perfectly well over `/external-libraries/`.
- *
- * So resolve the project the way the backend does (`core/runtime_home.py` and
- * `core/bootstrap.py`) instead of guessing, and keep the old path as the last
- * fallback so a checkout that *does* have `project-testbench/` is unaffected.
+ * Resolved the way the backend does (`core/runtime_home.py` and
+ * `core/bootstrap.py`): a live project can live anywhere, and a wrong guess
+ * leaves the import map empty so every bare specifier fails at runtime.
+ * `<repo>/project-testbench/` is the last fallback.
  */
 
 function bootstrapConfigPath(): string {
@@ -74,6 +69,22 @@ export function resolveLiveProjectDir(repoRoot: string): string {
   if (typeof chosen?.path === 'string' && chosen.path.trim()) return path.resolve(chosen.path);
 
   return path.join(repoRoot, 'project-testbench');
+}
+
+/**
+ * A registered project's folder by id, the `<slug>` of `/runtime/<slug>/` and
+ * `/editor/<slug>/`, so each instance document gets its own project's import
+ * map rather than the default project's. Undefined when it isn't registered.
+ */
+export function resolveProjectDirById(repoRoot: string, id: string): string | undefined {
+  const manifest = readJson(path.join(resolveRuntimeHome(repoRoot), 'projects.json'));
+  const entries = Array.isArray(manifest?.projects)
+    ? (manifest.projects as Array<Record<string, unknown>>)
+    : [];
+  const entry = entries.find((e) => e.id === id);
+  return typeof entry?.path === 'string' && entry.path.trim()
+    ? path.resolve(entry.path)
+    : undefined;
 }
 
 export function scanExternalLibraries(externalLibrariesDir: string): Record<string, string> {

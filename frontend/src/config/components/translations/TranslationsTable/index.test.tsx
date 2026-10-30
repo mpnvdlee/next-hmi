@@ -26,7 +26,7 @@ describe('TranslationsTable search highlighting', () => {
     expect(within(cell!).getByText('Mot')).toHaveClass('cfg-search-match');
     expect(editableInput).toHaveClass('cfg-trans-highlight-input__input');
     expect(editableInput).not.toHaveClass('cfg-prop-input cfg-prop-input--compact--search-match');
-    const primaryValue = screen.getByLabelText('Translation key: motor_on');
+    const primaryValue = screen.getByTitle('Immutable translation key');
     expect(primaryValue).toHaveTextContent('motor_on');
     expect(screen.queryByDisplayValue('Motor on')).not.toBeInTheDocument();
   });

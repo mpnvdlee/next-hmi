@@ -232,6 +232,59 @@ class ThemeSpacing(BaseModel):
     shadow: str = Field(default_factory=lambda: _default("spacing", "shadow"), description="Elevation shadow")
 
 
+class ThemeNumpad(BaseModel):
+    """Numpad and keyboard tokens (``columns`` is numpad-only). An empty value (or ``null``
+    weight) keeps the look derived from the rest of the theme: body font, accent colour,
+    the 188px numpad panel."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    columns: Literal[3, 4] = Field(default_factory=lambda: _default("numpad", "columns"), description="3 = Back/Clear/Enter under the digits, 4 = in a column beside them")
+    key_size: str = Field(default_factory=lambda: _default("numpad", "key_size"), description="Key width and minimum height")
+    gap: str = Field(default_factory=lambda: _default("numpad", "gap"), description="Gap between keys")
+    key_font: str = Field(default_factory=lambda: _default("numpad", "key_font"), max_length=256, description="Key font family")
+    key_font_size: str = Field(default_factory=lambda: _default("numpad", "key_font_size"), description="Digit key font size")
+    key_font_weight: int | None = Field(default_factory=lambda: _default("numpad", "key_font_weight"), ge=100, le=900, description="Key font weight")
+    accent: str = Field(default_factory=lambda: _default("numpad", "accent"), description="Enter key colour")
+
+    @field_validator("accent")
+    @classmethod
+    def validate_accent(cls, v: str) -> str:
+        if v and not _validate_color(v):
+            raise ValueError(f"Invalid color format: {v}")
+        return v
+
+
+_TOAST_SEVERITIES = ("info", "success", "warning", "error")
+
+
+class ThemeToasts(BaseModel):
+    """Toast tokens. An empty colour keeps the severity-tinted look the toast derives
+    from the rest of the theme."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    position: Literal["top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right"] = Field(
+        default_factory=lambda: _default("toasts", "position"), description="Screen corner or edge the toasts stack at"
+    )
+    shape: Literal["pill", "rounded"] = Field(default_factory=lambda: _default("toasts", "shape"), description="pill = fully round ends, rounded = the theme radius")
+    info_bg: str = Field(default_factory=lambda: _default("toasts", "info_bg"), description="Info toast background")
+    info_text: str = Field(default_factory=lambda: _default("toasts", "info_text"), description="Info toast text colour")
+    success_bg: str = Field(default_factory=lambda: _default("toasts", "success_bg"), description="Success toast background")
+    success_text: str = Field(default_factory=lambda: _default("toasts", "success_text"), description="Success toast text colour")
+    warning_bg: str = Field(default_factory=lambda: _default("toasts", "warning_bg"), description="Warning toast background")
+    warning_text: str = Field(default_factory=lambda: _default("toasts", "warning_text"), description="Warning toast text colour")
+    error_bg: str = Field(default_factory=lambda: _default("toasts", "error_bg"), description="Error toast background")
+    error_text: str = Field(default_factory=lambda: _default("toasts", "error_text"), description="Error toast text colour")
+
+    @field_validator(*[f"{s}_{part}" for s in _TOAST_SEVERITIES for part in ("bg", "text")])
+    @classmethod
+    def validate_colors(cls, v: str) -> str:
+        if v and not _validate_color(v):
+            raise ValueError(f"Invalid color format: {v}")
+        return v
+
+
 class ThemeConfig(BaseModel):
     """Complete editable theme configuration."""
 
@@ -240,6 +293,8 @@ class ThemeConfig(BaseModel):
     colors: ThemeColors = Field(default_factory=ThemeColors)
     typography: ThemeTypography = Field(default_factory=ThemeTypography)
     spacing: ThemeSpacing = Field(default_factory=ThemeSpacing)
+    numpad: ThemeNumpad = Field(default_factory=ThemeNumpad)
+    toasts: ThemeToasts = Field(default_factory=ThemeToasts)
 
 
 # ── Request/Response models ────────────────────────────────────────────────────

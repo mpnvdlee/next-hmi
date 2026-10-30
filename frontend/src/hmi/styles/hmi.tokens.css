@@ -14,6 +14,7 @@
  *   1. Derived secondary tokens (recompute from primaries via color-mix)
  *   2. Structural / non-editable tokens (overlay, indicator, virtual panels)
  *   3. Aliases referenced by component CSS but not surfaced in the editor
+ *   4. Fallbacks for the numpad theme tokens, which a theme may leave empty
  *
  * Dark mode is a regular named theme (see the Themes editor), applied through
  * the same applyThemeTokens() path — there is no `data-theme` override here.
@@ -88,8 +89,16 @@
      scroll container but still belongs to the page, so it sits just above
      the modal layer and below anything the runtime raises over the page. */
   --hmi-z-popup: 130;
-  --hmi-z-alert: 200;
   --hmi-z-toast: 300;
+  /* The numpad and keyboard the operator is typing on: a toast arriving
+     meanwhile must not cover their keys. */
+  --hmi-z-input: 350;
+  /* A Show Alert confirm must cover a numpad the same action list opened,
+     or the keypad would still take input over it. */
+  --hmi-z-alert: 380;
+  /* An alarm popup must never sit under an alert's dim: it gets its own layer
+     above the alert, below the detail dialog it opens. */
+  --hmi-z-alarm-popup: 390;
   --hmi-z-alarm-dialog: 400;
 
   /* Width of the severity stripe down the left edge of an alarm row or toast. */
@@ -152,8 +161,15 @@
   --hmi-virtual-dock-width: min(760px, calc(100vw - 24px));
   --hmi-virtual-dock-offset-mobile: 8px;
   --hmi-virtual-dock-width-mobile: calc(100vw - 12px);
-  --hmi-virtual-dock-width-compact: 188px;
-  --hmi-virtual-dock-width-compact-mobile: min(188px, calc(100vw - 16px));
+  /* The numpad panel is as wide as its key columns; the 2px is its border. */
+  --hmi-virtual-dock-width-compact: calc(
+    var(--hmi-numpad-columns) * var(--hmi-numpad-key-width) + (var(--hmi-numpad-columns) - 1) *
+      var(--hmi-numpad-gap) + 2 * var(--hmi-virtual-panel-padding-compact) + 2px
+  );
+  --hmi-virtual-dock-width-compact-mobile: min(
+    var(--hmi-virtual-dock-width-compact),
+    calc(100vw - 16px)
+  );
 
   --hmi-virtual-panel-gap: var(--hmi-space-sm);
   --hmi-virtual-panel-padding: var(--hmi-space-md);
@@ -169,11 +185,29 @@
   --hmi-virtual-key-padding-x-compact-mobile: var(--hmi-space-sm);
   --hmi-virtual-key-font-size-compact: var(--hmi-type-body-size);
   --hmi-virtual-key-font-size-actions-compact: var(--hmi-type-caption-size);
-  --hmi-virtual-key-font-size-compact-mobile: var(--hmi-type-body-size);
 
   --hmi-virtual-title-size: var(--hmi-type-caption-size);
   --hmi-virtual-row-gap-mobile: var(--hmi-space-sm);
   --hmi-virtual-panel-padding-mobile: var(--hmi-space-sm);
   --hmi-virtual-panel-padding-compact-mobile: var(--hmi-space-sm);
   --hmi-virtual-panel-gap-mobile: var(--hmi-space-sm);
+
+  /* ── Numpad theme tokens ─────────────────────────────────────────────────
+     Editable in Themes → Numpad & keyboard. An empty theme value removes the inline
+     property and these defaults show, derived from the rest of the theme.
+     --hmi-numpad-key-size has no default here: unset, keys keep the width of
+     a three-column 188px panel and the height their padding gives them. */
+  --hmi-numpad-columns: 3;
+  --hmi-numpad-gap: var(--hmi-virtual-panel-gap-compact);
+  --hmi-numpad-key-width: var(
+    --hmi-numpad-key-size,
+    calc(
+      (188px - 2px - 2 * var(--hmi-virtual-panel-padding-compact) - 2 * var(--hmi-numpad-gap)) / 3
+    )
+  );
+  --hmi-numpad-key-font: var(--hmi-type-body-font);
+  --hmi-numpad-key-font-size: var(--hmi-virtual-key-font-size-compact);
+  --hmi-numpad-key-font-weight: var(--hmi-type-body-weight);
+  --hmi-numpad-accent: var(--hmi-accent);
+  --hmi-numpad-accent-ink: color-mix(in oklch, var(--hmi-numpad-accent) 80%, black);
 }

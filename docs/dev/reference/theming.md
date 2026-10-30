@@ -82,6 +82,46 @@ For example, label tracking is `--hmi-type-label-tracking` backed by
 | `--hmi-radius-lg` | Large radius | `spacing.radius_lg` | `border-radius: var(--hmi-radius-lg);` |
 | `--hmi-shadow` | Elevation shadow | `spacing.shadow` | `box-shadow: var(--hmi-shadow);` |
 
+#### Numpad & keyboard — edit in the Themes editor → Numpad & keyboard
+
+Styles `VirtualNumpad` and `VirtualKeyboard` (`hmi-virtual-input__*`), so every input that
+opens either gets it. Columns is numpad-only; the keyboard's key widths come from its
+60-column grid, so Key size sets only its height. The default theme sets the Enter colour to
+`#0a84ff`. An empty theme value removes the inline property and the fallback in
+`hmi.tokens.css` shows.
+
+| Token | Controls | Theme JSON path | Empty means |
+| ------ | ------ | ------ | ------ |
+| `--hmi-numpad-columns` | `3`, or `4` = Back / Clear / Enter in a fourth column | `numpad.columns` | (never empty) |
+| `--hmi-numpad-key-size` | Key width and minimum height | `numpad.key_size` | Width of a three-column 188px panel, padding-driven height |
+| `--hmi-numpad-gap` | Gap between keys | `numpad.gap` | `--hmi-virtual-panel-gap-compact` |
+| `--hmi-numpad-key-font` | Key font family | `numpad.key_font` | `--hmi-type-body-font` |
+| `--hmi-numpad-key-font-size` | Key font size (numpad Back / Clear / Enter and keyboard modifiers stay caption size) | `numpad.key_font_size` | `--hmi-type-body-size` |
+| `--hmi-numpad-key-font-weight` | Key font weight | `numpad.key_font_weight` | `--hmi-type-body-weight` |
+| `--hmi-numpad-accent` | Enter key colour (hover: `--hmi-numpad-accent-ink`) | `numpad.accent` | `--hmi-accent` |
+
+A custom property cannot drive a selector, so the column count is also written as
+`data-hmi-numpad-columns` on `<html>` (the registry entry's `attribute`); `hmi.css` places
+Back / Clear / Enter in the fourth column under `[data-hmi-numpad-columns='4']`.
+
+#### Toasts — edit in the Themes editor → Toasts
+
+Styles the Show Toast stack (`HmiToastStack`, `toast-stack.css`). Alarm toasts
+(`AlarmPopup`) share the `.hmi-toast` classes, so the themed rules are scoped to
+`.hmi-toast-stack` and leave them untouched. The default theme sets every colour to the
+tint the fallback gives on the default palette. Empty colours fall back inside `toast-stack.css`.
+
+| Token | Controls | Theme JSON path | Empty means |
+| ------ | ------ | ------ | ------ |
+| `--hmi-toast-position` | Where the stack sits: `top-left`, `top-center`, `top-right`, `bottom-left`, `bottom-center`, `bottom-right` | `toasts.position` | (never empty) |
+| `--hmi-toast-shape` | `rounded` (`--hmi-radius`) or `pill` (`--hmi-radius-full`) | `toasts.shape` | (never empty) |
+| `--hmi-toast-{info,success,warning,error}-bg` | Toast background per severity | `toasts.<severity>_bg` | Surface tinted with the severity colour |
+| `--hmi-toast-{info,success,warning,error}-text` | Text and close × colour per severity (the icon always keeps the severity colour) | `toasts.<severity>_text` | `--hmi-text`; the × its muted colour |
+
+Position and shape are mirrored as `data-hmi-toast-position` and `data-hmi-toast-shape` on
+`<html>`. `toast-stack.css` matches the position by edge (`^='bottom'`) and side (`$='left'`,
+`$='right'`); top and center are the unattributed default.
+
 > Runtime structural constants (topbar height, select height) are **not** theme
 > tokens. They are defined in `hmi.tokens.css` and component CSS files and are not editable
 > in the Themes editor.
@@ -139,7 +179,7 @@ and the apply mechanism.
    to the project's default theme. The backend only tracks the default pointer
    (`config.json` → `project.defaultTheme`, set via `PUT /api/default-theme`).
 4. **Token registry** — `THEME_TOKENS` is the single registry. Each entry carries
-   the CSS variable (`cssVar`), theme JSON path (`themePath`), `label`, and the
+   the CSS variable (`cssVar`), an optional `<html>` `attribute` mirror, theme JSON path (`themePath`), `label`, and the
    editor UI metadata (`section`, `inputType`, `options`, `group`, `wide`,
    `placeholder`, `min`/`max`/`step`). `themeSections()` derives the Themes editor
    layout from it; `defaultTheme()` returns a fresh clone for Reset / import.
@@ -152,7 +192,7 @@ and the apply mechanism.
    index load) and `LS_THEME_SAVED` (post-save refresh, consumed by `AppInner`,
    which re-fetches with `loadAndApplyThemeTokens({ force: true })` and realigns
    `themeRuntimeStore`) localStorage keys signal theme changes between browser tabs. `ThemeSection` is
-   typed `'colors' | 'typography' | 'spacing'` (lowercase).
+   typed `'colors' | 'typography' | 'spacing' | 'numpad' | 'toasts'` (lowercase).
 
 ## Config Tokens
 
@@ -224,8 +264,8 @@ motion) are not declared in CSS. They are written as inline styles on `:root` by
    surface can't take its elevation from the editable `--hmi-shadow`, which a theme may
    set to almost nothing), indicator, virtual-panel
    sizes, the alarm severity stripe, the chart series palette, and the layering scale
-   (`--hmi-z-modal` 100 → `--hmi-z-popup` 130 → `--hmi-z-alert` 200 → `--hmi-z-toast` 300
-   → `--hmi-z-alarm-dialog` 400) that every runtime overlay reads its `z-index` from.
+   (`--hmi-z-modal` 100 → `--hmi-z-popup` 130 → `--hmi-z-toast` 300 → `--hmi-z-input` 350
+   → `--hmi-z-alert` 380 → `--hmi-z-alarm-popup` 390 → `--hmi-z-alarm-dialog` 400) that every runtime overlay reads its `z-index` from.
    `--hmi-z-popup` is the widget-owned layer: a dropdown list or nav flyout escapes its
    scroll container but still belongs to the page
 3. **Aliases** referenced by component CSS but not surfaced in the editor —

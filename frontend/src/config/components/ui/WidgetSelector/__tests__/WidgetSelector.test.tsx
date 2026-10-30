@@ -179,7 +179,7 @@ describe('WidgetSelector', () => {
     const onInsert = vi.fn();
     render(<WidgetSelector onClose={() => {}} onInsert={onInsert} />);
 
-    const search = screen.getByRole('searchbox', { name: 'Search widgets and components' });
+    const search = screen.getByRole('searchbox');
     fireEvent.change(search, { target: { value: 'NavigationMenu' } });
     fireEvent.keyDown(search, { key: 'Enter' });
 

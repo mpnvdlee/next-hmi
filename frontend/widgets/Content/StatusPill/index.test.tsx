@@ -35,18 +35,11 @@ describe('StatusPill', () => {
 
   it('renders an icon instead of the dot when not pulsing', async () => {
     const { container } = renderPill({ text: 'Completed', iconName: 'check-circle', tone: 'ok' });
-    // Same code-split icon path as the Icon widget: the lazy import pulls the
-    // whole `phosphorIconComponents` module, whose first on-the-fly transform
-    // can outlast waitFor's 1s default when the suite runs in parallel. See
-    // the fuller note in ../Icon/index.test.tsx.
-    await waitFor(
-      () => {
-        expect(container.querySelector('svg')).not.toBeNull();
-      },
-      { timeout: 8000 },
-    );
+    await waitFor(() => {
+      expect(container.querySelector('svg')).not.toBeNull();
+    });
     expect(container.querySelector('i')).toBeNull();
-  }, 15000);
+  });
 
   it('emits the radius override as a custom property, not a literal style', () => {
     const { container } = renderPill({ text: 'Idle', radius: '4px' });

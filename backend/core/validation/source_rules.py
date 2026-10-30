@@ -26,7 +26,16 @@ SOURCE_FIELD_PRODUCES: dict[str, dict[str, str | list[str]]] = {
         "pathSegments": "string[]",
     },
     "$viewport": {"size": "string", "orientation": "string", "width": "integer", "height": "integer"},
-    "$recipe": {"parametersChanged": "boolean", "loaded": "boolean", "activeName": "string"},
+    "$recipe": {
+        "parametersChanged": "boolean",
+        "loaded": "boolean",
+        "activeName": "string",
+        "parameterChanged": "boolean",
+        # A parameter holds whatever its variable does.
+        "parameterValue": ["float", "integer", "string", "boolean"],
+        "changedCount": "integer",
+        "savedAt": ["datetime", "string"],
+    },
     "$user": {
         "username": "string",
         "userList": ["string[]", "string"],
@@ -61,7 +70,10 @@ SOURCE_PRODUCES: dict[str, tuple[str, ...]] = {
     "$if": ("any",),
     "$compare": ("boolean",),
     "$not": ("boolean",),
-    "$formula": ("float",),
+    "$and": ("boolean",),
+    "$or": ("boolean",),
+    # A fraction unless `round: true`.
+    "$formula": ("float", "integer"),
     # Whole numbers unless `integer: false`.
     "$random": ("integer", "float"),
     "$switch": ("any",),
@@ -79,6 +91,7 @@ SOURCE_PRODUCES: dict[str, tuple[str, ...]] = {
     "$recipe": _field_produces("$recipe"),
     "$recipeList": ("record-list",),
     "$componentProp": ("any",),
+    "$overlay": ("any",),
     "$page": _field_produces("$page"),
     "$viewport": _field_produces("$viewport"),
     "$result": ("any",),

@@ -18,14 +18,15 @@ In the open-source build there is **no licence key, no feature unlock and no run
 
 ## Does the AGPL ask anything of me?
 
-Almost certainly not. Its obligations start only when you **redistribute a build** or **serve a modified build over a network** — and then only for changes to the *platform*.
+Almost certainly not. Its obligations start only when a build **leaves your organisation** — handed to a customer, shipped inside a machine — or when you **serve a modified build over a network**.
 
 | What you're doing | What the AGPL asks |
 |---|---|
 | Running NEXT HMI on your plant network, unmodified — commercially, at any scale | Nothing. |
 | Building projects, widgets and themes with it | Nothing. Your project content is yours (see below). |
-| Handing a colleague the official zip | Nothing beyond passing the licence along. |
-| Shipping a **modified** NEXT HMI inside your machines | Offer your recipients the source of what you shipped — or buy a commercial licence instead. |
+| Handing a colleague in your own organisation the official zip | Nothing. |
+| Shipping the official build, **unmodified**, inside your machines | Pass the licence along and give your recipients the source of that release — or buy a commercial licence instead. |
+| Shipping a **modified** NEXT HMI inside your machines | Give your recipients the source of what you shipped, your changes included — or buy a commercial licence instead. |
 | Offering a **modified** NEXT HMI as a hosted service | Same, under AGPL §13, to your network users. |
 
 The AGPL never requires payment. A commercial licence is the *alternative* to complying with the source-disclosure terms, not a fee the licence imposes.

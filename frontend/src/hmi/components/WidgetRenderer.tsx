@@ -14,13 +14,16 @@
  * - The amber ones wait for the surrounding `DataSettleGate`: a page renders
  *   before its variables land, so nothing is marked until that load is over.
  *
- * Preview mode (set by PreviewContext):
+ * Widget wrapper, in the runtime and the editor preview alike:
  * - Wraps each component in `<div data-widget-id="..." className="hmi-preview-node">`.
  * - CSS sets `display: contents` on .hmi-preview-node so layout is unaffected.
- * - The PreviewView postMessage bridge then targets [data-widget-id] to apply
+ * - A Repeater copy past the first carries the template's ids too.
+ *
+ * Preview mode (set by PreviewContext):
+ * - The PreviewView postMessage bridge targets [data-widget-id] to apply
  *   `hmi-preview-node--selected` to the wrapper.
- * - A Repeater copy past the first carries the template's ids too, so a click
- *   on it selects the template, and `--ghost` dims it.
+ * - A click on a Repeater copy selects the template, and `--ghost` dims it.
+ * - `data-widget-source="definition"` marks what a component definition draws.
  */
 
 import './WidgetRenderer.css';
@@ -30,10 +33,12 @@ import type { WidgetConfig, LayoutConfig } from '@shared/types/config';
 import { useConfigStore } from '@shared/store/configStore';
 import { widgetRegistry, isContainerHostType, placesOwnChildren } from '../registry/widgetRegistry';
 import { useHmiStore } from '../store/hmiStore';
+import { useHmiScope } from '../context/HmiScopeContext';
+import { executeWidgetActions } from '../utils/widgetActions';
 import { PreviewContext } from '@shared/context/PreviewContext';
 import { DefinitionScopeContext } from '../context/DefinitionScopeContext';
 import { useRepeatScope } from '../context/RepeatScopeContext';
-import { useBindingStatus, type BindingStatus } from '../utils/bindingValidation';
+import { useBindingStatus } from '../utils/bindingValidation';
 import { useResolvedProperties } from '../hooks/useResolvedProperties';
 import { useLiveScalars } from '../hooks/useLiveScalars';
 import { useTimeTick } from '../hooks/useTimeTick';
@@ -124,12 +129,6 @@ class WidgetErrorBoundary extends Component<EBProps, EBState> {
 
 const LOCKED_MESSAGE = 'Interaction not permitted';
 
-const BINDING_OVERLAY_LABELS: Record<Exclude<BindingStatus, 'ok'>, string> = {
-  disabled: 'Variable disabled',
-  disconnected: 'OPC UA disconnected',
-  nodata: 'No data',
-};
-
 /**
  * Build a flex-child style for the binding-unavailable wrapper.
  * The wrapper takes over the layout role normally played by .hmi-component,
@@ -183,6 +182,7 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
   // Lock-denied flash: tracks click position within the lock overlay
   const [lockFlash, setLockFlash] = useState<{ x: number; y: number } | null>(null);
   const lockedFeedback = useConfigStore((s) => s.shell.lockedFeedback ?? 'flash');
+  const scope = useHmiScope();
 
   // ── Visibility gate ───────────────────────────────────────────────────────
   // All hooks are called above; early return is safe here. `visible` /
@@ -193,6 +193,9 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
   }
 
   function handleLockedClick(e: MouseEvent<HTMLDivElement>) {
+    // Runs in every feedback mode, so a project can answer a locked press with
+    // its own login dialog instead of (or on top of) the built-in feedback.
+    executeWidgetActions(useConfigStore.getState().globalEvents.onInteractionDenied, { scope });
     if (lockedFeedback === 'none') return;
     if (lockedFeedback === 'toast') {
       // A fixed id per widget: hammering a locked control re-uses the toast
@@ -239,6 +242,7 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
     const comp = (
       <Comp
         id={node.id}
+        name={node.name}
         properties={resolvedProperties}
         layout={layout}
         childConfigs={isContainerHostType(node.type) ? node.children : undefined}
@@ -252,10 +256,7 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
       bindingStatus !== 'ok' ? (
         <div className="hmi-binding-wrapper" style={wrapperStyle(layout)}>
           {comp}
-          <div
-            className={`hmi-binding-overlay hmi-binding-overlay--${bindingStatus}`}
-            aria-label={BINDING_OVERLAY_LABELS[bindingStatus]}
-          >
+          <div className={`hmi-binding-overlay hmi-binding-overlay--${bindingStatus}`}>
             <span className="hmi-binding-overlay__icon" aria-hidden="true" />
           </div>
         </div>
@@ -264,8 +265,14 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
           className="hmi-lock-wrapper"
           style={wrapperStyle(layout)}
           title={lockedFeedback === 'none' ? undefined : LOCKED_MESSAGE}
+          role="group"
+          aria-disabled="true"
         >
-          {comp}
+          {/* The overlay stops the pointer; `inert` stops Tab, Enter and Space,
+              which reach the widget underneath straight past it. */}
+          <div className="hmi-lock-content" inert>
+            {comp}
+          </div>
           <div className="hmi-lock-overlay" onClick={handleLockedClick} aria-hidden="true">
             {lockFlash && (
               <span
@@ -280,17 +287,19 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
         comp
       );
 
-    return isPreview ? (
+    // The runtime gets the same wrapper as the editor preview, so a test or a
+    // script can find a widget by its id and both draw the same DOM.
+    return (
       <div
         data-widget-id={node.id}
         data-widget-type={node.type}
-        data-widget-source={fromDefinition ? 'definition' : undefined}
-        className={ghost ? 'hmi-preview-node hmi-preview-node--ghost' : 'hmi-preview-node'}
+        data-widget-source={isPreview && fromDefinition ? 'definition' : undefined}
+        className={
+          isPreview && ghost ? 'hmi-preview-node hmi-preview-node--ghost' : 'hmi-preview-node'
+        }
       >
         {content}
       </div>
-    ) : (
-      content
     );
   };
 

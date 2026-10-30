@@ -1,7 +1,7 @@
 import { isRecord } from '@shared/types/propertyValueGuards';
 import type { AlarmCountFilter } from '@shared/types/alarm';
 import type { RecipeField, RecipeRow } from '@shared/types/recipe';
-import type { PageField, PagePathSegment } from '@shared/types/config';
+import { isBoundIndex, type PageField, type PagePathSegment } from '@shared/types/config';
 import type { HttpEntry, HttpRequestSpec } from '../store/httpSourceStore';
 import { imageBodyToUrl } from '@shared/utils/imageAsset';
 import { withBase } from '@shared/utils/runtimeBase';
@@ -34,8 +34,10 @@ export interface EvaluationContext {
   resolveDevice?: (field: 'hostname' | 'ipAddress' | 'macAddress') => string | null;
   resolveTime?: (format?: string, timezone?: string) => string | null;
   resolveComponentProp?: (componentId: string, property: string) => ResolvedValue;
+  /** An input parameter of the open dialog `page`, or null while it is closed. */
+  resolveOverlayParam?: (page: string, param: string) => unknown;
   resolveAlarmCount?: (filter: AlarmCountFilter) => number;
-  resolveRecipe?: (typeId: string, field: RecipeField) => string | boolean;
+  resolveRecipe?: (typeId: string, field: RecipeField, parameter?: string) => unknown;
   /** Resolve the $recipeList property source: the datasets of a type as grid rows.
    *  Returns an array (not an ResolvedValue), so it is read via
    *  `useRecordListProp`, not the scalar `evaluatePropertyValue` path. */
@@ -91,13 +93,21 @@ type SourceHandler = (payload: unknown, context: EvaluationContext, depth: numbe
 
 const SOURCE_HANDLERS: Record<string, SourceHandler> = {
   $static: (payload) => resolveStaticValue(payload),
-  $var: (payload, ctx) => evaluateVar(payload, ctx),
-  $loc: (payload, ctx) => evaluateLoc(payload, ctx),
+  $var: (payload, ctx, d) => evaluateVar(payload, ctx, d),
+  $loc: (payload, ctx, d) => evaluateLoc(payload, ctx, d),
   $urlParam: (payload, ctx) => evaluateUrlParam(payload, ctx),
   $pageIsActive: (payload, ctx) => evaluatePageIsActive(payload, ctx),
   $if: (payload, ctx, d) => evaluateIf(payload, ctx, d),
   $compare: (payload, ctx, d) => evaluateCompare(payload, ctx, d),
   $not: (payload, ctx, d) => evaluateNot(payload, ctx, d),
+  // An empty list is false for both; the validator flags it.
+  $and: (payload, ctx, d) =>
+    Array.isArray(payload) &&
+    payload.length > 0 &&
+    payload.every((c) => Boolean(evaluatePropertyValueInternal(c, ctx, d))),
+  $or: (payload, ctx, d) =>
+    Array.isArray(payload) &&
+    payload.some((c) => Boolean(evaluatePropertyValueInternal(c, ctx, d))),
   $formula: (payload, ctx, d) => evaluateFormulaSource(payload, ctx, d),
   $random: (payload) => evaluateRandom(payload),
   $switch: (payload, ctx, d) => evaluateSwitch(payload, ctx, d),
@@ -107,6 +117,13 @@ const SOURCE_HANDLERS: Record<string, SourceHandler> = {
   $time: (payload, ctx) => evaluateTime(payload, ctx),
   $widgetProp: (payload, ctx) => evaluateWidgetProp(payload, ctx),
   $componentProp: (payload, ctx, depth) => evaluateComponentProp(payload, ctx, depth),
+  $overlay: (payload, ctx, depth) => {
+    const { page, param } = (payload ?? {}) as { page?: unknown; param?: unknown };
+    if (typeof page !== 'string' || typeof param !== 'string' || !ctx.resolveOverlayParam) {
+      return null;
+    }
+    return evaluatePropertyValueInternal(ctx.resolveOverlayParam(page, param), ctx, depth);
+  },
   $repeatItem: (payload, ctx, depth) =>
     ctx.resolveRepeatItem
       ? evaluatePropertyValueInternal(ctx.resolveRepeatItem(payload), ctx, depth)
@@ -207,7 +224,22 @@ function evaluateResult(payload: unknown, context: EvaluationContext): ResolvedV
   return JSON.stringify(v);
 }
 
-function evaluateVar(varObj: unknown, context: EvaluationContext): ResolvedValue {
+/**
+ * The element a bound `$var.index` names: -1 when it yields no whole number
+ * from 0 up — no element to read, and a write the server refuses as out of
+ * bounds, rather than falling back to the whole array.
+ */
+export function resolveBoundIndex(
+  index: unknown,
+  context: EvaluationContext,
+  depth = MAX_SOURCE_RECURSION_DEPTH,
+): number {
+  const v = evaluatePropertyValueInternal(index, context, depth);
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
+  return Number.isInteger(n) && n >= 0 ? n : -1;
+}
+
+function evaluateVar(varObj: unknown, context: EvaluationContext, depth: number): ResolvedValue {
   if (typeof varObj !== 'object' || varObj === null) {
     return null;
   }
@@ -219,7 +251,9 @@ function evaluateVar(varObj: unknown, context: EvaluationContext): ResolvedValue
       ? context.repeatIndex
       : typeof v.index === 'number'
         ? v.index
-        : undefined;
+        : isBoundIndex(v.index)
+          ? resolveBoundIndex(v.index, context, depth)
+          : undefined;
 
   if (!composite || !context.resolveVariable) {
     return null;
@@ -244,7 +278,15 @@ function evaluateVar(varObj: unknown, context: EvaluationContext): ResolvedValue
   return value;
 }
 
-function evaluateLoc(locObj: unknown, context: EvaluationContext): ResolvedValue {
+function evaluateLoc(locObj: unknown, context: EvaluationContext, depth: number): ResolvedValue {
+  // A key with placeholders: translate first, then fill, so each language
+  // puts the values where its grammar wants them.
+  if (isRecord(locObj) && typeof locObj.key === 'string') {
+    const text = context.resolveTranslation
+      ? String(context.resolveTranslation(locObj.key))
+      : locObj.key;
+    return renderTemplate(text, wildcardsOf(locObj), context, depth);
+  }
   if (typeof locObj !== 'string') {
     return null;
   }
@@ -393,9 +435,10 @@ function evaluateFormulaSource(
   const node = parseFormula(payload.expression);
   if (!node) return null;
   const wildcards = wildcardsOf(payload);
-  return evaluateFormula(node, (key) =>
+  const result = evaluateFormula(node, (key) =>
     toNumber(evaluatePropertyValueInternal(wildcards[key], context, depth)),
   );
+  return result !== null && payload.round === true ? Math.round(result) : result;
 }
 
 function evaluateRandom(randObj: unknown): ResolvedValue {
@@ -576,6 +619,12 @@ function parsePlaceholder(body: string): { fns: string[]; key: string } | null {
   return { fns, key: rest };
 }
 
+/** A transform that writes a number with exactly `digits` decimals. */
+const toDecimals = (digits: number) => (v: string) => {
+  const n = parseFloat(v);
+  return isNaN(n) ? v : n.toFixed(digits);
+};
+
 /** Supported transform functions mapped to their implementations. */
 const STRING_EXPR_FNS: Record<string, (v: string) => string> = {
   ToLower: (v) => v.toLowerCase(),
@@ -586,29 +635,63 @@ const STRING_EXPR_FNS: Record<string, (v: string) => string> = {
     const n = parseFloat(v);
     return isNaN(n) ? v : String(Math.round(n));
   },
-  Round1: (v) => {
-    const n = parseFloat(v);
-    return isNaN(n) ? v : n.toFixed(1);
-  },
-  Round2: (v) => {
-    const n = parseFloat(v);
-    return isNaN(n) ? v : n.toFixed(2);
-  },
+  Round1: toDecimals(1),
+  Round2: toDecimals(2),
+  Round3: toDecimals(3),
+  Round4: toDecimals(4),
   // Digit grouping for readable counters ("41280" → "41,280"). Locale-independent
   // on purpose: an operator screen shows the same separator wherever it runs.
+  // Groups the text, not the number, so an inner Round1's "6.0" keeps its ".0".
   Thousands: (v) => {
-    const n = parseFloat(v);
-    if (isNaN(n)) return v;
-    const [int, frac] = String(n).split('.');
+    const t = v.trim();
+    if (isNaN(parseFloat(t))) return v;
+    const [int, frac] = t.split('.');
     const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     return frac ? `${grouped}.${frac}` : grouped;
+  },
+  // Works on the text, not the number, so the decimals an inner Round1…Round4
+  // produced survive ("6.0" → "+6.0"). The minus is U+2212, the typographic one.
+  Signed: (v) => {
+    const t = v.trim();
+    const n = parseFloat(t);
+    if (isNaN(n)) return v;
+    const digits = t.replace(/^[+-]/, '');
+    if (n > 0) return `+${digits}`;
+    if (n < 0) return `−${digits}`;
+    return digits;
   },
 };
 
 /**
- * Fill `{1}` / `{Trim(ToLower(2))}` placeholders in `template` from `wildcards`,
- * evaluating each wildcard as a full property value. Shared by `$stringExpr`
- * and by `$http`, whose url / body / header values use the same syntax.
+ * Fill `{1}` / `{Trim(ToLower(2))}` placeholders in `template` with the text
+ * `valueOf(key)` gives for each wildcard key, transforms applied. A placeholder
+ * it gives `undefined` for, or that does not parse, is left intact.
+ */
+export function fillPlaceholders(
+  template: string,
+  valueOf: (key: string) => string | undefined,
+): string {
+  return template.replace(PLACEHOLDER_RE, (match, body: string) => {
+    const parsed = parsePlaceholder(body);
+    if (!parsed) return match;
+
+    let resolved = valueOf(parsed.key);
+    if (resolved === undefined) return match;
+
+    // Apply transform functions inside-out (the fns array is outer-first)
+    for (let i = parsed.fns.length - 1; i >= 0; i--) {
+      const fn = STRING_EXPR_FNS[parsed.fns[i]];
+      if (fn) resolved = fn(resolved);
+    }
+
+    return resolved;
+  });
+}
+
+/**
+ * Fill `{n}` placeholders in `template` from `wildcards`, evaluating each
+ * wildcard as a full property value. Shared by `$stringExpr` and by `$http`,
+ * whose url / body / header values use the same syntax.
  */
 function renderTemplate(
   template: string,
@@ -618,24 +701,11 @@ function renderTemplate(
 ): string {
   if (!template) return '';
 
-  return template.replace(PLACEHOLDER_RE, (_match, body: string) => {
-    const parsed = parsePlaceholder(body);
-    if (!parsed) return `{${body}}`; // leave unrecognised placeholders intact
-
-    const wcValue = wildcards[parsed.key];
-    if (wcValue === undefined) return `{${body}}`;
-
-    // Resolve wildcard using the standard expression evaluator
+  return fillPlaceholders(template, (key) => {
+    const wcValue = wildcards[key];
+    if (wcValue === undefined) return undefined;
     const evaluated = evaluatePropertyValueInternal(wcValue, context, depth);
-    let resolved = evaluated != null ? String(evaluated) : '';
-
-    // Apply transform functions inside-out (the fns array is outer-first)
-    for (let i = parsed.fns.length - 1; i >= 0; i--) {
-      const fn = STRING_EXPR_FNS[parsed.fns[i]];
-      if (fn) resolved = fn(resolved);
-    }
-
-    return resolved;
+    return evaluated != null ? String(evaluated) : '';
   });
 }
 
@@ -806,11 +876,28 @@ function evaluateAlarmCount(payload: unknown, context: EvaluationContext): Resol
 
 function evaluateRecipe(payload: unknown, context: EvaluationContext): ResolvedValue {
   if (typeof payload !== 'object' || payload === null) return false;
-  const { type, field } = payload as Record<string, unknown>;
+  const { type, field, parameter, format } = payload as Record<string, unknown>;
   if (typeof type !== 'string' || typeof field !== 'string') return false;
-  return (
-    context.resolveRecipe?.(type, field as RecipeField) ?? (field === 'activeName' ? '' : false)
+  if (field === 'savedAt') {
+    const raw = context.resolveRecipe?.(type, 'savedAt');
+    const stamp = typeof raw === 'string' ? raw : '';
+    const date = stamp ? new Date(stamp) : null;
+    if (!date || Number.isNaN(date.getTime())) return '';
+    // Formatted like $time; without a format it stays the ISO stamp a DateTime field takes.
+    return typeof format === 'string' && format.trim() ? formatDateByPattern(date, format) : stamp;
+  }
+  const fallbacks: Record<string, ResolvedValue> = {
+    activeName: '',
+    parameterValue: null,
+    changedCount: 0,
+  };
+  const fallback = field in fallbacks ? fallbacks[field] : false;
+  const value = context.resolveRecipe?.(
+    type,
+    field as RecipeField,
+    typeof parameter === 'string' ? parameter : undefined,
   );
+  return (value ?? fallback) as ResolvedValue;
 }
 
 function formatDateByPattern(date: Date, format: string, timezone?: string): string {

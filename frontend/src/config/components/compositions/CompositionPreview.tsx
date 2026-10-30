@@ -163,7 +163,7 @@ export default function CompositionPreview({
       flush
       className="widget-preview-container"
       actions={
-        <div className="component-preview-size" role="group" aria-label="Preview size">
+        <div className="component-preview-size" role="group">
           <label className="component-preview-size__field">
             <span>Width</span>
             <input
@@ -173,7 +173,6 @@ export default function CompositionPreview({
               step={1}
               value={previewWidth}
               onChange={(e) => updateDimension('width', e.target.value)}
-              aria-label="Preview width in pixels"
             />
           </label>
           <label className="component-preview-size__field">
@@ -185,7 +184,6 @@ export default function CompositionPreview({
               step={1}
               value={previewHeight}
               onChange={(e) => updateDimension('height', e.target.value)}
-              aria-label="Preview height in pixels"
             />
           </label>
         </div>

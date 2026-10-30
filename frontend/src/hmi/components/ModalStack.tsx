@@ -82,7 +82,20 @@ function closeSettings(root: PageRoot, target: PageNode) {
   return {
     showCloseButton: !own || target.showCloseButton !== false,
     closeOnBackgroundPress: !own || target.closeOnBackgroundPress !== false,
+    tapThrough: !own || target.tapThrough !== false,
   };
+}
+
+/** Hands a backdrop press on to the topmost element under it that is not part
+ *  of the overlay stack. */
+function passPressThrough(backdrop: Element, x: number, y: number) {
+  const beneath = document.elementsFromPoint(x, y).find((el) => !backdrop.contains(el));
+  if (!beneath) return;
+  const init = { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, pointerId: 1 };
+  // Button and Container act on pointer-down and -up; native controls on click.
+  beneath.dispatchEvent(new PointerEvent('pointerdown', init));
+  beneath.dispatchEvent(new PointerEvent('pointerup', init));
+  beneath.dispatchEvent(new MouseEvent('click', init));
 }
 
 /**
@@ -121,11 +134,14 @@ export function ModalStack() {
   return (
     <div
       className={`hmi-modal-backdrop${dim ? '' : ' hmi-modal-backdrop--transparent'}`}
-      onClick={() => {
+      onClick={(e) => {
         const top = openPageOverlays[openPageOverlays.length - 1];
-        if (top && closeSettings(top.root, top.target).closeOnBackgroundPress) {
-          closePageOverlay(top.entry.pageId);
-        }
+        if (!top) return;
+        const settings = closeSettings(top.root, top.target);
+        if (!settings.closeOnBackgroundPress) return;
+        closePageOverlay(top.entry.pageId);
+        // With no backdrop drawn, the press was aimed at what lies under it.
+        if (!dim && settings.tapThrough) passPressThrough(e.currentTarget, e.clientX, e.clientY);
       }}
     >
       <div className="hmi-modal-stack">
@@ -148,7 +164,10 @@ export function ModalStack() {
               }),
               style: { ...fixedStyle, ...stackOffsetStyle(stackIndex) },
               zIndex: index + 1,
+              // The header bar is the named node's, from either root — a group
+              // opened as an overlay decides it, not the page shown inside it.
               title: resolvePageTitle(target.title),
+              showHeader: target.showModalHeader !== false,
               onClose: closeSettings(root, target).showCloseButton
                 ? () => closePageOverlay(entry.pageId)
                 : null,
@@ -179,7 +198,8 @@ export function ModalStack() {
 
 /**
  * The modal-card shape every page overlay shares: a header (title + optional
- * close button) over a content body, inside a `ModalCard`.
+ * close button) over a content body, inside a `ModalCard`. With `showHeader`
+ * off the header bar goes, close button included.
  */
 function renderModalCard({
   key,
@@ -189,6 +209,7 @@ function renderModalCard({
   style,
   zIndex,
   title,
+  showHeader,
   onClose,
   children,
 }: {
@@ -199,6 +220,7 @@ function renderModalCard({
   style?: CSSProperties;
   zIndex: number;
   title: string;
+  showHeader: boolean;
   onClose: (() => void) | null;
   children: ReactNode;
 }) {
@@ -211,10 +233,12 @@ function renderModalCard({
       style={style}
       zIndex={zIndex}
     >
-      <div className="hmi-modal__header">
-        <span className="hmi-modal__title">{title}</span>
-        {onClose && <CloseButton className="hmi-modal__close" onClick={onClose} />}
-      </div>
+      {showHeader && (
+        <div className="hmi-modal__header">
+          <span className="hmi-modal__title">{title}</span>
+          {onClose && <CloseButton className="hmi-modal__close" onClick={onClose} />}
+        </div>
+      )}
       <div className="hmi-modal__content" data-flow-direction="row" data-flow-align="stretch">
         {children}
       </div>
@@ -249,6 +273,8 @@ function ModalCard({
       ref={ref}
       className={className}
       style={{ ...style, ...pos, zIndex }}
+      role="dialog"
+      aria-modal="true"
       onClick={(e) => e.stopPropagation()}
     >
       {children}

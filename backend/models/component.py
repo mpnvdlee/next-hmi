@@ -26,6 +26,10 @@ class ComponentPropertySchema(BaseModel):
     # from this on the frontend. No flat `requiredFields` is persisted.
     structSchema: list[Any] = Field(default_factory=list)
     write: bool = False
+    # "page": a String naming a page in the Pages section, picked with a page
+    # picker — what a Navigate To Page inside reads, as a dialog's input does.
+    # Left out when unset, so saving a component writes nothing new into it.
+    format: Literal["page"] | None = Field(default=None, exclude_if=lambda v: v is None)
     # For select type
     options: list[dict[str, Any]] = Field(default_factory=list)
     display: str | None = None

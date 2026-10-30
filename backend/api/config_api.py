@@ -3,6 +3,7 @@ import logging
 from dataclasses import replace
 from typing import Any
 
+from core import telemetry
 from core.component_validation import (
     DIRECT_BINDING_MESSAGE,
     NESTED_PROP_MESSAGE,
@@ -76,6 +77,9 @@ from core.validation import (
 )
 from fastapi import APIRouter, Query
 from mcp_server.diff import make_diff
+from models.alarm import AlarmConfig
+from models.recipe import RecipeConfig
+from pydantic import ValidationError
 from services import widget_compiler
 from services.websocket_manager import ConfigChangedEvent, websocket_manager
 
@@ -361,7 +365,11 @@ def _validate_component_tree(
             severity="error",
             code="component-direct-binding",
         )
-    for nested_path in component_nested_prop_paths(component):
+    def is_actions(widget_type: str, key: str) -> bool:
+        field = (ctx.widget_schema_for(widget_type) or {}).get(key)
+        return key == "actions" or (isinstance(field, dict) and field.get("type") == "actions")
+
+    for nested_path in component_nested_prop_paths(component, is_actions):
         report.warn(
             nested_path,
             NESTED_PROP_MESSAGE,
@@ -494,13 +502,15 @@ def _collect_widget_build_diagnostics(diagnostics: list[dict[str, Any]]) -> None
 
 
 # The config domains that live in their own files rather than in the page tree.
-# Each is a (kind, path resolver, validator) triple; the sweep treats them all
-# the same, so adding a domain is one row here.
-_DOMAIN_VALIDATORS: tuple[tuple[str, Any, Any], ...] = (
-    ("alarms", active_alarms_config_path, validate_alarms),
-    ("recipes", active_recipes_config_path, validate_recipes),
-    ("historian", lambda: active_project_root() / "historian" / "config.json", validate_historian),
-    ("users", lambda: active_project_root() / "users.json", validate_users),
+# Each is a (kind, path resolver, validator, load model) row; the sweep treats
+# them all the same, so adding a domain is one row here. The load model is the
+# one the service parses the file with: a file it rejects is replaced by an
+# empty default at runtime, so the sweep reports every rejection.
+_DOMAIN_VALIDATORS: tuple[tuple[str, Any, Any, Any], ...] = (
+    ("alarms", active_alarms_config_path, validate_alarms, AlarmConfig),
+    ("recipes", active_recipes_config_path, validate_recipes, RecipeConfig),
+    ("historian", lambda: active_project_root() / "historian" / "config.json", validate_historian, None),
+    ("users", lambda: active_project_root() / "users.json", validate_users, None),
 )
 
 
@@ -508,7 +518,7 @@ def _collect_domain_diagnostics(ctx: Any, diagnostics: list[dict[str, Any]]) -> 
     """Validate alarms/recipes/historian/users — the config domains whose
     ``$var`` bindings and group references nothing else checks, so a variable
     deleted out from under them used to read as "No issues"."""
-    for kind, resolve_path, validate in _DOMAIN_VALIDATORS:
+    for kind, resolve_path, validate, model in _DOMAIN_VALIDATORS:
         path = resolve_path()
         if not path.exists():
             continue
@@ -521,6 +531,18 @@ def _collect_domain_diagnostics(ctx: Any, diagnostics: list[dict[str, Any]]) -> 
             ))
             continue
         report = validate(doc, ctx)
+        if model is not None:
+            try:
+                model.model_validate(doc)
+            except ValidationError as exc:
+                for err in exc.errors():
+                    report.warn(
+                        "/" + "/".join(str(part) for part in err["loc"]),
+                        f"{path.name} does not load ({err['msg']}), so the runtime "
+                        "replaces it with an empty default",
+                        severity="error",
+                        code="config-invalid",
+                    )
         diagnostics.extend(
             _diagnostic_rows(report, artifact_kind=kind, artifact_id=kind, draft=doc)
         )
@@ -556,6 +578,8 @@ _PAGE_PERSISTED_FIELDS: frozenset[str] = frozenset({
     "componentProperties",
     "showCloseButton",
     "closeOnBackgroundPress",
+    "tapThrough",
+    "showModalHeader",
     "sections",
 })
 
@@ -806,9 +830,8 @@ async def put_config(body: dict) -> Any:
         payload["project"] = existing_project_block
 
     # Validate the widget trees this document carries (shell component arrays,
-    # globalEvents, shell region bindings) before persisting — the per-page
-    # endpoint validates page sections, but this surface was previously written
-    # unchecked. Resolve page cross-references against the incoming body so a
+    # globalEvents, shell region bindings) before persisting; the per-page
+    # endpoint validates page sections. Resolve page cross-references against the incoming body so a
     # page created — or moved between the two page-tree roots — in the same
     # save validates against its new assignment, not the on-disk index this
     # request is about to replace.
@@ -1044,7 +1067,9 @@ async def get_page(page_id: str) -> Any:
 
 @router.put("/pages/{page_id}")
 async def put_page(page_id: str, body: dict) -> Any:
-    return await _put_page_document(page_id, "pages", body)
+    result = await _put_page_document(page_id, "pages", body)
+    telemetry.mark("pageSaved")
+    return result
 
 
 @router.delete("/pages/{page_id}")

@@ -93,7 +93,6 @@ export default function AlarmTree({
         <TreeSearchBar
           value={searchQuery}
           onChange={setSearchQuery}
-          label="Search alarm tree"
           shortcutDisabled={addingGroup || groupMenu.state !== null || alarmMenu.state !== null}
           onCollapseAll={() => {
             // A search force-expands the tree, so the collapse would be invisible.

@@ -37,6 +37,7 @@ import {
 } from '@shared/types/config';
 import ContextMenu from './ContextMenu';
 import WidgetSelector from '../../ui/WidgetSelector';
+import { PAGE_WIDGETS } from '../../ui/WidgetSelector/catalog';
 import {
   makeComponentOfType,
   makeDefaultContainer,
@@ -690,7 +691,6 @@ export default function WidgetTree() {
           <TreeSearchBar
             value={searchQuery}
             onChange={setSearchQuery}
-            label="Search widget tree"
             // The widget selector drawer owns `/` while it's open.
             shortcutDisabled={selectorTarget !== null}
             onCollapseAll={() => {
@@ -911,6 +911,7 @@ export default function WidgetTree() {
           {selectorTarget && (
             <WidgetSelector
               contextName={selectorTarget.name}
+              filter={PAGE_WIDGETS}
               onClose={() => setSelectorTarget(null)}
               onInsert={(type) => {
                 const store = useConfigStore.getState();

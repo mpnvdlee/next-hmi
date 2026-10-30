@@ -6,6 +6,11 @@ import { resolveComponentPropValue } from '../utils/componentPropResolution';
 import { useRepeatScope } from '../context/RepeatScopeContext';
 import { useVariableStore } from '../store/variableStore';
 import { containsRepeatRef, substituteRepeatRefs } from '../utils/repeatItemResolution';
+import { collectBoundIndexes, substituteBoundIndexes } from '../utils/boundIndexResolution';
+import { extractVarKeys } from '../utils/extractVarKeys';
+import { resolveBoundIndex } from '../utils/propertySourceEval';
+import { useEvalContext } from './useEvalContext';
+import { useLiveScalars } from './useLiveScalars';
 
 const NO_META: Record<string, unknown> = {};
 
@@ -49,11 +54,32 @@ export function useResolvedProperties(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [properties, resolve, activeLanguage, translations, inputScope]);
 
-  return useMemo(
+  const repeated = useMemo(
     () =>
       repeats && scoped
         ? (substituteRepeatRefs(scoped, repeatScope, varMeta) as Record<string, unknown>)
         : scoped,
     [scoped, repeats, repeatScope, varMeta],
+  );
+
+  // A bound `$var.index` (a dialog's `$componentProp`, a `$var`) becomes the
+  // number it resolves to now. A `$var` inside an index is subscribed here, and
+  // the resolved numbers key the memo: a moved index re-substitutes, so the
+  // widget follows the new element; an unchanged one keeps the same object.
+  const evalCtx = useEvalContext();
+  const boundIndexes = useMemo(() => collectBoundIndexes(repeated), [repeated]);
+  useLiveScalars(extractVarKeys(boundIndexes));
+  const resolvedIndexes = boundIndexes.map((i) => resolveBoundIndex(i, evalCtx)).join(',');
+  return useMemo(
+    () =>
+      resolvedIndexes
+        ? (substituteBoundIndexes(repeated, (i) => resolveBoundIndex(i, evalCtx)) as Record<
+            string,
+            unknown
+          >)
+        : repeated,
+    // evalCtx is read through `resolvedIndexes`, which changes whenever it matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [repeated, resolvedIndexes],
   );
 }

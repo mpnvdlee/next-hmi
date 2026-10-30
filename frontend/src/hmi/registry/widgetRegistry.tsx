@@ -7,7 +7,7 @@
  * live project's custom-widgets/ folder are loaded via loadCustomWidgets(),
  * called once at app startup.
  *
- * Schema field types drive the editor Properties Panel (Phase 12).
+ * Schema field types drive the editor Properties Panel.
  *
  * Style rule: component files contain ZERO inline styles.
  * The only permitted exception is CSS custom property values set via `style={{}}`,
@@ -254,7 +254,7 @@ export function placesOwnChildren(type: string): boolean {
   return widgetRegistry[type]?.slots !== undefined;
 }
 
-// ── Custom component loader (Phase 8.9) ───────────────────────────────────────
+// ── Custom component loader ─────────────────────────────────────────────────────
 // Custom component sources and styles live under
 // <project>/custom-widgets/{Name}/. Compiled ESM lives in the runtime-home
 // widget cache; both surfaces are served as static files by the backend.
@@ -333,14 +333,11 @@ export function registerCustomWidget(entry: CustomWidgetManifestEntry): void {
     entry.name,
     async () => {
       if (needsRecharts) await ensureRecharts();
-      // Both halves of the widget, under one "loaded". The stylesheet used to
-      // be injected by the widget's own mount, i.e. after the gate had
-      // revealed the page and the widget had painted — on a slow machine,
-      // visibly unstyled first. Folding it in here makes every reader of this
-      // record cover it: the page gate, the boot warm-up, and the `lazy()`
-      // below, which is what catches the widgets that mount after the reveal
-      // (WindowedContent scrolling one in, a `visible` gate opening, a
-      // recompile remounting one).
+      // Both halves of the widget, under one "loaded", so no widget paints
+      // unstyled: every reader of this record waits for the CSS too — the
+      // page gate, the boot warm-up, and the `lazy()` below, which catches the
+      // widgets that mount after the reveal (WindowedContent scrolling one in,
+      // a `visible` gate opening, a recompile remounting one).
       const [mod] = await Promise.all([
         loadWidgetModule(getWidgetJsPath(entry)),
         entry.hasStyle ? adoptWidgetStylesheet(entry) : undefined,

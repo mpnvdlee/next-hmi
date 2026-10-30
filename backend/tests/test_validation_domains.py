@@ -90,6 +90,66 @@ def test_alarm_unbound_trigger_is_a_warning(ctx):
     assert finding.severity == "warning"
 
 
+def test_alarm_values_placeholders(ctx):
+    alarms = {
+        "groups": [
+            {
+                "alarms": [
+                    {
+                        "id": "a",
+                        "title": "Level {Round1(1)} of {Round2(2)}",
+                        "description": {"$static": "Was {3}"},
+                        "values": [
+                            {"$var": {"path": "Machine:Tanks/Level"}},
+                            {"$var": {"path": "Machine:Tanks/Gone"}},
+                        ],
+                        "trigger": {
+                            "type": "bool",
+                            "source_value": {"$var": {"path": "Machine:Tanks/Level"}},
+                        },
+                    }
+                ]
+            }
+        ]
+    }
+    report = validate_alarms(alarms, ctx)
+    unknown = next(f for f in report.warnings if f.code == "var-unknown")
+    assert unknown.path == "/groups/0/alarms/0/values/1"
+    assert unknown.severity == "error"
+    # `Round1`/`Round2` are function names, not placeholders 1 and 2; only {3} lacks a value.
+    missing = [f for f in report.warnings if f.code == "alarm-value-missing"]
+    assert [(f.path, f.severity) for f in missing] == [
+        ("/groups/0/alarms/0/description", "warning")
+    ]
+
+
+def test_alarm_value_that_is_not_a_variable_is_an_error(ctx):
+    alarms = {
+        "groups": [
+            {
+                "alarms": [
+                    {
+                        "id": "a",
+                        "title": "{1} {2}",
+                        "values": [
+                            {"$static": 5},
+                            {"$var": {"path": "Machine:Tanks/Level"}},
+                        ],
+                        "trigger": {
+                            "type": "bool",
+                            "source_value": {"$var": {"path": "Machine:Tanks/Level"}},
+                        },
+                    }
+                ]
+            }
+        ]
+    }
+    report = validate_alarms(alarms, ctx)
+    assert [(f.code, f.path, f.severity) for f in report.warnings] == [
+        ("alarm-value-not-var", "/groups/0/alarms/0/values/0", "error")
+    ]
+
+
 def test_alarm_level_and_trigger_type_enums(ctx):
     alarms = {
         "groups": [
@@ -342,6 +402,21 @@ def test_sweep_reports_an_unreadable_domain_file(sweep_client):
     rows = [d for d in resp.json()["diagnostics"] if d["artifactKind"] == "recipes"]
     assert len(rows) == 1
     assert "could not read recipes.json" in rows[0]["message"]
+
+
+def test_sweep_reports_an_alarms_file_the_alarm_model_rejects(sweep_client):
+    # The runtime loads such a file as an empty default, so every alarm is gone.
+    storage.write_json(
+        storage.active_project_root() / "alarms.json",
+        {"groups": [{"id": "g", "alarms": [{"id": "a", "value": {"$var": {"path": "X"}}}]}]},
+    )
+    resp = sweep_client.get("/api/config/validate")
+    rows = [d for d in resp.json()["diagnostics"] if d["code"] == "config-invalid"]
+    assert len(rows) == 1
+    assert rows[0]["artifactKind"] == "alarms"
+    assert rows[0]["severity"] == "error"
+    assert rows[0]["sourcePath"] == "/groups/0/alarms/0/value"
+    assert "alarms.json does not load (Extra inputs are not permitted)" in rows[0]["message"]
 
 
 def test_sweep_skips_absent_domain_files(sweep_client):

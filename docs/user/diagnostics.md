@@ -42,10 +42,12 @@ The editor header runs a project-wide validation pass and shows a pill with the 
 
 It reports things that are wrong but not fatal — a `$var` binding that names a variable no datasource offers, a variable or source whose type doesn't fit the field, a write aimed at a variable that isn't writable, an alarm with no source value, a recipe parameter that is unbound, a user in a group that no longer exists, a historian setting out of range, a custom widget that failed to compile. Saving is never blocked: a half-built screen is a normal state mid-edit.
 
+One finding means a whole file is lost: **"alarms.json does not load (…)"**, and the same for `recipes.json`. A hand-edited file that breaks the alarm or recipe format — a misspelt key, a field in the wrong place — is replaced by an empty one when the project starts, so the runtime has no alarms or recipes at all. The finding names the field the format rejects; fix it there and restart the project. The application log records the same failure at startup.
+
 Two findings are specific to reusable components:
 
 - **"component has no slot 'x'"** — the widget names a slot the component no longer declares, so it renders in the component's first slot instead. Drag it into the group you meant, or put the slot back. A widget placed on a component that declares *no* slots renders nowhere and is flagged the same way.
-- **"`$componentProp` is only substituted as a property's whole value"** — inside the component, a `$componentProp` is nested in another source or sits on a Layout field. It fills in once and then stops updating. See [Passing values into components](properties.md#passing-values-into-components).
+- **"`$componentProp` is only substituted as a property's whole value"** — inside the component, a `$componentProp` is nested in another source or sits on a Layout field. It fills in once and then stops updating. Inside an action list — a Button's **Actions**, a String Input's **On Submit**, an **If** or an **On Success** in them — nesting is fine and not flagged: an action reads its fields when it fires. See [Passing values into components](properties.md#passing-values-into-components).
 
 > [!NOTE]
 > While you have unsaved edits, the pill can only re-check the artifact you have open. Save to get the whole project re-validated.

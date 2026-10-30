@@ -42,6 +42,10 @@ export const CATEGORY_ORDER = [
   'Navigation',
 ] as const;
 
+/** Selector filter for pages: a ComponentSlot only means something inside a
+ *  reusable component definition. */
+export const PAGE_WIDGETS = (type: string) => type !== 'ComponentSlot';
+
 /**
  * Group every registered widget into ordered categories for the selector drawer.
  * Every registry entry has a canonical category.

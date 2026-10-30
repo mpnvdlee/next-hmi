@@ -916,6 +916,25 @@ def test_component_property_description_defaults_to_none():
     assert definition.componentProperties["title"].description is None
 
 
+def test_page_property_round_trips(widget_client):
+    """A component input can hold a page, as a dialog's input parameter can:
+    the model forbids extra keys, so `format` took the component down."""
+    body = {
+        "name": "StationLink",
+        "componentProperties": {
+            "target": {"type": "string", "label": "Target", "format": "page"},
+            "title": {"type": "string", "label": "Title"},
+        },
+        "children": [],
+    }
+    created = widget_client.post("/api/components", json=body)
+    assert created.status_code == 200
+    component_id = created.json()["id"]
+    persisted = storage.read_json(storage.active_components_dir() / f"{component_id}.json")
+    assert persisted["componentProperties"]["target"]["format"] == "page"
+    assert "format" not in persisted["componentProperties"]["title"]
+
+
 def test_select_property_option_type_round_trips(widget_client):
     """A `select` property's options may hold numbers, booleans or translations.
     The model forbids extra keys, so an undeclared `optionType` would take the

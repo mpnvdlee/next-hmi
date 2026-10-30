@@ -117,6 +117,22 @@ describe('ShellRegion', () => {
     expect(region.style.width).toBe('320px');
   });
 
+  it('marks a bound `floating` region floating, in its own slot', () => {
+    useVariableStore.setState({ values: { 'PLC:Sidebar/Float': true } });
+    const { container } = renderRegion({ floating: { $var: { path: 'PLC:Sidebar/Float' } } });
+
+    const region = container.querySelector('[data-region="leftSidebar"]');
+    expect(region).toHaveAttribute('data-floating', 'true');
+  });
+
+  it('lets `overlay` win over `floating`', () => {
+    const { container } = renderRegion({ overlay: true, floating: true, expanded: true });
+
+    expect(container.querySelector('[data-region]')).toBeNull();
+    const drawer = document.querySelector('[data-region="leftSidebar"][data-overlay="true"]');
+    expect(drawer).not.toHaveAttribute('data-floating');
+  });
+
   it('paints the region background from a bound `background`', () => {
     useVariableStore.setState({ values: { 'PLC:Sidebar/Bg': '#123456' } });
     const { container } = renderRegion({

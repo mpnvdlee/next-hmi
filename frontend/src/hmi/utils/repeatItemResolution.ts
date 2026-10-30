@@ -111,7 +111,7 @@ const containsCache = new WeakMap<object, boolean>();
 /** A widget node kept inside a property (a slot's content, a `widgets` field)
  *  renders through its own WidgetRenderer, which resolves its own references —
  *  possibly against a Repeater of its own. */
-function isWidgetNode(value: object): boolean {
+export function isWidgetNode(value: object): boolean {
   const rec = value as Record<string, unknown>;
   return (
     typeof rec.id === 'string' &&

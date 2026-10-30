@@ -54,17 +54,10 @@ describe('PageTitle', () => {
   it("defaults the icon to the active page's icon", async () => {
     const { container } = renderTitle({}, '/pages/dashboard');
 
-    // Builtin icon components are code-split: the lazy import pulls the whole
-    // `phosphorIconComponents` module, whose first on-the-fly transform can
-    // outlast waitFor's 1s default when the suite runs in parallel. See the
-    // fuller note in ../Icon/index.test.tsx.
-    await waitFor(
-      () => {
-        expect(container.querySelector('.hmi-page-title__icon svg')).not.toBeNull();
-      },
-      { timeout: 8000 },
-    );
-  }, 15000);
+    await waitFor(() => {
+      expect(container.querySelector('.hmi-page-title__icon svg')).not.toBeNull();
+    });
+  });
 
   it('renders no icon when neither the page nor the property names one', () => {
     const { container } = renderTitle({});

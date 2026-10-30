@@ -1,8 +1,7 @@
 """Tests for ``core.manifest`` and ``core.runtime_home``.
 
-Phase 1 of the project-management redesign: these modules are additive — no
-existing call site uses them yet. We test round-trip serialization,
-corruption tolerance, slug behavior, and the runtime-home resolver order.
+Round-trip serialization, corruption tolerance, slug behavior, and the
+runtime-home resolver order.
 """
 from __future__ import annotations
 

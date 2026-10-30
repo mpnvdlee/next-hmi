@@ -23,7 +23,7 @@ import type {
   VariableBinding,
   WriteTarget,
 } from '@shared/types/config';
-import { writeTargetAddress } from '@shared/types/config';
+import { bindingParts, isBoundIndex, writeTargetAddress } from '@shared/types/config';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import { getWriteCoercionKind, type VariableWriteDescriptor } from '@config/utils/variableType';
 import {
@@ -37,6 +37,7 @@ import { PickerField } from '../../ui/PathInputField';
 import type { OpenBindingPicker } from '../PropertySourceEditor/editors/utils';
 import { ParentPathContext } from '../PropertySourceEditor/parentPathContext';
 import PropRow from '../../ui/PropRow';
+import PageSelect from '../../ui/PageSelect';
 import Select from '../../ui/Select';
 import BoolButtonGroup from '../../ui/BoolButtonGroup';
 import SchemaFieldRow from '../../ui/SchemaFieldRow';
@@ -51,7 +52,10 @@ import { varBindingOf } from '../bindingPickerUtils';
 import { BOOLEAN_SLOT, schemaFieldPicker, slotFilter } from '../PropertySourceEditor/editors/utils';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
 import { useFieldDiagnostic } from '@config/hooks/usePanelDiagnostics';
-import { useComponentPropertySchema } from '../PropertySourceEditor/componentPropertySchemaContext';
+import {
+  ComponentPropertySchemaContext,
+  useComponentPropertySchema,
+} from '../PropertySourceEditor/componentPropertySchemaContext';
 import {
   useRepeatEditorScope,
   type RepeatEditorScope,
@@ -60,7 +64,8 @@ import { useEditorDomainStore, type PickerExtras } from '@config/store/domains/e
 import { repeatPickLabel } from '../VariableBindingPicker/repeatItemRows';
 import PropertySourceSelector, { type PropertySource } from '../PropertySourceSelector';
 import { getPropertySource } from '../propertyValueUtils';
-import { RepeatItemEditor } from '../PropertySourceEditor/editors/leaf';
+import { IndexRow, RepeatItemEditor } from '../PropertySourceEditor/editors/leaf';
+import { FieldRowBelow } from '../../ui/FieldGroup';
 import { ComponentPropEditor } from '../PropertySourceEditor/editors/picker';
 import { getDefaultValueForKind } from './actionMutations';
 
@@ -209,6 +214,7 @@ type AsyncActionType =
   | 'logoutUser'
   | 'writeDataVariable'
   | 'toggleDataVariable'
+  | 'editValue'
   | 'recipeLoad'
   | 'recipeSave';
 
@@ -238,6 +244,11 @@ const RESULT_FIELDS_BY_ACTION_SLOT: Record<AsyncActionType, Record<ResultEventKe
     onSuccess: ['datasource', 'path'],
     onFailed: ['datasource', 'path', 'reason'],
     onSettled: ['datasource', 'path', 'reason'],
+  },
+  editValue: {
+    onSuccess: ['value', 'previous', 'datasource', 'path'],
+    onFailed: ['value', 'previous', 'datasource', 'path', 'reason'],
+    onSettled: ['value', 'previous', 'datasource', 'path', 'reason'],
   },
   recipeLoad: {
     onSuccess: ['result', 'datasetId', 'written', 'total', 'verified', 'failures'],
@@ -558,16 +569,96 @@ const ClosePageOverlayEditor: EditorFor<'closePageOverlay'> = ({ action, ctx }) 
   );
 };
 
+const NAVIGATE_SCHEMA: SchemaField = { type: 'String', format: 'page', label: 'Page' };
+
+/** A fixed page, or — in a dialog — an input parameter the opener fills with one. */
+const NavigateToPageEditor: EditorFor<'navigateToPage'> = ({ action, ctx }) => {
+  const widgetId = useContext(PanelScopeContext);
+  const diagnostic = useFieldDiagnostic(widgetId, [...ctx.path, 'pageId']);
+  const inputScope = useComponentPropertySchema();
+  // The picker offers only the inputs declared to hold a page.
+  const pageInputs = useMemo(
+    () =>
+      inputScope && {
+        ...inputScope,
+        properties: Object.fromEntries(
+          Object.entries(inputScope.properties).filter(([, decl]) => decl.format === 'page'),
+        ),
+      },
+    [inputScope],
+  );
+  const source = getPropertySource(action.pageId) ?? 'static';
+  const pill =
+    inputScope || source !== 'static' ? (
+      <PropertySourceSelector
+        compact
+        value={action.pageId}
+        source={source}
+        fieldType="string"
+        forcedSources={['static']}
+        scopeSources={['$componentProp']}
+        label="Page"
+        onChange={(v) => {
+          if (getPropertySource(v) === source) return;
+          ctx.update({ pageId: source === 'static' ? { $componentProp: '' } : '' });
+        }}
+      />
+    ) : undefined;
+  return (
+    <PropRow
+      label="Page"
+      badge={pill}
+      selection={{ path: [...ctx.path, 'pageId'], schema: NAVIGATE_SCHEMA }}
+      diagnostic={diagnostic}
+    >
+      {source === '$componentProp' ? (
+        <ComponentPropertySchemaContext.Provider value={pageInputs}>
+          <ComponentPropEditor
+            value={action.pageId}
+            onChange={(v) =>
+              ctx.update({ pageId: (v as { $componentProp: string }) ?? { $componentProp: '' } })
+            }
+            schema={NAVIGATE_SCHEMA}
+          />
+        </ComponentPropertySchemaContext.Provider>
+      ) : (
+        <PageSelect
+          value={action.pageId}
+          onChange={(v) => ctx.update({ pageId: v ?? '' })}
+          emptyLabel="— select page —"
+        />
+      )}
+    </PropRow>
+  );
+};
+
 const WRITE_TARGET_FILTER = {
   label: 'Write Data Variable target',
   write: true,
   type: ['String', 'Boolean', 'Integer', 'Float', 'DateTime', 'Date', 'Time', 'Duration'],
 };
 const TOGGLE_TARGET_FILTER = { label: 'Toggle target', write: true, type: ['Boolean'] };
+const EDIT_TARGET_FILTER = { label: 'Edit Value target', write: true, type: ['Integer', 'Float'] };
 
 /** The copy's element a Repeat-item target names, or undefined for a `$var`. */
 function repeatTargetOf(target: WriteTarget | undefined): { member?: string } | undefined {
   return target && '$repeatItem' in target ? target.$repeatItem : undefined;
+}
+
+/** A `$var` target's address as the editor names it: a bound index shows as
+ *  `path[…]`, since which element it writes is only known when the action runs —
+ *  unless it is a fixed `$static` number. */
+export function editorTargetAddress(
+  target: WriteTarget | undefined,
+): { datasource: string; path: string } | null {
+  const address = writeTargetAddress(target);
+  const binding = varBindingOf(target);
+  if (!address || !isBoundIndex(binding?.index)) return address;
+  const fixed = binding.index.$static;
+  return {
+    ...address,
+    path: `${bindingParts(binding).location}[${Number.isInteger(fixed) ? fixed : '…'}]`,
+  };
 }
 
 /** The descriptor cached for a `$var` target — keyed by its `ds:path[N]`. */
@@ -575,7 +666,7 @@ function varTargetDescriptor(
   target: WriteTarget | undefined,
   dataTypes: ActionEditorCtx['dataTypes'],
 ): ActionEditorCtx['dataTypes'][string] | undefined {
-  const address = writeTargetAddress(target);
+  const address = editorTargetAddress(target);
   return address ? dataTypes[`${address.datasource}:${address.path}`] : undefined;
 }
 
@@ -591,49 +682,78 @@ function writeTargetType(
 }
 
 /**
- * A write/toggle target: a datasource variable, or — inside a Repeater — the
- * copy's own element. Each is its own source with its own picker. The element
- * is always this copy's; only a struct element asks which member to write.
+ * A write/toggle target: a datasource variable, inside a Repeater the copy's
+ * own element, or inside a component or dialog an input parameter the caller
+ * fills with a variable. Each is its own source with its own picker. The
+ * element is always this copy's; only a struct element asks which member to
+ * write.
  */
 function WriteTargetRow({
   action,
   ctx,
   filter,
   diagnostic,
+  writesWholeArray,
 }: {
   action: { target?: WriteTarget };
   ctx: ActionEditorCtx;
   filter: { label: string; write: boolean; type: string[] };
   diagnostic?: { level: 'error' | 'warning'; message: string };
+  /** The action may write a whole array, so its index is optional. */
+  writesWholeArray?: boolean;
 }) {
   const scope = useRepeatEditorScope();
+  const inputScope = useComponentPropertySchema();
   const target = repeatTargetOf(action.target);
-  const address = writeTargetAddress(action.target);
-  const active: PropertySource = target ? '$repeatItem' : '$var';
+  const inputTarget = action.target && '$componentProp' in action.target;
+  const address = editorTargetAddress(action.target);
+  const binding = varBindingOf(action.target);
+  const descriptor = varTargetDescriptor(action.target, ctx.dataTypes);
+  const active: PropertySource = target ? '$repeatItem' : inputTarget ? '$componentProp' : '$var';
   const members = scope?.members ?? [];
+  const scopeSources: PropertySource[] = [
+    ...(scope || target ? (['$repeatItem'] as const) : []),
+    ...(inputScope || inputTarget ? (['$componentProp'] as const) : []),
+  ];
   const pill =
-    scope || target ? (
+    scopeSources.length > 0 ? (
       <PropertySourceSelector
         compact
-        value={target ? { $repeatItem: {} } : { $var: { path: '' } }}
+        value={action.target ?? { $var: { path: '' } }}
         source={active}
         fieldType="string"
         forcedSources={['$var']}
         includeStatic={false}
-        scopeSources={['$repeatItem']}
+        scopeSources={scopeSources}
         label="Variable"
         onChange={(v) => {
           const next = getPropertySource(v);
           if (next === active) return;
           ctx.update({
-            target: next === '$repeatItem' ? { $repeatItem: {} } : undefined,
+            target:
+              next === '$repeatItem'
+                ? { $repeatItem: {} }
+                : next === '$componentProp'
+                  ? { $componentProp: '' }
+                  : undefined,
           } as Partial<ButtonAction>);
         }}
       />
     ) : undefined;
 
   let field: ReactNode;
-  if (target && members.length > 0) {
+  if (inputTarget) {
+    // The picker offers the inputs that can hold a writable variable of this type.
+    field = (
+      <ComponentPropEditor
+        value={action.target}
+        onChange={(v) =>
+          ctx.update({ target: v ?? { $componentProp: '' } } as Partial<ButtonAction>)
+        }
+        schema={{ type: filter.type as SchemaField['type'], write: true, label: filter.label }}
+      />
+    );
+  } else if (target && members.length > 0) {
     field = (
       <PickerField
         mono
@@ -667,13 +787,55 @@ function WriteTargetRow({
     field = (
       <PickerField
         mono
-        displayText={address ? `${address.datasource}:${address.path}` : ''}
+        // A bound index shows in its own row below, so the path shows without one.
+        displayText={
+          binding && isBoundIndex(binding.index)
+            ? binding.path
+            : address
+              ? `${address.datasource}:${address.path}`
+              : ''
+        }
         emptyLabel="Not bound"
         pickTitle="Change variable binding"
         onPick={() => ctx.openWriteVarPicker()}
       />
     );
   }
+  // A whole array target names its element in a row of its own below: a
+  // number or a source such as a dialog's input parameter. A write may also
+  // write the whole array, which leaving that row empty means.
+  const wholeArray = descriptor?.isArray === true && !descriptor.indexed;
+  const indexRow = binding && (isBoundIndex(binding.index) || wholeArray) && (
+    <ParentPathContext.Provider value={[...ctx.path, 'target']}>
+      <IndexRow
+        label="Variable"
+        arrayLength={wholeArray ? descriptor.arrayLength : undefined}
+        binding={binding}
+        optional={writesWholeArray}
+        onChange={(b) =>
+          ctx.update({
+            target: { $var: b },
+            // A whole-array write's value is an array; one element takes a scalar.
+            ...(writesWholeArray &&
+              (b.index === undefined) !== (binding.index === undefined) && {
+                value:
+                  b.index === undefined
+                    ? []
+                    : getDefaultValueForKind(getWriteCoercionKind(descriptor?.dataType)),
+              }),
+          } as Partial<ButtonAction>)
+        }
+        onOpenBindingPicker={(onPick, currentBinding, slot, extras) =>
+          ctx.openBindingPicker('', 'writeTargetIndex', {
+            ...extras,
+            filter: slotFilter({ label: 'Index', type: 'Integer' }, slot),
+            currentBinding,
+            onPick,
+          })
+        }
+      />
+    </ParentPathContext.Provider>
+  );
 
   const repeatDiagnostic =
     target && !scope
@@ -687,9 +849,12 @@ function WriteTargetRow({
         : undefined;
 
   return (
-    <PropRow label="Variable" badge={pill} diagnostic={repeatDiagnostic ?? diagnostic}>
-      {field}
-    </PropRow>
+    <>
+      <PropRow label="Variable" badge={pill} diagnostic={repeatDiagnostic ?? diagnostic}>
+        {field}
+        {indexRow && <FieldRowBelow>{indexRow}</FieldRowBelow>}
+      </PropRow>
+    </>
   );
 }
 
@@ -749,6 +914,7 @@ const WriteDataVariableEditor: EditorFor<'writeDataVariable'> = ({ action, ctx }
         ctx={ctx}
         filter={WRITE_TARGET_FILTER}
         diagnostic={targetDiagnostic}
+        writesWholeArray
       />
       {valueSource === '$repeatItem' && (
         <PropRow label="Value" badge={valuePill}>
@@ -907,6 +1073,125 @@ const ToggleDataVariableEditor: EditorFor<'toggleDataVariable'> = ({ action, ctx
   );
 };
 
+const MIN_SCHEMA: SchemaField = { type: 'Float', label: 'Min' };
+const MAX_SCHEMA: SchemaField = { type: 'Float', label: 'Max' };
+const DECIMALS_SCHEMA: SchemaField = { type: 'Integer', label: 'Decimals' };
+const NEGATIVE_SCHEMA: SchemaField = { type: 'Boolean', label: 'Allow negative' };
+const POSITION_SCHEMA: SchemaField = { type: 'String', format: 'select', label: 'Position' };
+
+/** A number field left empty: the runtime falls back to the variable's own setting. */
+function OptionalNumberInput({
+  value,
+  placeholder,
+  integer,
+  onChange,
+}: {
+  value: unknown;
+  placeholder: string;
+  integer?: boolean;
+  onChange: (v: number | undefined) => void;
+}) {
+  return (
+    <input
+      type="number"
+      className="cfg-prop-input"
+      step={integer ? 1 : 'any'}
+      min={integer ? 0 : undefined}
+      placeholder={placeholder}
+      value={typeof value === 'number' ? value : ''}
+      onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+    />
+  );
+}
+
+const EditValueEditor: EditorFor<'editValue'> = ({ action, ctx }) => {
+  const widgetId = useContext(PanelScopeContext);
+  const targetDiagnostic = useFieldDiagnostic(widgetId, [...ctx.path, 'target']);
+  const repeatScope = useRepeatEditorScope();
+  const targetType = writeTargetType(action.target, repeatScope, ctx.dataTypes);
+  const canonical = targetType !== undefined ? canonicalOpcuaWriteType(targetType) : undefined;
+  const notNumeric = targetType !== undefined && canonical !== 'Integer' && canonical !== 'Float';
+  const negative =
+    action.allowNegative === true ? 'yes' : action.allowNegative === false ? 'no' : 'auto';
+  return (
+    <>
+      <WriteTargetRow
+        action={action}
+        ctx={ctx}
+        filter={EDIT_TARGET_FILTER}
+        diagnostic={
+          notNumeric
+            ? { level: 'error', message: 'Only a numeric variable can be edited.' }
+            : targetDiagnostic
+        }
+      />
+      <LoginFieldEditor
+        ctx={ctx}
+        fieldKey="title"
+        label="Title"
+        value={action.title}
+        onChange={(v) => ctx.update({ title: v })}
+      />
+      <LoginFieldEditor
+        ctx={ctx}
+        fieldKey="unit"
+        label="Unit"
+        value={action.unit}
+        onChange={(v) => ctx.update({ unit: v })}
+      />
+      <ActionFieldRow ctx={ctx} fieldKey="min" schema={MIN_SCHEMA} label="Min">
+        <OptionalNumberInput
+          value={action.min}
+          placeholder="Variable's range"
+          onChange={(v) => ctx.update({ min: v })}
+        />
+      </ActionFieldRow>
+      <ActionFieldRow ctx={ctx} fieldKey="max" schema={MAX_SCHEMA} label="Max">
+        <OptionalNumberInput
+          value={action.max}
+          placeholder="Variable's range"
+          onChange={(v) => ctx.update({ max: v })}
+        />
+      </ActionFieldRow>
+      <ActionFieldRow ctx={ctx} fieldKey="decimals" schema={DECIMALS_SCHEMA} label="Decimals">
+        <OptionalNumberInput
+          integer
+          value={action.decimals}
+          placeholder={canonical === 'Integer' ? '0' : 'No limit'}
+          onChange={(v) => ctx.update({ decimals: v })}
+        />
+      </ActionFieldRow>
+      <ActionFieldRow
+        ctx={ctx}
+        fieldKey="allowNegative"
+        schema={NEGATIVE_SCHEMA}
+        label="Allow negative"
+      >
+        <Select
+          value={negative}
+          onChange={(v) =>
+            ctx.update({ allowNegative: v === 'yes' ? true : v === 'no' ? false : undefined })
+          }
+        >
+          <option value="auto">Unless min is 0 or more</option>
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </Select>
+      </ActionFieldRow>
+      <ActionFieldRow ctx={ctx} fieldKey="position" schema={POSITION_SCHEMA} label="Position">
+        <Select
+          value={action.position ?? 'center'}
+          onChange={(v) => ctx.update({ position: v as 'center' | 'bottom-right' })}
+        >
+          <option value="center">Center</option>
+          <option value="bottom-right">Bottom right</option>
+        </Select>
+      </ActionFieldRow>
+      <ResultHandlersSubrows action={action} actionType="editValue" ctx={ctx} />
+    </>
+  );
+};
+
 const LoginUserEditor: EditorFor<'loginUser'> = ({ action, ctx }) => (
   <>
     <LoginFieldEditor
@@ -1025,6 +1310,44 @@ const ShowToastEditor: EditorFor<'showToast'> = ({ action, ctx }) => (
     )}
   </>
 );
+
+const DelayEditor: EditorFor<'delay'> = ({ action, ctx }) => (
+  <ActionFieldRow ctx={ctx} fieldKey="duration" schema={DURATION_SCHEMA} label="Duration (ms)">
+    <input
+      type="number"
+      className="cfg-prop-input"
+      min={0}
+      step={100}
+      value={action.duration ?? 500}
+      onChange={(e) => ctx.update({ duration: e.target.value === '' ? 0 : Number(e.target.value) })}
+    />
+  </ActionFieldRow>
+);
+
+const RUN_COMPONENT_ACTIONS_SCHEMA: SchemaField = { type: 'actions', label: 'Actions' };
+
+const RunComponentActionsEditor: EditorFor<'runComponentActions'> = ({ action, ctx }) => {
+  const widgetId = useContext(PanelScopeContext);
+  const path = [...ctx.path, 'property'];
+  const diagnostic = useFieldDiagnostic(widgetId, path);
+  return (
+    <PropRow
+      label="Actions"
+      selection={{ path, schema: RUN_COMPONENT_ACTIONS_SCHEMA }}
+      diagnostic={diagnostic}
+    >
+      <ComponentPropEditor
+        value={action.property ? { $componentProp: action.property } : undefined}
+        onChange={(v) =>
+          ctx.update({
+            property: (v as { $componentProp?: string } | undefined)?.$componentProp ?? '',
+          })
+        }
+        schema={RUN_COMPONENT_ACTIONS_SCHEMA}
+      />
+    </PropRow>
+  );
+};
 
 const ShowAlertEditor: EditorFor<'showAlert'> = ({ action, ctx }) => {
   const NestedActions = ctx.ActionsInput;
@@ -1155,15 +1478,20 @@ export const ACTION_EDITORS: ActionEditors = {
   openDialog: OpenDialogEditor,
   openPageOverlay: OpenPageOverlayEditor,
   closePageOverlay: ClosePageOverlayEditor,
+  navigateToPage: NavigateToPageEditor,
   writeDataVariable: WriteDataVariableEditor,
   toggleDataVariable: ToggleDataVariableEditor,
+  editValue: EditValueEditor,
   if: IfEditor,
   recipeLoad: RecipeLoadEditor,
   recipeSave: RecipeSaveEditor,
   loginUser: LoginUserEditor,
   logoutUser: LogoutUserEditor,
+  acknowledgeAllAlarms: () => null,
+  delay: DelayEditor,
   setLanguage: SetLanguageEditor,
   setActiveTheme: SetThemeEditor,
   showToast: ShowToastEditor,
   showAlert: ShowAlertEditor,
+  runComponentActions: RunComponentActionsEditor,
 };

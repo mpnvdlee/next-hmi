@@ -6,14 +6,12 @@ listeners**, so ``emit()`` is a no-op there and behaviour is unchanged.
 
 Mirrors the listener pattern ``datasource_manager`` already uses for alarms.
 
-Scope, deliberately: an event is only emitted where a **named actor already
+Scope: an event is only emitted where a **named actor already
 exists**. Config, page, theme, translation and widget-source edits are *not*
 audited, because they carry no per-user attribution — the instance app's
 ``config_api``/``theme_api``/``widgets_api`` have no auth of their own and are
 gated by the manager proxy's single shared password. Emitting an actor there
-would assert attribution the system cannot deliver, which is a finding in
-itself rather than partial credit. Closing that gap needs per-user editor
-authentication, which is a separate feature.
+would assert attribution the system cannot deliver.
 
 Where an actor *does* exist, it still may not be worth the same. So every event
 also says where its actor came from:
@@ -27,9 +25,7 @@ also says where its actor came from:
     dropping it would lose the only lead there is, but recorded *as a claim*.
 
 ``actor_source`` defaults to ``ACTOR_CLAIMED``: a call site that forgets to say
-then under-claims instead of over-claiming. A trail that overstates what it
-knows is worse than one that admits the gap — the same standard that keeps
-config edits out of the trail entirely.
+then under-claims instead of over-claiming.
 """
 from __future__ import annotations
 

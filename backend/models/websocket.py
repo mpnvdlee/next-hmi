@@ -63,9 +63,11 @@ class LogoutMessage(TypedDict, total=False):
 
 
 class RequestIdentityMessage(TypedDict, total=False):
-    """Client → server: auto-login the configured autoLoginName user."""
+    """Client → server: auto-login the configured autoLoginName user, or resume
+    the login `sessionToken` names when it is still valid."""
     type: Required[str]
     scope: Required[str]
+    sessionToken: str
 
 
 # ── Server → client message shapes (for documentation) ───────────────────────
@@ -124,6 +126,8 @@ class UserIdentityMessage(TypedDict, total=False):
     groups: Required[list[str]]
     groupLabels: Required[dict[str, str]]
     requestId: str
+    # Present while this identity is a resumable login (see request_identity).
+    sessionToken: str
 
 
 class AuthErrorMessage(TypedDict, total=False):
@@ -163,6 +167,7 @@ def build_user_identity(
     groups: list[str],
     group_labels: dict[str, str],
     request_id: str | None = None,
+    session_token: str | None = None,
 ) -> UserIdentityMessage:
     payload: UserIdentityMessage = {
         "type": "user_identity",
@@ -173,6 +178,8 @@ def build_user_identity(
     }
     if request_id:
         payload["requestId"] = request_id
+    if session_token:
+        payload["sessionToken"] = session_token
     return payload
 
 

@@ -21,13 +21,7 @@ function Fixture({
   popupClassName?: string;
 }) {
   return (
-    <Select
-      value={value}
-      onChange={onChange}
-      disabled={disabled}
-      popupClassName={popupClassName}
-      aria-label="Fruit"
-    >
+    <Select value={value} onChange={onChange} disabled={disabled} popupClassName={popupClassName}>
       <option value="apple">Apple</option>
       <option value="banana" disabled>
         Banana
@@ -39,7 +33,7 @@ function Fixture({
 }
 
 function trigger() {
-  return screen.getByRole('combobox', { name: 'Fruit' });
+  return screen.getByRole('combobox');
 }
 
 describe('Select', () => {
@@ -164,7 +158,7 @@ describe('Select', () => {
 
   it("leaves an aria-hidden decoration out of an option's typeahead string", () => {
     render(
-      <Select value="" onChange={vi.fn()} aria-label="Fruit">
+      <Select value="" onChange={vi.fn()}>
         <option value="browse">
           <span aria-hidden="true">?</span>
           Browse actions…
@@ -180,7 +174,7 @@ describe('Select', () => {
 
   it('keeps the outer heading when one optgroup nests inside another', () => {
     render(
-      <Select value="" onChange={vi.fn()} aria-label="Fruit">
+      <Select value="" onChange={vi.fn()}>
         <optgroup label="Dialogs">
           <optgroup label="Motors">
             <option value="m1">Motor detail</option>
@@ -236,7 +230,7 @@ describe('Select', () => {
 
     it('passes popupClassName to the portaled option list', () => {
       render(
-        <Select value="apple" onChange={vi.fn()} popupClassName="wide-menu" aria-label="Fruit">
+        <Select value="apple" onChange={vi.fn()} popupClassName="wide-menu">
           <option value="apple">Apple</option>
         </Select>,
       );
@@ -287,7 +281,7 @@ describe('Select', () => {
 
   it('shows the placeholder when no option matches the current value', () => {
     render(
-      <Select value="missing" onChange={vi.fn()} placeholder="Pick one" aria-label="Fruit">
+      <Select value="missing" onChange={vi.fn()} placeholder="Pick one">
         <option value="apple">Apple</option>
       </Select>,
     );

@@ -55,8 +55,8 @@ Architecture and deployment: [docs/dev/INDEX.md](../docs/dev/INDEX.md).
 
 ## Checks
 
-Run these before opening a pull request. CI runs the same checks when a release
-is tagged, not on each pull request, so a failure you miss here surfaces there.
+Run these before opening a pull request. CI runs the same checks on every pull
+request, and again when a release is tagged.
 
 ```bash
 # repo root, venv active
@@ -67,7 +67,7 @@ ruff check backend
 npm test -- --run        # `npm test` alone stays in watch mode
 npm run lint
 npm run format:check
-npm run build            # also type-checks
+npm run type-check
 npm run check:bundle-budget
 ```
 

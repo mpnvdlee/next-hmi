@@ -32,7 +32,7 @@ export default function PropertySourceBadge({ source, variant = 'pill' }: Props)
       ? 'cfg-field-group__badge-cap cfg-property-source-badge'
       : 'cfg-source-pill__abbr cfg-property-source-badge';
   return (
-    <span className={className} title={label} aria-label={label}>
+    <span className={className} title={label}>
       {source === 'mixed' ? mixedIcon : propertySourceIcons[source]}
     </span>
   );

@@ -66,6 +66,21 @@ describe('Label', () => {
     expect(el.style.getPropertyValue('--hmi-label-weight')).toBe('');
   });
 
+  it('overrides the text case only when one is picked', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <Label properties={{ text: 'a', typography: 'label', textTransform: 'none' }} />
+        <Label properties={{ text: 'b', textTransform: 'uppercase' }} />
+        <Label properties={{ text: 'c', textTransform: 'theme' }} />
+      </MemoryRouter>,
+    );
+    const [asTyped, upper, theme] = Array.from(container.children) as HTMLElement[];
+
+    expect(asTyped.style.getPropertyValue('--hmi-label-transform')).toBe('none');
+    expect(upper.style.getPropertyValue('--hmi-label-transform')).toBe('uppercase');
+    expect(theme.style.getPropertyValue('--hmi-label-transform')).toBe('');
+  });
+
   it('resolves the text through a property source', () => {
     render(
       <MemoryRouter>

@@ -24,7 +24,6 @@ interface SelectionDrawerProps<T> {
   /** What is being picked: "Add widget", "Select source". */
   action: string;
   searchPlaceholder: string;
-  searchAriaLabel: string;
   categories: SelectionDrawerCategory<T>[];
   itemKey(item: T): string;
   itemMatches(item: T, query: string): boolean;
@@ -33,6 +32,8 @@ interface SelectionDrawerProps<T> {
   emptyMessage(query: string): ReactNode;
   /** Screen edge the drawer is anchored to and slides in from. Defaults to 'right'. */
   side?: 'left' | 'right';
+  /** Extra header controls beside the search, such as a "Show all" checkbox. */
+  headerMeta?: ReactNode;
   onClose(): void;
 }
 
@@ -43,6 +44,8 @@ interface SelectionDrawerCardProps {
   /** Small label pinned to the card's top-right, beside the title. */
   badge?: ReactNode;
   selected?: boolean;
+  /** Listed but not pickable here. */
+  disabled?: boolean;
   className?: string;
   style?: CSSProperties;
   onClick(): void;
@@ -54,6 +57,7 @@ export function SelectionDrawerCard({
   description,
   badge,
   selected,
+  disabled,
   className = '',
   style,
   onClick,
@@ -68,6 +72,7 @@ export function SelectionDrawerCard({
       className={classes}
       style={style}
       aria-pressed={selected === undefined ? undefined : selected}
+      disabled={disabled}
       onClick={onClick}
     >
       <span className="cfg-selection-card__icon" aria-hidden="true">
@@ -85,7 +90,6 @@ export default function SelectionDrawer<T>({
   title,
   action,
   searchPlaceholder,
-  searchAriaLabel,
   categories,
   itemKey,
   itemMatches,
@@ -93,6 +97,7 @@ export default function SelectionDrawer<T>({
   onSelectItem,
   emptyMessage,
   side = 'right',
+  headerMeta,
   onClose,
 }: SelectionDrawerProps<T>) {
   const [query, setQuery] = useState('');
@@ -101,6 +106,9 @@ export default function SelectionDrawer<T>({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Map<string, HTMLElement>>(new Map());
+  // A rail click holds its category until the user scrolls: a section near the
+  // end cannot reach the top, and scroll-spy would hand the rail to one above it.
+  const railPickRef = useRef(false);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return categories;
@@ -129,7 +137,7 @@ export default function SelectionDrawer<T>({
           .filter((entry) => entry.isIntersecting)
           .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
         const top = visible[0]?.target.getAttribute('data-category');
-        if (top) setActiveCategory(top);
+        if (top && !railPickRef.current) setActiveCategory(top);
       },
       { root, rootMargin: '0px 0px -70% 0px', threshold: 0 },
     );
@@ -138,8 +146,13 @@ export default function SelectionDrawer<T>({
   }, [categoryKey]);
 
   const scrollToCategory = (category: string) => {
+    railPickRef.current = true;
     setActiveCategory(category);
     sectionRefs.current.get(category)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  };
+
+  const releaseRailPick = () => {
+    railPickRef.current = false;
   };
 
   const registerSectionCallbacks = useRef<Map<string, (element: HTMLElement | null) => void>>(
@@ -173,19 +186,22 @@ export default function SelectionDrawer<T>({
         className="cfg-selection-drawer__header"
         title={<PickerTitle context={title} action={action} />}
         search={query}
-        onSearchChange={setQuery}
+        onSearchChange={(next) => {
+          releaseRailPick();
+          setQuery(next);
+        }}
         onSearchEnter={() => {
           if (topItem) onSelectItem(topItem);
         }}
-        searchAriaLabel={searchAriaLabel}
         searchPlaceholder={searchPlaceholder}
         searchInputRef={searchInputRef}
+        meta={headerMeta}
         onClose={onClose}
       />
 
       <SearchHighlightProvider query={query}>
         <div className="cfg-selection-drawer__body">
-          <nav className="cfg-selection-drawer__rail" aria-label={`${action} categories`}>
+          <nav className="cfg-selection-drawer__rail">
             {filtered.map((category) => (
               <button
                 key={category.category}
@@ -203,7 +219,13 @@ export default function SelectionDrawer<T>({
             ))}
           </nav>
 
-          <div className="cfg-selection-drawer__scroll" ref={scrollRef}>
+          <div
+            className="cfg-selection-drawer__scroll"
+            ref={scrollRef}
+            onWheel={releaseRailPick}
+            onPointerDown={releaseRailPick}
+            onKeyDown={releaseRailPick}
+          >
             {filtered.length === 0 ? (
               <p className="cfg-selection-drawer__empty">{emptyMessage(query)}</p>
             ) : (

@@ -62,9 +62,21 @@ same canvas as any other page.
 The action decides how it looks — **size** (auto / small / medium / fullscreen / fixed
 pixels), **placement** (centred, edge-docked, or anchored to the button that opened it,
 popover-style), and whether the backdrop **dims**. See [Actions](actions.md#screens). The
-page itself carries the two settings that outlive a single opening, in its **Overlay**
-section: whether a **close button** shows, and whether clicking the backdrop closes it.
-Both are on unless you turn them off.
+page itself carries the settings that outlive a single opening, in its **Overlay**
+section: whether a **close button** shows, whether clicking the backdrop closes it, and
+whether that click **taps through**. With the backdrop set to *none*, a tap outside a
+popover then closes it *and* reaches whatever lies under it — tap the next machine
+symbol and its own popover opens in the same tap. All three are on unless you turn them
+off; a dimmed backdrop only ever closes.
+
+**Show header bar** in the same section hides the card's title strip, × included — for a
+keypad or an access panel that should be all content. The page then needs its own
+**Close Dialog/Overlay** button, unless a backdrop click closes it. It is on unless you
+turn it off, and it is the one Overlay setting a navigable page opened with **Open Page
+As Overlay** has too. On a page group the group's setting counts, not its pages'.
+
+**Opening a dialog that is already on top swaps its inputs.** The card stays, takes the
+new input parameters and moves to the new anchor, rather than stacking a second copy.
 
 **Parameters make one page serve many.** A page in the **Dialogs** folder declares
 **input parameters** in its own panel — the same mechanism a Component uses. Declare
@@ -74,6 +86,8 @@ motor on the plant instead of one page per machine. The values belong to the ove
 navigating inside it keeps them.
 
 Each parameter also takes a **default value**, which applies whenever nothing supplied one.
+A parameter of type **Page** gets a page picker in the Open Dialog action, and a
+**Navigate To Page** action inside the dialog can go to whatever page the caller picked.
 
 > [!NOTE]
 > **Input parameters and overlay settings appear only inside the Dialogs folder.** A page

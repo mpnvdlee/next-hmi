@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useConfigStore } from '@shared/store/configStore';
 import { usePanelExpansionStore } from '@config/store/panelExpansionStore';
@@ -10,6 +10,7 @@ import { makeDefaultAction } from './actionMutations';
 import ActionsInput from './ActionsInput';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
+import { ComponentPropertySchemaContext } from '../PropertySourceEditor/componentPropertySchemaContext';
 import { usePanelDiagnostics } from '@config/hooks/usePanelDiagnostics';
 import { apiJson } from '@shared/utils/api';
 import { stubIntersectionObserver } from '../../../../test-setup';
@@ -74,6 +75,19 @@ async function pick(
   await user.click(screen.getByRole('option', { name: optionName }));
 }
 
+/** Add opens the action drawer; click the card whose name starts with `label`.
+ *  `scope` narrows to one list's Add when nested lists render their own. */
+async function addAction(
+  user: ReturnType<typeof userEvent.setup>,
+  label: string,
+  scope: HTMLElement = document.body,
+): Promise<void> {
+  await user.click(within(scope).getByTitle('Add action'));
+  await user.click(screen.getByRole('button', { name: (name) => name.startsWith(label) }));
+}
+
+beforeAll(stubIntersectionObserver);
+
 function Harness({
   initial,
   onChangeSpy,
@@ -105,24 +119,25 @@ function Harness({
 describe('ActionsInput — full discriminator sweep', () => {
   beforeEach(setupStores);
 
-  it('lists every ButtonAction discriminator in the Add dropdown', async () => {
+  it('lists every ButtonAction discriminator in the drawer Add opens', async () => {
     const user = userEvent.setup();
     render(<Harness onChangeSpy={vi.fn()} />);
-    await user.click(screen.getByRole('combobox'));
+    await user.click(screen.getByTitle('Add action'));
 
-    const options = screen.getAllByRole('option').map((o) => o.textContent);
     for (const { label } of ACTION_TYPES) {
-      expect(options).toContain(label);
+      expect(
+        screen.getByRole('button', { name: (name) => name.startsWith(label) }),
+      ).toBeInTheDocument();
     }
   });
 
   it.each(ACTION_TYPES)(
-    'constructs the documented default payload for "$type" via the Add dropdown',
+    'constructs the documented default payload for "$type" via the drawer',
     async ({ type, label }) => {
       const onChangeSpy = vi.fn();
       const user = userEvent.setup();
       render(<Harness onChangeSpy={onChangeSpy} />);
-      await pick(user, screen.getByRole('combobox'), label);
+      await addAction(user, label);
 
       const expected = makeDefaultAction(type, { overlayTargets: overlayTargetsFromStore() });
       expect(onChangeSpy).toHaveBeenCalledWith({ onPress: [expected] });
@@ -130,19 +145,68 @@ describe('ActionsInput — full discriminator sweep', () => {
   );
 });
 
+describe('ActionsInput — paste', () => {
+  beforeEach(setupStores);
+
+  it('appends a copied action with the drawer’s Paste action button', async () => {
+    const existing: ButtonAction = { type: 'logoutUser' };
+    const copied: ButtonAction = {
+      type: 'showToast',
+      message: 'Hi',
+      severity: 'info',
+      discard: 'auto',
+    };
+    const onChangeSpy = vi.fn();
+    // userEvent.setup() installs the clipboard stub the paste reads from.
+    const user = userEvent.setup();
+    await navigator.clipboard.writeText(JSON.stringify({ $static: copied }));
+    render(<Harness initial={{ onPress: [existing] }} onChangeSpy={onChangeSpy} />);
+    await user.click(screen.getByTitle('Add action'));
+    await user.click(screen.getByRole('button', { name: 'Paste action' }));
+
+    await waitFor(() => expect(onChangeSpy).toHaveBeenCalledWith({ onPress: [existing, copied] }));
+    expect(screen.queryByRole('heading', { name: /Add action/ })).not.toBeInTheDocument();
+  });
+
+  it('appends a copied action pasted with Ctrl+V in the drawer', async () => {
+    const copied: ButtonAction = { type: 'logoutUser' };
+    const onChangeSpy = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onChangeSpy={onChangeSpy} />);
+    await user.click(screen.getByTitle('Add action'));
+
+    fireEvent.paste(screen.getByRole('searchbox'), {
+      clipboardData: { getData: () => JSON.stringify({ $static: copied }) },
+    });
+
+    expect(onChangeSpy).toHaveBeenCalledWith({ onPress: [copied] });
+    expect(screen.queryByRole('heading', { name: /Add action/ })).not.toBeInTheDocument();
+  });
+
+  it('leaves plain text pasted into the drawer’s search to the search', async () => {
+    const onChangeSpy = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onChangeSpy={onChangeSpy} />);
+    await user.click(screen.getByTitle('Add action'));
+
+    fireEvent.paste(screen.getByRole('searchbox'), {
+      clipboardData: { getData: () => 'toast' },
+    });
+
+    expect(onChangeSpy).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: /Add action/ })).toBeInTheDocument();
+  });
+});
+
 describe('ActionsInput — browse drawer', () => {
   beforeEach(setupStores);
 
   beforeAll(stubIntersectionObserver);
 
-  it('leads the Add dropdown with a browse row that opens the categorised drawer', async () => {
+  it('opens the categorised drawer straight from Add', async () => {
     const user = userEvent.setup();
     render(<Harness onChangeSpy={vi.fn()} />);
-    await user.click(screen.getByRole('combobox'));
-
-    const [first] = screen.getAllByRole('option');
-    expect(first).toHaveAccessibleName('Browse actions…');
-    await user.click(first);
+    await user.click(screen.getByTitle('Add action'));
 
     expect(screen.getByRole('heading', { name: /Add action/ })).toBeInTheDocument();
     for (const category of ['Screens', 'Machine', 'Session', 'Interface']) {
@@ -150,11 +214,22 @@ describe('ActionsInput — browse drawer', () => {
     }
   });
 
+  it('closes the drawer on Escape without adding anything', async () => {
+    const onChangeSpy = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onChangeSpy={onChangeSpy} />);
+    await user.click(screen.getByTitle('Add action'));
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('heading', { name: /Add action/ })).not.toBeInTheDocument();
+    expect(onChangeSpy).not.toHaveBeenCalled();
+  });
+
   it('adds the action picked in the drawer and closes it', async () => {
     const onChangeSpy = vi.fn();
     const user = userEvent.setup();
     render(<Harness onChangeSpy={onChangeSpy} />);
-    await pick(user, screen.getByRole('combobox'), 'Browse actions…');
+    await user.click(screen.getByTitle('Add action'));
     await user.click(screen.getByRole('button', { name: /Show Toast/ }));
 
     expect(onChangeSpy).toHaveBeenCalledWith({
@@ -167,9 +242,9 @@ describe('ActionsInput — browse drawer', () => {
     const onChangeSpy = vi.fn();
     const user = userEvent.setup();
     render(<Harness onChangeSpy={onChangeSpy} />);
-    await pick(user, screen.getByRole('combobox'), 'Browse actions…');
+    await user.click(screen.getByTitle('Add action'));
 
-    const search = screen.getByRole('searchbox', { name: 'Search actions' });
+    const search = screen.getByRole('searchbox');
     fireEvent.change(search, { target: { value: 'theme' } });
     fireEvent.keyDown(search, { key: 'Enter' });
 
@@ -186,7 +261,7 @@ describe('ActionsInput — page-overlay routing', () => {
     const onChangeSpy = vi.fn();
     const user = userEvent.setup();
     render(<Harness onChangeSpy={onChangeSpy} />);
-    await pick(user, screen.getByRole('combobox'), 'Open Dialog');
+    await addAction(user, 'Open Dialog');
 
     expect(onChangeSpy).toHaveBeenLastCalledWith({
       onPress: [
@@ -234,7 +309,7 @@ describe('ActionsInput — page-overlay routing', () => {
     const onChangeSpy = vi.fn();
     const user = userEvent.setup();
     render(<Harness onChangeSpy={onChangeSpy} />);
-    await pick(user, screen.getByRole('combobox'), 'Open Page As Overlay');
+    await addAction(user, 'Open Page As Overlay');
 
     expect(onChangeSpy).toHaveBeenLastCalledWith({
       onPress: [{ type: 'openPageOverlay', pageId: 'page1', size: 'medium', placement: 'center' }],
@@ -251,7 +326,7 @@ describe('ActionsInput — page-overlay routing', () => {
     const onChangeSpy = vi.fn();
     const user = userEvent.setup();
     render(<Harness onChangeSpy={onChangeSpy} />);
-    await pick(user, screen.getByRole('combobox'), 'Close Dialog/Overlay');
+    await addAction(user, 'Close Dialog/Overlay');
     expect(onChangeSpy).toHaveBeenLastCalledWith({ onPress: [{ type: 'closePageOverlay' }] });
 
     await pick(user, within(fieldGroup('Page')).getByRole('combobox'), 'Home');
@@ -268,7 +343,7 @@ describe('ActionsInput — showToast arguments', () => {
     const onChangeSpy = vi.fn();
     const user = userEvent.setup();
     render(<Harness onChangeSpy={onChangeSpy} />);
-    await pick(user, screen.getByRole('combobox'), 'Show Toast');
+    await addAction(user, 'Show Toast');
 
     expect(onChangeSpy).toHaveBeenLastCalledWith({
       onPress: [
@@ -319,14 +394,13 @@ describe('ActionsInput — nested result handlers', () => {
     const onChangeSpy = vi.fn();
     const user = userEvent.setup();
     render(<Harness onChangeSpy={onChangeSpy} />);
-    await pick(user, screen.getByRole('combobox'), 'Write Data Variable');
+    await addAction(user, 'Write Data Variable');
 
     expect(screen.getByText('On Success')).toBeInTheDocument();
     expect(screen.getByText('On Failed')).toBeInTheDocument();
     expect(screen.getByText('On Settled')).toBeInTheDocument();
 
-    const onSuccessAdd = within(actionsGroup('On Success')).getByRole('combobox');
-    await pick(user, onSuccessAdd, 'Logout User');
+    await addAction(user, 'Logout User', actionsGroup('On Success'));
 
     const calls = onChangeSpy.mock.calls;
     const last = calls[calls.length - 1]?.[0] as ActionsConfig;
@@ -341,12 +415,12 @@ describe('ActionsInput — nested result handlers', () => {
     const onChangeSpy = vi.fn();
     const user = userEvent.setup();
     render(<Harness onChangeSpy={onChangeSpy} />);
-    await pick(user, screen.getByRole('combobox'), 'Show Alert');
+    await addAction(user, 'Show Alert');
 
     expect(screen.getByText('On Cancel')).toBeInTheDocument();
     expect(screen.getByText('On OK')).toBeInTheDocument();
 
-    await pick(user, within(actionsGroup('On OK')).getByRole('combobox'), 'Set Theme');
+    await addAction(user, 'Set Theme', actionsGroup('On OK'));
     const calls = onChangeSpy.mock.calls;
     const last = calls[calls.length - 1]?.[0] as ActionsConfig;
     const alertAction = last.onPress?.[0] as Extract<ButtonAction, { type: 'showAlert' }>;
@@ -361,7 +435,7 @@ describe('ActionsInput — nested result handlers', () => {
     // onFailed/onSettled slot — the component gates on ctx.resultFields alone,
     // not on actual nesting depth.
     render(<Harness onChangeSpy={onChangeSpy} resultFields={['username']} />);
-    await pick(user, screen.getByRole('combobox'), 'Login User');
+    await addAction(user, 'Login User');
     expect(screen.getByText('Username')).toBeInTheDocument();
   });
 });
@@ -389,7 +463,7 @@ describe('ActionsInput — invalid payload recovery', () => {
     const malformed = { type: 'bogusAction' } as unknown as ButtonAction;
     render(<Harness onChangeSpy={onChangeSpy} initial={{ onPress: [malformed] }} />);
 
-    await pick(user, screen.getByRole('combobox'), 'Logout User');
+    await addAction(user, 'Logout User');
     expect(onChangeSpy).toHaveBeenLastCalledWith({
       onPress: [malformed, { type: 'logoutUser' }],
     });
@@ -458,6 +532,49 @@ describe('ActionsInput — write target', () => {
     });
   });
 
+  it('summarises a bound index as path[…] and replaces it with the element the picker picks', async () => {
+    const onChangeSpy = vi.fn();
+    const user = userEvent.setup();
+    const toggle: ButtonAction = {
+      type: 'toggleDataVariable',
+      target: { $var: { path: 'PLC:Open', index: { $componentProp: 'device' } } },
+    };
+    render(<Harness onChangeSpy={onChangeSpy} initial={{ onPress: [toggle] }} />);
+    expect(document.body).toHaveTextContent('Toggle PLC:Open[…]');
+
+    await user.click(screen.getByTitle('Expand'));
+    await user.click(screen.getByTitle('Change variable binding'));
+    const target = useEditorDomainStore.getState().bindingPickerTarget;
+    expect(target?.currentBinding).toEqual({ path: 'PLC:Open' });
+    target?.onPick?.({ path: 'PLC:Open' }, { dataType: 'Boolean', isArray: true, index: 2 });
+
+    expect(onChangeSpy).toHaveBeenLastCalledWith({
+      onPress: [{ ...toggle, target: { $var: { path: 'PLC:Open[2]' } } }],
+    });
+  });
+
+  it('keeps a bound index when the picker confirms the same array, and resets the value for an element', async () => {
+    const onChangeSpy = vi.fn();
+    const user = userEvent.setup();
+    const write: ButtonAction = {
+      type: 'writeDataVariable',
+      target: { $var: { path: 'PLC:Steps', index: { $componentProp: 'device' } } },
+      value: 42,
+    };
+    render(<Harness onChangeSpy={onChangeSpy} initial={{ onPress: [write] }} />);
+
+    await user.click(screen.getByTitle('Expand'));
+    await user.click(screen.getByTitle('Change variable binding'));
+    const target = useEditorDomainStore.getState().bindingPickerTarget;
+    target?.onPick?.({ path: 'PLC:Steps' }, { dataType: 'Int16', isArray: true });
+    expect(onChangeSpy).not.toHaveBeenCalled();
+
+    target?.onPick?.({ path: 'PLC:Steps' }, { dataType: 'Int16', isArray: true, index: 2 });
+    expect(onChangeSpy).toHaveBeenLastCalledWith({
+      onPress: [{ ...write, target: { $var: { path: 'PLC:Steps[2]' } }, value: 0 }],
+    });
+  });
+
   it('marks the action row and its Variable row when the backend rejects the target', async () => {
     mockedApiJson.mockResolvedValue({
       diagnostics: [
@@ -496,5 +613,69 @@ describe('ActionsInput — write target', () => {
     // Expanded: the Variable row owning the target gets the full error mark.
     await user.click(screen.getByTitle('Expand'));
     expect(fieldGroup('Variable')).toHaveClass('cfg-field-group--invalid');
+  });
+});
+
+describe('ActionsInput — Navigate To Page in a dialog', () => {
+  beforeEach(setupStores);
+  afterEach(() => useEditorDomainStore.getState().closeBindingPicker());
+
+  it('offers only the input parameters of type Page', async () => {
+    const user = userEvent.setup();
+    const inputs = {
+      properties: {
+        target: { type: 'string', format: 'page', label: 'Target' },
+        title: { type: 'string', label: 'Title' },
+      },
+    };
+    render(
+      <ComponentPropertySchemaContext.Provider value={inputs}>
+        <Harness
+          onChangeSpy={vi.fn()}
+          initial={{ onPress: [{ type: 'navigateToPage', pageId: { $componentProp: '' } }] }}
+        />
+      </ComponentPropertySchemaContext.Provider>,
+    );
+
+    await user.click(screen.getByTitle('Expand'));
+    await user.click(screen.getByRole('button', { name: 'Select component property' }));
+
+    const source = useEditorDomainStore.getState().bindingPickerTarget?.componentPropSource;
+    expect(Object.keys(source?.properties ?? {})).toEqual(['target']);
+  });
+});
+
+describe('ActionsInput — a write target inside a component', () => {
+  beforeEach(setupStores);
+  afterEach(() => useEditorDomainStore.getState().closeBindingPicker());
+
+  it('targets an input parameter the instance fills with a writable variable', async () => {
+    const user = userEvent.setup();
+    const onChangeSpy = vi.fn();
+    const inputs = {
+      properties: {
+        value: { type: 'float', label: 'Value', write: true },
+        label: { type: 'string', label: 'Name' },
+      },
+    };
+    render(
+      <ComponentPropertySchemaContext.Provider value={inputs}>
+        <Harness
+          onChangeSpy={onChangeSpy}
+          initial={{ onPress: [{ type: 'editValue', target: { $componentProp: '' } }] }}
+        />
+      </ComponentPropertySchemaContext.Provider>,
+    );
+
+    await user.click(screen.getByTitle('Expand'));
+    await user.click(screen.getByRole('button', { name: 'Select component property' }));
+
+    const source = useEditorDomainStore.getState().bindingPickerTarget?.componentPropSource;
+    expect(source?.write).toBe(true);
+    expect(source?.fieldType).toEqual(['Integer', 'Float']);
+    act(() => source?.onPick('value'));
+    expect(onChangeSpy).toHaveBeenLastCalledWith({
+      onPress: [{ type: 'editValue', target: { $componentProp: 'value' } }],
+    });
   });
 });

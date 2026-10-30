@@ -64,7 +64,7 @@ describe('PropertySourceSelector', () => {
     fireEvent.click(screen.getByRole('button', { name: /Static/ }));
     fireEvent.click(screen.getByRole('button', { name: /Browse property sources/ }));
 
-    const search = screen.getByRole('searchbox', { name: 'Search property sources' });
+    const search = screen.getByRole('searchbox');
     fireEvent.change(search, { target: { value: 'Localizable' } });
     fireEvent.keyDown(search, { key: 'Enter' });
 
@@ -92,6 +92,31 @@ describe('PropertySourceSelector', () => {
     expect(screen.getByRole('button', { name: /If Condition/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Comparison/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Static Value/ })).not.toBeInTheDocument();
+  });
+
+  it('shows each source its types, and under Show all lists the refused ones disabled', () => {
+    const onChange = vi.fn();
+    render(
+      <PropertySourceSelector
+        value={{ $var: { path: '' } }}
+        onChange={onChange}
+        fieldType="boolean"
+        forcedSources={['$var', '$if']}
+        includeStatic={false}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Variable/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Browse property sources/ }));
+
+    expect(screen.getByRole('button', { name: /If Condition.*Any/ })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /Formula/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /Show all/ }));
+    const formula = screen.getByRole('button', { name: /Formula.*Not available/ });
+    expect(formula).toBeDisabled();
+    fireEvent.click(formula);
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('offers on a union field the sources any of its types takes', () => {

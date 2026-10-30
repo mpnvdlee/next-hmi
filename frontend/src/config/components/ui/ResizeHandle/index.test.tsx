@@ -240,14 +240,13 @@ describe('ResizeHandle', () => {
     expect(onResizeEnd).toHaveBeenCalledWith(340);
   });
 
-  it('exposes itself as a separator for assistive tech', () => {
+  it('exposes itself as a separator', () => {
     const { container } = render(
-      <ResizeHandle width={300} onResize={vi.fn()} min={200} max={600} label="Resize left panel" />,
+      <ResizeHandle width={300} onResize={vi.fn()} min={200} max={600} />,
     );
     const handle = container.querySelector('.cfg-resize-handle')!;
 
     expect(handle).toHaveAttribute('role', 'separator');
-    expect(handle).toHaveAttribute('aria-label', 'Resize left panel');
     expect(handle).toHaveAttribute('aria-valuenow', '300');
     expect(handle).toHaveAttribute('aria-valuemin', '200');
     expect(handle).toHaveAttribute('aria-valuemax', '600');

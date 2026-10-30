@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { act, render } from '@testing-library/react';
 import { useVariableStore } from '../store/variableStore';
-import { useWebSocket } from './useWebSocket';
+import { setBackendRestartHandler, useWebSocket } from './useWebSocket';
 
 /** A WebSocket that never touches the network and fires its events on demand. */
 class FakeSocket {
@@ -32,6 +32,10 @@ class FakeSocket {
   open(): void {
     this.readyState = FakeSocket.OPEN;
     this.onopen?.();
+  }
+
+  receive(msg: unknown): void {
+    this.onmessage?.({ data: JSON.stringify(msg) } as MessageEvent);
   }
 
   fireClose(): void {
@@ -93,6 +97,34 @@ describe('useWebSocket', () => {
 
     expect(useVariableStore.getState().wsConnected).toBe(false);
     expect(useVariableStore.getState().opcuaConnected).toEqual({});
+  });
+
+  it('calls the restart handler only when a reconnect reaches a different backend', () => {
+    vi.useFakeTimers();
+    const onRestart = vi.fn();
+    setBackendRestartHandler(onRestart);
+    try {
+      render(<Probe />);
+      const reconnect = (bootId: string) => {
+        const socket = FakeSocket.instances[FakeSocket.instances.length - 1];
+        act(() => socket.open());
+        act(() => socket.receive({ type: 'var_snapshot', values: {}, bootId }));
+        act(() => socket.fireClose());
+        act(() => {
+          vi.advanceTimersByTime(20_000);
+        });
+      };
+
+      reconnect('boot-a');
+      reconnect('boot-a');
+      expect(onRestart).not.toHaveBeenCalled();
+
+      reconnect('boot-b');
+      expect(onRestart).toHaveBeenCalledTimes(1);
+    } finally {
+      setBackendRestartHandler(null);
+      vi.useRealTimers();
+    }
   });
 
   it('reconnects after the live socket closes', () => {

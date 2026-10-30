@@ -413,18 +413,9 @@ export function LayoutFields({
     // a mode no read can resolve.
     if (reachableSizeKeys(effectiveMode).length) return renderRow(f, schemaFor(f));
 
-    // Only the two deriving modes reach here — every other mode, unreadable
-    // ones included, keeps its length reachable above.
-    const derivedBy = effectiveMode === 'fill' ? 'Fill' : 'Hug';
     return (
       <PropRow key={f.key} label={SIZE_LABELS[axis]} sourceless>
-        <input
-          className="cfg-prop-input cfg-prop-input--hint"
-          value="—"
-          readOnly
-          disabled
-          aria-label={`${SIZE_LABELS[axis]} (set by ${derivedBy})`}
-        />
+        <input className="cfg-prop-input cfg-prop-input--hint" value="—" readOnly disabled />
       </PropRow>
     );
   }

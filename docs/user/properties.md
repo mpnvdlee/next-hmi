@@ -30,12 +30,13 @@ Any of these can also be an **array**. An optional *format* refines the editor w
 | `$switch` | flexible | One of many values chosen by a key. |
 | `$widgetProp` | flexible | A value exported by a sibling widget on the page. |
 | `$componentProp` | flexible | A value passed in from outside — by the parent component, or by the **Open Dialog** action that opened this dialog. |
+| `$overlay` | flexible | An input of a dialog while it is open, empty once it closes — so a symbol can light up while its own popover shows: compare `$overlay` (dialog *device*, input *device*) with the symbol's number. |
 | `$result` | flexible | A field of an action's result (in its handlers only). |
 | `$repeatItem` | flexible | The element a Repeater copy draws, one member of it, or its index (inside a Repeater only). |
 | `$http` | flexible | A value picked out of an HTTP API response. |
 | `$loc` · `$stringExpr` | String | Translated text, or a template like `Tank {1} of {2}`. |
-| `$compare` · `$not` · `$pageIsActive` · `$userGroups` | Boolean | A comparison result, the opposite of another boolean, whether a page is active, or whether the signed-in user is in one of the listed groups. |
-| `$formula` | Float | A number calculated from other values, like `({1} - 32) / 1.8` — `+ - * /` and parentheses. Empty when an input is missing or you divide by zero. |
+| `$compare` · `$not` · `$and` · `$or` · `$pageIsActive` · `$userGroups` | Boolean | A comparison result, the opposite of another boolean, whether every (**AND**) or any (**OR**) condition in a list is true, whether a page is active, or whether the signed-in user is in one of the listed groups. |
+| `$formula` | Float / Integer | A number calculated from other values, like `({1} - 32) / 1.8` — `+ - * /` and parentheses. Empty when an input is missing or you divide by zero. **Round to a whole number** makes it an Integer; it is on from the start on a property that takes whole numbers. As the value of a **Write Data Variable** it can also go into an Integer tag: a whole result is written, a fraction is refused with `invalid_value`, as any number with decimals is. |
 | `$user` | String / String[] | The signed-in user's name or groups, or the list of all users. |
 | `$device` · `$urlParam` | String | This machine's identity (hostname, IP, MAC), or a parameter from the page URL. |
 | `$viewport` | String / Integer | Screen size class, orientation, width, height. |
@@ -110,15 +111,16 @@ A placeholder may wrap its value in transform functions, applied inside-out:
 | Function | Does |
 |---|---|
 | `ToLower` · `ToUpper` · `Capitalize` · `Trim` | Case and whitespace. |
-| `Round` · `Round1` · `Round2` | Nearest integer, or one / two decimals. |
-| `Thousands` | Digit grouping — `41280` → `41,280`. |
+| `Round` · `Round1` · `Round2` · `Round3` · `Round4` | Nearest integer, or one to four decimals. |
+| `Thousands` | Digit grouping — `41280` → `41,280`. It keeps the decimals its input has: `{Thousands(Round1(1))}` → `41,280.0`. |
+| `Signed` | Always show the sign — `6` → `+6`, `-4` → `−4`, `0` stays `0`. Put it outermost so it keeps the decimals of an inner round: `{Signed(Round1(1))}` → `+6.0`. |
 
 A placeholder whose wildcard is missing is left in the text as-is, so a typo shows up on screen rather than silently blanking the label.
 
-The **template itself is literal text** — it is not a bindable property. To keep a
-templated line translatable, put the words in the wildcards (`$loc`) and leave
-only structure and punctuation in the template: `"{1}: {Round1(2)} °C"` with
-wildcard `1` a `$loc`. See [Translations](translations.md#use-a-translation-on-a-screen).
+The **template itself is literal text** — it is not translated. For a sentence
+that must read naturally in every language, use **Localizable Text** instead:
+its phrase holds the `{1}`, `{2}` placeholders and each language orders them
+itself. See [Translations](translations.md#use-a-translation-on-a-screen).
 
 ## Passing values into components
 
@@ -126,14 +128,24 @@ A reusable **Component** declares **input properties** the parent fills in. Insi
 
 Both reads are typed. The `$componentProp` and `$widgetProp` pickers judge each input or exported value against the field it would fill, exactly as the variable picker judges a tag — one that does not fit is marked ✗ and cannot be confirmed — and the value an instance puts into an input is checked against the input's type like any widget property. The warnings pill flags a stored read or value that does not fit.
 
+An action inside the component can write through an input, too. Declare the input with **write** access — a **Float** input `value` with write ticked, say — and set the action's **Variable** row (Write Data Variable, Toggle Boolean Variable, Edit Value) to the input's source pill: the action writes whatever variable the instance passed in. One parameter-row component with an **Edit Value** button then edits a different setpoint per instance. The picker lists only inputs declared writable with a type the action writes, and the warnings pill flags one that is not. In the file:
+
+```json
+{ "type": "editValue", "target": { "$componentProp": "value" } }
+```
+
+The same works in a dialog, on an input parameter the opener fills with a variable.
+
 Each input can carry a **description** (one line shown under the field) and a **default value**, used wherever an instance leaves the property empty — the default is what the component really renders with, not just an editor hint.
+
+An input of type **Page** holds a page from the **Pages** section: whoever places the component picks it from a page picker, and a **Navigate To Page** inside the component goes to it, so one station card can lead each instance to its own station page. The warnings pill flags a page in the Dialogs folder or one that no longer exists. In the file it is `{ "type": "string", "label": "Target", "format": "page" }`.
 
 An input of type **Select (enum)** gives whoever places the component a fixed list of choices instead of a free field. **Option values** decides what a choice actually hands over: **String**, **Integer**, **Float**, **Boolean** or **Localisable text**. Pick the kind that matches what the component does with it — a size list should pass a real number, a caption list a translation — so the value arrives usable rather than as text that has to be read back as a number. Change the kind later and the option labels stay put while their values clear, since a value written for the old kind means nothing under the new one.
 
 Pages and page groups declare their **input parameters** in the same panel (see [Pages](pages.md)), so the option kinds apply there too.
 
 > [!IMPORTANT]
-> **`$componentProp` has to be the whole value of a property.** Use it directly — a Label's **Text** set to `$componentProp: title` — and it stays live. Bury it inside another source (as one arm of an `$if`, a wildcard of a string expression) or put it on a **Layout** field, and it fills in once and then stops updating. The warnings pill flags this. Do the thinking on the *instance* instead: the instance may bind `$var`, compare, format — then pass the finished value in through a plain `$componentProp`.
+> **`$componentProp` has to be the whole value of a property.** Use it directly — a Label's **Text** set to `$componentProp: title` — and it stays live. Bury it inside another source (as one arm of an `$if`, a wildcard of a string expression) or put it on a **Layout** field, and it fills in once and then stops updating. The warnings pill flags this. Actions are the exception: an action reads its fields when it fires, so inside an action list — an Edit Value **Title** of `Set {1}` with `{1}` the input, a Show Toast message — the input can sit anywhere and is always current. Elsewhere, do the thinking on the *instance* instead: the instance may bind `$var`, compare, format — then pass the finished value in through a plain `$componentProp`.
 
 ### Passing widgets into a component (slots)
 
@@ -159,7 +171,11 @@ A **Repeater** draws the widgets inside it once for every element of an array �
 2. **Design one copy** — Put the widgets for a single element inside the Repeater, laid out the way one element should look. The Repeater's **Layout** decides how the copies line up (row, column, wrapping, gap).
 3. **Bind to the element** — Inside, pick **Repeat Item** as a property's source and open its picker: the whole **Element**, one of its **members** (a struct field like `Speed`, or `label` / `value` of a typed-in list), or its **Index** (0 for the first). Like the variable picker it lists only what fits the property unless **Show all** is ticked. An API response or the saved recipes has a shape only the runtime knows, so for those you type the member's name into the field instead. A typed-in list's members take their type from what you typed: text is a String, Yes/No a Boolean, a whole number an Integer and a number with decimals a Float — so a Float property takes a `value` column only once one of its numbers has decimals. With the **Variable** source instead, every array in the picker gets a **[#] this copy** row that reads that array at the copy's position, the way `[2]` reads element 2: names next to setpoints. Typing `PLC:Names[#]` does the same.
 
+**An icon or image per copy.** Set the Icon's (or Image's) own source to **Repeat Item** and pick the member that holds it: a built-in icon name (`warning`) or an asset path (`icons/door.svg`). That works whatever Items is — a tag array of String, a typed-in list, an API response. Hand-written files may instead put the Repeat item inside a fixed icon, `{ "$static": { "type": "custom", "path": { "$repeatItem": { "member": "icon" } } } }`; that fills in only when Items is a list of values, and the warnings pill flags it over a tag.
+
 Each copy reads its own element. When Items is a tag, a copy's inputs write back to their own element too: a Switch bound to **Repeat Item** writes `Enables[3]` in the fourth copy, and **Write Data Variable** / **Toggle Boolean Variable** can switch their target to **Repeat Item**: always the copy's own element, or the member you pick of a struct element. Lists, API responses, recipes and users are read-only.
+
+Inside an **Image Container**, **Place copies: At item x / y** draws each copy at the point its element names instead of in a row — see [Place one design many times from a list](layout.md#place-one-design-many-times-from-a-list).
 
 **Start at** and **Max items** show part of the array — the first ten, or a page of it. **Empty text** is shown when there is nothing to draw.
 
@@ -191,6 +207,7 @@ appears as soon as the request completes, and again on every refresh.
 ## Coercion, in short
 
 - **A variable must match the field's type exactly.** A `Float` field takes no `Integer` tag and a `String` field no `Boolean` one; the binding picker will not confirm a tag that does not fit. A field that takes either lists both types.
+- **A field that writes back takes only a tag.** A value field that a control writes to — a Button Row's value, a Video's state variable — offers just the **Variable** source (or Repeat Item / an input property standing in for one): no fixed value, formula or condition, since the control would have nothing to write to.
 - **A widget reading a number** takes a number as-is, and text only when it is a clean decimal number (`"42"`, `"-1.5"`); anything else is *absent* and the field falls back. Nothing is rounded.
 - **A widget reading text** turns a number or a boolean into its plain text (`3.5`, `true`); decimals and units are the widget's own formatting.
 - Impossible bindings (image → Float) are rejected by the editor at bind time — never at runtime.

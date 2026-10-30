@@ -726,7 +726,8 @@ async def _pump_websocket(client: WebSocket, upstream) -> None:
     _done, pending = await asyncio.wait({c2u, u2c}, return_when=asyncio.FIRST_COMPLETED)
     for task in pending:
         task.cancel()
-    await asyncio.gather(*pending, return_exceptions=True)
+    # Gather both: a finished task's disconnect error must be retrieved too, or asyncio logs it.
+    await asyncio.gather(c2u, u2c, return_exceptions=True)
     with suppress(Exception):
         await upstream.close()
 

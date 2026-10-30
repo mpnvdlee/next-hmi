@@ -33,7 +33,6 @@ interface PickerDrawerHeaderProps {
   onSearchChange: (value: string) => void;
   onSearchEnter?: () => void;
   searchPlaceholder: string;
-  searchAriaLabel: string;
   searchInputRef: RefObject<HTMLInputElement | null>;
   /** Filter toggles / counts, shown in the row before the search input. */
   meta?: ReactNode;
@@ -49,7 +48,6 @@ export default function PickerDrawerHeader({
   onSearchChange,
   onSearchEnter,
   searchPlaceholder,
-  searchAriaLabel,
   searchInputRef,
   meta,
   onClose,
@@ -68,7 +66,6 @@ export default function PickerDrawerHeader({
           value={search}
           onChange={onSearchChange}
           onEnter={onSearchEnter}
-          ariaLabel={searchAriaLabel}
           placeholder={searchPlaceholder}
         />
       </div>

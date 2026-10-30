@@ -16,14 +16,22 @@ import AlarmDetailCard from '@hmi/components/AlarmDetailDialog/AlarmDetailCard';
 import { assetUrl } from '../../editor/assetPickerUtils';
 import { resolveAlarmString, resolveAlarmImage, findAlarm } from '../alarmDisplayUtils';
 import { useTranslationStore } from '@shared/store/translationStore';
+import { formatAlarmValues } from '@hmi/components/alarmUtils';
+import { useLiveScalars } from '@hmi/hooks/useLiveScalars';
+import { extractVarKeys } from '@hmi/utils/extractVarKeys';
 
 interface Props {
   config: AlarmConfig;
   selection: AlarmSelection;
 }
 
+/** Alarm text with its `{n}` placeholders filled live, as an active alarm shows them. */
+function alarmString(alarm: AlarmDefinition, value: unknown): string {
+  return formatAlarmValues(resolveAlarmString(value), undefined, alarm.values);
+}
+
 function alarmTitle(alarm: AlarmDefinition): string {
-  return resolveAlarmString(alarm.title) || 'Untitled';
+  return alarmString(alarm, alarm.title) || 'Untitled';
 }
 
 function ToastPreview({ alarm }: { alarm: AlarmDefinition }) {
@@ -31,7 +39,13 @@ function ToastPreview({ alarm }: { alarm: AlarmDefinition }) {
     <div className="cfg-alarm-preview__section">
       <div className="cfg-alarm-preview__label">Popup notification</div>
       <div className="cfg-alarm-preview__toast">
-        <AlarmToastCard level={alarm.level} code={alarm.code} title={alarmTitle(alarm)} disabled />
+        <AlarmToastCard
+          level={alarm.level}
+          code={alarm.code}
+          title={alarmTitle(alarm)}
+          disabled
+          ackable={alarm.ack_required !== false}
+        />
       </div>
       {!alarm.auto_popup && (
         <div className="cfg-alarm-preview__note">
@@ -58,11 +72,11 @@ function DetailPreview({ alarm }: { alarm: AlarmDefinition }) {
           code={alarm.code}
           title={alarmTitle(alarm)}
           imageSrc={image ? assetUrl(image) : undefined}
-          description={resolveAlarmString(alarm.description)}
+          description={alarmString(alarm, alarm.description)}
           descriptionPlaceholder="No description."
           resolutions={resolutions}
           meta={<span>Triggered: —</span>}
-          disabled
+          disabled={alarm.ack_required !== false}
         />
       </div>
     </div>
@@ -74,12 +88,12 @@ export default function AlarmPopupPreviewPanel({ config, selection }: Props) {
   // follows a language switch if something here subscribes to it.
   useTranslationStore((s) => s.activeLanguage);
   useTranslationStore((s) => s.translations);
+  const alarm = selection?.type === 'alarm' ? findAlarm(config, selection.id) : undefined;
+  useLiveScalars(extractVarKeys(alarm?.values ?? []));
 
   if (!selection || selection.type !== 'alarm') {
     return <div className="cfg-panel-empty">Select an alarm to preview its notifications.</div>;
   }
-
-  const alarm = findAlarm(config, selection.id);
   if (!alarm) return null;
 
   return (

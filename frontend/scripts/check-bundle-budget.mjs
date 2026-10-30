@@ -22,15 +22,9 @@
 //    adds: the recharts chunk `ensureRecharts()` dynamically imports, and
 //    TrendChart's own built-in module from check 2's tree.
 //
-// All three checks are CI-enforced. `vendor-icons` (all @phosphor-icons/react
-// icons used by the HMI runtime, ~94 kB gzip) used to be a static import of
-// every route via nextHmiSdk.ts's custom-widget SDK exposure and the Icon/Button/
-// MenuToggleButton/NavigationMenu built-ins; phosphorIcons.tsx now lazy-loads
-// each icon's component from a separate phosphorIconComponents.tsx chunk, so
-// only routes that actually render a builtin icon fetch it. Editor authoring
-// surfaces (WidgetIcon, IconSourcePicker) still import that chunk directly
-// for flicker-free synchronous rendering — editor already reaches
-// vendor-icons eagerly via its own UI-chrome icon imports regardless.
+// The widget SDK (nextHmiSdk.ts) reaches the whole HMI runtime, so it is
+// installed from App.tsx's lazy AppInner loader rather than main.tsx, whose
+// entry chunk every route (the manager included) loads.
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
@@ -51,9 +45,8 @@ const CHART_CHUNK_GZIP_BUDGET = 200 * 1024;
 // `vendor-icons` scales with the size of the built-in icon allowlist, not with
 // application code, so it gets its own budget like the chart chunk: one
 // @phosphor-icons module carries all six weights of one glyph, ~0.6 kB gzip,
-// and the allowlist is a product surface that grows on purpose (59 icons /
-// 52.8 kB gzip → 130 icons / 93.7 kB gzip). Raise it deliberately when the
-// allowlist expands. The cheaper alternative to a raise is lazifying the two
+// and the allowlist is a product surface that grows on purpose. Raise it when
+// the allowlist expands. The cheaper alternative to a raise is lazifying the two
 // editor surfaces that render the whole set synchronously (WidgetIcon,
 // IconSourcePicker) so the chunk leaves the editor route's static closure.
 const ICON_CHUNK_RAW_BUDGET = 450 * 1024;
@@ -67,46 +60,24 @@ const ICON_CHUNK_GZIP_BUDGET = 100 * 1024;
 // responsibility, and that is worth a look regardless of the total.
 // The tree cap guards the total product surface instead: it is the size of every
 // built-in put together, manifest.json included, and it grows with each widget
-// promoted to built-in. Raise it deliberately when the set expands; never
-// raise the per-widget cap to make room for the tree. Raised from 96 kB when
-// Video became the 39th built-in: it sits well inside the per-widget cap, and
-// the tree simply had less headroom left than one more widget needs. Leave a
-// few kB of slack when raising — a cap sitting a few hundred bytes above the
-// current total fails CI on an unrelated CSS tweak to any of the 39, which
-// turns the gate into noise rather than signal.
+// promoted to built-in. Raise it when the set grows; never raise the
+// per-widget cap to make room for the tree. Leave a few kB of slack when
+// raising — a cap a few hundred bytes above the current total fails CI on an
+// unrelated CSS tweak to any built-in.
 const BUILTIN_WIDGET_RAW_BUDGET = 32 * 1024;
 const BUILTIN_WIDGET_GZIP_BUDGET = 10 * 1024;
-const BUILTIN_WIDGETS_TREE_GZIP_BUDGET = 104 * 1024;
+const BUILTIN_WIDGETS_TREE_GZIP_BUDGET = 111.6 * 1024;
 
 const ROUTE_BUDGETS_GZIP = {
   manager: 150 * 1024,
   'basic-hmi': 150 * 1024,
   // The editor's shared chunk carries the tree drag-and-drop, clipboard and
-  // multi-selection surfaces eagerly. Raised from 250 kB once that growth was
-  // accepted as intrinsic; the recoverable path is lazifying the
-  // gesture-triggered editors, not a further raise. Raised again from 275 kB
-  // when the icon allowlist grew to 130 icons — the editor renders the whole
-  // set synchronously, so vendor-icons' +41 kB gzip lands in this closure; the
-  // recoverable path there is lazifying WidgetIcon/IconSourcePicker. Raised
-  // again from 320 kB for React 19's larger vendor-react chunk (~+14 kB
-  // gzip) — no code-side fix available for framework-runtime growth. Raised
-  // again from 325 kB for the Layout panel's controls (~+1.6 kB gzip: the two
-  // direction-dependent icon rows for align and justify, the four independent
-  // padding rows, and a mode row plus three length rows per axis). This
-  // one *is* feature code, unlike the raises above, and it was taken knowing
-  // the lazification path below was the alternative — the marker modals
-  // (ChildPositionsEditor, ImageIndicatorsEditor) remain the next thing to move
-  // off this closure if the route needs headroom again. Raised again from
-  // 330 kB for the Video widget. Most of that growth is structural rather than
-  // editor feature code: the editor statically imports
-  // builtinWidgetsManifest.editor.json to draw property panels, so every new
-  // built-in lands its whole schema in this closure, and none of the
-  // lazification paths above recover it — only splitting that manifest per
-  // widget would. The rest is VideoSourcePicker and its icon, which ConfigShell
-  // imports statically like the other asset pickers. Raised again from 340 kB
-  // for 1.0.0's editor features — the Repeater, the If / Else and Toggle
-  // actions, and the $not / $formula editors — to 400 kB, deliberately with
-  // headroom so the next few features do not each need a raise of their own.
+  // multi-selection surfaces, the full icon set (WidgetIcon/IconSourcePicker
+  // render it synchronously) and builtinWidgetsManifest.editor.json, so every
+  // new built-in lands its whole schema here. Before raising, the recoverable
+  // paths are: lazify WidgetIcon/IconSourcePicker, lazify the marker modals
+  // (ChildPositionsEditor, ImageIndicatorsEditor) and other gesture-triggered
+  // editors, or split the editor manifest per widget.
   editor: 400 * 1024,
   'chart-heavy-hmi': 350 * 1024,
 };

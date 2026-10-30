@@ -73,7 +73,7 @@
   display: flex;
   gap: var(--cfg-space-2);
   align-items: center;
-  font-size: var(--cfg-text-sm);
+  font-size: var(--cfg-text-base);
   color: var(--cfg-text);
   max-width: 100%;
   flex-wrap: wrap;
@@ -112,18 +112,19 @@
 .cfg-admin-https__cert-row {
   display: flex;
   gap: var(--cfg-space-2);
-  font-size: var(--cfg-text-sm);
+  font-size: var(--cfg-text-base);
   color: var(--cfg-text);
   max-width: 100%;
 }
 
 .cfg-admin-https__cert-label {
   color: var(--cfg-text-muted);
+  font-weight: var(--cfg-fw-medium);
   min-width: 6rem;
 }
 
 .cfg-admin-https__fingerprint {
   font-family: var(--cfg-font-mono);
-  font-size: var(--cfg-text-xs);
+  font-size: 0.95em;
   word-break: break-all;
 }

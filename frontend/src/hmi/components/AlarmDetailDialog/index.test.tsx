@@ -123,7 +123,7 @@ describe('AlarmDetailDialog', () => {
     const user = userEvent.setup();
     const { onClose } = renderDialog(mkAlarm());
 
-    await user.click(screen.getByRole('button', { name: 'Close' }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-modal__close')!);
 
     expect(apiJson).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -132,12 +132,12 @@ describe('AlarmDetailDialog', () => {
   it('closes via an overlay click but not a click inside the dialog card', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
-    const { container } = renderDialog(mkAlarm(), onClose);
+    const { baseElement } = renderDialog(mkAlarm(), onClose);
 
     await user.click(screen.getByText('Motor Overheat'));
     expect(onClose).not.toHaveBeenCalled();
 
-    await user.click(container.querySelector(`.${styles.overlay}`) as HTMLElement);
+    await user.click(baseElement.querySelector(`.${styles.overlay}`) as HTMLElement);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -145,8 +145,8 @@ describe('AlarmDetailDialog', () => {
   // (`AlarmDefinition.resolve_image`), and the URL has to carry the runtime
   // base — a project served under /runtime/<slug>/ 404s on a bare /assets/… .
   it('renders an image column when the alarm has an image', () => {
-    const { container } = renderDialog(mkAlarm({ image: 'images/motor.png' }));
-    const img = container.querySelector('img');
+    const { baseElement } = renderDialog(mkAlarm({ image: 'images/motor.png' }));
+    const img = baseElement.querySelector('img');
     expect(img).not.toBeNull();
     expect(img?.getAttribute('src')).toBe('/assets/images/motor.png');
   });

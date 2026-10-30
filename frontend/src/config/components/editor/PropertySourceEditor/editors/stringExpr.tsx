@@ -1,27 +1,10 @@
 import { renderSchemaField } from '../../../../utils/renderSchemaField';
 import { WildcardCard } from './shared';
 import { ParentPathContext, useParentPath, withSegs } from '../parentPathContext';
-import { wrapPicker, type OpenBindingPicker } from './utils';
+import { extractWildcardKeys, wrapPicker, type OpenBindingPicker } from './utils';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import type { StringExprSource } from '@shared/types/config';
 import type { PropertySource } from '../../propertyValueUtils';
-
-/** Extract unique wildcard numbers from a template string. */
-function extractWildcardKeys(template: string): string[] {
-  const keys = new Set<string>();
-  const re = /\{([^{}]+)\}/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(template)) !== null) {
-    let body = m[1].trim();
-    while (true) {
-      const fn = /^[A-Za-z]\w*\((.+)\)$/.exec(body);
-      if (!fn) break;
-      body = fn[1].trim();
-    }
-    if (/^\d+$/.test(body)) keys.add(body);
-  }
-  return Array.from(keys).sort((a, b) => Number(a) - Number(b));
-}
 
 const WILDCARD_SOURCES: PropertySource[] = ['static', '$var', '$loc'];
 const WILDCARD_SCHEMA: SchemaField = { type: 'String', label: '' };
@@ -54,8 +37,10 @@ export function StringExprEditor({
   function handleTemplateChange(newTemplate: string) {
     const newKeys = new Set(extractWildcardKeys(newTemplate));
     const next: Record<string, unknown> = {};
+    // A new placeholder starts unbound, so diagnostics warn until it is; a
+    // Static cleared to "" is a value the author chose.
     for (const k of newKeys) {
-      next[k] = wildcards[k] ?? '';
+      next[k] = wildcards[k] ?? { $var: { path: '' } };
     }
     onChange({ $stringExpr: { template: newTemplate, wildcards: next } });
   }
@@ -69,7 +54,8 @@ export function StringExprEditor({
       <p className="cfg-prop-hint">
         Use <code>{'{1}'}</code>, <code>{'{2}'}</code>, … as placeholders. Functions:{' '}
         <code>ToLower</code>, <code>ToUpper</code>, <code>Trim</code>, <code>Capitalize</code>,{' '}
-        <code>Round</code>, <code>Round1</code>, <code>Round2</code>
+        <code>Round</code>, <code>Round1</code> … <code>Round4</code>, <code>Thousands</code>,{' '}
+        <code>Signed</code>
         <br />
         Example: <code>{'{Trim(ToLower(1))}'}</code>
       </p>

@@ -10,7 +10,7 @@ from datetime import time as time_of_day
 from pathlib import Path
 from typing import Any
 
-from models.datasource import is_subscribable
+from models.datasource import is_present_on_server, is_subscribable
 
 from core.builtin_widgets_manifest import CatalogVersion, builtin_widgets_catalog
 from core.page_index import (
@@ -53,6 +53,8 @@ PROPERTY_SOURCE_KEYS = frozenset({
     "$switch",
     "$compare",
     "$not",
+    "$and",
+    "$or",
     "$formula",
     "$random",
     "$user",
@@ -63,6 +65,7 @@ PROPERTY_SOURCE_KEYS = frozenset({
     "$pageIsActive",
     "$widgetProp",
     "$componentProp",
+    "$overlay",
     "$languages",
     "$stringExpr",
     "$http",
@@ -200,6 +203,10 @@ class ValidationContext:
     # `max`): the live pool's, else the datasource file's. None skips
     # `write-value-type`.
     datasource_entry: Callable[[str, str], dict | None] | None = field(default=None, repr=False)
+    # (datasource, variable path) -> whether the datasource holds that variable
+    # but has it disabled: the registry leaves it out, yet it is no unknown
+    # variable. None reports every variable the registry lacks as unknown.
+    datasource_disabled: Callable[[str, str], bool] | None = field(default=None, repr=False)
     # True while walking the children of a Repeater: only there does
     # `$repeatItem` (or a Repeat-item write target) have an element to read.
     repeat_scope: bool = False
@@ -733,7 +740,10 @@ _Writable = dict[str, dict[str, bool]]
 # datasource -> variable path -> the leaf as its datasource file declares it.
 _Entries = dict[str, dict[str, dict]]
 
-_ds_scan_cache: tuple[frozenset[tuple[str, int]], _Registry, _Writable, dict[str, str], _Entries] | None = None
+_ds_scan_cache: (
+    tuple[frozenset[tuple[str, int]], _Registry, _Writable, dict[str, str], _Entries, dict[str, set[str]]]
+    | None
+) = None
 
 # variable_metadata() walks every subscribable variable across all datasources
 # under datasource_manager's lock — real cost on a live plant with many tags.
@@ -828,6 +838,7 @@ def _walk_variable_tree(
     out: dict[str, dict],
     writable: dict[str, bool],
     entries: dict[str, dict] | None = None,
+    disabled: set[str] | None = None,
 ) -> None:
     """Recursively derive typed VarTypes (into `out`) and leaf writability
     (into `writable`) from a datasource JSON's declared ``variables`` tree
@@ -849,7 +860,7 @@ def _walk_variable_tree(
             children = node.get("children")
             if not isinstance(children, list):
                 continue
-            _walk_variable_tree(children, path, out, writable, entries)
+            _walk_variable_tree(children, path, out, writable, entries, disabled)
             is_array = bool(node.get("is_array"))
             field_names = _disk_struct_fields(children, path, is_array, out)
             if field_names or is_array:
@@ -873,6 +884,8 @@ def _walk_variable_tree(
             writable[path] = node.get("writable") is True
             if entries is not None:
                 entries[path] = node
+        elif disabled is not None and is_present_on_server(node):
+            disabled.add(path)
 
 
 def _scan_datasources_from_disk() -> tuple[_Registry, _Writable, dict[str, str]]:
@@ -896,6 +909,7 @@ def _scan_datasources_from_disk() -> tuple[_Registry, _Writable, dict[str, str]]
     writable: _Writable = {}
     ds_types: dict[str, str] = {}
     entries: _Entries = {}
+    disabled: dict[str, set[str]] = {}
     for path in files:
         try:
             doc = read_json(path)
@@ -907,15 +921,17 @@ def _scan_datasources_from_disk() -> tuple[_Registry, _Writable, dict[str, str]]
         types: dict[str, dict] = {}
         access: dict[str, bool] = {}
         leaves: dict[str, dict] = {}
+        off: set[str] = set()
         variables = doc.get("variables") if isinstance(doc, dict) else None
-        _walk_variable_tree(variables, "", types, access, leaves)
+        _walk_variable_tree(variables, "", types, access, leaves, off)
         registry[name] = types
         writable[name] = access
         entries[name] = leaves
+        disabled[name] = off
         ds_type = doc.get("type") if isinstance(doc, dict) else None
         if isinstance(ds_type, str):
             ds_types[name] = ds_type
-    _ds_scan_cache = (fingerprint, registry, writable, ds_types, entries)
+    _ds_scan_cache = (fingerprint, registry, writable, ds_types, entries, disabled)
     return registry, writable, ds_types
 
 
@@ -944,6 +960,56 @@ def _datasource_entry_lookup() -> Callable[[str, str], dict | None]:
         return (disk.get(ds_name) or {}).get(var_path)
 
     return lookup
+
+
+def _disabled_variable_lookup() -> Callable[[str, str], bool]:
+    """Whether a datasource holds a variable, still on its server, but has it
+    disabled — the live
+    pool's config when it serves the datasource, else the datasource file.
+    Resolved only for a binding the registry lacks, so a page whose bindings
+    all resolve never reads it."""
+    disk: dict[str, set[str]] | None = None
+
+    def lookup(ds_name: str, var_path: str) -> bool:
+        nonlocal disk
+        try:
+            from services.datasource_manager import datasource_manager
+
+            entry = datasource_manager.datasources.get(ds_name)
+            if entry is not None:
+                var_entry = entry.registry.get(var_path)
+                return (
+                    isinstance(var_entry, dict)
+                    and not is_subscribable(var_entry)
+                    and is_present_on_server(var_entry)
+                )
+        except Exception:
+            pass
+        if disk is None:
+            _scan_datasources_from_disk()
+            disk = _ds_scan_cache[5] if _ds_scan_cache is not None else {}
+        return var_path in (disk.get(ds_name) or ())
+
+    return lookup
+
+
+def _report_disabled(
+    ctx: ValidationContext, ds_name: str, var_path: str, path: str, report: ValidationReport
+) -> bool:
+    """Report a binding to a variable its datasource has disabled: the pool
+    serves it no value, but enabling it there is all it takes. True when
+    reported."""
+    if ctx.datasource_disabled is None:
+        return False
+    if not any(ctx.datasource_disabled(ds_name, p) for p in {var_path, var_path.split("[")[0]}):
+        return False
+    report.warn(
+        path,
+        f"variable '{ds_name}:{var_path}' is disabled in its datasource — enable it there",
+        severity="warning",
+        code="var-disabled",
+    )
+    return True
 
 
 def _collect_datasource_types() -> dict[str, str]:
@@ -1109,6 +1175,7 @@ def build_context() -> ValidationContext:
             **_config_widgets(config),
         },
         datasource_entry=_datasource_entry_lookup(),
+        datasource_disabled=_disabled_variable_lookup(),
         translation_keys=_collect_translation_keys(),
         user_groups=_collect_user_groups(),
         icon_assets=_collect_asset_names(active_icons_dir()),
@@ -1160,6 +1227,9 @@ def _report_test_server_target(
     return True
 
 
+_BOUND_INDEX_FIELD = {"type": "Integer", "label": "Index"}
+
+
 def validate_var_ref(
     ref: Any,
     ctx: ValidationContext,
@@ -1198,6 +1268,10 @@ def validate_var_ref(
         return
     paths = ctx.datasource_registry[ds_name]
     resolved_key = var_path
+    if var_path not in paths and var_path.split("[")[0] not in paths and _report_disabled(
+        ctx, ds_name, var_path, path, report
+    ):
+        return
     if paths and var_path not in paths:
         base = var_path.split("[")[0]
         if base not in paths:
@@ -1205,8 +1279,13 @@ def validate_var_ref(
             return
         resolved_key = base
     var_type = paths.get(resolved_key) if paths else None
-    if ref.get("repeatIndex") is not True and _report_bad_index(
-        ref.get("index"), ds_name, resolved_key, var_type, path, report
+    index = ref.get("index")
+    if isinstance(index, dict):
+        # A bound index is a source of its own — a dialog's input, another
+        # variable — resolved to an element at runtime; only its type is known.
+        _validate_property_value(index, _BOUND_INDEX_FIELD, ctx, f"{path}/$var/index", report)
+    elif ref.get("repeatIndex") is not True and _report_bad_index(
+        index, ds_name, resolved_key, var_type, path, report
     ):
         return
     if var_type is None:
@@ -1218,9 +1297,22 @@ def validate_var_ref(
     subject = f"variable '{ds_name}:{var_path}'"
     accept = _accept_types_for_schema(schema_field)
     if accept and not any(vartype.accepts(a, element, required_fields) for a in accept):
-        report.warn(
-            path, f"{subject} type is incompatible with this field", severity="error", code="var-type"
-        )
+        # A whole array whose element would fit: the editor's Index row below
+        # the field names the element, so the finding anchors there.
+        whole = not indexed and var_type.get("array")
+        if whole and any(
+            vartype.accepts(a, vartype.element_of(var_type), required_fields) for a in accept
+        ):
+            report.warn(
+                f"{path}/$var/index",
+                f"{subject} is an array — choose an element",
+                severity="error",
+                code="var-type",
+            )
+        else:
+            report.warn(
+                path, f"{subject} type is incompatible with this field", severity="error", code="var-type"
+            )
         return
     if accept and element.get("kind") == "struct":
         base = (
@@ -1487,6 +1579,30 @@ _LABEL_VALUE_RECORD: tuple[dict, dict[str, dict]] = (
 )
 
 
+def _repeat_bound_asset(ref: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> bool:
+    """Whether a `$static` icon/image/video payload names its asset with a
+    `$repeatItem` — which the runtime fills in per Repeater copy
+    (`substituteRepeatRefs`), so there is no literal asset to look up. Over a
+    list it becomes the item's text; over a variable it becomes a binding, which
+    names no asset, and outside a Repeater it is never filled in."""
+    if not (isinstance(ref, dict) and "$repeatItem" in ref):
+        return False
+    if not ctx.repeat_scope:
+        report.warn(
+            path,
+            "the Repeat item has no Repeater copy here, so this names no asset",
+            severity="warning", code="repeatitem-no-scope",
+        )
+    elif _repeat_items_source(ctx) is not None:
+        report.warn(
+            path,
+            "a Repeat item inside a fixed icon or image names no asset when the Repeater "
+            "repeats a variable — set the field's own source to Repeat Item instead",
+            severity="error", code="repeatitem-in-static",
+        )
+    return True
+
+
 def _repeats_values(ctx: ValidationContext) -> bool:
     """Whether the innermost Repeater repeats over a list of values rather
     than a variable — so its element cannot be written."""
@@ -1621,7 +1737,13 @@ class _WriteTarget:
 
 
 def _check_write_target_type(
-    kind: str, target: _WriteTarget, ctx: ValidationContext, path: str, report: ValidationReport
+    kind: str,
+    target: _WriteTarget,
+    ctx: ValidationContext,
+    path: str,
+    report: ValidationReport,
+    *,
+    access: bool = True,
 ) -> None:
     """A write needs one variable it can put a value into: the write path
     addresses a leaf (a whole array, or one element of it), never a struct
@@ -1635,6 +1757,15 @@ def _check_write_target_type(
             code="write-target-type",
         )
         return
+    numeric = target.element.get("base") in ("Integer", "Float") and not target.element.get("array")
+    if kind == "editValue" and not numeric:
+        report.warn(
+            path,
+            f"{target.subject} is not a number — the numpad can only edit an Integer or Float",
+            severity="error",
+            code="edit-target-type",
+        )
+        return
     if kind == "toggleDataVariable":
         problem = _toggle_type_problem(target, ctx)
         if problem is not None:
@@ -1645,7 +1776,7 @@ def _check_write_target_type(
                 code="toggle-target-type",
             )
             return
-    if _read_only(ctx, target.ds_name, target.key):
+    if access and _read_only(ctx, target.ds_name, target.key):
         report.warn(
             path,
             f"{target.subject} is read-only, so this action cannot write it",
@@ -1687,15 +1818,37 @@ def _repeat_write_target(target: dict, ctx: ValidationContext) -> _WriteTarget |
     return _WriteTarget(ds_name, key, element, key == source[1], subject)
 
 
+# What a write target's `$componentProp` input must be declared as — a writable
+# input of a type the action writes. Mirrors WRITE_TARGET_FILTER /
+# TOGGLE_TARGET_FILTER / EDIT_TARGET_FILTER in the editor's actionEditors.tsx.
+_INPUT_WRITE_TARGET_FIELDS: dict[str, dict] = {
+    "writeDataVariable": {
+        "type": ["String", "Boolean", "Integer", "Float", "DateTime", "Date", "Time", "Duration"],
+        "write": True,
+    },
+    "toggleDataVariable": {"type": ["Boolean"], "write": True},
+    "editValue": {"type": ["Integer", "Float"], "write": True},
+}
+
+
 def _validate_write_target(
     action: dict, kind: str, ctx: ValidationContext, path: str, report: ValidationReport
 ) -> _WriteTarget | None:
-    """A `writeDataVariable` / `toggleDataVariable` target: a `$var`, or —
-    inside a Repeater — the copy's `$repeatItem`. Diagnostics anchor on
-    `<action>/target`, which the property panel maps back to the action's
-    target row. Returns what the action writes, when the registry knows it."""
+    """A `writeDataVariable` / `toggleDataVariable` / `editValue` target: a
+    `$var`, inside a Repeater the copy's `$repeatItem`, or inside a component
+    or dialog a `$componentProp` input the caller fills with a variable.
+    Diagnostics anchor on `<action>/target`, which the property panel maps back
+    to the action's target row. Returns what the action writes, when the
+    registry knows it."""
     target = action.get("target")
     target_path = f"{path}/target"
+    if isinstance(target, dict) and "$componentProp" in target:
+        # Checked like a writing field reading the input; the variable it names
+        # is the caller's, checked where the caller fills the input.
+        _validate_property_value(
+            target, _INPUT_WRITE_TARGET_FIELDS[kind], ctx, target_path, report
+        )
+        return None
     if isinstance(target, dict) and "$repeatItem" in target:
         if not ctx.repeat_scope:
             report.warn(
@@ -1738,6 +1891,8 @@ def _validate_write_target(
         return None
     paths = ctx.datasource_registry[ds_name]
     key = var_path if var_path in paths else var_path.split("[")[0]
+    if key not in paths and _report_disabled(ctx, ds_name, var_path, target_path, report):
+        return None
     if paths and key not in paths:
         report.warn(
             target_path,
@@ -1748,7 +1903,10 @@ def _validate_write_target(
         return None
     var_type = paths.get(key)
     index = ref.get("index") if isinstance(ref, dict) else None
-    if _report_bad_index(index, ds_name, key, var_type, target_path, report):
+    if isinstance(index, dict):
+        # Resolved to an element when the action runs, like a read's bound index.
+        _validate_action_value(index, _BOUND_INDEX_FIELD, ctx, f"{target_path}/$var/index", report)
+    elif _report_bad_index(index, ds_name, key, var_type, target_path, report):
         return None
     if var_type is None:
         return None
@@ -1760,6 +1918,22 @@ def _validate_write_target(
         indexed,
         f"variable '{ds_name}:{var_path}'",
     )
+    if not indexed and var_type.get("array") and kind != "writeDataVariable":
+        # A toggle or numpad acts on one element: when one would fit, the
+        # finding anchors on the editor's Index row below the target.
+        # Only the element's type decides; its access is reported on the target.
+        probe = ValidationReport()
+        element = replace(written, element=vartype.element_of(var_type), indexed=True)
+        _check_write_target_type(kind, element, ctx, target_path, probe, access=False)
+        if not probe.warnings:
+            report.warn(
+                f"{target_path}/$var/index",
+                f"{written.subject} is an array — choose an element",
+                severity="error",
+                code="toggle-target-type" if kind == "toggleDataVariable" else "edit-target-type",
+            )
+            _check_write_target_type(kind, element, ctx, target_path, report)
+            return written
     _check_write_target_type(kind, written, ctx, target_path, report)
     return written
 
@@ -1787,6 +1961,11 @@ def _validate_write_value(
         schema = {"type": f"{base}[]" if element.get("array") else base}
     wrapped = _has_property_source(value)
     if wrapped and _property_source_key(value) != "$static":
+        if _property_source_key(value) == "$formula" and schema == {"type": "Integer"}:
+            # A formula computes a Float, but the write path takes a whole one
+            # into an integer tag and refuses a fraction as lossy, as it does
+            # for any number — so only the formula itself is checked here.
+            schema = {"type": "Float"}
         _validate_action_value(value, schema, ctx, value_path, report)
         return
     if schema is None or written is None or ctx.datasource_entry is None:
@@ -1854,6 +2033,7 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
         "height": "Integer",
     },
     "closePageOverlay": {"pageId": "page"},
+    "navigateToPage": {"pageId": "page"},
     "writeDataVariable": {
         "target": "target",
         "value": "writeValue",
@@ -1864,6 +2044,19 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
     "if": {"condition": "Boolean", "then": "actions", "else": "actions"},
     "toggleDataVariable": {
         "target": "target",
+        "onSuccess": "actions",
+        "onFailed": "actions",
+        "onSettled": "actions",
+    },
+    "editValue": {
+        "target": "target",
+        "title": "String",
+        "unit": "String",
+        "min": "Float",
+        "max": "Float",
+        "decimals": "Integer",
+        "allowNegative": "Boolean",
+        "position": "String",
         "onSuccess": "actions",
         "onFailed": "actions",
         "onSettled": "actions",
@@ -1889,6 +2082,9 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
         "onFailed": "actions",
         "onSettled": "actions",
     },
+    "acknowledgeAllAlarms": {},
+    "runComponentActions": {"property": "actionsProperty"},
+    "delay": {"duration": "Integer"},
     "setLanguage": {"language": "String"},
     "setActiveTheme": {"theme": "String"},
     "showAlert": {
@@ -1911,6 +2107,7 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
 _ACTION_VALUE_SCHEMAS: dict[str, dict[str, str]] = {
     "String": {"type": "string"},
     "Integer": {"type": "integer"},
+    "Float": {"type": "float"},
     "Boolean": {"type": "boolean"},
 }
 
@@ -1962,7 +2159,7 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
     if not isinstance(action, dict):
         return
     kind = action.get("type") or action.get("action")
-    if kind in ("writeDataVariable", "toggleDataVariable"):
+    if kind in ("writeDataVariable", "toggleDataVariable", "editValue"):
         written = _validate_write_target(action, kind, ctx, path, report)
         if kind == "writeDataVariable":
             _validate_write_value(action, written, ctx, path, report)
@@ -1982,6 +2179,15 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
                 severity="error",
                 code="toast-severity-invalid",
             )
+    if kind == "editValue":
+        position = action.get("position")
+        if isinstance(position, str) and position not in ("center", "bottom-right"):
+            report.warn(
+                f"{path}/position",
+                f"unknown numpad position '{position}'",
+                severity="error",
+                code="numpad-position-invalid",
+            )
     page_fields = [name for name, role in (fields or {}).items() if role == "page"]
     if page_fields or kind in _LEGACY_PAGE_TARGET_ACTIONS:
         # A file from before `pageId` names the page under `target`.
@@ -1993,7 +2199,11 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
         names_target = isinstance(target, str) and (target != "" or kind != "closePageOverlay")
         if names_target and target not in ctx.page_ids:
             report.add(path, f"action target page '{target}' does not exist")
+    if kind == "runComponentActions":
+        _check_run_component_actions(action.get("property"), ctx, f"{path}/property", report)
     page_id = action.get("pageId")
+    if kind == "navigateToPage":
+        _check_navigate_target(page_id, ctx, f"{path}/pageId", report)
     if kind in ("openDialog", "openPageOverlay") and isinstance(page_id, str) and page_id:
         _check_overlay_root(kind, page_id, ctx, f"{path}/pageId", report)
     if kind == "openDialog" and isinstance(page_id, str) and page_id:
@@ -2041,6 +2251,28 @@ def validate_action_targets(actions: Any, ctx: ValidationContext, path: str, rep
 
 
 _WILDCARD_RE = re.compile(r"\{([^{}]*)\}")
+_PLACEHOLDER_FN_RE = re.compile(r"([A-Za-z]\w*)\((.+)\)", re.ASCII)
+
+
+def _placeholder_key(body: str) -> str | None:
+    """The wildcard key of a placeholder body such as `Trim(ToLower(1))`, or None
+    when it is not one. Mirrors `parsePlaceholder` in
+    frontend/src/hmi/utils/propertySourceEval.ts: the digits in a function name
+    (`Round2`) are not a key."""
+    rest = body.strip()
+    while (m := _PLACEHOLDER_FN_RE.fullmatch(rest)):
+        rest = m.group(2).strip()
+    return rest if re.fullmatch(r"[0-9]+", rest) else None
+
+
+def template_placeholder_keys(templates: list[str]) -> set[str]:
+    """Every `{n}` wildcard key the placeholders across `templates` name."""
+    return {
+        key
+        for template in templates
+        for match in _WILDCARD_RE.finditer(template)
+        if (key := _placeholder_key(match.group(1))) is not None
+    }
 
 # `$formula` grammar, mirrored from frontend/src/hmi/utils/formula.ts:
 #   expr := term (("+" | "-") term)*     term := unary (("*" | "/") unary)*
@@ -2131,10 +2363,7 @@ def _validate_wildcards(
     `wildcards` bag. Shared by `$stringExpr` (one template) and `$http` (url,
     body and header values), which use the same placeholder syntax."""
     wildcards = payload.get("wildcards") if isinstance(payload.get("wildcards"), dict) else {}
-    referenced: set[str] = set()
-    for template in templates:
-        for match in _WILDCARD_RE.finditer(template):
-            referenced |= set(re.findall(r"\d+", match.group(1)))
+    referenced = template_placeholder_keys(templates)
     code_prefix = source_key.lstrip("$").lower()
     for n in sorted(referenced, key=int):
         wildcard_value = wildcards.get(n)
@@ -2148,8 +2377,8 @@ def _validate_wildcards(
             _validate_property_value(wildcard_value, None, ctx, wildcard_path, report)
 
 
-# What an `$if` condition and a `$not` operand take: a Boolean, not any value's
-# truthiness (the editor's BOOLEAN_SLOT).
+# What an `$if` condition, a `$not` operand and an `$and`/`$or` item take: a
+# Boolean, not any value's truthiness (the editor's BOOLEAN_SLOT).
 _CONDITION_SCHEMA: dict[str, str] = {"type": "boolean"}
 
 
@@ -2185,19 +2414,88 @@ def _static_page_id(value: Any) -> str | None:
     return None
 
 
-def _check_navigable(page_id: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> None:
-    """Flag a navigation target sitting in the Dialogs folder. Only the overlay
-    actions reach those, so a menu item or `format: 'page'` field naming one
-    goes nowhere — the runtime resolves the route against the `pages` root
-    alone and renders its empty state."""
+def _check_navigable(
+    page_id: Any, ctx: ValidationContext, path: str, report: ValidationReport, hint: str = ""
+) -> None:
+    """Flag a navigation target sitting in the Dialogs folder, or naming no page
+    at all. Only the overlay actions reach the Dialogs folder, so a menu item or
+    `format: 'page'` field naming one goes nowhere — the runtime resolves the
+    route against the `pages` root alone and renders its empty state."""
     pid = _static_page_id(page_id)
     if pid is not None and pid in ctx.dialogs_page_ids:
         report.warn(
             path,
             f"page '{pid}' is in the Dialogs folder — nothing navigates to it, "
-            "so this target opens nothing",
+            f"so this target opens nothing{hint}",
             severity="error", code="page-not-navigable",
         )
+    # Only the `pages` root routes, so a page file neither root lists is as dead
+    # as a missing one. An empty set means the index wasn't read: skip.
+    elif pid is not None and ctx.navigable_page_ids and pid not in ctx.navigable_page_ids:
+        report.warn(
+            path, f"page '{pid}' is not in the Pages section", severity="error", code="page-unknown"
+        )
+
+
+def _check_navigate_target(page_id: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> None:
+    """A Navigate To Page target: a fixed page id (an unknown one is already the
+    page-field finding), or a `$componentProp` naming an input parameter
+    declared `format: 'page'` — whose callers' values `_check_navigable` checks."""
+    if isinstance(page_id, str):
+        if page_id in ctx.page_ids:
+            _check_navigable(page_id, ctx, path, report, " — open it with Open Dialog instead")
+        return
+    name = page_id.get("$componentProp") if isinstance(page_id, dict) and len(page_id) == 1 else None
+    if not isinstance(name, str):
+        report.warn(
+            path,
+            "the page is a fixed page or an input parameter declared as a page — nothing else",
+            severity="error", code="navigate-target-invalid",
+        )
+    elif not name:
+        report.warn(path, "property name is empty", severity="warning", code="componentprop-empty")
+    elif not ctx.input_scope or (
+        ctx.input_schema is not None and (ctx.input_schema.get(name) or {}).get("format") != "page"
+    ):
+        report.warn(
+            path,
+            f"input parameter '{name}' is not declared here as a page (format: page)",
+            severity="error", code="navigate-input-not-page",
+        )
+
+
+def _check_run_component_actions(
+    name: Any, ctx: ValidationContext, path: str, report: ValidationReport
+) -> None:
+    """A Run Component Actions property: the name of an `actions`-type property
+    of the component the action sits in — the only scope that passes one in."""
+    if not isinstance(name, str):
+        report.warn(
+            path,
+            "the property is the name of one of the component's Actions properties",
+            severity="error", code="runcomponentactions-invalid",
+        )
+    elif not name:
+        report.warn(path, "property name is empty", severity="warning", code="componentprop-empty")
+    elif not ctx.input_scope:
+        report.warn(
+            path,
+            f"Actions property '{name}' runs nothing here — only a component passes one in",
+            severity="error", code="runcomponentactions-no-scope",
+        )
+    elif ctx.input_schema is not None:
+        declared = ctx.input_schema.get(name)
+        if declared is None:
+            report.warn(
+                path, f"no property '{name}' is declared here",
+                severity="error", code="runcomponentactions-unknown",
+            )
+        elif declared.get("type") != "actions":
+            report.warn(
+                path,
+                f"property '{name}' is declared as {declared.get('type')!r}, not as Actions",
+                severity="error", code="runcomponentactions-not-actions",
+            )
 
 
 def _validate_menu_items(items: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> None:
@@ -2349,6 +2647,29 @@ def _check_source_type(
     else:
         message = f"{source_key} does not give a value {target} takes"
     report.warn(path, message, severity="error", code="source-type")
+
+
+# What a field that writes its value back may hold: a variable, or a scope
+# source standing in for one. Mirrors `bindsOnly` in SchemaFieldRow.
+_WRITABLE_SOURCES = frozenset({"$var", "$componentProp", "$repeatItem"})
+
+
+def _check_write_source(
+    source_key: str | None, schema_field: dict | None, path: str, report: ValidationReport
+) -> None:
+    """Flag a literal or a computed source (a formula, a condition, …) in a
+    field with `write: true`: the control has no variable to write to."""
+    if not isinstance(schema_field, dict) or schema_field.get("write") is not True:
+        return
+    if source_key in _WRITABLE_SOURCES:
+        return
+    what = "a fixed value" if source_key in (None, "$static") else source_key
+    report.warn(
+        path,
+        f"this field writes to a variable, but holds {what} — bind a variable",
+        severity="error",
+        code="write-source",
+    )
 
 
 def _input_scope(ctx: ValidationContext, node_id: str, own: dict[str, dict]) -> dict[str, dict]:
@@ -2518,6 +2839,40 @@ def _check_widget_prop(
     report.warn(path, message, severity="error", code=code)
 
 
+def _check_overlay(payload: dict, ctx: ValidationContext, path: str, report: ValidationReport) -> None:
+    """A `$overlay` reads an input parameter of a Dialogs-folder page while
+    that page is open, so the page must be a dialog that declares it."""
+    page, param = payload.get("page"), payload.get("param")
+    if not isinstance(page, str) or not page or not isinstance(param, str) or not param:
+        report.warn(
+            path, "page or input parameter is empty", severity="warning", code="overlay-empty"
+        )
+        return
+    if ctx.dialogs_page_ids and page not in ctx.dialogs_page_ids:
+        report.warn(
+            path,
+            f"page '{page}' is not in the Dialogs folder — only a dialog has input parameters",
+            severity="error", code="overlay-page",
+        )
+        return
+    declared = ctx.page_property_keys.get(page)
+    if declared is not None and param not in declared:
+        report.warn(
+            path,
+            f"page '{page}' declares no input parameter '{param}'",
+            severity="error", code="overlay-param-unknown",
+        )
+
+
+def _takes_only_whole_numbers(schema_field: dict | None) -> bool:
+    """An `Integer` field that no fraction fits — a union with `Float` or
+    `Duration` takes the formula's own result."""
+    if not isinstance(schema_field, dict):
+        return False
+    accepted = {t.lower() for t in vartype.accepted_value_types(schema_field.get("type"))}
+    return "integer" in accepted and not accepted & {"float", "duration"}
+
+
 def _validate_property_value(
     value: Any,
     schema_field: dict | None,
@@ -2539,6 +2894,8 @@ def _validate_property_value(
         _validate_menu_items(value, ctx, path, report)
 
     if not _has_property_source(value):
+        if value not in (None, ""):
+            _check_write_source(None, schema_field, path, report)
         _check_literal(value, schema_field, ctx, path, report, wrapped=False)
         return
     # Sourced value — recurse into its payload.
@@ -2546,6 +2903,7 @@ def _validate_property_value(
         return
     source_key = _property_source_key(value)
     payload = value.get(source_key)
+    _check_write_source(source_key, schema_field, path, report)
     _check_source_type(source_key, payload, schema_field, path, report)
     if source_key == "$var":
         validate_var_ref(payload, ctx, path, report, schema_field)
@@ -2562,33 +2920,45 @@ def _validate_property_value(
             icon_type = payload.get("type")
             if icon_type == "builtin":
                 name = payload.get("name")
-                if not isinstance(name, str) or name not in ctx.builtin_icons:
+                if _repeat_bound_asset(name, ctx, path, report):
+                    pass
+                elif not isinstance(name, str) or name not in ctx.builtin_icons:
                     report.warn(path, f"unknown built-in icon '{name}'", severity="error", code="icon-unknown")
             elif icon_type == "custom":
                 icon_path = payload.get("path")
-                if not isinstance(icon_path, str) or icon_path not in ctx.icon_assets:
+                if _repeat_bound_asset(icon_path, ctx, path, report):
+                    pass
+                elif not isinstance(icon_path, str) or icon_path not in ctx.icon_assets:
                     report.warn(path, f"unknown icon asset '{icon_path}'", severity="error", code="icon-unknown")
         elif field_type == "image":
             image_path = payload.get("path")
-            if not _is_absolute_asset_url(image_path) and (
+            if _repeat_bound_asset(image_path, ctx, path, report):
+                pass
+            elif not _is_absolute_asset_url(image_path) and (
                 not isinstance(image_path, str) or image_path not in ctx.image_assets
             ):
                 report.warn(path, f"unknown image asset '{image_path}'", severity="error", code="image-unknown")
         elif field_type == "video":
             video_path = payload.get("path")
-            if not _is_absolute_asset_url(video_path) and (
+            if _repeat_bound_asset(video_path, ctx, path, report):
+                pass
+            elif not _is_absolute_asset_url(video_path) and (
                 not isinstance(video_path, str) or video_path not in ctx.video_assets
             ):
                 report.warn(path, f"unknown video asset '{video_path}'", severity="error", code="video-unknown")
     elif source_key == "$loc":
-        # Runtime resolver (frontend/src/hmi/utils/propertySourceEval.ts:evaluateLoc) only
-        # accepts a string payload; any other shape silently resolves to null at render.
-        if not isinstance(payload, str):
-            report.add(path, "$loc payload must be a string translation key")
-        elif payload == "":
+        # Runtime resolver (frontend/src/hmi/utils/propertySourceEval.ts:evaluateLoc) takes
+        # the key as a string, or as {key, wildcards} when the key holds {1}, {2} …;
+        # any other shape silently resolves to null at render.
+        key = payload.get("key") if isinstance(payload, dict) else payload
+        if not isinstance(key, str):
+            report.add(path, "$loc payload must be a translation key, or {key, wildcards}")
+        elif key == "":
             report.warn(path, "translation key is empty", severity="warning", code="loc-empty")
-        elif ctx.translation_keys and payload not in ctx.translation_keys:
-            report.warn(path, f"unknown translation key '{payload}'", severity="error", code="loc-unknown")
+        elif ctx.translation_keys and key not in ctx.translation_keys:
+            report.warn(path, f"unknown translation key '{key}'", severity="error", code="loc-unknown")
+        if isinstance(payload, dict) and isinstance(key, str) and key:
+            _validate_wildcards([key], payload, "$loc", ctx, path, report)
     elif source_key == "$if" and isinstance(payload, dict):
         _validate_slot(
             payload.get("condition"), _CONDITION_SCHEMA, ctx, f"{path}/$if/condition", report,
@@ -2632,6 +3002,18 @@ def _validate_property_value(
             payload.get("value"), _CONDITION_SCHEMA, ctx, f"{path}/$not/value", report,
             code="not-value-empty", message="value to invert is unset",
         )
+    elif source_key in ("$and", "$or"):
+        name = source_key[1:]
+        if not isinstance(payload, list):
+            report.add(path, f"{source_key} payload must be a list of conditions")
+        elif not payload:
+            report.warn(path, f"{name} has no conditions", severity="error", code=f"{name}-empty")
+        else:
+            for i, item in enumerate(payload):
+                _validate_slot(
+                    item, _CONDITION_SCHEMA, ctx, f"{path}/{source_key}/{i}", report,
+                    code=f"{name}-item-empty", message="condition is unset",
+                )
     elif source_key == "$formula" and isinstance(payload, dict):
         expression = payload.get("expression")
         if not isinstance(expression, str) or expression.strip() == "":
@@ -2646,6 +3028,12 @@ def _validate_property_value(
             )
         else:
             _validate_wildcards([expression], payload, "$formula", ctx, path, report)
+        if payload.get("round") is not True and _takes_only_whole_numbers(schema_field):
+            report.warn(
+                f"{path}/$formula",
+                "this field takes whole numbers, but the formula is not rounded",
+                severity="warning", code="formula-fraction",
+            )
     elif source_key == "$stringExpr" and isinstance(payload, dict):
         template = payload.get("template")
         if not isinstance(template, str) or template == "":
@@ -2707,6 +3095,8 @@ def _validate_property_value(
             )
         else:
             _check_component_prop(payload, schema_field, ctx, path, report)
+    elif source_key == "$overlay" and isinstance(payload, dict):
+        _check_overlay(payload, ctx, path, report)
     elif source_key == "$repeatItem":
         if not isinstance(payload, dict):
             report.add(path, "$repeatItem payload must be an object")
@@ -2727,6 +3117,11 @@ def _validate_property_value(
             report.warn(
                 f"{path}/$recipe/type", "recipe type is empty",
                 severity="warning", code="recipe-type-empty",
+            )
+        if payload.get("field") in ("parameterValue", "parameterChanged") and not payload.get("parameter"):
+            report.warn(
+                f"{path}/$recipe/parameter", "recipe parameter is empty",
+                severity="warning", code="recipe-parameter-empty",
             )
 
 
@@ -2772,6 +3167,8 @@ def validate_widget_node(
                     # Typed as actions only by the component's declaration, which
                     # nothing walked before: a missing page is a diagnostic here.
                     _validate_actions_softly(value, prop_ctx, prop_path, report)
+    if wtype == "Repeater" and isinstance(properties, dict):
+        _validate_placed_items(properties, f"{path}/properties", report)
     # Walk children
     child_ctx = ctx
     items_key = ctx.repeat_items_key(wtype)
@@ -2794,6 +3191,40 @@ def validate_widget_node(
             for i, child in enumerate(children):
                 validate_widget_node(child, child_ctx, f"{path}/{child_field}/{i}", report)
     return report
+
+
+_PLACED_SIDES = frozenset({"top", "bottom", "left", "right"})
+
+
+def _validate_placed_items(properties: dict, path: str, report: ValidationReport) -> None:
+    """A Repeater placing its copies at item x / y reads each element's `x` and
+    `y` (0 to 1 across and down the image) and optional `side`. Only a literal list
+    is checked; a variable or API list is known only when it renders."""
+    if properties.get("placement") != "items":
+        return
+    items = properties.get("items")
+    path = f"{path}/items"
+    if isinstance(items, dict) and isinstance(items.get("$static"), list):
+        items, path = items["$static"], f"{path}/$static"
+    if not isinstance(items, list):
+        return
+    for i, item in enumerate(items):
+        rec = item if isinstance(item, dict) else {}
+        for axis in ("x", "y"):
+            v = rec.get(axis)
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v <= 1:
+                report.warn(
+                    f"{path}/{i}/{axis}",
+                    f"'{axis}' must be a number from 0 to 1 to place this copy",
+                    code="repeat-placement",
+                )
+        side = rec.get("side")
+        if side is not None and side not in _PLACED_SIDES:
+            report.warn(
+                f"{path}/{i}/side",
+                "'side' must be top, bottom, left or right",
+                code="repeat-placement",
+            )
 
 
 def _is_actions_field(field_schema: Any) -> bool:
@@ -2868,6 +3299,7 @@ _SHELL_BINDABLE_FIELDS: dict[str, dict[str, str]] = {
     "expanded": {"type": "boolean"},
     "overlay": {"type": "boolean"},
     "fullHeight": {"type": "boolean"},
+    "floating": {"type": "boolean"},
     "expandedSize": {"type": "string"},
     "collapsedSize": {"type": "string"},
     "background": {"type": "color"},
@@ -3013,7 +3445,16 @@ def validate_global_events(events: Any, ctx: ValidationContext) -> ValidationRep
     ctx = replace(ctx, input_scope=False)
     if isinstance(events, dict):
         for event_name, actions in events.items():
-            validate_action_targets(actions, ctx, f"/{event_name}", report)
+            if event_name != "onVariableChanged":
+                validate_action_targets(actions, ctx, f"/{event_name}", report)
+        triggers = events.get("onVariableChanged")
+        for i, trigger in enumerate(triggers if isinstance(triggers, list) else []):
+            if not isinstance(trigger, dict):
+                continue
+            path = f"/onVariableChanged/{i}"
+            if "variable" in trigger:
+                _validate_action_value(trigger["variable"], None, ctx, f"{path}/variable", report)
+            validate_action_targets(trigger.get("actions"), ctx, f"{path}/actions", report)
     return report
 
 

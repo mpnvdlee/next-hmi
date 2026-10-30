@@ -19,11 +19,13 @@ import AddButton from '../../ui/AddButton';
 import BoolButtonGroup from '../../ui/BoolButtonGroup';
 import PropertiesEmpty from '../../ui/PropertiesEmpty';
 import { CollapsiblePropertyCard } from '../../editor/PropertySourceEditor/editors/shared';
+import { TakesOneValueContext } from '../../editor/PropertySourceEditor/slotContext';
 import { getStaticString } from '../../editor/propertyValueUtils';
 import { varBindingOf } from '../../editor/bindingPickerUtils';
 import { findAlarm, resolveAlarmString } from '../alarmDisplayUtils';
 import { ClearIcon } from '../../ui/actionIcons';
 import type { SchemaField } from '@shared/types/widgetSchema';
+import { LocPlaceholdersContext } from '../../editor/PropertySourceEditor/locPlaceholdersContext';
 
 const NUMERIC_DATA_TYPES = ['Integer', 'Float'];
 
@@ -53,7 +55,12 @@ export default function AlarmPropertiesPanel({
   if (selection.type === 'alarm') {
     const alarm = findAlarm(config, selection.id);
     if (!alarm) return null;
-    return <AlarmPanel alarm={alarm} onPatch={onPatchAlarm} />;
+    // An alarm fills its text's {1}, {2} from its own values when it fires.
+    return (
+      <LocPlaceholdersContext.Provider value={false}>
+        <AlarmPanel alarm={alarm} onPatch={onPatchAlarm} />
+      </LocPlaceholdersContext.Provider>
+    );
   }
 
   return null;
@@ -103,7 +110,7 @@ function AlarmPanel({
     scope: string,
     current: unknown,
     apply: (binding: VariableBinding) => void,
-    filter: { label: string; type: string | string[] },
+    filter: { label: string; type?: string | string[] },
   ): OpenBindingPicker {
     return (onPick, _currentBinding, slot) => {
       openBindingPicker('', scope, {
@@ -147,6 +154,16 @@ function AlarmPanel({
     (binding) => updateTrigger({ max: { $var: binding } }),
     { label: 'Max threshold', type: NUMERIC_DATA_TYPES },
   );
+
+  const { values } = alarm;
+
+  function setValues(next: unknown[]) {
+    onPatch(alarm.id, { values: next });
+  }
+
+  function addValue() {
+    setValues([...values, { $var: { path: '' } }]);
+  }
 
   function addResolution() {
     onPatch(alarm.id, { resolutions: [...alarm.resolutions, ''] });
@@ -242,6 +259,53 @@ function AlarmPanel({
             labels={['On', 'Off']}
           />
         </PropRow>
+      </div>
+
+      {/* ── Values ── entry n fills the `{n}` placeholders in title and description. */}
+      <div className="cfg-section">
+        <div className="cfg-editor-actions">
+          <div className="cfg-editor-actions__title-row">
+            <div className="cfg-section__title">Values</div>
+            <AddButton title="Add value" onClick={addValue} />
+          </div>
+
+          {/* Each value fills one placeholder, so a whole array asks for its element. */}
+          <TakesOneValueContext.Provider value={true}>
+            {values.map((ref, i) => (
+              <CollapsiblePropertyCard
+                key={i}
+                title={`{${i + 1}}`}
+                value={ref}
+                schema={{ type: 'String', label: `{${i + 1}}` } as SchemaField}
+                slot={true}
+                sourceless
+                onChange={(v) => setValues(values.map((r, j) => (j === i ? v : r)))}
+                onOpenBindingPicker={makePicker(
+                  'alarm-value',
+                  ref,
+                  (binding) => setValues(values.map((r, j) => (j === i ? { $var: binding } : r))),
+                  { label: `Value {${i + 1}}` },
+                )}
+                actions={
+                  <button
+                    type="button"
+                    className="cfg-row-action-btn cfg-row-action-btn--stretch"
+                    title="Remove value"
+                    onClick={() => setValues(values.filter((_, j) => j !== i))}
+                  >
+                    <ClearIcon />
+                  </button>
+                }
+              />
+            ))}
+          </TakesOneValueContext.Provider>
+
+          {values.length === 0 && (
+            <span className="cfg-prop-hint cfg-section__empty">
+              No values yet. Add one to show it in the title or description as {'{1}'}.
+            </span>
+          )}
+        </div>
       </div>
 
       {/* ── Trigger ── */}
@@ -391,15 +455,27 @@ function AlarmPanel({
 
       {/* ── Ack Permissions ── */}
       <div className="cfg-section">
-        <div className="cfg-section__title">Acknowledgment Permissions</div>
-        <GroupsField
-          label="Allowed groups"
-          description="Empty → any user may acknowledge."
-          value={alarm.ack_groups}
-          onChange={(v) =>
-            onPatch(alarm.id, { ack_groups: Array.isArray(v) ? (v as string[]) : [] })
-          }
-        />
+        <div className="cfg-section__title">Acknowledgment</div>
+        <PropRow
+          label="Needs acknowledgement"
+          description="Off: the alarm fires already acknowledged, so it shows no ACK and is not counted as unacknowledged."
+        >
+          <BoolButtonGroup
+            value={alarm.ack_required !== false}
+            onChange={(v) => onPatch(alarm.id, { ack_required: v })}
+            labels={['On', 'Off']}
+          />
+        </PropRow>
+        {alarm.ack_required !== false && (
+          <GroupsField
+            label="Allowed groups"
+            description="Empty → any user may acknowledge."
+            value={alarm.ack_groups}
+            onChange={(v) =>
+              onPatch(alarm.id, { ack_groups: Array.isArray(v) ? (v as string[]) : [] })
+            }
+          />
+        )}
       </div>
     </div>
   );

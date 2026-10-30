@@ -51,12 +51,23 @@ describe('propertySourceRules', () => {
   });
 
   it('offers a source only where its produced type is the field type', () => {
-    expect(getDefaultPropertySources('integer')).not.toContain('$formula');
+    expect(getDefaultPropertySources('integer')).not.toContain('$time');
     expect(getDefaultPropertySources('float')).not.toContain('$alarmCount');
     expect(getDefaultPropertySources('string')).not.toContain('$compare');
     expect(getDefaultPropertySources('datetime')).not.toContain('$stringExpr');
     expect(getDefaultPropertySources('datetime')).toContain('$time');
     expect(getDefaultPropertySources('integer')).toContain('$random');
+  });
+
+  it('offers a formula on a whole-number field, rounding from the start there', () => {
+    expect(getDefaultPropertySources('integer')).toContain('$formula');
+    const create = PROPERTY_SOURCES.$formula.createDefault;
+    expect(create('integer', undefined, ['integer'])).toEqual({
+      $formula: { expression: '', wildcards: {}, round: true },
+    });
+    expect(create('float', undefined, ['float', 'integer'])).toEqual({
+      $formula: { expression: '', wildcards: {} },
+    });
   });
 
   it('offers a number-producing source on a duration field', () => {
@@ -117,8 +128,11 @@ describe('propertySourceRules', () => {
     }
   });
 
-  it('contains all 27 valid source types', () => {
-    expect(PROPERTY_SOURCE_KEYS).toHaveLength(27);
+  it('contains all 30 valid source types', () => {
+    expect(PROPERTY_SOURCE_KEYS).toHaveLength(30);
+    expect(PROPERTY_SOURCE_KEYS).toContain('$and');
+    expect(PROPERTY_SOURCE_KEYS).toContain('$or');
+    expect(PROPERTY_SOURCE_KEYS).toContain('$overlay');
     expect(PROPERTY_SOURCE_KEYS).toContain('$static');
     expect(PROPERTY_SOURCE_KEYS).toContain('$var');
     expect(PROPERTY_SOURCE_KEYS).toContain('$loc');

@@ -62,6 +62,8 @@
 }
 
 .hmi-layout {
+  /* Containing block for a floating full-height sidebar. */
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -91,6 +93,8 @@
 }
 
 .hmi-body {
+  /* Containing block for a floating sidebar. */
+  position: relative;
   display: flex;
   flex: 1;
   overflow: hidden;
@@ -110,9 +114,7 @@
   /* A flex column with a definite height, always — not only when the page has a
      header or footer. `.hmi-page__content` is the one scrollport below this, and
      it can only own the scrolling (and hand its children free space for a
-     `grow`) if every ancestor down to it has a definite height. Guarding this on
-     `:has(header/footer)` used to leave a plain page as nested auto-height
-     blocks, where `grow: 1` and `height: 100%` both silently did nothing.
+     `grow`) if every ancestor down to it has a definite height.
      Still `auto`, not `hidden`: a page routes its own overflow into
      `.hmi-page__content`, but `.hmi-main` also renders things that are not a
      page — the "no page" notice, the page-switch overlay — and clipping those
@@ -186,40 +188,22 @@
 }
 
 /* ── Flow translation ───────────────────────────────────────────
-   Each flex child emits its own two axes' flow-intent as axis-neutral custom
-   properties — `--w-*` for the screen's width axis, `--h-*` for height —
-   written by `selfLayoutStyle()` (layoutUtils.ts) from nothing but its own
-   `widthMode`/`heightMode`, with no idea which one its parent treats as main.
-   That is this block's job: read here, off the flex *parent*'s own
-   `data-flow-direction` (which screen axis is main) and `data-flow-align`
-   (whether an unset cross-axis child already stretches), never off the child.
-   A `$var`/`$switch`-bound `direction` just works — the runtime resolves it
-   like any other property source and writes the plain result into the
-   attribute (`containerLayoutProps` in layoutUtils.ts), so this rule sees the
-   same DOM state a literal `row`/`column` would have produced.
-   Three selector paths per rule, one per nesting depth, each matching any of
-   the four classes that can be the flex item: plain; the editor preview
-   (`.hmi-preview-node` is `display: contents`, so the actual flex item is the
-   element inside it); and a *second*, nested preview node — a `$component:`
-   instance in the editor gets one `.hmi-preview-node` for the instance
-   (`WidgetRenderer` for the `$component:` node itself) and another for the
-   definition's root widget (the recursive `WidgetRenderer` call
-   `ComponentRenderer` makes), so its root widget sits two `display: contents`
-   layers down, not one. The binding/lock wrapper is in the `:is()` list
-   because it is itself `position: relative`, so it — not the widget it wraps
-   — is the flex item; at each depth it needs the same declarations the plain
-   classes get, which is why one list covers both. That is more depth than the
-   shrink pins below need, since those only pin the plain and editor-preview
-   shapes. A component definition whose
-   own root is itself a `$component:` instance nests a third nothing-lost
-   `display: contents` layer this block does not reach — not a shape any
-   project actually builds today, but worth knowing if one ever does.
-   Placed before the shrink pins on purpose: both this block's rules and the
-   pins carry the same specificity (one attribute or `:is()` group, plus one
-   class), so for the one case they overlap — a Fill child inside page/page-
-   group chrome, which leaves `--w-shrink`/`--h-shrink` unset — the *later*
-   rule wins the tie. The pins must stay later so `flex-shrink: 0` keeps
-   beating this block's `var(--w-shrink, 1)` fallback there. */
+   Each flex child emits its two axes' flow-intent as axis-neutral custom
+   properties — `--w-*` for width, `--h-*` for height — written by
+   `selfLayoutStyle()` (layoutUtils.ts) from its own `widthMode`/`heightMode`
+   alone. This block decides which half applies, from the flex *parent*'s
+   `data-flow-direction` (which axis is main) and `data-flow-align` (whether an
+   unset cross-axis child already stretches). A bound `direction` works too:
+   the runtime writes the resolved value into the attribute.
+   Three selector paths per rule, one per nesting depth: plain; inside the
+   `display: contents` `.hmi-preview-node` wrapper `WidgetRenderer` draws; and
+   inside two of them, which is where a `$component:` instance's root widget
+   sits (one wrapper for the instance, one for the definition root). The
+   binding/lock wrapper is in the `:is()` list because it is `position:
+   relative`, so it — not the widget it wraps — is the flex item.
+   Placed before the shrink pins on purpose: both carry the same specificity,
+   and where they overlap (a Fill child in page/page-group chrome) the pins'
+   `flex-shrink: 0` must win over this block's `var(--w-shrink, 1)`. */
 [data-flow-direction='row']
   > :is(.hmi-component, .hmi-container, .hmi-binding-wrapper, .hmi-lock-wrapper),
 [data-flow-direction='row']
@@ -299,8 +283,8 @@
    further below; against the flow-translation block above the specificity
    ties, so source order decides and these pins have to stay after it — see
    the note there.
-   The `> .hmi-preview-node > …` paths cover the editor preview, where
-   WidgetRenderer wraps each widget in a `display: contents` node — the
+   The `> .hmi-preview-node > …` paths cover the `display: contents` node
+   WidgetRenderer wraps each widget in, runtime and editor alike — the
    actual flex item there is the inner `.hmi-component` / `.hmi-container`.
    The second, two-preview-node path is the same `$component:` instance case
    the flow-translation block above documents — a component placed directly
@@ -317,12 +301,17 @@
 }
 
 /* Off-screen windowing: let the browser skip layout/paint for top-level page
-   widgets that are scrolled out of view. Scoped to direct children of the
-   scrolling content region and to the live runtime only (the `.hmi-preview-node`
-   editor wrapper is excluded so authoring hit-testing/selection stays exact).
+   widgets that are scrolled out of view. Scoped to the top-level widgets of
+   the scrolling content region, through their `display: contents` wrapper,
+   and kept out of the editor canvas (`.hmi-root--config-mode`) so authoring
+   hit-testing/selection stays exact.
    `contain-intrinsic-size: auto <fallback>` makes the browser remember each
    widget's real size after first render, so the scrollbar stays stable. */
-.hmi-page__content > :is(.hmi-component, .hmi-container) {
+.hmi-page__content > :is(.hmi-component, .hmi-container),
+.hmi-root:not(.hmi-root--config-mode)
+  .hmi-page__content
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container) {
   content-visibility: auto;
   contain-intrinsic-size: auto 48px;
 }
@@ -382,6 +371,10 @@
 :is(.hmi-page-group-shell__header, .hmi-page-group-shell__footer)
   > :is(.hmi-component, .hmi-container),
 :is(.hmi-page-group-shell__header, .hmi-page-group-shell__footer)
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container),
+:is(.hmi-page-group-shell__header, .hmi-page-group-shell__footer)
+  > .hmi-preview-node
   > .hmi-preview-node
   > :is(.hmi-component, .hmi-container) {
   flex-shrink: 0;
@@ -494,14 +487,24 @@
 /* ── Virtual Input Panels ─────────────────────────────────────────────────── */
 .hmi-virtual-input__dock {
   position: fixed;
-  z-index: 120;
+  z-index: var(--hmi-z-input);
 }
 
+/* The keyboard, at the bottom centre. The dock takes its panel's width, so
+   the panel is what gets centred. */
 .hmi-virtual-input__dock--center {
   left: 50%;
   bottom: var(--hmi-virtual-dock-offset);
   transform: translateX(-50%);
-  width: var(--hmi-virtual-dock-width);
+  width: max-content;
+}
+
+/* A numpad docked center: the middle of the screen, both ways. */
+.hmi-virtual-input__dock--middle {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: max-content;
 }
 
 .hmi-virtual-input__dock--bottom-right {
@@ -561,6 +564,38 @@
   color: var(--hmi-text);
 }
 
+.hmi-virtual-input__field {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: var(--hmi-virtual-key-padding-y-compact) var(--hmi-input-padding-x);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius);
+  background: var(--hmi-bg);
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  transition: border-color var(--hmi-motion-fast) ease;
+}
+
+.hmi-virtual-input__field--masked {
+  -webkit-text-security: disc;
+}
+
+.hmi-virtual-input__field:focus {
+  outline: none;
+  border-color: var(--hmi-accent);
+}
+
+.hmi-virtual-input__field::placeholder {
+  color: var(--hmi-text-muted);
+  opacity: 1;
+}
+
+.hmi-virtual-input__value--invalid .hmi-virtual-input__field {
+  border-color: var(--hmi-fault);
+}
+
 .hmi-virtual-input__value-unit {
   font-family: var(--hmi-type-caption-font);
   font-size: var(--hmi-type-caption-size);
@@ -578,12 +613,36 @@
   color: var(--hmi-fault);
 }
 
-.hmi-virtual-input__range {
+.hmi-virtual-input__range,
+.hmi-virtual-input__error {
   text-align: center;
   font-family: var(--hmi-type-caption-font);
   font-size: var(--hmi-type-caption-size);
   font-weight: var(--hmi-type-caption-weight);
   color: var(--hmi-text-muted);
+}
+
+.hmi-virtual-input__error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--hmi-space-sm);
+  color: var(--hmi-fault);
+}
+
+/* Sized from the key's own font, so a theme's key size scales the icon with it. */
+.hmi-virtual-input__key-icon {
+  display: block;
+  width: 1.4em;
+  height: 1.4em;
+  margin: 0 auto;
+  flex-shrink: 0;
+}
+
+.hmi-virtual-input__error .hmi-virtual-input__key-icon {
+  width: 1.2em;
+  height: 1.2em;
+  margin: 0;
 }
 
 .hmi-virtual-input__row {
@@ -595,12 +654,34 @@
   grid-template-columns: repeat(60, minmax(0, 1fr));
 }
 
-.hmi-virtual-input__row--3 {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+/* Themes → Numpad & keyboard: the key gap spaces keyboard keys both ways, like the numpad grid. */
+.hmi-virtual-input__keyboard-rows {
+  display: grid;
+  gap: var(--hmi-numpad-gap);
 }
 
-.hmi-virtual-input__panel--compact .hmi-virtual-input__row {
-  gap: var(--hmi-virtual-panel-gap-compact);
+.hmi-virtual-input__panel--keyboard .hmi-virtual-input__row--keyboard {
+  gap: var(--hmi-numpad-gap);
+}
+
+.hmi-virtual-input__keys {
+  display: grid;
+  grid-template-columns: repeat(var(--hmi-numpad-columns), minmax(0, 1fr));
+  gap: var(--hmi-numpad-gap);
+}
+
+/* Four columns: the digits keep three, Back / Clear / Enter stack in the fourth. Placed
+   explicitly so the digits auto-flow around them. */
+[data-hmi-numpad-columns='4'] .hmi-virtual-input__keys .hmi-virtual-input__key--back {
+  grid-area: 1 / 4;
+}
+
+[data-hmi-numpad-columns='4'] .hmi-virtual-input__keys .hmi-virtual-input__key--clear {
+  grid-area: 2 / 4;
+}
+
+[data-hmi-numpad-columns='4'] .hmi-virtual-input__keys .hmi-virtual-input__key--accent {
+  grid-area: 3 / 4 / span 2;
 }
 
 .hmi-virtual-input__key {
@@ -620,9 +701,27 @@
     color var(--hmi-motion-fast) ease;
 }
 
+.hmi-virtual-input__key:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.hmi-virtual-input__panel--keyboard {
+  width: var(--hmi-virtual-dock-width);
+}
+
 .hmi-virtual-input__panel--keyboard .hmi-virtual-input__key {
   min-width: 0;
+  /* Width comes from the 60-column grid, so the key size only sets the height. */
+  min-height: var(--hmi-numpad-key-size, auto);
   padding-inline: var(--hmi-virtual-key-padding-x-compact);
+  font-family: var(--hmi-numpad-key-font);
+  font-size: var(--hmi-numpad-key-font-size);
+  font-weight: var(--hmi-numpad-key-font-weight);
+}
+
+.hmi-virtual-input__panel--keyboard .hmi-virtual-input__key--modifier {
+  font-size: var(--hmi-type-caption-size);
 }
 
 .hmi-virtual-input__key--size-1 {
@@ -697,28 +796,46 @@
 }
 
 .hmi-virtual-input__key--accent {
-  background: var(--hmi-accent);
-  border-color: var(--hmi-accent);
+  background: var(--hmi-numpad-accent);
+  border-color: var(--hmi-numpad-accent);
   color: var(--hmi-accent-on);
 }
 
 .hmi-virtual-input__key--accent:hover {
-  background: var(--hmi-accent-ink);
-  border-color: var(--hmi-accent-ink);
+  background: var(--hmi-numpad-accent-ink);
+  border-color: var(--hmi-numpad-accent-ink);
 }
 
 .hmi-virtual-input__panel--compact .hmi-virtual-input__key {
+  /* No key size set: the padding gives the height, as before the token existed. */
+  min-height: var(--hmi-numpad-key-size, auto);
   padding: var(--hmi-virtual-key-padding-y-compact) var(--hmi-virtual-key-padding-x-compact);
-  font-size: var(--hmi-virtual-key-font-size-compact);
+  font-family: var(--hmi-numpad-key-font);
+  font-size: var(--hmi-numpad-key-font-size);
+  font-weight: var(--hmi-numpad-key-font-weight);
 }
 
-.hmi-virtual-input__panel--compact .hmi-virtual-input__row--actions .hmi-virtual-input__key {
+.hmi-virtual-input__panel--compact .hmi-virtual-input__key--action {
   font-size: var(--hmi-virtual-key-font-size-actions-compact);
+}
+
+/* A keypad drawn inside its widget: the widget's card is the panel, so no
+   frame of its own, and it fills the width it is given. Two classes so the
+   compact panel's mobile width further down cannot win. */
+.hmi-virtual-input__panel.hmi-virtual-input__panel--inline {
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
 @media (max-width: 820px) {
   .hmi-virtual-input__dock--center {
     bottom: var(--hmi-virtual-dock-offset-mobile);
+  }
+
+  .hmi-virtual-input__panel--keyboard {
     width: var(--hmi-virtual-dock-width-mobile);
   }
 
@@ -751,14 +868,9 @@
     gap: var(--hmi-virtual-panel-gap-compact);
   }
 
-  .hmi-virtual-input__panel--compact .hmi-virtual-input__row {
-    gap: var(--hmi-virtual-panel-gap-compact);
-  }
-
   .hmi-virtual-input__panel--compact .hmi-virtual-input__key {
     padding: var(--hmi-virtual-key-padding-y-compact-mobile)
       var(--hmi-virtual-key-padding-x-compact-mobile);
-    font-size: var(--hmi-virtual-key-font-size-compact-mobile);
   }
 }
 

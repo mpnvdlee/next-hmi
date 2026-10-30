@@ -229,15 +229,23 @@ describe('SchemaFieldRow mixed source badge', () => {
   it('badges the source every selected widget shares', () => {
     renderRow({ source: '$var' });
 
-    expect(screen.getByLabelText('Variable')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Static Value')).not.toBeInTheDocument();
+    expect(
+      document.querySelector<HTMLElement>('.cfg-property-source-badge[title="Variable"]')!,
+    ).toBeInTheDocument();
+    expect(
+      document.querySelector('.cfg-property-source-badge[title="Static Value"]'),
+    ).not.toBeInTheDocument();
   });
 
   it('badges "mixed" when the widgets disagree on the source', () => {
     renderRow({ source: null });
 
-    expect(screen.getByLabelText('Mixed sources')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Static Value')).not.toBeInTheDocument();
+    expect(
+      document.querySelector<HTMLElement>('.cfg-property-source-badge[title="Mixed sources"]')!,
+    ).toBeInTheDocument();
+    expect(
+      document.querySelector('.cfg-property-source-badge[title="Static Value"]'),
+    ).not.toBeInTheDocument();
   });
 
   // A struct row binds one way whatever else the selection disagrees about, and
@@ -255,15 +263,46 @@ describe('SchemaFieldRow mixed source badge', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Variable')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Mixed sources')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Static Value')).not.toBeInTheDocument();
+    expect(
+      document.querySelector<HTMLElement>('.cfg-property-source-badge[title="Variable"]')!,
+    ).toBeInTheDocument();
+    expect(
+      document.querySelector('.cfg-property-source-badge[title="Mixed sources"]'),
+    ).not.toBeInTheDocument();
+    expect(
+      document.querySelector('.cfg-property-source-badge[title="Static Value"]'),
+    ).not.toBeInTheDocument();
+  });
+
+  // A writing field needs a variable to write to: no literal, no calculation.
+  it('offers a writing number field a variable binding and nothing else', async () => {
+    const write: SchemaField = { type: 'float', label: 'Setpoint', write: true };
+    render(
+      <SchemaFieldRow
+        schema={write}
+        value={{ $formula: { expression: '{1} * 2', wildcards: { 1: 3 } } }}
+        onChange={vi.fn()}
+        propKey="setpoint"
+      />,
+    );
+
+    expect(screen.queryByLabelText('Formula')).not.toBeInTheDocument();
+    const pill = document
+      .querySelector<HTMLElement>('.cfg-property-source-badge[title="Variable"]')!
+      .closest('button')!;
+    expect(pill).toHaveClass('cfg-source-pill--single');
+    await userEvent.click(pill);
+    expect(document.querySelector('.cfg-source-pill__option-label')).toBeNull();
   });
 
   it('gives a shared static value when Static is picked on a mixed static row', async () => {
     const onChange = renderRow({ source: 'static' });
 
-    await userEvent.click(screen.getByLabelText('Static Value').closest('button')!);
+    await userEvent.click(
+      document
+        .querySelector<HTMLElement>('.cfg-property-source-badge[title="Static Value"]')!
+        .closest('button')!,
+    );
     await userEvent.click(
       screen.getByText('Static Value', { selector: '.cfg-source-pill__option-label' }),
     );
@@ -325,7 +364,9 @@ describe('SchemaFieldRow select options that look like a source', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Localizable Text')).toBeInTheDocument();
+    expect(
+      document.querySelector<HTMLElement>('.cfg-property-source-badge[title="Localizable Text"]')!,
+    ).toBeInTheDocument();
   });
 
   // The pill has to agree with the body. Badging `$loc` while the row renders
@@ -341,8 +382,12 @@ describe('SchemaFieldRow select options that look like a source', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Static Value')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Localizable Text')).not.toBeInTheDocument();
+    expect(
+      document.querySelector<HTMLElement>('.cfg-property-source-badge[title="Static Value"]')!,
+    ).toBeInTheDocument();
+    expect(
+      document.querySelector('.cfg-property-source-badge[title="Localizable Text"]'),
+    ).not.toBeInTheDocument();
   });
 
   // Picking the source the row is already showing must be a no-op. Against a
@@ -359,7 +404,11 @@ describe('SchemaFieldRow select options that look like a source', () => {
       />,
     );
 
-    await userEvent.click(screen.getByLabelText('Static Value').closest('button')!);
+    await userEvent.click(
+      document
+        .querySelector<HTMLElement>('.cfg-property-source-badge[title="Static Value"]')!
+        .closest('button')!,
+    );
     await userEvent.click(
       screen.getByText('Static Value', { selector: '.cfg-source-pill__option-label' }),
     );
@@ -379,7 +428,11 @@ describe('SchemaFieldRow select options that look like a source', () => {
       />,
     );
 
-    await userEvent.click(screen.getByLabelText('Static Value').closest('button')!);
+    await userEvent.click(
+      document
+        .querySelector<HTMLElement>('.cfg-property-source-badge[title="Static Value"]')!
+        .closest('button')!,
+    );
 
     expect(
       screen.getByText('Variable', { selector: '.cfg-source-pill__option-label' }),
@@ -405,7 +458,9 @@ describe('SchemaFieldRow select options that look like a source', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Variable')).toBeInTheDocument();
+    expect(
+      document.querySelector<HTMLElement>('.cfg-property-source-badge[title="Variable"]')!,
+    ).toBeInTheDocument();
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   });
 });
