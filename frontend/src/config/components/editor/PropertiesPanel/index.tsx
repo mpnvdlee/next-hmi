@@ -1405,7 +1405,9 @@ function GlobalEventsPanel() {
         ))}
         <VariableTriggersInput
           value={globalEvents.onVariableChanged}
-          onChange={(onVariableChanged) => updateGlobalEvents({ ...globalEvents, onVariableChanged })}
+          onChange={(onVariableChanged) =>
+            updateGlobalEvents({ ...globalEvents, onVariableChanged })
+          }
         />
       </div>
     </PanelScopeContext.Provider>

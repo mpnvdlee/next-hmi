@@ -46,7 +46,11 @@ export function viewportFromShell(saved: EditorViewport | undefined): ViewportCh
   const idx = saved.preset === CUSTOM_ID ? CUSTOM_VIEWPORT : Math.max(preset, 0);
   const side = (px: unknown, fallback: number) =>
     typeof px === 'number' && Number.isFinite(px) ? clampViewportSide(px) : fallback;
-  return { idx, w: side(saved.width, VIEWPORT_DEFAULT.w), h: side(saved.height, VIEWPORT_DEFAULT.h) };
+  return {
+    idx,
+    w: side(saved.width, VIEWPORT_DEFAULT.w),
+    h: side(saved.height, VIEWPORT_DEFAULT.h),
+  };
 }
 
 export function viewportToShell(choice: ViewportChoice): EditorViewport {
