@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useVariablesDomainStore } from '@config/store/domains/variablesDomainStore';
 import type { DatasourceConfig, FolderEntry, VariableEntry } from '@shared/types/datasource';
@@ -39,6 +39,24 @@ const ADS: DatasourceConfig = {
   ],
 };
 
+const MARKED = {
+  node_id: '',
+  display_name: 'PLC',
+  data_type: null,
+  browse_mode: 'marked',
+  children: [
+    {
+      node_id: 'MAIN',
+      display_name: 'MAIN',
+      data_type: null,
+      children: [
+        { node_id: 'MAIN.a', display_name: 'a', data_type: 'Double' },
+        { node_id: 'MAIN.c', display_name: 'c', data_type: 'Int32', writable: true },
+      ],
+    },
+  ],
+};
+
 function render() {
   return renderHook(() =>
     useDatasourceVariableTableController({ datasource: ADS, onVariablesChange: vi.fn() }),
@@ -52,7 +70,12 @@ function vars(tree: unknown): VariableEntry[] {
 describe('Check against PLC', () => {
   beforeEach(() => {
     mockedApiJson.mockReset();
-    useVariablesDomainStore.setState({ selectedName: 'plc', pendingBrowse: {}, varsDrafts: {} });
+    useVariablesDomainStore.setState({
+      selectedName: 'plc',
+      pendingBrowse: {},
+      varsDrafts: {},
+      collapsedDrafts: {},
+    });
   });
 
   afterEach(() => {
@@ -104,11 +127,130 @@ describe('Check against PLC', () => {
     });
   });
 
-  it('opens the browse dialog instead of a full-tree browse', async () => {
+  it('shows the PLC variables in the table instead of a full-tree browse, adding a ticked one', async () => {
+    mockedApiJson.mockImplementation((url: string) =>
+      Promise.resolve(url.endsWith('/check-variables') ? { missing: [], changed: {} } : MARKED),
+    );
     const { result } = render();
     await act(() => result.current.handleBrowse());
-    expect(result.current.adsBrowseOpen).toBe(true);
-    expect(mockedApiJson).not.toHaveBeenCalled();
+    expect(result.current.showPlc).toBe(true);
+    await waitFor(() => expect(result.current.plcBrowse.nodes).not.toBeNull());
+
+    // Saved folders open collapsed: MAIN counts what the PLC has new in it.
+    expect(result.current.rows[0]).toMatchObject({ kind: 'folder', path: 'MAIN', plcNew: 1 });
+    act(() => result.current.toggleFolder('MAIN'));
+
+    // Saved a and b, then the PLC's c — a is saved, so it is not offered again.
+    const plcRows = result.current.rows.filter((r) => r.kind === 'plc');
+    expect(plcRows.map((r) => r.path)).toEqual(['MAIN/c']);
+    expect(result.current.plcNewCount).toBe(1);
+
+    act(() => result.current.addFromPlc(['MAIN.c']));
+    expect(vars(result.current.tree).map((v) => [v.node_id, v.enabled])).toEqual([
+      ['MAIN.a', true],
+      ['MAIN.b', true],
+      ['MAIN.c', true],
+    ]);
+    expect(result.current.rows.some((r) => r.kind === 'plc')).toBe(false);
+  });
+
+  it('marks, while browsing, the saved variables the PLC lacks or types differently', async () => {
+    mockedApiJson.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.endsWith('/check-variables')
+          ? { missing: ['MAIN.b'], changed: { 'MAIN.A': 'Float' } }
+          : MARKED,
+      ),
+    );
+    const { result } = render();
+    expect(result.current.plcMarks).toBeNull();
+    act(() => result.current.togglePlc());
+    await waitFor(() => expect(result.current.plcMarks).not.toBeNull());
+    expect([...result.current.plcMarks!.missing]).toEqual(['main.b']);
+    expect([...result.current.plcMarks!.changed]).toEqual([['main.a', 'Float']]);
+    // Marks only: the tree is as saved.
+    expect(vars(result.current.tree)[1].present_on_server).toBe(false);
+    expect(vars(result.current.tree)[0].data_type).toBe('Double');
+
+    act(() => result.current.togglePlc());
+    expect(result.current.showPlc).toBe(false);
+    expect(result.current.plcMarks).toBeNull();
+  });
+
+  it('browses afresh each time it starts', async () => {
+    mockedApiJson.mockImplementation((url: string) =>
+      Promise.resolve(url.endsWith('/check-variables') ? { missing: [] } : MARKED),
+    );
+    const { result } = render();
+    act(() => result.current.togglePlc());
+    await waitFor(() => expect(result.current.plcBrowse.nodes).not.toBeNull());
+    act(() => result.current.togglePlc());
+    act(() => result.current.togglePlc());
+    await waitFor(() => expect(result.current.plcBrowse.nodes).not.toBeNull());
+    const browses = mockedApiJson.mock.calls.filter(([url]) => url.endsWith('/browse'));
+    expect(browses).toHaveLength(2);
+  });
+
+  it('switches the PLC variables off for another datasource, without browsing it', async () => {
+    mockedApiJson.mockResolvedValue({
+      node_id: '',
+      display_name: 'PLC',
+      data_type: null,
+      children: [],
+    });
+    const { result, rerender } = renderHook(
+      ({ datasource }) =>
+        useDatasourceVariableTableController({ datasource, onVariablesChange: vi.fn() }),
+      { initialProps: { datasource: ADS } },
+    );
+    act(() => result.current.togglePlc());
+    expect(result.current.showPlc).toBe(true);
+
+    rerender({ datasource: { ...ADS, name: 'other' } });
+    expect(result.current.showPlc).toBe(false);
+    await act(async () => {});
+    expect(mockedApiJson.mock.calls.map(([url]) => url)).not.toContain(
+      '/api/datasources/other/browse',
+    );
+  });
+
+  it('loads the lazy level of an open saved folder to show what it has new', async () => {
+    mockedApiJson.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes('node_id=MAIN')
+          ? {
+              node_id: 'MAIN',
+              display_name: 'MAIN',
+              data_type: null,
+              children: [{ node_id: 'MAIN.c', display_name: 'c', data_type: 'Int32' }],
+            }
+          : {
+              node_id: '',
+              display_name: 'PLC',
+              data_type: null,
+              browse_mode: 'lazy',
+              children: [
+                {
+                  node_id: 'MAIN',
+                  display_name: 'MAIN',
+                  data_type: null,
+                  children: [],
+                  has_children: true,
+                },
+              ],
+            },
+      ),
+    );
+    const { result } = render();
+    act(() => result.current.togglePlc());
+    act(() => result.current.toggleFolder('MAIN'));
+    await waitFor(() =>
+      expect(result.current.rows.filter((r) => r.kind === 'plc').map((r) => r.path)).toEqual([
+        'MAIN/c',
+      ]),
+    );
+    // The root, MAIN's level, and the check of the saved variables.
+    expect(mockedApiJson).toHaveBeenCalledTimes(3);
   });
 
   it('keeps a clean result that un-marked a variable, until dismissed', async () => {

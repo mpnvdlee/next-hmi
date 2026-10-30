@@ -4,7 +4,8 @@
  *
  * Up front what every connection needs (PLC address, AMS NetID and port, a
  * Test connection), then how the PLC's AMS route for this HMI comes to exist,
- * then everything else under a collapsed "Advanced" section. Setting keys and
+ * then what the PLC browse shows, then everything else under a collapsed
+ * "Advanced" section. Setting keys and
  * defaults: docs/dev/architecture/data-formats.md (Datasource Files).
  */
 
@@ -32,6 +33,8 @@ export interface AdsLocalIdentity {
 interface Props {
   settings: AdsClientSettings;
   onChange: (key: string, value: unknown) => void;
+  /** The datasource's live connection is up: a test would be refused. */
+  connected?: boolean;
   /** Set while the datasource is connected: the route steps show its values. */
   connectedIdentity?: AdsLocalIdentity | null;
 }
@@ -139,7 +142,12 @@ function TwincatRouteSteps({ netId, ip }: { netId: string | null; ip: string | n
   );
 }
 
-export default function AdsSettingsForm({ settings, onChange, connectedIdentity }: Props) {
+export default function AdsSettingsForm({
+  settings,
+  onChange,
+  connected = false,
+  connectedIdentity,
+}: Props) {
   const host = settings.host ?? '';
   const localRouter = settings.local_router ?? false;
   const routeMethod = settings.route_method ?? 'twincat';
@@ -302,17 +310,26 @@ export default function AdsSettingsForm({ settings, onChange, connectedIdentity 
           max={65535}
           onChange={(v) => onChange('ams_port', v)}
         />
-        <div className="ds-ads__action">
-          <Button
-            variant="neutral"
-            size="sm"
-            onClick={() => void runTest()}
-            disabled={testing || !host.trim()}
-          >
-            {testing ? 'Testing…' : 'Test connection'}
-          </Button>
-          <OutcomeLine outcome={testOutcome} />
-        </div>
+        {connected ? (
+          // The PLC closes a second connection from the same NetID, so a test
+          // now would fail while the live connection works.
+          <p className="ds-ads__hint">
+            Connected to the PLC. It takes one connection from this HMI at a time: Disconnect to
+            test changed settings.
+          </p>
+        ) : (
+          <div className="ds-ads__action">
+            <Button
+              variant="neutral"
+              size="sm"
+              onClick={() => void runTest()}
+              disabled={testing || !host.trim()}
+            >
+              {testing ? 'Testing…' : 'Test connection'}
+            </Button>
+            <OutcomeLine outcome={testOutcome} />
+          </div>
+        )}
       </div>
 
       <div className="cfg-section">
@@ -394,6 +411,48 @@ export default function AdsSettingsForm({ settings, onChange, connectedIdentity 
             )}
           </>
         )}
+      </div>
+
+      <div className="cfg-section">
+        <div className="cfg-section__title">Browse</div>
+        <PropRow label="Browse Root">
+          <input
+            className="cfg-prop-input"
+            type="text"
+            value={settings.browse_root ?? ''}
+            placeholder="e.g. GVL_HMI (default: whole program)"
+            onChange={(e) => onChange('browse_root', e.target.value)}
+          />
+        </PropRow>
+        <PropRow
+          label="Browse Mode"
+          description={
+            browseMode === 'marked'
+              ? 'Only variables marked with one of the attributes below.'
+              : browseMode === 'lazy'
+                ? 'One level at a time: expand a folder or struct to load what is inside.'
+                : 'The whole program at once — can be very large on a real machine.'
+          }
+        >
+          <Select value={browseMode} onChange={(v) => onChange('browse_mode', v)}>
+            <option value="marked">Marked by attribute</option>
+            <option value="lazy">Lazy (one level)</option>
+            <option value="all">All</option>
+          </Select>
+        </PropRow>
+        <PropRow
+          label="Browse Attributes"
+          description="Comma-separated; e.g. OPC.UA.DA marks {attribute 'OPC.UA.DA' := '1'}."
+        >
+          <input
+            className="cfg-prop-input"
+            type="text"
+            value={settings.browse_attributes ?? ''}
+            disabled={browseMode !== 'marked'}
+            placeholder="OPC.UA.DA"
+            onChange={(e) => onChange('browse_attributes', e.target.value)}
+          />
+        </PropRow>
       </div>
 
       <CollapsibleSection title="Advanced" defaultCollapsed>
@@ -500,44 +559,6 @@ export default function AdsSettingsForm({ settings, onChange, connectedIdentity 
             value={!(settings.disable_background_sync ?? false)}
             onChange={(v) => onChange('disable_background_sync', !v)}
             labels={['On', 'Off']}
-          />
-        </PropRow>
-        <PropRow label="Browse Root">
-          <input
-            className="cfg-prop-input"
-            type="text"
-            value={settings.browse_root ?? ''}
-            placeholder="e.g. GVL_HMI (default: whole program)"
-            onChange={(e) => onChange('browse_root', e.target.value)}
-          />
-        </PropRow>
-        <PropRow
-          label="Browse Mode"
-          description={
-            browseMode === 'marked'
-              ? 'Only variables marked with one of the attributes below.'
-              : browseMode === 'lazy'
-                ? 'One level at a time: expand a folder or struct to load what is inside.'
-                : 'The whole program at once — can be very large on a real machine.'
-          }
-        >
-          <Select value={browseMode} onChange={(v) => onChange('browse_mode', v)}>
-            <option value="marked">Marked by attribute</option>
-            <option value="lazy">Lazy (one level)</option>
-            <option value="all">All</option>
-          </Select>
-        </PropRow>
-        <PropRow
-          label="Browse Attributes"
-          description="Comma-separated; e.g. OPC.UA.DA marks {attribute 'OPC.UA.DA' := '1'}."
-        >
-          <input
-            className="cfg-prop-input"
-            type="text"
-            value={settings.browse_attributes ?? ''}
-            disabled={browseMode !== 'marked'}
-            placeholder="OPC.UA.DA"
-            onChange={(e) => onChange('browse_attributes', e.target.value)}
           />
         </PropRow>
       </CollapsibleSection>

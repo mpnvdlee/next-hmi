@@ -106,10 +106,10 @@ describe('mergeBrowseSelection', () => {
       node_id: 'MAIN.stMotor.bRunning',
       display_name: 'bRunning',
       data_type: 'Boolean',
-      enabled: false,
+      enabled: true,
       writable: true,
     });
-    expect(find(next, 'GVL/sVersion')).toMatchObject({ node_id: 'GVL.sVersion', enabled: false });
+    expect(find(next, 'GVL/sVersion')).toMatchObject({ node_id: 'GVL.sVersion', enabled: true });
   });
 
   it('creates nested struct folders as needed', () => {
@@ -135,7 +135,7 @@ describe('mergeBrowseSelection', () => {
                     node_id: 'MAIN.stMotor.stLimits.fMax',
                     display_name: 'fMax',
                     data_type: 'Double',
-                    enabled: false,
+                    enabled: true,
                     writable: true,
                   },
                 ],
@@ -200,7 +200,7 @@ describe('mergeBrowseSelection', () => {
             node_id: `MAIN.aPoints[${i}].y`,
             display_name: 'y',
             data_type: 'Float',
-            enabled: false,
+            enabled: true,
             writable: true,
           },
         ],

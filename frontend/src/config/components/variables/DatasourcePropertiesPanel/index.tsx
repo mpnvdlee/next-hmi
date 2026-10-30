@@ -3,7 +3,7 @@
  *
  * Renders a property editor form based on the selected datasource's type.
  * - OPC-UA Client: server URL, credentials, security, reconnect interval
- * - Beckhoff ADS: AdsSettingsForm (connection, route, advanced)
+ * - Beckhoff ADS: AdsSettingsForm (connection, route, browse, advanced)
  * - Static Variables: no connection settings
  * - OPC-UA Test Server: port, endpoint path, start/stop
  */
@@ -202,11 +202,12 @@ export default function DatasourcePropertiesPanel({
         </div>
       )}
 
-      {/* ADS brings its own sections: connection, route, advanced */}
+      {/* ADS brings its own sections: connection, route, browse, advanced */}
       {config.type === 'ads-client' && isAdsClientSettings(settings) && (
         <AdsSettingsForm
           settings={settings}
           onChange={updateSetting}
+          connected={connected}
           connectedIdentity={connected && adsNetId ? { netId: adsNetId, ip: adsIp } : null}
         />
       )}

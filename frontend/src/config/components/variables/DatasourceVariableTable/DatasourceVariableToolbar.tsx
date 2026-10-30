@@ -11,6 +11,10 @@ interface ToolbarState {
   checking?: boolean;
   /** Check against PLC has saved variables to check. */
   canCheck?: boolean;
+  /** ADS: the PLC is shown in the table (browsing). */
+  plcShown?: boolean;
+  /** ADS: connected, so the PLC can be browsed. */
+  connected?: boolean;
 }
 
 interface ToolbarActions {
@@ -20,6 +24,7 @@ interface ToolbarActions {
   onFilterChange: (value: string) => void;
   onBrowse: () => void;
   onCheck?: () => void;
+  onTogglePlc?: () => void;
 }
 
 interface Props {
@@ -36,8 +41,18 @@ export default function DatasourceVariableToolbar({ state, actions }: Props) {
     browseDisabled = false,
     checking = false,
     canCheck = true,
+    plcShown = false,
+    connected = false,
   } = state;
-  const { onToggleLive, onCollapseAll, onExpandAll, onFilterChange, onBrowse, onCheck } = actions;
+  const {
+    onToggleLive,
+    onCollapseAll,
+    onExpandAll,
+    onFilterChange,
+    onBrowse,
+    onCheck,
+    onTogglePlc,
+  } = actions;
 
   return (
     <>
@@ -117,7 +132,27 @@ export default function DatasourceVariableToolbar({ state, actions }: Props) {
         </Button>
       )}
 
-      {dsType !== 'static' && (
+      {dsType === 'ads-client' && onTogglePlc && (
+        <Button
+          variant={plcShown ? 'neutral' : 'primary'}
+          size="sm"
+          type="button"
+          onClick={onTogglePlc}
+          // Stopping always works; browsing needs the PLC.
+          disabled={!plcShown && !connected}
+          title={
+            plcShown
+              ? 'Stop showing the PLC in the table'
+              : connected
+                ? 'Show the PLC in the table: tick a dimmed variable to add it'
+                : 'Connect the datasource to browse its PLC'
+          }
+        >
+          {plcShown ? 'Stop browsing' : 'Browse PLC'}
+        </Button>
+      )}
+
+      {dsType !== 'static' && dsType !== 'ads-client' && (
         <Button
           variant="primary"
           size="sm"

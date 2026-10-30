@@ -58,6 +58,6 @@ describe('AdsConnectionDialog', () => {
         onClose={vi.fn()}
       />,
     );
-    expect(screen.queryByText('Browse Mode')).toBeNull();
+    expect(screen.queryByText('Connect Timeout (s)')).toBeNull();
   });
 });

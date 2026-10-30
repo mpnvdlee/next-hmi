@@ -14,7 +14,11 @@ import AccessBadge from '@config/components/ui/AccessBadge';
 import LiveValue from '@config/components/ui/LiveValue';
 import Select from '@config/components/ui/Select';
 import InlineTextEdit from '@config/components/ui/InlineTextEdit';
-import { countEnabledVars, countVars } from '@config/components/ui/datasourceTreeHelpers';
+import {
+  countEnabledVars,
+  countVars,
+  type BrowseNode,
+} from '@config/components/ui/datasourceTreeHelpers';
 import { treePaddingLeft, treePaddingLeftWithOffset } from '@config/utils/treeRowLayout';
 import {
   VALUE_TYPES,
@@ -26,6 +30,7 @@ import {
 } from '@shared/utils/valueTypes';
 import { arrayBadgeSuffix, isArrayShape } from '@shared/types/arrayShape';
 import SearchHighlight from '@config/components/ui/SearchHighlight';
+import type { PlcRow } from './plcRows';
 
 // A stored type the test server cannot serve (a legacy `Integer`, `Duration`,
 // no type at all) is shown as itself rather than as a supported type it is not,
@@ -270,6 +275,8 @@ interface FolderRowCellsProps {
   onRenameFolder?: (folderPath: string, newName: string) => void;
   /** Min/Max columns are hidden for this release — see `SHOW_RANGE_COLUMNS`. */
   showRange?: boolean;
+  /** Collapsed, with this many new PLC variables inside (ADS "Show PLC variables"). */
+  plcNew?: number;
 }
 
 function FolderRowCellsImpl({
@@ -284,6 +291,7 @@ function FolderRowCellsImpl({
   onRemoveNode,
   onRenameFolder,
   showRange = true,
+  plcNew,
 }: FolderRowCellsProps) {
   const key = path;
   const isCollapsed = collapsed.has(key);
@@ -327,6 +335,14 @@ function FolderRowCellsImpl({
           <span className="cfg-var-folder-count">
             {enabled}/{total}
           </span>
+          {plcNew ? (
+            <span
+              className="cfg-var-folder-count cfg-var-folder-count--plc"
+              title={`${plcNew} more on the PLC, not in this datasource yet`}
+            >
+              +{plcNew}
+            </span>
+          ) : null}
         </button>
       </div>
       <div className="cfg-vtable-cell">
@@ -369,6 +385,101 @@ function FolderRowCellsImpl({
 
 export const FolderRowCells = memo(FolderRowCellsImpl);
 
+interface PlcRowCellsProps {
+  row: PlcRow;
+  showLive: boolean;
+  isEditable: boolean;
+  showRange?: boolean;
+  onAdd: (ids: string[]) => void;
+  onToggleOpen: (node: BrowseNode) => void;
+}
+
+/** A PLC variable or folder the datasource does not have yet: ticking it adds it. */
+export function PlcRowCells({
+  row,
+  showLive,
+  isEditable,
+  showRange = true,
+  onAdd,
+  onToggleOpen,
+}: PlcRowCellsProps) {
+  const { node, depth, leaf: isLeaf, newIds, open, unloaded, loading } = row;
+  const tag = loading ? <span className="cfg-var-plc-loading">loading…</span> : null;
+  return (
+    <>
+      <div className="cfg-vtable-cell cfg-vtable-cell--check">
+        <input
+          type="checkbox"
+          className="cfg-check"
+          checked={false}
+          disabled={newIds.length === 0}
+          aria-label={
+            isLeaf ? `Add ${node.display_name}` : `Add everything new in ${node.display_name}`
+          }
+          title={
+            unloaded
+              ? 'Open the folder to load what is in it'
+              : isLeaf
+                ? 'Add to this datasource'
+                : `Add the ${newIds.length} new variable${newIds.length === 1 ? '' : 's'} below`
+          }
+          onChange={() => onAdd(newIds)}
+        />
+      </div>
+      <div className="cfg-vtable-cell cfg-vtable-cell--flush">
+        {isLeaf ? (
+          <div
+            className="cfg-var-name-cell"
+            style={
+              { '--row-indent': treePaddingLeftWithOffset(depth, '18px + 0.2rem') } as CSSProperties
+            }
+            title={`${node.node_id} — on the PLC, not in this datasource yet`}
+          >
+            <SearchHighlight text={node.display_name} />
+          </div>
+        ) : (
+          <button
+            className="cfg-var-folder-btn"
+            style={{ '--row-indent': treePaddingLeft(depth) } as CSSProperties}
+            onClick={() => onToggleOpen(node)}
+            aria-expanded={open}
+            title={node.node_id}
+          >
+            <span className="cfg-var-folder-arrow">{open ? '▼' : '▶'}</span>
+            <SearchHighlight text={node.display_name} />
+            {tag}
+          </button>
+        )}
+      </div>
+      <div className="cfg-vtable-cell">
+        {isLeaf ? (
+          <DualType
+            dataType={node.data_type ?? undefined}
+            arrayBadge={node.is_array ? `[${node.array_length ?? ''}]` : undefined}
+          />
+        ) : node.data_type === 'struct' ? (
+          node.is_array ? (
+            'struct[]'
+          ) : (
+            'struct'
+          )
+        ) : null}
+      </div>
+      <div className="cfg-vtable-cell">
+        {isLeaf && <AccessBadge writable={node.writable} showUnknown />}
+      </div>
+      {showRange && (
+        <>
+          <div className="cfg-vtable-cell cfg-vtable-cell--range" />
+          <div className="cfg-vtable-cell cfg-vtable-cell--range" />
+        </>
+      )}
+      {showLive && <div className="cfg-vtable-cell" />}
+      {isEditable && <div className="cfg-vtable-cell cfg-vtable-cell--actions" />}
+    </>
+  );
+}
+
 interface VariableRowCellsProps {
   entry: VariableEntry;
   depth: number;
@@ -386,6 +497,8 @@ interface VariableRowCellsProps {
   onToggleArray?: (key: string) => void;
   onUpdateVar: (path: string, nodeId: string | undefined, patch: Partial<VariableEntry>) => void;
   onRemoveNode: (path: string) => void;
+  /** While browsing an ADS PLC: gone from it (red), or there with another data type (orange). */
+  plcMark?: { missing: true } | { type: string } | null;
 }
 
 export function VariableRowCells({
@@ -403,6 +516,7 @@ export function VariableRowCells({
   onToggleArray,
   onUpdateVar,
   onRemoveNode,
+  plcMark = null,
 }: VariableRowCellsProps) {
   const varKey = buildVarKey(dsName, path);
   const isArray = isArrayShape(entry);
@@ -456,7 +570,13 @@ export function VariableRowCells({
             style={
               { '--row-indent': treePaddingLeftWithOffset(depth, '18px + 0.2rem') } as CSSProperties
             }
-            title={entry.node_id}
+            title={
+              plcMark
+                ? 'missing' in plcMark
+                  ? `${entry.node_id} — no longer on the PLC`
+                  : `${entry.node_id} — ${plcMark.type} on the PLC`
+                : entry.node_id
+            }
           >
             <SearchHighlight text={entry.display_name} />
           </div>
@@ -493,6 +613,11 @@ export function VariableRowCells({
               ))}
             </Select>
           </div>
+        ) : plcMark && 'type' in plcMark ? (
+          // Saved type → the PLC's: the two that disagree, in the column's width.
+          <span className="cfg-var-plc-type" title={`${plcMark.type} on the PLC`}>
+            {entry.data_type} → <strong>{plcMark.type}</strong>
+          </span>
         ) : caps.dualType ? (
           <DualType dataType={entry.data_type} arrayBadge={arrayBadgeSuffix(entry)} />
         ) : (

@@ -3,13 +3,13 @@ import type { RefObject } from 'react';
 import { useVariableStore } from '@hmi/store/variableStore';
 import { sendWsMessage } from '@hmi/hooks/useWebSocket';
 import { buildVarKey } from '@shared/types/datasource';
-import type { RowItem } from '@config/components/ui/datasourceTreeHelpers';
+import type { TableRow } from './plcRows';
 import type { VirtualizerIndexLike } from './virtualizerTypes';
 
 interface Params {
   showLive: boolean;
   dsName: string;
-  rows: RowItem[];
+  rows: TableRow[];
   virtualizer: VirtualizerIndexLike;
   scrollRef: RefObject<HTMLDivElement | null>;
 }

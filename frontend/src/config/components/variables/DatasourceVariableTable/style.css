@@ -543,129 +543,88 @@
   accent-color: var(--cfg-accent);
 }
 
-/* ── ADS browse dialog (AdsBrowseDialog) ─────────────────────────────────── */
+/* ── The PLC in the table while browsing (ADS Browse PLC) ───────────────── */
 
-.cfg-ads-browse {
+/* Not in the datasource yet: grey italic, with a line down the left edge
+   until ticked. */
+.cfg-row.cfg-row--plc {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--cfg-accent) 45%, transparent);
+}
+
+.cfg-row.cfg-row--plc .cfg-vtable-cell:not(.cfg-vtable-cell--check) {
+  color: color-mix(in srgb, var(--cfg-text-muted) 60%, transparent);
+  font-style: italic;
+}
+
+.cfg-row.cfg-row--plc .cfg-var-type-local,
+.cfg-row.cfg-row--plc .cfg-var-type-remote {
+  color: inherit;
+}
+
+.cfg-row.cfg-row--plc .cfg-access-badge {
+  background: color-mix(in srgb, var(--cfg-surface-dark) 64%, var(--cfg-surface));
+  border-color: var(--cfg-border);
+  color: inherit;
+}
+
+.cfg-var-folder-count--plc {
+  margin-left: var(--cfg-space-2);
+  color: var(--cfg-accent);
+}
+
+.cfg-var-plc-loading {
+  margin-left: var(--cfg-space-2);
+  font-size: var(--cfg-text-xs);
+  color: var(--cfg-text-muted);
+}
+
+.cfg-var-plc-note {
   display: flex;
-  flex-direction: column;
-  width: min(40rem, calc(100vw - (var(--cfg-space-6) * 2)));
-  max-width: 100%;
-  max-height: min(85vh, 48rem);
-  padding: 0;
-}
-
-.cfg-ads-browse .cfg-modal-header {
-  padding: var(--cfg-space-4) var(--cfg-space-5);
-}
-
-.cfg-ads-browse__title {
-  margin: 0;
-  font-size: var(--cfg-text-lg);
-  font-weight: var(--cfg-fw-bold);
-  color: var(--cfg-text);
-}
-
-.cfg-ads-browse__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--cfg-space-3);
-  min-height: 9rem;
-  padding: var(--cfg-space-4) var(--cfg-space-5);
-  overflow: hidden;
-}
-
-.cfg-ads-browse__note {
-  margin: 0;
+  flex-wrap: wrap;
+  gap: 0 var(--cfg-space-4);
+  margin: 0 0 var(--cfg-space-2);
   font-size: var(--cfg-text-sm);
   line-height: 1.5;
   color: var(--cfg-text-muted);
 }
 
-.cfg-ads-browse__note code {
+.cfg-var-plc-note code {
   font-family: var(--cfg-font-mono);
   color: var(--cfg-text);
 }
 
-.cfg-ads-browse__tree {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  border: 1px solid var(--cfg-border);
-  border-radius: var(--cfg-radius);
-  font-size: var(--cfg-text-sm);
+/* Saved variables while browsing: gone from the PLC (red), or there with
+   another data type (orange, the PLC's type beside the saved one). */
+.cfg-row.cfg-row--plc-missing {
+  background: color-mix(in srgb, var(--cfg-danger-bg) 70%, transparent);
 }
 
-.cfg-ads-browse__row {
-  display: flex;
-  align-items: center;
-  gap: var(--cfg-space-2);
-  padding: var(--cfg-space-1) var(--cfg-space-3);
-  padding-left: calc(var(--cfg-space-2) + var(--cfg-ads-browse-depth, 0) * var(--cfg-space-4));
-  border-bottom: 1px solid color-mix(in srgb, var(--cfg-border) 50%, transparent);
-  cursor: pointer;
+.cfg-row.cfg-row--plc-missing .cfg-vtable-cell:not(.cfg-vtable-cell--check) {
+  color: var(--cfg-danger-fg);
 }
 
-.cfg-ads-browse__row:hover {
-  background: var(--cfg-bg-hover);
+.cfg-row.cfg-row--plc-changed {
+  background: color-mix(in srgb, var(--cfg-warning-strong) 14%, transparent);
 }
 
-.cfg-ads-browse__row--folder {
-  cursor: default;
+.cfg-row.cfg-row--plc-changed .cfg-vtable-cell:not(.cfg-vtable-cell--check) {
+  color: var(--cfg-warning-fg);
 }
 
-.cfg-ads-browse__row--added {
-  color: var(--cfg-text-muted);
-  cursor: default;
-}
-
-.cfg-ads-browse__caret {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 1rem;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--cfg-text-muted);
-  cursor: pointer;
-}
-
-.cfg-ads-browse__name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.cfg-var-plc-type {
+  font-family: var(--cfg-font-mono);
+  font-size: var(--cfg-text-xs);
   white-space: nowrap;
-  font-family: var(--cfg-font-mono);
 }
 
-.cfg-ads-browse__type {
-  flex: none;
-  font-family: var(--cfg-font-mono);
-  font-size: var(--cfg-text-xs);
-  color: var(--cfg-text-muted);
+.cfg-var-plc-type strong {
+  font-weight: var(--cfg-fw-bold);
 }
 
-.cfg-ads-browse__tag {
-  flex: none;
-  padding: 0 var(--cfg-space-2);
-  border-radius: var(--cfg-radius);
-  background: var(--cfg-surface-dark);
-  font-size: var(--cfg-text-xs);
-  color: var(--cfg-text-muted);
+.cfg-var-plc-count--missing {
+  color: var(--cfg-danger-fg);
 }
 
-.cfg-ads-browse__footer {
-  display: flex;
-  align-items: center;
-  gap: var(--cfg-space-2);
-  padding: var(--cfg-space-3) var(--cfg-space-5);
-  border-top: 1px solid var(--cfg-border);
-}
-
-.cfg-ads-browse__footer-left {
-  display: flex;
-  flex: 1;
-  gap: var(--cfg-space-1);
+.cfg-var-plc-count--changed {
+  color: var(--cfg-warning-fg);
 }

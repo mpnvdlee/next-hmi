@@ -1,7 +1,7 @@
 import { useMemo, type RefObject } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import type { RowItem } from '@config/components/ui/datasourceTreeHelpers';
-import { filterTree, flattenForRender } from '@config/components/ui/datasourceTreeHelpers';
+import { filterTree } from '@config/components/ui/datasourceTreeHelpers';
+import { filterBrowse, flattenWithPlc, type PlcOverlay, type TableRow } from './plcRows';
 
 /**
  * Min/Max range editing is fully built (see `RangeCells` in rowRenderers.tsx)
@@ -17,6 +17,8 @@ interface Params {
   showLive: boolean;
   isEditable: boolean;
   scrollRef: RefObject<HTMLDivElement | null>;
+  /** The PLC's not-yet-added variables, shown dimmed among the saved ones (ADS). */
+  plc?: PlcOverlay | null;
 }
 
 export function useDatasourceTableRows({
@@ -26,12 +28,25 @@ export function useDatasourceTableRows({
   showLive,
   isEditable,
   scrollRef,
+  plc = null,
 }: Params) {
-  const rows = useMemo((): RowItem[] => {
+  // `wanted`: lazy PLC levels an open saved folder needs before its new
+  // variables can show.
+  const { rows, wanted } = useMemo(() => {
     const query = filter.trim();
     const displayTree = query ? filterTree(tree, query) : tree;
-    return flattenForRender(displayTree, 0, query ? new Set() : collapsed);
-  }, [tree, filter, collapsed]);
+    // A filter opens every folder, PLC ones included, as it does saved ones.
+    const overlay =
+      plc && query ? { ...plc, nodes: filterBrowse(plc.nodes, query), open: null } : plc;
+    const wanted: string[] = [];
+    const rows: TableRow[] = flattenWithPlc(
+      displayTree,
+      query ? new Set() : collapsed,
+      overlay,
+      query ? [] : wanted,
+    );
+    return { rows, wanted };
+  }, [tree, filter, collapsed, plc]);
 
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
@@ -42,6 +57,7 @@ export function useDatasourceTableRows({
       const item = rows[index];
       if (item.kind === 'folder') return `f:${item.path}`;
       if (item.kind === 'array-element') return `ae:${item.path}[${item.index}]`;
+      if (item.kind === 'plc') return `p:${item.node.node_id}`;
       return `v:${item.path}`;
     },
   });
@@ -54,5 +70,5 @@ export function useDatasourceTableRows({
     return base + (isEditable ? ' 36px' : '');
   }, [showLive, isEditable]);
 
-  return { rows, rowVirtualizer, colsTmpl };
+  return { rows, wanted, rowVirtualizer, colsTmpl };
 }

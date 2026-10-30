@@ -173,7 +173,8 @@ async def test_ads_check_variables_lists_what_the_plc_no_longer_has(plc: FakePlc
     client, manager, pool = api
     body = _ads_body(plc)
     body["variables"] = [{"kind": "folder", "name": "MAIN", "node_id": "MAIN", "children": [
-        {"kind": "variable", "display_name": "fSpeed", "node_id": "MAIN.fSpeed", "data_type": "Double", "enabled": True},
+        # Saved as a Float, a Double on the PLC now.
+        {"kind": "variable", "display_name": "fSpeed", "node_id": "MAIN.fSpeed", "data_type": "Float", "enabled": True},
         {"kind": "variable", "display_name": "bGone", "node_id": "MAIN.bGone", "data_type": "Boolean", "enabled": False},
         {"kind": "struct", "display_name": "stMotor", "node_id": "MAIN.stMotor", "data_type": "struct", "enabled": False},
         # Saved as a value, but a struct on the PLC now: it no longer reads.
@@ -191,7 +192,10 @@ async def test_ads_check_variables_lists_what_the_plc_no_longer_has(plc: FakePlc
 
     resp = await client.post("/api/datasources/plc/check-variables")
     assert resp.status_code == 200
-    assert resp.json() == {"missing": ["MAIN.bGone", "MAIN.stMotor.stLimits", "MAIN.aPoints[1].z"]}
+    assert resp.json() == {
+        "missing": ["MAIN.bGone", "MAIN.stMotor.stLimits", "MAIN.aPoints[1].z"],
+        "changed": {"MAIN.fSpeed": "Double"},
+    }
     # Nothing is written: marking them stale is the editor's save.
     assert "present_on_server" not in json.dumps(manager.get("plc").config["variables"])
 
@@ -214,10 +218,10 @@ async def test_ads_check_variables_failure_is_a_503_with_the_reason(plc: FakePlc
     await client.put("/api/datasources/plc", json=_ads_body(plc))
     await _until(lambda: pool.get("plc").connected)
 
-    async def lost() -> list[str]:
+    async def lost() -> dict:
         raise ConnectionError("connection closed")
 
-    monkeypatch.setattr(pool.get("plc"), "missing_node_ids", lost)
+    monkeypatch.setattr(pool.get("plc"), "check_variables", lost)
     resp = await client.post("/api/datasources/plc/check-variables")
     assert resp.status_code == 503
     assert resp.json()["detail"] == "Could not read the PLC's symbols: connection closed"

@@ -557,8 +557,9 @@ async def browse_datasource_stream(name: str, node_id: str | None = None) -> Str
 
 
 @router.post("/{name}/check-variables")
-async def check_datasource_variables(name: str) -> dict[str, list[str]]:
-    """The saved variables of an ADS datasource the PLC no longer has.
+async def check_datasource_variables(name: str) -> dict[str, Any]:
+    """The saved variables of an ADS datasource the PLC no longer has, or has
+    with another data type.
 
     Changes nothing: the editor marks them stale and saves the tree through
     the normal PUT, so removing one stays the operator's own action.
@@ -567,12 +568,12 @@ async def check_datasource_variables(name: str) -> dict[str, list[str]]:
         raise DatasourceValidationError("Only ADS datasources support check-variables")
     engine = _browse_engine(name)
     try:
-        missing = await engine.missing_node_ids()
+        result = await engine.check_variables()
     except Exception as exc:  # the connection dropped, or the upload failed
         logger.warning("Check of %s against the PLC failed: %s", name, exc)
         detail = str(exc).strip() or exc.__class__.__name__
         raise HTTPException(status_code=503, detail=f"Could not read the PLC's symbols: {detail}") from None
-    return {"missing": missing}
+    return result
 
 
 # ── Test server lifecycle ─────────────────────────────────────────────────────

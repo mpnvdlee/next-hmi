@@ -915,11 +915,12 @@ class DatasourceAdsEngine:
             on_progress({"done": 1, "total": 1, "nodes": len(walked), "level": 0})
         return tree
 
-    async def missing_node_ids(self) -> list[str]:
-        """The saved variables' node_ids the PLC's current symbol table no
-        longer has, uploaded again as for a browse. A value must still resolve
-        to one read whole — a scalar that became a struct counts as missing —
-        while a saved struct only needs its path to exist."""
+    async def check_variables(self) -> dict[str, Any]:
+        """The saved variables the PLC's current symbol table, uploaded again
+        as for a browse, no longer has (``missing``: node_ids) or has with
+        another data type (``changed``: node_id → the PLC's type). A value must
+        still resolve to one read whole — a scalar that became a struct counts
+        as missing — while a saved struct only needs its path to exist."""
         conn = self._conn
         if not self._connected or conn is None:
             raise RuntimeError(f"Not connected: {self.datasource_name}")
@@ -928,16 +929,20 @@ class DatasourceAdsEngine:
             self._request_reload()
         ds_entry = self._ds_entry()
         if ds_entry is None:
-            return []
+            return {"missing": [], "changed": {}}
         missing: dict[str, None] = {}
+        changed: dict[str, str] = {}
         for entry in ds_entry.registry.values():
             node_id = entry.get("node_id")
             if not node_id:
                 continue
             if entry.get("kind") == "struct" or entry.get("data_type") == "struct":
-                present = table.exists(node_id)
-            else:
-                present = table.resolve(node_id) is not None
-            if not present:
+                if not table.exists(node_id):
+                    missing[node_id] = None
+                continue
+            address = table.resolve(node_id)
+            if address is None:
                 missing[node_id] = None
-        return list(missing)
+            elif entry.get("data_type") and entry["data_type"] != address.codec.type_name:
+                changed[node_id] = address.codec.type_name
+        return {"missing": list(missing), "changed": changed}

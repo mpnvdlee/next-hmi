@@ -1,9 +1,16 @@
 import { useState, type CSSProperties } from 'react';
 import type { RefObject } from 'react';
 import type { DatasourceType, VariableEntry } from '@shared/types/datasource';
-import { FolderRowCells, VariableRowCells, ArrayElementRowCells } from './rowRenderers';
+import {
+  FolderRowCells,
+  VariableRowCells,
+  ArrayElementRowCells,
+  PlcRowCells,
+} from './rowRenderers';
 import { SHOW_RANGE_COLUMNS } from './useDatasourceTableRows';
-import type { RowItem } from '@config/components/ui/datasourceTreeHelpers';
+import type { BrowseNode } from '@config/components/ui/datasourceTreeHelpers';
+import type { PlcMarks, TableRow } from './plcRows';
+import { nodeKey } from './browseMerge';
 import VirtualTreeRows from '@config/components/shared/VirtualTreeRows';
 import type { VirtualizerRenderLike } from './virtualizerTypes';
 import {
@@ -21,13 +28,15 @@ interface VirtualTableState {
   colsTmpl: string;
   showLive: boolean;
   isEditable: boolean;
-  rows: RowItem[];
+  rows: TableRow[];
   rowVirtualizer: VirtualizerRenderLike;
   collapsed: Set<string>;
   dsName: string;
   liveValues: Record<string, string>;
   filter: string;
   dsType: DatasourceType;
+  /** While browsing an ADS PLC: saved variables it no longer has (red), or has with another type (orange). */
+  plcMarks?: PlcMarks | null;
 }
 
 interface VirtualTableActions {
@@ -41,6 +50,9 @@ interface VirtualTableActions {
   onAddArrayStruct: (folderPath?: string) => void;
   onUpdateArrayLength: (path: string, newLength: number) => void;
   onRenameFolder: (folderPath: string, newName: string) => void;
+  /** Add PLC variables shown in the table (ADS) by node id. */
+  onAddFromPlc?: (ids: string[]) => void;
+  onTogglePlcFolder?: (node: BrowseNode) => void;
 }
 
 interface Props {
@@ -61,6 +73,7 @@ export default function DatasourceVariableVirtualTable({ state, actions }: Props
     liveValues,
     filter,
     dsType,
+    plcMarks = null,
   } = state;
   const {
     onToggleFolder,
@@ -73,12 +86,22 @@ export default function DatasourceVariableVirtualTable({ state, actions }: Props
     onAddArrayStruct,
     onUpdateArrayLength,
     onRenameFolder,
+    onAddFromPlc,
+    onTogglePlcFolder,
   } = actions;
 
   // ── Helpers ─────────────────────────────────────────────────────────────
   /** Returns true when the path is inside a non-first struct array element (e.g. tst6[1]/…). */
   const isInNonFirstElement = (path: string) =>
     path.split('/').some((seg) => /\[\d+\]$/.test(seg) && !/\[0\]$/.test(seg));
+
+  const plcMarkOf = (entry: VariableEntry): { missing: true } | { type: string } | null => {
+    if (!plcMarks || !entry.node_id) return null;
+    const key = nodeKey(entry.node_id);
+    if (plcMarks.missing.has(key)) return { missing: true };
+    const type = plcMarks.changed.get(key);
+    return type ? { type } : null;
+  };
 
   // ── Context menu state ──────────────────────────────────────────────────
   const [ctxMenu, setCtxMenu] = useState<{
@@ -178,11 +201,15 @@ export default function DatasourceVariableVirtualTable({ state, actions }: Props
           virtualizer={rowVirtualizer}
           getRowClassName={(item) => {
             if (item.kind === 'folder') return 'cfg-vtable-row cfg-var-folder-row';
+            if (item.kind === 'plc')
+              return `cfg-vtable-row cfg-row cfg-row--plc${item.leaf ? '' : ' cfg-var-folder-row'}`;
             if (item.kind === 'array-element')
               return 'cfg-vtable-row cfg-row cfg-row--array-element';
             const cls = ['cfg-vtable-row', 'cfg-row'];
             if (item.entry.enabled) cls.push('cfg-row--enabled');
             if (item.entry.present_on_server === false) cls.push('cfg-row--stale');
+            const mark = plcMarkOf(item.entry);
+            if (mark) cls.push('missing' in mark ? 'cfg-row--plc-missing' : 'cfg-row--plc-changed');
             return cls.join(' ');
           }}
           getRowDataAttrs={(item) => ({
@@ -191,6 +218,18 @@ export default function DatasourceVariableVirtualTable({ state, actions }: Props
           })}
           renderRow={(item) => {
             const rowEditable = isEditable && !isInNonFirstElement(item.path);
+            if (item.kind === 'plc') {
+              return (
+                <PlcRowCells
+                  row={item}
+                  showLive={showLive}
+                  isEditable={isEditable}
+                  showRange={SHOW_RANGE_COLUMNS}
+                  onAdd={(ids) => onAddFromPlc?.(ids)}
+                  onToggleOpen={(node) => onTogglePlcFolder?.(node)}
+                />
+              );
+            }
             return item.kind === 'folder' ? (
               <FolderRowCells
                 folder={item.folder}
@@ -204,6 +243,7 @@ export default function DatasourceVariableVirtualTable({ state, actions }: Props
                 onSetFolderEnabled={onSetFolderEnabled}
                 onRemoveNode={onRemoveNode}
                 onRenameFolder={onRenameFolder}
+                plcNew={item.plcNew}
               />
             ) : item.kind === 'array-element' ? (
               <ArrayElementRowCells
@@ -233,6 +273,7 @@ export default function DatasourceVariableVirtualTable({ state, actions }: Props
                 onToggleArray={onToggleFolder}
                 onUpdateVar={onUpdateVar}
                 onRemoveNode={onRemoveNode}
+                plcMark={plcMarkOf(item.entry)}
               />
             );
           }}
@@ -242,9 +283,11 @@ export default function DatasourceVariableVirtualTable({ state, actions }: Props
                 ? 'No variables match the filter.'
                 : isEditable
                   ? 'No variables configured. Right-click to add.'
-                  : dsType !== 'static'
-                    ? 'No variables configured. Use "Browse PLC" to discover.'
-                    : 'No variables configured.'}
+                  : dsType === 'ads-client'
+                    ? 'No variables configured. Use "Show PLC variables" to add some.'
+                    : dsType !== 'static'
+                      ? 'No variables configured. Use "Browse PLC" to discover.'
+                      : 'No variables configured.'}
             </div>
           }
         />

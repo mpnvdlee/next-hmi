@@ -49,14 +49,19 @@ describe('AdsSettingsForm', () => {
     mockedApiJson.mockReset();
   });
 
-  it('shows the basic fields up front and the rest under Advanced', () => {
+  it('shows the basic and browse fields up front and the rest under Advanced', () => {
     render(<Harness initial={{ host: '192.168.1.10' }} />);
 
     expect(screen.getByText('PLC IP / Host')).toBeTruthy();
     expect(field('PLC AMS NetID').placeholder).toBe('192.168.1.10.1.1');
     expect(field('AMS Port').placeholder).toBe('851');
     expect(screen.getByText(/TwinCAT 2 uses 801/)).toBeTruthy();
-    expect(screen.queryByText('Browse Mode')).toBeNull();
+    for (const label of ['Browse Root', 'Browse Mode', 'Browse Attributes']) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+    expect(field('Browse Attributes').placeholder).toBe('OPC.UA.DA');
+    fireEvent.change(field('Browse Root'), { target: { value: 'GVL_HMI' } });
+    expect(saved().browse_root).toBe('GVL_HMI');
     expect(screen.queryByText("This HMI's AMS NetID")).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
@@ -69,16 +74,9 @@ describe('AdsSettingsForm', () => {
       'Poll Interval (ms)',
       'Fast Max Delay (ms)',
       'Background Sync',
-      'Browse Root',
-      'Browse Mode',
-      'Browse Attributes',
     ]) {
       expect(screen.getByText(label)).toBeTruthy();
     }
-    expect(field('Browse Attributes').placeholder).toBe('OPC.UA.DA');
-
-    fireEvent.change(field('Browse Root'), { target: { value: 'GVL_HMI' } });
-    expect(saved().browse_root).toBe('GVL_HMI');
     fireEvent.click(screen.getByRole('button', { name: /Advanced/ }));
   });
 
@@ -119,12 +117,20 @@ describe('AdsSettingsForm', () => {
     expect((await screen.findByRole('status')).textContent).toBe('✕ No answer to ADS requests');
   });
 
+  it('offers no test while connected, since the PLC would refuse a second connection', () => {
+    render(<AdsSettingsForm connected settings={{ host: '10.0.0.20' }} onChange={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Test connection' })).toBeNull();
+    expect(screen.getByText(/Disconnect to test changed settings/)).toBeTruthy();
+  });
+
   it('switches between the TwinCAT and the custom route', async () => {
     render(<Harness initial={{ host: '10.0.0.20' }} />);
     expect(screen.getByText(/Router → Edit Routes/)).toBeTruthy();
     expect(screen.queryByText('PLC Password')).toBeNull();
+    // Route Method is the first select; Browse Mode follows it.
+    const routeMethod = () => screen.getAllByRole('combobox')[0];
 
-    fireEvent.click(screen.getByRole('combobox', { name: '' }));
+    fireEvent.click(routeMethod());
     fireEvent.click(await screen.findByRole('option', { name: 'Custom route' }));
 
     expect(saved().route_method).toBe('custom');
@@ -137,7 +143,7 @@ describe('AdsSettingsForm', () => {
     expect(saved().route_password).toBe('pw');
 
     // Back to a TwinCAT route: the PLC account is not kept with it.
-    fireEvent.click(screen.getByRole('combobox', { name: '' }));
+    fireEvent.click(routeMethod());
     fireEvent.click(await screen.findByRole('option', { name: 'TwinCAT route' }));
     expect(saved().route_method).toBe('twincat');
     expect(saved()).not.toHaveProperty('route_password');

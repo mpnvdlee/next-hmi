@@ -8,7 +8,11 @@
  * separate question — `applyPlcCheck`.
  */
 
-import { buildFromBrowse, type BrowseNode } from '@config/components/ui/datasourceTreeHelpers';
+import {
+  buildFromBrowse,
+  setEnabledInSubtree,
+  type BrowseNode,
+} from '@config/components/ui/datasourceTreeHelpers';
 import { isFolder, type FolderEntry, type TreeNode } from '@shared/types/datasource';
 import { cloneTree, type RemovedRow } from './datasourceBrowseDiff';
 
@@ -190,15 +194,18 @@ function mergeInto(target: TreeNode[], incoming: TreeNode[], saved: ReadonlySet<
 /**
  * `savedTree` plus the ticked browse leaves that are not saved yet (matched by
  * node id), each under the folder / struct-folder path of its PLC path,
- * creating the folders it needs. New variables start disabled, as from the
- * OPC-UA import; saved variables and folders are left as they are.
+ * creating the folders it needs. New variables start enabled — ticking one
+ * is the choice to use it; saved variables and folders are left as they are.
  */
 export function mergeBrowseSelection(
   savedTree: TreeNode[],
   browseNodes: BrowseNode[],
   selected: ReadonlySet<string>,
 ): TreeNode[] {
-  const incoming = buildFromBrowse(pickBrowseSelection(browseNodes, selected), new Map());
+  const incoming = setEnabledInSubtree(
+    buildFromBrowse(pickBrowseSelection(browseNodes, selected), new Map()),
+    true,
+  );
   const next = cloneTree(savedTree);
   mergeInto(next, incoming, savedNodeIds(savedTree));
   return next;

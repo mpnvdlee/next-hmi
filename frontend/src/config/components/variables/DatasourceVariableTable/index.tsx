@@ -4,7 +4,9 @@
  * Shows the variable tree table for the selected datasource.
  * Supports:
  * - OPC-UA Client: browse PLC, enable/disable, save
- * - Beckhoff ADS: browse dialog with add-only import, check against PLC
+ * - Beckhoff ADS: Browse PLC shows the PLC in the table — new variables to
+ *   tick and add, saved ones it lacks (red) or types differently (orange) —
+ *   and check against PLC
  * - Static Variables: inline add/edit/remove, name + type + value
  * - OPC-UA Test Server: tree editor with add folder/variable
  *
@@ -15,7 +17,7 @@
 
 import './style.css';
 import type { DatasourceConfig, TreeNode } from '@shared/types/datasource';
-import AdsBrowseDialog from './AdsBrowseDialog';
+import PlcBrowseNote from './PlcBrowseNote';
 import DatasourceBrowseDiffBanner from './DatasourceBrowseDiffBanner';
 import DatasourceBrowseProgress from './DatasourceBrowseProgress';
 import DatasourceVariableToolbar from './DatasourceVariableToolbar';
@@ -41,9 +43,13 @@ export default function DatasourceVariableTable({
 }: Props) {
   const {
     tree,
-    adsBrowseOpen,
-    closeAdsBrowse,
-    importAdsSelection,
+    showPlc,
+    togglePlc,
+    plcBrowse,
+    plcMarks,
+    plcNewCount,
+    addFromPlc,
+    isConnected,
     checking,
     checkResult,
     dismissCheckResult,
@@ -93,6 +99,8 @@ export default function DatasourceVariableTable({
     browseDisabled: hasPendingBrowse,
     checking,
     canCheck,
+    plcShown: showPlc,
+    connected: isConnected,
   };
 
   const toolbarActions = {
@@ -102,6 +110,7 @@ export default function DatasourceVariableTable({
     onFilterChange: setFilter,
     onBrowse: () => void handleBrowse(),
     onCheck: () => void checkAgainstPlc(),
+    onTogglePlc: togglePlc,
   };
 
   const tableState = {
@@ -116,6 +125,7 @@ export default function DatasourceVariableTable({
     liveValues,
     filter,
     dsType,
+    plcMarks: showPlc ? plcMarks : null,
   };
 
   const tableActions = {
@@ -129,6 +139,8 @@ export default function DatasourceVariableTable({
     onAddArrayStruct: addArrayStruct,
     onUpdateArrayLength: updateArrayLength,
     onRenameFolder: renameFolder,
+    onAddFromPlc: addFromPlc,
+    onTogglePlcFolder: plcBrowse.toggleOpen,
   };
 
   return (
@@ -167,21 +179,22 @@ export default function DatasourceVariableTable({
             />
           )}
 
-          <DatasourceVariableVirtualTable state={tableState} actions={tableActions} />
-
-          {adsBrowseOpen && (
-            <AdsBrowseDialog
-              dsName={dsName}
+          {showPlc && (
+            <PlcBrowseNote
+              browse={plcBrowse}
+              marks={plcMarks}
               savedTree={tree}
+              newCount={plcNewCount}
+              filtering={filter.trim() !== ''}
               attributes={
                 datasource.type === 'ads-client' && 'browse_attributes' in datasource.settings
                   ? datasource.settings.browse_attributes
                   : undefined
               }
-              onImport={importAdsSelection}
-              onClose={closeAdsBrowse}
             />
           )}
+
+          <DatasourceVariableVirtualTable state={tableState} actions={tableActions} />
         </>
       )}
     </ConfigWorkspace>
