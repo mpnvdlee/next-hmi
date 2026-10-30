@@ -32,11 +32,42 @@ describe('MenuToggleButton', () => {
   });
 
   it('shows the collapsed glyph and aria-pressed=false when the bound value is falsy', () => {
+    useVariableStore.setState({ values: { 'PLC:Menu/Open': false } });
     renderToggle({ bound: { $var: { path: 'PLC:Menu/Open' } } });
 
     const btn = screen.getByRole('button');
     expect(btn).toHaveAttribute('aria-pressed', 'false');
     expect(btn).toHaveTextContent('☰');
+    expect(btn.className).not.toContain('hmi-menu-toggle--unknown');
+  });
+
+  it('reads as unknown before the bound value arrives, and runs its actions without a write', async () => {
+    const user = userEvent.setup();
+    renderToggle({
+      bound: { $var: { path: 'PLC:Menu/Open' } },
+      actions: {
+        onPress: [{ type: 'toggleDataVariable', target: { $var: { path: 'PLC:Other' } } }],
+      },
+    });
+
+    const btn = screen.getByRole('button');
+    expect(btn).toHaveAttribute('aria-pressed', 'mixed');
+    expect(btn.className).toContain('hmi-menu-toggle--unknown');
+    expect(btn).toHaveTextContent('☰');
+
+    await user.click(btn);
+    const frames = vi.mocked(sendWsMessage).mock.calls.map((c) => c[0] as { type: string });
+    expect(frames.map((f) => f.type)).toEqual(['toggle_field']);
+  });
+
+  it('reads an unset bound state as its declared default, not as unknown', () => {
+    for (const properties of [{}, { bound: null }]) {
+      const { unmount } = renderToggle(properties);
+      const btn = screen.getByRole('button');
+      expect(btn).toHaveAttribute('aria-pressed', 'false');
+      expect(btn.className).not.toContain('hmi-menu-toggle--unknown');
+      unmount();
+    }
   });
 
   it('shows the expanded glyph and aria-pressed=true when the bound value is true', () => {
@@ -82,17 +113,5 @@ describe('MenuToggleButton', () => {
     });
     expect(container.querySelector('svg')?.outerHTML).not.toContain('fill="red"');
     expect(container.querySelector('svg')?.outerHTML).toContain('currentColor');
-  });
-
-  it.each([
-    ['false', 'false'],
-    ['no', 'false'],
-    ['', 'false'],
-    ['true', 'true'],
-  ])('reads the tag text %j as aria-pressed=%s', (value, pressed) => {
-    useVariableStore.setState({ values: { 'PLC:Menu/Open': value } });
-    renderToggle({ bound: { $var: { path: 'PLC:Menu/Open' } } });
-
-    expect(screen.getByRole('button')).toHaveAttribute('aria-pressed', pressed);
   });
 });

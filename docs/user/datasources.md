@@ -109,8 +109,13 @@ Open the datasource and browse. Each variable is recorded with its real OPC-UA *
 
 OPC-UA's many data types collapse to eight simple ones at the HMI boundary — `Boolean`, `Integer`, `Float`, `String`, `DateTime`, `Date`, `Time` and `Duration`: every `Int16/UInt32/…` becomes `Integer`, every `Float/Double` becomes `Float` — so a widget field never sees a wire type. A tag binds only to a field of its own simple type; see [Coercion, in short](properties.md#coercion-in-short).
 
-**Browse PLC** starts at the server's *Objects* folder, or at the **Browse Root Node** set in the datasource's properties.
+**Browse PLC** starts at the server's *Objects* folder, or at the **Browse Root Node** set in the datasource's properties. From *Objects* it skips the server's own `Server` object — its diagnostics, capabilities and namespace table: hundreds of nodes and no PLC tags. To bind one of those, such as `ServerStatus/CurrentTime`, set **Browse Root Node** to `i=2253` (or to the node inside it you want) and browse again.
 
-A re-browse compares the server with your tree and lists what was added, modified and *removed from server* for you to accept. A variable the browse did not reach is not counted as removed while the server still has it — so tags imported earlier from outside the current browse root stay as they are, enabled and bound.
+A re-browse compares the server with your tree and lists what was added, modified and *removed from server* for you to accept. A variable the browse did not reach is not counted as removed while the server still has it — so tags imported earlier from under `Server`, or from outside the current browse root, stay as they are, enabled and bound.
+
+Two kinds of value read differently from how a PLC tool shows them:
+
+- **A `DateTime` reads as UTC.** A Text widget bound to one shows `2026-01-02T03:04:05.678Z` — date, `T`, time to the millisecond, `Z` for UTC — whatever the panel's time zone.
+- **A very large `Int64`/`UInt64`** — beyond 9,007,199,254,740,991, a long-running counter for instance — arrives as text holding every digit. A Text widget shows it exactly; a number field still reads it, rounded to the nearest number a browser holds. To write one back, send it as text too.
 
 Next: [bind and subscribe →](subscribing.md)

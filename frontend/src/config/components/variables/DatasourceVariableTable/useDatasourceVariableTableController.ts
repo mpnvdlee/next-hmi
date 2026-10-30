@@ -78,7 +78,12 @@ export function useDatasourceVariableTableController({ datasource, onVariablesCh
     setCollapsed,
   });
 
-  const { browsing, browseError, handleBrowse } = useDatasourceBrowse({
+  const {
+    browsing,
+    browseError,
+    progress: browseProgress,
+    handleBrowse,
+  } = useDatasourceBrowse({
     dsName,
     latestTree,
     applyTreeUpdate,
@@ -148,6 +153,7 @@ export function useDatasourceVariableTableController({ datasource, onVariablesCh
     addArrayStruct,
     updateArrayLength,
     browseError,
+    browseProgress,
     scrollRef,
     colsTmpl,
     rows,

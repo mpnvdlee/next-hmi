@@ -9,22 +9,14 @@ export const description = 'A status light that changes colour with a boolean.';
 export const category = 'Indicators';
 export const icon = { type: 'builtin', name: 'broadcast' } as const;
 
-// A tag's text "false", "0", "no" or "off" reads as off, the way getPropBoolean
-// reads it; an empty text or NaN says nothing, so it stays off rather than
-// taking getPropBoolean's truthy reading.
-function isOnValue(value: unknown): boolean {
-  if (typeof value === 'string' && value.trim() === '') return false;
-  if (typeof value === 'number' && Number.isNaN(value)) return false;
-  return getPropBoolean({ value }, 'value');
-}
-
 export default function LedIndicator({ properties, layout }: HmiWidgetProps) {
-  const isOn = isOnValue(usePropVar(properties, 'variable'));
+  const isOn = usePropBoolean(properties, 'variable', null);
   const label = usePropString(properties, 'label', '');
+  const state = isOn === null ? 'unknown' : isOn ? 'on' : 'off';
 
   return (
     <div
-      className={`hmi-component hmi-led-indicator ${isOn ? 'hmi-led-indicator--on' : 'hmi-led-indicator--off'}`}
+      className={`hmi-component hmi-led-indicator hmi-led-indicator--${state}`}
       style={selfLayoutStyle(layout)}
     >
       <span className="hmi-led-indicator__dot" aria-hidden="true" />

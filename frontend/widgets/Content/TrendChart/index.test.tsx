@@ -249,6 +249,15 @@ describe('TrendChart', () => {
       expect(screen.getByTestId('line-chart')).toHaveAttribute('data-points', '1');
     });
 
+    it('plots an integer beyond 2**53, which arrives as its decimal string', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+      useVariableStore.setState({ values: { 'PLC:Temp': '9007199254740993' } });
+      renderLive();
+
+      expect(screen.getByTestId('line-chart')).toHaveAttribute('data-points', '1');
+    });
+
     it('ignores non-numeric values', () => {
       useVariableStore.setState({ values: { 'PLC:Temp': 'warming up' } });
       renderLive();

@@ -21,11 +21,20 @@ import {
   OPCUA_TYPES,
   toSimpleType,
   representativeOpcuaType,
-  canonicalOpcuaType,
+  opcuaTypeOf,
   isNumericType,
 } from '@shared/utils/valueTypes';
 import { arrayBadgeSuffix, isArrayShape } from '@shared/types/arrayShape';
 import SearchHighlight from '@config/components/ui/SearchHighlight';
+
+// A stored type the test server cannot serve (a legacy `Integer`, `Duration`,
+// no type at all) is shown as itself rather than as a supported type it is not,
+// so the row names what the server will refuse and any pick is a real change.
+const UNSUPPORTED_OPCUA_TYPE = '';
+
+function unsupportedTypeName(dataType: unknown): string {
+  return typeof dataType === 'string' && dataType.trim() ? dataType : 'No type';
+}
 
 function DualType({ dataType, arrayBadge }: { dataType?: string; arrayBadge?: string }) {
   return (
@@ -400,6 +409,8 @@ export function VariableRowCells({
   const isCollapsed = isArray && !!collapsed?.has(path);
   const caps = DATASOURCE_CAPABILITIES[dsType];
   const opcuaTypes = caps.typeEditor === 'opcua';
+  const opcuaType = opcuaTypes ? opcuaTypeOf(entry.data_type) : null;
+  const unsupportedOpcuaType = opcuaTypes && opcuaType === null;
 
   return (
     <>
@@ -455,9 +466,14 @@ export function VariableRowCells({
         {isEditable ? (
           <div className="cfg-var-type-edit">
             <Select
-              className="cfg-select--ghost"
+              className={`cfg-select--ghost${unsupportedOpcuaType ? ' cfg-var-type-unsupported' : ''}`}
+              title={
+                unsupportedOpcuaType
+                  ? 'The test server cannot serve this type. Pick a supported one.'
+                  : undefined
+              }
               value={
-                opcuaTypes ? canonicalOpcuaType(entry.data_type) : toSimpleType(entry.data_type)
+                opcuaTypes ? (opcuaType ?? UNSUPPORTED_OPCUA_TYPE) : toSimpleType(entry.data_type)
               }
               onChange={(v) =>
                 onUpdateVar(path, entry.node_id, {
@@ -465,6 +481,11 @@ export function VariableRowCells({
                 })
               }
             >
+              {unsupportedOpcuaType && (
+                <option value={UNSUPPORTED_OPCUA_TYPE} disabled>
+                  {`${unsupportedTypeName(entry.data_type)} (unsupported)`}
+                </option>
+              )}
               {(opcuaTypes ? OPCUA_TYPES : VALUE_TYPES).map((dt) => (
                 <option key={dt} value={dt}>
                   {dt}

@@ -275,8 +275,15 @@ Pre-save helpers. None of them touch the live pool or persist a datasource.
 - `GET /api/datasources/{name}/browse`
   - Only valid for `opcua-client` and `opcua-test-server` (`422` for `static`).
   - Returns the engine's `browse()` result (the OPC-UA node tree), walked from the datasource's `browse_root_node` or, without one, from the Objects folder. `show_root` is `true` when a root was configured.
-  - `present_outside_browse` (only when non-empty): the `node_id`s of the datasource's saved variables that this walk did not reach but that the server still has — checked with one NodeClass Read per chunk, where only `BadNodeIdUnknown`/`BadNodeIdInvalid` count as gone and a chunk that cannot be read counts as present. A variable saved from outside the configured root is not browsed rather than removed; **Browse PLC** neither lists it under *Removed from server* nor marks it stale.
+  - A browse from the default Objects root leaves out the standard `Server` object (`i=2253`) and everything under it — the server's own capabilities, diagnostics and namespace table, none of them a PLC tag. A `browse_root_node` at or inside it walks it as usual.
+  - `present_outside_browse` (only when non-empty): the `node_id`s of the datasource's saved variables that this walk did not reach but that the server still has — checked with one NodeClass Read per chunk, where only `BadNodeIdUnknown`/`BadNodeIdInvalid` count as gone and a chunk that cannot be read counts as present. A variable saved from under `Server`, or from outside the configured root, is not browsed rather than removed; **Browse PLC** neither lists it under *Removed from server* nor marks it stale.
   - `503` if the OPC-UA pool is unavailable, no engine exists for the datasource, or the engine is not connected.
+- `GET /api/datasources/{name}/browse/stream`
+  - The same browse, with live progress — what **Browse PLC** uses. `application/x-ndjson`, one object per line:
+    - `{ "type": "progress", done, total, nodes, level }` after every Browse and attribute-Read chunk. `total` is the work known *so far* (each parent still to browse, each variable still to type); it grows as levels reveal children and equals `done` when the walk ends. `nodes` is the count found so far, `level` the Browse rounds walked. Progress that queues up while the client reads is coalesced to the newest.
+    - then exactly one of `{ "type": "result", "tree" }` (the `/browse` body) or `{ "type": "error", "error" }` for a failure during the walk.
+  - The checks above run before the stream opens, so `422`/`503` arrive as HTTP statuses, never as an error line.
+  - Closing the connection cancels the walk on the server.
 
 ### Lifecycle
 

@@ -1,5 +1,5 @@
 import '../../testSdk';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useVariableStore } from '@hmi/store/variableStore';
@@ -86,6 +86,73 @@ describe('NumericStepper', () => {
     await user.click(screen.getByRole('button', { name: 'Decrement' }));
 
     expect(frames()[0].value).toBe(8);
+  });
+
+  it('steps an integer beyond 2**53 by its exact digits, the form it arrives in', async () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: '9007199254740993' } });
+    const user = userEvent.setup();
+    const { container } = renderStepper({ variable: BINDING, step: 1 });
+
+    expect(container.querySelector('.hmi-numeric-stepper__value')?.textContent).toBe(
+      '9007199254740993',
+    );
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:last-child')!);
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:first-child')!);
+
+    expect(frames().map((frame) => frame.value)).toEqual(['9007199254740994', '9007199254740992']);
+  });
+
+  it('holds a widget range beyond 2**53 to its exact digits', async () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: '18446744073709551613' } });
+    const user = userEvent.setup();
+    renderStepper({
+      variable: BINDING,
+      step: 1,
+      min: '18446744073709551612',
+      max: '18446744073709551614',
+    });
+
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:last-child')!);
+    act(() => useVariableStore.setState({ values: { [VAR_KEY]: '18446744073709551614' } }));
+
+    expect(frames().map((frame) => frame.value)).toEqual(['18446744073709551614']);
+    expect(
+      document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:last-child')!,
+    ).toBeDisabled();
+    expect(
+      document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:first-child')!,
+    ).toBeEnabled();
+  });
+
+  it('clamps a big step to a big widget min as digits, not an unsafe number', async () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: '9007199254741000' } });
+    const user = userEvent.setup();
+    renderStepper({ variable: BINDING, step: 1, min: '9007199254740995' });
+
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:first-child')!);
+    act(() => useVariableStore.setState({ values: { [VAR_KEY]: '9007199254740996' } }));
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:first-child')!);
+
+    expect(frames().map((frame) => frame.value)).toEqual(['9007199254740999', '9007199254740995']);
+    act(() => useVariableStore.setState({ values: { [VAR_KEY]: '9007199254740995' } }));
+    expect(
+      document.querySelector<HTMLElement>('.hmi-numeric-stepper__btn:first-child')!,
+    ).toBeDisabled();
+  });
+
+  it('commits a numpad entry beyond 2**53 by its exact digits', async () => {
+    useVariableStore.setState({ values: { [VAR_KEY]: '9007199254740993' } });
+    const user = userEvent.setup();
+    renderStepper({ variable: BINDING, showRangeOnNumpad: false });
+
+    await user.click(document.querySelector<HTMLElement>('.hmi-numeric-stepper__display')!);
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+    for (const digit of '18446744073709551615') {
+      await user.click(screen.getByRole('button', { name: digit }));
+    }
+    await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
+
+    expect(frames()[0].value).toBe('18446744073709551615');
   });
 
   it('clamps the reachable range with the step buttons', () => {

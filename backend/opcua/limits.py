@@ -31,14 +31,24 @@ class OperationLimits:
     max_read_ops: int | None = None
     max_browse_nodes: int | None = None
     max_monitored_items_per_call: int | None = None
+    max_browse_continuation_points: int | None = None
 
     def read_ops_budget(self) -> int:
         """Operations allowed in one Read request."""
         return self.max_read_ops or DEFAULT_MAX_READ_OPS
 
     def browse_nodes_budget(self) -> int:
-        """BrowseDescriptions allowed in one Browse request."""
-        return self.max_browse_nodes or DEFAULT_MAX_BROWSE_NODES
+        """BrowseDescriptions to send in one Browse request.
+
+        Also capped by MaxBrowseContinuationPoints: every node in a request
+        may need a continuation point for references past the first answer,
+        and a server out of them refuses the node outright (an S7-1500 keeps
+        five per session).
+        """
+        budget = self.max_browse_nodes or DEFAULT_MAX_BROWSE_NODES
+        if self.max_browse_continuation_points:
+            budget = min(budget, self.max_browse_continuation_points)
+        return budget
 
     def monitored_items_budget(self) -> int:
         """Items allowed in one CreateMonitoredItems/DeleteMonitoredItems call."""
@@ -59,6 +69,7 @@ async def read_operation_limits(client: Client, datasource_name: str = "") -> Op
         ua.ObjectIds.Server_ServerCapabilities_OperationLimits_MaxNodesPerRead,
         ua.ObjectIds.Server_ServerCapabilities_OperationLimits_MaxNodesPerBrowse,
         ua.ObjectIds.Server_ServerCapabilities_OperationLimits_MaxMonitoredItemsPerCall,
+        ua.ObjectIds.Server_ServerCapabilities_MaxBrowseContinuationPoints,
     )
     try:
         params = ua.ReadParameters()
@@ -89,13 +100,24 @@ async def read_operation_limits(client: Client, datasource_name: str = "") -> Op
         except Exception:
             value = None
         limits.append(value)
-    max_read_ops, max_browse_nodes, max_monitored_items_per_call = limits
+    (
+        max_read_ops,
+        max_browse_nodes,
+        max_monitored_items_per_call,
+        max_browse_continuation_points,
+    ) = limits
     logger.info(
         "OPC-UA operation limits for %s: MaxNodesPerRead=%s MaxNodesPerBrowse=%s "
-        "MaxMonitoredItemsPerCall=%s",
+        "MaxMonitoredItemsPerCall=%s MaxBrowseContinuationPoints=%s",
         datasource_name,
         max_read_ops or "unlimited",
         max_browse_nodes or "unlimited",
         max_monitored_items_per_call or "unlimited",
+        max_browse_continuation_points or "unlimited",
     )
-    return OperationLimits(max_read_ops, max_browse_nodes, max_monitored_items_per_call)
+    return OperationLimits(
+        max_read_ops,
+        max_browse_nodes,
+        max_monitored_items_per_call,
+        max_browse_continuation_points,
+    )

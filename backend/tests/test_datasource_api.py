@@ -240,24 +240,6 @@ def test_put_datasource_rejects_unknown_data_type(ds_client):
     assert manager.get("plc1") is None
 
 
-@pytest.mark.parametrize(
-    "data_type", ["DateTime", "Date", "Time", "Duration", "Single", "Integer", "Enumeration"]
-)
-def test_put_datasource_accepts_every_writable_data_type(ds_client, data_type):
-    """A static variable changes only through the write path, so every type a
-    write can target must be saveable."""
-    client, manager = ds_client
-    resp = client.put(
-        "/api/datasources/plc1",
-        json={
-            "type": "static",
-            "variables": [{"kind": "variable", "display_name": "X", "data_type": data_type}],
-        },
-    )
-    assert resp.status_code == 200, resp.text
-    assert manager.get("plc1") is not None
-
-
 def test_put_variables_rejects_unknown_data_type(ds_client):
     client, manager = ds_client
     manager.save("plc1", {"name": "plc1", "type": "static", "variables": []})

@@ -1,6 +1,7 @@
 import '../../testSdk';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { useVariableStore } from '@hmi/store/variableStore';
 import LedIndicator from './index';
 
 function renderLed(properties: Record<string, unknown>) {
@@ -12,6 +13,10 @@ function renderLed(properties: Record<string, unknown>) {
 }
 
 describe('LedIndicator', () => {
+  beforeEach(() => {
+    useVariableStore.setState({ values: {}, varMeta: {} });
+  });
+
   it('renders with no properties at all', () => {
     const { container } = renderLed({});
     const el = container.firstElementChild as HTMLElement;
@@ -21,12 +26,13 @@ describe('LedIndicator', () => {
     expect(el.querySelector('.hmi-led-indicator__dot')).not.toBeNull();
   });
 
-  it('reads as off — not as on — when the value is absent', () => {
+  it('reads as unknown — neither on nor off — when the value is absent', () => {
     const { container } = renderLed({ label: 'Pump' });
+    const el = container.firstElementChild as HTMLElement;
 
-    expect((container.firstElementChild as HTMLElement).className).toContain(
-      'hmi-led-indicator--off',
-    );
+    expect(el.className).toContain('hmi-led-indicator--unknown');
+    expect(el.className).not.toContain('hmi-led-indicator--off');
+    expect(el.className).not.toContain('hmi-led-indicator--on');
     expect(screen.getByText('Pump')).toBeInTheDocument();
   });
 
@@ -38,22 +44,33 @@ describe('LedIndicator', () => {
     );
   });
 
-  it.each(['false', '0', 'no', 'OFF', '', '  ', Number.NaN, 0])(
-    'stays off for a tag value that means off or nothing: %j',
-    (value) => {
-      const { container } = renderLed({ variable: value });
-
-      expect((container.firstElementChild as HTMLElement).className).toContain(
-        'hmi-led-indicator--off',
-      );
-    },
-  );
-
-  it.each(['true', '1', 'on', 1])('lights up for a tag value that means on: %j', (value) => {
-    const { container } = renderLed({ variable: value });
+  it('reads as off on a false value', () => {
+    const { container } = renderLed({ variable: false });
 
     expect((container.firstElementChild as HTMLElement).className).toContain(
-      'hmi-led-indicator--on',
+      'hmi-led-indicator--off',
     );
+  });
+
+  it('shows unknown until a bound value arrives, then follows it', () => {
+    const { container } = renderLed({ variable: { $var: { path: 'PLC:Pump/Running' } } });
+    const el = container.firstElementChild as HTMLElement;
+    expect(el.className).toContain('hmi-led-indicator--unknown');
+
+    act(() => useVariableStore.getState().setScalar('PLC:Pump/Running', true));
+    expect(el.className).toContain('hmi-led-indicator--on');
+    act(() => useVariableStore.getState().setScalar('PLC:Pump/Running', 'false'));
+    expect(el.className).toContain('hmi-led-indicator--off');
+  });
+
+  it('never lights on an empty text or NaN from a tag', () => {
+    const { container } = renderLed({ variable: { $var: { path: 'PLC:Batch/Id' } } });
+    const el = container.firstElementChild as HTMLElement;
+
+    for (const blank of ['', '   ', Number.NaN]) {
+      act(() => useVariableStore.getState().setScalar('PLC:Batch/Id', blank));
+      expect(el.className).toContain('hmi-led-indicator--unknown');
+      expect(el.className).not.toContain('hmi-led-indicator--on');
+    }
   });
 });

@@ -75,7 +75,7 @@ LAN peer discovery (mDNS) and every peer-transfer surface belong to the manager 
 - `backend/services/datasource_manager.py`
   - datasource registry
   - flattened variable lookup tables
-  - cached live values
+  - cached live values, JSON-ready (`core.value_types.json_ready` on every write); it imports no asyncua — each datasource normalizes its own values where they enter
   - priority-key aggregation across clients
   - all public methods protected by `threading.Lock`; payloads copied before lock release
   - `register_value_listener(fn)` / `unregister_value_listener(fn)` — idempotent register/remove for downstream listeners (alarm manager, historian manager). Listener fan-out copies the list under the lock so a slow listener can't block subsequent updates.
@@ -100,6 +100,11 @@ LAN peer discovery (mDNS) and every peer-transfer surface belong to the manager 
 Raw type matching is case-insensitive and trims surrounding whitespace. The
 frontend predictor and backend coercer use the same matrix, guarded by the
 cross-language `opcuaWriteTypes.json` and `opcuaWriteCoercion.json` fixtures.
+The VariantType each raw name is written with, its simple type, and whether
+the test server can build it are pinned in `opcuaBuiltinTypes.json`, together
+with browse's namespace-0 DataType names and the test server's `_VARIANT_MAP`.
+The test server refuses a type outside that map with a 422 and records the
+reason as the instance error.
 Persisted raw strings are never rewritten while loading a datasource; an
 unrecognised persisted type can still be displayed, but a write to it is
 rejected.
@@ -165,7 +170,7 @@ it. A range failure surfaces its own stable REST/WebSocket reason,
 `value_out_of_range`, rather than the matrix's `invalid_value` (see
 [websocket.md](websocket.md) for the full reason table). A verified write
 compares the read-back with the value actually sent — rounded, in its cache
-form (`DatasourceManager._coerce`); an OPC-UA indexed write reads the array raw
+form (`json_ready`); an OPC-UA indexed write reads the array raw
 (`read_current_values(raw=True)`) so the untouched elements go back in their
 wire types.
 
@@ -190,7 +195,8 @@ current value and before its Boolean check, with the same folder exception. Ever
 - `backend/opcua/` — the OPC-UA client, one module per concern
   - `pool.py` — `OpcuaPool` and the `opcua_pool` singleton: one engine per `opcua-client` datasource; `subscription_status()` collects each engine's own `subscription_status()`
   - `engine.py` — `DatasourceOpcuaEngine`: connection lifecycle and reconnect loop, the background and priority subscriptions (promote/demote), bulk reads, writes and the wire VariantType each tag arrives in. `read_current_values(paths, raw=False)` returns cache forms; `raw=True` keeps the server's values, for an indexed array write that sends the untouched elements back. `_DsSubHandler` is the datachange hot path. `attach_client()` adopts an already-connected asyncua `Client` without the reconnect loop — the supported seam for tests and tools that own the client
-  - `browse.py` — `AddressSpaceBrowser`: the address-space walk and DataType resolution. It needs only a connected client and the `OperationLimits`, none of the engine's subscription state; `DatasourceOpcuaEngine.browse()` builds one per browse. After the walk, `browse(node, *, saved_node_ids)` checks the saved variables' node ids the walk did not reach with one NodeClass Read per `read_ops_budget()` chunk; those the server still has come back as `present_outside_browse` (only when non-empty). Only `BadNodeIdUnknown`/`BadNodeIdInvalid` counts as gone and a chunk that fails to read counts as present; the frontend browse diff treats these ids as not browsed rather than removed
+  - `browse.py` — `AddressSpaceBrowser`: the address-space walk, DataType resolution and browse progress. It needs only a connected client and the `OperationLimits`, none of the engine's subscription state; `DatasourceOpcuaEngine.browse()` builds one per browse. `browse(node, *, on_progress, skip_children, saved_node_ids)` leaves out direct children of the root listed in `skip_children`: the engine passes `SERVER_OBJECT_NODE_ID` (`i=2253`) only when neither a `node_id` nor a `browse_root_node` is set, so a default browse skips the server's own diagnostics while an explicit root at or inside `Server` still walks them. After the walk, saved variables' node ids the walk did not reach are checked with one NodeClass Read per `read_ops_budget()` chunk; those the server still has come back as `present_outside_browse` (only when non-empty). Only `BadNodeIdUnknown`/`BadNodeIdInvalid` counts as gone and a chunk that fails to read counts as present; the frontend browse diff treats these ids as not browsed rather than removed
+  - `values.py` — `normalize_value()`: an OPC-UA value in its cache form (LocalizedText → text, NodeId/QualifiedName → canonical string, then `core.value_types.json_ready_scalar`). Applied in `_DsSubHandler` and `read_current_values`, so nothing downstream sees an asyncua type. See [Value forms](websocket.md#value-forms)
   - `limits.py` — `OperationLimits`, `read_operation_limits()` and the `DEFAULT_MAX_*` fallbacks. The engine owns the result, since reads and monitored-item creation are batched too, and hands it to the browser
   - `routing.py` — maps struct and array-of-struct leaves to the `(folder, field)` pair `DatasourceManager.update_struct_field()` patches in O(1)
   - `security.py` — secure-channel settings, certificate-path containment and self-signed certificate generation, shared by connect, the probe and the test server

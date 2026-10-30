@@ -1,6 +1,7 @@
 import '../../testSdk';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { useVariableStore } from '@hmi/store/variableStore';
 import Gauge from './index';
 import gaugeSource from './index.tsx?raw';
 
@@ -51,6 +52,19 @@ describe('Gauge', () => {
 
     expect(half?.[0]).not.toBe(half?.[1]);
     expect(full?.[1]).not.toBe(half?.[1]);
+  });
+
+  it('reads an integer beyond 2**53, which arrives as its decimal string', () => {
+    useVariableStore.setState({ values: { 'PLC:Counter': '9007199254740993' } });
+    const { container } = renderGauge({
+      variable: { $var: { path: 'PLC:Counter' } },
+      max: 2 ** 54,
+    });
+
+    expect(container.querySelector('.hmi-gauge__value')?.textContent).toBe('9007199254740992.0');
+    expect(fillEnds(container)).toEqual(
+      fillEnds(renderGauge({ variable: 50, max: 100 }).container),
+    );
   });
 
   // The compiler flags a widget as needing the chart chunk by looking for the

@@ -16,12 +16,13 @@ from asyncua.common.node import Node
 from core.number_utils import get_config_float
 from models.datasource import build_var_key, is_present_on_server, is_subscribable
 
-from .browse import AddressSpaceBrowser
+from .browse import SERVER_OBJECT_NODE_ID, AddressSpaceBrowser, BrowseProgressSink
 from .compat import apply_asyncua_watchdog_log_patch
 from .discovery import _short_probe_error
 from .limits import OperationLimits, read_operation_limits
 from .routing import _collect_struct_leaf_paths, _struct_field_routes
 from .security import apply_client_security
+from .values import normalize_value
 
 apply_asyncua_watchdog_log_patch()
 
@@ -51,14 +52,17 @@ class _DsSubHandler:
             ds_name = self._engine.datasource_name
             if node_id in self._engine._node_to_path:
                 path = self._engine._node_to_path[node_id]
-                dm.update(ds_name, path, val, priority=self._engine._is_priority_path(path))
+                dm.update(
+                    ds_name, path, normalize_value(val),
+                    priority=self._engine._is_priority_path(path),
+                )
             elif node_id in self._engine._node_to_field:
                 path, field_name, leaf_path = self._engine._node_to_field[node_id]
                 dm.update_struct_field(
                     ds_name,
                     path,
                     field_name,
-                    val,
+                    normalize_value(val),
                     leaf_path=leaf_path,
                     # Priority handles are tracked by their concrete monitored
                     # leaf paths, even when the user-facing binding targets a
@@ -473,8 +477,17 @@ class DatasourceOpcuaEngine:
 
     # ── Browse ────────────────────────────────────────────────────────────────
 
-    async def browse(self, node_id: str | None = None) -> dict:
-        """Walk the address space below *node_id* (or the configured root)."""
+    async def browse(
+        self,
+        node_id: str | None = None,
+        *,
+        on_progress: BrowseProgressSink | None = None,
+    ) -> dict:
+        """Walk the address space below *node_id* (or the configured root).
+
+        *on_progress* receives ``{done, total, nodes, level}`` after every
+        Browse and attribute-Read chunk; see AddressSpaceBrowser.
+        """
         client = self._client
         if not self._connected or client is None:
             raise RuntimeError(f"Not connected: {self.datasource_name}")
@@ -486,7 +499,14 @@ class DatasourceOpcuaEngine:
         browser = AddressSpaceBrowser(
             client, self._operation_limits, datasource_name=self.datasource_name
         )
-        result = await browser.browse(node, saved_node_ids=self._saved_node_ids())
+        result = await browser.browse(
+            node,
+            on_progress=on_progress,
+            # Browsing Server itself, or anything inside it, as the root still
+            # walks it: then it was asked for.
+            skip_children=() if configured_root else (SERVER_OBJECT_NODE_ID,),
+            saved_node_ids=self._saved_node_ids(),
+        )
         result["show_root"] = configured_root is not None
         return result
 
@@ -733,9 +753,9 @@ class DatasourceOpcuaEngine:
     async def read_current_values(self, paths: set[str], *, raw: bool = False) -> dict[str, Any]:
         """Bulk-read current values for requested paths and folder structs.
 
-        Values come back in their cache form; *raw* keeps the asyncua values
-        instead, for a caller that writes them back to the server — a patched
-        array element write.
+        Values come back in their cache form (``normalize_value``); *raw* keeps
+        the asyncua values instead, for a caller that writes them back to the
+        server — a patched array element write.
         """
         if not paths or not self._connected or self._client is None:
             return {}
@@ -804,7 +824,7 @@ class DatasourceOpcuaEngine:
             )
         result: dict[str, Any] = {}
         for (kind, path, field_name, _node), value in zip(requests, values, strict=False):
-            coerced = value if raw else dm._coerce(value)
+            coerced = value if raw else normalize_value(value)
             key = build_var_key(self.datasource_name, path)
             if kind == "struct" and field_name is not None:
                 fields = result.get(key)
