@@ -33,9 +33,10 @@ def project(tmp_path: Path) -> Path:
     hold = _container("hold", {"onRelease": {"onRelease": [{"type": "logoutUser"}]}})
     empty = _container("empty", {"title": "T", "actions": {"onPress": []}})
     plain = _container("plain", {"title": "P"})
+    bound = _container("bound", {"actions": {"$componentProp": "actions"}})
     tile["children"] = [hold]
     (root / "pages" / "home.json").write_text(
-        json.dumps({"id": "home", "sections": {"content": [tile, empty, plain]}})
+        json.dumps({"id": "home", "sections": {"content": [tile, empty, plain, bound]}})
     )
     return root
 
@@ -43,12 +44,16 @@ def project(tmp_path: Path) -> Path:
 def test_containers_with_actions_become_button_containers(project: Path) -> None:
     migrate_button_container(_staged(project), project)
 
-    tile, empty, plain = _read(project / "pages" / "home.json")["sections"]["content"]
+    tile, empty, plain, bound = _read(project / "pages" / "home.json")["sections"]["content"]
     assert tile["type"] == "ButtonContainer"
     assert tile["properties"]["actions"]["onPress"] == [{"type": "navigateToPage", "pageId": "x"}]
     assert tile["children"][0]["type"] == "ButtonContainer"
     assert empty == _container("empty", {"title": "T"})
     assert plain == _container("plain", {"title": "P"})
+    assert bound["type"] == "ButtonContainer"
+    assert bound["properties"]["actions"] == {
+        "onPress": [{"type": "runComponentActions", "property": "actions"}]
+    }
 
 
 def test_rerunning_changes_nothing(project: Path) -> None:

@@ -170,3 +170,27 @@ describe('executeWidgetActions — delay', () => {
     }
   });
 });
+
+describe('executeWidgetActions — runComponentActions', () => {
+  beforeEach(() => {
+    useHmiStore.setState({ openPageOverlays: [] });
+  });
+
+  it('runs the list the instance passes in through the named property', () => {
+    executeWidgetActions([{ type: 'runComponentActions', property: 'actions' }], {
+      evalCtx: {
+        inputScopeProps: { actions: { onPress: [{ type: 'openPageOverlay', pageId: 'p1' }] } },
+      },
+    });
+
+    expect(useHmiStore.getState().openPageOverlays.map((o) => o.pageId)).toEqual(['p1']);
+  });
+
+  it('does nothing when the instance sets no actions', () => {
+    executeWidgetActions([{ type: 'runComponentActions', property: 'actions' }], {
+      evalCtx: { inputScopeProps: {} },
+    });
+
+    expect(useHmiStore.getState().openPageOverlays).toEqual([]);
+  });
+});

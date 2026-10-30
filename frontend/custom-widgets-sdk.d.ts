@@ -390,6 +390,7 @@ type ComponentAction =
       onCancel?: ComponentAction[];
       onOk?: ComponentAction[];
     }
+  | { type: 'runComponentActions'; property: string }
   | {
       type: 'showToast';
       message: unknown;

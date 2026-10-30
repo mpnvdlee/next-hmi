@@ -67,6 +67,7 @@
     "onSettled": "actions"
   },
   "acknowledgeAllAlarms": {},
+  "runComponentActions": { "property": "actionsProperty" },
   "delay": { "duration": "Integer" },
   "setLanguage": { "language": "String" },
   "setActiveTheme": { "theme": "String" },

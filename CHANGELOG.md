@@ -229,6 +229,12 @@ heading.
   under **Interactable** like a Button. A press on a Button or an input inside
   it stays with that control.
 
+- **A Run Component Actions action.** Inside a component it runs the actions
+  each instance sets on one of the component's **Actions** properties, as one
+  item in the list next to the others. The upgrade to format 11 writes it
+  where a pressable Container bound its whole action list to a component
+  property, which it used to drop.
+
 - **A Button sets its alignment and text case.** **Content alignment**
   (center, or start for a menu-style tile) and **Text case** (uppercase). A Label's **Align** is now
   called **Content alignment**, and its new **Text case** follows the
