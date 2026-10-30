@@ -1,4 +1,5 @@
 import type { SchemaField } from '@shared/types/widgetSchema';
+import type { ButtonAction } from '@shared/types/config';
 import {
   isPropertySourceAllowed,
   SCOPE_SOURCES,
@@ -13,7 +14,7 @@ import { hasPropertySourceKey, isRecord } from '@shared/types/propertyValueGuard
 import { getPropertySource } from '@config/components/editor/propertyValueUtils';
 import { ACTION_TYPES } from '@config/components/editor/PropertiesPanel/actionsPreview';
 
-function toast(severity: 'info' | 'error', message: string): void {
+export function toast(severity: 'info' | 'error', message: string): void {
   useHmiStore.getState().showToast({
     id: randomUuid(),
     message,
@@ -117,9 +118,27 @@ export async function pastePropertyValue(
 
 const ACTION_TYPE_NAMES = new Set<string>(ACTION_TYPES.map((t) => t.type));
 
+/** The action a copied text holds — bare or `$static`-wrapped, as Copy writes
+ *  it — or null for anything else. */
+export function parseClipboardAction(text: string): ButtonAction | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const unwrapped =
+    isRecord(parsed) && '$static' in parsed ? (parsed as { $static: unknown }).$static : parsed;
+  return isRecord(unwrapped) &&
+    typeof unwrapped.type === 'string' &&
+    ACTION_TYPE_NAMES.has(unwrapped.type)
+    ? (unwrapped as ButtonAction)
+    : null;
+}
+
 export async function pasteActionValue(
   label: string,
-  onChange: (value: unknown) => void,
+  onChange: (action: ButtonAction) => void,
 ): Promise<void> {
   let text: string;
   try {
@@ -129,26 +148,11 @@ export async function pasteActionValue(
     return;
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    toast('error', 'Clipboard is not valid JSON');
-    return;
-  }
-
-  const unwrapped =
-    isRecord(parsed) && '$static' in parsed ? (parsed as { $static: unknown }).$static : parsed;
-
-  if (
-    !isRecord(unwrapped) ||
-    typeof unwrapped.type !== 'string' ||
-    !ACTION_TYPE_NAMES.has(unwrapped.type)
-  ) {
+  const action = parseClipboardAction(text);
+  if (!action) {
     toast('error', 'Clipboard does not contain an action');
     return;
   }
-
-  onChange(unwrapped);
+  onChange(action);
   toast('info', `Pasted into ${label}`);
 }
