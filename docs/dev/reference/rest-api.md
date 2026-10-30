@@ -105,7 +105,7 @@ it is in now.
   - `422` if `page_id` doesn't match `[A-Za-z0-9_-]{1,128}`.
 - `PUT /api/config/pages/{page_id}` · `PUT /api/config/dialogs/{page_id}`
   - Body is merged into the persisted file; only these keys are kept on disk:
-    `title`, `icon`, `description`, `breadcrumbLabel`, `hidden`, `role`, `order`, `route`, `layout`, `showHeader`, `showFooter`, `mainPadding`, `mainBackground`, `events`, `componentProperties`, `showCloseButton`, `closeOnBackgroundPress`, `tapThrough`, `sections`.
+    `title`, `icon`, `description`, `breadcrumbLabel`, `hidden`, `role`, `order`, `route`, `layout`, `showHeader`, `showFooter`, `mainPadding`, `mainBackground`, `events`, `componentProperties`, `showCloseButton`, `closeOnBackgroundPress`, `tapThrough`, `showModalHeader`, `sections`.
   - An explicit `null` for a key removes it from the stored document.
   - `sections` (when supplied) must be an object whose values are arrays. A section may not list a `type: "page-group"` node — nest a group inside another group instead (`422`).
   - Returns the merged document `{ id, ...persisted fields }`, with no warnings array — advisory findings come from `/api/config/validate`. A blocking validation finding is `422`. Broadcasts `config_changed` (`source: "rest"`).

@@ -45,6 +45,7 @@ import { useVariableStore } from '@hmi/store/variableStore';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { HmiScopeContext } from '@hmi/context/HmiScopeContext';
 import { AlertModal } from '@hmi/components/AlertModal';
+import { ActionNavigation } from '@hmi/components/ActionNavigation';
 import { HmiToastStack } from '@hmi/components/ToastStack';
 import { ModalStack } from '@hmi/components/ModalStack';
 import { useResolvedPageOverlays } from '@hmi/hooks/useOpenOverlays';
@@ -515,14 +516,16 @@ export default function PreviewView() {
                   ref={layoutRef}
                 >
                   <div className="hmi-modal">
-                    <div className="hmi-modal__header">
-                      <span className="hmi-modal__title">
-                        {resolvePageTitle(overlayNode.title)}
-                      </span>
-                      {overlayNode.showCloseButton !== false && (
-                        <CloseButton className="hmi-modal__close" />
-                      )}
-                    </div>
+                    {overlayNode.showModalHeader !== false && (
+                      <div className="hmi-modal__header">
+                        <span className="hmi-modal__title">
+                          {resolvePageTitle(overlayNode.title)}
+                        </span>
+                        {overlayNode.showCloseButton !== false && (
+                          <CloseButton className="hmi-modal__close" />
+                        )}
+                      </div>
+                    )}
                     {/* Same `data-flow-*` attributes the runtime's `ModalStack`
                         sets — without them the previewed page would sit in a
                         plain CSS default and drift from the real render. */}
@@ -544,6 +547,7 @@ export default function PreviewView() {
                 </div>
                 <ModalStack />
                 <AlertModal scope="runtime:preview" />
+                <ActionNavigation />
                 <HmiToastStack />
               </div>
             </PageDataSettleGate>
@@ -652,6 +656,7 @@ export default function PreviewView() {
                 <ModalStack />
               </div>
               <AlertModal scope="runtime:preview" />
+              <ActionNavigation />
               <HmiToastStack />
             </div>
           </PageDataSettleGate>

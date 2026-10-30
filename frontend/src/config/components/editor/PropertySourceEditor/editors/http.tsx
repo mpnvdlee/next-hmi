@@ -64,7 +64,8 @@ export function HttpEditor({
     const merged = { ...http, ...next };
     const live = new Set(extractWildcardKeys([merged.url ?? '', merged.body ?? '']));
     const kept: Record<string, unknown> = {};
-    for (const k of live) kept[k] = wildcards[k] ?? '';
+    // A new placeholder starts unbound, as in String Expr.
+    for (const k of live) kept[k] = wildcards[k] ?? { $var: { path: '' } };
     onChange({ $http: { ...merged, wildcards: kept } });
   }
 

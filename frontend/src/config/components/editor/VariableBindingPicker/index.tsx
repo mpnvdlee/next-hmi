@@ -32,6 +32,7 @@ import {
   accepts,
   elementOf,
   formatVarType,
+  nodeAcceptsOrElement,
   nodeVarType,
   parseTypeToken,
 } from '@shared/types/varType';
@@ -678,6 +679,7 @@ export default function VariableBindingPicker() {
       !dsFailed.has(selectedParsed.datasource);
 
     let scalarIsValid: boolean | null = null;
+    let wholeArrayElement = false;
     if (key && !isStruct) {
       const varToCheck = selectedVar ?? selectedParentVar;
       if (repeatPick && repeatOptions) {
@@ -688,8 +690,14 @@ export default function VariableBindingPicker() {
         const resolved = selectedVar ? nodeVarType(varToCheck) : elementOf(nodeVarType(varToCheck));
         const typeOk =
           allowed.length === 0 || allowed.some((t) => accepts(parseTypeToken(t), resolved));
+        // A whole array whose element fits a one-value slot binds too: the
+        // field's Index row below it then names the element.
+        wholeArrayElement =
+          !typeOk &&
+          !!selectedVar &&
+          allowed.some((t) => nodeAcceptsOrElement(parseTypeToken(t), resolved));
         const accessOk = !needsWrite || varToCheck.writable === true;
-        scalarIsValid = typeOk && accessOk;
+        scalarIsValid = (typeOk || wholeArrayElement) && accessOk;
       } else if (rawSelectedFolder) {
         scalarIsValid = strictFolderSelectable;
       } else if (!pendingDatasource) {
@@ -718,6 +726,7 @@ export default function VariableBindingPicker() {
         selectedElementIndex,
         rawSelectedFolder,
         scalarIsValid,
+        wholeArrayElement,
         isStruct,
       },
     };

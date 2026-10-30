@@ -1229,9 +1229,22 @@ def validate_var_ref(
     subject = f"variable '{ds_name}:{var_path}'"
     accept = _accept_types_for_schema(schema_field)
     if accept and not any(vartype.accepts(a, element, required_fields) for a in accept):
-        report.warn(
-            path, f"{subject} type is incompatible with this field", severity="error", code="var-type"
-        )
+        # A whole array whose element would fit: the editor's Index row below
+        # the field names the element, so the finding anchors there.
+        whole = not indexed and var_type.get("array")
+        if whole and any(
+            vartype.accepts(a, vartype.element_of(var_type), required_fields) for a in accept
+        ):
+            report.warn(
+                f"{path}/$var/index",
+                f"{subject} is an array — choose an element",
+                severity="error",
+                code="var-type",
+            )
+        else:
+            report.warn(
+                path, f"{subject} type is incompatible with this field", severity="error", code="var-type"
+            )
         return
     if accept and element.get("kind") == "struct":
         base = (
@@ -1632,7 +1645,13 @@ class _WriteTarget:
 
 
 def _check_write_target_type(
-    kind: str, target: _WriteTarget, ctx: ValidationContext, path: str, report: ValidationReport
+    kind: str,
+    target: _WriteTarget,
+    ctx: ValidationContext,
+    path: str,
+    report: ValidationReport,
+    *,
+    access: bool = True,
 ) -> None:
     """A write needs one variable it can put a value into: the write path
     addresses a leaf (a whole array, or one element of it), never a struct
@@ -1665,7 +1684,7 @@ def _check_write_target_type(
                 code="toggle-target-type",
             )
             return
-    if _read_only(ctx, target.ds_name, target.key):
+    if access and _read_only(ctx, target.ds_name, target.key):
         report.warn(
             path,
             f"{target.subject} is read-only, so this action cannot write it",
@@ -1783,6 +1802,22 @@ def _validate_write_target(
         indexed,
         f"variable '{ds_name}:{var_path}'",
     )
+    if not indexed and var_type.get("array") and kind != "writeDataVariable":
+        # A toggle or numpad acts on one element: when one would fit, the
+        # finding anchors on the editor's Index row below the target.
+        # Only the element's type decides; its access is reported on the target.
+        probe = ValidationReport()
+        element = replace(written, element=vartype.element_of(var_type), indexed=True)
+        _check_write_target_type(kind, element, ctx, target_path, probe, access=False)
+        if not probe.warnings:
+            report.warn(
+                f"{target_path}/$var/index",
+                f"{written.subject} is an array — choose an element",
+                severity="error",
+                code="toggle-target-type" if kind == "toggleDataVariable" else "edit-target-type",
+            )
+            _check_write_target_type(kind, element, ctx, target_path, report)
+            return written
     _check_write_target_type(kind, written, ctx, target_path, report)
     return written
 
@@ -1877,6 +1912,7 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
         "height": "Integer",
     },
     "closePageOverlay": {"pageId": "page"},
+    "navigateToPage": {"pageId": "page"},
     "writeDataVariable": {
         "target": "target",
         "value": "writeValue",
@@ -2040,6 +2076,8 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
         if names_target and target not in ctx.page_ids:
             report.add(path, f"action target page '{target}' does not exist")
     page_id = action.get("pageId")
+    if kind == "navigateToPage":
+        _check_navigate_target(page_id, ctx, f"{path}/pageId", report)
     if kind in ("openDialog", "openPageOverlay") and isinstance(page_id, str) and page_id:
         _check_overlay_root(kind, page_id, ctx, f"{path}/pageId", report)
     if kind == "openDialog" and isinstance(page_id, str) and page_id:
@@ -2099,6 +2137,16 @@ def _placeholder_key(body: str) -> str | None:
     while (m := _PLACEHOLDER_FN_RE.fullmatch(rest)):
         rest = m.group(2).strip()
     return rest if re.fullmatch(r"[0-9]+", rest) else None
+
+
+def template_placeholder_keys(templates: list[str]) -> set[str]:
+    """Every `{n}` wildcard key the placeholders across `templates` name."""
+    return {
+        key
+        for template in templates
+        for match in _WILDCARD_RE.finditer(template)
+        if (key := _placeholder_key(match.group(1))) is not None
+    }
 
 # `$formula` grammar, mirrored from frontend/src/hmi/utils/formula.ts:
 #   expr := term (("+" | "-") term)*     term := unary (("*" | "/") unary)*
@@ -2189,12 +2237,7 @@ def _validate_wildcards(
     `wildcards` bag. Shared by `$stringExpr` (one template) and `$http` (url,
     body and header values), which use the same placeholder syntax."""
     wildcards = payload.get("wildcards") if isinstance(payload.get("wildcards"), dict) else {}
-    referenced: set[str] = set()
-    for template in templates:
-        for match in _WILDCARD_RE.finditer(template):
-            key = _placeholder_key(match.group(1))
-            if key is not None:
-                referenced.add(key)
+    referenced = template_placeholder_keys(templates)
     code_prefix = source_key.lstrip("$").lower()
     for n in sorted(referenced, key=int):
         wildcard_value = wildcards.get(n)
@@ -2245,18 +2288,53 @@ def _static_page_id(value: Any) -> str | None:
     return None
 
 
-def _check_navigable(page_id: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> None:
-    """Flag a navigation target sitting in the Dialogs folder. Only the overlay
-    actions reach those, so a menu item or `format: 'page'` field naming one
-    goes nowhere — the runtime resolves the route against the `pages` root
-    alone and renders its empty state."""
+def _check_navigable(
+    page_id: Any, ctx: ValidationContext, path: str, report: ValidationReport, hint: str = ""
+) -> None:
+    """Flag a navigation target sitting in the Dialogs folder, or naming no page
+    at all. Only the overlay actions reach the Dialogs folder, so a menu item or
+    `format: 'page'` field naming one goes nowhere — the runtime resolves the
+    route against the `pages` root alone and renders its empty state."""
     pid = _static_page_id(page_id)
     if pid is not None and pid in ctx.dialogs_page_ids:
         report.warn(
             path,
             f"page '{pid}' is in the Dialogs folder — nothing navigates to it, "
-            "so this target opens nothing",
+            f"so this target opens nothing{hint}",
             severity="error", code="page-not-navigable",
+        )
+    # Only the `pages` root routes, so a page file neither root lists is as dead
+    # as a missing one. An empty set means the index wasn't read: skip.
+    elif pid is not None and ctx.navigable_page_ids and pid not in ctx.navigable_page_ids:
+        report.warn(
+            path, f"page '{pid}' is not in the Pages section", severity="error", code="page-unknown"
+        )
+
+
+def _check_navigate_target(page_id: Any, ctx: ValidationContext, path: str, report: ValidationReport) -> None:
+    """A Navigate To Page target: a fixed page id (an unknown one is already the
+    page-field finding), or a `$componentProp` naming an input parameter
+    declared `format: 'page'` — whose callers' values `_check_navigable` checks."""
+    if isinstance(page_id, str):
+        if page_id in ctx.page_ids:
+            _check_navigable(page_id, ctx, path, report, " — open it with Open Dialog instead")
+        return
+    name = page_id.get("$componentProp") if isinstance(page_id, dict) and len(page_id) == 1 else None
+    if not isinstance(name, str):
+        report.warn(
+            path,
+            "the page is a fixed page or an input parameter declared as a page — nothing else",
+            severity="error", code="navigate-target-invalid",
+        )
+    elif not name:
+        report.warn(path, "property name is empty", severity="warning", code="componentprop-empty")
+    elif not ctx.input_scope or (
+        ctx.input_schema is not None and (ctx.input_schema.get(name) or {}).get("format") != "page"
+    ):
+        report.warn(
+            path,
+            f"input parameter '{name}' is not declared here as a page (format: page)",
+            severity="error", code="navigate-input-not-page",
         )
 
 

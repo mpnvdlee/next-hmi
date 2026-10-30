@@ -549,10 +549,8 @@ def _edit(path: str, **fields) -> dict:
         (_write("PLC:Motor"), "write-target-type"),
         (_write("PLC:Speed"), "write-target-type"),
         (_toggle("PLC:Count"), "toggle-target-type"),
-        (_toggle("PLC:Flags"), "toggle-target-type"),
         (_toggle("PLC:Flags", index=7), "var-index"),
         (_edit("PLC:Run"), "edit-target-type"),
-        (_edit("PLC:Levels"), "edit-target-type"),
         (_edit("PLC:Speed"), "write-target-type"),
         # Access the registry does not state is read-only.
         (_write("PLC:Levels", [1.5]), "write-target-type"),
@@ -562,6 +560,22 @@ def test_a_target_the_action_cannot_write(ctx, action, code):
     report = _action(ctx, action)
     assert _codes(report) == [code]
     assert report.warnings[0].path == "/a/target"
+
+
+@pytest.mark.parametrize(
+    ("action", "found"),
+    [
+        (_toggle("PLC:Flags"), [("/a/target/$var/index", "toggle-target-type")]),
+        # Levels states no access, so it is read-only too — said on the target.
+        (
+            _edit("PLC:Levels"),
+            [("/a/target/$var/index", "edit-target-type"), ("/a/target", "write-target-type")],
+        ),
+    ],
+)
+def test_a_whole_array_toggle_or_edit_target_asks_for_its_element(ctx, action, found):
+    report = _action(ctx, action)
+    assert [(w.path, w.code) for w in report.warnings] == found
 
 
 @pytest.mark.parametrize(

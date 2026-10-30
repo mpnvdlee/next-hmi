@@ -494,14 +494,16 @@
 /* ── Virtual Input Panels ─────────────────────────────────────────────────── */
 .hmi-virtual-input__dock {
   position: fixed;
-  z-index: 120;
+  z-index: var(--hmi-z-input);
 }
 
+/* The dock takes its panel's width, so the panel is what gets centred: a
+   fixed-width dock would leave a narrower numpad at its left edge. */
 .hmi-virtual-input__dock--center {
   left: 50%;
   bottom: var(--hmi-virtual-dock-offset);
   transform: translateX(-50%);
-  width: var(--hmi-virtual-dock-width);
+  width: max-content;
 }
 
 .hmi-virtual-input__dock--bottom-right {
@@ -647,6 +649,10 @@
   cursor: not-allowed;
 }
 
+.hmi-virtual-input__panel--keyboard {
+  width: var(--hmi-virtual-dock-width);
+}
+
 .hmi-virtual-input__panel--keyboard .hmi-virtual-input__key {
   min-width: 0;
   padding-inline: var(--hmi-virtual-key-padding-x-compact);
@@ -760,6 +766,9 @@
 @media (max-width: 820px) {
   .hmi-virtual-input__dock--center {
     bottom: var(--hmi-virtual-dock-offset-mobile);
+  }
+
+  .hmi-virtual-input__panel--keyboard {
     width: var(--hmi-virtual-dock-width-mobile);
   }
 

@@ -40,6 +40,7 @@ interface AlarmHistoryEntry {
   code: string;
   level: AlarmLevel;
   title: string;
+  values?: unknown[];
   triggered_at: string;
   cleared_at: string;
   acked: boolean;
@@ -109,7 +110,7 @@ export default function AlarmHistoryList({ properties, layout }: HmiWidgetProps)
               <div className="hmi-alarm-row__content">
                 <div className="hmi-alarm-row__title">
                   {entry.code ? `[${entry.code}] ` : ''}
-                  {alarmText(entry.title)}
+                  {alarmText(entry.title, entry)}
                 </div>
                 <div className="hmi-alarm-row__meta">
                   {formatAlarmDateTime(entry.triggered_at)} →{' '}

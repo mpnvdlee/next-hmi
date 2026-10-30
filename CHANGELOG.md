@@ -19,6 +19,45 @@ heading.
   as a file, a compose file and `install.sh`, for a machine that cannot reach a
   registry.
 
+- **Navigate To Page goes to a page chosen at runtime.** The new action
+  closes every open dialog and overlay, then goes to a page from the Pages
+  section, firing the page events a menu press would. The page is fixed, or
+  — inside a dialog — an input parameter of the new type **Page**, which
+  the Open Dialog action fills in with a page picker: one station popup's
+  *Open station page* button then leads to each caller's own station. The
+  warnings pill flags a page that does not exist, one in the Dialogs folder,
+  and an input that is not declared as a page.
+
+- **Alarm text can show live values.** An alarm gets a **Values** list of
+  variables, numbered `{1}`, `{2}` …, and those placeholders in its title and
+  description show them, with the same functions a String Expression takes
+  (`{Round1(1)}`, `{Signed(2)}`). While the alarm is active the text follows
+  the live value; once it has cleared, and in the alarm history, it shows the
+  value from the moment the alarm went off. A value can be a member of one
+  element of a struct array, or one element of an array, also with its index
+  bound to another value; the stored value is the element the index named
+  when the alarm went off. History rows from before this release show `—`.
+
+- **Exo 2 is a bundled font.** The theme settings offer **Exo 2** next to
+  Inter, Manrope and Lexend for every font token, in weights 400 to 700,
+  served from the HMI itself so it looks the same without internet access.
+
+- **A dialog can drop its header bar.** A new **Show header bar** switch in a
+  page's or group's **Overlay** section hides the title and the × of the
+  card it opens in, so a keypad or an access panel can be a real dialog
+  without a title strip. The page then closes through a **Close
+  Dialog/Overlay** button of its own, or through the backdrop when **Close
+  on backdrop** is on. For a group, the group's switch counts, not the page
+  inside it. It is on by default, so existing projects look the same.
+
+- **Toasts take their place, shape and colours from the theme.** A new
+  **Toasts** section in the theme settings puts Show Toast notifications in
+  one of six places — top or bottom, left, center or right — makes them
+  rounded or a pill, and sets a background and text colour per severity
+  (info, success, warning, error). The default is today's look: top center,
+  rounded, and an empty colour keeps the severity tint, so existing projects
+  look the same.
+
 - **Buttons can be icon-only, stacked, and sized.** A Button with an icon and
   an empty label is icon-only: it takes even padding on every side so it sizes
   to a near-square tile. The Button also gets four properties: **Icon
@@ -105,6 +144,15 @@ heading.
   *Community Edition* or *Enterprise Edition* under the logo, and the runtime's
   loading screen says *Community Edition* in the public build.
 
+- **A project opened in 1.1.0 no longer opens in 1.0.x (breaking).** The
+  project file format moves to 10, because 1.1.0 adds fields to the alarm and
+  theme files that a 1.0.x build rejects: it would read the alarm files as
+  empty and save over them, and fail to load the themes. **Start** asks to
+  upgrade a project the first time 1.1.0 opens it, zipping it into
+  `.backups/` first; nothing in it is rewritten. A 1.0.x build then shows
+  **Requires update** and names 1.1.0 as the version it needs, instead of
+  losing the alarms.
+
 - **Number Input binds a plain Float or Integer variable (breaking).** Like
   the Button and the Numeric Stepper, it no longer takes a
   `bVisible` / `bEnabled` / `fValue` struct: bind the setpoint itself, and use
@@ -189,6 +237,39 @@ heading.
   test-server editor, which marks the old one unsupported.
 
 ### Fixed
+
+- **The category rail follows a click to its end.** In the Add action,
+  Add widget and source drawers, clicking a category near the end of the
+  list, such as **Interface**, scrolled to it but left the rail highlighting
+  one above it, because that section could not scroll to the top. The
+  clicked category now stays highlighted until you scroll yourself.
+
+- **A placeholder typed into a String Expr warns until it is bound.**
+  Typing `{2}` into a template added a `{2}` row holding an empty Static
+  text, which counts as a value, so the "placeholder {2} is unbound" warning
+  never showed. The new row now starts unbound, in an HTTP Request's URL and
+  body too. A Static value cleared on purpose still counts as set.
+
+- **An alarm's detail opens on screen from any page.** Tapping a row of an
+  Alarm List on a long page dimmed the screen but drew the detail dialog
+  off-screen, where it could not be read or acknowledged. The dialog now
+  always opens over the middle of the screen, from a custom widget too.
+
+- **A toast no longer covers the numpad.** A toast arriving while the
+  numpad or keyboard was open drew over its bottom row of keys. The keypad
+  the operator is typing on now sits above toasts, and below a Show Alert
+  confirm and an alarm's detail dialog. An open confirm now also dims the
+  toasts behind it; alarm popups keep their own layer above it.
+
+- **A custom widget's centred numpad is centred.** A `VirtualNumpad` with
+  `dockPosition="center"` sat at the left edge of a keyboard-wide strip
+  along the bottom of the screen. It now sits in the middle of the screen,
+  across and down; the keyboard stays docked at the bottom.
+
+- **Bundled fonts now carry their licence.** Inter, JetBrains Mono, Lexend,
+  Manrope and Roboto Mono ship their SIL OFL 1.1 text next to the font files
+  in `frontend/public/fonts/`, and `NOTICE` lists each family's copyright and
+  source, as it already did for Exo 2.
 
 - **A user-group check works in page and global events.** An **If** in a
   page's `onOpen` or `onClose`, or in a global event such as `onPageLoaded`,

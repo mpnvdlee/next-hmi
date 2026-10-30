@@ -31,7 +31,7 @@ import {
   structOffer,
   varStructVerdict,
 } from './helpers';
-import { typeLabel } from '@shared/types/componentProperty';
+import { propertyTypeLabel, typeLabel } from '@shared/types/componentProperty';
 import RequiredFieldsTree from './RequiredFieldsTree';
 
 type FolderEntry = PickerFolderEntry;
@@ -361,6 +361,9 @@ export interface VarMode {
   selectedElementIndex?: number | '#';
   rawSelectedFolder: FolderEntry | null;
   scalarIsValid: boolean | null;
+  /** The selection is a whole array that fits by its element, which the
+   *  field's Index row then names. */
+  wholeArrayElement?: boolean;
   isStruct: boolean;
 }
 
@@ -468,7 +471,7 @@ function ComponentPropPanel({
               <div className="editor-binding-req-row editor-binding-req-row--parent">
                 <span className="editor-binding-req-row__name">{selectedItem.displayLabel}</span>
                 {!isStructTarget && !selectedItem.node && (
-                  <TypeBadge type={formatTypeBadge(selectedItem.propSchema.type)} />
+                  <TypeBadge type={propertyTypeLabel(selectedItem.propSchema)} />
                 )}
                 {selectedItem.node?.kind === 'variable' && (
                   <>
@@ -605,6 +608,11 @@ function VarScalarPanel({
             <UnresolvedRow selectedKey={selectedKey} pending={mode?.pendingSelection === true} />
           ) : (
             <div className="editor-binding-char-empty">Nothing selected</div>
+          )}
+          {mode?.wholeArrayElement && (
+            <div className="editor-binding-char-empty">
+              Whole array — choose its element in the field's Index row
+            </div>
           )}
         </div>
       </div>

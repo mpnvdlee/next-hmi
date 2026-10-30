@@ -502,45 +502,72 @@ function PageComponentPropertyScope({
 }
 
 // ── OverlaySection ───────────────────────────────────────────────────────────
-// How the overlay card of a Dialogs-folder page or group closes. The node the
-// Open Page Overlay action names decides it; absent means yes, as for any page
-// opened as an overlay.
+// How the overlay card of a page or group looks and closes. The node the
+// overlay action names decides it; absent means yes, as for any page opened as
+// an overlay. Only the header bar is read outside the Dialogs folder.
+
+interface OverlaySettings {
+  showModalHeader?: boolean;
+  showCloseButton?: boolean;
+  closeOnBackgroundPress?: boolean;
+  tapThrough?: boolean;
+}
 
 function OverlaySection({
   node,
+  inDialogs,
   onPatch,
 }: {
-  node: { showCloseButton?: boolean; closeOnBackgroundPress?: boolean; tapThrough?: boolean };
-  onPatch: (patch: {
-    showCloseButton?: boolean;
-    closeOnBackgroundPress?: boolean;
-    tapThrough?: boolean;
-  }) => void;
+  node: OverlaySettings;
+  inDialogs: boolean;
+  onPatch: (patch: OverlaySettings) => void;
 }) {
   return (
     <div className="cfg-section">
       <div className="cfg-section__title">Overlay</div>
-      <PropRow label="Show close button">
+      <PropRow
+        label="Show header bar"
+        description={
+          // Outside the Dialogs folder a backdrop press always closes.
+          inDialogs && node.showModalHeader === false && node.closeOnBackgroundPress === false
+            ? 'Without the header bar there is no ×; add a Close Dialog/Overlay button on the page.'
+            : undefined
+        }
+      >
         <BoolButtonGroup
-          value={node.showCloseButton !== false}
-          onChange={(v) => onPatch({ showCloseButton: v })}
+          value={node.showModalHeader !== false}
+          onChange={(v) => onPatch({ showModalHeader: v })}
           labels={['Show', 'Hide']}
         />
       </PropRow>
-      <PropRow label="Close on backdrop">
-        <BoolButtonGroup
-          value={node.closeOnBackgroundPress !== false}
-          onChange={(v) => onPatch({ closeOnBackgroundPress: v })}
-        />
-      </PropRow>
-      {/* Only a backdrop press that closes can be handed on. */}
-      {node.closeOnBackgroundPress !== false && (
-        <PropRow label="Tap through">
-          <BoolButtonGroup
-            value={node.tapThrough !== false}
-            onChange={(v) => onPatch({ tapThrough: v })}
-          />
-        </PropRow>
+      {inDialogs && (
+        <>
+          {/* The close button sits in the header bar. */}
+          {node.showModalHeader !== false && (
+            <PropRow label="Show close button">
+              <BoolButtonGroup
+                value={node.showCloseButton !== false}
+                onChange={(v) => onPatch({ showCloseButton: v })}
+                labels={['Show', 'Hide']}
+              />
+            </PropRow>
+          )}
+          <PropRow label="Close on backdrop">
+            <BoolButtonGroup
+              value={node.closeOnBackgroundPress !== false}
+              onChange={(v) => onPatch({ closeOnBackgroundPress: v })}
+            />
+          </PropRow>
+          {/* Only a backdrop press that closes can be handed on. */}
+          {node.closeOnBackgroundPress !== false && (
+            <PropRow label="Tap through">
+              <BoolButtonGroup
+                value={node.tapThrough !== false}
+                onChange={(v) => onPatch({ tapThrough: v })}
+              />
+            </PropRow>
+          )}
+        </>
       )}
     </div>
   );
@@ -631,14 +658,17 @@ function PagePanel({
             />
           </PropRow>
         </div>
-        {inDialogs ? (
-          <OverlaySection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
-        ) : (
+        {!inDialogs && (
           <>
             <PageMetadataSection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
             <MainSection node={page} onPatch={(patch) => updatePage(page.id, patch)} />
           </>
         )}
+        <OverlaySection
+          node={page}
+          inDialogs={inDialogs}
+          onPatch={(patch) => updatePage(page.id, patch)}
+        />
         <PageEventsSection
           node={page}
           kindLabel={inDialogs ? 'Dialog' : 'Page'}
@@ -650,6 +680,7 @@ function PagePanel({
             ownerName={resolvePageTitle(page.title)}
             title="Input Parameters"
             itemNoun="input parameter"
+            pageInputs
             properties={page.componentProperties ?? {}}
             onChange={(next) => updatePage(page.id, { componentProperties: next })}
           />
@@ -917,12 +948,7 @@ function PageGroupPanel({
             </PropRow>
           )}
         </div>
-        {inDialogs ? (
-          <OverlaySection
-            node={pageGroup}
-            onPatch={(patch) => updatePageGroup(pageGroup.id, patch)}
-          />
-        ) : (
+        {!inDialogs && (
           <>
             <PageMetadataSection
               node={pageGroup}
@@ -934,6 +960,11 @@ function PageGroupPanel({
             />
           </>
         )}
+        <OverlaySection
+          node={pageGroup}
+          inDialogs={inDialogs}
+          onPatch={(patch) => updatePageGroup(pageGroup.id, patch)}
+        />
         <PageEventsSection
           node={pageGroup}
           kindLabel={inDialogs ? 'Dialog Group' : 'Group'}
@@ -945,6 +976,7 @@ function PageGroupPanel({
             ownerName={resolvePageTitle(pageGroup.title)}
             title="Input Parameters"
             itemNoun="input parameter"
+            pageInputs
             properties={pageGroup.componentProperties ?? {}}
             onChange={(next) => updatePageGroup(pageGroup.id, { componentProperties: next })}
           />

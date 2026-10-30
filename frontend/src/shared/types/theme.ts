@@ -79,11 +79,27 @@ interface ThemeNumpad {
   accent: string;
 }
 
+/** Toast tokens. An empty colour keeps the severity-tinted look derived from the rest of the theme. */
+interface ThemeToasts {
+  position:
+    'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right';
+  shape: 'pill' | 'rounded';
+  info_bg: string;
+  info_text: string;
+  success_bg: string;
+  success_text: string;
+  warning_bg: string;
+  warning_text: string;
+  error_bg: string;
+  error_text: string;
+}
+
 export interface ThemeConfig {
   colors: ThemeColors;
   typography: ThemeTypography;
   spacing: ThemeSpacing;
   numpad: ThemeNumpad;
+  toasts: ThemeToasts;
 }
 
 /** One theme in the `/api/themes` index: its id and config. */

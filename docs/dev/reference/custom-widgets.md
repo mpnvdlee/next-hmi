@@ -243,7 +243,7 @@ worked examples.
 
 - `useActiveAlarms()` → `AlarmInstance[]` — the live active-alarm list.
 - `useAlarmSummary()` → `AlarmSummary` (`{ total, unacked, error_count, warning_count, info_count }`) — the counts pushed alongside that list, so a badge doesn't re-derive them. For a single count in a plain property, the `$alarmCount` property source is simpler than this hook.
-- `useAlarmText()` — returns a `(text: string) => string` resolver for an instance's `title` and `description`. Those arrive already flattened to a bare `$loc` key: one instance is broadcast to every client and stored in history, so it stays language-agnostic and the operator's language is applied at render. A literal string passes through unchanged. Calling the hook also subscribes the component, so alarm text follows a language switch.
+- `useAlarmText()` — returns a `(text: string) => string` resolver for an instance's `title` and `description`. Those arrive already flattened to a bare `$loc` key: one instance is broadcast to every client and stored in history, so it stays language-agnostic and the operator's language is applied at render. A literal string passes through unchanged. Pass the instance or history row as a second argument to fill its `{1}`, `{2}` … placeholders from the alarm's `values`: live while it is active, the value stored at fire time once cleared, `—` where there is none. Calling the hook also subscribes the component, so alarm text follows a language switch and an active alarm's live values.
 - `useAlarmUsername()` → `string` — the signed-in user of the current scope, falling back to `'operator'`. This is the `username` the ack calls and `AlarmDetailDialog` expect.
 - `ackAlarm(instanceId, username, options?)` → `Promise<boolean>` — acknowledge one instance.
 - `ackAllAlarms(username, options?)` → `Promise<boolean>` — acknowledge every active alarm.
@@ -661,6 +661,7 @@ export default function MyActionButton({ properties, layout }: HmiWidgetProps) {
 Supported action types (see `frontend/src/config/components/editor/PropertiesPanel/actionsPreview.ts` for the canonical list):
 
 - `openDialog` (a Dialogs-folder node, with `componentProperties`) / `openPageOverlay` (a node in the `pages` root) / `closePageOverlay` (either)
+- `navigateToPage` — `{ pageId }`, a node in the `pages` root or `{ $componentProp }` naming a dialog input declared `format: 'page'`; closes every overlay, then navigates. One that resolves to no navigable page does nothing.
 - `writeDataVariable` — `{ target, value }`; `target` is `{ $var: { path: 'ds:path' } }`, or inside a Repeater `{ $repeatItem: { member? } }` for the copy's element; value is a literal (`string | number | boolean`, or an array for a whole-array target), or a property source (`$componentProp`, `$var`, …) evaluated when the action fires.
 - `toggleDataVariable` — `{ target }`, the same shape; inverts a Boolean variable from its current server-side value.
 - `editValue` — `{ target, title?, unit?, min?, max?, decimals?, allowNegative?, position? }`; opens the numpad on a numeric variable and writes on Apply. Empty `min` / `max` fall back to the variable's configured range; `$result` carries `value` and `previous`.

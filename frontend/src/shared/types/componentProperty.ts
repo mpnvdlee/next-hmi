@@ -5,6 +5,7 @@
 
 import type { SchemaField } from './widgetSchema';
 import { parseTypeToken } from './varType';
+import { typeList } from '../utils/valueTypes';
 
 /**
  * A node in the visual struct-schema tree editor.
@@ -112,6 +113,19 @@ export function typeLabel(token: string): string {
       : (VALUE_TYPE_OPTIONS.find((o) => o.value === bare.toLowerCase())?.label ??
         bare.charAt(0).toUpperCase() + bare.slice(1));
   return array ? `${label}[]` : label;
+}
+
+/** The add dialog's **Page** type, offered on a dialog's input parameters: a
+ *  String that names a page, which Open Dialog fills with a page picker and
+ *  Navigate To Page can go to. */
+export const PAGE_INPUT: Pick<ComponentPropertySchema, 'type' | 'format'> = {
+  type: 'string',
+  format: 'page',
+};
+
+/** A property's type as the editor states it — a page input reads as Page. */
+export function propertyTypeLabel(prop: Pick<ComponentPropertySchema, 'type' | 'format'>): string {
+  return prop.format === 'page' ? 'Page' : typeList(prop.type).map(typeLabel).join(', ');
 }
 
 /** Property types that never resolve to a single literal value, so they take

@@ -13,7 +13,7 @@ import { useParamSelection } from '@config/hooks/useParamSelection';
 import { PanelScopeContext, usePanelFieldExpanded } from '@config/store/panelExpansionStore';
 import FieldDrawer from '../../editor/PropertiesPanel/FieldDrawer';
 import { ChevronIcon, ExpandIcon } from '../actionIcons';
-import { FieldPathContext } from './fieldPathContext';
+import { FieldBelowSlotContext, FieldPathContext } from './fieldPathContext';
 
 export type FieldGroupTier = 1 | 2 | 3;
 
@@ -49,6 +49,14 @@ export function FieldHeaderActions({ children }: { children: ReactNode }) {
   if (!children) return null;
   if (slot) return createPortal(children, slot);
   return <div className="cfg-field-group__header-actions">{children}</div>;
+}
+
+/** Renders a row directly below the enclosing FieldGroup (via portal), as its
+ *  sibling. Falls back to rendering in place when there is no FieldGroup. */
+export function FieldRowBelow({ children }: { children: ReactNode }) {
+  const slot = useContext(FieldBelowSlotContext);
+  if (slot?.el) return createPortal(children, slot.el);
+  return slot ? null : <>{children}</>;
 }
 
 export interface FieldGroupSelection {
@@ -180,6 +188,7 @@ export default function FieldGroup({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [actionsEl, setActionsEl] = useState<HTMLDivElement | null>(null);
   const [headerEl, setHeaderEl] = useState<HTMLDivElement | null>(null);
+  const [belowEl, setBelowEl] = useState<HTMLDivElement | null>(null);
   // An unlabelled group has no title row of its own, so it passes the labelled
   // ancestor's slot straight through instead of shadowing it with null — a list
   // editor nested under one still lands on the nearest real title row.
@@ -211,6 +220,9 @@ export default function FieldGroup({
   }
 
   function handleRowMouseDown(e: MouseEvent) {
+    // A row portalled below this field (`FieldRowBelow`) bubbles here through
+    // React, but is a field of its own.
+    if (!e.currentTarget.contains(e.target as Node)) return;
     if (selection && !selected) {
       // Selecting a different field must dismiss any in-progress text edit on
       // the previously-selected field — blurring it commits/closes it (its
@@ -228,6 +240,7 @@ export default function FieldGroup({
   }
 
   function handleRowClick(e: MouseEvent) {
+    if (!e.currentTarget.contains(e.target as Node)) return;
     e.stopPropagation();
     if (!selection) {
       activate();
@@ -306,74 +319,78 @@ export default function FieldGroup({
   return (
     <FieldActionsSlotContext.Provider value={actionsEl}>
       <FieldHeaderSlotContext.Provider value={label ? headerEl : inheritedHeaderEl}>
-        <FieldPathContext.Provider value={fullPath}>
-          <div className={groupClassName}>
-            {label && (
-              <div className="cfg-field-group__header">
-                <div className="cfg-field-group__label">{label}</div>
-                {/* Always rendered so a descendant list editor can portal its add
+        <FieldBelowSlotContext.Provider value={{ el: belowEl, label }}>
+          <FieldPathContext.Provider value={fullPath}>
+            <div className={groupClassName}>
+              {label && (
+                <div className="cfg-field-group__header">
+                  <div className="cfg-field-group__label">{label}</div>
+                  {/* Always rendered so a descendant list editor can portal its add
                   control here; hidden via CSS (`:empty`) when nothing lands. */}
-                <div className="cfg-field-group__header-actions" ref={setHeaderEl}>
-                  {headerActions}
+                  <div className="cfg-field-group__header-actions" ref={setHeaderEl}>
+                    {headerActions}
+                  </div>
                 </div>
-              </div>
-            )}
-            {description && <p className="cfg-field-group__desc">{description}</p>}
-            <div className="cfg-field-group__box">
-              <div
-                className={`cfg-field-group__row${block ? ' cfg-field-group__row--block' : ''}`}
-                onMouseDown={handleRowMouseDown}
-                onClick={handleRowClick}
-              >
-                {showBadge && (
-                  <span
-                    className={`cfg-field-group__badge${
-                      isError
-                        ? ' cfg-field-group__badge--invalid'
-                        : isWarning
-                          ? ' cfg-field-group__badge--warning'
-                          : ''
-                    }`}
-                    title={diagnostic?.message}
+              )}
+              {description && <p className="cfg-field-group__desc">{description}</p>}
+              <div className="cfg-field-group__box">
+                <div
+                  className={`cfg-field-group__row${block ? ' cfg-field-group__row--block' : ''}`}
+                  onMouseDown={handleRowMouseDown}
+                  onClick={handleRowClick}
+                >
+                  {showBadge && (
+                    <span
+                      className={`cfg-field-group__badge${
+                        isError
+                          ? ' cfg-field-group__badge--invalid'
+                          : isWarning
+                            ? ' cfg-field-group__badge--warning'
+                            : ''
+                      }`}
+                      title={diagnostic?.message}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {badge}
+                    </span>
+                  )}
+                  <div className="cfg-field-group__content" ref={contentRef}>
+                    {tier === 3 ? (expanded ? kindLabel : summary) : children}
+                  </div>
+                  {/* Always rendered so descendant leaf editors can portal their own
+                buttons here; hidden via CSS (`:empty`) when nothing lands in it. */}
+                  <div
+                    className="cfg-field-group__actions"
+                    ref={setActionsEl}
                     onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {badge}
-                  </span>
-                )}
-                <div className="cfg-field-group__content" ref={contentRef}>
-                  {tier === 3 ? (expanded ? kindLabel : summary) : children}
+                    {rowActions}
+                  </div>
                 </div>
-                {/* Always rendered so descendant leaf editors can portal their own
-                buttons here; hidden via CSS (`:empty`) when nothing lands in it. */}
-                <div
-                  className="cfg-field-group__actions"
-                  ref={setActionsEl}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {rowActions}
-                </div>
-              </div>
-              {/* While the drawer hosts the live editor, keep the inline body as the
+                {/* While the drawer hosts the live editor, keep the inline body as the
               collapsed summary so only one editor instance is mounted at a time. */}
-              {showNest && (
-                <div className="cfg-field-group__nest">{drawerOpen ? summary : children}</div>
+                {showNest && (
+                  <div className="cfg-field-group__nest">{drawerOpen ? summary : children}</div>
+                )}
+              </div>
+              {drawerOpen && tier === 3 && (
+                <FieldDrawer title={drawerHeaderTitle} onClose={() => setDrawerOpen(false)}>
+                  {/* Distinct scope so the drawer copy's expand state never collides
+                  with the inline field's session key (drawer always opens expanded). */}
+                  <PanelScopeContext.Provider value={`${scope}::drawer`}>
+                    <FieldGroup {...sharedProps} defaultExpanded>
+                      {children}
+                    </FieldGroup>
+                  </PanelScopeContext.Provider>
+                </FieldDrawer>
               )}
             </div>
-            {drawerOpen && tier === 3 && (
-              <FieldDrawer title={drawerHeaderTitle} onClose={() => setDrawerOpen(false)}>
-                {/* Distinct scope so the drawer copy's expand state never collides
-                  with the inline field's session key (drawer always opens expanded). */}
-                <PanelScopeContext.Provider value={`${scope}::drawer`}>
-                  <FieldGroup {...sharedProps} defaultExpanded>
-                    {children}
-                  </FieldGroup>
-                </PanelScopeContext.Provider>
-              </FieldDrawer>
-            )}
-          </div>
-        </FieldPathContext.Provider>
+            {/* `display: contents` — a row portalled here lays out as the field's sibling. */}
+            <div className="cfg-field-group__below" ref={setBelowEl} />
+          </FieldPathContext.Provider>
+        </FieldBelowSlotContext.Provider>
       </FieldHeaderSlotContext.Provider>
     </FieldActionsSlotContext.Provider>
   );

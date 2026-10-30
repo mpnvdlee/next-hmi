@@ -10,6 +10,7 @@ import { makeDefaultAction } from './actionMutations';
 import ActionsInput from './ActionsInput';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { PanelScopeContext } from '@config/store/panelExpansionStore';
+import { ComponentPropertySchemaContext } from '../PropertySourceEditor/componentPropertySchemaContext';
 import { usePanelDiagnostics } from '@config/hooks/usePanelDiagnostics';
 import { apiJson } from '@shared/utils/api';
 import { stubIntersectionObserver } from '../../../../test-setup';
@@ -458,6 +459,49 @@ describe('ActionsInput — write target', () => {
     });
   });
 
+  it('summarises a bound index as path[…] and replaces it with the element the picker picks', async () => {
+    const onChangeSpy = vi.fn();
+    const user = userEvent.setup();
+    const toggle: ButtonAction = {
+      type: 'toggleDataVariable',
+      target: { $var: { path: 'PLC:Open', index: { $componentProp: 'device' } } },
+    };
+    render(<Harness onChangeSpy={onChangeSpy} initial={{ onPress: [toggle] }} />);
+    expect(document.body).toHaveTextContent('Toggle PLC:Open[…]');
+
+    await user.click(screen.getByTitle('Expand'));
+    await user.click(screen.getByTitle('Change variable binding'));
+    const target = useEditorDomainStore.getState().bindingPickerTarget;
+    expect(target?.currentBinding).toEqual({ path: 'PLC:Open' });
+    target?.onPick?.({ path: 'PLC:Open' }, { dataType: 'Boolean', isArray: true, index: 2 });
+
+    expect(onChangeSpy).toHaveBeenLastCalledWith({
+      onPress: [{ ...toggle, target: { $var: { path: 'PLC:Open[2]' } } }],
+    });
+  });
+
+  it('keeps a bound index when the picker confirms the same array, and resets the value for an element', async () => {
+    const onChangeSpy = vi.fn();
+    const user = userEvent.setup();
+    const write: ButtonAction = {
+      type: 'writeDataVariable',
+      target: { $var: { path: 'PLC:Steps', index: { $componentProp: 'device' } } },
+      value: 42,
+    };
+    render(<Harness onChangeSpy={onChangeSpy} initial={{ onPress: [write] }} />);
+
+    await user.click(screen.getByTitle('Expand'));
+    await user.click(screen.getByTitle('Change variable binding'));
+    const target = useEditorDomainStore.getState().bindingPickerTarget;
+    target?.onPick?.({ path: 'PLC:Steps' }, { dataType: 'Int16', isArray: true });
+    expect(onChangeSpy).not.toHaveBeenCalled();
+
+    target?.onPick?.({ path: 'PLC:Steps' }, { dataType: 'Int16', isArray: true, index: 2 });
+    expect(onChangeSpy).toHaveBeenLastCalledWith({
+      onPress: [{ ...write, target: { $var: { path: 'PLC:Steps[2]' } }, value: 0 }],
+    });
+  });
+
   it('marks the action row and its Variable row when the backend rejects the target', async () => {
     mockedApiJson.mockResolvedValue({
       diagnostics: [
@@ -496,5 +540,34 @@ describe('ActionsInput — write target', () => {
     // Expanded: the Variable row owning the target gets the full error mark.
     await user.click(screen.getByTitle('Expand'));
     expect(fieldGroup('Variable')).toHaveClass('cfg-field-group--invalid');
+  });
+});
+
+describe('ActionsInput — Navigate To Page in a dialog', () => {
+  beforeEach(setupStores);
+  afterEach(() => useEditorDomainStore.getState().closeBindingPicker());
+
+  it('offers only the input parameters of type Page', async () => {
+    const user = userEvent.setup();
+    const inputs = {
+      properties: {
+        target: { type: 'string', format: 'page', label: 'Target' },
+        title: { type: 'string', label: 'Title' },
+      },
+    };
+    render(
+      <ComponentPropertySchemaContext.Provider value={inputs}>
+        <Harness
+          onChangeSpy={vi.fn()}
+          initial={{ onPress: [{ type: 'navigateToPage', pageId: { $componentProp: '' } }] }}
+        />
+      </ComponentPropertySchemaContext.Provider>,
+    );
+
+    await user.click(screen.getByTitle('Expand'));
+    await user.click(screen.getByRole('button', { name: 'Select component property' }));
+
+    const source = useEditorDomainStore.getState().bindingPickerTarget?.componentPropSource;
+    expect(Object.keys(source?.properties ?? {})).toEqual(['target']);
   });
 });

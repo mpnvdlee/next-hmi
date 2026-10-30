@@ -703,6 +703,19 @@ def test_stringexpr_wildcard_empty(ctx):
     assert report.warnings[0].path.endswith("/wildcards/2")
 
 
+def test_stringexpr_wildcard_row_the_editor_added_is_unbound_but_a_cleared_static_is_not(ctx):
+    # The editor seeds a typed placeholder's row as an empty $var; a Static the
+    # author cleared is stored as "" and is a value (an optional query part, say).
+    report = ValidationReport()
+    _validate_property_value(
+        {"$stringExpr": {"template": "{1} {2}", "wildcards": {"1": "", "2": {"$var": {"path": ""}}}}},
+        None, ctx, "/p", report,
+    )
+    assert [(w.code, w.path) for w in report.warnings] == [
+        ("stringexpr-wildcard-empty", "/p/$stringExpr/wildcards/2"),
+    ]
+
+
 @pytest.mark.parametrize("template", ["{Round2(1)}", "{Trim(Round1(1))} g", "{ Signed( Round2(1) ) }"])
 def test_stringexpr_digits_in_function_names_are_not_wildcards(ctx, template):
     report = ValidationReport()
@@ -801,6 +814,38 @@ def test_bound_index_on_a_write_target(ctx, index, codes):
     action = {"type": "toggleDataVariable", "target": {"$var": {"path": "PLC:Safety/Open", "index": index}}}
     validate_action_targets([action], _array_ctx(ctx), "/a", report)
     assert [w.code for w in report.warnings] == codes
+
+
+def test_whole_array_on_a_one_value_field_anchors_on_its_index(ctx):
+    report = ValidationReport()
+    value = {"$var": {"path": "PLC:Safety/Open"}}
+    _validate_property_value(value, {"type": "Boolean"}, _array_ctx(ctx), "/p", report)
+    w = _warn(report)
+    assert (w.code, w.path) == ("var-type", "/p/$var/index")
+    assert "choose an element" in w.message
+
+
+@pytest.mark.parametrize("kind", ["toggleDataVariable", "writeDataVariable"])
+def test_whole_array_toggle_target_anchors_on_its_index(ctx, kind):
+    report = ValidationReport()
+    action = {"type": kind, "target": {"$var": {"path": "PLC:Safety/Open"}}}
+    validate_action_targets([action], _array_ctx(ctx), "/a", report)
+    # A write may write the whole array; a toggle needs one element.
+    expected = [("/a/0/target/$var/index", "toggle-target-type")] if kind == "toggleDataVariable" else []
+    assert [(w.path, w.code) for w in report.warnings] == expected
+
+
+def test_read_only_whole_array_toggle_target_asks_for_its_element_and_says_read_only(ctx):
+    array_ctx = _array_ctx(ctx)
+    array_ctx.datasource_writable["PLC"]["Safety/Open"] = False
+    report = ValidationReport()
+    action = {"type": "toggleDataVariable", "target": {"$var": {"path": "PLC:Safety/Open"}}}
+    validate_action_targets([action], array_ctx, "/a", report)
+    assert [(w.path, w.code) for w in report.warnings] == [
+        ("/a/0/target/$var/index", "toggle-target-type"),
+        ("/a/0/target", "write-target-type"),
+    ]
+    assert "read-only" in report.warnings[1].message
 
 
 def _overlay_ctx(ctx: ValidationContext) -> ValidationContext:
@@ -1090,5 +1135,91 @@ def test_menu_item_linking_to_a_navigable_page_is_silent(nav_ctx):
     _validate_property_value(
         [{"type": "page-link", "pageId": "home"}],
         {"type": "menu-items"}, nav_ctx, "/p", report,
+    )
+    assert report.warnings == []
+
+
+def test_page_field_naming_no_page():
+    report = ValidationReport()
+    _validate_property_value("gone", {"type": "String", "format": "page"}, _root_ctx(), "/p", report)
+    assert (_warn(report).code, _warn(report).severity) == ("page-unknown", "error")
+
+
+def _navigate(page_id, ctx: ValidationContext) -> ValidationReport:
+    report = ValidationReport()
+    _validate_action({"type": "navigateToPage", "pageId": page_id}, ctx, "/a", report)
+    return report
+
+
+def _dialog_scope(**inputs) -> ValidationContext:
+    return replace(_root_ctx(), input_schema=inputs)
+
+
+def test_navigate_to_a_navigable_page_is_silent():
+    report = _navigate("home", _root_ctx())
+    assert (report.findings, report.warnings) == ([], [])
+
+
+def test_navigate_to_an_unknown_page():
+    report = _navigate("gone", _root_ctx())
+    assert [f.message for f in report.findings] == ["action target page 'gone' does not exist"]
+    assert report.warnings == []
+
+
+def test_navigate_to_a_page_file_no_root_lists():
+    # The file exists, so the page-field finding stays quiet, but nothing routes there.
+    ctx = replace(_root_ctx(), page_ids={"motor-detail", "home", "orphan"})
+    report = _navigate("orphan", ctx)
+    assert report.findings == []
+    assert [(w.code, w.path) for w in report.warnings] == [("page-unknown", "/a/pageId")]
+
+
+def test_navigate_to_the_dialogs_folder():
+    w = _warn(_navigate("motor-detail", _root_ctx()))
+    assert (w.code, w.severity, w.path) == ("page-not-navigable", "error", "/a/pageId")
+    assert "Open Dialog" in w.message
+
+
+def test_navigate_to_a_page_input():
+    ctx = _dialog_scope(stationPage={"type": "String", "format": "page"})
+    assert _navigate({"$componentProp": "stationPage"}, ctx).warnings == []
+
+
+@pytest.mark.parametrize(
+    "inputs",
+    [{"stationPage": {"type": "String"}}, {}],
+    ids=["not-format-page", "undeclared"],
+)
+def test_navigate_to_an_input_that_is_not_a_page(inputs):
+    w = _warn(_navigate({"$componentProp": "stationPage"}, _dialog_scope(**inputs)))
+    assert (w.code, w.severity) == ("navigate-input-not-page", "error")
+
+
+def test_navigate_to_an_input_outside_a_dialog():
+    ctx = replace(_root_ctx(), input_scope=False)
+    assert _warn(_navigate({"$componentProp": "stationPage"}, ctx)).code == "navigate-input-not-page"
+
+
+@pytest.mark.parametrize("page_id", [{"$static": "home"}, {"$var": {"path": "PLC:Page"}}])
+def test_navigate_takes_nothing_else(page_id):
+    assert _warn(_navigate(page_id, _root_ctx())).code == "navigate-target-invalid"
+
+
+def test_open_dialog_passing_a_page_input_checks_the_page():
+    ctx = replace(
+        _root_ctx(),
+        page_properties={"motor-detail": {"stationPage": {"type": "String", "format": "page"}}},
+    )
+    for value, code in [("gone", "page-unknown"), ("motor-detail", "page-not-navigable")]:
+        report = ValidationReport()
+        _validate_action(
+            {"type": "openDialog", "pageId": "motor-detail", "componentProperties": {"stationPage": value}},
+            ctx, "/a", report,
+        )
+        assert [w.code for w in report.warnings] == [code]
+    report = ValidationReport()
+    _validate_action(
+        {"type": "openDialog", "pageId": "motor-detail", "componentProperties": {"stationPage": "home"}},
+        ctx, "/a", report,
     )
     assert report.warnings == []

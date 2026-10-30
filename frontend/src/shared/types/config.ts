@@ -447,6 +447,9 @@ interface PageNodeBase {
    *  it — so tapping the next hotspot closes this popover and opens its own in
    *  one tap. Read only for a node in the Dialogs folder; absent = it does. */
   tapThrough?: boolean;
+  /** Whether the modal card shows its header bar (title and close button) while
+   *  this node is open as a page overlay, from either root; absent = shown. */
+  showModalHeader?: boolean;
 }
 
 export interface PageConfig extends PageNodeBase {
@@ -582,6 +585,13 @@ export type ButtonAction =
    *  overlay was opened with, or the page it has since navigated to; empty
    *  closes the top-most overlay. */
   | { type: 'closePageOverlay'; pageId?: string }
+  | {
+      /** Closes every open overlay, then navigates to a page or page group in
+       *  the `pages` root: a fixed id, or a dialog input parameter declared
+       *  `format: 'page'`. One that resolves to no navigable page does nothing. */
+      type: 'navigateToPage';
+      pageId: string | { $componentProp: string };
+    }
   | {
       type: 'writeDataVariable';
       /** Absent until a target is picked. */

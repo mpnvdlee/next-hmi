@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import type { AlarmInstance } from '@shared/types/alarm';
 import { ackAlarm, formatAlarmDateTime, useAlarmText } from '../alarmUtils';
 import { imageAssetUrl } from '@shared/utils/imageAsset';
@@ -35,15 +36,18 @@ export default function AlarmDetailDialog({ alarm, username, onClose }: AlarmDet
     [onClose],
   );
 
-  return (
+  // Portalled: inside a widget, an ancestor with `content-visibility`, a
+  // transform or a filter would size and place the fixed overlay instead of
+  // the viewport, off-screen on a long page.
+  return createPortal(
     <div className={styles.overlay} onClick={handleOverlayClick}>
       <AlarmDetailCard
         className={styles.dialogFloating}
         level={alarm.level}
         code={alarm.code}
-        title={alarmText(alarm.title)}
+        title={alarmText(alarm.title, alarm)}
         imageSrc={alarm.image ? imageAssetUrl(alarm.image) : undefined}
-        description={alarm.description ? alarmText(alarm.description) : undefined}
+        description={alarm.description ? alarmText(alarm.description, alarm) : undefined}
         resolutions={resolutions}
         meta={
           <>
@@ -59,6 +63,7 @@ export default function AlarmDetailDialog({ alarm, username, onClose }: AlarmDet
         onAck={alarm.acked ? undefined : handleAck}
         onClose={onClose}
       />
-    </div>
+    </div>,
+    document.body,
   );
 }

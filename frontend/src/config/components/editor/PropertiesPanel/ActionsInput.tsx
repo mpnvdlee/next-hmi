@@ -17,7 +17,7 @@ import {
 import { useConfigStore } from '@shared/store/configStore';
 import { flattenPageNodes, resolvePageTitle } from '@shared/utils/pageTree';
 import type { ActionsConfig, ButtonAction, VariableBinding } from '@shared/types/config';
-import { writeTargetAddress } from '@shared/types/config';
+import { isBoundIndex } from '@shared/types/config';
 import { varBindingOf } from '../bindingPickerUtils';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import Select from '@config/components/ui/Select';
@@ -37,6 +37,7 @@ import {
 import { getDefaultValueForKind, makeDefaultAction } from './actionMutations';
 import {
   ACTION_EDITORS,
+  editorTargetAddress,
   findOverlayTarget,
   type ActionEditorCtx,
   type OverlayTargets,
@@ -134,7 +135,7 @@ export default function ActionsInput({
           action.type !== 'editValue'
         )
           continue;
-        const address = writeTargetAddress(action.target);
+        const address = editorTargetAddress(action.target);
         if (!address) continue;
 
         const key = `${address.datasource}:${address.path}`;
@@ -159,18 +160,25 @@ export default function ActionsInput({
     const current = actions[actionIdx];
     // The picked element index is baked into the path as a `[N]` suffix — the
     // same shape a migrated pair takes — so the path is also the picker's key.
-    const currentBinding =
+    const targetBinding =
       current?.type === 'writeDataVariable' ||
       current?.type === 'toggleDataVariable' ||
       current?.type === 'editValue'
         ? varBindingOf(current.target)
         : undefined;
+    // A bound index names no element, so the picker opens on the array itself.
+    // Confirming that array keeps the bound index; picking an element replaces it.
+    const bound = targetBinding && isBoundIndex(targetBinding.index);
+    const currentBinding = bound ? { path: targetBinding.path } : targetBinding;
+    const keepsBoundIndex = (binding: VariableBinding, metadata?: BindingPickMetadata) =>
+      bound && metadata?.index === undefined && binding.path === targetBinding.path;
     const pickedKey = (binding: VariableBinding, metadata?: BindingPickMetadata) =>
       metadata?.index !== undefined ? `${binding.path}[${metadata.index}]` : binding.path;
     if (current?.type === 'toggleDataVariable' || current?.type === 'editValue') {
       openBindingPicker('', current.type, {
         currentBinding,
         onPick: (binding: VariableBinding, metadata?: BindingPickMetadata) => {
+          if (keepsBoundIndex(binding, metadata)) return;
           const key = pickedKey(binding, metadata);
           updateAction(actionIdx, { target: { $var: { path: key } } });
           if (metadata?.dataType) {
@@ -195,6 +203,7 @@ export default function ActionsInput({
       currentBinding,
       onPick: (binding: VariableBinding, metadata?: BindingPickMetadata) => {
         const action = actions[actionIdx];
+        if (keepsBoundIndex(binding, metadata)) return;
         if (action && action.type === 'writeDataVariable') {
           const dataType = metadata?.dataType;
           const kind = getWriteCoercionKind(dataType);
@@ -338,8 +347,14 @@ function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets)
       const p = findOverlayTarget(overlayTargets, action.pageId)?.node;
       return p ? K('Close', resolvePageTitle(p.title), ' overlay') : K('Close top-most overlay');
     }
+    case 'navigateToPage': {
+      if (typeof action.pageId !== 'string')
+        return K('Go to input', action.pageId.$componentProp || undefined);
+      const p = findOverlayTarget(overlayTargets, action.pageId)?.node;
+      return p ? K('Go to', resolvePageTitle(p.title)) : K('Navigate to page');
+    }
     case 'writeDataVariable': {
-      const address = writeTargetAddress(action.target);
+      const address = editorTargetAddress(action.target);
       return address ? (
         // NBSP, not a plain space: a normal space is a wrap opportunity, so a
         // path too long to follow the keyword moves down whole and strands
@@ -359,7 +374,7 @@ function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets)
       return condition !== '—' ? K('If', condition) : K('If condition');
     }
     case 'toggleDataVariable': {
-      const address = writeTargetAddress(action.target);
+      const address = editorTargetAddress(action.target);
       return address ? (
         <>
           <Kw tint={tint}>Toggle</Kw>
@@ -371,7 +386,7 @@ function actionSummaryText(action: ButtonAction, overlayTargets: OverlayTargets)
       );
     }
     case 'editValue': {
-      const address = writeTargetAddress(action.target);
+      const address = editorTargetAddress(action.target);
       return address ? (
         <>
           <Kw tint={tint}>Edit</Kw>

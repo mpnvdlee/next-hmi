@@ -33,6 +33,13 @@ const ACTION_TYPE_ICON: Record<ActionType, ReactNode> = {
       <path d="M5 8 l4.5 4.5 M9.5 8 l-4.5 4.5" />
     </Icon>
   ),
+  // An arrow into a page — goes there.
+  navigateToPage: (
+    <Icon>
+      <rect x="6.5" y="2.5" width="7" height="11" rx="1" />
+      <path d="M1.5 8 h7.5 M6.5 5.5 L9 8 l-2.5 2.5" />
+    </Icon>
+  ),
   // Link — writes a live signal.
   writeDataVariable: (
     <Icon viewBox="0 0 24 24" strokeWidth={2}>
