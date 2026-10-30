@@ -51,8 +51,8 @@ export function FieldHeaderActions({ children }: { children: ReactNode }) {
   return <div className="cfg-field-group__header-actions">{children}</div>;
 }
 
-/** Renders a row directly below the enclosing FieldGroup (via portal), as its
- *  sibling. Falls back to rendering in place when there is no FieldGroup. */
+/** Renders a row directly below the enclosing FieldGroup's box (via portal),
+ *  inside the field. Falls back to rendering in place when there is no FieldGroup. */
 export function FieldRowBelow({ children }: { children: ReactNode }) {
   const slot = useContext(FieldBelowSlotContext);
   if (slot?.el) return createPortal(children, slot.el);
@@ -375,6 +375,9 @@ export default function FieldGroup({
                   <div className="cfg-field-group__nest">{drawerOpen ? summary : children}</div>
                 )}
               </div>
+              {/* `display: contents` — a row portalled here lays out as the box's
+              next item, at the field's own gap. */}
+              <div className="cfg-field-group__below" ref={setBelowEl} />
               {drawerOpen && tier === 3 && (
                 <FieldDrawer title={drawerHeaderTitle} onClose={() => setDrawerOpen(false)}>
                   {/* Distinct scope so the drawer copy's expand state never collides
@@ -387,8 +390,6 @@ export default function FieldGroup({
                 </FieldDrawer>
               )}
             </div>
-            {/* `display: contents` — a row portalled here lays out as the field's sibling. */}
-            <div className="cfg-field-group__below" ref={setBelowEl} />
           </FieldPathContext.Provider>
         </FieldBelowSlotContext.Provider>
       </FieldHeaderSlotContext.Provider>

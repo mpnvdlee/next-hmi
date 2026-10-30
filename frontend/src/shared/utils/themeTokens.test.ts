@@ -43,12 +43,21 @@ describe('applyThemeTokens — toasts', () => {
     expect(root.style.getPropertyValue('--hmi-toast-error-bg')).toBe('#b91c1c');
   });
 
-  it("defaults to today's look: top-center, rounded, empty colours left to the stylesheet", () => {
+  it('defaults to top-center, rounded, with a colour set for every severity', () => {
     applyThemeTokens(defaultTheme());
 
     expect(root.getAttribute('data-hmi-toast-position')).toBe('top-center');
     expect(root.getAttribute('data-hmi-toast-shape')).toBe('rounded');
+    expect(root.style.getPropertyValue('--hmi-toast-info-bg')).toBe('#f4f9ff');
+    expect(root.style.getPropertyValue('--hmi-toast-error-text')).toBe('#0f1722');
+  });
+
+  it('leaves an empty colour to the stylesheet fallback', () => {
+    const theme = defaultTheme();
+    theme.toasts = { ...theme.toasts, info_bg: '' };
+
+    applyThemeTokens(theme);
+
     expect(root.style.getPropertyValue('--hmi-toast-info-bg')).toBe('');
-    expect(root.style.getPropertyValue('--hmi-toast-error-text')).toBe('');
   });
 });

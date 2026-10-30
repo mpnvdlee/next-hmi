@@ -185,7 +185,7 @@ const SECTION_HINTS: Record<ThemeSection, string> = {
   spacing:
     'Spacing, corner radius and elevation. The shape next to each field is drawn at the value you enter.',
   numpad:
-    'The on-screen numpad used by numeric inputs. An empty field follows the rest of the theme: Body font, Accent colour, the standard key width.',
+    'The on-screen numpad and keyboard that inputs open. Key size sets the numpad key width and height, and only the height on the keyboard. An empty field follows the rest of the theme: Body font, Accent colour, the standard key width.',
   toasts:
     'Notifications from the Show Toast action: where they stack, their shape, and a background and text colour per severity. An empty colour keeps the severity tint.',
 };

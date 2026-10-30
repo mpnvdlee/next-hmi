@@ -497,12 +497,20 @@
   z-index: var(--hmi-z-input);
 }
 
-/* The dock takes its panel's width, so the panel is what gets centred: a
-   fixed-width dock would leave a narrower numpad at its left edge. */
+/* The keyboard, at the bottom centre. The dock takes its panel's width, so
+   the panel is what gets centred. */
 .hmi-virtual-input__dock--center {
   left: 50%;
   bottom: var(--hmi-virtual-dock-offset);
   transform: translateX(-50%);
+  width: max-content;
+}
+
+/* A numpad docked center: the middle of the screen, both ways. */
+.hmi-virtual-input__dock--middle {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   width: max-content;
 }
 
@@ -563,6 +571,34 @@
   color: var(--hmi-text);
 }
 
+.hmi-virtual-input__field {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: var(--hmi-virtual-key-padding-y-compact) var(--hmi-input-padding-x);
+  border: 1px solid var(--hmi-border);
+  border-radius: var(--hmi-radius);
+  background: var(--hmi-bg);
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  transition: border-color var(--hmi-motion-fast) ease;
+}
+
+.hmi-virtual-input__field:focus {
+  outline: none;
+  border-color: var(--hmi-accent);
+}
+
+.hmi-virtual-input__field::placeholder {
+  color: var(--hmi-text-muted);
+  opacity: 1;
+}
+
+.hmi-virtual-input__value--invalid .hmi-virtual-input__field {
+  border-color: var(--hmi-fault);
+}
+
 .hmi-virtual-input__value-unit {
   font-family: var(--hmi-type-caption-font);
   font-size: var(--hmi-type-caption-size);
@@ -581,7 +617,6 @@
 }
 
 .hmi-virtual-input__range,
-.hmi-virtual-input__current,
 .hmi-virtual-input__error {
   text-align: center;
   font-family: var(--hmi-type-caption-font);
@@ -594,10 +629,6 @@
   color: var(--hmi-fault);
 }
 
-.hmi-virtual-input__value-placeholder {
-  color: var(--hmi-text-muted);
-}
-
 .hmi-virtual-input__row {
   display: grid;
   gap: var(--hmi-virtual-panel-gap);
@@ -605,6 +636,16 @@
 
 .hmi-virtual-input__row--keyboard {
   grid-template-columns: repeat(60, minmax(0, 1fr));
+}
+
+/* Themes → Numpad & keyboard: the key gap spaces keyboard keys both ways, like the numpad grid. */
+.hmi-virtual-input__keyboard-rows {
+  display: grid;
+  gap: var(--hmi-numpad-gap);
+}
+
+.hmi-virtual-input__panel--keyboard .hmi-virtual-input__row--keyboard {
+  gap: var(--hmi-numpad-gap);
 }
 
 .hmi-virtual-input__keys {
@@ -655,7 +696,16 @@
 
 .hmi-virtual-input__panel--keyboard .hmi-virtual-input__key {
   min-width: 0;
+  /* Width comes from the 60-column grid, so the key size only sets the height. */
+  min-height: var(--hmi-numpad-key-size, auto);
   padding-inline: var(--hmi-virtual-key-padding-x-compact);
+  font-family: var(--hmi-numpad-key-font);
+  font-size: var(--hmi-numpad-key-font-size);
+  font-weight: var(--hmi-numpad-key-font-weight);
+}
+
+.hmi-virtual-input__panel--keyboard .hmi-virtual-input__key--modifier {
+  font-size: var(--hmi-type-caption-size);
 }
 
 .hmi-virtual-input__key--size-1 {
@@ -730,22 +780,12 @@
 }
 
 .hmi-virtual-input__key--accent {
-  background: var(--hmi-accent);
-  border-color: var(--hmi-accent);
+  background: var(--hmi-numpad-accent);
+  border-color: var(--hmi-numpad-accent);
   color: var(--hmi-accent-on);
 }
 
 .hmi-virtual-input__key--accent:hover {
-  background: var(--hmi-accent-ink);
-  border-color: var(--hmi-accent-ink);
-}
-
-.hmi-virtual-input__keys .hmi-virtual-input__key--accent {
-  background: var(--hmi-numpad-accent);
-  border-color: var(--hmi-numpad-accent);
-}
-
-.hmi-virtual-input__keys .hmi-virtual-input__key--accent:hover {
   background: var(--hmi-numpad-accent-ink);
   border-color: var(--hmi-numpad-accent-ink);
 }

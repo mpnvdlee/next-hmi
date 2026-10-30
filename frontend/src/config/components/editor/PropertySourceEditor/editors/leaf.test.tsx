@@ -38,13 +38,17 @@ describe('VarEditor', () => {
     vi.mocked(loadVariableWriteDescriptor).mockResolvedValueOnce({
       dataType: 'Float',
       isArray: true,
+      arrayLength: 5,
     });
     const onChange = renderValueField({ $var: { path: 'CF:Temps' } });
-    const label = await screen.findByText('Value - Index');
+    // No title of its own: a hint naming the range sits above its box.
+    const hint = await screen.findByText('Element of the array, 0 to 4');
+    expect(screen.queryByText('Value - Index')).toBeNull();
     expect(loadVariableWriteDescriptor).toHaveBeenCalledWith('CF', 'Temps');
-    // A sibling of the Value row, not a card inside it.
-    const indexRow = label.closest('.cfg-field-group') as HTMLElement;
-    expect(valueRow().contains(indexRow)).toBe(false);
+    // Part of the Value field, under its box rather than inside it.
+    const indexRow = hint.closest('.cfg-field-group') as HTMLElement;
+    expect(valueRow().contains(indexRow)).toBe(true);
+    expect(valueRow().querySelector('.cfg-field-group__box')!.contains(indexRow)).toBe(false);
     const input = within(indexRow).getByPlaceholderText('Choose an element');
     fireEvent.change(input, { target: { value: '3' } });
     expect(onChange).toHaveBeenLastCalledWith({
@@ -63,14 +67,14 @@ describe('VarEditor', () => {
     });
     renderValueField({ $var: binding });
     await new Promise((r) => setTimeout(r));
-    expect(screen.queryByText('Value - Index')).toBeNull();
+    expect(screen.queryByText(/Element of the array/)).toBeNull();
   });
 
   it('adds no Index row on a field that takes the whole array', async () => {
     vi.mocked(loadVariableWriteDescriptor).mockResolvedValue({ dataType: 'Float', isArray: true });
     renderValueField({ $var: { path: 'CF:Temps' } }, vi.fn(), 'Float[]');
     await new Promise((r) => setTimeout(r));
-    expect(screen.queryByText('Value - Index')).toBeNull();
+    expect(screen.queryByText(/Element of the array/)).toBeNull();
   });
 
   it('asks an alarm-style any-type slot that takes one value for the element too', async () => {
@@ -85,7 +89,7 @@ describe('VarEditor', () => {
         </PropRow>
       </TakesOneValueContext.Provider>,
     );
-    expect(await screen.findByText('{3} - Index')).toBeInTheDocument();
+    expect(await screen.findByText('Element of the array')).toBeInTheDocument();
   });
 
   it('shows a bound index in its row and the path without brackets; clearing it binds the whole array', () => {
@@ -93,7 +97,9 @@ describe('VarEditor', () => {
       $var: { path: 'CF:Safety/Open', index: { $static: 4 } },
     });
     expect(within(valueRow()).getByRole('textbox')).toHaveValue('CF:Safety/Open');
-    const indexRow = screen.getByText('Value - Index').closest('.cfg-field-group') as HTMLElement;
+    const indexRow = screen
+      .getByText('Element of the array')
+      .closest('.cfg-field-group') as HTMLElement;
     const input = within(indexRow).getByRole('spinbutton');
     expect(input).toHaveValue(4);
     fireEvent.change(input, { target: { value: '' } });

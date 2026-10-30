@@ -19,7 +19,7 @@ Marks where content the caller supplies is rendered. Put one in a reusable compo
 
 ### Container
 
-Groups and lays out child widgets in a row or column. Hosts other widgets.
+Groups and lays out child widgets in a row or column. Hosts other widgets, and runs its actions when pressed.
 
 | Property | Label | Type |
 |---|---|---|
@@ -29,6 +29,7 @@ Groups and lays out child widgets in a row or column. Hosts other widgets.
 | `background` | Background | `color` |
 | `border` | Border | `String` |
 | `shadow` | Shadow | `String` |
+| `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 

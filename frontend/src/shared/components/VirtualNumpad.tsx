@@ -23,12 +23,19 @@ interface VirtualNumpadProps {
   unit?: string;
   /** Whether min/max show as a hint under the title. They gate Enter either way. Default true. */
   showRange?: boolean;
-  /** The value being replaced: the placeholder while the entry is empty, and the "Current setpoint" line. */
+  /** The value being replaced: the entry field's placeholder while the entry is empty. */
   currentValue?: string;
   /** Digits allowed after the point; 0 disables the point. Omit for no limit. */
   decimals?: number;
   /** Whether the minus key works. Default: true unless min is 0 or more. */
   allowNegative?: boolean;
+}
+
+/** Whether an entry obeys the key rules: one optional leading minus, one point, the decimals limit. */
+function fitsRules(text: string, decimals: number | undefined, allowNegative: boolean) {
+  const match = /^(-?)\d*(\.(\d*))?$/.exec(text);
+  if (!match || (match[1] && !allowNegative) || (match[2] && decimals === 0)) return false;
+  return decimals === undefined || (match[3] ?? '').length <= decimals;
 }
 
 function rangeMessage(min: number | undefined, max: number | undefined, unit: string | undefined) {
@@ -65,7 +72,11 @@ export function VirtualNumpad({
       const target = event.target as Node | null;
       if (!target) return;
       if (panelRef.current?.contains(target)) return;
-      if (anchorRef?.current?.contains(target)) return;
+      if (anchorRef?.current?.contains(target)) {
+        // A press on the widget keeps the typing focus in the entry field.
+        if (event.type === 'mousedown') event.preventDefault();
+        return;
+      }
       onCancel();
     };
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -90,50 +101,66 @@ export function VirtualNumpad({
       onChange(value ? (value.startsWith('-') ? value.slice(1) : `-${value}`) : '-');
       return;
     }
-    if (key === '.') {
-      if (value.includes('.') || decimals === 0) return;
-      onChange(!value || value === '-' ? `${value}0.` : `${value}.`);
-      return;
-    }
-    const fraction = value.split('.')[1];
-    if (decimals !== undefined && fraction !== undefined && fraction.length >= decimals) return;
-    onChange(`${value}${key}`);
+    const next = key === '.' && (!value || value === '-') ? `${value}0.` : `${value}${key}`;
+    if (fitsRules(next, decimals, allowNegative)) onChange(next);
   };
 
-  const dockClass = `hmi-virtual-input__dock hmi-virtual-input__dock--${dockPosition}`;
+  // A centred numpad sits in the middle of the screen; the keyboard's centre dock stays at the bottom.
+  const dockClass = `hmi-virtual-input__dock hmi-virtual-input__dock--${dockPosition === 'center' ? 'middle' : dockPosition}`;
 
   const parsed = parseFloat(value);
   const isOutOfRange =
     !isNaN(parsed) && ((min !== undefined && parsed < min) || (max !== undefined && parsed > max));
   const canApply = !isNaN(parsed) && !isOutOfRange;
+  const apply = () => {
+    if (canApply) onApply(value);
+  };
   const hasRange = showRange && (min !== undefined || max !== undefined);
   const keyDisabled = (key: string) =>
     (key === '-' && !allowNegative) || (key === '.' && decimals === 0);
 
   return createPortal(
     <div className={dockClass}>
-      <div className="hmi-virtual-input__panel hmi-virtual-input__panel--compact" ref={panelRef}>
+      <div
+        className="hmi-virtual-input__panel hmi-virtual-input__panel--compact"
+        ref={panelRef}
+        // Keeps the focus, and with it the caret, in the entry field while keys are pressed.
+        onMouseDown={(e) => {
+          if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
+        }}
+      >
         <div className="hmi-virtual-input__header">
           {title && <span className="hmi-virtual-input__title">{title}</span>}
           <CloseButton
             className="hmi-virtual-input__close"
-            onMouseDown={(e) => e.preventDefault()}
             onClick={onCancel}
             label="Close numpad"
           />
         </div>
-        {currentValue !== undefined && currentValue !== '' && (
-          <div className="hmi-virtual-input__current">
-            Current setpoint {currentValue}
-            {unit && ` ${unit}`}
-          </div>
-        )}
         <div
           className={`hmi-virtual-input__value${isOutOfRange ? ' hmi-virtual-input__value--invalid' : ''}`}
         >
-          {value || (
-            <span className="hmi-virtual-input__value-placeholder">{currentValue || '0'}</span>
-          )}
+          {/* A physical keyboard types here through the same rules; Escape is the document listener's.
+              inputMode none keeps a tablet's own keyboard shut. */}
+          <input
+            className="hmi-virtual-input__field"
+            type="text"
+            inputMode="none"
+            autoFocus
+            aria-label={title || 'Value'}
+            value={value}
+            placeholder={currentValue || '0'}
+            onChange={(e) => {
+              if (fitsRules(e.target.value, decimals, allowNegative)) onChange(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.ctrlKey || e.metaKey || e.altKey) return;
+              if (e.key === 'Enter') apply();
+              else if ((NUMPAD_KEYS as readonly string[]).includes(e.key)) applyKey(e.key);
+              else return;
+              e.preventDefault();
+            }}
+          />
           {unit && <span className="hmi-virtual-input__value-unit">{unit}</span>}
         </div>
         {hasRange && (
@@ -154,7 +181,6 @@ export function VirtualNumpad({
               type="button"
               key={key}
               className="hmi-virtual-input__key"
-              onMouseDown={(e) => e.preventDefault()}
               onClick={() => applyKey(key)}
               disabled={keyDisabled(key)}
               tabIndex={-1}
@@ -165,7 +191,6 @@ export function VirtualNumpad({
           <button
             type="button"
             className="hmi-virtual-input__key hmi-virtual-input__key--action hmi-virtual-input__key--back"
-            onMouseDown={(e) => e.preventDefault()}
             onClick={() => onChange(value.slice(0, -1))}
             tabIndex={-1}
           >
@@ -174,7 +199,6 @@ export function VirtualNumpad({
           <button
             type="button"
             className="hmi-virtual-input__key hmi-virtual-input__key--action hmi-virtual-input__key--clear"
-            onMouseDown={(e) => e.preventDefault()}
             onClick={() => onChange('')}
             tabIndex={-1}
           >
@@ -183,10 +207,7 @@ export function VirtualNumpad({
           <button
             type="button"
             className="hmi-virtual-input__key hmi-virtual-input__key--action hmi-virtual-input__key--accent"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => {
-              if (canApply) onApply(value);
-            }}
+            onClick={apply}
             disabled={!canApply}
             tabIndex={-1}
           >

@@ -139,6 +139,15 @@ def test_rerunning_changes_nothing(project: Path) -> None:
     assert {p: p.read_bytes() for p in project.rglob("*.json")} == before
 
 
+def test_a_bound_type_property_is_left_alone(project: Path) -> None:
+    page = {"id": "p", "properties": {"type": {"$var": {"path": "PLC:Rotor/Type"}}}}
+    _write(project / "pages" / "rotor.json", page)
+
+    migrate_write_targets(_staged(project), project)
+
+    assert _read(project / "pages" / "rotor.json") == page
+
+
 def test_the_coordinator_carries_a_format_8_project_past_9(project: Path) -> None:
     write_project_metadata(
         project,

@@ -19,6 +19,13 @@ heading.
   as a file, a compose file and `install.sh`, for a machine that cannot reach a
   registry.
 
+- **A guide to shipping it on a machine.** *Shipping it on a machine* in the
+  user guide covers which build ships, activation on the commissioning bench,
+  locking the installation down and what to hand the customer. The manager's
+  System Information names the edition and links to it, and in the community
+  build the editor's Branding section and the contact card point at what the
+  enterprise build adds and what shipping costs.
+
 - **Navigate To Page goes to a page chosen at runtime.** The new action
   closes every open dialog and overlay, then goes to a page from the Pages
   section, firing the page events a menu press would. The page is fixed, or
@@ -238,6 +245,13 @@ heading.
 
 ### Fixed
 
+- **A popover opened near the bottom of the screen stays on it.** A dialog
+  placed `trigger-below` a button low on the screen opened below it anyway,
+  partly off the screen, because its size was read before its contents had
+  loaded. It now opens on the other side of the button when only that side
+  has room, and is pulled inside the screen when neither has; the same for
+  `trigger-above`, `trigger-left` and `trigger-right`.
+
 - **The category rail follows a click to its end.** In the Add action,
   Add widget and source drawers, clicking a category near the end of the
   list, such as **Interface**, scrolled to it but left the rail highlighting
@@ -265,6 +279,12 @@ heading.
   `dockPosition="center"` sat at the left edge of a keyboard-wide strip
   along the bottom of the screen. It now sits in the middle of the screen,
   across and down; the keyboard stays docked at the bottom.
+
+- **A second tap on a Number Input or String Input opens its numpad or
+  keyboard again.** After × (or Enter, on a Number Input) the field kept
+  focus, and the keypad opened only when the field gained focus, so tapping
+  the same field again did nothing until the operator tapped somewhere else
+  first.
 
 - **Bundled fonts now carry their licence.** Inter, JetBrains Mono, Lexend,
   Manrope and Roboto Mono ship their SIL OFL 1.1 text next to the font files
