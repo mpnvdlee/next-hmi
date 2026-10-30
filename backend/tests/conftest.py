@@ -21,7 +21,11 @@ _ensure_backend_on_path()
 @pytest.fixture(autouse=True)
 def _no_telemetry(monkeypatch) -> None:
     """No test may phone home — every manager lifespan would otherwise ping."""
+    from core import telemetry
+
     monkeypatch.setenv("NEXTHMI_TELEMETRY", "off")
+    # Milestones land in the runtime home, which most tests never isolate.
+    monkeypatch.setattr(telemetry, "mark", lambda *args, **kwargs: None)
 
 
 @pytest.fixture(autouse=True)

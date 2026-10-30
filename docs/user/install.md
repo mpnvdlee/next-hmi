@@ -3,8 +3,9 @@
 NEXT HMI ships in two distributable forms:
 
 1. **Docker image** — single container; runtime home (and any projects
-   under it) mounted as a volume.
-2. **Portable Mac/Windows binary** — unzip + double-click. No installer,
+   under it) mounted as a volume. Pull it from `ghcr.io`, or download it as an
+   offline installer zip from the release.
+2. **Portable Mac/Windows/Linux binary** — unzip + double-click. No installer,
    no admin rights, no Python or Node toolchain on the host.
 
 Both formats run the same backend over the same on-disk layout. Move a
@@ -48,7 +49,9 @@ origin root; an individual project's HMI is at
   .mcp-tokens.json        hashed MCP bearer tokens, each scoped to one project
   .peer-trust.json        pinned peer TLS certificates (trust on first use)
   .install-id.json        random installation ID used by usage reporting
-  .telemetry.json         usage-reporting on/off (absent means on)
+  .telemetry.json         usage-reporting on/off (absent means on), contact prompt dismissed
+  .telemetry-session.json whether the last run stopped cleanly, and its version
+  .telemetry-milestones/  a dated file per first time: connected, pageSaved, mcpUsed
   tls/                    HTTPS setting + generated and uploaded certificates
   .peer-transfer-sender.json    outgoing push transfer phases/progress (no bearer plaintext)
   .peer-transfer-receipts.json  incoming push claims, recovery phases, and receipts
@@ -182,10 +185,11 @@ require the explicit `NEXTHMI_ALLOW_LOOPBACK_PEERS=1` deployment override.
 
 ## Usage reporting
 
-The runtime reports that it started to `https://next-hmi.com/ping` — once at
-start-up, then once every 24 hours while it keeps running. It is the only
-outgoing connection NEXT HMI makes on its own, and it exists to answer one
-question: how many installations are active.
+The runtime reports that it is running to `https://next-hmi.com/ping` — once at
+start-up, then once an hour while it keeps running. It is the only outgoing
+connection NEXT HMI makes on its own, and it exists to answer a few questions:
+how many installations are active, how long they stay up, and whether people
+get past connecting to a PLC.
 
 Each report carries exactly:
 
@@ -197,9 +201,18 @@ Each report carries exactly:
 | `os` / `osRelease` | `Darwin` / `25.6.0` | the host platform |
 | `python` | `3.14.6` | the bundled interpreter |
 | `event` | `start` / `heartbeat` | which of the two moments this is |
+| `installMethod` | `bundle` / `docker` / `source` / `other` | the portable download, the Docker image, a source checkout, or none of those |
+| `sessionId` | `9a07e2c1…` | random ID for this run, new on every start |
+| `uptimeS` | `86400` | seconds since this run started |
+| `connected` / `pageSaved` / `mcpUsed` | `true` | whether this installation has *ever* connected to an OPC-UA server, saved a page, or answered an MCP tool call |
+| `pages` / `tags` / `opcuaConns` | `11-100` | how many pages, variables and OPC-UA client connections all projects have together, as `0`, `1-10`, `11-100` or `100+` |
+| `mcpEnabled` | `false` | whether any project has MCP access switched on |
+| `prevExit` | `clean` / `unclean` / `none` | start only: whether the previous run shut down normally, crashed or was killed, or there was none |
+| `prevVersion` | `1.0.0` | start only: the version of the previous run, when it was a different one; empty otherwise |
 
-Nothing else is sent: no project names, variables, addresses, tag values, user
-names, or licence data. The receiving end stores no IP address. The
+Nothing else is sent: no project names, page or variable names, tag values,
+addresses, user names, or licence data. The sizes are counted on this machine
+and only the class leaves it. The receiving end stores no IP address. The
 installation ID is a random number tied to the runtime home, not to the
 machine — copy the runtime home and both copies report as the same
 installation; delete `.install-id.json` and the next start counts as a new one.
@@ -215,6 +228,14 @@ To turn it off, either:
 - set `NEXTHMI_TELEMETRY=off` in the environment — this wins over the setting
   and makes the switch read-only, which is the form to use in Docker or a
   managed deployment. `NEXTHMI_TELEMETRY=on` forces the opposite the same way.
+
+Once an installation has connected to a PLC and saved a page, the Projects page
+asks once whether you use NEXT HMI in a machine or product. **Tell us about
+it** opens the contact form on next-hmi.com in your browser — with the
+installation ID filled in while usage reporting is on, so the message can be
+read next to this installation's reports — and **Not now** puts the question
+away for good. The app itself sends nothing either way; only submitting the
+form does. The same link stays under Settings → Usage reporting.
 
 ## HTTPS
 
@@ -427,13 +448,18 @@ plain HTTP so local installs keep working.
 
 ## Docker
 
-### Quick start
+Three ways to get the same image. Each starts it on port 8000 (and 8443 once
+HTTPS is on) with the runtime home mounted as `/data`.
+
+### From the registry
 
 ```bash
-# from a clone of the repo
-docker build -t nexthmi .
-docker run --rm -p 8000:8000 -v "$PWD/project-data:/data" nexthmi
+docker run -d --name nexthmi -p 8000:8000 -p 8443:8443 \
+  -v nexthmi-data:/data ghcr.io/mpnvdlee/next-hmi:latest
 ```
+
+The image is multi-arch (`linux/amd64` + `linux/arm64`). Swap `:latest` for a
+version tag such as `:1.0.1` to pin a release.
 
 Open <http://localhost:8000> and set the device-admin password when the
 manager dashboard prompts. On first boot the bundled seed project is
@@ -445,16 +471,32 @@ exception: `http://192.168.1.10:8000` is not a secure context, so the browser
 withholds the editor's clipboard there. See [What plain HTTP costs the
 browser](#what-plain-http-costs-the-browser).
 
-Using compose:
+### As a file download, without a registry
+
+For a host that cannot reach `ghcr.io`, every release carries an offline
+installer per architecture, `nexthmi-community-docker-linux-x64-<version>.zip` and
+`nexthmi-community-docker-linux-arm64-<version>.zip`: the image as a file, a compose file
+that restarts the container with the host, and `install.sh`. Copy it over,
+unzip it and run:
+
+```bash
+./install.sh
+```
+
+It loads the image and starts it, with `./project-data` beside it as `/data`.
+`README.txt` in the zip covers stopping, logs and updating.
+
+### From a clone of the repo
 
 ```bash
 docker compose up -d
 ```
 
-`docker-compose.yml` at the repo root binds `./project-data` to `/data`.
-That bind-mount carries both the runtime home (`projects.json`, `.logs/`,
-`.widget-build/`) AND any project folders the operator places under it.
-Projects with absolute paths outside `/data` need their own bind-mounts.
+`docker-compose.yml` at the repo root builds the image and binds
+`./project-data` to `/data`. That bind-mount carries both the runtime home
+(`projects.json`, `.logs/`, `.widget-build/`) AND any project folders the
+operator places under it. Projects with absolute paths outside `/data` need
+their own bind-mounts.
 
 Discovery note: mDNS requires host networking. Without it (default bridge
 mode) the runtime won't appear on peer pickers — operators can still use
@@ -478,10 +520,11 @@ manual `host:port` entries.
 
 ### Upgrading
 
-```bash
-docker pull nexthmi:latest         # or rebuild from source
-docker compose up -d               # picks up the new image
-```
+- **Registry** — `docker pull ghcr.io/mpnvdlee/next-hmi:latest`, then remove
+  the container and run the same `docker run` again.
+- **File download** — unzip the newer installer and run its `./install.sh`
+  from the folder that holds your `project-data/`.
+- **Clone** — `git pull`, then `docker compose up -d --build`.
 
 The data volume is untouched. The backend checks each project's stamped
 format version on activation and refuses to open one written by a newer
@@ -495,16 +538,17 @@ the next start and registers it. A fresh device-admin password is required again
 and the reseeded project starts out with only its `guest` user.
 Existing volumes retain their current project credentials unchanged.
 
-## Mac / Windows portable binaries
+## Portable binaries
 
 ### Installing
 
-1. Download `nexthmi-<os>-<arch>-<version>.zip` from the release.
+1. Download `nexthmi-community-<os>-<arch>-<version>.zip` from the release.
 2. Unzip anywhere you have write access (Downloads, Desktop, anywhere
    under your home directory).
 3. Launch:
    - macOS: double-click `nexthmi.command`.
    - Windows: double-click `nexthmi.exe`.
+   - Linux (x64): run `./nexthmi` from a terminal in the unzipped folder.
 
 A terminal window opens, prints the banner, and stays in the foreground.
 
@@ -620,10 +664,11 @@ lives wherever the bootstrap file points.
 
 ### Limitations
 
-- The macOS build is Apple silicon only: `nexthmi-macos-arm64-<version>.zip`.
+- The macOS build is Apple silicon only: `nexthmi-community-macos-arm64-<version>.zip`.
   There is no Intel (x64) macOS build.
 - No auto-update. Operators check the release page for new versions.
 - No process-level service install — the binary runs in the foreground
   of whichever terminal launched it. If you want it persistent, wrap it
-  in `launchd` (macOS) or *Task Scheduler* (Windows) yourself.
+  in `launchd` (macOS), *Task Scheduler* (Windows) or a systemd unit
+  (Linux) yourself.
 

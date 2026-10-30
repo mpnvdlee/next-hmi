@@ -17,7 +17,9 @@ product.
 ## Hard rules
 
 Breaking one of these usually still passes review and fails at runtime. They
-apply to every change, in every directory.
+apply to every change, in every directory. Three are enforced: inline styles by
+`npm run lint`, raw file writes and import-time resolver calls by
+`backend/tests/test_storage_hard_rules.py`.
 
 - **Never write files directly on the backend.** Use the `core.storage` atomic
   helpers. Resolve every workspace path through the project-anchored resolvers in
@@ -46,10 +48,6 @@ apply to every change, in every directory.
   `NEXTHMI_DATA_DIR` → `~/.config/nexthmi/runtime.json` → `.dev-runtime-home/` →
   `~/Documents/NextHMI/`. On a machine where a packaged build has ever run,
   `start-dev.py` follows the bootstrap file, not the repo-local default.
-- **Scope, comments, docs, commits.** Don't refactor adjacent code unless asked.
-  Comments explain a non-obvious *why* only — identifiers carry the *what*.
-  Prefer editing an existing file to creating one; never create a `*.md` unless
-  asked. Commit only when explicitly asked.
 
 ## The change loop
 
@@ -77,7 +75,8 @@ ruff check backend
 npm test -- --run                     # `npm test` alone stays in watch mode
 npm test -- --run src/path/file.test.tsx
 npm run lint
-npm run build                         # tsc + vite build; the type check
+npm run type-check                    # tsc only; writes nothing
+npm run build                         # also regenerates the tracked widget manifest
 ```
 
 | Changed | Also run |
@@ -119,8 +118,10 @@ widget schema.
   [../architecture/frontend.md](../architecture/frontend.md).
 - `project-testbench/` — the dev/test project: real example content, intentional
   diagnostic findings, deliberate scale fixtures. Lives in its own private
-  repository (`next-hmi-testbench`) and is cloned in here for dev — gitignored
-  (root-anchored `/project-testbench/`), same pattern as `enterprise/`. When present it is the
+  repository (`next-hmi-testbench`), cloned in here or symlinked to a sibling
+  checkout (`ln -s ../next-hmi-testbench project-testbench`) — gitignored
+  (root-anchored `/project-testbench`), same pattern as `enterprise/`. Without
+  it, the `project-testbench` tests skip silently. When present it is the
   auto-bootstrapped live project in dev; when absent the backend bootstrap seeds
   a fresh `Default-Project/` from `project-seed/`. Never included in Docker or
   portable-executable builds — in production the operator creates projects
@@ -369,7 +370,7 @@ batching alike. `backend/tests/test_websocket_validation.py` pins the contract.
 ### Author a custom widget
 
 Custom widgets are project content, not product code. They live in the live
-project's `custom-widgets/<Name>/index.tsx` — in dev, the cloned-in
+project's `custom-widgets/<Name>/index.tsx` — in dev, the
 `project-testbench/custom-widgets/<Name>/index.tsx`. The source must NOT import
 React or app helpers; every helper comes from the `window.__nextHMI__` globals
 typed in `frontend/custom-widgets-sdk.d.ts`. The backend widget compiler emits

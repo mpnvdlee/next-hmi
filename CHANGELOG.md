@@ -13,6 +13,12 @@ heading.
 
 ### Added
 
+- **A Linux zip and an offline Docker installer in every release.** Next to the
+  Windows and macOS zips, a release now carries `nexthmi-community-linux-x64-<version>.zip`
+  and, per architecture, `nexthmi-community-docker-linux-<arch>-<version>.zip`: the image
+  as a file, a compose file and `install.sh`, for a machine that cannot reach a
+  registry.
+
 - **Browse PLC shows its progress.** Browsing a whole server could run for
   minutes on a large PLC with only a disabled button to show for it. A bar now
   fills as the walk goes, with the number of nodes found and how deep it has
@@ -33,6 +39,24 @@ heading.
   variable-store listener.
 
 ### Changed
+
+- **Every download names its edition.** The public zips are now
+  `nexthmi-community-<os>-<arch>-<version>.zip` and
+  `nexthmi-community-docker-linux-<arch>-<version>.zip`; the folder inside keeps
+  its name, so shortcuts to it still work. The terminal splash prints
+  *Community Edition* or *Enterprise Edition* under the logo, and the runtime's
+  loading screen says *Community Edition* in the public build.
+
+- **Usage reporting says more, and still nothing about your projects.** The
+  report now goes out every hour instead of once a day, and adds how NEXT HMI
+  was installed, how long it has been running, whether the last run stopped
+  cleanly, whether this installation has ever connected to a PLC, saved a page
+  or been used over MCP, and the rough size of all projects together (0, 1–10,
+  11–100 or more pages, tags and OPC-UA connections). No names, values or
+  addresses are sent. [Usage reporting](docs/user/install.md#usage-reporting)
+  lists every field; the switch and `NEXTHMI_TELEMETRY=off` work as before.
+  An installation that has connected and saved a page is asked once, on the
+  Projects page, whether it is used in a machine or product.
 
 - **On/off widgets show "unknown" instead of "off" before a value arrives.**
   An **LED Indicator** shows an empty ring, a **Switch** a hollow track with its
@@ -582,6 +606,7 @@ below ships in the initial open-source build.
   shipped loose (replaceable) in binary builds, with the LGPL texts and a
   written source offer bundled alongside.
 
+[1.0.1]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.0.1
 [1.0.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.0.0
 [0.0.1-rc2]: https://github.com/mpnvdlee/next-hmi/releases/tag/v0.0.1-rc2
 [0.0.1-rc1]: https://github.com/mpnvdlee/next-hmi/releases/tag/v0.0.1-rc1

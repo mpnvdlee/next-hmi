@@ -76,6 +76,22 @@ export function resolveLiveProjectDir(repoRoot: string): string {
   return path.join(repoRoot, 'project-testbench');
 }
 
+/**
+ * A registered project's folder by id, the `<slug>` of `/runtime/<slug>/` and
+ * `/editor/<slug>/`, so each instance document gets its own project's import
+ * map rather than the default project's. Undefined when it isn't registered.
+ */
+export function resolveProjectDirById(repoRoot: string, id: string): string | undefined {
+  const manifest = readJson(path.join(resolveRuntimeHome(repoRoot), 'projects.json'));
+  const entries = Array.isArray(manifest?.projects)
+    ? (manifest.projects as Array<Record<string, unknown>>)
+    : [];
+  const entry = entries.find((e) => e.id === id);
+  return typeof entry?.path === 'string' && entry.path.trim()
+    ? path.resolve(entry.path)
+    : undefined;
+}
+
 export function scanExternalLibraries(externalLibrariesDir: string): Record<string, string> {
   if (!fs.existsSync(externalLibrariesDir)) return {};
   const out: Record<string, string> = {};

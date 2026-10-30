@@ -58,6 +58,7 @@ interface ManagerStore {
   telemetry: TelemetryStatus | null;
   loadTelemetry(): Promise<void>;
   applyTelemetry(enabled: boolean): Promise<void>;
+  dismissContactPrompt(): Promise<void>;
 }
 
 export const useManagerStore = create<ManagerStore>((set, get) => ({
@@ -194,6 +195,14 @@ export const useManagerStore = create<ManagerStore>((set, get) => ({
       telemetry: await apiJson<TelemetryStatus>('/api/system/telemetry', {
         method: 'PUT',
         body: { enabled },
+      }),
+    });
+  },
+
+  dismissContactPrompt: async () => {
+    set({
+      telemetry: await apiJson<TelemetryStatus>('/api/system/telemetry/contact-prompt', {
+        method: 'DELETE',
       }),
     });
   },
