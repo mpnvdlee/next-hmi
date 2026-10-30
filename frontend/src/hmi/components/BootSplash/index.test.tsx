@@ -30,7 +30,7 @@ describe('BootSplash', () => {
 
   it('shows the version and the phase progress readout', () => {
     render(<BootSplash phase="config" />);
-    expect(screen.getByText('vdev')).toBeInTheDocument();
+    expect(screen.getByText('Community Edition · vdev')).toBeInTheDocument();
     expect(screen.getByText(/Loading configuration · 2\/3/)).toBeInTheDocument();
   });
 
@@ -61,6 +61,7 @@ describe('BootSplash', () => {
       render(<BootSplash phase="ready" />);
       expect(wordmark()).toBe('NEXT HMI');
       expect(screen.queryByText(/AGPL-3\.0/)).not.toBeInTheDocument();
+      expect(screen.getByText('vdev')).toBeInTheDocument();
     } finally {
       delete window.__NEXTHMI_EDITION__;
     }

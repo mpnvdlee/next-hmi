@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import fs from 'fs';
+import { execSync } from 'child_process';
 import {
   buildImportMap,
   resolveLiveProjectDir,
@@ -170,6 +171,17 @@ function externalModulesPlugin(): Plugin {
 // proxied project instance as the manager dashboard (issue #20). The backend
 // strips stray tags defensively; not emitting one is the other half.
 function runtimeGlobalsPlugin(): Plugin {
+  // Same string backend/core/version.py reports for a checkout, so the boot
+  // splash names the build that telemetry and the Help link see.
+  let version = 'dev';
+  try {
+    version =
+      execSync('git describe --tags --match "v[0-9]*"', { encoding: 'utf8', stdio: 'pipe' })
+        .trim()
+        .replace(/^v/, '') || 'dev';
+  } catch {
+    // No .git or no git: stay on "dev", like the backend.
+  }
   return {
     name: 'nextHMI-runtime-globals',
     apply: 'serve',
@@ -185,7 +197,7 @@ function runtimeGlobalsPlugin(): Plugin {
         return [
           {
             tag: 'script',
-            children: `window.__NEXTHMI_BASE__=${JSON.stringify(base)};window.__NEXTHMI_MODE__=${JSON.stringify(mode)};window.__NEXTHMI_VERSION__="dev";window.__NEXTHMI_EDITION__=${JSON.stringify(process.env.NEXTHMI_EDITION === 'ee' ? 'ee' : 'oss')};`,
+            children: `window.__NEXTHMI_BASE__=${JSON.stringify(base)};window.__NEXTHMI_MODE__=${JSON.stringify(mode)};window.__NEXTHMI_VERSION__=${JSON.stringify(version)};window.__NEXTHMI_EDITION__=${JSON.stringify(process.env.NEXTHMI_EDITION === 'ee' ? 'ee' : 'oss')};`,
             injectTo: 'head-prepend',
           },
         ];

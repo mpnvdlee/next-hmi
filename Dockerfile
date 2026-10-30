@@ -19,6 +19,14 @@
 # interpreter. The node stage runs `build:app`, which is `build` minus that
 # shell-out, against the artifacts stage 2 already produced.
 
+# ── Edition ────────────────────────────────────────────────────────────────
+# NEXTHMI_EDITION=ee (a build arg) adds the enterprise tree. It arrives as a
+# named context, `--build-context enterprise=<dir with backend/ and frontend/>`,
+# which replaces this empty stage; build/build-docker.sh passes both. The
+# default oss build copies nothing from it, so the public image carries no
+# enterprise code.
+FROM scratch AS enterprise
+
 # ── Stage 1 — npm tree + esbuild binary ────────────────────────────────────
 FROM node:22-slim AS node-deps
 WORKDIR /src
@@ -97,6 +105,16 @@ COPY --from=builtin-widgets-build /src/frontend/public/builtin-widgets-js fronte
 COPY --from=builtin-widgets-build /src/frontend/src/generated/builtinWidgetsManifest.json frontend/src/generated/builtinWidgetsManifest.json
 COPY --from=builtin-widgets-build /src/frontend/src/generated/builtinWidgetsManifest.editor.json frontend/src/generated/builtinWidgetsManifest.editor.json
 
+# Vite resolves the @enterprise alias to ../enterprise/frontend for ee, and that
+# tree has no package.json, so it borrows the frontend's modules through a link.
+ARG NEXTHMI_EDITION=oss
+RUN --mount=type=bind,from=enterprise,target=/mnt/enterprise \
+    if [ "$NEXTHMI_EDITION" = "ee" ]; then \
+      test -f /mnt/enterprise/frontend/registry.ts || { echo "NEXTHMI_EDITION=ee needs --build-context enterprise=<dir>" >&2; exit 1; }; \
+      mkdir -p enterprise && cp -r /mnt/enterprise/frontend enterprise/; \
+      ln -sfn /src/frontend/node_modules enterprise/node_modules; \
+    fi
+
 # `build:app` rather than `build`: this stage has no Python, and the
 # built-in-widgets compile that `build` would run first has already happened
 # in builtin-widgets-build.
@@ -105,11 +123,20 @@ RUN cd frontend && npm run build:app
 
 # ── Stage 4 — runtime ───────────────────────────────────────────────────────
 FROM python-base AS runtime
-ENV PYTHONPATH=/app/backend
+ARG NEXTHMI_EDITION=oss
+# launcher.py picks the edition's entrypoint from NEXTHMI_EDITION; the enterprise
+# tree is importable only when the ee build below copied it in.
+ENV NEXTHMI_EDITION=$NEXTHMI_EDITION \
+    PYTHONPATH=/app/backend:/app/enterprise/backend
 
 WORKDIR /app
 
 COPY backend/ backend/
+RUN --mount=type=bind,from=enterprise,target=/mnt/enterprise \
+    if [ "$NEXTHMI_EDITION" = "ee" ]; then \
+      test -f /mnt/enterprise/backend/manager_enterprise.py || { echo "NEXTHMI_EDITION=ee needs --build-context enterprise=<dir>" >&2; exit 1; }; \
+      mkdir -p enterprise && cp -r /mnt/enterprise/backend enterprise/; \
+    fi
 COPY --from=frontend-build /src/frontend/dist /app/frontend/dist
 # Shared between backend (models/theme.py imports it at startup) and the
 # frontend Theme Editor. Copied as a source file, not part of the SPA dist.

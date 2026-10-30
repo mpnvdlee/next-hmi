@@ -67,7 +67,9 @@ export default function BootSplash({ phase }: { phase: BootPhase }) {
               </span>
             </>
           )}
-          <span className="hmi-boot-splash__version">v{getVersion()}</span>
+          <span className="hmi-boot-splash__version">
+            {!isEE && 'Community Edition · '}v{getVersion()}
+          </span>
         </div>
 
         <Spinner variant="cfg" />

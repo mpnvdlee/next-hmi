@@ -166,6 +166,19 @@ jobs:
           path: ${{ runner.temp }}/nexthmi-amd64.tar.gz
           if-no-files-found: error
           retention-days: 3
+      # The offline installer users download from the Release. It rebuilds the
+      # same context, so every layer comes from the cache of the image above.
+      - name: Build offline Docker installer
+        if: github.ref_type == 'tag'
+        run: ./build/build-docker.sh "${GITHUB_REF_NAME#v}"
+      - name: Upload offline Docker installer
+        if: github.ref_type == 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: nexthmi-docker-linux-x64
+          path: dist/nexthmi-community-docker-linux-x64-*.zip
+          if-no-files-found: error
+          retention-days: 3
 
   docker-linux-arm64:
     runs-on: ubuntu-24.04-arm
@@ -222,6 +235,19 @@ jobs:
           path: ${{ runner.temp }}/nexthmi-arm64.tar.gz
           if-no-files-found: error
           retention-days: 3
+      # The offline installer users download from the Release. It rebuilds the
+      # same context, so every layer comes from the cache of the image above.
+      - name: Build offline Docker installer
+        if: github.ref_type == 'tag'
+        run: ./build/build-docker.sh "${GITHUB_REF_NAME#v}"
+      - name: Upload offline Docker installer
+        if: github.ref_type == 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: nexthmi-docker-linux-arm64
+          path: dist/nexthmi-community-docker-linux-arm64-*.zip
+          if-no-files-found: error
+          retention-days: 3
 
   # Not yet covered by either job above (both single-project, root-user
   # images): multiple simultaneously running child projects behind one
@@ -265,13 +291,13 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: nexthmi-macos-arm64
-          path: dist/nexthmi-macos-arm64-*.zip
+          path: dist/nexthmi-community-macos-arm64-*.zip
           if-no-files-found: error
           retention-days: 3
       - name: Unzip artifact
         run: |
           mkdir -p "$RUNNER_TEMP/portable"
-          unzip -q dist/nexthmi-macos-arm64-*.zip -d "$RUNNER_TEMP/portable"
+          unzip -q dist/nexthmi-community-macos-arm64-*.zip -d "$RUNNER_TEMP/portable"
       - name: Bundled esbuild runs standalone (no Node/npm on PATH)
         run: |
           env -i PATH="/usr/bin:/bin" \
@@ -325,6 +351,92 @@ jobs:
   # prompt (a CI-built artifact never picks up com.apple.quarantine the way
   # a browser download would), and notarization/antivirus behavior.
 
+  # ── Portable Linux x64 build + smoke test ──
+
+  linux-x64-portable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt pyinstaller
+      - run: npm install -g esbuild
+      - name: Resolve build version from tag
+        # A v* tag stamps the real version into the bundle (version.txt) and
+        # into the zip's filename; any other trigger (dispatch, non-v tag)
+        # stays "ci-smoke". The smoke steps below glob the zip and reference
+        # the *folder* inside it, whose name stays version-independent.
+        run: |
+          case "$GITHUB_REF_TYPE:$GITHUB_REF_NAME" in
+            tag:v*) echo "NEXTHMI_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV" ;;
+            *)      echo "NEXTHMI_VERSION=ci-smoke" >> "$GITHUB_ENV" ;;
+          esac
+      - name: Build portable artifact
+        run: ./build/build-binary.sh
+      # Zip rather than folder, for the same reason as the macOS leg above.
+      - name: Upload portable artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: nexthmi-linux-x64
+          path: dist/nexthmi-community-linux-x64-*.zip
+          if-no-files-found: error
+          retention-days: 3
+      - name: Unzip artifact
+        run: |
+          mkdir -p "$RUNNER_TEMP/portable"
+          unzip -q dist/nexthmi-community-linux-x64-*.zip -d "$RUNNER_TEMP/portable"
+      - name: Bundled esbuild runs standalone (no Node/npm on PATH)
+        run: |
+          env -i PATH="/usr/bin:/bin" \
+            "$RUNNER_TEMP/portable/nexthmi-linux-x64/_internal/esbuild" --version
+      - name: First run — empty runtime home, manager startup
+        run: |
+          RUNTIME_HOME="$RUNNER_TEMP/runtime-home"
+          echo "RUNTIME_HOME=$RUNTIME_HOME" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/portable/nexthmi-linux-x64/nexthmi" &
+          echo $! > "$RUNNER_TEMP/nexthmi.pid"
+        env:
+          NEXTHMI_DATA_DIR: ${{ runner.temp }}/runtime-home
+          NEXTHMI_PORT: "18100"
+      - name: Wait for manager to answer
+        run: |
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18100/ || true)
+            [ "$code" = "200" ] && exit 0
+            sleep 1
+          done
+          echo "::error::manager never answered 200" && exit 1
+      - name: Seed created under runtime home
+        run: test -f "$RUNTIME_HOME/projects.json" && test -d "$RUNTIME_HOME/Default-Project"
+      - name: Graceful shutdown (SIGTERM)
+        run: |
+          PID=$(cat "$RUNNER_TEMP/nexthmi.pid")
+          kill -TERM "$PID"
+          for i in $(seq 1 20); do kill -0 "$PID" 2>/dev/null || exit 0; sleep 0.2; done
+          echo "::error::process did not exit after SIGTERM" && exit 1
+      - name: Restart against the same runtime home
+        run: |
+          "$RUNNER_TEMP/portable/nexthmi-linux-x64/nexthmi" &
+          echo $! > "$RUNNER_TEMP/nexthmi.pid"
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:18100/ || true)
+            [ "$code" = "200" ] && exit 0
+            sleep 1
+          done
+          echo "::error::manager did not come back up after restart" && exit 1
+        env:
+          NEXTHMI_DATA_DIR: ${{ runner.temp }}/runtime-home
+          NEXTHMI_PORT: "18100"
+      - name: Cleanup
+        if: always()
+        run: |
+          PID=$(cat "$RUNNER_TEMP/nexthmi.pid" 2>/dev/null || true)
+          [ -n "$PID" ] && kill -TERM "$PID" 2>/dev/null || true
+
   windows-x64-portable:
     runs-on: windows-latest
     steps:
@@ -352,14 +464,14 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: nexthmi-windows-x64
-          path: dist\nexthmi-windows-x64-*.zip
+          path: dist\nexthmi-community-windows-x64-*.zip
           if-no-files-found: error
           retention-days: 3
       - name: Unzip artifact
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\portable" | Out-Null
-          $zip = Get-ChildItem -Path dist -Filter 'nexthmi-windows-x64-*.zip' | Select-Object -First 1
+          $zip = Get-ChildItem -Path dist -Filter 'nexthmi-community-windows-x64-*.zip' | Select-Object -First 1
           Expand-Archive -Path $zip.FullName -DestinationPath "$env:RUNNER_TEMP\portable" -Force
       - name: Bundled esbuild runs standalone (no Node/npm on PATH)
         shell: pwsh
@@ -444,8 +556,9 @@ jobs:
   # cloned in; see docs/dev/operations/release.md, and the edition guard in
   # build/publish-docs.py that refuses the downgrade.
   #
-  # The tree is additive by design. It carries this release's `v<version>/`
-  # directory, a copy of it at the root as "latest", and a `versions.json` built
+  # The tree is additive by design. It carries this release's minor-line
+  # directory (`v1.1/` for 1.1.2), a copy of it at the root as "latest" when
+  # that line is the newest, and a `versions.json` built
   # from the repository's released tags — so uploading it over the live site
   # leaves every previously published version directory untouched while the
   # picker immediately starts offering the new one.
@@ -471,7 +584,7 @@ jobs:
           fi
       - name: Render the versioned site tree
         run: |
-          python build/publish-docs.py site "${{ steps.version.outputs.value }}" /docs --from-git-tags
+          python build/publish-docs.py site "${{ steps.version.outputs.value }}" /docs
       - name: Render the offline copy the release zips ship
         run: |
           python build/render-docs.py offline "${{ steps.version.outputs.value }}"
@@ -479,15 +592,16 @@ jobs:
         run: |
           set -euo pipefail
           version="${{ steps.version.outputs.value }}"
+          line="$(echo "${version%%-*}" | cut -d. -f1-2)"
           test -f site/versions.json
-          test -d "site/v$version"
-          test -f "site/v$version/index.html"
-          # No version gate on the root copy: publish-docs.py renders it for a
-          # candidate exactly like a final release, so it must exist either way.
-          test -f site/index.html
+          test -f "site/v$line/index.html"
+          # The root holds the newest minor line only: a patch for an older
+          # line (1.0.2 after 1.1.0) leaves it alone, so it is not rendered.
+          latest="$(python3 -c 'import json; print(json.load(open("site/versions.json"))["versions"][0]["version"])')"
+          if [ "$latest" = "$version" ]; then test -f site/index.html; fi
           # A dev doc reaching the guide is the regression this split exists to
           # prevent — see docs/INDEX.md.
-          if ls site/v"$version"/*.html | grep -Ee '(backend|rest-api|websocket|dependency-policy)\.html'; then
+          if ls site/v"$line"/*.html | grep -Ee '(backend|rest-api|websocket|dependency-policy)\.html'; then
             echo "::error::developer documentation leaked into the user guide"
             exit 1
           fi
@@ -502,7 +616,7 @@ jobs:
           # fetched from Google Fonts on purpose (WEBFONTS in render-docs.py).
           # Any *other* host is the regression — typically an asset that only
           # resolves from the machine that wrote the page.
-          if grep -Eoh 'src="https?://[^"]*"|<link[^>]+href="https?://[^"]*"' site/v"$version"/*.html \
+          if grep -Eoh 'src="https?://[^"]*"|<link[^>]+href="https?://[^"]*"' site/v"$line"/*.html \
              | grep -Ev 'https://fonts\.(googleapis|gstatic)\.com'; then
             echo "::error::rendered docs load a resource from an unexpected external host"
             exit 1
@@ -531,6 +645,7 @@ jobs:
       - docker-linux-x64
       - docker-linux-arm64
       - macos-arm64-portable
+      - linux-x64-portable
       - windows-x64-portable
       - docs-site
     runs-on: ubuntu-latest
@@ -560,8 +675,9 @@ jobs:
   #
   # `needs: release-readiness` (no `if: always()`) is the gate: this job runs
   # only when every required platform job passed, so a red matrix can never
-  # ship a Release. The portable zips come from the macOS/Windows jobs'
-  # artifacts; the Docker image is published separately by docker-publish
+  # ship a Release. The portable zips come from the macOS/Linux/Windows jobs'
+  # artifacts and the offline Docker installers from the docker-linux-* jobs;
+  # the registry image is published separately by docker-publish
   # below, still final-tag-only (an RC pushed as `latest` on GHCR would be
   # wrong). `contents: write` is scoped to this job alone; the workflow
   # default stays read-only.
@@ -572,9 +688,17 @@ jobs:
     permissions:
       contents: write
     steps:
-      # Only the portable zips belong in the Release — not the docs-site-oss
-      # bundle or the docker-image-* tarballs (those feed docker-publish
-      # below, not end users).
+      # The release notes are a short form of this version's CHANGELOG.md
+      # section, made by build/release-notes.py.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: |
+            CHANGELOG.md
+            build/release-notes.py
+          sparse-checkout-cone-mode: false
+      # Only the portable zips and the offline Docker installers belong in the
+      # Release — not the docs-site-oss bundle or the docker-image-* tarballs
+      # (those feed docker-publish below, not end users).
       - name: Download built artifacts
         uses: actions/download-artifact@v8
         with:
@@ -592,13 +716,24 @@ jobs:
           case "$tag" in
             *-*) prerelease_flag=(--prerelease) ;;
           esac
+          # A tag without its own section (an rc, still under [Unreleased])
+          # falls back to GitHub's generated notes.
+          python3 build/release-notes.py "${tag#v}" "$GITHUB_REPOSITORY" > notes.md
+          if [ -s notes.md ]; then
+            notes=(--notes-file notes.md)
+          else
+            notes=(--generate-notes)
+          fi
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$tag" artifacts/* --repo "$GITHUB_REPOSITORY" --clobber
+            if [ -s notes.md ]; then
+              gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file notes.md
+            fi
           else
             gh release create "$tag" artifacts/* \
               --repo "$GITHUB_REPOSITORY" \
               --title "NEXT HMI ${tag#v}" \
-              --generate-notes \
+              "${notes[@]}" \
               "${prerelease_flag[@]}"
           fi
 
@@ -612,9 +747,7 @@ jobs:
   # tagged <version> + latest with no QEMU. Because the per-arch images only
   # travel as run artifacts, nothing reaches the registry until this post-gate
   # job runs. `packages: write` is scoped here; the workflow default stays
-  # read-only. Note: while the repository is private the pushed package is
-  # private too (counts against the small free package quota); it becomes
-  # public and free when the repository is made public.
+  # read-only.
   docker-publish:
     needs: release-readiness
     if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
@@ -626,6 +759,7 @@ jobs:
       - name: Download image tarballs
         uses: actions/download-artifact@v8
         with:
+          pattern: docker-image-*
           path: images
           merge-multiple: true
       - name: Log in to GHCR
