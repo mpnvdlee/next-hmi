@@ -61,6 +61,8 @@ export function makeDefaultAction(
       return { type: 'logoutUser' };
     case 'acknowledgeAllAlarms':
       return { type: 'acknowledgeAllAlarms' };
+    case 'runComponentActions':
+      return { type: 'runComponentActions', property: '' };
     case 'delay':
       return { type: 'delay', duration: 500 };
     case 'setLanguage':

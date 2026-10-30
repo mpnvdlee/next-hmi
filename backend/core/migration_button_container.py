@@ -6,6 +6,10 @@ box again. A Container with actions in ``actions.onPress`` or
 ``onRelease.onRelease`` changes type and keeps everything else. One whose lists
 are empty only loses those keys, which it no longer has a field for.
 
+A component definition could bind a whole field to one of its properties,
+``{"$componentProp": "actions"}``; that becomes the one action
+``runComponentActions`` in the list, which the editor shows like any other.
+
 Walks every stored JSON document whole, like the other steps. Re-runnable: a
 Container without the keys is left alone.
 """
@@ -18,6 +22,15 @@ from typing import Any
 from core.storage import read_json, write_json
 
 _PRESS_FIELDS = (("actions", "onPress"), ("onRelease", "onRelease"))
+
+
+def _unbind(props: dict[str, Any]) -> dict[str, Any]:
+    out = dict(props)
+    for key, event in _PRESS_FIELDS:
+        bound = props.get(key)
+        if isinstance(bound, dict) and isinstance(bound.get("$componentProp"), str):
+            out[key] = {event: [{"type": "runComponentActions", "property": bound["$componentProp"]}]}
+    return out
 
 
 def _has_actions(props: dict[str, Any]) -> bool:
@@ -41,8 +54,9 @@ def _rewrite(value: Any) -> tuple[Any, bool]:
         out = {key: item for key, (item, _) in items_by_key.items()} if changed else value
         props = out.get("properties")
         if out.get("type") == "Container" and isinstance(props, dict):
+            props = _unbind(props)
             if _has_actions(props):
-                return {**out, "type": "ButtonContainer"}, True
+                return {**out, "type": "ButtonContainer", "properties": props}, True
             if any(key in props for key, _ in _PRESS_FIELDS):
                 kept = {k: v for k, v in props.items() if k not in dict(_PRESS_FIELDS)}
                 return {**out, "properties": kept}, True

@@ -1,4 +1,9 @@
-import type { AnchorRect, ButtonAction, OverlayPlacement } from '@shared/types/config';
+import type {
+  ActionsConfig,
+  AnchorRect,
+  ButtonAction,
+  OverlayPlacement,
+} from '@shared/types/config';
 import { writeTargetAddress } from '@shared/types/config';
 import type { EvaluationContext, ResolvedValue } from '@hmi/utils/propertySourceEval';
 import { useVariableStore } from '@hmi/store/variableStore';
@@ -161,6 +166,12 @@ export function executeWidgetActions(
     if (action.type === 'if') {
       const branch = evaluatePropertyValue(action.condition, evalCtx) ? action.then : action.else;
       executeWidgetActions(branch, context);
+      continue;
+    }
+
+    if (action.type === 'runComponentActions') {
+      const passed = inputScopeProps?.[action.property] as ActionsConfig | undefined;
+      executeWidgetActions(passed?.onPress, context);
       continue;
     }
 
