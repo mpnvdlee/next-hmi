@@ -5,6 +5,9 @@ import { useConfigStore } from '@shared/store/configStore';
 import { usePanelExpansionStore } from '@config/store/panelExpansionStore';
 import type { MenuItemConfig } from '@shared/types/config';
 import MenuItemsInput from './MenuItemsInput';
+import { stubIntersectionObserver } from '../../../../test-setup';
+
+beforeAll(stubIntersectionObserver);
 
 // jsdom doesn't implement scrollIntoView; the custom Select's popup calls it.
 Element.prototype.scrollIntoView = vi.fn();
@@ -291,10 +294,11 @@ describe('MenuItemsInput — per-variant fields', () => {
     const row = itemRows(container)[0];
     expect(within(row).getByText('Actions')).toBeInTheDocument();
 
-    const actionsAdd = within(
-      within(row).getByText('Actions').closest('.cfg-editor-actions') as HTMLElement,
-    ).getByRole('combobox');
-    await pick(user, actionsAdd, 'Logout User');
+    const actions = within(row).getByText('Actions').closest('.cfg-editor-actions') as HTMLElement;
+    await user.click(within(actions).getByTitle('Add action'));
+    await user.click(
+      screen.getByRole('button', { name: (name) => name.startsWith('Logout User') }),
+    );
 
     expect(onChangeSpy).toHaveBeenLastCalledWith([
       { type: 'action', label: '', actions: [{ type: 'logoutUser' }] },
