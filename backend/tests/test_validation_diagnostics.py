@@ -1344,6 +1344,42 @@ def test_navigate_to_an_input_outside_a_dialog():
     assert _warn(_navigate({"$componentProp": "stationPage"}, ctx)).code == "navigate-input-not-page"
 
 
+
+def _run_component_actions(action: dict, ctx: ValidationContext) -> ValidationReport:
+    report = ValidationReport()
+    _validate_action({"type": "runComponentActions", **action}, ctx, "/a", report)
+    return report
+
+
+def test_run_component_actions_naming_an_actions_property_is_silent():
+    ctx = _dialog_scope(actions={"type": "actions", "label": "On press"})
+    report = _run_component_actions({"property": "actions"}, ctx)
+    assert (report.findings, report.warnings) == ([], [])
+
+
+@pytest.mark.parametrize(
+    "action, inputs, code, severity",
+    [
+        ({}, {}, "runcomponentactions-invalid", "error"),
+        ({"property": 3}, {}, "runcomponentactions-invalid", "error"),
+        ({"property": {"$componentProp": "actions"}}, {}, "runcomponentactions-invalid", "error"),
+        ({"property": ""}, {}, "componentprop-empty", "warning"),
+        ({"property": "onTap"}, {"actions": {"type": "actions"}}, "runcomponentactions-unknown", "error"),
+        ({"property": "label"}, {"label": {"type": "string"}}, "runcomponentactions-not-actions", "error"),
+    ],
+    ids=["missing", "not-a-string", "a-binding", "empty", "undeclared", "not-actions"],
+)
+def test_run_component_actions_with_a_bad_property(action, inputs, code, severity):
+    w = _warn(_run_component_actions(action, _dialog_scope(**inputs)))
+    assert (w.code, w.severity, w.path) == (code, severity, "/a/property")
+
+
+def test_run_component_actions_outside_a_component():
+    ctx = replace(_root_ctx(), input_scope=False)
+    w = _warn(_run_component_actions({"property": "actions"}, ctx))
+    assert (w.code, w.severity) == ("runcomponentactions-no-scope", "error")
+
+
 _REPEATED_ICON = {"$static": {"type": "custom", "path": {"$repeatItem": {"member": "icon"}}}}
 
 

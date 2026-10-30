@@ -1324,6 +1324,31 @@ const DelayEditor: EditorFor<'delay'> = ({ action, ctx }) => (
   </ActionFieldRow>
 );
 
+const RUN_COMPONENT_ACTIONS_SCHEMA: SchemaField = { type: 'actions', label: 'Actions' };
+
+const RunComponentActionsEditor: EditorFor<'runComponentActions'> = ({ action, ctx }) => {
+  const widgetId = useContext(PanelScopeContext);
+  const path = [...ctx.path, 'property'];
+  const diagnostic = useFieldDiagnostic(widgetId, path);
+  return (
+    <PropRow
+      label="Actions"
+      selection={{ path, schema: RUN_COMPONENT_ACTIONS_SCHEMA }}
+      diagnostic={diagnostic}
+    >
+      <ComponentPropEditor
+        value={action.property ? { $componentProp: action.property } : undefined}
+        onChange={(v) =>
+          ctx.update({
+            property: (v as { $componentProp?: string } | undefined)?.$componentProp ?? '',
+          })
+        }
+        schema={RUN_COMPONENT_ACTIONS_SCHEMA}
+      />
+    </PropRow>
+  );
+};
+
 const ShowAlertEditor: EditorFor<'showAlert'> = ({ action, ctx }) => {
   const NestedActions = ctx.ActionsInput;
   return (
@@ -1468,4 +1493,5 @@ export const ACTION_EDITORS: ActionEditors = {
   setActiveTheme: SetThemeEditor,
   showToast: ShowToastEditor,
   showAlert: ShowAlertEditor,
+  runComponentActions: RunComponentActionsEditor,
 };

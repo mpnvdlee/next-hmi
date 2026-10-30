@@ -697,6 +697,12 @@ export type ButtonAction =
       onOk?: ButtonAction[];
     }
   | {
+      /** Inside a component definition: runs the action list the instance
+       *  passes in through the component's `actions`-type property `property`. */
+      type: 'runComponentActions';
+      property: string;
+    }
+  | {
       type: 'showToast';
       /** The message text (expression-capable: $static, $loc, $var) */
       message: unknown;

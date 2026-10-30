@@ -319,7 +319,7 @@ or field fails `actionFields.test.ts` (fixture against the union) and
 `test_structure_parity.py` (table against the fixture) until both name it: a
 type token (`String`, `Integer`, `Boolean`) for a value checked like a property
 of that type, or the role `_validate_action` handles by name (`page`, `inputs`,
-`target`, `writeValue`, `actions`). The table also drives the
+`target`, `writeValue`, `actions`, `actionsProperty`). The table also drives the
 walk — a field with the role `actions` is the nested list walked, one with
 `page` the page reference checked — so naming a new field there is all it
 takes for the backend to check it.

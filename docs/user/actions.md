@@ -13,7 +13,7 @@ Custom widgets fire the same lists through the SDK's `executeWidgetActions`, so 
 
 ## The action catalog
 
-Sixteen types, in the order the **Add action** menu lists them. **Browse actions…** at the top of that menu opens the same catalog as a searchable drawer, grouped as below.
+Nineteen types, in the order the **Add action** menu lists them. **Browse actions…** at the top of that menu opens the same catalog as a searchable drawer, grouped as below.
 
 ### Screens
 
@@ -75,6 +75,7 @@ See [Users, groups & permissions](users.md#sign-in-and-out-on-a-screen) for the 
 |---|---|
 | **Delay** | Waits **Duration** milliseconds, then runs the actions after it. A write goes to the PLC and comes back; a **Show Toast** after a short Delay reads the value the PLC confirmed, so it can say *Lower limit set to −25 g*. |
 | **If / Else** | Evaluates a **Condition** — a Boolean variable, a comparison (`$compare`: *Mode = 2*, *Level > 80*), a negation, a user-group check — and runs its **Then** list when it holds, its **Else** list when it does not. Branches take any actions, including another **If / Else**. The condition reads the value the panel has at that moment. |
+| **Run Component Actions** | Inside a [component](properties.md#passing-values-into-components): runs the actions each instance sets on one of the component's **Actions** properties, picked under **Actions**. A menu tile built as a component carries one in its Button Container's list, and every tile on the page then does what its own instance says. It sits in the list like any other action, so the tile can do something of its own before or after. |
 
 ## Async actions and `$result`
 
