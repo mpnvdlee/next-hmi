@@ -1,5 +1,6 @@
 import { DeviceMobile, DeviceTablet, FrameCorners, Laptop } from '@phosphor-icons/react';
 import type { Icon } from '@phosphor-icons/react';
+import { projectSlug } from '@shared/utils/runtimeBase';
 
 interface ViewportPreset {
   label: string;
@@ -26,6 +27,12 @@ export interface ViewportChoice {
 }
 
 const VIEWPORT_KEY = 'cfg-preview:viewport';
+// Per project, so a phone-sized project doesn't open another project's editor at phone size.
+// The dev root has no slug and keeps the bare key.
+const viewportKey = () => {
+  const slug = projectSlug();
+  return slug ? `${VIEWPORT_KEY}:${slug}` : VIEWPORT_KEY;
+};
 const VIEWPORT_DEFAULT: ViewportChoice = { idx: 0, w: 1920, h: 1080 };
 const SIDE_MIN = 200;
 const SIDE_MAX = 7680;
@@ -36,7 +43,7 @@ export function clampViewportSide(px: number) {
 
 export function storedViewport(): ViewportChoice {
   try {
-    const v = JSON.parse(window.localStorage.getItem(VIEWPORT_KEY) ?? 'null');
+    const v = JSON.parse(window.localStorage.getItem(viewportKey()) ?? 'null');
     if (
       Number.isInteger(v?.idx) &&
       v.idx >= 0 &&
@@ -54,7 +61,7 @@ export function storedViewport(): ViewportChoice {
 
 export function storeViewport(choice: ViewportChoice) {
   try {
-    window.localStorage.setItem(VIEWPORT_KEY, JSON.stringify(choice));
+    window.localStorage.setItem(viewportKey(), JSON.stringify(choice));
   } catch {
     /* private mode / quota — the viewport just won't be remembered */
   }

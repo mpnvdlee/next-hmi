@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { CUSTOM_VIEWPORT, storeViewport, storedViewport } from './viewportPresets';
 
 describe('stored viewport', () => {
-  afterEach(() => window.localStorage.clear());
+  afterEach(() => {
+    window.localStorage.clear();
+    delete window.__NEXTHMI_BASE__;
+  });
 
   it('round-trips a custom size', () => {
     storeViewport({ idx: CUSTOM_VIEWPORT, w: 1280, h: 800 });
@@ -19,5 +22,15 @@ describe('stored viewport', () => {
     expect(storedViewport().idx).toBe(0);
     storeViewport({ idx: CUSTOM_VIEWPORT + 1, w: 800, h: 600 });
     expect(storedViewport().idx).toBe(0);
+  });
+
+  it('keeps a separate viewport per project', () => {
+    window.__NEXTHMI_BASE__ = '/editor/alpha/';
+    storeViewport({ idx: 3, w: 1920, h: 1080 });
+    window.__NEXTHMI_BASE__ = '/editor/beta/';
+    expect(storedViewport().idx).toBe(0);
+    storeViewport({ idx: 1, w: 1920, h: 1080 });
+    window.__NEXTHMI_BASE__ = '/editor/alpha/';
+    expect(storedViewport().idx).toBe(3);
   });
 });
