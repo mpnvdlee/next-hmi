@@ -716,7 +716,10 @@ def test_stringexpr_wildcard_row_the_editor_added_is_unbound_but_a_cleared_stati
     ]
 
 
-@pytest.mark.parametrize("template", ["{Round2(1)}", "{Trim(Round1(1))} g", "{ Signed( Round2(1) ) }"])
+@pytest.mark.parametrize(
+    "template",
+    ["{Round2(1)}", "{Trim(Round1(1))} g", "{ Signed( Round2(1) ) }", "{Thousands(Round4(1))}"],
+)
 def test_stringexpr_digits_in_function_names_are_not_wildcards(ctx, template):
     report = ValidationReport()
     _validate_property_value(
@@ -1198,6 +1201,47 @@ def test_navigate_to_an_input_that_is_not_a_page(inputs):
 def test_navigate_to_an_input_outside_a_dialog():
     ctx = replace(_root_ctx(), input_scope=False)
     assert _warn(_navigate({"$componentProp": "stationPage"}, ctx)).code == "navigate-input-not-page"
+
+
+def _write_to_input(kind: str, ctx: ValidationContext, name: str = "value") -> ValidationReport:
+    report = ValidationReport()
+    action = {"type": kind, "target": {"$componentProp": name}}
+    if kind == "writeDataVariable":
+        action["value"] = 1
+    _validate_action(action, ctx, "/a", report)
+    return report
+
+
+@pytest.mark.parametrize("kind", ["writeDataVariable", "editValue"])
+def test_write_target_naming_a_writable_input_is_clean(kind):
+    # The compressor parameter row: the instance passes the variable as `value`.
+    ctx = _dialog_scope(value={"type": "float", "label": "Value", "write": True})
+    report = _write_to_input(kind, ctx)
+    assert (report.findings, report.warnings) == ([], [])
+
+
+def test_toggle_target_naming_a_writable_boolean_input_is_clean():
+    ctx = _dialog_scope(run={"type": "boolean", "write": True})
+    assert _write_to_input("toggleDataVariable", ctx, "run").warnings == []
+
+
+@pytest.mark.parametrize(
+    "inputs, code",
+    [
+        ({"value": {"type": "float"}}, "componentprop-type"),
+        ({"value": {"type": "string", "write": True}}, "componentprop-type"),
+        ({}, "componentprop-unknown"),
+    ],
+    ids=["not-writable", "wrong-type", "undeclared"],
+)
+def test_edit_value_target_naming_an_input_that_cannot_take_it(inputs, code):
+    w = _warn(_write_to_input("editValue", _dialog_scope(**inputs)))
+    assert (w.code, w.path) == (code, "/a/target")
+
+
+def test_write_target_naming_an_input_outside_any_input_scope():
+    ctx = replace(_root_ctx(), input_scope=False)
+    assert _warn(_write_to_input("editValue", ctx)).code == "componentprop-no-scope"
 
 
 @pytest.mark.parametrize("page_id", [{"$static": "home"}, {"$var": {"path": "PLC:Page"}}])

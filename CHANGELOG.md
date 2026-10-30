@@ -26,6 +26,16 @@ heading.
   build the editor's Branding section and the contact card point at what the
   enterprise build adds and what shipping costs.
 
+- **A Repeater places its copies on an Image Container's image.** With
+  **Place copies** set to **At item x / y**, each copy is drawn at the point
+  its element names (`x` and `y`, 0 to 1 across and down the image), and an
+  optional `side` puts it on one side of that point with its last widget on
+  it, so one callout design serves every edge of a machine. The element's
+  other fields reach the copy through Repeat Item, also as the index of an
+  array tag. Items take a typed-in list of records through **Edit as JSON**,
+  and the warnings pill flags an element it cannot place. Positions are
+  edited in the list; the copies are not dragged on the canvas.
+
 - **Navigate To Page goes to a page chosen at runtime.** The new action
   closes every open dialog and overlay, then goes to a page from the Pages
   section, firing the page events a menu press would. The page is fixed, or
@@ -142,6 +152,47 @@ heading.
   or `NaN` as no value. A property with no variable bound no longer costs a
   variable-store listener.
 
+- **A String Input can open the numpad.** A new **Keyboard** property set to
+  **Numeric** opens the numpad instead of the on-screen keyboard, with
+  digits only, so a PIN or a code needs no letters to tap past. With
+  **Password field** on, the numpad masks the entry too. Custom widgets get
+  the same masking through the SDK numpad's new `password` prop. The default
+  stays **Text**. Two more properties make a PIN dialog one tap shorter:
+  **Focus when shown** opens the keyboard or numpad as soon as the field
+  appears (not in the editor canvas), and **On Submit** runs its actions on
+  Enter, on the numpad or a physical keyboard — a Login User there signs in
+  without a separate button. The numpad opens centred on screen, over the
+  dialog, like Edit Value's. **Keypad** draws that numpad inside the field
+  itself instead, so a PIN dialog is one panel rather than a dialog with a
+  second panel over it; Enter submits and clears the entry for the next try.
+
+- **A locked widget is out of the keyboard's reach too.** A widget that is
+  not **Interactable** already ignored a press, but **Tab** still reached
+  the Button or field underneath, and **Enter** or **Space** fired it,
+  so a keyboard got past a lock that guards a setpoint. A locked widget
+  now takes no focus and no keys, and a screen reader announces it as
+  unavailable under its own name. Unlocked widgets behave as before.
+
+- **`Round3` and `Round4` in text templates.** Next to `Round1` and
+  `Round2`, a String Expression and alarm text can show a value with three
+  or four decimals: `{Round3(1)}`.
+
+- **Runtime widgets carry their id.** Every widget on an operator screen now
+  sits in an element with `data-widget-id` and `data-widget-type`, as it
+  already did in the editor, so a test or script can find it by its node id:
+  `[data-widget-id="pump-start"]`. The element takes no space, so layouts look
+  the same; a Navigation Menu placed straight in a shell region now gets its
+  sidebar background and border in the editor preview too.
+
+- **An action in a component writes through its input.** Write Data
+  Variable, Toggle Boolean Variable and Edit Value inside a component can
+  target an input declared with write access, `{ "$componentProp": "value" }`,
+  and write whatever variable the instance passed in. A parameter row with an
+  Edit Value button is then one component placed once per setpoint. The
+  Variable row's source pill offers the input, inside a dialog too, and the
+  warnings pill flags an input that is not writable or not of a type the
+  action writes.
+
 ### Changed
 
 - **Every download names its edition.** The public zips are now
@@ -244,6 +295,22 @@ heading.
   test-server editor, which marks the old one unsupported.
 
 ### Fixed
+
+- **The alarm guide says what Value Range does.** It said the trigger fires
+  outside **Min** / **Max**; it fires while the value lies between them, both
+  included, as it always has. The guide now says so, with what one empty
+  bound does.
+
+- **`Thousands` keeps the decimals it is given.** `{Thousands(Round1(1))}`
+  showed `41,280` for 41280, dropping the `.0` the inner `Round1` wrote. It
+  now groups the text it receives, so it shows `41,280.0`.
+
+- **An alarms file the app cannot load is flagged.** An `alarms.json` that
+  breaks the alarm format, such as an alarm with a key it does not know, was
+  replaced by an empty one at startup, and the warnings pill said nothing, so
+  every alarm was gone without a word. The pill now shows an error per field
+  the format rejects, and the log says the file was replaced. The same goes
+  for `recipes.json`.
 
 - **A popover opened near the bottom of the screen stays on it.** A dialog
   placed `trigger-below` a button low on the screen opened below it anyway,

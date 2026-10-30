@@ -334,7 +334,9 @@ project's custom widgets and reusable components on top. A widget that renders
 other widgets itself — `NavigationMenu` (a page-tree menu with a footer slot),
 `ImageContainer` (children placed absolutely over a background image),
 `Repeater` (its children drawn once per array element, each copy in a
-`RepeatScope`) and `ComponentSlot` (the component system's own machinery) — is
+`RepeatScope`; with `placement: "items"` each copy is its own box at the
+element's `x` / `y`, and an `ImageContainer` gives such a Repeater the whole
+image instead of a point) and `ComponentSlot` (the component system's own machinery) — is
 authored against
 the SDK's [composition primitives](../reference/custom-widgets.md#composition)
 like any other built-in widget. Like any built-in widget it arrives as a lazy
@@ -542,7 +544,7 @@ Runtime implementation:
 
 - `frontend/src/hmi/utils/propertySourceEval.ts` evaluates the scalar property sources through one `SOURCE_HANDLERS` map (`$static`, `$var`, `$loc`, `$urlParam`, `$pageIsActive`, `$if`, `$compare`, `$not`, `$and`, `$or`, `$formula`, `$random`, `$switch`, `$user`, `$userGroups`, `$device`, `$time`, `$widgetProp`, `$componentProp`, `$overlay`, `$repeatItem`, `$result`, `$stringExpr`, `$http`, `$alarmCount`, `$recipe`, `$page`, `$viewport`); the list-valued `$languages` and `$recipeList` are resolved on the list paths (`useItemListProp`, `useRecordListProp`, the Dropdown's options) instead; icon and image values are plain `$static` payloads (`{ type, name }` / `{ path }`) resolved by the `$static` handler
 - `$result` is only meaningful inside async-action result handlers (`onSuccess` / `onFailed` / `onSettled` on `loginUser`, `logoutUser`, `writeDataVariable`, `toggleDataVariable`, `editValue`, `recipeLoad`, `recipeSave`); `{ $result: 'field' }` reads the named field off the response payload (e.g. `reason`, `username`); outside that context, or for an unknown field, it resolves to `null`
-- `$stringExpr` parses `{N}` placeholders inside a template, where `N` is a wildcard key. Placeholders may wrap the wildcard with chained transforms — `ToLower`, `ToUpper`, `Trim`, `Capitalize`, `Round`, `Round1`, `Round2`, `Thousands`, `Signed` — applied inside-out
+- `$stringExpr` parses `{N}` placeholders inside a template, where `N` is a wildcard key. Placeholders may wrap the wildcard with chained transforms — `ToLower`, `ToUpper`, `Trim`, `Capitalize`, `Round`, `Round1` … `Round4`, `Thousands`, `Signed` — applied inside-out
 - `$user` with `field: 'userList'` is list-valued: an `option-list` or `item-list` field resolves it to the project's users, while a scalar field gets the usernames joined. On an `option-list`, `field: 'groups'` lists every user group (the Dropdown resolves both itself); elsewhere it is the signed-in user's groups. `$languages` is likewise resolved by the widget
 - `$widgetProp` reads another widget's export from `widgetPropStore` through the eval context's `resolveComponentProp` (keyed by the exporting widget's id, and per copy inside a Repeater); `path` drills into a struct or array export
 - bad-quality and disconnected `$var` reads resolve to the field's fallback (not a crash); coercion between mismatched base types follows the rules in [value-types.md](value-types.md) (`frontend/src/hmi/utils/coercion.ts`)
@@ -566,6 +568,12 @@ Runtime implementation:
 - loads config and translations
 - renders the shell regions (header, sidebars, footer), the page body and the open overlays
 - sends visible binding keys to the backend
+
+Both views draw each widget inside a `display: contents`
+`<div class="hmi-preview-node" data-widget-id="…" data-widget-type="…">` from
+`WidgetRenderer`, so a test or script can find a runtime widget by its node id
+(`[data-widget-id="pump-start"]`). Ids are unique per tree, not per screen: a
+component definition's widgets and every Repeater copy carry their own tree's ids.
 
 ### PreviewView
 
@@ -611,8 +619,9 @@ conventions is restated here, so the two cannot drift apart.
 
 ## Runtime SDK For Custom Components
 
-`frontend/src/nextHmiSdk.ts` builds `window.__nextHMI__` (installed at boot by
-`main.tsx`) so compiled custom components can reuse the app's React instance and
+`frontend/src/nextHmiSdk.ts` builds `window.__nextHMI__` (installed by
+`App.tsx` as the lazy `AppInner` loads, so the manager dashboard, which renders
+no widgets, never loads it or the HMI runtime it reaches) so compiled custom components can reuse the app's React instance and
 helper functions instead of importing app modules. The canonical name list and every hook signature are
 documented in [../reference/custom-widgets.md](../reference/custom-widgets.md)
 (source of truth: `frontend/src/shared/utils/nextHmiSdkNames.ts` and

@@ -206,6 +206,13 @@
             "group": "Content"
           },
           {
+            "key": "placement",
+            "label": "Place copies",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "flow"
+          },
+          {
             "key": "visible",
             "label": "Visible",
             "type": "Boolean",
@@ -448,6 +455,20 @@
             "label": "Border width (px)",
             "type": "Integer",
             "group": "Appearance"
+          },
+          {
+            "key": "align",
+            "label": "Content alignment",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "center"
+          },
+          {
+            "key": "textTransform",
+            "label": "Text case",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "none"
           },
           {
             "key": "iconSize",
@@ -1809,10 +1830,29 @@
             "group": "Appearance"
           },
           {
+            "key": "keyboard",
+            "label": "Keyboard",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "text"
+          },
+          {
+            "key": "autoFocus",
+            "label": "Focus when shown",
+            "type": "Boolean",
+            "group": "Appearance"
+          },
+          {
             "key": "disabled",
             "label": "Disabled",
             "type": "Boolean",
             "group": "Appearance"
+          },
+          {
+            "key": "onSubmit",
+            "label": "On Submit",
+            "type": "actions",
+            "group": "Actions"
           },
           {
             "key": "visible",

@@ -80,6 +80,12 @@ like any other screen, wired with actions ([Actions](actions.md)):
 > Tick **Password field** on the String Input holding the password so the entry
 > is masked. It deliberately keeps browser keychains out, so a panel PC never
 > offers to save — or auto-fill — an operator's credentials.
+>
+> For a PIN, set its **Keyboard** to **Numeric** as well: a tap then opens the
+> numpad instead of the on-screen keyboard, with digits only, and the numpad
+> masks the entry too. Tick **Focus when shown** and put the Login User action
+> in the field's **On Submit**, and a PIN dialog opens straight onto the
+> numpad, centred over it, and signs in on **Enter**.
 
 Sign-in is **per open runtime**, not per browser and not per installation: two tabs on the same panel PC can be two different operators, and each keeps its own identity until it is closed or logged out.
 
@@ -99,7 +105,7 @@ Both already arrive on that source. A newly placed widget has **Visible** and **
 
 ### What a locked widget does
 
-A widget that is not **Interactable** renders read-only rather than disappearing — the operator can see the setpoint and see that it is not theirs to change. It is dimmed, and pressing it does nothing.
+A widget that is not **Interactable** renders read-only rather than disappearing — the operator can see the setpoint and see that it is not theirs to change. It is dimmed, and pressing it does nothing. The keyboard cannot reach it either: **Tab** skips it, so **Enter** or **Space** cannot fire it, and a screen reader announces it as unavailable.
 
 Whether the press *says* anything is a project-wide choice: the editor's **Settings** panel (see [Layout & the shell](layout.md)) carries **Locked feedback** with three modes.
 

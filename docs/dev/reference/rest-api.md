@@ -136,6 +136,7 @@ Both endpoints are read-only: they never persist, recompile, or rewrite anything
   - Returns `{ "diagnostics": [ ... ] }`.
 - `GET /api/config/validate`
   - Whole-project sweep from disk: shell areas, `globalEvents`, page-group lifecycle events in both index roots, every page file, reusable components, translation dictionaries, custom-widget build status, and the alarms, recipes, historian and users documents — everything the realtime endpoint never sees because only one artifact is open at a time.
+  - An `alarms.json` or `recipes.json` its service's Pydantic model rejects gets one `config-invalid` error row per rejected field: the service loads such a file as an empty default.
   - Returns `{ "diagnostics": [ ... ] }` in the same row shape. This is what the editor's Diagnostics panel lists.
 
 ### Dictionaries

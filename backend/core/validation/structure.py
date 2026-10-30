@@ -1726,15 +1726,37 @@ def _repeat_write_target(target: dict, ctx: ValidationContext) -> _WriteTarget |
     return _WriteTarget(ds_name, key, element, key == source[1], subject)
 
 
+# What a write target's `$componentProp` input must be declared as — a writable
+# input of a type the action writes. Mirrors WRITE_TARGET_FILTER /
+# TOGGLE_TARGET_FILTER / EDIT_TARGET_FILTER in the editor's actionEditors.tsx.
+_INPUT_WRITE_TARGET_FIELDS: dict[str, dict] = {
+    "writeDataVariable": {
+        "type": ["String", "Boolean", "Integer", "Float", "DateTime", "Date", "Time", "Duration"],
+        "write": True,
+    },
+    "toggleDataVariable": {"type": ["Boolean"], "write": True},
+    "editValue": {"type": ["Integer", "Float"], "write": True},
+}
+
+
 def _validate_write_target(
     action: dict, kind: str, ctx: ValidationContext, path: str, report: ValidationReport
 ) -> _WriteTarget | None:
-    """A `writeDataVariable` / `toggleDataVariable` target: a `$var`, or —
-    inside a Repeater — the copy's `$repeatItem`. Diagnostics anchor on
-    `<action>/target`, which the property panel maps back to the action's
-    target row. Returns what the action writes, when the registry knows it."""
+    """A `writeDataVariable` / `toggleDataVariable` / `editValue` target: a
+    `$var`, inside a Repeater the copy's `$repeatItem`, or inside a component
+    or dialog a `$componentProp` input the caller fills with a variable.
+    Diagnostics anchor on `<action>/target`, which the property panel maps back
+    to the action's target row. Returns what the action writes, when the
+    registry knows it."""
     target = action.get("target")
     target_path = f"{path}/target"
+    if isinstance(target, dict) and "$componentProp" in target:
+        # Checked like a writing field reading the input; the variable it names
+        # is the caller's, checked where the caller fills the input.
+        _validate_property_value(
+            target, _INPUT_WRITE_TARGET_FIELDS[kind], ctx, target_path, report
+        )
+        return None
     if isinstance(target, dict) and "$repeatItem" in target:
         if not ctx.repeat_scope:
             report.warn(
@@ -2949,6 +2971,8 @@ def validate_widget_node(
                     # Typed as actions only by the component's declaration, which
                     # nothing walked before: a missing page is a diagnostic here.
                     _validate_actions_softly(value, prop_ctx, prop_path, report)
+    if wtype == "Repeater" and isinstance(properties, dict):
+        _validate_placed_items(properties, f"{path}/properties", report)
     # Walk children
     child_ctx = ctx
     items_key = ctx.repeat_items_key(wtype)
@@ -2971,6 +2995,40 @@ def validate_widget_node(
             for i, child in enumerate(children):
                 validate_widget_node(child, child_ctx, f"{path}/{child_field}/{i}", report)
     return report
+
+
+_PLACED_SIDES = frozenset({"top", "bottom", "left", "right"})
+
+
+def _validate_placed_items(properties: dict, path: str, report: ValidationReport) -> None:
+    """A Repeater placing its copies at item x / y reads each element's `x` and
+    `y` (0 to 1 across and down the image) and optional `side`. Only a literal list
+    is checked; a variable or API list is known only when it renders."""
+    if properties.get("placement") != "items":
+        return
+    items = properties.get("items")
+    path = f"{path}/items"
+    if isinstance(items, dict) and isinstance(items.get("$static"), list):
+        items, path = items["$static"], f"{path}/$static"
+    if not isinstance(items, list):
+        return
+    for i, item in enumerate(items):
+        rec = item if isinstance(item, dict) else {}
+        for axis in ("x", "y"):
+            v = rec.get(axis)
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v <= 1:
+                report.warn(
+                    f"{path}/{i}/{axis}",
+                    f"'{axis}' must be a number from 0 to 1 to place this copy",
+                    code="repeat-placement",
+                )
+        side = rec.get("side")
+        if side is not None and side not in _PLACED_SIDES:
+            report.warn(
+                f"{path}/{i}/side",
+                "'side' must be top, bottom, left or right",
+                code="repeat-placement",
+            )
 
 
 def _is_actions_field(field_schema: Any) -> bool:

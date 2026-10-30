@@ -37,6 +37,7 @@
   font-size: var(--hmi-type-body-size);
   font-weight: var(--hmi-type-subheading-weight);
   letter-spacing: var(--hmi-type-body-tracking);
+  text-transform: var(--hmi-btn-transform, none);
   cursor: pointer;
   transition:
     background var(--hmi-motion-fast) ease,
@@ -75,6 +76,15 @@
 
 .hmi-button__btn--icon-top {
   flex-direction: column;
+}
+
+.hmi-button__btn--start {
+  justify-content: flex-start;
+}
+
+.hmi-button__btn--start.hmi-button__btn--icon-top {
+  align-items: flex-start;
+  text-align: left;
 }
 
 /* Icon-only takes the vertical padding on every side, so hug sizing gives a

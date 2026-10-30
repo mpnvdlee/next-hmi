@@ -8,7 +8,7 @@ Two features that turn a dashboard into an operations tool: condition-based **al
 
 1. **Open the Alarms area** — Add an alarm (organise them in groups if you like).
 2. **Point it at a variable** — Bind the alarm's **Source** to the tag it watches.
-3. **Choose a trigger type** — **Boolean** — fires on `true` or `false`. **Value Range** — fires outside a **Min** / **Max** threshold.
+3. **Choose a trigger type** — **Boolean** — fires on `true` or `false`. **Value Range** — fires while the value lies between **Min** and **Max**, both included: the range you set is the alarm range, not the normal one. Leave one empty to open that side, so **Min** `80` alone fires at 80 and above, and **Max** `10` alone at 10 and below.
 4. **Set severity & presentation** — Pick **Error**, **Warning** or **Info**, give it a **Code** (`W-318`), a **Title** and a **Description**, and optionally an **Image** (a filename in `assets/images/`).
 
 Three more fields turn a definition into something an operator can act on:

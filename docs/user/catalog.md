@@ -67,6 +67,7 @@ Draws its child widgets once per element of an array, each copy bound to its own
 | `startOffset` | Start at | `Integer` |
 | `maxItems` | Max items | `Integer` |
 | `emptyText` | Empty text | `String` |
+| `placement` | Place copies | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
@@ -136,6 +137,8 @@ Runs actions and can write true to a bound boolean on press.
 | `fill` | Fill | `color` |
 | `radius` | Radius | `String` |
 | `borderWidth` | Border width (px) | `Integer` |
+| `align` | Content alignment | `String` |
+| `textTransform` | Text case | `String` |
 | `iconSize` | Icon size (px) | `Integer` |
 | `variable` | Variable | `Boolean` |
 | `actions` | Actions | `actions` |
@@ -441,7 +444,10 @@ A text field whose typed value is published for sibling widgets to read.
 | `label` | Label | `String` |
 | `placeholder` | Placeholder | `String` |
 | `isPassword` | Password field | `Boolean` |
+| `keyboard` | Keyboard | `String` |
+| `autoFocus` | Focus when shown | `Boolean` |
 | `disabled` | Disabled | `Boolean` |
+| `onSubmit` | On Submit | `actions` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 

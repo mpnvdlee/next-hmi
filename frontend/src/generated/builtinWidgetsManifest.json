@@ -67,7 +67,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "b23087d75b30b7fc",
+    "buildTs": "db95980b0dd659d7",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -97,6 +97,12 @@
       },
       "borderWidth": {
         "type": "integer"
+      },
+      "align": {
+        "type": "string"
+      },
+      "textTransform": {
+        "type": "string"
       },
       "iconSize": {
         "type": "integer"
@@ -1157,7 +1163,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "b1a2c7fdaec5305c",
+    "buildTs": "bfc4badb66f19f8b",
     "displayName": "String Input",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1173,8 +1179,17 @@
       "isPassword": {
         "type": "boolean"
       },
+      "keyboard": {
+        "type": "string"
+      },
+      "autoFocus": {
+        "type": "boolean"
+      },
       "disabled": {
         "type": "boolean"
+      },
+      "onSubmit": {
+        "type": "actions"
       }
     },
     "schemaError": null
@@ -1303,7 +1318,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "9fbc34106611c4c2",
+    "buildTs": "ec118521a94b7a2c",
     "displayName": "Image Container",
     "hostsChildren": true,
     "flowsChildren": null,
@@ -1337,7 +1352,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "428dad1c10dddb25",
+    "buildTs": "a4c3c230407a5dab",
     "displayName": null,
     "hostsChildren": true,
     "flowsChildren": true,
@@ -1355,6 +1370,9 @@
       },
       "emptyText": {
         "type": "string"
+      },
+      "placement": {
+        "type": "String"
       }
     },
     "schemaError": null
@@ -1514,7 +1532,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "d9e0db76b0c983a3",
+    "buildTs": "55228dc1142ffa8e",
     "displayName": "Navigation Menu",
     "hostsChildren": null,
     "flowsChildren": null,

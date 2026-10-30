@@ -108,10 +108,17 @@ describe('ComponentRenderer instance sizing', () => {
   });
 
   it('does not introduce a wrapper element around the definition', () => {
-    // A wrapper would re-parent the roots and flip which axis their flex
-    // properties resolve against — a Fill root collapsing to no height.
+    // A box-drawing wrapper would re-parent the roots and flip which axis their
+    // flex properties resolve against — a Fill root collapsing to no height.
+    // Only the `display: contents` widget wrappers (instance, then root) sit
+    // between, and the flow rules in hmi.css look through both.
     const { container } = renderInstance({ grow: 1 });
-    expect(container.firstElementChild?.classList.contains('hmi-container')).toBe(true);
+    const root = container.querySelector('.hmi-container') as HTMLElement;
+    let el = root.parentElement;
+    while (el && el !== container) {
+      expect(el.classList.contains('hmi-preview-node')).toBe(true);
+      el = el.parentElement;
+    }
   });
 
   it('sizes only the first root when a definition has more than one', () => {

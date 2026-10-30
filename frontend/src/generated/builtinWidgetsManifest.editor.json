@@ -166,6 +166,40 @@
         "step": 1,
         "group": "Appearance"
       },
+      "align": {
+        "format": "select",
+        "label": "Content alignment",
+        "display": "button-text",
+        "group": "Appearance",
+        "defaultValue": "center",
+        "options": [
+          {
+            "label": "Center",
+            "value": "center"
+          },
+          {
+            "label": "Start",
+            "value": "start"
+          }
+        ]
+      },
+      "textTransform": {
+        "format": "select",
+        "label": "Text case",
+        "display": "button-text",
+        "group": "Appearance",
+        "defaultValue": "none",
+        "options": [
+          {
+            "label": "As typed",
+            "value": "none"
+          },
+          {
+            "label": "Uppercase",
+            "value": "uppercase"
+          }
+        ]
+      },
       "iconSize": {
         "label": "Icon size (px)",
         "min": 8,
@@ -1957,9 +1991,38 @@
         "label": "Password field",
         "group": "Appearance"
       },
+      "keyboard": {
+        "format": "select",
+        "label": "Keyboard",
+        "description": "Numeric opens the numpad instead, for digits only — a PIN or a code.",
+        "display": "button-text",
+        "group": "Appearance",
+        "defaultValue": "text",
+        "options": [
+          {
+            "label": "Text",
+            "value": "text"
+          },
+          {
+            "label": "Numeric",
+            "value": "numeric"
+          }
+        ]
+      },
+      "autoFocus": {
+        "label": "Focus when shown",
+        "description": "Opens the keyboard or numpad as soon as the field appears, as a PIN dialog wants.",
+        "group": "Appearance"
+      },
       "disabled": {
         "label": "Disabled",
         "group": "Appearance"
+      },
+      "onSubmit": {
+        "label": "On Submit",
+        "description": "Runs on Enter, on the numpad or a physical keyboard.",
+        "group": "Actions",
+        "event": "onSubmit"
       }
     }
   },
@@ -2180,6 +2243,23 @@
         "label": "Empty text",
         "group": "Content",
         "description": "Shown instead when there are no elements to draw. Empty shows nothing."
+      },
+      "placement": {
+        "format": "select",
+        "label": "Place copies",
+        "group": "Content",
+        "defaultValue": "flow",
+        "options": [
+          {
+            "label": "In a row or column",
+            "value": "flow"
+          },
+          {
+            "label": "At item x / y",
+            "value": "items"
+          }
+        ],
+        "description": "At item x / y draws each copy at its element's x and y (0–1) over an Image Container's image, on the element's side (top, bottom, left, right) of that point when it names one."
       }
     }
   },

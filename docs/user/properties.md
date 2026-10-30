@@ -111,8 +111,8 @@ A placeholder may wrap its value in transform functions, applied inside-out:
 | Function | Does |
 |---|---|
 | `ToLower` · `ToUpper` · `Capitalize` · `Trim` | Case and whitespace. |
-| `Round` · `Round1` · `Round2` | Nearest integer, or one / two decimals. |
-| `Thousands` | Digit grouping — `41280` → `41,280`. |
+| `Round` · `Round1` · `Round2` · `Round3` · `Round4` | Nearest integer, or one to four decimals. |
+| `Thousands` | Digit grouping — `41280` → `41,280`. It keeps the decimals its input has: `{Thousands(Round1(1))}` → `41,280.0`. |
 | `Signed` | Always show the sign — `6` → `+6`, `-4` → `−4`, `0` stays `0`. Put it outermost so it keeps the decimals of an inner round: `{Signed(Round1(1))}` → `+6.0`. |
 
 A placeholder whose wildcard is missing is left in the text as-is, so a typo shows up on screen rather than silently blanking the label.
@@ -127,6 +127,14 @@ wildcard `1` a `$loc`. See [Translations](translations.md#use-a-translation-on-a
 A reusable **Component** declares **input properties** the parent fills in. Inside, children read them with `$componentProp` — the whole struct, or one member by slash-path (`sensor/fValue`). Every member a struct input declares is required: the instance's binding picker confirms only a struct variable that carries each of them with a fitting type, and write access where a member asks for it. A member can still be absent at runtime — a disabled leaf, a value not yet arrived — so the widgets inside should not depend on it being there. Sibling widgets can read each other's exported state with `$widgetProp`. This is how one "Motor" component drives many motors from different tags.
 
 Both reads are typed. The `$componentProp` and `$widgetProp` pickers judge each input or exported value against the field it would fill, exactly as the variable picker judges a tag — one that does not fit is marked ✗ and cannot be confirmed — and the value an instance puts into an input is checked against the input's type like any widget property. The warnings pill flags a stored read or value that does not fit.
+
+An action inside the component can write through an input, too. Declare the input with **write** access — a **Float** input `value` with write ticked, say — and set the action's **Variable** row (Write Data Variable, Toggle Boolean Variable, Edit Value) to the input's source pill: the action writes whatever variable the instance passed in. One parameter-row component with an **Edit Value** button then edits a different setpoint per instance. The picker lists only inputs declared writable with a type the action writes, and the warnings pill flags one that is not. In the file:
+
+```json
+{ "type": "editValue", "target": { "$componentProp": "value" } }
+```
+
+The same works in a dialog, on an input parameter the opener fills with a variable.
 
 Each input can carry a **description** (one line shown under the field) and a **default value**, used wherever an instance leaves the property empty — the default is what the component really renders with, not just an editor hint.
 
@@ -162,6 +170,8 @@ A **Repeater** draws the widgets inside it once for every element of an array �
 3. **Bind to the element** — Inside, pick **Repeat Item** as a property's source and open its picker: the whole **Element**, one of its **members** (a struct field like `Speed`, or `label` / `value` of a typed-in list), or its **Index** (0 for the first). Like the variable picker it lists only what fits the property unless **Show all** is ticked. An API response or the saved recipes has a shape only the runtime knows, so for those you type the member's name into the field instead. A typed-in list's members take their type from what you typed: text is a String, Yes/No a Boolean, a whole number an Integer and a number with decimals a Float — so a Float property takes a `value` column only once one of its numbers has decimals. With the **Variable** source instead, every array in the picker gets a **[#] this copy** row that reads that array at the copy's position, the way `[2]` reads element 2: names next to setpoints. Typing `PLC:Names[#]` does the same.
 
 Each copy reads its own element. When Items is a tag, a copy's inputs write back to their own element too: a Switch bound to **Repeat Item** writes `Enables[3]` in the fourth copy, and **Write Data Variable** / **Toggle Boolean Variable** can switch their target to **Repeat Item**: always the copy's own element, or the member you pick of a struct element. Lists, API responses, recipes and users are read-only.
+
+Inside an **Image Container**, **Place copies: At item x / y** draws each copy at the point its element names instead of in a row — see [Place one design many times from a list](layout.md#place-one-design-many-times-from-a-list).
 
 **Start at** and **Max items** show part of the array — the first ten, or a page of it. **Empty text** is shown when there is nothing to draw.
 

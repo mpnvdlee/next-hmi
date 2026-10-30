@@ -3,6 +3,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useComponentPropStore } from '@hmi/store/widgetPropStore';
+import { useHmiStore } from '@hmi/store/hmiStore';
+import { PreviewContext } from '@shared/context/PreviewContext';
 import StringInput from './index';
 
 function renderInput(properties: Record<string, unknown>, id = 'entry') {
@@ -99,5 +101,118 @@ describe('StringInput', () => {
 
     expect(screen.getByRole('textbox')).toBeDisabled();
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  describe('numeric keyboard', () => {
+    it('opens the numpad, not the keyboard, and publishes the digits', async () => {
+      const user = userEvent.setup();
+      renderInput({ keyboard: 'numeric', label: 'PIN' });
+
+      await user.click(screen.getByRole('textbox'));
+      expect(document.querySelector('.hmi-virtual-input__panel--keyboard')).not.toBeInTheDocument();
+      for (const key of ['0', '4', '2'])
+        await user.click(screen.getByRole('button', { name: key }));
+
+      expect(useComponentPropStore.getState().props.entry.value).toBe('042');
+      expect(screen.getByRole('button', { name: '.' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: '-' })).toBeDisabled();
+
+      await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
+      expect(document.querySelector('.hmi-virtual-input__close')).not.toBeInTheDocument();
+      expect(useComponentPropStore.getState().props.entry.value).toBe('042');
+    });
+
+    it('masks the numpad entry of a password field through CSS where supported', async () => {
+      stubCssMasking(true);
+      const user = userEvent.setup();
+      renderInput({ keyboard: 'numeric', isPassword: true, label: 'PIN' });
+
+      await user.click(screen.getByRole('textbox'));
+      const entry = document.querySelector<HTMLElement>('.hmi-virtual-input__field')!;
+
+      expect(entry).toHaveClass('hmi-virtual-input__field--masked');
+      expect(entry).toHaveAttribute('type', 'text');
+    });
+
+    it('falls back to a password numpad entry where the CSS mask is unsupported', async () => {
+      stubCssMasking(false);
+      const user = userEvent.setup();
+      renderInput({ keyboard: 'numeric', isPassword: true, label: 'PIN' });
+
+      await user.click(document.querySelector('.hmi-string-input__input') as HTMLElement);
+      const entry = document.querySelector<HTMLElement>('.hmi-virtual-input__field')!;
+
+      expect(entry).toHaveAttribute('type', 'password');
+    });
+  });
+
+  describe('PIN entry', () => {
+    // The toast reads the field's own export, so it proves the actions see
+    // the entered value, as a Login User password binding does.
+    const toastValue = {
+      onSubmit: [
+        {
+          type: 'showToast',
+          message: { $widgetProp: { componentId: 'entry', property: 'value' } },
+          severity: 'info',
+          discard: 'auto',
+        },
+      ],
+    };
+    const toasts = () => useHmiStore.getState().pendingToasts.map((t) => t.message);
+
+    beforeEach(() => {
+      useHmiStore.setState({ pendingToasts: [] });
+    });
+
+    it('opens the numpad centred as soon as it appears with Focus when shown', () => {
+      renderInput({ keyboard: 'numeric', autoFocus: true, label: 'PIN' });
+
+      expect(document.querySelector<HTMLElement>('.hmi-virtual-input__close')!).toBeInTheDocument();
+      expect(document.querySelector('.hmi-virtual-input__dock--middle')).not.toBeNull();
+    });
+
+    it('does not open it in the editor canvas', () => {
+      render(
+        <MemoryRouter>
+          <PreviewContext.Provider value={true}>
+            <StringInput id="entry" properties={{ keyboard: 'numeric', autoFocus: true }} />
+          </PreviewContext.Provider>
+        </MemoryRouter>,
+      );
+
+      expect(document.querySelector('.hmi-virtual-input__close')).not.toBeInTheDocument();
+    });
+
+    it('runs On Submit with the entered value on the numpad Enter, and closes it', async () => {
+      const user = userEvent.setup();
+      renderInput({ keyboard: 'numeric', autoFocus: true, onSubmit: toastValue });
+
+      for (const key of ['1', '2', '3', '4'])
+        await user.click(screen.getByRole('button', { name: key }));
+      await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__key--accent')!);
+
+      expect(toasts()).toEqual(['1234']);
+      expect(document.querySelector('.hmi-virtual-input__close')).not.toBeInTheDocument();
+    });
+
+    it('runs On Submit on Enter from a physical keyboard', async () => {
+      const user = userEvent.setup();
+      renderInput({ onSubmit: toastValue });
+
+      await user.type(screen.getByRole('textbox'), 'A17{Enter}');
+
+      expect(toasts()).toEqual(['A17']);
+    });
+
+    it('does not run On Submit when the numpad is closed with ×', async () => {
+      const user = userEvent.setup();
+      renderInput({ keyboard: 'numeric', autoFocus: true, onSubmit: toastValue });
+
+      await user.click(screen.getByRole('button', { name: '7' }));
+      await user.click(document.querySelector<HTMLElement>('.hmi-virtual-input__close')!);
+
+      expect(toasts()).toEqual([]);
+    });
   });
 });

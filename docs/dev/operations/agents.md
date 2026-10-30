@@ -82,7 +82,7 @@ npm run build                         # also regenerates the tracked widget mani
 | Changed | Also run |
 |---|---|
 | A built-in widget's registry entry or schema | `npm run docs:widgets` — regenerates `docs/user/catalog.md`, `docs/user/generated/widgets.json`, `docs/user/generated/property-sources.json`; commit them |
-| Anything under `frontend/widgets/` | `npm run build:builtin-widgets` then `npm run docs:widgets`; commit both regenerated halves of `frontend/src/generated/builtinWidgetsManifest.json` (`.json` + `.editor.json`) and the catalog. `npx tsc -p frontend/tsconfig.builtin-widgets.json` type-checks the sources against the SDK declarations. `npm run check:bundle-budget` from `frontend/` after `npm run build` — a per-PR gate: 32 kB raw / 10 kB gzip per widget and 104 kB gzip across the tree, counting every file the widget publishes (`index.js`, `style.css`, and a `fonts/` directory if it ships one) |
+| Anything under `frontend/widgets/` | `npm run build:builtin-widgets` then `npm run docs:widgets`; commit both regenerated halves of `frontend/src/generated/builtinWidgetsManifest.json` (`.json` + `.editor.json`) and the catalog. `npx tsc -p frontend/tsconfig.builtin-widgets.json` type-checks the sources against the SDK declarations. `npm run check:bundle-budget` from `frontend/` after `npm run build` — a per-PR gate: 32 kB raw / 10 kB gzip per widget and 108 kB gzip across the tree, counting every file the widget publishes (`index.js`, `style.css`, and a `fonts/` directory if it ships one) |
 | A property source | `npm run docs:widgets` (the source table is generated too) + backend validation tests |
 | Anything under `project-testbench/` diagnostics | `pytest backend/tests/test_project_testbench_diagnostics.py` — a golden snapshot; a new finding must be regenerated deliberately |
 | OPC-UA browse, the browse import (`buildFromBrowse`), or datasource read/write/subscribe | `pytest backend/tests/test_opcua_plc_profiles.py` and `npm test -- --run src/config/components/ui/opcuaBrowseProfiles.test.ts`. Both halves are held to `frontend/src/shared/types/__fixtures__/opcuaBrowseProfiles.json`: the backend proves each PLC-shaped server (CODESYS, S7-1500, TwinCAT, Kepware, B&R, edge cases, every NodeId type) browses to its `browse`, the frontend that `browse` imports to its `tree`, and the backend runs `tree` live. A deliberate change regenerates both halves, after reading the diff: `python -m tests.opcua_plc_profiles` from `backend/`, then the frontend test with `NEXTHMI_WRITE_FIXTURE=1` |
@@ -116,10 +116,10 @@ widget schema.
   [Component Registry](../architecture/frontend.md#component-registry) and
   [Add a built-in widget](#add-a-built-in-widget). Module map:
   [../architecture/frontend.md](../architecture/frontend.md).
-- `project-testbench/` — the dev/test project: real example content, intentional
-  diagnostic findings, deliberate scale fixtures. Lives in its own private
-  repository (`next-hmi-testbench`), cloned in here or symlinked to a sibling
-  checkout (`ln -s ../next-hmi-testbench project-testbench`) — gitignored
+- `project-testbench/` — the dev/test project: the `aquavane/` example of the
+  private `next-hmi-testbench` repository, which holds one folder per example
+  project. Symlinked to a sibling checkout
+  (`ln -s ../next-hmi-testbench/aquavane project-testbench`) — gitignored
   (root-anchored `/project-testbench`), same pattern as `enterprise/`. Without
   it, the `project-testbench` tests skip silently. When present it is the
   auto-bootstrapped live project in dev; when absent the backend bootstrap seeds

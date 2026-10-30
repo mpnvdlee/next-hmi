@@ -163,3 +163,60 @@ describe('if action', () => {
     expect(sendWsMessage).toHaveBeenCalledWith(expect.objectContaining({ path: 'Admin' }));
   });
 });
+
+describe('a $componentProp write target', () => {
+  // Inside a component the instance passes the variable as an input; the
+  // action's target names that input instead of a variable of its own.
+  const ctx = {
+    scope: 'runtime',
+    evalCtx: { inputScopeProps: { value: { $var: { path: 'CP:Params/MaxPressure' } } } },
+  };
+  const target = { $componentProp: 'value' };
+
+  it('writes the variable the instance passed in', () => {
+    executeWidgetActions([{ type: 'writeDataVariable', target, value: 7 }], ctx);
+    expect(sendWsMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'write_field',
+        datasource: 'CP',
+        path: 'Params/MaxPressure',
+        value: 7,
+      }),
+    );
+  });
+
+  it('toggles the variable the instance passed in', () => {
+    executeWidgetActions([{ type: 'toggleDataVariable', target }], ctx);
+    expect(sendWsMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'toggle_field',
+        datasource: 'CP',
+        path: 'Params/MaxPressure',
+      }),
+    );
+  });
+
+  it('opens Edit Value on the variable the instance passed in', async () => {
+    const { useHmiStore } = await import('@hmi/store/hmiStore');
+    executeWidgetActions([{ type: 'editValue', target }], ctx);
+    const numpad = useHmiStore.getState().numpadRequest;
+    expect(numpad).not.toBeNull();
+    numpad!.apply(12.5);
+    expect(sendWsMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'write_field',
+        datasource: 'CP',
+        path: 'Params/MaxPressure',
+        value: 12.5,
+      }),
+    );
+  });
+
+  it('writes nothing when the input is not a variable', () => {
+    executeWidgetActions([{ type: 'writeDataVariable', target, value: 7 }], {
+      scope: 'runtime',
+      evalCtx: { inputScopeProps: { value: 3 } },
+    });
+    expect(sendWsMessage).not.toHaveBeenCalled();
+  });
+});

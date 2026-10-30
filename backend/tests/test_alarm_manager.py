@@ -5,6 +5,7 @@ recompute callback raises or is entirely unset.
 """
 from pathlib import Path
 
+import pytest
 from models.alarm import AlarmConfig, AlarmDefinition, AlarmGroup, AlarmTrigger
 from services.alarm_manager import AlarmManager
 
@@ -98,6 +99,18 @@ def test_value_range_trigger_reads_a_counter_beyond_two_to_the_53():
     manager = AlarmManager()
     assert manager._evaluate_trigger(trigger, str(2**63)) is True
     assert manager._evaluate_trigger(trigger, str(2**59)) is False
+
+
+@pytest.mark.parametrize(
+    "value, fires",
+    [(79.9, False), (80, True), (95, True), (100, True), (100.1, False)],
+)
+def test_value_range_trigger_fires_inside_min_and_max(value, fires):
+    # Min / Max bound the alarm range, both included — the documented meaning.
+    trigger = AlarmTrigger(
+        type="value_range", source_value={"$var": {"path": "DS:Temp"}}, min=80, max=100,
+    )
+    assert AlarmManager()._evaluate_trigger(trigger, value) is fires
 
 
 def test_fire_captures_values_and_clear_keeps_them(live_project_root: Path, monkeypatch):

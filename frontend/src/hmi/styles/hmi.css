@@ -198,10 +198,11 @@
    attribute (`containerLayoutProps` in layoutUtils.ts), so this rule sees the
    same DOM state a literal `row`/`column` would have produced.
    Three selector paths per rule, one per nesting depth, each matching any of
-   the four classes that can be the flex item: plain; the editor preview
+   the four classes that can be the flex item: plain; inside the widget wrapper
+   `WidgetRenderer` draws in the runtime and the editor preview alike
    (`.hmi-preview-node` is `display: contents`, so the actual flex item is the
    element inside it); and a *second*, nested preview node — a `$component:`
-   instance in the editor gets one `.hmi-preview-node` for the instance
+   instance gets one `.hmi-preview-node` for the instance
    (`WidgetRenderer` for the `$component:` node itself) and another for the
    definition's root widget (the recursive `WidgetRenderer` call
    `ComponentRenderer` makes), so its root widget sits two `display: contents`
@@ -299,8 +300,8 @@
    further below; against the flow-translation block above the specificity
    ties, so source order decides and these pins have to stay after it — see
    the note there.
-   The `> .hmi-preview-node > …` paths cover the editor preview, where
-   WidgetRenderer wraps each widget in a `display: contents` node — the
+   The `> .hmi-preview-node > …` paths cover the `display: contents` node
+   WidgetRenderer wraps each widget in, runtime and editor alike — the
    actual flex item there is the inner `.hmi-component` / `.hmi-container`.
    The second, two-preview-node path is the same `$component:` instance case
    the flow-translation block above documents — a component placed directly
@@ -317,12 +318,17 @@
 }
 
 /* Off-screen windowing: let the browser skip layout/paint for top-level page
-   widgets that are scrolled out of view. Scoped to direct children of the
-   scrolling content region and to the live runtime only (the `.hmi-preview-node`
-   editor wrapper is excluded so authoring hit-testing/selection stays exact).
+   widgets that are scrolled out of view. Scoped to the top-level widgets of
+   the scrolling content region, through their `display: contents` wrapper,
+   and kept out of the editor canvas (`.hmi-root--config-mode`) so authoring
+   hit-testing/selection stays exact.
    `contain-intrinsic-size: auto <fallback>` makes the browser remember each
    widget's real size after first render, so the scrollbar stays stable. */
-.hmi-page__content > :is(.hmi-component, .hmi-container) {
+.hmi-page__content > :is(.hmi-component, .hmi-container),
+.hmi-root:not(.hmi-root--config-mode)
+  .hmi-page__content
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container) {
   content-visibility: auto;
   contain-intrinsic-size: auto 48px;
 }
@@ -382,6 +388,10 @@
 :is(.hmi-page-group-shell__header, .hmi-page-group-shell__footer)
   > :is(.hmi-component, .hmi-container),
 :is(.hmi-page-group-shell__header, .hmi-page-group-shell__footer)
+  > .hmi-preview-node
+  > :is(.hmi-component, .hmi-container),
+:is(.hmi-page-group-shell__header, .hmi-page-group-shell__footer)
+  > .hmi-preview-node
   > .hmi-preview-node
   > :is(.hmi-component, .hmi-container) {
   flex-shrink: 0;
@@ -583,6 +593,10 @@
   font: inherit;
   text-align: center;
   transition: border-color var(--hmi-motion-fast) ease;
+}
+
+.hmi-virtual-input__field--masked {
+  -webkit-text-security: disc;
 }
 
 .hmi-virtual-input__field:focus {

@@ -440,9 +440,12 @@ nested inside other actions (`onSuccess` / `onFailed` / `onSettled`, `then` /
 | `showAlert` | `title`, `description`, `cancelText`, `okText`, `dismissible`, `onCancel`, `onOk` |
 | `showToast` | `message`, `severity` (`info` \| `success` \| `warning` \| `error`), `discard` (`auto` \| `manual`), `duration` (ms) |
 
-A write or toggle `target` is a property source naming one variable — a `$var`,
-or inside a Repeater `{ "$repeatItem": { "member": "..." } }` — and is absent
-until one is picked. The backend walks every field through `ACTION_FIELDS`
+A write, toggle or edit `target` is a property source naming one variable — a
+`$var`, inside a Repeater `{ "$repeatItem": { "member": "..." } }`, or inside a
+component or dialog `{ "$componentProp": "<input>" }`, an input declared
+`write: true` that the caller fills with a `$var` (resolved when the action
+fires; a `name/member` path writes that member) — and is absent until one is
+picked. The backend walks every field through `ACTION_FIELDS`
 (`backend/core/validation/structure.py`); what each field is checked as is in
 [value-types.md](value-types.md#type-diagnostics).
 
