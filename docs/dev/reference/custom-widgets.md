@@ -183,7 +183,7 @@ The canonical list of names exposed on `window.__nextHMI__` lives in `frontend/s
 - `useBindingValue(binding)` — same, but takes a `VariableBinding` (or `undefined`).
 - `useStructVariable(key)` — subscribe to a struct (returns `Record<string, unknown>`) or an array-of-struct (returns `unknown[]`).
 - `useVariableMeta(key)` — subscribe to `{ type, min?, max?, writable?, fieldRanges? }`. `type` is the canonical scalar/struct `VarType` with `array: boolean` and an optional fixed `length`; `min`/`max` apply to scalar numeric variables, `writable` says whether a scalar variable accepts writes, and `fieldRanges` carries per-field struct ranges. Returns `undefined` if the key isn't known.
-- `useEvalContext()` — returns the active `EvaluationContext` used to resolve `$var` / `$loc` / `$urlParam` / `$user` / `$userGroups` / `$device` / `$time` / `$pageIsActive` / `$random` / `$if` / `$compare` / `$not` / `$formula` / `$switch` / `$widgetProp` / `$componentProp` / `$repeatItem` / `$stringExpr` / `$http` / `$alarmCount` / `$recipe` / `$page` / `$viewport` / `$result` property sources. The full source/type model is in [../architecture/value-types.md](../architecture/value-types.md).
+- `useEvalContext()` — returns the active `EvaluationContext` used to resolve `$var` / `$loc` / `$urlParam` / `$user` / `$userGroups` / `$device` / `$time` / `$pageIsActive` / `$random` / `$if` / `$compare` / `$not` / `$and` / `$or` / `$formula` / `$switch` / `$widgetProp` / `$componentProp` / `$overlay` / `$repeatItem` / `$stringExpr` / `$http` / `$alarmCount` / `$recipe` / `$page` / `$viewport` / `$result` property sources. The full source/type model is in [../architecture/value-types.md](../architecture/value-types.md).
 - `bindingKey(binding)` — composes a `"datasource:path"` key from a `VariableBinding`.
 - `parseVarKey(key)` — splits `"datasource:path"` back into `{ datasource, path }`.
 - `useWriteVariable(properties, propKey, options?)` — returns `(value, opts?) => void`, the supported way to write a bound variable. See [Writing values](#writing-values).
@@ -367,7 +367,7 @@ widget that renders one branches on both pairs below — as the built-in `Icon`,
 
 ### Virtual input
 
-- `VirtualKeyboard` / `VirtualNumpad` — modal soft input components driven by `{ isOpen, value, onChange, onClose, anchorRef?, title?, dockPosition? }`. `VirtualKeyboard` also takes optional `password?` to mask its value preview. `VirtualNumpad` also takes optional `min?`, `max?`, `unit?` — shown as a range/unit hint under the title and used to redden the value preview when the entered value is out of bounds.
+- `VirtualKeyboard` / `VirtualNumpad` — modal soft input components driven by `{ isOpen, value, onChange, anchorRef?, title?, dockPosition? }`. `VirtualKeyboard` closes through `onClose()` and also takes optional `password?` to mask its value preview. `VirtualNumpad` has no `onClose`: Enter calls `onApply(value)` — only with a value that parses and sits inside `min?`/`max?` — and ×, Escape or a press outside call `onCancel()`, so backing out never writes. Out of range, Enter is disabled and the panel says why ("Enter a value between 80 and 200 ms"). It also takes optional `unit?`, `showRange?` (the min/max hint; the bounds gate Enter either way), `currentValue?` (placeholder and "Current setpoint" line — start `value` empty so the first key replaces it), `decimals?` (0 disables the point) and `allowNegative?` (default: off when `min` ≥ 0).
 - `CloseButton` — the standard themed close/dismiss control, driven by `{ onClick?, label?, tone?, className? }`.
 
 ### Charts
@@ -663,13 +663,14 @@ Supported action types (see `frontend/src/config/components/editor/PropertiesPan
 - `openDialog` (a Dialogs-folder node, with `componentProperties`) / `openPageOverlay` (a node in the `pages` root) / `closePageOverlay` (either)
 - `writeDataVariable` — `{ target, value }`; `target` is `{ $var: { path: 'ds:path' } }`, or inside a Repeater `{ $repeatItem: { member? } }` for the copy's element; value is a literal (`string | number | boolean`, or an array for a whole-array target), or a property source (`$componentProp`, `$var`, …) evaluated when the action fires.
 - `toggleDataVariable` — `{ target }`, the same shape; inverts a Boolean variable from its current server-side value.
+- `editValue` — `{ target, title?, unit?, min?, max?, decimals?, allowNegative?, position? }`; opens the numpad on a numeric variable and writes on Apply. Empty `min` / `max` fall back to the variable's configured range; `$result` carries `value` and `previous`.
 - `if` — `{ condition, then, else }`; evaluates `condition` (any property-source value, e.g. a `$var` or `$compare`) and runs the `then` or `else` action list.
 - `setLanguage` — switches the active HMI language; the `language` property is resolved from component properties at runtime.
 - `setActiveTheme` — switches the runtime theme for this session; `theme` resolves to a theme id.
 - `loginUser` / `logoutUser` — scope-based authentication (the scope defaults to the current `useHmiScope()`).
 - `recipeLoad` (`{ datasetId, verify? }`) / `recipeSave` (`{ datasetId? }`) — download a recipe dataset to its variables, or save the live values into one.
 
-`writeDataVariable`, `toggleDataVariable`, `loginUser`, `logoutUser`, `recipeLoad` and `recipeSave` are asynchronous: each takes optional `onSuccess` / `onFailed` / `onSettled` action lists that run when the backend answers (or the request times out), and inside those lists `$result` reads fields off the response.
+`writeDataVariable`, `toggleDataVariable`, `editValue`, `loginUser`, `logoutUser`, `recipeLoad` and `recipeSave` are asynchronous: each takes optional `onSuccess` / `onFailed` / `onSettled` action lists that run when the backend answers (or the request times out), and inside those lists `$result` reads fields off the response.
 - `showAlert` — modal alert with `onCancel` / `onOk` nested action lists.
 - `showToast` — transient toast (`info` | `success` | `warning` | `error`); `discard: 'auto' | 'manual'` with optional `duration`.
 

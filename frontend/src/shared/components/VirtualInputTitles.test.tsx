@@ -4,7 +4,15 @@ import { VirtualNumpad } from './VirtualNumpad';
 
 describe('virtual input titles', () => {
   it('does not show a fallback title when the numpad has no label', () => {
-    render(<VirtualNumpad isOpen value="" onChange={() => undefined} onClose={() => undefined} />);
+    render(
+      <VirtualNumpad
+        isOpen
+        value=""
+        onChange={() => undefined}
+        onApply={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
 
     expect(screen.queryByText('Numpad')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Close numpad')).toBeInTheDocument();
@@ -16,7 +24,8 @@ describe('virtual input titles', () => {
         isOpen
         value=""
         onChange={() => undefined}
-        onClose={() => undefined}
+        onApply={() => undefined}
+        onCancel={() => undefined}
         title="Setpoint"
       />,
     );

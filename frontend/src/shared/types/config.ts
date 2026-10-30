@@ -46,11 +46,27 @@ export interface VariableBinding {
    *  datasource name before the first ':' selects the connection; the rest is
    *  the slash-separated location of the variable within that datasource. */
   path: string;
-  /** Array element index (0-based). When set, resolves to value[index] at runtime. Absent means whole variable. */
-  index?: number;
+  /** Array element index (0-based). When set, resolves to value[index] at runtime. Absent means whole variable.
+   *  May itself be an Integer property source — a dialog's `$componentProp`, a
+   *  `$var` — which the runtime resolves to a number before any widget or write
+   *  sees the binding (see `isBoundIndex`). */
+  index?: number | BoundIndex;
   /** Take `index` from the surrounding Repeater copy instead. Replaced by a
    *  concrete `index` before any widget sees the binding. */
   repeatIndex?: boolean;
+}
+
+/** A `$var.index` given as a property source instead of a number. */
+export type BoundIndex = { [source: `$${string}`]: unknown };
+
+/** Whether a binding's index is a property source still to be resolved. */
+export function isBoundIndex(index: unknown): index is BoundIndex {
+  return typeof index === 'object' && index !== null;
+}
+
+/** The element a binding names: a bound index no one resolved names none (-1). */
+export function bindingIndex(b: VariableBinding | undefined | null): number | undefined {
+  return isBoundIndex(b?.index) ? -1 : b?.index;
 }
 
 /** Extract the composite "datasource:location" key from a VariableBinding. */
@@ -77,9 +93,10 @@ export function writeTargetAddress(target: unknown): { datasource: string; path:
   const binding = (target as VarSource).$var;
   const { datasource, location } = bindingParts(binding);
   if (!datasource || !location) return null;
+  const index = bindingIndex(binding);
   return {
     datasource,
-    path: binding.index !== undefined ? `${location}[${binding.index}]` : location,
+    path: index !== undefined ? `${location}[${index}]` : location,
   };
 }
 
@@ -121,6 +138,16 @@ export interface PageIsActiveSource {
   };
 }
 
+/** $overlay: an input parameter of a Dialogs-folder page, while it is open */
+export interface OverlaySource {
+  $overlay: {
+    /** The dialog page (or page group) id. */
+    page: string;
+    /** The input parameter it declares. */
+    param: string;
+  };
+}
+
 /** $if: conditional property source (condition + true/false branches) */
 export interface IfSource {
   $if: {
@@ -144,6 +171,16 @@ export interface NotSource {
   $not: {
     value: unknown;
   };
+}
+
+/** $and: true when every listed boolean is true */
+export interface AndSource {
+  $and: unknown[];
+}
+
+/** $or: true when any listed boolean is true */
+export interface OrSource {
+  $or: unknown[];
 }
 
 /** $formula: arithmetic over `{n}` placeholders, e.g. "({1} - 32) / 1.8" */
@@ -406,6 +443,10 @@ interface PageNodeBase {
   /** Whether pressing the backdrop closes this node's page overlay. Read only
    *  for a node in the Dialogs folder; absent = closes. */
   closeOnBackgroundPress?: boolean;
+  /** Whether that press, with no backdrop drawn, also reaches what lies under
+   *  it — so tapping the next hotspot closes this popover and opens its own in
+   *  one tap. Read only for a node in the Dialogs folder; absent = it does. */
+  tapThrough?: boolean;
 }
 
 export interface PageConfig extends PageNodeBase {
@@ -568,6 +609,25 @@ export type ButtonAction =
       onSettled?: ButtonAction[];
     }
   | {
+      /** Opens the numpad on a numeric variable; Apply writes, Cancel does nothing. */
+      type: 'editValue';
+      /** Absent until a target is picked. */
+      target?: WriteTarget;
+      title?: unknown;
+      unit?: unknown;
+      /** Empty falls back to the variable's own configured range. */
+      min?: unknown;
+      max?: unknown;
+      /** Empty: none for an Integer variable, no limit otherwise. */
+      decimals?: unknown;
+      /** Empty: allowed unless the lower bound is 0 or more. */
+      allowNegative?: unknown;
+      position?: 'center' | 'bottom-right';
+      onSuccess?: ButtonAction[];
+      onFailed?: ButtonAction[];
+      onSettled?: ButtonAction[];
+    }
+  | {
       type: 'loginUser';
       username: unknown;
       password: unknown;
@@ -645,6 +705,8 @@ export interface GlobalEventsConfig {
   onPageLoaded?: ButtonAction[];
   onHmiLoaded?: ButtonAction[];
   onLocaleChanged?: ButtonAction[];
+  /** A press on a widget whose `interactable` resolves false. */
+  onInteractionDenied?: ButtonAction[];
 }
 
 /**

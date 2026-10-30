@@ -38,6 +38,13 @@ export const ACTION_TYPES = [
       'Flips a writable Boolean variable — true becomes false, false becomes true — from its current value on the server.',
   },
   {
+    type: 'editValue' as const,
+    label: 'Edit Value',
+    category: 'Machine',
+    description:
+      'Opens the numpad on a numeric variable; Apply writes the entered value, Cancel writes nothing.',
+  },
+  {
     type: 'recipeLoad' as const,
     label: 'Recipe: Load',
     category: 'Machine',
@@ -103,6 +110,7 @@ export const ACTION_TYPE_TINT: Record<ButtonAction['type'], string> = {
   closePageOverlay: 'static',
   writeDataVariable: 'var',
   toggleDataVariable: 'not',
+  editValue: 'formula',
   if: 'if',
   recipeLoad: 'recipe',
   recipeSave: 'recipeList',

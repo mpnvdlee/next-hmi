@@ -82,7 +82,17 @@ function closeSettings(root: PageRoot, target: PageNode) {
   return {
     showCloseButton: !own || target.showCloseButton !== false,
     closeOnBackgroundPress: !own || target.closeOnBackgroundPress !== false,
+    tapThrough: !own || target.tapThrough !== false,
   };
+}
+
+/** Hands a backdrop press on to the topmost element under it that is not part
+ *  of the overlay stack. */
+function passPressThrough(backdrop: Element, x: number, y: number) {
+  const beneath = document.elementsFromPoint(x, y).find((el) => !backdrop.contains(el));
+  beneath?.dispatchEvent(
+    new MouseEvent('click', { bubbles: true, cancelable: true, clientX: x, clientY: y }),
+  );
 }
 
 /**
@@ -121,11 +131,14 @@ export function ModalStack() {
   return (
     <div
       className={`hmi-modal-backdrop${dim ? '' : ' hmi-modal-backdrop--transparent'}`}
-      onClick={() => {
+      onClick={(e) => {
         const top = openPageOverlays[openPageOverlays.length - 1];
-        if (top && closeSettings(top.root, top.target).closeOnBackgroundPress) {
-          closePageOverlay(top.entry.pageId);
-        }
+        if (!top) return;
+        const settings = closeSettings(top.root, top.target);
+        if (!settings.closeOnBackgroundPress) return;
+        closePageOverlay(top.entry.pageId);
+        // With no backdrop drawn, the press was aimed at what lies under it.
+        if (!dim && settings.tapThrough) passPressThrough(e.currentTarget, e.clientX, e.clientY);
       }}
     >
       <div className="hmi-modal-stack">

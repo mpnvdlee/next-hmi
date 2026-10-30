@@ -53,6 +53,8 @@ PROPERTY_SOURCE_KEYS = frozenset({
     "$switch",
     "$compare",
     "$not",
+    "$and",
+    "$or",
     "$formula",
     "$random",
     "$user",
@@ -63,6 +65,7 @@ PROPERTY_SOURCE_KEYS = frozenset({
     "$pageIsActive",
     "$widgetProp",
     "$componentProp",
+    "$overlay",
     "$languages",
     "$stringExpr",
     "$http",
@@ -1160,6 +1163,9 @@ def _report_test_server_target(
     return True
 
 
+_BOUND_INDEX_FIELD = {"type": "Integer", "label": "Index"}
+
+
 def validate_var_ref(
     ref: Any,
     ctx: ValidationContext,
@@ -1205,8 +1211,13 @@ def validate_var_ref(
             return
         resolved_key = base
     var_type = paths.get(resolved_key) if paths else None
-    if ref.get("repeatIndex") is not True and _report_bad_index(
-        ref.get("index"), ds_name, resolved_key, var_type, path, report
+    index = ref.get("index")
+    if isinstance(index, dict):
+        # A bound index is a source of its own — a dialog's input, another
+        # variable — resolved to an element at runtime; only its type is known.
+        _validate_property_value(index, _BOUND_INDEX_FIELD, ctx, f"{path}/$var/index", report)
+    elif ref.get("repeatIndex") is not True and _report_bad_index(
+        index, ds_name, resolved_key, var_type, path, report
     ):
         return
     if var_type is None:
@@ -1635,6 +1646,15 @@ def _check_write_target_type(
             code="write-target-type",
         )
         return
+    numeric = target.element.get("base") in ("Integer", "Float") and not target.element.get("array")
+    if kind == "editValue" and not numeric:
+        report.warn(
+            path,
+            f"{target.subject} is not a number — the numpad can only edit an Integer or Float",
+            severity="error",
+            code="edit-target-type",
+        )
+        return
     if kind == "toggleDataVariable":
         problem = _toggle_type_problem(target, ctx)
         if problem is not None:
@@ -1748,7 +1768,10 @@ def _validate_write_target(
         return None
     var_type = paths.get(key)
     index = ref.get("index") if isinstance(ref, dict) else None
-    if _report_bad_index(index, ds_name, key, var_type, target_path, report):
+    if isinstance(index, dict):
+        # Resolved to an element when the action runs, like a read's bound index.
+        _validate_action_value(index, _BOUND_INDEX_FIELD, ctx, f"{target_path}/$var/index", report)
+    elif _report_bad_index(index, ds_name, key, var_type, target_path, report):
         return None
     if var_type is None:
         return None
@@ -1868,6 +1891,19 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
         "onFailed": "actions",
         "onSettled": "actions",
     },
+    "editValue": {
+        "target": "target",
+        "title": "String",
+        "unit": "String",
+        "min": "Float",
+        "max": "Float",
+        "decimals": "Integer",
+        "allowNegative": "Boolean",
+        "position": "String",
+        "onSuccess": "actions",
+        "onFailed": "actions",
+        "onSettled": "actions",
+    },
     "loginUser": {
         "username": "String",
         "password": "String",
@@ -1911,6 +1947,7 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
 _ACTION_VALUE_SCHEMAS: dict[str, dict[str, str]] = {
     "String": {"type": "string"},
     "Integer": {"type": "integer"},
+    "Float": {"type": "float"},
     "Boolean": {"type": "boolean"},
 }
 
@@ -1962,7 +1999,7 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
     if not isinstance(action, dict):
         return
     kind = action.get("type") or action.get("action")
-    if kind in ("writeDataVariable", "toggleDataVariable"):
+    if kind in ("writeDataVariable", "toggleDataVariable", "editValue"):
         written = _validate_write_target(action, kind, ctx, path, report)
         if kind == "writeDataVariable":
             _validate_write_value(action, written, ctx, path, report)
@@ -1981,6 +2018,15 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
                 f"unknown toast severity '{severity}'",
                 severity="error",
                 code="toast-severity-invalid",
+            )
+    if kind == "editValue":
+        position = action.get("position")
+        if isinstance(position, str) and position not in ("center", "bottom-right"):
+            report.warn(
+                f"{path}/position",
+                f"unknown numpad position '{position}'",
+                severity="error",
+                code="numpad-position-invalid",
             )
     page_fields = [name for name, role in (fields or {}).items() if role == "page"]
     if page_fields or kind in _LEGACY_PAGE_TARGET_ACTIONS:
@@ -2041,6 +2087,18 @@ def validate_action_targets(actions: Any, ctx: ValidationContext, path: str, rep
 
 
 _WILDCARD_RE = re.compile(r"\{([^{}]*)\}")
+_PLACEHOLDER_FN_RE = re.compile(r"([A-Za-z]\w*)\((.+)\)", re.ASCII)
+
+
+def _placeholder_key(body: str) -> str | None:
+    """The wildcard key of a placeholder body such as `Trim(ToLower(1))`, or None
+    when it is not one. Mirrors `parsePlaceholder` in
+    frontend/src/hmi/utils/propertySourceEval.ts: the digits in a function name
+    (`Round2`) are not a key."""
+    rest = body.strip()
+    while (m := _PLACEHOLDER_FN_RE.fullmatch(rest)):
+        rest = m.group(2).strip()
+    return rest if re.fullmatch(r"[0-9]+", rest) else None
 
 # `$formula` grammar, mirrored from frontend/src/hmi/utils/formula.ts:
 #   expr := term (("+" | "-") term)*     term := unary (("*" | "/") unary)*
@@ -2134,7 +2192,9 @@ def _validate_wildcards(
     referenced: set[str] = set()
     for template in templates:
         for match in _WILDCARD_RE.finditer(template):
-            referenced |= set(re.findall(r"\d+", match.group(1)))
+            key = _placeholder_key(match.group(1))
+            if key is not None:
+                referenced.add(key)
     code_prefix = source_key.lstrip("$").lower()
     for n in sorted(referenced, key=int):
         wildcard_value = wildcards.get(n)
@@ -2148,8 +2208,8 @@ def _validate_wildcards(
             _validate_property_value(wildcard_value, None, ctx, wildcard_path, report)
 
 
-# What an `$if` condition and a `$not` operand take: a Boolean, not any value's
-# truthiness (the editor's BOOLEAN_SLOT).
+# What an `$if` condition, a `$not` operand and an `$and`/`$or` item take: a
+# Boolean, not any value's truthiness (the editor's BOOLEAN_SLOT).
 _CONDITION_SCHEMA: dict[str, str] = {"type": "boolean"}
 
 
@@ -2518,6 +2578,31 @@ def _check_widget_prop(
     report.warn(path, message, severity="error", code=code)
 
 
+def _check_overlay(payload: dict, ctx: ValidationContext, path: str, report: ValidationReport) -> None:
+    """A `$overlay` reads an input parameter of a Dialogs-folder page while
+    that page is open, so the page must be a dialog that declares it."""
+    page, param = payload.get("page"), payload.get("param")
+    if not isinstance(page, str) or not page or not isinstance(param, str) or not param:
+        report.warn(
+            path, "page or input parameter is empty", severity="warning", code="overlay-empty"
+        )
+        return
+    if ctx.dialogs_page_ids and page not in ctx.dialogs_page_ids:
+        report.warn(
+            path,
+            f"page '{page}' is not in the Dialogs folder — only a dialog has input parameters",
+            severity="error", code="overlay-page",
+        )
+        return
+    declared = ctx.page_property_keys.get(page)
+    if declared is not None and param not in declared:
+        report.warn(
+            path,
+            f"page '{page}' declares no input parameter '{param}'",
+            severity="error", code="overlay-param-unknown",
+        )
+
+
 def _validate_property_value(
     value: Any,
     schema_field: dict | None,
@@ -2632,6 +2717,18 @@ def _validate_property_value(
             payload.get("value"), _CONDITION_SCHEMA, ctx, f"{path}/$not/value", report,
             code="not-value-empty", message="value to invert is unset",
         )
+    elif source_key in ("$and", "$or"):
+        name = source_key[1:]
+        if not isinstance(payload, list):
+            report.add(path, f"{source_key} payload must be a list of conditions")
+        elif not payload:
+            report.warn(path, f"{name} has no conditions", severity="error", code=f"{name}-empty")
+        else:
+            for i, item in enumerate(payload):
+                _validate_slot(
+                    item, _CONDITION_SCHEMA, ctx, f"{path}/{source_key}/{i}", report,
+                    code=f"{name}-item-empty", message="condition is unset",
+                )
     elif source_key == "$formula" and isinstance(payload, dict):
         expression = payload.get("expression")
         if not isinstance(expression, str) or expression.strip() == "":
@@ -2707,6 +2804,8 @@ def _validate_property_value(
             )
         else:
             _check_component_prop(payload, schema_field, ctx, path, report)
+    elif source_key == "$overlay" and isinstance(payload, dict):
+        _check_overlay(payload, ctx, path, report)
     elif source_key == "$repeatItem":
         if not isinstance(payload, dict):
             report.add(path, "$repeatItem payload must be an object")

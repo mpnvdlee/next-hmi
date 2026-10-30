@@ -510,8 +510,12 @@ function OverlaySection({
   node,
   onPatch,
 }: {
-  node: { showCloseButton?: boolean; closeOnBackgroundPress?: boolean };
-  onPatch: (patch: { showCloseButton?: boolean; closeOnBackgroundPress?: boolean }) => void;
+  node: { showCloseButton?: boolean; closeOnBackgroundPress?: boolean; tapThrough?: boolean };
+  onPatch: (patch: {
+    showCloseButton?: boolean;
+    closeOnBackgroundPress?: boolean;
+    tapThrough?: boolean;
+  }) => void;
 }) {
   return (
     <div className="cfg-section">
@@ -529,6 +533,15 @@ function OverlaySection({
           onChange={(v) => onPatch({ closeOnBackgroundPress: v })}
         />
       </PropRow>
+      {/* Only a backdrop press that closes can be handed on. */}
+      {node.closeOnBackgroundPress !== false && (
+        <PropRow label="Tap through">
+          <BoolButtonGroup
+            value={node.tapThrough !== false}
+            onChange={(v) => onPatch({ tapThrough: v })}
+          />
+        </PropRow>
+      )}
     </div>
   );
 }
@@ -1285,6 +1298,7 @@ const GLOBAL_EVENT_FIELDS: { eventKey: keyof GlobalEventsConfig; label: string }
   { eventKey: 'onPageLoaded', label: 'Page Loaded' },
   { eventKey: 'onHmiLoaded', label: 'HMI Loaded' },
   { eventKey: 'onLocaleChanged', label: 'Locale Changed' },
+  { eventKey: 'onInteractionDenied', label: 'Interaction Denied' },
 ];
 
 function GlobalEventsPanel() {

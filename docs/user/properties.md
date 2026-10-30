@@ -30,11 +30,12 @@ Any of these can also be an **array**. An optional *format* refines the editor w
 | `$switch` | flexible | One of many values chosen by a key. |
 | `$widgetProp` | flexible | A value exported by a sibling widget on the page. |
 | `$componentProp` | flexible | A value passed in from outside — by the parent component, or by the **Open Dialog** action that opened this dialog. |
+| `$overlay` | flexible | An input of a dialog while it is open, empty once it closes — so a symbol can light up while its own popover shows: compare `$overlay` (dialog *device*, input *device*) with the symbol's number. |
 | `$result` | flexible | A field of an action's result (in its handlers only). |
 | `$repeatItem` | flexible | The element a Repeater copy draws, one member of it, or its index (inside a Repeater only). |
 | `$http` | flexible | A value picked out of an HTTP API response. |
 | `$loc` · `$stringExpr` | String | Translated text, or a template like `Tank {1} of {2}`. |
-| `$compare` · `$not` · `$pageIsActive` · `$userGroups` | Boolean | A comparison result, the opposite of another boolean, whether a page is active, or whether the signed-in user is in one of the listed groups. |
+| `$compare` · `$not` · `$and` · `$or` · `$pageIsActive` · `$userGroups` | Boolean | A comparison result, the opposite of another boolean, whether every (**AND**) or any (**OR**) condition in a list is true, whether a page is active, or whether the signed-in user is in one of the listed groups. |
 | `$formula` | Float | A number calculated from other values, like `({1} - 32) / 1.8` — `+ - * /` and parentheses. Empty when an input is missing or you divide by zero. |
 | `$user` | String / String[] | The signed-in user's name or groups, or the list of all users. |
 | `$device` · `$urlParam` | String | This machine's identity (hostname, IP, MAC), or a parameter from the page URL. |
@@ -112,6 +113,7 @@ A placeholder may wrap its value in transform functions, applied inside-out:
 | `ToLower` · `ToUpper` · `Capitalize` · `Trim` | Case and whitespace. |
 | `Round` · `Round1` · `Round2` | Nearest integer, or one / two decimals. |
 | `Thousands` | Digit grouping — `41280` → `41,280`. |
+| `Signed` | Always show the sign — `6` → `+6`, `-4` → `−4`, `0` stays `0`. Put it outermost so it keeps the decimals of an inner round: `{Signed(Round1(1))}` → `+6.0`. |
 
 A placeholder whose wildcard is missing is left in the text as-is, so a typo shows up on screen rather than silently blanking the label.
 

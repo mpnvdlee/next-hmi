@@ -30,6 +30,8 @@ import type { WidgetConfig, LayoutConfig } from '@shared/types/config';
 import { useConfigStore } from '@shared/store/configStore';
 import { widgetRegistry, isContainerHostType, placesOwnChildren } from '../registry/widgetRegistry';
 import { useHmiStore } from '../store/hmiStore';
+import { useHmiScope } from '../context/HmiScopeContext';
+import { executeWidgetActions } from '../utils/widgetActions';
 import { PreviewContext } from '@shared/context/PreviewContext';
 import { DefinitionScopeContext } from '../context/DefinitionScopeContext';
 import { useRepeatScope } from '../context/RepeatScopeContext';
@@ -183,6 +185,7 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
   // Lock-denied flash: tracks click position within the lock overlay
   const [lockFlash, setLockFlash] = useState<{ x: number; y: number } | null>(null);
   const lockedFeedback = useConfigStore((s) => s.shell.lockedFeedback ?? 'flash');
+  const scope = useHmiScope();
 
   // ── Visibility gate ───────────────────────────────────────────────────────
   // All hooks are called above; early return is safe here. `visible` /
@@ -193,6 +196,9 @@ export default function WidgetRenderer({ node }: { node: WidgetConfig }) {
   }
 
   function handleLockedClick(e: MouseEvent<HTMLDivElement>) {
+    // Runs in every feedback mode, so a project can answer a locked press with
+    // its own login dialog instead of (or on top of) the built-in feedback.
+    executeWidgetActions(useConfigStore.getState().globalEvents.onInteractionDenied, { scope });
     if (lockedFeedback === 'none') return;
     if (lockedFeedback === 'toast') {
       // A fixed id per widget: hammering a locked control re-uses the toast

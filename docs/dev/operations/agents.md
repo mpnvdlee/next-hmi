@@ -214,9 +214,9 @@ Inline styles and property parsing are in [Hard rules](#hard-rules). Beyond thos
 
 Every property has a **type** (`String`, `Integer`, `Float`, `Boolean`,
 `DateTime`, …) and a **source**. The canonical sources are: `$static`, `$var`,
-`$loc`, `$if`, `$switch`, `$compare`, `$not`, `$formula`, `$random`, `$user`, `$userGroups`,
+`$loc`, `$if`, `$switch`, `$compare`, `$not`, `$and`, `$or`, `$formula`, `$random`, `$user`, `$userGroups`,
 `$device`, `$time`, `$urlParam`, `$pageIsActive`, `$widgetProp`,
-`$componentProp`, `$languages`, `$stringExpr`, `$http`, `$alarmCount`,
+`$componentProp`, `$overlay`, `$languages`, `$stringExpr`, `$http`, `$alarmCount`,
 `$recipe`, `$recipeList`, `$page`, `$viewport`, `$result`, `$repeatItem`.
 
 Icons and images are plain `$static` values carrying a structured payload
@@ -285,7 +285,7 @@ validates it, both doc trees describe it.
 3. `frontend/src/hmi/utils/propertySourceEval.ts` — evaluation.
 4. An editor under `frontend/src/config/components/editor/PropertySourceEditor/editors/`
    — its own file, or beside its relatives (`conditional.tsx` holds `$if`,
-   `$compare`, `$not`, `$switch`; `leaf.tsx` the one-control sources) —
+   `$compare`, `$not`, `$and` / `$or`, `$switch`; `leaf.tsx` the one-control sources) —
    registered in `PropertySourceEditor/index.tsx`, and an icon in
    `PropertySourceSelector/propertySourceIcons.tsx`.
 5. `backend/core/validation/structure.py` — add the key to

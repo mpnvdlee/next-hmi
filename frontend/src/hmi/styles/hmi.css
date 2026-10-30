@@ -578,11 +578,21 @@
   color: var(--hmi-fault);
 }
 
-.hmi-virtual-input__range {
+.hmi-virtual-input__range,
+.hmi-virtual-input__current,
+.hmi-virtual-input__error {
   text-align: center;
   font-family: var(--hmi-type-caption-font);
   font-size: var(--hmi-type-caption-size);
   font-weight: var(--hmi-type-caption-weight);
+  color: var(--hmi-text-muted);
+}
+
+.hmi-virtual-input__error {
+  color: var(--hmi-fault);
+}
+
+.hmi-virtual-input__value-placeholder {
   color: var(--hmi-text-muted);
 }
 
@@ -595,12 +605,24 @@
   grid-template-columns: repeat(60, minmax(0, 1fr));
 }
 
-.hmi-virtual-input__row--3 {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.hmi-virtual-input__keys {
+  display: grid;
+  grid-template-columns: repeat(var(--hmi-numpad-columns), minmax(0, 1fr));
+  gap: var(--hmi-numpad-gap);
 }
 
-.hmi-virtual-input__panel--compact .hmi-virtual-input__row {
-  gap: var(--hmi-virtual-panel-gap-compact);
+/* Four columns: the digits keep three, Back / Clear / Enter stack in the fourth. Placed
+   explicitly so the digits auto-flow around them. */
+[data-hmi-numpad-columns='4'] .hmi-virtual-input__keys .hmi-virtual-input__key--back {
+  grid-area: 1 / 4;
+}
+
+[data-hmi-numpad-columns='4'] .hmi-virtual-input__keys .hmi-virtual-input__key--clear {
+  grid-area: 2 / 4;
+}
+
+[data-hmi-numpad-columns='4'] .hmi-virtual-input__keys .hmi-virtual-input__key--accent {
+  grid-area: 3 / 4 / span 2;
 }
 
 .hmi-virtual-input__key {
@@ -618,6 +640,11 @@
     background var(--hmi-motion-fast) ease,
     border-color var(--hmi-motion-fast) ease,
     color var(--hmi-motion-fast) ease;
+}
+
+.hmi-virtual-input__key:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .hmi-virtual-input__panel--keyboard .hmi-virtual-input__key {
@@ -707,12 +734,26 @@
   border-color: var(--hmi-accent-ink);
 }
 
-.hmi-virtual-input__panel--compact .hmi-virtual-input__key {
-  padding: var(--hmi-virtual-key-padding-y-compact) var(--hmi-virtual-key-padding-x-compact);
-  font-size: var(--hmi-virtual-key-font-size-compact);
+.hmi-virtual-input__keys .hmi-virtual-input__key--accent {
+  background: var(--hmi-numpad-accent);
+  border-color: var(--hmi-numpad-accent);
 }
 
-.hmi-virtual-input__panel--compact .hmi-virtual-input__row--actions .hmi-virtual-input__key {
+.hmi-virtual-input__keys .hmi-virtual-input__key--accent:hover {
+  background: var(--hmi-numpad-accent-ink);
+  border-color: var(--hmi-numpad-accent-ink);
+}
+
+.hmi-virtual-input__panel--compact .hmi-virtual-input__key {
+  /* No key size set: the padding gives the height, as before the token existed. */
+  min-height: var(--hmi-numpad-key-size, auto);
+  padding: var(--hmi-virtual-key-padding-y-compact) var(--hmi-virtual-key-padding-x-compact);
+  font-family: var(--hmi-numpad-key-font);
+  font-size: var(--hmi-numpad-key-font-size);
+  font-weight: var(--hmi-numpad-key-font-weight);
+}
+
+.hmi-virtual-input__panel--compact .hmi-virtual-input__key--action {
   font-size: var(--hmi-virtual-key-font-size-actions-compact);
 }
 
@@ -751,14 +792,9 @@
     gap: var(--hmi-virtual-panel-gap-compact);
   }
 
-  .hmi-virtual-input__panel--compact .hmi-virtual-input__row {
-    gap: var(--hmi-virtual-panel-gap-compact);
-  }
-
   .hmi-virtual-input__panel--compact .hmi-virtual-input__key {
     padding: var(--hmi-virtual-key-padding-y-compact-mobile)
       var(--hmi-virtual-key-padding-x-compact-mobile);
-    font-size: var(--hmi-virtual-key-font-size-compact-mobile);
   }
 }
 

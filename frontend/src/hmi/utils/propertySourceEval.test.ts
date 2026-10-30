@@ -442,6 +442,32 @@ describe('propertySourceEval', () => {
     });
   });
 
+  describe('$and / $or', () => {
+    const status = { $var: { path: 'PLC1:Status' } };
+    const below = { $compare: { left: 5, operator: '<', right: 3 } };
+
+    it('is true for $and only when every item is', () => {
+      expect(evaluatePropertyValue({ $and: [true, status] }, mockContext)).toBe(true);
+      expect(evaluatePropertyValue({ $and: [status, below] }, mockContext)).toBe(false);
+    });
+
+    it('is true for $or when any item is', () => {
+      expect(evaluatePropertyValue({ $or: [below, status] }, mockContext)).toBe(true);
+      expect(evaluatePropertyValue({ $or: [below, false] }, mockContext)).toBe(false);
+    });
+
+    it('nests, and reads a missing value as false', () => {
+      const nested = { $or: [{ $and: [status, { $var: { path: 'PLC1:Nope' } }] }, below] };
+      expect(evaluatePropertyValue(nested, mockContext)).toBe(false);
+    });
+
+    it('is false for an empty or malformed list', () => {
+      expect(evaluatePropertyValue({ $and: [] }, mockContext)).toBe(false);
+      expect(evaluatePropertyValue({ $or: [] }, mockContext)).toBe(false);
+      expect(evaluatePropertyValue({ $and: { value: true } }, mockContext)).toBe(false);
+    });
+  });
+
   describe('$formula wrapper', () => {
     const formula = (expression: string, wildcards: Record<string, unknown> = {}) =>
       evaluatePropertyValue({ $formula: { expression, wildcards } }, mockContext);
@@ -1165,6 +1191,32 @@ describe('propertySourceEval', () => {
 
     it('returns null with no resolver in context', () => {
       expect(evaluatePropertyValue({ $http: { url: 'https://x/y' } }, {})).toBeNull();
+    });
+  });
+  describe('$stringExpr Signed()', () => {
+    const signed = (value: unknown, template = '{Signed(1)}') =>
+      evaluatePropertyValue(
+        { $stringExpr: { template, wildcards: { '1': { $static: value } } } },
+        mockContext,
+      );
+
+    it('prefixes positives with + and negatives with a true minus sign', () => {
+      expect(signed(6)).toBe('+6');
+      expect(signed(-4)).toBe('\u22124');
+    });
+
+    it('leaves zero unsigned, including negative zero', () => {
+      expect(signed(0)).toBe('0');
+      expect(signed('-0.0')).toBe('0.0');
+    });
+
+    it('keeps the decimals an inner rounding produced', () => {
+      expect(signed(6, '{Signed(Round1(1))} g')).toBe('+6.0 g');
+      expect(signed(-3.456, '{Signed(Round2(1))}')).toBe('\u22123.46');
+    });
+
+    it('passes non-numeric text through', () => {
+      expect(signed('n/a')).toBe('n/a');
     });
   });
 });

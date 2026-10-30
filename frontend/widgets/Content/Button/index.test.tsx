@@ -1,5 +1,5 @@
 import '../../testSdk';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useVariableStore } from '@hmi/store/variableStore';
@@ -100,6 +100,65 @@ describe('Button', () => {
 
     const btn = screen.getByRole('button', { name: 'Measure' });
     expect(btn.style.backgroundColor).toBe('rgb(34, 167, 224)');
+  });
+
+  it('renders an empty label with an icon as an icon-only button', async () => {
+    renderButton({ label: ' ', iconName: 'house' });
+
+    const btn = screen.getByRole('button');
+    await waitFor(() => expect(btn.querySelector('svg')).not.toBeNull());
+    expect(btn).toHaveClass('hmi-button__btn--icon-only');
+    expect(btn).not.toHaveAttribute('title');
+    expect(btn.querySelector('.hmi-button__label')).toBeNull();
+  });
+
+  it('keeps the text padding while the label is filled in', async () => {
+    renderButton({ label: 'Reset', iconName: 'house' });
+
+    const btn = screen.getByRole('button', { name: 'Reset' });
+    await waitFor(() => expect(btn.querySelector('svg')).not.toBeNull());
+    expect(btn).not.toHaveClass('hmi-button__btn--icon-only');
+    expect(btn).not.toHaveAttribute('aria-label');
+  });
+
+  it('stays a plain text button with neither icon nor label', () => {
+    renderButton({ label: '' });
+
+    const btn = screen.getByRole('button');
+    expect(btn).not.toHaveClass('hmi-button__btn--icon-only');
+    expect(btn).not.toHaveAttribute('aria-label');
+    expect(btn.querySelector('.hmi-button__label')).not.toBeNull();
+  });
+
+  it('stacks the icon above the text with the top icon position', () => {
+    renderButton({ label: 'Home', iconPosition: 'top' });
+
+    expect(screen.getByRole('button', { name: 'Home' })).toHaveClass('hmi-button__btn--icon-top');
+  });
+
+  it('emits icon size, border width and outline fill as custom properties', () => {
+    const { container } = renderButton({
+      label: 'Jog',
+      variant: 'outline',
+      iconSize: 32,
+      borderWidth: 3,
+      fill: '#102030',
+    });
+    const el = container.firstElementChild as HTMLElement;
+
+    expect(el.style.getPropertyValue('--hmi-btn-icon-size')).toBe('32px');
+    expect(el.style.getPropertyValue('--hmi-btn-border-width')).toBe('3px');
+    expect(el.style.getPropertyValue('--hmi-btn-fill')).toBe('#102030');
+  });
+
+  it('leaves the new overrides unset so the default look stays', () => {
+    const { container } = renderButton({ label: 'Jog' });
+    const el = container.firstElementChild as HTMLElement;
+
+    for (const prop of ['--hmi-btn-icon-size', '--hmi-btn-border-width', '--hmi-btn-fill']) {
+      expect(el.style.getPropertyValue(prop)).toBe('');
+    }
+    expect(screen.getByRole('button', { name: 'Jog' })).not.toHaveAttribute('title');
   });
 
   it('dispatches configured onPress actions', async () => {

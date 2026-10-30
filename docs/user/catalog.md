@@ -129,9 +129,13 @@ Runs actions and can write true to a bound boolean on press.
 |---|---|---|
 | `label` | Label | `String` |
 | `iconName` | Icon | `icon` |
+| `iconPosition` | Icon position | `String` |
 | `color` | Color | `color` |
 | `variant` | Style | `String` |
+| `fill` | Fill | `color` |
 | `radius` | Radius | `String` |
+| `borderWidth` | Border width (px) | `Integer` |
+| `iconSize` | Icon size (px) | `Integer` |
 | `variable` | Variable | `Boolean` |
 | `actions` | Actions | `actions` |
 | `visible` | Visible | `Boolean` |
@@ -400,8 +404,11 @@ A numeric entry field that writes a number to a variable.
 | `unit` | Unit | `String` |
 | `min` | Min value | `Float` |
 | `max` | Max value | `Float` |
-| `variable` | Variable | `struct` |
+| `variable` | Variable | `Float | Integer` |
+| `allowNegative` | Allow negative values | `Boolean` |
+| `decimals` | Decimal places | `Integer` |
 | `showRangeOnNumpad` | Show range on numpad | `Boolean` |
+| `numpadPosition` | Numpad position | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 
@@ -417,8 +424,10 @@ Increment / decrement a numeric variable with + / − buttons.
 | `step` | Step | `Float` |
 | `min` | Min value | `Float` |
 | `max` | Max value | `Float` |
+| `allowNegative` | Allow negative values | `Boolean` |
 | `decimals` | Decimal places | `Integer` |
 | `showRangeOnNumpad` | Show range on numpad | `Boolean` |
+| `numpadPosition` | Numpad position | `String` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 

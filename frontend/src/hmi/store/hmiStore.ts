@@ -59,6 +59,16 @@ interface UserIdentity {
   groupLabels: Record<string, string>;
 }
 
+/** What `$user` reads for a scope's signed-in user. */
+export function resolveUserField(
+  user: UserIdentity | undefined,
+  field: 'username' | 'groups',
+): string | null {
+  if (!user) return null;
+  if (field === 'username') return user.username;
+  return user.groups.map((id) => user.groupLabels[id] ?? id).join(', ');
+}
+
 export interface AlertEntry {
   id: string;
   title: string;
@@ -83,9 +93,25 @@ export interface ToastEntry {
   duration: number;
 }
 
+/** A numpad opened by an `editValue` action, rendered at the top of HmiView. */
+export interface NumpadRequest {
+  id: string;
+  title?: string;
+  unit?: string;
+  min?: number;
+  max?: number;
+  decimals?: number;
+  allowNegative?: boolean;
+  position: 'center' | 'bottom-right';
+  currentValue?: string;
+  apply: (value: number) => void;
+}
+
 interface HmiStore {
   openPageOverlays: PageOverlayEntry[];
   pendingAlerts: AlertEntry[];
+  /** Opening another replaces it: one numpad is on screen at a time. */
+  numpadRequest: NumpadRequest | null;
   pendingToasts: ToastEntry[];
   currentUsersByScope: Record<string, UserIdentity>;
   loginErrorsByScope: Record<string, string | null>;
@@ -95,6 +121,7 @@ interface HmiStore {
   /** Moves the overlay identified by `overlayId` onto `nextPageId`. */
   updatePageOverlay: (overlayId: string, nextPageId: string) => void;
   showAlert: (entry: AlertEntry) => void;
+  openNumpad: (request: NumpadRequest | null) => void;
   dismissAlert: (id: string) => void;
   showToast: (entry: ToastEntry) => void;
   dismissToast: (id: string) => void;
@@ -105,14 +132,21 @@ interface HmiStore {
 export const useHmiStore = create<HmiStore>((set) => ({
   openPageOverlays: [],
   pendingAlerts: [],
+  numpadRequest: null,
   pendingToasts: [],
   currentUsersByScope: {},
   loginErrorsByScope: {},
   openPageOverlay: (entry) =>
     set((state) => {
-      if (!entry.pageId || state.openPageOverlays.some((e) => overlayMatches(e, entry.pageId)))
-        return state;
-      return { openPageOverlays: [...state.openPageOverlays, entry] };
+      if (!entry.pageId) return state;
+      const overlays = state.openPageOverlays;
+      // Opening the dialog on top again swaps its inputs and anchor — a popover
+      // moving on to the next hotspot — instead of being refused.
+      if (overlays[overlays.length - 1]?.pageId === entry.pageId) {
+        return { openPageOverlays: [...overlays.slice(0, -1), entry] };
+      }
+      if (overlays.some((e) => overlayMatches(e, entry.pageId))) return state;
+      return { openPageOverlays: [...overlays, entry] };
     }),
   closePageOverlay: (id) =>
     set((state) => {
@@ -159,6 +193,7 @@ export const useHmiStore = create<HmiStore>((set) => ({
       };
     }),
   showAlert: (entry) => set((state) => ({ pendingAlerts: [...state.pendingAlerts, entry] })),
+  openNumpad: (request) => set({ numpadRequest: request }),
   dismissAlert: (id) =>
     set((state) => ({
       pendingAlerts: state.pendingAlerts.filter((a) => a.id !== id),

@@ -1,7 +1,7 @@
 import { isRecord } from '@shared/types/propertyValueGuards';
 import type { AlarmCountFilter } from '@shared/types/alarm';
 import type { RecipeField, RecipeRow } from '@shared/types/recipe';
-import type { PageField, PagePathSegment } from '@shared/types/config';
+import { isBoundIndex, type PageField, type PagePathSegment } from '@shared/types/config';
 import type { HttpEntry, HttpRequestSpec } from '../store/httpSourceStore';
 import { imageBodyToUrl } from '@shared/utils/imageAsset';
 import { withBase } from '@shared/utils/runtimeBase';
@@ -34,6 +34,8 @@ export interface EvaluationContext {
   resolveDevice?: (field: 'hostname' | 'ipAddress' | 'macAddress') => string | null;
   resolveTime?: (format?: string, timezone?: string) => string | null;
   resolveComponentProp?: (componentId: string, property: string) => ResolvedValue;
+  /** An input parameter of the open dialog `page`, or null while it is closed. */
+  resolveOverlayParam?: (page: string, param: string) => unknown;
   resolveAlarmCount?: (filter: AlarmCountFilter) => number;
   resolveRecipe?: (typeId: string, field: RecipeField) => string | boolean;
   /** Resolve the $recipeList property source: the datasets of a type as grid rows.
@@ -91,13 +93,21 @@ type SourceHandler = (payload: unknown, context: EvaluationContext, depth: numbe
 
 const SOURCE_HANDLERS: Record<string, SourceHandler> = {
   $static: (payload) => resolveStaticValue(payload),
-  $var: (payload, ctx) => evaluateVar(payload, ctx),
+  $var: (payload, ctx, d) => evaluateVar(payload, ctx, d),
   $loc: (payload, ctx) => evaluateLoc(payload, ctx),
   $urlParam: (payload, ctx) => evaluateUrlParam(payload, ctx),
   $pageIsActive: (payload, ctx) => evaluatePageIsActive(payload, ctx),
   $if: (payload, ctx, d) => evaluateIf(payload, ctx, d),
   $compare: (payload, ctx, d) => evaluateCompare(payload, ctx, d),
   $not: (payload, ctx, d) => evaluateNot(payload, ctx, d),
+  // An empty list is false for both; the validator flags it.
+  $and: (payload, ctx, d) =>
+    Array.isArray(payload) &&
+    payload.length > 0 &&
+    payload.every((c) => Boolean(evaluatePropertyValueInternal(c, ctx, d))),
+  $or: (payload, ctx, d) =>
+    Array.isArray(payload) &&
+    payload.some((c) => Boolean(evaluatePropertyValueInternal(c, ctx, d))),
   $formula: (payload, ctx, d) => evaluateFormulaSource(payload, ctx, d),
   $random: (payload) => evaluateRandom(payload),
   $switch: (payload, ctx, d) => evaluateSwitch(payload, ctx, d),
@@ -107,6 +117,13 @@ const SOURCE_HANDLERS: Record<string, SourceHandler> = {
   $time: (payload, ctx) => evaluateTime(payload, ctx),
   $widgetProp: (payload, ctx) => evaluateWidgetProp(payload, ctx),
   $componentProp: (payload, ctx, depth) => evaluateComponentProp(payload, ctx, depth),
+  $overlay: (payload, ctx, depth) => {
+    const { page, param } = (payload ?? {}) as { page?: unknown; param?: unknown };
+    if (typeof page !== 'string' || typeof param !== 'string' || !ctx.resolveOverlayParam) {
+      return null;
+    }
+    return evaluatePropertyValueInternal(ctx.resolveOverlayParam(page, param), ctx, depth);
+  },
   $repeatItem: (payload, ctx, depth) =>
     ctx.resolveRepeatItem
       ? evaluatePropertyValueInternal(ctx.resolveRepeatItem(payload), ctx, depth)
@@ -207,7 +224,22 @@ function evaluateResult(payload: unknown, context: EvaluationContext): ResolvedV
   return JSON.stringify(v);
 }
 
-function evaluateVar(varObj: unknown, context: EvaluationContext): ResolvedValue {
+/**
+ * The element a bound `$var.index` names: -1 when it yields no whole number
+ * from 0 up — no element to read, and a write the server refuses as out of
+ * bounds, rather than falling back to the whole array.
+ */
+export function resolveBoundIndex(
+  index: unknown,
+  context: EvaluationContext,
+  depth = MAX_SOURCE_RECURSION_DEPTH,
+): number {
+  const v = evaluatePropertyValueInternal(index, context, depth);
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN;
+  return Number.isInteger(n) && n >= 0 ? n : -1;
+}
+
+function evaluateVar(varObj: unknown, context: EvaluationContext, depth: number): ResolvedValue {
   if (typeof varObj !== 'object' || varObj === null) {
     return null;
   }
@@ -219,7 +251,9 @@ function evaluateVar(varObj: unknown, context: EvaluationContext): ResolvedValue
       ? context.repeatIndex
       : typeof v.index === 'number'
         ? v.index
-        : undefined;
+        : isBoundIndex(v.index)
+          ? resolveBoundIndex(v.index, context, depth)
+          : undefined;
 
   if (!composite || !context.resolveVariable) {
     return null;
@@ -602,6 +636,17 @@ const STRING_EXPR_FNS: Record<string, (v: string) => string> = {
     const [int, frac] = String(n).split('.');
     const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     return frac ? `${grouped}.${frac}` : grouped;
+  },
+  // Works on the text, not the number, so the decimals an inner Round1/Round2
+  // produced survive ("6.0" → "+6.0"). The minus is U+2212, the typographic one.
+  Signed: (v) => {
+    const t = v.trim();
+    const n = parseFloat(t);
+    if (isNaN(n)) return v;
+    const digits = t.replace(/^[+-]/, '');
+    if (n > 0) return `+${digits}`;
+    if (n < 0) return `−${digits}`;
+    return digits;
   },
 };
 

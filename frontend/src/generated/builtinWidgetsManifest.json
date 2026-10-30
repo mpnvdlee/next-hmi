@@ -67,7 +67,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "42cd64cf0558eb6a",
+    "buildTs": "b23087d75b30b7fc",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -80,14 +80,26 @@
       "iconName": {
         "type": "icon"
       },
+      "iconPosition": {
+        "type": "string"
+      },
       "color": {
         "type": "color"
       },
       "variant": {
         "type": "string"
       },
+      "fill": {
+        "type": "color"
+      },
       "radius": {
         "type": "string"
+      },
+      "borderWidth": {
+        "type": "integer"
+      },
+      "iconSize": {
+        "type": "integer"
       },
       "variable": {
         "type": "boolean"
@@ -1043,7 +1055,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "4f1acec6194cd73e",
+    "buildTs": "16549436a9a5b62b",
     "displayName": "Number Input",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1063,25 +1075,23 @@
         "type": "float"
       },
       "variable": {
-        "type": "struct",
-        "requiredFields": [
-          {
-            "name": "bVisible",
-            "type": "Boolean"
-          },
-          {
-            "name": "bEnabled",
-            "type": "Boolean"
-          },
-          {
-            "name": "fValue",
-            "type": "Float",
-            "write": true
-          }
-        ]
+        "type": [
+          "float",
+          "integer"
+        ],
+        "write": true
+      },
+      "allowNegative": {
+        "type": "boolean"
+      },
+      "decimals": {
+        "type": "integer"
       },
       "showRangeOnNumpad": {
         "type": "boolean"
+      },
+      "numpadPosition": {
+        "type": "string"
       }
     },
     "schemaError": null
@@ -1095,7 +1105,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "1af3ac5aef6d3439",
+    "buildTs": "c47a67c5bf243cf8",
     "displayName": "Numeric Stepper",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -1123,11 +1133,17 @@
       "max": {
         "type": "float"
       },
+      "allowNegative": {
+        "type": "boolean"
+      },
       "decimals": {
         "type": "integer"
       },
       "showRangeOnNumpad": {
         "type": "boolean"
+      },
+      "numpadPosition": {
+        "type": "string"
       }
     },
     "schemaError": null

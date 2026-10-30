@@ -407,6 +407,13 @@
             "group": "Content"
           },
           {
+            "key": "iconPosition",
+            "label": "Icon position",
+            "type": "String",
+            "group": "Content",
+            "defaultValue": "left"
+          },
+          {
             "key": "color",
             "label": "Color",
             "type": "color",
@@ -420,9 +427,27 @@
             "defaultValue": "solid"
           },
           {
+            "key": "fill",
+            "label": "Fill",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
             "key": "radius",
             "label": "Radius",
             "type": "String",
+            "group": "Appearance"
+          },
+          {
+            "key": "borderWidth",
+            "label": "Border width (px)",
+            "type": "Integer",
+            "group": "Appearance"
+          },
+          {
+            "key": "iconSize",
+            "label": "Icon size (px)",
+            "type": "Integer",
             "group": "Appearance"
           },
           {
@@ -1623,8 +1648,21 @@
           {
             "key": "variable",
             "label": "Variable",
-            "type": "struct",
+            "type": "Float | Integer",
             "group": "Data"
+          },
+          {
+            "key": "allowNegative",
+            "label": "Allow negative values",
+            "type": "Boolean",
+            "group": "Data",
+            "defaultValue": true
+          },
+          {
+            "key": "decimals",
+            "label": "Decimal places",
+            "type": "Integer",
+            "group": "Appearance"
           },
           {
             "key": "showRangeOnNumpad",
@@ -1632,6 +1670,13 @@
             "type": "Boolean",
             "group": "Appearance",
             "defaultValue": true
+          },
+          {
+            "key": "numpadPosition",
+            "label": "Numpad position",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "bottom-right"
           },
           {
             "key": "visible",
@@ -1692,6 +1737,13 @@
             "group": "Data"
           },
           {
+            "key": "allowNegative",
+            "label": "Allow negative values",
+            "type": "Boolean",
+            "group": "Data",
+            "defaultValue": true
+          },
+          {
             "key": "decimals",
             "label": "Decimal places",
             "type": "Integer",
@@ -1704,6 +1756,13 @@
             "type": "Boolean",
             "group": "Appearance",
             "defaultValue": true
+          },
+          {
+            "key": "numpadPosition",
+            "label": "Numpad position",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "bottom-right"
           },
           {
             "key": "visible",

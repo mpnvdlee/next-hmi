@@ -83,9 +83,10 @@ These carry whatever type the field requires, so you can use them almost anywher
 | Source | Shape | What it gives you |
 |---|---|---|
 | `$static` | `{ $static: value }` | A fixed value you type or pick — the literal for **any** type, including a structured `icon` (`{ type, name }`), `image` (`{ path }`) or `video` (`{ path }`). For those, the editor opens a picker rather than a text box |
-| `$var` | `{ $var: { path, index?, repeatIndex? } }` | A live datasource / OPC-UA variable. `repeatIndex: true` takes `index` from the surrounding Repeater copy — see [Repeater items in depth](#repeater-items-in-depth-repeatitem) |
+| `$var` | `{ $var: { path, index?, repeatIndex? } }` | A live datasource / OPC-UA variable. `repeatIndex: true` takes `index` from the surrounding Repeater copy — see [Repeater items in depth](#repeater-items-in-depth-repeatitem). `index` may itself be an Integer source (`{ $componentProp: 'device' }`, a `$var`): `useResolvedProperties` resolves it to a number before a widget, its writer or an action target sees the binding (`boundIndexResolution.ts`), events resolve a write target's at write time, and a `$var` inside it is subscribed. No whole number from 0 up resolves to `-1`: the read is *absent*, never the whole array, and a write is refused `array_index_out_of_bounds` |
 | `$widgetProp` | `{ $widgetProp: { componentId, property, path? } }` | A property **exported by another component** on the page (sibling → me). `path` is an optional slash-path into a struct/array member of the exported value (e.g. `name` on a selected row) |
 | `$componentProp` | `{ $componentProp: name }` | A value **passed in from outside** — by my parent component, or by the action that opened the page overlay I am in (outside → me) |
+| `$overlay` | `{ $overlay: { page, param } }` | An input parameter of the Dialogs-folder page `page` **while it is open** — what the opening action passed, else the declared default — and *absent* once it closes. Reads the topmost open copy, from anywhere on screen: a hotspot's selection ring is `$compare($overlay{device, device} === 3)`. The backend flags a `page` outside the Dialogs folder (`overlay-page`) and a `param` it does not declare (`overlay-param-unknown`) |
 | `$result` | `{ $result: field }` | An action's result (only inside `onSuccess` / `onFailed` / `onSettled`) |
 | `$repeatItem` | `{ $repeatItem: { field?, member? } }` | The element of the surrounding Repeater copy, one `member` of it, or (`field: 'index'`) its 0-based index — see [Repeater items in depth](#repeater-items-in-depth-repeatitem) |
 | `$if` | `{ $if: { condition, true, false } }` | One of two values, chosen by a condition |
@@ -112,6 +113,7 @@ Each of these only works in a field of the matching type.
 | `$recipeList` | Record[] | `{ $recipeList: { type } }` | A dataset type's saved recipes as grid rows `{ id, name, description, lastLoaded }` (empty `type` = all types). Offered on `record-list` fields; read with `useRecordListProp` |
 | `$compare` | Boolean | `{ $compare: { left, operator, right } }` | A comparison result (`>` `<` `>=` `<=` `===` `!==`). The ordering operators coerce both sides to numbers, treating a non-numeric side as `0`. `===` / `!==` are **not** strict despite the spelling: `looseEquals` compares identity first, then number-vs-string by `parseFloat`, so `5 === "5"` is `true` while `true === 1` is `false` |
 | `$not` | Boolean | `{ $not: { value } }` | The inverse of a boolean `value`. A number counts as a 0/1 flag (`0` → `true`, anything else → `false`); any other input, or none, is *absent* |
+| `$and` / `$or` | Boolean | `{ $and: [cond, …] }` / `{ $or: [cond, …] }` | `$and` is `true` when every item is truthy, `$or` when any is; items are Boolean property values of any source, nested `$and` / `$or` included. An empty or non-list payload is `false` (the validator reports `and-empty` / `or-empty` as an error, and a non-list as a structural error) |
 | `$formula` | Float | `{ $formula: { expression, wildcards } }` | Arithmetic like `({1} - 32) / 1.8`: numbers, `{n}` placeholders filled from `wildcards` (each a full property value, coerced with `toNumber`), `+ - * /`, unary minus and parentheses. An unparseable expression, a placeholder with no numeric value, a division by zero or a non-finite result makes the whole value *absent*. The grammar lives in `frontend/src/hmi/utils/formula.ts`; the backend mirrors it only to flag syntax errors |
 | `$pageIsActive` | Boolean | `{ $pageIsActive: { page? } }` | `true` when the target page is active |
 | `$languages` | String[] | `{ $languages: {} }` | The project's language list |
@@ -249,7 +251,7 @@ operand.
 
 | Slot | Picker lists |
 |---|---|
-| `$if` condition, `$not` value, action `if` condition | `Boolean`, read-only — no truthiness of another type; test an `Integer` or `String` through `$compare` (`BOOLEAN_SLOT`) |
+| `$if` condition, `$not` value, `$and` / `$or` item, action `if` condition | `Boolean`, read-only — no truthiness of another type; test an `Integer` or `String` through `$compare` (`BOOLEAN_SLOT`) |
 | `$compare` left / right, `$switch` value and case `when` | Any type — ordering coerces with `toNumber`, `===` / `!==` use `looseEquals` |
 | `$formula` operand | `Float` and `Integer`, read-only — each operand is coerced to a number |
 | `$stringExpr` / `$http` wildcard | Any type — it is formatted into text |
@@ -646,6 +648,8 @@ exports) is skipped, never guessed.
 | `widgetprop-type` / `widgetprop-unknown` | error | See [Which variable fits a field](#which-variable-fits-a-field) |
 | `write-target-type` | error | A Write Data Variable or Toggle target the write path cannot write: a struct (a write addresses one variable — a whole array or one element of it — never a struct folder), a variable not known to be writable, or the Repeat item of a Repeater over a list rather than a variable |
 | `toggle-target-type` | error | A Toggle target that is not a single Boolean — a toggle reads the current value and inverts it |
+| `edit-target-type` | error | An Edit Value target that is not a single Integer or Float — the numpad enters one number |
+| `numpad-position-invalid` | error | An Edit Value `position` other than `center` or `bottom-right` |
 | `write-value-type` | error | A fixed Write Data Variable value (bare or `$static`) that `coerce_entry_write_value` in `backend/services/write_service.py` would reject against the target's entry — its OPC-UA type, array shape and fixed length, and `min` / `max` — worded as the editor's row words it (`writeCoercionMessages.json`). The entry is the live pool's when it serves the datasource, else the datasource file's |
 | `value-invalid` | error | A malformed source payload inside an action's field (`{ "$loc": 5 }`) — rejected elsewhere, reported here |
 | `action-page-unknown` | error | An action naming a page that does not exist, inside a component instance's property that only its declaration types as `actions`. The same action in a widget's `actions` field is a rejected write |

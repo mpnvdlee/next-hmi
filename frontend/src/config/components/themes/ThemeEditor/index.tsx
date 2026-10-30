@@ -2,7 +2,7 @@
  * ThemeEditor — the per-theme token editor body.
  *
  * Presentational: renders the validation notices and the Colors / Typography /
- * Spacing sections (derived from the shared `THEME_TOKENS` registry) for one
+ * Spacing / Numpad sections (derived from the shared `THEME_TOKENS` registry) for one
  * theme, delegating edits and per-section reset to its parent (ThemesView).
  *
  * Each setting is shown exactly once, with its live preview folded into the
@@ -183,6 +183,8 @@ const SECTION_HINTS: Record<ThemeSection, string> = {
     'Seven reusable text styles. The specimen beside each combo previews the exact font, size, weight, letter spacing and case as you edit.',
   spacing:
     'Spacing, corner radius and elevation. The shape next to each field is drawn at the value you enter.',
+  numpad:
+    'The on-screen numpad used by numeric inputs. An empty field follows the rest of the theme: Body font, Accent colour, the standard key width.',
 };
 
 function SectionDescription({ section }: { section: ThemeSection }) {
@@ -226,6 +228,31 @@ function SectionBody({
             onChange={onChangeField}
           />
         ))}
+      </div>
+    );
+  }
+
+  if (section.key === 'numpad') {
+    return (
+      <div className="cfg-theme-grid">
+        {section.tokens.map((token) =>
+          token.inputType === 'color' ? (
+            <ColorField
+              key={token.themePath}
+              token={token}
+              theme={theme}
+              value={readThemeValue(theme, token.themePath)}
+              onChange={onChangeField}
+            />
+          ) : (
+            <ComboField
+              key={token.themePath}
+              token={token}
+              value={readThemeValue(theme, token.themePath)}
+              onChange={onChangeField}
+            />
+          ),
+        )}
       </div>
     );
   }
@@ -425,8 +452,11 @@ function NumberField({
         min={token.min}
         max={token.max}
         step={token.step}
+        placeholder={token.placeholder}
         value={value}
         onChange={(e) => {
+          // A token with a placeholder may be empty: cleared, it follows the theme again.
+          if (e.target.value === '' && token.placeholder) return onChange(token.themePath, null);
           const next = Number.parseInt(e.target.value, 10);
           if (!Number.isFinite(next)) return;
           onChange(token.themePath, next);
@@ -449,7 +479,13 @@ function SelectField({
   return (
     <div className="cfg-theme-input-group">
       <label className="cfg-theme-label">{token.label}</label>
-      <Select value={value} onChange={(v) => onChange(token.themePath, v)}>
+      <Select
+        value={value}
+        onChange={(v) =>
+          // The option's own value, so a numeric setting is stored as a number.
+          onChange(token.themePath, token.options?.find((o) => String(o.value) === v)?.value ?? v)
+        }
+      >
         {(token.options ?? []).map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}
@@ -493,7 +529,12 @@ function ColorField({
         onChange={(e) => onChange(token.themePath, e.target.value)}
         className="cfg-theme-color-input"
       />
-      <input type="text" {...inputProps} className="cfg-prop-input" placeholder="#000000" />
+      <input
+        type="text"
+        {...inputProps}
+        className="cfg-prop-input"
+        placeholder={token.placeholder ?? '#000000'}
+      />
       {pairings.length > 0 && (
         <div className="cfg-theme-contrast-badges">
           {pairings.map((pair) => (
@@ -549,8 +590,9 @@ function FontField({
         onChange={(v) => onChange(token.themePath, v)}
         style={{ fontFamily: value || undefined }}
       >
-        {!matchedPreset && (
-          <option value={value} style={{ fontFamily: value || undefined }}>
+        {token.placeholder && <option value="">{token.placeholder}</option>}
+        {!matchedPreset && value && (
+          <option value={value} style={{ fontFamily: value }}>
             {value}
           </option>
         )}

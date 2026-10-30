@@ -19,6 +19,64 @@ heading.
   as a file, a compose file and `install.sh`, for a machine that cannot reach a
   registry.
 
+- **Buttons can be icon-only, stacked, and sized.** A Button with an icon and
+  an empty label is icon-only: it takes even padding on every side so it sizes
+  to a near-square tile. The Button also gets four properties: **Icon
+  position** (left, or on top with the text below), **Icon size** and
+  **Border width** in pixels, and a **Fill** colour for the outline style.
+  Each one left at its default keeps today's look.
+
+- **AND (`$and`) and OR (`$or`) combine conditions.** Two new Boolean
+  sources take a list of conditions — a variable, a comparison, an Invert, a
+  group check, another AND / OR — and are true when every one, or any
+  one, is. A button can then be interactable only while the machine is ready
+  *and* the door is shut, without a helper tag in the PLC. They fit every
+  Boolean field, an `$if` condition and the If action's condition; the editor
+  lists one card per condition with **+ Add condition**, and the backend
+  flags a list with no conditions as an error.
+
+- **The numpad takes its look from the theme.** A new **Numpad** section in
+  the theme settings sets the key size, the gap between keys, the key font
+  and the Enter key colour, and picks one of two layouts: 3 columns, with
+  Back, Clear and Enter under the digits, or 4, with them in a column on the
+  right. Every numeric input gets it — Number Input, Numeric Stepper, Edit
+  Value and custom widgets that open the SDK numpad. A field left empty
+  follows the rest of the theme, so existing projects look the same.
+
+- **Edit Value opens the numpad on a tag without a Number Input.** The new
+  action puts the numpad over the screen for a numeric variable — a setpoint
+  behind a machine tile, a value in a table row, the element a dialog's input
+  names. **Apply** writes, **Cancel** writes nothing and runs no handler.
+  Min, max and decimals default to what the variable itself is configured
+  with, and `onSuccess` / `onFailed` / `onSettled` read the entered value and
+  the one it replaced as `$result` `value` and `previous`.
+
+- **A variable's array index can come from another value.** A binding such
+  as `Safety/Open` with its index bound to a dialog's input parameter reads,
+  writes and toggles the element of whichever device opened the dialog — one
+  popup instead of a 27-case **Switch**, and no hand-off variable for a
+  toggle. A field that takes one value, bound to a whole array — a property,
+  a **Toggle Boolean Variable** or **Edit Value** target, a String Expression,
+  HTTP Request or alarm placeholder — gets an index box right under the
+  variable, headed by a light *Element of the array, 0 to 4* hint, that asks
+  for the element: a number, or any whole-number source, including another
+  variable. On a **Write Data Variable** target the row is
+  optional, and empty writes the whole array. An element picked in the picker
+  shows in the path instead, with no row. An index that is empty or past the
+  end reads nothing and a write fails with `array_index_out_of_bounds`, never
+  the whole array.
+
+- **Open Dialog Input (`$overlay`) lights what a popover belongs to.** The new
+  source reads an input parameter of a dialog while it is open and is empty
+  once it closes, from anywhere on the screen. Bind a machine symbol's
+  selection ring to a comparison of `$overlay` (dialog *device*, input
+  *device*) with the symbol's own number, and it lights exactly while its
+  popover shows, moves along when the popover swaps to the next symbol and
+  clears when it closes — with no extra variable to set and reset. The
+  editor picks the dialog and then one of the inputs it declares; the
+  diagnostics flag a page outside the Dialogs folder or an input it does not
+  declare.
+
 - **Browse PLC shows its progress.** Browsing a whole server could run for
   minutes on a large PLC with only a disabled button to show for it. A bar now
   fills as the walk goes, with the number of nodes found and how deep it has
@@ -46,6 +104,43 @@ heading.
   its name, so shortcuts to it still work. The terminal splash prints
   *Community Edition* or *Enterprise Edition* under the logo, and the runtime's
   loading screen says *Community Edition* in the public build.
+
+- **Number Input binds a plain Float or Integer variable (breaking).** Like
+  the Button and the Numeric Stepper, it no longer takes a
+  `bVisible` / `bEnabled` / `fValue` struct: bind the setpoint itself, and use
+  the widget's own **Visible** and **Interactable** properties to hide or lock
+  it. An Integer variable turns the numpad's point off, and with no min/max on
+  the widget the variable's own range applies. A Number Input still bound to a
+  struct shows `---` until it is rebound; there is no migration.
+
+- **A tap outside a popover reaches what is under it.** With the backdrop set
+  to *none*, a tap outside a dialog used to close it and stop there, so moving
+  from one machine symbol's popover to the next took two taps. Now that tap
+  closes the popover *and* lands on what lies under it, so the next symbol's
+  popover opens at once. A new **Tap through** switch in a dialog's **Overlay**
+  section turns it off; a dimmed backdrop only ever closes, and a dialog that
+  does not close on a backdrop press still ignores it. Opening the dialog that
+  is already on top now swaps in the new input parameters and moves it to the
+  new anchor, where it used to do nothing. Projects with backdrop-less dialogs
+  change behaviour without a migration.
+
+- **The numpad never writes when the operator backs out.** ×, a press outside
+  the numpad and Escape now cancel the entry; only Enter writes, and only a
+  value inside min/max. Number Input and Numeric Stepper used to save the typed
+  value on × and on a press outside, and silently clamped an out-of-range entry
+  — a typed 5000 reached the machine as the max, 200. Now the numpad refuses
+  it and shows its bounds in red (`Min: 80 · Max: 200`). An entry starts
+  empty, with the current value as placeholder, so a key replaces the value
+  instead of appending to it. The entry is a real field: a physical keyboard
+  types into it by the same rules as the keys, Enter applies and Escape
+  cancels, and a tablet's own keyboard stays shut. Both widgets get
+  **Allow negative values** (minus is off anyway when min is 0 or more) and
+  **Numpad position** (bottom right or center); Number Input also gets
+  **Decimal places**. Numeric Stepper's **Decimal places** now also limits what
+  can be typed, and an Integer variable never takes a point. The ± buttons
+  still stop at min/max. **Custom widgets:** `VirtualNumpad` replaces
+  `onClose(value)` with `onApply(value)` and `onCancel()`; a widget that passes
+  `onClose` must switch.
 
 - **Usage reporting says more, and still nothing about your projects.** The
   report now goes out every hour instead of once a day, and adds how NEXT HMI
@@ -94,6 +189,12 @@ heading.
   test-server editor, which marks the old one unsupported.
 
 ### Fixed
+
+- **A user-group check works in page and global events.** An **If** in a
+  page's `onOpen` or `onClose`, or in a global event such as `onPageLoaded`,
+  saw no signed-in user, so `$userGroups` was always false: a "is this an
+  admin?" guard turned the admin away too. Event actions now see the same
+  signed-in user, translations and variables as a button's actions.
 
 - **Counters beyond 2^53 drive numeric widgets.** Gauge, Progress Bar, Ring
   Gauge, Trend, Trend Chart, Numeric Stepper and Number Input read an

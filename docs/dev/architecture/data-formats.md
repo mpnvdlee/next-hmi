@@ -26,7 +26,7 @@ A project is a self-contained folder anywhere on disk, registered in the runtime
     <DatasourceName>.json
   config.json             ← page index + globalEvents + embedded project metadata/defaultTheme
   themes/
-    <themeId>.json        ← one theme each (colors, typography, spacing)
+    <themeId>.json        ← one theme each (colors, typography, spacing, numpad)
   pages/
     <pageId>.json         ← per-page component tree (the navigable tree)
   dialogs/
@@ -88,7 +88,7 @@ Outside any project, the runtime keeps its own state:
 - `<project>/config.json`
   - Page index: HMI page list, header, footer, the Dialogs folder's page list, global lifecycle events (v2 — no component children for pages). Also holds `project.defaultTheme` — the id of the default theme
 - `<project>/themes/<themeId>.json`
-  - One theme per file (colors, typography, and spacing tokens editable in Theme Editor). The id is the file stem
+  - One theme per file (colors, typography, spacing, and numpad tokens editable in Theme Editor). The id is the file stem
 - `<project>/pages/<pageId>.json`
   - Page document for one page of the navigable tree: its metadata and component tree
 - `<project>/dialogs/<pageId>.json`
@@ -184,6 +184,7 @@ dashboard via `POST /api/projects/{id}/mcp` and reported by `projects_list`. A
 - `onLocaleChanged`
 - `onUserLoggedIn`
 - `onUserLoggedOut`
+- `onInteractionDenied` (a press on a non-interactable widget)
 
 Index page node — structural only. Saving the index strips everything else, so
 a page's title, icon and the rest of its metadata live in its page document:
@@ -248,7 +249,7 @@ page of the Dialogs folder — one shape, two directories):
 only the keys in `_PAGE_PERSISTED_FIELDS` (`api/config_api.py`) — `title`,
 `icon`, `description`, `breadcrumbLabel`, `hidden`, `role`, `order`, `route`,
 `layout`, `showHeader`, `showFooter`, `mainPadding`, `mainBackground`, `events`,
-`componentProperties`, `showCloseButton`, `closeOnBackgroundPress` — and drops
+`componentProperties`, `showCloseButton`, `closeOnBackgroundPress`, `tapThrough` — and drops
 any other key on save.
 
 A widget node carries `id`, `type`, `name`, `properties`, `layout`, optional
@@ -348,6 +349,9 @@ Two optional keys are read only on a node in this root, on both kinds:
 
 - `showCloseButton` — the modal's close button. Absent means shown
 - `closeOnBackgroundPress` — a press on the backdrop closes it. Absent means it does
+- `tapThrough` — with backdrop `none`, that closing press also reaches the element
+  under it, so tapping the next hotspot closes this popover and opens its own in one
+  tap. Absent means it does; ignored when `closeOnBackgroundPress` is off
 
 `componentProperties` is likewise only read here — declared on a page in its
 page document, on a group in its index node, exactly as above.
@@ -415,6 +419,7 @@ nested inside other actions (`onSuccess` / `onFailed` / `onSettled`, `then` /
 | `closePageOverlay` | `pageId` — the overlay to close; empty closes the top-most |
 | `writeDataVariable` | `target`, `value` (a literal, a `$componentProp` or a `$repeatItem`), `onSuccess` / `onFailed` / `onSettled` |
 | `toggleDataVariable` | `target`, `onSuccess` / `onFailed` / `onSettled` |
+| `editValue` | `target`, `title`, `unit`, `min`, `max`, `decimals`, `allowNegative`, `position` (`center` \| `bottom-right`), `onSuccess` / `onFailed` / `onSettled` |
 | `if` | `condition` (a Boolean property value), `then`, `else` |
 | `loginUser` | `username`, `password`, `onSuccess` / `onFailed` / `onSettled` |
 | `logoutUser` | `onSuccess` / `onFailed` / `onSettled` |
@@ -443,7 +448,7 @@ registry.
 On first access the backend seeds `themes/default.json` from defaults if no
 theme exists yet. A theme file is read as-is, with no read-time normalization.
 
-One theme file has three sections:
+One theme file has four sections:
 
 - **colors** — `bg`, `surface`, `surface_raised`, `text`, `text_muted`,
   `accent`, `border`, `ok`, `warn`, and `fault`.
@@ -452,9 +457,17 @@ One theme file has three sections:
   `_tracking`, and `_transform`.
 - **spacing** — `space_sm`, `space_md`, `space_lg`, `radius_sm`, `radius_md`,
   `radius_lg`, and `shadow`.
+- **numpad** — the on-screen numpad of every numeric input: `columns` (`3`, or
+  `4` to move Back / Clear / Enter into a column beside the digits), `key_size`
+  (key width and minimum height), `gap`, `key_font`, `key_font_size` (digit
+  keys), `key_font_weight`, and `accent` (the Enter key). Every field but
+  `columns` may be empty (`""`, or `null` for the weight): the numpad then
+  derives it from the rest of the theme — body font, accent colour, a 188px
+  three-column panel — as it did before the section existed. A theme file
+  without the section reads as these defaults.
 
-That is 52 editable fields: 10 colors, 35 typography values, and 7 spacing
-values. `frontend/src/shared/themeDefaults.json` is the exact canonical JSON
+That is 59 editable fields: 10 colors, 35 typography values, 7 spacing
+values, and 7 numpad values. `frontend/src/shared/themeDefaults.json` is the exact canonical JSON
 shape and `project-seed/themes/light.json` is kept byte-for-byte equivalent.
 Extra fields are rejected by the backend (`extra="forbid"`).
 
