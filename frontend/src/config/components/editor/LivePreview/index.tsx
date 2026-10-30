@@ -46,6 +46,7 @@ import { findInPages, isFound } from '@shared/utils/widgetTree';
 import type { CSSWithVars } from '@shared/types/style';
 import ConfigWorkspace from '@config/components/ui/ConfigWorkspace';
 import WidgetSelector from '@config/components/ui/WidgetSelector';
+import { PAGE_WIDGETS } from '@config/components/ui/WidgetSelector/catalog';
 import PreviewContextMenu from './PreviewContextMenu';
 import { resolvePreviewInsertTarget, type PreviewInsertTarget } from './previewInsertTarget';
 import { buildComponentsUpdate, buildPagesUpdate, buildTranslationsUpdate } from './previewSync';
@@ -758,6 +759,7 @@ export default function LivePreview({ pageId }: { pageId: string }) {
       {selectorTarget && (
         <WidgetSelector
           contextName={selectorTarget.name}
+          filter={PAGE_WIDGETS}
           onClose={() => setSelectorTarget(null)}
           onInsert={(type) => {
             insertIntoTarget(selectorTarget, type);
