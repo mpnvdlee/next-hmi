@@ -9,6 +9,8 @@ project file format ships only in a release whose minor or major number moves.
 Breaking changes are always called out under a **Changed** or **Removed**
 heading.
 
+## [Unreleased]
+
 ## [1.1.0] - 2026-10-31
 
 Built for touch panels at the machine: a numpad that refuses what it should,
