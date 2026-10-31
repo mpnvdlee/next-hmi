@@ -35,20 +35,22 @@ Grants four things:
 
 **White-labelling therefore means the enterprise build, and that build is
 activated.** A redistribution licensee is delivered the enterprise build plus
-one key per device, bound to that machine — see the activation section for
+one key per installation, bound to that machine — see the activation section for
 exactly what the key does, which is less than it sounds. There is no third,
 unactivated "commercial build": the edition seam has two values, `oss` and `ee`.
 The open-source build in this repository contains no licence check at all and
 never will.
 
-Priced **per device** — one fee per NEXT HMI server that leaves your
-building, perpetual for devices already delivered, with no renewal and no
-expiry. One server is one device; the browser screens on it are never counted,
-so a panel PC and twenty tablets are one licence. Current prices and volume
+Priced **per installation** — one fee per installation that leaves your
+building, perpetual for installations already delivered, with no renewal and no
+expiry. An installation is one NEXT HMI server on one computer: a panel PC, an
+industrial PC, or a virtual machine or container with a pinned identity. The
+browser screens it serves are never counted, so a panel PC and twenty tablets
+are one licence. Current prices and volume
 tiers are at **[next-hmi.com/pricing](https://next-hmi.com/pricing)**.
 
 The tier is set by what you take in the running contract year, and there is no
-minimum: five machines a year is five times the tier price, with nothing to
+minimum: five installations a year is five times the tier price, with nothing to
 administer between the transactions.
 
 **What the licence does not include:** support, a response time or an SLA,
@@ -78,10 +80,11 @@ waiting and giving up your own mark for a while.
 
 Adds an **audit trail** — an append-only, attributed record of operator actions
 — for plants under regulatory audit requirements. Separate build, its own
-add-on key on top of the runtime licence, code not in this repository.
+add-on key, code not in this repository.
 
-Priced **per installation**, once, perpetual — one fee per plant that switches
-it on, whatever number of devices that plant runs. Not a subscription; see
+Priced **per installation**, once, perpetual, and paid on top of the
+redistribution licence for that installation — a plant with three servers pays
+for three. Not a subscription; see
 [next-hmi.com/pricing](https://next-hmi.com/pricing).
 
 It is the only paid module today. What separates a paid module from the free

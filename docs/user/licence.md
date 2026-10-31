@@ -54,13 +54,13 @@ The open-source build has no setting for it: the notice is bound to the edition,
 
 That setting is bound to the edition too: the open-source build ignores it, so a white-labelled project opened there shows the product branding again.
 
-One consequence worth knowing before you buy. The enterprise build is **activated** — it needs a key, bound to the machine, one per device. The open-source build is not, contains no licence check of any kind, and never will. So white-labelling means taking on activation, which in practice is a one-time step at commissioning: paste the key, and the panel never asks again. A purchased key has no expiry date, re-issue after a hardware replacement is free, and the check runs only when a project *starts*, never against one already serving screens.<!-- ee-only --> See [Licensing](../../enterprise/docs/user/licensing.md) if you are running that build.<!-- /ee-only -->
+One consequence worth knowing before you buy. The enterprise build is **activated** — it needs a key, bound to the machine, one per installation. The open-source build is not, contains no licence check of any kind, and never will. So white-labelling means taking on activation, which in practice is a one-time step at commissioning: paste the key, and the panel never asks again. A purchased key has no expiry date, re-issue after a hardware replacement is free, and the check runs only when a project *starts*, never against one already serving screens.<!-- ee-only --> See [Licensing](../../enterprise/docs/user/licensing.md) if you are running that build.<!-- /ee-only -->
 
 ## When you'd want a commercial licence
 
 Four situations, none of which apply to a plant that just runs the thing:
 
-- **You redistribute a modified build** — a machine builder embedding NEXT HMI in shipped equipment, an integrator delivering a modified build to clients, a SaaS vendor hosting one. Priced per device, once, perpetual; one server is one device, and the browser screens on it are never counted.
+- **You redistribute a modified build** — a machine builder embedding NEXT HMI in shipped equipment, an integrator delivering a modified build to clients, a SaaS vendor hosting one. Priced per installation, once, perpetual; an installation is one NEXT HMI server on one computer, and the browser screens it serves are never counted.
 - **You want to white-label** — replace the boot-screen logo with your own and drop the notice. Same price, same licence, and for many machine builders it is the reason rather than the copyleft.
 - **Your IT policy refuses unsigned executables** — the public downloads are unsigned and stay that way; a signed build is one of the things the licence buys.
 - **You want a contractual counterparty, or someone to do the work** — commissioning, migrations, custom widgets, PLC integration. Available to everyone, including AGPL users who never redistribute. It adds a relationship, never a different binary. Note there are no support packages and no response-time commitments: work goes per assignment, and none of it is inside the licence.

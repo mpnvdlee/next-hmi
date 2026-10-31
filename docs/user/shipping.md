@@ -8,7 +8,7 @@ What to sort out before NEXT HMI leaves your building on a machine or panel PC y
 |---|---|---|
 | The official build, unmodified, with the product boot screen | Open-source | Pass the licence along and give your customer the source of that release — see [Does the AGPL ask anything of me?](licence.md#does-the-agpl-ask-anything-of-me) |
 | A build you modified | Open-source | Give your customer the source of what you shipped, your changes included |
-| Your own logo on the boot screen, a signed build, or no source obligation for you or your customer | Enterprise | One licence per device, once — see [COMMERCIAL.md](../../COMMERCIAL.md) |
+| Your own logo on the boot screen, a signed build, or no source obligation for you or your customer | Enterprise | One licence per installation, once — see [COMMERCIAL.md](../../COMMERCIAL.md) |
 
 Your pages, themes, translations and custom widgets are yours in every row; [Your project content is yours](licence.md#your-project-content-is-yours) says why.
 
