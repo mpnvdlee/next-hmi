@@ -9,7 +9,13 @@ project file format ships only in a release whose minor or major number moves.
 Breaking changes are always called out under a **Changed** or **Removed**
 heading.
 
-## [Unreleased]
+## [1.1.0] - 2026-10-31
+
+Built for touch panels at the machine: a numpad that refuses what it should,
+richer Buttons and two new widgets, live values in alarm text and translations,
+and actions on a variable change. Projects are upgraded to file format 11 on
+first start, after you confirm it and a backup is taken, and no longer open in
+1.0.x — see **Changed**.
 
 ### Added
 
@@ -67,8 +73,8 @@ heading.
   the header, footer and both sidebars lays the region over the page instead
   of next to it: the page fills the space underneath, the region is
   transparent unless it has a **Background**, and a click on its empty space
-  reaches the page. Widgets in the region, and a Container with press
-  actions, still take their own clicks. Bindable, like the other region
+  reaches the page. Widgets in the region, a Button Container included,
+  still take their own clicks. Bindable, like the other region
   settings.
 
 - **Show all and value types in the property-source drawer.** Each source card
@@ -236,9 +242,7 @@ heading.
 
 - **A Run Component Actions action.** Inside a component it runs the actions
   each instance sets on one of the component's **Actions** properties, as one
-  item in the list next to the others. The upgrade to format 11 writes it
-  where a pressable Container bound its whole action list to a component
-  property, which it used to drop.
+  item in the list next to the others.
 
 - **A Button sets its alignment and text case.** **Content alignment**
   (center, or start for a menu-style tile) and **Text case** (uppercase). A Label's **Align** is now
@@ -336,13 +340,13 @@ heading.
   loading screen says *Community Edition* in the public build.
 
 - **A project opened in 1.1.0 no longer opens in 1.0.x (breaking).** The
-  project file format moves to 10, because 1.1.0 adds fields to the alarm and
+  project file format moves to 11, because 1.1.0 adds fields to the alarm and
   theme files that a 1.0.x build rejects: it would read the alarm files as
   empty and save over them, and fail to load the themes. **Start** asks to
   upgrade a project the first time 1.1.0 opens it, zipping it into
-  `.backups/` first; nothing in it is rewritten. A 1.0.x build then shows
-  **Requires update** and names 1.1.0 as the version it needs, instead of
-  losing the alarms.
+  `.backups/` first; the upgrade only rebuilds User Badges (see **Removed**).
+  A 1.0.x build then shows **Requires update** and names 1.1.0 as the
+  version it needs, instead of losing the alarms.
 
 - **Number Input binds a plain Float or Integer variable (breaking).** Like
   the Button and the Numeric Stepper, it no longer takes a
@@ -1121,6 +1125,7 @@ below ships in the initial open-source build.
   shipped loose (replaceable) in binary builds, with the LGPL texts and a
   written source offer bundled alongside.
 
+[1.1.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.1.0
 [1.0.1]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.0.1
 [1.0.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.0.0
 [0.0.1-rc2]: https://github.com/mpnvdlee/next-hmi/releases/tag/v0.0.1-rc2
