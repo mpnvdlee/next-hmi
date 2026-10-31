@@ -257,7 +257,7 @@ jobs:
   # ── Portable macOS arm64 build + smoke test ──
 
   macos-arm64-portable:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
