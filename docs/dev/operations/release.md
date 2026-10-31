@@ -18,11 +18,23 @@ The whole run, in order. The sections below hold the detail per step.
    the tag, and an empty section shows there as a bare heading. Start the section with a one- or two-sentence intro, and write every entry
    as `- **Title.** Body`. The GitHub Release shows only the intro, the
    headings and the titles, so a title must stand on its own.
-3. **Run the [pre-flight](#pre-flight) checks.**
-4. **Merge and tag.** Merge to the release branch, tag that commit `vx.y.z`,
-   push the branch, then the tag. A patch for an older line (1.0.3 after
+3. **Run the [pre-flight](#pre-flight) checks**, and check GitHub's
+   runner-image retirements for every `runs-on` in `release-matrix.yml`. A
+   retiring image gets brownouts in the weeks before, and a brownout cancels
+   the matrix halfway (1.1.0 lost its first run to `macos-14`).
+4. **Merge and tag.** Merge to the release branch, tag that commit with a
+   signed, annotated tag, push the branch, then the tag:
+
+   ```bash
+   git tag -s -m "NEXT HMI x.y.z" vx.y.z <commit>
+   git push origin refs/tags/vx.y.z
+   ```
+
+   A patch for an older line (1.0.3 after
    1.1.0) is tagged from that line's branch, which must carry
-   `build/release-notes.py` and the line-aware `build/publish-docs.py`.
+   `build/release-notes.py` and the line-aware `build/publish-docs.py`. Get
+   the commit right the first time: moving a tag later rebuilds and replaces
+   everything — see [Moving a release tag](#moving-a-release-tag).
 5. **Wait for the release matrix.** On green, the GitHub Release appears with
    the zips and the short notes, and a final tag also pushes the GHCR image —
    see [Sign-off](#sign-off) steps 1–3. Check the Release page. To redo its
@@ -32,8 +44,24 @@ The whole run, in order. The sections below hold the detail per step.
    python3 build/release-notes.py x.y.z <owner>/<repo> | gh release edit vx.y.z --notes-file -
    ```
 
-6. **Point the website's `dl.php`** at the new filenames.
-7. **Render the guide from the tag**, not from a development branch — the
+6. **Open the next `[Unreleased]`** in `CHANGELOG.md`, through a PR to the
+   release branch. Merge it after the tag, never before: the tag must not
+   contain it.
+7. **Update the website** (`<promotion-website>/public_html`). Every place
+   below names the version or a release filename, and none of them follows
+   the tag by itself:
+
+   | File | What to change |
+   |---|---|
+   | `dl.php` | The installer URLs in `ASSETS`: tag and filename. Open each URL once; each must answer 200. |
+   | `gh-stats.php` | The asset-name regex that counts downloads per platform. Change it only when the filename pattern changes (1.1.0 added the `community-` prefix). Keep the old pattern too: older releases still count. |
+   | `index.html` | `softwareVersion` in the JSON-LD block. |
+   | `llms.txt` | The `Current version:` line. |
+   | `download.html` | A new row at the top of the release table: version, date, one to three sentences (main features, then each breaking change and what the operator must do), and a link to `/docs/changelog.html#xyz---YYYY-MM-DD`. Check the anchor in the rendered changelog. |
+
+   Find what the list misses with
+   `grep -rn "<previous-version>" --include='*.php' --include='*.html' --include='*.txt' . | grep -v /docs/`.
+8. **Render the guide from the tag**, not from a development branch — the
    guide must describe what this release does:
 
    ```bash
@@ -50,11 +78,42 @@ The whole run, in order. The sections below hold the detail per step.
    the newest, `versions.json` and `sitemap.xml` — see [Sign-off](#sign-off)
    step 4. The version picker shows the line, `1.1.x`.
 
-8. **Upload `docs/`** — plus `.htaccess` when it changed — and commit the
-   website checkout.
-9. **After a patch for an older line**, merge its changelog section into the
+9. **Commit the website checkout and upload.** Upload `docs/` and every file
+   from step 7, plus `.htaccess` when it changed. Then check the live site:
+   `https://next-hmi.com/llms.txt`, `/docs/versions.json`, and one `/dl/<slug>`
+   download for each platform.
+10. **After a patch for an older line**, merge its changelog section into the
    newest line's `CHANGELOG.md`. The root guide is rendered from the newest
    line, so its changelog lists the patch only from then on.
+
+## Moving a release tag
+
+Moving a tag after its Release exists is possible, but it redoes the release.
+Do it only when the release lacks something that must ship in it.
+
+```bash
+git tag -s -f -m "NEXT HMI x.y.z" vx.y.z <new-commit>
+git push -f origin refs/tags/vx.y.z
+```
+
+No ruleset guards tags, so the push goes through. The push starts
+`release-matrix.yml` again, for the new commit:
+
+- `publish-release` sees that the Release exists. It replaces every zip with
+  `--clobber` and rewrites the notes from the `CHANGELOG.md` at the new commit.
+  A replaced asset starts again at zero downloads, and while the job runs, a
+  download can fail for a short time.
+- `docker-publish` pushes `ghcr.io/<repo>:<version>` and `:latest` again.
+- Anyone who fetched the old tag keeps it until they fetch with `--force`.
+
+After the run is green:
+
+1. Render the guide again from the moved tag (step 8). Commit the website and
+   upload it again (step 9).
+2. Check `[Unreleased]`. When the new commit is after the PR that opened
+   `[Unreleased]` (step 6), the changelog at the tag contains that empty
+   section, and the website shows it as a bare heading. To prevent that, put
+   the tag on a commit before that PR.
 
 ## Versioning
 
@@ -251,7 +310,7 @@ After verifying every artifact:
    (`build/release-notes.py`) — so date and rename the
    `[Unreleased]` section before tagging; a tag without its own section gets
    GitHub's generated notes instead. Check the Release page once the run is green, then
-   point the website's `dl.php` at the new filenames.
+   update the website ([step 7](#release-step-by-step)).
 3. The registry image is published for you, on a **final** tag only:
    `docker-publish` loads the two smoke-tested per-arch tarballs and pushes
    `ghcr.io/<repo>:<version>` and `:latest` as one multi-arch manifest. An RC
