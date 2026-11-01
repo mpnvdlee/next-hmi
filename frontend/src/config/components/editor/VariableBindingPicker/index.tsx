@@ -200,6 +200,9 @@ export default function VariableBindingPicker() {
     setShowAll(false);
     setLoadError(null);
     setDsFailed(new Set());
+    // The picker outlives every close, so a tree loaded on an earlier open is
+    // stale once tags are enabled or browsed in: fetch each one again.
+    setDsLoaded(new Set());
     prevSearch.current = '';
     scrolledToSelection.current = false;
     if (isComponentPropMode && target?.componentPropSource) {

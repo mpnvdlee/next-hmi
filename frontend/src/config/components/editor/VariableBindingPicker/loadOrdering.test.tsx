@@ -179,6 +179,28 @@ describe('VariableBindingPicker — datasource loading order', () => {
     await waitFor(() => expect(listHeight()).toHaveStyle({ height: '52px' }));
   });
 
+  it('shows variables saved to a datasource since an earlier open', async () => {
+    let variables: unknown = { variables: [] };
+    mockedApiJson.mockImplementation((url: string) =>
+      url === '/api/datasources'
+        ? (Promise.resolve([{ name: 'PLC', type: 'static' }]) as never)
+        : (Promise.resolve(variables) as never),
+    );
+
+    openOnBoundWidget();
+    render(<VariableBindingPicker />);
+    await waitFor(() => expect(variableRequests('PLC')).toHaveLength(1));
+
+    act(() => {
+      useEditorDomainStore.getState().closeBindingPicker();
+    });
+    variables = SPEED_VARIABLES;
+    act(() => openOnBoundWidget());
+
+    await waitFor(() => expect(variableRequests('PLC')).toHaveLength(2));
+    await waitFor(() => expect(listHeight()).toHaveStyle({ height: '52px' }));
+  });
+
   it('does not retry a failed variable fetch until the datasource is expanded again', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     mockedApiJson.mockImplementation((url: string) =>
