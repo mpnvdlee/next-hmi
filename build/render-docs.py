@@ -225,26 +225,63 @@ def rewrite_links(body: str, link_map: dict[str, str], source: str) -> str:
     copy to point at, and an offline reader is better served by a URL they can
     read and carry off the panel than by link text that goes nowhere.
     """
-    source_dir = posixpath.dirname(source)
-
     def rewrite(match: re.Match[str]) -> str:
-        href = match.group(1)
-        if href.startswith(("http://", "https://", "#", "mailto:", "/")):
-            return match.group(0)
-        path, _, anchor = href.partition("#")
-        if not path:
-            return match.group(0)
-        resolved = posixpath.normpath(posixpath.join(source_dir, path))
-        suffix = f"#{anchor}" if anchor else ""
-        # Keep any ``#anchor`` — the heading ids added by ``apply_heading_ids``
-        # make cross-page anchors resolve on the site as they do on GitHub.
-        if resolved in link_map:
-            return f'href="{link_map[resolved]}{suffix}"'
-        if resolved.startswith("docs/dev/"):
-            return f'href="{GITHUB_BLOB}{resolved}{suffix}"'
-        return match.group(0)
+        target = resolve_link(match.group(1), link_map, source)
+        return f'href="{target}"' if target else match.group(0)
 
     return re.sub(r'href="([^"]+)"', rewrite, body)
+
+
+def resolve_link(href: str, link_map: dict[str, str], source: str) -> str | None:
+    """Where a relative guide link points once rendered, or None to leave it."""
+    if href.startswith(("http://", "https://", "#", "mailto:", "/")):
+        return None
+    path, _, anchor = href.partition("#")
+    if not path:
+        return None
+    resolved = posixpath.normpath(posixpath.join(posixpath.dirname(source), path))
+    suffix = f"#{anchor}" if anchor else ""
+    # Keep any ``#anchor`` — the heading ids added by ``apply_heading_ids``
+    # make cross-page anchors resolve on the site as they do on GitHub.
+    if resolved in link_map:
+        return f"{link_map[resolved]}{suffix}"
+    if resolved.startswith("docs/dev/"):
+        return f"{GITHUB_BLOB}{resolved}{suffix}"
+    return None
+
+
+def llms_full(
+    pages: list[tuple[str, str, str]], link_map: dict[str, str], base: str, current_edition: str
+) -> str:
+    """The whole guide as one Markdown file, for AI assistants (llmstxt.org).
+
+    The site's hand-written /llms.txt links here. Each page keeps its Markdown,
+    with guide links pointed at the published pages so an assistant can cite them.
+    Verbatim pages (the licence texts) are left out: they are long, and the
+    rendered licence pages already say what they mean.
+    """
+    parts = [
+        "# NEXT HMI user guide\n\n"
+        "> Every page of the NEXT HMI user guide in one file. Each section starts "
+        "with the URL of its page on the site.\n"
+    ]
+    for src, _section, _title in pages:
+        if Path(src).suffix in VERBATIM_SUFFIXES:
+            continue
+        text = strip_edition_blocks((REPO_ROOT / src).read_text(encoding="utf-8"), current_edition)
+        text = UNRELEASED_RE.sub("", text)
+        text = re.sub(r"<!--.*?-->\s*", "", text, flags=re.S)
+
+        def link(match: re.Match[str], src: str = src) -> str:
+            target = resolve_link(match.group(1), link_map, src)
+            if target and not target.startswith("http"):
+                target = canonical_url(base, target)
+            return f"]({target or match.group(1)})"
+
+        text = re.sub(r"\]\(([^)\s]+)\)", link, text)
+        page = output_name(src)
+        parts.append(f"\n---\n\nSource: {canonical_url(base, page)}\n\n{text.strip()}\n")
+    return "".join(parts)
 
 
 def apply_classes(body: str) -> str:
@@ -346,6 +383,9 @@ def apply_callouts(body: str) -> str:
 
 
 EDITION_BLOCK_RE = re.compile(r"<!--\s*ee-only\s*-->(.*?)<!--\s*/ee-only\s*-->\n?", re.S)
+# The website describes released versions only; work queued for the next one
+# stays in the repo until its release moves it under a version heading.
+UNRELEASED_RE = re.compile(r"^## \[Unreleased\].*?(?=^## |\Z)", re.S | re.M)
 
 
 def strip_edition_blocks(text: str, current_edition: str) -> str:
@@ -564,6 +604,8 @@ def render(
             body = f"<h1>{html.escape(title)}</h1><pre>{html.escape(text)}</pre>"
         else:
             text = strip_edition_blocks(text, current_edition)
+            if not offline:
+                text = UNRELEASED_RE.sub("", text)
             # The parser runs with html=False, which escapes comments rather than
             # dropping them — a generated-file marker would render as body text.
             text = re.sub(r"<!--.*?-->\s*", "", text, flags=re.S)
@@ -608,6 +650,13 @@ def render(
     # contents, and output_name() maps it straight onto index.html.
     if not (out_dir / "index.html").is_file():
         shutil.copyfile(out_dir / output_name(present[0][0]), out_dir / "index.html")
+
+    # Only the live web copy: an archived copy would be a second, stale answer,
+    # and an offline panel has no assistant crawling it.
+    if canonical_base and not archived:
+        (out_dir / "llms-full.txt").write_text(
+            llms_full(pages, link_map, canonical_base, current_edition), encoding="utf-8"
+        )
 
     print(f"[docs] rendered {len(pages)} pages ({current_edition}) → {out_dir}")
     return 0
