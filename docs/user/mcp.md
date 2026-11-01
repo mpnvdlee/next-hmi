@@ -140,9 +140,9 @@ They are ordinary instructions, not privileged calls — the agent still works t
 
 ## While an agent is working
 
-**Operator screens follow along.** A running project re-reads the changed files and pushes the update to every connected browser, so an HMI screen shows the new value or the new widget without anyone touching it.
+**Operator screens follow along.** A running project re-reads the changed files and pushes the update to every connected browser, so an HMI screen shows the new value, widget, page or text without anyone touching it.
 
-**Editor tabs ask first.** An open editor shows a banner — *"Config was updated by another writer."* — with the choice to reload or dismiss, rather than yanking the canvas out from under you mid-edit. Dismissing keeps your tab as it is; your next save writes over what the agent did, so reload unless you know the two edits don't overlap.
+**Editor tabs ask first.** An open editor shows a banner — *"Config was updated by another writer."* — with the choice to reload or dismiss, rather than yanking the canvas out from under you mid-edit. Dismissing keeps your tab as it is. Saving then writes only the pages you changed, so the agent's edits to other pages stay. If you and the agent changed the same page, the page list or the translations, the save is refused instead of overwriting the agent: reload, then make your change again.
 
 ## When it doesn't work
 

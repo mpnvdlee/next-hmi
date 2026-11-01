@@ -11,6 +11,28 @@ heading.
 
 ## [Unreleased]
 
+### Fixed
+
+- **What an AI assistant changes over MCP shows up on the running screen.**
+  An operator screen that was already open kept the pages and texts as it
+  first loaded them, so a widget, page, page setting, global event or
+  translation added, changed or removed over MCP only appeared after a
+  browser reload. The screen now re-reads them as soon as the server reports
+  the change, without a reload, so a login and open dialogs stay, and values
+  for variables a new widget binds start arriving straight away.
+- **Saving in the editor no longer overwrites what an AI assistant changed.**
+  An editor tab that stayed open while an assistant worked over MCP wrote
+  every page back on its next save, so the assistant's widgets disappeared
+  again, and a page it had created was deleted. A save now writes only the
+  pages you changed, and is refused when the same page or the page list
+  changed since you loaded it, so you reload instead of losing the other
+  edit.
+- **Alarms an AI assistant adds over MCP go off without a restart.** An alarm
+  written through the MCP server landed in `alarms.json`, but a running
+  project kept evaluating its old alarm list, and the editor and runtime kept
+  showing it, until the project was restarted. A running project now picks up
+  added, changed and deleted alarms straight away.
+
 ## [1.1.0] - 2026-10-31
 
 Built for touch panels at the machine: a numpad that refuses what it should,

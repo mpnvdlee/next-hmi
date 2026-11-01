@@ -1892,3 +1892,71 @@ def test_post_validate_stays_silent_on_a_menu_item_naming_a_navigable_page(clien
 
     assert resp.status_code == 200
     assert "page-not-navigable" not in [d["code"] for d in resp.json()["diagnostics"]]
+
+
+# ── Revisions: a save based on a stale load is refused ───────────────────────
+
+
+def test_put_config_refuses_a_save_based_on_a_stale_index(client, tmp_dirs):
+    # An MCP write created a page after the editor loaded; the editor's save
+    # would drop it from the index and the orphan sweep would delete its file.
+    project_dir, pages_dir = tmp_dirs
+    storage.write_json(project_dir / "config.json", {"version": 2, "pages": [{"id": "p1", "type": "page"}]})
+    loaded = client.get("/api/config/config").json()
+    storage.write_json(
+        project_dir / "config.json",
+        {"version": 2, "pages": [{"id": "p1", "type": "page"}, {"id": "mcp", "type": "page"}]},
+    )
+    storage.write_json(pages_dir / "mcp.json", {"id": "mcp", "sections": {"content": []}})
+
+    resp = client.put(
+        "/api/config/config",
+        json={"pages": [{"id": "p1", "type": "page"}], "revision": loaded["revision"]},
+    )
+
+    assert resp.status_code == 409
+    assert (pages_dir / "mcp.json").exists()
+
+
+def test_put_config_accepts_its_own_revision_and_returns_the_next(client, tmp_dirs):
+    project_dir, _pages_dir = tmp_dirs
+    storage.write_json(project_dir / "config.json", {"version": 2, "pages": []})
+    revision = client.get("/api/config/config").json()["revision"]
+    # Another screen flips the theme in the same file; that is not the editor's surface.
+    storage.write_json(
+        project_dir / "config.json", {"version": 2, "pages": [], "project": {"defaultTheme": "dark"}}
+    )
+
+    first = client.put("/api/config/config", json={"pages": [], "revision": revision})
+    second = client.put("/api/config/config", json={"pages": [], "revision": first.json()["revision"]})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert client.get("/api/config/config").json()["revision"] == second.json()["revision"]
+
+
+def test_put_page_refuses_a_save_based_on_a_stale_page(client, tmp_dirs):
+    project_dir, pages_dir = tmp_dirs
+    storage.write_json(project_dir / "config.json", {"version": 2, "pages": [{"id": "p1", "type": "page"}]})
+    storage.write_json(pages_dir / "p1.json", {"id": "p1", "sections": {"content": []}})
+    revision = client.get("/api/config/config").json()["pageRevisions"]["p1"]
+    mcp_edit = {"id": "p1", "sections": {"content": [{"id": "w", "type": "Label", "properties": {}}]}}
+    storage.write_json(pages_dir / "p1.json", mcp_edit)
+
+    stale = client.put("/api/config/pages/p1", json={"sections": {"content": []}, "revision": revision})
+
+    assert stale.status_code == 409
+    assert storage.read_json(pages_dir / "p1.json") == mcp_edit
+    fresh = client.get("/api/config/config").json()["pageRevisions"]["p1"]
+    saved = client.put("/api/config/pages/p1", json={"title": "Line", "revision": fresh})
+    assert saved.status_code == 200
+    assert saved.json()["revision"] == client.get("/api/config/config").json()["pageRevisions"]["p1"]
+
+
+def test_put_page_refuses_a_new_page_that_another_writer_already_created(client, tmp_dirs):
+    _project_dir, pages_dir = tmp_dirs
+    storage.write_json(pages_dir / "p2.json", {"id": "p2", "sections": {"content": []}})
+
+    resp = client.put("/api/config/pages/p2", json={"title": "Mine", "revision": "missing"})
+
+    assert resp.status_code == 409

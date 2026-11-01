@@ -161,3 +161,74 @@ async def test_reload_datasources_swallows_unreadable_json_and_warns(
 
     assert called is False
     assert "failed to read datasource DS" in caplog.text
+
+
+def test_reload_alarms_refreshes_running_alarm_manager(
+    client: TestClient, monkeypatch, live_project_root: Path
+) -> None:
+    # The manager MCP wrote alarms.json and synced its own alarm_manager; this
+    # child still holds the pre-edit config until the hook re-reads the file.
+    import core.storage as storage
+    from services.alarm_manager import alarm_manager
+
+    async def no_broadcast(event) -> None:
+        return None
+
+    monkeypatch.setattr(websocket_manager, "broadcast_config_changed", no_broadcast)
+
+    storage.ensure_active_project_dirs()
+    alarm_manager.load()
+    assert alarm_manager.get_config().groups == []
+
+    storage.write_json(
+        storage.active_alarms_config_path(),
+        {
+            "version": 1,
+            "groups": [
+                {
+                    "id": "line",
+                    "title": "Line",
+                    "alarms": [
+                        {
+                            "id": "w-210",
+                            "code": "W-210",
+                            "title": "Reject bin 80 % full",
+                            "trigger": {
+                                "type": "value_range",
+                                "source_value": {"$var": {"path": "DS:BinLevel"}},
+                                "min": 24,
+                            },
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+
+    resp = client.post(
+        "/api/internal/reload", json={"artifact_type": "alarms", "artifact_ids": ["w-210"]}
+    )
+
+    assert resp.status_code == 200
+    groups = alarm_manager.get_config().groups
+    assert [a.id for g in groups for a in g.alarms] == ["w-210"]
+    assert alarm_manager.get_trigger_paths_by_datasource() == {"DS": {"BinLevel"}}
+
+
+def test_reload_drops_stale_runtime_pages_config(client: TestClient, monkeypatch) -> None:
+    # A widget the manager MCP added binds a variable set_context must resolve
+    # from the page on disk, not from this child's pre-edit cache.
+    import services.websocket_manager as ws
+
+    async def no_broadcast(event) -> None:
+        return None
+
+    monkeypatch.setattr(websocket_manager, "broadcast_config_changed", no_broadcast)
+    monkeypatch.setattr(ws, "_runtime_pages_config_cache", {"pages": []})
+
+    resp = client.post(
+        "/api/internal/reload", json={"artifact_type": "page", "artifact_ids": ["line"]}
+    )
+
+    assert resp.status_code == 200
+    assert ws._runtime_pages_config_cache is None

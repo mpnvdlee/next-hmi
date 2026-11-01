@@ -12,30 +12,34 @@ import type { PagesBootstrapResponse } from '@shared/types/config';
  * Skips the fetch only when the index is already loaded AND there are unsaved changes.
  */
 export function useConfig(): void {
-  const setPages = useConfigStore((s) => s.setPages);
-
   useEffect(() => {
     const { loaded } = useConfigStore.getState();
     if (loaded && projectIsDirty()) return;
+    void loadConfigIndex();
+  }, []);
+}
 
-    void (async () => {
-      try {
-        const data = await apiJson<PagesBootstrapResponse>('/api/config/config');
-        const store = useConfigStore.getState();
-        setPages(data.pages ?? []);
-        store.setHeader(data.header ?? []);
-        store.setFooter(data.footer ?? []);
-        store.setLeftSidebar(data.leftSidebar ?? []);
-        store.setRightSidebar(data.rightSidebar ?? []);
-        store.setShell(data.shell ?? {});
-        store.setDialogs(data.dialogs ?? []);
-        store.setGlobalEvents(data.globalEvents ?? {});
-        store.markLoaded();
-      } catch (err) {
-        console.error('[useConfig] Failed to load config:', err);
-      }
-    })();
-  }, [setPages]);
+/** Fetch the page index + global areas into configStore, replacing what it holds. */
+export async function loadConfigIndex(): Promise<void> {
+  try {
+    const data = await apiJson<PagesBootstrapResponse>('/api/config/config');
+    const store = useConfigStore.getState();
+    store.setPages(data.pages ?? []);
+    store.setHeader(data.header ?? []);
+    store.setFooter(data.footer ?? []);
+    store.setLeftSidebar(data.leftSidebar ?? []);
+    store.setRightSidebar(data.rightSidebar ?? []);
+    store.setShell(data.shell ?? {});
+    store.setDialogs(data.dialogs ?? []);
+    store.setGlobalEvents(data.globalEvents ?? {});
+    // setPages marks every page it receives with content dirty (right for an
+    // undo snapshot); fresh from the server none is, so a save writes back only
+    // what the user touched and leaves other writers' pages alone.
+    store.markSynced(data.revision ?? null, data.pageRevisions ?? {});
+    store.markLoaded();
+  } catch (err) {
+    console.error('[useConfig] Failed to load config:', err);
+  }
 }
 
 /**

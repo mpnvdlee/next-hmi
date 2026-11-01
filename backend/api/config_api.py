@@ -1,4 +1,6 @@
 import asyncio
+import hashlib
+import json
 import logging
 from dataclasses import replace
 from typing import Any
@@ -98,6 +100,27 @@ router = APIRouter(prefix="/api/config", tags=["config"])
 
 def _config_path():
     return active_config_dir() / "config.json"
+
+
+# What `PUT /config` writes. `mcpEnabled` and `project` (the default theme) are
+# set from other screens, so a change there must not make an editor save stale.
+_INDEX_EDITABLE_FIELDS = (
+    "pages", "dialogs", "header", "footer", "leftSidebar", "rightSidebar", "shell", "globalEvents",
+)
+
+
+def _index_revision(config: Any) -> str:
+    """The index an editor's save is based on; an MCP write in between changes it."""
+    doc = config if isinstance(config, dict) else {}
+    surface = {key: doc.get(key) for key in _INDEX_EDITABLE_FIELDS}
+    return hashlib.sha256(json.dumps(surface, sort_keys=True).encode()).hexdigest()
+
+
+def _page_revision(path) -> str:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except FileNotFoundError:
+        return "missing"
 
 
 def _default_dict_path():
@@ -780,7 +803,20 @@ def _validate_index_nodes(nodes: list[Any], ids: set[str]) -> None:
 
 @router.get("/config")
 async def get_config() -> Any:
-    return _load_global_config()
+    # Revisions before content: a write landing in between then makes the next
+    # save refuse needlessly, rather than overwrite what this load never saw.
+    raw = read_json(_config_path()) if _config_path().exists() else {}
+    page_revisions = {
+        page_id: _page_revision(page_document_dir(root) / f"{page_id}.json")
+        for root in INDEX_ROOTS
+        for page_id in collect_page_ids(_list_field(raw, root))
+        if is_valid_page_id(page_id)
+    }
+    return {
+        **_load_global_config(),
+        "revision": _index_revision(raw),
+        "pageRevisions": page_revisions,
+    }
 
 
 @router.put("/config")
@@ -790,6 +826,12 @@ async def put_config(body: dict) -> Any:
     if "dialogs" in body and not isinstance(body["dialogs"], list):
         raise ConfigValidationError("'dialogs' must be an array")
     existing_raw = read_json(_config_path()) if _config_path().exists() else {}
+    # Optional so older clients still save; the editor always sends it.
+    expected_revision = body.get("revision")
+    if isinstance(expected_revision, str) and expected_revision != _index_revision(existing_raw):
+        raise ConfigConflictError(
+            "the page index changed since it was loaded (another writer); reload before saving"
+        )
     # The Dialogs folder is preserved when the body omits it, like `mcpEnabled`
     # and the `project` block: this endpoint carries whatever surface its caller
     # edits, and an older client that knows nothing of the second root must not
@@ -881,7 +923,7 @@ async def put_config(body: dict) -> Any:
                 path.unlink(missing_ok=True)
 
     _invalidate_runtime_cache()
-    return payload
+    return {**payload, "revision": _index_revision(payload)}
 
 
 # ── Build diagnostics ──────────────────────────────────────────────────────────
@@ -1017,6 +1059,11 @@ async def _put_page_document(page_id: str, root: str, body: dict) -> Any:
                     )
 
     path = page_document_dir(root) / f"{page_id}.json"
+    expected_revision = body.get("revision")
+    if isinstance(expected_revision, str) and expected_revision != _page_revision(path):
+        raise ConfigConflictError(
+            f"page '{page_id}' changed since it was loaded (another writer); reload before saving"
+        )
     try:
         existing = read_json(path)
     except FileNotFoundError:
@@ -1048,7 +1095,7 @@ async def _put_page_document(page_id: str, root: str, body: dict) -> Any:
     # Fire-and-forget so a slow browser tab doesn't bound REST response time.
     task = asyncio.create_task(websocket_manager.broadcast_config_changed(event))
     task.add_done_callback(_log_broadcast_error)
-    return payload
+    return {**payload, "revision": _page_revision(path)}
 
 
 async def _delete_page_document(page_id: str, root: str) -> Any:

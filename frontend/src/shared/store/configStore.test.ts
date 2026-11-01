@@ -860,6 +860,38 @@ describe('configStore', () => {
     expect(useConfigStore.getState().dirtyPageIds.size).toBe(0);
   });
 
+  it('sends the revisions it loaded at and keeps the ones each save returns', async () => {
+    // The server refuses a save whose revision is stale (an MCP write in between).
+    const fetchSpy = vi.fn((url: string, _init?: RequestInit) =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ revision: url === '/api/config/config' ? 'idx-2' : `${url}-2` }),
+      }),
+    );
+    vi.stubGlobal('fetch', fetchSpy);
+    useConfigStore.getState().markSynced('idx-1', { 'page-1': 'p1-1' });
+    useConfigStore.setState({ dirtyPageIds: new Set(['page-1']) });
+    useConfigStore
+      .getState()
+      .addPage({ id: 'fresh', type: 'page', title: 'Fresh', sections: { content: [] } });
+
+    expect(await useConfigStore.getState().saveConfigToBackend()).toBe(true);
+
+    const bodyOf = (url: string) =>
+      JSON.parse(fetchSpy.mock.calls.find((call) => call[0] === url)?.[1]?.body as string);
+    expect(bodyOf('/api/config/config').revision).toBe('idx-1');
+    expect(bodyOf('/api/config/pages/page-1').revision).toBe('p1-1');
+    // A page the load never saw: refused if another writer created it meanwhile.
+    expect(bodyOf('/api/config/pages/fresh').revision).toBe('missing');
+    const { indexRevision, pageRevisions } = useConfigStore.getState();
+    expect(indexRevision).toBe('idx-2');
+    expect(pageRevisions).toEqual({
+      'page-1': '/api/config/pages/page-1-2',
+      fresh: '/api/config/pages/fresh-2',
+    });
+  });
+
   it('saves the Dialogs folder as index nodes and its dirty pages as page files', async () => {
     const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 204 });
     vi.stubGlobal('fetch', fetchSpy);
@@ -985,6 +1017,25 @@ describe('configStore', () => {
     const sections = firstPage && 'sections' in firstPage ? firstPage.sections : undefined;
     expect(sections?.main).toEqual(children);
     expect(useConfigStore.getState().loadedPageIds.has('page-1')).toBe(true);
+  });
+
+  it('loadPageContent with force re-fetches a page that is already loaded', async () => {
+    // A running HMI reloads a page the server changed under it (an MCP write).
+    const children = [{ id: 'new-tile', type: 'Label', name: 'New', properties: {}, layout: {} }];
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'page-1', sections: { main: children } }),
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    useConfigStore.setState({ loadedPageIds: new Set(['page-1']), dirtyPageIds: new Set() });
+
+    await useConfigStore.getState().loadPageContent('page-1');
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    await useConfigStore.getState().loadPageContent('page-1', { force: true });
+    const firstPage = useConfigStore.getState().pages[0];
+    const sections = firstPage && 'sections' in firstPage ? firstPage.sections : undefined;
+    expect(sections?.main).toEqual(children);
   });
 
   it('loadPageContent reads a Dialogs-folder page from that root\u2019s endpoint', async () => {

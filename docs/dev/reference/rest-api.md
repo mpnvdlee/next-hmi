@@ -69,12 +69,15 @@ Base prefix: `/api/config`. Page index, shared shell areas, dictionaries and tra
       "shell": {},
       "dialogs": [],
       "globalEvents": {},
-      "mcpEnabled": false
+      "mcpEnabled": false,
+      "revision": "<sha256>",
+      "pageRevisions": { "home": "<sha256>" }
     }
     ```
 
   - `pages` and `dialogs` are the two index roots, with the same node shape: `pages` is the navigable tree, `dialogs` the pages that only open as an overlay (their documents live in `dialogs/`).
   - `globalEvents` is an object keyed by lifecycle event name; each value is an array of action objects.
+  - `revision` hashes the fields `PUT /api/config/config` writes (`pages`, `dialogs`, the shell areas, `shell`, `globalEvents`), so a theme or `mcpEnabled` change does not move it. `pageRevisions` holds a hash of each index page's document bytes (`"missing"` when its file is absent). Both are read before the content, and an editor sends them back on save.
 
 - `PUT /api/config/config`
   - Body must contain a `pages` array; `header`, `footer`, `leftSidebar`, `rightSidebar`, `shell`, `dialogs`, `globalEvents`, `mcpEnabled` are accepted optionally. An omitted `mcpEnabled` keeps the stored value, and the embedded `project` metadata block is always kept.
@@ -89,7 +92,8 @@ Base prefix: `/api/config`. Page index, shared shell areas, dictionaries and tra
   - On save the index is normalized: groups keep their metadata — including an optional `componentProperties` declaration block, which `openDialog` may target — while page entries are reduced to `{ id, type: "page" }` (metadata for pages is stored in the per-page file).
   - A page whose root changed is relocated: its document moves between `pages/` and `dialogs/` before anything is swept.
   - Orphaned page documents (id no longer in *that directory's* root, excluding `__*.json`) are deleted.
-  - Returns the normalized payload.
+  - An optional `revision` (from `GET` or the last save) that no longer matches returns `409` and writes nothing, so a stale editor save cannot drop a page another writer (MCP, another tab) created, nor sweep its file. Without `revision` there is no check.
+  - Returns the normalized payload with its new `revision`.
 
 ### Per-page content
 
@@ -108,7 +112,8 @@ it is in now.
     `title`, `icon`, `description`, `breadcrumbLabel`, `hidden`, `role`, `order`, `route`, `layout`, `showHeader`, `showFooter`, `mainPadding`, `mainBackground`, `events`, `componentProperties`, `showCloseButton`, `closeOnBackgroundPress`, `tapThrough`, `showModalHeader`, `sections`.
   - An explicit `null` for a key removes it from the stored document.
   - `sections` (when supplied) must be an object whose values are arrays. A section may not list a `type: "page-group"` node — nest a group inside another group instead (`422`).
-  - Returns the merged document `{ id, ...persisted fields }`, with no warnings array — advisory findings come from `/api/config/validate`. A blocking validation finding is `422`. Broadcasts `config_changed` (`source: "rest"`).
+  - An optional `revision` (from `pageRevisions` or the last save; `"missing"` for a page the client creates) that no longer matches the stored document returns `409` and writes nothing. Without `revision` there is no check.
+  - Returns the merged document `{ id, ...persisted fields, revision }`, with no warnings array — advisory findings come from `/api/config/validate`. A blocking validation finding is `422`. Broadcasts `config_changed` (`source: "rest"`).
   - `422` if `page_id` is invalid.
 - `DELETE /api/config/pages/{page_id}` · `DELETE /api/config/dialogs/{page_id}`
   - Removes that directory's page document if present. Returns `{ "ok": true }`.
