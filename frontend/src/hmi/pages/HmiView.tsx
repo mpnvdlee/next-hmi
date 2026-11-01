@@ -38,6 +38,7 @@ import { ContentSpinner } from '@shared/components/Spinner';
 import { useGlobalEvents } from '../hooks/useGlobalEvents';
 import { usePageEvents } from '../hooks/usePageEvents';
 import { useProjectWidgetWarmup } from '../hooks/useProjectWidgetWarmup';
+import { useLivePageReload } from '../hooks/useLivePageReload';
 import ConnectionLostOverlay from '@shared/components/ConnectionLostOverlay';
 import { loadSessionToken } from '../utils/runtimeSession';
 
@@ -113,6 +114,7 @@ export default function HmiView() {
     setBackendRestartHandler(reloadPage);
     return () => setBackendRestartHandler(null);
   }, []);
+  const liveReloads = useLivePageReload();
 
   // Send active runtime context. Backend computes the full variable set so
   // nested expressions (for example $if/$switch/$compare) are included.
@@ -154,8 +156,10 @@ export default function HmiView() {
     // config editor while the HMI view is active.
     // openPageOverlayEntries (Zustand state) changes reference only when overlays
     // are actually added/removed, avoiding spurious re-fires.
+    // liveReloads ticks when another writer changed the pages, whose new
+    // widgets or global events may bind variables not yet subscribed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wsConnected, page?.id, openPageOverlayEntries, componentDefinitions]);
+  }, [wsConnected, page?.id, openPageOverlayEntries, componentDefinitions, liveReloads]);
 
   // Clear this client's runtime context only on true unmount (navigating away
   // from the HMI view entirely). Deliberately a separate, empty-deps effect:

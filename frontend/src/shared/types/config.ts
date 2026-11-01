@@ -785,6 +785,10 @@ export interface PagesBootstrapResponse {
   leftSidebar?: WidgetConfig[];
   rightSidebar?: WidgetConfig[];
   globalEvents?: GlobalEventsConfig;
+  /** Revision of the index's editable fields, sent back on save. */
+  revision?: string;
+  /** Revision of each page document, by page id, sent back on save. */
+  pageRevisions?: Record<string, string>;
 }
 
 /**

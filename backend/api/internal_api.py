@@ -15,12 +15,23 @@ import logging
 from typing import Any
 
 from core.http_origins import invalidate_http_origin_cache
-from core.storage import active_datasources_dir, read_json
+from core.storage import (
+    active_alarms_config_path,
+    active_datasources_dir,
+    load_json_or_default,
+    read_json,
+)
 from fastapi import APIRouter
+from models.alarm import AlarmConfig
 from pydantic import BaseModel, Field
+from services.alarm_manager import alarm_manager
 from services.datasource_manager import datasource_manager
 from services.datasource_sync import apply_datasource_change, enabled_paths
-from services.websocket_manager import ConfigChangedEvent, websocket_manager
+from services.websocket_manager import (
+    ConfigChangedEvent,
+    invalidate_runtime_pages_config_cache,
+    websocket_manager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +55,21 @@ async def reload(body: ReloadBody) -> dict[str, str]:
     # values reflect the edit.
     if body.artifact_type == "variables":
         await _reload_datasources(body.artifact_ids)
+    # The MCP tool synced the manager's alarm_manager, not this child's, so
+    # without this the trigger map keeps the old alarms until a restart.
+    if body.artifact_type == "alarms":
+        alarm_manager.apply_config(
+            load_json_or_default(
+                active_alarms_config_path(), AlarmConfig, AlarmConfig.model_validate
+            )
+        )
 
     # The manager MCP wrote straight to disk, so every cache derived from a
     # project document is now stale — including the $http origin allowlist,
-    # where stale means the proxy still trusts an origin the edit removed.
+    # where stale means the proxy still trusts an origin the edit removed, and
+    # the page config set_context resolves a page's variables from.
     invalidate_http_origin_cache()
+    invalidate_runtime_pages_config_cache()
 
     event = ConfigChangedEvent(
         artifact_type=body.artifact_type,

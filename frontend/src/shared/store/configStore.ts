@@ -375,6 +375,11 @@ interface ConfigStore {
   dirtyPageIds: Set<string>;
   /** Why the last `saveConfigToBackend` failed, or null after a clean save. */
   saveError: string | null;
+  /** The server's index and page revisions this store was loaded or last saved
+   *  at; a save sends them so the server can refuse one that would overwrite
+   *  another writer (an MCP edit). Null until an index load supplied one. */
+  indexRevision: string | null;
+  pageRevisions: Record<string, string>;
 
   // Bootstrap / hydration
   /** Accepts raw, unvalidated wire nodes — runs them through normalizePageNodes(). */
@@ -382,6 +387,8 @@ interface ConfigStore {
   /** Same as `setPages`, for the Dialogs folder root. */
   setDialogs(dialogs: unknown[]): void;
   markLoaded(): void;
+  /** The tree now matches the server at these revisions: nothing is dirty. */
+  markSynced(indexRevision: string | null, pageRevisions: Record<string, string>): void;
   setHeader(components: WidgetConfig[]): void;
   setFooter(components: WidgetConfig[]): void;
   setLeftSidebar(components: WidgetConfig[]): void;
@@ -403,8 +410,9 @@ interface ConfigStore {
   setGlobalEvents(events: GlobalEventsConfig): void;
   /** User-initiated edit of globalEvents — pushes a throttled undo snapshot. */
   updateGlobalEvents(events: GlobalEventsConfig): void;
-  /** Fetch a single page's component content from the backend and hydrate it. */
-  loadPageContent(pageId: string): Promise<void>;
+  /** Fetch a single page's component content from the backend and hydrate it.
+   *  `force` re-fetches a page that is already loaded. */
+  loadPageContent(pageId: string, options?: { force?: boolean }): Promise<void>;
 
   // Page CRUD — a node is found in whichever root holds it; `root` picks where a
   // new top-level node goes.
@@ -511,12 +519,16 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
   loadedPageIds: new Set<string>(),
   dirtyPageIds: new Set<string>(),
   saveError: null,
+  indexRevision: null,
+  pageRevisions: {},
 
   // ── Bootstrap / hydration ───────────────────────────────────────────────────
 
   setPages: (pages) => _setTree((s) => _loadRoot(s, 'pages', pages)),
   setDialogs: (dialogs) => _setTree((s) => _loadRoot(s, 'dialogs', dialogs)),
   markLoaded: () => set({ loaded: true }),
+  markSynced: (indexRevision, pageRevisions) =>
+    set({ indexRevision, pageRevisions, dirtyPageIds: new Set() }),
   setHeader: (header) => _setTree({ header }),
   setFooter: (footer) => _setTree({ footer }),
   setLeftSidebar: (leftSidebar) => _setTree({ leftSidebar }),
@@ -963,8 +975,8 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
     });
   },
 
-  loadPageContent: async (pageId) => {
-    if (get().loadedPageIds.has(pageId)) return;
+  loadPageContent: async (pageId, options) => {
+    if (!options?.force && get().loadedPageIds.has(pageId)) return;
     const root = findPageRoot(get(), pageId);
     if (!root) return;
     try {
@@ -997,9 +1009,11 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
       dialogs,
       globalEvents,
       dirtyPageIds,
+      indexRevision,
+      pageRevisions,
     } = get();
     try {
-      await apiJson('/api/config/config', {
+      const saved = await apiJson<{ revision?: string } | undefined>('/api/config/config', {
         method: 'PUT',
         body: {
           pages: _toIndexNodes(pages),
@@ -1010,8 +1024,10 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
           rightSidebar,
           shell,
           globalEvents,
+          revision: indexRevision ?? undefined,
         },
       });
+      if (saved?.revision) set({ indexRevision: saved.revision });
       // Track which pages actually persisted so only those are cleared from the
       // dirty set — a page edited during this in-flight save (or one whose PUT
       // failed) must stay dirty so its change isn't silently dropped.
@@ -1048,8 +1064,17 @@ export const useConfigStore = create<ConfigStore>((set, get) => ({
             if (loadedPageIds.has(pageId)) {
               body.sections = page.sections;
             }
+            // A page the load did not know is new: "missing" refuses it when
+            // another writer created the same id in the meantime.
+            if (indexRevision !== null) body.revision = pageRevisions[pageId] ?? 'missing';
             try {
-              await apiJson(_pageDocumentUrl(root, pageId), { method: 'PUT', body });
+              const result = await apiJson<{ revision?: string } | undefined>(
+                _pageDocumentUrl(root, pageId),
+                { method: 'PUT', body },
+              );
+              const revision = result?.revision;
+              if (revision)
+                set((s) => ({ pageRevisions: { ...s.pageRevisions, [pageId]: revision } }));
             } catch (err) {
               console.error(`[configStore] Failed to save page ${pageId}:`, err);
               return { id: pageId, message: errorMessage(err) };
