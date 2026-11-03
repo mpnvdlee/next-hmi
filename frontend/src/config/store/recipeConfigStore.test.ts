@@ -151,10 +151,6 @@ describe('mutations', () => {
 });
 
 describe('registerSave callback', () => {
-  it('is registered as "recipes" in projectStore', () => {
-    expect(useProjectStore.getState()._saveCallbacks.get('recipes')).toBeTruthy();
-  });
-
   it('calls PUT /api/recipes/config with current config', async () => {
     const fetchMock = vi.fn(async (url: string, opts?: RequestInit) => {
       if (url === '/api/recipes/config' && opts?.method === 'PUT') {

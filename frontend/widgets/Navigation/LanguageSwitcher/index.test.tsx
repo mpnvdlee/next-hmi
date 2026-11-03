@@ -25,11 +25,6 @@ describe('LanguageSwitcher', () => {
     setLanguages(['en', 'de', 'fr']);
   });
 
-  it('renders with no properties set', () => {
-    const { container } = renderSwitcher({});
-    expect(container.querySelector('.hmi-language-switcher')).not.toBeNull();
-  });
-
   it('roots itself in a label carrying both the base and widget classes', () => {
     const { container } = renderSwitcher({});
     // `hmi-component` carries the shared flex-sizing defaults (grow, shrink,

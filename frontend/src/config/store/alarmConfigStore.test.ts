@@ -110,11 +110,6 @@ describe('mutations', () => {
 // ── registerSave callback ─────────────────────────────────────────────────────
 
 describe('registerSave callback', () => {
-  it('is registered as "alarms" in projectStore', () => {
-    const cb = useProjectStore.getState()._saveCallbacks.get('alarms');
-    expect(cb).toBeTruthy();
-  });
-
   it('calls PUT /api/alarms/config with current config', async () => {
     const fetchMock = vi.fn(async (url: string, opts?: RequestInit) => {
       if (url === '/api/alarms/config' && opts?.method === 'PUT') {

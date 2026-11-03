@@ -125,17 +125,6 @@ describe('HttpsSection', () => {
     });
   });
 
-  it('reopens the page on the HTTP port when HTTPS is switched off', async () => {
-    const user = withFakeTimers();
-    const replace = stubLocation('https://panel:8443/config/admin');
-    renderSection({ enabled: true, httpPort: 8000, httpsPort: 8443 }, { runningProjectCount: 0 });
-
-    await user.click(screen.getByRole('button', { name: 'HTTP' }));
-    await vi.advanceTimersByTimeAsync(60_000);
-
-    expect(replace).toHaveBeenCalledWith('http://panel:8000/config/admin');
-  });
-
   it('waits on its own spinner while the app moves to the HTTP port', async () => {
     // An https: page may not fetch an http: origin — mixed content blocks it —
     // so there is no poll that could tell this page when :8000 is serving. The

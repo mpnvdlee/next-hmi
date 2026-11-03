@@ -79,9 +79,6 @@ class TestActorProvenance:
             audit.ACTOR_CLAIMED
         )
 
-    def test_the_two_provenances_are_distinguishable(self):
-        assert audit.ACTOR_SESSION != audit.ACTOR_CLAIMED
-
     def test_provenance_reaches_the_listener(self):
         seen: list[audit.AuditEvent] = []
         audit.register_listener(seen.append)

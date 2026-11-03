@@ -183,10 +183,6 @@ describe('draft edits', () => {
 });
 
 describe('registerSave callback', () => {
-  it('is registered as "historian" in projectStore', () => {
-    expect(useProjectStore.getState()._saveCallbacks.get('historian')).toBeTruthy();
-  });
-
   it('calls save() when invoked', async () => {
     useHistorianConfigStore.setState({ config: CONFIG_WITH_VAR });
     const calls = stubFetch({

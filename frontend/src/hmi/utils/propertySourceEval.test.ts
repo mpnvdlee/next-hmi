@@ -535,6 +535,7 @@ describe('propertySourceEval', () => {
     });
 
     it('generates float when integer=false', () => {
+      vi.spyOn(Math, 'random').mockReturnValueOnce(0.25);
       const result = evaluatePropertyValue(
         {
           $random: {
@@ -545,9 +546,7 @@ describe('propertySourceEval', () => {
         },
         mockContext,
       );
-      expect(typeof result).toBe('number');
-      expect(result).toBeGreaterThanOrEqual(0);
-      expect(result).toBeLessThanOrEqual(1);
+      expect(result).toBe(0.25);
     });
   });
 

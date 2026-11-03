@@ -16,11 +16,6 @@ describe('Clock', () => {
     vi.useRealTimers();
   });
 
-  it('renders without throwing on empty properties', () => {
-    const { container } = renderClock({});
-    expect(container.firstElementChild).not.toBeNull();
-  });
-
   it('carries the base component class alongside its own', () => {
     const { container } = renderClock({});
     const el = container.firstElementChild as HTMLElement;

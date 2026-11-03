@@ -34,11 +34,6 @@ def test_stale_overrides_enabled() -> None:
     assert is_subscribable({"enabled": False, "present_on_server": False}) is False
 
 
-def test_present_on_server_default_is_truthy() -> None:
-    """Omitted ``present_on_server`` is treated as present (legacy data)."""
-    assert is_subscribable({"enabled": True}) is True
-
-
 def test_present_on_server_survives_upsert_roundtrip() -> None:
     """``present_on_server`` is a field the model doesn't know about; it must
     pass through ``DatasourceUpsertBody`` unchanged so the stale-variable

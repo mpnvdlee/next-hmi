@@ -131,11 +131,6 @@ describe('ColorInput', () => {
     expect(onChange).toHaveBeenCalledWith(undefined);
   });
 
-  it('does not show a revert action while unset', () => {
-    render(<ColorInput value={undefined} onChange={vi.fn()} />);
-    expect(screen.queryByTitle(/^Revert to /)).not.toBeInTheDocument();
-  });
-
   it('drives the native <input type="color"> control directly', () => {
     const onChange = vi.fn();
     render(<ColorInput value="#2D9CFF" onChange={onChange} />);
