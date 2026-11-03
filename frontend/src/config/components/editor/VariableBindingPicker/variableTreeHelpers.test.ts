@@ -1,6 +1,9 @@
 import {
+  bitKeyLabel,
+  flattenForRender,
   resolveElementBinding,
   rowSelectionKey,
+  splitBitKey,
   typeFilter,
   type DatasourceNode,
   type RowItem,
@@ -242,5 +245,42 @@ describe('typeFilter', () => {
     expect(selectable(['Speed'])).toEqual(['Motor', 'MotorRO', 'Mistyped']);
     expect(selectable([{ name: 'Speed', type: 'Float' }])).toEqual(['Motor', 'MotorRO']);
     expect(selectable([{ name: 'Speed', write: true }])).toEqual(['Motor', 'Mistyped']);
+  });
+});
+
+describe('bits', () => {
+  const status: PickerVariableEntry = {
+    kind: 'variable',
+    display_name: 'Status',
+    data_type: 'Integer',
+    bits: 16,
+    enabled: true,
+    writable: true,
+    _datasource: 'Plant',
+    _path: 'Battery/Status',
+  };
+  const ds: DatasourceNode = {
+    kind: 'datasource',
+    name: 'Plant',
+    type: 'static',
+    children: [status],
+  };
+  const boolField = { type: 'Boolean', write: true };
+
+  it('keeps a whole number where its bits fit, only with Bits on', () => {
+    expect(typeFilter([status], boolField)).toEqual([]);
+    expect(typeFilter([status], boolField, true)).toEqual([status]);
+    expect(typeFilter([{ ...status, writable: false }], boolField, true)).toEqual([]);
+  });
+
+  it("lists a word's bits only once its row is opened", () => {
+    const closed = flattenForRender([ds], 0, new Set(), false, true);
+    expect(closed.map(rowSelectionKey)).toEqual([null, 'Plant:Battery/Status']);
+    const open = flattenForRender([ds], 0, new Set(['Plant:Battery/Status.%X']), false, true);
+    expect(open).toHaveLength(18);
+    const bit5 = rowSelectionKey(open[7])!;
+    expect(bit5).toBe('Plant:Battery/Status.%X5');
+    expect(splitBitKey('Battery/Status.%X5')).toEqual({ path: 'Battery/Status', bit: 5 });
+    expect(bitKeyLabel('Status.%X5')).toBe('Status.5');
   });
 });

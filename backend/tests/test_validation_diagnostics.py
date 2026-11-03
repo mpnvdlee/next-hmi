@@ -1505,3 +1505,51 @@ def test_open_dialog_passing_a_page_input_checks_the_page():
         ctx, "/a", report,
     )
     assert report.warnings == []
+
+
+def test_var_bit_reads_a_bit_of_a_whole_number_as_a_boolean(ctx):
+    entries = {"Status": {"data_type": "UInt16", "writable": True}, "Speed": {"data_type": "Double"}}
+    bits = replace(
+        ctx,
+        datasource_registry={"PLC": {
+            "Status": {"kind": "scalar", "base": "Integer", "array": False},
+            "Speed": {"kind": "scalar", "base": "Float", "array": False},
+        }},
+        datasource_writable={"PLC": {"Status": True}},
+        datasource_entry=lambda ds, key: entries.get(key),
+    )
+
+    def check(ref, field):
+        report = ValidationReport()
+        validate_var_ref(ref, bits, "/p", report, field)
+        assert report.findings == []
+        return [(w.path, w.code) for w in report.warnings]
+
+    assert check({"path": "PLC:Status", "bit": 15}, {"type": "boolean", "write": True}) == []
+    assert check({"path": "PLC:Status", "bit": 3}, {"type": "integer"}) == [("/p", "var-type")]
+    assert check({"path": "PLC:Status", "bit": 16}, {"type": "boolean"}) == [("/p/$var/bit", "var-type")]
+    assert check({"path": "PLC:Speed", "bit": 0}, {"type": "boolean"}) == [("/p/$var/bit", "var-type")]
+
+
+def test_a_bit_is_a_boolean_write_and_toggle_target(ctx):
+    entries = {"Status": {"data_type": "UInt16", "writable": True}}
+    bits = replace(
+        ctx,
+        datasource_registry={"PLC": {"Status": {"kind": "scalar", "base": "Integer", "array": False}}},
+        datasource_writable={"PLC": {"Status": True}},
+        datasource_entry=lambda ds, key: entries.get(key),
+    )
+
+    def codes(action):
+        report = ValidationReport()
+        validate_action_targets([action], bits, "/a", report)
+        return [(w.path, w.code) for w in report.warnings]
+
+    bit3 = {"$var": {"path": "PLC:Status", "bit": 3}}
+    assert codes({"type": "toggleDataVariable", "target": bit3}) == []
+    assert codes({"type": "writeDataVariable", "target": bit3, "value": True}) == []
+    assert codes({"type": "writeDataVariable", "target": bit3, "value": 7}) == [("/a/0/value", "write-value-type")]
+    assert codes({"type": "editValue", "target": bit3}) == [("/a/0/target", "edit-target-type")]
+    assert codes({"type": "toggleDataVariable", "target": {"$var": {"path": "PLC:Status", "bit": 16}}}) == [
+        ("/a/0/target/$var/bit", "write-target-type")
+    ]

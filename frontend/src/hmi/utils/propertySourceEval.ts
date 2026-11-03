@@ -4,6 +4,7 @@ import type { RecipeField, RecipeRow } from '@shared/types/recipe';
 import { isBoundIndex, type PageField, type PagePathSegment } from '@shared/types/config';
 import type { HttpEntry, HttpRequestSpec } from '../store/httpSourceStore';
 import { imageBodyToUrl } from '@shared/utils/imageAsset';
+import { readBit } from '@shared/utils/valueTypes';
 import { withBase } from '@shared/utils/runtimeBase';
 import { resolveComponentPropKey } from './componentPropResolution';
 import { toNumber } from './coercion';
@@ -270,12 +271,9 @@ function evaluateVar(varObj: unknown, context: EvaluationContext, depth: number)
   }
 
   const value = context.resolveVariable(datasource, path);
-
-  if (index !== undefined && Array.isArray(value)) {
-    return (value[index] ?? null) as ResolvedValue;
-  }
-
-  return value;
+  const element = index !== undefined && Array.isArray(value) ? (value[index] ?? null) : value;
+  if (typeof v.bit === 'number' && element !== undefined) return readBit(element, v.bit);
+  return element as ResolvedValue;
 }
 
 function evaluateLoc(locObj: unknown, context: EvaluationContext, depth: number): ResolvedValue {

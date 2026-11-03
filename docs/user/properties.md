@@ -16,7 +16,9 @@ Two questions answer every property:
 
 Any of these can also be an **array**. An optional *format* refines the editor without changing the type — a `String` can present as a URL field, a dropdown, a password mask, a CSS-length input, a direction/align picker; a `Boolean` as a Visible/Hidden or Enabled/Disabled toggle.
 
-`String`, `Integer`, `Float`, `Boolean`, `DateTime`, `Date`, `Time`, `Duration`, `color`, `icon`, `image`, `video`
+`String`, `Integer`, `Byte`, `Float`, `Boolean`, `DateTime`, `Date`, `Time`, `Duration`, `color`, `icon`, `image`, `video`
+
+A `Byte` is a whole number from 0 to 255 — what an OPC-UA `Byte` tag holds, a Siemens `BYTE` or `USINT` among them. A static datasource offers it as a data type, and the datasource table's **Live** column shows its value in hex: `16#0C`. Only a formula's `{1}` and a **Value Display** take a `Byte` tag.
 
 ## The sources
 
@@ -36,7 +38,7 @@ Any of these can also be an **array**. An optional *format* refines the editor w
 | `$http` | flexible | A value picked out of an HTTP API response. |
 | `$loc` · `$stringExpr` | String | Translated text, or a template like `Tank {1} of {2}`. |
 | `$compare` · `$not` · `$and` · `$or` · `$pageIsActive` · `$userGroups` | Boolean | A comparison result, the opposite of another boolean, whether every (**AND**) or any (**OR**) condition in a list is true, whether a page is active, or whether the signed-in user is in one of the listed groups. |
-| `$formula` | Float / Integer | A number calculated from other values, like `({1} - 32) / 1.8` — `+ - * /` and parentheses. Empty when an input is missing or you divide by zero. **Round to a whole number** makes it an Integer; it is on from the start on a property that takes whole numbers. As the value of a **Write Data Variable** it can also go into an Integer tag: a whole result is written, a fraction is refused with `invalid_value`, as any number with decimals is. |
+| `$formula` | Float / Integer | A number calculated from other values, like `({1} - 32) / 1.8` or `{1} AND 16#0C` — arithmetic, one bit of a value, and bit operations; see [Calculate with a formula](#calculate-with-a-formula-formula). Empty when an input is missing or you divide by zero. **Round to a whole number** makes it an Integer; it is on from the start on a property that takes whole numbers. As the value of a **Write Data Variable** it can also go into an Integer tag: a whole result is written, a fraction is refused with `invalid_value`, as any number with decimals is. |
 | `$user` | String / String[] | The signed-in user's name or groups, or the list of all users. |
 | `$device` · `$urlParam` | String | This machine's identity (hostname, IP, MAC), or a parameter from the page URL. |
 | `$viewport` | String / Integer | Screen size class, orientation, width, height. |
@@ -121,6 +123,23 @@ The **template itself is literal text** — it is not translated. For a sentence
 that must read naturally in every language, use **Localizable Text** instead:
 its phrase holds the `{1}`, `{2}` placeholders and each language orders them
 itself. See [Translations](translations.md#use-a-translation-on-a-screen).
+
+## Calculate with a formula: `$formula`
+
+A formula is written like Structured Text and gives a number. Write `{1}`, `{2}`, … for values: each gets its own row under the expression, where you pick what it is bound to — a number, a `Byte`, or a Boolean, which counts as 1 or 0. A link under the expression opens this section.
+
+| What | Written as | Example |
+|---|---|---|
+| A value | `{1}`, `{2}`, … | `{1}` |
+| Arithmetic | `+ - * /`, parentheses | `({1} - 32) / 1.8` |
+| One bit, bit 0 the lowest | `.3` right after the value | `{1}.3` |
+| Bit mask on a whole number | `AND OR XOR NOT` | `({1} AND 16#0C) / 4` |
+| Shift | `SHL(x, n)`, `SHR(x, n)` | `SHR({1}, 4) AND 16#0F` |
+| Hex and binary numbers | `16#`, `2#` | `16#0F`, `2#1100_0000` |
+
+The order is that of Structured Text: parentheses first, then `NOT` and minus, `* /`, `+ -`, then `AND`, `XOR` and `OR` last. Keywords may be written in any case. A bit and the bit operators take whole numbers only: a fraction leaves the value empty, as a missing value or a division by zero does. `NOT` flips every bit of a signed number, so `NOT 0` is `-1` — mask the result to the width you mean: `NOT {1} AND 16#FF` for a `Byte`.
+
+A bit read this way gives 1 or 0. A formula only reads: to show or switch one bit as a Boolean, bind the field to the bit itself with the picker's **Bits** box — see [Binding & subscribing](subscribing.md#bind-a-property-to-a-tag).
 
 ## Passing values into components
 

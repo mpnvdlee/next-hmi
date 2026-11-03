@@ -1,6 +1,7 @@
 [
   "Boolean[]",
   "Integer[]",
+  "Byte[]",
   "Float[]",
   "String[]",
   "DateTime[]",

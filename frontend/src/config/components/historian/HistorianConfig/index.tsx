@@ -73,6 +73,7 @@ export default function HistorianConfig() {
         setJustAdded(key);
       },
       filter: { label: 'Historian variable', type: LOGGABLE_TYPES },
+      noBits: true,
     });
   }
 

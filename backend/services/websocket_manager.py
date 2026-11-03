@@ -21,7 +21,6 @@ import contextlib
 import itertools
 import json
 import logging
-import re
 import secrets
 import threading
 import time
@@ -69,9 +68,6 @@ _MAX_WS_MESSAGE_BYTES = 64 * 1024
 _BOOT_ID = uuid.uuid4().hex
 # How long a runtime login can be resumed on a new socket after it was last used.
 _SESSION_TTL_S = 12 * 3600
-# Matches "[N]" suffix used in array-element paths (e.g. "MyArray[2]")
-_ARRAY_INDEX_RE = re.compile(r"\[(\d+)\]$")
-
 # Documented reason codes echoed back to clients in auth_error / write_error
 # messages. Frontend action-result handlers $switch on these strings, so they
 # are a stable contract — do not rename without a coordinated frontend change.
@@ -631,7 +627,7 @@ class WebSocketManager:
     ) -> None:
         """Resolve, permission-check, write (or toggle), audit and respond."""
         request_id = msg.get("requestId")
-        registry_path = _ARRAY_INDEX_RE.sub("", path)
+        registry_path = write_service.registry_path_of(self._datasource_manager, ds_name, path)
 
         entry_data = self._datasource_manager.get_entry(ds_name, registry_path)
         if entry_data is None:

@@ -155,6 +155,28 @@ describe('VarEditor', () => {
     expect(screen.getByRole('textbox')).toHaveValue('PLC:Motor1/Speed[2]');
   });
 
+  it('shows a bit as `.N` and commits a typed `.N` as one', () => {
+    const onChange = vi.fn();
+    render(
+      <VarEditor value={{ $var: { path: 'PLC:Battery/Status', bit: 5 } }} onChange={onChange} />,
+    );
+    const input = screen.getByRole('textbox');
+    expect(input).toHaveValue('PLC:Battery/Status.5');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'PLC:Battery/Status.3' } });
+    fireEvent.blur(input);
+    expect(onChange).toHaveBeenCalledWith({ $var: { path: 'PLC:Battery/Status', bit: 3 } });
+  });
+
+  it('leaves a picked tag whose name ends in `.N` alone while its text is', () => {
+    const onChange = vi.fn();
+    render(<VarEditor value={{ $var: { path: 'PLC:Motor.1' } }} onChange={onChange} />);
+    const input = screen.getByRole('textbox');
+    fireEvent.focus(input);
+    fireEvent.blur(input);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it('commits a typed path on blur, parsing a trailing [n] into index', () => {
     const onChange = vi.fn();
     render(<VarEditor value={{ $var: { path: '' } }} onChange={onChange} />);

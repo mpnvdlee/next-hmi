@@ -3,6 +3,7 @@ import type { RefObject } from 'react';
 import { useVariableStore } from '@hmi/store/variableStore';
 import { sendWsMessage } from '@hmi/hooks/useWebSocket';
 import { buildVarKey } from '@shared/types/datasource';
+import { byteHex } from '@shared/utils/valueTypes';
 import type { RowItem } from '@config/components/ui/datasourceTreeHelpers';
 import type { VirtualizerIndexLike } from './virtualizerTypes';
 
@@ -64,8 +65,11 @@ export function useLiveValues({ showLive, dsName, rows, virtualizer, scrollRef }
 
         const key = buildVarKey(dsNameRef.current, row.path);
         if (!(key in values)) continue;
-        const isStruct = varMeta[key]?.type.kind === 'struct';
-        next[key] = isStruct ? '{…}' : String(values[key]);
+        const type = varMeta[key]?.type;
+        next[key] =
+          type?.kind === 'struct'
+            ? '{…}'
+            : ((type?.base === 'Byte' ? byteHex(values[key]) : null) ?? String(values[key]));
       }
 
       if (sameValues(next, liveValuesRef.current)) return;

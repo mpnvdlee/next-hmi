@@ -319,7 +319,7 @@ async def write_datasource_variable(
     if parsed is None:
         return {"ok": False, "reason": "bad_request"}
     datasource, path, field, value = parsed
-    registry_path = write_service.array_registry_path(path)
+    registry_path = write_service.registry_path_of(datasource_manager, datasource, path)
     entry_data = datasource_manager.get_entry(datasource, registry_path)
     if entry_data is None:
         return {"ok": False, "reason": write_service.REASON_BAD_PATH}

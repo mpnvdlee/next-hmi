@@ -50,6 +50,23 @@ describe('useWriteVariable', () => {
     ]);
   });
 
+  it('writes a bit as a Boolean with a `.N` after the path', () => {
+    useVariableStore.setState({
+      varMeta: {
+        'PLC:Motor/Speed': {
+          type: { kind: 'scalar', base: 'Integer', array: false },
+          writable: true,
+        },
+      },
+    });
+    const write = writer({ variable: { $var: { path: 'PLC:Motor/Speed', bit: 3 } } });
+    write(true);
+    write(7);
+
+    // 7 is no Boolean, so only the first write leaves.
+    expect(frames().map((f) => [f.path, f.value])).toEqual([['Motor/Speed.3', true]]);
+  });
+
   it('coerces a scalar against its metadata before sending', () => {
     useVariableStore.setState({
       varMeta: { 'PLC:Motor/Speed': { type: { kind: 'scalar', base: 'Integer', array: false } } },

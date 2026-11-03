@@ -1,6 +1,7 @@
 import { subscribeConfigChanged } from '@shared/events/configChangedBus';
 import { apiJson } from '@shared/utils/api';
 import { canonicalOpcuaWriteType } from '@shared/utils/opcuaWriteCoercion';
+import { bitWidth } from '@shared/utils/valueTypes';
 
 type WriteCoercionKind = 'boolean' | 'number' | 'string' | null;
 export interface VariableWriteDescriptor {
@@ -30,6 +31,7 @@ export function getWriteCoercionKind(dataType: string | undefined): WriteCoercio
     case 'Boolean':
       return 'boolean';
     case 'Integer':
+    case 'Byte':
     case 'Float':
     case 'Duration':
       return 'number';
@@ -109,6 +111,15 @@ export async function loadVariableWriteDescriptor(
   try {
     const variables = await loadVariableTree(datasource);
     // `[…]` is a bound index: one element, which one only known at run time.
+    // `.N` is one bit of a whole number, written as a Boolean — unless a tag is
+    // itself named so.
+    const bitMatch = /\.(\d+)$/.exec(path);
+    const word = bitMatch && findVariableWriteDescriptor(variables, path.slice(0, bitMatch.index));
+    if (bitMatch && word && !word.isArray && Number(bitMatch[1]) < bitWidth(word.dataType)) {
+      if (!findVariableWriteDescriptor(variables, path)) {
+        return { dataType: 'Boolean', isArray: false, complete: true };
+      }
+    }
     const indexMatch = /\[(-?\d+|…)\]$/.exec(path);
     const descriptor = findVariableWriteDescriptor(variables, path.slice(0, indexMatch?.index));
     return descriptor

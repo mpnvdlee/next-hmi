@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { useVariableStore, type VarMeta } from '../store/variableStore';
 import { type VariableBinding, bindingIndex, bindingKey } from '@shared/types/config';
+import { readBit } from '@shared/utils/valueTypes';
 
 const noSubscribe = (): (() => void) => () => {};
 
@@ -33,10 +34,11 @@ export function useVariable(id: string): unknown {
 export function useBindingValue(binding: VariableBinding | undefined): unknown {
   const id = bindingKey(binding);
   const index = bindingIndex(binding);
+  const bit = binding?.bit;
   // The snapshot is the resolved value itself — a store value or an element of
   // one, never a fresh object — so it compares equal across ticks that leave it
   // alone, and a scalar-array element re-renders only when that element changes.
-  const getSnapshot = (): unknown => {
+  const getElement = (): unknown => {
     const { values, varMeta } = useVariableStore.getState();
     if (index === undefined) return id ? values[id] : undefined;
     const type = id ? varMeta[id]?.type : undefined;
@@ -44,6 +46,11 @@ export function useBindingValue(binding: VariableBinding | undefined): unknown {
     if (type.kind === 'struct') return values[`${id}/[${index}]`];
     const raw = values[id];
     return Array.isArray(raw) ? (raw[index] ?? null) : null;
+  };
+  const getSnapshot = (): unknown => {
+    const value = getElement();
+    if (bit === undefined || value === undefined) return value;
+    return readBit(value, bit);
   };
   // A property with no binding has nothing to watch, so it registers no store
   // listener; every widget reads several such properties.

@@ -71,6 +71,7 @@ export const SOURCE_CAPABLE_TYPES = new Set([
   'time',
   'duration',
   'integer',
+  'byte',
   'float',
   'boolean',
   'color',

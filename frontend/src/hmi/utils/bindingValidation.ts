@@ -21,6 +21,7 @@ import {
   structSatisfies,
   type AcceptType,
   type StructMemberLookup,
+  type VarType,
 } from '@shared/types/varType';
 import { acceptedValueTypes } from '@shared/utils/valueTypes';
 import { useVariableStore } from '../store/variableStore';
@@ -39,12 +40,16 @@ export interface BindingSpec {
   id: string;
   /** Array element selected by `$var.index`, when present. */
   index?: number;
+  /** Bit of that value selected by `$var.bit`: the slot then reads a Boolean. */
+  bit?: number;
   /** Schema slot's accepted types (empty = no type constraint). */
   accept: AcceptType[];
   requiredFields?: RequiredFieldEntry[];
   /** The slot writes the variable back, so a read-only variable fails it. */
   write?: boolean;
 }
+
+const BIT_TYPE: VarType = { kind: 'scalar', base: 'Boolean', array: false };
 
 /** The schema-field slice binding validation reads. */
 export interface BindingSchemaField {
@@ -134,6 +139,7 @@ function buildBindingSpecs(
       specs.push({
         id,
         index: bindingIndex(b),
+        ...(b.bit !== undefined && { bit: b.bit }),
         accept: acceptTypes(field?.type),
         requiredFields: field?.requiredFields,
         ...(field?.write === true && { write: true }),
@@ -298,7 +304,7 @@ export function checkBindingSpec(
   s: BindingStoreSlice,
   hasMeta: boolean,
 ): 'ok' | 'invalid' | 'pending' {
-  const { id, index, accept, requiredFields, write } = spec;
+  const { id, index, bit, accept, requiredFields, write } = spec;
   const meta = s.varMeta[id];
 
   if (!meta) {
@@ -319,8 +325,15 @@ export function checkBindingSpec(
     }
   }
 
+  const element = index === undefined ? meta.type : elementOf(meta.type);
+  if (bit !== undefined) {
+    // A whole number that is no array element; the backend knows the exact width.
+    const whole = index === undefined && element.kind === 'scalar' && !element.array;
+    const width = whole ? (element.base === 'Byte' ? 8 : element.base === 'Integer' ? 32 : 0) : 0;
+    if (!Number.isInteger(bit) || bit < 0 || bit >= width) return 'invalid';
+  }
   if (accept.length > 0) {
-    const value = index === undefined ? meta.type : elementOf(meta.type);
+    const value: VarType = bit !== undefined ? BIT_TYPE : element;
     if (!accept.some((a) => accepts(a, value, requiredFields))) return 'invalid';
     if (value.kind === 'struct' && requiredFields?.length && value.fields.length > 0) {
       const members = structMembers(s.varMeta, id, meta, index);

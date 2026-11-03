@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { FormulaEditor } from './formula';
-import { NUMERIC_SLOT } from './utils';
+import { FORMULA_OPERAND_SLOT } from './utils';
 
 function Harness({ initial, onChange }: { initial?: unknown; onChange: (v: unknown) => void }) {
   const [value, setValue] = useState(initial);
@@ -73,7 +73,7 @@ describe('FormulaEditor', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('opens an operand picker on numbers, whatever the field takes', () => {
+  it('opens an operand picker on numbers and Booleans, whatever the field takes', () => {
     const open = vi.fn();
     render(
       <FormulaEditor
@@ -85,6 +85,6 @@ describe('FormulaEditor', () => {
     const titles = screen.getAllByText('{1}');
     const card = titles[titles.length - 1].closest('.cfg-field-group') as HTMLElement;
     fireEvent.click(within(card).getByRole('button', { name: 'Change variable binding' }));
-    expect(open.mock.calls[0][2]).toBe(NUMERIC_SLOT);
+    expect(open.mock.calls[0][2]).toBe(FORMULA_OPERAND_SLOT);
   });
 });

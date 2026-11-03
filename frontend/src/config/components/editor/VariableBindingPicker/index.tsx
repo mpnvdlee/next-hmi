@@ -62,6 +62,10 @@ import {
   collectFolderKeys,
   resolveElementBinding,
   rowSelectionKey,
+  BIT_KEY,
+  bitEntries,
+  hasBits,
+  splitBitKey,
 } from './variableTreeHelpers';
 import {
   buildComponentPropRows,
@@ -155,6 +159,7 @@ export default function VariableBindingPicker() {
   // Selected composite key
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [bits, setBits] = useState(false);
 
   const isComponentPropMode = !!target?.componentPropSource;
   // Repeat item mode lists only the Repeater copy's element — a source of its
@@ -184,6 +189,7 @@ export default function VariableBindingPicker() {
     if (!wrapped?.path) return null;
     const base = wrapped.path;
     if (wrapped.repeatIndex) return `${base}${REPEAT_INDEX_SUFFIX}`;
+    if (wrapped.bit !== undefined) return `${base}${BIT_KEY}${wrapped.bit}`;
     if (wrapped.index === undefined) return base;
     // struct[] elements are addressed by folder path (".../[N]"), scalar
     // arrays by a bracket suffix on the variable's own path —
@@ -198,6 +204,10 @@ export default function VariableBindingPicker() {
     if (!open) return;
     setSearch('');
     setShowAll(false);
+    // Open on the bits when the field is bound to one, its word's list open.
+    const boundBit = currentKey ? splitBitKey(currentKey) : null;
+    setBits(boundBit !== null);
+    if (boundBit) setCollapsed((prev) => new Set([...prev, `${boundBit.path}${BIT_KEY}`]));
     setLoadError(null);
     setDsFailed(new Set());
     // The picker outlives every close, so a tree loaded on an earlier open is
@@ -251,6 +261,15 @@ export default function VariableBindingPicker() {
     if (!comp) return null;
     return widgetRegistry[comp.type]?.schema[target.propertyKey] ?? null;
   }, [isComponentPropMode, comp, target]);
+
+  // Bits are Booleans the runtime reads off a whole number, so they are offered
+  // where a Boolean fits and the caller resolves the binding client-side.
+  const bitsAvailable =
+    loadsDatasources &&
+    !target?.noBits &&
+    schemaField?.type !== undefined &&
+    acceptedValueTypes(schemaField.type).some((t) => t.toLowerCase() === 'boolean');
+  const listBits = bitsAvailable && bits;
 
   // The Repeat item rows follow the same type filter as the variables.
   const repeatProperties = useMemo(
@@ -419,9 +438,9 @@ export default function VariableBindingPicker() {
       ...ds,
       children: showAll
         ? annotateSelectable(ds.children, schemaField)
-        : typeFilter(ds.children, schemaField),
+        : typeFilter(ds.children, schemaField, listBits),
     }));
-  }, [isComponentPropMode, dsTree, schemaField, showAll]);
+  }, [isComponentPropMode, dsTree, schemaField, showAll, listBits]);
 
   const rows = useMemo((): RowItem[] => {
     if (isComponentPropMode && target?.componentPropSource) {
@@ -480,20 +499,35 @@ export default function VariableBindingPicker() {
     return flattenForRender(
       filtered,
       0,
-      search.trim() ? new Set() : collapsed,
+      // A search opens every folder; a bit list stays as the user left it,
+      // since its key marks it open.
+      search.trim() ? new Set([...collapsed].filter((k) => k.endsWith(BIT_KEY))) : collapsed,
       target?.repeatIndex === true,
+      listBits,
     );
-  }, [isComponentPropMode, target, typedDsTree, search, showAll, collapsed, repeatProperties]);
+  }, [
+    isComponentPropMode,
+    target,
+    typedDsTree,
+    search,
+    showAll,
+    collapsed,
+    repeatProperties,
+    listBits,
+  ]);
 
   // All variable entries across all datasources (for var-mode right panel lookup)
   const allVars = useMemo(() => {
     if (isComponentPropMode) return [];
     const out: VariableEntry[] = [];
     for (const ds of dsTree) {
-      out.push(...flattenAll(ds.children, ds.name));
+      for (const v of flattenAll(ds.children, ds.name)) {
+        out.push(v);
+        if (listBits && hasBits(v)) out.push(...bitEntries(v));
+      }
     }
     return out;
-  }, [isComponentPropMode, dsTree]);
+  }, [isComponentPropMode, dsTree, listBits]);
 
   // The type-filtered tree a selected folder is judged against, even while
   // "Show all" lists everything.
@@ -503,9 +537,9 @@ export default function VariableBindingPicker() {
         ? typedDsTree
         : dsTree.map((ds) => ({
             ...ds,
-            children: typeFilter(ds.children, schemaField),
+            children: typeFilter(ds.children, schemaField, listBits),
           })),
-    [isComponentPropMode, showAll, dsTree, typedDsTree, schemaField],
+    [isComponentPropMode, showAll, dsTree, typedDsTree, schemaField, listBits],
   );
 
   // Scroll container for the virtual list
@@ -782,6 +816,10 @@ export default function VariableBindingPicker() {
         path: `${datasource}:${rawPath.slice(0, -REPEAT_INDEX_SUFFIX.length)}`,
         repeatIndex: true,
       };
+    } else if (splitBitKey(rawPath)) {
+      const { path, bit } = splitBitKey(rawPath)!;
+      binding = { path: `${datasource}:${path}`, bit };
+      meta = { dataType: 'Boolean' };
     } else {
       const { path, index: elementIndex } = resolveElementBinding(
         datasource,
@@ -868,6 +906,8 @@ export default function VariableBindingPicker() {
       }
       showAll={showAll}
       onShowAllChange={setShowAll}
+      bits={bits}
+      onBitsChange={bitsAvailable ? setBits : undefined}
       loadError={loadsDatasources ? loadError : null}
       listRef={listRef}
       listContent={
@@ -895,6 +935,7 @@ export default function VariableBindingPicker() {
                 selectKey,
                 onPickAndClose: confirmKey,
                 dsLoading,
+                bits: listBits,
               };
               return <PickerRow item={item} ctx={ctx} />;
             }}

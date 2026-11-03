@@ -135,6 +135,8 @@ interface VariableBinding {
   index?: number;
   /** Take `index` from the surrounding Repeater copy instead. */
   repeatIndex?: boolean;
+  /** One bit (0 the lowest) of a whole-number variable, read and written as a Boolean. */
+  bit?: number;
 }
 
 /** The variable a write or toggle action writes: a `$var`, inside a Repeater

@@ -205,6 +205,11 @@
   outline: none;
 }
 
+/* The type names outgrow the ghost trigger; the list shows each one whole. */
+.cfg-var-type-popup {
+  min-width: max-content;
+}
+
 .cfg-var-type-edit {
   display: flex;
   align-items: center;

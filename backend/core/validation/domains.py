@@ -141,6 +141,7 @@ def validate_alarms(alarms: Any, ctx: ValidationContext) -> ValidationReport:
                     )
                     continue
                 validate_property_value(ref, None, ctx, f"{base}/values/{vi}", report)
+                _refuse_bit(ref, f"{base}/values/{vi}", report, "an alarm value")
             # `{n}` in the text names entry n of `values`, counted from 1.
             for field_name in ("title", "description"):
                 text = AlarmDefinition.resolve_string(alarm.get(field_name))
@@ -180,6 +181,7 @@ def validate_alarms(alarms: Any, ctx: ValidationContext) -> ValidationReport:
                 validate_property_value(
                     source_value, None, ctx, f"{base}/trigger/source_value", report
                 )
+                _refuse_bit(source_value, f"{base}/trigger/source_value", report, "an alarm")
             # Thresholds accept a plain number, `$static` or a `$var` — the
             # float schema type-checks the literal and filters the binding.
             for bound in ("min", "max"):
@@ -187,7 +189,21 @@ def validate_alarms(alarms: Any, ctx: ValidationContext) -> ValidationReport:
                     validate_property_value(
                         trigger[bound], {"type": "float"}, ctx, f"{base}/trigger/{bound}", report
                     )
+                    _refuse_bit(trigger[bound], f"{base}/trigger/{bound}", report, "an alarm")
     return report
+
+
+def _refuse_bit(ref: Any, path: str, report: ValidationReport, reader: str) -> None:
+    """A `$var.bit` is read in the browser only: `reader` resolves its binding
+    on the server, where it would read — and write — the whole word."""
+    payload = ref.get("$var") if isinstance(ref, dict) else None
+    if isinstance(payload, dict) and payload.get("bit") is not None:
+        report.warn(
+            f"{path}/$var/bit",
+            f"{reader} takes a whole variable, not one bit of it",
+            severity="error",
+            code="var-type",
+        )
 
 
 def validate_recipes(recipes: Any, ctx: ValidationContext) -> ValidationReport:
@@ -220,6 +236,7 @@ def validate_recipes(recipes: Any, ctx: ValidationContext) -> ValidationReport:
             # also the binding filter — an unknown one falls back to no filter.
             schema = {"type": data_type} if data_type in _RECIPE_DATA_TYPES else None
             validate_property_value(binding, schema, ctx, f"{base}/binding", report)
+            _refuse_bit(binding, f"{base}/binding", report, "a recipe parameter")
     return report
 
 

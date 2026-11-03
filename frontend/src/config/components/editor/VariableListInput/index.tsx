@@ -137,6 +137,7 @@ export default function VariableListInput({
         );
       },
       filter: { label, type: PLOTTABLE_TYPES },
+      noBits: true,
     });
   }
 

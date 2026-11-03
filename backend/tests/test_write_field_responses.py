@@ -151,6 +151,24 @@ def test_permission_denied_when_group_mismatch() -> None:
     ]
 
 
+def test_a_bit_write_is_judged_by_its_words_groups() -> None:
+    # The ACL lookup strips the `.N` bit as it does the `[N]` element: a path no
+    # entry matched used to find no groups to check, and so none to refuse.
+    ws = FakeWebSocket()
+    ds_entry = FakeDatasourceEntry(
+        ds_type="static",
+        registry={"Tag": {"data_type": "UInt16", "writable": True, "interactableByGroups": ["engineer"]}},
+    )
+    manager = _make_manager(ws, ds_entry=ds_entry)
+    manager._client_users["c1"] = {  # type: ignore[attr-defined]
+        "runtime:tab1:inst1": {"username": "guest", "groups": ["guest"]}
+    }
+
+    _run_write(manager, _msg(path="Tag.3", field=None, value=True))
+
+    assert [(m["path"], m["reason"]) for m in ws.messages] == [("Tag.3", "permission_denied")]
+
+
 def test_invalid_value_when_coercion_fails() -> None:
     ws = FakeWebSocket()
     ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32", "writable": True}})

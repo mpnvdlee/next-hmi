@@ -1,5 +1,5 @@
 import {
-  NUMERIC_SLOT,
+  FORMULA_OPERAND_SLOT,
   schemaFieldPicker,
   slotFilter,
   wrapPicker,
@@ -24,9 +24,14 @@ describe('wrapPicker slot', () => {
   it('lets the innermost slot that names a type win', () => {
     const parent = vi.fn<OpenBindingPicker>();
     const condition = wrapPicker(parent, vi.fn(), undefined, true)!;
-    const operand = wrapPicker(condition, vi.fn(), undefined, NUMERIC_SLOT)!;
+    const operand = wrapPicker(condition, vi.fn(), undefined, FORMULA_OPERAND_SLOT)!;
     operand();
-    expect(parent).toHaveBeenCalledWith(expect.any(Function), undefined, NUMERIC_SLOT, undefined);
+    expect(parent).toHaveBeenCalledWith(
+      expect.any(Function),
+      undefined,
+      FORMULA_OPERAND_SLOT,
+      undefined,
+    );
   });
 
   it("hands the slot's Repeat item option through untouched", () => {
@@ -49,9 +54,9 @@ describe('slotFilter', () => {
   });
 
   it("puts a typed slot's own type under the property's label, read-only", () => {
-    expect(slotFilter(filter, NUMERIC_SLOT)).toEqual({
+    expect(slotFilter(filter, FORMULA_OPERAND_SLOT)).toEqual({
       label: 'Value',
-      type: ['Float', 'Integer'],
+      type: ['Float', 'Integer', 'Byte', 'Boolean'],
     });
   });
 });

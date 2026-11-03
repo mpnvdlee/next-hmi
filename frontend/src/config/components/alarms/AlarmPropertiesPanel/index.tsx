@@ -120,6 +120,7 @@ function AlarmPanel({
         },
         filter: slotFilter(filter, slot),
         currentBinding: varBindingOf(current),
+        noBits: true,
       });
     };
   }

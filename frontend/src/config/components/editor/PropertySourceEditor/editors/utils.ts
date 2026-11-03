@@ -33,9 +33,10 @@ export type OpenBindingPicker = (
  */
 export type SlotType = true | { type: string | string[] };
 
-/** What a `$formula` operand takes: the formula coerces each one to a number. */
-export const NUMERIC_TYPES: SchemaField['type'] = ['Float', 'Integer'];
-export const NUMERIC_SLOT: SlotType = { type: NUMERIC_TYPES };
+/** What a `$formula` operand takes: the formula coerces each one to a number,
+ *  a Boolean — a bit among them — to 1 or 0. */
+export const FORMULA_OPERAND_TYPES: SchemaField['type'] = ['Float', 'Integer', 'Byte', 'Boolean'];
+export const FORMULA_OPERAND_SLOT: SlotType = { type: FORMULA_OPERAND_TYPES };
 
 /** What a condition takes (an `$if`'s, an If action's, what `$not` inverts):
  *  a Boolean, not any value's truthiness — an Integer tests through `$compare`. */

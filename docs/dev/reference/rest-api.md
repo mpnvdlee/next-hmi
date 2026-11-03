@@ -42,7 +42,7 @@ These are FastAPI `StaticFiles` mounts and serve any file in the named directory
 ## Documentation
 
 - `GET /help` **(manager)**
-  - Serves the rendered user guide. A build with docs bundled beside the executable mounts them as static files at `/help/`; a source checkout or the Docker image has no bundled copy, so the route redirects to `PUBLIC_DOCS_URL` (`https://next-hmi.com/docs/`) instead. Only `docs/user/` is ever rendered. Not `/docs` — that is FastAPI's Swagger UI.
+  - Serves the rendered user guide. A build with docs bundled beside the executable mounts them as static files at `/help/`; a source checkout or the Docker image has no bundled copy, so the route redirects to `PUBLIC_DOCS_URL` (`https://next-hmi.com/docs/`) instead, its version's line (`v1.1/`) when the app has one. `GET /help/<page>` redirects to that page there, so a deep link such as the formula editor's `/help/properties.html#…` works in both. Only `docs/user/` is ever rendered. Not `/docs` — that is FastAPI's Swagger UI.
 
 ---
 

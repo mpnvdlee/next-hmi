@@ -38,6 +38,7 @@
   "representative": {
     "Boolean": "Boolean",
     "Integer": "Int32",
+    "Byte": "Byte",
     "Float": "Double",
     "String": "String",
     "DateTime": "DateTime",
@@ -60,15 +61,17 @@
       "writeVariantType": "SByte",
       "testServerType": "SByte",
       "inOpcuaTypes": true,
-      "staticDefault": 0
+      "staticDefault": 0,
+      "bits": 8
     },
     {
       "name": "Byte",
-      "simpleType": "Integer",
+      "simpleType": "Byte",
       "writeVariantType": "Byte",
       "testServerType": "Byte",
       "inOpcuaTypes": true,
-      "staticDefault": 0
+      "staticDefault": 0,
+      "bits": 8
     },
     {
       "name": "Int16",
@@ -76,7 +79,8 @@
       "writeVariantType": "Int16",
       "testServerType": "Int16",
       "inOpcuaTypes": true,
-      "staticDefault": 0
+      "staticDefault": 0,
+      "bits": 16
     },
     {
       "name": "UInt16",
@@ -84,7 +88,8 @@
       "writeVariantType": "UInt16",
       "testServerType": "UInt16",
       "inOpcuaTypes": true,
-      "staticDefault": 0
+      "staticDefault": 0,
+      "bits": 16
     },
     {
       "name": "Int32",
@@ -92,7 +97,8 @@
       "writeVariantType": "Int32",
       "testServerType": "Int32",
       "inOpcuaTypes": true,
-      "staticDefault": 0
+      "staticDefault": 0,
+      "bits": 32
     },
     {
       "name": "UInt32",
@@ -100,7 +106,8 @@
       "writeVariantType": "UInt32",
       "testServerType": "UInt32",
       "inOpcuaTypes": true,
-      "staticDefault": 0
+      "staticDefault": 0,
+      "bits": 32
     },
     {
       "name": "Int64",
@@ -268,15 +275,17 @@
       "writeVariantType": "SByte",
       "testServerType": "SByte",
       "inOpcuaTypes": false,
-      "staticDefault": 0
+      "staticDefault": 0,
+      "bits": 8
     },
     {
       "name": "UInt8",
-      "simpleType": "Integer",
+      "simpleType": "Byte",
       "writeVariantType": "Byte",
       "testServerType": "Byte",
       "inOpcuaTypes": false,
-      "staticDefault": 0
+      "staticDefault": 0,
+      "bits": 8
     },
     {
       "name": "Single",
@@ -292,7 +301,8 @@
       "writeVariantType": "Int32",
       "testServerType": null,
       "inOpcuaTypes": false,
-      "staticDefault": 0
+      "staticDefault": 0,
+      "bits": 32
     },
     {
       "name": "Int",
@@ -300,7 +310,8 @@
       "writeVariantType": "Int32",
       "testServerType": null,
       "inOpcuaTypes": false,
-      "staticDefault": 0
+      "staticDefault": 0,
+      "bits": 32
     },
     {
       "name": "Enumeration",

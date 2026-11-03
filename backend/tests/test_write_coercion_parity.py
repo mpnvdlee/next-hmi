@@ -55,6 +55,7 @@ def test_every_raw_type_in_shared_mapping_is_accepted() -> None:
     samples = {
         "Boolean": False,
         "Integer": 0,
+        "Byte": 0,
         "Float": 0,
         "String": "x",
         "DateTime": "2026-06-15T12:00:00Z",

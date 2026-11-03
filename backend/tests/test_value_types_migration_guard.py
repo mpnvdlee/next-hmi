@@ -7,7 +7,7 @@ so they are excluded. This catches a regression where an OPC literal or a stale
 The value-type vocabulary is capitalised (``Boolean``, ``Float``, ``DateTime``,
 …), so those names overlap real OPC-UA type names and are *not* flagged. The
 guard therefore only forbids OPC types that have no value-type equivalent
-(``Int16``, ``Double``, ``Byte``, …).
+(``Int16``, ``Double``, ``UInt8``, …).
 """
 
 import re
@@ -24,7 +24,7 @@ PROJECT_ROOTS = (PROJECT_TESTBENCH, PROJECT_SEED, PROJECT_EXAMPLE)
 # Raw OPC-UA type literals with no value-type name — these must never appear in
 # HMI config / widget schemas (a value type is the only datatype a schema speaks).
 _OPC_LITERAL_RE = re.compile(
-    r"\b(Bool|SByte|Byte|Int8|Int16|Int32|Int64|UInt8|UInt16|UInt32|UInt64"
+    r"\b(Bool|SByte|Int8|Int16|Int32|Int64|UInt8|UInt16|UInt32|UInt64"
     r"|Single|Double|Decimal)\b"
 )
 

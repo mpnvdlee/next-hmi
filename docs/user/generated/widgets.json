@@ -2405,7 +2405,7 @@
           {
             "key": "variable",
             "label": "Value",
-            "type": "Float | Integer",
+            "type": "Float | Integer | Byte",
             "group": "Data"
           },
           {

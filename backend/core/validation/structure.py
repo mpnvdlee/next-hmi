@@ -36,7 +36,7 @@ from core.storage import (
     read_csv,
     read_json,
 )
-from core.value_types import to_simple_type
+from core.value_types import BIT_WIDTHS, to_simple_type
 
 from . import component_property, source_rules, vartype
 from .ids import is_valid_page_id
@@ -84,6 +84,7 @@ PROPERTY_SOURCE_KEYS = frozenset({
 _ATOMIC_TYPE_CHECKS = {
     "string": (str,),
     "integer": (int,),
+    "byte": (int,),
     "float": (int, float),
     "boolean": (bool,),
     "color": (str,),
@@ -1295,6 +1296,12 @@ def validate_var_ref(
     indexed = ref.get("index") is not None or ref.get("repeatIndex") is True
     element = vartype.element_of(var_type) if indexed else var_type
     subject = f"variable '{ds_name}:{var_path}'"
+    bit = ref.get("bit")
+    if bit is not None:
+        if not _has_bit(bit, indexed, var_type, ctx, ds_name, resolved_key):
+            report.warn(f"{path}/$var/bit", f"{subject} has no bit {bit}", severity="error", code="var-type")
+            return
+        element = _BIT_TYPE
     accept = _accept_types_for_schema(schema_field)
     if accept and not any(vartype.accepts(a, element, required_fields) for a in accept):
         # A whole array whose element would fit: the editor's Index row below
@@ -1330,6 +1337,26 @@ def validate_var_ref(
             severity="error",
             code="var-readonly",
         )
+
+
+_BIT_TYPE = {"kind": "scalar", "base": "Boolean", "array": False}
+
+
+def _has_bit(
+    bit: Any, indexed: bool, var_type: dict, ctx: ValidationContext, ds_name: str, key: str
+) -> bool:
+    """Whether `$var.bit` names a bit the variable has: one of a whole number
+    that is no array element, below the width of its real type when the
+    variable's entry is known (`BIT_WIDTHS`)."""
+    if indexed or isinstance(bit, bool) or not isinstance(bit, int) or bit < 0:
+        return False
+    if var_type.get("kind") != "scalar" or var_type.get("array"):
+        return False
+    if var_type.get("base") not in ("Integer", "Byte"):
+        return False
+    entry = ctx.datasource_entry(ds_name, key) if ctx.datasource_entry else None
+    raw = entry.get("data_type") if isinstance(entry, dict) else None
+    return not isinstance(raw, str) or bit < BIT_WIDTHS.get(raw.strip().lower(), 0)
 
 
 def _report_bad_index(
@@ -1734,6 +1761,8 @@ class _WriteTarget:
     element: dict
     indexed: bool
     subject: str
+    # One bit of the variable, written as a Boolean into its word.
+    bit: int | None = None
 
 
 def _check_write_target_type(
@@ -1791,6 +1820,8 @@ def _toggle_type_problem(target: _WriteTarget, ctx: ValidationContext) -> str | 
     not know (a Variant, a LocalizedText) to String — else on the registry's."""
     if target.element.get("array"):
         return "is an array"
+    if target.bit is not None:
+        return None
     entry = ctx.datasource_entry(target.ds_name, target.key) if ctx.datasource_entry else None
     raw = entry.get("data_type") if isinstance(entry, dict) else None
     if isinstance(raw, str) and raw:
@@ -1911,6 +1942,20 @@ def _validate_write_target(
     if var_type is None:
         return None
     indexed = index is not None or key != var_path
+    bit = ref.get("bit") if isinstance(ref, dict) else None
+    if bit is not None:
+        subject = f"variable '{ds_name}:{var_path}'"
+        if not _has_bit(bit, indexed, var_type, ctx, ds_name, key):
+            report.warn(
+                f"{target_path}/$var/bit",
+                f"{subject} has no bit {bit}",
+                severity="error",
+                code="write-target-type",
+            )
+            return None
+        written = _WriteTarget(ds_name, key, _BIT_TYPE, False, f"bit {bit} of {subject}", bit)
+        _check_write_target_type(kind, written, ctx, target_path, report)
+        return written
     written = _WriteTarget(
         ds_name,
         key,
@@ -1973,6 +2018,8 @@ def _validate_write_value(
     entry = ctx.datasource_entry(written.ds_name, written.key)
     if not isinstance(entry, dict):
         return
+    if written.bit is not None:
+        entry = {"data_type": "Boolean"}
     from services.write_service import (
         COERCION_INVALID_DESCRIPTOR,
         COERCION_MESSAGES,
@@ -2275,14 +2322,23 @@ def template_placeholder_keys(templates: list[str]) -> set[str]:
     }
 
 # `$formula` grammar, mirrored from frontend/src/hmi/utils/formula.ts:
-#   expr := term (("+" | "-") term)*     term := unary (("*" | "/") unary)*
-#   unary := ("-" | "+") unary | primary  primary := number | "{n}" | "(" expr ")"
-_FORMULA_TOKEN_RE = re.compile(r"\s*(?:(\d+(?:\.\d*)?|\.\d+)|\{\s*(\d+)\s*\}|([-+*/()]))")
+#   expr := xor ("OR" xor)*      xor := and ("XOR" and)*     and := sum ("AND" sum)*
+#   sum := term (("+" | "-") term)*     term := unary (("*" | "/") unary)*
+#   unary := ("-" | "+" | "NOT") unary | primary
+#   primary := number | "16#…" | "2#…" | "{n}" | "{n}.bit" | ("SHL" | "SHR") "(" expr "," expr ")"
+#            | "(" expr ")"
+# Keywords take any case. Both sides parse the expressions in formulaSyntax.json.
+_FORMULA_TOKEN_RE = re.compile(
+    r"\s*(?:(16#[0-9a-f][0-9a-f_]*|2#[01][01_]*)|(\d+(?:\.\d*)?|\.\d+)|\{\s*(\d+)\s*\}(?:\.(\d+))?"
+    r"|(AND|OR|XOR|NOT|SHL|SHR)(?![a-z0-9_#])|([-+*/(),]))",
+    re.IGNORECASE,
+)
 
 
 def _formula_is_valid(expression: str) -> bool:
     """Whether `expression` parses as a `$formula` — syntax only; the runtime
-    still yields null for an unbound placeholder or a division by zero."""
+    still yields null for an unbound placeholder, a division by zero or a bit
+    operation on a fraction."""
     tokens: list[str] = []
     src = expression.rstrip()
     pos = 0
@@ -2290,50 +2346,49 @@ def _formula_is_valid(expression: str) -> bool:
         m = _FORMULA_TOKEN_RE.match(src, pos)
         if not m:
             return False
-        tokens.append(m.group(3) or "n")
+        operator = m.group(5) or m.group(6)
+        tokens.append(operator.upper() if operator else "n")
         pos = m.end()
     if not tokens:
         return False
 
     i = 0
 
-    def expr() -> bool:
+    def take(token: str) -> bool:
         nonlocal i
-        if not term():
-            return False
-        while i < len(tokens) and tokens[i] in "+-":
+        if i < len(tokens) and tokens[i] == token:
             i += 1
-            if not term():
-                return False
-        return True
+            return True
+        return False
 
-    def term() -> bool:
-        nonlocal i
-        if not unary():
-            return False
-        while i < len(tokens) and tokens[i] in "*/":
-            i += 1
-            if not unary():
+    def level(ops: tuple[str, ...], operand: Callable[[], bool]) -> Callable[[], bool]:
+        def parse() -> bool:
+            nonlocal i
+            if not operand():
                 return False
-        return True
+            while i < len(tokens) and tokens[i] in ops:
+                i += 1
+                if not operand():
+                    return False
+            return True
+
+        return parse
 
     def unary() -> bool:
         nonlocal i
-        while i < len(tokens) and tokens[i] in "+-":
+        while i < len(tokens) and tokens[i] in ("+", "-", "NOT"):
             i += 1
-        if i >= len(tokens):
-            return False
-        if tokens[i] == "n":
-            i += 1
-            return True
-        if tokens[i] != "(":
-            return False
-        i += 1
-        if not expr() or i >= len(tokens) or tokens[i] != ")":
-            return False
-        i += 1
-        return True
+        return primary()
 
+    def primary() -> bool:
+        nonlocal i
+        if take("n"):
+            return True
+        if take("SHL") or take("SHR"):
+            return take("(") and expr() and take(",") and expr() and take(")")
+        return take("(") and expr() and take(")")
+
+    expr = level(("OR",), level(("XOR",), level(("AND",), level(("+", "-"), level(("*", "/"), unary)))))
     return expr() and i == len(tokens)
 
 
@@ -2530,7 +2585,7 @@ def _type_tokens(schema_field: dict | None) -> list[str]:
 
 def _literal_matches(value: Any, token: str) -> bool:
     # bool is a subclass of int; it is no number here.
-    if token in ("integer", "float", "duration") and isinstance(value, bool):
+    if token in ("integer", "byte", "float", "duration") and isinstance(value, bool):
         return False
     return isinstance(value, _ATOMIC_TYPE_CHECKS[token])
 

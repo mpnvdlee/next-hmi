@@ -82,7 +82,7 @@
   {
     "key": "$formula",
     "label": "Formula",
-    "description": "A number calculated from values with + − × ÷ and parentheses.",
+    "description": "A number calculated from values with + − × ÷, parentheses and bit operations.",
     "produces": [
       "float",
       "integer"

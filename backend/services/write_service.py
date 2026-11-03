@@ -29,7 +29,12 @@ from decimal import Decimal
 from typing import Any
 
 from asyncua import ua
-from core.value_types import MAX_SAFE_INTEGER, array_index_out_of_bounds, json_ready
+from core.value_types import (
+    BIT_WIDTHS,
+    MAX_SAFE_INTEGER,
+    array_index_out_of_bounds,
+    json_ready,
+)
 from models.datasource import build_var_key
 
 logger = logging.getLogger(__name__)
@@ -134,9 +139,28 @@ def array_registry_path(path: str) -> str:
     return _ARRAY_INDEX_RE.sub("", path)
 
 
+def split_bit(datasource_manager: Any, ds_name: str, path: str) -> tuple[str, int | None]:
+    """Split a ``.N`` bit suffix off *path* — unless the whole path names a
+    variable itself, so a tag called ``Motor.1`` stays that tag."""
+    match = _BIT_SUFFIX_RE.search(path)
+    if match is None or datasource_manager is None:
+        return path, None
+    if datasource_manager.get_entry(ds_name, array_registry_path(path)) is not None:
+        return path, None
+    return path[: match.start()], int(match.group(1))
+
+
+def registry_path_of(datasource_manager: Any, ds_name: str, path: str) -> str:
+    """The variable a write to *path* lands on: no ``.N`` bit, no ``[N]`` element."""
+    return array_registry_path(split_bit(datasource_manager, ds_name, path)[0])
+
+
 # ── Type coercion tables ──────────────────────────────────────────────────────
 
 _ARRAY_INDEX_RE = re.compile(r"\[(-?\d+)\]$")
+# One or two digits: no type has more than 32 bits, and int() of a digit run
+# past Python's limit raises instead of refusing the path.
+_BIT_SUFFIX_RE = re.compile(r"\.(\d{1,2})$")
 _MAX_DYNAMIC_ARRAY_INDEX = 10000
 _FLOAT32_MAX = 3.4028234663852886e38
 _DECIMAL_NUMBER_RE = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
@@ -708,6 +732,14 @@ async def write_value(
     if datasource_manager is None:
         return WriteOutcome(False, REASON_OPCUA_UNREACHABLE)
 
+    word_path, bit = split_bit(datasource_manager, ds_name, path)
+    if bit is not None:
+        if field is not None:
+            return WriteOutcome(False, REASON_BAD_FIELD)
+        return await _write_bit(
+            datasource_manager, opcua_pool, ds_name, word_path, bit, value, verify=verify,
+        )
+
     registry_path = _ARRAY_INDEX_RE.sub("", path)
     entry_data = datasource_manager.get_entry(ds_name, registry_path)
     if entry_data is None:
@@ -830,6 +862,57 @@ async def write_value(
     return WriteOutcome(True)
 
 
+async def _write_bit(
+    datasource_manager: Any,
+    opcua_pool: Any,
+    ds_name: str,
+    word_path: str,
+    bit: int,
+    value: Any,
+    *,
+    verify: bool,
+) -> WriteOutcome:
+    """Set or clear one bit: read the whole word, change the bit, write the
+    word back through ``write_value``. A bit of an array element is not one."""
+    entry_data = datasource_manager.get_entry(ds_name, word_path)
+    if entry_data is None or _ARRAY_INDEX_RE.search(word_path):
+        return WriteOutcome(False, REASON_BAD_PATH)
+    if not is_writable(entry_data):
+        return WriteOutcome(False, REASON_READ_ONLY)
+    data_type = str(entry_data.get("data_type") or "").strip().lower()
+    width = BIT_WIDTHS.get(data_type, 0)
+    if bit >= width:
+        return WriteOutcome(False, REASON_BAD_PATH)
+    try:
+        on = coerce_write_value(value, "boolean")
+    except ValueError:
+        return WriteOutcome(False, REASON_INVALID_VALUE)
+
+    key = build_var_key(ds_name, word_path)
+    ds_entry = datasource_manager.get(ds_name)
+    if ds_entry is not None and ds_entry.ds_type == "static":
+        current = _cached(datasource_manager, key)
+    else:
+        engine = opcua_pool.get(ds_name) if opcua_pool is not None else None
+        if engine is None:
+            return WriteOutcome(False, REASON_OPCUA_UNREACHABLE)
+        try:
+            # A fresh read, never the cache: the whole word goes back, and a
+            # stale copy would undo the bits the PLC has changed since.
+            current = (await engine.read_current_values({word_path})).get(key)
+        except Exception:
+            return WriteOutcome(False, REASON_VALUE_UNAVAILABLE)
+    if isinstance(current, bool) or not isinstance(current, int):
+        return WriteOutcome(False, REASON_VALUE_UNAVAILABLE)
+
+    word = (current | (1 << bit) if on else current & ~(1 << bit)) & ((1 << width) - 1)
+    if _INT_RANGES[_CANONICAL_TYPE_ALIASES[data_type]][0] < 0 and word >= 1 << (width - 1):
+        word -= 1 << width  # back to two's complement for a signed type
+    return await write_value(
+        datasource_manager, opcua_pool, ds_name, word_path, word, verify=verify,
+    )
+
+
 async def toggle_value(
     datasource_manager: Any,
     opcua_pool: Any,
@@ -844,14 +927,20 @@ async def toggle_value(
     """
     if datasource_manager is None:
         return WriteOutcome(False, REASON_OPCUA_UNREACHABLE), None
-    entry_data = datasource_manager.get_entry(ds_name, _ARRAY_INDEX_RE.sub("", path))
+    word_path, bit = split_bit(datasource_manager, ds_name, path)
+    entry_data = datasource_manager.get_entry(ds_name, _ARRAY_INDEX_RE.sub("", word_path))
     if entry_data is None:
         return WriteOutcome(False, REASON_BAD_PATH), None
     data_type = entry_data.get("data_type")
     if not _is_struct_folder(entry_data) and not is_writable(entry_data):
         return WriteOutcome(False, REASON_READ_ONLY), None
-    if not isinstance(data_type, str) or _CANONICAL_TYPE_ALIASES.get(data_type.strip().lower()) != "boolean":
+    if bit is None and (
+        not isinstance(data_type, str)
+        or _CANONICAL_TYPE_ALIASES.get(data_type.strip().lower()) != "boolean"
+    ):
         return WriteOutcome(False, REASON_INVALID_VALUE), None
+    if bit is not None and bit >= BIT_WIDTHS.get(str(data_type or "").strip().lower(), 0):
+        return WriteOutcome(False, REASON_BAD_PATH), None
     current = await read_value(datasource_manager, opcua_pool, ds_name, path)
     if not isinstance(current, bool):
         return WriteOutcome(False, REASON_VALUE_UNAVAILABLE), None
@@ -869,10 +958,16 @@ async def read_value(
 
     OPC-UA datasources get a fresh node read; static datasources and any read
     failure fall back to the in-memory cache. An array-element path (``[N]``)
-    indexes into the resolved array value.
+    indexes into the resolved array value; a bit path (``.N``) reads that bit
+    of a whole number as a bool.
     """
     if datasource_manager is None:
         return None
+
+    path, bit = split_bit(datasource_manager, ds_name, path)
+    if bit is not None:
+        word = await read_value(datasource_manager, opcua_pool, ds_name, path)
+        return None if isinstance(word, bool) or not isinstance(word, int) else bool(word >> bit & 1)
 
     registry_path = _ARRAY_INDEX_RE.sub("", path)
     index_match = _ARRAY_INDEX_RE.search(path)

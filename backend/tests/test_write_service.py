@@ -922,3 +922,70 @@ async def test_toggle_of_a_read_only_untyped_variable_reports_read_only():
     dm._entry.cache[build_var_key("DS", "NoType")] = True
     outcome, written = await write_service.toggle_value(dm, None, "DS", "NoType")
     assert (outcome.ok, outcome.reason, written) == (False, write_service.REASON_READ_ONLY, None)
+
+
+@pytest.mark.asyncio
+async def test_static_bit_write_sets_and_clears_one_bit_of_the_word():
+    dm = FakeStaticDM({"Mask": {"data_type": "Byte", "writable": True}})
+    key = build_var_key("DS", "Mask")
+    dm._entry.cache[key] = 0b1000_0001
+    assert (await write_service.write_value(dm, None, "DS", "Mask.3", True)).ok
+    assert dm._entry.cache[key] == 0b1000_1001
+    assert (await write_service.write_value(dm, None, "DS", "Mask.7", "false")).ok
+    assert dm._entry.cache[key] == 0b0000_1001
+    assert await write_service.read_value(dm, None, "DS", "Mask.3") is True
+    outcome, written = await write_service.toggle_value(dm, None, "DS", "Mask.3")
+    assert outcome.ok and written is False
+    assert dm._entry.cache[key] == 0b0000_0001
+
+
+@pytest.mark.asyncio
+async def test_signed_bit_write_keeps_twos_complement():
+    dm = FakeStaticDM({"Status": {"data_type": "Int32", "writable": True}})
+    key = build_var_key("DS", "Status")
+    dm._entry.cache[key] = 5
+    assert (await write_service.write_value(dm, None, "DS", "Status.31", True)).ok
+    assert dm._entry.cache[key] == 5 - 2**31
+    assert (await write_service.write_value(dm, None, "DS", "Status.31", False)).ok
+    assert dm._entry.cache[key] == 5
+
+
+@pytest.mark.asyncio
+async def test_bit_write_refuses_what_is_no_bit_of_a_writable_word():
+    dm = FakeStaticDM({
+        "Mask": {"data_type": "Byte", "writable": True},
+        "Speed": {"data_type": "Double", "writable": True},
+        "Locked": {"data_type": "UInt16", "writable": False},
+    })
+    dm._entry.cache[build_var_key("DS", "Mask")] = 0
+    assert (await write_service.write_value(dm, None, "DS", "Mask.8", True)).reason == write_service.REASON_BAD_PATH
+    assert (await write_service.write_value(dm, None, "DS", "Speed.1", True)).reason == write_service.REASON_BAD_PATH
+    assert (await write_service.write_value(dm, None, "DS", "Locked.1", True)).reason == write_service.REASON_READ_ONLY
+    assert (await write_service.write_value(dm, None, "DS", "Mask.1", 5)).reason == write_service.REASON_INVALID_VALUE
+
+
+@pytest.mark.asyncio
+async def test_opcua_bit_write_reads_the_word_fresh_and_writes_it_whole():
+    engine = FakeEngine()
+    engine._store["ns=2;s=Status"] = 0b0100
+    dm = FakeOpcuaDM({"Status": {"data_type": "UInt16", "writable": True, "node_id": "ns=2;s=Status"}})
+    outcome = await write_service.write_value(dm, FakeOpcuaPool(engine), "PLC", "Status.0", True)
+    assert outcome.ok
+    assert engine.writes == [("ns=2;s=Status", 0b0101)]
+
+
+@pytest.mark.asyncio
+async def test_a_bit_path_no_type_could_hold_is_a_bad_path():
+    dm = FakeStaticDM({"Mask": {"data_type": "Byte", "writable": True}, "Speed": {"data_type": "Double", "writable": True}})
+    dm._entry.cache[build_var_key("DS", "Mask")] = 0
+    huge = "Mask." + "9" * 5000  # past int()'s digit limit
+    assert (await write_service.write_value(dm, None, "DS", huge, True)).reason == write_service.REASON_BAD_PATH
+    outcome, _ = await write_service.toggle_value(dm, None, "DS", "Speed.1")
+    assert outcome.reason == write_service.REASON_BAD_PATH
+
+
+def test_a_dotted_tag_name_is_no_bit():
+    dm = FakeStaticDM({"Motor.1": {"data_type": "Int16"}, "Motor": {"data_type": "Int16"}})
+    assert write_service.split_bit(dm, "DS", "Motor.1") == ("Motor.1", None)
+    assert write_service.split_bit(dm, "DS", "Motor.2") == ("Motor", 2)
+    assert write_service.registry_path_of(dm, "DS", "Motor.2") == "Motor"

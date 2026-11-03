@@ -16,12 +16,12 @@ OPCUA_TO_SIMPLE: dict[str, str] = {
     "boolean": "Boolean",
     "bool": "Boolean",
     "sbyte": "Integer",
-    "byte": "Integer",
+    "byte": "Byte",
     "int8": "Integer",
     "int16": "Integer",
     "int32": "Integer",
     "int64": "Integer",
-    "uint8": "Integer",
+    "uint8": "Byte",
     "uint16": "Integer",
     "uint32": "Integer",
     "uint64": "Integer",
@@ -42,12 +42,21 @@ OPCUA_TO_SIMPLE: dict[str, str] = {
     "timespan": "Duration",
 }
 
+# Bits a whole-number type offers a bit binding (`$var.bit`), by lower-cased
+# real type. Mirrors BIT_WIDTHS in the frontend's valueTypes.ts (parity:
+# opcuaBuiltinTypes.json `bits`); `integer` is the static datasource's Int32.
+BIT_WIDTHS: dict[str, int] = {
+    "byte": 8, "uint8": 8, "sbyte": 8, "int8": 8,
+    "uint16": 16, "int16": 16,
+    "uint32": 32, "int32": 32, "integer": 32, "int": 32,
+}
+
 # Number.MAX_SAFE_INTEGER: the largest integer a browser's JSON number holds exactly.
 MAX_SAFE_INTEGER = 2**53 - 1
 
 # Simple scalar types (no struct names, no arrays).
 VALUE_TYPES: frozenset[str] = frozenset(
-    {"Boolean", "Integer", "Float", "String", "DateTime", "Date", "Time", "Duration"}
+    {"Boolean", "Integer", "Byte", "Float", "String", "DateTime", "Date", "Time", "Duration"}
 )
 
 # Case-insensitive lookup: lower-cased value type -> canonical (capitalised) form.
@@ -57,6 +66,7 @@ _CANONICAL_BY_LOWER: dict[str, str] = {t.lower(): t for t in VALUE_TYPES}
 # picked on the static/sim datasource.
 SIMPLE_TO_REPRESENTATIVE: dict[str, str] = {
     "integer": "Int32",
+    "byte": "Byte",
     "float": "Double",
     "boolean": "Boolean",
     "string": "String",
@@ -128,7 +138,8 @@ def simplify_variable_tree(nodes: Any) -> list:
 
     For each non-folder node (``kind`` is optional on variables), ``data_type`` is converted to the
     element simple type (no ``[]`` suffix); ``is_array``/``array_length`` are
-    preserved as sibling fields (via the shallow node copy). Folders pass
+    preserved as sibling fields (via the shallow node copy), and a scalar
+    whole number gains ``bits``, its width in ``BIT_WIDTHS``. Folders pass
     through. Does not mutate the input.
     """
     if not isinstance(nodes, list):
@@ -140,10 +151,12 @@ def simplify_variable_tree(nodes: Any) -> list:
             continue
         new_node = dict(node)
         if node.get("kind") != "folder":
-            new_node["data_type"] = to_simple_type(
-                node.get("data_type", ""),
-                as_array_suffix=False,
-            )
+            raw = node.get("data_type", "")
+            new_node["data_type"] = to_simple_type(raw, as_array_suffix=False)
+            # The simple type hides the width, so the bits a picker lists ride along.
+            bits = BIT_WIDTHS.get(raw.strip().lower(), 0) if isinstance(raw, str) else 0
+            if bits and not node.get("is_array"):
+                new_node["bits"] = bits
         children = node.get("children")
         if isinstance(children, list):
             new_node["children"] = simplify_variable_tree(children)

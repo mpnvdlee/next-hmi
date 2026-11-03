@@ -5,6 +5,12 @@ import {
 } from './propertySourceEval';
 
 describe('propertySourceEval', () => {
+  it('reads one bit of a variable as a Boolean', () => {
+    const ctx: EvaluationContext = { resolveVariable: () => 0b0100 };
+    expect(evaluatePropertyValue({ $var: { path: 'PLC:Status', bit: 2 } }, ctx)).toBe(true);
+    expect(evaluatePropertyValue({ $var: { path: 'PLC:Status', bit: 0 } }, ctx)).toBe(false);
+  });
+
   // Mock context with example implementations
   const mockContext: EvaluationContext = {
     resolveVariable: (datasource, path) => {

@@ -33,6 +33,7 @@ import {
 } from './helpers';
 import { propertyTypeLabel, typeLabel } from '@shared/types/componentProperty';
 import RequiredFieldsTree from './RequiredFieldsTree';
+import { bitKeyLabel } from './variableTreeHelpers';
 
 type FolderEntry = PickerFolderEntry;
 type VariableEntry = PickerVariableEntry;
@@ -75,7 +76,8 @@ function SelectedVarRow({
 }) {
   if (!entry._datasource || !entry._path) return null;
   const { parentPath, varName } = splitPath(entry._path);
-  const displayName = elementIndex !== undefined ? `${varName}[${elementIndex}]` : varName;
+  const displayName =
+    elementIndex !== undefined ? `${varName}[${elementIndex}]` : bitKeyLabel(varName);
   const typeText =
     elementIndex !== undefined
       ? formatTypeBadge(entry.data_type ?? '—')
