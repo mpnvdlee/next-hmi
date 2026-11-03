@@ -18,7 +18,16 @@ device-admin session cookie; the runtime socket is public, like the rest of the
 live view. The manager closes either upgrade with `1008` when the session is
 missing (editor) or the project's users document is unusable, and with `1011`
 when the project is not running. The child itself binds `127.0.0.1` and does
-not authenticate `/ws`.
+not authenticate `/ws`; it refuses only an upgrade carrying a foreign `Origin`,
+which the manager's hop never sends.
+
+Before any of that, an upgrade whose `Origin` header differs from the
+request's own origin (scheme plus `Host`) is closed `1008` before accept, so
+the handshake answers `403`: a socket ignores CORS, and without this a page on
+any other site open in the panel's browser could read and write live values.
+An upgrade with no `Origin` (a script, not a browser) passes. The rule and its
+limits (reverse-proxy `Host`, dev proxy, DNS rebinding) are in
+[rest-api.md](../reference/rest-api.md#authentication).
 
 Inbound frames are capped at **64 KiB**; oversized or non-JSON frames are logged
 and dropped. Unknown client `type` values are ignored. Composite keys use the

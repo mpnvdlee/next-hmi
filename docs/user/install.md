@@ -140,7 +140,11 @@ password) is the operator surface:
   is open too, unless a variable carries `interactableByGroups`
   (see [Users, groups & permissions](users.md)). The install answers on every
   interface by default, so put the manager on a trusted network and use
-  [HTTPS](#https) where it is not.
+  [HTTPS](#https) where it is not. Open to the network does not mean open to
+  other websites: the install refuses a page from another site, open in the
+  panel's browser, that tries to connect to the live screen or send it
+  changes. It cannot catch a site that has pointed a name of its own at this
+  device (DNS rebinding) — one more reason to keep the network trusted.
 - **Start / Stop** — bring a project up or down. A running project gets
   its own backend instance and becomes reachable at `/runtime/<slug>/`
   (and `/editor/<slug>/`); the set of running projects is remembered and
@@ -389,9 +393,12 @@ uploaded certificate, re-upload it and pick the protocol again).
 Caddy, nginx, or Traefik in front of the manager is the better option where
 one already exists: it handles renewal. Set `NEXTHMI_HOST=127.0.0.1` so the
 manager answers the proxy alone and nothing reaches it directly, leave
-`NEXTHMI_SSL_*` unset, and have the proxy send `X-Forwarded-Proto`. A proxy
-on the same host is trusted out of the box; one on another host needs its
-address allow-listed:
+`NEXTHMI_SSL_*` unset, and have the proxy send `X-Forwarded-Proto` and pass
+the browser's `Host` header through unchanged. Caddy and Traefik do that by
+default; nginx needs `proxy_set_header Host $http_host;` (`$host` drops the port, so a proxy on `:8443` would no longer match). Without it the manager
+cannot tell the browser's own address from another website's and refuses
+every change and every live connection. A proxy on the same host is trusted
+out of the box; one on another host needs its address allow-listed:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |

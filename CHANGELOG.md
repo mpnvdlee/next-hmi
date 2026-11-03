@@ -63,6 +63,15 @@ heading.
   URL while the list is empty. A local address is always refused there. A
   URL with a fixed server works as before.
 
+- **Behind a reverse proxy, pass the browser's `Host` with its port
+  (breaking).** The device now refuses a change or a live connection whose
+  browser page came from another address. A proxy that rewrites `Host`
+  makes every request look like that, so nothing can be changed and no
+  value arrives. Caddy and Traefik pass it by default; nginx needs
+  `proxy_set_header Host $http_host;`, since `$host` drops the port. The
+  proxy must also send `X-Forwarded-Proto`, and a proxy on another host
+  must be listed in `NEXTHMI_FORWARDED_ALLOW_IPS`.
+
 ### Removed
 
 - **`GET /api/users/credential-state`.** `GET /api/users` carries
@@ -91,6 +100,16 @@ heading.
   added, changed and deleted alarms straight away.
 
 ### Security
+
+- **Other websites can no longer reach the live view.** A web page from
+  another site, open in a browser on the panel or on the same network,
+  could open a running project's live connection and read and write values,
+  or send its public requests. The manager and every project instance now
+  refuse a live connection and every change whose browser page came from
+  another address. Scripts, which send no page address, are unaffected. The
+  same check covers `/mcp`: an MCP client running inside a web page on
+  another address is refused, while desktop and command-line clients are
+  not.
 
 - **An `$http` URL no longer opens the plant network to anyone.** A URL that
   took its server from a placeholder let anyone who reached the live view

@@ -51,6 +51,7 @@ from core.manifest import (
     load_manifest,
     migrate_invalid_project_ids,
 )
+from core.origin_check import OriginCheckMiddleware
 from core.peer_discovery import peer_discovery
 from core.project_packer import max_zip_bytes
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -107,10 +108,15 @@ def _strip_manager_cookie(cookie_header: str) -> str:
 
 
 def _forwarded_headers(request: Request) -> list[tuple[str, str]]:
-    """Request headers to forward upstream: hop-by-hop dropped, manager cookie stripped."""
+    """Request headers to forward upstream: hop-by-hop dropped, manager cookie stripped.
+
+    ``Origin`` is dropped too: the manager's own check has passed it by now,
+    and the child refuses any write that still carries a foreign one
+    (``core.origin_check``) — its own ``Host`` is loopback, never the browser's.
+    """
     headers: list[tuple[str, str]] = []
     for key, value in request.headers.items():
-        if key.lower() in _HOP_BY_HOP:
+        if key.lower() in _HOP_BY_HOP or key.lower() == "origin":
             continue
         if key.lower() == "cookie":
             value = _strip_manager_cookie(value)
@@ -612,6 +618,9 @@ async def _auth_gate(request: Request, call_next):
         except TimeoutError:
             return JSONResponse({"detail": "Transfer deadline exceeded"}, status_code=408)
     return await call_next(request)
+
+
+app.add_middleware(OriginCheckMiddleware)
 
 
 @app.get("/api/health", include_in_schema=False)

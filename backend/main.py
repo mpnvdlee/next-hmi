@@ -22,6 +22,7 @@ from api.widgets_api import router as widgets_router
 from core import project_bootstrap
 from core.exceptions import register_exception_handlers
 from core.logging_setup import configure_logging
+from core.origin_check import OriginCheckMiddleware
 from core.project_migrations import run_baseline_migration
 from core.storage import (
     WIDGET_BUILD_DIR,
@@ -263,6 +264,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="NEXT HMI", lifespan=lifespan)
 register_exception_handlers(app)
+# An instance binds loopback with no auth of its own, and a page in the
+# panel's browser can find that port; see ``core.origin_check``.
+app.add_middleware(OriginCheckMiddleware)
 
 
 # NOTE: every top-level route lives under one of /api/, /ws, /mcp, or a
