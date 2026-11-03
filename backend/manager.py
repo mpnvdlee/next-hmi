@@ -277,7 +277,7 @@ _RUNTIME_PUBLIC_ROUTES: dict[str, tuple[tuple[str, ...], ...]] = {
         ("api", "components", "folders"),
         ("api", "widgets"),
         ("api", "device", "info"),
-        ("api", "users"),
+        ("api", "users", "roster"),
         ("api", "alarms", "history"),
         ("api", "historian", "query"),
     ),

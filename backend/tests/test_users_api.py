@@ -1,13 +1,9 @@
-"""The anonymous `GET /api/users` roster and the gated credential-state route
-beside it.
+"""The public `GET /api/users/roster` and the gated users routes beside it.
 
-`GET /api/users` sits on the manager's anonymous runtime allowlist so the live
-view can resolve `$user` / `$userGroups` and populate the sign-in dropdown with
-no session. That is a reason to publish `users` and `groups`; it is not a
-reason to publish which of those accounts carries a credential — that is a
-target list for whoever is guessing passwords on the WebSocket. This module
-pins that split and confirms the new `/credential-state` route lives behind
-the manager's session gate instead.
+The live view resolves `$user` → All users / Groups with no session, so the
+manager's runtime allowlist opens `/roster`: usernames and group labels, no
+membership and no credential state. The full document (`GET /api/users`),
+with `passwordSet` per account, stays behind the device-admin session.
 """
 
 from __future__ import annotations
@@ -37,23 +33,29 @@ def client(tmp_path, monkeypatch):
     return TestClient(test_app)
 
 
-def test_the_anonymous_roster_does_not_say_who_has_a_password(client):
-    """The live view reads this route with no session so it can resolve
-    $user and $userGroups. Which accounts carry a credential is not part of
-    that, and publishing it hands an attacker a target list."""
-    body = client.get("/api/users").json()
-    assert body["users"], "fixture should have users"
-    for account in body["users"]:
-        assert "passwordSet" not in account
+def test_the_roster_carries_names_and_group_labels_only(client):
+    doc = load()
+    doc["groups"].append({"id": "operator", "label": "Operators"})
+    doc["users"].append(
+        {
+            "id": "op-1",
+            "username": "op",
+            "password": "",
+            "passwordHash": hash_password("secret"),
+            "groups": ["operator"],
+        }
+    )
+    save(doc)
+
+    body = client.get("/api/users/roster").json()
+
+    assert set(body) == {"users", "groups"}
+    assert {"id": "op-1", "username": "op"} in body["users"]
+    assert all(set(account) == {"id", "username"} for account in body["users"])
+    assert {"id": "operator", "label": "Operators"} in body["groups"]
 
 
-def test_the_roster_still_carries_what_the_runtime_needs(client):
-    body = client.get("/api/users").json()
-    assert "users" in body and "groups" in body
-    assert all("username" in u for u in body["users"])
-
-
-def test_credential_state_route_reports_who_has_a_password(client):
+def test_the_full_document_reports_who_has_a_password(client):
     doc = load()
     doc["users"].append(
         {
@@ -66,17 +68,16 @@ def test_credential_state_route_reports_who_has_a_password(client):
     )
     save(doc)
 
-    body = client.get("/api/users/credential-state").json()
+    body = client.get("/api/users").json()
 
-    assert body == {"guest": False, "has-pw": True}
+    assert {u["id"]: u["passwordSet"] for u in body["users"]} == {
+        "guest": False,
+        "has-pw": True,
+    }
 
 
-def test_credential_state_route_is_gated_behind_a_manager_session():
-    """Deny-by-default: a brand new path is gated with no allowlist edit, which
-    is what lets this fix stay inside `_redact_document` instead of widening
-    the anonymous table."""
+def test_only_the_roster_is_public_on_the_runtime():
     import manager
 
-    assert manager._is_gated("/runtime/x/api/users/credential-state", "GET") is True
-    # The roster beside it must stay public — this fix must not touch that.
-    assert manager._is_gated("/runtime/x/api/users", "GET") is False
+    assert manager._is_gated("/runtime/x/api/users/roster", "GET") is False
+    assert manager._is_gated("/runtime/x/api/users", "GET") is True

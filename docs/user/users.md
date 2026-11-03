@@ -130,6 +130,8 @@ Groups decide what a signed-in operator sees and may touch on the screens. They 
 > [!IMPORTANT]
 > **A running project's screens are open — no password at all.** `/runtime/<slug>/` is reachable by anyone who can reach the panel, which is what an HMI is for: an operator walks up and works. The device-admin password guards the editor and the dashboard, not the live view.
 >
+> The live view can also list every username and group name — that is what fills a sign-in dropdown — but not who belongs to which group, or which accounts have a password. Those stay behind the device-admin password.
+>
 > That means operating is open too — pressing a button, changing a setpoint, writing a tag. To restrict a tag to certain groups, set `interactableByGroups` on the variable (see [Enforcement](#enforcement-and-where-it-really-happens)); it is the only thing that limits what an operator may write, and it is opt-in per variable. Keep the runtime off untrusted networks — see [HTTPS](install.md#https).
 
 A project copied from the seed ships **no accounts at all** beyond the anonymous `guest`, so there is no reusable credential to leak between installs and nothing to type before the project opens. Every real account is one you add here. See [Managing projects](projects.md#the-manager-dashboard).

@@ -14,7 +14,7 @@ it('loads every configured user group', async () => {
       { id: 'operator', label: 'Operators' },
       { id: 'engineer', label: 'Engineers' },
     ],
-    users: [{ id: 1, username: 'operator', groups: ['operator'] }],
+    users: [{ id: 'operator', username: 'operator' }],
   });
 
   const { result } = renderHook(() => ({
@@ -29,7 +29,7 @@ it('loads every configured user group', async () => {
       { id: 'engineer', label: 'Engineers' },
     ]);
   });
-  expect(result.current.users).toEqual([{ id: 1, username: 'operator', groups: ['operator'] }]);
-  expect(apiJson).toHaveBeenCalledWith('/api/users');
+  expect(result.current.users).toEqual([{ id: 'operator', username: 'operator' }]);
+  expect(apiJson).toHaveBeenCalledWith('/api/users/roster');
   expect(apiJson).toHaveBeenCalledTimes(1);
 });

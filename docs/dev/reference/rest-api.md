@@ -17,7 +17,7 @@ A few endpoints raise `fastapi.HTTPException` directly with other status codes �
 
 The **manager** front door is gated by a single **device-admin password** set on first run. The manager's `_auth_gate` middleware requires a valid session cookie (`nexthmi_manager_session`, a stateless HMAC-signed token) on every `/api/*` and `/editor/*` request (and on the manager's own `openapi.json` / `docs` / `redoc`), except `/api/manager/auth/*`, `/api/manager/peer/*`, `/api/manager/mcp/pair`, `/api/health`, and `/mcp`. Peer endpoints perform their own bearer-token authentication (only pairing accepts the existing device-admin password); `/mcp` takes a manager session or an MCP bearer token (see [mcp.md](mcp.md)); MCP pairing checks the device-admin password itself. See **Manager API** below for the login/setup endpoints; the password digest lives in `<runtime_home>/.manager-auth.json`.
 
-**`/runtime/*` is the exception: a live operator view is public.** A deny-by-default allowlist (`_RUNTIME_PUBLIC_ROUTES` in `manager.py`) names the child routes a running screen needs — the SPA document and its static mounts, a fixed set of config / theme / component / widget / user reads, alarm history, historian queries, the operator-action POSTs (alarm ack, recipe load and save, `$http`), and `/ws`. Everything else under `/runtime/*` still needs the session: every write verb, `api/datasources`, `api/system/*`, `api/projects/*`, `api/internal/*`, `api/health`, and the instance's own `openapi.json` / `docs` / `redoc`. `HEAD` follows `GET`; `OPTIONS` is gated, since an anonymous preflight would otherwise enumerate the withheld routes.
+**`/runtime/*` is the exception: a live operator view is public.** A deny-by-default allowlist (`_RUNTIME_PUBLIC_ROUTES` in `manager.py`) names the child routes a running screen needs — the SPA document and its static mounts, a fixed set of config / theme / component / widget reads, the user roster (names and group labels), alarm history, historian queries, the operator-action POSTs (alarm ack, recipe load and save, `$http`), and `/ws`. Everything else under `/runtime/*` still needs the session: every write verb, `api/datasources`, `api/system/*`, `api/projects/*`, `api/internal/*`, `api/health`, and the instance's own `openapi.json` / `docs` / `redoc`. `HEAD` follows `GET`; `OPTIONS` is gated, since an anonymous preflight would otherwise enumerate the withheld routes.
 
 A path segment is refused outright when *any* decoding of it — the original, each intermediate `unquote`, or the fixpoint — contains `/` or `\`, or is empty, `.` or `..`. The gate and the child each decode once, so without that rule a double-encoded separator lets the gate match one route while the child serves another.
 
@@ -492,13 +492,17 @@ These endpoints expose what's in the user workspace directly (no `/api` prefix o
 Base prefix: `/api/users`. IDs (user id, group id, username) must match `[A-Za-z0-9_-]+` and be ≤ 64 chars.
 
 - `GET /api/users` → full users document `{ settings, groups, users }`, with every
-  stored password redacted to `""` and no `passwordHash`. It is public (the
-  live view resolves `$user` and the sign-in dropdown without a session), so it
-  says nothing about which accounts carry a credential.
-- `GET /api/users/credential-state` → `{ "<userId>": bool }` — whether each
-  account has a usable credential (an unusable stored hash reads `false`). Not
-  on the public `/runtime` allowlist, so it needs the device-admin session; the
-  editor reads it for the "(unchanged)" / "(no password)" placeholder.
+  stored password redacted to `""`, no `passwordHash`, and a boolean
+  `passwordSet` per user — whether the account has a usable credential (an
+  unusable stored hash reads `false`), for the editor's "(unchanged)" /
+  "(no password)" placeholder. Not on the public `/runtime` allowlist, so it
+  needs the device-admin session; the editor reads it.
+- `GET /api/users/roster` → `{ users: [{ id, username }], groups: [{ id, label }] }`.
+  The one users read on the public `/runtime` allowlist: the live view fills
+  `$user` → All users (the sign-in dropdown) and `$user` → Groups from it with no
+  session. It carries no group membership, settings or credential state — the
+  signed-in user's own groups arrive with the WebSocket identity, and
+  auto-login runs on the server.
 - `PUT /api/users`
   - Body: the complete `{ settings, groups, users }` document returned by `GET /api/users`.
   - Validates all sections and their group references before atomically replacing `users.json`; validation failure leaves the stored document unchanged.

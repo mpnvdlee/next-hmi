@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { apiJson } from '@shared/utils/api';
 
 export interface UserEntry {
-  id: number;
+  id: string;
   username: string;
 }
 
@@ -27,7 +27,7 @@ function loadUsersDocument(): Promise<UsersDocument> {
   // that returns a non-promise would otherwise unmount the whole HMI tree
   // instead of degrading to "no users known yet".
   pendingLoad ??= Promise.resolve(
-    apiJson<{ users?: UserEntry[]; groups?: UserGroupEntry[] }>('/api/users'),
+    apiJson<{ users?: UserEntry[]; groups?: UserGroupEntry[] }>('/api/users/roster'),
   )
     .then((document) => {
       cachedDocument = {
@@ -42,7 +42,7 @@ function loadUsersDocument(): Promise<UsersDocument> {
   return pendingLoad;
 }
 
-/** Share the session-cached `/api/users` document between the public SDK hooks. */
+/** Share the session-cached `/api/users/roster` between the public SDK hooks. */
 export function useUsersDocument(): UsersDocument {
   const [document, setDocument] = useState(cachedDocument ?? EMPTY_DOCUMENT);
 

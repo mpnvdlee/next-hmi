@@ -65,20 +65,7 @@ export const useUsersDomainStore = create<UsersDomainState>((set, get) => ({
 
   load: async () => {
     try {
-      // The roster route is anonymous (the live view needs it with no
-      // session) and no longer carries `passwordSet` — the editor pulls that
-      // separately from the gated credential-state route and merges it in.
-      const [document, credentialState] = await Promise.all([
-        apiJson<UsersDocument>('/api/users'),
-        apiJson<Record<string, boolean>>('/api/users/credential-state'),
-      ]);
-      const data: UsersDocument = {
-        ...document,
-        users: document.users.map((user) => ({
-          ...user,
-          passwordSet: credentialState[user.id] ?? false,
-        })),
-      };
+      const data = await apiJson<UsersDocument>('/api/users');
       set((state) => ({
         data,
         draft: structuredClone(data),

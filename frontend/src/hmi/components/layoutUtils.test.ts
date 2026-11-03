@@ -1,19 +1,19 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 
 // `$user` on a record-list field reads the project's account list, which
-// `useEvalContext` pulls from the session-cached `/api/users` document. Stub it
+// `useEvalContext` pulls from the session-cached `/api/users/roster`. Stub it
 // so the hook under test doesn't depend on a fetch.
 vi.mock('../hooks/useUsersData', () => ({
   useUsersData: () => [
-    { id: 1, username: 'admin' },
-    { id: 2, username: 'operator1' },
+    { id: 'admin', username: 'admin' },
+    { id: 'operator1', username: 'operator1' },
   ],
 }));
 vi.mock('../hooks/useUsersDocument', () => ({
   useUsersDocument: () => ({
     users: [
-      { id: 1, username: 'admin' },
-      { id: 2, username: 'operator1' },
+      { id: 'admin', username: 'admin' },
+      { id: 'operator1', username: 'operator1' },
     ],
     groups: [{ id: 'ops', label: 'Operators' }],
   }),

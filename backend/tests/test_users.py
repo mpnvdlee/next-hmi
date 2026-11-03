@@ -138,7 +138,7 @@ def test_get_users_returns_full_document(api_client):
     assert "users" in data
     assert "settings" in data
     assert all(user["password"] == "" for user in data["users"])
-    assert all("passwordSet" not in user for user in data["users"])
+    assert all(user["passwordSet"] is False for user in data["users"])
 
 
 def test_put_users_document_saves_all_sections_together(api_client):
@@ -253,12 +253,10 @@ def test_get_redacts_legacy_plaintext_without_rewriting(api_client, users_tmp):
     before = users_tmp.read_bytes()
 
     payload = api_client.get("/api/users").json()
-    credential_state = api_client.get("/api/users/credential-state").json()
 
     returned = next(user for user in payload["users"] if user["id"] == "legacy")
     assert returned["password"] == ""
-    assert "passwordSet" not in returned
-    assert credential_state["legacy"] is True
+    assert returned["passwordSet"] is True
     assert users_tmp.read_bytes() == before
 
 

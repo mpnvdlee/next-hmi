@@ -22,31 +22,21 @@ def _require_valid_id(value: Any, label: str) -> str:
     return str(value)
 
 
-def _redact_document(
-    document: dict[str, Any], *, include_credential_state: bool = False
-) -> dict[str, Any]:
-    """Strip stored credentials from every account.
+def _redact_document(document: dict[str, Any]) -> dict[str, Any]:
+    """Strip stored credentials from every account, keeping ``passwordSet``.
 
-    ``include_credential_state`` also attaches ``passwordSet`` — the editor
-    needs it to render the "(unchanged)" vs "(no password)" placeholder, but
-    the anonymous ``GET /api/users`` must not hand an unauthenticated LAN
-    caller a target list of which accounts carry a credential.
+    The editor needs ``passwordSet`` to render the "(unchanged)" vs
+    "(no password)" placeholder.
     """
     redacted = dict(document)
     redacted["users"] = [
         {
             **{key: value for key, value in user.items() if key != "passwordHash"},
             "password": "",
-            **(
-                {
-                    # The same test sign-in makes: an unusable stored hash is
-                    # not a password set, or the editor would show a
-                    # credential nobody can present as configured.
-                    "passwordSet": has_password(user)
-                }
-                if include_credential_state
-                else {}
-            ),
+            # The same test sign-in makes: an unusable stored hash is not a
+            # password set, or the editor would show a credential nobody can
+            # present as configured.
+            "passwordSet": has_password(user),
         }
         for user in document.get("users", [])
         if isinstance(user, dict)
@@ -140,28 +130,32 @@ def _require_valid_users_document(document: dict[str, Any]) -> None:
 def get_users() -> dict:
     """Return the users document with stored credentials redacted.
 
-    Anonymous — the live view resolves ``$user``/``$userGroups`` and the
-    sign-in dropdown with no session, so this must never carry
-    ``passwordSet``: that would hand an unauthenticated LAN caller a target
-    list of which accounts have a credential to guess.
+    Editor only: the manager gates it; the live view reads ``/roster``.
     """
     return _redact_document(users_manager.load())
 
 
-@router.get("/credential-state")
-def get_credential_state() -> dict[str, bool]:
-    """Which accounts carry a credential, by id.
+@router.get("/roster")
+def get_roster() -> dict:
+    """Usernames and group labels — all the live view needs, with no session.
 
-    Gated: the manager's allowlist is deny-by-default and this path isn't on
-    it, so only a signed-in editor can reach it. Kept separate from
-    ``get_users`` rather than gating the whole roster, because the live view
-    still needs the anonymous roster for identity resolution.
+    Public on the manager's runtime allowlist for the sign-in dropdown
+    (``$user`` → All users) and the group picker (``$user`` → Groups). Who
+    belongs to which group stays behind the session: the signed-in user's own
+    groups reach the live view over the WebSocket identity.
     """
     document = users_manager.load()
     return {
-        str(user.get("id")): has_password(user)
-        for user in document.get("users", [])
-        if isinstance(user, dict)
+        "users": [
+            {"id": user.get("id"), "username": user.get("username")}
+            for user in document.get("users", [])
+            if isinstance(user, dict)
+        ],
+        "groups": [
+            {"id": group.get("id"), "label": group.get("label", group.get("id"))}
+            for group in document.get("groups", [])
+            if isinstance(group, dict)
+        ],
     }
 
 
@@ -212,7 +206,7 @@ def put_users_document(body: dict = Body(...)) -> dict:
     }
     _require_valid_users_document(document)
     users_manager.save(document)
-    return _redact_document(document, include_credential_state=True)
+    return _redact_document(document)
 
 
 @router.put("/settings")
@@ -306,7 +300,7 @@ def put_users(body: list = Body(...)) -> list:
     doc["users"] = _normalize_users(body, group_ids, current_by_id)
     _require_valid_users_document(doc)
     users_manager.save(doc)
-    return _redact_document(doc, include_credential_state=True)["users"]
+    return _redact_document(doc)["users"]
 
 
 @router.delete("/users/{user_id}")

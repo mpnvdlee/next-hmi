@@ -358,7 +358,7 @@ _RUNTIME_PUBLIC_CALLS = [
     ("GET", "api/components/folders"),
     ("GET", "api/widgets"),
     ("GET", "api/device/info"),
-    ("GET", "api/users"),
+    ("GET", "api/users/roster"),
     ("GET", "api/alarms/history"),
     ("GET", "api/historian/query"),
     ("POST", "api/alarms/ack/alarm-1"),
@@ -396,6 +396,9 @@ _RUNTIME_GATED_CALLS = [
     ("GET", "api/projects"),
     ("GET", "api/components/some-component"),
     ("GET", "api/internal/reload"),
+    # The full users document carries every group membership; the live view
+    # reads api/users/roster instead.
+    ("GET", "api/users"),
     # HEAD follows the GET table, so it opens exactly what GET opens and
     # nothing more. OPTIONS is deliberately not folded in: the live view is
     # same-origin and never preflights, and an anonymous OPTIONS would return

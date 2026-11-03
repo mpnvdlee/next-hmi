@@ -1,7 +1,7 @@
 import { useUsersDocument, type UserEntry } from './useUsersDocument';
 
 /**
- * Reads the user list from the session-cached /api/users document.
+ * Reads the user list from the session-cached /api/users/roster.
  * Returns an empty array until the data is available.
  */
 export function useUsersData(): UserEntry[] {

@@ -48,6 +48,13 @@ heading.
 
 ### Changed
 
+- **The live view gets the user roster, not the users file.**
+  `GET /api/users` now needs the device-admin session, and carries
+  `passwordSet` for each user. The live view reads the new public
+  `GET /api/users/roster`: usernames and group names, without who is in
+  which group. A custom widget or script that read `/runtime/<slug>/api/users`
+  reads the roster instead.
+
 - **An `$http` URL that takes its server from a placeholder needs that
   server listed.** `http://{1}/api/status` used to reach any
   server but the HMI's own machine. It now reaches only the servers listed
@@ -55,6 +62,11 @@ heading.
   refused until the list holds its server; the warnings pill flags such a
   URL while the list is empty. A local address is always refused there. A
   URL with a fixed server works as before.
+
+### Removed
+
+- **`GET /api/users/credential-state`.** `GET /api/users` carries
+  `passwordSet` for each user instead.
 
 ### Fixed
 
@@ -83,6 +95,9 @@ heading.
 - **An `$http` URL no longer opens the plant network to anyone.** A URL that
   took its server from a placeholder let anyone who reached the live view
   have the HMI call any server on the plant network. See **Changed**.
+
+- **Who belongs to which group stays behind the password.** The public user
+  list carried every group membership; the roster carries none.
 
 ## [1.1.0] - 2026-10-31
 

@@ -584,7 +584,7 @@ declare function usePublishWidgetProp(
   value: unknown,
 ): void;
 
-declare function useUsersData(): Array<{ id: number; username: string }>;
+declare function useUsersData(): Array<{ id: string; username: string }>;
 declare function useUserGroupsData(): Array<{ id: string; label: string }>;
 declare function useLanguagesData(): Array<{ code: string }>;
 /** The active language and the setter that changes it — the other half of
