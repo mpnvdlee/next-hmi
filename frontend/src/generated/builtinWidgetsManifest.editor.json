@@ -1545,6 +1545,16 @@
       "label": {
         "label": "Label",
         "group": "Content"
+      },
+      "onColor": {
+        "label": "On color",
+        "defaultToken": "--hmi-ok",
+        "group": "Appearance"
+      },
+      "offColor": {
+        "label": "Off color",
+        "defaultToken": "--hmi-text-muted",
+        "group": "Appearance"
       }
     }
   },

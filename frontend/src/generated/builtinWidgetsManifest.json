@@ -721,7 +721,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "fe51114a9d90b8e8",
+    "buildTs": "e2e8e4bbc8749ae0",
     "displayName": "LED Indicator",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -733,6 +733,12 @@
       },
       "label": {
         "type": "string"
+      },
+      "onColor": {
+        "type": "color"
+      },
+      "offColor": {
+        "type": "color"
       }
     },
     "schemaError": null

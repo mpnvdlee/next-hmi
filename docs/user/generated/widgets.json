@@ -2078,6 +2078,18 @@
             "group": "Content"
           },
           {
+            "key": "onColor",
+            "label": "On color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
+            "key": "offColor",
+            "label": "Off color",
+            "type": "color",
+            "group": "Appearance"
+          },
+          {
             "key": "visible",
             "label": "Visible",
             "type": "Boolean",
