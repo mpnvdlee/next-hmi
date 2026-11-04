@@ -57,7 +57,8 @@ export const useHistorianConfigStore = create<HistorianConfigState>((set, get) =
         apiJson<HistorianConfig>('/api/historian/config'),
         apiJson<string[]>('/api/historian/available-variables'),
       ]);
-      set({ config, availableVars });
+      // Same guard again: an edit can land while the request is out.
+      if (!(get().config && projectIsDirty())) set({ config, availableVars });
     } catch (err) {
       console.error('[historianConfigStore] load failed:', err);
     }

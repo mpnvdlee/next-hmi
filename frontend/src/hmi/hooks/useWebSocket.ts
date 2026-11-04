@@ -17,7 +17,7 @@ import { useVariableStore, type VarMeta } from '../store/variableStore';
 import { useHmiStore } from '../store/hmiStore';
 import { useAlarmStore } from '../store/alarmStore';
 import { useRecipeStore } from '../store/recipeStore';
-import { publishConfigChanged } from '@shared/events/configChangedBus';
+import { publishConfigChanged, type ConfigChangedEvent } from '@shared/events/configChangedBus';
 import { publishWidgetUpdated } from '@shared/events/widgetUpdatedBus';
 import type { AlarmInstance, AlarmSummary } from '@shared/types/alarm';
 import type { RecipeConfig, LoadedDataset, DownloadResult } from '@shared/types/recipe';
@@ -79,16 +79,7 @@ type WsMessage =
   | { type: 'recipe_error'; requestId: string; reason: string }
   | { type: 'alarm_ack_response'; requestId: string }
   | { type: 'alarm_ack_error'; requestId: string; reason: string }
-  | {
-      type: 'config_changed';
-      artifact_type:
-        'page' | 'datasource' | 'alarms' | 'translations' | 'asset' | 'variables' | 'component';
-      artifact_ids: string[];
-      source: 'mcp' | 'rest';
-      agent_label?: string;
-      summary: string;
-      diff?: unknown;
-    }
+  | ({ type: 'config_changed' } & ConfigChangedEvent)
   | {
       type: 'widget_updated';
       /** Canonical normalized path relative to custom-widgets/. */
@@ -207,6 +198,7 @@ function ingestConfigChanged(msg: ConfigChangedMsg): void {
     artifact_ids: msg.artifact_ids,
     source: msg.source,
     agent_label: msg.agent_label,
+    tab_id: msg.tab_id,
     summary: msg.summary,
     diff: msg.diff,
   });

@@ -30,7 +30,7 @@ export function useDatasourceSaveRegistration({
         method: 'PUT',
         body: sentTree,
       });
-      // A REST save broadcasts no config_changed, so the type lookups learn of it here.
+      // The save's config_changed can arrive after this resolves; a lookup in between must not read the old tree.
       forgetVariableTrees();
       if (latestTree.current !== sentTree) {
         // A newer edit landed while this save was in flight. Keep `dirty`

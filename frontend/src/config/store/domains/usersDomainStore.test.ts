@@ -40,6 +40,30 @@ describe('usersDomainStore security drafts', () => {
     vi.unstubAllGlobals();
   });
 
+  it('keeps a draft edited while a load was out', async () => {
+    let release!: () => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            release = () =>
+              resolve({ ok: true, status: 200, json: async () => structuredClone(BASE_DOCUMENT) });
+          }),
+      ),
+    );
+    const loading = useUsersDomainStore.getState().load();
+    const editedGroups = structuredClone(BASE_DOCUMENT.groups);
+    editedGroups[1].label = 'Typed during the load';
+    useUsersDomainStore.getState().patchGroupsDraft(editedGroups);
+
+    release();
+    await loading;
+
+    expect(useUsersDomainStore.getState().dirty).toBe(true);
+    expect(useUsersDomainStore.getState().draft?.groups[1].label).toBe('Typed during the load');
+  });
+
   it('keeps edits out of project dirty state, save callbacks, and undo snapshots', () => {
     useProjectStore.getState().pushSnapshot();
     const editedUsers = structuredClone(BASE_DOCUMENT.users);

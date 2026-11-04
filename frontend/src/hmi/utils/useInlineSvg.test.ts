@@ -1,18 +1,13 @@
 import { renderHook, waitFor } from '@testing-library/react';
-import { publishConfigChanged } from '@shared/events/configChangedBus';
-import { useInlineSvg } from './useInlineSvg';
+import { forgetInlineSvgs, useInlineSvg } from './useInlineSvg';
 
 function mockFetchOnce(text: string) {
   return vi.fn().mockResolvedValue({ ok: true, text: async () => text });
 }
 
-function forgetCachedAssets() {
-  publishConfigChanged({ artifact_type: 'asset', artifact_ids: [], source: 'mcp', summary: '' });
-}
-
 describe('useInlineSvg', () => {
   afterEach(() => {
-    forgetCachedAssets();
+    forgetInlineSvgs();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -184,7 +179,7 @@ describe('useInlineSvg', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('fetches again after an asset change is announced', async () => {
+  it('fetches again once the cache is forgotten', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ ok: true, text: async () => '<svg><path d="old" /></svg>' })
@@ -195,7 +190,7 @@ describe('useInlineSvg', () => {
     await waitFor(() => expect(first.result.current).toContain('old'));
     first.unmount();
 
-    forgetCachedAssets();
+    forgetInlineSvgs();
     const second = renderHook(() => useInlineSvg('/icons/gear.svg'));
     await waitFor(() => expect(second.result.current).toContain('new'));
   });

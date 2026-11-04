@@ -60,11 +60,13 @@ async def test_broadcast_config_changed_rest_omits_agent_label():
             artifact_ids=["page-home"],
             source="rest",
             summary="REST write",
+            tab_id="tab-1",
         )
     )
     import json
     payload = json.loads(ws.messages[0])
     assert payload["source"] == "rest"
+    assert payload["tab_id"] == "tab-1"
     assert "agent_label" not in payload
 
 

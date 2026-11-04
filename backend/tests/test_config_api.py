@@ -175,6 +175,38 @@ def test_put_config_saves_index(client):
     assert "sections" not in data["pages"][0]
 
 
+@pytest.fixture()
+def broadcasts(monkeypatch):
+    """Every ``config_changed`` the routes send, in order."""
+    from services.websocket_manager import websocket_manager
+
+    events = []
+
+    async def capture(event):
+        events.append(event)
+
+    monkeypatch.setattr(websocket_manager, "broadcast_config_changed", capture)
+    return events
+
+
+def test_put_config_tells_open_browsers_which_tab_saved(client, broadcasts):
+    payload = {"pages": [{"id": "p1", "type": "page"}], "dialogs": []}
+    client.put("/api/config/config", json=payload, headers={"X-NextHMI-Tab": "tab-1"})
+    client.put("/api/config/pages/p1", json={"title": "One"}, headers={"X-NextHMI-Tab": "tab-1"})
+
+    assert [(e.artifact_type, e.artifact_ids, e.source, e.tab_id) for e in broadcasts] == [
+        ("page", [], "rest", "tab-1"),
+        ("page", ["p1"], "rest", "tab-1"),
+    ]
+    assert broadcasts[1].diff
+
+
+def test_put_config_broadcasts_nothing_it_refused(client, broadcasts):
+    resp = client.put("/api/config/config", json={"pages": "not-a-list"})
+    assert resp.status_code == 422
+    assert broadcasts == []
+
+
 def test_put_config_does_not_include_warnings_in_response(client):
     # Advisory issues (e.g. unknown $var on a header widget) don't block the
     # write, but the build-diagnostics response is served separately from

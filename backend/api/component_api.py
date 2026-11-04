@@ -8,7 +8,11 @@ from models.component import ComponentDefinition
 from pydantic import BaseModel
 from services.component_manager import component_manager
 
-router = APIRouter(prefix="/api/components", tags=["components"])
+from api.change_broadcast import broadcasts
+
+router = APIRouter(
+    prefix="/api/components", tags=["components"], dependencies=[broadcasts("component")]
+)
 
 
 class FolderCreate(BaseModel):

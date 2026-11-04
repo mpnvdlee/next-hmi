@@ -13,6 +13,8 @@ from models.theme import ThemeConfig, ThemeValidationResult, validate_theme_payl
 from pydantic import BaseModel, Field
 from services.theme_manager import theme_manager
 
+from api.change_broadcast import broadcasts
+
 router = APIRouter(tags=["theme"])
 
 
@@ -55,13 +57,13 @@ def get_default_theme() -> DefaultThemeBody:
     return DefaultThemeBody(default=theme_manager.get_default_id())
 
 
-@router.put("/api/default-theme", response_model=DefaultThemeBody)
+@router.put("/api/default-theme", response_model=DefaultThemeBody, dependencies=[broadcasts("theme")])
 def set_default_theme(body: DefaultThemeBody) -> DefaultThemeBody:
     theme_manager.set_default_id(body.default)
     return DefaultThemeBody(default=theme_manager.get_default_id())
 
 
-@router.post("/api/themes", response_model=ThemeEnvelope)
+@router.post("/api/themes", response_model=ThemeEnvelope, dependencies=[broadcasts("theme")])
 def create_theme(body: CreateThemeBody) -> ThemeEnvelope:
     """Create a new theme (optionally duplicated from an existing one)."""
     new_id, config = theme_manager.create(body.name, body.source)
@@ -73,7 +75,7 @@ def get_theme(theme_id: str) -> ThemeConfig:
     return theme_manager.get(theme_id)
 
 
-@router.put("/api/themes/{theme_id}", response_model=ThemeConfig)
+@router.put("/api/themes/{theme_id}", response_model=ThemeConfig, dependencies=[broadcasts("theme")])
 def put_theme(theme_id: str, body: ThemeConfig) -> ThemeConfig:
     """Create or replace a theme by id."""
     try:
@@ -82,7 +84,7 @@ def put_theme(theme_id: str, body: ThemeConfig) -> ThemeConfig:
         raise ThemeValidationError(str(e)) from e
 
 
-@router.delete("/api/themes/{theme_id}")
+@router.delete("/api/themes/{theme_id}", dependencies=[broadcasts("theme")])
 def delete_theme(theme_id: str) -> dict:
     theme_manager.delete(theme_id)
     return {"deleted": theme_id}

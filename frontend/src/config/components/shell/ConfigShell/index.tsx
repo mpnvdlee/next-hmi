@@ -10,6 +10,7 @@ import ImageSourcePicker from '@config/components/editor/ImageSourcePicker';
 import VideoSourcePicker from '@config/components/editor/VideoSourcePicker';
 import { ConfigToastStack } from '../ConfigToastStack';
 import { ConfigUpdatedBanner } from '../ConfigUpdatedBanner';
+import { editorHasUnsavedChanges } from '@config/utils/editorLiveSync';
 import ConfigTopBar from '../ConfigTopBar';
 import SaveWarningsPill from '../SaveWarningsPill';
 import { editorPath, getArea, projectSlug, withBase } from '@shared/utils/runtimeBase';
@@ -34,9 +35,7 @@ import { setBackendRestartHandler } from '@hmi/hooks/useWebSocket';
 
 /** A restarted backend may serve newer config; show it, unless that drops unsaved edits. */
 function reloadUnlessDirty() {
-  if (!useProjectStore.getState().dirty && !useUsersDomainStore.getState().dirty) {
-    window.location.reload();
-  }
+  if (!editorHasUnsavedChanges()) window.location.reload();
 }
 
 interface NavItem {

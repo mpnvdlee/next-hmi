@@ -13,6 +13,8 @@ Routes split across **two apps**: the **manager** (`backend/manager.py`, default
 
 A few endpoints raise `fastapi.HTTPException` directly with other status codes — those are called out per endpoint.
 
+Every project-instance write that changes project content — pages and the page index, translations and dictionaries, themes, components, alarms, recipes (config and dataset upload), the historian, datasources and their variables, users, `$http` origins — broadcasts [`config_changed`](../architecture/websocket.md#config_changed) over `/ws` once it succeeded, with `source: "rest"` and, when the request carried an `X-NextHMI-Tab` header, that tab's id as `tab_id`.
+
 ## Authentication
 
 The **manager** front door is gated by a single **device-admin password** set on first run. The manager's `_auth_gate` middleware requires a valid session cookie (`nexthmi_manager_session`, a stateless HMAC-signed token) on every `/api/*` and `/editor/*` request (and on the manager's own `openapi.json` / `docs` / `redoc`), except `/api/manager/auth/*`, `/api/manager/peer/*`, `/api/manager/mcp/pair`, `/api/health`, `/mcp` and `/api/v1/*`. Peer endpoints perform their own bearer-token authentication (only pairing accepts the existing device-admin password); `/mcp` takes a manager session or an MCP bearer token (see [mcp.md](mcp.md)); MCP pairing checks the device-admin password itself; `/api/v1/*` takes the device-admin password over HTTP Basic or an API token and never the session cookie (see [API v1](#api-v1)). See **Manager API** below for the login/setup endpoints; the password digest lives in `<runtime_home>/.manager-auth.json`.
@@ -162,7 +164,7 @@ it is in now.
   - An explicit `null` for a key removes it from the stored document.
   - `sections` (when supplied) must be an object whose values are arrays. A section may not list a `type: "page-group"` node — nest a group inside another group instead (`422`).
   - An optional `revision` (from `pageRevisions` or the last save; `"missing"` for a page the client creates) that no longer matches the stored document returns `409` and writes nothing. Without `revision` there is no check.
-  - Returns the merged document `{ id, ...persisted fields, revision }`, with no warnings array — advisory findings come from `/api/config/validate`. A blocking validation finding is `422`. Broadcasts `config_changed` (`source: "rest"`).
+  - Returns the merged document `{ id, ...persisted fields, revision }`, with no warnings array — advisory findings come from `/api/config/validate`. A blocking validation finding is `422`. Its `config_changed` carries the page's JSON Patch `diff`.
   - `422` if `page_id` is invalid.
 - `DELETE /api/config/pages/{page_id}` · `DELETE /api/config/dialogs/{page_id}`
   - Removes that directory's page document if present. Returns `{ "ok": true }`.
@@ -510,7 +512,7 @@ These endpoints expose what's in the user workspace directly (no `/api` prefix o
   - `displayName`, `hostsChildren`, `flowsChildren`, `repeatsChildren`, `category`, `description`, `icon`, `schema` and `exportedProperties` are read from the compiled `<runtime_home>/.widget-build/widget-schemas.json` (`null` when the widget has never compiled). They let the client register a widget — schema, drawer card, `$widgetProp` list — without importing its module, which is what makes the modules load lazily on first render instead of all at once at startup.
   - `schemaError` is set when the widget compiled but the schema extractor could not reduce its exports to literals. The widget still renders; the editor offers no property fields and no `$widgetProp`s for it. Every other widget keeps its schema — one unreadable widget costs only its own.
 - `POST /api/widgets/recompile`
-  - Recompiles every custom widget and regenerates the schema manifest. Broadcasts a `widget_updated` event per widget so open browsers reload the module.
+  - Recompiles every custom widget and regenerates the schema manifest. Broadcasts a `widget_updated` event per widget so an open editor reloads the module (see [websocket.md](../architecture/websocket.md)); the live view picks it up after a browser reload.
   - Returns the refreshed list in the `GET /api/widgets` shape.
 - `POST /api/widgets/recompile/{key:path}`
   - Recompiles one widget by registry `key` (flat `<Name>` or grouped `<Group>/<Name>`). Same response shape.
@@ -805,7 +807,7 @@ HTTPS is not required, since many LAN installs run plain HTTP, but over HTTP the
 
 ### Running or stopped
 
-Every route except [panel sessions](#panel-sessions) reads or writes the project's files inside `use_project(projectId)`, so each one works the same on a running and a stopped project; none needs the instance. A user write then POSTs the running child's `/api/internal/reload` (`artifact_type: "users"`, `source: "api"`, see [Internal API](#internal-api)), which broadcasts `config_changed` so an open editor shows its "updated by another writer" banner before it saves the old list over the change, and re-checks every identity its connections hold: a deleted (or renamed) user, or one whose password changed, drops to the auto-login user, a regrouped one gets its new groups. The child reads `users.json` fresh on every sign-in, so nothing else needs reloading.
+Every route except [panel sessions](#panel-sessions) reads or writes the project's files inside `use_project(projectId)`, so each one works the same on a running and a stopped project; none needs the instance. A user write then POSTs the running child's `/api/internal/reload` (`artifact_type: "users"`, `source: "api"`, see [Internal API](#internal-api)), which broadcasts `config_changed` so an open editor re-reads the users, or shows its "updated by another writer" banner when it has unsaved edits, before it saves the old list over the change, and re-checks every identity its connections hold: a deleted (or renamed) user, or one whose password changed, drops to the auto-login user, a regrouped one gets its new groups. The child reads `users.json` fresh on every sign-in, so nothing else needs reloading.
 
 ### Paging
 

@@ -37,6 +37,31 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('load', () => {
+  it('keeps an edit made while the request was out', async () => {
+    let release!: () => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            release = () => resolve({ ok: true, status: 200, json: async () => EMPTY_CONFIG });
+          }),
+      ),
+    );
+    useAlarmConfigStore.setState({ config: EMPTY_CONFIG, loaded: true });
+    const loading = useAlarmConfigStore.getState().load();
+    useAlarmConfigStore.getState().addGroup('Typed during the load');
+
+    release();
+    await loading;
+
+    expect(useAlarmConfigStore.getState().config?.groups.map((g) => g.title)).toEqual([
+      'Typed during the load',
+    ]);
+  });
+});
+
 // ── Mutations mark project dirty ──────────────────────────────────────────────
 
 describe('mutations', () => {

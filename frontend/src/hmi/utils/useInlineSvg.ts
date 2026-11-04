@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { withBase } from '@shared/utils/runtimeBase';
-import { subscribeConfigChanged } from '@shared/events/configChangedBus';
 
 /** `fill="…"` / `stroke="…"` presentation attributes, not `fill-opacity` or `stroke-width`. */
 const PAINT_ATTR = /\s(fill|stroke)="([^"]*)"/gi;
@@ -45,14 +44,17 @@ function recolorSvg(svgText: string): string {
 const resolved = new Map<string, string>();
 const pending = new Map<string, Promise<string>>();
 
-// An asset rewritten in place keeps its URL, so the only way to see the new
-// file is to forget the old one. Icons already on screen keep what they show;
-// the next mount fetches again.
-subscribeConfigChanged((event) => {
-  if (event.artifact_type !== 'asset') return;
+/**
+ * Forget every cached icon. An asset rewritten in place keeps its URL, so the
+ * only way to see the new file is to forget the old one; icons already on
+ * screen keep what they show, the next mount fetches again. The editor calls
+ * this when another writer changed an asset — the live view does not, it
+ * shows a change after a browser reload.
+ */
+export function forgetInlineSvgs(): void {
   resolved.clear();
   pending.clear();
-});
+}
 
 function loadInlineSvg(url: string): Promise<string> {
   const hit = resolved.get(url);

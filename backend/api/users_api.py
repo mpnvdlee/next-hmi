@@ -9,6 +9,8 @@ from core.passwords import has_password, hash_password
 from fastapi import APIRouter, Body, Depends, Request
 from services import users_manager
 
+from api.change_broadcast import broadcasts
+
 
 async def _refresh_identities_after_write(request: Request) -> AsyncIterator[None]:
     # Skipped when the handler raises. The same refresh API v1 writes reach
@@ -22,7 +24,9 @@ async def _refresh_identities_after_write(request: Request) -> AsyncIterator[Non
 
 
 router = APIRouter(
-    prefix="/api/users", tags=["users"], dependencies=[Depends(_refresh_identities_after_write)]
+    prefix="/api/users",
+    tags=["users"],
+    dependencies=[Depends(_refresh_identities_after_write), broadcasts("users")],
 )
 
 

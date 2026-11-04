@@ -113,4 +113,4 @@ Full export/import mechanics are in [Managing projects](projects.md#download--up
 Every file here is plain text or a plain binary, so a text editor and Git work fine — that is the point of the format. Two habits keep it painless:
 
 - **Let the editor own what the editor writes.** Pages, themes, alarms and users are saved as whole documents. Hand-editing them while an editor tab is open risks the next Save overwriting your change.
-- **Reload after an out-of-band edit.** The running backend caches configuration it has already read. Custom widgets are the exception — those are watched and recompiled on save, and pushed to open pages live.
+- **Reload after an out-of-band edit.** The running backend caches configuration it has already read. Custom widgets are the exception — those are watched and recompiled on save: an open editor picks the new build up by itself (after asking, when it has unsaved changes), the live view after a browser reload.

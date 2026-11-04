@@ -51,7 +51,8 @@ heading.
   with only the scopes it needs, or use the device-admin password over HTTP
   Basic, username `admin`, for your own scripts. A project user's password
   never works as an API key. A user change reaches a running project's
-  screens at once. See *Connecting other systems (API v1)* in the guide.
+  screens at once, and an open editor is told before it saves over it. See
+  *Connecting other systems (API v1)* in the guide.
 
 - **Named panels.** Open a runtime with `?panel=<name>` at the end of its
   address, and another system can sign an operator in or out on it over
@@ -171,13 +172,19 @@ heading.
   with `421 Invalid Host header`, so an assistant on a laptop on the plant
   network could not connect. It now answers any address the HMI is reached
   by; a token or the dashboard sign-in is still required.
-- **What an AI assistant changes over MCP shows up on the running screen.**
-  An operator screen that was already open kept the pages and texts as it
-  first loaded them, so a widget, page, page setting, global event or
-  translation added, changed or removed over MCP only appeared after a
-  browser reload. The screen now re-reads them as soon as the server reports
-  the change, without a reload, so a login and open dialogs stay, and values
-  for variables a new widget binds start arriving straight away.
+- **An open editor keeps up with changes made elsewhere.** An editor tab
+  heard nothing of what another editor tab saved, and of an AI assistant's or
+  API v1's change only through a banner asking for a reload. With nothing
+  unsaved it now shows the change straight away, without a reload, on the
+  page you have open; with unsaved edits it shows the banner, so you choose.
+  Every save in the editor now announces itself, so a second tab finds out
+  too. A recompiled custom widget follows the same rule: the editor reloads
+  for it, or shows the banner first when you have unsaved edits, where it
+  used to reload straight away. The live view shows a change after a browser
+  reload — a recompiled widget and a theme saved in the editor no longer
+  reload or repaint an operator's screen by themselves, and an icon rewritten
+  over MCP is no longer refetched the next time it mounts there, as it was in
+  1.1.0.
 - **Saving in the editor no longer overwrites what an AI assistant changed.**
   An editor tab that stayed open while an assistant worked over MCP wrote
   every page back on its next save, so the assistant's widgets disappeared

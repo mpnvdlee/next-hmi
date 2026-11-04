@@ -107,6 +107,6 @@ Work through it in the editor you opened above.
 
 1. **Switch the canvas to Test mode** — In the preview toolbar, the **Mode** control has two buttons: the pencil is **Config mode** (clicks select widgets), the play button is **Test mode** (clicks run actions). Pick **Test mode**.
 2. **Press Start** — The pill flips to *Running*. Press **Stop** and it flips back. The write went through the server to the datasource and came back to every subscriber, exactly as a PLC write would.
-3. **Save** — `Ctrl/Cmd + S`. The project files are written to disk and every open runtime picks the change up.
+3. **Save** — `Ctrl/Cmd + S`. The project files are written to disk. An open live view shows the change after a browser reload.
 
 You now have the whole loop: data in, a screen that reads it, a control that writes it. Where to go next — [Adding & arranging widgets](widgets.md) for the rest of the catalog, [Dynamic properties](properties.md) for what else a field can be bound to, and [Connecting to data](datasources.md) when you're ready to point at a real PLC.

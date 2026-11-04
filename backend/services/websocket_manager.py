@@ -86,7 +86,8 @@ class ConfigChangedEvent:
     """Payload for ``broadcast_config_changed``.
 
     ``source`` is ``"mcp"``, ``"rest"`` or ``"api"``. ``agent_label`` is
-    included on the wire only when ``source == "mcp"``.
+    included on the wire only when ``source == "mcp"``; ``tab_id`` names the
+    browser tab whose REST write this was, when it named itself.
     """
 
     artifact_type: str
@@ -95,6 +96,7 @@ class ConfigChangedEvent:
     summary: str = ""
     diff: Any = None
     agent_label: str | None = None
+    tab_id: str | None = None
 
 
 class WebSocketManager:
@@ -350,6 +352,8 @@ class WebSocketManager:
             payload["agent_label"] = event.agent_label
         if event.diff is not None:
             payload["diff"] = event.diff
+        if event.tab_id:
+            payload["tab_id"] = event.tab_id
         await self._broadcast(payload)
 
     # -- Connection lifecycle -------------------------------------------------

@@ -1,6 +1,6 @@
 # Building your own widgets
 
-When the catalog stops, TypeScript starts. Drop a `.tsx` file into your project's `custom-widgets/` folder and the backend compiles it on save and hot-swaps it into the running app — no core rebuild, no Node toolchain, no page reload.
+When the catalog stops, TypeScript starts. Drop a `.tsx` file into your project's `custom-widgets/` folder and the backend compiles it on save — no core rebuild, no Node toolchain. An open editor picks the new widget up at once, by reloading itself, or shows a banner first when you have unsaved changes; the live view shows it after a browser reload.
 
 ## The folder contract
 
@@ -22,7 +22,7 @@ Folders starting with `.` or `_` are ignored — keep a scaffold in `_template/`
    - Writing back is one call: `const write = useWriteVariable(properties, 'variable')`, then `write(value)` from your handler. It reports a rejected write to the operator for you. Gate your control on `write.canWrite` — only a `$var` binding can be written to, so a property bound to a fixed or computed value resolves fine for display but has nothing to write to, and an enabled control would swallow the click.
 3. **Honour the editor's layout** — Spread `selfLayoutStyle(layout)` on your outer element so the editor's size-mode, fill-weight and min/max-size fields take effect, and `widgetColorStyle(color)` to let a colour field override the theme.
 4. **Declare a schema** — Export a `schema` so your fields show up in the properties panel, and `exportedProperties` so siblings can read your state via `$widgetProp`. Both are read out of your source at compile time, so keep them plain literals; if they can't be read, the widget still renders but the Admin area marks it **No schema** and the editor offers no fields for it.
-5. **Save** — The compiler builds the module and pushes a `widget_updated` message over the WebSocket; the editor re-imports it live.
+5. **Save** — The compiler builds the module and pushes a `widget_updated` message over the WebSocket; the editor reloads to load it, or shows a banner first when you have unsaved changes.
 
 ```
 // no imports — SDK names come from window.__nextHMI__

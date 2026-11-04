@@ -215,8 +215,8 @@ On a running project, a removed user, or one whose password changed, is signed
 out of every panel straight away (the panel falls back to its auto-login user),
 and a user whose groups changed
 gets the new groups on the panel they are signed in on. If someone has the
-project open in the editor, the editor shows that another writer changed it, so
-they reload before saving.
+project open in the editor, the editor shows the new list, or, when it has
+unsaved changes, that another writer changed it, so they reload before saving.
 
 ### Panels: sign users in and out
 

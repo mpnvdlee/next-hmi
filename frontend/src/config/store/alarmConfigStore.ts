@@ -63,6 +63,8 @@ export const useAlarmConfigStore = create<AlarmConfigState>((set, get) => ({
     if (get().loaded && projectIsDirty()) return;
     try {
       const config = await apiJson<AlarmConfig>('/api/alarms/config');
+      // Same guard again: an edit can land while the request is out.
+      if (get().loaded && projectIsDirty()) return;
       set({ config, loaded: true, loadError: null });
     } catch (err) {
       console.error('[alarmConfigStore] load failed:', err);
