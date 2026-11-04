@@ -315,7 +315,8 @@ export function executeWidgetActions(
 
     if (action.type === 'acknowledgeAllAlarms') {
       // A refusal toasts inside ackAllAlarms, so the list need not wait for it.
-      void ackAllAlarms(useHmiStore.getState().currentUsersByScope[scope]?.username || 'operator');
+      // The backend attributes it to this connection's signed-in user.
+      void ackAllAlarms();
       continue;
     }
 

@@ -8,12 +8,22 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
+from core import audit
 from core.cert_info import describe_certificate
 from core.exceptions import DatasourceNotFoundError, DatasourceValidationError
 from core.project_packer import safe_filename
 from core.storage import active_certs_dir, write_bytes_atomic
 from core.value_types import simplify_variable_tree
-from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from models.datasource import (
@@ -300,10 +310,15 @@ async def read_datasource_certificate_info(path: str) -> CertInfo:
 
 @router.post("/write")
 async def write_datasource_variable(
+    request: Request,
     body: Any = Body(...),
     credentials: HTTPBasicCredentials | None = Depends(_write_credentials),
 ) -> dict[str, Any]:
-    """Authenticated project-user write using the WebSocket request contract."""
+    """Authenticated project-user write using the WebSocket request contract.
+
+    Audited as the authenticated user, or as ``engineer`` when the manager
+    marked the request as coming through the editor (the WebSocket rule).
+    """
     authenticated = (
         await users_manager.authenticate(credentials.username, credentials.password)
         if credentials is not None
@@ -323,12 +338,17 @@ async def write_datasource_variable(
     entry_data = datasource_manager.get_entry(datasource, registry_path)
     if entry_data is None:
         return {"ok": False, "reason": write_service.REASON_BAD_PATH}
-    identity, _document = authenticated
-    if not write_service.write_permitted(identity, entry_data):
-        return {"ok": False, "reason": "permission_denied"}
     outcome = await write_service.write_value(
         datasource_manager, _opcua_pool, datasource, path, value, field=field,
     )
+    if outcome.ok:
+        identity, _document = authenticated
+        actor, actor_source = (
+            (audit.ENGINEER_ACTOR, audit.ACTOR_DEVICE_ADMIN)
+            if audit.from_editor(request.headers)
+            else (identity["username"], audit.ACTOR_SESSION)
+        )
+        await write_service.audit_write(actor, actor_source, datasource, path, value, field)
     return {"ok": outcome.ok, "reason": outcome.reason}
 
 

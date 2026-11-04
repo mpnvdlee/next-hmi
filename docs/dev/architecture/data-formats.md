@@ -59,6 +59,7 @@ Outside any project, the runtime keeps its own state:
   .thumbnails/            ← per-project main-page screenshots (<projectId>.png), installation-local
   .restart-pending        ← sentinel written by /api/system/restart
   .peer-tokens.json       ← hashed manager peer tokens (no bearer plaintext)
+  .mcp-tokens.json        ← hashed MCP and API v1 tokens, each covering every project: id, name, access (MCP) or kind "api" + scopes, authGeneration, createdAt
   .peer-transfer-sender.json   ← durable outgoing (push) phases, byte counts, and retry fingerprints (no bearer plaintext)
   .peer-transfer-receipts.json ← durable incoming (push-receive) claims, apply phases, identities, and receipts
   .peer-transfer-pull.json     ← durable outgoing-pull phases, identities, and receipts
@@ -178,6 +179,15 @@ needs; every reader defaults the rest.
 `mcpEnabled` is the per-project MCP write gate, toggled from the manager
 dashboard via `POST /api/projects/{id}/mcp` and reported by `projects_list`. A
 `PUT` of the config that omits the key preserves the stored value.
+
+`httpAllowedOrigins` is an optional array of origins (`"http://10.0.0.5:8080"`)
+that an `$http` source whose url interpolates its own scheme, host or port may
+reach — see [`$http`](value-types.md#http-requests-in-depth-http). It is written
+by `PUT /api/config/http-origins`, which stores each entry normalised to
+`scheme://host:port` and refuses loopback, link-local and unspecified hosts, and
+`PUT /api/config/config` preserves it. Absent means empty: a dynamic-host source
+then reaches nothing. Adding the key needed no migration — an older project
+reads as an empty list.
 
 `globalEvents` is a singleton config of action arrays fired on app/page lifecycle:
 
@@ -554,7 +564,6 @@ the `/api/themes` endpoints in [../reference/rest-api.md](../reference/rest-api.
             "on_true": true
           },
           "ack_required": true,
-          "ack_groups": [],
           "values": [{ "$var": { "path": "MyPLC:Motor1/Temp" } }]
         }
       ]
@@ -582,6 +591,8 @@ Group and alarm ids are slugs the service layer assigns from the title or `code`
 ```
 
 An instance's `value_refs` is its definition's `values` bindings, copied at fire time, and `values` their raw values at that moment; a history entry keeps `values`. A file written before these fields existed reads them as `[]`.
+
+Anyone may acknowledge an alarm. The `ack_groups` key that older `alarms.json` and `alarm_state.json` files carry on an alarm or instance is ignored when they load and dropped on the next save.
 
 ## Recipe Files
 

@@ -41,7 +41,15 @@ from api.system_api import manager_router as system_router
 from api.telemetry_api import router as telemetry_router
 from api.thumbnail_api import manager_router as thumbnail_manager_router
 from api.tls_api import router as tls_router
-from core import manager_auth, peer_tokens, telemetry, tls_settings, users_document
+from api.v1_api import router as api_v1_router
+from core import (
+    audit,
+    manager_auth,
+    peer_tokens,
+    telemetry,
+    tls_settings,
+    users_document,
+)
 from core.exceptions import register_exception_handlers
 from core.logging_setup import configure_logging
 from core.manifest import (
@@ -51,6 +59,7 @@ from core.manifest import (
     load_manifest,
     migrate_invalid_project_ids,
 )
+from core.origin_check import OriginCheckMiddleware
 from core.peer_discovery import peer_discovery
 from core.project_packer import max_zip_bytes
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -107,16 +116,42 @@ def _strip_manager_cookie(cookie_header: str) -> str:
 
 
 def _forwarded_headers(request: Request) -> list[tuple[str, str]]:
-    """Request headers to forward upstream: hop-by-hop dropped, manager cookie stripped."""
+    """Request headers to forward upstream: hop-by-hop dropped, manager cookie stripped.
+
+    ``Origin`` is dropped too: the manager's own check has passed it by now,
+    and the child refuses any write that still carries a foreign one
+    (``core.origin_check``) — its own ``Host`` is loopback, never the browser's.
+    ``x-nexthmi-editor`` is the manager's own mark (``core.audit.EDITOR_HEADER``),
+    so a browser's copy never reaches the child. ``X-Forwarded-For`` is replaced
+    by the one address the manager saw — ``request.client``, which uvicorn has
+    already taken from a trusted front proxy's header — because the child's
+    uvicorn trusts loopback and would otherwise believe whatever the browser
+    wrote there (``api.device_api``). ``X-Forwarded-Proto`` is likewise the
+    scheme the manager derived itself, and a client's ``X-Forwarded-Host``,
+    ``X-Forwarded-Prefix`` and ``Forwarded`` are dropped — the child bakes the
+    prefix into ``index.html``, so only the manager's own alias may set it.
+    """
     headers: list[tuple[str, str]] = []
     for key, value in request.headers.items():
-        if key.lower() in _HOP_BY_HOP:
+        if key.lower() in _HOP_BY_HOP or key.lower() in (
+            "origin",
+            "x-forwarded-for",
+            "x-forwarded-proto",
+            "x-forwarded-host",
+            "x-forwarded-prefix",
+            "x-real-ip",
+            "forwarded",
+            audit.EDITOR_HEADER,
+        ):
             continue
         if key.lower() == "cookie":
             value = _strip_manager_cookie(value)
             if not value:
                 continue
         headers.append((key, value))
+    if request.client is not None:
+        headers.append(("x-forwarded-for", request.client.host))
+    headers.append(("x-forwarded-proto", request.url.scheme))
     return headers
 
 
@@ -201,6 +236,9 @@ app.include_router(thumbnail_manager_router)
 app.include_router(system_router)
 app.include_router(tls_router)
 app.include_router(telemetry_router)
+# Excluded from ``_auth_gate`` (see ``_is_gated``): every v1 route checks its own
+# device-admin Basic or API-token credential, and a session cookie opens none.
+app.include_router(api_v1_router)
 
 # Product documentation behind the editor's Help button: the bundled copy when
 # this build ships one, otherwise a redirect to the public page.
@@ -277,13 +315,11 @@ _RUNTIME_PUBLIC_ROUTES: dict[str, tuple[tuple[str, ...], ...]] = {
         ("api", "components", "folders"),
         ("api", "widgets"),
         ("api", "device", "info"),
-        ("api", "users"),
+        ("api", "users", "roster"),
         ("api", "alarms", "history"),
         ("api", "historian", "query"),
     ),
     "POST": (
-        ("api", "alarms", "ack", _ONE),
-        ("api", "alarms", "ack-all"),
         ("api", "recipes", "datasets", _ONE, "download"),
         ("api", "recipes", "datasets", _ONE, "upload"),
         ("api", "http-request"),
@@ -305,7 +341,9 @@ def _is_gated(path: str, method: str = "GET", raw_path: str | None = None) -> bo
     The SPA shell + bundle stay public so the login screen can render; the data
     APIs and the editor proxy are gated. Auth endpoints are always public.
     ``/mcp`` is excluded here because it enforces its own session-or-bearer-
-    token authentication (``mcp_server.auth``) instead of this cookie gate.
+    token authentication (``mcp_server.auth``) instead of this cookie gate;
+    ``/api/v1/`` because every route under it authenticates itself
+    (``api.v1_api``) and a session cookie must not be enough there.
     ``/runtime/<id>/…`` is gated only for what is not on the public table above.
     """
     if (
@@ -315,7 +353,7 @@ def _is_gated(path: str, method: str = "GET", raw_path: str | None = None) -> bo
         or path == "/api/health"
     ):
         return False
-    if path == "/mcp" or path.startswith("/mcp/"):
+    if path == "/mcp" or path.startswith("/mcp/") or path.startswith("/api/v1/"):
         return False
     if path.startswith("/api/"):
         return True
@@ -614,6 +652,9 @@ async def _auth_gate(request: Request, call_next):
     return await call_next(request)
 
 
+app.add_middleware(OriginCheckMiddleware)
+
+
 @app.get("/api/health", include_in_schema=False)
 async def health() -> dict:
     return {"status": "ok"}
@@ -691,8 +732,14 @@ async def _proxy_ws_to_child(
     import websockets
 
     await websocket.accept()
+    # The child attributes this socket's writes, recipe loads and acks to
+    # "engineer". The upstream is a fresh connection carrying none of the
+    # browser's headers, so only the session-gated editor prefix can set it.
+    headers = {audit.EDITOR_HEADER: "1"} if require_session else None
     try:
-        async with websockets.connect(f"ws://127.0.0.1:{port}/ws", max_size=None) as upstream:
+        async with websockets.connect(
+            f"ws://127.0.0.1:{port}/ws", max_size=None, additional_headers=headers
+        ) as upstream:
             await _pump_websocket(websocket, upstream)
     except Exception as exc:  # pragma: no cover — upstream gone mid-connect
         logger.debug("ws proxy %s: upstream error %s", project_id, exc)
@@ -795,6 +842,9 @@ async def _proxy_http_to_child(
     headers = _forwarded_headers(request)
     if forwarded_prefix is not None:
         headers.append(("x-forwarded-prefix", forwarded_prefix))
+        # The auth gate has already demanded the session for /editor/*.
+        if forwarded_prefix.startswith("/editor/"):
+            headers.append((audit.EDITOR_HEADER, "1"))
     body = await request.body()
     upstream_req = _proxy_client.build_request(
         request.method, url, headers=headers, content=body

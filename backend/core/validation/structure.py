@@ -13,6 +13,7 @@ from typing import Any
 from models.datasource import is_present_on_server, is_subscribable
 
 from core.builtin_widgets_manifest import CatalogVersion, builtin_widgets_catalog
+from core.http_origins import is_dynamic_template, listed_origins
 from core.page_index import (
     INDEX_ROOTS,
     collect_group_ancestors,
@@ -30,7 +31,6 @@ from core.storage import (
     active_config_dir,
     active_icons_dir,
     active_images_dir,
-    active_project_root,
     active_translations_dir,
     active_videos_dir,
     read_csv,
@@ -143,11 +143,6 @@ class ValidationContext:
     # A test server is a simulator the product *serves*, never a binding target:
     # bindings must go through an opcua-client pointed at it (see validate_var_ref).
     datasource_types: dict[str, str] = field(default_factory=dict)
-    # Group ids declared in users.json — what an alarm's ack_groups, a user's
-    # membership and the config-access setting are checked against. Empty means
-    # the file wasn't readable, in which case those checks are skipped rather
-    # than reporting every group as unknown.
-    user_groups: frozenset[str] = field(default_factory=frozenset)
     page_ids: set[str] = field(default_factory=set)
     # Ids of the nodes in the navigable ``pages`` root of the index. A page
     # there has no input scope: only the Dialogs folder's pages take input
@@ -227,6 +222,9 @@ class ValidationContext:
     icon_assets: frozenset[str] = field(default_factory=frozenset)
     image_assets: frozenset[str] = field(default_factory=frozenset)
     video_assets: frozenset[str] = field(default_factory=frozenset)
+    # config.json `httpAllowedOrigins` — the only origins a dynamic-host $http
+    # template can reach (core/http_origins.py).
+    http_allowed_origins: frozenset[str] = field(default_factory=frozenset)
     # declared_property_keys() memo, keyed by widget type — a node walk resolves
     # the same widget type repeatedly (e.g. every Button on a page), and the
     # result only depends on widget_type for the lifetime of this context.
@@ -1120,25 +1118,6 @@ def _is_absolute_asset_url(value: Any) -> bool:
     return isinstance(value, str) and value.lower().startswith(("http://", "https://", "data:", "blob:"))
 
 
-def _collect_user_groups() -> frozenset[str]:
-    """Group ids from users.json. Unreadable/absent yields an empty set, which
-    the consumers treat as "unknown" and skip rather than flagging every
-    reference as broken."""
-    path = active_project_root() / "users.json"
-    if not path.exists():
-        return frozenset()
-    try:
-        doc = read_json(path)
-    except Exception:
-        return frozenset()
-    groups = doc.get("groups") if isinstance(doc, dict) else None
-    if not isinstance(groups, list):
-        return frozenset()
-    return frozenset(
-        g["id"] for g in groups if isinstance(g, dict) and isinstance(g.get("id"), str) and g["id"]
-    )
-
-
 def build_context() -> ValidationContext:
     """Snapshot the world for the duration of a single validation pass."""
     component_property_keys, component_slots, component_properties, component_widgets = _scan_components()
@@ -1178,10 +1157,10 @@ def build_context() -> ValidationContext:
         datasource_entry=_datasource_entry_lookup(),
         datasource_disabled=_disabled_variable_lookup(),
         translation_keys=_collect_translation_keys(),
-        user_groups=_collect_user_groups(),
         icon_assets=_collect_asset_names(active_icons_dir()),
         image_assets=_collect_asset_names(active_images_dir()),
         video_assets=_collect_asset_names(active_videos_dir()),
+        http_allowed_origins=frozenset(listed_origins(config)),
     )
 
 
@@ -3106,6 +3085,13 @@ def _validate_property_value(
                 severity="warning", code="http-url-empty",
             )
         else:
+            if is_dynamic_template(url) and not ctx.http_allowed_origins:
+                report.warn(
+                    f"{path}/$http/url",
+                    "url takes its host from a placeholder, but the project lists no "
+                    "allowed origins (Admin › HTTP sources), so every request is refused",  # noqa: RUF001 -- breadcrumb separator glyph, shown verbatim in the UI
+                    severity="warning", code="http-dynamic-host-unlisted",
+                )
             # url / body / header values share $stringExpr's placeholder syntax,
             # so every template on the request is scanned against one wildcard bag.
             templates = [url]

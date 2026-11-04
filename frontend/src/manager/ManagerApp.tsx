@@ -33,6 +33,7 @@ import LogsSection from '@config/components/admin/LogsSection';
 import LogViewerModal from '@config/components/admin/LogViewerModal';
 import ProjectThumbnail from './ProjectThumbnail';
 import SecuritySection from '@config/components/admin/SecuritySection';
+import TokensSection from '@config/components/admin/TokensSection';
 import HttpsSection from '@config/components/admin/HttpsSection';
 import InsecureConnectionNotice from '@config/components/admin/InsecureConnectionNotice';
 import ContactPrompt from '@config/components/admin/ContactPrompt';
@@ -504,7 +505,7 @@ function ProjectsPage() {
                             disabled={busyId === p.id || p.status === 'missing'}
                             onChange={(e) => act(p.id, () => setProjectMcp(p.id, e.target.checked))}
                           />
-                          <span>MCP {p.mcpEnabled ? 'enabled' : 'disabled'}</span>
+                          <span>MCP write {p.mcpEnabled ? 'enabled' : 'disabled'}</span>
                         </label>
                       </div>
                     </div>
@@ -748,6 +749,7 @@ function SettingsPage() {
         <RuntimeHomeSection status={runtimeHome ? { path: runtimeHome } : null} />
         <LogsSection onOpen={() => setLogsOpen(true)} />
         <SecuritySection onChangePassword={changePassword} />
+        <TokensSection />
         <HttpsSection
           status={tls}
           runningProjectCount={runningProjectCount}

@@ -68,7 +68,6 @@ Access = Literal["read", "write"]
 @dataclass(frozen=True)
 class McpIdentity:
     kind: IdentityKind
-    project_id: str | None = None
     access: Access | None = None
     token_id: str | None = None
 
@@ -93,7 +92,7 @@ def authenticate(request: Request) -> McpIdentity | None:
     scope = mcp_tokens.resolve(_bearer(request))
     if scope is not None:
         return McpIdentity(
-            kind="token", project_id=scope.project_id, access=scope.access, token_id=scope.token_id,
+            kind="token", access=scope.access, token_id=scope.token_id,
         )
     return None
 
@@ -123,13 +122,13 @@ class McpAuthMiddleware:
             _identity.reset(token)
 
 
-def require_mcp_access(project_id: str, *, need_write: bool) -> None:
+def require_mcp_access(*, need_write: bool) -> None:
     """Enforce the current request's identity against one tool call's project.
 
     Called from inside the scoped-tool wrapper, which already knows the
     ``project`` argument and whether the tool is a write. A manager session
-    carries full workspace access; a bearer token must name this exact
-    project and, for a write, have been issued ``write`` access.
+    carries full workspace access; a bearer token reaches every project and,
+    for a write, must have been issued ``write`` access.
     """
     identity = _identity.get()
     if identity is None:
@@ -139,8 +138,6 @@ def require_mcp_access(project_id: str, *, need_write: bool) -> None:
         raise McpAuthError("MCP request is not authenticated")
     if identity.kind == "session":
         return
-    if identity.project_id != project_id:
-        raise McpAuthError(f"MCP token is not scoped to project '{project_id}'")
     if need_write and identity.access != "write":
         raise McpAuthError("MCP token has read-only access")
 

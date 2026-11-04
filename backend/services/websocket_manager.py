@@ -12,12 +12,15 @@ Responsibilities:
                                variable has been sent (from cache and/or a fresh
                                OPC-UA read)
             write_field    -> write a value to the PLC via opcua_pool
+            alarm_ack      -> acknowledge one alarm as this connection's user
+            alarm_ack_all  -> acknowledge every alarm as this connection's user
             login          -> authenticate a scoped session
-            logout         -> revert a scoped session to guest
+            logout         -> revert a scoped session to the auto-login user
 """
 
 import asyncio
 import contextlib
+import hashlib
 import itertools
 import json
 import logging
@@ -37,6 +40,7 @@ from core.storage import (
     active_config_dir,
     read_json,
 )
+from core.validation.ids import is_valid_panel_name
 from fastapi import WebSocket
 from models.datasource import build_var_key, parse_var_key
 from models.websocket import (
@@ -52,6 +56,7 @@ from models.websocket import (
     build_write_response,
 )
 
+from services import recipe_manager as recipe_manager_module
 from services import write_service
 
 logger = logging.getLogger(__name__)
@@ -73,7 +78,6 @@ _SESSION_TTL_S = 12 * 3600
 # are a stable contract — do not rename without a coordinated frontend change.
 REASON_INVALID_CREDENTIALS = "invalid_credentials"
 REASON_RATE_LIMITED = "rate_limited"
-REASON_PERMISSION_DENIED = "permission_denied"
 REASON_BAD_REQUEST = "bad_request"
 
 
@@ -81,8 +85,8 @@ REASON_BAD_REQUEST = "bad_request"
 class ConfigChangedEvent:
     """Payload for ``broadcast_config_changed``.
 
-    ``source`` is ``"mcp"`` or ``"rest"``. ``agent_label`` is included on the
-    wire only when ``source == "mcp"``.
+    ``source`` is ``"mcp"``, ``"rest"`` or ``"api"``. ``agent_label`` is
+    included on the wire only when ``source == "mcp"``.
     """
 
     artifact_type: str
@@ -111,11 +115,15 @@ class WebSocketManager:
         self._recipe_manager = None
         # Per-client identity store: client_id -> { scope -> {username, groups} }
         self._client_users: dict[str, dict[str, dict[str, Any]]] = {}
-        # Resumable logins: token -> (username, monotonic expiry). Outlive the
-        # socket so a reconnect or page reload stays logged in.
+        # Resumable logins: token -> (username, monotonic expiry, credential
+        # mark). Outlive the socket so a reconnect or page reload stays logged in.
         # shortcut: in memory, so a backend restart logs everyone out; persist
         # (signed tokens) if operators must survive a restart.
-        self._sessions: dict[str, tuple[str, float]] = {}
+        self._sessions: dict[str, tuple[str, float, str]] = {}
+        # Connections the manager opened through the session-gated editor prefix.
+        self._editor_clients: set[str] = set()
+        # Runtime connections whose tab named its panel (``?panel=``): client_id -> name.
+        self._client_panels: dict[str, str] = {}
         # Per-client connection timestamps: client_id -> ISO string
         self._client_connected_at: dict[str, str] = {}
         # Priority batch delay per datasource name, beside the entry it was read
@@ -325,8 +333,8 @@ class WebSocketManager:
     async def broadcast_config_changed(self, event: ConfigChangedEvent) -> None:
         """Broadcast a config-changed event to every connected browser tab.
 
-        ``event.source`` is ``"mcp"`` or ``"rest"``. For ``"rest"`` writes,
-        ``agent_label`` is omitted from the payload regardless of value.
+        ``event.source`` is ``"mcp"``, ``"rest"`` or ``"api"``. For anything but
+        ``"mcp"``, ``agent_label`` is omitted from the payload regardless of value.
 
         ``event.diff`` may be a JSON Patch (list of ops) or the truncation
         sentinel ``{ truncated, reason, op_count }`` from ``mcp_server.diff``.
@@ -346,11 +354,16 @@ class WebSocketManager:
 
     # -- Connection lifecycle -------------------------------------------------
 
-    async def connect(self, websocket: WebSocket) -> str:
-        """Accept connection, send snapshot, register client. Returns client_id."""
+    async def connect(self, websocket: WebSocket, *, editor: bool = False) -> str:
+        """Accept connection, send snapshot, register client. Returns client_id.
+
+        ``editor`` marks a socket the manager proxied from ``/editor/<slug>/ws``.
+        """
         await websocket.accept()
         client_id = str(uuid.uuid4())
         self._connections[client_id] = websocket
+        if editor:
+            self._editor_clients.add(client_id)
         self._client_users[client_id] = {}
         self._client_connected_at[client_id] = datetime.now(UTC).isoformat()
         try:
@@ -407,6 +420,8 @@ class WebSocketManager:
         """Remove client and demote any variables that were only priority for this client."""
         self._connections.pop(client_id, None)
         self._client_users.pop(client_id, None)
+        self._editor_clients.discard(client_id)
+        self._client_panels.pop(client_id, None)
         self._client_connected_at.pop(client_id, None)
         if self._datasource_manager is not None:
             self._datasource_manager.clear_client(client_id)
@@ -473,6 +488,8 @@ class WebSocketManager:
             await self._handle_recipe_load(client_id, msg)
         elif msg_type == "recipe_save":
             await self._handle_recipe_save(client_id, msg)
+        elif msg_type in ("alarm_ack", "alarm_ack_all"):
+            await self._handle_alarm_ack(client_id, msg)
         elif msg_type == "login":
             await self._handle_login(client_id, cast(LoginMessage, msg))
         elif msg_type == "logout":
@@ -592,7 +609,7 @@ class WebSocketManager:
         await self._checked_write(client_id, msg, ds_name, path, field=field, value=value)
 
     async def _handle_toggle_field(self, client_id: str, msg: ToggleFieldMessage) -> None:
-        """Invert a Boolean variable. Same permission check, audit and
+        """Invert a Boolean variable. Same audit and
         `write_response` / `write_error` contract as `_handle_write_field`; the
         value written is read on the server, never taken from the client."""
         request_id = msg.get("requestId")
@@ -625,7 +642,7 @@ class WebSocketManager:
         value: Any = None,
         toggle: bool = False,
     ) -> None:
-        """Resolve, permission-check, write (or toggle), audit and respond."""
+        """Resolve, write (or toggle), audit and respond."""
         request_id = msg.get("requestId")
         registry_path = write_service.registry_path_of(self._datasource_manager, ds_name, path)
 
@@ -638,11 +655,6 @@ class WebSocketManager:
             return
 
         scope = msg.get("scope", "")
-        if not self._check_write_permitted(client_id, scope, entry_data):
-            logger.warning("%s denied for %s:%s (scope=%s)", msg.get("type"), ds_name, path, scope)
-            await self._send_write_result(client_id, request_id, ds_name, path, REASON_PERMISSION_DENIED)
-            return
-
         if toggle:
             outcome, value = await write_service.toggle_value(
                 self._datasource_manager, self._opcua_pool, ds_name, path,
@@ -655,24 +667,10 @@ class WebSocketManager:
             logger.warning("%s %s:%s.%s failed: %s", msg.get("type"), ds_name, path, field, outcome.reason)
         else:
             # Moving a setpoint is the most consequential thing an operator does
-            # here, and it is one of the few actions with an actor the server
-            # established itself — the identity `_check_write_permitted` just
-            # decided against, five lines up. Emitted here rather than in
-            # write_service because write_service is also the recipe-download
-            # path, which has no operator behind it.
-            #
-            # Only writes that landed. A rejected or failed write moved nothing,
-            # and an unauthenticated caller must not be able to grow an
-            # append-only, never-truncated file by spamming rejects. Denials
-            # stay in the log above.
-            await audit.emit_async(
-                audit.AuditEvent(
-                    actor=self._session_actor(client_id, scope),
-                    actor_source=audit.ACTOR_SESSION,
-                    action="variable.write",
-                    subject=build_var_key(ds_name, path),
-                    detail={"value": value, "field": field} if field else {"value": value},
-                )
+            # here; failures stay in the log above.
+            await write_service.audit_write(
+                *self._attributed(client_id, self._session_actor(client_id, scope)),
+                ds_name, path, value, field,
             )
         await self._send_write_result(client_id, request_id, ds_name, path, outcome.reason)
 
@@ -692,17 +690,8 @@ class WebSocketManager:
             await self._send_recipe_result(client_id, request_id, None, REASON_BAD_REQUEST)
             return
         verify = bool(msg.get("verify", False))
-        scope = msg.get("scope", "")
-
-        identity = self._client_users.get(client_id, {}).get(scope) if scope else None
         try:
-            result = await self._recipe_manager.download(
-                dataset_id,
-                verify=verify,
-                permission_check=write_service.write_permission_gate(
-                    identity, self._datasource_manager,
-                ),
-            )
+            result = await self._recipe_manager.download(dataset_id, verify=verify)
         except Exception:
             logger.exception("recipe_load failed for dataset %s", dataset_id)
             await self._send_recipe_result(client_id, request_id, None, "download_failed")
@@ -710,6 +699,9 @@ class WebSocketManager:
         if result is None:
             await self._send_recipe_result(client_id, request_id, None, "not_found")
             return
+        await recipe_manager_module.audit_load(
+            result, *self._attributed(client_id, self._session_actor(client_id, msg.get("scope", ""))),
+        )
         await self._send_recipe_result(
             client_id, request_id, result.model_dump(by_alias=True), None,
         )
@@ -737,15 +729,11 @@ class WebSocketManager:
                 return
         scope = msg.get("scope", "")
         identity = self._client_users.get(client_id, {}).get(scope) if scope else None
-        username = identity.get("username", "") if isinstance(identity, dict) else ""
+        username, _source = self._attributed(
+            client_id, identity.get("username", "") if isinstance(identity, dict) else "",
+        )
         try:
-            config = await self._recipe_manager.upload_into(
-                dataset_id,
-                username=username,
-                permission_check=write_service.write_permission_gate(
-                    identity, self._datasource_manager,
-                ),
-            )
+            config = await self._recipe_manager.upload_into(dataset_id, username=username)
         except Exception:
             logger.exception("recipe_save failed for dataset %s", dataset_id)
             await self._send_recipe_result(client_id, request_id, None, "upload_failed")
@@ -756,6 +744,47 @@ class WebSocketManager:
         await self._send_recipe_result(
             client_id, request_id, {"datasetId": dataset_id}, None,
         )
+
+    async def _handle_alarm_ack(self, client_id: str, msg: dict) -> None:
+        """Acknowledge one alarm (``alarm_ack``) or all (``alarm_ack_all``).
+
+        Attributed to the identity this connection holds, never to a name the
+        message carries. Replies ``alarm_ack_response`` / ``alarm_ack_error``
+        when the client supplied a ``requestId``.
+        """
+        request_id = msg.get("requestId")
+        if self._alarm_manager is None:
+            await self._send_ack_result(client_id, request_id, "alarms_unavailable")
+            return
+        actor, actor_source = self._attributed(client_id, self._connection_actor(client_id))
+        if msg.get("type") == "alarm_ack_all":
+            # The alarm manager saves state and calls audit listeners synchronously.
+            await asyncio.to_thread(
+                self._alarm_manager.ack_all, actor, actor_source=actor_source,
+            )
+            await self._send_ack_result(client_id, request_id, None)
+            return
+        instance_id = msg.get("instanceId")
+        if not isinstance(instance_id, str) or not instance_id:
+            await self._send_ack_result(client_id, request_id, REASON_BAD_REQUEST)
+            return
+        found = await asyncio.to_thread(
+            self._alarm_manager.ack_alarm, instance_id, actor, actor_source=actor_source,
+        )
+        await self._send_ack_result(client_id, request_id, None if found else "not_found")
+
+    async def _send_ack_result(
+        self, client_id: str, request_id: str | None, reason: str | None,
+    ) -> None:
+        """Emit alarm_ack_response (reason=None) or alarm_ack_error. No-op without requestId."""
+        if not request_id:
+            return
+        payload: dict[str, Any] = (
+            {"type": "alarm_ack_error", "requestId": request_id, "reason": reason}
+            if reason
+            else {"type": "alarm_ack_response", "requestId": request_id}
+        )
+        await self._safe_send_json(client_id, payload)
 
     async def _send_recipe_result(
         self,
@@ -807,24 +836,35 @@ class WebSocketManager:
         )
         await self._safe_send_json(client_id, payload)
 
-    def _check_write_permitted(self, client_id: str, scope: str, entry_data: Any) -> bool:
-        """Return True if the client's identity for the given scope is allowed to write."""
-        identity = self._client_users.get(client_id, {}).get(scope) if scope else None
-        return write_service.write_permitted(identity, entry_data)
-
     def _session_actor(self, client_id: str, scope: str) -> str:
         """Name this connection authenticated as for *scope*, never one it sent.
 
-        Read from the same store `_check_write_permitted` uses, so the audit
-        record names whoever the permission decision was actually made against.
-        A connection that never logged in falls back to "guest" — which
-        `write_service.write_permitted` already treats it as. That is still a
+        A connection that never logged in falls back to "guest". That is still a
         fact the server established (this socket presented no credentials), not
         a claim, so it is honest to tag it `ACTOR_SESSION`.
         """
-        identity = self._client_users.get(client_id, {}).get(scope) if scope else None
-        username = identity.get("username") if isinstance(identity, dict) else None
-        return username if isinstance(username, str) and username else "guest"
+        return _username(self._client_users.get(client_id, {}).get(scope) if scope else None)
+
+    def _attributed(self, client_id: str, username: str) -> tuple[str, str]:
+        """``(actor, actor_source)`` for a write, recipe load or ack on this socket.
+
+        An editor socket is the engineer's, whichever project user its Test-mode
+        preview is signed in as. Login and logout records keep the HMI user.
+        """
+        if client_id in self._editor_clients:
+            return audit.ENGINEER_ACTOR, audit.ACTOR_DEVICE_ADMIN
+        return username, audit.ACTOR_SESSION
+
+    def _connection_actor(self, client_id: str) -> str:
+        """Name the identity this connection established most recently.
+
+        For a message that names no scope (alarm acks: the SDK's ``ackAlarm``
+        has none to send). A runtime tab holds one live HmiView, and a remounted
+        one gets a new scope while the old scope's entry stays behind, so the
+        latest identity — see ``_apply_and_respond_identity`` — is the screen
+        the operator is looking at. "guest" when the socket has none.
+        """
+        return _username(next(reversed((self._client_users.get(client_id) or {}).values()), None))
 
     async def _apply_and_respond_identity(
         self,
@@ -842,7 +882,18 @@ class WebSocketManager:
         request_identity passes no request_id so its user_identity message
         cannot be mistaken for a login response by the client dispatcher.
         """
-        self._client_users.setdefault(client_id, {})[scope] = identity
+        self._store_identity(client_id, scope, identity)
+        await self._send_identity(client_id, scope, identity, doc, request_id=request_id)
+
+    def _store_identity(self, client_id: str, scope: str, identity: dict) -> None:
+        scopes = self._client_users.setdefault(client_id, {})
+        # Re-insert so the dict's last entry is the latest identity (_connection_actor).
+        scopes.pop(scope, None)
+        scopes[scope] = identity
+
+    async def _send_identity(
+        self, client_id: str, scope: str, identity: dict, doc: dict, *, request_id: str | None = None
+    ) -> None:
         if client_id not in self._connections:
             return
         group_labels = self._build_group_labels(doc, identity["groups"])
@@ -858,16 +909,12 @@ class WebSocketManager:
             ),
         )
 
-    def _end_session(self, client_id: str, scope: str) -> None:
-        """Revoke the resumable login this connection holds for *scope*, if any."""
-        identity = self._client_users.get(client_id, {}).get(scope) or {}
-        self._sessions.pop(identity.get("session", ""), None)
-
-    def _start_session(self, username: str) -> str:
+    def _start_session(self, user: dict) -> str:
+        """A resumable login for *user*, the users.json entry it signed in as."""
         now = time.monotonic()
         self._sessions = {t: s for t, s in self._sessions.items() if s[1] > now}
         token = secrets.token_urlsafe(32)
-        self._sessions[token] = (username, now + _SESSION_TTL_S)
+        self._sessions[token] = (user["username"], now + _SESSION_TTL_S, _credential_mark(user))
         return token
 
     async def _handle_login(self, client_id: str, msg: LoginMessage) -> None:
@@ -903,9 +950,18 @@ class WebSocketManager:
             return
 
         identity, doc = authenticated
-        self._end_session(client_id, scope)
-        identity = {**identity, "session": self._start_session(identity["username"])}
-        await self._apply_and_respond_identity(client_id, scope, identity, doc, request_id=request_id)
+        replaced = self._held_token(client_id, scope)
+        identity = {**identity, "session": self._start_session(_user(doc, identity["username"]) or identity)}
+        # Stored first so the reset below passes this scope by, and sent last:
+        # the tab saves the token of the last user_identity it gets, and a
+        # stale scope of the same tab that held the replaced login would
+        # otherwise wipe the new one. A panel's other monitors lose it too.
+        self._store_identity(client_id, scope, identity)
+        await self._reset_sessions({replaced} - {None}, _auto_login_identity(doc), doc)
+        # Send what the scope holds now: a sign-out or refresh that landed
+        # during the reset wins, and the tab must show what the server enforces.
+        current = self._client_users.get(client_id, {}).get(scope, identity)
+        await self._send_identity(client_id, scope, current, doc, request_id=request_id)
         # The one login path with credentials behind it. Auto-login via
         # request_identity is deliberately not audited — every page open would
         # otherwise append a guest record to an fsync'd, never-truncated file.
@@ -927,24 +983,20 @@ class WebSocketManager:
         if not isinstance(scope, str) or not scope:
             return
 
+        panel = msg.get("panel")
+        # The editor is the engineer's, never a panel an integration may sign in.
+        if is_valid_panel_name(panel) and client_id not in self._editor_clients:
+            self._client_panels[client_id] = cast(str, panel)
+        else:
+            self._client_panels.pop(client_id, None)
+
         from services import users_manager
         doc = users_manager.load()
         resumed = self._resume_session(msg.get("sessionToken"), doc)
         if resumed is not None:
             await self._apply_and_respond_identity(client_id, scope, resumed, doc)
             return
-        settings = doc.get("settings", {})
-        auto_login_name = settings.get("autoLoginName", "guest") if isinstance(settings, dict) else "guest"
-        user = next(
-            (u for u in doc.get("users", []) if isinstance(u, dict) and u.get("username") == auto_login_name),
-            None,
-        )
-        identity = (
-            {"username": user["username"], "groups": list(user.get("groups", ["guest"]))}
-            if user is not None
-            else {"username": "guest", "groups": ["guest"]}
-        )
-        await self._apply_and_respond_identity(client_id, scope, identity, doc)
+        await self._apply_and_respond_identity(client_id, scope, _auto_login_identity(doc), doc)
 
     def _resume_session(self, token: object, doc: dict) -> dict[str, Any] | None:
         """Identity for a still-valid login token, with the user's current groups."""
@@ -953,19 +1005,16 @@ class WebSocketManager:
         session = self._sessions.get(token)
         if session is None:
             return None
-        username, expires = session
-        user = next(
-            (u for u in doc.get("users", []) if isinstance(u, dict) and u.get("username") == username),
-            None,
-        )
-        if expires <= time.monotonic() or user is None:
+        username, expires, mark = session
+        user = _user(doc, username)
+        if expires <= time.monotonic() or user is None or _credential_mark(user) != mark:
             del self._sessions[token]
             return None
-        self._sessions[token] = (username, time.monotonic() + _SESSION_TTL_S)
-        return {"username": username, "groups": list(user.get("groups", ["guest"])), "session": token}
+        self._sessions[token] = (username, time.monotonic() + _SESSION_TTL_S, mark)
+        return {"username": username, "groups": _groups(user), "session": token}
 
     async def _handle_logout(self, client_id: str, msg: LogoutMessage) -> None:
-        """Revert scoped identity back to guest."""
+        """Revert scoped identity back to the auto-login user."""
         scope = msg.get("scope", "")
         if not isinstance(scope, str) or not scope:
             return
@@ -973,20 +1022,18 @@ class WebSocketManager:
         request_id = msg.get("requestId")
         # Read before the revert overwrites it — this is who the session was.
         previous_actor = self._session_actor(client_id, scope)
-        self._end_session(client_id, scope)
+        ended = self._held_token(client_id, scope)
 
         from services import users_manager
         doc = users_manager.load()
-        guest = next((u for u in doc.get("users", []) if isinstance(u, dict) and u.get("username") == "guest"), None)
-        identity = {
-            "username": "guest",
-            "groups": list(guest.get("groups", ["guest"])) if guest else ["guest"],
-        }
+        identity = _auto_login_identity(doc)
         await self._apply_and_respond_identity(client_id, scope, identity, doc, request_id=request_id)
-        # Only a real session ending is worth a record. A guest→guest logout —
-        # a double logout, or a socket that never authenticated — ended nothing,
-        # and the trail is append-only and never truncated.
-        if previous_actor != "guest":
+        # Every monitor sharing this login (a signed-in panel) signs out with it.
+        await self._reset_sessions({ended} - {None}, identity, doc)
+        # Only a real session ending is worth a record. A logout holding no login
+        # — a double logout, or a socket still on the auto-login user — ended
+        # nothing, and the trail is append-only and never truncated.
+        if ended is not None:
             await audit.emit_async(
                 audit.AuditEvent(
                     actor=previous_actor,
@@ -995,6 +1042,114 @@ class WebSocketManager:
                     subject=scope,
                 )
             )
+
+    # -- Named panels (API v1 sign-in, via api/internal) ----------------------
+
+    def panels(self) -> list[dict[str, Any]]:
+        """Each named panel with its connection count and who is signed in on it."""
+        users: dict[str, list[str]] = {}
+        for client_id, panel in self._client_panels.items():
+            users.setdefault(panel, []).append(self._connection_actor(client_id))
+        return [
+            {"name": name, "connections": len(names), "users": sorted(set(names))}
+            for name, names in sorted(users.items())
+        ]
+
+    def has_panel(self, panel: str) -> bool:
+        return panel in self._client_panels.values()
+
+    def _held_token(self, client_id: str, scope: str) -> str | None:
+        return (self._client_users.get(client_id, {}).get(scope) or {}).get("session")
+
+    def _panel_scopes(self, panel: str) -> list[tuple[str, str]]:
+        return [
+            (client_id, scope)
+            for client_id, name in list(self._client_panels.items())
+            if name == panel and client_id in self._connections
+            for scope in list(self._client_users.get(client_id, {}))
+        ]
+
+    async def _set_in_place(self, client_id: str, scope: str, identity: dict, doc: dict) -> None:
+        # In place keeps scope order, so _connection_actor still reads the live screen.
+        scopes = self._client_users.get(client_id)
+        if scopes is None or scope not in scopes:
+            return
+        scopes[scope] = identity
+        await self._send_identity(client_id, scope, identity, doc)
+
+    async def _reset_sessions(self, tokens: set[str], identity: dict, doc: dict) -> set[str]:
+        """Give every scope holding one of *tokens* `identity`, then revoke them.
+
+        A panel login is one token on many scopes: each monitor of the panel,
+        and any tab that resumed it, even under another panel name or none.
+        Returns the usernames it replaced.
+        """
+        replaced: set[str] = set()
+        # Revoked before the first send yields, so no tab can resume one meanwhile.
+        for token in tokens:
+            self._sessions.pop(token, None)
+        for client_id in [c for c in self._client_users if c in self._connections]:
+            for scope, held in list(self._client_users.get(client_id, {}).items()):
+                # Skip a scope that logged in afresh while an earlier send awaited.
+                if held.get("session") in tokens and self._client_users.get(client_id, {}).get(scope) is held:
+                    replaced.add(held.get("username", "guest"))
+                    await self._set_in_place(client_id, scope, identity, doc)
+        return replaced
+
+    async def sign_in_panel(self, panel: str, identity: dict, doc: dict) -> None:
+        # One resumable login per panel, so a reload of any of its tabs keeps it.
+        pairs = self._panel_scopes(panel)
+        replaced = {t for c, s in pairs if (t := self._held_token(c, s))}
+        signed_in = {**identity, "session": self._start_session(_user(doc, identity["username"]) or identity)}
+        for client_id, scope in pairs:
+            await self._set_in_place(client_id, scope, signed_in, doc)
+        await self._reset_sessions(replaced, _auto_login_identity(doc), doc)
+
+    async def sign_out_panel(self, panel: str) -> list[str]:
+        """Drop *panel*, and every copy of the logins it held, back to the
+        auto-login user; returns who was signed in."""
+        from services import users_manager
+        doc = users_manager.load()
+        fallback = _auto_login_identity(doc)
+        pairs = self._panel_scopes(panel)
+        previous = {self._connection_actor(c) for c, _ in pairs}
+        previous |= await self._reset_sessions(
+            {t for c, s in pairs if (t := self._held_token(c, s))}, fallback, doc
+        )
+        for client_id, scope in pairs:
+            held = self._client_users.get(client_id, {}).get(scope)
+            if held is not None and held != fallback:
+                # A login this scope took while the reset above awaited.
+                if held.get("session"):
+                    self._sessions.pop(held["session"], None)
+                previous.add(held.get("username", "guest"))
+                await self._set_in_place(client_id, scope, fallback, doc)
+        return sorted(previous)
+
+    async def refresh_identities(self) -> None:
+        """Re-check every held identity against users.json after a user write:
+        a deleted or renamed user, and every login of one whose password
+        changed, falls back to the auto-login user; a regrouped one gets its
+        new groups. Updated in place, so scope order is kept."""
+        from services import users_manager
+        doc = users_manager.load()
+        users = {u.get("username"): u for u in doc.get("users", []) if isinstance(u, dict)}
+        stale = {
+            token
+            for token, (username, _expires, mark) in self._sessions.items()
+            if username not in users or _credential_mark(users[username]) != mark
+        }
+        await self._reset_sessions(stale, _auto_login_identity(doc), doc)
+        for client_id, scopes in list(self._client_users.items()):
+            for scope, identity in list(scopes.items()):
+                user = users.get(identity.get("username"))
+                if user is None:
+                    updated = _auto_login_identity(doc)
+                else:
+                    updated = {**identity, "groups": _groups(user)}
+                if updated != identity:
+                    scopes[scope] = updated
+                    await self._send_identity(client_id, scope, updated, doc)
 
     async def _send_cached_values(self, client_id: str, composite_keys: set[str]) -> set[str]:
         if self._datasource_manager is None or not composite_keys:
@@ -1072,6 +1227,43 @@ class WebSocketManager:
 
 
 # -- Helpers -----------------------------------------------------------------
+
+
+def _user(doc: dict, username: str) -> dict[str, Any] | None:
+    return next(
+        (u for u in doc.get("users", []) if isinstance(u, dict) and u.get("username") == username),
+        None,
+    )
+
+
+def _groups(user: dict) -> list[str]:
+    return list(user.get("groups", ["guest"]))
+
+
+def _username(identity: object) -> str:
+    """The identity's username, or "guest" when it holds none."""
+    username = identity.get("username") if isinstance(identity, dict) else None
+    return username if isinstance(username, str) and username else "guest"
+
+
+def _credential_mark(user: dict) -> str:
+    """Fingerprint of the credential a login was granted against: a password
+    change alters it, and the logins taken with the old one end."""
+    credential = [user.get("passwordHash"), user.get("password", "")]
+    return hashlib.sha256(json.dumps(credential, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _auto_login_identity(doc: dict) -> dict[str, Any]:
+    """The configured autoLoginName user's identity, or bare guest without one."""
+    settings = doc.get("settings", {})
+    auto_login_name = settings.get("autoLoginName", "guest") if isinstance(settings, dict) else "guest"
+    user = next(
+        (u for u in doc.get("users", []) if isinstance(u, dict) and u.get("username") == auto_login_name),
+        None,
+    )
+    if user is None:
+        return {"username": "guest", "groups": ["guest"]}
+    return {"username": user["username"], "groups": _groups(user)}
 
 
 def _group_priority_paths_by_datasource(priority_keys: set[str]) -> dict[str, set[str]]:

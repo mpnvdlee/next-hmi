@@ -542,7 +542,7 @@ describe('projects dashboard', () => {
     useProjectsStore.setState({ projects: [project()] });
     renderAt('/projects');
 
-    expect(within(row('Line 1')).getByText('MCP disabled')).toBeInTheDocument();
+    expect(within(row('Line 1')).getByText('MCP write disabled')).toBeInTheDocument();
     await userEvent.click(within(row('Line 1')).getByRole('checkbox'));
 
     expect(setProjectMcp).toHaveBeenCalledWith('p1', true);
@@ -890,6 +890,7 @@ describe('settings page', () => {
     expect(screen.getByText('1h 1m 1s')).toBeInTheDocument();
     expect(screen.getByText('/home/op/NextHMI')).toBeInTheDocument();
     expect(screen.getByText('Security')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Tokens' })).toBeInTheDocument();
     expect(loadRuntimeHome).toHaveBeenCalledTimes(1);
 
     expect(loadSystemInfo).toHaveBeenCalledTimes(1);

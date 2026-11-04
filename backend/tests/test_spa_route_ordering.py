@@ -56,7 +56,8 @@ def _post_ping():
 
 app.include_router(late)
 
-client = TestClient(app)
+# An instance answers only a loopback Host (core.origin_check).
+client = TestClient(app, base_url="http://127.0.0.1")
 if module_name == "manager":
     client.post("/api/manager/auth/setup", json={"password": "regression"})
 

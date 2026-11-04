@@ -6,8 +6,8 @@
  * writer widget correlates its write and surfaces a rejection. Writing raw
  * `sendWsMessage({ type: 'write_field', … })` omits the `requestId`, which
  * makes the backend skip its `write_response` / `write_error` entirely: an
- * out-of-range value or a `interactableByGroups` denial then reaches the
- * operator as nothing at all.
+ * out-of-range value or a read-only variable then reaches the operator as
+ * nothing at all.
  */
 
 import { useCallback, useId, useMemo } from 'react';
@@ -58,7 +58,6 @@ export interface WriteVariable {
 const TOAST_DURATION_MS = 4000;
 
 const FAILURE_MESSAGES: Record<string, string> = {
-  permission_denied: 'You are not allowed to change this value',
   read_only: 'Variable is read-only',
   value_out_of_range: 'Value is outside the allowed range',
   integer_out_of_range: 'Value is outside the allowed range',

@@ -23,6 +23,7 @@ import threading
 from collections.abc import Callable
 from typing import Any
 
+from core import audit
 from core.ids import slug_id
 from core.storage import (
     active_recipe_state_path,
@@ -44,6 +45,22 @@ from models.recipe import (
 from services import write_service
 
 logger = logging.getLogger(__name__)
+
+
+async def audit_load(result: DownloadResult, actor: str, actor_source: str) -> None:
+    """Record a download as ``recipe.load`` — only one that wrote something,
+    as with ``variable.write``. Shared by the WebSocket and REST entry points."""
+    if not result.written:
+        return
+    await audit.emit_async(
+        audit.AuditEvent(
+            actor=actor,
+            actor_source=actor_source,
+            action="recipe.load",
+            subject=result.dataset_id,
+            detail={"result": result.result, "written": result.written, "total": result.total},
+        )
+    )
 
 
 def _assign_config_ids(config: RecipeConfig) -> None:
@@ -184,7 +201,6 @@ class RecipeManager:
         dataset_id: str,
         *,
         verify: bool = False,
-        permission_check: Callable[[str, str], bool] | None = None,
     ) -> DownloadResult | None:
         """Write every parameter's stored value to its variable.
 
@@ -192,12 +208,6 @@ class RecipeManager:
         partial success, records the dataset as loaded for its type (replacing
         any prior load for that type) and stamps the dataset's own `loaded_at`.
         Returns None when the dataset id is unknown.
-
-        ``permission_check(datasource, path)`` — when supplied — gates each write;
-        a parameter it rejects becomes a ``permission_denied`` failure and is not
-        written. Callers with a client identity (the recipe WS handler) pass one
-        so recipe downloads honour the same per-variable write ACL as direct
-        client writes.
         """
         async with self._op_lock:
             with self._lock:
@@ -219,11 +229,6 @@ class RecipeManager:
                     continue
                 if param.id not in values:
                     failures.append(DownloadFailure(parameterId=param.id, reason="no_value"))
-                    continue
-                if permission_check is not None and not permission_check(ds_name, path):
-                    failures.append(
-                        DownloadFailure(parameterId=param.id, reason="permission_denied")
-                    )
                     continue
                 idx = param.resolve_index()
                 write_path = f"{path}[{idx}]" if idx is not None else path
@@ -269,17 +274,13 @@ class RecipeManager:
         dataset_id: str,
         *,
         username: str = "",
-        permission_check: Callable[[str, str], bool] | None = None,
     ) -> RecipeConfig | None:
         """Read current live values for a dataset's type and overwrite the
         dataset's stored values in place. Returns None when the id is unknown.
 
         A parameter whose live value can't be read (``read_value`` returns None)
         keeps its previously-stored value rather than being overwritten with
-        null, so a transient read blip doesn't corrupt the saved dataset. A
-        parameter ``permission_check`` denies is treated the same way — see
-        ``write_service.write_permission_gate``, the same per-variable ACL
-        ``download`` applies to its writes.
+        null, so a transient read blip doesn't corrupt the saved dataset.
         """
         async with self._op_lock:
             with self._lock:
@@ -293,8 +294,6 @@ class RecipeManager:
             for param in params:
                 ds_name, path = param.resolve_datasource_path()
                 if not ds_name or not path:
-                    continue
-                if permission_check is not None and not permission_check(ds_name, path):
                     continue
                 idx = param.resolve_index()
                 read_path = f"{path}[{idx}]" if idx is not None else path

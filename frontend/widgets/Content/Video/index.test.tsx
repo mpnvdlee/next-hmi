@@ -12,7 +12,7 @@ vi.mock('@hmi/hooks/useWebSocket', () => ({
   sendWsMessage: vi.fn(),
 }));
 
-// useEvalContext() pulls in useUsersData(), which fetches /api/users and
+// useEvalContext() pulls in useUsersData(), which fetches /api/users/roster and
 // resolves asynchronously after mount — a real network call in jsdom, with
 // nothing to answer it. Stub it so every render settles synchronously
 // instead of leaving a rejected fetch to update state after the test body

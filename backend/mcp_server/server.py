@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any, TypeVar
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from . import agent_label
@@ -197,7 +198,15 @@ def build_mcp_asgi_app() -> ASGIApp:
 
     # stateless_http/streamable_http_path moved here from the MCPServer
     # constructor in mcp 2.0.
-    inner = mcp_app.streamable_http_app(stateless_http=False, streamable_http_path="/")
+    inner = mcp_app.streamable_http_app(
+        stateless_http=False,
+        streamable_http_path="/",
+        # The SDK's default Host allowlist answers 421 to every non-loopback Host,
+        # i.e. to every client on the LAN. Rebinding needs no guard here: /mcp
+        # takes a bearer token or the manager session, OriginCheckMiddleware
+        # refuses cross-origin pages, and a rebound page has neither credential.
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+    )
     inner.add_middleware(_LabelMiddleware)
     return mcp_auth.McpAuthMiddleware(inner)
 

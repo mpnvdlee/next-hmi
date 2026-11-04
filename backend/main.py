@@ -19,9 +19,10 @@ from api.theme_api import router as theme_router
 from api.thumbnail_api import instance_router as thumbnail_router
 from api.users_api import router as users_router
 from api.widgets_api import router as widgets_router
-from core import project_bootstrap
+from core import audit, project_bootstrap
 from core.exceptions import register_exception_handlers
 from core.logging_setup import configure_logging
+from core.origin_check import OriginCheckMiddleware
 from core.project_migrations import run_baseline_migration
 from core.storage import (
     WIDGET_BUILD_DIR,
@@ -82,8 +83,8 @@ _event_loop: asyncio.AbstractEventLoop | None = None
 def _schedule_alarm_broadcast(payload: dict) -> None:
     """Bridge sync alarm_manager broadcasts into the async event loop.
 
-    ack_alarm() is called from a sync FastAPI route which runs in a thread
-    pool executor — asyncio.get_running_loop() raises RuntimeError there.
+    ack_alarm() runs in a worker thread (the /ws ack handler off-loads it with
+    asyncio.to_thread) — asyncio.get_running_loop() raises RuntimeError there.
     We capture the loop at startup and use call_soon_threadsafe instead.
     """
     if _event_loop is None or _event_loop.is_closed():
@@ -263,6 +264,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="NEXT HMI", lifespan=lifespan)
 register_exception_handlers(app)
+# An instance binds loopback with no auth of its own, and a page in the
+# panel's browser can find that port, or rebind a name to it; see
+# ``core.origin_check``.
+app.add_middleware(OriginCheckMiddleware, loopback_only=True)
 
 
 # NOTE: every top-level route lives under one of /api/, /ws, /mcp, or a
@@ -355,7 +360,11 @@ async def health():
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     try:
-        client_id = await websocket_manager.connect(websocket)
+        # Set by the manager on the /editor/<slug>/ws upstream only (manager.py);
+        # it never forwards a browser's headers to this socket.
+        client_id = await websocket_manager.connect(
+            websocket, editor=audit.from_editor(websocket.headers)
+        )
     except WebSocketDisconnect:
         return
 

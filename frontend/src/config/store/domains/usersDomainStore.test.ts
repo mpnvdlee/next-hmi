@@ -69,36 +69,6 @@ describe('usersDomainStore security drafts', () => {
     expect(useUsersDomainStore.getState().dirty).toBe(true);
   });
 
-  it('merges credential state from the gated route into the loaded document', async () => {
-    const roster: UsersDocument = {
-      settings: { autoLoginName: 'guest' },
-      groups: [{ id: 'guest', label: 'Guest' }],
-      users: [
-        { id: 'guest', username: 'guest', password: '', groups: ['guest'] },
-        { id: 'admin', username: 'admin', password: '', groups: ['guest'] },
-      ],
-    };
-    const fetchMock = vi.fn(async (url: string) => ({
-      ok: true,
-      status: 200,
-      json: async () =>
-        url === '/api/users/credential-state' ? { guest: false, admin: true } : roster,
-    }));
-    vi.stubGlobal('fetch', fetchMock);
-
-    await useUsersDomainStore.getState().load();
-
-    const requestedUrls = fetchMock.mock.calls.map((call) => call[0]);
-    expect(requestedUrls).toContain('/api/users');
-    expect(requestedUrls).toContain('/api/users/credential-state');
-    const users = useUsersDomainStore.getState().data?.users;
-    expect(users?.find((u) => u.id === 'guest')?.passwordSet).toBe(false);
-    expect(users?.find((u) => u.id === 'admin')?.passwordSet).toBe(true);
-    expect(
-      useUsersDomainStore.getState().draft?.users.find((u) => u.id === 'admin')?.passwordSet,
-    ).toBe(true);
-  });
-
   it('keeps memberships valid when deleting a referenced group', () => {
     useUsersDomainStore.getState().deleteGroupDraft('admin');
 

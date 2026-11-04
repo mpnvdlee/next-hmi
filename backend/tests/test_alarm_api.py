@@ -116,31 +116,3 @@ def test_get_alarm_summary_all_zero_initially(alarm_client):
     assert data["error_count"] == 0
     assert data["warning_count"] == 0
     assert data["info_count"] == 0
-
-
-# ── POST /api/alarms/ack/{id} ─────────────────────────────────────────────────
-
-
-def test_ack_alarm_returns_404_for_unknown_instance(alarm_client):
-    resp = alarm_client.post("/api/alarms/ack/no-such-id", json={"username": "admin"})
-    assert resp.status_code == 404
-
-
-def test_ack_alarm_requires_username(alarm_client):
-    resp = alarm_client.post("/api/alarms/ack/some-id", json={"username": ""})
-    assert resp.status_code == 422
-    assert "Username" in resp.json()["detail"]
-
-
-# ── POST /api/alarms/ack-all ──────────────────────────────────────────────────
-
-
-def test_ack_all_requires_username(alarm_client):
-    resp = alarm_client.post("/api/alarms/ack-all", json={"username": ""})
-    assert resp.status_code == 422
-
-
-def test_ack_all_with_no_active_alarms(alarm_client):
-    resp = alarm_client.post("/api/alarms/ack-all", json={"username": "operator"})
-    assert resp.status_code == 200
-    assert resp.json()["count"] == 0

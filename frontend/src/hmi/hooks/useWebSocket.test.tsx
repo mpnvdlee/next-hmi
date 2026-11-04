@@ -1,6 +1,9 @@
 import { StrictMode } from 'react';
 import { act, render } from '@testing-library/react';
+import { ackAlarm, ackAllAlarms } from '../components/alarmUtils';
+import { useHmiStore } from '../store/hmiStore';
 import { useVariableStore } from '../store/variableStore';
+import { identityRequest, loadSessionToken } from '../utils/runtimeSession';
 import { setBackendRestartHandler, useWebSocket } from './useWebSocket';
 
 /** A WebSocket that never touches the network and fires its events on demand. */
@@ -21,7 +24,11 @@ class FakeSocket {
     FakeSocket.instances.push(this);
   }
 
-  send(): void {}
+  sent: string[] = [];
+
+  send(data: string): void {
+    this.sent.push(data);
+  }
 
   /** Matches the browser: closing a pending handshake only marks it CLOSING —
    *  the close event lands later, whenever the abort completes. */
@@ -61,6 +68,33 @@ describe('useWebSocket', () => {
 
   afterEach(() => {
     globalThis.WebSocket = realWebSocket;
+  });
+
+  it("keeps the live view's login token when a stale scope of the tab is reset", () => {
+    // A remounted HmiView leaves its old scope on the socket; the server may
+    // sign that one out after the live scope logged in afresh.
+    sessionStorage.clear();
+    render(<Probe />);
+    const socket = FakeSocket.instances[0];
+    act(() => socket.open());
+    identityRequest('runtime:old');
+    identityRequest('runtime:live');
+    const identity = { type: 'user_identity', groups: [], groupLabels: {} };
+    act(() =>
+      socket.receive({
+        ...identity,
+        scope: 'runtime:live',
+        username: 'bob',
+        sessionToken: 'bob-token',
+      }),
+    );
+    act(() => socket.receive({ ...identity, scope: 'runtime:old', username: 'guest' }));
+    expect(loadSessionToken()).toBe('bob-token');
+    // The token is also what tells a sign-in from the auto-login user.
+    expect(useHmiStore.getState().currentUsersByScope['runtime:live'].signedIn).toBe(true);
+    act(() => socket.receive({ ...identity, scope: 'runtime:live', username: 'guest' }));
+    expect(loadSessionToken()).toBeUndefined();
+    expect(useHmiStore.getState().currentUsersByScope['runtime:live'].signedIn).toBe(false);
   });
 
   it('drops the socket a StrictMode remount discarded, and keeps the live one', () => {
@@ -144,5 +178,25 @@ describe('useWebSocket', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('settles an alarm ack on its correlated response or error', async () => {
+    render(<Probe />);
+    const live = FakeSocket.instances[FakeSocket.instances.length - 1];
+    act(() => live.open());
+    const lastRequestId = () =>
+      (JSON.parse(live.sent[live.sent.length - 1]) as { requestId: string }).requestId;
+    useHmiStore.setState({ pendingToasts: [] });
+
+    const accepted = ackAlarm('inst-1');
+    act(() => live.receive({ type: 'alarm_ack_response', requestId: lastRequestId() }));
+    await expect(accepted).resolves.toBe(true);
+
+    const refused = ackAllAlarms();
+    act(() =>
+      live.receive({ type: 'alarm_ack_error', requestId: lastRequestId(), reason: 'not_found' }),
+    );
+    await expect(refused).resolves.toBe(false);
+    expect(useHmiStore.getState().pendingToasts[0].message).toMatch(/no longer active/);
   });
 });

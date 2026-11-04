@@ -11,17 +11,14 @@ frontend cache distinguishes it from a broken proxy call.
 
 Scope note: the runtime is public, so this endpoint is too — but it is not a
 general proxy. A request is performed only when its **origin** (scheme + host +
-port) is one an ``$http`` property source somewhere in this project names — or,
-once a source in the project interpolates its own host, any http(s) origin
-*except* loopback, link-local and unspecified addresses, which stay refused
-even then because a project instance answers its own API with no auth of its
-own (see the "Dynamic hosts" note in ``core/http_origins.py``). The allowlist
-is derived in ``core/http_origins.py``; path, query, headers and body stay
-unrestricted, because the author's template interpolates live values into
-them. The set can only change by editing the project, and the project can only
-be edited through the editor, which is behind the device-admin session — so the
-servers this endpoint can reach are exactly the ones the device admin chose, or,
-once that admin opts a source out of pinning, anywhere but this machine.
+port) is one an ``$http`` property source somewhere in this project names, or
+one the project lists under ``httpAllowedOrigins`` for sources that interpolate
+their own host (see the "Dynamic hosts" note in ``core/http_origins.py``). The
+allowlist is derived in ``core/http_origins.py``; path, query, headers and body
+stay unrestricted, because the author's template interpolates live values into
+them. Both sets can only change by editing the project, which is behind the
+device-admin session — so the servers this endpoint can reach are exactly the
+ones the device admin chose.
 
 Redirects are therefore walked by hand, one hop at a time, with the same check
 on every hop. Letting httpx follow them checks hop 0 only: a configured host
@@ -103,7 +100,10 @@ def _refuse(url: str, policy: HttpOriginPolicy) -> HttpSourceResponse | None:
         return HttpSourceResponse(
             ok=False,
             status=0,
-            error=f"origin '{origin}' is not configured by an $http source in this project",
+            error=(
+                f"origin '{origin}' is not configured by an $http source "
+                "or the allowed origins of this project"
+            ),
         )
     return None
 

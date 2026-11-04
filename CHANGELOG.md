@@ -42,8 +42,135 @@ heading.
   bound to another number widget, an alarm, a recipe parameter, the historian
   or a trend is now flagged in the warnings pill.
 
+- **API v1 for other systems.** A MES, BI tool, HR system or badge reader
+  can read historian samples, alarm history and recipes, manage the
+  project's users, and sign operators in and out on named panels over a
+  versioned HTTP API at `/api/v1/projects/<id>/…`. It answers JSON or CSV,
+  works on a stopped project too (except panel sign-in), and keeps its routes
+  and field names for as long as v1 exists. Give each system an API token
+  with only the scopes it needs, or use the device-admin password over HTTP
+  Basic, username `admin`, for your own scripts. A project user's password
+  never works as an API key. A user change reaches a running project's
+  screens at once. See *Connecting other systems (API v1)* in the guide.
+
+- **Named panels.** Open a runtime with `?panel=<name>` at the end of its
+  address, and another system can sign an operator in or out on it over
+  API v1, with that operator's own password. Screens opened with the same
+  name are signed in and out together. The name proves nothing about which
+  screen it is: anyone who opens the same name receives the same sign-ins,
+  so use it only on panels on a trusted network.
+
+- **Tokens under Settings › Tokens.** Create and revoke MCP tokens (read,
+  or read and write) and API tokens (per scope) on the dashboard's Settings
+  page instead of over `curl`. A new token is shown once, with the server URL
+  and client JSON any MCP agent can use, or a `curl` example for an API
+  token. `POST /api/manager/mcp/pair` with the device-admin password still
+  mints one for a script. Bearer tokens are the MCP sign-in model; no OAuth
+  step is planned.
+
+- **Admin › HTTP sources.** The editor's Admin area lists the servers an
+  `$http` URL may reach when it takes its server from a placeholder; see
+  **Changed**.
+
+- **What is reachable without a password.** A new page in the guide lists
+  everything someone on the network can see and do with no password, what
+  the device-admin password, API, MCP and peer tokens add, and how to place
+  the device on the network.
+
+- **`sendWsMessage` says whether it sent.** The widget SDK's
+  `sendWsMessage` returns `true` when the message went out and `false` when
+  the live connection is down.
+
+### Changed
+
+- **One MCP token covers every project.** A token used to name one project;
+  now it reaches all of them, at the access level it was made with. MCP
+  writes still go through only on projects with **MCP write enabled** ticked,
+  the dashboard switch that was labelled **MCP enabled**. A token paired with
+  1.0 or 1.1 named one project and is refused rather than widened: create a
+  new one under **Settings › Tokens**. `POST /api/manager/mcp/pair` no longer
+  takes a `projectId`, and answers `422` when a script still sends one.
+
+- **The server no longer limits who may write a variable.**
+  Per-variable write groups (`interactableByGroups` on a datasource
+  variable) are gone. A write, a toggle and a recipe load are refused only
+  when the variable is not writable, and the `permission_denied` write error
+  no longer occurs. A project that still carries the key opens unchanged and
+  the key is ignored. To stop a group changing a value, block or hide the
+  button that writes it (**Interactable** or **Visible** → `$userGroups`),
+  and mark the variable read-only in its datasource when no screen needs to
+  write it. Anyone who can reach the panel can write the writable variables,
+  so keep the runtime on a trusted network.
+
+- **Alarms are acknowledged over the live connection, in the name of who is
+  signed in.** `POST /api/alarms/ack/{id}` and
+  `POST /api/alarms/ack-all` are removed. An acknowledgement records the
+  user signed in on that screen, or `guest`, never a name the caller sends.
+  The Alarm List, the alarm pop-up and **Acknowledge All Alarms** work as
+  before. A custom widget that called those routes itself uses the SDK's
+  `ackAlarm` / `ackAllAlarms` instead; their `username` argument is still
+  accepted and ignored.
+
+- **The live view gets the user roster, not the users file.**
+  `GET /api/users` now needs the device-admin session, and carries
+  `passwordSet` for each user. The live view reads the new public
+  `GET /api/users/roster`: usernames and group names, without who is in
+  which group. A custom widget or script that read `/runtime/<slug>/api/users`
+  reads the roster, or API v1 `GET …/users` with a token, instead.
+
+- **An `$http` URL that takes its server from a placeholder needs that
+  server listed.** `http://{1}/api/status` used to reach any
+  server but the HMI's own machine. It now reaches only the servers listed
+  under **Editor › Admin › HTTP sources** (scheme, server and port), and is
+  refused until the list holds its server; the warnings pill flags such a
+  URL while the list is empty. A local address is always refused there. A
+  URL with a fixed server works as before.
+
+- **Behind a reverse proxy, pass the browser's `Host` with its port
+  (breaking).** The device now refuses a change or a live connection whose
+  browser page came from another address. A proxy that rewrites `Host`
+  makes every request look like that, so nothing can be changed and no
+  value arrives. Caddy and Traefik pass it by default; nginx needs
+  `proxy_set_header Host $http_host;`, since `$host` drops the port. The
+  proxy must also send `X-Forwarded-Proto`, and a proxy on another host
+  must be listed in `NEXTHMI_FORWARDED_ALLOW_IPS`.
+
+- **Changes from the editor are recorded as `engineer`.** A value written,
+  a recipe loaded or saved, or an alarm acknowledged in the editor's Test
+  mode is recorded as `engineer`, whichever project user the preview is
+  signed in as: the editor sits behind the device-admin password, not a
+  project user.
+
+- **Signing out on a screen returns to the auto-login user.** A **Logout
+  User** action, and a sign-in on one monitor of a panel that another
+  system signed in over API v1, dropped the screens to `guest`. They now
+  return to the project's **Auto-login user**, as a newly opened screen and
+  a sign-out over API v1 already did. **onUserLoggedIn** and
+  **onUserLoggedOut** now fire on a real sign-in and sign-out instead of on
+  a change from or to `guest`, so they also work when the auto-login user
+  is a real user, and no longer fire when such a screen opens.
+
+- **Recipe download takes no credentials.** `POST
+  /api/recipes/datasets/{id}/download` ignores HTTP Basic credentials; they
+  only fed the write groups. Upload still takes them, to record who saved.
+
+### Removed
+
+- **`GET /api/users/credential-state`.** `GET /api/users` carries
+  `passwordSet` for each user instead.
+
+- **The alarm setting Allowed groups.** It never limited who could
+  acknowledge an alarm: anyone at the screen may, signed in or not. A
+  project that still carries it (`ack_groups`) opens unchanged and drops the
+  key on the next save, and alarms reach custom widgets without it.
+
 ### Fixed
 
+- **An AI assistant on another machine can reach MCP.** `/mcp` answered
+  every client that did not address the HMI as `localhost` or `127.0.0.1`
+  with `421 Invalid Host header`, so an assistant on a laptop on the plant
+  network could not connect. It now answers any address the HMI is reached
+  by; a token or the dashboard sign-in is still required.
 - **What an AI assistant changes over MCP shows up on the running screen.**
   An operator screen that was already open kept the pages and texts as it
   first loaded them, so a widget, page, page setting, global event or
@@ -63,6 +190,65 @@ heading.
   project kept evaluating its old alarm list, and the editor and runtime kept
   showing it, until the project was restarted. A running project now picks up
   added, changed and deleted alarms straight away.
+- **An alarm acknowledgement says why it failed, at once when offline.** The
+  message reads as a sentence for an alarm that is gone, a timeout, alarms
+  being unavailable and a lost connection, and an acknowledgement pressed
+  while the connection is down fails straight away instead of after 10 s.
+  `onError` still gets the raw code.
+
+### Security
+
+- **Other websites can no longer reach the live view.** A web page from
+  another site, open in a browser on the panel or on the same network,
+  could open a running project's live connection and read and write values,
+  or send its public requests. The manager and every project instance now
+  refuse a live connection and every change whose browser page came from
+  another address. Scripts, which send no page address, are unaffected. A
+  site that points a name of its own at a project's internal port (DNS
+  rebinding) is refused too; one that points it at the device's own address
+  still gets past the check, to the open part only; keep the network trusted. The same check covers `/mcp` and
+  API v1: an MCP or API client running inside a web page on another address
+  is refused, while desktop and command-line clients are not.
+
+- **An `$http` URL no longer opens the plant network to anyone.** A URL that
+  took its server from a placeholder let anyone who reached the live view
+  have the HMI call any server on the plant network. See **Changed**.
+
+- **Who belongs to which group stays behind the password.** The public user
+  list carried every group membership; the roster carries none.
+
+- **An alarm acknowledgement records who really gave it.** The public
+  acknowledgement routes recorded whatever username the caller sent.
+
+- **Recipe loads and REST writes are recorded.** In a build that keeps a
+  record of who did what, every recipe load that writes a value is now
+  recorded with who loaded it: on the live connection the signed-in user,
+  and through `POST /api/recipes/datasets/{id}/download` `guest`, or
+  `engineer` from the editor. A variable written through
+  `POST /api/datasources/write` is recorded like one written on the live
+  connection: as the signed-in user, or `engineer` from the editor. User changes and panel sign-ins over API v1 are recorded under
+  the token's name, or `admin` for the device-admin password.
+
+- **`$device` no longer looks up an address the caller picks.** The device
+  info route believed an `X-Forwarded-For` header the browser wrote, so
+  anyone could make the device reverse-resolve and ARP-look-up any address,
+  and a value starting with `-` reached `arp` as an option. It now uses only
+  the address the connection came from, refuses anything that is not an IP
+  address, and the manager forwards that address itself. This also fixes
+  `$device` reporting `127.0.0.1` on every screen behind the manager.
+
+- **A request header can no longer put a script into the page.** The
+  manager passed a client's `X-Forwarded-Prefix` header on to the project,
+  which wrote it unescaped into the page it returned. The manager now drops
+  it, and the page escapes what it writes into its scripts.
+
+- **A deleted user is signed out at once.** A user deleted while signed in
+  on a running project's screen stayed signed in, and a regrouped one kept
+  the old groups, until the screen signed out. Saving users in the editor or
+  over API v1 now signs a deleted user out on every screen, back to the
+  auto-login user, and gives a regrouped one the new groups. A changed
+  password signs that user out the same way, and a reloaded screen can no
+  longer resume a sign-in made with the old one.
 
 ## [1.1.0] - 2026-10-31
 

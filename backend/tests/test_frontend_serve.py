@@ -538,3 +538,20 @@ def test_spa_app_assets_mount_serves_hashed_bundles(tmp_path: Path) -> None:
     r = _client(app).get("/_app/index-abc.js")
     assert r.status_code == 200
     assert "export const x = 1;" in r.text
+
+
+def test_render_cannot_be_broken_out_of_by_the_base_path(tmp_path: Path) -> None:
+    frontend_serve.reset_render_cache()
+    dist = _make_dist(tmp_path)
+    libs = _make_libs(tmp_path)
+
+    html = frontend_serve.render_index_html(
+        dist, libs, tmp_path / "missing.json", base_path="/x/</script><!--<script>alert(1)</script>/"
+    )
+
+    assert "/x/</script>" not in html
+    assert "<!--" not in html
+    assert (
+        'window.__NEXTHMI_BASE__="/x/\\u003c/script>\\u003c!--\\u003cscript>alert(1)\\u003c/script>/"'
+        in html
+    )

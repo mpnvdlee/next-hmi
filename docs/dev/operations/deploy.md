@@ -55,14 +55,16 @@ Two independent controls:
 
 1. **Transport** — `/mcp` is behind the manager front door. Browsers use the
    manager session cookie; headless AI clients send a **bearer token**
-   (`Authorization: Bearer <token>`), paired at `POST /api/manager/mcp/pair`
-   by presenting the device-admin password, and revoked at
-   `DELETE /api/manager/mcp-tokens/{id}`. The plaintext is returned once; only
-   its digest is stored. **A token is scoped to one project and to `read` or
-   `write`** — a session cookie spans the workspace, a token never does. This
-   is the narrower credential to hand an external agent.
+   (`Authorization: Bearer <token>`), created under **Settings › Tokens**
+   on the manager (`POST /api/manager/mcp-tokens` with the session) or, from a
+   script, at `POST /api/manager/mcp/pair` by presenting the device-admin
+   password, and revoked at `DELETE /api/manager/mcp-tokens/{id}`. The
+   plaintext is returned once; only its digest is stored. **A token is scoped to `read` or `write`**
+   and covers every project. It is the narrower credential to hand an external agent: a read token cannot write,
+   and it is revocable without changing the password.
 2. **Per-project authorization** — each project has an `mcpEnabled` flag (off
-   by default), toggled from the manager dashboard's projects list. Reads are
+   by default), toggled from the manager dashboard's projects list as
+   **MCP write enabled**. Reads are
    always allowed; **writes are refused** for a project with the flag off. The
    flag persists in that project's `config.json` and works whether or not the
    project is running.
@@ -70,9 +72,6 @@ Two independent controls:
 Editing is file-based, so a stopped project is still editable; when a project
 *is* running, the manager notifies its child over a loopback reload hook so
 open browsers and the OPC-UA pipeline update.
-
-Adding OAuth 2.1 (the spec-canonical auth for MCP HTTP transports) is a
-follow-up item.
 
 ## Features and editions
 

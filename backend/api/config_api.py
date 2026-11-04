@@ -17,7 +17,12 @@ from core.exceptions import (
     ConfigNotFoundError,
     ConfigValidationError,
 )
-from core.http_origins import invalidate_http_origin_cache
+from core.http_origins import (
+    ALLOWED_ORIGINS_KEY,
+    invalidate_http_origin_cache,
+    listed_origins,
+    parse_listed_origin,
+)
 from core.page_index import (
     INDEX_ROOTS,
     all_root_nodes,
@@ -102,8 +107,8 @@ def _config_path():
     return active_config_dir() / "config.json"
 
 
-# What `PUT /config` writes. `mcpEnabled` and `project` (the default theme) are
-# set from other screens, so a change there must not make an editor save stale.
+# What `PUT /config` writes. `mcpEnabled`, `httpAllowedOrigins` and `project`
+# (the default theme) are set from other screens, so a change there must not make an editor save stale.
 _INDEX_EDITABLE_FIELDS = (
     "pages", "dialogs", "header", "footer", "leftSidebar", "rightSidebar", "shell", "globalEvents",
 )
@@ -870,6 +875,8 @@ async def put_config(body: dict) -> Any:
     # survive every config save (push/pull dedupes on `project.id`).
     if isinstance(existing_project_block, dict):
         payload["project"] = existing_project_block
+    if isinstance(existing_raw, dict) and ALLOWED_ORIGINS_KEY in existing_raw:
+        payload[ALLOWED_ORIGINS_KEY] = existing_raw[ALLOWED_ORIGINS_KEY]
 
     # Validate the widget trees this document carries (shell component arrays,
     # globalEvents, shell region bindings) before persisting; the per-page
@@ -924,6 +931,39 @@ async def put_config(body: dict) -> Any:
 
     _invalidate_runtime_cache()
     return {**payload, "revision": _index_revision(payload)}
+
+
+# ── $http allowed origins ──────────────────────────────────────────────────────
+# Kept off `GET /config`, which the public runtime reads: the list names plant
+# hosts, and only the editor needs it.
+
+@router.get("/http-origins")
+async def get_http_origins() -> Any:
+    # What the proxy honours, not what is on disk: a hand-edited entry it
+    # ignores would otherwise show as listed and fail every later PUT.
+    raw = read_json(_config_path()) if _config_path().exists() else {}
+    return {"origins": list(listed_origins(raw))}
+
+
+@router.put("/http-origins")
+async def put_http_origins(body: dict) -> Any:
+    entries = body.get("origins")
+    if not isinstance(entries, list):
+        raise ConfigValidationError("'origins' array is required")
+    origins: list[str] = []
+    for entry in entries:
+        try:
+            origin = parse_listed_origin(entry)
+        except ValueError as exc:
+            raise ConfigValidationError(str(exc)) from exc
+        if origin not in origins:
+            origins.append(origin)
+    raw = read_json(_config_path()) if _config_path().exists() else {}
+    config = raw if isinstance(raw, dict) else {}
+    config[ALLOWED_ORIGINS_KEY] = origins
+    write_json(_config_path(), config)
+    invalidate_http_origin_cache()
+    return {"origins": origins}
 
 
 # ── Build diagnostics ──────────────────────────────────────────────────────────

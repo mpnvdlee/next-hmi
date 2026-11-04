@@ -10,8 +10,7 @@ import api.http_source_api as http_source_api
 import core.http_origins as http_origins
 import httpx
 import pytest
-from core.http_origins import HttpOriginPolicy
-from core.storage import write_json
+from core.storage import read_json, write_json
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -301,20 +300,65 @@ def test_origin_from_recipes_is_allowed(proxy_client, live_project_root, monkeyp
     assert _post(proxy_client, "http://recipe.local/v")["ok"] is True
 
 
-# ── Dynamic hosts — the documented opt-out ────────────────────────────────────
+# ── Dynamic hosts — only the origins the project lists ────────────────────────
 
 
-def test_a_placeholder_in_the_host_opts_that_project_out_of_pinning(
+def _list_origins(root, *origins: str) -> None:
+    """Write ``httpAllowedOrigins`` into config.json, keeping what is there."""
+    path = root / "config.json"
+    config = read_json(path) if path.exists() else {}
+    write_json(path, {**config, "httpAllowedOrigins": list(origins)})
+    http_origins.invalidate_http_origin_cache()
+
+
+def test_a_dynamic_host_with_no_listed_origins_reaches_nothing(
     proxy_client, live_project_root, monkeypatch
 ):
-    """Documented in core/http_origins.py: an author who interpolates the host
-    has asked for a host no allowlist can name, so the policy stops pinning."""
+    """A placeholder host no longer opens the proxy: the request goes nowhere
+    until the project lists where it may go."""
     write_page(live_project_root, "home", "http://{1}/api/temp")
     _allow_everything_upstream(monkeypatch)
 
-    assert _post(proxy_client, "http://anything.example.com/api/temp")["ok"] is True
-    assert http_origins.http_origin_policy().allows_any_origin is True
+    for url in ("http://10.0.0.5/api/temp", "http://192.168.1.20/api/temp", "http://plc.local/api/temp"):
+        payload = _post(proxy_client, url)
+        assert payload["ok"] is False, url
+        assert "not configured" in payload["error"], url
     assert http_origins.http_origin_policy().dynamic_templates == ("http://{1}/api/temp",)
+
+
+def test_a_dynamic_host_reaches_a_listed_origin_and_nothing_else(
+    proxy_client, live_project_root, monkeypatch
+):
+    write_page(live_project_root, "home", "http://{1}/api/temp")
+    _list_origins(live_project_root, "http://Line1.Local", "https://10.0.0.7:8443")
+    _allow_everything_upstream(monkeypatch)
+
+    assert _post(proxy_client, "http://line1.local:80/api/temp")["ok"] is True
+    assert _post(proxy_client, "https://10.0.0.7:8443/x")["ok"] is True
+    assert _post(proxy_client, "http://line2.local/api/temp")["ok"] is False
+    assert _post(proxy_client, "https://10.0.0.7/x")["ok"] is False, "the port is part of the origin"
+
+
+def test_listed_origins_never_include_this_machine(live_project_root):
+    """A hand-edited list cannot point the proxy back at the instance itself."""
+    write_page(live_project_root, "home", "http://{host}/api")
+    _list_origins(
+        live_project_root,
+        "http://127.0.0.1:8123", "http://localhost:8123", "http://[::1]:8123",
+        "http://169.254.169.254", "http://0.0.0.0:8123", "http://127.1", "http://0x7f.0.0.1",
+        "http://2130706433", "http://0177.0.0.1",
+        "http://localhost.", "http://LOCALHOST.", "http://foo.localhost.",
+        "http://localhost.localdomain.", "http://127.0.0.1.", "http://2130706433.",
+        "http://169.254.169.254.",
+        "not a url", "https://plant.local",
+    )
+
+    policy = http_origins.http_origin_policy()
+    assert policy.listed == frozenset({"https://plant.local:443"})
+    assert not policy.permits("http://127.0.0.1:8123/api/datasources")
+    assert not policy.permits("http://169.254.169.254/latest/meta-data/")
+    assert not policy.permits("http://localhost.:8123/api/users")
+    assert policy.permits("https://plant.local/api/line1")
 
 
 @pytest.mark.parametrize(
@@ -327,8 +371,8 @@ def test_a_placeholder_anywhere_in_the_origin_counts_as_dynamic(
     write_page(live_project_root, "home", template)
 
     policy = http_origins.http_origin_policy()
-    assert policy.allows_any_origin is True
     assert policy.dynamic_templates == (template,)
+    assert policy.permits("http://plc.local/x") is False
 
 
 @pytest.mark.parametrize(
@@ -343,13 +387,11 @@ def test_a_placeholder_anywhere_in_the_origin_counts_as_dynamic(
 def test_templated_credentials_are_not_a_dynamic_host(live_project_root, template, origin):
     """Userinfo is not part of an origin — a source that interpolates its
     basic-auth credentials against a fixed host pins that host like any other
-    literal template. Counting the placeholder as a dynamic host turned one
-    ordinary credentialed source into a project-wide opt-out."""
+    literal template, not a dynamic host."""
     write_page(live_project_root, "home", template)
 
     policy = http_origins.http_origin_policy()
     assert policy.dynamic_templates == ()
-    assert policy.allows_any_origin is False
     assert policy.origins == frozenset({origin})
     assert policy.permits("http://169.254.169.254/latest/meta-data/") is False
     assert policy.permits("http://127.0.0.1:8000/api/datasources") is False
@@ -365,14 +407,14 @@ def test_templated_credentials_are_not_a_dynamic_host(live_project_root, templat
         "https://{user}:{pass}@{host}/api",
     ],
 )
-def test_a_placeholder_past_the_userinfo_is_still_an_opt_out(live_project_root, template):
+def test_a_placeholder_past_the_userinfo_is_still_dynamic(live_project_root, template):
     """Dropping the credentials must not drop the host or the port with them —
-    both still decide the origin, so a placeholder in either is the real opt-out."""
+    both still decide the origin, so a placeholder in either makes it dynamic."""
     write_page(live_project_root, "home", template)
 
     policy = http_origins.http_origin_policy()
-    assert policy.allows_any_origin is True
     assert policy.dynamic_templates == (template,)
+    assert policy.permits("http://plc.local/x") is False
 
 
 def test_credentialed_template_reaches_only_its_own_host(
@@ -393,16 +435,12 @@ def test_credentialed_template_reaches_only_its_own_host(
     "template",
     ["/api/local-thing", "/api/{id}", "{base}/x", "api/v1/{id}/status"],
 )
-def test_a_relative_template_is_not_an_opt_out(live_project_root, template):
-    """A template with no ``://`` names no origin — and so opts out of nothing.
-
-    Reading its placeholder as an opt-out is what made an ordinary
-    ``/api/status/{machineId}`` widen the whole project to any origin.
-    """
+def test_a_relative_template_is_not_dynamic(live_project_root, template):
+    """A template with no ``://`` names no origin, and is no dynamic-host
+    template either: it adds nothing and needs no listed origin."""
     write_page(live_project_root, "home", template)
 
     policy = http_origins.http_origin_policy()
-    assert policy.allows_any_origin is False
     assert policy.dynamic_templates == ()
     assert policy.origins == frozenset()
 
@@ -421,24 +459,6 @@ def test_a_relative_template_does_not_open_the_proxy(
 
 
 # ── Loopback regression: the proxy must not be able to call us ────────────────
-
-
-def test_a_dynamic_template_does_not_open_loopback():
-    """A placeholder host opts out of pinning, but never onto this machine:
-    a project instance binds loopback with no auth of its own."""
-    policy = HttpOriginPolicy(frozenset(), ("https://{host}/api",))
-    assert policy.allows_any_origin
-    assert not policy.permits("http://127.0.0.1:8123/api/datasources")
-    assert not policy.permits("http://[::1]:8123/api/datasources")
-    assert not policy.permits("http://localhost:8123/api/datasources")
-    assert not policy.permits("http://169.254.169.254/latest/meta-data/")
-    assert not policy.permits("http://0.0.0.0:8123/")
-    # Numeric IPv4 spellings inet_aton still resolves without a lookup.
-    assert not policy.permits("http://127.1/x")
-    assert not policy.permits("http://2130706433/x")
-    assert not policy.permits("http://0177.0.0.1/x")
-    assert not policy.permits("http://0x7f.0.0.1/x")
-    assert policy.permits("https://plant.local/api/line1")
 
 
 def test_loopback_into_our_own_api_is_refused_when_not_configured(
@@ -743,7 +763,6 @@ def test_no_live_project_refuses_everything(monkeypatch):
 
     policy = http_origins.http_origin_policy()
     assert policy.origins == frozenset()
-    assert policy.allows_any_origin is False
     assert policy.permits("http://plc.local/x") is False
 
 

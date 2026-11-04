@@ -372,7 +372,6 @@ class AlarmManager:
             auto_popup=definition.auto_popup,
             ack_required=definition.ack_required,
             acked=not definition.ack_required,
-            ack_groups=list(definition.ack_groups),
             value_refs=list(definition.values),
             values=self._read_values(definition.values),
             triggered_at=now,
@@ -417,14 +416,14 @@ class AlarmManager:
         exactly one ``acked_by``, so a second press either has to overwrite it —
         leaving the trail naming someone the stored state does not — or change
         nothing. It changes nothing: whoever got there first owns the
-        acknowledgement, and the trail says the same. A double-click, a retried
-        POST and a second operator pressing an already-lit button are all the
+        acknowledgement, and the trail says the same. A double-click, a resent
+        ``alarm_ack`` and a second operator pressing an already-lit button are all the
         same non-event, and an append-only file that can never be corrected is
         the wrong place to write non-events.
 
         Still returns True when the instance exists, acked or not, so a retry
-        reads as success rather than as a vanished alarm (the route maps False
-        to 404).
+        reads as success rather than as a vanished alarm (the ``/ws`` handler
+        maps False to ``not_found``).
         """
         found = False
         acked: dict[str, Any] | None = None

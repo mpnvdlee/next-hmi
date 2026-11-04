@@ -5,6 +5,10 @@ project's files directly. When the edited project has a running child, the
 manager POSTs the change here so this child re-reads the affected files and
 updates its live clients (open editor tabs) and OPC-UA pipeline.
 
+API v1 (also in the manager) signs users in and out on a named panel through
+the ``panels`` hooks: the live connections are here, and so is the throttle the
+WebSocket ``login`` uses, which the password check must share.
+
 This router is only reachable on the child's ``127.0.0.1`` instance port. The
 manager reverse proxy refuses ``/runtime|editor/<id>/api/internal/*`` (see
 ``manager.py``), so a browser holding a manager session can never drive it.
@@ -14,6 +18,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from core.exceptions import NotFoundError
 from core.http_origins import invalidate_http_origin_cache
 from core.storage import (
     active_alarms_config_path,
@@ -21,9 +26,10 @@ from core.storage import (
     load_json_or_default,
     read_json,
 )
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from models.alarm import AlarmConfig
 from pydantic import BaseModel, Field
+from services import users_manager
 from services.alarm_manager import alarm_manager
 from services.datasource_manager import datasource_manager
 from services.datasource_sync import apply_datasource_change, enabled_paths
@@ -70,6 +76,9 @@ async def reload(body: ReloadBody) -> dict[str, str]:
     # the page config set_context resolves a page's variables from.
     invalidate_http_origin_cache()
     invalidate_runtime_pages_config_cache()
+    # A deleted or regrouped user must not keep the identity it signed in with.
+    if body.artifact_type == "users":
+        await websocket_manager.refresh_identities()
 
     event = ConfigChangedEvent(
         artifact_type=body.artifact_type,
@@ -102,3 +111,44 @@ async def _reload_datasources(artifact_ids: list[str]) -> None:
             continue
         old_enabled = enabled_paths(datasource_manager.get(name))
         await apply_datasource_change(name, after, old_enabled)
+
+
+class PanelBody(BaseModel):
+    panel: str
+
+
+class PanelLoginBody(PanelBody):
+    username: str
+    password: str
+
+
+def _require_panel(panel: str) -> None:
+    if not websocket_manager.has_panel(panel):
+        raise NotFoundError(f"No connected panel named '{panel}'")
+
+
+@router.get("/panels")
+async def panels() -> dict[str, Any]:
+    return {"panels": websocket_manager.panels()}
+
+
+@router.post("/panels/login")
+async def panel_login(body: PanelLoginBody) -> dict[str, Any]:
+    """Sign *username* in on every connection of the panel, as a WS ``login`` would."""
+    _require_panel(body.panel)
+    # The WS login's own check: its throttle raises RateLimitError (429).
+    authenticated = await users_manager.authenticate(body.username, body.password)
+    if authenticated is None:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    identity, doc = authenticated
+    # The hash took a while; the panel's last screen may have closed meanwhile.
+    _require_panel(body.panel)
+    await websocket_manager.sign_in_panel(body.panel, identity, doc)
+    return {"username": identity["username"], "groups": identity["groups"]}
+
+
+@router.post("/panels/logout")
+async def panel_logout(body: PanelBody) -> dict[str, Any]:
+    """Drop the panel back to the auto-login user."""
+    _require_panel(body.panel)
+    return {"signedOut": await websocket_manager.sign_out_panel(body.panel)}

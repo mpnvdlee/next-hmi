@@ -21,14 +21,13 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture()
 def ctx():
-    """One datasource with one known variable, and two user groups."""
+    """One datasource with one known variable."""
     return ValidationContext(
         widget_schemas={},
         datasource_registry={
             "Machine": {"Tanks/Level": {"kind": "scalar", "base": "Float", "array": False}}
         },
         datasource_types={"Machine": "opcua-client"},
-        user_groups=frozenset({"operator", "admin"}),
     )
 
 
@@ -186,25 +185,6 @@ def test_alarm_level_and_trigger_type_enums(ctx):
     assert "alarm-trigger-type-unknown" in codes(validate_alarms(alarms, ctx))
 
 
-def test_alarm_ack_group_must_exist(ctx):
-    alarms = {
-        "groups": [
-            {"alarms": [{"id": "a", "ack_groups": ["admin", "nobody"], "trigger": {"type": "bool"}}]}
-        ]
-    }
-    report = validate_alarms(alarms, ctx)
-    finding = next(f for f in report.warnings if f.code == "user-group-unknown")
-    assert finding.path == "/groups/0/alarms/0/ack_groups/1"
-
-
-def test_alarm_groups_unchecked_when_users_file_unreadable():
-    """An empty group set means "not collected", not "no groups exist" — every
-    ack_groups entry would otherwise be flagged on a fresh checkout."""
-    bare = ValidationContext(widget_schemas={})
-    alarms = {"groups": [{"alarms": [{"id": "a", "ack_groups": ["anything"]}]}]}
-    assert "user-group-unknown" not in codes(validate_alarms(alarms, bare))
-
-
 def test_alarm_localizable_text_checks_translation_keys():
     ctx = ValidationContext(widget_schemas={}, translation_keys=frozenset({"alarm.known"}))
     alarms = {
@@ -327,16 +307,6 @@ def test_user_membership_must_name_a_real_group(ctx):
     assert finding.path == "/users/0/groups/1"
 
 
-def test_user_groups_checked_against_the_file_not_the_context(ctx):
-    """`ctx.user_groups` is built *from* this file, so validating against it
-    would make every finding vacuously true."""
-    users = {"groups": [], "users": [{"id": "u", "username": "u", "groups": ["admin"]}]}
-    # 'admin' is in ctx.user_groups but not in this document's own groups list —
-    # an emptied groups list is a real answer, not a missing one.
-    finding = next(f for f in validate_users(users, ctx).warnings if f.code == "user-group-unknown")
-    assert finding.path == "/users/0/groups/0"
-
-
 def test_auto_login_and_duplicate_usernames(ctx):
     users = {
         "groups": [{"id": "operator"}],
@@ -396,7 +366,6 @@ def test_sweep_reports_domain_findings(sweep_client):
                     "alarms": [
                         {
                             "id": "a",
-                            "ack_groups": ["ghost"],
                             "trigger": {"type": "bool", "source_value": ""},
                         }
                     ],
@@ -410,7 +379,7 @@ def test_sweep_reports_domain_findings(sweep_client):
     assert resp.status_code == 200
     diagnostics = resp.json()["diagnostics"]
     alarm_rows = [d for d in diagnostics if d["artifactKind"] == "alarms"]
-    assert {d["code"] for d in alarm_rows} >= {"user-group-unknown", "alarm-trigger-unbound"}
+    assert "alarm-trigger-unbound" in {d["code"] for d in alarm_rows}
     assert all(d["artifactId"] == "alarms" for d in alarm_rows)
 
 

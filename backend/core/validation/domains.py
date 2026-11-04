@@ -69,35 +69,6 @@ def _element_index(composite: str) -> int | None:
         return None
 
 
-def _check_groups(
-    groups: Any,
-    ctx: ValidationContext,
-    path: str,
-    report: ValidationReport,
-    subject: str,
-    groups_known: bool = False,
-) -> None:
-    """Every entry of a user-group id list must name a group in users.json.
-
-    An empty ``ctx.user_groups`` is ambiguous: users.json may genuinely define
-    no groups, or it may simply not have been loaded into this context. Callers
-    that built the set themselves pass ``groups_known=True`` so the empty case
-    still reports; the rest skip rather than flag every membership.
-    """
-    if not isinstance(groups, list):
-        return
-    if not ctx.user_groups and not groups_known:
-        return
-    for i, group in enumerate(groups):
-        if isinstance(group, str) and group and group not in ctx.user_groups:
-            report.warn(
-                f"{path}/{i}",
-                f"{subject} references unknown user group '{group}'",
-                severity="error",
-                code="user-group-unknown",
-            )
-
-
 def validate_alarms(alarms: Any, ctx: ValidationContext) -> ValidationReport:
     """Alarm definitions: trigger bindings, localizable text, level/type enums
     and acknowledgement groups."""
@@ -126,8 +97,6 @@ def validate_alarms(alarms: Any, ctx: ValidationContext) -> ValidationReport:
                 validate_property_value(
                     resolution, _STRING_FIELD, ctx, f"{base}/resolutions/{ri}", report
                 )
-
-            _check_groups(alarm.get("ack_groups"), ctx, f"{base}/ack_groups", report, "alarm")
 
             values = alarm.get("values") if isinstance(alarm.get("values"), list) else []
             for vi, ref in enumerate(values):
@@ -277,12 +246,8 @@ def validate_historian(config: Any, ctx: ValidationContext) -> ValidationReport:
 
 
 def validate_users(users: Any, ctx: ValidationContext) -> ValidationReport:
-    """Group membership and the settings that name a user or group.
-
-    Checked against the file's own ``groups`` list rather than ``ctx`` — this
-    validator *is* what defines that list, so reading it from the context would
-    make every finding vacuously true.
-    """
+    """Group membership and the settings that name a user or group, checked
+    against the file's own ``groups`` list."""
     report = ValidationReport()
     if not isinstance(users, dict):
         return report
@@ -291,13 +256,18 @@ def validate_users(users: Any, ctx: ValidationContext) -> ValidationReport:
         for g in _dicts(users.get("groups"))
         if isinstance(g.get("id"), str) and g["id"]
     }
-    local = ValidationContext(widget_schemas={}, user_groups=frozenset(known_groups))
 
     usernames = set()
     for ui, user in enumerate(_dicts(users.get("users"))):
-        _check_groups(
-            user.get("groups"), local, f"/users/{ui}/groups", report, "user", groups_known=True
-        )
+        groups = user.get("groups")
+        for gi, group in enumerate(groups if isinstance(groups, list) else []):
+            if isinstance(group, str) and group and group not in known_groups:
+                report.warn(
+                    f"/users/{ui}/groups/{gi}",
+                    f"user references unknown user group '{group}'",
+                    severity="error",
+                    code="user-group-unknown",
+                )
         name = user.get("username")
         if isinstance(name, str) and name:
             if name in usernames:

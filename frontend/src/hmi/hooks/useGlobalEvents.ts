@@ -21,8 +21,8 @@ import type { GlobalEventsConfig } from '@shared/types/config';
  *                    context's values have arrived (or after a grace)
  * - onPageLoaded:    fires on every page navigation
  * - onLocaleChanged: fires when the active language changes (skips initial)
- * - onUserLoggedIn:  fires when a user identity appears for this scope
- * - onUserLoggedOut: fires when a user identity is removed for this scope
+ * - onUserLoggedIn:  fires when this scope's identity becomes a real sign-in
+ * - onUserLoggedOut: fires when it goes back to the auto-login user
  * - onVariableChanged: each trigger fires when its variable's value changes
  */
 export function useGlobalEvents(scope: string): void {
@@ -141,25 +141,20 @@ export function useGlobalEvents(scope: string): void {
   }, [scope]);
 
   // ── onUserLoggedIn / onUserLoggedOut ─────────────────────────────────────
-  // The backend always has a user in scope (at minimum "guest"), so we detect
-  // login/logout by watching whether the username is the unauthenticated guest.
-  const prevUsernameRef = useRef<string | undefined>(undefined);
+  // The scope always holds a user, the auto-login one (guest or a real user)
+  // when nobody signed in, so a sign-in is told apart by its session token.
+  // A reload that resumes a sign-in counts as one, as it always has.
+  const prevSignedInRef = useRef(false);
   useEffect(() => {
-    const initial = useHmiStore.getState().currentUsersByScope[scope];
-    prevUsernameRef.current = initial?.username ?? 'guest';
+    prevSignedInRef.current = !!useHmiStore.getState().currentUsersByScope[scope]?.signedIn;
     return useHmiStore.subscribe((state) => {
-      const user = state.currentUsersByScope[scope];
-      const username = user?.username ?? 'guest';
-      const prev = prevUsernameRef.current;
-      if (prev === username) return;
-      prevUsernameRef.current = username;
-      const wasGuest = !prev || prev === 'guest';
-      const isGuest = username === 'guest';
-      if (wasGuest && !isGuest) {
-        executeWidgetActions(globalEventsRef.current.onUserLoggedIn, { scope });
-      } else if (!wasGuest && isGuest) {
-        executeWidgetActions(globalEventsRef.current.onUserLoggedOut, { scope });
-      }
+      const signedIn = !!state.currentUsersByScope[scope]?.signedIn;
+      if (signedIn === prevSignedInRef.current) return;
+      prevSignedInRef.current = signedIn;
+      executeWidgetActions(
+        signedIn ? globalEventsRef.current.onUserLoggedIn : globalEventsRef.current.onUserLoggedOut,
+        { scope },
+      );
     });
   }, [scope]);
 }

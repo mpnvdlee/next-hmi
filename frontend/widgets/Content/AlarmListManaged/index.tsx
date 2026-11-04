@@ -185,7 +185,6 @@ const STATE_TEXT = { new: 'New', acked: 'Acked', active: 'Active', cleared: 'Cle
 
 export default function AlarmListManaged({ properties, layout }: HmiWidgetProps) {
   const active = useActiveAlarms();
-  const username = useAlarmUsername();
   const alarmText = useAlarmText();
   const evalCtx = useEvalContext();
   const title = getPropString(properties, 'title', 'Alarms', evalCtx);
@@ -254,23 +253,15 @@ export default function AlarmListManaged({ properties, layout }: HmiWidgetProps)
         resolutions: e.resolutions ?? [],
         group_title: e.group_title ?? '',
         auto_popup: false,
-        ack_groups: [],
       },
       state: 'cleared' as const,
     })),
   ];
 
-  const handleAck = useCallback(
-    async (e: React.MouseEvent, id: string) => {
-      e.stopPropagation();
-      await ackAlarm(id, username);
-    },
-    [username],
-  );
-
-  const handleAckAll = useCallback(async () => {
-    await ackAllAlarms(username);
-  }, [username]);
+  const handleAck = useCallback(async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    await ackAlarm(id);
+  }, []);
 
   const count = filtered.filter((a) => !a.acked).length;
 
@@ -378,7 +369,7 @@ export default function AlarmListManaged({ properties, layout }: HmiWidgetProps)
 
       {!ackOff && filtered.some((a) => !a.acked) && (
         <div className="hmi-alarm-list__footer">
-          <button className="hmi-alarm-btn hmi-alarm-btn--primary" onClick={handleAckAll}>
+          <button className="hmi-alarm-btn hmi-alarm-btn--primary" onClick={() => ackAllAlarms()}>
             Acknowledge All
           </button>
         </div>
@@ -388,7 +379,6 @@ export default function AlarmListManaged({ properties, layout }: HmiWidgetProps)
         <AlarmDetailDialog
           alarm={selected.alarm}
           clearedAt={selected.clearedAt || undefined}
-          username={username}
           onClose={() => setSelected(null)}
         />
       )}

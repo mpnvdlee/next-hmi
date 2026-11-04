@@ -31,7 +31,7 @@ The backend creates any missing folder on startup, and never overwrites this tre
 
 Browse to the origin root (`http://localhost:8000` by default) and sign in with the **device-admin password**. The dashboard lists every project registered on this installation, one row each, showing its name, its **id**, its folder, and its status.
 
-The id is the project's address: it is what appears in `/runtime/<id>/` and `/editor/<id>/`, in the instance log folder, and in the scope of an MCP token. It is derived from the name when the project is created, and it stays put afterwards unless you change it deliberately — see **Rename** below.
+The id is the project's address: it is what appears in `/runtime/<id>/` and `/editor/<id>/`, and in the instance log folder. It is derived from the name when the project is created, and it stays put afterwards unless you change it deliberately — see **Rename** below.
 
 Each row shows a picture of that project's main page as it looked the last time
 the project was saved in the editor. A project that has never been saved shows
@@ -46,7 +46,7 @@ Each row carries the actions for that project:
 | **Open** · **Open editor** | Once running, opens the operator runtime or the editor in a new tab. |
 | **Stop** | Takes the instance and its connections down. |
 | **Set as default** | Marks the project the origin root jumps to, and keeps it running. Handy on a panel PC that should boot straight into one screen set. |
-| **MCP enabled / disabled** | Whether an AI agent on the workspace MCP endpoint may *write* to this project. Off by default. See [AI agents over MCP](mcp.md). |
+| **MCP write enabled / disabled** | Whether an AI agent on the workspace MCP endpoint may *write* to this project. Off by default. See [AI agents over MCP](mcp.md). |
 | **Rename** | Changes the project's name, its id, or both. Only while the project is stopped. |
 | **Export** | Downloads the whole project as a zip. |
 | **Transfer** | Pushes this project to another NEXT HMI manager on the network. |
@@ -128,7 +128,7 @@ registering, starting.
 ## Move, repair, and remove
 
 - **Moved the folder?** The row goes to a **missing** status and grows a **Locate…** button — the one action still available, since every other one needs the folder that is gone. Give it the new path and the entry is re-pointed. The destination's `config.json` must carry the same project id, so a typo can't silently attach the entry to an unrelated tree.
-- **Rename** changes the display name, the id, or both — stop the project first. The **name** is cosmetic. The **id** is the address: every `/runtime/<id>/` or `/editor/<id>/` bookmark pointing at the old one breaks, and any client using the old URL has to be updated. Everything on this installation follows along automatically — the manifest entry, the project's own `config.json`, the default-project choice, the instance logs and the MCP tokens issued for it. The folder on disk keeps its path; move it with **Locate…** if you want that renamed too. An id must start with a letter or digit and hold only letters, digits, `.`, `_` or `-`, and it cannot collide with another registered project.
+- **Rename** changes the display name, the id, or both — stop the project first. The **name** is cosmetic. The **id** is the address: every `/runtime/<id>/` or `/editor/<id>/` bookmark pointing at the old one breaks, and any client using the old URL has to be updated. Everything on this installation follows along automatically — the manifest entry, the project's own `config.json`, the default-project choice and the instance logs. The folder on disk keeps its path; move it with **Locate…** if you want that renamed too. An id must start with a letter or digit and hold only letters, digits, `.`, `_` or `-`, and it cannot collide with another registered project.
 - **Remove** unregisters the project. By default your files on disk are left alone and only the manifest row goes; tick **Also delete the folder on disk** in the confirmation to erase it too. Deleting the folder is refused if it has no `project` block in `config.json`, which stops a stale path from wiping something unrelated.
 - A running project must be **stopped** before it can be removed.
 

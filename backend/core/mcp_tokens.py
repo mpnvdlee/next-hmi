@@ -1,13 +1,20 @@
-"""Revocable bearer tokens for the multi-project workspace MCP transport.
+"""Revocable bearer tokens for the workspace MCP transport and the external API.
 
 Mirrors ``core.peer_tokens`` (hashed-at-rest, paired once with the device-admin
 password, revocable, bound to the current password generation) but adds the
 scope a peer token doesn't need: each MCP token grants ``read`` or ``write``
-access to exactly one project. ``write`` implies ``read``. Binding
-``authGeneration`` at issue time — and rejecting on verify once it no longer
-matches ``manager_auth.credential_generation()`` — revokes every outstanding
-token the instant the device-admin password changes, independent of the
-explicit ``revoke_all()`` the password-change endpoint also calls.
+access to every project. ``write`` implies ``read``. Binding ``authGeneration`` at issue time — and rejecting on
+verify once it no longer matches ``manager_auth.credential_generation()`` —
+revokes every outstanding token the instant the device-admin password
+changes, independent of the explicit ``revoke_all()`` the password-change
+endpoint also calls.
+
+The same store holds the external API's tokens (``/api/v1``, see
+``api.v1_api``): an entry with ``"kind": "api"`` carries a list of ``scopes``
+instead of an ``access`` level. An entry without ``kind`` is an MCP token, so
+a file written before API tokens existed reads unchanged. Each kind resolves
+only through its own function — an MCP token never opens ``/api/v1`` and an API
+token never opens ``/mcp``.
 """
 
 from __future__ import annotations
@@ -27,6 +34,10 @@ from core.time_utils import iso_now
 
 Access = Literal["read", "write"]
 
+API_SCOPES = (
+    "history:read", "alarms:read", "recipes:read", "users:read", "users:write", "sessions:write",
+)
+
 _TOKENS_FILENAME = ".mcp-tokens.json"
 _lock = threading.RLock()
 
@@ -34,8 +45,14 @@ _lock = threading.RLock()
 @dataclass(frozen=True)
 class TokenScope:
     token_id: str
-    project_id: str
     access: Access
+    name: str
+
+
+@dataclass(frozen=True)
+class ApiTokenScope:
+    token_id: str
+    scopes: frozenset[str]
     name: str
 
 
@@ -61,10 +78,7 @@ def _digest(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def issue(*, project_id: str, access: Access, name: str | None = None) -> tuple[str, str]:
-    """Return ``(token_id, raw_token)`` while persisting only its digest."""
-    if access not in ("read", "write"):
-        raise ValueError(f"Invalid access level: {access!r}")
+def _append(entry: dict[str, Any]) -> tuple[str, str]:
     token_id = secrets.token_urlsafe(12)
     raw_token = f"{token_id}.{secrets.token_urlsafe(32)}"
     with _lock:
@@ -72,9 +86,7 @@ def issue(*, project_id: str, access: Access, name: str | None = None) -> tuple[
         data["tokens"].append(
             {
                 "id": token_id,
-                "name": (name or "MCP client").strip() or "MCP client",
-                "projectId": project_id,
-                "access": access,
+                **entry,
                 "hash": _digest(raw_token),
                 "authGeneration": manager_auth.credential_generation(),
                 "createdAt": iso_now(),
@@ -84,8 +96,33 @@ def issue(*, project_id: str, access: Access, name: str | None = None) -> tuple[
     return token_id, raw_token
 
 
-def resolve(token: str | None) -> TokenScope | None:
-    """Return the scope for a valid, unrevoked token, or ``None``."""
+def issue(*, access: Access, name: str | None = None) -> tuple[str, str]:
+    """Return ``(token_id, raw_token)`` while persisting only its digest."""
+    if access not in ("read", "write"):
+        raise ValueError(f"Invalid access level: {access!r}")
+    return _append(
+        {
+            "name": (name or "MCP client").strip() or "MCP client",
+            "access": access,
+        }
+    )
+
+
+def issue_api(*, scopes: list[str], name: str | None = None) -> tuple[str, str]:
+    """Mint an ``/api/v1`` token holding exactly *scopes*."""
+    if not scopes or not set(scopes) <= set(API_SCOPES):
+        raise ValueError(f"An API token needs one or more of: {', '.join(API_SCOPES)}")
+    return _append(
+        {
+            "kind": "api",
+            "name": (name or "API client").strip() or "API client",
+            "scopes": sorted(set(scopes)),
+        }
+    )
+
+
+def _find(token: str | None) -> dict[str, Any] | None:
+    """The stored entry *token* matches under the current password generation."""
     if not token or "." not in token:
         return None
     token_id = token.split(".", 1)[0]
@@ -100,18 +137,38 @@ def resolve(token: str | None) -> TokenScope | None:
                 and entry.get("authGeneration") == generation
                 and isinstance(entry.get("hash"), str)
                 and hmac.compare_digest(candidate, entry["hash"])
+                # Paired by 1.0/1.1 for one project: refused, never widened to all.
+                and "projectId" not in entry
             ):
-                project_id = entry.get("projectId")
-                access = entry.get("access")
-                if not isinstance(project_id, str) or access not in ("read", "write"):
-                    return None
-                return TokenScope(
-                    token_id=token_id,
-                    project_id=project_id,
-                    access=access,
-                    name=str(entry.get("name") or "MCP client"),
-                )
+                return entry
     return None
+
+
+def resolve(token: str | None) -> TokenScope | None:
+    """Return the scope for a valid, unrevoked MCP token, or ``None``."""
+    entry = _find(token)
+    if entry is None or entry.get("kind", "mcp") != "mcp":
+        return None
+    access = entry.get("access")
+    if access not in ("read", "write"):
+        return None
+    return TokenScope(
+        token_id=entry["id"],
+        access=access,
+        name=str(entry.get("name") or "MCP client"),
+    )
+
+
+def resolve_api(token: str | None) -> ApiTokenScope | None:
+    """Return the scope for a valid, unrevoked API token, or ``None``."""
+    entry = _find(token)
+    if entry is None or entry.get("kind") != "api" or not isinstance(entry.get("scopes"), list):
+        return None
+    return ApiTokenScope(
+        token_id=entry["id"],
+        scopes=frozenset(s for s in entry["scopes"] if s in API_SCOPES),
+        name=str(entry.get("name") or "API client"),
+    )
 
 
 def revoke(token_id: str) -> bool:
@@ -123,26 +180,6 @@ def revoke(token_id: str) -> bool:
             return False
         _save(data)
         return True
-
-
-def retarget_project(old_project_id: str, new_project_id: str) -> int:
-    """Re-scope every token issued for *old_project_id* onto *new_project_id*.
-
-    Renaming a project's id keeps the same project, so the tokens an operator
-    already handed out have to follow it — otherwise they'd resolve to a scope
-    no project answers to, and a later project reusing the old id would inherit
-    them.
-    """
-    with _lock:
-        data = _load()
-        moved = 0
-        for entry in data["tokens"]:
-            if entry.get("projectId") == old_project_id:
-                entry["projectId"] = new_project_id
-                moved += 1
-        if moved:
-            _save(data)
-        return moved
 
 
 def revoke_all() -> int:
@@ -161,9 +198,13 @@ def list_tokens() -> list[dict[str, Any]]:
         return [
             {
                 "id": entry.get("id"),
+                "kind": entry.get("kind", "mcp"),
                 "name": entry.get("name"),
-                "projectId": entry.get("projectId"),
-                "access": entry.get("access"),
+                **(
+                    {"scopes": entry.get("scopes", [])}
+                    if entry.get("kind") == "api"
+                    else {"access": entry.get("access")}
+                ),
                 "createdAt": entry.get("createdAt"),
             }
             for entry in _load()["tokens"]

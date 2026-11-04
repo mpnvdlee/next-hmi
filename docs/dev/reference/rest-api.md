@@ -15,15 +15,64 @@ A few endpoints raise `fastapi.HTTPException` directly with other status codes �
 
 ## Authentication
 
-The **manager** front door is gated by a single **device-admin password** set on first run. The manager's `_auth_gate` middleware requires a valid session cookie (`nexthmi_manager_session`, a stateless HMAC-signed token) on every `/api/*` and `/editor/*` request (and on the manager's own `openapi.json` / `docs` / `redoc`), except `/api/manager/auth/*`, `/api/manager/peer/*`, `/api/manager/mcp/pair`, `/api/health`, and `/mcp`. Peer endpoints perform their own bearer-token authentication (only pairing accepts the existing device-admin password); `/mcp` takes a manager session or an MCP bearer token (see [mcp.md](mcp.md)); MCP pairing checks the device-admin password itself. See **Manager API** below for the login/setup endpoints; the password digest lives in `<runtime_home>/.manager-auth.json`.
+The **manager** front door is gated by a single **device-admin password** set on first run. The manager's `_auth_gate` middleware requires a valid session cookie (`nexthmi_manager_session`, a stateless HMAC-signed token) on every `/api/*` and `/editor/*` request (and on the manager's own `openapi.json` / `docs` / `redoc`), except `/api/manager/auth/*`, `/api/manager/peer/*`, `/api/manager/mcp/pair`, `/api/health`, `/mcp` and `/api/v1/*`. Peer endpoints perform their own bearer-token authentication (only pairing accepts the existing device-admin password); `/mcp` takes a manager session or an MCP bearer token (see [mcp.md](mcp.md)); MCP pairing checks the device-admin password itself; `/api/v1/*` takes the device-admin password over HTTP Basic or an API token and never the session cookie (see [API v1](#api-v1)). See **Manager API** below for the login/setup endpoints; the password digest lives in `<runtime_home>/.manager-auth.json`.
 
-**`/runtime/*` is the exception: a live operator view is public.** A deny-by-default allowlist (`_RUNTIME_PUBLIC_ROUTES` in `manager.py`) names the child routes a running screen needs — the SPA document and its static mounts, a fixed set of config / theme / component / widget / user reads, alarm history, historian queries, the operator-action POSTs (alarm ack, recipe load and save, `$http`), and `/ws`. Everything else under `/runtime/*` still needs the session: every write verb, `api/datasources`, `api/system/*`, `api/projects/*`, `api/internal/*`, `api/health`, and the instance's own `openapi.json` / `docs` / `redoc`. `HEAD` follows `GET`; `OPTIONS` is gated, since an anonymous preflight would otherwise enumerate the withheld routes.
+**The internal API is for the app's own frontend only.** `/api/*`, `/runtime/<slug>/api/*`, `/editor/<slug>/api/*` and `/ws` exist to serve the SPA and may change in any release. [API v1](#api-v1) (`/api/v1/*`) is the only supported external surface: an integration that needs something the frontend reads gets a v1 route, never an entry on the public table below.
 
 A path segment is refused outright when *any* decoding of it — the original, each intermediate `unquote`, or the fixpoint — contains `/` or `\`, or is empty, `.` or `..`. The gate and the child each decode once, so without that rule a double-encoded separator lets the gate match one route while the child serves another.
 
-`/editor/<slug>/ws` requires the cookie; `/runtime/<slug>/ws` does not.
+**Cross-origin requests are refused.** Every WebSocket upgrade and every request whose method is not `GET`, `HEAD` or `OPTIONS` passes `OriginCheckMiddleware` (`core/origin_check.py`) before the gate, on every manager path including `/mcp`, and again on the project instance. When it carries an `Origin` header that differs from the request's own origin — its scheme, as uvicorn sees it after a trusted proxy's `X-Forwarded-Proto`, plus its `Host` header, with default ports implied — HTTP answers `403 {"detail": "Cross-origin request refused"}` and an upgrade is closed `1008` before accept, which the server answers `403`. `Origin: null` never matches. A request with no `Origin` passes: browsers always send one on these requests, scripts (curl, MCP clients, peer transfers) do not, and the check guards a browser's reach, not the API. That closes what the `SameSite=Lax` cookie leaves open: a page on another site opening `/runtime/<slug>/ws` (WebSockets ignore CORS) or POSTing to a public runtime route as a "simple" request that is never preflighted. JSON-body routes already reject a `text/plain` or form body with `422`, but `recipes/datasets/{id}/upload` takes no body and `…/download` an optional one, so either runs on a bodyless cross-site POST without this check.
 
-A **project instance's** own HTTP API and WebSocket are unauthenticated — instances bind `127.0.0.1` and are only reachable through the manager proxy (which strips the manager cookie before forwarding). Running an instance standalone (`uvicorn main:app`) exposes it unauthenticated, so bind a trusted interface in that case. `start-dev.py` runs the manager, so dev goes through the same gate.
+Consequences: a reverse proxy in front must pass the browser's `Host` through (Caddy and Traefik do by default; nginx needs `proxy_set_header Host $http_host`, since `$host` drops a non-default port) and send `X-Forwarded-Proto` from a trusted address, or every write and socket is refused. A `root_path` mount does not matter — an origin has no path. In dev, Vite's proxy forwards `Host` and `Origin` unchanged (no `changeOrigin`), so the backend on `:8001` sees the browser's `:8000` origin and accepts it. The HTTP port that only redirects to HTTPS is a different origin from the HTTPS port. On the manager the check does not stop DNS rebinding: a rebound name makes the attacker's origin equal the `Host` it sends. That would need a `Host` allowlist, which an install reached by IP, hostname and `.local` alike does not have (an instance has one, below); the session cookie is not sent to a rebound name, so it reaches only what is already public. For the same reason `/mcp` turns off the MCP SDK's own rebinding guard, a loopback `Host` allowlist that answers `421` to a client on the LAN: a rebound page has neither the session cookie nor a bearer token, so it gets the `401` any caller without one gets.
+
+A **project instance's** own HTTP API and WebSocket are unauthenticated — instances bind `127.0.0.1` and are only reachable through the manager proxy (which strips the manager cookie before forwarding). A page in a browser on the same machine can still find that loopback port, so the instance runs the same Origin check: the proxy drops `Origin` once the manager's check has passed (the WebSocket hop never sets one), so proxied traffic passes and a page that goes around the manager is refused, while a standalone instance still works from its own origin. An instance also refuses every request, reads included, whose `Host` is not `127.0.0.1`, `localhost` or `[::1]`: the manager proxy and the manager's own calls always use `127.0.0.1`, so a page that rebinds a name to the loopback port gets `403`. A standalone instance (`uvicorn main:app`) is therefore usable only at a loopback address, even when bound to another interface; to reach a project from another machine, run the manager. `start-dev.py` runs the manager, so dev goes through the same gate.
+
+### Route access
+
+**`/runtime/*` is the exception to the gate: a live operator view is public.** A deny-by-default table (`_RUNTIME_PUBLIC_ROUTES` in `manager.py`) names the child routes a running screen needs; everything else under `/runtime/*` still needs the session. Each entry is exact, or exact with one `*` segment (written `{…}` below); query strings never take part in the match. `HEAD` follows `GET`; `OPTIONS` is gated, since an anonymous preflight would otherwise enumerate the withheld routes. `backend/tests/test_rest_api_public_routes.py` fails when the `public` rows under `/runtime/{slug}/api/` here and that table disagree, so document a new public route in the same change that adds it.
+
+Access: **public** — no credential. **session** — the manager session cookie. **password** — the device-admin password, in the body or over HTTP Basic, on the login throttle. **token** — a bearer token the route checks itself. **loopback-only** — never reachable through the manager.
+
+| Method | Path | Access | Why |
+|---|---|---|---|
+| `GET` | `/` and any SPA path outside the excluded prefixes, `/_app/*` | public | The dashboard's sign-in screen has to render. `/` redirects to the default project's runtime when one is set and running. |
+| `GET` | `/help`, `/help/*` | public | The user guide behind the Help button. |
+| `GET` | `/api/health` | public | Liveness probe for Docker and proxies; answers `{ "status": "ok" }` and nothing else. |
+| `GET` | `/api/manager/auth/status` | public | The SPA picks the setup, sign-in or dashboard screen from `{ passwordSet, authenticated }`. |
+| `POST` | `/api/manager/auth/setup` | public | First run has no password to check; `409` once one is set. |
+| `POST` | `/api/manager/auth/login` | password | |
+| `POST` | `/api/manager/auth/change-password` | password | `currentPassword`. |
+| `POST` | `/api/manager/auth/logout` | public | Only clears the cookie. |
+| `POST` | `/api/manager/mcp/pair` | password | Mints an MCP or API token for a script that has no session. |
+| `POST` | `/api/manager/peer/pair` | password | Also refused unless the client address is private (loopback only with `NEXTHMI_ALLOW_LOOPBACK_PEERS=1`), as on every peer route. |
+| `GET`, `POST`, `DELETE` | `/api/manager/peer/projects`, `…/projects/{id}/archive`, `…/transfers`, `…/transfers/{id}`, `…/transfers/{id}/status` | token | Peer token from pairing. The upload's token and size are checked in `_auth_gate` before the body is read. |
+| any | `/mcp`, `/mcp/*` | session or token | MCP token; see [mcp.md](mcp.md). |
+| any | `/api/v1/*` | password or token | HTTP Basic or an API token; a session cookie alone is `401`. See [API v1](#api-v1). |
+| `GET` | `/docs/oauth2-redirect` | public | FastAPI's static Swagger OAuth helper page: no data, and no route list. Only the manager's own; the child's is gated with the rest of its docs. |
+| any | every other `/api/*`, `/editor/{slug}/*`, `openapi.json`, `docs`, `redoc` | session | |
+| `GET` | `/runtime/{slug}/api/config/config` | public | The page index, shell and settings the live view boots from. |
+| `GET` | `/runtime/{slug}/api/config/pages/{pageId}` | public | A page's widgets. |
+| `GET` | `/runtime/{slug}/api/config/dialogs/{dialogId}` | public | The same document under the overlay index; a dialog is as public as a page. |
+| `GET` | `/runtime/{slug}/api/config/dictionaries` | public | `$loc` texts. |
+| `GET` | `/runtime/{slug}/api/config/translations` | public | `$loc` texts per language. |
+| `GET` | `/runtime/{slug}/api/themes` | public | The theme list for the theme switcher. |
+| `GET` | `/runtime/{slug}/api/themes/{themeId}` | public | The tokens the screen renders with. |
+| `GET` | `/runtime/{slug}/api/default-theme` | public | Which theme to start in. |
+| `GET` | `/runtime/{slug}/api/components` | public | Component definitions the pages instantiate. |
+| `GET` | `/runtime/{slug}/api/components/folders` | public | Read with the definitions. |
+| `GET` | `/runtime/{slug}/api/widgets` | public | The custom-widget list the runtime loads bundles from. |
+| `GET` | `/runtime/{slug}/api/device/info` | public | The `$device` source: the caller's own address, host name and MAC. Only the connection's address is looked up, never one the caller names. |
+| `GET` | `/runtime/{slug}/api/users/roster` | public | `$user` → **All users** / **All user groups**: usernames and group labels, no memberships. |
+| `GET` | `/runtime/{slug}/api/alarms/history` | public | The alarm list widgets' history view. |
+| `GET` | `/runtime/{slug}/api/historian/query` | public | Trend widgets. |
+| `POST` | `/runtime/{slug}/api/recipes/datasets/{id}/download` | public | The SDK's `recipeDownload`; audited as `recipe.load`. |
+| `POST` | `/runtime/{slug}/api/recipes/datasets/{id}/upload` | public | The SDK's `recipeUpload`; optional Basic credentials only set `updatedBy`. |
+| `POST` | `/runtime/{slug}/api/http-request` | public | `$http`, limited to the project's own origins (see [HTTP source proxy](#http-source-proxy)). |
+| `GET` | `/runtime/{slug}/{path}` outside `api/`: the SPA document, `_app/*`, `assets/*`, `widgets/*`, `widget-js/*`, `builtin-widgets-js/*`, `external-libraries/*` | public | The live view's document and every file it loads. The static mounts serve any file in their directory. |
+| WS | `/runtime/{slug}/ws` | public | The variable pipeline: snapshots, writes, recipe load and save, alarm ack, sign-in. See [websocket.md](../architecture/websocket.md). |
+| any | every other `/runtime/{slug}/*`: every other verb and route, including `api/datasources`, `api/users`, `api/system/*`, `api/internal/*`, `api/health`, `openapi.json`, `docs`, `redoc` | session | |
+| WS | `/editor/{slug}/ws` | session | Writes on it are recorded as `engineer`. |
+| any | `/api/internal/*` on the instance port | loopback-only | The proxy refuses it under both prefixes; see [Internal API](#internal-api). |
 
 ## Health
 
@@ -80,7 +129,7 @@ Base prefix: `/api/config`. Page index, shared shell areas, dictionaries and tra
   - `revision` hashes the fields `PUT /api/config/config` writes (`pages`, `dialogs`, the shell areas, `shell`, `globalEvents`), so a theme or `mcpEnabled` change does not move it. `pageRevisions` holds a hash of each index page's document bytes (`"missing"` when its file is absent). Both are read before the content, and an editor sends them back on save.
 
 - `PUT /api/config/config`
-  - Body must contain a `pages` array; `header`, `footer`, `leftSidebar`, `rightSidebar`, `shell`, `dialogs`, `globalEvents`, `mcpEnabled` are accepted optionally. An omitted `mcpEnabled` keeps the stored value, and the embedded `project` metadata block is always kept.
+  - Body must contain a `pages` array; `header`, `footer`, `leftSidebar`, `rightSidebar`, `shell`, `dialogs`, `globalEvents`, `mcpEnabled` are accepted optionally. An omitted `mcpEnabled` keeps the stored value; the embedded `project` metadata block and `httpAllowedOrigins` (set through [`/api/config/http-origins`](#allowed-origins-for-http)) are always kept.
   - The shell areas and `globalEvents` are validated before anything is written; a blocking finding is `422`.
   - Index validation rules (`422` on failure):
     - Each entry must be an object with a string `id`.
@@ -250,7 +299,8 @@ Base prefix: `/api/datasources`. Datasource types supported (`models/datasource.
   - Requires HTTP Basic credentials for a user in the active project's `users.json`; manager-session authentication is not accepted as a substitute for an HMI identity.
   - Body uses the WebSocket write envelope: `{ "datasource": "PLC", "path": "Motor/Speed", "value": 42, "field"?: "name" }`.
   - Returns `{ "ok": true, "reason": null }` or `{ "ok": false, "reason": "<stable reason>" }`; invalid credentials return HTTP `401`. An account with no password set is invalid credentials like any other — it can never be signed in as. Repeated failures are throttled (`core/user_auth_throttle.py`): five in a row for one username, or a flood across many, answer HTTP `429` until the lockout expires.
-  - Uses the same envelope parser, `interactableByGroups` authorization, coercion matrix, and write service as WebSocket `write_field`, and answers with the same `reason` vocabulary ([websocket.md](../architecture/websocket.md#action-result-correlation)). Present `null` reaches coercion and returns `invalid_value`; missing or malformed envelope fields return `bad_request`; an unknown variable is `bad_path`; a caller outside `interactableByGroups` is `permission_denied`.
+  - Uses the same envelope parser, coercion matrix, and write service as WebSocket `write_field`, and answers with the same `reason` vocabulary ([websocket.md](../architecture/websocket.md#action-result-correlation)). Present `null` reaches coercion and returns `invalid_value`; missing or malformed envelope fields return `bad_request`; an unknown variable is `bad_path`. Any authenticated user may write any writable variable; there is no per-variable group check.
+  - A write that lands emits the same `variable.write` audit event as WebSocket `write_field`, with the authenticated user as actor (`actor_source: "session"`), or `engineer` (`actor_source: "device_admin"`) when the request came through the editor prefix.
   - A variable not marked `writable: true` — for an element, its array; for a struct field, that member — is refused as `read_only` and nothing is written. The check runs after coercion, so an uncoercible value to a read-only variable still reports `invalid_value`.
 
 ### Connection wizard
@@ -332,13 +382,7 @@ Base prefix: `/api/alarms`. Configuration models live in `models/alarm.py`; runt
 
 ### Acknowledgement
 
-- `POST /api/alarms/ack/{instance_id}`
-  - Body: `{ "username": "<non-empty>" }`.
-  - `422` if `username` is empty; `404` if the instance is not in the active list.
-  - On success the alarm is marked `acked = true`; it remains active until its trigger clears. Returns `{ "status": "ok" }` and triggers an `alarm_update` broadcast.
-- `POST /api/alarms/ack-all`
-  - Body: `{ "username": "<non-empty>" }`.
-  - Acks every currently unacked active instance. Returns `{ "status": "ok", "count": <n> }`.
+There is no REST route: an acknowledgement is the `/ws` message `alarm_ack` / `alarm_ack_all` ([websocket.md](../architecture/websocket.md#client--server-messages)), so it is recorded against the identity of the connection that sent it rather than a name in a request body.
 
 ---
 
@@ -362,11 +406,12 @@ A project defines **dataset types** (independent axes). Each type owns **paramet
 
 - `POST /api/recipes/datasets/{id}/download`
   - Body: `{ "verify"?: bool }`. Writes every parameter's stored value to its variable (continue-on-error). With `verify`, each value is read back and confirmed by exact match. Records the dataset as loaded for its type on success/partial.
-  - Applies the same `interactableByGroups` authorization as WebSocket `recipe_load`: a parameter whose variable the caller may not write becomes a `permission_denied` failure and is not written. This route carries no session, so a plain request writes as the anonymous `guest`; optional HTTP Basic credentials for a user in the active project's `users.json` lift it out of that, and credentials that do not authenticate return HTTP `401` rather than falling back to `guest` — including an account with no password set, which can never be signed in as. Repeated failures answer HTTP `429` on the same throttle as the variable-write route.
+  - Public on the runtime allowlist and takes no credentials. A parameter whose variable is not writable becomes a `read_only` failure, as on WebSocket `recipe_load`.
+  - A load that writes at least one parameter emits a `recipe.load` audit event: actor `guest` (`actor_source: "anonymous"`), or `engineer` (`device_admin`) when the manager marked the request with `x-nexthmi-editor: 1` — it does so only on the session-gated `/editor/<slug>/` prefix and strips a browser's copy.
   - `404` if the dataset id is unknown. Returns `DownloadResult` `{ result: success|partial|failed, datasetId, written, total, verified, failures: [{ parameterId, reason }] }`.
 - `POST /api/recipes/datasets/{id}/upload`
   - Reads current live values and overwrites the dataset's `values` in place. `404` if unknown. Returns the updated `RecipeConfig`.
-  - Takes the same optional HTTP Basic credentials as download (`401` when they do not authenticate, `429` on the throttle), applies the same per-variable `interactableByGroups` check, and records the authenticated user as the dataset's `updatedBy`.
+  - Takes optional HTTP Basic credentials for a user in the active project's `users.json` and records that user as the dataset's `updatedBy` (empty without credentials; `engineer` on a request the manager marked as coming through the editor). Credentials that do not authenticate return HTTP `401` rather than being dropped — including an account with no password set, which can never be signed in as; repeated failures answer HTTP `429` on the same throttle as the variable-write route.
 
 The WebSocket `recipe_load` / `recipe_save` messages (see `architecture/websocket.md`) drive the same manager methods for button-bound `recipeLoad` / `recipeSave` actions that need `$result`.
 
@@ -480,7 +525,7 @@ These endpoints expose what's in the user workspace directly (no `/api` prefix o
 
 - `GET /api/device/info`
   - Best-effort identification of the HTTP client making the request.
-  - Reads `X-Forwarded-For` (first hop) or `request.client.host`; strips `::ffff:` IPv6-mapped prefixes.
+  - Reads `request.client.host` only, never a header. Behind the manager that is the browser's address: the proxy drops any `X-Forwarded-For` / `X-Real-IP` the client sent and sets `X-Forwarded-For` to the peer it saw (`request.client`, which uvicorn already took from a trusted front proxy's header, see `NEXTHMI_FORWARDED_ALLOW_IPS`), and the instance's uvicorn, trusting loopback, turns that into `request.client`. Unwraps an IPv4-mapped IPv6 address; anything that does not parse as an IP address answers all `null` and is looked up nowhere. `arp` gets it after `--`.
   - Hostname is resolved via reverse-DNS (`socket.gethostbyaddr`).
   - MAC is resolved from `/proc/net/arp` on Linux, otherwise from `arp -n <ip>` (1 s timeout). Returns `null` for any value that can't be determined.
   - Response: `{ "ip": string | null, "hostname": string | null, "mac": string | null }`.
@@ -492,13 +537,17 @@ These endpoints expose what's in the user workspace directly (no `/api` prefix o
 Base prefix: `/api/users`. IDs (user id, group id, username) must match `[A-Za-z0-9_-]+` and be ≤ 64 chars.
 
 - `GET /api/users` → full users document `{ settings, groups, users }`, with every
-  stored password redacted to `""` and no `passwordHash`. It is public (the
-  live view resolves `$user` and the sign-in dropdown without a session), so it
-  says nothing about which accounts carry a credential.
-- `GET /api/users/credential-state` → `{ "<userId>": bool }` — whether each
-  account has a usable credential (an unusable stored hash reads `false`). Not
-  on the public `/runtime` allowlist, so it needs the device-admin session; the
-  editor reads it for the "(unchanged)" / "(no password)" placeholder.
+  stored password redacted to `""`, no `passwordHash`, and a boolean
+  `passwordSet` per user — whether the account has a usable credential (an
+  unusable stored hash reads `false`), for the editor's "(unchanged)" /
+  "(no password)" placeholder. Not on the public `/runtime` allowlist, so it
+  needs the device-admin session; the editor reads it.
+- `GET /api/users/roster` → `{ users: [{ id, username }], groups: [{ id, label }] }`.
+  The one users read on the public `/runtime` allowlist: the live view fills
+  `$user` → All users (the sign-in dropdown) and `$user` → Groups from it with no
+  session. It carries no group membership, settings or credential state — the
+  signed-in user's own groups arrive with the WebSocket identity, and
+  auto-login runs on the server.
 - `PUT /api/users`
   - Body: the complete `{ settings, groups, users }` document returned by `GET /api/users`.
   - Validates all sections and their group references before atomically replacing `users.json`; validation failure leaves the stored document unchanged.
@@ -531,6 +580,7 @@ Base prefix: `/api/users`. IDs (user id, group id, username) must match `[A-Za-z
   - Returns the redacted persisted users list, with `passwordSet` per user.
 - `DELETE /api/users/users/{user_id}`
   - `422` for `guest`; `404` if not found. Returns `{ "deleted": user_id }`.
+- Every write that succeeds then runs `websocket_manager.refresh_identities` (a router dependency, `_refresh_identities_after_write`), the same refresh an API v1 user write reaches through `/api/internal/reload`: a user no longer listed, and every login of a user whose password changed, drops to the auto-login user on every connection, a regrouped one gets its new groups.
 
 ---
 
@@ -554,13 +604,14 @@ off). Its control surface is the manager dashboard.
 
 ### MCP bearer tokens
 
-**(manager)** Long-lived credentials for headless AI clients hitting `/mcp`.
+**(manager)** Long-lived credentials for headless AI clients hitting `/mcp`, and for integrations on [API v1](#api-v1) (`kind: "api"`).
 
-- `POST /api/manager/mcp/pair` — body `{ password, projectId, access, name? }` where `password` is the device-admin password and `access` is `"read"` or `"write"`. → `201 { tokenId, token, projectId, access, transport, trustedLanOnly }`. The plaintext `token` is returned once; only its SHA-256 digest is persisted (`<runtime_home>/.mcp-tokens.json`). Reachable **pre-session** (like login/setup) because a pairing client has no session cookie yet, and therefore subject to the same login throttle — `429 RateLimitError` after 5 failures. Unknown `projectId` → `404`.
-- `GET /api/manager/mcp-tokens` → `{ tokens: [{ id, name, projectId, access, createdAt }] }` (no secrets).
+- `POST /api/manager/mcp/pair` — body `{ password, access, name? }` where `password` is the device-admin password and `access` is `"read"` or `"write"`; any other field, `projectId` included, answers `422`. → `201 { tokenId, token, access, transport, trustedLanOnly }`. The plaintext `token` is returned once; only its SHA-256 digest is persisted (`<runtime_home>/.mcp-tokens.json`). Reachable **pre-session** (like login/setup) because a pairing client has no session cookie yet, and therefore subject to the same login throttle — `429 RateLimitError` after 5 failures.
+- `POST /api/manager/mcp-tokens` — body `{ kind?, access?, scopes?, name? }`. `kind` is `"mcp"` (default; needs `access`) or `"api"` (needs a non-empty `scopes` list, see [API v1](#api-v1); an empty or unknown scope answers `422` with a `detail` naming the valid ones); an MCP token answers `201 { kind: "mcp", tokenId, token, access, transport, trustedLanOnly }`, an API token `201 { kind: "api", tokenId, token, scopes }`. `/pair` takes the same `kind`/`scopes` fields. The create route behind **Settings › Tokens**: session-gated like the rest of `/api/manager/*`, so no password in the body. Same `201` and `422` responses as `/pair`, through the same code path; no login throttle, since nothing is verified but the session.
+- `GET /api/manager/mcp-tokens` → `{ tokens: [{ id, kind, name, access | scopes, createdAt }] }` (no secrets). Both kinds are listed; an MCP token carries `access`, an API token `scopes`.
 - `DELETE /api/manager/mcp-tokens/{id}` → `{ revoked: true, tokenId }`; `404` when the id is unknown.
 
-A token is scoped to exactly one project and one access level, re-checked per tool call. Changing the device-admin password revokes every issued token.
+A token is scoped to one access level (or scope list) and covers every project, re-checked per tool call or request. An entry with a `projectId` was paired by 1.0 or 1.1 for one project and never resolves, so an upgrade does not widen it. Changing the device-admin password revokes every issued token of both kinds. Both kinds share `<runtime_home>/.mcp-tokens.json`; an entry with no `kind` is an MCP token, so a file written before API tokens existed reads unchanged. `mcp_tokens.resolve()` returns MCP tokens only and `resolve_api()` API tokens only, so an API token gets `401` on `/mcp` and an MCP token `401` on `/api/v1`.
 
 ---
 
@@ -706,7 +757,100 @@ Base prefix: `/api/historian`. Samples live in a SQLite database under the live 
     `{ "ok": bool, "status": int, "body": any, "error": string | null }`.
   - `ok: false` with `status: 0` for a non-`http(s)` scheme, a hostless URL, a refused origin, or a transport error; `ok: false` with the upstream status for a non-2xx response or a body over 1 MiB.
   - Response body is parsed as JSON regardless of `content-type` and falls back to raw text. Timeout is a fixed 10 s. Redirects are walked one hop at a time with the scheme and origin check re-run on **every** hop, capped at 5 (`more than 5 redirects` otherwise), and all caller-supplied headers are dropped once a hop leaves its origin — otherwise a configured host could redirect the proxy into an unconfigured one and carry the project's API key with it.
-  - **Only origins the project itself configures are reachable.** The request's origin (scheme + host + port, default ports normalised, host compared case-insensitively) must match one an `$http` property source in this project names — see [`$http`](../architecture/value-types.md#http-requests-in-depth-http). Anything else is refused with `ok: false`, `status: 0` and `error: "origin '…' is not configured by an $http source in this project"`. Once any source in the project interpolates its own host, any http(s) origin is allowed except loopback, link-local and unspecified addresses (`core/http_origins.py`). Path, query, headers and body are unrestricted.
+  - **Only origins the project itself configures are reachable.** The request's origin (scheme + host + port, default ports normalised, host compared case-insensitively) must match one an `$http` property source in this project names — see [`$http`](../architecture/value-types.md#http-requests-in-depth-http) — or one listed in the project's `httpAllowedOrigins` (see [Allowed origins](#allowed-origins-for-http)). Anything else is refused with `ok: false`, `status: 0` and `error: "origin '…' is not configured by an $http source or the allowed origins of this project"`. A source that interpolates its own host (`http://{host}/x`) pins nothing, so it reaches only the listed origins, and nothing while the list is empty (`core/http_origins.py`). Path, query, headers and body are unrestricted.
+
+### Allowed origins for `$http`
+
+Behind the device-admin session: not on the runtime public-route table (`_RUNTIME_PUBLIC_ROUTES` in `backend/manager.py`), and kept off the public `GET /api/config/config`.
+
+- `GET /api/config/http-origins`
+  - `{ "origins": ["http://10.0.0.5:8080", …] }` — `httpAllowedOrigins` from `config.json`, `[]` when unset. Only entries the proxy honours are returned, normalised; a hand-edited entry it ignores is left out.
+- `PUT /api/config/http-origins`
+  - Body: `{ "origins": [string] }`. Replaces the list. Each entry is normalised to `scheme://host:port` (lower-cased, default port filled in, path and credentials dropped) and duplicates collapse. `422` names the first entry that is not an http(s) origin or names this machine (loopback, link-local, unspecified, `localhost`). Returns the stored list.
+  - `PUT /api/config/config` leaves the key as it is.
+
+---
+
+## API v1
+
+**(manager)** `backend/api/v1_api.py`. The external, versioned API for integrations (MES, BI, HR systems): every route is `/api/v1/projects/{projectId}/…`, answers JSON, and keeps its field names stable within v1. The internal routes in the rest of this file are for the app's own frontend and may change in any release. Operator-facing guide: [docs/user/api.md](../../user/api.md).
+
+### Auth
+
+`_auth_gate` skips `/api/v1/*`; the router authenticates every request itself (a router-wide dependency, so a route added later still refuses anonymous callers), and a manager session cookie alone gets `401`. Two credentials:
+
+| Credential | Header | Reaches |
+|---|---|---|
+| Device-admin password | `Authorization: Basic base64("admin:<password>")` — the username is always `admin` | Every project, every scope. Checked with `manager_auth.verify_password` and the dashboard login's throttle: 5 failures lock Basic (and the dashboard login) for 60 s, `429`. Basic checks run one at a time (`_basic_lock`) with the lockout read inside the lock, so parallel guesses cannot all pass it before the first failure counts. A Basic success never calls `register_login_success`: a polling script's good password says nothing about who sent the failures, and clearing the count on each poll would let a guesser fit four tries between polls. Any non-API check of the device-admin password resets it — dashboard sign-in, change-password, MCP `/pair` and peer `/pair` — as does the lockout itself. |
+| API token | `Authorization: Bearer <token>` | One project, the scopes it was minted with (`POST /api/manager/mcp-tokens` with `kind: "api"`, see [MCP bearer tokens](#mcp-bearer-tokens)). |
+
+HMI user credentials (`users.json`) are never an API key. An MCP token is refused here (`401`), and an API token is refused on `/mcp` and on every internal route.
+
+The `401` carries `WWW-Authenticate: Bearer realm="NEXT HMI API"`, never a `Basic` challenge: a Basic challenge makes a browser prompt for the password and then cache it, and a cached password rides along on cross-site requests. Writes still pass `OriginCheckMiddleware`, so a browser page on another origin cannot `PUT` or `DELETE` here.
+
+Order of checks: credential (`401`, or `429` while locked out) → token's project (`403`) → token's scope (`403`) → project exists (`404`).
+
+Scopes (`core.mcp_tokens.API_SCOPES`):
+
+| Scope | Routes |
+|---|---|
+| `history:read` | `GET …/history` |
+| `alarms:read` | `GET …/alarms/history` |
+| `recipes:read` | `GET …/recipes` |
+| `users:read` | `GET …/users` |
+| `users:write` | `PUT …/users/{userId}`, `DELETE …/users/{userId}` — does not imply `users:read` |
+| `sessions:write` | `GET …/panels`, `POST …/panels/{panel}/login`, `POST …/panels/{panel}/logout` |
+
+HTTPS is not required, since many LAN installs run plain HTTP, but over HTTP the token or password crosses the network in clear text.
+
+### Running or stopped
+
+Every route except [panel sessions](#panel-sessions) reads or writes the project's files inside `use_project(projectId)`, so each one works the same on a running and a stopped project; none needs the instance. A user write then POSTs the running child's `/api/internal/reload` (`artifact_type: "users"`, `source: "api"`, see [Internal API](#internal-api)), which broadcasts `config_changed` so an open editor shows its "updated by another writer" banner before it saves the old list over the change, and re-checks every identity its connections hold: a deleted (or renamed) user, or one whose password changed, drops to the auto-login user, a regrouped one gets its new groups. The child reads `users.json` fresh on every sign-in, so nothing else needs reloading.
+
+### Paging
+
+`history` and `alarms/history` return `{ items: [...], nextCursor }`. `nextCursor` is opaque; pass it back as `cursor` with the same filters for the next page, until it is `null`. Paging is keyset (the last row's sort key), not offset, so walking one query's pages neither skips nor repeats a row that was there when the walk started. A cursor is not a resume point for polling: the last page answers `nextCursor: null`, and history is ordered by sample time while the historian writes its buffer every 1.5 s, so a late-landing sample can sort before a row already served. Clients that sync incrementally poll with `start` — for history a margin before the newest `timestamp` they hold, deduplicated on `(variable, timestamp)`; for alarm history the newest `clearedAt` they hold, deduplicated on `id`. docs/user/api.md tells integrators the same. `format=csv` returns the same page as `text/csv` (header row always present) with the next cursor in the `X-Next-Cursor` response header, absent on the last page. A CSV text cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading `'`, so a spreadsheet shows it rather than running it as a formula; numbers are written as they are. `users` and `recipes` are small, bounded sets and return in full.
+
+Times in queries are ISO-8601 (no offset means UTC) or relative (`-30s`, `-15m`, `-1h`, `-7d`), or `now`. Times in responses are ISO-8601 UTC with an offset.
+
+### Historian samples
+
+- `GET …/history?variables=&start=&end=now&limit=1000&cursor=&format=json` — scope `history:read`.
+  - `variables` (required): comma-separated variable keys as the historian stores them (`<datasource>:<path>`). `start` (required), `end` (default `now`). `limit` `1`–`10000`, default `1000`.
+  - Raw samples, no downsampling, ordered by `timestamp` then row id: `items: [{ variable, timestamp, value }]`.
+  - Reads `<project>/historian/history.db` over a `mode=ro` SQLite connection, so it never blocks or writes to a running instance's historian (WAL lets the read run beside it). A project with no database answers an empty page.
+  - `422` for a malformed time, a `limit` out of range, or a bad cursor.
+
+### Alarm history
+
+- `GET …/alarms/history?start=&end=now&limit=100&cursor=&format=json` — scope `alarms:read`.
+  - Cleared alarms from `alarm_state.json` (the instance keeps the newest 500), oldest first by `clearedAt`; `start` / `end` filter on `clearedAt` too. `limit` `1`–`500`, default `100`.
+  - `items: [{ id, alarmId, code, level, title, description, groupTitle, triggeredAt, clearedAt, acked, ackedBy, ackedAt }]`. `ackedBy` is the name the instance recorded at acknowledgement; `ackedBy` and `ackedAt` are `null` for an unacknowledged alarm. Where that name came from (a signed-in session, the editor, an unverified claim) is not stored in `alarm_state.json`, so v1 does not report it.
+
+### Recipes
+
+- `GET …/recipes` — scope `recipes:read`. Read only; nothing here loads a dataset to the PLC.
+  - `{ datasetTypes: [{ id, name, loadedDatasetId, parameters: [{ id, label, dataType }], datasets: [{ id, name, description, values, updatedAt, updatedBy }] }] }`. `values` maps parameter id to value; `loadedDatasetId` is the dataset last loaded for the type, or `null`.
+
+### Users
+
+- `GET …/users` — scope `users:read` → `{ users: [{ id, username, groups, passwordSet }], groups: [{ id, label }] }`. No password or hash ever leaves.
+- `PUT …/users/{userId}` — scope `users:write`. Body `{ username?, password?, groups? }`; any other field is `422`. Creates the user when `userId` is new, else updates it. An omitted field keeps its current value (`username` defaults to `userId` on create); an omitted or empty `password` keeps the stored one, and a new user without one has no password and cannot sign in. → the user as `GET` shows it.
+  - Runs the editor's own validation (`users_api.put_users`): id and username `[A-Za-z0-9_-]`, at most 64 characters; at least one group, every group known; a duplicate username `409`; `guest` keeps id and username `guest`, only the `guest` group and no password. The password is stored as a PBKDF2 hash.
+- `DELETE …/users/{userId}` — scope `users:write` → `{ deleted: userId }`. `404` when unknown; `guest` cannot be deleted (`422`).
+- A missing, unreadable or invalid `users.json` answers `409` on all three, rather than a write replacing it with defaults.
+- A `PUT` or `DELETE` that lands emits a `core.audit` event inside the project's `use_project` scope, so a listener files it under that project: action `user.save` or `user.delete`, subject the user id, actor the API token's name (`admin` for the device-admin password), `actor_source: "api"`. `detail` is `{ tokenId, created, username, groups, passwordChanged }` for a save and `{ tokenId }` for a delete; `tokenId` is `null` for `admin`. No password, hash or token value goes into the record. A refused request emits nothing. The event is emitted in the manager process, not in the project's instance, so a listener has to be registered there to record it.
+
+### Panel sessions
+
+Sign an HMI user in or out on a **named panel**: every runtime connection whose tab was opened with `?panel=<name>` (sent in `request_identity`, see [websocket.md](../architecture/websocket.md#client--server-messages)). The live connections and the WS login's throttle are in the project's child, so these routes forward over the loopback `api/internal/panels*` hooks (see [Internal API](#internal-api)); `409` when the project is not running or its child does not answer. A `{panel}` outside `[A-Za-z0-9_-]{1,64}`, or with no connection, is `404`. The child's `401`, `404`, `422` and `429` pass through with its `detail`.
+
+- `GET …/panels` — scope `sessions:write` → `{ panels: [{ name, connections, users }] }`, sorted by name. `users` is the distinct usernames the panel's connections hold (their latest identity, `guest` or the auto-login user when nobody signed in).
+- `POST …/panels/{panel}/login` — scope `sessions:write`. Body `{ username, password }` (both strings; any other field `422`) → `{ panel, username, groups }`.
+  - The password check is the WS `login`'s own, `users_manager.authenticate` in the child, so the per-username and flood throttle of `core.user_auth_throttle` is shared with sign-ins on the screens: `401` (no `WWW-Authenticate`, the API credential was fine) for a wrong username or password, `429` while locked out.
+  - On success every scope of every connection on that panel gets the identity with one fresh resumable `sessionToken`, sent as an unprompted `user_identity`, the message a WS `login` answers with. A reload of any of those tabs resumes it; a connection that names the panel later starts as the auto-login user. The panel's earlier `sessionToken`s are revoked, and any other scope still holding one (a tab that resumed it after dropping or changing its panel name) reverts to the auto-login user.
+- `POST …/panels/{panel}/logout` — scope `sessions:write`, no body → `{ panel, signedOut }`, the distinct usernames the panel held before. Every scope on the panel gets the auto-login user's identity (`settings.autoLoginName`, `guest` when that user is missing), and so does every scope anywhere that holds one of the panel's `sessionToken`s, which are then revoked: a tab that resumed the panel's login under another name or none is signed out with it. `signedOut` includes those holders. An on-screen WS `logout` reverts to the same identity.
+- A login or logout that lands emits a `core.audit` event in the manager inside `use_project`: action `user.login` / `user.logout`, subject the panel name, actor the token's name (`admin` for Basic), `actor_source: "api"`. `detail` is `{ tokenId, username, groups }` for a login and `{ tokenId, signedOut }` for a logout. A refused request emits nothing; no password goes into the record.
 
 ---
 
@@ -715,10 +859,15 @@ Base prefix: `/api/historian`. Samples live in a SQLite database under the live 
 Loopback-only hooks, driven by the manager, never by browsers. The router is reachable only on the child's `127.0.0.1` instance port; the manager reverse proxy refuses `/runtime|editor/<id>/api/internal/*`, so a browser holding a manager session can never drive it.
 
 - `POST /api/internal/reload`
-  - Body: `{ artifact_type, artifact_ids: [], source: "mcp", summary: "", diff: null, agent_label: null }`.
-  - The workspace MCP runs in the manager process and edits a project's files directly; this tells the running child to re-apply the write to its live runtime and clients.
+  - Body: `{ artifact_type, artifact_ids: [], source: "mcp", summary: "", diff: null, agent_label: null }`. `source` is `"api"` when [API v1](#api-v1) wrote the project's users (`artifact_type: "users"`, `agent_label` the token's name or `admin`).
+  - The workspace MCP and API v1 run in the manager process and edit a project's files directly; this tells the running child to re-apply the write to its live runtime and clients.
   - For `artifact_type: "variables"`, each affected datasource (`artifact_ids` are `"<datasource>/<path>"`) is re-read and its subscription delta applied against the running OPC-UA pipeline before browsers are notified.
+  - For `artifact_type: "users"`, `websocket_manager.refresh_identities` re-reads `users.json` and updates in place every identity a connection holds: a user no longer listed, and every resumable login taken with a password that has since changed, drops to the auto-login user (its `sessionToken` revoked; each login remembers a fingerprint of the credential it was granted against), a regrouped one gets its new groups; each changed scope gets an unprompted `user_identity`.
   - Then broadcasts `config_changed` over `/ws`. Returns `{ "status": "ok" }`.
+- `GET /api/internal/panels` → `{ panels: [{ name, connections, users }] }` (`websocket_manager.panels`).
+- `POST /api/internal/panels/login` — body `{ panel, username, password }`. `404` when no connection names `panel` (checked before the password, so an unknown panel costs no hash and no throttle count); then `users_manager.authenticate`: `401` wrong credentials, `429` throttled. → `{ username, groups }` after `websocket_manager.sign_in_panel`.
+- `POST /api/internal/panels/logout` — body `{ panel }`. `404` as above → `{ signedOut }` after `websocket_manager.sign_out_panel`.
+- The panel name travels in the body, not the path, so nothing the API v1 caller sends can change which internal route the manager hits.
 
 ---
 
@@ -735,7 +884,7 @@ Every route that issues the cookie issues the same one: `HttpOnly`, `SameSite=La
 - `GET /api/manager/auth/status` → `{ passwordSet, authenticated }`.
 - `POST /api/manager/auth/setup` — Body `{ password }`. Sets the device-admin password on first run and issues a session cookie. 409 if a password already exists.
 - `POST /api/manager/auth/login` — Body `{ password }`. Issues a session cookie on success. `422` on wrong password; `429` (`RateLimitError`) when the in-memory throttle is locked (5 consecutive failures → 60 s lockout).
-- `POST /api/manager/auth/change-password` — Body `{ currentPassword, newPassword }`. Verifies the current password (reusing the login lockout), rotates it, revokes every peer-transfer token and every MCP token, and reissues the session cookie so the caller stays signed in. `422` on wrong current password; `429` when locked out.
+- `POST /api/manager/auth/change-password` — Body `{ currentPassword, newPassword }`. Verifies the current password (reusing the login lockout), rotates it, revokes every peer-transfer token and every MCP and API token, and reissues the session cookie so the caller stays signed in. `422` on wrong current password; `429` when locked out.
 - `POST /api/manager/auth/logout` — Clears the session cookie.
 
 ### Supervisor — `/api/manager`
@@ -747,7 +896,7 @@ Every route that issues the cookie issues the same one: `HttpOnly`, `SameSite=La
 
 ### Project reverse proxy
 
-- `ANY /runtime/{projectId}/{path}` and `WS /runtime/{projectId}/ws` (and the `/editor/{projectId}/...` alias) — the manager streams these to the matching child instance on loopback. A project whose `users.json` is missing, unreadable, corrupt or structurally invalid is not proxied at all: the HTTP route answers `409` naming the reason, and the WebSocket closes with `1008`. Otherwise, returns `503` when the project is not running and `502` on an upstream error — except for a top-level document navigation (a `GET` whose `Accept` carries `text/html`), which has no child to serve it: a build that ships the frontend bundle answers that with the SPA shell for the project's own base, and the app explains the outage in place (`ProjectUnavailableOverlay`) without losing the URL; a build with no bundle to render falls back to `303` → `/projects?unavailable={id}&reason={why}`. `GET /runtime/{projectId}` (no trailing slash) redirects to `/runtime/{projectId}/`; likewise for `/editor/{projectId}`. These carry the same project-instance API surface documented elsewhere in this file.
+- `ANY /runtime/{projectId}/{path}` and `WS /runtime/{projectId}/ws` (and the `/editor/{projectId}/...` alias) — the manager streams these to the matching child instance on loopback. A project whose `users.json` is missing, unreadable, corrupt or structurally invalid is not proxied at all: the HTTP route answers `409` naming the reason, and the WebSocket closes with `1008`. Otherwise, returns `503` when the project is not running and `502` on an upstream error — except for a top-level document navigation (a `GET` whose `Accept` carries `text/html`), which has no child to serve it: a build that ships the frontend bundle answers that with the SPA shell for the project's own base, and the app explains the outage in place (`ProjectUnavailableOverlay`) without losing the URL; a build with no bundle to render falls back to `303` → `/projects?unavailable={id}&reason={why}`. `GET /runtime/{projectId}` (no trailing slash) redirects to `/runtime/{projectId}/`; likewise for `/editor/{projectId}`. These carry the same project-instance API surface documented elsewhere in this file. Upstream, the proxy drops a client's `Origin`, `X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host`, `X-Real-IP` and `Forwarded`, and sets `X-Forwarded-For` and `X-Forwarded-Proto` to the peer address and scheme the manager itself derived (after uvicorn's handling of a trusted front proxy); the instance's uvicorn trusts loopback and takes both from there.
 
 ---
 
@@ -779,7 +928,7 @@ Base prefix: `/api/projects`. Manages the project list in the runtime-home manif
   - Returns `{ path, parent, entries: [{ name, path }], error, hasConfigJson }`. `parent` is `null` at the filesystem root; `error` carries the `OSError` text for an unreadable directory while still returning the resolved `path`; `hasConfigJson` lets the dialog spot an existing project folder.
 - `PATCH /api/projects/{id}`
   - Body: `{ name?, id? }` — send only what changes; an unchanged pair is a no-op that returns the entry. Renames the manifest entry and the `project` block in the folder's `config.json`.
-  - An id change also moves `defaultProjectId`, the instance log folder and the widget-build cache, and re-scopes every MCP token issued for the project (so outstanding tokens follow the project instead of dangling at an id nothing answers to). It does **not** rename the folder on disk.
+  - An id change also moves `defaultProjectId`, the instance log folder and the widget-build cache. It does **not** rename the folder on disk.
   - `409` when the project is in the manifest `running` set (stop it first) or when the new id is already registered — compared case-insensitively, since the id doubles as a folder name under the runtime home. `422` on an empty name, an id the grammar in `core.manifest.validate_project_id` rejects, or an id change on a project whose folder carries no metadata (the embedded id has to follow the manifest). A name-only change works with the folder missing.
 - `POST /api/projects/{id}/default`
   - No body. Makes this project the origin-root default (`/` opens its runtime, starting it on demand) by setting the manifest's `defaultProjectId`; works whether the project is running or stopped. Returns the project's list entry. `404` for an unknown id.

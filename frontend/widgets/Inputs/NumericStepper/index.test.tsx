@@ -258,7 +258,7 @@ describe('NumericStepper', () => {
 
     expect(frames()).toHaveLength(3);
     for (const frame of frames()) {
-      resolvePending(String(frame.requestId), { reason: 'permission_denied' }, false);
+      resolvePending(String(frame.requestId), { reason: 'read_only' }, false);
     }
 
     const toasts = useHmiStore.getState().pendingToasts;

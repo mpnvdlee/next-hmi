@@ -87,13 +87,7 @@ describe('UsersView draft lifetime', () => {
     render(<UsersView />);
     render(<UsersView />);
 
-    // The load fans out to two endpoints (roster + gated credential state),
-    // so the dedup guarantee is "each URL once", not "one fetch total" — a
-    // count-only assertion would still pass if one endpoint were fetched
-    // twice and the other raced past the guard and never called at all.
-    const urls = fetchMock.mock.calls.map(([u]) => String(u));
-    expect(urls.filter((u) => u.endsWith('/api/users')).length).toBe(1);
-    expect(urls.filter((u) => u.includes('credential-state')).length).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -83,7 +83,7 @@ export default function CustomWidgetsSection({
                   <td className="cfg-admin-component-table__timestamp">
                     {w.buildTs ? new Date(w.buildTs).toLocaleTimeString() : '—'}
                   </td>
-                  <td className="cfg-admin-component-table__actions">
+                  <td className="cfg-admin-table__actions">
                     <Button
                       variant="ghost"
                       size="sm"

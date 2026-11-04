@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 from api import projects_api, system_api
 from core import manifest as manifest_mod
-from core import mcp_tokens, runtime_home
 from core import project_migrations as pm
+from core import runtime_home
 from core.exceptions import register_exception_handlers
 from core.passwords import verify_password
 from core.project_packer import pack_project
@@ -364,21 +364,6 @@ def test_rename_moves_the_thumbnail(client: TestClient, tmp_path: Path, home: Pa
     assert client.patch(f"/api/projects/{project_id}", json={"id": "plant-b"}).status_code == 200
     assert not shot.exists()
     assert (home / ".thumbnails" / "plant-b.png").read_bytes() == b"\x89PNG\r\n\x1a\n"
-
-
-def test_rename_retargets_mcp_tokens(
-    client: TestClient, tmp_path: Path, home: Path, monkeypatch,
-) -> None:
-    monkeypatch.setattr(mcp_tokens.manager_auth, "credential_generation", lambda: "gen-1")
-    path = tmp_path / "plant-a"
-    project_id = _make_project_folder(path)
-    _single_project_manifest(home, path, project_id)
-    _token_id, raw = mcp_tokens.issue(project_id=project_id, access="write")
-
-    assert client.patch(f"/api/projects/{project_id}", json={"id": "plant-b"}).status_code == 200
-    scope = mcp_tokens.resolve(raw)
-    assert scope is not None
-    assert scope.project_id == "plant-b"
 
 
 def test_rename_refuses_running_project(client: TestClient, tmp_path: Path, home: Path) -> None:

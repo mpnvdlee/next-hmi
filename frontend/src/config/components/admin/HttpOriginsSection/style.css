@@ -1,0 +1,4 @@
+.cfg-http-origins__add {
+  display: flex;
+  gap: var(--cfg-space-2);
+}

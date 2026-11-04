@@ -6,14 +6,12 @@ coerce → dispatch → write implementation. Handles scalars *and* whole-array
 values, static and OPC-UA datasources, optional verify read-back, and returns a
 structured :class:`WriteOutcome` with an error reason on failure.
 
-The one *rule* every write caller applies — ``write_permitted``, and the
-``write_permission_gate`` that binds it to an identity for a whole recipe
-download — lives here so the callers cannot drift apart. Resolving *which*
-identity is still theirs: it comes from a per-connection session (the WebSocket
-handlers) or from credentials on a request (the REST write endpoints), neither
-of which this module can see. Auditing sits with them for the same reason, and
-one more: a recipe download reaches this module with no operator behind it, so a
-record emitted here could not say who to attribute the write to.
+Who a write is attributed to is the callers' to say: it comes from a
+per-connection session (the WebSocket handlers) or from credentials on a request
+(the REST write endpoint), neither of which this module can see, and a recipe
+download reaches this module with no operator behind each parameter write. So
+``write_value`` audits nothing; an operator-write caller passes its actor to
+``audit_write``.
 """
 
 from __future__ import annotations
@@ -22,13 +20,13 @@ import logging
 import math
 import re
 import struct
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from typing import Any
 
 from asyncua import ua
+from core import audit
 from core.value_types import (
     BIT_WIDTHS,
     MAX_SAFE_INTEGER,
@@ -38,6 +36,25 @@ from core.value_types import (
 from models.datasource import build_var_key
 
 logger = logging.getLogger(__name__)
+
+
+async def audit_write(
+    actor: str, actor_source: str, ds_name: str, path: str, value: Any, field: str | None,
+) -> None:
+    """Record an operator write that landed as ``variable.write``.
+
+    Only writes that landed: a rejected one moved nothing, and a caller must
+    not grow an append-only, never-truncated file by spamming rejects.
+    """
+    await audit.emit_async(
+        audit.AuditEvent(
+            actor=actor,
+            actor_source=actor_source,
+            action="variable.write",
+            subject=build_var_key(ds_name, path),
+            detail={"value": value, "field": field} if field else {"value": value},
+        )
+    )
 
 # ── Failure reasons (string values match the WebSocket write_error contract) ──
 
@@ -98,41 +115,6 @@ def parse_toggle_request(payload: Any) -> tuple[str, str] | None:
     ):
         return None
     return datasource, path
-
-
-def write_permitted(identity: Any, entry_data: Any) -> bool:
-    """Apply the one identity/group rule used by every operator write caller."""
-    if not isinstance(entry_data, dict):
-        return True
-    interactable_groups = entry_data.get("interactableByGroups")
-    if not isinstance(interactable_groups, list) or not interactable_groups:
-        return True
-    groups = identity.get("groups", []) if isinstance(identity, dict) else ["guest"]
-    user_groups = {group for group in groups if isinstance(group, str)}
-    allowed_groups = {group for group in interactable_groups if isinstance(group, str)}
-    return bool(user_groups & allowed_groups)
-
-
-def write_permission_gate(
-    identity: Any, datasource_manager: Any,
-) -> Callable[[str, str], bool]:
-    """Bind one identity to the per-variable ACL, as ``(datasource, path) -> bool``.
-
-    The shape ``recipe_manager.download`` takes as ``permission_check``. Both
-    download entry points build their gate here — the WebSocket ``recipeLoad``
-    handler and ``POST /api/recipes/datasets/{id}/download`` — so the two cannot
-    drift into enforcing different rules on the same write.
-    """
-
-    def permitted(ds_name: str, base_path: str) -> bool:
-        entry_data = (
-            datasource_manager.get_entry(ds_name, base_path)
-            if datasource_manager is not None
-            else None
-        )
-        return write_permitted(identity, entry_data)
-
-    return permitted
 
 
 def array_registry_path(path: str) -> str:

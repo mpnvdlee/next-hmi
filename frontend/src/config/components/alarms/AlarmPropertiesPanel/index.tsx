@@ -12,7 +12,6 @@ import { slotFilter } from '../../editor/PropertySourceEditor/editors/utils';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import PanelHeader from '../../ui/PanelHeader';
 import PropRow from '../../ui/PropRow';
-import GroupsField from '../../ui/GroupsField';
 import TextField from '../../ui/TextField';
 import Select from '../../ui/Select';
 import AddButton from '../../ui/AddButton';
@@ -454,7 +453,7 @@ function AlarmPanel({
         </div>
       </div>
 
-      {/* ── Ack Permissions ── */}
+      {/* ── Acknowledgment ── */}
       <div className="cfg-section">
         <div className="cfg-section__title">Acknowledgment</div>
         <PropRow
@@ -467,16 +466,6 @@ function AlarmPanel({
             labels={['On', 'Off']}
           />
         </PropRow>
-        {alarm.ack_required !== false && (
-          <GroupsField
-            label="Allowed groups"
-            description="Empty → any user may acknowledge."
-            value={alarm.ack_groups}
-            onChange={(v) =>
-              onPatch(alarm.id, { ack_groups: Array.isArray(v) ? (v as string[]) : [] })
-            }
-          />
-        )}
       </div>
     </div>
   );

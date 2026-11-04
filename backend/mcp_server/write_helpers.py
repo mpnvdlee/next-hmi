@@ -20,13 +20,14 @@ _inflight: set[asyncio.Task[Any]] = set()
 # agent's tool latency.
 _RELOAD_TIMEOUT_SECONDS = 5.0
 
-# Shared client for the loopback reload hook. Agents make many sequential edits
-# to the same project, so a single keep-alive client avoids a fresh connection
-# pool per write. Built lazily and closed by ``drain_inflight_broadcasts``.
+# Shared client for the manager's loopback calls to a child (the reload hook,
+# API v1's panel hooks). Agents make many sequential edits to the same project,
+# so a single keep-alive client avoids a fresh connection pool per write. Built
+# lazily and closed by ``drain_inflight_broadcasts``.
 _loopback_client: Any = None
 
 
-def _get_loopback_client() -> Any:
+def loopback_client() -> Any:
     global _loopback_client
     if _loopback_client is None:
         import httpx
@@ -86,7 +87,7 @@ async def emit_change(
 
     project_id = current_scoped_project_id()
     if project_id is not None:
-        _track(asyncio.create_task(_notify_child(project_id, payload)))
+        _track(asyncio.create_task(notify_child(project_id, payload)))
         return
 
     # Legacy in-process path.
@@ -103,7 +104,7 @@ async def emit_change(
     _track(asyncio.create_task(websocket_manager.broadcast_config_changed(event)))
 
 
-async def _notify_child(project_id: str, payload: dict[str, Any]) -> None:
+async def notify_child(project_id: str, payload: dict[str, Any]) -> None:
     """Fire the loopback reload hook on the running child for *project_id*.
 
     No-op when the project is not running. The child re-reads the affected files
@@ -118,7 +119,7 @@ async def _notify_child(project_id: str, payload: dict[str, Any]) -> None:
 
     url = f"http://127.0.0.1:{port}/api/internal/reload"
     try:
-        await _get_loopback_client().post(url, json=payload)
+        await loopback_client().post(url, json=payload)
     except httpx.HTTPError as exc:
         log.debug("reload hook for '%s' failed: %s", project_id, exc)
 

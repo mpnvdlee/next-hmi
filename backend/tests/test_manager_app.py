@@ -320,6 +320,10 @@ def test_proxy_excludes_internal_reload_hook_even_when_project_is_running(
     )
     assert resp_nested.status_code == 404
 
+    # API v1's panel sign-in hooks take an HMI password: browsers never reach them.
+    for hook in ("panels", "panels/login", "panels/logout"):
+        assert getattr(client, method)(f"/{prefix}/some-project/api/internal/{hook}").status_code == 404
+
 
 def test_runtime_editor_aliases_gated_without_auth(client: TestClient) -> None:
     """Both prefixes still gate anything off the public runtime table — and
@@ -358,11 +362,9 @@ _RUNTIME_PUBLIC_CALLS = [
     ("GET", "api/components/folders"),
     ("GET", "api/widgets"),
     ("GET", "api/device/info"),
-    ("GET", "api/users"),
+    ("GET", "api/users/roster"),
     ("GET", "api/alarms/history"),
     ("GET", "api/historian/query"),
-    ("POST", "api/alarms/ack/alarm-1"),
-    ("POST", "api/alarms/ack-all"),
     ("POST", "api/recipes/datasets/ds-1/download"),
     ("POST", "api/recipes/datasets/ds-1/upload"),
     ("POST", "api/http-request"),
@@ -396,6 +398,9 @@ _RUNTIME_GATED_CALLS = [
     ("GET", "api/projects"),
     ("GET", "api/components/some-component"),
     ("GET", "api/internal/reload"),
+    # The full users document carries every group membership; the live view
+    # reads api/users/roster instead.
+    ("GET", "api/users"),
     # HEAD follows the GET table, so it opens exactly what GET opens and
     # nothing more. OPTIONS is deliberately not folded in: the live view is
     # same-origin and never preflights, and an anonymous OPTIONS would return
@@ -618,6 +623,64 @@ def test_runtime_socket_is_public_and_editor_socket_is_not(
         with client.websocket_connect("/editor/ghost/ws"):
             pass
     assert disconnected.value.code == 1008
+
+
+def test_only_the_editor_socket_reaches_the_child_marked_as_editor(
+    client: TestClient, monkeypatch
+) -> None:
+    """The child records an editor socket's writes as the engineer's. The mark
+    is the manager's alone: a browser sending it on the public runtime prefix
+    must not get it through."""
+    import manager as manager_module
+    import websockets
+
+    upstream_headers: list[object] = []
+
+    def fake_connect(*_args, **kwargs):
+        upstream_headers.append(kwargs.get("additional_headers"))
+        return _FakeUpstreamSocket()
+
+    monkeypatch.setattr(manager_module.supervisor, "port_for", lambda pid: 65000)
+    monkeypatch.setattr(websockets, "connect", fake_connect)
+
+    forged = {"x-nexthmi-editor": "1"}
+    with client.websocket_connect("/runtime/ghost/ws", headers=forged) as ws:
+        ws.send_text("hello")
+        assert ws.receive_text() == "echo:hello"
+    client.post("/api/manager/auth/setup", json={"password": "manager-secret"})
+    with client.websocket_connect("/editor/ghost/ws") as ws:
+        ws.send_text("hello")
+        assert ws.receive_text() == "echo:hello"
+
+    assert upstream_headers == [None, {"x-nexthmi-editor": "1"}]
+
+
+def test_only_an_editor_http_request_reaches_the_child_marked_as_editor(
+    client: TestClient, monkeypatch
+) -> None:
+    """Same mark on the HTTP hop (a REST recipe download is attributed by it);
+    a browser's own copy is dropped on either prefix."""
+    import httpx
+    import manager as manager_module
+
+    seen: list[str | None] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers.get("x-nexthmi-editor"))
+        return httpx.Response(200, stream=httpx.ByteStream(b"{}"))
+
+    monkeypatch.setattr(manager_module.supervisor, "port_for", lambda pid: 65000)
+    monkeypatch.setattr(
+        manager_module, "_proxy_client", httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
+    forged = {"x-nexthmi-editor": "1"}
+    path = "api/recipes/datasets/ds-1/download"
+
+    assert client.post(f"/runtime/ghost/{path}", json={}, headers=forged).status_code == 200
+    client.post("/api/manager/auth/setup", json={"password": "manager-secret"})
+    assert client.post(f"/editor/ghost/{path}", json={}, headers={"x-nexthmi-editor": "0"}).status_code == 200
+
+    assert seen == [None, "1"]
 
 
 def test_unauthenticated_fetch_gets_a_typed_401(client: TestClient) -> None:

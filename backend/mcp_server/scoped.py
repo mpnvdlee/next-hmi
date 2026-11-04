@@ -60,8 +60,8 @@ def _require_write_allowed(project_id: str) -> None:
     # re-loading the manifest. This is purely the auth scope.
     if not project_mcp_enabled(active_project_root()):
         raise McpWriteDisabledError(
-            f"MCP writes are disabled for project '{project_id}'. Enable MCP for "
-            "this project in the manager dashboard."
+            f"MCP writes are disabled for project '{project_id}'. Tick MCP write "
+            "enabled for this project on the manager dashboard."
         )
 
 
@@ -92,7 +92,7 @@ def _make_scoped_wrapper(pending: PendingTool) -> Any:
         token = _current_mcp_session.set(session)
         try:
             with use_project(project_id):
-                mcp_auth.require_mcp_access(project_id, need_write=pending.is_write)
+                mcp_auth.require_mcp_access(need_write=pending.is_write)
                 if pending.is_write:
                     _require_write_allowed(project_id)
                 result = await orig_fn(**kwargs) if is_async else orig_fn(**kwargs)

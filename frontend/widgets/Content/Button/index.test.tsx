@@ -124,12 +124,12 @@ describe('Button', () => {
 
     await user.click(screen.getByRole('button', { name: 'Start' }));
 
-    resolvePending(String(sentFrame().requestId), { reason: 'permission_denied' }, false);
+    resolvePending(String(sentFrame().requestId), { reason: 'read_only' }, false);
 
     const toasts = useHmiStore.getState().pendingToasts;
     expect(toasts).toHaveLength(1);
     expect(toasts[0].severity).toBe('error');
-    expect(toasts[0].message).toMatch(/not allowed/i);
+    expect(toasts[0].message).toMatch(/read-only/i);
   });
 
   it('applies an outline style with a transparent background and colored border/text', () => {

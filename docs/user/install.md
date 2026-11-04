@@ -46,7 +46,7 @@ origin root; an individual project's HMI is at
   .widget-build/          compiled custom-widget JS (regenerated)
   .restart-pending        sentinel for /api/system/restart
   .peer-tokens.json       hashed manager peer tokens (no bearer plaintext)
-  .mcp-tokens.json        hashed MCP bearer tokens, each scoped to one project
+  .mcp-tokens.json        hashed MCP and API tokens
   .peer-trust.json        pinned peer TLS certificates (trust on first use)
   .install-id.json        random installation ID used by usage reporting
   .telemetry.json         usage-reporting on/off (absent means on), contact prompt dismissed
@@ -137,10 +137,12 @@ password) is the operator surface:
   gates the dashboard and every project's **editor** (`/editor/<slug>/`). A
   running project's **live screens** (`/runtime/<slug>/`) are open to anyone who
   can reach the host, deliberately: that is what an operator panel is. Operating
-  is open too, unless a variable carries `interactableByGroups`
-  (see [Users, groups & permissions](users.md)). The install answers on every
-  interface by default, so put the manager on a trusted network and use
-  [HTTPS](#https) where it is not.
+  is open too: anyone who can reach the panel can write writable tags, and
+  blocking the button is how a project stops operators changing a value. The
+  install answers on every interface by default, so put the manager on a
+  trusted network and use [HTTPS](#https) where it is not.
+  [What is reachable without a password](network-access.md) lists what is open,
+  what each credential adds, and how to place the device on the network.
 - **Start / Stop** — bring a project up or down. A running project gets
   its own backend instance and becomes reachable at `/runtime/<slug>/`
   (and `/editor/<slug>/`); the set of running projects is remembered and
@@ -162,7 +164,7 @@ password) is the operator surface:
 - **Export** — download the project as `<name>.nexthmi.zip`.
 - **Set as default** — mark the project the origin root redirects to, and keep
   it running.
-- **MCP enabled / disabled** — per-project switch for whether the workspace
+- **MCP write enabled / disabled** — per-project switch for whether the workspace
   MCP endpoint may *write* to this project. See [AI agents over
   MCP](mcp.md).
 - **Locate…** — re-point a manifest entry whose folder has been moved. Shown
@@ -389,9 +391,12 @@ uploaded certificate, re-upload it and pick the protocol again).
 Caddy, nginx, or Traefik in front of the manager is the better option where
 one already exists: it handles renewal. Set `NEXTHMI_HOST=127.0.0.1` so the
 manager answers the proxy alone and nothing reaches it directly, leave
-`NEXTHMI_SSL_*` unset, and have the proxy send `X-Forwarded-Proto`. A proxy
-on the same host is trusted out of the box; one on another host needs its
-address allow-listed:
+`NEXTHMI_SSL_*` unset, and have the proxy send `X-Forwarded-Proto` and pass
+the browser's `Host` header through unchanged. Caddy and Traefik do that by
+default; nginx needs `proxy_set_header Host $http_host;` (`$host` drops the port, so a proxy on `:8443` would no longer match). Without it the manager
+cannot tell the browser's own address from another website's and refuses
+every change and every live connection. A proxy on the same host is trusted
+out of the box; one on another host needs its address allow-listed:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |

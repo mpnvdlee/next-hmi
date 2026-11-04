@@ -6,12 +6,37 @@ import type { AlarmInstance, AlarmSummary } from '@shared/types/alarm';
 import { useAlarmStore } from '@hmi/store/alarmStore';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { apiJson } from '@shared/utils/api';
+import { sendWsMessage } from '@hmi/hooks/useWebSocket';
+import { resolvePending } from '@hmi/utils/actionDispatcher';
 import AlarmListManaged from './index';
 
 vi.mock('@shared/utils/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@shared/utils/api')>()),
   apiJson: vi.fn(),
 }));
+vi.mock('@hmi/hooks/useWebSocket', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@hmi/hooks/useWebSocket')>()),
+  sendWsMessage: vi.fn(),
+}));
+
+/** Make the backend answer every alarm ack frame with `ok` (and `reason`). */
+function answerAcks(ok: boolean, reason?: string) {
+  vi.mocked(sendWsMessage).mockImplementation((msg) => {
+    const frame = msg as { type: string; requestId?: string };
+    if (frame.type.startsWith('alarm_ack')) {
+      resolvePending(String(frame.requestId), reason ? { reason } : {}, ok);
+    }
+    return true;
+  });
+}
+
+/** The alarm ack frames sent so far. */
+function ackFrames() {
+  return vi
+    .mocked(sendWsMessage)
+    .mock.calls.map(([msg]) => msg as Record<string, unknown>)
+    .filter((m) => String(m.type).startsWith('alarm_ack'));
+}
 
 function mkAlarm(overrides: Partial<AlarmInstance> = {}): AlarmInstance {
   return {
@@ -25,7 +50,6 @@ function mkAlarm(overrides: Partial<AlarmInstance> = {}): AlarmInstance {
     resolutions: [],
     group_title: 'Motors',
     auto_popup: true,
-    ack_groups: [],
     triggered_at: '2026-01-01T10:00:00Z',
     acked: false,
     acked_by: '',
@@ -49,6 +73,7 @@ function renderList(properties: Record<string, unknown> = {}) {
 describe('AlarmListManaged', () => {
   beforeEach(() => {
     vi.mocked(apiJson).mockReset();
+    vi.mocked(sendWsMessage).mockReset();
     useAlarmStore.setState({ active: [], summary: mkSummary() });
     useHmiStore.setState({ currentUsersByScope: {}, pendingToasts: [] });
   });
@@ -132,22 +157,21 @@ describe('AlarmListManaged', () => {
   });
 
   it('acknowledges a single alarm without opening its detail dialog', async () => {
-    vi.mocked(apiJson).mockResolvedValue(undefined);
+    answerAcks(true);
     const user = userEvent.setup();
     useAlarmStore.setState({ active: [mkAlarm()], summary: mkSummary({ total: 1, unacked: 1 }) });
     renderList();
 
     await user.click(screen.getByRole('button', { name: 'ACK' }));
 
-    expect(apiJson).toHaveBeenCalledWith(
-      '/api/alarms/ack/inst-1',
-      expect.objectContaining({ method: 'POST', body: { username: 'operator' } }),
-    );
+    expect(ackFrames()).toEqual([
+      expect.objectContaining({ type: 'alarm_ack', instanceId: 'inst-1' }),
+    ]);
     expect(screen.queryByRole('button', { name: 'Acknowledge' })).not.toBeInTheDocument();
   });
 
   it('acknowledges all alarms via the footer button', async () => {
-    vi.mocked(apiJson).mockResolvedValue(undefined);
+    answerAcks(true);
     const user = userEvent.setup();
     useAlarmStore.setState({
       active: [mkAlarm(), mkAlarm({ id: 'inst-2', code: 'A-002' })],
@@ -157,16 +181,13 @@ describe('AlarmListManaged', () => {
 
     await user.click(screen.getByRole('button', { name: 'Acknowledge All' }));
 
-    expect(apiJson).toHaveBeenCalledWith(
-      '/api/alarms/ack-all',
-      expect.objectContaining({ method: 'POST', body: { username: 'operator' } }),
-    );
+    expect(ackFrames()).toEqual([expect.objectContaining({ type: 'alarm_ack_all' })]);
   });
 
   // A refused ack used to reject into nothing: the row stayed unacknowledged
   // and the operator was told nothing at all.
   it('toasts a refused ack instead of dropping it', async () => {
-    vi.mocked(apiJson).mockRejectedValue(new Error('Active alarm not found'));
+    answerAcks(false, 'not_found');
     const user = userEvent.setup();
     useAlarmStore.setState({ active: [mkAlarm()], summary: mkSummary({ total: 1, unacked: 1 }) });
     renderList();
@@ -176,11 +197,11 @@ describe('AlarmListManaged', () => {
     await waitFor(() => expect(useHmiStore.getState().pendingToasts).toHaveLength(1));
     const [toast] = useHmiStore.getState().pendingToasts;
     expect(toast.severity).toBe('error');
-    expect(toast.message).toMatch(/Active alarm not found/);
+    expect(toast.message).toMatch(/no longer active/);
   });
 
   it('toasts a refused acknowledge-all instead of dropping it', async () => {
-    vi.mocked(apiJson).mockRejectedValue(new Error('Server unreachable'));
+    answerAcks(false, 'disconnected');
     const user = userEvent.setup();
     useAlarmStore.setState({ active: [mkAlarm()], summary: mkSummary({ total: 1, unacked: 1 }) });
     renderList();
@@ -188,7 +209,7 @@ describe('AlarmListManaged', () => {
     await user.click(screen.getByRole('button', { name: 'Acknowledge All' }));
 
     await waitFor(() => expect(useHmiStore.getState().pendingToasts).toHaveLength(1));
-    expect(useHmiStore.getState().pendingToasts[0].message).toMatch(/Server unreachable/);
+    expect(useHmiStore.getState().pendingToasts[0].message).toMatch(/Not connected/);
   });
 
   it('opens the detail dialog on row click and closes it', async () => {

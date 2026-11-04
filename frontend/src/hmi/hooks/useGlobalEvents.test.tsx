@@ -114,3 +114,46 @@ describe('onVariableChanged', () => {
     expect(toasts()).toEqual(['high', 'high']);
   });
 });
+
+describe('onUserLoggedIn / onUserLoggedOut', () => {
+  const toast = (message: string) => [
+    { type: 'showToast' as const, message, severity: 'info' as const, discard: 'auto' as const },
+  ];
+  const identity = (username: string, signedIn: boolean) => ({
+    username,
+    groups: [username],
+    groupLabels: {},
+    signedIn,
+  });
+  const receive = (username: string, signedIn: boolean) =>
+    act(() => useHmiStore.getState().setCurrentUser('runtime', identity(username, signedIn)));
+
+  beforeEach(() => {
+    useHmiStore.setState({ currentUsersByScope: {} });
+    useConfigStore.setState({
+      globalEvents: { onUserLoggedIn: toast('in'), onUserLoggedOut: toast('out') },
+    });
+  });
+
+  it.each(['guest', 'line'])(
+    'fires once for a sign-in and once for a sign-out with auto-login user %s',
+    (autoLogin) => {
+      renderHook(() => useGlobalEvents('runtime'), { wrapper });
+
+      receive(autoLogin, false);
+      expect(toasts()).toEqual([]);
+      receive('ann', true);
+      receive('ann', true); // a regroup or a reconnect resuming the same sign-in
+      expect(toasts()).toEqual(['in']);
+      receive(autoLogin, false);
+      receive(autoLogin, false);
+      expect(toasts()).toEqual(['in', 'out']);
+    },
+  );
+
+  it('counts a sign-in resumed after a reload as a sign-in', () => {
+    renderHook(() => useGlobalEvents('runtime'), { wrapper });
+    receive('ann', true);
+    expect(toasts()).toEqual(['in']);
+  });
+});

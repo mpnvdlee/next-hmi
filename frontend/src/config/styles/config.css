@@ -1968,7 +1968,7 @@
   gap: var(--cfg-space-2);
 }
 
-/* Shared admin data table — used by Connected Runtimes and Custom Widgets. */
+/* Shared admin data table — the Admin area's runtimes, widgets, origins and tokens. */
 .cfg-admin-table {
   width: 100%;
   border-collapse: collapse;
@@ -1989,6 +1989,11 @@
   padding: var(--cfg-space-2) var(--cfg-space-3);
   border-bottom: 1px solid var(--cfg-border);
   vertical-align: middle;
+}
+
+.cfg-admin-table__actions {
+  text-align: right;
+  white-space: nowrap;
 }
 
 .cfg-theme-grid {

@@ -55,6 +55,10 @@ check whether the behaviour is in scope:
   a project instance directly to the public Internet.** The full network
   placement and threat model is documented in
   [docs/dev/operations/deploy.md](../docs/dev/operations/deploy.md#network-placement-and-threat-model).
+- **The live screens are open by design.** Anyone who can reach a running
+  project's screens can operate them, writable variables included, with no
+  password. What is open and what needs a credential is listed in
+  [What is reachable without a password](../docs/user/network-access.md).
 - **Editor access is code execution.** Authoring custom widgets compiles TSX on
   the server and runs it in the browser — editor access is a privileged role by
   design, not a low-privilege one. See

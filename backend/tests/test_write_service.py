@@ -143,14 +143,6 @@ def test_float32_contract_rounds_to_the_nearest_float32() -> None:
     assert non_finite.value.reason == write_service.COERCION_NON_FINITE
 
 
-def test_shared_write_permission_defaults_to_guest_and_matches_groups() -> None:
-    entry = {"interactableByGroups": ["operator"]}
-    assert not write_service.write_permitted(None, entry)
-    assert write_service.write_permitted({"groups": ["operator"]}, entry)
-    assert not write_service.write_permitted({"groups": ["guest"]}, entry)
-    assert write_service.write_permitted(None, {"interactableByGroups": []})
-
-
 @dataclass
 class FakeEntry:
     ds_type: str = "static"

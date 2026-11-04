@@ -154,7 +154,6 @@ describe('AlarmHistoryList', () => {
           resolutions: [],
           group_title: 'Motors',
           auto_popup: false,
-          ack_groups: [],
           triggered_at: '2026-01-01T10:00:00Z',
           acked: false,
           acked_by: '',

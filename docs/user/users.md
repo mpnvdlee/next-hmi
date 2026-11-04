@@ -1,6 +1,6 @@
 # Users, groups & permissions
 
-Who is at the panel decides what they see and what they may change. NEXT HMI answers that with **groups** — a user belongs to one or more, and everything else (a hidden button, a read-only setpoint, a refused write) is a group test. There is no scripting anywhere in this.
+Who is at the panel decides what they see and what they may change. NEXT HMI answers that with **groups** — a user belongs to one or more, and everything else (a hidden button, a read-only setpoint) is a group test. There is no scripting anywhere in this.
 
 ## The model in four sentences
 
@@ -20,6 +20,8 @@ All of it lives in `users.json` inside the project folder, with passwords stored
 3. **Add a user** — Set the **Username**, a **Password**, and tick the **Groups** they belong to. A user must keep at least one group, so the last one cannot be removed.
 4. **Save users** — Accounts save on their own **Save users** button in the header, separate from the normal Save, so a security change is never carried along by an unrelated page edit. **Discard users** throws the draft away.
 
+A saved change reaches a running project's panels at once: a removed user, or one whose password changed, is signed out (the panel falls back to the auto-login user), and a user whose groups changed gets the new groups on the panel they are signed in on.
+
 > [!NOTE]
 > **The password field never shows you the current password.** It reads *(unchanged)* once one is set — the server only stores a hash. Type a new one to replace it; leave it alone and the existing one is kept.
 
@@ -34,7 +36,7 @@ Select **Settings** in the tree for the one project-wide choice:
 
 | Setting | Means |
 |---|---|
-| **Auto-login user** | Who a freshly opened runtime is signed in as before anyone touches it. `guest` is the normal answer; picking a real user makes an unattended panel start out with that user's rights. |
+| **Auto-login user** | Who a freshly opened runtime is signed in as before anyone touches it, and who it goes back to when someone signs out. `guest` is the normal answer; picking a real user makes an unattended panel start out with that user's rights. |
 
 > [!IMPORTANT]
 > **No group opens the editor.** The fence around the project itself is the installation's **device-admin password** — the one that unlocks the Manager dashboard — and nothing in `users.json` widens or narrows it. Whoever has that password can rewrite pages, alarms and users, whichever project user the runtime happens to be signed in as, so keep it to the people who genuinely engineer the system. See [How this relates to the device-admin password](#how-this-relates-to-the-device-admin-password).
@@ -72,6 +74,8 @@ like any other screen, wired with actions ([Actions](actions.md)):
 
 Sign-in is **per open runtime**, not per browser and not per installation: two tabs on the same panel PC can be two different operators, and each keeps its own identity until it is closed or logged out.
 
+**Signing in from another system.** A badge reader or a MES can sign an operator in or out on a panel over the API, with that operator's own password. The panel needs a name for that: open its runtime with `?panel=<name>` at the end of the address, for example `/runtime/line-a/?panel=line-a-1` (letters, digits, `-` and `_`). Screens opened with the same name are signed in and out together; a screen without the parameter cannot be reached this way. The name proves nothing: anyone who can reach the runtime can open it with the same `?panel=` and receives the same sign-ins, so use this only on panels on a trusted network, in a kiosk browser nobody else controls. See [Panels: sign users in and out](api.md#panels-sign-users-in-and-out).
+
 Global events give the rest of the plumbing — `onUserLoggedIn` and `onUserLoggedOut` fire project-wide, which is where "go to the home page on login, back to the lock screen on logout" belongs. See [Global events](actions.md#global-events).
 
 ## Gate what a group can see and do
@@ -104,17 +108,15 @@ To offer a sign-in instead, attach an **Open Dialog** pointing at your sign-in d
 
 Two more sources read the identity directly, for labels and lists rather than gates: **`$user`** gives the signed-in **username** or their **groups** as text. On a list field — a Dropdown's **Options**, a Repeater's **Items** — it lists **All users** (each valued by username) or **All user groups** instead, the raw material for a user-picker screen.
 
-## Enforcement, and where it really happens
+## What the server enforces
 
-Hiding a button is presentation. The write itself is checked on the server: a datasource variable may carry an **`interactableByGroups`** list, and a write to it from a session outside those groups is refused with `permission_denied` — over the WebSocket and over REST alike. The editor has no field for it; set it on the variable entry in the datasource file (or via the datasource API) when a tag must be protected against more than a hidden button.
+The server does not restrict who may write a writable variable. Groups decide what the panel shows and lets an operator press; once a write reaches the server, the only check is whether the variable is marked **writable** in its datasource — a read-only variable is refused with `read_only` for everyone.
 
-> [!WARNING]
-> **An empty list means *everyone*, not *nobody*.** `"interactableByGroups": []` reads the same as leaving the key out — the write is allowed. To lock a tag down, name the groups that may write it; there is no spelling that permits nobody at all. Note this reads the opposite way round to the group pickers elsewhere in the editor, where an empty selection means nobody.
->
-> It also has to sit on the **variable** entry. A list on a folder is silently ignored — the variables inside it stay writable.
+So hiding or blocking the button — **Visible** / **Interactable** on the widget — is how a project stops operators changing a value. A setpoint no button writes cannot be changed from the panel.
 
-> [!IMPORTANT]
-> Treat `Visible` / `Interactable` as ergonomics, not as security. They keep the wrong control out of the wrong hands on the panel; they do not stop someone who reaches the API. For tags that matter, set `interactableByGroups` on the variable as well, and keep the runtime off untrusted networks — see [HTTPS](install.md#https).
+That holds for anyone who reaches the panel, signed in or not ([What is reachable without a password](network-access.md)), so leave a variable read-only in its datasource when nothing on the screens needs to change it.
+
+Signing in does change the record. A write, a recipe load and an alarm acknowledgement from a button are attributed to the user signed in on that screen, or to `guest` when nobody is. A recipe load from a custom widget's `recipeDownload` carries no sign-in and is always recorded as `guest`. The same actions from the editor's Test mode are recorded as `engineer`, whoever the preview is signed in as: the editor sits behind the device-admin password, not a project user.
 
 ## How this relates to the device-admin password
 
@@ -130,7 +132,9 @@ Groups decide what a signed-in operator sees and may touch on the screens. They 
 > [!IMPORTANT]
 > **A running project's screens are open — no password at all.** `/runtime/<slug>/` is reachable by anyone who can reach the panel, which is what an HMI is for: an operator walks up and works. The device-admin password guards the editor and the dashboard, not the live view.
 >
-> That means operating is open too — pressing a button, changing a setpoint, writing a tag. To restrict a tag to certain groups, set `interactableByGroups` on the variable (see [Enforcement](#enforcement-and-where-it-really-happens)); it is the only thing that limits what an operator may write, and it is opt-in per variable. Keep the runtime off untrusted networks — see [HTTPS](install.md#https).
+> The live view can also list every username and group name — that is what fills a sign-in dropdown — but not who belongs to which group, or which accounts have a password. Those stay behind the device-admin password.
+>
+> That means operating is open too — pressing a button, changing a setpoint, writing a tag. The server does not restrict who may write a writable variable; blocking the button is how a project stops it (see [What the server enforces](#what-the-server-enforces)). [What is reachable without a password](network-access.md) lists everything the live view leaves open.
 
 A project copied from the seed ships **no accounts at all** beyond the anonymous `guest`, so there is no reusable credential to leak between installs and nothing to type before the project opens. Every real account is one you add here. See [Managing projects](projects.md#the-manager-dashboard).
 

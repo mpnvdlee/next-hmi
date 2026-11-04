@@ -1960,3 +1960,120 @@ def test_put_page_refuses_a_new_page_that_another_writer_already_created(client,
     resp = client.put("/api/config/pages/p2", json={"title": "Mine", "revision": "missing"})
 
     assert resp.status_code == 409
+
+
+# ── $http allowed origins ─────────────────────────────────────────────────────
+
+
+def test_http_origins_round_trip_normalised_and_deduplicated(client, tmp_dirs):
+    project_dir, _pages_dir = tmp_dirs
+    storage.write_json(project_dir / "config.json", {"version": 2, "pages": [], "mcpEnabled": True})
+
+    resp = client.put(
+        "/api/config/http-origins",
+        json={"origins": ["https://Plant.Local", "https://plant.local:443/api", "http://10.0.0.5:8080"]},
+    )
+
+    assert resp.status_code == 200
+    expected = ["https://plant.local:443", "http://10.0.0.5:8080"]
+    assert resp.json() == {"origins": expected}
+    assert client.get("/api/config/http-origins").json() == {"origins": expected}
+    stored = storage.read_json(project_dir / "config.json")
+    assert stored["httpAllowedOrigins"] == expected
+    assert stored["mcpEnabled"] is True, "the rest of config.json is left alone"
+    assert "httpAllowedOrigins" not in client.get("/api/config/config").json(), (
+        "GET /config is public; the list stays behind the session"
+    )
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "plant.local", "ftp://plant.local", "http://127.0.0.1:8000", "http://localhost",
+        "http://169.254.169.254",
+        # A trailing dot names the same host.
+        "http://localhost.", "http://LOCALHOST.", "http://foo.localhost.",
+        "http://localhost.localdomain.", "http://127.0.0.1.", "http://2130706433.",
+        "http://169.254.169.254.",
+        # Numeric IPv4 spellings inet_aton still reads as 127.0.0.1.
+        "http://2130706433", "http://0177.0.0.1",
+    ],
+)
+def test_http_origins_refuses_entries_the_proxy_will_not_reach(client, tmp_dirs, entry):
+    project_dir, _pages_dir = tmp_dirs
+    storage.write_json(project_dir / "config.json", {"version": 2, "pages": []})
+
+    resp = client.put("/api/config/http-origins", json={"origins": [entry]})
+
+    assert resp.status_code == 422
+    assert "httpAllowedOrigins" not in storage.read_json(project_dir / "config.json")
+
+
+def test_get_http_origins_lists_only_what_the_proxy_honours(client, tmp_dirs):
+    """A hand-edited entry the proxy ignores must not show as listed — the
+    editor would send it back and every later PUT would 422 on it."""
+    project_dir, _pages_dir = tmp_dirs
+    storage.write_json(project_dir / "config.json", {
+        "version": 2, "pages": [],
+        "httpAllowedOrigins": ["http://localhost:8000", "not a url", 7, "http://PLC.local", "http://plc.local:80"],
+    })
+
+    origins = client.get("/api/config/http-origins").json()["origins"]
+
+    assert origins == ["http://plc.local:80"]
+    assert client.put("/api/config/http-origins", json={"origins": origins}).status_code == 200
+
+
+def test_put_http_origins_alone_changes_what_the_proxy_permits(client, tmp_dirs, monkeypatch):
+    """The write drops the cached policy itself: with the mtime fingerprint
+    pinned, only that invalidation can make the new entry take effect."""
+    import core.http_origins as http_origins
+
+    project_dir, pages_dir = tmp_dirs
+    storage.write_json(project_dir / "config.json", {"version": 2, "pages": [{"id": "p1", "type": "page"}]})
+    storage.write_json(pages_dir / "p1.json", {
+        "id": "p1",
+        "sections": {"content": [{
+            "id": "w1", "type": "Label",
+            "properties": {"text": {"$http": {"url": "http://{h}/api"}}},
+        }]},
+    })
+    monkeypatch.setattr(http_origins, "_fingerprint", lambda documents: frozenset())
+    http_origins.invalidate_http_origin_cache()
+    assert http_origins.http_origin_policy().permits("http://plc.local/api") is False
+
+    assert client.put("/api/config/http-origins", json={"origins": ["http://plc.local"]}).status_code == 200
+
+    assert http_origins.http_origin_policy().permits("http://plc.local/api") is True
+    http_origins.invalidate_http_origin_cache()
+
+
+def test_put_config_preserves_http_allowed_origins(client, tmp_dirs):
+    project_dir, _pages_dir = tmp_dirs
+    storage.write_json(
+        project_dir / "config.json",
+        {"version": 2, "pages": [], "httpAllowedOrigins": ["http://plc.local:80"]},
+    )
+
+    assert client.put("/api/config/config", json={"pages": []}).status_code == 200
+
+    assert storage.read_json(project_dir / "config.json")["httpAllowedOrigins"] == ["http://plc.local:80"]
+
+
+def test_dynamic_host_diagnostic_follows_the_allowed_origins(client, tmp_dirs):
+    project_dir, pages_dir = tmp_dirs
+    storage.write_json(project_dir / "config.json", {"version": 2, "pages": [{"id": "p1", "type": "page"}]})
+    storage.write_json(pages_dir / "p1.json", {
+        "id": "p1",
+        "sections": {"content": [{
+            "id": "w1", "type": "Label",
+            "properties": {"text": {"$http": {"url": "http://{h}/api", "wildcards": {"h": "plc.local"}}}},
+        }]},
+    })
+
+    def codes() -> list[str]:
+        return [d["code"] for d in client.get("/api/config/validate").json()["diagnostics"]]
+
+    assert "http-dynamic-host-unlisted" in codes()
+    client.put("/api/config/http-origins", json={"origins": ["http://plc.local"]})
+    assert "http-dynamic-host-unlisted" not in codes()

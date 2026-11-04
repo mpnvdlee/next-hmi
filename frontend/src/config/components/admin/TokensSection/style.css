@@ -1,0 +1,58 @@
+.cfg-tokens__scopes {
+  font-family: var(--cfg-font-mono);
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text-muted);
+}
+
+/* The command and JSON snippets run long; cap the dialog so they wrap instead
+   of stretching it past the viewport. */
+.cfg-tokens-modal {
+  width: min(40rem, calc(100vw - (var(--cfg-space-6) * 2)));
+  max-height: calc(100vh - (var(--cfg-space-6) * 2));
+  overflow-y: auto;
+}
+
+.cfg-tokens-snippet__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--cfg-space-2);
+}
+
+.cfg-tokens-snippet {
+  margin: 0;
+  padding: var(--cfg-space-2) var(--cfg-space-3);
+  border: 1px solid var(--cfg-border);
+  border-radius: var(--cfg-radius);
+  background: color-mix(in srgb, var(--cfg-surface-dark) 35%, var(--cfg-surface));
+  font-family: var(--cfg-font-mono);
+  font-size: var(--cfg-text-sm);
+  color: var(--cfg-text);
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: all;
+}
+
+.cfg-tokens-group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* The shared choice card reserves two lines for its detail; these are one line,
+   so the reserve only left an empty strip under the text. */
+.cfg-tokens-modal .project-form__choice-detail {
+  min-height: 0;
+}
+
+/* Read by assistive tech, out of the layout: absolute positioning takes it
+   out of the dialog's flex gap, and a display: none region would not be
+   announced. */
+.cfg-tokens-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

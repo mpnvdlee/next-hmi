@@ -36,13 +36,14 @@ dashboard.
 | Path | `/mcp/` (on the manager origin, not `/runtime/<slug>/mcp`). A `Mount` only matches paths under its prefix, so bare `/mcp` would fall through to `redirect_slashes` and answer `307` — which MCP clients generally don't follow. `_McpSlashMiddleware` (`mcp_server/server.py`) rewrites `/mcp` to `/mcp/` before routing, so both spellings hit the transport. |
 | Transport | MCP Streamable HTTP |
 | Front door | Gated by the manager session. Headless clients send a **bearer token**: `Authorization: Bearer <token>` |
-| Tokens | Paired at `POST /api/manager/mcp/pair` with `{ password, projectId, access, name? }` — the device-admin password, the project the token is scoped to, and `read` or `write`. Reachable pre-session (like login), since a pairing client has no cookie yet. Returns `{ tokenId, token, projectId, access, transport, trustedLanOnly }`; only the SHA-256 digest is persisted, in `<runtime_home>/.mcp-tokens.json`. Listed at `GET /api/manager/mcp-tokens` (id, name, projectId, access, createdAt — never the secret) and revoked at `DELETE /api/manager/mcp-tokens/{id}`. Changing the device-admin password revokes all of them. |
-| Token scope | A token names **exactly one project** and one access level. `require_mcp_access` re-checks both on every tool call, so cross-project access is impossible for a token — unlike a manager session, which spans the workspace because the dashboard already grants that. |
-| Per-project scope | `mcpEnabled` (per project) — reads are always allowed; **writes are refused** when off. Controlled from the manager **projects list**, persisted as `mcpEnabled` on each project's `config.json`. It is an *additional* gate: a write-scoped token still cannot write to a project with the flag off. |
+| Host header | Any. `build_mcp_asgi_app` turns off the SDK's DNS-rebinding protection (`TransportSecuritySettings(enable_dns_rebinding_protection=False)`), whose loopback-only `Host` allowlist would answer `421` to every client on another machine. A rebound page carries neither the session cookie nor a token, and `OriginCheckMiddleware` refuses a cross-origin page ([rest-api.md](rest-api.md#authentication)). |
+| Tokens | Created under **Settings › Tokens** on the manager with the manager session, or paired by a script with the device-admin password; stored as SHA-256 digests in `<runtime_home>/.mcp-tokens.json` beside API v1 tokens. Routes, response shapes and revocation: [rest-api.md](rest-api.md#mcp-bearer-tokens). |
+| Token scope | A token carries one access level and covers every project. `require_mcp_access` re-checks the access level on every tool call. An entry with a `projectId` (paired by 1.0 or 1.1, when a token named one project) never resolves: it is refused rather than widened. |
+| Per-project scope | `mcpEnabled` (per project) — reads are always allowed; **writes are refused** when off. Controlled from the manager **projects list** (**MCP write enabled**), persisted as `mcpEnabled` on each project's `config.json`. It is an *additional* gate: a write-scoped token still cannot write to a project with the flag off. |
 
-OAuth 2.1 — the spec-canonical auth for HTTP transports — remains the future
-direction; the bearer token is the pragmatic step for headless clients. See
-*Future protocol alignment* below.
+Bearer tokens are the auth model, not a stopgap. OAuth 2.1 — the MCP spec's
+canonical auth for HTTP transports — mainly serves cloud clients, which cannot
+reach an HMI on a plant LAN; every local client sends a bearer header.
 
 ### Per-project authorization
 
@@ -117,9 +118,9 @@ max 500). MCP resources are not exposed; clients that only surface tools
 
 ### Alarms
 - `alarms_get_config()` — full `alarms.json` document (`{ version, groups: [{ id, title, alarms: [...] }] }`)
-- `alarms_add(group_id, title?, level?, trigger?, settings?)` — `group_id` must reference an existing group (group lifecycle stays in the UI editor). `level` ∈ `error` / `warning` / `info` (default `warning`). The returned `alarm_id` is a kebab slug derived from the alarm's `code` (falling back to `title`). `settings` may supply additional `AlarmDefinition` fields: `code`, `description`, `image`, `auto_popup`, `resolutions`, `ack_required`, `ack_groups`.
+- `alarms_add(group_id, title?, level?, trigger?, settings?)` — `group_id` must reference an existing group (group lifecycle stays in the UI editor). `level` ∈ `error` / `warning` / `info` (default `warning`). The returned `alarm_id` is a kebab slug derived from the alarm's `code` (falling back to `title`). `settings` may supply additional `AlarmDefinition` fields: `code`, `description`, `image`, `auto_popup`, `resolutions`, `ack_required`.
 - `alarms_delete(alarm_id, confirm?)` *destructive*
-- `alarms_set(alarm_id, patch)` — JSON Merge Patch over an alarm's fields (`title`, `level`, `trigger`, `code`, `description`, `image`, `auto_popup`, `resolutions`, `ack_required`, `ack_groups`). `id` is server-managed and must not appear in `patch`.
+- `alarms_set(alarm_id, patch)` — JSON Merge Patch over an alarm's fields (`title`, `level`, `trigger`, `code`, `description`, `image`, `auto_popup`, `resolutions`, `ack_required`). `id` is server-managed and must not appear in `patch`.
 - Group lifecycle (`alarms_add_group` / `alarms_delete_group` / `alarms_set_group`) is intentionally **not** exposed — create/rename groups in the UI editor.
 
 ### Translations
@@ -242,10 +243,6 @@ a transaction.
 The following deviations from canonical MCP practice are deliberate
 deferrals rather than oversights:
 
-- **OAuth 2.1**: the endpoint is gated by the manager session
-  and bearer tokens (`Authorization: Bearer`), which covers headless clients;
-  OAuth 2.1 remains the spec-canonical direction generic MCP clients (Claude
-  Desktop, hosted runners) will eventually expect.
 - **Multi-process lock backend**: the per-file `asyncio.Lock`
   registry is in-memory and process-local; a multi-worker deployment would
   need a file-lock or shared primitive.

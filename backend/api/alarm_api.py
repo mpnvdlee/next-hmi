@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
-from core import audit
-from core.exceptions import AlarmNotFoundError, AlarmValidationError
 from core.http_origins import invalidate_http_origin_cache
 from fastapi import APIRouter, Query
 from models.alarm import (
@@ -14,17 +10,9 @@ from models.alarm import (
     AlarmInstance,
     AlarmSummary,
 )
-from pydantic import BaseModel
 from services.alarm_manager import alarm_manager
 
 router = APIRouter(prefix="/api/alarms", tags=["alarms"])
-
-
-# ── Request models ────────────────────────────────────────────────────────────
-
-
-class AckRequest(BaseModel):
-    username: str
 
 
 # ── Configuration endpoints ───────────────────────────────────────────────────
@@ -71,37 +59,3 @@ def get_alarm_history(
 def get_alarm_summary() -> AlarmSummary:
     """Return computed alarm summary counts."""
     return alarm_manager.get_summary()
-
-
-# ── Acknowledgment endpoints ─────────────────────────────────────────────────
-
-
-@router.post("/ack/{instance_id}")
-def ack_alarm(instance_id: str, body: AckRequest) -> dict[str, str]:
-    """Acknowledge a single active alarm.
-
-    ``username`` is a claim, and is recorded as one. This route has no session:
-    the only real per-user identity in the instance app is established by
-    ``login`` over the WebSocket and lives per *connection*
-    (``websocket_manager._client_users``), which a separate REST request cannot
-    be tied back to. Nothing else gates the route either — on the instance's
-    loopback port anyone who can reach it can post any name.
-
-    So the name goes into the trail tagged ``ACTOR_CLAIMED``. Matching it against
-    whoever is logged in over some WebSocket would launder a guess into a
-    "verified" record.
-    """
-    if not body.username:
-        raise AlarmValidationError("Username is required")
-    if not alarm_manager.ack_alarm(instance_id, body.username, actor_source=audit.ACTOR_CLAIMED):
-        raise AlarmNotFoundError(f"Active alarm '{instance_id}' not found")
-    return {"status": "ok"}
-
-
-@router.post("/ack-all")
-def ack_all_alarms(body: AckRequest) -> dict[str, Any]:
-    """Acknowledge all active alarms. ``username`` is unverified — see ``ack_alarm``."""
-    if not body.username:
-        raise AlarmValidationError("Username is required")
-    count = alarm_manager.ack_all(body.username, actor_source=audit.ACTOR_CLAIMED)
-    return {"status": "ok", "count": count}

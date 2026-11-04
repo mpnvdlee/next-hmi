@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { AlarmInstance } from '@shared/types/alarm';
 import { useAlarmStore } from '@hmi/store/alarmStore';
-import { ackAlarm, useAlarmText, useAlarmUsername } from '../alarmUtils';
+import { ackAlarm, useAlarmText } from '../alarmUtils';
 import AlarmDetailDialog from '../AlarmDetailDialog';
 import AlarmToastCard from './AlarmToastCard';
 import styles from './index.module.css';
@@ -13,7 +13,6 @@ import styles from './index.module.css';
  */
 export default function AlarmPopup() {
   const active = useAlarmStore((s) => s.active);
-  const username = useAlarmUsername();
   const alarmText = useAlarmText();
 
   // Track locally dismissed popup IDs (not acked, just hidden)
@@ -42,13 +41,10 @@ export default function AlarmPopup() {
     setDismissed((prev) => new Set(prev).add(id));
   }, []);
 
-  const handleAck = useCallback(
-    async (e: React.MouseEvent, id: string) => {
-      e.stopPropagation();
-      await ackAlarm(id, username);
-    },
-    [username],
-  );
+  const handleAck = useCallback(async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    await ackAlarm(id);
+  }, []);
 
   if (popupAlarms.length === 0 && !detailAlarm) return null;
 
@@ -70,11 +66,7 @@ export default function AlarmPopup() {
       </div>
 
       {detailAlarm && (
-        <AlarmDetailDialog
-          alarm={detailAlarm}
-          username={username}
-          onClose={() => setDetailAlarm(null)}
-        />
+        <AlarmDetailDialog alarm={detailAlarm} onClose={() => setDetailAlarm(null)} />
       )}
     </>
   );

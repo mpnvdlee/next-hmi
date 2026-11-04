@@ -73,7 +73,6 @@ def test_add_alarm_nests_inside_group_with_slug_id():
         "image",
         "auto_popup",
         "resolutions",
-        "ack_groups",
     ):
         assert field in nested
 

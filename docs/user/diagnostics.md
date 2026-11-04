@@ -4,7 +4,7 @@ When a value doesn't arrive, a widget doesn't render, or a save doesn't stick, N
 
 ## The Admin area (per project)
 
-Pick **Admin** in the editor's left rail. Three live sections, refreshed while you watch.
+Pick **Admin** in the editor's left rail. Three live sections, refreshed while you watch, then one setting for the project: the origins its HTTP sources may reach.
 
 ### Fast Subscriptions
 
@@ -24,6 +24,10 @@ A third state sits between the two: **No schema**. The widget compiled and rende
 
 Every open operator screen against this project: its **scope**, the **user** signed in there, that user's **groups**, and when it connected. Use it to confirm that the panel by the line really is signed in as `operator` and not still sitting on `guest`.
 
+### HTTP sources
+
+The origins (scheme, host and port) an `$http` source may reach when its url takes the host from a placeholder. Each change saves straight away. See [Reading a value from an API](properties.md#reading-a-value-from-an-api-http).
+
 ## The manager's Settings page (per installation)
 
 Sign in to the manager dashboard and open **Settings** — this is installation-wide, not per project.
@@ -34,6 +38,7 @@ Sign in to the manager dashboard and open **Settings** — this is installation-
 | **Runtime home** | Where per-installation state lives — the manifest, logs, the widget-build cache, TLS material. See [Installing and running](install.md#runtime-home). |
 | **Logs** | Opens the **Application logs** viewer: the last 500 lines with the log file's path, a **Refresh**, and **Download full log** for the whole file. |
 | **Security** | Change the **device-admin password** that gates the dashboard itself. |
+| **Tokens** | The [MCP](mcp.md) and [API](api.md) tokens, each covering every project: name, kind, access level or scopes, and creation time. **Create token** makes a new one and shows it once; **Revoke** takes one back. |
 | **HTTPS** | Certificate status, regenerate or upload your own, and restart into TLS. Full walkthrough in [HTTPS](install.md#https). |
 
 ## The warnings pill
@@ -62,7 +67,7 @@ Two findings are specific to reusable components:
 
 **A value never updates, and never goes bad either.** Check **Fast Subscriptions**: a tag that appears nowhere is not subscribed. Common causes: the variable is not enabled in the datasource's variable table, the binding points at a path that was renamed on the PLC (the browse-diff banner in the Datasources area flags this), or the widget binding it is not on a visible page.
 
-**A write is rejected.** The reason code tells you which layer refused: `read_only` (the variable is not marked writable in the datasource — the server sends nothing to the machine), `permission_denied` (the signed-in user's groups are outside the variable's allowed set — see [Users](users.md#enforcement-and-where-it-really-happens)), `opcua_unreachable`, `write_failed`, `invalid_value`, `bad_path`. Attach an `onFailed` handler with a **Show Toast** of `{ $result: "reason" }` and the panel tells the operator directly — see [Actions](actions.md#async-actions-and-result).
+**A write is rejected.** The reason code tells you which layer refused: `read_only` (the variable is not marked writable in the datasource — the server sends nothing to the machine), `opcua_unreachable`, `write_failed`, `invalid_value`, `bad_path`. Attach an `onFailed` handler with a **Show Toast** of `{ $result: "reason" }` and the panel tells the operator directly — see [Actions](actions.md#async-actions-and-result).
 
 **Copy and paste in the editor say the clipboard needs HTTPS.** `navigator.clipboard` is one of the browser APIs that exist only in a secure context — HTTPS, or `localhost`. Reaching the installation at a plain-HTTP LAN address (`http://192.168.1.10:8000`) removes it outright, so no permission prompt can restore it; serve the installation over [HTTPS](install.md#https) instead, or open it on the host at `localhost`. The full rule and what else it touches is in [What plain HTTP costs the browser](install.md#what-plain-http-costs-the-browser).
 

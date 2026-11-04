@@ -90,6 +90,28 @@ def test_trigger_paths_reflect_edit_and_delete(live_project_root: Path):
     assert manager.get_trigger_paths_by_datasource() == {}
 
 
+def test_a_project_still_carrying_ack_groups_loads(live_project_root: Path):
+    """The removed "Allowed groups" setting is ignored in alarms.json and in a
+    saved active alarm, never a reason to fall back to an empty config."""
+    from core import storage
+
+    alarm = {"id": "p1", "code": "P1", "ack_groups": ["operator"], "trigger": {"type": "bool"}}
+    storage.write_json(
+        storage.active_alarms_config_path(), {"groups": [{"id": "g", "title": "Pumps", "alarms": [alarm]}]}
+    )
+    storage.write_json(
+        storage.active_alarm_state_path(), {"active": [{"alarm_id": "p1", "ack_groups": ["operator"]}]}
+    )
+
+    manager = AlarmManager()
+    manager.load()
+
+    assert manager.get_config().groups[0].alarms[0].code == "P1"
+    assert [a.alarm_id for a in manager.get_active()] == ["p1"]
+    manager.set_config(manager.get_config())
+    assert "ack_groups" not in storage.read_json(storage.active_alarms_config_path())["groups"][0]["alarms"][0]
+
+
 def test_value_range_trigger_reads_a_counter_beyond_two_to_the_53():
     # The cache holds such a counter as its decimal string, the form a browser
     # carries exactly; the threshold compare still sees a number.
