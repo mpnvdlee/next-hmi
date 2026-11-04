@@ -265,8 +265,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="NEXT HMI", lifespan=lifespan)
 register_exception_handlers(app)
 # An instance binds loopback with no auth of its own, and a page in the
-# panel's browser can find that port; see ``core.origin_check``.
-app.add_middleware(OriginCheckMiddleware)
+# panel's browser can find that port, or rebind a name to it; see
+# ``core.origin_check``.
+app.add_middleware(OriginCheckMiddleware, loopback_only=True)
 
 
 # NOTE: every top-level route lives under one of /api/, /ws, /mcp, or a

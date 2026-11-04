@@ -215,21 +215,41 @@ def test_is_cross_origin(scheme: str, host: str, origin: str, cross: bool) -> No
 # ── the hop to the project instance ───────────────────────────────────────────
 
 
-def test_http_proxy_does_not_forward_origin() -> None:
+def test_http_proxy_forwards_only_the_peer_and_scheme_it_saw() -> None:
     import manager
     from starlette.requests import Request
 
     request = Request(
         {
             "type": "http",
-            "method": "POST",
+            "scheme": "http",
+            "method": "GET",
             "path": "/",
-            "headers": [(b"origin", b"http://testserver"), (b"x-probe", b"1")],
+            "server": ("testserver", 80),
+            "client": ("10.0.4.12", 50000),
+            "headers": [
+                (b"host", b"testserver"),
+                (b"origin", b"http://testserver"),
+                (b"x-probe", b"1"),
+                (b"x-forwarded-for", b"203.0.113.7"),
+                (b"x-real-ip", b"203.0.113.8"),
+                (b"x-forwarded-proto", b"https"),
+                (b"x-forwarded-host", b"evil.example"),
+                (b"x-forwarded-prefix", b"/x/</script><script>alert(1)</script>/"),
+                (b"forwarded", b"for=203.0.113.9;proto=https;host=evil.example"),
+            ],
         }
     )
-    forwarded = dict(manager._forwarded_headers(request))
-    assert "origin" not in forwarded
-    assert forwarded["x-probe"] == "1"
+    forwarded = manager._forwarded_headers(request)
+
+    def values(name: str) -> list[str]:
+        return [v for k, v in forwarded if k.lower() == name]
+
+    assert values("x-forwarded-for") == ["10.0.4.12"]
+    assert values("x-forwarded-proto") == ["http"]
+    assert values("x-real-ip") == values("x-forwarded-host") == values("forwarded") == []
+    assert values("x-forwarded-prefix") == values("origin") == []
+    assert values("x-probe") == ["1"]
 
 
 def test_ws_proxy_does_not_forward_origin(client: TestClient, running_child) -> None:
@@ -269,6 +289,14 @@ try:
 except WebSocketDisconnect as exc:
     ws_refused = exc.code
 
+# DNS rebinding: a name of the page's own, pointed at the loopback port.
+rebound = TestClient(main.app, base_url="http://evil.example:47001", raise_server_exceptions=False)
+try:
+    with rebound.websocket_connect("ws://evil.example:47001/ws"):
+        rebound_ws = None
+except WebSocketDisconnect as exc:
+    rebound_ws = exc.code
+
 with open(sys.argv[1], "w", encoding="utf-8") as fh:
     json.dump(
         {
@@ -277,6 +305,11 @@ with open(sys.argv[1], "w", encoding="utf-8") as fh:
             "own": post({"Origin": own}),
             "none": post({}),
             "ws_refused": ws_refused,
+            "rebound_get": rebound.get("/api/health").status_code,
+            "rebound_ws": rebound_ws,
+            "localhost_get": TestClient(main.app, base_url="http://localhost:47001")
+            .get("/api/health")
+            .status_code,
         },
         fh,
     )
@@ -285,8 +318,9 @@ with open(sys.argv[1], "w", encoding="utf-8") as fh:
 
 def test_instance_refuses_a_page_that_goes_around_the_manager(tmp_path: Path) -> None:
     """A page in the panel's browser can find the child's loopback port. Its
-    writes and its socket are refused there; the manager proxy, which sends no
-    Origin, and a standalone instance used from its own origin still pass."""
+    writes and its socket are refused there, and so is everything under a
+    rebound name; the manager proxy, which sends no Origin, and a standalone
+    instance used from its own loopback origin still pass."""
     backend = Path(__file__).resolve().parents[1]
     home = tmp_path / "runtime-home"
     home.mkdir()
@@ -314,3 +348,6 @@ def test_instance_refuses_a_page_that_goes_around_the_manager(tmp_path: Path) ->
     assert result["own"] != 403
     assert result["none"] != 403
     assert result["ws_refused"] == 1008
+    assert result["rebound_get"] == 403
+    assert result["rebound_ws"] == 1008
+    assert result["localhost_get"] == 200

@@ -153,6 +153,11 @@ heading.
 
 ### Fixed
 
+- **An AI assistant on another machine can reach MCP.** `/mcp` answered
+  every client that did not address the HMI as `localhost` or `127.0.0.1`
+  with `421 Invalid Host header`, so an assistant on a laptop on the plant
+  network could not connect. It now answers any address the HMI is reached
+  by; a token or the dashboard sign-in is still required.
 - **What an AI assistant changes over MCP shows up on the running screen.**
   An operator screen that was already open kept the pages and texts as it
   first loaded them, so a widget, page, page setting, global event or
@@ -185,10 +190,12 @@ heading.
   could open a running project's live connection and read and write values,
   or send its public requests. The manager and every project instance now
   refuse a live connection and every change whose browser page came from
-  another address. Scripts, which send no page address, are unaffected. The
-  same check covers `/mcp` and API v1: an MCP or API client running inside a
-  web page on another address is refused, while desktop and command-line
-  clients are not.
+  another address. Scripts, which send no page address, are unaffected. A
+  site that points a name of its own at a project's internal port (DNS
+  rebinding) is refused too; one that points it at the device's own address
+  still gets past the check, to the open part only; keep the network trusted. The same check covers `/mcp` and
+  API v1: an MCP or API client running inside a web page on another address
+  is refused, while desktop and command-line clients are not.
 
 - **An `$http` URL no longer opens the plant network to anyone.** A URL that
   took its server from a placeholder let anyone who reached the live view
@@ -208,6 +215,19 @@ heading.
   `POST /api/datasources/write` is recorded like one written on the live
   connection: as the signed-in user, or `engineer` from the editor. User changes and panel sign-ins over API v1 are recorded under
   the token's name, or `admin` for the device-admin password.
+
+- **`$device` no longer looks up an address the caller picks.** The device
+  info route believed an `X-Forwarded-For` header the browser wrote, so
+  anyone could make the device reverse-resolve and ARP-look-up any address,
+  and a value starting with `-` reached `arp` as an option. It now uses only
+  the address the connection came from, refuses anything that is not an IP
+  address, and the manager forwards that address itself. This also fixes
+  `$device` reporting `127.0.0.1` on every screen behind the manager.
+
+- **A request header can no longer put a script into the page.** The
+  manager passed a client's `X-Forwarded-Prefix` header on to the project,
+  which wrote it unescaped into the page it returned. The manager now drops
+  it, and the page escapes what it writes into its scripts.
 
 - **Deleting a project revokes its tokens.** Its MCP and API tokens
   outlived it, and a later project created with the same id inherited them.

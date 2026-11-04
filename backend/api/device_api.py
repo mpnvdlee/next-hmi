@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import re
 import socket
 import subprocess
@@ -21,19 +22,23 @@ _HOSTNAME_TIMEOUT_SECONDS = 1.0
 
 
 def _client_ip(request: Request) -> str | None:
-    """Return the originating client IP, honouring X-Forwarded-For when present."""
-    fwd = request.headers.get("x-forwarded-for")
-    if fwd:
-        ip = fwd.split(",")[0].strip()
-        if ip:
-            return _strip_ipv6_mapped(ip)
-    if request.client and request.client.host:
-        return _strip_ipv6_mapped(request.client.host)
-    return None
+    """The requesting client's IP address, or ``None`` when it is not one.
 
-
-def _strip_ipv6_mapped(ip: str) -> str:
-    return ip[7:] if ip.startswith("::ffff:") else ip
+    Only ``request.client`` counts: uvicorn has already rewritten it from
+    ``X-Forwarded-For`` when the peer is a trusted proxy (here, the manager on
+    loopback, which sets that header to the address it saw). A header the
+    client sent itself is never read, so nobody can point the lookups below at
+    an address of their choosing.
+    """
+    if request.client is None:
+        return None
+    try:
+        address = ipaddress.ip_address(request.client.host)
+    except ValueError:
+        return None
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        address = address.ipv4_mapped
+    return str(address)
 
 
 def _resolve_hostname(ip: str) -> str | None:
@@ -72,7 +77,7 @@ def _lookup_mac(ip: str) -> str | None:
 
     try:
         result = subprocess.run(
-            ["arp", "-n", ip],
+            ["arp", "-n", "--", ip],
             capture_output=True,
             text=True,
             timeout=1.0,

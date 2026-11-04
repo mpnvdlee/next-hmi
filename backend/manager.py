@@ -122,17 +122,36 @@ def _forwarded_headers(request: Request) -> list[tuple[str, str]]:
     and the child refuses any write that still carries a foreign one
     (``core.origin_check``) — its own ``Host`` is loopback, never the browser's.
     ``x-nexthmi-editor`` is the manager's own mark (``core.audit.EDITOR_HEADER``),
-    so a browser's copy never reaches the child.
+    so a browser's copy never reaches the child. ``X-Forwarded-For`` is replaced
+    by the one address the manager saw — ``request.client``, which uvicorn has
+    already taken from a trusted front proxy's header — because the child's
+    uvicorn trusts loopback and would otherwise believe whatever the browser
+    wrote there (``api.device_api``). ``X-Forwarded-Proto`` is likewise the
+    scheme the manager derived itself, and a client's ``X-Forwarded-Host``,
+    ``X-Forwarded-Prefix`` and ``Forwarded`` are dropped — the child bakes the
+    prefix into ``index.html``, so only the manager's own alias may set it.
     """
     headers: list[tuple[str, str]] = []
     for key, value in request.headers.items():
-        if key.lower() in _HOP_BY_HOP or key.lower() in ("origin", audit.EDITOR_HEADER):
+        if key.lower() in _HOP_BY_HOP or key.lower() in (
+            "origin",
+            "x-forwarded-for",
+            "x-forwarded-proto",
+            "x-forwarded-host",
+            "x-forwarded-prefix",
+            "x-real-ip",
+            "forwarded",
+            audit.EDITOR_HEADER,
+        ):
             continue
         if key.lower() == "cookie":
             value = _strip_manager_cookie(value)
             if not value:
                 continue
         headers.append((key, value))
+    if request.client is not None:
+        headers.append(("x-forwarded-for", request.client.host))
+    headers.append(("x-forwarded-proto", request.url.scheme))
     return headers
 
 

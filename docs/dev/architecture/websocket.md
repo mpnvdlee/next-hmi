@@ -19,7 +19,8 @@ live view. The manager closes either upgrade with `1008` when the session is
 missing (editor) or the project's users document is unusable, and with `1011`
 when the project is not running. The child itself binds `127.0.0.1` and does
 not authenticate `/ws`; it refuses only an upgrade carrying a foreign `Origin`,
-which the manager's hop never sends.
+which the manager's hop never sends, or a `Host` other than a loopback name,
+which the hop always is.
 
 Before any of that, an upgrade whose `Origin` header differs from the
 request's own origin (scheme plus `Host`) is closed `1008` before accept, so

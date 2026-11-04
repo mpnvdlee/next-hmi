@@ -7,9 +7,11 @@ refuses a page that found the loopback port and went around the manager. A
 standalone ``uvicorn main:app`` keeps working from its own origin.
 
 Comparing ``Origin`` with ``Host`` cannot catch DNS rebinding: a page that
-points a name of its own at this machine sends a matching pair. Closing that
-needs a ``Host`` allowlist, which an install reached by IP, hostname and
-``.local`` alike does not have.
+points a name of its own at this machine sends a matching pair. The instance
+closes that with ``loopback_only``: the manager proxy and its own callers
+always reach it as ``127.0.0.1``, so any other ``Host`` is refused, reads
+included. The manager cannot do the same — it is reached by IP, hostname and
+``.local`` alike — so a rebound name still gets past the manager's check.
 """
 from __future__ import annotations
 
@@ -19,19 +21,12 @@ from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from core.http_origins import normalize_origin
+
 # Methods a browser may send cross-site without the server's say-so having any
 # effect beyond a read the same-origin policy hides from the page.
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
-_DEFAULT_PORTS = {"http": 80, "https": 443}
-
-
-def _origin_key(url: str) -> tuple[str, str, int | None] | None:
-    try:
-        parts = urlsplit(url)
-        port = parts.port or _DEFAULT_PORTS.get(parts.scheme)
-    except ValueError:
-        return None
-    return (parts.scheme, parts.hostname, port) if parts.hostname else None
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
 def is_cross_origin(scope: Scope) -> bool:
@@ -48,8 +43,16 @@ def is_cross_origin(scope: Scope) -> bool:
     if origin is None:
         return False
     scheme = {"ws": "http", "wss": "https"}.get(scope["scheme"], scope["scheme"])
-    own = _origin_key(f"{scheme}://{headers.get('host', '')}")
-    return own is None or _origin_key(origin) != own
+    own = normalize_origin(f"{scheme}://{headers.get('host', '')}")
+    return own is None or normalize_origin(origin) != own
+
+
+def _is_loopback_host(scope: Scope) -> bool:
+    try:
+        host = urlsplit(f"//{Headers(scope=scope).get('host', '')}").hostname
+    except ValueError:
+        return False
+    return host in _LOOPBACK_HOSTS
 
 
 class OriginCheckMiddleware:
@@ -60,20 +63,30 @@ class OriginCheckMiddleware:
     WebSocket ignores CORS: without this any page open in the panel's browser
     could open ``/runtime/<slug>/ws`` and read and write live values, or POST
     to the public runtime routes as a "simple" request that never preflights.
+
+    ``loopback_only`` also refuses every request whose ``Host`` is not a
+    loopback name (see the module docstring).
     """
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, *, loopback_only: bool = False) -> None:
         self._app = app
+        self._loopback_only = loopback_only
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        checked = scope["type"] == "websocket" or (
-            scope["type"] == "http" and scope["method"] not in _SAFE_METHODS
-        )
-        if not checked or not is_cross_origin(scope):
+        if scope["type"] not in ("http", "websocket"):
             await self._app(scope, receive, send)
-        elif scope["type"] == "websocket":
+            return
+        if self._loopback_only and not _is_loopback_host(scope):
+            refused = "Host not allowed"
+        elif (
+            scope["type"] == "websocket" or scope["method"] not in _SAFE_METHODS
+        ) and is_cross_origin(scope):
+            refused = "Cross-origin request refused"
+        else:
+            await self._app(scope, receive, send)
+            return
+        if scope["type"] == "websocket":
             # Closing before accept makes the server answer the handshake with 403.
             await send({"type": "websocket.close", "code": 1008})
         else:
-            response = JSONResponse({"detail": "Cross-origin request refused"}, status_code=403)
-            await response(scope, receive, send)
+            await JSONResponse({"detail": refused}, status_code=403)(scope, receive, send)

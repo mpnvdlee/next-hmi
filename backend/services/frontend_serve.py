@@ -138,6 +138,13 @@ def _safe_mtime_ns(path: Path) -> int:
         return 0
 
 
+def _script_json(value: object) -> str:
+    """JSON safe inside a ``<script>`` element: ``\\u003c`` still decodes to
+    ``<`` in JS and JSON, but the HTML parser never sees a ``</script>`` or a
+    ``<!--`` that would end or swallow the element."""
+    return json.dumps(value).replace("<", "\\u003c")
+
+
 def render_index_html(
     dist_dir: Path,
     libraries_dir: Path,
@@ -197,21 +204,22 @@ def render_index_html(
         }
     globals_script = (
         "    <script>"
-        f"window.__NEXTHMI_BASE__={json.dumps(base_path)};"
-        f"window.__NEXTHMI_MODE__={json.dumps(mode)};"
-        f"window.__NEXTHMI_VERSION__={json.dumps(app_version())};"
-        f"window.__NEXTHMI_EDITION__={json.dumps(app_edition())};"
+        f"window.__NEXTHMI_BASE__={_script_json(base_path)};"
+        f"window.__NEXTHMI_MODE__={_script_json(mode)};"
+        f"window.__NEXTHMI_VERSION__={_script_json(app_version())};"
+        f"window.__NEXTHMI_EDITION__={_script_json(app_edition())};"
         "</script>\n"
     )
     injection = (
         globals_script
-        + f'    <script type="importmap">{json.dumps(import_map)}</script>\n'
+        + f'    <script type="importmap">{_script_json(import_map)}</script>\n'
     )
 
     # Inject immediately after <head>. If the html has no <head> (shouldn't
     # happen for a real Vite build), prepend at the top so the SPA still loads.
     if _HEAD_OPEN_RE.search(html):
-        html = _HEAD_OPEN_RE.sub(r"\1\n" + injection, html, count=1)
+        # A function, not a template: the injection carries backslashes.
+        html = _HEAD_OPEN_RE.sub(lambda m: m.group(1) + "\n" + injection, html, count=1)
     else:
         html = injection + html
 

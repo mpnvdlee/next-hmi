@@ -124,19 +124,42 @@ def manager_client(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(manager.supervisor, "resume_all", lambda: None)
     monkeypatch.setattr(manager.supervisor, "shutdown", lambda: None)
 
-    # ``mcp_app.session_manager.run()`` is guarded to enter at most once per
-    # process (see mcp_server.server.run_session_manager_once) — whichever
-    # TestClient in the whole test run happens to be first gets a live
-    # session manager; every other one hits a torn-down or never-initialized
-    # one. That's an existing, documented constraint of testing the real
-    # streamable-HTTP transport in-process, not something these auth tests
-    # try to work around: raise_server_exceptions=False turns that inner
-    # RuntimeError into a 500 response instead of propagating, so tests below
-    # can assert on what they actually care about — whether *our* auth gate
-    # (a clean 401 before any of that FastMCP machinery runs) let the request
-    # through — without depending on the rest of the protocol completing.
-    with TestClient(manager.app, raise_server_exceptions=False) as tc:
+    # A session manager runs once per process (run_session_manager_once), so
+    # each test mounts a fresh transport and lets this lifespan start it; the
+    # previous one is put back afterwards.
+    from mcp_server import server as mcp_server
+
+    lowlevel = mcp_server.mcp_app._lowlevel_server
+    monkeypatch.setattr(lowlevel, "_session_manager", lowlevel._session_manager)
+    monkeypatch.setattr(mcp_server, "_session_started", False)
+    mount = next(r for r in manager.app.routes if getattr(r, "path", None) == "/mcp")
+    monkeypatch.setattr(mount, "app", mcp_server.build_mcp_asgi_app())
+    with TestClient(manager.app) as tc:
         yield tc
+
+
+_INITIALIZE = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+        "protocolVersion": "2025-06-18",
+        "capabilities": {},
+        "clientInfo": {"name": "test", "version": "0"},
+    },
+}
+
+
+def _initialize(client: TestClient, **headers: str):
+    """An MCP initialize; asserts the transport answered it, not just the gate."""
+    resp = client.post(
+        "/mcp",
+        json=_INITIALIZE,
+        headers={"Accept": "application/json, text/event-stream", **headers},
+    )
+    assert resp.status_code == 200, resp.text
+    assert '"serverInfo"' in resp.text
+    return resp
 
 
 def test_mcp_rejects_request_with_no_credentials(manager_client: TestClient):
@@ -160,10 +183,11 @@ def test_mcp_without_trailing_slash_is_not_a_redirect(manager_client: TestClient
     manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
     resp = manager_client.post(
         "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
+        json=_INITIALIZE,
+        headers={"Accept": "application/json, text/event-stream"},
         follow_redirects=False,
     )
-    assert resp.status_code != 307
+    assert resp.status_code == 200
 
 
 def test_mcp_forged_forwarded_headers_do_not_bypass_auth(manager_client: TestClient):
@@ -180,10 +204,7 @@ def test_mcp_forged_forwarded_headers_do_not_bypass_auth(manager_client: TestCli
 
 def test_mcp_accepts_valid_session_cookie(manager_client: TestClient):
     manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
-    resp = manager_client.post("/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "ping"})
-    # Whatever FastMCP's streamable-HTTP layer does next is out of scope here —
-    # the point is our auth gate did not block it.
-    assert resp.status_code != 401
+    _initialize(manager_client)
 
 
 def test_mcp_accepts_valid_bearer_token(manager_client: TestClient):
@@ -196,12 +217,20 @@ def test_mcp_accepts_valid_bearer_token(manager_client: TestClient):
     assert pair.status_code == 201
     token = pair.json()["token"]
     _drop_session_cookie(manager_client)  # exercise the bearer token alone
-    resp = manager_client.post(
-        "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert resp.status_code != 401
+    _initialize(manager_client, Authorization=f"Bearer {token}")
+
+
+def test_mcp_answers_a_client_on_the_lan(manager_client: TestClient):
+    """A client on another machine sends the manager's LAN address as Host; the
+    SDK's loopback-only Host check would answer that 421."""
+    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    _seed_project(manager_client)
+    token = manager_client.post(
+        "/api/manager/mcp/pair",
+        json={"password": "secret", "projectId": "P1", "access": "read"},
+    ).json()["token"]
+    _drop_session_cookie(manager_client)
+    _initialize(manager_client, Authorization=f"Bearer {token}", Host="192.168.1.5:8000")
 
 
 def _drop_session_cookie(client: TestClient) -> None:
@@ -309,12 +338,7 @@ def test_dashboard_create_needs_session_not_password(manager_client: TestClient)
     assert issued["token"] not in str(listed)
 
     _drop_session_cookie(manager_client)
-    resp = manager_client.post(
-        "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
-        headers={"Authorization": f"Bearer {issued['token']}"},
-    )
-    assert resp.status_code != 401
+    _initialize(manager_client, Authorization=f"Bearer {issued['token']}")
 
 
 def test_password_change_revokes_mcp_tokens(manager_client: TestClient):
@@ -327,12 +351,7 @@ def test_password_change_revokes_mcp_tokens(manager_client: TestClient):
     token = pair.json()["token"]
     _drop_session_cookie(manager_client)
 
-    resp = manager_client.post(
-        "/mcp",
-        json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    assert resp.status_code != 401
+    _initialize(manager_client, Authorization=f"Bearer {token}")
 
     # change-password re-authenticates with the *current* password and
     # re-issues a session cookie for the caller — drop it again so this

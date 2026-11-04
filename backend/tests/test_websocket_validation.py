@@ -618,10 +618,11 @@ from fastapi.testclient import TestClient
 import main
 from services.websocket_manager import websocket_manager
 
+# An instance answers only a loopback Host (core.origin_check).
 client = TestClient(main.app)
-with client.websocket_connect("/ws", headers={"x-nexthmi-editor": "1"}) as editor:
+with client.websocket_connect("ws://127.0.0.1/ws", headers={"x-nexthmi-editor": "1"}) as editor:
     editor.receive_text()
-    with client.websocket_connect("/ws", headers={"x-nexthmi-editor": "yes"}) as other:
+    with client.websocket_connect("ws://127.0.0.1/ws", headers={"x-nexthmi-editor": "yes"}) as other:
         other.receive_text()
         result = {
             "connections": len(websocket_manager._connections),
