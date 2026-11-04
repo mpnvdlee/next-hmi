@@ -42,6 +42,24 @@ heading.
   bound to another number widget, an alarm, a recipe parameter, the historian
   or a trend is now flagged in the warnings pill.
 
+- **API v1 for other systems.** A MES, BI tool, HR system or badge reader
+  can read historian samples, alarm history and recipes, and manage the
+  project's users, over a versioned HTTP API at `/api/v1/projects/<id>/…`.
+  It answers JSON or CSV, works on a stopped project too, and keeps its
+  routes and field names for as long as v1 exists. Give each system an API
+  token with only the scopes it needs, or use the device-admin password over
+  HTTP Basic, username `admin`, for your own scripts. A project user's
+  password never works as an API key. See *Connecting other systems (API v1)*
+  in the guide.
+
+- **Tokens under Editor › Admin › Tokens.** Create and revoke the project's
+  MCP tokens (read, or read and write) and API tokens (per scope) in the
+  editor instead of over `curl`. A new token is shown once, with the
+  `claude mcp add` command and client JSON for an MCP token, or a `curl`
+  example for an API token. `POST /api/manager/mcp/pair` with the
+  device-admin password still mints one for a script. Bearer tokens are the
+  MCP sign-in model; no OAuth step is planned.
+
 - **Admin › HTTP sources.** The editor's Admin area lists the servers an
   `$http` URL may reach when it takes its server from a placeholder; see
   **Changed**.
@@ -77,7 +95,7 @@ heading.
   `passwordSet` for each user. The live view reads the new public
   `GET /api/users/roster`: usernames and group names, without who is in
   which group. A custom widget or script that read `/runtime/<slug>/api/users`
-  reads the roster instead.
+  reads the roster, or API v1 `GET …/users` with a token, instead.
 
 - **An `$http` URL that takes its server from a placeholder needs that
   server listed.** `http://{1}/api/status` used to reach any
@@ -151,9 +169,9 @@ heading.
   or send its public requests. The manager and every project instance now
   refuse a live connection and every change whose browser page came from
   another address. Scripts, which send no page address, are unaffected. The
-  same check covers `/mcp`: an MCP client running inside a web page on
-  another address is refused, while desktop and command-line clients are
-  not.
+  same check covers `/mcp` and API v1: an MCP or API client running inside a
+  web page on another address is refused, while desktop and command-line
+  clients are not.
 
 - **An `$http` URL no longer opens the plant network to anyone.** A URL that
   took its server from a placeholder let anyone who reached the live view
@@ -171,7 +189,12 @@ heading.
   and through `POST /api/recipes/datasets/{id}/download` `guest`, or
   `engineer` from the editor. A variable written through
   `POST /api/datasources/write` is recorded like one written on the live
-  connection: as the signed-in user, or `engineer` from the editor.
+  connection: as the signed-in user, or `engineer` from the editor. User
+  changes over API v1 are recorded under the token's name, or `admin` for
+  the device-admin password.
+
+- **Deleting a project revokes its tokens.** Its MCP and API tokens
+  outlived it, and a later project created with the same id inherited them.
 
 ## [1.1.0] - 2026-10-31
 

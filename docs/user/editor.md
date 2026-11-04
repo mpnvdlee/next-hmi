@@ -17,7 +17,7 @@ The editor's left rail switches between the areas that make up a project, top to
 - **Recipes** — Parameter sets you download to and upload from live variables. [How-to →](alarms-recipes.md#build-a-recipe)
 - **Historian** — Which variables are logged, at what rate, and for how long. [How-to →](historian.md)
 - **Users** — Accounts and groups driving who can see and interact with what. [How-to →](users.md)
-- **Admin** — Live diagnostics for this project: fast subscriptions, custom-widget build status, connected runtimes. [How-to →](diagnostics.md#the-admin-area-per-project)
+- **Admin** — Live diagnostics for this project: fast subscriptions, custom-widget build status, connected runtimes. Also the project's allowed HTTP origins and its [MCP](mcp.md) and [API](api.md) tokens. [How-to →](diagnostics.md#the-admin-area-per-project)
 
 Installation-wide settings — the runtime home, HTTPS, the device-admin password, logs — are not here; they live on the **Manager**'s Settings page. See [Diagnostics](diagnostics.md#the-managers-settings-page-per-installation).
 

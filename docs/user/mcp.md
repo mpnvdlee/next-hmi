@@ -30,15 +30,30 @@ A project does **not** need to be running to be edited — the tools work on the
 
 On the Manager dashboard, tick **MCP enabled** on the project's row. Off is the default. With it off, an agent can still *read* that project; every write is refused.
 
-![A project row on the Manager dashboard: the MCP checkbox sits next to the default-project radio, reading "MCP disabled" until you tick it.](images/manager-mcp-toggle.png)
+![A project row on the Manager dashboard: the MCP checkbox sits next to "Set as default", reading "MCP disabled" until you tick it.](images/manager-mcp-toggle.png)
 
 ### 2. Find the project id
 
-Pairing and every tool call name a project by **id**, not by its display name. The id is the slug in the project's own URLs — open the project and read `/runtime/<id>/` or `/editor/<id>/` from the address bar. It is also the `project.id` field in the project's `config.json`, and an agent with any token can call `projects_list` to see them all.
+Every tool call names a project by **id**, not by its display name — and so does pairing a token from a script. The id is the slug in the project's own URLs — open the project and read `/runtime/<id>/` or `/editor/<id>/` from the address bar. It is also the `project.id` field in the project's `config.json`, and an agent with any token can call `projects_list` to see them all.
 
-### 3. Pair a token
+### 3. Create a token
 
-A headless client (an agent runner, a desktop assistant) has no manager session, so it authenticates with a bearer token. Tokens are minted over the API, not from a button: present the **device-admin password**, the one you set on the dashboard at first launch (see [Managing projects](install.md#managing-projects)); it is the same password that unlocks the dashboard, not a project's operator password.
+A headless client (an agent runner, a desktop assistant) has no manager session, so it authenticates with a bearer token. Open the project in the editor, pick **Admin** in the left rail, and click **Create token** in the **Tokens** section. Keep the kind on **MCP**. The dialog asks for:
+
+- **Token name** — any label, so you can tell tokens apart later (*Claude on my laptop*, *CI runner*).
+- **Read** or **Write** — a token is scoped to exactly **this one project** and to that access level; it can never reach another project. A write token still needs **MCP enabled** ticked (step 1) before a write goes through.
+
+Click **Create token**. The dialog then shows, each with a **Copy** button:
+
+- the token itself,
+- the `claude mcp add` command for Claude Code, and
+- the `mcpServers` JSON for clients configured by file,
+
+with this installation's endpoint already filled in — the address the editor is open on, so with HTTPS on it is the `8443` one. The token is shown **once**: only its hash is stored, so a lost token cannot be recovered, only replaced. Only **Done** closes the dialog while the token is on screen.
+
+![The Create token dialog after creating an MCP token: the token, the claude mcp add command and the mcpServers JSON, each with a Copy button, above the Create another and Done buttons.](images/admin-tokens-mcp.png)
+
+**From a script.** `POST /api/manager/mcp/pair` mints the same token without a dashboard session, taking the **device-admin password** in the body instead — the one that unlocks the dashboard (see [Managing projects](install.md#managing-projects)), not a project's operator password:
 
 ```bash
 curl -X POST http://localhost:8000/api/manager/mcp/pair \
@@ -46,19 +61,11 @@ curl -X POST http://localhost:8000/api/manager/mcp/pair \
   -d '{"password":"<device-admin>","projectId":"line-a","access":"write","name":"Claude"}'
 ```
 
-On Windows PowerShell, where the single quotes above are not string delimiters:
-
-```powershell
-Invoke-RestMethod -Method Post -Uri http://localhost:8000/api/manager/mcp/pair `
-  -ContentType 'application/json' `
-  -Body '{"password":"<device-admin>","projectId":"line-a","access":"write","name":"Claude"}'
-```
-
-Send the body as BOM-free UTF-8. Building it with PowerShell's `Out-File` or `Set-Content` and posting the file writes a byte-order mark ahead of the `{`, and the server rejects it with a JSON parse error pointing at *line 1 column 1* — pass the JSON inline as above, or write the file with `[IO.File]::WriteAllText`, which does not add a BOM.
-
-The response carries the token **once** — only its hash is stored, so a lost token cannot be recovered, only replaced. A token is scoped to exactly **one project** and to **read** or **write**; it can never reach another project.
+From Windows PowerShell, use `Invoke-RestMethod -Method Post -ContentType 'application/json' -Body '<the same JSON>'` and pass the JSON inline: a body file written with `Out-File` or `Set-Content` starts with a byte-order mark, and the server rejects it with a JSON parse error at *line 1 column 1*.
 
 ### 4. Point the client at it
+
+The dialog in step 3 already shows both of these filled in; they are spelled out here for a token minted from a script.
 
 Claude Code, from a terminal:
 
@@ -97,11 +104,11 @@ Ask for a read first, so a bad endpoint or a mis-scoped token shows up before an
 
 | Action | How |
 |---|---|
-| List issued tokens | `GET /api/manager/mcp-tokens` — returns id, name, project, access level and creation time; never the secret. |
-| Revoke one | `DELETE /api/manager/mcp-tokens/<id>` |
-| Revoke everything | Change the device-admin password. |
+| List issued tokens | **Editor › Admin › Tokens** lists the project's tokens: name, kind, access level (or, for an [API token](api.md), its scopes) and creation time, never the secret. `GET /api/manager/mcp-tokens` returns all of them, with ids. |
+| Revoke one | **Revoke** on its row in that list, or `DELETE /api/manager/mcp-tokens/<id>`. |
+| Revoke everything | Change the device-admin password. Deleting a project revokes its tokens. |
 
-Because the secret is shown once, the way to check a token is still live is to look for it: `GET /api/manager/mcp-tokens` from a browser signed in to the dashboard lists the issued tokens (the call takes the manager session, not a bearer token), so a missing id means revoked and a present one means the fault is in the client's URL, header or scope. Confirm the rest with one `initialize` call against `/mcp/` before assuming the client is misconfigured.
+Because the secret is shown once, the way to check a token is still live is to look for it in that list: a missing token means revoked, and a present one means the fault is in the client's URL, header or scope. Confirm the rest with one `initialize` call against `/mcp/` before assuming the client is misconfigured.
 
 Tokens do **not** expire on their own. One stays valid until it is revoked by id, or until the device-admin password changes — so treat a token handed to a laptop or a CI runner as live until you take it back.
 
@@ -149,8 +156,8 @@ They are ordinary instructions, not privileged calls — the agent still works t
 | What you see | What it means |
 |---|---|
 | `401` · *MCP requires a manager session or a valid MCP bearer token* | No `Authorization` header reached the server, or the token was revoked — including by a device-admin password change, which revokes every token. |
-| *MCP token is not scoped to project '…'* | The token was paired for a different project. One token, one project — pair another. |
-| *MCP token has read-only access* | Paired with `"access":"read"`. Access level is fixed at pairing; mint a `write` token. |
+| *MCP token is not scoped to project '…'* | The token was created for a different project. One token, one project — create another under **Editor › Admin › Tokens** of the right project. |
+| *MCP token has read-only access* | Created as **Read**. Access level is fixed when the token is made; create a **Write** one. |
 | *MCP writes are disabled for project '…'* | The token is fine, the project's **MCP enabled** tick is not. Step 1 above. |
 | *Project '…' not found* while pairing | The `projectId` isn't a registered project id — you probably sent the display name. Step 2 above. |
 | *Too many failed attempts. Try again in Ns.* | Wrong device-admin password on `/pair`; the same lockout that guards the dashboard login. Wait it out. |

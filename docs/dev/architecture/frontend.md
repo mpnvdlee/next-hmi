@@ -134,7 +134,8 @@ Config-domain stores (`frontend/src/config/store/`):
 - `translationsViewStore.ts`, `themeViewStore.ts`, `panelExpansionStore.ts`
 - `alarmConfigStore.ts`, `recipeConfigStore.ts`, `historianConfigStore.ts`, `componentEditorStore.ts`
 - `adminViewStore.ts`
-  - Live subscriptions (polled every 2 s), alarm triggers, historian paths, custom-widget build status + recompile, and connected runtimes — i.e. exactly what `AdminView` renders. **System info, runtime home, logs, HTTPS and the device-admin password are not here**: those sections live on the manager's `/settings` page and are fed by `managerStore` / `projectsStore`.
+  - Live subscriptions (polled every 2 s), alarm triggers, historian paths, custom-widget build status + recompile, connected runtimes and the `$http` allowed origins (`httpOrigins`) — every `AdminView` section but Tokens. **System info, runtime home, logs, HTTPS and the device-admin password are not here**: those sections live on the manager's `/settings` page and are fed by `managerStore` / `projectsStore`.
+  - Not here either: the **Tokens** section. Tokens are minted by the manager, so `admin/TokensSection/tokensApi.ts` calls `/api/manager/mcp-tokens` through `managerApiJson` (no `/editor/<id>/` prefix, the session cookie rides along), and `AdminView` renders the section only under an `/editor/<id>/` base.
 
 Manager store:
 

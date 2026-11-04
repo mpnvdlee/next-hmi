@@ -4,7 +4,7 @@ When a value doesn't arrive, a widget doesn't render, or a save doesn't stick, N
 
 ## The Admin area (per project)
 
-Pick **Admin** in the editor's left rail. Three live sections, refreshed while you watch.
+Pick **Admin** in the editor's left rail. Three live sections, refreshed while you watch, then two settings for the project: the origins its HTTP sources may reach, and its access tokens.
 
 ### Fast Subscriptions
 
@@ -23,6 +23,14 @@ A third state sits between the two: **No schema**. The widget compiled and rende
 ### Connected Runtimes
 
 Every open operator screen against this project: its **scope**, the **user** signed in there, that user's **groups**, and when it connected. Use it to confirm that the panel by the line really is signed in as `operator` and not still sitting on `guest`.
+
+### HTTP sources
+
+The origins (scheme, host and port) an `$http` source may reach when its url takes the host from a placeholder. Each change saves straight away. See [Reading a value from an API](properties.md#reading-a-value-from-an-api-http).
+
+### Tokens
+
+The project's [MCP](mcp.md) and [API](api.md) tokens: name, kind, access level or scopes, and creation time. **Create token** makes a new one and shows it once; **Revoke** takes one back.
 
 ## The manager's Settings page (per installation)
 

@@ -41,6 +41,7 @@ from api.system_api import manager_router as system_router
 from api.telemetry_api import router as telemetry_router
 from api.thumbnail_api import manager_router as thumbnail_manager_router
 from api.tls_api import router as tls_router
+from api.v1_api import router as api_v1_router
 from core import (
     audit,
     manager_auth,
@@ -216,6 +217,9 @@ app.include_router(thumbnail_manager_router)
 app.include_router(system_router)
 app.include_router(tls_router)
 app.include_router(telemetry_router)
+# Excluded from ``_auth_gate`` (see ``_is_gated``): every v1 route checks its own
+# device-admin Basic or API-token credential, and a session cookie opens none.
+app.include_router(api_v1_router)
 
 # Product documentation behind the editor's Help button: the bundled copy when
 # this build ships one, otherwise a redirect to the public page.
@@ -318,7 +322,9 @@ def _is_gated(path: str, method: str = "GET", raw_path: str | None = None) -> bo
     The SPA shell + bundle stay public so the login screen can render; the data
     APIs and the editor proxy are gated. Auth endpoints are always public.
     ``/mcp`` is excluded here because it enforces its own session-or-bearer-
-    token authentication (``mcp_server.auth``) instead of this cookie gate.
+    token authentication (``mcp_server.auth``) instead of this cookie gate;
+    ``/api/v1/`` because every route under it authenticates itself
+    (``api.v1_api``) and a session cookie must not be enough there.
     ``/runtime/<id>/…`` is gated only for what is not on the public table above.
     """
     if (
@@ -328,7 +334,7 @@ def _is_gated(path: str, method: str = "GET", raw_path: str | None = None) -> bo
         or path == "/api/health"
     ):
         return False
-    if path == "/mcp" or path.startswith("/mcp/"):
+    if path == "/mcp" or path.startswith("/mcp/") or path.startswith("/api/v1/"):
         return False
     if path.startswith("/api/"):
         return True

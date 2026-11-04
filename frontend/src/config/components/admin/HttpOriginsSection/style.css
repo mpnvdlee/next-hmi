@@ -1,8 +1,3 @@
-.cfg-http-origins__actions {
-  text-align: right;
-  white-space: nowrap;
-}
-
 .cfg-http-origins__add {
   display: flex;
   gap: var(--cfg-space-2);

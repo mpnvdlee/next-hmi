@@ -28,6 +28,11 @@ also says where its actor came from:
 ``ACTOR_ANONYMOUS``
     A public request with no identity at all (a REST recipe download): the
     actor is ``"guest"`` because nobody could have been named.
+``ACTOR_API``
+    A write over the external API (``api.v1_api``): the actor is the name of
+    the API token that authenticated it, or ``"admin"`` for the device-admin
+    password. That name was chosen by whoever minted the token, so it says which
+    credential acted, not which person; ``detail["tokenId"]`` pins the token.
 ``ACTOR_CLAIMED``
     The caller supplied the name and nothing checked it. Recorded because
     dropping it would lose the only lead there is, but recorded *as a claim*.
@@ -51,6 +56,7 @@ logger = logging.getLogger(__name__)
 ACTOR_SESSION = "session"
 ACTOR_DEVICE_ADMIN = "device_admin"
 ACTOR_ANONYMOUS = "anonymous"
+ACTOR_API = "api"
 # Header the manager sets on every hop to a child it makes for the editor
 # prefix (the /ws upgrade and each HTTP request), and strips from browser input:
 # the child's evidence for ``ACTOR_DEVICE_ADMIN``.

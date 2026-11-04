@@ -86,7 +86,7 @@ async def emit_change(
 
     project_id = current_scoped_project_id()
     if project_id is not None:
-        _track(asyncio.create_task(_notify_child(project_id, payload)))
+        _track(asyncio.create_task(notify_child(project_id, payload)))
         return
 
     # Legacy in-process path.
@@ -103,7 +103,7 @@ async def emit_change(
     _track(asyncio.create_task(websocket_manager.broadcast_config_changed(event)))
 
 
-async def _notify_child(project_id: str, payload: dict[str, Any]) -> None:
+async def notify_child(project_id: str, payload: dict[str, Any]) -> None:
     """Fire the loopback reload hook on the running child for *project_id*.
 
     No-op when the project is not running. The child re-reads the affected files

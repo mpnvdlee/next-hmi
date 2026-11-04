@@ -15,7 +15,7 @@ A few endpoints raise `fastapi.HTTPException` directly with other status codes �
 
 ## Authentication
 
-The **manager** front door is gated by a single **device-admin password** set on first run. The manager's `_auth_gate` middleware requires a valid session cookie (`nexthmi_manager_session`, a stateless HMAC-signed token) on every `/api/*` and `/editor/*` request (and on the manager's own `openapi.json` / `docs` / `redoc`), except `/api/manager/auth/*`, `/api/manager/peer/*`, `/api/manager/mcp/pair`, `/api/health`, and `/mcp`. Peer endpoints perform their own bearer-token authentication (only pairing accepts the existing device-admin password); `/mcp` takes a manager session or an MCP bearer token (see [mcp.md](mcp.md)); MCP pairing checks the device-admin password itself. See **Manager API** below for the login/setup endpoints; the password digest lives in `<runtime_home>/.manager-auth.json`.
+The **manager** front door is gated by a single **device-admin password** set on first run. The manager's `_auth_gate` middleware requires a valid session cookie (`nexthmi_manager_session`, a stateless HMAC-signed token) on every `/api/*` and `/editor/*` request (and on the manager's own `openapi.json` / `docs` / `redoc`), except `/api/manager/auth/*`, `/api/manager/peer/*`, `/api/manager/mcp/pair`, `/api/health`, `/mcp` and `/api/v1/*`. Peer endpoints perform their own bearer-token authentication (only pairing accepts the existing device-admin password); `/mcp` takes a manager session or an MCP bearer token (see [mcp.md](mcp.md)); MCP pairing checks the device-admin password itself; `/api/v1/*` takes the device-admin password over HTTP Basic or an API token and never the session cookie (see [API v1](#api-v1)). See **Manager API** below for the login/setup endpoints; the password digest lives in `<runtime_home>/.manager-auth.json`.
 
 **`/runtime/*` is the exception: a live operator view is public.** A deny-by-default allowlist (`_RUNTIME_PUBLIC_ROUTES` in `manager.py`) names the child routes a running screen needs — the SPA document and its static mounts, a fixed set of config / theme / component / widget reads, the user roster (names and group labels), alarm history, historian queries, the operator-action POSTs (recipe load and save, `$http`), and `/ws`. Everything else under `/runtime/*` still needs the session: every write verb, `api/datasources`, `api/system/*`, `api/projects/*`, `api/internal/*`, `api/health`, and the instance's own `openapi.json` / `docs` / `redoc`. `HEAD` follows `GET`; `OPTIONS` is gated, since an anonymous preflight would otherwise enumerate the withheld routes.
 
@@ -558,13 +558,14 @@ off). Its control surface is the manager dashboard.
 
 ### MCP bearer tokens
 
-**(manager)** Long-lived credentials for headless AI clients hitting `/mcp`.
+**(manager)** Long-lived credentials for headless AI clients hitting `/mcp`, and for integrations on [API v1](#api-v1) (`kind: "api"`).
 
 - `POST /api/manager/mcp/pair` — body `{ password, projectId, access, name? }` where `password` is the device-admin password and `access` is `"read"` or `"write"`. → `201 { tokenId, token, projectId, access, transport, trustedLanOnly }`. The plaintext `token` is returned once; only its SHA-256 digest is persisted (`<runtime_home>/.mcp-tokens.json`). Reachable **pre-session** (like login/setup) because a pairing client has no session cookie yet, and therefore subject to the same login throttle — `429 RateLimitError` after 5 failures. Unknown `projectId` → `404`.
-- `GET /api/manager/mcp-tokens` → `{ tokens: [{ id, name, projectId, access, createdAt }] }` (no secrets).
+- `POST /api/manager/mcp-tokens` — body `{ projectId, kind?, access?, scopes?, name? }`. `kind` is `"mcp"` (default; needs `access`) or `"api"` (needs a non-empty `scopes` list, see [API v1](#api-v1)); an MCP token answers `201 { kind: "mcp", tokenId, token, projectId, access, transport, trustedLanOnly }`, an API token `201 { kind: "api", tokenId, token, projectId, scopes }`. `/pair` takes the same `kind`/`scopes` fields. The create route behind **Editor › Admin › Tokens**: session-gated like the rest of `/api/manager/*`, so no password in the body. Same `201` response and `404` as `/pair`, through the same code path; no login throttle, since nothing is verified but the session.
+- `GET /api/manager/mcp-tokens` → `{ tokens: [{ id, kind, name, projectId, access | scopes, createdAt }] }` (no secrets). Both kinds are listed; an MCP token carries `access`, an API token `scopes`.
 - `DELETE /api/manager/mcp-tokens/{id}` → `{ revoked: true, tokenId }`; `404` when the id is unknown.
 
-A token is scoped to exactly one project and one access level, re-checked per tool call. Changing the device-admin password revokes every issued token.
+A token is scoped to exactly one project and one access level (or scope list), re-checked per tool call or request. Changing the device-admin password revokes every issued token of both kinds.
 
 ---
 
@@ -724,13 +725,86 @@ Behind the device-admin session: not on the runtime public-route table (`_RUNTIM
 
 ---
 
+## API v1
+
+**(manager)** `backend/api/v1_api.py`. The external, versioned API for integrations (MES, BI, HR systems): every route is `/api/v1/projects/{projectId}/…`, answers JSON, and keeps its field names stable within v1. The internal routes in the rest of this file are for the app's own frontend and may change in any release. Operator-facing guide: [docs/user/api.md](../../user/api.md).
+
+### Auth
+
+`_auth_gate` skips `/api/v1/*`; the router authenticates every request itself (a router-wide dependency, so a route added later still refuses anonymous callers), and a manager session cookie alone gets `401`. Two credentials:
+
+| Credential | Header | Reaches |
+|---|---|---|
+| Device-admin password | `Authorization: Basic base64("admin:<password>")` — the username is always `admin` | Every project, every scope. Checked with `manager_auth.verify_password` and the dashboard login's throttle: 5 failures lock Basic (and the dashboard login) for 60 s, `429`. Basic checks run one at a time (`_basic_lock`) with the lockout read inside the lock, so parallel guesses cannot all pass it before the first failure counts. A Basic success never calls `register_login_success`: a polling script's good password says nothing about who sent the failures, and clearing the count on each poll would let a guesser fit four tries between polls. Any non-API check of the device-admin password resets it — dashboard sign-in, change-password, MCP `/pair` and peer `/pair` — as does the lockout itself. |
+| API token | `Authorization: Bearer <token>` | One project, the scopes it was minted with (`POST /api/manager/mcp-tokens` with `kind: "api"`, see [MCP bearer tokens](#mcp-bearer-tokens)). |
+
+HMI user credentials (`users.json`) are never an API key. An MCP token is refused here (`401`), and an API token is refused on `/mcp` and on every internal route.
+
+The `401` carries `WWW-Authenticate: Bearer realm="NEXT HMI API"`, never a `Basic` challenge: a Basic challenge makes a browser prompt for the password and then cache it, and a cached password rides along on cross-site requests. Writes still pass `OriginCheckMiddleware`, so a browser page on another origin cannot `PUT` or `DELETE` here.
+
+Order of checks: credential (`401`, or `429` while locked out) → token's project (`403`) → token's scope (`403`) → project exists (`404`).
+
+Scopes (`core.mcp_tokens.API_SCOPES`):
+
+| Scope | Routes |
+|---|---|
+| `history:read` | `GET …/history` |
+| `alarms:read` | `GET …/alarms/history` |
+| `recipes:read` | `GET …/recipes` |
+| `users:read` | `GET …/users` |
+| `users:write` | `PUT …/users/{userId}`, `DELETE …/users/{userId}` — does not imply `users:read` |
+
+`sessions:write` (signing users in and out on named panels) is the planned next scope.
+
+HTTPS is not required, since many LAN installs run plain HTTP, but over HTTP the token or password crosses the network in clear text.
+
+### Running or stopped
+
+Every route reads or writes the project's files inside `use_project(projectId)`, so each one works the same on a running and a stopped project; none needs the instance. A user write then POSTs the running child's `/api/internal/reload` (`artifact_type: "users"`, `source: "api"`, see [Internal API](#internal-api)), which broadcasts `config_changed` so an open editor shows its "updated by another writer" banner before it saves the old list over the change. The child reads `users.json` fresh on every sign-in, so nothing else needs reloading.
+
+### Paging
+
+`history` and `alarms/history` return `{ items: [...], nextCursor }`. `nextCursor` is opaque; pass it back as `cursor` with the same filters for the next page, until it is `null`. Paging is keyset (the last row's sort key), not offset, so walking one query's pages neither skips nor repeats a row that was there when the walk started. A cursor is not a resume point for polling: the last page answers `nextCursor: null`, and history is ordered by sample time while the historian writes its buffer every 1.5 s, so a late-landing sample can sort before a row already served. Clients that sync incrementally poll with `start` — for history a margin before the newest `timestamp` they hold, deduplicated on `(variable, timestamp)`; for alarm history the newest `clearedAt` they hold, deduplicated on `id`. docs/user/api.md tells integrators the same. `format=csv` returns the same page as `text/csv` (header row always present) with the next cursor in the `X-Next-Cursor` response header, absent on the last page. A CSV text cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading `'`, so a spreadsheet shows it rather than running it as a formula; numbers are written as they are. `users` and `recipes` are small, bounded sets and return in full.
+
+Times in queries are ISO-8601 (no offset means UTC) or relative (`-30s`, `-15m`, `-1h`, `-7d`), or `now`. Times in responses are ISO-8601 UTC with an offset.
+
+### Historian samples
+
+- `GET …/history?variables=&start=&end=now&limit=1000&cursor=&format=json` — scope `history:read`.
+  - `variables` (required): comma-separated variable keys as the historian stores them (`<datasource>:<path>`). `start` (required), `end` (default `now`). `limit` `1`–`10000`, default `1000`.
+  - Raw samples, no downsampling, ordered by `timestamp` then row id: `items: [{ variable, timestamp, value }]`.
+  - Reads `<project>/historian/history.db` over a `mode=ro` SQLite connection, so it never blocks or writes to a running instance's historian (WAL lets the read run beside it). A project with no database answers an empty page.
+  - `422` for a malformed time, a `limit` out of range, or a bad cursor.
+
+### Alarm history
+
+- `GET …/alarms/history?start=&end=now&limit=100&cursor=&format=json` — scope `alarms:read`.
+  - Cleared alarms from `alarm_state.json` (the instance keeps the newest 500), oldest first by `clearedAt`; `start` / `end` filter on `clearedAt` too. `limit` `1`–`500`, default `100`.
+  - `items: [{ id, alarmId, code, level, title, description, groupTitle, triggeredAt, clearedAt, acked, ackedBy, ackedAt }]`. `ackedBy` is the name the instance recorded at acknowledgement; `ackedBy` and `ackedAt` are `null` for an unacknowledged alarm. Where that name came from (a signed-in session, the editor, an unverified claim) is not stored in `alarm_state.json`, so v1 does not report it.
+
+### Recipes
+
+- `GET …/recipes` — scope `recipes:read`. Read only; nothing here loads a dataset to the PLC.
+  - `{ datasetTypes: [{ id, name, loadedDatasetId, parameters: [{ id, label, dataType }], datasets: [{ id, name, description, values, updatedAt, updatedBy }] }] }`. `values` maps parameter id to value; `loadedDatasetId` is the dataset last loaded for the type, or `null`.
+
+### Users
+
+- `GET …/users` — scope `users:read` → `{ users: [{ id, username, groups, passwordSet }], groups: [{ id, label }] }`. No password or hash ever leaves.
+- `PUT …/users/{userId}` — scope `users:write`. Body `{ username?, password?, groups? }`; any other field is `422`. Creates the user when `userId` is new, else updates it. An omitted field keeps its current value (`username` defaults to `userId` on create); an omitted or empty `password` keeps the stored one, and a new user without one has no password and cannot sign in. → the user as `GET` shows it.
+  - Runs the editor's own validation (`users_api.put_users`): id and username `[A-Za-z0-9_-]`, at most 64 characters; at least one group, every group known; a duplicate username `409`; `guest` keeps id and username `guest`, only the `guest` group and no password. The password is stored as a PBKDF2 hash.
+- `DELETE …/users/{userId}` — scope `users:write` → `{ deleted: userId }`. `404` when unknown; `guest` cannot be deleted (`422`).
+- A missing, unreadable or invalid `users.json` answers `409` on all three, rather than a write replacing it with defaults.
+- A `PUT` or `DELETE` that lands emits a `core.audit` event inside the project's `use_project` scope, so a listener files it under that project: action `user.save` or `user.delete`, subject the user id, actor the API token's name (`admin` for the device-admin password), `actor_source: "api"`. `detail` is `{ tokenId, created, username, groups, passwordChanged }` for a save and `{ tokenId }` for a delete; `tokenId` is `null` for `admin`. No password, hash or token value goes into the record. A refused request emits nothing. The event is emitted in the manager process, not in the project's instance, so a listener has to be registered there to record it.
+
+---
+
 ## Internal API
 
 Loopback-only hooks, driven by the manager, never by browsers. The router is reachable only on the child's `127.0.0.1` instance port; the manager reverse proxy refuses `/runtime|editor/<id>/api/internal/*`, so a browser holding a manager session can never drive it.
 
 - `POST /api/internal/reload`
-  - Body: `{ artifact_type, artifact_ids: [], source: "mcp", summary: "", diff: null, agent_label: null }`.
-  - The workspace MCP runs in the manager process and edits a project's files directly; this tells the running child to re-apply the write to its live runtime and clients.
+  - Body: `{ artifact_type, artifact_ids: [], source: "mcp", summary: "", diff: null, agent_label: null }`. `source` is `"api"` when [API v1](#api-v1) wrote the project's users (`artifact_type: "users"`, `agent_label` the token's name or `admin`).
+  - The workspace MCP and API v1 run in the manager process and edit a project's files directly; this tells the running child to re-apply the write to its live runtime and clients.
   - For `artifact_type: "variables"`, each affected datasource (`artifact_ids` are `"<datasource>/<path>"`) is re-read and its subscription delta applied against the running OPC-UA pipeline before browsers are notified.
   - Then broadcasts `config_changed` over `/ws`. Returns `{ "status": "ok" }`.
 
@@ -749,7 +823,7 @@ Every route that issues the cookie issues the same one: `HttpOnly`, `SameSite=La
 - `GET /api/manager/auth/status` → `{ passwordSet, authenticated }`.
 - `POST /api/manager/auth/setup` — Body `{ password }`. Sets the device-admin password on first run and issues a session cookie. 409 if a password already exists.
 - `POST /api/manager/auth/login` — Body `{ password }`. Issues a session cookie on success. `422` on wrong password; `429` (`RateLimitError`) when the in-memory throttle is locked (5 consecutive failures → 60 s lockout).
-- `POST /api/manager/auth/change-password` — Body `{ currentPassword, newPassword }`. Verifies the current password (reusing the login lockout), rotates it, revokes every peer-transfer token and every MCP token, and reissues the session cookie so the caller stays signed in. `422` on wrong current password; `429` when locked out.
+- `POST /api/manager/auth/change-password` — Body `{ currentPassword, newPassword }`. Verifies the current password (reusing the login lockout), rotates it, revokes every peer-transfer token and every MCP and API token, and reissues the session cookie so the caller stays signed in. `422` on wrong current password; `429` when locked out.
 - `POST /api/manager/auth/logout` — Clears the session cookie.
 
 ### Supervisor — `/api/manager`
@@ -793,7 +867,7 @@ Base prefix: `/api/projects`. Manages the project list in the runtime-home manif
   - Returns `{ path, parent, entries: [{ name, path }], error, hasConfigJson }`. `parent` is `null` at the filesystem root; `error` carries the `OSError` text for an unreadable directory while still returning the resolved `path`; `hasConfigJson` lets the dialog spot an existing project folder.
 - `PATCH /api/projects/{id}`
   - Body: `{ name?, id? }` — send only what changes; an unchanged pair is a no-op that returns the entry. Renames the manifest entry and the `project` block in the folder's `config.json`.
-  - An id change also moves `defaultProjectId`, the instance log folder and the widget-build cache, and re-scopes every MCP token issued for the project (so outstanding tokens follow the project instead of dangling at an id nothing answers to). It does **not** rename the folder on disk.
+  - An id change also moves `defaultProjectId`, the instance log folder and the widget-build cache, and re-scopes every MCP and API token issued for the project (so outstanding tokens follow the project instead of dangling at an id nothing answers to). It does **not** rename the folder on disk.
   - `409` when the project is in the manifest `running` set (stop it first) or when the new id is already registered — compared case-insensitively, since the id doubles as a folder name under the runtime home. `422` on an empty name, an id the grammar in `core.manifest.validate_project_id` rejects, or an id change on a project whose folder carries no metadata (the embedded id has to follow the manifest). A name-only change works with the folder missing.
 - `POST /api/projects/{id}/default`
   - No body. Makes this project the origin-root default (`/` opens its runtime, starting it on demand) by setting the manifest's `defaultProjectId`; works whether the project is running or stopped. Returns the project's list entry. `404` for an unknown id.
@@ -801,7 +875,7 @@ Base prefix: `/api/projects`. Manages the project list in the runtime-home manif
   - Body: `{ path }`. Re-points a missing entry. Rejects (409) if the folder's metadata id doesn't match the manifest entry; rejects (422) if no metadata file is present.
 - `DELETE /api/projects/{id}?deleteFolder=<bool>`
   - Removes the entry. With `deleteFolder=true`, `rmtree`s the folder — but only after confirming `config.json` contains a valid `project` metadata block (defense against wrong-path wipeouts; `422` otherwise). Refuses (409) to delete a project that is in the manifest `running` set — stop it first. Returns `{ id, deletedFolder }`.
-  - Also deletes the project's stored thumbnail, if any, regardless of `deleteFolder` — the screenshot lives outside the project folder.
+  - Also deletes the project's stored thumbnail, if any, regardless of `deleteFolder` — the screenshot lives outside the project folder — and revokes every MCP and API token issued for it, so a later project reusing the id does not inherit them.
 - `GET /api/projects/{id}/export`
   - Streams the project as a zip with `Content-Disposition: attachment; filename="<name>.nexthmi.zip"` (the project name, made filename-safe). 409 if the folder is missing on disk.
 - `POST /api/projects/import`

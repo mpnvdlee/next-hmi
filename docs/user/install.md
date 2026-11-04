@@ -46,7 +46,7 @@ origin root; an individual project's HMI is at
   .widget-build/          compiled custom-widget JS (regenerated)
   .restart-pending        sentinel for /api/system/restart
   .peer-tokens.json       hashed manager peer tokens (no bearer plaintext)
-  .mcp-tokens.json        hashed MCP bearer tokens, each scoped to one project
+  .mcp-tokens.json        hashed MCP and API tokens, each scoped to one project
   .peer-trust.json        pinned peer TLS certificates (trust on first use)
   .install-id.json        random installation ID used by usage reporting
   .telemetry.json         usage-reporting on/off (absent means on), contact prompt dismissed

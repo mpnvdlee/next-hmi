@@ -55,9 +55,10 @@ Two independent controls:
 
 1. **Transport** — `/mcp` is behind the manager front door. Browsers use the
    manager session cookie; headless AI clients send a **bearer token**
-   (`Authorization: Bearer <token>`), paired at `POST /api/manager/mcp/pair`
-   by presenting the device-admin password, and revoked at
-   `DELETE /api/manager/mcp-tokens/{id}`. The plaintext is returned once; only
+   (`Authorization: Bearer <token>`), created under **Editor › Admin ›
+   Tokens** (`POST /api/manager/mcp-tokens` with the session) or, from a
+   script, at `POST /api/manager/mcp/pair` by presenting the device-admin
+   password, and revoked at `DELETE /api/manager/mcp-tokens/{id}`. The plaintext is returned once; only
    its digest is stored. **A token is scoped to one project and to `read` or
    `write`** — a session cookie spans the workspace, a token never does. This
    is the narrower credential to hand an external agent.
@@ -70,9 +71,6 @@ Two independent controls:
 Editing is file-based, so a stopped project is still editable; when a project
 *is* running, the manager notifies its child over a loopback reload hook so
 open browsers and the OPC-UA pipeline update.
-
-Adding OAuth 2.1 (the spec-canonical auth for MCP HTTP transports) is a
-follow-up item.
 
 ## Features and editions
 

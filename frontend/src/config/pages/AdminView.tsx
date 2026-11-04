@@ -6,9 +6,13 @@ import SubscriptionsSection from '../components/admin/SubscriptionsSection';
 import CustomWidgetsSection from '../components/admin/CustomWidgetsSection';
 import ConnectedRuntimesSection from '../components/admin/ConnectedRuntimesSection';
 import HttpOriginsSection from '../components/admin/HttpOriginsSection';
+import TokensSection from '../components/admin/TokensSection';
 import ConfigWorkspace from '../components/ui/ConfigWorkspace';
+import { getArea, projectSlug } from '@shared/utils/runtimeBase';
 
 export default function AdminView() {
+  // Tokens are minted by the manager, which only serves the editor under /editor/<id>/.
+  const projectId = getArea() === 'editor' ? projectSlug() : null;
   const customWidgets = useAdminViewStore((s) => s.customWidgets);
   const subscriptions = useAdminViewStore((s) => s.subscriptions);
   const alarmTriggers = useAdminViewStore((s) => s.alarmTriggers);
@@ -65,6 +69,7 @@ export default function AdminView() {
           error={httpOriginsError}
           onSave={saveHttpOrigins}
         />
+        {projectId && <TokensSection projectId={projectId} />}
         {enterpriseAdminSections.map((Section, i) => (
           <Section key={i} />
         ))}

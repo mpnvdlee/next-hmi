@@ -772,6 +772,23 @@ def test_delete_removes_entry(client: TestClient, tmp_path: Path, home: Path) ->
     assert target.exists()
 
 
+def test_delete_revokes_the_project_tokens(
+    client: TestClient, tmp_path: Path, home: Path, monkeypatch,
+) -> None:
+    monkeypatch.setattr(mcp_tokens.manager_auth, "credential_generation", lambda: "gen-1")
+    path = tmp_path / "plant-a"
+    project_id = _make_project_folder(path)
+    _single_project_manifest(home, path, project_id)
+    _mcp_id, mcp_raw = mcp_tokens.issue(project_id=project_id, access="write")
+    _api_id, api_raw = mcp_tokens.issue_api(project_id=project_id, scopes=["alarms:read"])
+    _other_id, other_raw = mcp_tokens.issue(project_id="plant-z", access="read")
+
+    assert client.delete(f"/api/projects/{project_id}").status_code == 200
+    assert mcp_tokens.resolve(mcp_raw) is None
+    assert mcp_tokens.resolve_api(api_raw) is None
+    assert mcp_tokens.resolve(other_raw) is not None
+
+
 def test_delete_with_folder_flag_rmtrees(client: TestClient, tmp_path: Path, home: Path) -> None:
     target = tmp_path / "wipe-me"
     project_id = _make_project_folder(target)

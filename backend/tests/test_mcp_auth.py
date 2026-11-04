@@ -274,6 +274,43 @@ def test_mcp_token_list_and_revoke_require_manager_session(manager_client: TestC
     assert manager_client.delete(f"/api/manager/mcp-tokens/{token_id}").status_code == 404
 
 
+def test_dashboard_create_needs_session_not_password(manager_client: TestClient):
+    """The dashboard's create route takes the manager session as its proof: no
+    password in the body, and nothing minted without the session."""
+    manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
+    _seed_project(manager_client)
+    _drop_session_cookie(manager_client)
+    body = {"projectId": "P1", "access": "write", "name": "Laptop"}
+    assert manager_client.post("/api/manager/mcp-tokens", json=body).status_code == 401
+
+    manager_client.post("/api/manager/auth/login", json={"password": "secret"})
+    missing = manager_client.post(
+        "/api/manager/mcp-tokens", json={"projectId": "GHOST", "access": "read"}
+    )
+    assert missing.status_code == 404
+
+    created = manager_client.post("/api/manager/mcp-tokens", json=body)
+    assert created.status_code == 201
+    issued = created.json()
+    assert issued["projectId"] == "P1"
+    assert issued["access"] == "write"
+    assert issued["transport"] == "http"
+
+    # Shown once: the listing never carries the secret.
+    listed = manager_client.get("/api/manager/mcp-tokens").json()["tokens"]
+    entry = next(t for t in listed if t["id"] == issued["tokenId"])
+    assert entry["name"] == "Laptop"
+    assert issued["token"] not in str(listed)
+
+    _drop_session_cookie(manager_client)
+    resp = manager_client.post(
+        "/mcp",
+        json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
+        headers={"Authorization": f"Bearer {issued['token']}"},
+    )
+    assert resp.status_code != 401
+
+
 def test_password_change_revokes_mcp_tokens(manager_client: TestClient):
     manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
     _seed_project(manager_client)

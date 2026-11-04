@@ -55,7 +55,7 @@ export default function HttpOriginsSection({ origins, error, onSave }: Props) {
             {origins.map((origin) => (
               <tr key={origin}>
                 <td>{origin}</td>
-                <td className="cfg-http-origins__actions">
+                <td className="cfg-admin-table__actions">
                   <Button
                     variant="ghost"
                     size="sm"
