@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useId, useMemo } from 'react';
-import { bindingIndex, bindingKey } from '@shared/types/config';
+import { addressSuffix, bindingIndex, bindingKey } from '@shared/types/config';
 import { parseVarKey } from '@shared/types/datasource';
 import {
   coerceOpcuaWrite,
@@ -89,6 +89,9 @@ const WIDEST_FOR_SIMPLE: Record<string, string> = {
   float: 'double',
   integer: 'int64',
 };
+
+/** A bit is written as a Boolean; the backend folds it into its word. */
+const BIT_DESCRIPTOR: OpcuaWriteDescriptor = { dataType: 'boolean', isArray: false };
 
 /**
  * Build the coercion descriptor for a whole-variable (non-field) write.
@@ -171,6 +174,7 @@ export function useWriteVariable(
   const binding = getPropBinding(properties, propKey);
   const varKey = bindingKey(binding);
   const index = bindingIndex(binding);
+  const bit = binding?.bit;
   const meta = useVariableMeta(varKey);
   // One toast id per hook instance: an operator who presses the same control
   // again while its rejection is still on screen reuses that toast instead of
@@ -214,7 +218,11 @@ export function useWriteVariable(
       // a struct array has none, and the struct's `VarType` names its fields
       // without their types, so only the configured field range is checked
       // there and type coercion is left to the backend.
-      const descriptor = target ? scalarDescriptor(target, field ? undefined : index) : null;
+      const descriptor = !target
+        ? null
+        : bit !== undefined
+          ? BIT_DESCRIPTOR
+          : scalarDescriptor(target, field ? undefined : index);
       if (descriptor) {
         const coerced = preflight(value, descriptor);
         if (!coerced.ok) {
@@ -242,12 +250,12 @@ export function useWriteVariable(
         ...(requestId ? { requestId } : {}),
         scope,
         datasource,
-        path: index !== undefined ? `${path}[${index}]` : path,
+        path: `${path}${addressSuffix(index, bit)}`,
         ...(field ? { field } : {}),
         value: payloadValue,
       });
     },
-    [varKey, index, meta, scope, toastId, onError, tracked],
+    [varKey, index, bit, meta, scope, toastId, onError, tracked],
   );
 
   return useMemo(() => Object.assign(write, { canWrite: Boolean(varKey) }), [write, varKey]);

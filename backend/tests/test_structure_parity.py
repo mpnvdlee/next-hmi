@@ -130,3 +130,13 @@ def test_action_fields_table_matches_frontend_union() -> None:
     ButtonAction union — so a new action type or field fails here until the
     backend says how to validate it."""
     assert _load("actionFields.json") == structure.ACTION_FIELDS
+
+
+def test_formula_syntax_matches_frontend_parser() -> None:
+    """Same fixture drives formula.test.ts — the warnings pill calls a formula
+    invalid exactly when the runtime cannot parse it."""
+    from core.validation.structure import _formula_is_valid
+
+    fixture = _load("formulaSyntax.json")
+    assert [e for e in fixture["valid"] if not _formula_is_valid(e)] == []
+    assert [e for e in fixture["invalid"] if _formula_is_valid(e)] == []

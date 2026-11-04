@@ -8,7 +8,7 @@ import {
 } from './bindingValidation';
 import type { VarMeta } from '../store/variableStore';
 import type { EvaluationContext, ResolvedValue } from './propertySourceEval';
-import type { VarType } from '@shared/types/varType';
+import type { AcceptType, VarType } from '@shared/types/varType';
 
 function slice(overrides: Partial<BindingStoreSlice> = {}): BindingStoreSlice {
   return {
@@ -41,6 +41,23 @@ function structArraySpec(overrides: Partial<BindingSpec> = {}): BindingSpec {
 }
 
 describe('checkBindingSpec', () => {
+  it('judges a bit of a whole number as a Boolean, its word deciding access', () => {
+    const s = slice({
+      values: { 'Plant:Status': 32, 'Plant:Speed': 1.5 },
+      varMeta: {
+        'Plant:Status': meta({ kind: 'scalar', base: 'Integer', array: false }, { writable: true }),
+        'Plant:Speed': meta({ kind: 'scalar', base: 'Float', array: false }),
+      },
+    });
+    const bool: AcceptType = { kind: 'scalar', base: 'Boolean', array: false };
+    const int: AcceptType = { kind: 'scalar', base: 'Integer', array: false };
+    const spec = (id: string, bit: number, accept: AcceptType) => ({ id, bit, accept: [accept] });
+    expect(checkBindingSpec({ ...spec('Plant:Status', 5, bool), write: true }, s, true)).toBe('ok');
+    expect(checkBindingSpec(spec('Plant:Status', 5, int), s, true)).toBe('invalid');
+    expect(checkBindingSpec(spec('Plant:Status', 32, bool), s, true)).toBe('invalid');
+    expect(checkBindingSpec(spec('Plant:Speed', 0, bool), s, true)).toBe('invalid');
+  });
+
   it('reports ok for an empty struct[] variable once metadata confirms the shape', () => {
     const s = slice({ values: { 'PLC:Alarms': [] }, varMeta: { 'PLC:Alarms': meta(structArray) } });
     expect(checkBindingSpec(structArraySpec(), s, true)).toBe('ok');

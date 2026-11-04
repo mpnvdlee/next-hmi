@@ -20,6 +20,7 @@ import pytest
 from asyncua import ua
 from core.exceptions import DatasourceValidationError
 from core.value_types import (
+    BIT_WIDTHS,
     OPCUA_TO_SIMPLE,
     VALUE_TYPES,
     datetime_to_iso,
@@ -87,6 +88,10 @@ def test_browse_names_namespace_zero_data_types_from_fixture() -> None:
 @pytest.mark.parametrize("entry", TYPES, ids=_IDS)
 def test_simple_type(entry: dict) -> None:
     assert to_simple_type(entry["name"]) == entry["simpleType"]
+
+
+def test_bit_widths_match_fixture() -> None:
+    assert {t["name"].lower(): t["bits"] for t in TYPES if "bits" in t} == BIT_WIDTHS
 
 
 def test_opcua_to_simple_has_no_name_outside_fixture() -> None:

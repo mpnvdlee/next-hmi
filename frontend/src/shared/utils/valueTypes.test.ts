@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
+  bitWidth,
+  byteHex,
+  readBit,
   toSimpleType,
   representativeOpcuaType,
   canonicalOpcuaType,
@@ -189,6 +192,7 @@ describe('OPC-UA builtin type table', () => {
     expect(opcuaTypeOf(t.name)).toBe(t.testServerType);
     // What the UI calls a variable is what a write to it is coerced as.
     expect(canonicalOpcuaWriteType(t.name)).toBe(t.writeVariantType === null ? null : t.simpleType);
+    expect(bitWidth(t.name)).toBe('bits' in t ? t.bits : 0);
   });
 
   it('has no simple-type mapping outside the fixture', () => {
@@ -215,5 +219,23 @@ describe('OPC-UA builtin type table', () => {
     for (const [simple, opcuaType] of Object.entries(representative)) {
       expect(representativeOpcuaType(simple)).toBe(opcuaType);
     }
+  });
+});
+
+describe('bits and bytes', () => {
+  it('reads one bit of a whole number, the sign bit of a negative one too', () => {
+    expect(readBit(0b1000, 3)).toBe(true);
+    expect(readBit(0b1000, 2)).toBe(false);
+    expect(readBit(-1, 31)).toBe(true);
+    expect(readBit(4294967295, 31)).toBe(true);
+    expect(readBit(1.5, 0)).toBeNull();
+    expect(readBit('8', 3)).toBeNull();
+  });
+
+  it('shows a Byte as IEC hex', () => {
+    expect(byteHex(12)).toBe('16#0C');
+    expect(byteHex(255)).toBe('16#FF');
+    expect(byteHex(256)).toBeNull();
+    expect(byteHex(null)).toBeNull();
   });
 });

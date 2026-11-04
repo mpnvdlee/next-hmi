@@ -20,12 +20,12 @@ from core.value_types import (
         ("Boolean", "Boolean"),
         ("Bool", "Boolean"),
         ("SByte", "Integer"),
-        ("Byte", "Integer"),
+        ("Byte", "Byte"),
         ("Int8", "Integer"),
         ("Int16", "Integer"),
         ("Int32", "Integer"),
         ("Int64", "Integer"),
-        ("UInt8", "Integer"),
+        ("UInt8", "Byte"),
         ("UInt16", "Integer"),
         ("UInt32", "Integer"),
         ("UInt64", "Integer"),
@@ -123,6 +123,18 @@ def test_simplify_variable_tree_converts_leaves_and_preserves_fields():
     # Folders keep their kind/name.
     assert out[0]["kind"] == "folder"
     assert out[0]["name"] == "Motor"
+
+
+def test_simplify_variable_tree_keeps_the_bit_width_its_simple_type_hides():
+    out = simplify_variable_tree([
+        {"display_name": "Status", "data_type": "UInt16"},
+        {"display_name": "Mask", "data_type": "Byte"},
+        {"display_name": "Words", "data_type": "UInt16", "is_array": True},
+        {"display_name": "Total", "data_type": "UInt64"},
+    ])
+    assert [(n["data_type"], n.get("bits")) for n in out] == [
+        ("Integer", 16), ("Byte", 8), ("Integer", None), ("Integer", None),
+    ]
 
 
 def test_simplify_variable_tree_does_not_mutate_input():

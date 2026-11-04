@@ -54,6 +54,9 @@ export interface VariableBinding {
   /** Take `index` from the surrounding Repeater copy instead. Replaced by a
    *  concrete `index` before any widget sees the binding. */
   repeatIndex?: boolean;
+  /** One bit (0 the lowest) of a whole-number variable, read and written as a
+   *  Boolean. Shown as `Status.3`; travels to the backend as a `.3` path suffix. */
+  bit?: number;
 }
 
 /** A `$var.index` given as a property source instead of a number. */
@@ -85,7 +88,8 @@ export function bindingParts(b: VariableBinding | undefined | null): {
   return { datasource: path.slice(0, idx), location: path.slice(idx + 1) };
 }
 
-/** The datasource/path pair a write goes to, `[N]` added for one array slot.
+/** The datasource/path pair a write goes to, `[N]` added for one array slot
+ *  and `.N` for one bit.
  *  Null until the target is a picked `$var` — an unpicked target, or a
  *  `$repeatItem` outside a Repeater (inside one it is already a `$var`). */
 export function writeTargetAddress(target: unknown): { datasource: string; path: string } | null {
@@ -94,10 +98,12 @@ export function writeTargetAddress(target: unknown): { datasource: string; path:
   const { datasource, location } = bindingParts(binding);
   if (!datasource || !location) return null;
   const index = bindingIndex(binding);
-  return {
-    datasource,
-    path: index !== undefined ? `${location}[${index}]` : location,
-  };
+  return { datasource, path: `${location}${addressSuffix(index, binding.bit)}` };
+}
+
+/** The `[N]` element and `.N` bit suffixes a write path carries, in that order. */
+export function addressSuffix(index: number | undefined, bit: number | undefined): string {
+  return `${index !== undefined ? `[${index}]` : ''}${bit !== undefined ? `.${bit}` : ''}`;
 }
 
 // Property source types

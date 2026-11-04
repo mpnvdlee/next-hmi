@@ -933,7 +933,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "87273dca2761463a",
+    "buildTs": "dabc1a4ea1db99a4",
     "displayName": "Value Display",
     "hostsChildren": null,
     "flowsChildren": null,
@@ -943,7 +943,8 @@
       "variable": {
         "type": [
           "float",
-          "integer"
+          "integer",
+          "byte"
         ]
       },
       "label": {

@@ -587,7 +587,7 @@ Displays a numeric value with a label and unit.
 
 | Property | Label | Type |
 |---|---|---|
-| `variable` | Value | `Float | Integer` |
+| `variable` | Value | `Float | Integer | Byte` |
 | `label` | Label | `String` |
 | `unit` | Unit | `String` |
 | `decimals` | Decimal places | `Integer` |

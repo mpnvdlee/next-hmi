@@ -873,6 +873,17 @@ def test_help_redirects_to_public_docs_when_none_are_bundled(
     assert resp.headers["location"] == f"{docs_api.PUBLIC_DOCS_URL}v1.0/"
 
 
+def test_a_help_page_redirects_to_that_page_of_the_public_docs(
+    client: TestClient, monkeypatch
+) -> None:
+    from api import docs_api
+
+    monkeypatch.setattr(docs_api, "app_version", lambda: "1.1.0")
+    resp = client.get("/help/properties.html", follow_redirects=False)
+    assert resp.status_code == 307
+    assert resp.headers["location"] == f"{docs_api.PUBLIC_DOCS_URL}v1.1/properties.html"
+
+
 def test_public_docs_url_falls_back_to_latest_for_dev() -> None:
     from api.docs_api import PUBLIC_DOCS_URL, public_docs_url
 

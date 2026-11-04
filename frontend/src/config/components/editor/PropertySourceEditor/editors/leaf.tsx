@@ -35,7 +35,7 @@ import type {
   VarSource,
   ViewportSource,
 } from '@shared/types/config';
-import { bindingParts, isBoundIndex } from '@shared/types/config';
+import { addressSuffix, bindingIndex, bindingParts, isBoundIndex } from '@shared/types/config';
 import { loadVariableWriteDescriptor } from '@config/utils/variableType';
 import { acceptedValueTypes, isArrayType } from '@shared/utils/valueTypes';
 import { FieldRowBelow } from '../../../ui/FieldGroup';
@@ -46,11 +46,15 @@ import { useConfigStore } from '@shared/store/configStore';
 import { findPageNodeById, flattenPageNodes, resolvePageTitle } from '@shared/utils/pageTree';
 import { sourceFieldFits, type FieldSelectingSource } from '@hmi/utils/propertySourceRegistry';
 
-/** Parse a typed `datasource:location[n]` string into a VariableBinding. */
-function parseVarPathInput(text: string): { path: string; index?: number } {
-  const trimmed = text.trim();
-  const m = trimmed.match(/^(.*)\[(\d+)\]$/);
-  return m ? { path: m[1], index: parseInt(m[2], 10) } : { path: trimmed };
+/** Parse a typed `datasource:location[n].b` string into a VariableBinding —
+ *  `[n]` one array element, `.b` one bit. */
+function parseVarPathInput(text: string): VariableBinding {
+  const m = text.trim().match(/^(.*?)(?:\[(\d+)\])?(?:\.(\d+))?$/)!;
+  return {
+    path: m[1],
+    ...(m[2] !== undefined && { index: parseInt(m[2], 10) }),
+    ...(m[3] !== undefined && { bit: parseInt(m[3], 10) }),
+  };
 }
 
 /**
@@ -111,9 +115,7 @@ export function VarEditor({
     ? ''
     : repeatIndex
       ? `${basePath}${REPEAT_INDEX_SUFFIX}`
-      : varObj.index !== undefined && !boundIndex
-        ? `${basePath}[${varObj.index}]`
-        : basePath;
+      : `${basePath}${addressSuffix(boundIndex ? undefined : bindingIndex(varObj), varObj.bit)}`;
   // Whether the path names a whole array, which the variable's metadata tells,
   // and how long it is.
   const [wholeArray, setWholeArray] = useState<{ path: string; length?: number }>();
@@ -141,6 +143,8 @@ export function VarEditor({
         titleFromDraft
         onCommit={(text) => {
           const trimmed = text.trim();
+          // Unchanged text keeps the binding — a tag named `Motor.1` included.
+          if (trimmed === committedText) return;
           const parsed: VariableBinding = trimmed.endsWith(REPEAT_INDEX_SUFFIX)
             ? { path: trimmed.slice(0, -REPEAT_INDEX_SUFFIX.length), repeatIndex: true }
             : parseVarPathInput(text);
@@ -152,7 +156,8 @@ export function VarEditor({
           if (
             next.path === basePath &&
             next.index === varObj.index &&
-            next.repeatIndex === varObj.repeatIndex
+            next.repeatIndex === varObj.repeatIndex &&
+            next.bit === varObj.bit
           )
             return;
           onChange({ $var: next });

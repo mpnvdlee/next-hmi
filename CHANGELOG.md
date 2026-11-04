@@ -18,6 +18,29 @@ heading.
   a theme colour or any other colour; left unset they follow the theme's OK
   and Muted Text colours. Off used to be the much lighter Border colour, so an
   LED that is off now reads clearly on a white surface.
+- **Bind one bit of a status word.** Where a field takes a Boolean, the
+  variable picker has a **Bits** box: tick it and every 8-, 16- or 32-bit
+  whole-number tag opens onto its bits, `Bit 0` the lowest. A picked bit shows
+  as `Plant:Battery/Status.5`, lights an LED, and is written by a button or a
+  toggle: the server reads the whole word fresh from the controller, changes
+  that one bit and writes the word back.
+- **Formulas read bits and mask words.** A formula takes `{1}.3` for one bit,
+  `AND`, `OR`, `XOR` and `NOT` on whole numbers, `SHL(x, n)` and `SHR(x, n)`,
+  and hex and binary numbers such as `16#0F` and `2#1100`, in Structured Text
+  order. A Boolean value counts as 1 or 0. A link under the expression opens
+  the new formula reference in the user guide.
+- **`Byte` is a type of its own.** An OPC-UA `Byte` tag, and a static
+  variable of the new **Byte** data type, show their live value in hex
+  (`16#0C`) in the datasource table, and are taken by a formula and a Value
+  Display.
+
+### Changed
+
+- **A `Byte` tag no longer fits a field that takes an Integer.** An OPC-UA
+  `Byte` — a Siemens `BYTE` or `USINT` — used to arrive as an Integer. It is
+  now a `Byte`, which only a formula and a Value Display take, so a Byte tag
+  bound to another number widget, an alarm, a recipe parameter, the historian
+  or a trend is now flagged in the warnings pill.
 
 ### Fixed
 

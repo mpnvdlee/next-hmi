@@ -59,6 +59,22 @@ describe('useBindingValue (struct[] index resolution)', () => {
     useVariableStore.setState({ values: {}, varMeta: {} });
   });
 
+  it('reads one bit of a whole number as a Boolean, of an array element too', () => {
+    useVariableStore.setState({
+      values: { 'MyPLC:Status': 0b1000, 'MyPLC:Words': [0, 0b10] },
+      varMeta: { 'MyPLC:Words': { type: { kind: 'scalar', base: 'Integer', array: true } } },
+    });
+    expect(renderHook(() => useBindingValue({ path: 'MyPLC:Status', bit: 3 })).result.current).toBe(
+      true,
+    );
+    expect(renderHook(() => useBindingValue({ path: 'MyPLC:Status', bit: 2 })).result.current).toBe(
+      false,
+    );
+    expect(
+      renderHook(() => useBindingValue({ path: 'MyPLC:Words', index: 1, bit: 1 })).result.current,
+    ).toBe(true);
+  });
+
   it('slices a scalar array client-side (no per-element backend key)', () => {
     useVariableStore.setState({
       values: { 'MyPLC:MyArray': [10, 20, 30] },

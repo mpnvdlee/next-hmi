@@ -17,7 +17,14 @@ import { arrayBadgeSuffix, isArrayShape } from '@shared/types/arrayShape';
 import { ToggleSlot, EmptyToggleSlot, GroupHeaderRow } from '../BindingPickerShell/rowParts';
 import { propertyTypeLabel } from '@shared/types/componentProperty';
 import { formatTypeBadge } from './helpers';
-import { folderKey, arrayExpansionKey, rowSelectionKey, type RowItem } from './variableTreeHelpers';
+import {
+  folderKey,
+  arrayExpansionKey,
+  bitsExpansionKey,
+  hasBits,
+  rowSelectionKey,
+  type RowItem,
+} from './variableTreeHelpers';
 import { REPEAT_INDEX_SUFFIX } from './repeatItemRows';
 
 export interface RowContext {
@@ -30,6 +37,8 @@ export interface RowContext {
   onPickAndClose: (key: string) => void;
   /** Datasource names whose children are currently being fetched. */
   dsLoading: Set<string>;
+  /** The Bits checkbox is on: a whole number opens onto its bits. */
+  bits?: boolean;
 }
 
 type Extract<T, K> = T extends { kind: K } ? T : never;
@@ -231,8 +240,10 @@ function VariableRow({ item, ctx }: { item: Extract<RowItem, 'variable'>; ctx: R
   const compositeKey = v._datasource && v._path ? `${v._datasource}:${v._path}` : v.display_name;
   const isSelected = compositeKey === selectedKey;
   const isArrayVar = isArrayShape(v);
-  const arrKey = isArrayVar ? arrayExpansionKey(v) : '';
-  const isArrOpen = isArrayVar && !collapsed.has(arrKey);
+  const showsBits = !!ctx.bits && hasBits(v);
+  const arrKey = isArrayVar ? arrayExpansionKey(v) : showsBits ? bitsExpansionKey(v) : '';
+  // A bit list's key marks it open, an array's marks it closed.
+  const isArrOpen = isArrayVar ? !collapsed.has(arrKey) : showsBits && collapsed.has(arrKey);
   return (
     <div
       className={`editor-binding-item${isSelected ? ' editor-binding-item--selected' : ''}`}
@@ -240,7 +251,7 @@ function VariableRow({ item, ctx }: { item: Extract<RowItem, 'variable'>; ctx: R
       onClick={() => selectKey(compositeKey)}
       title={v.node_id}
     >
-      {isArrayVar ? (
+      {isArrayVar || showsBits ? (
         <ToggleSlot
           open={isArrOpen}
           onToggle={(e) => {
@@ -258,6 +269,7 @@ function VariableRow({ item, ctx }: { item: Extract<RowItem, 'variable'>; ctx: R
         <span className="editor-binding-char-row__type cfg-text-truncate">
           <SearchHighlight text={formatTypeBadge(v.data_type)} />
           {arrayBadgeSuffix(v)}
+          {showsBits && ` · ${v.bits} bits`}
         </span>
       )}
       <AccessBadge writable={v.writable} />

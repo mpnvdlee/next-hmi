@@ -170,6 +170,7 @@ export const SCALAR_FIELD_TYPES = [
   'time',
   'duration',
   'integer',
+  'byte',
   'float',
   'boolean',
 ];
@@ -357,7 +358,7 @@ const DESCRIPTORS: PropertySourceDescriptor[] = [
     key: '$formula',
     contentTier: 3,
     label: 'Formula',
-    description: 'A number calculated from values with + − × ÷ and parentheses.',
+    description: 'A number calculated from values with + − × ÷, parentheses and bit operations.',
     abbr: 'fx',
     // A fraction unless `round: true`, which a whole-number field starts with.
     produces: ['float', 'integer'],

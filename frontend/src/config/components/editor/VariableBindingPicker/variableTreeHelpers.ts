@@ -62,27 +62,27 @@ function liveArrayLength(v: PickerVariableEntry): number {
 }
 
 /** Flatten the var-mode tree into ordered rows, honoring collapsed-state.
- *  `repeatElement` adds a `[#]` row to every array, for a field inside a Repeater. */
+ *  `repeatElement` adds a `[#]` row to every array, for a field inside a Repeater;
+ *  `bits` a Bit row per bit under each whole number the user expands. */
 export function flattenForRender(
   nodes: DisplayNode[],
   depth: number,
   collapsed: Set<string>,
   repeatElement = false,
+  bits = false,
 ): RowItem[] {
   const rows: RowItem[] = [];
+  const children = (level: DisplayNode[]) =>
+    flattenForRender(level, depth + 1, collapsed, repeatElement, bits);
   for (const n of nodes) {
     if (isDatasourceNode(n)) {
       const key = `ds:${n.name}`;
       rows.push({ kind: 'datasource', node: n, depth });
-      if (!collapsed.has(key)) {
-        rows.push(...flattenForRender(n.children, depth + 1, collapsed, repeatElement));
-      }
+      if (!collapsed.has(key)) rows.push(...children(n.children));
     } else if (isFolder(n)) {
       const key = folderKey(n);
       rows.push({ kind: 'folder', folder: n, depth });
-      if (!collapsed.has(key)) {
-        rows.push(...flattenForRender(n.children, depth + 1, collapsed, repeatElement));
-      }
+      if (!collapsed.has(key)) rows.push(...children(n.children));
     } else {
       const v = n as PickerVariableEntry;
       rows.push({ kind: 'variable', entry: v, depth });
@@ -91,10 +91,55 @@ export function flattenForRender(
         if (repeatElement) rows.push({ kind: 'repeat-element', parent: v, depth: depth + 1 });
         rows.push(...makeArrayElementRows(v, depth + 1, v._path ?? v.display_name, liveLength));
       }
+      // Unlike an array, a word starts closed: its bits open on request.
+      if (bits && hasBits(v) && collapsed.has(bitsExpansionKey(v))) {
+        for (const entry of bitEntries(v)) {
+          rows.push({ kind: 'variable', entry, depth: depth + 1 });
+        }
+      }
     }
   }
   return rows;
 }
+
+/** Separates a variable's path from a bit number in a picker key
+ *  (`Battery/Status.%X3`). Never shown: the bit reads `Status.3`. */
+export const BIT_KEY = '.%X';
+const BIT_KEY_RE = /^(.+)\.%X(\d+)$/;
+
+/** Whether the picker lists the bits of a variable: a whole number, not an
+ *  array. The tree's simple types hide the width, so it rides along as `bits`. */
+export function hasBits(v: PickerVariableEntry): boolean {
+  return !isArrayShape(v) && (v.bits ?? 0) > 0;
+}
+
+/** Toggle-set key of a word's bit list. Present means open — the reverse of
+ *  every other key there, since a word starts closed. */
+export function bitsExpansionKey(v: PickerVariableEntry): string {
+  return `${v._datasource ?? ''}:${v._path ?? v.display_name}${BIT_KEY}`;
+}
+
+/** One Boolean entry per bit of `v`, keyed `<path>.%X<n>` and named `Bit <n>`. */
+export function bitEntries(v: PickerVariableEntry): PickerVariableEntry[] {
+  const path = v._path ?? v.display_name;
+  return Array.from({ length: v.bits ?? 0 }, (_, n) => ({
+    ...v,
+    bits: undefined,
+    node_id: undefined,
+    display_name: `Bit ${n}`,
+    data_type: 'Boolean',
+    _path: `${path}${BIT_KEY}${n}`,
+  }));
+}
+
+/** A picker key's path split into its variable and bit, or null for no bit. */
+export function splitBitKey(rawPath: string): { path: string; bit: number } | null {
+  const m = rawPath.match(BIT_KEY_RE);
+  return m ? { path: m[1], bit: Number(m[2]) } : null;
+}
+
+/** A bit key as the user reads it: `Status.%X3` → `Status.3`. */
+export const bitKeyLabel = (text: string): string => text.replace(BIT_KEY_RE, '$1.$2');
 
 /** Flatten the stored tree to a plain array, annotating each with _datasource and _path. */
 export function flattenAll(nodes: TreeNode[], datasource: string, prefix = ''): VariableEntry[] {
@@ -156,7 +201,8 @@ export function annotateSelectable(
   return annotate(nodes);
 }
 
-/** Keep only enabled entries; apply type filter per schema field. */
+/** Keep only enabled entries; apply type filter per schema field. With `bits`,
+ *  a whole number stays wherever its bits — Booleans — fit. */
 export function typeFilter(
   nodes: TreeNode[],
   schemaField: {
@@ -164,8 +210,10 @@ export function typeFilter(
     requiredFields?: RequiredFieldEntry[];
     write?: boolean;
   } | null,
+  bits = false,
 ): TreeNode[] {
   const allowed = schemaField?.type !== undefined ? acceptedValueTypes(schemaField.type) : [];
+  const bitsFit = bits && allowed.some((t) => t.toLowerCase() === 'boolean');
   const shapes = structShapes(allowed);
   const required = schemaField?.requiredFields;
 
@@ -194,7 +242,7 @@ export function typeFilter(
       if (!n.enabled) return [];
       if (shapes.only) return [];
       if (n.data_type === 'struct') return [];
-      if (allowed.length) {
+      if (allowed.length && !(bitsFit && hasBits(n))) {
         if (!allowed.some((t) => nodeAcceptsOrElement(parseTypeToken(t), nodeVarType(n))))
           return [];
       }

@@ -102,7 +102,7 @@ SOURCE_PRODUCES: dict[str, tuple[str, ...]] = {
 SCOPE_SOURCES: frozenset[str] = frozenset({"$componentProp", "$result", "$repeatItem"})
 
 SCALAR_FIELD_TYPES: tuple[str, ...] = (
-    "string", "datetime", "date", "time", "duration", "integer", "float", "boolean",
+    "string", "datetime", "date", "time", "duration", "integer", "byte", "float", "boolean",
 )
 _STRING_BOUND_KINDS = frozenset({"color", "icon", "image", "video"})
 _LIST_KINDS = frozenset({"option-list", "item-list"})

@@ -44,6 +44,11 @@ interface BindingPickerShellProps {
   showAll?: boolean;
   onShowAllChange?: (checked: boolean) => void;
 
+  /** The "Bits" checkbox, rendered when `onBitsChange` is set: lists the bits
+   *  of each whole-number variable under it. */
+  bits?: boolean;
+  onBitsChange?: (checked: boolean) => void;
+
   loadError?: string | null;
 
   /** Ref forwarded to <div className="editor-binding-list"> (needed by virtualizer) */
@@ -71,6 +76,8 @@ export default function BindingPickerShell({
   showAllCheckbox,
   showAll,
   onShowAllChange,
+  bits,
+  onBitsChange,
   loadError,
   listRef,
   listContent,
@@ -96,16 +103,28 @@ export default function BindingPickerShell({
         searchPlaceholder={searchPlaceholder}
         searchInputRef={searchInputRef}
         meta={
-          showAllCheckbox && (
-            <label className="editor-binding-showall">
-              <input
-                type="checkbox"
-                checked={!!showAll}
-                onChange={(e) => onShowAllChange?.(e.target.checked)}
-              />
-              Show all
-            </label>
-          )
+          <>
+            {onBitsChange && (
+              <label className="editor-binding-showall">
+                <input
+                  type="checkbox"
+                  checked={!!bits}
+                  onChange={(e) => onBitsChange(e.target.checked)}
+                />
+                Bits
+              </label>
+            )}
+            {showAllCheckbox && (
+              <label className="editor-binding-showall">
+                <input
+                  type="checkbox"
+                  checked={!!showAll}
+                  onChange={(e) => onShowAllChange?.(e.target.checked)}
+                />
+                Show all
+              </label>
+            )}
+          </>
         }
         onClose={onClose}
       />

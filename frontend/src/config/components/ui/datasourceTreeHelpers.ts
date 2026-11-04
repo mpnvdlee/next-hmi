@@ -55,6 +55,8 @@ export interface PickerFolderEntry extends FolderEntry {
 }
 
 export interface PickerVariableEntry extends VariableEntry {
+  /** How many bits the real type offers a bit binding; absent for none. */
+  bits?: number;
   _path?: string;
   _datasource?: string;
 }
@@ -115,6 +117,7 @@ export function parseApiTree(nodes: unknown[], datasource: string, prefix = ''):
         }),
         writable,
         fields,
+        ...(typeof n.bits === 'number' && n.bits > 0 && { bits: n.bits }),
         _datasource: datasource,
         _path: path,
       } satisfies PickerVariableEntry;

@@ -20,11 +20,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-SimpleBase = str  # 'Boolean' | 'Integer' | 'Float' | 'String' | 'DateTime' | 'Date' | 'Time' | 'Duration'
+SimpleBase = str  # 'Boolean' | 'Integer' | 'Byte' | 'Float' | 'String' | 'DateTime' | 'Date' | 'Time' | 'Duration'
 
 BASES: list[SimpleBase] = [
     "Boolean",
     "Integer",
+    "Byte",
     "Float",
     "String",
     "DateTime",

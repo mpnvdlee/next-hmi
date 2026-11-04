@@ -2,7 +2,7 @@
 
 Every property value answers two questions:
 
-1. **What type is it?** — the kind of value (`String`, `Integer`, `Float`, `Boolean`, `DateTime`, `Date`, `Time`, `Duration`, `color`, `icon`, `image`, `video`). Any type can also be an **array** of that type.
+1. **What type is it?** — the kind of value (`String`, `Integer`, `Byte`, `Float`, `Boolean`, `DateTime`, `Date`, `Time`, `Duration`, `color`, `icon`, `image`, `video`). Any type can also be an **array** of that type.
 2. **Where does it come from?** — the source (a literal you typed, a datasource variable, the logged-in user, a computed expression, …).
 
 The **type is decided by the field**. A label's `text` field needs a `String`; a gauge's `value` field needs a `Float` or an `Integer`. You don't pick the type — you pick a **source** that produces the type the field wants.
@@ -23,6 +23,7 @@ The kinds of value a field can hold. Any of these can also appear as an **array*
 |---|---|---|
 | `String` | `"hello"` | Text, labels, captions |
 | `Integer` | `42` | Whole-number values, counts, indices |
+| `Byte` | `12` | A whole number 0–255 from an OPC-UA `Byte` (Siemens `BYTE` / `USINT`). Exact like every base: only fields that list it take one — `$formula` operands and Value Display's `variable` |
 | `Float` | `3.14` | Continuous values, sizes, measurements |
 | `Boolean` | `true` / `false` | Visibility, enabled, toggles |
 | `DateTime` | `"2026-06-16T14:30:00Z"` | Timestamps, date + time values |
@@ -83,7 +84,7 @@ These carry whatever type the field requires, so you can use them almost anywher
 | Source | Shape | What it gives you |
 |---|---|---|
 | `$static` | `{ $static: value }` | A fixed value you type or pick — the literal for **any** type, including a structured `icon` (`{ type, name }`), `image` (`{ path }`) or `video` (`{ path }`). For those, the editor opens a picker rather than a text box |
-| `$var` | `{ $var: { path, index?, repeatIndex? } }` | A live datasource / OPC-UA variable. `repeatIndex: true` takes `index` from the surrounding Repeater copy — see [Repeater items in depth](#repeater-items-in-depth-repeatitem). `index` may itself be an Integer source (`{ $componentProp: 'device' }`, a `$var`): `useResolvedProperties` resolves it to a number before a widget, its writer or an action target sees the binding (`boundIndexResolution.ts`), events resolve a write target's at write time, and a `$var` inside it is subscribed. No whole number from 0 up resolves to `-1`: the read is *absent*, never the whole array, and a write is refused `array_index_out_of_bounds`. A whole array on a field that takes one value — or as a toggle or Edit Value target — is reported at `<field>/$var/index`, where the editor's index row — under the field's box, untitled, with an *Element of the array* hint — asks for the element |
+| `$var` | `{ $var: { path, index?, repeatIndex?, bit? } }` | A live datasource / OPC-UA variable. `repeatIndex: true` takes `index` from the surrounding Repeater copy — see [Repeater items in depth](#repeater-items-in-depth-repeatitem). `index` may itself be an Integer source (`{ $componentProp: 'device' }`, a `$var`): `useResolvedProperties` resolves it to a number before a widget, its writer or an action target sees the binding (`boundIndexResolution.ts`), events resolve a write target's at write time, and a `$var` inside it is subscribed. No whole number from 0 up resolves to `-1`: the read is *absent*, never the whole array, and a write is refused `array_index_out_of_bounds`. A whole array on a field that takes one value — or as a toggle or Edit Value target — is reported at `<field>/$var/index`, where the editor's index row — under the field's box, untitled, with an *Element of the array* hint — asks for the element. `bit` reads one bit (0 the lowest) of a whole number as a `Boolean` — judged as a `Boolean` against the field, its word's access deciding a write; `readBit` in `valueTypes.ts` on the runtime, `_has_bit` in the validator, which caps it at the real type's width (`BIT_WIDTHS`: 8, 16 or 32 for `Byte`/`SByte`, `UInt16`/`Int16`, `UInt32`/`Int32` and a static `Integer`; none for an array element). A write travels with a `.N` path suffix and lands as a read-modify-write of the whole word — see [websocket.md](websocket.md#client--server-messages) |
 | `$widgetProp` | `{ $widgetProp: { componentId, property, path? } }` | A property **exported by another component** on the page (sibling → me). `path` is an optional slash-path into a struct/array member of the exported value (e.g. `name` on a selected row) |
 | `$componentProp` | `{ $componentProp: name }` | A value **passed in from outside** — by my parent component, or by the action that opened the page overlay I am in (outside → me) |
 | `$overlay` | `{ $overlay: { page, param } }` | An input parameter of the Dialogs-folder page `page` **while it is open** — what the opening action passed, else the declared default — and *absent* once it closes. Reads the topmost open copy, from anywhere on screen: a hotspot's selection ring is `$compare($overlay{device, device} === 3)`. The backend flags a `page` outside the Dialogs folder (`overlay-page`) and a `param` it does not declare (`overlay-param-unknown`) |
@@ -114,7 +115,7 @@ Each of these only works in a field of the matching type.
 | `$compare` | Boolean | `{ $compare: { left, operator, right } }` | A comparison result (`>` `<` `>=` `<=` `===` `!==`). The ordering operators coerce both sides to numbers, treating a non-numeric side as `0`. `===` / `!==` are **not** strict despite the spelling: `looseEquals` compares identity first, then number-vs-string by `parseFloat`, so `5 === "5"` is `true` while `true === 1` is `false` |
 | `$not` | Boolean | `{ $not: { value } }` | The inverse of a boolean `value`. A number counts as a 0/1 flag (`0` → `true`, anything else → `false`); any other input, or none, is *absent* |
 | `$and` / `$or` | Boolean | `{ $and: [cond, …] }` / `{ $or: [cond, …] }` | `$and` is `true` when every item is truthy, `$or` when any is; items are Boolean property values of any source, nested `$and` / `$or` included. An empty or non-list payload is `false` (the validator reports `and-empty` / `or-empty` as an error, and a non-list as a structural error) |
-| `$formula` | Float / Integer | `{ $formula: { expression, wildcards, round? } }` | Arithmetic like `({1} - 32) / 1.8`: numbers, `{n}` placeholders filled from `wildcards` (each a full property value, coerced with `toNumber`), `+ - * /`, unary minus and parentheses. An unparseable expression, a placeholder with no numeric value, a division by zero or a non-finite result makes the whole value *absent*. `round: true` rounds the result to the nearest whole number (`Math.round`); a formula created on an `Integer`-only field starts with it on, and the backend warns `formula-fraction` when such a field holds one without it. The grammar lives in `frontend/src/hmi/utils/formula.ts`; the backend mirrors it only to flag syntax errors |
+| `$formula` | Float / Integer | `{ $formula: { expression, wildcards, round? } }` | Structured-Text-style arithmetic like `({1} - 32) / 1.8` or `SHR({1}, 4) AND 16#0F`: numbers (`16#…` and `2#…` too), `{n}` placeholders filled from `wildcards` (each a full property value, coerced with `toNumber`, a Boolean to 1 / 0) and `{n}.N`, one bit of one; `+ - * /`, unary minus, parentheses, and on whole numbers `AND OR XOR NOT`, `SHL(x, n)`, `SHR(x, n)` — ST precedence, `NOT` tightest and `OR` loosest. A bit operation on a fraction is *absent* too. An unparseable expression, a placeholder with no numeric value, a division by zero or a non-finite result makes the whole value *absent*. `round: true` rounds the result to the nearest whole number (`Math.round`); a formula created on an `Integer`-only field starts with it on, and the backend warns `formula-fraction` when such a field holds one without it. The grammar lives in `frontend/src/hmi/utils/formula.ts`; the backend mirrors it only to flag syntax errors, both held to `frontend/src/shared/types/__fixtures__/formulaSyntax.json` |
 | `$pageIsActive` | Boolean | `{ $pageIsActive: { page? } }` | `true` when the target page is active |
 | `$languages` | String[] | `{ $languages: {} }` | The project's language list |
 | `$user`, username | String | `{ $user: { field } }` `field: username` | The logged-in user's name |
@@ -157,7 +158,7 @@ A datasource isn't a flat list — variables live in a tree. `$var` can point at
 The `$var` shape stays the same in every case:
 
 ```
-{ $var: { path, index?, repeatIndex? } }
+{ $var: { path, index?, repeatIndex?, bit? } }
 ```
 
 - `path` — `datasource:location`, where the location is slash-separated (`PLC:Motor/Speed`). The datasource name before the `:` identifies which connection (and whether it's OPC-UA or static).
@@ -255,7 +256,7 @@ operand.
 |---|---|
 | `$if` condition, `$not` value, `$and` / `$or` item, action `if` condition | `Boolean`, read-only — no truthiness of another type; test an `Integer` or `String` through `$compare` (`BOOLEAN_SLOT`) |
 | `$compare` left / right, `$switch` value and case `when` | Any type — ordering coerces with `toNumber`, `===` / `!==` use `looseEquals` |
-| `$formula` operand | `Float` and `Integer`, read-only — each operand is coerced to a number |
+| `$formula` operand | `Float`, `Integer`, `Byte` and `Boolean`, read-only — each operand is coerced to a number, a Boolean to 1 / 0 (`FORMULA_OPERAND_SLOT`); the **Bits** box is offered here |
 | `$stringExpr` / `$http` wildcard | Any type — it is formatted into text |
 | `$if` true / false, `$switch` then / default | What the property takes |
 
@@ -321,7 +322,8 @@ The map is `OPCUA_TO_SIMPLE` in `backend/core/value_types.py`, mirrored in
 | OPC-UA datatype | Simple type |
 |---|---|
 | `Boolean`, `Bool` | `Boolean` |
-| `SByte`, `Byte`, `Int8`/`16`/`32`/`64`, `UInt8`/`16`/`32`/`64`, `Enumeration` | `Integer` |
+| `SByte`, `Int8`/`16`/`32`/`64`, `UInt16`/`32`/`64`, `Enumeration` | `Integer` |
+| `Byte`, `UInt8` | `Byte` |
 | `Float`, `Single`, `Double`, `Decimal` | `Float` |
 | `String`, `ByteString`, `Guid`, `NodeId` | `String` |
 | `DateTime` | `DateTime` |
@@ -331,9 +333,9 @@ The map is `OPCUA_TO_SIMPLE` in `backend/core/value_types.py`, mirrored in
 | *anything else* | `String` (fallback) |
 
 - **The datasources manager is where the tree lives.** Browsing or editing a datasource records, per leaf, its real `data_type`, whether it's `writable`, and an explicit `is_array` plus optional positive `array_length` for fixed arrays. Folders organise, folders-with-variables become structs, and the same scalar / array / struct / struct-array shapes described above are exactly what `$var` binds to.
-- **There are eight simple types.** `VALUE_TYPES` is `Boolean`, `Integer`, `Float`, `String`, `DateTime`, `Date`, `Time`, `Duration` — `Date`, `Time` and `Duration` collapse from their own OPC-UA datatypes rather than riding on `DateTime`. `color`, `icon`, `image` and `video` are the exception: they have no OPC-UA datatype at all and exist only as field types, refined by the **field**, never by the variable. A variable drives one as a `String`.
+- **There are nine simple types.** `VALUE_TYPES` is `Boolean`, `Integer`, `Byte`, `Float`, `String`, `DateTime`, `Date`, `Time`, `Duration` — `Date`, `Time` and `Duration` collapse from their own OPC-UA datatypes rather than riding on `DateTime`. `color`, `icon`, `image` and `video` are the exception: they have no OPC-UA datatype at all and exist only as field types, refined by the **field**, never by the variable. A variable drives one as a `String`.
 - **Live values arrive in JSON forms.** The collapse above is about types; the values themselves are normalized where they enter (`opcua.values.normalize_value` for OPC-UA): a `DateTime` arrives as ISO 8601 UTC with milliseconds (`"2026-01-02T03:04:05.678Z"`), an `Integer` beyond ±9,007,199,254,740,991 as its decimal string, a `LocalizedText` as its text. The full list is [Value forms](websocket.md#value-forms).
-- **The static datasource works in reverse.** It has no live server, so picking a simple type synthesises a *representative* OPC-UA type to store (`SIMPLE_TO_REPRESENTATIVE`): `Integer` → `Int32`, `Float` → `Double`, `Boolean` → `Boolean`, `String` → `String`, `DateTime` / `Date` / `Time` → `DateTime`, `Duration` → `Double`. The round trip is therefore lossy for `Date`, `Time` and `Duration` — a static `Date` reads back as `DateTime`.
+- **The static datasource works in reverse.** It has no live server, so picking a simple type synthesises a *representative* OPC-UA type to store (`SIMPLE_TO_REPRESENTATIVE`): `Integer` → `Int32`, `Byte` → `Byte`, `Float` → `Double`, `Boolean` → `Boolean`, `String` → `String`, `DateTime` / `Date` / `Time` → `DateTime`, `Duration` → `Double`. The round trip is therefore lossy for `Date`, `Time` and `Duration` — a static `Date` reads back as `DateTime`.
 
 ---
 

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { evaluatePropertyValue } from '@hmi/utils/propertySourceEval';
 import { useReactiveEval } from '@hmi/hooks/useReactiveEval';
 import type { ShellRegionConfig, ShellRegionId, VarSource } from '@shared/types/config';
-import { bindingParts } from '@shared/types/config';
+import { writeTargetAddress } from '@shared/types/config';
 import type { CSSWithVars } from '@shared/types/style';
 import { sendWsMessage } from '@hmi/hooks/useWebSocket';
 import { useHmiScope } from '@hmi/context/HmiScopeContext';
@@ -251,16 +251,10 @@ function OverlayLayer({
  */
 function writeBoundFalse(expanded: unknown, scope: string): void {
   const v = findBoundVar(expanded);
-  if (!v?.path) return;
-  const { datasource, location } = bindingParts(v);
-  if (!datasource || !location) return;
-  sendWsMessage({
-    type: 'write_field',
-    scope,
-    datasource,
-    path: location,
-    value: false,
-  });
+  // The address carries the binding's `[N]` element and `.N` bit.
+  const address = v ? writeTargetAddress({ $var: v }) : null;
+  if (!address) return;
+  sendWsMessage({ type: 'write_field', scope, ...address, value: false });
 }
 
 function findBoundVar(expr: unknown): VarSource['$var'] | null {

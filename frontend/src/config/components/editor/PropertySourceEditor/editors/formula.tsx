@@ -3,12 +3,14 @@ import PropRow from '../../../ui/PropRow';
 import BoolButtonGroup from '../../../ui/BoolButtonGroup';
 import { BranchEditor } from './shared';
 import { ParentPathContext, useParentPath, withSegs } from '../parentPathContext';
-import { NUMERIC_SLOT, NUMERIC_TYPES, type OpenBindingPicker } from './utils';
+import { FORMULA_OPERAND_SLOT, FORMULA_OPERAND_TYPES, type OpenBindingPicker } from './utils';
 import type { SchemaField } from '@shared/types/widgetSchema';
 import type { FormulaSource } from '@shared/types/config';
 import { formulaWildcardKeys, parseFormula } from '@hmi/utils/formula';
 
-const OPERAND_SCHEMA: SchemaField = { type: NUMERIC_TYPES, label: '' };
+const OPERAND_SCHEMA: SchemaField = { type: FORMULA_OPERAND_TYPES, label: '' };
+// The guide this build ships, or the public one of its version — see /help.
+const FORMULA_DOCS_URL = '/help/properties.html#calculate-with-a-formula-formula';
 const EXPRESSION_SCHEMA: SchemaField = {
   type: 'String',
   label: 'Formula',
@@ -49,18 +51,22 @@ export function FormulaEditor({
         )}
       </div>
 
-      {invalid ? (
-        <p className="cfg-prop-hint cfg-prop-hint--error" role="alert">
-          This formula is not valid — the value stays empty until it is fixed.
-        </p>
-      ) : (
-        <p className="cfg-prop-hint">
-          Use <code>{'{1}'}</code>, <code>{'{2}'}</code>, … for values, with <code>+</code>{' '}
-          <code>-</code> <code>*</code> <code>/</code> and parentheses.
-          <br />
-          Dividing by zero, or a value that is not a number, leaves the result empty.
-        </p>
-      )}
+      {/* The link carries the syntax; the hint stays one line. */}
+      <p
+        className={`cfg-prop-hint${invalid ? ' cfg-prop-hint--error' : ''}`}
+        role={invalid ? 'alert' : undefined}
+      >
+        {invalid ? (
+          'This formula is not valid — the value stays empty until it is fixed.'
+        ) : (
+          <>
+            Use <code>{'{1}'}</code>, <code>{'{2}'}</code>, … for values.
+          </>
+        )}{' '}
+        <a href={FORMULA_DOCS_URL} target="_blank" rel="noreferrer">
+          Formula reference
+        </a>
+      </p>
 
       {keys.map((key) => (
         <ParentPathContext.Provider
@@ -72,7 +78,7 @@ export function FormulaEditor({
             value={wildcards[key] ?? 0}
             onChange={(v) => updateWildcard(key, v)}
             schema={OPERAND_SCHEMA}
-            slot={NUMERIC_SLOT}
+            slot={FORMULA_OPERAND_SLOT}
             onOpenBindingPicker={onOpenBindingPicker}
           />
         </ParentPathContext.Provider>

@@ -171,7 +171,7 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
     if (!v?.path) return '(var)';
     const { datasource, location } = bindingParts(v);
     const base = datasource ? `${datasource}: ${location}` : location;
-    return v.index !== undefined ? `${base}[${v.index}]` : base;
+    return `${base}${v.index !== undefined ? `[${v.index}]` : ''}${v.bit !== undefined ? `.${v.bit}` : ''}`;
   }
   if (isLocSource(obj)) return `"${obj.$loc}"`;
   if (isLocTemplate(obj)) return `"${obj.$loc.key}"`;

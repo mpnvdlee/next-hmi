@@ -466,6 +466,7 @@ export function VariableRowCells({
           <div className="cfg-var-type-edit">
             <Select
               className={`cfg-select--ghost${unsupportedOpcuaType ? ' cfg-var-type-unsupported' : ''}`}
+              popupClassName="cfg-var-type-popup"
               title={
                 unsupportedOpcuaType
                   ? 'The test server cannot serve this type. Pick a supported one.'

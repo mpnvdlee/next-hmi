@@ -7,6 +7,7 @@
 export const VALUE_TYPES = [
   'Boolean',
   'Integer',
+  'Byte',
   'Float',
   'String',
   'DateTime',
@@ -44,12 +45,12 @@ export const OPCUA_TO_SIMPLE: Record<string, string> = {
   boolean: 'Boolean',
   bool: 'Boolean',
   sbyte: 'Integer',
-  byte: 'Integer',
+  byte: 'Byte',
   int8: 'Integer',
   int16: 'Integer',
   int32: 'Integer',
   int64: 'Integer',
-  uint8: 'Integer',
+  uint8: 'Byte',
   uint16: 'Integer',
   uint32: 'Integer',
   uint64: 'Integer',
@@ -80,6 +81,7 @@ export function toSimpleType(opcuaType: string | undefined): string {
 // Simple type (lower-cased) -> representative OPC-UA type (for synthesis on static/sim). Mirrors backend.
 const SIMPLE_TO_REPRESENTATIVE: Record<string, string> = {
   integer: 'Int32',
+  byte: 'Byte',
   float: 'Double',
   boolean: 'Boolean',
   string: 'String',
@@ -136,8 +138,41 @@ export function canonicalOpcuaType(raw: string | undefined): string {
 /** True when the simple or raw OPC-UA type resolves to a numeric simple type. */
 export const isNumericType = (t: string): boolean => {
   const simple = toSimpleType(t);
-  return simple === 'Integer' || simple === 'Float';
+  return simple === 'Integer' || simple === 'Byte' || simple === 'Float';
 };
+
+// Bits a whole-number OPC-UA type offers a bit binding (`$var.bit`). Mirrors
+// backend BIT_WIDTHS (parity: opcuaBuiltinTypes.json `bits`).
+const BIT_WIDTHS: Record<string, number> = {
+  byte: 8,
+  uint8: 8,
+  sbyte: 8,
+  int8: 8,
+  uint16: 16,
+  int16: 16,
+  uint32: 32,
+  int32: 32,
+  integer: 32,
+  int: 32,
+};
+
+/** How many bits a variable of this raw type exposes; 0 when it has none. */
+export const bitWidth = (dataType: string | undefined): number =>
+  BIT_WIDTHS[(dataType ?? '').trim().toLowerCase()] ?? 0;
+
+/** Bit `bit` (0 the lowest) of a whole number, or null when the value is none.
+ *  `>>` reads the 32-bit two's complement, so a negative Int32 reads its sign bit. */
+export function readBit(value: unknown, bit: number): boolean | null {
+  // `>>` takes its count modulo 32, so a higher bit would read a low one.
+  if (!Number.isInteger(bit) || bit < 0 || bit > 31) return null;
+  return typeof value === 'number' && Number.isInteger(value) ? ((value >> bit) & 1) === 1 : null;
+}
+
+/** A hex form of a Byte value for a live readout: `12` → `16#0C`. */
+export const byteHex = (value: unknown): string | null =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 255
+    ? `16#${value.toString(16).toUpperCase().padStart(2, '0')}`
+    : null;
 
 export const baseType = (t: string): string => (t.endsWith('[]') ? t.slice(0, -2) : t);
 export const isArrayType = (t: string): boolean => t.endsWith('[]');

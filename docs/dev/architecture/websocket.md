@@ -198,6 +198,15 @@ integer digits keeps them too — and writes it back as a string.
   - If the path ends with `[N]`, element `N` is patched into the current array
     and the full patched array is written — the current value is a fresh node
     read for OPC-UA, the in-memory cache for a static datasource.
+  - A `bit` on the target becomes a `.N` suffix after any `[N]`
+    (`Battery/Status.5`): bit `N` of a whole-number variable, the value a
+    Boolean. The backend reads the whole word — a fresh node read for OPC-UA,
+    never the cache; the cache for a static datasource — sets or clears the
+    bit and writes the word back through the same path, so its access,
+    permission and range checks apply. A path the registry holds whole (a tag
+    named `Motor.1`) is that tag, not a bit. A bit beyond the type's width, of
+    a type with no bits, or of an array element is `bad_path`; a value that is
+    not a Boolean is `invalid_value`.
   - Permission check: if the variable defines `interactableByGroups`, the scoped
     identity's groups must intersect that list.
   - Values are coerced per the
@@ -228,6 +237,7 @@ integer digits keeps them too — and writes it back as a string.
     static datasource) and writes its inverse through `write_service.write_value`,
     so the permission check, range check, audit record and reply are the same
     as a `write_field`. The client never sends the value: its copy may be stale.
+  - A `.N` bit path toggles that bit of its word.
   - A variable whose `data_type` is not Boolean fails with `invalid_value`; one
     whose current value is not a boolean (never read, read failed) fails with
     `value_unavailable` and writes nothing.

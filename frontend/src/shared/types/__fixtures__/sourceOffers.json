@@ -127,10 +127,21 @@
     "video": ["$static", "$var", "$urlParam", "$if", "$switch", "$widgetProp"],
     "option-list": ["$static", "$user", "$var", "$languages", "$widgetProp"],
     "record-list": ["$var", "$recipeList", "$widgetProp"],
-    "item-list": ["$static", "$var", "$http", "$recipeList", "$user", "$widgetProp"]
+    "item-list": ["$static", "$var", "$http", "$recipeList", "$user", "$widgetProp"],
+    "byte": ["$static", "$var", "$if", "$switch", "$widgetProp", "$http", "$overlay"]
   },
   "fits": {
-    "any": ["string", "datetime", "date", "time", "duration", "integer", "float", "boolean"],
+    "any": [
+      "string",
+      "datetime",
+      "date",
+      "time",
+      "duration",
+      "integer",
+      "byte",
+      "float",
+      "boolean"
+    ],
     "string": ["string"],
     "integer": ["duration", "integer"],
     "float": ["duration", "float"],

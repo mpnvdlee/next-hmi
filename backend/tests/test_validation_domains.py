@@ -83,6 +83,24 @@ def test_alarm_known_variable_is_clean(ctx):
     assert validate_alarms(alarms, ctx).warnings == []
 
 
+def test_alarms_and_recipes_refuse_one_bit_of_a_variable(ctx):
+    # They resolve their bindings on the server, which reads the whole word.
+    bit = {"$var": {"path": "Machine:Tanks/Status", "bit": 3}}
+    ctx.datasource_registry["Machine"]["Tanks/Status"] = {"kind": "scalar", "base": "Integer", "array": False}
+    alarms = {"groups": [{"id": "g", "alarms": [{
+        "id": "a", "level": "warning", "values": [bit],
+        "trigger": {"type": "bool", "source_value": bit},
+    }]}]}
+    assert [(w.path, w.code) for w in validate_alarms(alarms, ctx).warnings] == [
+        ("/groups/0/alarms/0/values/0/$var/bit", "var-type"),
+        ("/groups/0/alarms/0/trigger/source_value/$var/bit", "var-type"),
+    ]
+    recipes = {"datasetTypes": [{"parameters": [{"dataType": "boolean", "binding": bit}]}]}
+    assert [(w.path, w.code) for w in validate_recipes(recipes, ctx).warnings] == [
+        ("/datasetTypes/0/parameters/0/binding/$var/bit", "var-type"),
+    ]
+
+
 def test_alarm_unbound_trigger_is_a_warning(ctx):
     alarms = {"groups": [{"alarms": [{"id": "a", "trigger": {"type": "bool"}}]}]}
     report = validate_alarms(alarms, ctx)

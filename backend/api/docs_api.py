@@ -53,6 +53,13 @@ async def help_redirect() -> RedirectResponse:
     return RedirectResponse(url=public_docs_url(app_version()))
 
 
+@router.get("/help/{page:path}", include_in_schema=False)
+async def help_page_redirect(page: str) -> RedirectResponse:
+    """A deep link into the guide — an editor hint's reference — lands on the
+    same page of the public one; the browser keeps the ``#anchor``."""
+    return RedirectResponse(url=public_docs_url(app_version()) + page)
+
+
 def public_docs_url(version: str) -> str:
     """The published guide for ``version``'s minor line; the latest for ``"dev"``."""
     line = re.match(r"(\d+)\.(\d+)\.", version)

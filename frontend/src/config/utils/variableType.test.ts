@@ -49,6 +49,23 @@ describe('write value classification', () => {
     expect(apiJson).toHaveBeenCalledWith('/api/datasources/PLC/variables?simple=false');
   });
 
+  it('describes a bit `.N` of a whole number as a Boolean, and a tag named so as itself', async () => {
+    const { apiJson } = await import('@shared/utils/api');
+    vi.mocked(apiJson).mockResolvedValueOnce({
+      variables: [
+        { kind: 'variable', display_name: 'Status', data_type: 'UInt16' },
+        { kind: 'variable', display_name: 'Motor.1', data_type: 'Float' },
+      ],
+    });
+    expect(await loadVariableWriteDescriptor('PLC', 'Status.15')).toEqual({
+      dataType: 'Boolean',
+      isArray: false,
+      complete: true,
+    });
+    expect(await loadVariableWriteDescriptor('PLC', 'Status.16')).toBeUndefined();
+    expect((await loadVariableWriteDescriptor('PLC', 'Motor.1'))?.dataType).toBe('Float');
+  });
+
   it('reads a bound index `[…]` as one element of the array, at no fixed index', async () => {
     expect(await loadVariableWriteDescriptor('PLC', 'Count[…]')).toEqual({
       dataType: 'UInt16',

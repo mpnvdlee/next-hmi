@@ -87,6 +87,57 @@ describe('VariableBindingPicker search', () => {
   });
 });
 
+describe('VariableBindingPicker bits', () => {
+  const statusTree = {
+    variables: [
+      { display_name: 'Status', data_type: 'Integer', bits: 16, enabled: true, writable: true },
+    ],
+  };
+
+  it('opens on a bound bit with Bits ticked and confirms it as `{ path, bit }`', async () => {
+    const onPick = vi.fn();
+    mockedApiJson.mockImplementation(
+      async (url: string) =>
+        (url === '/api/datasources' ? [{ name: 'Plant', type: 'static' }] : statusTree) as never,
+    );
+
+    useEditorDomainStore.getState().openBindingPicker('', 'led', {
+      onPick,
+      currentBinding: { path: 'Plant:Status', bit: 5 },
+      filter: { type: 'Boolean', write: true },
+    });
+    render(<VariableBindingPicker />);
+
+    expect(screen.getByRole('checkbox', { name: 'Bits' })).toBeChecked();
+    // The selected pane names the bit only once its word's tree has loaded.
+    await screen.findByText('Status.5');
+    const confirm = screen.getByRole('button', { name: /Confirm/ });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    fireEvent.click(confirm);
+
+    expect(onPick).toHaveBeenCalledWith(
+      { path: 'Plant:Status', bit: 5 },
+      expect.objectContaining({ dataType: 'Boolean' }),
+    );
+  });
+
+  it('offers no Bits box to a caller that resolves its binding on the server', async () => {
+    mockedApiJson.mockImplementation(
+      async (url: string) =>
+        (url === '/api/datasources' ? [{ name: 'Plant', type: 'static' }] : statusTree) as never,
+    );
+    useEditorDomainStore.getState().openBindingPicker('', 'alarm', {
+      onPick: vi.fn(),
+      filter: { type: 'Boolean' },
+      noBits: true,
+    });
+    render(<VariableBindingPicker />);
+
+    await waitFor(() => expect(mockedApiJson).toHaveBeenCalled());
+    expect(screen.queryByRole('checkbox', { name: 'Bits' })).toBeNull();
+  });
+});
+
 describe('VariableBindingPicker component-prop mode', () => {
   function openComponentPropPicker() {
     useEditorDomainStore.getState().openBindingPicker('', 'iconName', {

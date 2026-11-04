@@ -170,17 +170,24 @@ export default function ActionsInput({
       bound && metadata?.index === undefined && binding.path === targetBinding.path;
     const pickedKey = (binding: VariableBinding, metadata?: BindingPickMetadata) =>
       metadata?.index !== undefined ? `${binding.path}[${metadata.index}]` : binding.path;
+    // A bit rides beside the path, as the picker hands it over.
+    const pickedTarget = (binding: VariableBinding, key: string) => ({
+      $var: { path: key, ...(binding.bit !== undefined && { bit: binding.bit }) },
+    });
+    // The descriptor cache key: the target's address, `.N` included.
+    const typeKey = (binding: VariableBinding, key: string) =>
+      binding.bit !== undefined ? `${key}.${binding.bit}` : key;
     if (current?.type === 'toggleDataVariable' || current?.type === 'editValue') {
       openBindingPicker('', current.type, {
         currentBinding,
         onPick: (binding: VariableBinding, metadata?: BindingPickMetadata) => {
           if (keepsBoundIndex(binding, metadata)) return;
           const key = pickedKey(binding, metadata);
-          updateAction(actionIdx, { target: { $var: { path: key } } });
+          updateAction(actionIdx, { target: pickedTarget(binding, key) });
           if (metadata?.dataType) {
             setDataTypes((prev) => ({
               ...prev,
-              [key]: {
+              [typeKey(binding, key)]: {
                 dataType: metadata.dataType!,
                 isArray: metadata.isArray === true,
                 complete: false,
@@ -207,9 +214,10 @@ export default function ActionsInput({
           // Confirming the target the action already writes must not reset the
           // authored value — the picker now opens preselected, so a plain
           // Confirm is a no-op the user expects to change nothing.
-          const retargeted = varBindingOf(action.target)?.path !== key;
+          const previous = varBindingOf(action.target);
+          const retargeted = previous?.path !== key || previous?.bit !== binding.bit;
           updateAction(actionIdx, {
-            target: { $var: { path: key } },
+            target: pickedTarget(binding, key),
             ...(retargeted && {
               value:
                 metadata?.isArray && metadata.index === undefined
@@ -220,7 +228,7 @@ export default function ActionsInput({
           if (dataType) {
             setDataTypes((prev) => ({
               ...prev,
-              [key]: {
+              [typeKey(binding, key)]: {
                 dataType,
                 isArray: metadata?.isArray === true,
                 arrayLength: metadata?.arrayLength,

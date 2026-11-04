@@ -77,6 +77,9 @@ interface BindingPickerOptions extends PickerExtras {
    *  the page tree — alarm/recipe fields, action fields, write targets. Drives
    *  preselect, auto-expand and scroll-to-selection. */
   currentBinding?: VariableBinding;
+  /** Hide the Bits checkbox: the binding is resolved on the server (alarms,
+   *  the historian, a trend), which reads no bit of a variable. */
+  noBits?: boolean;
 }
 
 interface BindingPickerTarget extends BindingPickerOptions {

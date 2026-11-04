@@ -54,7 +54,8 @@ export type WriteCoercionResult =
   { ok: true; value: unknown } | { ok: false; reason: WriteCoercionReason };
 
 interface TypeRule {
-  canonical: 'Boolean' | 'Integer' | 'Float' | 'String' | 'DateTime' | 'Date' | 'Time' | 'Duration';
+  canonical:
+    'Boolean' | 'Integer' | 'Byte' | 'Float' | 'String' | 'DateTime' | 'Date' | 'Time' | 'Duration';
   min?: bigint;
   max?: bigint;
 }
@@ -84,7 +85,11 @@ function register(names: string[], rule: TypeRule): void {
 
 register(['boolean', 'bool'], { canonical: 'Boolean' });
 for (const [name, [min, max]] of Object.entries(INT_RANGES)) {
-  register([name], { canonical: 'Integer', min, max });
+  register([name], {
+    canonical: name === 'byte' || name === 'uint8' ? 'Byte' : 'Integer',
+    min,
+    max,
+  });
 }
 register(['integer', 'int', 'enumeration'], {
   canonical: 'Integer',
@@ -159,7 +164,7 @@ function scalar(value: unknown, rule: TypeRule, rawType: string): WriteCoercionR
     }
     return reject('invalid_boolean');
   }
-  if (rule.canonical === 'Integer') return integerValue(value, rule);
+  if (rule.canonical === 'Integer' || rule.canonical === 'Byte') return integerValue(value, rule);
   if (rule.canonical === 'Float' || rule.canonical === 'Duration') {
     if (typeof value === 'boolean' || (typeof value !== 'number' && typeof value !== 'string')) {
       return reject('invalid_float');
