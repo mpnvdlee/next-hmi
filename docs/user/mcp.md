@@ -172,7 +172,7 @@ They are ordinary instructions, not privileged calls — the agent still works t
 > [!IMPORTANT]
 > An agent with a write-scoped token can change what operators see and what values get written to a PLC. Treat the endpoint as equivalent to editor access.
 
-- **Keep it on a trusted network.** The endpoint is plain HTTP unless you've turned on [HTTPS](install.md#https). A bearer token crossing an untrusted network is a bearer token someone else can use.
+- **Keep it on a trusted network.** The endpoint is plain HTTP unless you've turned on [HTTPS](install.md#https). A bearer token crossing an untrusted network is a bearer token someone else can use. See [What is reachable without a password](network-access.md) for what the rest of the device leaves open.
 - **Grant the narrowest scope that works.** A `read` token for an agent that only answers questions about the project; `write` only where you want edits.
 - **Confirmation guards the agent, not you.** An agent can chain the dry-run and the confirm in a single turn without asking a human. The MCP toggle is the control that actually stops writes.
 - **Attribution is best-effort.** Writes are labelled with the client's name, but any authenticated caller can set that label, so treat the log as advisory rather than proof.

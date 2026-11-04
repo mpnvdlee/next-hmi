@@ -11,6 +11,11 @@ project is running or stopped, because it reads and writes the project's own
 files. The one exception is signing someone in or out on a panel, which needs
 the project running. Nothing in it writes to the PLC.
 
+API v1 is the only way in meant for other systems. The other addresses the
+app uses are its own internals and can change in any release. What the
+operator screens leave open without any credential is listed in
+[What is reachable without a password](network-access.md).
+
 ## Giving a system access
 
 There are two ways to sign a request.
@@ -297,3 +302,4 @@ name (or `admin`), with the user who was signed in or out.
   with `?panel=<name>` and then receives every sign-in sent to that panel, with
   a login that survives a reload. Only sign users in over the API on panels
   that sit on a trusted network, in a kiosk browser nobody else controls.
+  See [What is reachable without a password](network-access.md).

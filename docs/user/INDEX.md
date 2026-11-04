@@ -49,6 +49,7 @@ alarms, recipes, the historian, users and custom widgets.
 | Page | What it covers |
 |---|---|
 | [Users, groups & permissions](users.md) | Accounts and groups, signing in and out on a screen, gating what each role sees and may change |
+| [What is reachable without a password](network-access.md) | What anyone on the network can see and do with no password, what each credential adds, and where to put the device |
 | [Diagnostics & troubleshooting](diagnostics.md) | The Admin area, the manager's Settings page, the warnings pill, and the common symptoms |
 | [AI agents over MCP](mcp.md) | Letting an assistant read and edit a project — enabling it, tokens, connecting a client, the starter prompts, and the limits |
 | [Connecting other systems (API v1)](api.md) | Letting a MES, BI tool or HR system read historian data, alarms and recipes and manage users — tokens, scopes, requests, and keeping it safe |

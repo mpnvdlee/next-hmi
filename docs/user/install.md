@@ -137,16 +137,12 @@ password) is the operator surface:
   gates the dashboard and every project's **editor** (`/editor/<slug>/`). A
   running project's **live screens** (`/runtime/<slug>/`) are open to anyone who
   can reach the host, deliberately: that is what an operator panel is. Operating
-  is open too: the server does not restrict who may write a writable variable,
-  so anyone who can reach the panel can write writable tags. Blocking the button
-  is how a project stops operators changing a value (see
-  [Users, groups & permissions](users.md#what-the-server-enforces)). The install
-  answers on every interface by default, so put the manager on a trusted network
-  and use [HTTPS](#https) where it is not. Open to the network does not mean
-  open to other websites: the install refuses a page from another site, open
-  in the panel's browser, that tries to connect to the live screen or send it
-  changes. It cannot catch a site that has pointed a name of its own at this
-  device (DNS rebinding) — one more reason to keep the network trusted.
+  is open too: anyone who can reach the panel can write writable tags, and
+  blocking the button is how a project stops operators changing a value. The
+  install answers on every interface by default, so put the manager on a
+  trusted network and use [HTTPS](#https) where it is not.
+  [What is reachable without a password](network-access.md) lists what is open,
+  what each credential adds, and how to place the device on the network.
 - **Start / Stop** — bring a project up or down. A running project gets
   its own backend instance and becomes reachable at `/runtime/<slug>/`
   (and `/editor/<slug>/`); the set of running projects is remembered and

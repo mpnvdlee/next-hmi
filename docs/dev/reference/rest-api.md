@@ -17,17 +17,62 @@ A few endpoints raise `fastapi.HTTPException` directly with other status codes �
 
 The **manager** front door is gated by a single **device-admin password** set on first run. The manager's `_auth_gate` middleware requires a valid session cookie (`nexthmi_manager_session`, a stateless HMAC-signed token) on every `/api/*` and `/editor/*` request (and on the manager's own `openapi.json` / `docs` / `redoc`), except `/api/manager/auth/*`, `/api/manager/peer/*`, `/api/manager/mcp/pair`, `/api/health`, `/mcp` and `/api/v1/*`. Peer endpoints perform their own bearer-token authentication (only pairing accepts the existing device-admin password); `/mcp` takes a manager session or an MCP bearer token (see [mcp.md](mcp.md)); MCP pairing checks the device-admin password itself; `/api/v1/*` takes the device-admin password over HTTP Basic or an API token and never the session cookie (see [API v1](#api-v1)). See **Manager API** below for the login/setup endpoints; the password digest lives in `<runtime_home>/.manager-auth.json`.
 
-**`/runtime/*` is the exception: a live operator view is public.** A deny-by-default allowlist (`_RUNTIME_PUBLIC_ROUTES` in `manager.py`) names the child routes a running screen needs — the SPA document and its static mounts, a fixed set of config / theme / component / widget reads, the user roster (names and group labels), alarm history, historian queries, the operator-action POSTs (recipe load and save, `$http`), and `/ws`. Everything else under `/runtime/*` still needs the session: every write verb, `api/datasources`, `api/system/*`, `api/projects/*`, `api/internal/*`, `api/health`, and the instance's own `openapi.json` / `docs` / `redoc`. `HEAD` follows `GET`; `OPTIONS` is gated, since an anonymous preflight would otherwise enumerate the withheld routes.
+**The internal API is for the app's own frontend only.** `/api/*`, `/runtime/<slug>/api/*`, `/editor/<slug>/api/*` and `/ws` exist to serve the SPA and may change in any release. [API v1](#api-v1) (`/api/v1/*`) is the only supported external surface: an integration that needs something the frontend reads gets a v1 route, never an entry on the public table below.
 
 A path segment is refused outright when *any* decoding of it — the original, each intermediate `unquote`, or the fixpoint — contains `/` or `\`, or is empty, `.` or `..`. The gate and the child each decode once, so without that rule a double-encoded separator lets the gate match one route while the child serves another.
-
-`/editor/<slug>/ws` requires the cookie; `/runtime/<slug>/ws` does not.
 
 **Cross-origin requests are refused.** Every WebSocket upgrade and every request whose method is not `GET`, `HEAD` or `OPTIONS` passes `OriginCheckMiddleware` (`core/origin_check.py`) before the gate, on every manager path including `/mcp`, and again on the project instance. When it carries an `Origin` header that differs from the request's own origin — its scheme, as uvicorn sees it after a trusted proxy's `X-Forwarded-Proto`, plus its `Host` header, with default ports implied — HTTP answers `403 {"detail": "Cross-origin request refused"}` and an upgrade is closed `1008` before accept, which the server answers `403`. `Origin: null` never matches. A request with no `Origin` passes: browsers always send one on these requests, scripts (curl, MCP clients, peer transfers) do not, and the check guards a browser's reach, not the API. That closes what the `SameSite=Lax` cookie leaves open: a page on another site opening `/runtime/<slug>/ws` (WebSockets ignore CORS) or POSTing to a public runtime route as a "simple" request that is never preflighted. JSON-body routes already reject a `text/plain` or form body with `422`, but `recipes/datasets/{id}/upload` takes no body and `…/download` an optional one, so either runs on a bodyless cross-site POST without this check.
 
 Consequences: a reverse proxy in front must pass the browser's `Host` through (Caddy and Traefik do by default; nginx needs `proxy_set_header Host $http_host`, since `$host` drops a non-default port) and send `X-Forwarded-Proto` from a trusted address, or every write and socket is refused. A `root_path` mount does not matter — an origin has no path. In dev, Vite's proxy forwards `Host` and `Origin` unchanged (no `changeOrigin`), so the backend on `:8001` sees the browser's `:8000` origin and accepts it. The HTTP port that only redirects to HTTPS is a different origin from the HTTPS port. On the manager the check does not stop DNS rebinding: a rebound name makes the attacker's origin equal the `Host` it sends. That would need a `Host` allowlist, which an install reached by IP, hostname and `.local` alike does not have (an instance has one, below); the session cookie is not sent to a rebound name, so it reaches only what is already public. For the same reason `/mcp` turns off the MCP SDK's own rebinding guard, a loopback `Host` allowlist that answers `421` to a client on the LAN: a rebound page has neither the session cookie nor a bearer token, so it gets the `401` any caller without one gets.
 
 A **project instance's** own HTTP API and WebSocket are unauthenticated — instances bind `127.0.0.1` and are only reachable through the manager proxy (which strips the manager cookie before forwarding). A page in a browser on the same machine can still find that loopback port, so the instance runs the same Origin check: the proxy drops `Origin` once the manager's check has passed (the WebSocket hop never sets one), so proxied traffic passes and a page that goes around the manager is refused, while a standalone instance still works from its own origin. An instance also refuses every request, reads included, whose `Host` is not `127.0.0.1`, `localhost` or `[::1]`: the manager proxy and the manager's own calls always use `127.0.0.1`, so a page that rebinds a name to the loopback port gets `403`. A standalone instance (`uvicorn main:app`) is therefore usable only at a loopback address, even when bound to another interface; to reach a project from another machine, run the manager. `start-dev.py` runs the manager, so dev goes through the same gate.
+
+### Route access
+
+**`/runtime/*` is the exception to the gate: a live operator view is public.** A deny-by-default table (`_RUNTIME_PUBLIC_ROUTES` in `manager.py`) names the child routes a running screen needs; everything else under `/runtime/*` still needs the session. Each entry is exact, or exact with one `*` segment (written `{…}` below); query strings never take part in the match. `HEAD` follows `GET`; `OPTIONS` is gated, since an anonymous preflight would otherwise enumerate the withheld routes. `backend/tests/test_rest_api_public_routes.py` fails when the `public` rows under `/runtime/{slug}/api/` here and that table disagree, so document a new public route in the same change that adds it.
+
+Access: **public** — no credential. **session** — the manager session cookie. **password** — the device-admin password, in the body or over HTTP Basic, on the login throttle. **token** — a bearer token the route checks itself. **loopback-only** — never reachable through the manager.
+
+| Method | Path | Access | Why |
+|---|---|---|---|
+| `GET` | `/` and any SPA path outside the excluded prefixes, `/_app/*` | public | The dashboard's sign-in screen has to render. `/` redirects to the default project's runtime when one is set and running. |
+| `GET` | `/help`, `/help/*` | public | The user guide behind the Help button. |
+| `GET` | `/api/health` | public | Liveness probe for Docker and proxies; answers `{ "status": "ok" }` and nothing else. |
+| `GET` | `/api/manager/auth/status` | public | The SPA picks the setup, sign-in or dashboard screen from `{ passwordSet, authenticated }`. |
+| `POST` | `/api/manager/auth/setup` | public | First run has no password to check; `409` once one is set. |
+| `POST` | `/api/manager/auth/login` | password | |
+| `POST` | `/api/manager/auth/change-password` | password | `currentPassword`. |
+| `POST` | `/api/manager/auth/logout` | public | Only clears the cookie. |
+| `POST` | `/api/manager/mcp/pair` | password | Mints an MCP or API token for a script that has no session. |
+| `POST` | `/api/manager/peer/pair` | password | Also refused unless the client address is private (loopback only with `NEXTHMI_ALLOW_LOOPBACK_PEERS=1`), as on every peer route. |
+| `GET`, `POST`, `DELETE` | `/api/manager/peer/projects`, `…/projects/{id}/archive`, `…/transfers`, `…/transfers/{id}`, `…/transfers/{id}/status` | token | Peer token from pairing. The upload's token and size are checked in `_auth_gate` before the body is read. |
+| any | `/mcp`, `/mcp/*` | session or token | MCP token; see [mcp.md](mcp.md). |
+| any | `/api/v1/*` | password or token | HTTP Basic or an API token; a session cookie alone is `401`. See [API v1](#api-v1). |
+| `GET` | `/docs/oauth2-redirect` | public | FastAPI's static Swagger OAuth helper page: no data, and no route list. Only the manager's own; the child's is gated with the rest of its docs. |
+| any | every other `/api/*`, `/editor/{slug}/*`, `openapi.json`, `docs`, `redoc` | session | |
+| `GET` | `/runtime/{slug}/api/config/config` | public | The page index, shell and settings the live view boots from. |
+| `GET` | `/runtime/{slug}/api/config/pages/{pageId}` | public | A page's widgets. |
+| `GET` | `/runtime/{slug}/api/config/dialogs/{dialogId}` | public | The same document under the overlay index; a dialog is as public as a page. |
+| `GET` | `/runtime/{slug}/api/config/dictionaries` | public | `$loc` texts. |
+| `GET` | `/runtime/{slug}/api/config/translations` | public | `$loc` texts per language. |
+| `GET` | `/runtime/{slug}/api/themes` | public | The theme list for the theme switcher. |
+| `GET` | `/runtime/{slug}/api/themes/{themeId}` | public | The tokens the screen renders with. |
+| `GET` | `/runtime/{slug}/api/default-theme` | public | Which theme to start in. |
+| `GET` | `/runtime/{slug}/api/components` | public | Component definitions the pages instantiate. |
+| `GET` | `/runtime/{slug}/api/components/folders` | public | Read with the definitions. |
+| `GET` | `/runtime/{slug}/api/widgets` | public | The custom-widget list the runtime loads bundles from. |
+| `GET` | `/runtime/{slug}/api/device/info` | public | The `$device` source: the caller's own address, host name and MAC. Only the connection's address is looked up, never one the caller names. |
+| `GET` | `/runtime/{slug}/api/users/roster` | public | `$user` → **All users** / **All user groups**: usernames and group labels, no memberships. |
+| `GET` | `/runtime/{slug}/api/alarms/history` | public | The alarm list widgets' history view. |
+| `GET` | `/runtime/{slug}/api/historian/query` | public | Trend widgets. |
+| `POST` | `/runtime/{slug}/api/recipes/datasets/{id}/download` | public | The SDK's `recipeDownload`; audited as `recipe.load`. |
+| `POST` | `/runtime/{slug}/api/recipes/datasets/{id}/upload` | public | The SDK's `recipeUpload`; optional Basic credentials only set `updatedBy`. |
+| `POST` | `/runtime/{slug}/api/http-request` | public | `$http`, limited to the project's own origins (see [HTTP source proxy](#http-source-proxy)). |
+| `GET` | `/runtime/{slug}/{path}` outside `api/`: the SPA document, `_app/*`, `assets/*`, `widgets/*`, `widget-js/*`, `builtin-widgets-js/*`, `external-libraries/*` | public | The live view's document and every file it loads. The static mounts serve any file in their directory. |
+| WS | `/runtime/{slug}/ws` | public | The variable pipeline: snapshots, writes, recipe load and save, alarm ack, sign-in. See [websocket.md](../architecture/websocket.md). |
+| any | every other `/runtime/{slug}/*`: every other verb and route, including `api/datasources`, `api/users`, `api/system/*`, `api/internal/*`, `api/health`, `openapi.json`, `docs`, `redoc` | session | |
+| WS | `/editor/{slug}/ws` | session | Writes on it are recorded as `engineer`. |
+| any | `/api/internal/*` on the instance port | loopback-only | The proxy refuses it under both prefixes; see [Internal API](#internal-api). |
 
 ## Health
 
@@ -480,7 +525,7 @@ These endpoints expose what's in the user workspace directly (no `/api` prefix o
 
 - `GET /api/device/info`
   - Best-effort identification of the HTTP client making the request.
-  - Reads `X-Forwarded-For` (first hop) or `request.client.host`; strips `::ffff:` IPv6-mapped prefixes.
+  - Reads `request.client.host` only, never a header. Behind the manager that is the browser's address: the proxy drops any `X-Forwarded-For` / `X-Real-IP` the client sent and sets `X-Forwarded-For` to the peer it saw (`request.client`, which uvicorn already took from a trusted front proxy's header, see `NEXTHMI_FORWARDED_ALLOW_IPS`), and the instance's uvicorn, trusting loopback, turns that into `request.client`. Unwraps an IPv4-mapped IPv6 address; anything that does not parse as an IP address answers all `null` and is looked up nowhere. `arp` gets it after `--`.
   - Hostname is resolved via reverse-DNS (`socket.gethostbyaddr`).
   - MAC is resolved from `/proc/net/arp` on Linux, otherwise from `arp -n <ip>` (1 s timeout). Returns `null` for any value that can't be determined.
   - Response: `{ "ip": string | null, "hostname": string | null, "mac": string | null }`.
@@ -566,7 +611,7 @@ off). Its control surface is the manager dashboard.
 - `GET /api/manager/mcp-tokens` → `{ tokens: [{ id, kind, name, projectId, access | scopes, createdAt }] }` (no secrets). Both kinds are listed; an MCP token carries `access`, an API token `scopes`.
 - `DELETE /api/manager/mcp-tokens/{id}` → `{ revoked: true, tokenId }`; `404` when the id is unknown.
 
-A token is scoped to exactly one project and one access level (or scope list), re-checked per tool call or request. Changing the device-admin password revokes every issued token of both kinds.
+A token is scoped to exactly one project and one access level (or scope list), re-checked per tool call or request. Changing the device-admin password revokes every issued token of both kinds. Both kinds share `<runtime_home>/.mcp-tokens.json`; an entry with no `kind` is an MCP token, so a file written before API tokens existed reads unchanged. `mcp_tokens.resolve()` returns MCP tokens only and `resolve_api()` API tokens only, so an API token gets `401` on `/mcp` and an MCP token `401` on `/api/v1`.
 
 ---
 

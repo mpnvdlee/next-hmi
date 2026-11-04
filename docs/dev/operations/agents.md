@@ -328,7 +328,11 @@ takes for the backend to check it.
 
 `backend/api/<domain>_api.py`, router mounted from `main.py` — or `manager.py` if
 manager-only. Pydantic models in `backend/models/`. Document it in
-[../reference/rest-api.md](../reference/rest-api.md).
+[../reference/rest-api.md](../reference/rest-api.md). An endpoint for other
+systems goes under `/api/v1`, the only external surface. Adding one to the
+runtime's public table (`_RUNTIME_PUBLIC_ROUTES`) means adding its row to
+[Route access](../reference/rest-api.md#route-access) too;
+`backend/tests/test_rest_api_public_routes.py` fails until both agree.
 
 ### Add an MCP tool
 

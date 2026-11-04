@@ -72,6 +72,11 @@ heading.
   `$http` URL may reach when it takes its server from a placeholder; see
   **Changed**.
 
+- **What is reachable without a password.** A new page in the guide lists
+  everything someone on the network can see and do with no password, what
+  the device-admin password, API, MCP and peer tokens add, and how to place
+  the device on the network.
+
 - **`sendWsMessage` says whether it sent.** The widget SDK's
   `sendWsMessage` returns `true` when the message went out and `false` when
   the live connection is down.

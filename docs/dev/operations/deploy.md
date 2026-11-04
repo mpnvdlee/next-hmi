@@ -58,8 +58,8 @@ Two independent controls:
    (`Authorization: Bearer <token>`), created under **Editor › Admin ›
    Tokens** (`POST /api/manager/mcp-tokens` with the session) or, from a
    script, at `POST /api/manager/mcp/pair` by presenting the device-admin
-   password, and revoked at `DELETE /api/manager/mcp-tokens/{id}`. The plaintext is returned once; only
-   its digest is stored. **A token is scoped to one project and to `read` or
+   password, and revoked at `DELETE /api/manager/mcp-tokens/{id}`. The
+   plaintext is returned once; only its digest is stored. **A token is scoped to one project and to `read` or
    `write`** — a session cookie spans the workspace, a token never does. This
    is the narrower credential to hand an external agent.
 2. **Per-project authorization** — each project has an `mcpEnabled` flag (off

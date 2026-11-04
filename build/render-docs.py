@@ -109,6 +109,7 @@ USER_SOURCES: list[tuple[str, str]] = [
     ("docs/user/alarms-recipes.md", "Widgets & styling"),
     ("docs/user/custom-widgets.md", "Widgets & styling"),
     ("docs/user/users.md", "Operations"),
+    ("docs/user/network-access.md", "Operations"),
     ("docs/user/diagnostics.md", "Operations"),
     ("docs/user/mcp.md", "Operations"),
     ("docs/user/api.md", "Operations"),

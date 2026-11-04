@@ -22,7 +22,8 @@ Enterprise only. Start the enterprise build; it opens on an activation screen. P
 
 ## 4. Lock it down
 
-- **Device-admin password.** It guards the Manager dashboard and the editor; keep it to the people who engineer the system. The live screens stay open to anyone who can reach the panel — see [How this relates to the device-admin password](users.md#how-this-relates-to-the-device-admin-password).
+- **Device-admin password.** It guards the Manager dashboard and the editor; keep it to the people who engineer the system. Set it before the machine goes on your customer's network. The live screens stay open to anyone who can reach the panel — see [What is reachable without a password](network-access.md).
+- **Network.** Put the panel on its own network segment, with a firewall in front — see [Network advice](network-access.md#network-advice).
 - **Usage reporting.** If your customer's network allows no outgoing connections, ship with `NEXTHMI_TELEMETRY=off` — see [Usage reporting](install.md#usage-reporting).
 - **HTTPS.** Turn it on when the panel is reached over a network you do not control — see [HTTPS](install.md#https).
 - **Start on boot.** The portable build runs in the foreground; wrap it in `launchd`, Task Scheduler or a systemd unit — see [Limitations](install.md#limitations). The offline Docker installer restarts the container with the host on its own — see [Docker](install.md#docker).

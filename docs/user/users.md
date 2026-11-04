@@ -114,8 +114,7 @@ The server does not restrict who may write a writable variable. Groups decide wh
 
 So hiding or blocking the button — **Visible** / **Interactable** on the widget — is how a project stops operators changing a value. A setpoint no button writes cannot be changed from the panel.
 
-> [!IMPORTANT]
-> Anyone who can reach the panel on the network can write every writable tag, signed in or not: the live view and its socket are open by design, and they do not ask who is calling before a write. Keep the runtime on a trusted network — see [HTTPS](install.md#https) — and leave a variable read-only in its datasource when nothing on the screens needs to change it.
+That holds for anyone who reaches the panel, signed in or not ([What is reachable without a password](network-access.md)), so leave a variable read-only in its datasource when nothing on the screens needs to change it.
 
 Signing in does change the record. A write, a recipe load and an alarm acknowledgement from a button are attributed to the user signed in on that screen, or to `guest` when nobody is. A recipe load from a custom widget's `recipeDownload` carries no sign-in and is always recorded as `guest`. The same actions from the editor's Test mode are recorded as `engineer`, whoever the preview is signed in as: the editor sits behind the device-admin password, not a project user.
 
@@ -135,7 +134,7 @@ Groups decide what a signed-in operator sees and may touch on the screens. They 
 >
 > The live view can also list every username and group name — that is what fills a sign-in dropdown — but not who belongs to which group, or which accounts have a password. Those stay behind the device-admin password.
 >
-> That means operating is open too — pressing a button, changing a setpoint, writing a tag. The server does not restrict who may write a writable variable; blocking the button is how a project stops it (see [What the server enforces](#what-the-server-enforces)). Keep the runtime on a trusted network — see [HTTPS](install.md#https).
+> That means operating is open too — pressing a button, changing a setpoint, writing a tag. The server does not restrict who may write a writable variable; blocking the button is how a project stops it (see [What the server enforces](#what-the-server-enforces)). [What is reachable without a password](network-access.md) lists everything the live view leaves open.
 
 A project copied from the seed ships **no accounts at all** beyond the anonymous `guest`, so there is no reusable credential to leak between installs and nothing to type before the project opens. Every real account is one you add here. See [Managing projects](projects.md#the-manager-dashboard).
 
