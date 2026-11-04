@@ -13,6 +13,8 @@ from services import users_manager
 from services.recipe_manager import audit_load, recipe_manager
 from services.websocket_manager import websocket_manager
 
+from api.change_broadcast import broadcasts
+
 router = APIRouter(prefix="/api/recipes", tags=["recipes"])
 _upload_credentials = HTTPBasic(auto_error=False)
 
@@ -41,7 +43,7 @@ def get_recipe_config() -> RecipeConfig:
     return recipe_manager.get_config()
 
 
-@router.put("/config", response_model=RecipeConfig)
+@router.put("/config", response_model=RecipeConfig, dependencies=[broadcasts("recipes")])
 async def put_recipe_config(body: RecipeConfig) -> RecipeConfig:
     """Replace the entire recipe configuration."""
     recipe_manager.set_config(body)
@@ -114,7 +116,11 @@ async def download_dataset(
     return result
 
 
-@router.post("/datasets/{dataset_id}/upload", response_model=RecipeConfig)
+@router.post(
+    "/datasets/{dataset_id}/upload",
+    response_model=RecipeConfig,
+    dependencies=[broadcasts("recipes")],
+)
 async def upload_dataset(
     dataset_id: str,
     request: Request,

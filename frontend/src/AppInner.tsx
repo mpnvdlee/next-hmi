@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { preloadableLazy } from '@shared/utils/settledLazy';
 import { Routes, Route } from 'react-router-dom';
 import { useWebSocket } from '@hmi/hooks/useWebSocket';
-import { subscribeWidgetUpdated } from '@shared/events/widgetUpdatedBus';
 import {
   loadCustomWidgets,
   loadComponents,
@@ -11,14 +10,9 @@ import {
 } from '@hmi/registry/widgetRegistry';
 import { useDeviceInfoStore } from '@hmi/store/deviceInfoStore';
 import { useVariableStore } from '@hmi/store/variableStore';
-import { useThemeRuntimeStore } from '@hmi/store/themeRuntimeStore';
 import { useComponentStore } from '@shared/store/componentStore';
 import { useProjectStore } from '@shared/store/projectStore';
-import {
-  ensureThemeTokens,
-  loadAndApplyThemeTokens,
-  LS_THEME_SAVED,
-} from '@shared/utils/themeTokens';
+import { ensureThemeTokens } from '@shared/utils/themeTokens';
 import { useDocumentChrome } from '@shared/hooks/useDocumentChrome';
 import { registerActionRunner } from '@hmi/utils/actionDispatcher';
 import { executeWidgetActions } from '@hmi/utils/widgetActions';
@@ -172,26 +166,9 @@ export default function AppInner() {
     });
   }, []);
 
-  // A theme saved in another tab. Re-fetch, then realign the runtime selection
-  // in case the active theme was deleted there (falls back to the default).
-  useEffect(() => {
-    function handleStorage(event: StorageEvent) {
-      if (event.key !== LS_THEME_SAVED) return;
-      void loadAndApplyThemeTokens({ force: true }).then(() => {
-        useThemeRuntimeStore.getState().syncActiveTheme();
-      });
-    }
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, []);
-
-  // Reload when the backend recompiles a custom component so the new
-  // bundle is picked up everywhere.
-  useEffect(() => {
-    return subscribeWidgetUpdated(() => {
-      window.location.reload();
-    });
-  }, []);
+  // A saved theme and a recompiled custom widget reach the editor only
+  // (PreviewView, ConfigUpdatedBanner): the live view shows either after a
+  // browser reload.
 
   // Start loading components eagerly so they're ready as fast as possible.
   // Config routes render immediately; HMI/Preview routes are gated via

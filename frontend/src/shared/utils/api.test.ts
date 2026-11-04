@@ -8,6 +8,7 @@ import {
   MANAGER_SESSION_REQUIRED,
   setProjectUnavailableHandler,
   setSessionExpiredHandler,
+  TAB_ID,
 } from './api';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -47,6 +48,17 @@ describe('apiJson', () => {
     if (!isApiError(err)) return;
     expect(err.status).toBe(403);
     expect(err.code).toBe('denied');
+  });
+
+  it('names this tab on a write, so the server can echo it in config_changed', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await apiJson('/api/thing', { method: 'PUT', body: {} });
+    await apiJson('/api/thing');
+
+    expect(fetchSpy.mock.calls[0][1].headers).toMatchObject({ 'X-NextHMI-Tab': TAB_ID });
+    expect(fetchSpy.mock.calls[1][1].headers).toBeUndefined();
   });
 
   it('does not claim a failed fetch as an ApiError', () => {

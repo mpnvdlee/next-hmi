@@ -227,8 +227,8 @@ The app opens one WebSocket per browser tab.
 - `recipe_snapshot`, `recipe_update` — applied to `recipeStore`
 - `user_identity`, `auth_error`
 - `write_response`, `write_error`, `recipe_response`, `recipe_error` — routed to the async action dispatcher by `requestId`
-- `config_changed` — project files changed on disk
-- `widget_updated` — a custom widget was recompiled; `AppInner` reloads the page
+- `config_changed` — project content changed; published on `configChangedBus`. The editor applies it in place or shows its banner (`ConfigUpdatedBanner`, `config/utils/editorLiveSync.ts`); the live view ignores it and shows a change after a browser reload
+- `widget_updated` — a custom widget was recompiled; the editor reloads, or shows its banner when it has unsaved edits (`ConfigUpdatedBanner`), and the preview iframe reloads itself either way (`PreviewView`); the live view ignores it. A theme saved in an editor tab (the `hmi_theme_saved` storage key) likewise repaints only the editor's preview (`PreviewView`), never an open live view
 - `restarting` — ignored here; the projects view polls for it
 
 The full wire protocol these messages belong to is specified in [websocket.md](websocket.md).

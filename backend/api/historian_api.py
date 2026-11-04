@@ -7,6 +7,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
+from api.change_broadcast import broadcasts
+
 router = APIRouter(prefix="/api/historian", tags=["historian"])
 
 
@@ -54,7 +56,7 @@ async def get_config() -> dict[str, Any]:
     return historian_manager.get_config()
 
 
-@router.put("/config")
+@router.put("/config", dependencies=[broadcasts("historian")])
 async def set_config(body: HistorianConfig) -> dict[str, Any]:
     from services.historian_manager import historian_manager
     from services.websocket_manager import websocket_manager

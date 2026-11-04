@@ -74,7 +74,7 @@ Folders or files whose name starts with `.` or `_` are ignored by both the compi
 The compiler lives in `backend/services/widget_compiler.py` and runs in both dev and packaged installs. Behaviour:
 
 - Scans `<project>/custom-widgets/*/index.tsx` (and `*/<Group>/<Name>/index.tsx`) at backend startup.
-- Recompiles a widget via `watchfiles` whenever anything inside its folder changes, and prunes the build status of a widget whose folder is gone; either way it emits a `widget_updated` message over the `/ws` WebSocket, and the running app reloads the page to pick the new build up.
+- Recompiles a widget via `watchfiles` whenever anything inside its folder changes, and prunes the build status of a widget whose folder is gone; either way it emits a `widget_updated` message over the `/ws` WebSocket, and an open editor reloads the page to pick the new build up (or shows its banner first when it has unsaved edits); the live view picks it up after a browser reload.
 - Writes the compiled `index.js` to `<runtime_home>/.widget-build/<Name>/index.js` (or `…/<Group>/<Name>/index.js`).
 - Tracks success/error by canonical widget identity in `<runtime_home>/.widget-build/.build-status.json`. The version-2 file is `{ "version": 2, "widgets": { "<Group>/<Name>": { ... } } }`; `/api/widgets` surfaces each matching entry as `buildOk`, `buildError`, and `buildTs`.
 - Regenerates `<runtime_home>/.widget-build/widget-schemas.json` — the catalog manifest built from every custom widget's `schema`, `exportedProperties`, `category`, `description` and `icon`, extracted from the source with tree-sitter (`backend/services/widget_schemas.py`). The product's own widgets are not in it: they ship as the baked built-in-widgets manifest instead.

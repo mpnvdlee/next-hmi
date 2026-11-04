@@ -66,14 +66,19 @@ export const useUsersDomainStore = create<UsersDomainState>((set, get) => ({
   load: async () => {
     try {
       const data = await apiJson<UsersDocument>('/api/users');
-      set((state) => ({
-        data,
-        draft: structuredClone(data),
-        loadError: null,
-        saveError: null,
-        dirty: false,
-        _draftSeq: state._draftSeq + 1,
-      }));
+      // An edit made while the request was out is kept, not replaced.
+      set((state) =>
+        state.dirty
+          ? state
+          : {
+              data,
+              draft: structuredClone(data),
+              loadError: null,
+              saveError: null,
+              dirty: false,
+              _draftSeq: state._draftSeq + 1,
+            },
+      );
     } catch (err) {
       console.error('[usersDomainStore] load failed:', err);
       set({ loadError: 'Could not load users.' });

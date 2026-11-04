@@ -12,6 +12,8 @@ from models.alarm import (
 )
 from services.alarm_manager import alarm_manager
 
+from api.change_broadcast import broadcasts
+
 router = APIRouter(prefix="/api/alarms", tags=["alarms"])
 
 
@@ -24,7 +26,7 @@ def get_alarm_config() -> AlarmConfig:
     return alarm_manager.get_config()
 
 
-@router.put("/config", response_model=AlarmConfig)
+@router.put("/config", response_model=AlarmConfig, dependencies=[broadcasts("alarms")])
 def put_alarm_config(body: AlarmConfig) -> AlarmConfig:
     """Replace the entire alarm configuration."""
     alarm_manager.set_config(body)

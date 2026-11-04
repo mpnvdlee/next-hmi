@@ -142,8 +142,8 @@ leaving a half-initialised socket registered.
 | `write_response` | `{ type, requestId, datasource, path }` | A correlated `write_field` or `toggle_field` succeeded — see [Action result correlation](#action-result-correlation). |
 | `write_error` | `{ type, requestId, datasource, path, reason }` | A correlated `write_field` or `toggle_field` failed. |
 | `restarting` | `{ type, reason }` | Right before the backend SIGTERMs itself for `POST /api/system/restart`. Clients disconnect and poll `/api/system/info` for the new process. |
-| `widget_updated` | `{ type, key, name, ts, schema_ok }` | A custom widget recompiled or was deleted; `key` is its normalized path relative to `custom-widgets/`. |
-| `config_changed` | see [config_changed](#config_changed) | After every MCP- or REST-driven config write. |
+| `widget_updated` | `{ type, key, name, ts, schema_ok }` | A custom widget recompiled or was deleted; `key` is its normalized path relative to `custom-widgets/`. An editor tab reloads, or shows its banner when it has unsaved edits (`ConfigUpdatedBanner`); the editor's preview iframe reloads itself either way (`PreviewView`, fed over `postMessage`, holds nothing to lose); the live view ignores it and shows the new build after a browser reload. |
+| `config_changed` | see [config_changed](#config_changed) | After every write that changes project content — REST, MCP or API v1. |
 | `context_ready` | `{ type, currentPageIds: [string, ...] }` | Reply to `set_context`: every variable requested for `currentPageIds` has been sent, from cache and/or a fresh OPC-UA read. The id list is echoed verbatim, so an overlay — whose resolved page id is in that list — settles on this ack rather than on the grace timer. The client does **not** hold the page for it — a page renders as soon as its config and widget modules are in memory — it uses the ack to decide when a binding that still has no value is genuinely without data, and only then marks it (amber "no data" overlay). A page whose ack never arrives falls back to a 3 s grace. The client should ignore any `context_ready` whose page-set doesn't match its most recently sent `set_context` (a superseded navigation's background prefetch can still land late, and opening an overlay resends the context with its page appended). |
 
 > Auto-login (`request_identity`) never carries a `requestId` in its
@@ -424,8 +424,9 @@ still processed but produce no response.
 
 ## config_changed
 
-Broadcast after every MCP- or REST-driven config write so other connected
-browser tabs can refetch or surface conflicts.
+Broadcast after every write that changes project content — an editor save or
+any other REST write, an MCP tool, an API v1 user write — so open editor tabs
+can re-fetch it or warn about unsaved edits.
 
 ```json
 {
@@ -439,14 +440,41 @@ browser tabs can refetch or surface conflicts.
 }
 ```
 
-- `artifact_type ∈ page | datasource | alarms | translations | asset | variables | component | users`.
+- `artifact_type ∈ page | datasource | alarms | translations | asset | variables | component | users | theme | recipes | historian | http_origins`.
+  `page` covers the page index too: `PUT /api/config/config` (page tree,
+  Dialogs folder, shell, globalEvents) sends it with no ids.
 - `artifact_ids` is always an array — single-target writes send one element; bulk
-  tools coalesce.
+  tools coalesce. A REST write sends the route's path parameters (a theme id, a
+  datasource name), none for a route that replaces a whole document.
 - `source` is `mcp`, `rest` or `api` (an [API v1](../reference/rest-api.md#api-v1) user write). `agent_label` is included only when
   `source === "mcp"`.
+- `tab_id` is included only on a `rest` write whose request named its browser
+  tab in the `X-NextHMI-Tab` header (`apiJson` sends `TAB_ID` on every write).
+  An editor tab skips an event carrying its own id: that save is its own. Two
+  editor tabs both save over REST, so `source` alone cannot tell them apart.
+  The REST side is `api/change_broadcast.py`: the `broadcasts(artifact_type)`
+  route dependency sends the event after the response, and only when the
+  handler did not raise.
 - `diff` is an RFC 6902 JSON Patch. If the serialized JSON would exceed 32 KiB it
   is replaced by `{ "truncated": true, "reason": "patch_too_large", "op_count": N }`
   and consumers fall back to `summary`.
+
+An editor tab acts only on content it holds — a domain store it never loaded
+(Alarms, Recipes, Users… never opened) fetches fresh when its screen opens, so
+a change there is neither re-fetched nor warned about. For content it holds
+(`config/utils/editorLiveSync.ts`):
+
+- With nothing unsaved (`projectStore.dirty` and the users screen's own `dirty`
+  both false) it re-fetches the store in place. A change to what undo covers
+  (pages and the index, translations, components, themes) also clears the undo
+  history, so undo cannot step back over it. A store whose author edited while
+  the fetch was out keeps that edit and drops the response, and the banner
+  shows instead.
+- With unsaved edits it shows the "Config was updated by another writer"
+  banner instead.
+
+An `asset` event only empties the inline-SVG cache. The live view does not
+listen: it shows a change after a browser reload.
 
 This WS broadcast is the **only** change notification. MCP-native
 `notifications/resources/updated` and `notifications/resources/list_changed` are

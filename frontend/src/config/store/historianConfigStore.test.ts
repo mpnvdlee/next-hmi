@@ -198,3 +198,33 @@ describe('registerSave callback', () => {
     ]);
   });
 });
+
+describe('load', () => {
+  it('keeps an edit made while the request was out', async () => {
+    let release!: () => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        url.includes('/api/historian/config')
+          ? new Promise((resolve) => {
+              release = () => resolve({ ok: true, status: 200, json: async () => EMPTY_CONFIG });
+            })
+          : Promise.resolve({
+              ok: true,
+              status: 200,
+              json: async () => (url.includes('status') ? STATUS : []),
+            }),
+      ),
+    );
+    useHistorianConfigStore.setState({ config: EMPTY_CONFIG });
+    const loading = useHistorianConfigStore.getState().load();
+    useHistorianConfigStore.getState().addVariable('plc:temp');
+
+    release();
+    await loading;
+
+    expect(Object.keys(useHistorianConfigStore.getState().config?.variables ?? {})).toEqual([
+      'plc:temp',
+    ]);
+  });
+});

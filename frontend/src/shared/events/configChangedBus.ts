@@ -9,14 +9,27 @@
  * to the conflict store. The bus has no Zustand or React deps.
  */
 
-type ArtifactType =
-  'page' | 'datasource' | 'alarms' | 'translations' | 'asset' | 'variables' | 'component';
+export type ArtifactType =
+  | 'page'
+  | 'datasource'
+  | 'alarms'
+  | 'translations'
+  | 'asset'
+  | 'variables'
+  | 'component'
+  | 'users'
+  | 'theme'
+  | 'recipes'
+  | 'historian'
+  | 'http_origins';
 
-interface ConfigChangedEvent {
+export interface ConfigChangedEvent {
   artifact_type: ArtifactType;
   artifact_ids: string[];
-  source: 'mcp' | 'rest';
+  source: 'mcp' | 'rest' | 'api';
   agent_label?: string;
+  /** The browser tab whose REST write this was (`TAB_ID` in `utils/api`). */
+  tab_id?: string;
   summary: string;
   diff?: unknown;
 }

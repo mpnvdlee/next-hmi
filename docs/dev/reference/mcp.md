@@ -176,7 +176,8 @@ change to the edited project's running child over a **loopback-only reload
 hook** (`POST /api/internal/reload`, reachable only on the child's instance
 port). The child re-reads the affected files, re-applies any datasource
 subscription delta, and fires the **WS `config_changed`** broadcast to every
-connected browser tab. If no child is running for that project there is
+connected browser tab: an open editor re-reads the change, the live view shows
+it after a browser reload. If no child is running for that project there is
 nothing to notify — the files are simply current for the next start. Shape:
 
 ```json
@@ -252,7 +253,8 @@ deferrals rather than oversights:
   single-add/-delete is exposed; bulk imports of OPC-UA subtrees
   are deferred along with their confirm-gating semantics.
 - **Side-by-side diff with three-button conflict resolution** in the
-  editor: an MCP-sourced `config_changed` raises a banner
+  editor: an MCP-sourced `config_changed` is applied in place when the
+  editor has nothing unsaved, and otherwise raises a banner
   (`ConfigUpdatedBanner`) offering *Reload page* or *Keep unsaved changes*;
   a full overwrite/apply/cancel flow would need per-artifact dirty-state
   tracking.

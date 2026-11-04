@@ -1,5 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { publishWidgetUpdated } from '@shared/events/widgetUpdatedBus';
+import { LS_THEME_SAVED } from '@shared/utils/themeTokens';
 
 const loadCustomWidgets = vi.fn(() => Promise.resolve());
 const loadComponents = vi.fn(() => Promise.resolve());
@@ -22,11 +24,13 @@ vi.mock('@hmi/registry/widgetRegistry', async (importOriginal) => {
   };
 });
 
+const loadAndApplyThemeTokens = vi.fn(() => Promise.resolve());
+
 vi.mock('@shared/utils/themeTokens', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@shared/utils/themeTokens')>()),
   // The only two that would reach the network from a bare unit test.
   ensureThemeTokens: () => Promise.resolve(),
-  loadAndApplyThemeTokens: () => Promise.resolve(),
+  loadAndApplyThemeTokens: () => loadAndApplyThemeTokens(),
 }));
 
 vi.mock('@hmi/hooks/useWebSocket', () => ({ useWebSocket: () => {} }));
@@ -106,5 +110,28 @@ describe('the /config route in the runtime route map', () => {
     // `editorPath()` still emits /config/... and this route is the only way in.
     renderAt(undefined, '/config/pages');
     expect(await screen.findByText('config routes')).toBeInTheDocument();
+  });
+});
+
+describe('the live view and changes made in the editor', () => {
+  it('neither reloads for a recompiled widget nor repaints for a saved theme', async () => {
+    const reload = vi.fn();
+    vi.stubGlobal('location', { ...window.location, reload });
+    render(
+      <MemoryRouter initialEntries={['/config/pages']}>
+        <AppInner />
+      </MemoryRouter>,
+    );
+    await screen.findByText('config routes');
+    loadAndApplyThemeTokens.mockClear();
+
+    act(() => {
+      publishWidgetUpdated({ key: 'Gauge', name: 'Gauge', ts: 't1', schema_ok: true });
+      window.dispatchEvent(new StorageEvent('storage', { key: LS_THEME_SAVED, newValue: '1' }));
+    });
+
+    expect(reload).not.toHaveBeenCalled();
+    expect(loadAndApplyThemeTokens).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

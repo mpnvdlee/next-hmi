@@ -42,6 +42,8 @@ interface AdminViewStore {
   /** `httpAllowedOrigins` — where a dynamic-host `$http` source may go. */
   httpOrigins: string[];
   httpOriginsError: string | null;
+  /** True once `httpOrigins` came from the server. */
+  httpOriginsLoaded: boolean;
 
   loadCustomWidgets(): Promise<void>;
   loadSubscriptions(): Promise<void>;
@@ -83,6 +85,7 @@ export const useAdminViewStore = create<AdminViewStore>((set) => ({
   recompileError: null,
   httpOrigins: [],
   httpOriginsError: null,
+  httpOriginsLoaded: false,
 
   loadCustomWidgets: async () => {
     try {
@@ -126,7 +129,7 @@ export const useAdminViewStore = create<AdminViewStore>((set) => ({
   loadHttpOrigins: async () => {
     try {
       const { origins } = await apiJson<HttpOrigins>('/api/config/http-origins');
-      set({ httpOrigins: origins, httpOriginsError: null });
+      set({ httpOrigins: origins, httpOriginsError: null, httpOriginsLoaded: true });
     } catch (e) {
       set({ httpOriginsError: errorMessage(e) });
     }

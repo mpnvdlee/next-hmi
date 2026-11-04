@@ -98,7 +98,7 @@ Ask for a read first, so a bad endpoint or a mis-scoped token shows up before an
 
 1. *"List the pages in project line-a."* — exercises the connection, the token and the project id in one call.
 2. *"What variables does the LinePLC datasource have?"* — confirms the agent can see your data model.
-3. *"Add a page called Line overview with a heading and a button bound to LinePLC:Motor/Start."* — the first write. Watch the editor tab: the change lands on disk and any open editor offers to reload.
+3. *"Add a page called Line overview with a heading and a button bound to LinePLC:Motor/Start."* — the first write. Watch the editor tab: the change lands on disk and an open editor shows it, or offers to reload when it has unsaved changes.
 
 ## Managing tokens
 
@@ -147,9 +147,9 @@ They are ordinary instructions, not privileged calls — the agent still works t
 
 ## While an agent is working
 
-**Operator screens follow along.** A running project re-reads the changed files and pushes the update to every connected browser, so an HMI screen shows the new value, widget, page or text without anyone touching it.
+**Operator screens show it after a reload.** A running project re-reads the changed files at once, but an open live view keeps what it shows until its browser tab is reloaded, so nothing on an operator's screen changes under their hands. Alarms the agent adds go off straight away.
 
-**Editor tabs ask first.** An open editor shows a banner — *"Config was updated by another writer."* — with the choice to reload or dismiss, rather than yanking the canvas out from under you mid-edit. Dismissing keeps your tab as it is. Saving then writes only the pages you changed, so the agent's edits to other pages stay. If you and the agent changed the same page, the page list or the translations, the save is refused instead of overwriting the agent: reload, then make your change again.
+**Editor tabs follow along, or ask first.** An editor with nothing unsaved shows the agent's change straight away, without a reload. One with unsaved changes shows a banner instead — *"Config was updated by another writer."* — with the choice to reload or dismiss, rather than yanking the canvas out from under you mid-edit. Dismissing keeps your tab as it is. Saving then writes only the pages you changed, so the agent's edits to other pages stay. If you and the agent changed the same page, the page list or the translations, the save is refused instead of overwriting the agent: reload, then make your change again.
 
 ## When it doesn't work
 

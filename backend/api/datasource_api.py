@@ -51,6 +51,8 @@ from services.datasource_sync import (
     metadata_keys,
 )
 
+from api.change_broadcast import broadcasts
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/datasources", tags=["datasources"])
@@ -384,7 +386,7 @@ async def get_datasource_variables(name: str, simple: bool = True) -> dict[str, 
     return {"variables": variables}
 
 
-@router.put("/{name}")
+@router.put("/{name}", dependencies=[broadcasts("datasource")])
 async def put_datasource(name: str, body: DatasourceUpsertBody) -> dict[str, Any]:
     """Create or update a datasource (settings + variables).
 
@@ -418,7 +420,7 @@ async def put_datasource(name: str, body: DatasourceUpsertBody) -> dict[str, Any
     return payload
 
 
-@router.delete("/{name}")
+@router.delete("/{name}", dependencies=[broadcasts("datasource")])
 async def delete_datasource(name: str) -> dict[str, str]:
     """Delete a datasource and stop its connections."""
     entry = _require_datasource(name)
@@ -429,7 +431,7 @@ async def delete_datasource(name: str) -> dict[str, str]:
     return {"status": "deleted"}
 
 
-@router.put("/{name}/variables")
+@router.put("/{name}/variables", dependencies=[broadcasts("variables")])
 async def put_variables(name: str, body: list[Any]) -> list[Any]:
     """Update only the variable tree for a datasource."""
     entry = _require_datasource(name)

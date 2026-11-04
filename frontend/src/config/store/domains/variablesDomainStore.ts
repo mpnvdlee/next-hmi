@@ -17,6 +17,8 @@ import {
 
 interface VariablesViewState {
   datasources: DatasourceListItem[];
+  /** True once `datasources` came from the server — an empty list included. */
+  listLoaded: boolean;
   selectedName: string | null;
   selectedConfig: DatasourceConfig | null;
   datasourceTreeExpanded: boolean;
@@ -90,6 +92,7 @@ export const useVariablesDomainStore = create<VariablesDomainStore>((set, get) =
 
   return {
     datasources: [],
+    listLoaded: false,
     selectedName: null,
     selectedConfig: null,
     datasourceTreeExpanded: true,
@@ -115,7 +118,7 @@ export const useVariablesDomainStore = create<VariablesDomainStore>((set, get) =
           signal: controller.signal,
         });
         if (!listLoader.isCurrent(controller)) return;
-        set({ datasources: data, listError: null });
+        set({ datasources: data, listError: null, listLoaded: true });
       } catch (err) {
         if (controller.signal.aborted) return;
         console.error('[variablesDomainStore] Failed to load datasource list:', err);

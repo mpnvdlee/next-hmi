@@ -83,13 +83,16 @@ export default function TranslationInput({
     }
   }, [translationOnly, value]);
 
-  // Close dropdown when clicking outside; revert to plain if nothing selected
-  useDismissOnOutsideClick(wrapperRef, () => {
+  // Typing only searches; a key is set by picking or adding it. So a dismiss
+  // puts the field back on the key it holds instead of leaving search text that
+  // reads as a value no save will write — or reverts to plain if none is set.
+  function dismiss() {
     setOpen(false);
-    if (!translationOnly && !isLocSource(value)) {
-      setMode('plain');
-    }
-  });
+    if (translationOnly) setSearch(isLocSource(value) ? value.$loc : '');
+    else if (!isLocSource(value)) setMode('plain');
+  }
+
+  useDismissOnOutsideClick(wrapperRef, dismiss);
 
   // The values popover owns the field while it is open — the key dropdown would
   // otherwise reopen behind it whenever focus returns to the search input.
@@ -191,10 +194,7 @@ export default function TranslationInput({
         selectKey(filtered[index]);
       }
     } else if (e.key === 'Escape') {
-      setOpen(false);
-      if (!translationOnly && !isLocSource(value)) {
-        setMode('plain');
-      }
+      dismiss();
     }
   }
 

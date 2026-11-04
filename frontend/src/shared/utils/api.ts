@@ -10,7 +10,15 @@
  *   hits the right backend.
  */
 
+import { randomUuid } from './id';
 import { getArea, withBase } from './runtimeBase';
+
+/**
+ * This browser tab, named on every write so the server's `config_changed`
+ * broadcast can echo it (`tab_id`): two editor tabs both save over REST, and
+ * only this id tells a tab its own save from the other one's.
+ */
+export const TAB_ID = randomUuid();
 
 class ApiError extends Error {
   readonly status: number;
@@ -104,10 +112,12 @@ interface JsonOptions {
 async function requestJson<T>(url: string, options: JsonOptions | undefined): Promise<T> {
   const { method = 'GET', body, signal } = options ?? {};
   const init: RequestInit = { method, signal };
+  const headers: Record<string, string> = method === 'GET' ? {} : { 'X-NextHMI-Tab': TAB_ID };
   if (body !== undefined) {
-    init.headers = { 'Content-Type': 'application/json' };
+    headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(body);
   }
+  if (Object.keys(headers).length > 0) init.headers = headers;
   const res = await fetch(url, init);
   if (!res.ok) throw await apiErrorFrom(res);
   if (res.status === 204) return undefined as T;

@@ -1,7 +1,5 @@
-import asyncio
 import hashlib
 import json
-import logging
 from dataclasses import replace
 from typing import Any
 
@@ -82,24 +80,15 @@ from core.validation import (
     validate_users,
     validate_widget_node,
 )
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, BackgroundTasks, Query, Request
 from mcp_server.diff import make_diff
 from models.alarm import AlarmConfig
 from models.recipe import RecipeConfig
 from pydantic import ValidationError
 from services import widget_compiler
-from services.websocket_manager import ConfigChangedEvent, websocket_manager
+from services.websocket_manager import websocket_manager
 
-log = logging.getLogger(__name__)
-
-
-def _log_broadcast_error(task: asyncio.Task[Any]) -> None:
-    if task.cancelled():
-        return
-    exc = task.exception()
-    if exc is not None:
-        log.warning("config_changed broadcast failed: %s", exc)
-
+from api.change_broadcast import broadcasts, rest_change
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -824,7 +813,7 @@ async def get_config() -> Any:
     }
 
 
-@router.put("/config")
+@router.put("/config", dependencies=[broadcasts("page")])
 async def put_config(body: dict) -> Any:
     if "pages" not in body or not isinstance(body["pages"], list):
         raise ConfigValidationError("'pages' array is required")
@@ -945,7 +934,7 @@ async def get_http_origins() -> Any:
     return {"origins": list(listed_origins(raw))}
 
 
-@router.put("/http-origins")
+@router.put("/http-origins", dependencies=[broadcasts("http_origins")])
 async def put_http_origins(body: dict) -> Any:
     entries = body.get("origins")
     if not isinstance(entries, list):
@@ -1082,7 +1071,9 @@ async def _get_page_document(page_id: str, root: str) -> Any:
     return read_json(path)
 
 
-async def _put_page_document(page_id: str, root: str, body: dict) -> Any:
+async def _put_page_document(
+    page_id: str, root: str, body: dict, request: Request, background: BackgroundTasks
+) -> Any:
     if not is_valid_page_id(page_id):
         raise ConfigValidationError("Invalid page id")
     if "sections" in body:
@@ -1125,16 +1116,9 @@ async def _put_page_document(page_id: str, root: str, body: dict) -> Any:
         raise ConfigValidationError(report.to_message())
     write_json(path, payload)
     _invalidate_runtime_cache()
-    event = ConfigChangedEvent(
-        artifact_type="page",
-        artifact_ids=[page_id],
-        source="rest",
-        summary=f"PUT /api/config/{root}/{page_id}",
-        diff=make_diff(before, payload),
-    )
-    # Fire-and-forget so a slow browser tab doesn't bound REST response time.
-    task = asyncio.create_task(websocket_manager.broadcast_config_changed(event))
-    task.add_done_callback(_log_broadcast_error)
+    event = rest_change(request, "page", [page_id], diff=make_diff(before, payload))
+    # After the response, so a slow browser tab doesn't bound REST response time.
+    background.add_task(websocket_manager.broadcast_config_changed, event)
     return {**payload, "revision": _page_revision(path)}
 
 
@@ -1153,13 +1137,15 @@ async def get_page(page_id: str) -> Any:
 
 
 @router.put("/pages/{page_id}")
-async def put_page(page_id: str, body: dict) -> Any:
-    result = await _put_page_document(page_id, "pages", body)
+async def put_page(
+    page_id: str, body: dict, request: Request, background: BackgroundTasks
+) -> Any:
+    result = await _put_page_document(page_id, "pages", body, request, background)
     telemetry.mark("pageSaved")
     return result
 
 
-@router.delete("/pages/{page_id}")
+@router.delete("/pages/{page_id}", dependencies=[broadcasts("page")])
 async def delete_page(page_id: str) -> Any:
     return await _delete_page_document(page_id, "pages")
 
@@ -1170,11 +1156,13 @@ async def get_dialogs_document(page_id: str) -> Any:
 
 
 @router.put("/dialogs/{page_id}")
-async def put_dialogs_document(page_id: str, body: dict) -> Any:
-    return await _put_page_document(page_id, "dialogs", body)
+async def put_dialogs_document(
+    page_id: str, body: dict, request: Request, background: BackgroundTasks
+) -> Any:
+    return await _put_page_document(page_id, "dialogs", body, request, background)
 
 
-@router.delete("/dialogs/{page_id}")
+@router.delete("/dialogs/{page_id}", dependencies=[broadcasts("page")])
 async def delete_dialogs_document(page_id: str) -> Any:
     return await _delete_page_document(page_id, "dialogs")
 
@@ -1186,7 +1174,7 @@ async def get_dictionaries() -> Any:
     return _list_dictionaries()
 
 
-@router.post("/dictionaries")
+@router.post("/dictionaries", dependencies=[broadcasts("translations")])
 async def create_dictionary(body: dict) -> Any:
     raw_name = body.get("name", "")
     if not isinstance(raw_name, str):
@@ -1213,7 +1201,7 @@ async def create_dictionary(body: dict) -> Any:
     return _list_dictionaries()
 
 
-@router.delete("/dictionaries/{name}")
+@router.delete("/dictionaries/{name}", dependencies=[broadcasts("translations")])
 async def delete_dictionary(name: str) -> Any:
     if name == "Default":
         raise ConfigValidationError("Cannot delete the Default dictionary")
@@ -1249,7 +1237,7 @@ async def get_translations(dict_name: str = Query(default="Default", alias="dict
     return _parse_translations_csv(_dict_path(dict_name))
 
 
-@router.post("/translations")
+@router.post("/translations", dependencies=[broadcasts("translations")])
 async def add_translation(body: dict, dict_name: str = Query(default="Default", alias="dict")) -> Any:
     path = _dict_path(dict_name)
     raw_key = body.get("key", "")
@@ -1272,7 +1260,7 @@ async def add_translation(body: dict, dict_name: str = Query(default="Default", 
     return payload
 
 
-@router.put("/translations")
+@router.put("/translations", dependencies=[broadcasts("translations")])
 async def put_translations(body: dict, dict_name: str = Query(default="Default", alias="dict")) -> Any:
     """Full save: languages + rows.
 
@@ -1318,7 +1306,7 @@ async def put_translations(body: dict, dict_name: str = Query(default="Default",
     return payload
 
 
-@router.post("/translations/language")
+@router.post("/translations/language", dependencies=[broadcasts("translations")])
 async def add_language(
     body: dict, dict_name: str = Query(default="Default", alias="dict")
 ) -> Any:
@@ -1348,7 +1336,7 @@ async def add_language(
     return payload
 
 
-@router.delete("/translations/language/{code}")
+@router.delete("/translations/language/{code}", dependencies=[broadcasts("translations")])
 async def delete_language(
     code: str, dict_name: str = Query(default="Default", alias="dict")
 ) -> Any:
@@ -1372,7 +1360,7 @@ async def delete_language(
     return payload
 
 
-@router.delete("/translations/{key:path}")
+@router.delete("/translations/{key:path}", dependencies=[broadcasts("translations")])
 async def delete_translation(key: str, dict_name: str = Query(default="Default", alias="dict")) -> Any:
     """Remove a single translation row by its key (en-EN value)."""
     path = _dict_path(dict_name)

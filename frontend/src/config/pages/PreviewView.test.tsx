@@ -3,6 +3,7 @@ import '../../../widgets/testSdk';
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { useConfigStore } from '@shared/store/configStore';
+import { publishWidgetUpdated } from '@shared/events/widgetUpdatedBus';
 import { useVariableStore } from '@hmi/store/variableStore';
 import { useComponentStore } from '@shared/store/componentStore';
 import { registerComponents } from '@hmi/registry/widgetRegistry';
@@ -517,5 +518,53 @@ describe('PreviewView — empty shell regions', () => {
 
     expect(container.querySelector('[data-region="leftSidebar"]')).toBeNull();
     expect(container.querySelector('.hmi-navmenu')).toBeNull();
+  });
+});
+
+describe('PreviewView — a theme saved in an editor tab', () => {
+  beforeEach(() => setupStores([BUTTON_PAGE]));
+
+  it('re-fetches the themes, where the live view does not', async () => {
+    renderPreview();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockClear();
+
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: 'hmi_theme_saved', newValue: '1' }));
+    });
+
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.map(([url]) => String(url))).toContainEqual(
+        expect.stringContaining('/api/themes'),
+      ),
+    );
+  });
+});
+
+describe('PreviewView — a recompiled custom widget', () => {
+  beforeEach(() => setupStores([BUTTON_PAGE]));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('reloads the preview, whatever the editor around it holds', () => {
+    const reload = vi.fn();
+    renderPreview();
+    vi.stubGlobal('location', { ...window.location, reload });
+
+    act(() => publishWidgetUpdated({ key: 'Gauge', name: 'Gauge', ts: 't1', schema_ok: true }));
+
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('leaves the hidden thumbnail capture frame alone', () => {
+    const reload = vi.fn();
+    const frame = document.createElement('iframe');
+    frame.dataset.thumbnailCapture = 'true';
+    vi.stubGlobal('frameElement', frame);
+    renderPreview();
+    vi.stubGlobal('location', { ...window.location, reload });
+
+    act(() => publishWidgetUpdated({ key: 'Gauge', name: 'Gauge', ts: 't2', schema_ok: true }));
+
+    expect(reload).not.toHaveBeenCalled();
   });
 });

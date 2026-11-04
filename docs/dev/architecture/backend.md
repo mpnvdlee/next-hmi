@@ -237,6 +237,8 @@ current value and before its Boolean check, with the same folder exception. Ever
   - users, groups, and access settings
 - `backend/api/device_api.py`, `historian_api.py`, `http_source_api.py`, `thumbnail_api.py`
   - requesting-client identification, historian config/query, the `$http` proxy, the editor's project thumbnail
+- `backend/api/change_broadcast.py`
+  - the `broadcasts(artifact_type)` route dependency every content-changing REST write carries: `config_changed` after a successful write, echoing the `X-NextHMI-Tab` header as `tab_id` ([websocket.md](websocket.md#config_changed))
 - `backend/api/internal_api.py`
   - the loopback-only `POST /api/internal/reload` hook the manager calls after a workspace MCP write
 - `backend/api/projects_api.py` (not on a managed instance)

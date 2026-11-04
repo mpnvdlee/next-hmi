@@ -19,10 +19,15 @@ export function useConfig(): void {
   }, []);
 }
 
-/** Fetch the page index + global areas into configStore, replacing what it holds. */
-export async function loadConfigIndex(): Promise<void> {
+/**
+ * Fetch the page index + global areas into configStore, replacing what it holds.
+ * `shouldApply`, checked once the response is in, lets a caller drop it — an
+ * editor whose author edited during the fetch. Resolves whether it was applied.
+ */
+export async function loadConfigIndex(shouldApply?: () => boolean): Promise<boolean> {
   try {
     const data = await apiJson<PagesBootstrapResponse>('/api/config/config');
+    if (shouldApply && !shouldApply()) return false;
     const store = useConfigStore.getState();
     store.setPages(data.pages ?? []);
     store.setHeader(data.header ?? []);
@@ -37,8 +42,10 @@ export async function loadConfigIndex(): Promise<void> {
     // what the user touched and leaves other writers' pages alone.
     store.markSynced(data.revision ?? null, data.pageRevisions ?? {});
     store.markLoaded();
+    return true;
   } catch (err) {
     console.error('[useConfig] Failed to load config:', err);
+    return false;
   }
 }
 

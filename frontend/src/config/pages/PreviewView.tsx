@@ -71,7 +71,14 @@ import { PageDataSettleGate } from '@hmi/components/DataSettleGate';
 import { collectComponentPriorityKeys } from '@hmi/components/layoutUtils';
 import { PreviewContext } from '@shared/context/PreviewContext';
 import { PreviewSelectionContext } from '@hmi/context/PreviewSelectionContext';
-import { applyPreviewTheme, LS_THEME_PREVIEW } from '@shared/utils/themeTokens';
+import {
+  applyPreviewTheme,
+  loadAndApplyThemeTokens,
+  LS_THEME_PREVIEW,
+  LS_THEME_SAVED,
+} from '@shared/utils/themeTokens';
+import { useThemeRuntimeStore } from '@hmi/store/themeRuntimeStore';
+import { subscribeWidgetUpdated } from '@shared/events/widgetUpdatedBus';
 import { installPreviewInteractionGuard } from './previewInteractionGuard';
 import { selectionModifiers, type SelectionModifiers } from '@shared/utils/domEvent';
 
@@ -208,8 +215,26 @@ export default function PreviewView() {
     }
   }, []);
 
+  // A recompiled custom widget only loads with the page. The preview holds
+  // nothing of its own — the editor feeds it over postMessage — so it reloads
+  // even while the editor keeps unsaved edits and shows its banner. Not the
+  // hidden frame a thumbnail is captured in (captureThumbnail.ts): a reload
+  // there would cut the capture short.
+  useEffect(() => {
+    if ((window.frameElement as HTMLElement | null)?.dataset.thumbnailCapture) return;
+    return subscribeWidgetUpdated(() => window.location.reload());
+  }, []);
+
   useEffect(() => {
     function handleStorage(event: StorageEvent) {
+      // A theme saved in an editor tab. Re-fetch, then realign the selection in
+      // case the active theme was deleted there (falls back to the default).
+      if (event.key === LS_THEME_SAVED) {
+        void loadAndApplyThemeTokens({ force: true }).then(() =>
+          useThemeRuntimeStore.getState().syncActiveTheme(),
+        );
+        return;
+      }
       if (event.key !== LS_THEME_PREVIEW || !event.newValue) return;
       try {
         const payload = JSON.parse(event.newValue) as { theme?: ThemeConfig };

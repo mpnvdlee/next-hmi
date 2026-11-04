@@ -35,12 +35,14 @@ Edits are held in the editor until you save them, so you can undo freely before 
 | **Undo** (Ctrl/Cmd + Z) · **Redo** (Ctrl/Cmd + Y or Ctrl/Cmd + Shift + Z) | Step back and forward through the edit history. |
 | **Save users** · **Discard users** | Accounts and groups save separately — a security change is never mixed into a normal save. These appear in the header only while that draft is dirty. |
 
-Closing the tab with unsaved work prompts you first. Once a save lands, the server writes the project files and broadcasts a `config_changed` message, so every open runtime picks the change up on its own — there is no separate publish step.
+Closing the tab with unsaved work prompts you first. Once a save lands, the server writes the project files — there is no separate publish step. An open live view shows the change after a browser reload.
+
+**Other writers.** The editor also follows changes made elsewhere: in a second editor tab, by an AI assistant over [MCP](mcp.md), or by another system over [API v1](api.md). With nothing unsaved, the editor shows the change straight away, without a reload, on the page you have open. With unsaved changes it shows a banner instead — *"Config was updated by another writer."* — and leaves your work as it is: **Reload page** drops your changes and shows theirs, **Keep unsaved changes** closes the banner. A change you saved yourself, in this tab, never raises it.
 
 Each save also refreshes the picture of this project shown on the Manager's project list: the main page is rendered off-screen and stored as a thumbnail. It runs after the save, never blocks it, and never fires your project's `onHmiLoaded` event — so a save cannot write to a datasource as a side effect.
 
 > [!NOTE]
-> **Two different "saves".** A **custom widget** is a file you edit outside the editor; the backend compiles it the moment you save the `.tsx` and hot-swaps it into open pages. That is unrelated to the editor's Save button. See [Building your own widgets](custom-widgets.md).
+> **Two different "saves".** A **custom widget** is a file you edit outside the editor; the backend compiles it the moment you save the `.tsx`, and the editor reloads to show it — or, when you have unsaved changes, shows a banner (*"A custom widget was recompiled. Reload to use it."*) while the canvas already shows the new widget. An open live view shows it after a browser reload. That is unrelated to the editor's Save button. See [Building your own widgets](custom-widgets.md).
 
 ## Keyboard shortcuts
 
@@ -60,5 +62,5 @@ Each save also refreshes the picture of this project shown on the Manager's proj
 - **Preview at any size.** The viewport selector switches the canvas between **Fit to screen**, **Laptop** (1440×900), **Tablet** (1024×768) and **Phone** (390×844) so you can check responsive branches. **Scaling** zooms the canvas beside it, for reading a dense screen without changing the size it is laid out at.
 - **Try the screen without leaving the editor.** The preview toolbar's **Mode** control has two buttons: the pencil is **Config mode**, where a click selects the widget you clicked, and the play button is **Test mode**, where clicks run actions and navigation works — press your own buttons, open your own overlays, watch a write land. Writes, recipe loads and alarm acknowledgements made here are live, and recorded as `engineer`.
 - **Watch the warnings pill.** The header runs a project-wide validation pass and surfaces findings — an incomplete `$var` binding, a reference to a datasource that no longer exists — without blocking the save. Click a finding to jump to it; see [Diagnostics](diagnostics.md#the-warnings-pill).
-- **Open the runtime beside it.** The header's second button opens this project's operator runtime in a new tab, so you can keep a real screen open while you edit.
+- **Open the runtime beside it.** The header's second button opens this project's operator runtime in a new tab, so you can keep a real screen open while you edit. Reload that tab after a save to see the change.
 - **Send the project from here.** The header's **Transfer** button pushes the open project to another NEXT HMI device, without a detour through the Manager. What travels is the project *on disk*, so the button stays disabled — "Save your changes before transferring" — until your edits are saved. It appears only where a Manager is serving the editor. See [Push & pull between devices](projects.md#push--pull-between-devices).

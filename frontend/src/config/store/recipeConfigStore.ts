@@ -99,6 +99,8 @@ export const useRecipeConfigStore = create<RecipeConfigState>((set, get) => {
       if (get().loaded && projectIsDirty()) return;
       try {
         const config = await apiJson<RecipeConfig>('/api/recipes/config');
+        // Same guard again: an edit can land while the request is out.
+        if (get().loaded && projectIsDirty()) return;
         set({ config, loaded: true, loadError: null });
       } catch (err) {
         console.error('[recipeConfigStore] load failed:', err);

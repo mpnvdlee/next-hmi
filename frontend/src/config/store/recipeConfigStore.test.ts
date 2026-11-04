@@ -168,3 +168,28 @@ describe('registerSave callback', () => {
     );
   });
 });
+
+describe('load', () => {
+  it('keeps an edit made while the request was out', async () => {
+    let release!: () => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            release = () => resolve({ ok: true, status: 200, json: async () => EMPTY_CONFIG });
+          }),
+      ),
+    );
+    useRecipeConfigStore.setState({ config: EMPTY_CONFIG, loaded: true });
+    const loading = useRecipeConfigStore.getState().load();
+    useRecipeConfigStore.getState().addType('Typed during the load');
+
+    release();
+    await loading;
+
+    expect(useRecipeConfigStore.getState().config?.datasetTypes.map((t) => t.name)).toEqual([
+      'Typed during the load',
+    ]);
+  });
+});
