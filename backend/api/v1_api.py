@@ -8,7 +8,7 @@ nothing. Two credentials work:
 * the device-admin password over HTTP Basic, username ``admin`` — every
   project, every scope, with the same failure throttle as the dashboard login;
 * an API token (``core.mcp_tokens.issue_api``) as ``Authorization: Bearer`` —
-  one project, the scopes it was minted with.
+  every project, only the scopes it was minted with.
 
 HMI user credentials (``users.json``) are never an API key, and an MCP token
 is refused here just as an API token is refused on ``/mcp``.
@@ -126,14 +126,11 @@ async def _authenticate(request: Request) -> Caller:
 
 
 def _scope(scope: str) -> Any:
-    """Per-route check of the project and *scope*, on the request's cached caller."""
+    """Per-route check of *scope* and that the project exists, on the request's cached caller."""
 
     async def check(projectId: str, caller: Caller = Depends(_authenticate)) -> Caller:
-        if caller.token is not None:
-            if caller.token.project_id != projectId:
-                raise HTTPException(status_code=403, detail="API token is not scoped to this project")
-            if scope not in caller.token.scopes:
-                raise HTTPException(status_code=403, detail=f"API token lacks the '{scope}' scope")
+        if caller.token is not None and scope not in caller.token.scopes:
+            raise HTTPException(status_code=403, detail=f"API token lacks the '{scope}' scope")
         if find_project(load_manifest(), projectId) is None:
             raise NotFoundError(f"Project '{projectId}' not found")
         return caller

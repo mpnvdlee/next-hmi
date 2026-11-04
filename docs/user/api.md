@@ -21,10 +21,11 @@ operator screens leave open without any credential is listed in
 There are two ways to sign a request.
 
 **An API token (recommended).** A token is a long random string that unlocks
-one project and only the parts you tick when you create it. Hand each system its
+every project on this installation, but only the parts you tick when you create
+it. Hand each system its
 own token, so you can take one back without touching the others.
 
-1. Open the project in the editor and pick **Admin** in the left rail.
+1. On the Manager dashboard, open **Settings**.
 2. In the **Tokens** section, click **Create token** and choose the kind **API**.
 3. Give it a name you will recognise later (*HR system*, *Power BI*).
 4. Tick the scopes the system needs, and nothing more (see the table below).
@@ -33,8 +34,9 @@ own token, so you can take one back without touching the others.
 
 ![The Create token dialog with the kind set to API: a name field and one checkbox per scope, from reading historian samples to changing users, with "Sign users in and out on named panels" ticked.](images/admin-tokens-api.png)
 
-The dialog also shows a ready-made `curl` command for the new token. The
-**Tokens** section lists the project's tokens with **Revoke** on each.
+The dialog also shows a ready-made `curl` command for the new token; replace
+`<project-id>` in it with a project's id. The **Tokens** section lists every
+token, with **Revoke** on each.
 
 **The device-admin password.** The password that unlocks the dashboard also
 works, over HTTP Basic, with the username `admin`. It reaches every project and
@@ -89,7 +91,7 @@ What the answers mean:
 |---|---|
 | `200` | Done |
 | `401` | No credential, a wrong one, or a revoked token |
-| `403` | The token is for another project, or lacks the scope this route needs |
+| `403` | The token lacks the scope this route needs |
 | `401` (panel sign-in) | The HMI user's username or password is wrong |
 | `404` | No such project, no such user, or no open panel with that name |
 | `409` | The project's `users.json` is damaged (repair it in the editor first), or a panel route was called while the project is stopped |

@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from core import mcp_tokens, runtime_home, users_document
+from core import runtime_home, users_document
 from core.exceptions import ConflictError, NotFoundError, ValidationError
 from core.manifest import (
     ManifestV1,
@@ -571,7 +571,6 @@ def update_project(project_id: str, body: UpdateProjectBody) -> dict[str, Any]:
         save_manifest(manifest)
 
     if changing_id:
-        mcp_tokens.retarget_project(old_id, entry.id)
         _move_runtime_state(old_id, entry.id)
 
     metadata = read_project_metadata(target)
@@ -821,7 +820,6 @@ def delete(project_id: str, deleteFolder: bool = False) -> dict[str, Any]:
 
         manifest.projects = [p for p in manifest.projects if p.id != entry.id]
         save_manifest(manifest)
-    mcp_tokens.revoke_project(entry.id)
     delete_thumbnail(entry.id)
     logger.info("Removed project '%s' (%s) from manifest", entry.name, entry.id)
     return {"id": entry.id, "deletedFolder": bool(deleteFolder)}

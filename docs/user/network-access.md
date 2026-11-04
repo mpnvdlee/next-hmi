@@ -85,10 +85,10 @@ The manager is the device's front door, at the address without
 
 | Credential | Opens |
 |---|---|
-| **Device-admin password**, signed in on the dashboard | The dashboard, every project's editor and Test mode, the editor's Admin area with its HTTP sources and tokens, and the [MCP endpoint](mcp.md) for every project from that browser. Values written from the editor are recorded as `engineer`. |
+| **Device-admin password**, signed in on the dashboard | The dashboard, every project's editor and Test mode, the editor's Admin area with its HTTP sources, the Settings page with its tokens, and the [MCP endpoint](mcp.md) for every project from that browser. Values written from the editor are recorded as `engineer`. |
 | **Device-admin password** over HTTP Basic | [API v1](api.md) on every project, with every scope. |
-| **API token** | [API v1](api.md) on one project, limited to the scopes ticked when it was created. Created under **Editor › Admin › Tokens**. |
-| **MCP token** | The [MCP endpoint](mcp.md) on one project, to read, or to read and write. Created under **Editor › Admin › Tokens**. |
+| **API token** | [API v1](api.md) on every project, limited to the scopes ticked when it was created. Created under **Settings › Tokens** on the dashboard. |
+| **MCP token** | The [MCP endpoint](mcp.md) on every project, to read, or to read and write (writes only where **MCP write enabled** is ticked). Created under **Settings › Tokens** on the dashboard. |
 | **Peer token** | Sending and fetching projects between two NEXT HMI devices, after one pairing with the other device's device-admin password. See [Managing projects](install.md#managing-projects). |
 | **A project user's password** | Signing in on that project's screens. It changes what the screens show and who actions are recorded as. It never opens the editor or the API. See [Users, groups & permissions](users.md). |
 

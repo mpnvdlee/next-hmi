@@ -1,11 +1,7 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import AdminView from './AdminView';
 import { useAdminViewStore } from '../store/adminViewStore';
-
-vi.mock('../components/admin/TokensSection/tokensApi', () => ({
-  listTokens: vi.fn().mockResolvedValue([]),
-}));
 
 const INITIAL = useAdminViewStore.getState();
 
@@ -58,21 +54,6 @@ describe('AdminView', () => {
     expect(screen.getByText('Custom Widgets')).toBeInTheDocument();
     expect(screen.getByText('Connected Runtimes')).toBeInTheDocument();
     expect(screen.getByText('HTTP sources')).toBeInTheDocument();
-  });
-
-  it('shows Tokens only under an /editor/<id>/ base, where the manager mints them', async () => {
-    renderView();
-    expect(screen.queryByText('Tokens')).not.toBeInTheDocument();
-    cleanup();
-
-    window.__NEXTHMI_BASE__ = '/editor/p1/';
-    try {
-      renderView();
-      expect(await screen.findByText('No tokens yet.')).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: 'Tokens' })).toBeInTheDocument();
-    } finally {
-      delete window.__NEXTHMI_BASE__;
-    }
   });
 
   it('reads widgets, subscriptions and runtimes once on mount', () => {

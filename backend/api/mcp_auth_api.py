@@ -1,13 +1,14 @@
 """MCP and API bearer-token pairing, creation, listing, and revocation.
 
 Mirrors ``api.manager_peers_api``'s peer-token pairing pattern: a token is
-minted once and is scoped — here to one project and to ``read``/``write``
-access — instead of being a blanket credential. There are two ways to mint
-one: Editor > Admin > Tokens (``POST /api/manager/mcp-tokens``), where the
-manager session is the proof, and ``/pair``, where a script presents the
-device-admin password instead. All routes are mounted only on the manager app and require
-the existing manager auth gate (``manager._auth_gate``) except ``/pair``
-itself, which is reachable pre-session the same way login/setup are (see
+minted once and is scoped — here to ``read``/``write`` access on every
+project — instead of being a blanket credential.
+There are two ways to mint one: Settings > Tokens on the dashboard (``POST
+/api/manager/mcp-tokens``), where the manager session is the proof, and
+``/pair``, where a script presents the device-admin password instead. All
+routes are mounted only on the manager app and require the existing manager
+auth gate (``manager._auth_gate``) except ``/pair`` itself, which is
+reachable pre-session the same way login/setup are (see
 ``api.manager_auth_api``) since a scripted client has no session cookie.
 
 ``kind: "api"`` mints an external-API token (``/api/v1``, see ``api.v1_api``)
@@ -17,16 +18,17 @@ from __future__ import annotations
 
 from core import manager_auth, mcp_tokens
 from core.exceptions import NotFoundError, RateLimitError, ValidationError
-from core.manifest import find_project, load_manifest
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 public_router = APIRouter(prefix="/api/manager/mcp", tags=["manager-mcp"])
 manager_router = APIRouter(prefix="/api/manager/mcp-tokens", tags=["manager-mcp"])
 
 
 class CreateBody(BaseModel):
-    projectId: str = Field(min_length=1, max_length=200)
+    # A 1.x script still sending projectId gets a 422, not a token for every project it didn't ask for.
+    model_config = ConfigDict(extra="forbid")
+
     kind: str = Field(default="mcp", pattern="^(mcp|api)$")
     access: str | None = Field(default=None, pattern="^(read|write)$")
     scopes: list[str] = Field(default_factory=list)
@@ -44,29 +46,23 @@ class PairBody(CreateBody):
 
 
 def _issue(body: CreateBody) -> dict:
-    if find_project(load_manifest(), body.projectId) is None:
-        raise NotFoundError(f"Project '{body.projectId}' not found")
     if body.kind == "api":
         try:
-            token_id, token = mcp_tokens.issue_api(
-                project_id=body.projectId, scopes=body.scopes, name=body.name
-            )
+            token_id, token = mcp_tokens.issue_api(scopes=body.scopes, name=body.name)
         except ValueError as exc:
             raise ValidationError(str(exc)) from exc
         return {
             "tokenId": token_id,
             "token": token,
             "kind": "api",
-            "projectId": body.projectId,
             "scopes": sorted(set(body.scopes)),
         }
     assert body.access is not None
-    token_id, token = mcp_tokens.issue(project_id=body.projectId, access=body.access, name=body.name)
+    token_id, token = mcp_tokens.issue(access=body.access, name=body.name)
     return {
         "kind": "mcp",
         "tokenId": token_id,
         "token": token,
-        "projectId": body.projectId,
         "access": body.access,
         "transport": "http",
         "trustedLanOnly": True,

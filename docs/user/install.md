@@ -46,7 +46,7 @@ origin root; an individual project's HMI is at
   .widget-build/          compiled custom-widget JS (regenerated)
   .restart-pending        sentinel for /api/system/restart
   .peer-tokens.json       hashed manager peer tokens (no bearer plaintext)
-  .mcp-tokens.json        hashed MCP and API tokens, each scoped to one project
+  .mcp-tokens.json        hashed MCP and API tokens
   .peer-trust.json        pinned peer TLS certificates (trust on first use)
   .install-id.json        random installation ID used by usage reporting
   .telemetry.json         usage-reporting on/off (absent means on), contact prompt dismissed
@@ -164,7 +164,7 @@ password) is the operator surface:
 - **Export** — download the project as `<name>.nexthmi.zip`.
 - **Set as default** — mark the project the origin root redirects to, and keep
   it running.
-- **MCP enabled / disabled** — per-project switch for whether the workspace
+- **MCP write enabled / disabled** — per-project switch for whether the workspace
   MCP endpoint may *write* to this project. See [AI agents over
   MCP](mcp.md).
 - **Locate…** — re-point a manifest entry whose folder has been moved. Shown

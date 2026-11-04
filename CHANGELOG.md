@@ -60,13 +60,13 @@ heading.
   screen it is: anyone who opens the same name receives the same sign-ins,
   so use it only on panels on a trusted network.
 
-- **Tokens under Editor › Admin › Tokens.** Create and revoke the project's
-  MCP tokens (read, or read and write) and API tokens (per scope) in the
-  editor instead of over `curl`. A new token is shown once, with the
-  `claude mcp add` command and client JSON for an MCP token, or a `curl`
-  example for an API token. `POST /api/manager/mcp/pair` with the
-  device-admin password still mints one for a script. Bearer tokens are the
-  MCP sign-in model; no OAuth step is planned.
+- **Tokens under Settings › Tokens.** Create and revoke MCP tokens (read,
+  or read and write) and API tokens (per scope) on the dashboard's Settings
+  page instead of over `curl`. A new token is shown once, with the server URL
+  and client JSON any MCP agent can use, or a `curl` example for an API
+  token. `POST /api/manager/mcp/pair` with the device-admin password still
+  mints one for a script. Bearer tokens are the MCP sign-in model; no OAuth
+  step is planned.
 
 - **Admin › HTTP sources.** The editor's Admin area lists the servers an
   `$http` URL may reach when it takes its server from a placeholder; see
@@ -82,6 +82,14 @@ heading.
   the live connection is down.
 
 ### Changed
+
+- **One MCP token covers every project.** A token used to name one project;
+  now it reaches all of them, at the access level it was made with. MCP
+  writes still go through only on projects with **MCP write enabled** ticked,
+  the dashboard switch that was labelled **MCP enabled**. A token paired with
+  1.0 or 1.1 named one project and is refused rather than widened: create a
+  new one under **Settings › Tokens**. `POST /api/manager/mcp/pair` no longer
+  takes a `projectId`, and answers `422` when a script still sends one.
 
 - **The server no longer limits who may write a variable.**
   Per-variable write groups (`interactableByGroups` on a datasource
@@ -233,9 +241,6 @@ heading.
   manager passed a client's `X-Forwarded-Prefix` header on to the project,
   which wrote it unescaped into the page it returned. The manager now drops
   it, and the page escapes what it writes into its scripts.
-
-- **Deleting a project revokes its tokens.** Its MCP and API tokens
-  outlived it, and a later project created with the same id inherited them.
 
 - **A deleted user is signed out at once.** A user deleted while signed in
   on a running project's screen stayed signed in, and a regrouped one kept

@@ -28,53 +28,46 @@ A project does **not** need to be running to be edited — the tools work on the
 
 ### 1. Enable writes for the project
 
-On the Manager dashboard, tick **MCP enabled** on the project's row. Off is the default. With it off, an agent can still *read* that project; every write is refused.
+On the Manager dashboard, tick **MCP write enabled** on the project's row. Off is the default. With it off, an agent can still *read* that project; every write is refused.
 
-![A project row on the Manager dashboard: the MCP checkbox sits next to "Set as default", reading "MCP disabled" until you tick it.](images/manager-mcp-toggle.png)
+![A project row on the Manager dashboard: the MCP checkbox sits next to "Set as default", reading "MCP write disabled" until you tick it.](images/manager-mcp-toggle.png)
 
 ### 2. Find the project id
 
-Every tool call names a project by **id**, not by its display name — and so does pairing a token from a script. The id is the slug in the project's own URLs — open the project and read `/runtime/<id>/` or `/editor/<id>/` from the address bar. It is also the `project.id` field in the project's `config.json`, and an agent with any token can call `projects_list` to see them all.
+Every tool call names a project by **id**, not by its display name. The id is the slug in the project's own URLs — open the project and read `/runtime/<id>/` or `/editor/<id>/` from the address bar. It is also the `project.id` field in the project's `config.json`, and an agent with any token can call `projects_list` to see them all.
 
 ### 3. Create a token
 
-A headless client (an agent runner, a desktop assistant) has no manager session, so it authenticates with a bearer token. Open the project in the editor, pick **Admin** in the left rail, and click **Create token** in the **Tokens** section. Keep the kind on **MCP**. The dialog asks for:
+A headless client (an agent runner, a desktop assistant) has no manager session, so it authenticates with a bearer token. One token covers every project on this installation, so you create it once. On the Manager dashboard, open **Settings** and click **Create token** in the **Tokens** section. Keep the kind on **MCP**. The dialog asks for:
 
-- **Token name** — any label, so you can tell tokens apart later (*Claude on my laptop*, *CI runner*).
-- **Read** or **Write** — a token is scoped to exactly **this one project** and to that access level; it can never reach another project. A write token still needs **MCP enabled** ticked (step 1) before a write goes through.
+- **Token name** — any label, so you can tell tokens apart later (*AI agent on my laptop*, *CI runner*).
+- **Read** or **Write** — the access level the token has on every project. A write token still needs **MCP write enabled** ticked (step 1) on each project it writes to.
 
 Click **Create token**. The dialog then shows, each with a **Copy** button:
 
 - the token itself,
-- the `claude mcp add` command for Claude Code, and
-- the `mcpServers` JSON for clients configured by file,
+- the server URL, and
+- the `mcpServers` JSON for agents configured by file,
 
-with this installation's endpoint already filled in — the address the editor is open on, so with HTTPS on it is the `8443` one. The token is shown **once**: only its hash is stored, so a lost token cannot be recovered, only replaced. Only **Done** closes the dialog while the token is on screen.
+with this installation's endpoint already filled in — the address the dashboard is open on, so with HTTPS on it is the `8443` one. The token is shown **once**: only its hash is stored, so a lost token cannot be recovered, only replaced. Only **Done** closes the dialog while the token is on screen.
 
-![The Create token dialog after creating an MCP token: the token, the claude mcp add command and the mcpServers JSON, each with a Copy button, above the Create another and Done buttons.](images/admin-tokens-mcp.png)
+![The Create token dialog after creating an MCP token: the token, the server URL and the mcpServers JSON, each with a Copy button, above the Create another and Done buttons.](images/admin-tokens-mcp.png)
 
 **From a script.** `POST /api/manager/mcp/pair` mints the same token without a dashboard session, taking the **device-admin password** in the body instead — the one that unlocks the dashboard (see [Managing projects](install.md#managing-projects)), not a project's operator password:
 
 ```bash
 curl -X POST http://localhost:8000/api/manager/mcp/pair \
   -H 'Content-Type: application/json' \
-  -d '{"password":"<device-admin>","projectId":"line-a","access":"write","name":"Claude"}'
+  -d '{"password":"<device-admin>","access":"write","name":"Agent runner"}'
 ```
 
 From Windows PowerShell, use `Invoke-RestMethod -Method Post -ContentType 'application/json' -Body '<the same JSON>'` and pass the JSON inline: a body file written with `Out-File` or `Set-Content` starts with a byte-order mark, and the server rejects it with a JSON parse error at *line 1 column 1*.
 
 ### 4. Point the client at it
 
-The dialog in step 3 already shows both of these filled in; they are spelled out here for a token minted from a script.
+The dialog in step 3 already shows these filled in; they are spelled out here for a token minted from a script.
 
-Claude Code, from a terminal:
-
-```bash
-claude mcp add --transport http nexthmi https://hmi.local:8443/mcp/ \
-  --header "Authorization: Bearer <token>"
-```
-
-Clients configured by file want the same three facts — transport, URL, header:
+Any AI agent that speaks MCP over Streamable HTTP can connect. It needs the server URL, `https://hmi.local:8443/mcp/`, and the header `Authorization: Bearer <token>`. Agents configured by file mostly take this shape:
 
 ```json
 {
@@ -86,6 +79,13 @@ Clients configured by file want the same three facts — transport, URL, header:
     }
   }
 }
+```
+
+Some agents name the fields differently (`servers` for `mcpServers`, `serverUrl` or `httpUrl` for `url`); the URL and the header stay the same. A command-line agent may take them as flags instead — Claude Code, for example:
+
+```bash
+claude mcp add --transport http nexthmi https://hmi.local:8443/mcp/ \
+  --header "Authorization: Bearer <token>"
 ```
 
 `hmi.local` is an mDNS name and only resolves on a client that speaks mDNS — Linux needs `avahi`, Windows has no resolver of its own and needs Bonjour installed. If the name doesn't resolve, that is a plain DNS failure and not a certificate problem: use the machine's IP address, or add a `hosts` entry for it.
@@ -104,9 +104,9 @@ Ask for a read first, so a bad endpoint or a mis-scoped token shows up before an
 
 | Action | How |
 |---|---|
-| List issued tokens | **Editor › Admin › Tokens** lists the project's tokens: name, kind, access level (or, for an [API token](api.md), its scopes) and creation time, never the secret. `GET /api/manager/mcp-tokens` returns all of them, with ids. |
+| List issued tokens | **Settings › Tokens** on the Manager dashboard lists every token: name, kind, access level (or, for an [API token](api.md), its scopes) and creation time, never the secret. `GET /api/manager/mcp-tokens` returns all of them, with ids. |
 | Revoke one | **Revoke** on its row in that list, or `DELETE /api/manager/mcp-tokens/<id>`. |
-| Revoke everything | Change the device-admin password. Deleting a project revokes its tokens. |
+| Revoke everything | Change the device-admin password. |
 
 Because the secret is shown once, the way to check a token is still live is to look for it in that list: a missing token means revoked, and a present one means the fault is in the client's URL, header or scope. Confirm the rest with one `initialize` call against `/mcp/` before assuming the client is misconfigured.
 
@@ -156,10 +156,10 @@ They are ordinary instructions, not privileged calls — the agent still works t
 | What you see | What it means |
 |---|---|
 | `401` · *MCP requires a manager session or a valid MCP bearer token* | No `Authorization` header reached the server, or the token was revoked — including by a device-admin password change, which revokes every token. |
-| *MCP token is not scoped to project '…'* | The token was created for a different project. One token, one project — create another under **Editor › Admin › Tokens** of the right project. |
 | *MCP token has read-only access* | Created as **Read**. Access level is fixed when the token is made; create a **Write** one. |
-| *MCP writes are disabled for project '…'* | The token is fine, the project's **MCP enabled** tick is not. Step 1 above. |
-| *Project '…' not found* while pairing | The `projectId` isn't a registered project id — you probably sent the display name. Step 2 above. |
+| *MCP writes are disabled for project '…'* | The token is fine, the project's **MCP write enabled** tick is not. Step 1 above. |
+| `401` with a token made in version 1.0 or 1.1 | Those tokens named one project. Tokens now cover every project, so an old one is refused rather than widened. Create a new one under **Settings › Tokens**. |
+| `422` *Extra inputs are not permitted* on `projectId` while pairing | Pairing no longer takes a project: a token covers every project. Drop `projectId` from the body. |
 | *Too many failed attempts. Try again in Ns.* | Wrong device-admin password on `/pair`; the same lockout that guards the dashboard login. Wait it out. |
 | `404` on `GET`, `405` on `POST`, or a bare `307` | The URL reached the router but not the transport — add the trailing slash (`/mcp/`). A proxy in front can rewrite the path too. |
 | Connection refused on `8443` | HTTPS was never turned on, so nothing listens there. Use the `8000` HTTP endpoint, or enable [HTTPS](install.md#https) first. |

@@ -15,17 +15,17 @@ import '@config/components/projects/ProjectsView/projectForm.css';
 import './style.css';
 
 interface Props {
-  projectId: string;
-  /** Whether the project lets MCP write; a Write token is refused until it does.
-   *  `null`: the switch could not be read, so the hint says so instead of guessing. */
-  mcpEnabled: boolean | null;
   /** A token was issued, so the list behind the dialog is stale. */
   onCreated(): void;
   onClose(): void;
 }
 
 const ACCESS_CHOICES: { value: McpAccess; label: string; detail: string }[] = [
-  { value: 'read', label: 'Read', detail: 'The agent can look at the project but change nothing.' },
+  {
+    value: 'read',
+    label: 'Read',
+    detail: 'The agent can look at your projects but change nothing.',
+  },
   {
     value: 'write',
     label: 'Write',
@@ -36,7 +36,7 @@ const ACCESS_CHOICES: { value: McpAccess; label: string; detail: string }[] = [
 type Kind = 'mcp' | 'api';
 
 const KIND_CHOICES: { value: Kind; label: string; detail: string }[] = [
-  { value: 'mcp', label: 'MCP', detail: 'An AI client works on the project over MCP.' },
+  { value: 'mcp', label: 'MCP', detail: 'An AI agent works on your projects over MCP.' },
   {
     value: 'api',
     label: 'API',
@@ -66,24 +66,26 @@ const SCOPE_CHOICES: { value: ApiScope; label: string; example: string }[] = [
   },
 ];
 
+/** The token covers every project; the example's URL still has to name one. */
+const PROJECT_PLACEHOLDER = '<project-id>';
+
 function apiExample(issued: IssuedApiToken) {
   const scope = SCOPE_CHOICES.find((choice) => issued.scopes.includes(choice.value));
   const [path, ...rest] = (scope?.example ?? 'users').split(' ');
-  const url = `${window.location.origin}/api/v1/projects/${encodeURIComponent(issued.projectId)}/${path}`;
+  const url = `${window.location.origin}/api/v1/projects/${PROJECT_PLACEHOLDER}/${path}`;
   return {
     text: [`curl -H "Authorization: Bearer ${issued.token}" "${url}"`, ...rest].join(' '),
     writes: scope?.value === 'users:write',
   };
 }
 
-/** The two client setups docs/user/mcp.md lists, filled in for this token. */
+/** What any MCP agent needs (docs/user/mcp.md), filled in for this token. */
 function clientConfig(issued: IssuedMcpToken) {
-  // The editor is served by the manager that serves /mcp, so its own origin
+  // The dashboard is served by the manager that serves /mcp, so its own origin
   // already carries the right scheme and port (HTTPS moves both to :8443).
   const url = `${window.location.origin}/mcp/`;
-  const header = `Authorization: Bearer ${issued.token}`;
   return {
-    command: `claude mcp add --transport ${issued.transport} nexthmi ${url} --header "${header}"`,
+    url,
     json: JSON.stringify(
       {
         mcpServers: {
@@ -101,12 +103,12 @@ function clientConfig(issued: IssuedMcpToken) {
 }
 
 /**
- * Mint a bearer token scoped to one project and show it once: an MCP token
- * for an AI client or an API token for an API v1 integration. The manager
+ * Mint a bearer token for every project and show it once: an MCP token for an
+ * AI agent or an API token for an API v1 integration. The manager
  * session is the proof (`POST /api/manager/mcp-tokens`), so no device-admin
  * password is asked for here.
  */
-export default function CreateTokenModal({ projectId, mcpEnabled, onCreated, onClose }: Props) {
+export default function CreateTokenModal({ onCreated, onClose }: Props) {
   const [name, setName] = useState('');
   const [kind, setKind] = useState<Kind>('mcp');
   const [access, setAccess] = useState<McpAccess>('read');
@@ -129,9 +131,7 @@ export default function CreateTokenModal({ projectId, mcpEnabled, onCreated, onC
     setError(null);
     try {
       setIssued(
-        kind === 'api'
-          ? await createApiToken(projectId, scopes, name)
-          : await createMcpToken(projectId, access, name),
+        kind === 'api' ? await createApiToken(scopes, name) : await createMcpToken(access, name),
       );
       setCopied(null);
       onCreated();
@@ -183,10 +183,10 @@ export default function CreateTokenModal({ projectId, mcpEnabled, onCreated, onC
           {config && (
             <>
               <Snippet
-                label="Claude Code"
-                text={config.command}
-                copied={copied === 'Claude Code'}
-                onCopy={() => copy('Claude Code', config.command)}
+                label="Server URL"
+                text={config.url}
+                copied={copied === 'Server URL'}
+                onCopy={() => copy('Server URL', config.url)}
               />
               <Snippet
                 label="Client config (JSON)"
@@ -194,6 +194,11 @@ export default function CreateTokenModal({ projectId, mcpEnabled, onCreated, onC
                 copied={copied === 'Client config (JSON)'}
                 onCopy={() => copy('Client config (JSON)', config.json)}
               />
+              <p className="project-form__hint">
+                Any AI agent that speaks MCP over HTTP can connect: give it the server URL and send
+                the token in an <code>Authorization: Bearer</code> header. Many agents read the JSON
+                above from a config file; some name its fields differently.
+              </p>
             </>
           )}
           {example && (
@@ -204,9 +209,13 @@ export default function CreateTokenModal({ projectId, mcpEnabled, onCreated, onC
                 copied={copied === 'Example request'}
                 onCopy={() => copy('Example request', example.text)}
               />
+              <p className="project-form__hint">
+                Replace <code>{PROJECT_PLACEHOLDER}</code> with a project&apos;s id: the name in its{' '}
+                <code>/editor/&lt;id&gt;/</code> address.
+              </p>
               {example.writes && (
                 <p className="project-form__hint">
-                  This example changes data: running it creates user <strong>jdoe</strong> in this
+                  This example changes data: running it creates user <strong>jdoe</strong> in that
                   project, or changes that user&apos;s groups if it exists.
                 </p>
               )}
@@ -218,8 +227,8 @@ export default function CreateTokenModal({ projectId, mcpEnabled, onCreated, onC
             {copied && `${copied} copied to the clipboard.`}
           </p>
           <p className="project-form__hint">
-            The URL is the address this editor is open on. A client on another machine needs one it
-            can reach.
+            The URL is the address this dashboard is open on. A client on another machine needs one
+            it can reach.
           </p>
         </>
       ) : (
@@ -232,7 +241,7 @@ export default function CreateTokenModal({ projectId, mcpEnabled, onCreated, onC
               className="cfg-prop-input cfg-prop-input--tall"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={kind === 'api' ? 'HR system' : 'Claude on my laptop'}
+              placeholder={kind === 'api' ? 'HR system' : 'AI agent on my laptop'}
               maxLength={200}
             />
             <span className="project-form__hint">So you can tell tokens apart when revoking.</span>
@@ -253,7 +262,7 @@ export default function CreateTokenModal({ projectId, mcpEnabled, onCreated, onC
               onChange={setAccess}
             />
           ) : (
-            <fieldset className="project-form__field cfg-tokens-scopes">
+            <fieldset className="project-form__field cfg-tokens-group">
               <legend className="project-form__label">Scopes</legend>
               {SCOPE_CHOICES.map((choice) => (
                 <label key={choice.value} className="project-form__choice-head">
@@ -268,16 +277,10 @@ export default function CreateTokenModal({ projectId, mcpEnabled, onCreated, onC
               ))}
             </fieldset>
           )}
-          {kind === 'mcp' && access === 'write' && mcpEnabled === false && (
+          {kind === 'mcp' && access === 'write' && (
             <p className="project-form__hint">
-              Writes are refused until <strong>MCP enabled</strong> is ticked for this project on
-              the dashboard.
-            </p>
-          )}
-          {kind === 'mcp' && access === 'write' && mcpEnabled === null && (
-            <p className="project-form__hint">
-              Could not read whether <strong>MCP enabled</strong> is ticked for this project. Writes
-              are refused until it is; check its row on the dashboard.
+              A write goes through only on projects with <strong>MCP write enabled</strong> ticked
+              on the dashboard.
             </p>
           )}
         </>
@@ -328,28 +331,31 @@ function ChoiceGroup<T extends string>({
   onChange(value: T): void;
 }) {
   return (
-    <div className="project-form__choices" role="radiogroup" aria-label={label}>
-      {choices.map((choice) => (
-        <div
-          key={choice.value}
-          className={`project-form__choice${
-            value === choice.value ? ' project-form__choice--active' : ''
-          }`}
-        >
-          <label className="project-form__choice-head">
-            <input
-              type="radio"
-              name={name}
-              value={choice.value}
-              checked={value === choice.value}
-              onChange={() => onChange(choice.value)}
-            />
-            <span>{choice.label}</span>
-          </label>
-          <p className="project-form__choice-detail">{choice.detail}</p>
-        </div>
-      ))}
-    </div>
+    <fieldset className="project-form__field cfg-tokens-group">
+      <legend className="project-form__label">{label}</legend>
+      <div className="project-form__choices">
+        {choices.map((choice) => (
+          <div
+            key={choice.value}
+            className={`project-form__choice${
+              value === choice.value ? ' project-form__choice--active' : ''
+            }`}
+          >
+            <label className="project-form__choice-head">
+              <input
+                type="radio"
+                name={name}
+                value={choice.value}
+                checked={value === choice.value}
+                onChange={() => onChange(choice.value)}
+              />
+              <span>{choice.label}</span>
+            </label>
+            <p className="project-form__choice-detail">{choice.detail}</p>
+          </div>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 

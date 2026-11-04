@@ -1,4 +1,4 @@
-import { isApiError, managerApiJson } from '@shared/utils/api';
+import { managerApiJson } from '@shared/utils/api';
 
 /**
  * The manager's token routes (`/api/manager/mcp-tokens`, gated by the manager
@@ -17,7 +17,6 @@ export interface ListedToken {
   id: string;
   kind: 'mcp' | 'api';
   name: string;
-  projectId: string;
   access?: McpAccess;
   scopes?: ApiScope[];
   createdAt: string;
@@ -28,7 +27,6 @@ export interface IssuedMcpToken {
   kind: 'mcp';
   tokenId: string;
   token: string;
-  projectId: string;
   access: McpAccess;
   transport: string;
 }
@@ -37,40 +35,27 @@ export interface IssuedApiToken {
   kind: 'api';
   tokenId: string;
   token: string;
-  projectId: string;
   scopes: ApiScope[];
 }
 
 export const listTokens = async () =>
   (await managerApiJson<{ tokens: ListedToken[] }>('/api/manager/mcp-tokens')).tokens;
 
-export const createMcpToken = (projectId: string, access: McpAccess, name: string) =>
+/** A token covers every project; the body names none. */
+export const createMcpToken = (access: McpAccess, name: string) =>
   managerApiJson<IssuedMcpToken>('/api/manager/mcp-tokens', {
     method: 'POST',
-    body: { projectId, access, name: name.trim() || undefined },
+    body: { access, name: name.trim() || undefined },
   });
 
-export const createApiToken = (projectId: string, scopes: ApiScope[], name: string) =>
+export const createApiToken = (scopes: ApiScope[], name: string) =>
   managerApiJson<IssuedApiToken>('/api/manager/mcp-tokens', {
     method: 'POST',
-    body: { projectId, kind: 'api', scopes, name: name.trim() || undefined },
+    body: { kind: 'api', scopes, name: name.trim() || undefined },
   });
 
 export async function revokeToken(tokenId: string) {
   await managerApiJson(`/api/manager/mcp-tokens/${encodeURIComponent(tokenId)}`, {
     method: 'DELETE',
   });
-}
-
-/** The project's MCP write switch; `null` when the manager does not know the project (404). */
-export async function projectMcpEnabled(projectId: string): Promise<boolean | null> {
-  try {
-    const { mcpEnabled } = await managerApiJson<{ mcpEnabled: boolean }>(
-      `/api/projects/${encodeURIComponent(projectId)}/mcp`,
-    );
-    return mcpEnabled;
-  } catch (e) {
-    if (isApiError(e) && e.status === 404) return null;
-    throw e;
-  }
 }

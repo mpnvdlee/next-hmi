@@ -37,20 +37,19 @@ def _configure_home(monkeypatch, tmp_path: Path) -> Path:
 
 def test_issue_persists_only_hash(monkeypatch, tmp_path: Path):
     _configure_home(monkeypatch, tmp_path)
-    token_id, token = mcp_tokens.issue(project_id="P1", access="write", name="Agent")
+    token_id, token = mcp_tokens.issue(access="write", name="Agent")
     stored = mcp_tokens.tokens_path().read_text(encoding="utf-8")
     assert token not in stored
     assert token_id in stored
     scope = mcp_tokens.resolve(token)
     assert scope is not None
-    assert scope.project_id == "P1"
     assert scope.access == "write"
     assert scope.token_id == token_id
 
 
 def test_resolve_rejects_garbage_and_wrong_signature(monkeypatch, tmp_path: Path):
     _configure_home(monkeypatch, tmp_path)
-    _, token = mcp_tokens.issue(project_id="P1", access="read")
+    _, token = mcp_tokens.issue(access="read")
     assert mcp_tokens.resolve(None) is None
     assert mcp_tokens.resolve("garbage") is None
     assert mcp_tokens.resolve(token + "x") is None
@@ -58,8 +57,8 @@ def test_resolve_rejects_garbage_and_wrong_signature(monkeypatch, tmp_path: Path
 
 def test_revoke_and_revoke_all(monkeypatch, tmp_path: Path):
     _configure_home(monkeypatch, tmp_path)
-    id1, token1 = mcp_tokens.issue(project_id="P1", access="read")
-    _id2, token2 = mcp_tokens.issue(project_id="P2", access="write")
+    id1, token1 = mcp_tokens.issue(access="read")
+    _id2, token2 = mcp_tokens.issue(access="write")
     assert mcp_tokens.revoke(id1) is True
     assert mcp_tokens.revoke(id1) is False
     assert mcp_tokens.resolve(token1) is None
@@ -73,7 +72,7 @@ def test_password_change_invalidates_tokens_via_generation(monkeypatch, tmp_path
     """Belt-and-braces: even without an explicit revoke_all() call, a token
     minted under the old password generation stops resolving."""
     _configure_home(monkeypatch, tmp_path)
-    _, token = mcp_tokens.issue(project_id="P1", access="write")
+    _, token = mcp_tokens.issue(access="write")
     assert mcp_tokens.resolve(token) is not None
     manager_auth.set_password("new-device-admin")
     assert mcp_tokens.resolve(token) is None
@@ -84,28 +83,26 @@ def test_password_change_invalidates_tokens_via_generation(monkeypatch, tmp_path
 
 def test_require_mcp_access_raises_when_unauthenticated():
     with pytest.raises(McpAuthError):
-        require_mcp_access("P1", need_write=False)
+        require_mcp_access(need_write=False)
 
 
 def test_session_identity_has_full_access():
     with identity_for_tests(McpIdentity(kind="session")):
-        require_mcp_access("P1", need_write=False)
-        require_mcp_access("P2", need_write=True)
+        require_mcp_access(need_write=False)
+        require_mcp_access(need_write=True)
 
 
-def test_token_identity_scoped_to_its_project_and_access():
-    write_token = McpIdentity(kind="token", project_id="P1", access="write")
+def test_token_identity_is_held_to_its_access():
+    write_token = McpIdentity(kind="token", access="write")
     with identity_for_tests(write_token):
-        require_mcp_access("P1", need_write=False)
-        require_mcp_access("P1", need_write=True)
-        with pytest.raises(McpAuthError):
-            require_mcp_access("P2", need_write=False)
+        require_mcp_access(need_write=False)
+        require_mcp_access(need_write=True)
 
-    read_token = McpIdentity(kind="token", project_id="P1", access="read")
+    read_token = McpIdentity(kind="token", access="read")
     with identity_for_tests(read_token):
-        require_mcp_access("P1", need_write=False)
+        require_mcp_access(need_write=False)
         with pytest.raises(McpAuthError):
-            require_mcp_access("P1", need_write=True)
+            require_mcp_access(need_write=True)
 
 
 # ── /mcp HTTP auth gate ──────────────────────────────────────────────────────
@@ -209,10 +206,10 @@ def test_mcp_accepts_valid_session_cookie(manager_client: TestClient):
 
 def test_mcp_accepts_valid_bearer_token(manager_client: TestClient):
     manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
-    manifest_project = _seed_project(manager_client)
+    _seed_project(manager_client)
     pair = manager_client.post(
         "/api/manager/mcp/pair",
-        json={"password": "secret", "projectId": manifest_project, "access": "read"},
+        json={"password": "secret", "access": "read"},
     )
     assert pair.status_code == 201
     token = pair.json()["token"]
@@ -227,7 +224,7 @@ def test_mcp_answers_a_client_on_the_lan(manager_client: TestClient):
     _seed_project(manager_client)
     token = manager_client.post(
         "/api/manager/mcp/pair",
-        json={"password": "secret", "projectId": "P1", "access": "read"},
+        json={"password": "secret", "access": "read"},
     ).json()["token"]
     _drop_session_cookie(manager_client)
     _initialize(manager_client, Authorization=f"Bearer {token}", Host="192.168.1.5:8000")
@@ -256,29 +253,30 @@ def _seed_project(client: TestClient) -> str:
 # ── /api/manager/mcp/pair, mcp-tokens list/revoke ────────────────────────────
 
 
-def test_pair_requires_correct_password_and_existing_project(manager_client: TestClient):
+def test_pair_requires_correct_password_and_takes_no_project(manager_client: TestClient):
     manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
     _seed_project(manager_client)
 
     wrong = manager_client.post(
         "/api/manager/mcp/pair",
-        json={"password": "nope", "projectId": "P1", "access": "read"},
+        json={"password": "nope", "access": "read"},
     )
     assert wrong.status_code == 422
 
-    missing_project = manager_client.post(
+    # A 1.x script naming a project is refused, not handed a token for every project.
+    one_project = manager_client.post(
         "/api/manager/mcp/pair",
-        json={"password": "secret", "projectId": "GHOST", "access": "read"},
+        json={"password": "secret", "projectId": "P1", "access": "read"},
     )
-    assert missing_project.status_code == 404
+    assert one_project.status_code == 422
 
     ok = manager_client.post(
         "/api/manager/mcp/pair",
-        json={"password": "secret", "projectId": "P1", "access": "write"},
+        json={"password": "secret", "access": "write"},
     )
     assert ok.status_code == 201
     body = ok.json()
-    assert body["projectId"] == "P1"
+    assert "projectId" not in body
     assert body["access"] == "write"
 
 
@@ -290,7 +288,7 @@ def test_mcp_token_list_and_revoke_require_manager_session(manager_client: TestC
     _seed_project(manager_client)
     pair = manager_client.post(
         "/api/manager/mcp/pair",
-        json={"password": "secret", "projectId": "P1", "access": "read"},
+        json={"password": "secret", "access": "read"},
     )
     token_id = pair.json()["tokenId"]
 
@@ -309,17 +307,17 @@ def test_dashboard_create_needs_session_not_password(manager_client: TestClient)
     manager_client.post("/api/manager/auth/setup", json={"password": "secret"})
     _seed_project(manager_client)
     _drop_session_cookie(manager_client)
-    body = {"projectId": "P1", "access": "write", "name": "Laptop"}
+    body = {"access": "write", "name": "Laptop"}
     assert manager_client.post("/api/manager/mcp-tokens", json=body).status_code == 401
 
     manager_client.post("/api/manager/auth/login", json={"password": "secret"})
-    missing = manager_client.post(
-        "/api/manager/mcp-tokens", json={"projectId": "GHOST", "access": "read"}
+    one_project = manager_client.post(
+        "/api/manager/mcp-tokens", json={"projectId": "P1", "access": "read"}
     )
-    assert missing.status_code == 404
+    assert one_project.status_code == 422
 
     bad_scopes = manager_client.post(
-        "/api/manager/mcp-tokens", json={"projectId": "P1", "kind": "api", "scopes": ["root"]}
+        "/api/manager/mcp-tokens", json={"kind": "api", "scopes": ["root"]}
     )
     assert bad_scopes.status_code == 422
     assert bad_scopes.json()["detail"].startswith("An API token needs one or more of:")
@@ -327,7 +325,6 @@ def test_dashboard_create_needs_session_not_password(manager_client: TestClient)
     created = manager_client.post("/api/manager/mcp-tokens", json=body)
     assert created.status_code == 201
     issued = created.json()
-    assert issued["projectId"] == "P1"
     assert issued["access"] == "write"
     assert issued["transport"] == "http"
 
@@ -346,7 +343,7 @@ def test_password_change_revokes_mcp_tokens(manager_client: TestClient):
     _seed_project(manager_client)
     pair = manager_client.post(
         "/api/manager/mcp/pair",
-        json={"password": "secret", "projectId": "P1", "access": "write"},
+        json={"password": "secret", "access": "write"},
     )
     token = pair.json()["token"]
     _drop_session_cookie(manager_client)
@@ -399,7 +396,7 @@ def test_write_scoped_token_still_blocked_by_mcp_disabled(monkeypatch, tmp_path:
     )
     prepare_workspace_tools()
 
-    write_token = McpIdentity(kind="token", project_id="P1", access="write")
+    write_token = McpIdentity(kind="token", access="write")
     with identity_for_tests(write_token):  # noqa: SIM117 -- no autofix offered (inner block has a local import), left as-is per the mechanical-only policy for this family
         with pytest.raises(Exception) as excinfo:
             import asyncio

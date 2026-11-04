@@ -3,11 +3,11 @@
 Mirrors ``core.peer_tokens`` (hashed-at-rest, paired once with the device-admin
 password, revocable, bound to the current password generation) but adds the
 scope a peer token doesn't need: each MCP token grants ``read`` or ``write``
-access to exactly one project. ``write`` implies ``read``. Binding
-``authGeneration`` at issue time — and rejecting on verify once it no longer
-matches ``manager_auth.credential_generation()`` — revokes every outstanding
-token the instant the device-admin password changes, independent of the
-explicit ``revoke_all()`` the password-change endpoint also calls.
+access to every project. ``write`` implies ``read``. Binding ``authGeneration`` at issue time — and rejecting on
+verify once it no longer matches ``manager_auth.credential_generation()`` —
+revokes every outstanding token the instant the device-admin password
+changes, independent of the explicit ``revoke_all()`` the password-change
+endpoint also calls.
 
 The same store holds the external API's tokens (``/api/v1``, see
 ``api.v1_api``): an entry with ``"kind": "api"`` carries a list of ``scopes``
@@ -45,7 +45,6 @@ _lock = threading.RLock()
 @dataclass(frozen=True)
 class TokenScope:
     token_id: str
-    project_id: str
     access: Access
     name: str
 
@@ -53,7 +52,6 @@ class TokenScope:
 @dataclass(frozen=True)
 class ApiTokenScope:
     token_id: str
-    project_id: str
     scopes: frozenset[str]
     name: str
 
@@ -98,28 +96,26 @@ def _append(entry: dict[str, Any]) -> tuple[str, str]:
     return token_id, raw_token
 
 
-def issue(*, project_id: str, access: Access, name: str | None = None) -> tuple[str, str]:
+def issue(*, access: Access, name: str | None = None) -> tuple[str, str]:
     """Return ``(token_id, raw_token)`` while persisting only its digest."""
     if access not in ("read", "write"):
         raise ValueError(f"Invalid access level: {access!r}")
     return _append(
         {
             "name": (name or "MCP client").strip() or "MCP client",
-            "projectId": project_id,
             "access": access,
         }
     )
 
 
-def issue_api(*, project_id: str, scopes: list[str], name: str | None = None) -> tuple[str, str]:
-    """Mint an ``/api/v1`` token for *project_id* holding exactly *scopes*."""
+def issue_api(*, scopes: list[str], name: str | None = None) -> tuple[str, str]:
+    """Mint an ``/api/v1`` token holding exactly *scopes*."""
     if not scopes or not set(scopes) <= set(API_SCOPES):
         raise ValueError(f"An API token needs one or more of: {', '.join(API_SCOPES)}")
     return _append(
         {
             "kind": "api",
             "name": (name or "API client").strip() or "API client",
-            "projectId": project_id,
             "scopes": sorted(set(scopes)),
         }
     )
@@ -141,7 +137,8 @@ def _find(token: str | None) -> dict[str, Any] | None:
                 and entry.get("authGeneration") == generation
                 and isinstance(entry.get("hash"), str)
                 and hmac.compare_digest(candidate, entry["hash"])
-                and isinstance(entry.get("projectId"), str)
+                # Paired by 1.0/1.1 for one project: refused, never widened to all.
+                and "projectId" not in entry
             ):
                 return entry
     return None
@@ -157,7 +154,6 @@ def resolve(token: str | None) -> TokenScope | None:
         return None
     return TokenScope(
         token_id=entry["id"],
-        project_id=entry["projectId"],
         access=access,
         name=str(entry.get("name") or "MCP client"),
     )
@@ -170,7 +166,6 @@ def resolve_api(token: str | None) -> ApiTokenScope | None:
         return None
     return ApiTokenScope(
         token_id=entry["id"],
-        project_id=entry["projectId"],
         scopes=frozenset(s for s in entry["scopes"] if s in API_SCOPES),
         name=str(entry.get("name") or "API client"),
     )
@@ -185,39 +180,6 @@ def revoke(token_id: str) -> bool:
             return False
         _save(data)
         return True
-
-
-def retarget_project(old_project_id: str, new_project_id: str) -> int:
-    """Re-scope every token issued for *old_project_id* onto *new_project_id*.
-
-    Renaming a project's id keeps the same project, so the tokens an operator
-    already handed out have to follow it — otherwise they'd resolve to a scope
-    no project answers to, and a later project reusing the old id would inherit
-    them.
-    """
-    with _lock:
-        data = _load()
-        moved = 0
-        for entry in data["tokens"]:
-            if entry.get("projectId") == old_project_id:
-                entry["projectId"] = new_project_id
-                moved += 1
-        if moved:
-            _save(data)
-        return moved
-
-
-def revoke_project(project_id: str) -> int:
-    """Revoke every token issued for *project_id*: a later project reusing a
-    deleted one's id must not inherit them."""
-    with _lock:
-        data = _load()
-        kept = [entry for entry in data["tokens"] if entry.get("projectId") != project_id]
-        revoked = len(data["tokens"]) - len(kept)
-        if revoked:
-            data["tokens"] = kept
-            _save(data)
-        return revoked
 
 
 def revoke_all() -> int:
@@ -238,7 +200,6 @@ def list_tokens() -> list[dict[str, Any]]:
                 "id": entry.get("id"),
                 "kind": entry.get("kind", "mcp"),
                 "name": entry.get("name"),
-                "projectId": entry.get("projectId"),
                 **(
                     {"scopes": entry.get("scopes", [])}
                     if entry.get("kind") == "api"

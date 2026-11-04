@@ -33,10 +33,16 @@
   user-select: all;
 }
 
-.cfg-tokens-scopes {
+.cfg-tokens-group {
   margin: 0;
   padding: 0;
   border: 0;
+}
+
+/* The shared choice card reserves two lines for its detail; these are one line,
+   so the reserve only left an empty strip under the text. */
+.cfg-tokens-modal .project-form__choice-detail {
+  min-height: 0;
 }
 
 /* Read by assistive tech, out of the layout: absolute positioning takes it

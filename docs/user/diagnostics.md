@@ -4,7 +4,7 @@ When a value doesn't arrive, a widget doesn't render, or a save doesn't stick, N
 
 ## The Admin area (per project)
 
-Pick **Admin** in the editor's left rail. Three live sections, refreshed while you watch, then two settings for the project: the origins its HTTP sources may reach, and its access tokens.
+Pick **Admin** in the editor's left rail. Three live sections, refreshed while you watch, then one setting for the project: the origins its HTTP sources may reach.
 
 ### Fast Subscriptions
 
@@ -28,10 +28,6 @@ Every open operator screen against this project: its **scope**, the **user** sig
 
 The origins (scheme, host and port) an `$http` source may reach when its url takes the host from a placeholder. Each change saves straight away. See [Reading a value from an API](properties.md#reading-a-value-from-an-api-http).
 
-### Tokens
-
-The project's [MCP](mcp.md) and [API](api.md) tokens: name, kind, access level or scopes, and creation time. **Create token** makes a new one and shows it once; **Revoke** takes one back.
-
 ## The manager's Settings page (per installation)
 
 Sign in to the manager dashboard and open **Settings** — this is installation-wide, not per project.
@@ -42,6 +38,7 @@ Sign in to the manager dashboard and open **Settings** — this is installation-
 | **Runtime home** | Where per-installation state lives — the manifest, logs, the widget-build cache, TLS material. See [Installing and running](install.md#runtime-home). |
 | **Logs** | Opens the **Application logs** viewer: the last 500 lines with the log file's path, a **Refresh**, and **Download full log** for the whole file. |
 | **Security** | Change the **device-admin password** that gates the dashboard itself. |
+| **Tokens** | The [MCP](mcp.md) and [API](api.md) tokens, each covering every project: name, kind, access level or scopes, and creation time. **Create token** makes a new one and shows it once; **Revoke** takes one back. |
 | **HTTPS** | Certificate status, regenerate or upload your own, and restart into TLS. Full walkthrough in [HTTPS](install.md#https). |
 
 ## The warnings pill

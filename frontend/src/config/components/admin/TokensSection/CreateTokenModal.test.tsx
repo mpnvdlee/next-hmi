@@ -9,7 +9,6 @@ const ISSUED: IssuedMcpToken = {
   kind: 'mcp',
   tokenId: 'tok-new',
   token: 'tok-new.SECRET',
-  projectId: 'p1',
   access: 'write',
   transport: 'http',
 };
@@ -17,18 +16,10 @@ const ISSUED: IssuedMcpToken = {
 /** Create resolves after the click does; act() holds the test until its updates land. */
 const settle = (click: Promise<void>) => act(() => click);
 
-function renderModal(props: Partial<React.ComponentProps<typeof CreateTokenModal>> = {}) {
+function renderModal() {
   const onCreated = vi.fn();
   const onClose = vi.fn();
-  render(
-    <CreateTokenModal
-      projectId="p1"
-      mcpEnabled
-      onCreated={onCreated}
-      onClose={onClose}
-      {...props}
-    />,
-  );
+  render(<CreateTokenModal onCreated={onCreated} onClose={onClose} />);
   return { onCreated, onClose };
 }
 
@@ -36,25 +27,22 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it('creates a token, shows it once with ready-to-paste client config, and copies it', async () => {
+it('creates a token for every project, shows it once with agent-neutral config, and copies it', async () => {
   const user = userEvent.setup();
   vi.mocked(createMcpToken).mockResolvedValue(ISSUED);
   const { onCreated } = renderModal();
 
-  await user.type(screen.getByLabelText(/^Token name/), 'Claude');
+  await user.type(screen.getByLabelText(/^Token name/), 'Agent');
   await user.click(screen.getByRole('radio', { name: 'Write' }));
   await settle(user.click(screen.getByRole('button', { name: 'Create token' })));
 
-  expect(createMcpToken).toHaveBeenCalledWith('p1', 'write', 'Claude');
+  expect(createMcpToken).toHaveBeenCalledWith('write', 'Agent');
   expect(onCreated).toHaveBeenCalledTimes(1);
   expect(await screen.findByText('tok-new.SECRET')).toBeInTheDocument();
   expect(screen.getByText(/only a hash of it is stored/i)).toHaveFocus();
   const url = `${window.location.origin}/mcp/`;
-  expect(
-    screen.getByText(
-      `claude mcp add --transport http nexthmi ${url} --header "Authorization: Bearer tok-new.SECRET"`,
-    ),
-  ).toBeInTheDocument();
+  expect(screen.getByText(url)).toBeInTheDocument();
+  expect(screen.queryByText(/claude/i)).not.toBeInTheDocument();
 
   await user.click(screen.getByRole('button', { name: 'Copy Client config (JSON)' }));
   expect(JSON.parse(await navigator.clipboard.readText())).toEqual({
@@ -89,24 +77,14 @@ it('only Done closes the dialog while the token is on screen', async () => {
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
-it('warns that a Write token is refused while MCP is off for the project', async () => {
+it('says a Write token writes only on projects with MCP write enabled', async () => {
   const user = userEvent.setup();
-  renderModal({ mcpEnabled: false });
-  expect(screen.queryByText(/Writes are refused/)).not.toBeInTheDocument();
+  renderModal();
+  expect(screen.queryByText(/A write goes through only/)).not.toBeInTheDocument();
 
   await user.click(screen.getByRole('radio', { name: 'Write' }));
 
-  expect(screen.getByText(/Writes are refused/)).toBeInTheDocument();
-});
-
-it('says the MCP switch is unknown instead of guessing when it could not be read', async () => {
-  const user = userEvent.setup();
-  renderModal({ mcpEnabled: null });
-
-  await user.click(screen.getByRole('radio', { name: 'Write' }));
-
-  expect(screen.getByText(/Could not read whether/)).toBeInTheDocument();
-  expect(screen.queryByText(/^Writes are refused until/)).not.toBeInTheDocument();
+  expect(screen.getByText(/A write goes through only/)).toBeInTheDocument();
 });
 
 it('creates an API token with the chosen scopes and shows a curl example', async () => {
@@ -115,7 +93,6 @@ it('creates an API token with the chosen scopes and shows a curl example', async
     kind: 'api',
     tokenId: 'tok-api',
     token: 'tok-api.SECRET',
-    projectId: 'p1',
     scopes: ['users:read', 'users:write'],
   });
   renderModal();
@@ -129,15 +106,15 @@ it('creates an API token with the chosen scopes and shows a curl example', async
   await user.click(screen.getByRole('checkbox', { name: /^Create, change and delete users/ }));
   await settle(user.click(createButton));
 
-  expect(createApiToken).toHaveBeenCalledWith('p1', ['users:read', 'users:write'], '');
+  expect(createApiToken).toHaveBeenCalledWith(['users:read', 'users:write'], '');
   expect(createMcpToken).not.toHaveBeenCalled();
   expect(await screen.findByText('tok-api.SECRET')).toBeInTheDocument();
   expect(
     screen.getByText(
-      `curl -H "Authorization: Bearer tok-api.SECRET" "${window.location.origin}/api/v1/projects/p1/users"`,
+      `curl -H "Authorization: Bearer tok-api.SECRET" "${window.location.origin}/api/v1/projects/<project-id>/users"`,
     ),
   ).toBeInTheDocument();
-  expect(screen.queryByText(/claude mcp add/)).not.toBeInTheDocument();
+  expect(screen.queryByText('Server URL')).not.toBeInTheDocument();
   expect(screen.queryByText(/This example changes data/)).not.toBeInTheDocument();
 });
 
@@ -147,7 +124,6 @@ it('labels the example as changing data when a users:write-only token has no rea
     kind: 'api',
     tokenId: 'tok-w',
     token: 'tok-w.SECRET',
-    projectId: 'p1',
     scopes: ['users:write'],
   });
   renderModal();

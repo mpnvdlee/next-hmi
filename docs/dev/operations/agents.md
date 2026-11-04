@@ -421,8 +421,8 @@ The manager hosts one workspace MCP server at `/mcp` exposing pages, components,
 datasources, variables, alarms, translations, assets, users and widget schemas
 across *every* project. A client calls
 `projects_list` to discover projects, then passes a `project` id to every other
-tool. Writes are gated per project by the dashboard's **MCP enabled** toggle and
-by the token's scope; project lifecycle (start, stop, create, delete) is never
+tool. Writes are gated per project by the dashboard's **MCP write enabled** toggle
+and by the token's access level; project lifecycle (start, stop, create, delete) is never
 exposed.
 
 That path is for an external agent editing project *content* — a hosted runner

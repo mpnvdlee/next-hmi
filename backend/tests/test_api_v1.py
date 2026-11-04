@@ -124,8 +124,8 @@ def client(monkeypatch, tmp_path: Path):
     manager_auth.register_login_success()
 
 
-def _api_token(*scopes: str, project: str = "P1") -> str:
-    return mcp_tokens.issue_api(project_id=project, scopes=list(scopes))[1]
+def _api_token(*scopes: str) -> str:
+    return mcp_tokens.issue_api(scopes=list(scopes))[1]
 
 
 # ── auth matrix ──────────────────────────────────────────────────────────────
@@ -147,9 +147,11 @@ def test_bad_token_is_401(client: TestClient):
     assert client.get("/api/v1/projects/P1/users", headers=_bearer("x.y")).status_code == 401
 
 
-def test_token_for_another_project_is_403(client: TestClient):
-    token = _api_token("users:read", project="P2")
-    assert client.get("/api/v1/projects/P1/users", headers=_bearer(token)).status_code == 403
+def test_a_token_opens_every_project(client: TestClient):
+    token = _api_token("users:read")
+    for project in ("P1", "P2"):
+        assert client.get(f"/api/v1/projects/{project}/users", headers=_bearer(token)).status_code == 200
+    assert client.get("/api/v1/projects/P1/recipes", headers=_bearer(token)).status_code == 403
 
 
 def test_token_without_the_scope_is_403(client: TestClient):
@@ -163,7 +165,7 @@ def test_token_without_the_scope_is_403(client: TestClient):
 
 
 def test_mcp_token_is_refused_on_v1(client: TestClient):
-    _, token = mcp_tokens.issue(project_id="P1", access="write")
+    _, token = mcp_tokens.issue(access="write")
     assert client.get("/api/v1/projects/P1/users", headers=_bearer(token)).status_code == 401
 
 
@@ -479,7 +481,7 @@ def test_users_routes_refuse_a_broken_users_file(client: TestClient, tmp_path: P
 # ── token store ──────────────────────────────────────────────────────────────
 
 
-def test_token_file_without_kind_still_reads_as_mcp(monkeypatch, tmp_path: Path):
+def test_a_one_project_token_from_1x_is_refused_not_widened(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(runtime_home, "runtime_home_path", lambda: tmp_path)
     manager_auth.set_password(PASSWORD)
     raw = "abc.secret"
@@ -500,9 +502,9 @@ def test_token_file_without_kind_still_reads_as_mcp(monkeypatch, tmp_path: Path)
         ],
     }
     mcp_tokens.tokens_path().write_text(json.dumps(legacy))
-    scope = mcp_tokens.resolve(raw)
-    assert scope is not None and scope.access == "read"
+    assert mcp_tokens.resolve(raw) is None
     assert mcp_tokens.resolve_api(raw) is None
+    # Still listed, without a kind it reads as MCP, so it can be revoked.
     assert mcp_tokens.list_tokens()[0]["kind"] == "mcp"
 
 
@@ -510,14 +512,14 @@ def test_issue_api_rejects_unknown_or_empty_scopes(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(runtime_home, "runtime_home_path", lambda: tmp_path)
     manager_auth.set_password(PASSWORD)
     with pytest.raises(ValueError):
-        mcp_tokens.issue_api(project_id="P1", scopes=[])
+        mcp_tokens.issue_api(scopes=[])
     with pytest.raises(ValueError):
-        mcp_tokens.issue_api(project_id="P1", scopes=["users:admin"])
+        mcp_tokens.issue_api(scopes=["users:admin"])
 
 
 def test_dashboard_creates_and_lists_an_api_token(client: TestClient):
     client.post("/api/manager/auth/login", json={"password": PASSWORD})
-    body = {"projectId": "P1", "kind": "api", "scopes": ["users:read", "history:read"], "name": "HR"}
+    body = {"kind": "api", "scopes": ["users:read", "history:read"], "name": "HR"}
     created = client.post("/api/manager/mcp-tokens", json=body)
     assert created.status_code == 201
     issued = created.json()
@@ -526,9 +528,9 @@ def test_dashboard_creates_and_lists_an_api_token(client: TestClient):
     assert {"kind": "api", "scopes": ["history:read", "users:read"], "name": "HR"}.items() <= next(
         t for t in listed if t["id"] == issued["tokenId"]
     ).items()
-    bad = client.post("/api/manager/mcp-tokens", json={"projectId": "P1", "kind": "api", "scopes": ["root"]})
+    bad = client.post("/api/manager/mcp-tokens", json={"kind": "api", "scopes": ["root"]})
     assert bad.status_code == 422
-    assert client.post("/api/manager/mcp-tokens", json={"projectId": "P1"}).status_code == 422
+    assert client.post("/api/manager/mcp-tokens", json={}).status_code == 422
     client.cookies.delete(manager_auth.SESSION_COOKIE)
     assert client.get("/api/v1/projects/P1/users", headers=_bearer(issued["token"])).status_code == 200
 
@@ -549,7 +551,7 @@ def audit_events():
 
 
 def test_user_writes_are_audited_without_secrets(client: TestClient, reloads, audit_events):
-    token_id, token = mcp_tokens.issue_api(project_id="P1", scopes=["users:write"], name="HR system")
+    token_id, token = mcp_tokens.issue_api(scopes=["users:write"], name="HR system")
     client.put(
         "/api/v1/projects/P1/users/bob",
         json={"password": "pw-secret", "groups": ["operator"]},
@@ -631,8 +633,6 @@ def test_panel_routes_need_the_sessions_write_scope(client: TestClient, child):
         assert client.request(method, url, json=body).status_code == 401
         users = _bearer(_api_token("users:write", "users:read"))
         assert client.request(method, url, json=body, headers=users).status_code == 403
-        other = _bearer(_api_token("sessions:write", project="P2"))
-        assert client.request(method, url, json=body, headers=other).status_code == 403
     assert child._client_users["c1"]["runtime:c1"]["username"] == "guest"
 
 
@@ -715,7 +715,7 @@ def test_panel_login_wrong_password_is_401_then_throttled(client: TestClient, ch
 
 def test_panel_sign_in_and_out_are_audited(client: TestClient, child, audit_events):
     _open_tab(child, "c1", "line-a")
-    token_id, token = mcp_tokens.issue_api(project_id="P1", scopes=["sessions:write"], name="Badge reader")
+    token_id, token = mcp_tokens.issue_api(scopes=["sessions:write"], name="Badge reader")
     client.post(
         "/api/v1/projects/P1/panels/line-a/login",
         json={"username": "ann", "password": "ann-secret"},

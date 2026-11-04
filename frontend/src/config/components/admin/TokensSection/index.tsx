@@ -4,49 +4,32 @@ import Button from '../../ui/Button';
 import AccessBadge from '../../ui/AccessBadge';
 import { describeError } from '@config/store/projectsStore';
 import CreateTokenModal from './CreateTokenModal';
-import { listTokens, projectMcpEnabled, revokeToken, type ListedToken } from './tokensApi';
+import { listTokens, revokeToken, type ListedToken } from './tokensApi';
 import './style.css';
 
-interface Props {
-  projectId: string;
-}
-
 /**
- * The bearer tokens scoped to this project: MCP tokens for AI clients and API
- * tokens for API v1 integrations. Listed and revoked here; created and shown
- * once in {@link CreateTokenModal}.
+ * The installation's bearer tokens on the manager's Settings page: MCP tokens
+ * for AI agents and API tokens for API v1 integrations, each covering every
+ * project. Listed and revoked here; created and shown once in
+ * {@link CreateTokenModal}.
  */
-export default function TokensSection({ projectId }: Props) {
+export default function TokensSection() {
   const [tokens, setTokens] = useState<ListedToken[]>([]);
-  const [mcpEnabled, setMcpEnabled] = useState<boolean | null>(null);
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const all = await listTokens();
-      setTokens(all.filter((t) => t.projectId === projectId));
+      setTokens(await listTokens());
     } catch (e) {
       setError(describeError(e));
     }
-  }, [projectId]);
+  }, []);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
-
-  async function openCreate() {
-    // Read at open time: the switch lives on the dashboard and may have just changed.
-    setError(null);
-    try {
-      setMcpEnabled(await projectMcpEnabled(projectId));
-    } catch (e) {
-      setError(describeError(e));
-      setMcpEnabled(null);
-    }
-    setCreating(true);
-  }
 
   async function revoke(id: string) {
     setBusy(true);
@@ -64,11 +47,12 @@ export default function TokensSection({ projectId }: Props) {
   return (
     <AdminSection
       title="Tokens"
-      actions={<Button onClick={() => void openCreate()}>Create token</Button>}
+      actions={<Button onClick={() => setCreating(true)}>Create token</Button>}
     >
       <p className="cfg-admin-section__desc cfg-admin-section__desc--wide">
-        A token lets an AI client (MCP) or an integration such as an MES or HR system (API v1) reach
-        this project without the device-admin password. Revoke a token to cut that access off.
+        A token lets an AI agent (MCP) or an integration such as an MES or HR system (API v1) reach
+        every project on this machine without the device-admin password. Revoke a token to cut that
+        access off.
       </p>
 
       {error && <p className="cfg-error-banner">{error}</p>}
@@ -124,12 +108,7 @@ export default function TokensSection({ projectId }: Props) {
       )}
 
       {creating && (
-        <CreateTokenModal
-          projectId={projectId}
-          mcpEnabled={mcpEnabled}
-          onCreated={() => void refresh()}
-          onClose={() => setCreating(false)}
-        />
+        <CreateTokenModal onCreated={() => void refresh()} onClose={() => setCreating(false)} />
       )}
     </AdminSection>
   );
