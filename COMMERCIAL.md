@@ -15,9 +15,10 @@ text — ask <mailto:licensing@next-hmi.com> for that.
 
 ## Redistribution licence
 
-For OEMs and machine builders embedding NEXT HMI in shipped equipment,
-integrators delivering modified builds, and SaaS vendors serving a modified
-NEXT HMI.
+For anyone who ships NEXT HMI without passing on the source, or wants it under
+their own name: OEMs and machine builders embedding it in shipped equipment,
+integrators delivering modified builds, SaaS vendors serving a modified
+NEXT HMI. The price is the same for every kind of customer.
 
 Grants four things:
 
@@ -45,20 +46,23 @@ Priced **per installation** — one fee per installation that leaves your
 building, perpetual for installations already delivered, with no renewal and no
 expiry. An installation is one NEXT HMI server on one computer: a panel PC, an
 industrial PC, or a virtual machine or container with a pinned identity. The
-browser screens it serves are never counted, so a panel PC and twenty tablets
-are one licence. Current prices and volume
-tiers are at **[next-hmi.com/pricing](https://next-hmi.com/pricing)**.
+browser screens it serves and the PLCs it talks to are never counted, and
+neither are tags, pages or operators, so a panel PC and twenty tablets are one
+licence. Current prices and volume tiers are at
+**[next-hmi.com/pricing](https://next-hmi.com/pricing)**.
 
-The tier is set by what you take in the running contract year, and there is no
-minimum: five installations a year is five times the tier price, with nothing to
-administer between the transactions.
+Volume tiers count the installations you take in a contract year, and each
+contract year starts again at the first tier. A lower tier price applies from
+the first installation past its threshold onward; installations already bought
+are never repriced. There is no minimum: five installations a year is five times
+the tier price, with nothing to administer between the transactions.
 
-**What the licence does not include:** support, a response time or an SLA,
-installation and commissioning, any bugfix or hotfix commitment, custom
-development, or PLC work. It grants white-label, release from the AGPL source
-obligation, a signed build, and key issuance — nothing more, which is what keeps
-it a decision rather than a negotiation. Those other things are real and can be
-bought separately; see [Support and commissioning](#support-and-commissioning).
+**You buy the product as it is.** The licence grants white-label, release from
+the AGPL source obligation, a signed build, and key issuance, which is what keeps
+it a decision rather than a negotiation. Because the source comes with it, as it
+is still means never stuck: see [Fixing a bug yourself](#fixing-a-bug-yourself).
+Installation, commissioning, custom development and PLC work are bought
+separately; see [Support and commissioning](#support-and-commissioning).
 
 ### Fixing a bug yourself
 
@@ -76,6 +80,10 @@ layer. Three steps, in order:
 Step 3 is the one that matters: you are never blocked on us. You choose between
 waiting and giving up your own mark for a while.
 
+A fix you send in earns no credit or discount, since the price is the same for
+everyone. What you get back is everyone else's fixes: yours goes into the next
+release for every user, and theirs reach you the same way.
+
 ## Audit-trail module
 
 Adds an **audit trail** — an append-only, attributed record of operator actions
@@ -92,13 +100,9 @@ build is scale and regulatory pressure, never a feature held back: alarms, the
 historian, recipes, users and the editor are in the open-source build and stay
 there.
 
-What exists today is the recording and an audit panel to read it in: sign-in and
-sign-out, successful writes to equipment, alarm acknowledgements, each marked
-`verified` or `claimed`. The packaged compliance module on top — exports,
-retention controls, the documentation a quality department signs off — is still
-being built, and its scope is set with the first customer who needs it. Neither
-today's recording nor that module is on its own a 21 CFR Part 11 package: there
-is no integrity chain over the file and no electronic-signature capture.
+It records sign-in and sign-out, successful writes to equipment, and alarm
+acknowledgements, each marked `verified` or `claimed`, with an audit panel to
+read them in.
 
 ## Activation
 
@@ -143,11 +147,8 @@ contact; we maintain and develop the product. Hours on the product itself — a
 custom widget, a migration across a platform version — are quoted per
 assignment.
 
-Sold **separately from any licence, and never as a subscription**. There are no
-support packages, no tiers and no response-time commitments — a guaranteed
-response on every working day of the year is the one thing a small team cannot
-honestly promise, so it is not sold rather than sold badly. Work goes per
-assignment, planned by agreement, quoted for the piece of work.
+Sold **separately from any licence, and never as a subscription**. Work goes
+per assignment, planned by agreement, quoted for the piece of work.
 
 What stays free for everyone: GitHub issues, the documentation, and every
 release.
