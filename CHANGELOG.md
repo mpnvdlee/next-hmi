@@ -185,6 +185,11 @@ heading.
   reload or repaint an operator's screen by themselves, and an icon rewritten
   over MCP is no longer refetched the next time it mounts there, as it was in
   1.1.0.
+- **A Localizable Text field no longer shows text it will not save.** Typing
+  in it searches the translation keys; a key is set only by picking one or
+  adding it with **+ Add**. Clicking away or pressing Escape left the typed
+  text in the field, where it read as the new value while nothing was marked
+  unsaved and Save wrote nothing. The field now goes back to the key it holds.
 - **Saving in the editor no longer overwrites what an AI assistant changed.**
   An editor tab that stayed open while an assistant worked over MCP wrote
   every page back on its next save, so the assistant's widgets disappeared

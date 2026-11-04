@@ -3,6 +3,31 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useTranslationStore } from '@shared/store/translationStore';
 import TranslationInput from './index';
 
+describe('TranslationInput key field', () => {
+  beforeEach(() => {
+    useTranslationStore.setState({
+      languages: [{ code: 'en' }, { code: 'nl' }],
+      translations: { motor_on: { en: 'motor_on', nl: 'Motor aan' } },
+    });
+  });
+
+  it.each([
+    ['clicking elsewhere', () => fireEvent.mouseDown(document.body)],
+    ['Escape', () => fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' })],
+  ])('puts typed search text back to the key it holds on %s', (_, dismiss) => {
+    const onChange = vi.fn();
+    render(<TranslationInput value={{ $loc: 'motor_on' }} onChange={onChange} translationOnly />);
+    const input = screen.getByRole('textbox');
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'Motor draait' } });
+    dismiss();
+
+    expect(input).toHaveValue('motor_on');
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
 describe('TranslationInput search', () => {
   beforeEach(() => {
     useTranslationStore.setState({
