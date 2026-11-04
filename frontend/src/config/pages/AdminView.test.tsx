@@ -12,6 +12,8 @@ function stubLoaders(overrides: Partial<ReturnType<typeof useAdminViewStore.getS
     loadRuntimes: vi.fn().mockResolvedValue(undefined),
     recompileAllWidgets: vi.fn().mockResolvedValue(undefined),
     recompileWidget: vi.fn().mockResolvedValue(undefined),
+    loadHttpOrigins: vi.fn().mockResolvedValue(undefined),
+    saveHttpOrigins: vi.fn().mockResolvedValue(true),
     ...overrides,
   });
 }
@@ -45,12 +47,13 @@ afterEach(() => {
 });
 
 describe('AdminView', () => {
-  it('renders the three admin sections', () => {
+  it('renders the four admin sections', () => {
     renderView();
 
     expect(screen.getByText('Fast Subscriptions')).toBeInTheDocument();
     expect(screen.getByText('Custom Widgets')).toBeInTheDocument();
     expect(screen.getByText('Connected Runtimes')).toBeInTheDocument();
+    expect(screen.getByText('HTTP sources')).toBeInTheDocument();
   });
 
   it('reads widgets, subscriptions and runtimes once on mount', () => {

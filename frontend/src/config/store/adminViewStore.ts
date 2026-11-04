@@ -1,5 +1,5 @@
 import { create, type StoreApi } from 'zustand';
-import { apiJson } from '@shared/utils/api';
+import { apiJson, errorMessage } from '@shared/utils/api';
 import type { CustomWidgetManifestEntry } from '@shared/types/widgetSchema';
 
 export interface SubscriptionEntry {
@@ -39,13 +39,21 @@ interface AdminViewStore {
   /** Registry keys currently recompiling; `'*'` means the whole "Recompile all" run. */
   recompiling: string[];
   recompileError: string | null;
+  /** `httpAllowedOrigins` — where a dynamic-host `$http` source may go. */
+  httpOrigins: string[];
+  httpOriginsError: string | null;
 
   loadCustomWidgets(): Promise<void>;
   loadSubscriptions(): Promise<void>;
   loadRuntimes(): Promise<void>;
   recompileAllWidgets(): Promise<void>;
   recompileWidget(key: string): Promise<void>;
+  loadHttpOrigins(): Promise<void>;
+  /** Resolves `true` once stored; on a refusal the list stays and the error is set. */
+  saveHttpOrigins(origins: string[]): Promise<boolean>;
 }
+
+type HttpOrigins = { origins: string[] };
 
 async function runRecompile(
   set: StoreApi<AdminViewStore>['setState'],
@@ -73,6 +81,8 @@ export const useAdminViewStore = create<AdminViewStore>((set) => ({
   runtimesError: null,
   recompiling: [],
   recompileError: null,
+  httpOrigins: [],
+  httpOriginsError: null,
 
   loadCustomWidgets: async () => {
     try {
@@ -111,5 +121,28 @@ export const useAdminViewStore = create<AdminViewStore>((set) => ({
   recompileWidget: (key) => {
     const encoded = key.split('/').map(encodeURIComponent).join('/');
     return runRecompile(set, key, `/api/widgets/recompile/${encoded}`);
+  },
+
+  loadHttpOrigins: async () => {
+    try {
+      const { origins } = await apiJson<HttpOrigins>('/api/config/http-origins');
+      set({ httpOrigins: origins, httpOriginsError: null });
+    } catch (e) {
+      set({ httpOriginsError: errorMessage(e) });
+    }
+  },
+
+  saveHttpOrigins: async (next) => {
+    try {
+      const { origins } = await apiJson<HttpOrigins>('/api/config/http-origins', {
+        method: 'PUT',
+        body: { origins: next },
+      });
+      set({ httpOrigins: origins, httpOriginsError: null });
+      return true;
+    } catch (e) {
+      set({ httpOriginsError: errorMessage(e) });
+      return false;
+    }
   },
 }));

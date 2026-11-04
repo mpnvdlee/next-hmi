@@ -426,12 +426,27 @@ normal absent value rather than a broken API call.
 > one hop at a time with the same check on each.
 >
 > Only a placeholder in the *scheme, host or port* of an absolute template
-> (`http://{1}/x`, `{1}://h/x`, `http://h:{1}/x`) names no fixed origin; that is an
-> explicit opt-out, and while one exists the project's proxy accepts any http(s)
-> origin. A relative template (`/api/status/{id}`) is **not** an opt-out — it
-> contributes no origin and widens nothing — and a placeholder in the path, query
-> or credentials (`https://{user}:{pass}@h/x`, which still pins `https://h:443`)
-> is irrelevant.
+> (`http://{1}/x`, `{1}://h/x`, `http://h:{1}/x`) names no fixed origin. Such a
+> *dynamic-host* template reaches only the origins the project lists by hand in
+> `config.json` under `httpAllowedOrigins` (edited in the editor's **Admin ›
+> HTTP sources**, `GET`/`PUT /api/config/http-origins`). The list applies to every
+> request, because a resolved request carries nothing that ties it back to the
+> source that rendered it, and it is compared exactly like a derived origin. While
+> it is empty a dynamic-host request is refused, and validation reports
+> `http-dynamic-host-unlisted` on the template so the editor's warnings pill says
+> so first. A rendered host is a value an operator or PLC can steer and the proxy
+> is anonymous, so it never follows one to an origin nobody named.
+>
+> A listed origin never names this machine: loopback, link-local and unspecified
+> addresses, `localhost` and the numeric spellings of 127.0.0.1 are refused by the
+> write endpoint and ignored if hand-edited in. A local service is still
+> reachable through a literal template (`http://localhost:9000/api`), where the
+> target is visible in the source that uses it.
+>
+> A relative template (`/api/status/{id}`) is not a dynamic-host template — it
+> contributes no origin and needs no list entry — and a placeholder in the path,
+> query or credentials (`https://{user}:{pass}@h/x`, which still pins
+> `https://h:443`) is irrelevant.
 
 ---
 

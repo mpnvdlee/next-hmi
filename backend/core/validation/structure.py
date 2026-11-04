@@ -13,6 +13,7 @@ from typing import Any
 from models.datasource import is_present_on_server, is_subscribable
 
 from core.builtin_widgets_manifest import CatalogVersion, builtin_widgets_catalog
+from core.http_origins import is_dynamic_template, listed_origins
 from core.page_index import (
     INDEX_ROOTS,
     collect_group_ancestors,
@@ -227,6 +228,9 @@ class ValidationContext:
     icon_assets: frozenset[str] = field(default_factory=frozenset)
     image_assets: frozenset[str] = field(default_factory=frozenset)
     video_assets: frozenset[str] = field(default_factory=frozenset)
+    # config.json `httpAllowedOrigins` — the only origins a dynamic-host $http
+    # template can reach (core/http_origins.py).
+    http_allowed_origins: frozenset[str] = field(default_factory=frozenset)
     # declared_property_keys() memo, keyed by widget type — a node walk resolves
     # the same widget type repeatedly (e.g. every Button on a page), and the
     # result only depends on widget_type for the lifetime of this context.
@@ -1182,6 +1186,7 @@ def build_context() -> ValidationContext:
         icon_assets=_collect_asset_names(active_icons_dir()),
         image_assets=_collect_asset_names(active_images_dir()),
         video_assets=_collect_asset_names(active_videos_dir()),
+        http_allowed_origins=frozenset(listed_origins(config)),
     )
 
 
@@ -3106,6 +3111,13 @@ def _validate_property_value(
                 severity="warning", code="http-url-empty",
             )
         else:
+            if is_dynamic_template(url) and not ctx.http_allowed_origins:
+                report.warn(
+                    f"{path}/$http/url",
+                    "url takes its host from a placeholder, but the project lists no "
+                    "allowed origins (Admin › HTTP sources), so every request is refused",  # noqa: RUF001 -- breadcrumb separator glyph, shown verbatim in the UI
+                    severity="warning", code="http-dynamic-host-unlisted",
+                )
             # url / body / header values share $stringExpr's placeholder syntax,
             # so every template on the request is scanned against one wildcard bag.
             templates = [url]

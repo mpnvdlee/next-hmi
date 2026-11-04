@@ -237,3 +237,33 @@ describe('recompileWidget', () => {
     expect(useAdminViewStore.getState().recompiling).toEqual([]);
   });
 });
+
+describe('saveHttpOrigins', () => {
+  it('keeps the list the backend normalised', async () => {
+    stubFetch({ 'PUT /api/config/http-origins': { origins: ['http://plc.local:80'] } });
+
+    expect(await useAdminViewStore.getState().saveHttpOrigins(['http://PLC.local'])).toBe(true);
+
+    expect(useAdminViewStore.getState().httpOrigins).toEqual(['http://plc.local:80']);
+    expect(useAdminViewStore.getState().httpOriginsError).toBeNull();
+  });
+
+  it('keeps the old list and reports why the backend refused the new one', async () => {
+    useAdminViewStore.setState({ httpOrigins: ['http://plc.local:80'] });
+    stubFetch({
+      'PUT /api/config/http-origins': {
+        status: 422,
+        detail: 'http://127.0.0.1:80 points at this machine',
+      },
+    });
+
+    expect(
+      await useAdminViewStore
+        .getState()
+        .saveHttpOrigins(['http://plc.local:80', 'http://127.0.0.1']),
+    ).toBe(false);
+
+    expect(useAdminViewStore.getState().httpOrigins).toEqual(['http://plc.local:80']);
+    expect(useAdminViewStore.getState().httpOriginsError).toContain('points at this machine');
+  });
+});

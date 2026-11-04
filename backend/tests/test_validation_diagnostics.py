@@ -804,6 +804,33 @@ def test_stringexpr_empty(ctx):
     assert (w.code, w.severity) == ("stringexpr-empty", "warning")
 
 
+def _http(url: str) -> dict:
+    return {"$http": {"url": url, "wildcards": {"host": {"$static": "plc.local"}}}}
+
+
+def test_http_dynamic_host_with_no_allowed_origins(ctx):
+    """The proxy refuses a dynamic-host request unless the project lists the
+    origins it may reach (core/http_origins.py) — say so before the runtime does."""
+    report = ValidationReport()
+    _validate_property_value(_http("http://{host}/api"), None, ctx, "/p", report)
+    w = _warn(report)
+    assert (w.code, w.severity, w.path) == ("http-dynamic-host-unlisted", "warning", "/p/$http/url")
+
+
+@pytest.mark.parametrize("url", ["http://plc.local/api/{host}", "/api/{host}"])
+def test_http_fixed_or_relative_host_needs_no_allowed_origins(ctx, url):
+    report = ValidationReport()
+    _validate_property_value(_http(url), None, ctx, "/p", report)
+    assert not [w for w in report.warnings if w.code == "http-dynamic-host-unlisted"]
+
+
+def test_http_dynamic_host_with_allowed_origins_is_clean(ctx):
+    report = ValidationReport()
+    listed = replace(ctx, http_allowed_origins=frozenset({"http://plc.local:80"}))
+    _validate_property_value(_http("http://{host}/api"), None, listed, "/p", report)
+    assert not [w for w in report.warnings if w.code == "http-dynamic-host-unlisted"]
+
+
 def test_stringexpr_wildcard_empty(ctx):
     report = ValidationReport()
     _validate_property_value(

@@ -179,6 +179,15 @@ needs; every reader defaults the rest.
 dashboard via `POST /api/projects/{id}/mcp` and reported by `projects_list`. A
 `PUT` of the config that omits the key preserves the stored value.
 
+`httpAllowedOrigins` is an optional array of origins (`"http://10.0.0.5:8080"`)
+that an `$http` source whose url interpolates its own scheme, host or port may
+reach — see [`$http`](value-types.md#http-requests-in-depth-http). It is written
+by `PUT /api/config/http-origins`, which stores each entry normalised to
+`scheme://host:port` and refuses loopback, link-local and unspecified hosts, and
+`PUT /api/config/config` preserves it. Absent means empty: a dynamic-host source
+then reaches nothing. Adding the key needed no migration — an older project
+reads as an empty list.
+
 `globalEvents` is a singleton config of action arrays fired on app/page lifecycle:
 
 - `onHmiLoaded`

@@ -5,6 +5,7 @@ import ScrollPage from '../components/ui/ScrollPage';
 import SubscriptionsSection from '../components/admin/SubscriptionsSection';
 import CustomWidgetsSection from '../components/admin/CustomWidgetsSection';
 import ConnectedRuntimesSection from '../components/admin/ConnectedRuntimesSection';
+import HttpOriginsSection from '../components/admin/HttpOriginsSection';
 import ConfigWorkspace from '../components/ui/ConfigWorkspace';
 
 export default function AdminView() {
@@ -22,16 +23,21 @@ export default function AdminView() {
   const loadRuntimes = useAdminViewStore((s) => s.loadRuntimes);
   const recompileAllWidgets = useAdminViewStore((s) => s.recompileAllWidgets);
   const recompileWidget = useAdminViewStore((s) => s.recompileWidget);
+  const httpOrigins = useAdminViewStore((s) => s.httpOrigins);
+  const httpOriginsError = useAdminViewStore((s) => s.httpOriginsError);
+  const loadHttpOrigins = useAdminViewStore((s) => s.loadHttpOrigins);
+  const saveHttpOrigins = useAdminViewStore((s) => s.saveHttpOrigins);
 
   useEffect(() => {
     void loadCustomWidgets();
     void loadSubscriptions();
     void loadRuntimes();
+    void loadHttpOrigins();
     const subId = setInterval(loadSubscriptions, 2000);
     return () => {
       clearInterval(subId);
     };
-  }, [loadCustomWidgets, loadSubscriptions, loadRuntimes]);
+  }, [loadCustomWidgets, loadSubscriptions, loadRuntimes, loadHttpOrigins]);
 
   return (
     <ConfigWorkspace title="Admin" flush>
@@ -53,6 +59,11 @@ export default function AdminView() {
           loading={runtimesLoading}
           error={runtimesError}
           onRefresh={loadRuntimes}
+        />
+        <HttpOriginsSection
+          origins={httpOrigins}
+          error={httpOriginsError}
+          onSave={saveHttpOrigins}
         />
         {enterpriseAdminSections.map((Section, i) => (
           <Section key={i} />

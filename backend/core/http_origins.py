@@ -34,32 +34,33 @@ filesystems whose mtime granularity is coarser than a single edit.
 (single braces — ``PLACEHOLDER_RE`` in ``propertySourceEval.ts``,
 ``_WILDCARD_RE`` in ``core/validation/structure.py``). Exactly one position
 matters: a placeholder in the *scheme, host or port* of an absolute template
-means the author wrote a source whose origin is decided at render time — they
-have deliberately opted out of origin pinning for that source, and no allowlist
-can express "whatever that variable says". Such a template is recorded on the
-policy (:attr:`HttpOriginPolicy.dynamic_templates`) and logged, and while one
-exists in the project the policy permits any http(s) origin — except back at
-this machine. Loopback, link-local and unspecified addresses, and the names
-that reach them by convention, stay refused even while unpinned
-(:func:`_is_local_destination`), because a project instance answers its own
-API with no auth of its own: an unpinned policy may go anywhere the operator
-might have meant, but "anywhere" cannot include the request endpoint's own
-host. That is still a real widening of the proxy, so what remains of it is
-never silent: it takes an explicit edit in the editor, which only the device
-admin can reach.
+means the source's origin is decided at render time, so no derived allowlist
+can name it. Such a template is recorded on the policy
+(:attr:`HttpOriginPolicy.dynamic_templates`) and reaches only the origins the
+project lists by hand under ``httpAllowedOrigins`` in ``config.json``
+(:func:`listed_origins`). With that list empty the request is refused, and the
+validation layer flags the template so the editor says so before the runtime
+does. A rendered host is a value an operator or a PLC can steer, and this
+endpoint is anonymous — opening every origin for it would let anyone on the
+network walk the proxy across the plant LAN.
+
+A listed origin never points back at this machine: loopback, link-local and
+unspecified addresses, and the names that reach them by convention, are
+dropped from the list (:func:`_is_local_destination`), because a project
+instance answers its own API with no auth of its own. An author who needs a
+service on this machine writes it as a literal template, where the target is
+visible in the source that uses it.
 
 Everywhere else a placeholder is irrelevant. In the *path*, *query* or
 *fragment* the origin is still fixed — and so it is in the *userinfo*, the one
 part of the authority that names no origin: ``https://{user}:{pass}@plant.local``
 pins ``https://plant.local:443`` exactly as a literal credential would, because
 both this module and every url parser drop credentials before comparing.
-Counting that as a dynamic host would let one ordinary credentialed source
-open the proxy project-wide. And a template with no ``://`` at all —
+Counting that as a dynamic host would leave an ordinary credentialed source
+unpinned and refused. And a template with no ``://`` at all —
 ``/api/status/{machineId}``, ``{base}/api/x`` — names no origin: it adds nothing
-to the allowlist and, just as importantly, opts out of nothing. Treating it as
-an opt-out would mean one ordinary relative template anywhere in the project
-turned this endpoint into an open proxy; an author who wants a computed host
-writes it where it is visible, in the authority.
+to the allowlist and is not a dynamic-host template either. Whatever it renders
+into has to be named by a template that does carry an authority, or listed.
 """
 from __future__ import annotations
 
@@ -106,9 +107,9 @@ _DYNAMIC = _Dynamic()
 
 def _is_local_destination(url: str) -> bool:
     """Loopback, link-local and unspecified addresses, plus the names and
-    numeric spellings that reach them without a lookup. An unpinned policy
-    may go anywhere the operator might have meant — except back at this
-    machine, where the project instance answers with no auth of its own.
+    numeric spellings that reach them without a lookup. A listed origin may
+    name any host the device admin chose — except this machine, where the
+    project instance answers with no auth of its own.
 
     Classification never resolves a hostname. ``permits()`` runs on the
     event loop that also drives the OPC-UA and WebSocket variable pipeline,
@@ -139,7 +140,8 @@ def _is_local_destination(url: str) -> bool:
         return True
     if not host:
         return True
-    host = host.strip("[]").lower()
+    # A trailing dot is the same host in DNS (`localhost.`, `127.0.0.1.`).
+    host = host.strip("[]").lower().rstrip(".")
     if host in {"localhost", "localhost.localdomain", ""} or host.endswith(".localhost"):
         return True
     try:
@@ -153,38 +155,41 @@ def _is_local_destination(url: str) -> bool:
 
 
 class HttpOriginPolicy:
-    """What ``POST /api/http-request`` is allowed to reach for one project."""
+    """What ``POST /api/http-request`` is allowed to reach for one project.
 
-    __slots__ = ("dynamic_templates", "origins")
+    ``origins`` are the ones literal templates pin, ``listed`` the project's
+    ``httpAllowedOrigins``. A resolved request carries nothing that ties it
+    back to the source that produced it, so both sets apply to every request.
+    """
 
-    def __init__(self, origins: frozenset[str], dynamic_templates: tuple[str, ...]) -> None:
+    __slots__ = ("dynamic_templates", "listed", "origins")
+
+    def __init__(
+        self,
+        origins: frozenset[str],
+        dynamic_templates: tuple[str, ...],
+        listed: frozenset[str],
+    ) -> None:
         self.origins = origins
         self.dynamic_templates = dynamic_templates
-
-    @property
-    def allows_any_origin(self) -> bool:
-        """True while the project holds a template with a placeholder in its host.
-
-        See the module docstring: such a source has opted out of pinning, and
-        the opt-out is project-wide because a resolved request carries nothing
-        that ties it back to the source that produced it.
-        """
-        return bool(self.dynamic_templates)
+        self.listed = listed
 
     def permits(self, url: str) -> bool:
-        if self.allows_any_origin:
-            return not _is_local_destination(url)
         origin = normalize_origin(url)
-        return origin is not None and origin in self.origins
+        return origin is not None and (origin in self.origins or origin in self.listed)
 
     def __repr__(self) -> str:  # pragma: no cover - diagnostics only
         return (
             f"HttpOriginPolicy(origins={sorted(self.origins)!r}, "
+            f"listed={sorted(self.listed)!r}, "
             f"dynamic_templates={list(self.dynamic_templates)!r})"
         )
 
 
-_EMPTY_POLICY = HttpOriginPolicy(frozenset(), ())
+_EMPTY_POLICY = HttpOriginPolicy(frozenset(), (), frozenset())
+
+#: The ``config.json`` key holding the origins a dynamic-host template may reach.
+ALLOWED_ORIGINS_KEY = "httpAllowedOrigins"
 
 
 def normalize_origin(url: str) -> str | None:
@@ -211,6 +216,41 @@ def normalize_origin(url: str) -> str | None:
     if ":" in host:
         host = f"[{host}]"
     return f"{scheme}://{host}:{port}"
+
+
+def parse_listed_origin(entry: Any) -> str:
+    """The normalised origin an ``httpAllowedOrigins`` entry names.
+
+    Raises ``ValueError`` with a reason when it names no http(s) origin or
+    names this machine (see the module docstring).
+    """
+    origin = normalize_origin(entry) if isinstance(entry, str) else None
+    if origin is None:
+        raise ValueError(f"{entry!r} is not an http(s) origin such as https://plant.local:8443")
+    if _is_local_destination(origin):
+        raise ValueError(
+            f"{origin} points at this machine (loopback, link-local or unspecified), "
+            "which the proxy never reaches through the allowed-origins list"
+        )
+    return origin
+
+
+def listed_origins(config: Any) -> tuple[str, ...]:
+    """The valid ``httpAllowedOrigins`` of a ``config.json`` document, in order.
+
+    Entries the write endpoint would refuse — a hand edit can still put them
+    on disk — are dropped and logged rather than honoured.
+    """
+    raw = config.get(ALLOWED_ORIGINS_KEY) if isinstance(config, dict) else None
+    if not isinstance(raw, list):
+        return ()
+    origins: dict[str, None] = {}
+    for entry in raw:
+        try:
+            origins[parse_listed_origin(entry)] = None
+        except ValueError as exc:
+            logger.warning("http origins: ignoring %s entry: %s", ALLOWED_ORIGINS_KEY, exc)
+    return tuple(origins)
 
 
 def _split_authority(template: str) -> tuple[str, str] | None:
@@ -246,7 +286,7 @@ def _classify_template(template: str) -> str | _Dynamic | None:
     """Normalized origin, ``_DYNAMIC``, or ``None`` when it pins and widens nothing.
 
     See the module docstring: only a placeholder in the scheme, host or port of
-    an absolute template is the opt-out.
+    an absolute template makes it dynamic.
     """
     split = _split_authority(template)
     if split is None:
@@ -258,12 +298,17 @@ def _classify_template(template: str) -> str | _Dynamic | None:
     if "{" in scheme:
         return _DYNAMIC
     if scheme.lower() not in _DEFAULT_PORTS:
-        # `ftp://{host}/x` can never become an http(s) request, so it is not an
-        # opt-out from an http(s) allowlist — the endpoint refuses the scheme.
+        # `ftp://{host}/x` can never become an http(s) request, so it is not a
+        # dynamic-host http(s) template — the endpoint refuses the scheme.
         return None
     if "{" in _host_and_port(authority):
         return _DYNAMIC
     return normalize_origin(template)
+
+
+def is_dynamic_template(template: str) -> bool:
+    """True when *template* interpolates its scheme, host or port."""
+    return isinstance(_classify_template(template), _Dynamic)
 
 
 def _collect_http_urls(node: Any, out: set[str]) -> None:
@@ -314,6 +359,8 @@ def _fingerprint(documents: list[Path]) -> frozenset[tuple[str, int]]:
 def _derive_policy(documents: list[Path]) -> HttpOriginPolicy:
     origins: set[str] = set()
     dynamic: set[str] = set()
+    listed: frozenset[str] = frozenset()
+    config_path = active_config_dir() / "config.json"
     for path in documents:
         try:
             document = read_json(path)
@@ -323,6 +370,8 @@ def _derive_policy(documents: list[Path]) -> HttpOriginPolicy:
             # errors, this one just needs to be visible in the log.
             logger.warning("http origins: could not read %s", path)
             continue
+        if path == config_path:
+            listed = frozenset(listed_origins(document))
         urls: set[str] = set()
         _collect_http_urls(document, urls)
         for url in urls:
@@ -331,16 +380,16 @@ def _derive_policy(documents: list[Path]) -> HttpOriginPolicy:
                 dynamic.add(url)
             elif classified is not None:
                 origins.add(classified)
-    policy = HttpOriginPolicy(frozenset(origins), tuple(sorted(dynamic)))
-    if policy.allows_any_origin:
+    policy = HttpOriginPolicy(frozenset(origins), tuple(sorted(dynamic)), listed)
+    if policy.dynamic_templates and not policy.listed:
         logger.warning(
-            "http origins: %d $http source(s) interpolate their host (%s), so "
-            "/api/http-request accepts any http(s) origin for this project",
+            "http origins: %d $http source(s) interpolate their host (%s) but %s "
+            "is empty, so /api/http-request refuses them",
             len(policy.dynamic_templates),
             ", ".join(policy.dynamic_templates),
+            ALLOWED_ORIGINS_KEY,
         )
-    else:
-        logger.debug("http origins: %s", sorted(policy.origins))
+    logger.debug("http origins: %s, listed %s", sorted(policy.origins), sorted(policy.listed))
     return policy
 
 

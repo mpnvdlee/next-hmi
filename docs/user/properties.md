@@ -223,6 +223,21 @@ from the MES, a setpoint from a REST service, an outside temperature.
 Until the first response arrives the field shows its fallback; the real value
 appears as soon as the request completes, and again on every refresh.
 
+### Which servers a URL can reach
+
+The live view is open to anyone on the network, so the HMI only calls servers the
+project itself names. A URL with a fixed server — `https://mes.local/api/orders/{1}`
+— names its own, and needs nothing else.
+
+A URL that takes the server itself from a placeholder — `http://{1}/api/status`,
+one line controller or another depending on a variable — names none. Such a URL
+only reaches the servers you list under **Admin › HTTP sources** in the editor.
+Write each one as scheme, server and port, for example `http://10.0.0.5:8080`.
+Until the list holds the server a request goes to, that request is refused, and
+the warnings pill reminds you while the list is empty. The machine the HMI runs
+on can never be listed; to call a service on it, write its address in the URL
+directly.
+
 ## Coercion, in short
 
 - **A variable must match the field's type exactly.** A `Float` field takes no `Integer` tag and a `String` field no `Boolean` one; the binding picker will not confirm a tag that does not fit. A field that takes either lists both types.

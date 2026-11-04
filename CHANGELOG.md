@@ -42,6 +42,20 @@ heading.
   bound to another number widget, an alarm, a recipe parameter, the historian
   or a trend is now flagged in the warnings pill.
 
+- **Admin › HTTP sources.** The editor's Admin area lists the servers an
+  `$http` URL may reach when it takes its server from a placeholder; see
+  **Changed**.
+
+### Changed
+
+- **An `$http` URL that takes its server from a placeholder needs that
+  server listed.** `http://{1}/api/status` used to reach any
+  server but the HMI's own machine. It now reaches only the servers listed
+  under **Editor › Admin › HTTP sources** (scheme, server and port), and is
+  refused until the list holds its server; the warnings pill flags such a
+  URL while the list is empty. A local address is always refused there. A
+  URL with a fixed server works as before.
+
 ### Fixed
 
 - **What an AI assistant changes over MCP shows up on the running screen.**
@@ -63,6 +77,12 @@ heading.
   project kept evaluating its old alarm list, and the editor and runtime kept
   showing it, until the project was restarted. A running project now picks up
   added, changed and deleted alarms straight away.
+
+### Security
+
+- **An `$http` URL no longer opens the plant network to anyone.** A URL that
+  took its server from a placeholder let anyone who reached the live view
+  have the HMI call any server on the plant network. See **Changed**.
 
 ## [1.1.0] - 2026-10-31
 

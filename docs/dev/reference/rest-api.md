@@ -80,7 +80,7 @@ Base prefix: `/api/config`. Page index, shared shell areas, dictionaries and tra
   - `revision` hashes the fields `PUT /api/config/config` writes (`pages`, `dialogs`, the shell areas, `shell`, `globalEvents`), so a theme or `mcpEnabled` change does not move it. `pageRevisions` holds a hash of each index page's document bytes (`"missing"` when its file is absent). Both are read before the content, and an editor sends them back on save.
 
 - `PUT /api/config/config`
-  - Body must contain a `pages` array; `header`, `footer`, `leftSidebar`, `rightSidebar`, `shell`, `dialogs`, `globalEvents`, `mcpEnabled` are accepted optionally. An omitted `mcpEnabled` keeps the stored value, and the embedded `project` metadata block is always kept.
+  - Body must contain a `pages` array; `header`, `footer`, `leftSidebar`, `rightSidebar`, `shell`, `dialogs`, `globalEvents`, `mcpEnabled` are accepted optionally. An omitted `mcpEnabled` keeps the stored value; the embedded `project` metadata block and `httpAllowedOrigins` (set through [`/api/config/http-origins`](#allowed-origins-for-http)) are always kept.
   - The shell areas and `globalEvents` are validated before anything is written; a blocking finding is `422`.
   - Index validation rules (`422` on failure):
     - Each entry must be an object with a string `id`.
@@ -706,7 +706,17 @@ Base prefix: `/api/historian`. Samples live in a SQLite database under the live 
     `{ "ok": bool, "status": int, "body": any, "error": string | null }`.
   - `ok: false` with `status: 0` for a non-`http(s)` scheme, a hostless URL, a refused origin, or a transport error; `ok: false` with the upstream status for a non-2xx response or a body over 1 MiB.
   - Response body is parsed as JSON regardless of `content-type` and falls back to raw text. Timeout is a fixed 10 s. Redirects are walked one hop at a time with the scheme and origin check re-run on **every** hop, capped at 5 (`more than 5 redirects` otherwise), and all caller-supplied headers are dropped once a hop leaves its origin — otherwise a configured host could redirect the proxy into an unconfigured one and carry the project's API key with it.
-  - **Only origins the project itself configures are reachable.** The request's origin (scheme + host + port, default ports normalised, host compared case-insensitively) must match one an `$http` property source in this project names — see [`$http`](../architecture/value-types.md#http-requests-in-depth-http). Anything else is refused with `ok: false`, `status: 0` and `error: "origin '…' is not configured by an $http source in this project"`. Once any source in the project interpolates its own host, any http(s) origin is allowed except loopback, link-local and unspecified addresses (`core/http_origins.py`). Path, query, headers and body are unrestricted.
+  - **Only origins the project itself configures are reachable.** The request's origin (scheme + host + port, default ports normalised, host compared case-insensitively) must match one an `$http` property source in this project names — see [`$http`](../architecture/value-types.md#http-requests-in-depth-http) — or one listed in the project's `httpAllowedOrigins` (see [Allowed origins](#allowed-origins-for-http)). Anything else is refused with `ok: false`, `status: 0` and `error: "origin '…' is not configured by an $http source or the allowed origins of this project"`. A source that interpolates its own host (`http://{host}/x`) pins nothing, so it reaches only the listed origins, and nothing while the list is empty (`core/http_origins.py`). Path, query, headers and body are unrestricted.
+
+### Allowed origins for `$http`
+
+Behind the device-admin session: not on the runtime public-route table (`_RUNTIME_PUBLIC_ROUTES` in `backend/manager.py`), and kept off the public `GET /api/config/config`.
+
+- `GET /api/config/http-origins`
+  - `{ "origins": ["http://10.0.0.5:8080", …] }` — `httpAllowedOrigins` from `config.json`, `[]` when unset. Only entries the proxy honours are returned, normalised; a hand-edited entry it ignores is left out.
+- `PUT /api/config/http-origins`
+  - Body: `{ "origins": [string] }`. Replaces the list. Each entry is normalised to `scheme://host:port` (lower-cased, default port filled in, path and credentials dropped) and duplicates collapse. `422` names the first entry that is not an http(s) origin or names this machine (loopback, link-local, unspecified, `localhost`). Returns the stored list.
+  - `PUT /api/config/config` leaves the key as it is.
 
 ---
 
