@@ -6,6 +6,7 @@ _DICT_NAME_RE = re.compile(r"^[A-Za-z0-9_\- ]+$")
 _WIDGET_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 _DATASOURCE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 _COMPONENT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+_PANEL_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 # Internal spaces allowed, but not leading/trailing (they don't round-trip as
 # directory names on every platform) — total length 1..64.
 _COMPONENT_FOLDER_RE = re.compile(r"^[A-Za-z0-9_-](?:[A-Za-z0-9_\- ]{0,62}[A-Za-z0-9_-])?$")
@@ -45,6 +46,11 @@ def is_valid_datasource_name(value: object) -> bool:
 
 def is_valid_component_id(value: object) -> bool:
     return isinstance(value, str) and bool(_COMPONENT_ID_RE.match(value))
+
+
+def is_valid_panel_name(value: object) -> bool:
+    """Return True if value is a usable runtime panel name (``?panel=``)."""
+    return isinstance(value, str) and bool(_PANEL_NAME_RE.fullmatch(value))
 
 
 def is_valid_component_folder(value: object) -> bool:

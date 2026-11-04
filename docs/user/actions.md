@@ -121,8 +121,8 @@ Some things should happen because *the system reached a state*, not because some
 |---|---|
 | **onHmiLoaded** | Once, when a runtime finishes loading. The place for start-up state: pick a theme from the device, raise a "connecting" toast, open a lock-screen overlay. It waits until the values of the first page and of the variables its own actions read have arrived, up to 3 seconds, so a first-start guard such as an **If** on `Machine/Initialized` reads the tag, not "no value yet". The first **onPageLoaded** runs right after it. |
 | **onPageLoaded** | On the first page and on every navigation afterwards. |
-| **onUserLoggedIn** | When this runtime goes from the guest identity to a signed-in user. |
-| **onUserLoggedOut** | When it goes back to guest. |
+| **onUserLoggedIn** | When someone signs in on this runtime: on the screen, or on its panel over API v1. A reload that keeps the sign-in fires it again; switching from one signed-in user to another does not. The **Auto-login user** a screen starts as is not a sign-in, even when it is a real user. |
+| **onUserLoggedOut** | When the sign-in ends and the screen goes back to the auto-login user: a **Logout User**, a sign-out over API v1, or the signed-in user being deleted. |
 | **onLocaleChanged** | When the active language changes (not on the initial load). |
 | **onInteractionDenied** | When someone presses a widget that is not **Interactable** — the place to open your sign-in dialog. Runs whatever the **Locked feedback** mode is. |
 | **Variable Changed** | Per variable you add: whenever its value changes, and once at start-up with the value it already has. It watches its variable on every page. To act on one value only, put an **If** on that same variable around the actions — for example *If* `Line/DoorOpen` *then* **Open Dialog** opens a popup when the bool goes high, and does nothing when it goes low. |

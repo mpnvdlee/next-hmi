@@ -11,7 +11,7 @@ import core.passwords as passwords_module
 import pytest
 import services.users_manager as users_manager_module
 from conftest import FakeWebSocket
-from core import user_auth_throttle
+from core import audit, user_auth_throttle
 from core.exceptions import RateLimitError
 from core.passwords import hash_password, is_valid_hash, verify_password
 from services.users_manager import (
@@ -678,6 +678,175 @@ def test_logout_resets_to_guest(ws_manager):
     assert ws_manager._client_users["c1"]["runtime:tab1:inst1"]["username"] == "guest"
 
 
+def _two_monitors_signed_in(ws_manager) -> dict[str, FakeWebSocket]:
+    monitors = {}
+    for client_id in ("m1", "m2"):
+        monitors[client_id] = ws_manager._connections[client_id] = FakeWebSocket()
+        ws_manager._client_users[client_id] = {}
+        asyncio.run(ws_manager.handle_message(client_id, json.dumps(
+            {"type": "request_identity", "scope": f"runtime:{client_id}", "panel": "line-a"}
+        )))
+    doc = users_manager_module.load()
+    asyncio.run(ws_manager.sign_in_panel("line-a", {"username": "operator1", "groups": ["operator"]}, doc))
+    return monitors
+
+
+def test_on_screen_logout_signs_out_every_monitor_of_the_panel(ws_manager):
+    monitors = _two_monitors_signed_in(ws_manager)
+    asyncio.run(ws_manager._handle_logout("m1", {"type": "logout", "scope": "runtime:m1"}))
+
+    for client_id, ws in monitors.items():
+        assert ws.messages[-1]["username"] == "guest" and "sessionToken" not in ws.messages[-1]
+        assert ws_manager._client_users[client_id][f"runtime:{client_id}"]["username"] == "guest"
+    assert ws_manager._sessions == {}
+
+
+def test_on_screen_login_replaces_the_panel_login_on_every_monitor(ws_manager):
+    monitors = _two_monitors_signed_in(ws_manager)
+    shared = monitors["m2"].messages[-1]["sessionToken"]
+    asyncio.run(ws_manager._handle_login("m1", {
+        "type": "login", "scope": "runtime:m1", "username": "hashed", "password": "hashed-pass",
+    }))
+
+    assert monitors["m1"].messages[-1]["username"] == "hashed"
+    assert monitors["m2"].messages[-1]["username"] == "guest"
+    assert shared not in ws_manager._sessions
+
+
+def test_on_screen_logout_and_a_replacing_login_fall_back_to_the_auto_login_user(
+    ws_manager, auth_users
+):
+    """The same user an API v1 panel sign-out and a fresh connection get, not guest."""
+    doc = json.loads(auth_users.read_text())
+    doc["settings"]["autoLoginName"] = "nopass"
+    auth_users.write_text(json.dumps(doc))
+    seen: list[audit.AuditEvent] = []
+    audit.register_listener(seen.append)
+    try:
+        monitors = _two_monitors_signed_in(ws_manager)
+        asyncio.run(ws_manager._handle_login("m1", {
+            "type": "login", "scope": "runtime:m1", "username": "hashed", "password": "hashed-pass",
+        }))
+        assert monitors["m2"].messages[-1]["username"] == "nopass"
+
+        asyncio.run(ws_manager._handle_logout("m1", {"type": "logout", "scope": "runtime:m1"}))
+        assert monitors["m1"].messages[-1]["username"] == "nopass"
+        assert monitors["m1"].messages[-1]["groups"] == ["engineer", "guest"]
+
+        # Still on the auto-login user: that logout ends no login, so it leaves no record.
+        asyncio.run(ws_manager._handle_logout("m1", {"type": "logout", "scope": "runtime:m1"}))
+    finally:
+        audit.unregister_listener(seen.append)
+    assert [(e.action, e.actor) for e in seen if e.action == "user.logout"] == [("user.logout", "hashed")]
+
+
+def test_login_on_a_remounted_view_leaves_the_tab_holding_the_new_token(ws_manager):
+    """A remounted HmiView leaves its old scope behind on the socket, still
+    holding the login the new scope resumed. The tab saves the token of the last
+    user_identity it receives, so that must be the new login's."""
+    ws = ws_manager._connections["t"] = FakeWebSocket()
+    ws_manager._client_users["t"] = {}
+    asyncio.run(ws_manager._handle_login("t", {
+        "type": "login", "scope": "runtime:s0", "username": "operator1", "password": "op1pass",
+    }))
+    first = ws.messages[-1]["sessionToken"]
+    asyncio.run(ws_manager.handle_message("t", json.dumps(
+        {"type": "request_identity", "scope": "runtime:s1", "sessionToken": first}
+    )))
+    asyncio.run(ws_manager._handle_login("t", {
+        "type": "login", "scope": "runtime:s1", "username": "hashed", "password": "hashed-pass",
+    }))
+
+    saved = [m.get("sessionToken") for m in ws.messages if m["type"] == "user_identity"][-1]
+    assert saved == ws_manager._client_users["t"]["runtime:s1"]["session"]
+    assert ws_manager._client_users["t"]["runtime:s0"]["username"] == "guest"
+    assert first not in ws_manager._sessions
+
+
+def test_a_tab_cannot_resume_a_panel_login_while_its_sign_out_is_sending(ws_manager):
+    class SlowWebSocket(FakeWebSocket):
+        async def send_text(self, message: str) -> None:
+            await asyncio.sleep(0.01)
+            await super().send_text(message)
+
+    async def scenario() -> dict:
+        for client_id in ("m1", "m2"):
+            ws_manager._connections[client_id] = SlowWebSocket()
+            ws_manager._client_users[client_id] = {}
+            await ws_manager.handle_message(client_id, json.dumps(
+                {"type": "request_identity", "scope": f"runtime:{client_id}", "panel": "line-a"}
+            ))
+        doc = users_manager_module.load()
+        await ws_manager.sign_in_panel("line-a", {"username": "operator1", "groups": ["operator"]}, doc)
+        token = ws_manager._client_users["m1"]["runtime:m1"]["session"]
+
+        async def resume_meanwhile() -> None:
+            await asyncio.sleep(0.005)  # inside the first send of the sign-out
+            ws_manager._connections["x"] = FakeWebSocket()
+            ws_manager._client_users["x"] = {}
+            await ws_manager.handle_message("x", json.dumps(
+                {"type": "request_identity", "scope": "runtime:x", "sessionToken": token}
+            ))
+
+        await asyncio.gather(ws_manager.sign_out_panel("line-a"), resume_meanwhile())
+        return ws_manager._client_users["x"]["runtime:x"]
+
+    assert asyncio.run(scenario())["username"] == "guest"
+    assert ws_manager._sessions == {}
+
+
+def test_a_panel_sign_out_during_an_on_screen_login_is_not_undone(ws_manager):
+    """The login awaits the reset of the login it replaced; a panel sign-out
+    that lands meanwhile must stick, and the tab is told what it holds."""
+    class SlowWebSocket(FakeWebSocket):
+        delay = 0.01
+
+        async def send_text(self, message: str) -> None:
+            await asyncio.sleep(self.delay)
+            await super().send_text(message)
+
+    class VerySlowWebSocket(SlowWebSocket):
+        delay = 0.1
+
+    async def scenario() -> FakeWebSocket:
+        for client_id in ("p1", "p2", "p3", "p4"):
+            ws_manager._connections[client_id] = SlowWebSocket()
+            ws_manager._client_users[client_id] = {}
+            await ws_manager.handle_message(client_id, json.dumps(
+                {"type": "request_identity", "scope": f"runtime:{client_id}", "panel": "line-a"}
+            ))
+        doc = users_manager_module.load()
+        await ws_manager.sign_in_panel("line-a", {"username": "operator1", "groups": ["operator"]}, doc)
+        # A monitor reloaded without ?panel= and resumed the panel login: slow to reset.
+        ws_manager._connections["x"] = VerySlowWebSocket()
+        ws_manager._client_users["x"] = {}
+        await ws_manager.handle_message("x", json.dumps({
+            "type": "request_identity", "scope": "runtime:x",
+            "sessionToken": ws_manager._client_users["p1"]["runtime:p1"]["session"],
+        }))
+
+        async def sign_out_meanwhile() -> None:
+            await asyncio.sleep(0.035)
+            await ws_manager.sign_out_panel("line-a")
+
+        await asyncio.gather(
+            ws_manager._handle_login("p1", {
+                "type": "login", "scope": "runtime:p1", "username": "hashed",
+                "password": "hashed-pass", "requestId": "r1",
+            }),
+            sign_out_meanwhile(),
+        )
+        return ws_manager._connections["p1"]
+
+    p1 = asyncio.run(scenario())
+    held = ws_manager._client_users["p1"]["runtime:p1"]
+    assert held["username"] != "hashed" and held.get("session") is None
+    answer = next(m for m in p1.messages if m.get("requestId") == "r1")
+    assert answer["username"] == held["username"] and "sessionToken" not in answer
+    assert p1.messages[-1]["username"] == held["username"]
+    assert ws_manager._sessions == {}
+
+
 def test_get_runtime_sessions_excludes_config_scope(ws_manager):
     from datetime import datetime
     ws_manager._connections["c2"] = FakeWebSocket()
@@ -788,6 +957,34 @@ def test_login_session_resumes_on_a_new_socket_until_logout(ws_manager):
     after_logout = request_identity("c3", token)
     assert after_logout["username"] == "guest"
     assert "sessionToken" not in after_logout
+
+
+def test_a_password_change_ends_the_logins_taken_with_the_old_one(ws_manager, auth_users):
+    def login(client_id: str, username: str, password: str) -> FakeWebSocket:
+        ws = ws_manager._connections[client_id] = FakeWebSocket()
+        ws_manager._client_users[client_id] = {}
+        asyncio.run(ws_manager._handle_login(client_id, {
+            "type": "login", "scope": f"runtime:{client_id}", "username": username, "password": password,
+        }))
+        return ws
+
+    live = login("c1", "operator1", "op1pass")
+    asyncio.run(ws_manager.disconnect("c1"))
+    resumable = live.messages[-1]["sessionToken"]
+    live = login("c2", "operator1", "op1pass")
+    untouched = login("c3", "hashed", "hashed-pass")
+
+    doc = json.loads(auth_users.read_text())
+    for user in doc["users"]:
+        if user["username"] == "operator1":
+            user["password"], user["passwordHash"] = "", hash_password("new-pass")
+    auth_users.write_text(json.dumps(doc))
+    asyncio.run(ws_manager.refresh_identities())
+
+    assert live.messages[-1]["username"] == "guest" and "sessionToken" not in live.messages[-1]
+    assert untouched.messages[-1]["username"] == "hashed"
+    assert list(ws_manager._sessions) == [untouched.messages[-1]["sessionToken"]]
+    assert ws_manager._resume_session(resumable, doc) is None
 
 
 # ─── requestId echoing for action-result correlation ───────────────────────
@@ -1037,3 +1234,20 @@ def test_a_username_flood_trips_the_global_cooldown():
         user_auth_throttle.register_login_failure(f"ghost{attempt}")
 
     assert user_auth_throttle.lockout_remaining("operator1") > 0.0
+
+
+def test_editor_user_writes_refresh_held_identities(api_client, monkeypatch):
+    from services.websocket_manager import websocket_manager
+
+    calls: list[str] = []
+
+    async def refresh() -> None:
+        calls.append("refresh")
+
+    monkeypatch.setattr(websocket_manager, "refresh_identities", refresh)
+    api_client.get("/api/users")
+    assert calls == []
+    assert api_client.delete("/api/users/users/nobody").status_code == 404
+    assert calls == []  # a refused write changed nothing
+    assert api_client.put("/api/users/settings", json={"autoLoginName": "guest"}).status_code == 200
+    assert calls == ["refresh"]

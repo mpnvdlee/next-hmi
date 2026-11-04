@@ -320,6 +320,10 @@ def test_proxy_excludes_internal_reload_hook_even_when_project_is_running(
     )
     assert resp_nested.status_code == 404
 
+    # API v1's panel sign-in hooks take an HMI password: browsers never reach them.
+    for hook in ("panels", "panels/login", "panels/logout"):
+        assert getattr(client, method)(f"/{prefix}/some-project/api/internal/{hook}").status_code == 404
+
 
 def test_runtime_editor_aliases_gated_without_auth(client: TestClient) -> None:
     """Both prefixes still gate anything off the public runtime table — and

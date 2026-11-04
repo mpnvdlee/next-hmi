@@ -13,10 +13,13 @@ nothing. Two credentials work:
 HMI user credentials (``users.json``) are never an API key, and an MCP token
 is refused here just as an API token is refused on ``/mcp``.
 
-Every route reads or writes the project's files under ``use_project``, so it
-works the same whether the project is running or stopped. A user write also
-pokes a running child's reload hook, so open editor tabs learn the roster
-changed before they save over it.
+Every route but ``panels`` reads or writes the project's files under
+``use_project``, so it works the same whether the project is running or
+stopped. A user write also pokes a running child's reload hook, so open editor
+tabs learn the roster changed before they save over it, and a deleted or
+regrouped user loses the identity it holds on a panel. ``panels`` acts on live
+connections, so it needs the running child and goes through its loopback
+``api/internal/panels`` hooks.
 """
 from __future__ import annotations
 
@@ -51,6 +54,7 @@ from core.storage import (
     load_json_or_default,
     use_project,
 )
+from core.validation.ids import is_valid_panel_name
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from mcp_server.pagination import CursorError, decode_cursor, encode_cursor, paginate
@@ -77,7 +81,7 @@ _users_locks: dict[str, threading.Lock] = {}
 
 @dataclass(frozen=True)
 class Caller:
-    label: str  # who did it, for the reload notice: "admin" or the token's name
+    label: str  # the audit actor: "admin" or the token's name
     token: mcp_tokens.ApiTokenScope | None = None  # None: the device admin
 
 
@@ -148,6 +152,7 @@ _ALARMS_READ = _scope("alarms:read")
 _RECIPES_READ = _scope("recipes:read")
 _USERS_READ = _scope("users:read")
 _USERS_WRITE = _scope("users:write")
+_SESSIONS_WRITE = _scope("sessions:write")
 
 
 @contextmanager
@@ -376,11 +381,7 @@ def list_users(projectId: str, _: Caller = _USERS_READ) -> dict[str, Any]:
         document = _users_document(root)
     return {
         "users": [_public_user(user) for user in document["users"]],
-        "groups": [
-            {"id": group.get("id"), "label": group.get("label", group.get("id"))}
-            for group in document.get("groups", [])
-            if isinstance(group, dict)
-        ],
+        "groups": users_api.group_entries(document),
     }
 
 
@@ -394,7 +395,6 @@ async def _notify_running_child(project_id: str, user_id: str, caller: Caller) -
             "artifact_ids": [user_id],
             "source": "api",
             "summary": f"User '{user_id}' changed over API v1",
-            "agent_label": caller.label,
         },
     )
 
@@ -482,3 +482,72 @@ async def delete_user(
     await _notify_running_child(projectId, userId, caller)
     return {"deleted": userId}
 
+
+# ── 4.8 panel sessions ───────────────────────────────────────────────────────
+
+
+async def _child(project_id: str, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
+    """Call the running child's loopback ``api/internal/<path>``; its errors pass through."""
+    import httpx
+    from mcp_server.write_helpers import loopback_client
+    from services.supervisor import supervisor
+
+    port = supervisor.port_for(project_id)
+    if port is None:
+        raise ConflictError(f"Project '{project_id}' is not running")
+    try:
+        resp = await loopback_client().request(
+            method, f"http://127.0.0.1:{port}/api/internal/{path}", json=body
+        )
+    except httpx.HTTPError as exc:
+        raise ConflictError(f"Project '{project_id}' did not answer: {exc}") from exc
+    if resp.is_error:
+        try:
+            detail = resp.json().get("detail")
+        except ValueError:
+            detail = resp.text
+        raise HTTPException(status_code=resp.status_code, detail=detail)
+    return resp.json()
+
+
+def _panel_name(panel: str) -> str:
+    # Never a connected panel, so 404 like any other unknown one.
+    if not is_valid_panel_name(panel):
+        raise NotFoundError(f"No connected panel named '{panel}'")
+    return panel
+
+
+@router.get("/panels")
+async def list_panels(projectId: str, _: Caller = _SESSIONS_WRITE) -> dict[str, Any]:
+    return await _child(projectId, "GET", "panels")
+
+
+@router.post("/panels/{panel}/login")
+async def panel_login(
+    projectId: str, panel: str, body: dict = Body(...), caller: Caller = _SESSIONS_WRITE
+) -> dict[str, Any]:
+    """Sign an HMI user in on every connection of a named panel; checks their password."""
+    unknown = set(body) - {"username", "password"}
+    if unknown:
+        raise ValidationError(f"Unknown fields: {sorted(unknown)}")
+    username, password = body.get("username"), body.get("password")
+    if not isinstance(username, str) or not isinstance(password, str):
+        raise ValidationError("username and password must be strings")
+    signed_in = await _child(
+        projectId,
+        "POST",
+        "panels/login",
+        {"panel": _panel_name(panel), "username": username, "password": password},
+    )
+    with _project(projectId):
+        _audit(caller, "user.login", panel, signed_in)
+    return {"panel": panel, **signed_in}
+
+
+@router.post("/panels/{panel}/logout")
+async def panel_logout(projectId: str, panel: str, caller: Caller = _SESSIONS_WRITE) -> dict[str, Any]:
+    """Drop a named panel back to the auto-login user."""
+    signed_out = await _child(projectId, "POST", "panels/logout", {"panel": _panel_name(panel)})
+    with _project(projectId):
+        _audit(caller, "user.logout", panel, signed_out)
+    return {"panel": panel, **signed_out}

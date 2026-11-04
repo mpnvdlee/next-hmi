@@ -10,7 +10,7 @@ export type McpAccess = 'read' | 'write';
 
 /** What an API v1 token may do; `backend/core/mcp_tokens.py` API_SCOPES. */
 export type ApiScope =
-  'history:read' | 'alarms:read' | 'recipes:read' | 'users:read' | 'users:write';
+  'history:read' | 'alarms:read' | 'recipes:read' | 'users:read' | 'users:write' | 'sessions:write';
 
 /** One row of `GET /api/manager/mcp-tokens`: an MCP token has `access`, an API token `scopes`. */
 export interface ListedToken {

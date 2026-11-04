@@ -24,7 +24,7 @@ import type { RecipeConfig, LoadedDataset, DownloadResult } from '@shared/types/
 import type { ActionResultReason } from '@shared/types/config';
 import { flushAllAsDisconnected, resolvePending } from '../utils/actionDispatcher';
 import { wsUrl } from '@shared/utils/runtimeBase';
-import { saveSessionToken } from '../utils/runtimeSession';
+import { isLiveScope, saveSessionToken } from '../utils/runtimeSession';
 
 // ── Inbound message schema ────────────────────────────────────────────────────
 // Discriminated union of every message the backend can send. The handler below
@@ -366,9 +366,10 @@ export function useWebSocket(): void {
                 username: msg.username,
                 groups: msg.groups ?? [],
                 groupLabels: msg.groupLabels ?? {},
+                signedIn: Boolean(msg.sessionToken),
               });
               setLoginErrorRef.current(msg.scope, null);
-              saveSessionToken(msg.sessionToken);
+              if (isLiveScope(msg.scope)) saveSessionToken(msg.sessionToken);
             }
             // requestId is present only on responses to login/logout (never
             // for auto-login via request_identity), so this resolve cannot

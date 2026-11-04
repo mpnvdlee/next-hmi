@@ -10,7 +10,7 @@ Message types (client → server):
   write_field      — write a value to a PLC variable via OPC-UA
   toggle_field     — invert a Boolean variable, read server-side
   login            — authenticate a scoped session with username/password
-  logout           — revert a scoped session back to guest
+  logout           — revert a scoped session back to the auto-login user
   request_identity — auto-login the configured autoLoginName user for a scope
 """
 
@@ -56,7 +56,7 @@ class LoginMessage(TypedDict, total=False):
 
 
 class LogoutMessage(TypedDict, total=False):
-    """Client → server: revert a scoped session to guest."""
+    """Client → server: revert a scoped session to the auto-login user."""
     type: Required[str]
     scope: Required[str]
     requestId: str
@@ -64,10 +64,12 @@ class LogoutMessage(TypedDict, total=False):
 
 class RequestIdentityMessage(TypedDict, total=False):
     """Client → server: auto-login the configured autoLoginName user, or resume
-    the login `sessionToken` names when it is still valid."""
+    the login `sessionToken` names when it is still valid. `panel` names this
+    runtime tab's panel (its `?panel=` URL parameter) so API v1 can sign it in."""
     type: Required[str]
     scope: Required[str]
     sessionToken: str
+    panel: str
 
 
 # ── Server → client message shapes (for documentation) ───────────────────────

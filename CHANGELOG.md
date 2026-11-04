@@ -43,14 +43,22 @@ heading.
   or a trend is now flagged in the warnings pill.
 
 - **API v1 for other systems.** A MES, BI tool, HR system or badge reader
-  can read historian samples, alarm history and recipes, and manage the
-  project's users, over a versioned HTTP API at `/api/v1/projects/<id>/…`.
-  It answers JSON or CSV, works on a stopped project too, and keeps its
-  routes and field names for as long as v1 exists. Give each system an API
-  token with only the scopes it needs, or use the device-admin password over
-  HTTP Basic, username `admin`, for your own scripts. A project user's
-  password never works as an API key. See *Connecting other systems (API v1)*
-  in the guide.
+  can read historian samples, alarm history and recipes, manage the
+  project's users, and sign operators in and out on named panels over a
+  versioned HTTP API at `/api/v1/projects/<id>/…`. It answers JSON or CSV,
+  works on a stopped project too (except panel sign-in), and keeps its routes
+  and field names for as long as v1 exists. Give each system an API token
+  with only the scopes it needs, or use the device-admin password over HTTP
+  Basic, username `admin`, for your own scripts. A project user's password
+  never works as an API key. A user change reaches a running project's
+  screens at once. See *Connecting other systems (API v1)* in the guide.
+
+- **Named panels.** Open a runtime with `?panel=<name>` at the end of its
+  address, and another system can sign an operator in or out on it over
+  API v1, with that operator's own password. Screens opened with the same
+  name are signed in and out together. The name proves nothing about which
+  screen it is: anyone who opens the same name receives the same sign-ins,
+  so use it only on panels on a trusted network.
 
 - **Tokens under Editor › Admin › Tokens.** Create and revoke the project's
   MCP tokens (read, or read and write) and API tokens (per scope) in the
@@ -119,6 +127,15 @@ heading.
   mode is recorded as `engineer`, whichever project user the preview is
   signed in as: the editor sits behind the device-admin password, not a
   project user.
+
+- **Signing out on a screen returns to the auto-login user.** A **Logout
+  User** action, and a sign-in on one monitor of a panel that another
+  system signed in over API v1, dropped the screens to `guest`. They now
+  return to the project's **Auto-login user**, as a newly opened screen and
+  a sign-out over API v1 already did. **onUserLoggedIn** and
+  **onUserLoggedOut** now fire on a real sign-in and sign-out instead of on
+  a change from or to `guest`, so they also work when the auto-login user
+  is a real user, and no longer fire when such a screen opens.
 
 - **Recipe download takes no credentials.** `POST
   /api/recipes/datasets/{id}/download` ignores HTTP Basic credentials; they
@@ -189,12 +206,19 @@ heading.
   and through `POST /api/recipes/datasets/{id}/download` `guest`, or
   `engineer` from the editor. A variable written through
   `POST /api/datasources/write` is recorded like one written on the live
-  connection: as the signed-in user, or `engineer` from the editor. User
-  changes over API v1 are recorded under the token's name, or `admin` for
-  the device-admin password.
+  connection: as the signed-in user, or `engineer` from the editor. User changes and panel sign-ins over API v1 are recorded under
+  the token's name, or `admin` for the device-admin password.
 
 - **Deleting a project revokes its tokens.** Its MCP and API tokens
   outlived it, and a later project created with the same id inherited them.
+
+- **A deleted user is signed out at once.** A user deleted while signed in
+  on a running project's screen stayed signed in, and a regrouped one kept
+  the old groups, until the screen signed out. Saving users in the editor or
+  over API v1 now signs a deleted user out on every screen, back to the
+  auto-login user, and gives a regrouped one the new groups. A changed
+  password signs that user out the same way, and a reloaded screen can no
+  longer resume a sign-in made with the old one.
 
 ## [1.1.0] - 2026-10-31
 

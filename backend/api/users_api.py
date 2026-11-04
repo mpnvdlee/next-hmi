@@ -1,14 +1,29 @@
 """REST API for user and group management."""
 
+from collections.abc import AsyncIterator
 from typing import Any
 
 from core import users_document
 from core.exceptions import UserConflictError, UserNotFoundError, UserValidationError
 from core.passwords import has_password, hash_password
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Depends, Request
 from services import users_manager
 
-router = APIRouter(prefix="/api/users", tags=["users"])
+
+async def _refresh_identities_after_write(request: Request) -> AsyncIterator[None]:
+    # Skipped when the handler raises. The same refresh API v1 writes reach
+    # through the reload hook, so a deleted or regrouped user is signed out or
+    # regrouped on every connection of this instance.
+    yield
+    if request.method not in ("GET", "HEAD"):
+        from services.websocket_manager import websocket_manager
+
+        await websocket_manager.refresh_identities()
+
+
+router = APIRouter(
+    prefix="/api/users", tags=["users"], dependencies=[Depends(_refresh_identities_after_write)]
+)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -151,12 +166,17 @@ def get_roster() -> dict:
             for user in document.get("users", [])
             if isinstance(user, dict)
         ],
-        "groups": [
-            {"id": group.get("id"), "label": group.get("label", group.get("id"))}
-            for group in document.get("groups", [])
-            if isinstance(group, dict)
-        ],
+        "groups": group_entries(document),
     }
+
+
+def group_entries(document: dict) -> list[dict[str, Any]]:
+    """Each group as ``{id, label}``, the label falling back to the id."""
+    return [
+        {"id": group.get("id"), "label": group.get("label", group.get("id"))}
+        for group in document.get("groups", [])
+        if isinstance(group, dict)
+    ]
 
 
 @router.put("")

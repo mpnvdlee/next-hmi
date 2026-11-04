@@ -20,6 +20,8 @@ All of it lives in `users.json` inside the project folder, with passwords stored
 3. **Add a user** — Set the **Username**, a **Password**, and tick the **Groups** they belong to. A user must keep at least one group, so the last one cannot be removed.
 4. **Save users** — Accounts save on their own **Save users** button in the header, separate from the normal Save, so a security change is never carried along by an unrelated page edit. **Discard users** throws the draft away.
 
+A saved change reaches a running project's panels at once: a removed user, or one whose password changed, is signed out (the panel falls back to the auto-login user), and a user whose groups changed gets the new groups on the panel they are signed in on.
+
 > [!NOTE]
 > **The password field never shows you the current password.** It reads *(unchanged)* once one is set — the server only stores a hash. Type a new one to replace it; leave it alone and the existing one is kept.
 
@@ -34,7 +36,7 @@ Select **Settings** in the tree for the one project-wide choice:
 
 | Setting | Means |
 |---|---|
-| **Auto-login user** | Who a freshly opened runtime is signed in as before anyone touches it. `guest` is the normal answer; picking a real user makes an unattended panel start out with that user's rights. |
+| **Auto-login user** | Who a freshly opened runtime is signed in as before anyone touches it, and who it goes back to when someone signs out. `guest` is the normal answer; picking a real user makes an unattended panel start out with that user's rights. |
 
 > [!IMPORTANT]
 > **No group opens the editor.** The fence around the project itself is the installation's **device-admin password** — the one that unlocks the Manager dashboard — and nothing in `users.json` widens or narrows it. Whoever has that password can rewrite pages, alarms and users, whichever project user the runtime happens to be signed in as, so keep it to the people who genuinely engineer the system. See [How this relates to the device-admin password](#how-this-relates-to-the-device-admin-password).
@@ -71,6 +73,8 @@ like any other screen, wired with actions ([Actions](actions.md)):
 > opens it straight away.
 
 Sign-in is **per open runtime**, not per browser and not per installation: two tabs on the same panel PC can be two different operators, and each keeps its own identity until it is closed or logged out.
+
+**Signing in from another system.** A badge reader or a MES can sign an operator in or out on a panel over the API, with that operator's own password. The panel needs a name for that: open its runtime with `?panel=<name>` at the end of the address, for example `/runtime/line-a/?panel=line-a-1` (letters, digits, `-` and `_`). Screens opened with the same name are signed in and out together; a screen without the parameter cannot be reached this way. The name proves nothing: anyone who can reach the runtime can open it with the same `?panel=` and receives the same sign-ins, so use this only on panels on a trusted network, in a kiosk browser nobody else controls. See [Panels: sign users in and out](api.md#panels-sign-users-in-and-out).
 
 Global events give the rest of the plumbing — `onUserLoggedIn` and `onUserLoggedOut` fire project-wide, which is where "go to the home page on login, back to the lock screen on logout" belongs. See [Global events](actions.md#global-events).
 

@@ -575,3 +575,214 @@ def test_user_writes_are_audited_without_secrets(client: TestClient, reloads, au
     assert second["tokenId"] is None and second["created"] is False and second["passwordChanged"] is False
     recorded = repr([e for _, e in audit_events])
     assert "pw-secret" not in recorded and token not in recorded and "pbkdf2" not in recorded
+
+
+# ── panel sessions ───────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def child(monkeypatch, tmp_path: Path):
+    """P1 running, its loopback hooks served by this process's internal router
+    on a fresh WebSocketManager; P2 stays stopped."""
+    import httpx
+    from api import internal_api
+    from core.exceptions import register_exception_handlers
+    from fastapi import FastAPI
+    from mcp_server import write_helpers
+    from services import users_manager
+    from services.supervisor import supervisor
+    from services.websocket_manager import WebSocketManager
+
+    app = FastAPI()
+    register_exception_handlers(app)
+    app.include_router(internal_api.router)
+    loopback = httpx.AsyncClient(transport=httpx.ASGITransport(app=app))
+    manager = WebSocketManager()
+    monkeypatch.setattr(internal_api, "websocket_manager", manager)
+    monkeypatch.setattr(users_manager, "users_path", lambda: tmp_path / "P1" / "users.json")
+    monkeypatch.setattr(supervisor, "port_for", lambda pid: 9 if pid == "P1" else None)
+    monkeypatch.setattr(write_helpers, "loopback_client", lambda: loopback)
+    return manager
+
+
+def _open_tab(manager, client_id: str, panel: str | None = None, *, editor: bool = False):
+    from conftest import FakeWebSocket
+
+    ws = FakeWebSocket()
+    manager._connections[client_id] = ws
+    manager._client_users[client_id] = {}
+    if editor:
+        manager._editor_clients.add(client_id)
+    msg = {"type": "request_identity", "scope": f"runtime:{client_id}"}
+    if panel is not None:
+        msg["panel"] = panel
+    asyncio.run(manager.handle_message(client_id, json.dumps(msg)))
+    return ws
+
+
+def test_panel_routes_need_the_sessions_write_scope(client: TestClient, child):
+    _open_tab(child, "c1", "line-a")
+    calls = [
+        ("GET", "/api/v1/projects/P1/panels", None),
+        ("POST", "/api/v1/projects/P1/panels/line-a/login", {"username": "ann", "password": "ann-secret"}),
+        ("POST", "/api/v1/projects/P1/panels/line-a/logout", None),
+    ]
+    for method, url, body in calls:
+        assert client.request(method, url, json=body).status_code == 401
+        users = _bearer(_api_token("users:write", "users:read"))
+        assert client.request(method, url, json=body, headers=users).status_code == 403
+        other = _bearer(_api_token("sessions:write", project="P2"))
+        assert client.request(method, url, json=body, headers=other).status_code == 403
+    assert child._client_users["c1"]["runtime:c1"]["username"] == "guest"
+
+
+def test_panel_routes_need_a_running_project(client: TestClient, child):
+    assert client.get("/api/v1/projects/P2/panels", headers=_basic()).status_code == 409
+    resp = client.post(
+        "/api/v1/projects/P2/panels/line-a/login",
+        json={"username": "ann", "password": "ann-secret"},
+        headers=_basic(),
+    )
+    assert resp.status_code == 409
+
+
+def test_panel_login_reaches_only_that_panels_connections(client: TestClient, child):
+    tabs = {
+        "a1": _open_tab(child, "a1", "line-a"),
+        "a2": _open_tab(child, "a2", "line-a"),
+        "b1": _open_tab(child, "b1", "line-b"),
+        "unnamed": _open_tab(child, "unnamed"),
+        "bad-name": _open_tab(child, "bad-name", "line a"),
+        "editor": _open_tab(child, "editor", "line-a", editor=True),
+    }
+    seen = {cid: len(ws.messages) for cid, ws in tabs.items()}
+    headers = _bearer(_api_token("sessions:write"))
+
+    resp = client.post(
+        "/api/v1/projects/P1/panels/line-a/login",
+        json={"username": "ann", "password": "ann-secret"},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"panel": "line-a", "username": "ann", "groups": ["operator"]}
+    for cid, ws in tabs.items():
+        new = ws.messages[seen[cid]:]
+        if cid in ("a1", "a2"):
+            assert [(m["type"], m["scope"], m["username"]) for m in new] == [("user_identity", f"runtime:{cid}", "ann")]
+            assert new[0]["sessionToken"] and "requestId" not in new[0]
+        else:
+            assert new == []
+    assert tabs["a1"].messages[-1]["sessionToken"] == tabs["a2"].messages[-1]["sessionToken"]
+
+    assert client.get("/api/v1/projects/P1/panels", headers=headers).json() == {
+        "panels": [
+            {"name": "line-a", "connections": 2, "users": ["ann"]},
+            {"name": "line-b", "connections": 1, "users": ["guest"]},
+        ]
+    }
+
+    resp = client.post("/api/v1/projects/P1/panels/line-a/logout", headers=headers)
+    assert resp.json() == {"panel": "line-a", "signedOut": ["ann"]}
+    for cid in ("a1", "a2"):
+        last = tabs[cid].messages[-1]
+        assert last["username"] == "guest" and "sessionToken" not in last
+    assert child._sessions == {}
+
+
+def test_panel_login_unknown_panel_is_404(client: TestClient, child):
+    _open_tab(child, "c1", "line-a")
+    body = {"username": "ann", "password": "ann-secret"}
+    for panel in ("line-z", "line%20a", "x" * 65):
+        url = f"/api/v1/projects/P1/panels/{panel}"
+        assert client.post(f"{url}/login", json=body, headers=_basic()).status_code == 404
+        assert client.post(f"{url}/logout", headers=_basic()).status_code == 404
+
+
+def test_panel_login_wrong_password_is_401_then_throttled(client: TestClient, child):
+    ws = _open_tab(child, "c1", "line-a")
+    seen = len(ws.messages)
+    url = "/api/v1/projects/P1/panels/line-a/login"
+    headers = _bearer(_api_token("sessions:write"))
+    for _ in range(5):
+        resp = client.post(url, json={"username": "ann", "password": "nope"}, headers=headers)
+        assert resp.status_code == 401
+        assert "www-authenticate" not in resp.headers  # the API credential was fine
+    # The WS login's per-username throttle: now even the right password waits.
+    assert client.post(url, json={"username": "ann", "password": "ann-secret"}, headers=headers).status_code == 429
+    assert client.post(url, json={"username": "ann"}, headers=headers).status_code == 422
+    assert ws.messages[seen:] == []
+
+
+def test_panel_sign_in_and_out_are_audited(client: TestClient, child, audit_events):
+    _open_tab(child, "c1", "line-a")
+    token_id, token = mcp_tokens.issue_api(project_id="P1", scopes=["sessions:write"], name="Badge reader")
+    client.post(
+        "/api/v1/projects/P1/panels/line-a/login",
+        json={"username": "ann", "password": "ann-secret"},
+        headers=_bearer(token),
+    )
+    client.post(
+        "/api/v1/projects/P1/panels/line-a/login",
+        json={"username": "ann", "password": "wrong"},
+        headers=_bearer(token),
+    )
+    client.post("/api/v1/projects/P1/panels/line-a/logout", headers=_basic())
+
+    assert [(p, e.action, e.actor, e.actor_source, e.subject, e.detail) for p, e in audit_events] == [
+        ("P1", "user.login", "Badge reader", "api", "line-a",
+         {"tokenId": token_id, "username": "ann", "groups": ["operator"]}),
+        ("P1", "user.logout", "admin", "api", "line-a", {"tokenId": None, "signedOut": ["ann"]}),
+    ]
+    assert "ann-secret" not in repr(audit_events)
+
+
+def test_panel_logout_reaches_tabs_that_resumed_the_login_elsewhere(client: TestClient, child):
+    from services.websocket_manager import _auto_login_identity
+
+    tabs = {cid: _open_tab(child, cid, "line-a") for cid in ("a1", "a2")}
+    headers = _basic()
+    url = "/api/v1/projects/P1/panels/line-a"
+    client.post(f"{url}/login", json={"username": "ann", "password": "ann-secret"}, headers=headers)
+    token = tabs["a2"].messages[-1]["sessionToken"]
+
+    def detach() -> None:
+        # The same tab reloads without ?panel (or under another name) and resumes ann.
+        asyncio.run(child.handle_message("a2", json.dumps(
+            {"type": "request_identity", "scope": "runtime:a2", "sessionToken": token}
+        )))
+        assert tabs["a2"].messages[-1]["username"] == "ann" and "a2" not in child._client_panels
+
+    detach()
+    assert client.post(f"{url}/logout", headers=headers).json()["signedOut"] == ["ann"]
+    held = [i["username"] for scopes in child._client_users.values() for i in scopes.values()]
+    assert held == ["guest", "guest"] and child._sessions == {}
+
+    # A new sign-in on the panel revokes the login a detached tab still carries.
+    tabs["a2"] = _open_tab(child, "a2", "line-a")
+    client.post(f"{url}/login", json={"username": "ann", "password": "ann-secret"}, headers=headers)
+    token = tabs["a2"].messages[-1]["sessionToken"]
+    detach()
+    client.post(f"{url}/login", json={"username": "ann", "password": "ann-secret"}, headers=headers)
+    assert child._client_users["a2"]["runtime:a2"] == _auto_login_identity({"users": []})
+    assert token not in child._sessions
+
+
+def test_panel_login_is_404_when_the_panel_closes_during_the_check(client: TestClient, child, monkeypatch):
+    from services import users_manager
+
+    _open_tab(child, "c1", "line-a")
+    real = users_manager.authenticate
+
+    async def slow_check(username, password):
+        result = await real(username, password)
+        await child.disconnect("c1")
+        return result
+
+    monkeypatch.setattr(users_manager, "authenticate", slow_check)
+    resp = client.post(
+        "/api/v1/projects/P1/panels/line-a/login",
+        json={"username": "ann", "password": "ann-secret"},
+        headers=_basic(),
+    )
+    assert resp.status_code == 404
+    assert child._sessions == {} and "c1" not in child._client_users

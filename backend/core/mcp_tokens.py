@@ -34,8 +34,9 @@ from core.time_utils import iso_now
 
 Access = Literal["read", "write"]
 
-# ``sessions:write`` (signing users in and out on named panels) is the next scope.
-API_SCOPES = ("history:read", "alarms:read", "recipes:read", "users:read", "users:write")
+API_SCOPES = (
+    "history:read", "alarms:read", "recipes:read", "users:read", "users:write", "sessions:write",
+)
 
 _TOKENS_FILENAME = ".mcp-tokens.json"
 _lock = threading.RLock()
@@ -112,9 +113,8 @@ def issue(*, project_id: str, access: Access, name: str | None = None) -> tuple[
 
 def issue_api(*, project_id: str, scopes: list[str], name: str | None = None) -> tuple[str, str]:
     """Mint an ``/api/v1`` token for *project_id* holding exactly *scopes*."""
-    unknown = set(scopes) - set(API_SCOPES)
-    if not scopes or unknown:
-        raise ValueError(f"Invalid API scopes: {sorted(unknown) or 'none given'}")
+    if not scopes or not set(scopes) <= set(API_SCOPES):
+        raise ValueError(f"An API token needs one or more of: {', '.join(API_SCOPES)}")
     return _append(
         {
             "kind": "api",

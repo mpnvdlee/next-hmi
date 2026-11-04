@@ -535,6 +535,7 @@ Base prefix: `/api/users`. IDs (user id, group id, username) must match `[A-Za-z
   - Returns the redacted persisted users list, with `passwordSet` per user.
 - `DELETE /api/users/users/{user_id}`
   - `422` for `guest`; `404` if not found. Returns `{ "deleted": user_id }`.
+- Every write that succeeds then runs `websocket_manager.refresh_identities` (a router dependency, `_refresh_identities_after_write`), the same refresh an API v1 user write reaches through `/api/internal/reload`: a user no longer listed, and every login of a user whose password changed, drops to the auto-login user on every connection, a regrouped one gets its new groups.
 
 ---
 
@@ -561,7 +562,7 @@ off). Its control surface is the manager dashboard.
 **(manager)** Long-lived credentials for headless AI clients hitting `/mcp`, and for integrations on [API v1](#api-v1) (`kind: "api"`).
 
 - `POST /api/manager/mcp/pair` — body `{ password, projectId, access, name? }` where `password` is the device-admin password and `access` is `"read"` or `"write"`. → `201 { tokenId, token, projectId, access, transport, trustedLanOnly }`. The plaintext `token` is returned once; only its SHA-256 digest is persisted (`<runtime_home>/.mcp-tokens.json`). Reachable **pre-session** (like login/setup) because a pairing client has no session cookie yet, and therefore subject to the same login throttle — `429 RateLimitError` after 5 failures. Unknown `projectId` → `404`.
-- `POST /api/manager/mcp-tokens` — body `{ projectId, kind?, access?, scopes?, name? }`. `kind` is `"mcp"` (default; needs `access`) or `"api"` (needs a non-empty `scopes` list, see [API v1](#api-v1)); an MCP token answers `201 { kind: "mcp", tokenId, token, projectId, access, transport, trustedLanOnly }`, an API token `201 { kind: "api", tokenId, token, projectId, scopes }`. `/pair` takes the same `kind`/`scopes` fields. The create route behind **Editor › Admin › Tokens**: session-gated like the rest of `/api/manager/*`, so no password in the body. Same `201` response and `404` as `/pair`, through the same code path; no login throttle, since nothing is verified but the session.
+- `POST /api/manager/mcp-tokens` — body `{ projectId, kind?, access?, scopes?, name? }`. `kind` is `"mcp"` (default; needs `access`) or `"api"` (needs a non-empty `scopes` list, see [API v1](#api-v1); an empty or unknown scope answers `422` with a `detail` naming the valid ones); an MCP token answers `201 { kind: "mcp", tokenId, token, projectId, access, transport, trustedLanOnly }`, an API token `201 { kind: "api", tokenId, token, projectId, scopes }`. `/pair` takes the same `kind`/`scopes` fields. The create route behind **Editor › Admin › Tokens**: session-gated like the rest of `/api/manager/*`, so no password in the body. Same `201` response and `404` as `/pair`, through the same code path; no login throttle, since nothing is verified but the session.
 - `GET /api/manager/mcp-tokens` → `{ tokens: [{ id, kind, name, projectId, access | scopes, createdAt }] }` (no secrets). Both kinds are listed; an MCP token carries `access`, an API token `scopes`.
 - `DELETE /api/manager/mcp-tokens/{id}` → `{ revoked: true, tokenId }`; `404` when the id is unknown.
 
@@ -753,14 +754,13 @@ Scopes (`core.mcp_tokens.API_SCOPES`):
 | `recipes:read` | `GET …/recipes` |
 | `users:read` | `GET …/users` |
 | `users:write` | `PUT …/users/{userId}`, `DELETE …/users/{userId}` — does not imply `users:read` |
-
-`sessions:write` (signing users in and out on named panels) is the planned next scope.
+| `sessions:write` | `GET …/panels`, `POST …/panels/{panel}/login`, `POST …/panels/{panel}/logout` |
 
 HTTPS is not required, since many LAN installs run plain HTTP, but over HTTP the token or password crosses the network in clear text.
 
 ### Running or stopped
 
-Every route reads or writes the project's files inside `use_project(projectId)`, so each one works the same on a running and a stopped project; none needs the instance. A user write then POSTs the running child's `/api/internal/reload` (`artifact_type: "users"`, `source: "api"`, see [Internal API](#internal-api)), which broadcasts `config_changed` so an open editor shows its "updated by another writer" banner before it saves the old list over the change. The child reads `users.json` fresh on every sign-in, so nothing else needs reloading.
+Every route except [panel sessions](#panel-sessions) reads or writes the project's files inside `use_project(projectId)`, so each one works the same on a running and a stopped project; none needs the instance. A user write then POSTs the running child's `/api/internal/reload` (`artifact_type: "users"`, `source: "api"`, see [Internal API](#internal-api)), which broadcasts `config_changed` so an open editor shows its "updated by another writer" banner before it saves the old list over the change, and re-checks every identity its connections hold: a deleted (or renamed) user, or one whose password changed, drops to the auto-login user, a regrouped one gets its new groups. The child reads `users.json` fresh on every sign-in, so nothing else needs reloading.
 
 ### Paging
 
@@ -796,6 +796,17 @@ Times in queries are ISO-8601 (no offset means UTC) or relative (`-30s`, `-15m`,
 - A missing, unreadable or invalid `users.json` answers `409` on all three, rather than a write replacing it with defaults.
 - A `PUT` or `DELETE` that lands emits a `core.audit` event inside the project's `use_project` scope, so a listener files it under that project: action `user.save` or `user.delete`, subject the user id, actor the API token's name (`admin` for the device-admin password), `actor_source: "api"`. `detail` is `{ tokenId, created, username, groups, passwordChanged }` for a save and `{ tokenId }` for a delete; `tokenId` is `null` for `admin`. No password, hash or token value goes into the record. A refused request emits nothing. The event is emitted in the manager process, not in the project's instance, so a listener has to be registered there to record it.
 
+### Panel sessions
+
+Sign an HMI user in or out on a **named panel**: every runtime connection whose tab was opened with `?panel=<name>` (sent in `request_identity`, see [websocket.md](../architecture/websocket.md#client--server-messages)). The live connections and the WS login's throttle are in the project's child, so these routes forward over the loopback `api/internal/panels*` hooks (see [Internal API](#internal-api)); `409` when the project is not running or its child does not answer. A `{panel}` outside `[A-Za-z0-9_-]{1,64}`, or with no connection, is `404`. The child's `401`, `404`, `422` and `429` pass through with its `detail`.
+
+- `GET …/panels` — scope `sessions:write` → `{ panels: [{ name, connections, users }] }`, sorted by name. `users` is the distinct usernames the panel's connections hold (their latest identity, `guest` or the auto-login user when nobody signed in).
+- `POST …/panels/{panel}/login` — scope `sessions:write`. Body `{ username, password }` (both strings; any other field `422`) → `{ panel, username, groups }`.
+  - The password check is the WS `login`'s own, `users_manager.authenticate` in the child, so the per-username and flood throttle of `core.user_auth_throttle` is shared with sign-ins on the screens: `401` (no `WWW-Authenticate`, the API credential was fine) for a wrong username or password, `429` while locked out.
+  - On success every scope of every connection on that panel gets the identity with one fresh resumable `sessionToken`, sent as an unprompted `user_identity`, the message a WS `login` answers with. A reload of any of those tabs resumes it; a connection that names the panel later starts as the auto-login user. The panel's earlier `sessionToken`s are revoked, and any other scope still holding one (a tab that resumed it after dropping or changing its panel name) reverts to the auto-login user.
+- `POST …/panels/{panel}/logout` — scope `sessions:write`, no body → `{ panel, signedOut }`, the distinct usernames the panel held before. Every scope on the panel gets the auto-login user's identity (`settings.autoLoginName`, `guest` when that user is missing), and so does every scope anywhere that holds one of the panel's `sessionToken`s, which are then revoked: a tab that resumed the panel's login under another name or none is signed out with it. `signedOut` includes those holders. An on-screen WS `logout` reverts to the same identity.
+- A login or logout that lands emits a `core.audit` event in the manager inside `use_project`: action `user.login` / `user.logout`, subject the panel name, actor the token's name (`admin` for Basic), `actor_source: "api"`. `detail` is `{ tokenId, username, groups }` for a login and `{ tokenId, signedOut }` for a logout. A refused request emits nothing; no password goes into the record.
+
 ---
 
 ## Internal API
@@ -806,7 +817,12 @@ Loopback-only hooks, driven by the manager, never by browsers. The router is rea
   - Body: `{ artifact_type, artifact_ids: [], source: "mcp", summary: "", diff: null, agent_label: null }`. `source` is `"api"` when [API v1](#api-v1) wrote the project's users (`artifact_type: "users"`, `agent_label` the token's name or `admin`).
   - The workspace MCP and API v1 run in the manager process and edit a project's files directly; this tells the running child to re-apply the write to its live runtime and clients.
   - For `artifact_type: "variables"`, each affected datasource (`artifact_ids` are `"<datasource>/<path>"`) is re-read and its subscription delta applied against the running OPC-UA pipeline before browsers are notified.
+  - For `artifact_type: "users"`, `websocket_manager.refresh_identities` re-reads `users.json` and updates in place every identity a connection holds: a user no longer listed, and every resumable login taken with a password that has since changed, drops to the auto-login user (its `sessionToken` revoked; each login remembers a fingerprint of the credential it was granted against), a regrouped one gets its new groups; each changed scope gets an unprompted `user_identity`.
   - Then broadcasts `config_changed` over `/ws`. Returns `{ "status": "ok" }`.
+- `GET /api/internal/panels` → `{ panels: [{ name, connections, users }] }` (`websocket_manager.panels`).
+- `POST /api/internal/panels/login` — body `{ panel, username, password }`. `404` when no connection names `panel` (checked before the password, so an unknown panel costs no hash and no throttle count); then `users_manager.authenticate`: `401` wrong credentials, `429` throttled. → `{ username, groups }` after `websocket_manager.sign_in_panel`.
+- `POST /api/internal/panels/logout` — body `{ panel }`. `404` as above → `{ signedOut }` after `websocket_manager.sign_out_panel`.
+- The panel name travels in the body, not the path, so nothing the API v1 caller sends can change which internal route the manager hits.
 
 ---
 

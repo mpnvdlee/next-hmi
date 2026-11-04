@@ -36,10 +36,6 @@ class CreateBody(BaseModel):
     def _kind_fields(self) -> CreateBody:
         if self.kind == "mcp" and self.access is None:
             raise ValueError("An MCP token needs an access level")
-        if self.kind == "api" and (
-            not self.scopes or not set(self.scopes) <= set(mcp_tokens.API_SCOPES)
-        ):
-            raise ValueError(f"An API token needs one or more of: {', '.join(mcp_tokens.API_SCOPES)}")
         return self
 
 
@@ -51,9 +47,12 @@ def _issue(body: CreateBody) -> dict:
     if find_project(load_manifest(), body.projectId) is None:
         raise NotFoundError(f"Project '{body.projectId}' not found")
     if body.kind == "api":
-        token_id, token = mcp_tokens.issue_api(
-            project_id=body.projectId, scopes=body.scopes, name=body.name
-        )
+        try:
+            token_id, token = mcp_tokens.issue_api(
+                project_id=body.projectId, scopes=body.scopes, name=body.name
+            )
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
         return {
             "tokenId": token_id,
             "token": token,

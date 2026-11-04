@@ -289,6 +289,12 @@ def test_dashboard_create_needs_session_not_password(manager_client: TestClient)
     )
     assert missing.status_code == 404
 
+    bad_scopes = manager_client.post(
+        "/api/manager/mcp-tokens", json={"projectId": "P1", "kind": "api", "scopes": ["root"]}
+    )
+    assert bad_scopes.status_code == 422
+    assert bad_scopes.json()["detail"].startswith("An API token needs one or more of:")
+
     created = manager_client.post("/api/manager/mcp-tokens", json=body)
     assert created.status_code == 201
     issued = created.json()

@@ -232,3 +232,46 @@ def test_reload_drops_stale_runtime_pages_config(client: TestClient, monkeypatch
 
     assert resp.status_code == 200
     assert ws._runtime_pages_config_cache is None
+
+
+def test_users_reload_drops_deleted_users_and_refreshes_groups(
+    client: TestClient, monkeypatch, tmp_path: Path
+) -> None:
+    import json
+
+    from conftest import FakeWebSocket
+    from services import users_manager
+    from services.websocket_manager import WebSocketManager
+
+    users_path = tmp_path / "users.json"
+    monkeypatch.setattr(users_manager, "users_path", lambda: users_path)
+    manager = WebSocketManager()
+    monkeypatch.setattr(internal_api, "websocket_manager", manager)
+    held = {
+        "ann": {"username": "ann", "groups": ["operator"], "session": manager._start_session({"username": "ann"})},
+        "bob": {"username": "bob", "groups": ["operator"], "session": manager._start_session({"username": "bob"})},
+        "guest": {"username": "guest", "groups": ["guest"]},
+    }
+    sockets = {}
+    for name, identity in held.items():
+        sockets[name] = manager._connections[name] = FakeWebSocket()
+        manager._client_users[name] = {f"runtime:{name}": dict(identity)}
+    # The editor's or API v1's save: ann regrouped, bob deleted.
+    users_path.write_text(json.dumps({
+        "settings": {"autoLoginName": "guest"},
+        "groups": [{"id": "guest"}, {"id": "operator"}, {"id": "admin"}],
+        "users": [
+            {"id": "guest", "username": "guest", "groups": ["guest"]},
+            {"id": "ann", "username": "ann", "groups": ["admin"]},
+        ],
+    }))
+
+    assert client.post("/api/internal/reload", json={"artifact_type": "users"}).status_code == 200
+
+    def identities(name: str) -> list[tuple[str, list[str]]]:
+        return [(m["username"], m["groups"]) for m in sockets[name].messages if m["type"] == "user_identity"]
+
+    assert identities("ann") == [("ann", ["admin"])]
+    assert identities("bob") == [("guest", ["guest"])]
+    assert identities("guest") == []
+    assert list(manager._sessions) == [held["ann"]["session"]]

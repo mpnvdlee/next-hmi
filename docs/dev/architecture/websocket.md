@@ -136,7 +136,7 @@ leaving a half-initialised socket registered.
 | `recipe_error` | `{ type, requestId, reason }` | A correlated `recipe_load` / `recipe_save` failed. |
 | `alarm_ack_response` | `{ type, requestId }` | A correlated `alarm_ack` / `alarm_ack_all` succeeded. |
 | `alarm_ack_error` | `{ type, requestId, reason }` | A correlated `alarm_ack` / `alarm_ack_all` failed: `not_found` (no active instance with that id), `bad_request` (no `instanceId`), `alarms_unavailable`. |
-| `user_identity` | `{ type, scope, username, groups, groupLabels, sessionToken? }` | After `login`, `logout`, or `request_identity`. `sessionToken` is present while the identity is a resumable login (see `request_identity`). |
+| `user_identity` | `{ type, scope, username, groups, groupLabels, sessionToken? }` | After `login`, `logout`, or `request_identity`. Also unprompted, with no `requestId`: for every scope on a named panel's connections when [API v1](../reference/rest-api.md#panel-sessions) signs that panel in or out, and for a scope whose user a `users` reload deleted, regrouped or gave a new password (see [Internal API](../reference/rest-api.md#internal-api)). `sessionToken` is present while the identity is a resumable login (see `request_identity`). |
 | `auth_error` | `{ type, scope, reason }` | Failed `login`. `reason` is `"invalid_credentials"`, or `"rate_limited"` while the credential throttle is holding this username off. |
 | `write_response` | `{ type, requestId, datasource, path }` | A correlated `write_field` or `toggle_field` succeeded — see [Action result correlation](#action-result-correlation). |
 | `write_error` | `{ type, requestId, datasource, path, reason }` | A correlated `write_field` or `toggle_field` failed. |
@@ -326,25 +326,44 @@ integer digits keeps them too — and writes it back as a string.
     mismatch the server sends `auth_error`. Both echo `requestId` when supplied.
   - A successful login carries a `sessionToken`. The runtime keeps it in
     `sessionStorage` (per tab) and sends it with `request_identity`, so a
-    reconnect or reload stays logged in.
+    reconnect or reload stays logged in. It saves the token of a
+    `user_identity` only for the live view's scope (the last to send
+    `request_identity`, `isLiveScope` in `runtimeSession.ts`), so a stale
+    scope a remounted view left on the socket cannot replace it.
+  - The scope's previous `sessionToken`, if any, is revoked, and every other
+    scope still holding it (the other monitors of a panel signed in over API v1,
+    a tab that resumed it) reverts to the auto-login user with an unprompted
+    `user_identity`.
 
-- `logout` — revert a scope to `guest`.
+- `logout` — revert a scope to the auto-login user (`settings.autoLoginName`,
+  `guest` when that user is missing), the identity `request_identity` and an
+  API v1 panel sign-out give.
 
   ```json
   { "type": "logout", "scope": "runtime:main", "requestId": "…" }
   ```
 
-  - Sends a `user_identity` with the guest identity (echoing `requestId`), and
-    revokes the scope's `sessionToken`.
+  - Sends a `user_identity` with that identity (echoing `requestId`), and
+    revokes the scope's `sessionToken`. Every other scope holding the same
+    token reverts to it too, so all monitors of a panel signed in over
+    API v1 sign out together. A logout that ends no `sessionToken` is not
+    audited.
 
 - `request_identity` — resume the login `sessionToken` names, or else auto-login
   the configured `settings.autoLoginName` user for a scope (falls back to `guest`).
 
   ```json
-  { "type": "request_identity", "scope": "runtime:main", "sessionToken": "…" }
+  { "type": "request_identity", "scope": "runtime:main", "sessionToken": "…", "panel": "line-a-1" }
   ```
 
   - Always followed by a `user_identity`; never carries `requestId`.
+  - `panel` (optional) names the connection's panel: the runtime tab's
+    `?panel=` URL parameter, which the tab keeps in `sessionStorage` because
+    in-app navigation drops the query string (`loadPanelName` in
+    `frontend/src/hmi/utils/runtimeSession.ts`). It must match
+    `[A-Za-z0-9_-]{1,64}`; any other value, or none, leaves the connection
+    unnamed. Each `request_identity` replaces the connection's name. An editor
+    connection is never named. API v1 targets named connections only.
   - A token resumes while its user still exists and it was used in the last
     12 hours; the user's groups are re-read. Tokens live in backend memory, so a
     backend restart ends every login.
@@ -362,7 +381,7 @@ echoes it on the corresponding response so the frontend dispatcher
 
 - `login` → `user_identity` (success) or `auth_error` (failure); both echo
   `requestId`.
-- `logout` → `user_identity` (guest) with the echoed `requestId`.
+- `logout` → `user_identity` (the auto-login user) with the echoed `requestId`.
 - `write_field` / `toggle_field` → `write_response` on success, `write_error` on failure.
 - `recipe_load` / `recipe_save` → `recipe_response` on success (with the
   `DownloadResult` exposed as `$result` in handlers), `recipe_error` on failure.
@@ -419,10 +438,10 @@ browser tabs can refetch or surface conflicts.
 }
 ```
 
-- `artifact_type ∈ page | datasource | alarms | translations | asset | variables | component`.
+- `artifact_type ∈ page | datasource | alarms | translations | asset | variables | component | users`.
 - `artifact_ids` is always an array — single-target writes send one element; bulk
   tools coalesce.
-- `source` is `mcp` or `rest`. `agent_label` is included only when
+- `source` is `mcp`, `rest` or `api` (an [API v1](../reference/rest-api.md#api-v1) user write). `agent_label` is included only when
   `source === "mcp"`.
 - `diff` is an RFC 6902 JSON Patch. If the serialized JSON would exceed 32 KiB it
   is replaced by `{ "truncated": true, "reason": "patch_too_large", "op_count": N }`

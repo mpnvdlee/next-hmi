@@ -40,7 +40,7 @@ import { usePageEvents } from '../hooks/usePageEvents';
 import { useProjectWidgetWarmup } from '../hooks/useProjectWidgetWarmup';
 import { useLivePageReload } from '../hooks/useLivePageReload';
 import ConnectionLostOverlay from '@shared/components/ConnectionLostOverlay';
-import { loadSessionToken } from '../utils/runtimeSession';
+import { identityRequest } from '../utils/runtimeSession';
 
 const reloadPage = () => window.location.reload();
 
@@ -106,7 +106,7 @@ export default function HmiView() {
   // login when it can still be resumed, the auto-login user otherwise.
   useEffect(() => {
     if (!wsConnected) return;
-    sendWsMessage({ type: 'request_identity', scope, sessionToken: loadSessionToken() });
+    sendWsMessage(identityRequest(scope));
   }, [wsConnected, scope]);
   // A restarted backend may serve newer config: load it fresh. A reconnect to
   // the same backend needs nothing, and the tab's login survives either way.

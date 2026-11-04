@@ -56,6 +56,8 @@ interface UserIdentity {
   username: string;
   groups: string[];
   groupLabels: Record<string, string>;
+  /** A real sign-in (the identity carried a sessionToken), not the auto-login user. */
+  signedIn?: boolean;
 }
 
 /** What `$user` reads for a scope's signed-in user. */

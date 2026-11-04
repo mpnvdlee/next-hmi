@@ -58,6 +58,7 @@ const SCOPE_CHOICES: { value: ApiScope; label: string; example: string }[] = [
   { value: 'alarms:read', label: 'Read alarm history', example: 'alarms/history' },
   { value: 'recipes:read', label: 'Read recipes', example: 'recipes' },
   { value: 'users:read', label: 'Read users', example: 'users' },
+  { value: 'sessions:write', label: 'Sign users in and out on named panels', example: 'panels' },
   {
     value: 'users:write',
     label: 'Create, change and delete users',

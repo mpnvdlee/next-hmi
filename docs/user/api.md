@@ -2,12 +2,14 @@
 
 API v1 lets another system talk to NEXT HMI over HTTP: a MES that reads recipes,
 a BI tool that pulls historian data or alarm history, an HR system that keeps the
-operator accounts up to date. It is a small, versioned API: the routes and field
-names on this page stay the same for as long as v1 exists.
+operator accounts up to date, a badge reader that signs an operator in on a
+panel. It is a small, versioned API: the routes and field names on this page
+stay the same for as long as v1 exists.
 
 Every request names one project, by its id. The API works the same whether that
 project is running or stopped, because it reads and writes the project's own
-files. Nothing in it writes to the PLC.
+files. The one exception is signing someone in or out on a panel, which needs
+the project running. Nothing in it writes to the PLC.
 
 ## Giving a system access
 
@@ -24,7 +26,7 @@ own token, so you can take one back without touching the others.
 5. Click **Create token**, then copy the token. It is shown **once**: only a
    hash of it is stored, so a lost token cannot be recovered, only replaced.
 
-![The Create token dialog with the kind set to API: a name field and one checkbox per scope, from reading historian samples to changing users.](images/admin-tokens-api.png)
+![The Create token dialog with the kind set to API: a name field and one checkbox per scope, from reading historian samples to changing users, with "Sign users in and out on named panels" ticked.](images/admin-tokens-api.png)
 
 The dialog also shows a ready-made `curl` command for the new token. The
 **Tokens** section lists the project's tokens with **Revoke** on each.
@@ -49,6 +51,7 @@ Neither does an MCP token: those are for AI agents (see [AI agents over MCP](mcp
 | `recipes:read` | Read the recipe types and their saved datasets |
 | `users:read` | Read the user list (never a password) |
 | `users:write` | Create, change and delete users |
+| `sessions:write` | See which named panels are open, and sign users in and out on them |
 
 **`users:write` does not include `users:read`.** A token with only
 `users:write` can create, change and delete users, but gets `403` when it asks
@@ -82,8 +85,9 @@ What the answers mean:
 | `200` | Done |
 | `401` | No credential, a wrong one, or a revoked token |
 | `403` | The token is for another project, or lacks the scope this route needs |
-| `404` | No such project, or no such user |
-| `409` | The project's `users.json` is damaged; repair it in the editor first |
+| `401` (panel sign-in) | The HMI user's username or password is wrong |
+| `404` | No such project, no such user, or no open panel with that name |
+| `409` | The project's `users.json` is damaged (repair it in the editor first), or a panel route was called while the project is stopped |
 | `422` | Something in the request is not valid; the `detail` field says what |
 | `429` | Too many wrong passwords; wait a minute |
 
@@ -200,9 +204,76 @@ coming from the API. The record says whether the password changed, never the
 password itself.
 
 A change takes effect at once: the next sign-in on a panel uses the new list.
-Someone already signed in on a panel stays signed in until they sign out. If
-someone has the project open in the editor, the editor shows that another writer
-changed it, so they reload before saving.
+On a running project, a removed user, or one whose password changed, is signed
+out of every panel straight away (the panel falls back to its auto-login user),
+and a user whose groups changed
+gets the new groups on the panel they are signed in on. If someone has the
+project open in the editor, the editor shows that another writer changed it, so
+they reload before saving.
+
+### Panels: sign users in and out
+
+A badge reader at a machine, or a MES at shift change, can sign an operator in
+on a panel without anyone typing a password on the screen. The API checks the
+operator's own password, the same one they would type at the panel.
+
+**Name the panel first.** Open the panel's runtime with a `panel` parameter in
+the address:
+
+```text
+https://hmi.local:8443/runtime/line-a/?panel=line-a-1
+```
+
+A panel name uses letters, digits, `-` and `_`, up to 64 characters. Several
+screens can share one name (two monitors at the same machine); they are signed
+in and out together. A screen opened without the parameter has no name and the
+API cannot reach it. The name is kept when the operator moves between pages and
+when the browser reloads; it is gone when the tab is closed. Set it in the panel
+PC's kiosk or start-up address so it is always there.
+
+See which named panels are open, and who is signed in on each:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "https://hmi.local:8443/api/v1/projects/line-a/panels"
+```
+
+```json
+{ "panels": [ { "name": "line-a-1", "connections": 1, "users": ["guest"] } ] }
+```
+
+Sign a user in, with their username and password from the project's *Users*
+list:
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"username": "jdoe", "password": "their-password"}' \
+  "https://hmi.local:8443/api/v1/projects/line-a/panels/line-a-1/login"
+```
+
+The answer is `{ "panel", "username", "groups" }`, and every open screen with
+that name switches to that user at once, as if they had signed in there. A
+wrong username or password answers `401`. Five wrong passwords in a row for one
+username lock that username for a minute (`429`), on the panel itself as well:
+it is the same lock a sign-in on the screen uses.
+
+Sign out again:
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  "https://hmi.local:8443/api/v1/projects/line-a/panels/line-a-1/logout"
+```
+
+The panel falls back to the project's auto-login user (`guest` unless you chose
+another one). The answer names who was signed in: `{ "panel", "signedOut" }`.
+
+These routes act on the screens that are open now, so the project must be
+running (`409` otherwise), and a name with no open screen answers `404`. A
+signed-in screen that reloads stays signed in; a screen that opens later with
+the same name starts as the auto-login user. A build that keeps a record of
+who did what records every sign-in and sign-out over the API under the token's
+name (or `admin`), with the user who was signed in or out.
+
 
 ## Keeping it safe
 
@@ -220,3 +291,9 @@ changed it, so they reload before saving.
   token at once, MCP and API alike.
 - A token with `users:write` can make anyone an operator or an admin. Give it
   only to a system you trust with that.
+- A token with `sessions:write` still needs each operator's password to sign
+  them in, but it can sign anyone out of a panel at any time.
+- **A panel name proves nothing.** Anyone who can reach the runtime can open it
+  with `?panel=<name>` and then receives every sign-in sent to that panel, with
+  a login that survives a reload. Only sign users in over the API on panels
+  that sit on a trusted network, in a kiosk browser nobody else controls.
