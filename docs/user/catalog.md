@@ -508,6 +508,8 @@ A status light that changes colour with a boolean.
 |---|---|---|
 | `variable` | Value | `Boolean` |
 | `label` | Label | `String` |
+| `onColor` | On color | `color` |
+| `offColor` | Off color | `color` |
 | `visible` | Visible | `Boolean` |
 | `interactable` | Interactable | `Boolean` |
 

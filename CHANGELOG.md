@@ -11,6 +11,14 @@ heading.
 
 ## [Unreleased]
 
+### Added
+
+- **The LED Indicator's colours can be changed.** It was always green when on
+  and grey when off. Two new properties, **On color** and **Off color**, take
+  a theme colour or any other colour; left unset they follow the theme's OK
+  and Muted Text colours. Off used to be the much lighter Border colour, so an
+  LED that is off now reads clearly on a white surface.
+
 ### Fixed
 
 - **What an AI assistant changes over MCP shows up on the running screen.**

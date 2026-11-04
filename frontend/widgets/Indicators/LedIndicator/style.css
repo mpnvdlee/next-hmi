@@ -17,12 +17,12 @@
 }
 
 .hmi-led-indicator--on .hmi-led-indicator__dot {
-  background: var(--hmi-ok);
-  box-shadow: 0 0 6px var(--hmi-ok);
+  background: var(--hmi-led-on-color, var(--hmi-ok));
+  box-shadow: 0 0 6px var(--hmi-led-on-color, var(--hmi-ok));
 }
 
 .hmi-led-indicator--off .hmi-led-indicator__dot {
-  background: var(--hmi-border);
+  background: var(--hmi-led-off-color, var(--hmi-text-muted));
   box-shadow: none;
 }
 

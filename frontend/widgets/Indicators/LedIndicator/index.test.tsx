@@ -73,4 +73,12 @@ describe('LedIndicator', () => {
       expect(el.className).not.toContain('hmi-led-indicator--on');
     }
   });
+
+  it('passes the on and off colours to the dot', () => {
+    const { container } = renderLed({ variable: true, onColor: '#ff0000', offColor: '#0000ff' });
+    const dot = container.querySelector('.hmi-led-indicator__dot') as HTMLElement;
+
+    expect(dot.style.getPropertyValue('--hmi-led-on-color')).toBe('#ff0000');
+    expect(dot.style.getPropertyValue('--hmi-led-off-color')).toBe('#0000ff');
+  });
 });
