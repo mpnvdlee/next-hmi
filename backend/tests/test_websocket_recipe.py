@@ -13,23 +13,19 @@ from services.websocket_manager import WebSocketManager
 class FakeRecipeManager:
     def __init__(self) -> None:
         self.downloaded: list[tuple[str, bool]] = []
-        self.permission_checks: list[Any] = []
         self.uploaded: list[tuple[str, str]] = []
-        self.upload_permission_checks: list[Any] = []
         self.state: dict[str, LoadedDataset] = {}
         self.download_result: DownloadResult | None = DownloadResult(
             result="success", datasetId="d1", written=1, total=1,
         )
         self.upload_result: Any = object()  # non-None → success
 
-    async def download(self, dataset_id: str, *, verify: bool = False, permission_check=None):
+    async def download(self, dataset_id: str, *, verify: bool = False):
         self.downloaded.append((dataset_id, verify))
-        self.permission_checks.append(permission_check)
         return self.download_result
 
-    async def upload_into(self, dataset_id: str, *, username: str = "", permission_check=None):
+    async def upload_into(self, dataset_id: str, *, username: str = ""):
         self.uploaded.append((dataset_id, username))
-        self.upload_permission_checks.append(permission_check)
         return self.upload_result
 
     def get_state(self) -> dict[str, LoadedDataset]:
@@ -52,9 +48,6 @@ def test_recipe_load_success_emits_response():
         "type": "recipe_load", "datasetId": "d1", "verify": True, "requestId": "r1",
     })))
     assert rm.downloaded == [("d1", True)]
-    # The handler forwards a permission_check so recipe downloads honour the
-    # same per-variable write ACL as direct client writes.
-    assert callable(rm.permission_checks[-1])
     assert ws.messages[-1]["type"] == "recipe_response"
     assert ws.messages[-1]["requestId"] == "r1"
     assert ws.messages[-1]["result"]["result"] == "success"
@@ -101,15 +94,14 @@ def test_recipe_save_uses_username_from_scope():
     assert ws.messages[-1]["type"] == "recipe_response"
 
 
-def test_recipe_save_forwards_permission_check_from_scope():
+def test_recipe_save_on_an_editor_socket_is_the_engineer_s():
     rm = FakeRecipeManager()
     manager, _ws = _make_manager(rm)
+    manager._editor_clients.add("c1")  # type: ignore[attr-defined]
     asyncio.run(manager.handle_message("c1", _json({
         "type": "recipe_save", "datasetId": "d1", "scope": "runtime", "requestId": "r8",
     })))
-    # Upload reads live values into the stored dataset — the same per-variable
-    # ACL recipe_load's download applies must gate that read too.
-    assert callable(rm.upload_permission_checks[-1])
+    assert rm.uploaded == [("d1", "engineer")]
 
 
 def test_recipe_save_omitted_id_uses_single_loaded():

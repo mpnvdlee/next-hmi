@@ -1,6 +1,6 @@
 # Users, groups & permissions
 
-Who is at the panel decides what they see and what they may change. NEXT HMI answers that with **groups** — a user belongs to one or more, and everything else (a hidden button, a read-only setpoint, a refused write) is a group test. There is no scripting anywhere in this.
+Who is at the panel decides what they see and what they may change. NEXT HMI answers that with **groups** — a user belongs to one or more, and everything else (a hidden button, a read-only setpoint) is a group test. There is no scripting anywhere in this.
 
 ## The model in four sentences
 
@@ -104,17 +104,16 @@ To offer a sign-in instead, attach an **Open Dialog** pointing at your sign-in d
 
 Two more sources read the identity directly, for labels and lists rather than gates: **`$user`** gives the signed-in **username** or their **groups** as text. On a list field — a Dropdown's **Options**, a Repeater's **Items** — it lists **All users** (each valued by username) or **All user groups** instead, the raw material for a user-picker screen.
 
-## Enforcement, and where it really happens
+## What the server enforces
 
-Hiding a button is presentation. The write itself is checked on the server: a datasource variable may carry an **`interactableByGroups`** list, and a write to it from a session outside those groups is refused with `permission_denied` — over the WebSocket and over REST alike. The editor has no field for it; set it on the variable entry in the datasource file (or via the datasource API) when a tag must be protected against more than a hidden button.
+The server does not restrict who may write a writable variable. Groups decide what the panel shows and lets an operator press; once a write reaches the server, the only check is whether the variable is marked **writable** in its datasource — a read-only variable is refused with `read_only` for everyone.
 
-> [!WARNING]
-> **An empty list means *everyone*, not *nobody*.** `"interactableByGroups": []` reads the same as leaving the key out — the write is allowed. To lock a tag down, name the groups that may write it; there is no spelling that permits nobody at all. Note this reads the opposite way round to the group pickers elsewhere in the editor, where an empty selection means nobody.
->
-> It also has to sit on the **variable** entry. A list on a folder is silently ignored — the variables inside it stay writable.
+So hiding or blocking the button — **Visible** / **Interactable** on the widget — is how a project stops operators changing a value. A setpoint no button writes cannot be changed from the panel.
 
 > [!IMPORTANT]
-> Treat `Visible` / `Interactable` as ergonomics, not as security. They keep the wrong control out of the wrong hands on the panel; they do not stop someone who reaches the API. For tags that matter, set `interactableByGroups` on the variable as well, and keep the runtime off untrusted networks — see [HTTPS](install.md#https).
+> Anyone who can reach the panel on the network can write every writable tag, signed in or not: the live view and its socket are open by design, and they do not ask who is calling before a write. Keep the runtime on a trusted network — see [HTTPS](install.md#https) — and leave a variable read-only in its datasource when nothing on the screens needs to change it.
+
+Signing in does change the record. A write, a recipe load and an alarm acknowledgement from a button are attributed to the user signed in on that screen, or to `guest` when nobody is. A recipe load from a custom widget's `recipeDownload` carries no sign-in and is always recorded as `guest`. The same actions from the editor's Test mode are recorded as `engineer`, whoever the preview is signed in as: the editor sits behind the device-admin password, not a project user.
 
 ## How this relates to the device-admin password
 
@@ -132,7 +131,7 @@ Groups decide what a signed-in operator sees and may touch on the screens. They 
 >
 > The live view can also list every username and group name — that is what fills a sign-in dropdown — but not who belongs to which group, or which accounts have a password. Those stay behind the device-admin password.
 >
-> That means operating is open too — pressing a button, changing a setpoint, writing a tag. To restrict a tag to certain groups, set `interactableByGroups` on the variable (see [Enforcement](#enforcement-and-where-it-really-happens)); it is the only thing that limits what an operator may write, and it is opt-in per variable. Keep the runtime off untrusted networks — see [HTTPS](install.md#https).
+> That means operating is open too — pressing a button, changing a setpoint, writing a tag. The server does not restrict who may write a writable variable; blocking the button is how a project stops it (see [What the server enforces](#what-the-server-enforces)). Keep the runtime on a trusted network — see [HTTPS](install.md#https).
 
 A project copied from the seed ships **no accounts at all** beyond the anonymous `guest`, so there is no reusable credential to leak between installs and nothing to type before the project opens. Every real account is one you add here. See [Managing projects](projects.md#the-manager-dashboard).
 

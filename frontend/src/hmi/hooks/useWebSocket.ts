@@ -77,6 +77,8 @@ type WsMessage =
       result: DownloadResult | { datasetId: string } | null;
     }
   | { type: 'recipe_error'; requestId: string; reason: string }
+  | { type: 'alarm_ack_response'; requestId: string }
+  | { type: 'alarm_ack_error'; requestId: string; reason: string }
   | {
       type: 'config_changed';
       artifact_type:
@@ -210,8 +212,11 @@ function ingestConfigChanged(msg: ConfigChangedMsg): void {
   });
 }
 
-/** Send any JSON-serialisable message. Safe to call before the socket opens. */
-export function sendWsMessage(msg: unknown): void {
+/**
+ * Send any JSON-serialisable message. Safe to call before the socket opens:
+ * the message is dropped then, and the call returns `false`.
+ */
+export function sendWsMessage(msg: unknown): boolean {
   if (_ws?.readyState === WebSocket.OPEN) {
     if (
       typeof msg === 'object' &&
@@ -221,7 +226,9 @@ export function sendWsMessage(msg: unknown): void {
       _lastSentContextKey = idListKey((msg as { currentPageIds?: unknown }).currentPageIds);
     }
     _ws.send(JSON.stringify(msg));
+    return true;
   }
+  return false;
 }
 
 // The backend process the last socket reached, from its first var_snapshot. A
@@ -410,7 +417,11 @@ export function useWebSocket(): void {
             resolvePending(msg.requestId, (msg.result ?? {}) as Record<string, unknown>, true);
             return;
           case 'recipe_error':
+          case 'alarm_ack_error':
             resolvePending(msg.requestId, { reason: msg.reason }, false);
+            return;
+          case 'alarm_ack_response':
+            resolvePending(msg.requestId, {}, true);
             return;
           case 'config_changed':
             ingestConfigChanged(msg);

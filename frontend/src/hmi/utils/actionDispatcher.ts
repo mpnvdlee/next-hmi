@@ -130,8 +130,8 @@ export function beginAsyncAction(
  *
  * Unlike `beginAsyncAction` this never returns `undefined`: a widget has no
  * authored onSuccess/onFailed to gate on, and the correlated response is the
- * only way it can learn the write was rejected (out of range, or denied by
- * `interactableByGroups` — which the frontend cannot see up front).
+ * only way it can learn the write was rejected (out of range, or refused by
+ * the controller — which the frontend cannot see up front).
  */
 export function beginTrackedWrite(scope: string, onResult: PendingResultCallback): string {
   const requestId = generateId();

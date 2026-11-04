@@ -259,9 +259,9 @@ describe('actionDispatcher', () => {
 
     expect(requestId).toBeTruthy();
 
-    resolvePending(requestId, { reason: 'permission_denied' }, false);
+    resolvePending(requestId, { reason: 'write_failed' }, false);
 
-    expect(seen).toEqual([{ ok: false, payload: { reason: 'permission_denied' } }]);
+    expect(seen).toEqual([{ ok: false, payload: { reason: 'write_failed' } }]);
 
     // Resolved entries are gone — the 10s timer must not fire a second time.
     vi.advanceTimersByTime(60_000);

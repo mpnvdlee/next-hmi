@@ -29,6 +29,28 @@ An upgrade with no `Origin` (a script, not a browser) passes. The rule and its
 limits (reverse-proxy `Host`, dev proxy, DNS rebinding) are in
 [rest-api.md](../reference/rest-api.md#authentication).
 
+The manager opens a fresh upstream connection per browser socket and forwards
+none of the browser's headers. On the editor prefix only, it sets
+`x-nexthmi-editor: 1` (`core.audit.EDITOR_HEADER`) on that upstream
+upgrade; the child marks such a connection as an editor socket
+(`websocket_manager.connect(editor=True)`). A browser cannot forge the mark on
+`/runtime/<slug>/ws`, since its headers never reach the child; a process on the
+host can, by dialling the child's loopback port directly — the same trust the
+child's `/api/internal/*` hooks rely on. The HTTP proxy carries the same mark on
+every editor-prefix request and drops a browser's copy on both prefixes, so a
+REST route can tell the editor apart too (see `POST /api/recipes/datasets/{id}/download`).
+
+**Attribution.** A `write_field` / `toggle_field` that lands, a `recipe_load`
+that writes at least one parameter, and an `alarm_ack` / `alarm_ack_all` are
+recorded (audit event and, for acks, the alarm's `acked_by`) against the
+connection: on a runtime socket the signed-in project user, or `guest`, with
+`actor_source: "session"`; on an editor socket always `engineer`, with
+`actor_source: "device_admin"`, whichever project user the editor's Test-mode
+preview is signed in as. `login` / `logout` records keep the project user on
+both. A recipe load over REST (the SDK's `recipeDownload`) carries no sign-in:
+it is recorded as `guest` with `actor_source: "anonymous"`, or as `engineer`
+when it came through the editor.
+
 Inbound frames are capped at **64 KiB**; oversized or non-JSON frames are logged
 and dropped. Unknown client `type` values are ignored. Composite keys use the
 form `"<datasource>:<path>"` (`models/datasource.py:build_var_key`).
@@ -112,6 +134,8 @@ leaving a half-initialised socket registered.
 | `recipe_update` | same shape as `recipe_snapshot`, `type: "recipe_update"` | On config change / download / upload. |
 | `recipe_response` | `{ type, requestId, result }` | A correlated `recipe_load` / `recipe_save` succeeded — `result` is the `DownloadResult` (load) or `{ datasetId }` (save). |
 | `recipe_error` | `{ type, requestId, reason }` | A correlated `recipe_load` / `recipe_save` failed. |
+| `alarm_ack_response` | `{ type, requestId }` | A correlated `alarm_ack` / `alarm_ack_all` succeeded. |
+| `alarm_ack_error` | `{ type, requestId, reason }` | A correlated `alarm_ack` / `alarm_ack_all` failed: `not_found` (no active instance with that id), `bad_request` (no `instanceId`), `alarms_unavailable`. |
 | `user_identity` | `{ type, scope, username, groups, groupLabels, sessionToken? }` | After `login`, `logout`, or `request_identity`. `sessionToken` is present while the identity is a resumable login (see `request_identity`). |
 | `auth_error` | `{ type, scope, reason }` | Failed `login`. `reason` is `"invalid_credentials"`, or `"rate_limited"` while the credential throttle is holding this username off. |
 | `write_response` | `{ type, requestId, datasource, path }` | A correlated `write_field` or `toggle_field` succeeded — see [Action result correlation](#action-result-correlation). |
@@ -211,13 +235,14 @@ integer digits keeps them too — and writes it back as a string.
     (`Battery/Status.5`): bit `N` of a whole-number variable, the value a
     Boolean. The backend reads the whole word — a fresh node read for OPC-UA,
     never the cache; the cache for a static datasource — sets or clears the
-    bit and writes the word back through the same path, so its access,
-    permission and range checks apply. A path the registry holds whole (a tag
+    bit and writes the word back through the same path, so its access and
+    range checks apply. A path the registry holds whole (a tag
     named `Motor.1`) is that tag, not a bit. A bit beyond the type's width, of
     a type with no bits, or of an array element is `bad_path`; a value that is
     not a Boolean is `invalid_value`.
-  - Permission check: if the variable defines `interactableByGroups`, the scoped
-    identity's groups must intersect that list.
+  - The server does not check who is writing: any connection may write any
+    writable variable. A variable entry may still carry the retired
+    `interactableByGroups` key from an older project; it is ignored.
   - Values are coerced per the
     [OPC-UA write-coercion matrix](backend.md#opc-ua-write-coercion-matrix), then
     refused as `read_only` unless the variable written is marked `writable: true`,
@@ -244,7 +269,7 @@ integer digits keeps them too — and writes it back as a string.
     `toggleDataVariable` action's `target` is resolved the same way. The backend reads
     the current value itself (a fresh node read for OPC-UA, the cache for a
     static datasource) and writes its inverse through `write_service.write_value`,
-    so the permission check, range check, audit record and reply are the same
+    so the read-only check, range check, audit record and reply are the same
     as a `write_field`. The client never sends the value: its copy may be stale.
   - A `.N` bit path toggles that bit of its word.
   - A variable whose `data_type` is not Boolean fails with `invalid_value`; one
@@ -270,7 +295,26 @@ integer digits keeps them too — and writes it back as a string.
 
   - An omitted `datasetId` targets the currently-loaded dataset when exactly one
     type is loaded (otherwise `recipe_error` with `bad_request`). `updatedBy` is
-    taken from the scope's identity.
+    the scope's signed-in user (empty when the scope has no identity), or
+    `engineer` on an editor socket.
+
+- `alarm_ack` / `alarm_ack_all` — acknowledge one active alarm, or every one.
+
+  ```json
+  { "type": "alarm_ack", "instanceId": "…", "requestId": "…" }
+  { "type": "alarm_ack_all", "requestId": "…" }
+  ```
+
+  - The acknowledgement is recorded against this connection, never against a
+    name in the message (any `username` is ignored): the identity the socket
+    established most recently — its signed-in user, or `guest` when nobody
+    signed in. The message carries no `scope` because the SDK's `ackAlarm` has
+    none to send; a runtime tab holds one live view, so its latest identity is
+    the screen the operator is looking at.
+  - Acknowledging an already-acked alarm succeeds and changes nothing.
+  - Replies `alarm_ack_response` / `alarm_ack_error` when `requestId` is
+    supplied; fire-and-forget otherwise. The resulting state reaches every
+    client as `alarm_update`.
 
 - `login` — authenticate a scope.
 
@@ -311,7 +355,7 @@ message to be ignored silently.
 ## Action result correlation
 
 Client-fired async actions (`login`, `logout`, `write_field`, `toggle_field`, `recipe_load`,
-`recipe_save`) accept an optional `requestId` (UUID). When supplied, the backend
+`recipe_save`, `alarm_ack`, `alarm_ack_all`) accept an optional `requestId` (UUID). When supplied, the backend
 echoes it on the corresponding response so the frontend dispatcher
 (`frontend/src/hmi/utils/actionDispatcher.ts`) can fire the authored
 `onSuccess` / `onFailed` / `onSettled` handlers.
@@ -322,6 +366,8 @@ echoes it on the corresponding response so the frontend dispatcher
 - `write_field` / `toggle_field` → `write_response` on success, `write_error` on failure.
 - `recipe_load` / `recipe_save` → `recipe_response` on success (with the
   `DownloadResult` exposed as `$result` in handlers), `recipe_error` on failure.
+- `alarm_ack` / `alarm_ack_all` → `alarm_ack_response` on success,
+  `alarm_ack_error` on failure.
 
 Every deterministic failure path in `_handle_write_field` and `_handle_toggle_field` emits a `write_error`
 immediately, so the client never waits out the 10 s timeout. Reason codes are a
@@ -331,7 +377,6 @@ stable contract the frontend `$switch`es on:
 | --- | --- |
 | `invalid_credentials` | Login: username/password mismatch — including every account with no password set, which can never be signed in as |
 | `rate_limited`        | Login: too many failed attempts for this username (or across all of them); the right password is refused too until the lockout expires. `users_manager.authenticate` raises `RateLimitError`, which the REST credential routes answer as HTTP `429` |
-| `permission_denied`   | Write: client's group is not in the variable's `interactableByGroups` |
 | `bad_request`         | Write: missing required field in the request payload |
 | `bad_path`            | Write: datasource/path is unknown to the registry |
 | `bad_field`           | Write: field cannot be resolved to an OPC-UA node id |
@@ -345,7 +390,7 @@ stable contract the frontend `$switch`es on:
 | `value_unavailable` | Toggle: the variable's current value is not a known boolean, so there is nothing to invert |
 | `verify_mismatch` | Write: `verify` was requested, the write itself succeeded, but reading the value back did not match what was written. Only reachable when the caller opts in — `recipe_load` with `verify: true` is the one producer today; `write_field` never sets it |
 
-`invalid_value` follows the documented [OPC-UA write-coercion matrix](backend.md#opc-ua-write-coercion-matrix). The REST variable-write endpoint uses project-user HTTP Basic credentials, then calls the same request parser, `interactableByGroups` permission helper, coercer, and dispatcher.
+`invalid_value` follows the documented [OPC-UA write-coercion matrix](backend.md#opc-ua-write-coercion-matrix). The REST variable-write endpoint uses project-user HTTP Basic credentials, then calls the same request parser, coercer, and dispatcher.
 
 `read_only` is checked in `write_service.write_value` (and in `toggle_value`, before the Boolean check and the read), so the WebSocket, REST and recipe-download writes refuse it alike; a recipe download reports it per parameter in `failures`. It comes after `bad_path` and `bad_field` and before everything about the index or the value — `array_index_out_of_bounds`, `invalid_value`, `value_out_of_range` — since no other value could make the write succeed. A whole-struct payload names a folder with no access of its own and stays `invalid_value`. `useWriteVariable` pre-flights it in the same order: a variable whose metadata says `writable: false` is reported `read_only` before its value is coerced. A variable that states no access at all is read-only, the same reading the editor and the runtime overlay give it.
 

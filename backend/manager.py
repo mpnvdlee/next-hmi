@@ -41,7 +41,14 @@ from api.system_api import manager_router as system_router
 from api.telemetry_api import router as telemetry_router
 from api.thumbnail_api import manager_router as thumbnail_manager_router
 from api.tls_api import router as tls_router
-from core import manager_auth, peer_tokens, telemetry, tls_settings, users_document
+from core import (
+    audit,
+    manager_auth,
+    peer_tokens,
+    telemetry,
+    tls_settings,
+    users_document,
+)
 from core.exceptions import register_exception_handlers
 from core.logging_setup import configure_logging
 from core.manifest import (
@@ -113,10 +120,12 @@ def _forwarded_headers(request: Request) -> list[tuple[str, str]]:
     ``Origin`` is dropped too: the manager's own check has passed it by now,
     and the child refuses any write that still carries a foreign one
     (``core.origin_check``) — its own ``Host`` is loopback, never the browser's.
+    ``x-nexthmi-editor`` is the manager's own mark (``core.audit.EDITOR_HEADER``),
+    so a browser's copy never reaches the child.
     """
     headers: list[tuple[str, str]] = []
     for key, value in request.headers.items():
-        if key.lower() in _HOP_BY_HOP or key.lower() == "origin":
+        if key.lower() in _HOP_BY_HOP or key.lower() in ("origin", audit.EDITOR_HEADER):
             continue
         if key.lower() == "cookie":
             value = _strip_manager_cookie(value)
@@ -288,8 +297,6 @@ _RUNTIME_PUBLIC_ROUTES: dict[str, tuple[tuple[str, ...], ...]] = {
         ("api", "historian", "query"),
     ),
     "POST": (
-        ("api", "alarms", "ack", _ONE),
-        ("api", "alarms", "ack-all"),
         ("api", "recipes", "datasets", _ONE, "download"),
         ("api", "recipes", "datasets", _ONE, "upload"),
         ("api", "http-request"),
@@ -700,8 +707,14 @@ async def _proxy_ws_to_child(
     import websockets
 
     await websocket.accept()
+    # The child attributes this socket's writes, recipe loads and acks to
+    # "engineer". The upstream is a fresh connection carrying none of the
+    # browser's headers, so only the session-gated editor prefix can set it.
+    headers = {audit.EDITOR_HEADER: "1"} if require_session else None
     try:
-        async with websockets.connect(f"ws://127.0.0.1:{port}/ws", max_size=None) as upstream:
+        async with websockets.connect(
+            f"ws://127.0.0.1:{port}/ws", max_size=None, additional_headers=headers
+        ) as upstream:
             await _pump_websocket(websocket, upstream)
     except Exception as exc:  # pragma: no cover — upstream gone mid-connect
         logger.debug("ws proxy %s: upstream error %s", project_id, exc)
@@ -804,6 +817,9 @@ async def _proxy_http_to_child(
     headers = _forwarded_headers(request)
     if forwarded_prefix is not None:
         headers.append(("x-forwarded-prefix", forwarded_prefix))
+        # The auth gate has already demanded the session for /editor/*.
+        if forwarded_prefix.startswith("/editor/"):
+            headers.append((audit.EDITOR_HEADER, "1"))
     body = await request.body()
     upstream_req = _proxy_client.build_request(
         request.method, url, headers=headers, content=body

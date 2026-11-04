@@ -21,7 +21,6 @@ function alarm(overrides: Partial<AlarmInstance> = {}): AlarmInstance {
     resolutions: [],
     group_title: 'Pumps',
     auto_popup: false,
-    ack_groups: [],
     triggered_at: '2024-01-01T00:00:00Z',
     acked: false,
     acked_by: '',

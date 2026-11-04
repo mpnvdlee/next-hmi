@@ -3,11 +3,11 @@
 The device-admin front door has had one of these since it was exposed
 (``core.manager_auth``); this is the same idea for the *project* users in
 ``users.json``. It matters more here, not less: the live view is reachable with
-no manager session at all, so ``POST /api/recipes/datasets/{id}/download``,
-``POST /api/recipes/datasets/{id}/upload`` and the WebSocket ``login`` message
-each hand an anonymous LAN caller an unlimited, unmetered password oracle — and
-every attempt costs a 200 000-iteration PBKDF2, which on a panel PC is an
-availability problem before it is a brute-force one.
+no manager session at all, so ``POST /api/recipes/datasets/{id}/upload`` and
+the WebSocket ``login`` message each hand an anonymous LAN caller an
+unlimited, unmetered password oracle — and every attempt costs a 200 000-iteration
+PBKDF2, which on a panel PC is an availability problem before it is a
+brute-force one.
 
 Two tiers, because one cannot cover both:
 

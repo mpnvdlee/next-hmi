@@ -563,7 +563,6 @@ the `/api/themes` endpoints in [../reference/rest-api.md](../reference/rest-api.
             "on_true": true
           },
           "ack_required": true,
-          "ack_groups": [],
           "values": [{ "$var": { "path": "MyPLC:Motor1/Temp" } }]
         }
       ]
@@ -591,6 +590,8 @@ Group and alarm ids are slugs the service layer assigns from the title or `code`
 ```
 
 An instance's `value_refs` is its definition's `values` bindings, copied at fire time, and `values` their raw values at that moment; a history entry keeps `values`. A file written before these fields existed reads them as `[]`.
+
+Anyone may acknowledge an alarm. The `ack_groups` key that older `alarms.json` and `alarm_state.json` files carry on an alarm or instance is ignored when they load and dropped on the next save.
 
 ## Recipe Files
 

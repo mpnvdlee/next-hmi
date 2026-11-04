@@ -1,5 +1,8 @@
 import asyncio
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import core.storage as storage_module
@@ -455,3 +458,196 @@ def test_collect_context_keys_scans_nested_properties_and_layout(monkeypatch, tm
     )
 
     assert keys == {"DS:Text", "DS:Width"}
+
+
+class _RecordingAlarmManager:
+    def __init__(self) -> None:
+        self.acks: list[tuple[str, str, str]] = []
+
+    def ack_alarm(self, instance_id: str, username: str, *, actor_source: str) -> bool:
+        self.acks.append((instance_id, username, actor_source))
+        return instance_id == "a1"
+
+    def ack_all(self, username: str, *, actor_source: str) -> int:
+        self.acks.append(("*", username, actor_source))
+        return 1
+
+
+def _ack_manager() -> tuple[WebSocketManager, FakeWebSocket, _RecordingAlarmManager]:
+    manager = WebSocketManager()
+    alarms = _RecordingAlarmManager()
+    manager.set_alarm_manager(alarms)
+    ws = FakeWebSocket()
+    manager._connections["c1"] = ws  # type: ignore[attr-defined]
+    return manager, ws, alarms
+
+
+def test_alarm_ack_is_attributed_to_the_connection_not_the_message() -> None:
+    manager, ws, alarms = _ack_manager()
+    manager._client_users["c1"] = {"runtime:t1": {"username": "anna", "groups": ["operator"]}}
+
+    asyncio.run(manager.handle_message("c1", json.dumps(
+        {"type": "alarm_ack", "instanceId": "a1", "username": "mallory", "requestId": "r1"}
+    )))
+
+    assert alarms.acks == [("a1", "anna", "session")]
+    assert ws.messages == [{"type": "alarm_ack_response", "requestId": "r1"}]
+
+
+def test_alarm_ack_with_nobody_signed_in_is_guest() -> None:
+    manager, _ws, alarms = _ack_manager()
+
+    asyncio.run(manager.handle_message("c1", json.dumps({"type": "alarm_ack_all"})))
+
+    assert alarms.acks == [("*", "guest", "session")]
+
+
+def test_alarm_ack_follows_the_latest_identity_on_the_socket() -> None:
+    """A remounted HmiView gets a new scope; the old scope's entry stays behind."""
+    manager, _ws, alarms = _ack_manager()
+
+    async def scenario() -> None:
+        await manager._apply_and_respond_identity(
+            "c1", "runtime:new", {"username": "guest", "groups": ["guest"]}, {},
+        )
+        await manager._apply_and_respond_identity(
+            "c1", "runtime:old", {"username": "guest", "groups": ["guest"]}, {},
+        )
+        await manager._apply_and_respond_identity(
+            "c1", "runtime:new", {"username": "anna", "groups": ["operator"]}, {},
+        )
+        await manager.handle_message("c1", json.dumps({"type": "alarm_ack", "instanceId": "a1"}))
+
+    asyncio.run(scenario())
+
+    assert alarms.acks == [("a1", "anna", "session")]
+
+
+@pytest.mark.parametrize(
+    ("message", "reason"),
+    [
+        ({"type": "alarm_ack", "instanceId": "gone", "requestId": "r1"}, "not_found"),
+        ({"type": "alarm_ack", "requestId": "r1"}, "bad_request"),
+    ],
+)
+def test_alarm_ack_failures_answer_alarm_ack_error(message, reason) -> None:
+    manager, ws, _alarms = _ack_manager()
+
+    asyncio.run(manager.handle_message("c1", json.dumps(message)))
+
+    assert ws.messages == [{"type": "alarm_ack_error", "requestId": "r1", "reason": reason}]
+
+
+def test_alarm_ack_from_the_editor_is_attributed_to_the_engineer() -> None:
+    manager, _ws, alarms = _ack_manager()
+    manager._editor_clients.add("c1")  # type: ignore[attr-defined]
+    manager._client_users["c1"] = {"runtime:preview": {"username": "anna", "groups": ["operator"]}}
+
+    asyncio.run(manager.handle_message("c1", json.dumps({"type": "alarm_ack", "instanceId": "a1"})))
+
+    assert alarms.acks == [("a1", "engineer", "device_admin")]
+
+
+class _FakeRecipeManager:
+    def __init__(self, written: int) -> None:
+        self.written = written
+
+    async def download(self, dataset_id: str, *, verify: bool):
+        from models.recipe import DownloadResult
+
+        return DownloadResult(
+            result="success" if self.written else "failed", datasetId=dataset_id,
+            written=self.written, total=1, verified=verify, failures=[],
+        )
+
+
+@pytest.mark.parametrize(
+    ("editor", "written", "expected"),
+    [
+        (False, 1, [("anna", "session", "recipe.load", "espresso")]),
+        (True, 1, [("engineer", "device_admin", "recipe.load", "espresso")]),
+        (False, 0, []),
+    ],
+)
+def test_recipe_load_is_audited_with_its_actor(editor, written, expected) -> None:
+    from core import audit
+
+    manager = WebSocketManager()
+    manager.set_recipe_manager(_FakeRecipeManager(written))
+    manager._connections["c1"] = FakeWebSocket()  # type: ignore[attr-defined]
+    manager._client_users["c1"] = {"runtime:t1": {"username": "anna", "groups": ["operator"]}}
+    if editor:
+        manager._editor_clients.add("c1")  # type: ignore[attr-defined]
+    seen: list = []
+    audit.register_listener(seen.append)
+    try:
+        asyncio.run(manager.handle_message("c1", json.dumps(
+            {"type": "recipe_load", "datasetId": "espresso", "scope": "runtime:t1"}
+        )))
+    finally:
+        audit.unregister_listener(seen.append)
+
+    assert [(e.actor, e.actor_source, e.action, e.subject) for e in seen] == expected
+
+
+def test_connect_marks_only_an_editor_socket() -> None:
+    manager = WebSocketManager()
+
+    async def scenario() -> tuple[str, str]:
+        return (
+            await manager.connect(FakeWebSocket(), editor=True),  # type: ignore[arg-type]
+            await manager.connect(FakeWebSocket()),  # type: ignore[arg-type]
+        )
+
+    editor_id, runtime_id = asyncio.run(scenario())
+
+    assert manager._editor_clients == {editor_id}  # type: ignore[attr-defined]
+    asyncio.run(manager.disconnect(editor_id))
+    assert manager._editor_clients == set()  # type: ignore[attr-defined]
+    assert runtime_id not in manager._editor_clients  # type: ignore[attr-defined]
+
+
+# Runs in a subprocess: importing ``main`` bootstraps a project and grafts its
+# singletons onto the module table for every later test.
+_EDITOR_HEADER_PROBE = '''
+import json
+import sys
+
+from fastapi.testclient import TestClient
+
+import main
+from services.websocket_manager import websocket_manager
+
+client = TestClient(main.app)
+with client.websocket_connect("/ws", headers={"x-nexthmi-editor": "1"}) as editor:
+    editor.receive_text()
+    with client.websocket_connect("/ws", headers={"x-nexthmi-editor": "yes"}) as other:
+        other.receive_text()
+        result = {
+            "connections": len(websocket_manager._connections),
+            "editors": len(websocket_manager._editor_clients),
+        }
+with open(sys.argv[1], "w", encoding="utf-8") as fh:
+    json.dump(result, fh)
+'''
+
+
+def test_the_instance_marks_only_a_socket_carrying_the_editor_header(tmp_path: Path) -> None:
+    backend = Path(__file__).resolve().parents[1]
+    home = tmp_path / "runtime-home"
+    home.mkdir()
+    script = tmp_path / "probe.py"
+    script.write_text(_EDITOR_HEADER_PROBE, encoding="utf-8")
+    out = tmp_path / "result.json"
+    env = {
+        **os.environ,
+        "NEXTHMI_DATA_DIR": str(home),
+        "PYTHONPATH": os.pathsep.join([str(backend), os.environ.get("PYTHONPATH", "")]),
+    }
+    env.pop("NEXTHMI_FRONTEND_DIST", None)
+    proc = subprocess.run(
+        [sys.executable, str(script), str(out)],
+        env=env, capture_output=True, text=True, cwd=str(backend.parent), timeout=180,
+    )
+    assert proc.returncode == 0, f"probe failed:\n{proc.stdout}\n{proc.stderr}"
+    assert json.loads(out.read_text(encoding="utf-8")) == {"connections": 2, "editors": 1}

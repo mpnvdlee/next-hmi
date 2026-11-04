@@ -16,11 +16,13 @@ Three more fields turn a definition into something an operator can act on:
 - **Auto popup** — **On** raises the alarm popup on every display the moment the alarm goes active. Leave it **Off** and it only shows up in the lists.
 - **Resolutions** — an ordered list of what to check or do, shown in the alarm's detail dialog. This is where the tribal knowledge goes, instead of in a folder nobody opens.
 - **Values** — variables whose value you want in the alarm text. Each row is numbered: `{1}` in the **Title** or **Description** shows the first one, `{2}` the second, with the same functions a String Expression takes (`{Round1(1)}`, `{Signed(2)}`). While the alarm is active the text shows the live value; once it has cleared, and in the history, it shows the value from the moment the alarm went off. Write `Tank temperature {Round1(1)} °C` and the operator reads `Tank temperature 81.5 °C`. A value can also be one element of an array, with its index fixed or bound to another value, or a member of one element of a struct array; history keeps the element the index named when the alarm went off.
-- **Acknowledgment → Needs acknowledgement** — off for an alarm nobody has to acknowledge (see below). **Allowed groups** — who may acknowledge it. Empty means anyone; set it and only those groups can clear the alarm. See [Users, groups & permissions](users.md).
+- **Acknowledgment → Needs acknowledgement** — off for an alarm nobody has to acknowledge (see below).
 
 The centre of the editor previews both surfaces live — the popup notification and the detail dialog — so you can see what the operator will read while you write it.
 
 Each alarm has a **Needs acknowledgement** switch, on by default. Turned off, the alarm fires already acknowledged: it shows no ACK, is not counted as unacknowledged and Acknowledge All passes it by, while it still appears, pops up and goes to the history like any other. Use it for messages the operator only needs to see, such as *Zeroing required*.
+
+Anyone at the screen may acknowledge an alarm, signed in or not. An acknowledgement records who gave it: the user signed in on that screen, or `guest` when nobody is. One given from the editor's Test mode is recorded as `engineer`.
 
 Surface them with the **Alarm List** and **Alarm History** widgets, and show a live count anywhere with the `$alarmCount` source (filter by `all` / `unacked` / `error` / `warning` / `info`). The Alarm List draws no frame of its own, so it sits in whatever card or page you place it on; the Alarm History has an **Own frame** toggle for the same. Clear the **Title** to drop the header band too.
 
@@ -50,4 +52,4 @@ For a screen that needs more than that, write a [custom widget](custom-widgets.m
 - Read state with **`$recipe`** — *Loaded recipe name* (`activeName`), *Is loaded* (`loaded`), *Parameters changed* (`parametersChanged`, true when live values have drifted from the loaded set), per parameter *Parameter changed* (`parameterChanged`) and *Saved value of a parameter* (`parameterValue`), *Number of changed parameters* (`changedCount`), or *Saved at* (`savedAt`).
 - Call **`recipeDownload(datasetId)`** and **`recipeUpload(datasetId)`** from your buttons, and read the configuration with `useRecipeConfig` / `useRecipeState`.
 
-The same two operations are also available over REST at `POST /api/recipes/datasets/{id}/download` and `/upload`, which is the route to take from an external MES or scheduler. A download honours the same per-variable write permissions as a button does: a parameter bound to a variable you [restricted to a group](users.md) is skipped with `permission_denied` unless the request carries the credentials of a user in that group.
+The same two operations are also available over REST at `POST /api/recipes/datasets/{id}/download` and `/upload`, which is the route to take from an external MES or scheduler. A download writes every parameter whose variable is writable; a read-only one is skipped with `read_only`.

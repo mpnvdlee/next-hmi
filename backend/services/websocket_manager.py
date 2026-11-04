@@ -12,6 +12,8 @@ Responsibilities:
                                variable has been sent (from cache and/or a fresh
                                OPC-UA read)
             write_field    -> write a value to the PLC via opcua_pool
+            alarm_ack      -> acknowledge one alarm as this connection's user
+            alarm_ack_all  -> acknowledge every alarm as this connection's user
             login          -> authenticate a scoped session
             logout         -> revert a scoped session to guest
 """
@@ -52,6 +54,7 @@ from models.websocket import (
     build_write_response,
 )
 
+from services import recipe_manager as recipe_manager_module
 from services import write_service
 
 logger = logging.getLogger(__name__)
@@ -73,7 +76,6 @@ _SESSION_TTL_S = 12 * 3600
 # are a stable contract — do not rename without a coordinated frontend change.
 REASON_INVALID_CREDENTIALS = "invalid_credentials"
 REASON_RATE_LIMITED = "rate_limited"
-REASON_PERMISSION_DENIED = "permission_denied"
 REASON_BAD_REQUEST = "bad_request"
 
 
@@ -116,6 +118,8 @@ class WebSocketManager:
         # shortcut: in memory, so a backend restart logs everyone out; persist
         # (signed tokens) if operators must survive a restart.
         self._sessions: dict[str, tuple[str, float]] = {}
+        # Connections the manager opened through the session-gated editor prefix.
+        self._editor_clients: set[str] = set()
         # Per-client connection timestamps: client_id -> ISO string
         self._client_connected_at: dict[str, str] = {}
         # Priority batch delay per datasource name, beside the entry it was read
@@ -346,11 +350,16 @@ class WebSocketManager:
 
     # -- Connection lifecycle -------------------------------------------------
 
-    async def connect(self, websocket: WebSocket) -> str:
-        """Accept connection, send snapshot, register client. Returns client_id."""
+    async def connect(self, websocket: WebSocket, *, editor: bool = False) -> str:
+        """Accept connection, send snapshot, register client. Returns client_id.
+
+        ``editor`` marks a socket the manager proxied from ``/editor/<slug>/ws``.
+        """
         await websocket.accept()
         client_id = str(uuid.uuid4())
         self._connections[client_id] = websocket
+        if editor:
+            self._editor_clients.add(client_id)
         self._client_users[client_id] = {}
         self._client_connected_at[client_id] = datetime.now(UTC).isoformat()
         try:
@@ -407,6 +416,7 @@ class WebSocketManager:
         """Remove client and demote any variables that were only priority for this client."""
         self._connections.pop(client_id, None)
         self._client_users.pop(client_id, None)
+        self._editor_clients.discard(client_id)
         self._client_connected_at.pop(client_id, None)
         if self._datasource_manager is not None:
             self._datasource_manager.clear_client(client_id)
@@ -473,6 +483,8 @@ class WebSocketManager:
             await self._handle_recipe_load(client_id, msg)
         elif msg_type == "recipe_save":
             await self._handle_recipe_save(client_id, msg)
+        elif msg_type in ("alarm_ack", "alarm_ack_all"):
+            await self._handle_alarm_ack(client_id, msg)
         elif msg_type == "login":
             await self._handle_login(client_id, cast(LoginMessage, msg))
         elif msg_type == "logout":
@@ -592,7 +604,7 @@ class WebSocketManager:
         await self._checked_write(client_id, msg, ds_name, path, field=field, value=value)
 
     async def _handle_toggle_field(self, client_id: str, msg: ToggleFieldMessage) -> None:
-        """Invert a Boolean variable. Same permission check, audit and
+        """Invert a Boolean variable. Same audit and
         `write_response` / `write_error` contract as `_handle_write_field`; the
         value written is read on the server, never taken from the client."""
         request_id = msg.get("requestId")
@@ -625,7 +637,7 @@ class WebSocketManager:
         value: Any = None,
         toggle: bool = False,
     ) -> None:
-        """Resolve, permission-check, write (or toggle), audit and respond."""
+        """Resolve, write (or toggle), audit and respond."""
         request_id = msg.get("requestId")
         registry_path = write_service.registry_path_of(self._datasource_manager, ds_name, path)
 
@@ -638,11 +650,6 @@ class WebSocketManager:
             return
 
         scope = msg.get("scope", "")
-        if not self._check_write_permitted(client_id, scope, entry_data):
-            logger.warning("%s denied for %s:%s (scope=%s)", msg.get("type"), ds_name, path, scope)
-            await self._send_write_result(client_id, request_id, ds_name, path, REASON_PERMISSION_DENIED)
-            return
-
         if toggle:
             outcome, value = await write_service.toggle_value(
                 self._datasource_manager, self._opcua_pool, ds_name, path,
@@ -655,24 +662,10 @@ class WebSocketManager:
             logger.warning("%s %s:%s.%s failed: %s", msg.get("type"), ds_name, path, field, outcome.reason)
         else:
             # Moving a setpoint is the most consequential thing an operator does
-            # here, and it is one of the few actions with an actor the server
-            # established itself — the identity `_check_write_permitted` just
-            # decided against, five lines up. Emitted here rather than in
-            # write_service because write_service is also the recipe-download
-            # path, which has no operator behind it.
-            #
-            # Only writes that landed. A rejected or failed write moved nothing,
-            # and an unauthenticated caller must not be able to grow an
-            # append-only, never-truncated file by spamming rejects. Denials
-            # stay in the log above.
-            await audit.emit_async(
-                audit.AuditEvent(
-                    actor=self._session_actor(client_id, scope),
-                    actor_source=audit.ACTOR_SESSION,
-                    action="variable.write",
-                    subject=build_var_key(ds_name, path),
-                    detail={"value": value, "field": field} if field else {"value": value},
-                )
+            # here; failures stay in the log above.
+            await write_service.audit_write(
+                *self._attributed(client_id, self._session_actor(client_id, scope)),
+                ds_name, path, value, field,
             )
         await self._send_write_result(client_id, request_id, ds_name, path, outcome.reason)
 
@@ -692,17 +685,8 @@ class WebSocketManager:
             await self._send_recipe_result(client_id, request_id, None, REASON_BAD_REQUEST)
             return
         verify = bool(msg.get("verify", False))
-        scope = msg.get("scope", "")
-
-        identity = self._client_users.get(client_id, {}).get(scope) if scope else None
         try:
-            result = await self._recipe_manager.download(
-                dataset_id,
-                verify=verify,
-                permission_check=write_service.write_permission_gate(
-                    identity, self._datasource_manager,
-                ),
-            )
+            result = await self._recipe_manager.download(dataset_id, verify=verify)
         except Exception:
             logger.exception("recipe_load failed for dataset %s", dataset_id)
             await self._send_recipe_result(client_id, request_id, None, "download_failed")
@@ -710,6 +694,9 @@ class WebSocketManager:
         if result is None:
             await self._send_recipe_result(client_id, request_id, None, "not_found")
             return
+        await recipe_manager_module.audit_load(
+            result, *self._attributed(client_id, self._session_actor(client_id, msg.get("scope", ""))),
+        )
         await self._send_recipe_result(
             client_id, request_id, result.model_dump(by_alias=True), None,
         )
@@ -737,15 +724,11 @@ class WebSocketManager:
                 return
         scope = msg.get("scope", "")
         identity = self._client_users.get(client_id, {}).get(scope) if scope else None
-        username = identity.get("username", "") if isinstance(identity, dict) else ""
+        username, _source = self._attributed(
+            client_id, identity.get("username", "") if isinstance(identity, dict) else "",
+        )
         try:
-            config = await self._recipe_manager.upload_into(
-                dataset_id,
-                username=username,
-                permission_check=write_service.write_permission_gate(
-                    identity, self._datasource_manager,
-                ),
-            )
+            config = await self._recipe_manager.upload_into(dataset_id, username=username)
         except Exception:
             logger.exception("recipe_save failed for dataset %s", dataset_id)
             await self._send_recipe_result(client_id, request_id, None, "upload_failed")
@@ -756,6 +739,47 @@ class WebSocketManager:
         await self._send_recipe_result(
             client_id, request_id, {"datasetId": dataset_id}, None,
         )
+
+    async def _handle_alarm_ack(self, client_id: str, msg: dict) -> None:
+        """Acknowledge one alarm (``alarm_ack``) or all (``alarm_ack_all``).
+
+        Attributed to the identity this connection holds, never to a name the
+        message carries. Replies ``alarm_ack_response`` / ``alarm_ack_error``
+        when the client supplied a ``requestId``.
+        """
+        request_id = msg.get("requestId")
+        if self._alarm_manager is None:
+            await self._send_ack_result(client_id, request_id, "alarms_unavailable")
+            return
+        actor, actor_source = self._attributed(client_id, self._connection_actor(client_id))
+        if msg.get("type") == "alarm_ack_all":
+            # The alarm manager saves state and calls audit listeners synchronously.
+            await asyncio.to_thread(
+                self._alarm_manager.ack_all, actor, actor_source=actor_source,
+            )
+            await self._send_ack_result(client_id, request_id, None)
+            return
+        instance_id = msg.get("instanceId")
+        if not isinstance(instance_id, str) or not instance_id:
+            await self._send_ack_result(client_id, request_id, REASON_BAD_REQUEST)
+            return
+        found = await asyncio.to_thread(
+            self._alarm_manager.ack_alarm, instance_id, actor, actor_source=actor_source,
+        )
+        await self._send_ack_result(client_id, request_id, None if found else "not_found")
+
+    async def _send_ack_result(
+        self, client_id: str, request_id: str | None, reason: str | None,
+    ) -> None:
+        """Emit alarm_ack_response (reason=None) or alarm_ack_error. No-op without requestId."""
+        if not request_id:
+            return
+        payload: dict[str, Any] = (
+            {"type": "alarm_ack_error", "requestId": request_id, "reason": reason}
+            if reason
+            else {"type": "alarm_ack_response", "requestId": request_id}
+        )
+        await self._safe_send_json(client_id, payload)
 
     async def _send_recipe_result(
         self,
@@ -807,22 +831,38 @@ class WebSocketManager:
         )
         await self._safe_send_json(client_id, payload)
 
-    def _check_write_permitted(self, client_id: str, scope: str, entry_data: Any) -> bool:
-        """Return True if the client's identity for the given scope is allowed to write."""
-        identity = self._client_users.get(client_id, {}).get(scope) if scope else None
-        return write_service.write_permitted(identity, entry_data)
-
     def _session_actor(self, client_id: str, scope: str) -> str:
         """Name this connection authenticated as for *scope*, never one it sent.
 
-        Read from the same store `_check_write_permitted` uses, so the audit
-        record names whoever the permission decision was actually made against.
-        A connection that never logged in falls back to "guest" — which
-        `write_service.write_permitted` already treats it as. That is still a
+        A connection that never logged in falls back to "guest". That is still a
         fact the server established (this socket presented no credentials), not
         a claim, so it is honest to tag it `ACTOR_SESSION`.
         """
         identity = self._client_users.get(client_id, {}).get(scope) if scope else None
+        username = identity.get("username") if isinstance(identity, dict) else None
+        return username if isinstance(username, str) and username else "guest"
+
+    def _attributed(self, client_id: str, username: str) -> tuple[str, str]:
+        """``(actor, actor_source)`` for a write, recipe load or ack on this socket.
+
+        An editor socket is the engineer's, whichever project user its Test-mode
+        preview is signed in as. Login and logout records keep the HMI user.
+        """
+        if client_id in self._editor_clients:
+            return audit.ENGINEER_ACTOR, audit.ACTOR_DEVICE_ADMIN
+        return username, audit.ACTOR_SESSION
+
+    def _connection_actor(self, client_id: str) -> str:
+        """Name the identity this connection established most recently.
+
+        For a message that names no scope (alarm acks: the SDK's ``ackAlarm``
+        has none to send). A runtime tab holds one live HmiView, and a remounted
+        one gets a new scope while the old scope's entry stays behind, so the
+        latest identity — see ``_apply_and_respond_identity`` — is the screen
+        the operator is looking at. "guest" when the socket has none.
+        """
+        scopes = self._client_users.get(client_id) or {}
+        identity = next(reversed(scopes.values()), None)
         username = identity.get("username") if isinstance(identity, dict) else None
         return username if isinstance(username, str) and username else "guest"
 
@@ -842,7 +882,10 @@ class WebSocketManager:
         request_identity passes no request_id so its user_identity message
         cannot be mistaken for a login response by the client dispatcher.
         """
-        self._client_users.setdefault(client_id, {})[scope] = identity
+        scopes = self._client_users.setdefault(client_id, {})
+        # Re-insert so the dict's last entry is the latest identity (_connection_actor).
+        scopes.pop(scope, None)
+        scopes[scope] = identity
         if client_id not in self._connections:
             return
         group_labels = self._build_group_labels(doc, identity["groups"])

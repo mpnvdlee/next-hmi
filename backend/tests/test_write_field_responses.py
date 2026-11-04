@@ -126,49 +126,6 @@ def test_bad_path_when_entry_unknown() -> None:
     ]
 
 
-def test_permission_denied_when_group_mismatch() -> None:
-    ws = FakeWebSocket()
-    ds_entry = FakeDatasourceEntry(
-        ds_type="static",
-        registry={"Tag": {"data_type": "int32", "writable": True, "interactableByGroups": ["engineer"]}},
-    )
-    manager = _make_manager(ws, ds_entry=ds_entry)
-    # client identity carries only "guest", not "engineer"
-    manager._client_users["c1"] = {  # type: ignore[attr-defined]
-        "runtime:tab1:inst1": {"username": "guest", "groups": ["guest"]}
-    }
-
-    _run_write(manager, _msg())
-
-    assert ws.messages == [
-        {
-            "type": "write_error",
-            "requestId": "req-1",
-            "datasource": "DS",
-            "path": "Tag",
-            "reason": "permission_denied",
-        },
-    ]
-
-
-def test_a_bit_write_is_judged_by_its_words_groups() -> None:
-    # The ACL lookup strips the `.N` bit as it does the `[N]` element: a path no
-    # entry matched used to find no groups to check, and so none to refuse.
-    ws = FakeWebSocket()
-    ds_entry = FakeDatasourceEntry(
-        ds_type="static",
-        registry={"Tag": {"data_type": "UInt16", "writable": True, "interactableByGroups": ["engineer"]}},
-    )
-    manager = _make_manager(ws, ds_entry=ds_entry)
-    manager._client_users["c1"] = {  # type: ignore[attr-defined]
-        "runtime:tab1:inst1": {"username": "guest", "groups": ["guest"]}
-    }
-
-    _run_write(manager, _msg(path="Tag.3", field=None, value=True))
-
-    assert [(m["path"], m["reason"]) for m in ws.messages] == [("Tag.3", "permission_denied")]
-
-
 def test_invalid_value_when_coercion_fails() -> None:
     ws = FakeWebSocket()
     ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32", "writable": True}})
@@ -315,21 +272,6 @@ def test_toggle_writes_the_inverse_of_the_cached_static_value() -> None:
     ]
 
 
-def test_toggle_respects_interactable_groups() -> None:
-    ws = FakeWebSocket()
-    ds_entry = FakeDatasourceEntry(
-        ds_type="static",
-        registry={"Run": {"data_type": "Boolean", "writable": True, "interactableByGroups": ["operator"]}},
-    )
-    manager = _make_manager(ws, ds_entry=ds_entry)
-    manager._datasource_manager.cached = {"DS:Run": True}  # type: ignore[union-attr]
-
-    asyncio.run(manager._handle_toggle_field("c1", _toggle()))
-
-    assert manager._datasource_manager.static_updates == []  # type: ignore[union-attr]
-    assert ws.messages[0]["reason"] == "permission_denied"
-
-
 def test_toggle_without_path_is_a_bad_request() -> None:
     ws = FakeWebSocket()
     manager = _make_manager(ws, ds_entry=None)
@@ -386,3 +328,35 @@ def test_toggle_of_a_variable_that_states_no_access_reports_read_only() -> None:
 
     assert manager._datasource_manager.static_updates == []  # type: ignore[union-attr]
     assert ws.messages[0]["reason"] == "read_only"
+
+
+# ── Attribution ──────────────────────────────────────────────────────────────
+
+
+def _audited_write(*, editor: bool) -> list:
+    from core import audit
+
+    ws = FakeWebSocket()
+    ds_entry = FakeDatasourceEntry(ds_type="static", registry={"Tag": {"data_type": "int32", "writable": True}})
+    manager = _make_manager(ws, ds_entry=ds_entry)
+    if editor:
+        manager._editor_clients.add("c1")  # type: ignore[attr-defined]
+    manager._client_users["c1"] = {  # type: ignore[attr-defined]
+        "runtime:tab1:inst1": {"username": "anna", "groups": ["operator"]}
+    }
+    seen: list = []
+    audit.register_listener(seen.append)
+    try:
+        _run_write(manager, _msg())
+    finally:
+        audit.unregister_listener(seen.append)
+    return [(e.actor, e.actor_source, e.action) for e in seen]
+
+
+def test_runtime_write_is_attributed_to_the_signed_in_user() -> None:
+    assert _audited_write(editor=False) == [("anna", "session", "variable.write")]
+
+
+def test_editor_write_is_attributed_to_the_engineer() -> None:
+    """The editor's Test-mode preview may be signed in as anyone; the write is the engineer's."""
+    assert _audited_write(editor=True) == [("engineer", "device_admin", "variable.write")]

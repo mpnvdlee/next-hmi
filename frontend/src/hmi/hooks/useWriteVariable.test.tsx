@@ -174,9 +174,9 @@ describe('useWriteVariable', () => {
   it('toasts the backend rejection correlated by requestId', () => {
     writer(bound)(1);
 
-    resolvePending(String(frames()[0].requestId), { reason: 'permission_denied' }, false);
+    resolvePending(String(frames()[0].requestId), { reason: 'opcua_unreachable' }, false);
 
-    expect(useHmiStore.getState().pendingToasts[0].message).toMatch(/not allowed/i);
+    expect(useHmiStore.getState().pendingToasts[0].message).toMatch(/not connected/i);
   });
 
   // Backend write_service reports read_only before any value error; the local

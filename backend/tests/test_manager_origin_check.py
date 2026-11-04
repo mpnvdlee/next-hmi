@@ -18,7 +18,7 @@ from core import runtime_home
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-ACK_ALL = "/runtime/ghost/api/alarms/ack-all"
+RECIPE_LOAD = "/runtime/ghost/api/recipes/datasets/ds-1/download"
 
 
 def _client(monkeypatch, tmp_path: Path, base_url: str, root_path: str = "") -> TestClient:
@@ -109,13 +109,13 @@ def test_cross_origin_post_is_refused_before_it_acts(client: TestClient) -> None
 
 @pytest.mark.parametrize("origin", ["http://evil.example", "null", "http://testserver:8000", "https://testserver"])
 def test_cross_origin_post_to_public_runtime_route_is_refused(client: TestClient, origin: str) -> None:
-    assert _post(client, ACK_ALL, origin).status_code == 403
+    assert _post(client, RECIPE_LOAD, origin).status_code == 403
 
 
 @pytest.mark.parametrize("origin", [None, "http://testserver", "HTTP://TestServer:80"])
 def test_same_origin_or_headerless_post_reaches_the_proxy(client: TestClient, origin: str | None) -> None:
     # 503: the proxy ran and found no child — the check let it through.
-    assert _post(client, ACK_ALL, origin).status_code == 503
+    assert _post(client, RECIPE_LOAD, origin).status_code == 503
 
 
 def test_cross_origin_post_to_mcp_is_refused(client: TestClient) -> None:
@@ -163,10 +163,10 @@ def test_editor_socket_refuses_a_cross_origin_upgrade_even_with_a_session(
 def test_https_origin_matches_on_scheme_and_port(monkeypatch, tmp_path: Path, running_child) -> None:
     with _client(monkeypatch, tmp_path, "https://hmi.local:8443") as tls:
         # 502: let through to a child whose port answers nothing.
-        assert _post(tls, ACK_ALL, "https://hmi.local:8443").status_code == 502
+        assert _post(tls, RECIPE_LOAD, "https://hmi.local:8443").status_code == 502
         # The HTTP port that only redirects here is another origin.
-        assert _post(tls, ACK_ALL, "http://hmi.local:8000").status_code == 403
-        assert _post(tls, ACK_ALL, "http://hmi.local:8443").status_code == 403
+        assert _post(tls, RECIPE_LOAD, "http://hmi.local:8000").status_code == 403
+        assert _post(tls, RECIPE_LOAD, "http://hmi.local:8443").status_code == 403
         # websocket_connect ignores base_url, so the wss URL is spelled out.
         wss = "wss://hmi.local:8443/runtime/ghost/ws"
         with tls.websocket_connect(wss, headers={"Origin": "https://hmi.local:8443"}) as ws:
@@ -179,14 +179,14 @@ def test_https_origin_matches_on_scheme_and_port(monkeypatch, tmp_path: Path, ru
 
 def test_default_port_is_implied(monkeypatch, tmp_path: Path) -> None:
     with _client(monkeypatch, tmp_path, "https://hmi.example") as tls:
-        assert _post(tls, ACK_ALL, "https://hmi.example").status_code == 503
-        assert _post(tls, ACK_ALL, "https://hmi.example:443").status_code == 503
+        assert _post(tls, RECIPE_LOAD, "https://hmi.example").status_code == 503
+        assert _post(tls, RECIPE_LOAD, "https://hmi.example:443").status_code == 503
 
 
 def test_root_path_mount_does_not_change_the_origin(monkeypatch, tmp_path: Path) -> None:
     with _client(monkeypatch, tmp_path, "http://testserver", root_path="/hmi") as mounted:
-        assert _post(mounted, ACK_ALL, "http://testserver").status_code == 503
-        assert _post(mounted, ACK_ALL, "http://evil.example").status_code == 403
+        assert _post(mounted, RECIPE_LOAD, "http://testserver").status_code == 503
+        assert _post(mounted, RECIPE_LOAD, "http://evil.example").status_code == 403
 
 
 @pytest.mark.parametrize(
@@ -238,8 +238,10 @@ def test_ws_proxy_does_not_forward_origin(client: TestClient, running_child) -> 
         ws.receive_text()
     (args, kwargs), = running_child
     assert args == ("ws://127.0.0.1:65000/ws",)
-    # websockets sends an Origin header only when given ``origin=``.
-    assert set(kwargs) == {"max_size"}
+    # websockets sends an Origin header only when given ``origin=``; the
+    # runtime hop adds no header of its own either.
+    assert set(kwargs) == {"max_size", "additional_headers"}
+    assert kwargs["additional_headers"] is None
 
 
 # Runs in a subprocess: importing ``main`` bootstraps a project and grafts its
@@ -257,8 +259,8 @@ own = "http://127.0.0.1:47001"
 client = TestClient(main.app, base_url=own, raise_server_exceptions=False)
 
 
-def ack(headers):
-    return client.post("/api/alarms/ack-all", json={"username": "op"}, headers=headers).status_code
+def post(headers):
+    return client.post("/api/recipes/datasets/ghost/download", json={}, headers=headers).status_code
 
 
 try:
@@ -270,10 +272,10 @@ except WebSocketDisconnect as exc:
 with open(sys.argv[1], "w", encoding="utf-8") as fh:
     json.dump(
         {
-            "foreign": ack({"Origin": "http://evil.example"}),
-            "other_loopback_port": ack({"Origin": "http://127.0.0.1:8000"}),
-            "own": ack({"Origin": own}),
-            "none": ack({}),
+            "foreign": post({"Origin": "http://evil.example"}),
+            "other_loopback_port": post({"Origin": "http://127.0.0.1:8000"}),
+            "own": post({"Origin": own}),
+            "none": post({}),
             "ws_refused": ws_refused,
         },
         fh,

@@ -5,16 +5,34 @@ import type { AlarmInstance, AlarmSummary } from '@shared/types/alarm';
 import { useAlarmStore } from '@hmi/store/alarmStore';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { useTranslationStore } from '@shared/store/translationStore';
-import { apiJson } from '@shared/utils/api';
+import { sendWsMessage } from '@hmi/hooks/useWebSocket';
+import { resolvePending } from '@hmi/utils/actionDispatcher';
 import styles from './index.module.css';
 import AlarmPopup from './index';
 
-// Partial: the ack helpers reach for `errorMessage` on a refusal, so stubbing
-// the whole module would fail the failure path rather than exercise it.
-vi.mock('@shared/utils/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/utils/api')>()),
-  apiJson: vi.fn(),
+vi.mock('@hmi/hooks/useWebSocket', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@hmi/hooks/useWebSocket')>()),
+  sendWsMessage: vi.fn(),
 }));
+
+/** Make the backend answer every alarm ack frame with `ok` (and `reason`). */
+function answerAcks(ok: boolean, reason?: string) {
+  vi.mocked(sendWsMessage).mockImplementation((msg) => {
+    const frame = msg as { type: string; requestId?: string };
+    if (frame.type.startsWith('alarm_ack')) {
+      resolvePending(String(frame.requestId), reason ? { reason } : {}, ok);
+    }
+    return true;
+  });
+}
+
+/** The alarm ack frames sent so far. */
+function ackFrames() {
+  return vi
+    .mocked(sendWsMessage)
+    .mock.calls.map(([msg]) => msg as Record<string, unknown>)
+    .filter((m) => String(m.type).startsWith('alarm_ack'));
+}
 
 function mkAlarm(overrides: Partial<AlarmInstance> = {}): AlarmInstance {
   return {
@@ -28,7 +46,6 @@ function mkAlarm(overrides: Partial<AlarmInstance> = {}): AlarmInstance {
     resolutions: [],
     group_title: 'Motors',
     auto_popup: true,
-    ack_groups: [],
     triggered_at: '2026-01-01T10:00:00Z',
     acked: false,
     acked_by: '',
@@ -55,7 +72,7 @@ function renderPopup() {
 
 describe('AlarmPopup', () => {
   beforeEach(() => {
-    vi.mocked(apiJson).mockReset();
+    vi.mocked(sendWsMessage).mockReset();
     useAlarmStore.setState({ active: [], summary: EMPTY_SUMMARY });
     useHmiStore.setState({ currentUsersByScope: {} });
   });
@@ -132,21 +149,20 @@ describe('AlarmPopup', () => {
     await user.click(document.querySelector<HTMLElement>('.hmi-toast__close')!);
 
     expect(container.firstChild).toBeNull();
-    expect(apiJson).not.toHaveBeenCalled();
+    expect(ackFrames()).toEqual([]);
   });
 
   it('acknowledges an alarm via its ACK button', async () => {
-    vi.mocked(apiJson).mockResolvedValue(undefined);
+    answerAcks(true);
     const user = userEvent.setup();
     useAlarmStore.setState({ active: [mkAlarm()], summary: EMPTY_SUMMARY });
     renderPopup();
 
     await user.click(screen.getByRole('button', { name: 'ACK' }));
 
-    expect(apiJson).toHaveBeenCalledWith(
-      '/api/alarms/ack/inst-1',
-      expect.objectContaining({ method: 'POST', body: { username: 'operator' } }),
-    );
+    expect(ackFrames()).toEqual([
+      expect.objectContaining({ type: 'alarm_ack', instanceId: 'inst-1' }),
+    ]);
   });
 
   it('opens the detail dialog on popup click and closes it', async () => {

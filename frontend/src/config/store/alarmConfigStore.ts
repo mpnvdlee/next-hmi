@@ -46,7 +46,6 @@ function createAlarmDefinition(taken: Iterable<string>): AlarmDefinition {
     resolutions: [],
     trigger: { ...DEFAULT_TRIGGER },
     ack_required: true,
-    ack_groups: [],
     values: [],
   };
 }

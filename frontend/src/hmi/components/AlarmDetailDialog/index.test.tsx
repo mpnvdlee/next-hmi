@@ -3,14 +3,34 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { AlarmInstance } from '@shared/types/alarm';
 import { useHmiStore } from '@hmi/store/hmiStore';
-import { apiJson } from '@shared/utils/api';
+import { sendWsMessage } from '@hmi/hooks/useWebSocket';
+import { resolvePending } from '@hmi/utils/actionDispatcher';
 import styles from './index.module.css';
 import AlarmDetailDialog from './index';
 
-vi.mock('@shared/utils/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/utils/api')>()),
-  apiJson: vi.fn(),
+vi.mock('@hmi/hooks/useWebSocket', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@hmi/hooks/useWebSocket')>()),
+  sendWsMessage: vi.fn(),
 }));
+
+/** Make the backend answer every alarm ack frame with `ok` (and `reason`). */
+function answerAcks(ok: boolean, reason?: string) {
+  vi.mocked(sendWsMessage).mockImplementation((msg) => {
+    const frame = msg as { type: string; requestId?: string };
+    if (frame.type.startsWith('alarm_ack')) {
+      resolvePending(String(frame.requestId), reason ? { reason } : {}, ok);
+    }
+    return true;
+  });
+}
+
+/** The alarm ack frames sent so far. */
+function ackFrames() {
+  return vi
+    .mocked(sendWsMessage)
+    .mock.calls.map(([msg]) => msg as Record<string, unknown>)
+    .filter((m) => String(m.type).startsWith('alarm_ack'));
+}
 
 function mkAlarm(overrides: Partial<AlarmInstance> = {}): AlarmInstance {
   return {
@@ -24,7 +44,6 @@ function mkAlarm(overrides: Partial<AlarmInstance> = {}): AlarmInstance {
     resolutions: [],
     group_title: 'Motors',
     auto_popup: true,
-    ack_groups: [],
     triggered_at: '2026-01-01T10:00:00Z',
     acked: false,
     acked_by: '',
@@ -38,7 +57,7 @@ function renderDialog(alarm: AlarmInstance, onClose = vi.fn()) {
     onClose,
     ...render(
       <MemoryRouter>
-        <AlarmDetailDialog alarm={alarm} username="operator" onClose={onClose} />
+        <AlarmDetailDialog alarm={alarm} onClose={onClose} />
       </MemoryRouter>,
     ),
   };
@@ -46,7 +65,7 @@ function renderDialog(alarm: AlarmInstance, onClose = vi.fn()) {
 
 describe('AlarmDetailDialog', () => {
   beforeEach(() => {
-    vi.mocked(apiJson).mockReset();
+    vi.mocked(sendWsMessage).mockReset();
     useHmiStore.setState({ pendingToasts: [] });
   });
 
@@ -92,30 +111,29 @@ describe('AlarmDetailDialog', () => {
   });
 
   it('acknowledges the alarm and closes on Acknowledge click', async () => {
-    vi.mocked(apiJson).mockResolvedValue(undefined);
+    answerAcks(true);
     const user = userEvent.setup();
     const { onClose } = renderDialog(mkAlarm());
 
     await user.click(screen.getByRole('button', { name: 'Acknowledge' }));
 
-    expect(apiJson).toHaveBeenCalledWith(
-      '/api/alarms/ack/inst-1',
-      expect.objectContaining({ method: 'POST', body: { username: 'operator' } }),
-    );
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(ackFrames()).toEqual([
+      expect.objectContaining({ type: 'alarm_ack', instanceId: 'inst-1' }),
+    ]);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 
   // Closing on a refusal would look exactly like success, so the dialog stays
   // put and the toast says why.
   it('keeps the dialog open and surfaces the reason when the ack is refused', async () => {
-    vi.mocked(apiJson).mockRejectedValue(new Error('You are not allowed to acknowledge'));
+    answerAcks(false, 'not_found');
     const user = userEvent.setup();
     const { onClose } = renderDialog(mkAlarm());
 
     await user.click(screen.getByRole('button', { name: 'Acknowledge' }));
 
     await waitFor(() => expect(useHmiStore.getState().pendingToasts).toHaveLength(1));
-    expect(useHmiStore.getState().pendingToasts[0].message).toMatch(/not allowed to acknowledge/);
+    expect(useHmiStore.getState().pendingToasts[0].message).toMatch(/no longer active/);
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -125,7 +143,7 @@ describe('AlarmDetailDialog', () => {
 
     await user.click(document.querySelector<HTMLElement>('.hmi-modal__close')!);
 
-    expect(apiJson).not.toHaveBeenCalled();
+    expect(ackFrames()).toEqual([]);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

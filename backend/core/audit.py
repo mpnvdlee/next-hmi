@@ -20,6 +20,14 @@ also says where its actor came from:
     The server resolved the name itself, from the identity a connection
     established by authenticating (``websocket_manager._client_users``). The
     caller could not choose it.
+``ACTOR_DEVICE_ADMIN``
+    The action came through the editor, whose socket the manager only opens
+    behind the device-admin session. That password is shared, not personal, so
+    the actor is the fixed name ``"engineer"`` rather than whichever project
+    user the editor's preview is signed in as.
+``ACTOR_ANONYMOUS``
+    A public request with no identity at all (a REST recipe download): the
+    actor is ``"guest"`` because nobody could have been named.
 ``ACTOR_CLAIMED``
     The caller supplied the name and nothing checked it. Recorded because
     dropping it would lose the only lead there is, but recorded *as a claim*.
@@ -33,7 +41,7 @@ import asyncio
 import contextlib
 import logging
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -41,7 +49,21 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 ACTOR_SESSION = "session"
+ACTOR_DEVICE_ADMIN = "device_admin"
+ACTOR_ANONYMOUS = "anonymous"
+# Header the manager sets on every hop to a child it makes for the editor
+# prefix (the /ws upgrade and each HTTP request), and strips from browser input:
+# the child's evidence for ``ACTOR_DEVICE_ADMIN``.
+EDITOR_HEADER = "x-nexthmi-editor"
 ACTOR_CLAIMED = "claimed"
+# The fixed actor of ``ACTOR_DEVICE_ADMIN``: every editor connection's and
+# editor request's operator actions are recorded as this name.
+ENGINEER_ACTOR = "engineer"
+
+
+def from_editor(headers: Mapping[str, str]) -> bool:
+    """True when the manager marked this hop as coming through the editor."""
+    return headers.get(EDITOR_HEADER) == "1"
 
 
 @dataclass(frozen=True)

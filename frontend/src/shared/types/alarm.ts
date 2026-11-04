@@ -30,7 +30,6 @@ export interface AlarmDefinition {
   trigger: AlarmTrigger;
   /** False: the alarm fires already acknowledged and never waits for an operator. */
   ack_required: boolean;
-  ack_groups: string[];
   /** `$var` bindings the `{1}`, `{2}` … placeholders in title / description name. */
   values: unknown[];
 }
@@ -60,7 +59,6 @@ export interface AlarmInstance {
   auto_popup: boolean;
   /** Absent on instances from before the setting: they needed acknowledgement. */
   ack_required?: boolean;
-  ack_groups: string[];
   /** The definition's `values` bindings, read live while the alarm is active. */
   value_refs?: unknown[];
   /** Raw values of those bindings when the alarm fired (null: none cached). */

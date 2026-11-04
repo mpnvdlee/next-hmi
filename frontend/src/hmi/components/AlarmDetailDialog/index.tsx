@@ -12,16 +12,12 @@ interface AlarmDetailDialogProps {
   alarm: AlarmInstance;
   /** Set for an alarm from the history: shown in the details, and nothing left to acknowledge. */
   clearedAt?: string;
-  username: string;
+  /** Ignored: the backend records who is signed in. Kept for existing widgets. */
+  username?: string;
   onClose: () => void;
 }
 
-export default function AlarmDetailDialog({
-  alarm,
-  clearedAt,
-  username,
-  onClose,
-}: AlarmDetailDialogProps) {
+export default function AlarmDetailDialog({ alarm, clearedAt, onClose }: AlarmDetailDialogProps) {
   // Dialog renders outside the widget tree, so subscribe to any `$var` / `$time`
   // a resolution string binds to (evalCtx no longer re-renders on ticks).
   const evalCtx = useReactiveEval(alarm.resolutions);
@@ -33,8 +29,8 @@ export default function AlarmDetailDialog({
   // A refused ack leaves the dialog open behind its toast — closing on a
   // failure would look exactly like success.
   const handleAck = useCallback(async () => {
-    if (await ackAlarm(alarm.id, username)) onClose();
-  }, [alarm.id, username, onClose]);
+    if (await ackAlarm(alarm.id)) onClose();
+  }, [alarm.id, onClose]);
 
   const handleOverlayClick = useCallback(
     (e: React.MouseEvent) => {

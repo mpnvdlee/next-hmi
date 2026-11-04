@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from models.binding import resolve_var_binding, resolve_var_index
 
@@ -12,6 +12,13 @@ from models.binding import resolve_var_binding, resolve_var_index
 
 AlarmLevel = Literal["error", "warning", "info"]
 AlarmTriggerType = Literal["value_range", "bool"]
+
+
+def _drop_ack_groups(data: Any) -> Any:
+    # The removed "Allowed groups" setting: files written before still carry it.
+    if isinstance(data, dict) and "ack_groups" in data:
+        data = {k: v for k, v in data.items() if k != "ack_groups"}
+    return data
 
 
 # ── Configuration models (persisted in alarms.json) ──────────────────────────
@@ -72,9 +79,10 @@ class AlarmDefinition(BaseModel):
     trigger: AlarmTrigger = Field(default_factory=lambda: AlarmTrigger(type="value_range"))
     # False: the alarm fires already acknowledged, so it never waits for an operator.
     ack_required: bool = True
-    ack_groups: list[str] = Field(default_factory=list)
     # `$var` bindings the `{1}`, `{2}` … placeholders in title/description name.
     values: list[Any] = Field(default_factory=list)
+
+    _ignore_ack_groups = model_validator(mode="before")(_drop_ack_groups)
 
     @staticmethod
     def resolve_string(value: Any) -> str:
@@ -153,7 +161,6 @@ class AlarmInstance(BaseModel):
     group_title: str = ""
     auto_popup: bool = True
     ack_required: bool = True
-    ack_groups: list[str] = Field(default_factory=list)
     # The definition's `values` bindings, so a client can show them live while
     # active, and their raw values at fire time, which history keeps.
     value_refs: list[Any] = Field(default_factory=list)
@@ -162,6 +169,8 @@ class AlarmInstance(BaseModel):
     acked: bool = False
     acked_by: str = ""
     acked_at: str = ""
+
+    _ignore_ack_groups = model_validator(mode="before")(_drop_ack_groups)
 
 
 class AlarmHistoryEntry(BaseModel):

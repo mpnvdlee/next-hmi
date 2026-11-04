@@ -13,7 +13,8 @@ import {
 } from '@hmi/utils/propertySourceEval';
 import { useHmiScope } from '@hmi/context/HmiScopeContext';
 import { useTranslationStore } from '@shared/store/translationStore';
-import { apiJson, errorMessage } from '@shared/utils/api';
+import { sendWsMessage } from '@hmi/hooks/useWebSocket';
+import { beginTrackedWrite, resolvePending } from '@hmi/utils/actionDispatcher';
 import './alarmShared.css';
 
 /** An alarm instance or history row, as far as its `{n}` placeholders need it. */
@@ -142,6 +143,13 @@ export interface AckAlarmOptions {
 
 const ACK_TOAST_DURATION_MS = 4000;
 
+const ACK_FAILURE_MESSAGES: Record<string, string> = {
+  not_found: 'The alarm is no longer active',
+  alarms_unavailable: 'Alarms are not available',
+  disconnected: 'Not connected to the server',
+  timeout: 'The server did not respond',
+};
+
 /**
  * Report a refused acknowledgement, per `useWriteVariable`'s error contract.
  *
@@ -156,12 +164,11 @@ const ACK_TOAST_DURATION_MS = 4000;
  * reasons each still get to say so.
  */
 function reportAckFailure(
-  err: unknown,
+  reason: string,
   toastId: string,
   onError: NonNullable<AckAlarmOptions['onError']>,
 ): void {
   if (onError === 'silent') return;
-  const reason = errorMessage(err);
   if (typeof onError === 'function') {
     onError(reason);
     return;
@@ -170,50 +177,50 @@ function reportAckFailure(
   if (pendingToasts.some((t) => t.id === toastId)) return;
   showToast({
     id: toastId,
-    message: `Could not acknowledge: ${reason}`,
+    message: `Could not acknowledge: ${ACK_FAILURE_MESSAGES[reason] ?? reason}`,
     severity: 'error',
     discard: 'auto',
     duration: ACK_TOAST_DURATION_MS,
   });
 }
 
-async function postAck(
-  url: string,
-  username: string,
+function sendAck(
+  msg: { type: 'alarm_ack'; instanceId: string } | { type: 'alarm_ack_all' },
   toastId: string,
   options: AckAlarmOptions | undefined,
 ): Promise<boolean> {
-  try {
-    await apiJson(url, { method: 'POST', body: { username } });
-    return true;
-  } catch (err) {
-    reportAckFailure(err, toastId, options?.onError ?? 'toast');
-    return false;
-  }
+  return new Promise((resolve) => {
+    const requestId = beginTrackedWrite('', (ok, payload) => {
+      if (!ok) reportAckFailure(String(payload.reason), toastId, options?.onError ?? 'toast');
+      resolve(ok);
+    });
+    // Fail now on a closed socket rather than after the 10 s pending timeout.
+    if (!sendWsMessage({ ...msg, requestId })) {
+      resolvePending(requestId, { reason: 'disconnected' }, false);
+    }
+  });
 }
 
 /**
- * Acknowledge a single alarm instance via the REST API.
+ * Acknowledge a single alarm instance over the WebSocket.
+ *
+ * The backend records the user signed in on this connection (or `guest`), so
+ * `_username` is ignored; it stays in the signature for existing widgets.
  *
  * Resolves `true` when the backend accepted it and `false` when it refused —
  * it never rejects, so a caller that ignores the result still gets the refusal
  * on screen. Sequence anything that must only happen on success (closing a
  * dialog, say) on the returned value.
  */
-export async function ackAlarm(
+export function ackAlarm(
   instanceId: string,
-  username: string,
+  _username?: string,
   options?: AckAlarmOptions,
 ): Promise<boolean> {
-  return postAck(
-    `/api/alarms/ack/${encodeURIComponent(instanceId)}`,
-    username,
-    `alarm-ack-${instanceId}`,
-    options,
-  );
+  return sendAck({ type: 'alarm_ack', instanceId }, `alarm-ack-${instanceId}`, options);
 }
 
-/** Acknowledge all active alarms via the REST API. Same contract as `ackAlarm`. */
-export async function ackAllAlarms(username: string, options?: AckAlarmOptions): Promise<boolean> {
-  return postAck('/api/alarms/ack-all', username, 'alarm-ack-all', options);
+/** Acknowledge all active alarms. Same contract as `ackAlarm`. */
+export function ackAllAlarms(_username?: string, options?: AckAlarmOptions): Promise<boolean> {
+  return sendAck({ type: 'alarm_ack_all' }, 'alarm-ack-all', options);
 }

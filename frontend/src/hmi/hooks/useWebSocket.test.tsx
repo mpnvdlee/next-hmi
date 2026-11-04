@@ -1,5 +1,7 @@
 import { StrictMode } from 'react';
 import { act, render } from '@testing-library/react';
+import { ackAlarm, ackAllAlarms } from '../components/alarmUtils';
+import { useHmiStore } from '../store/hmiStore';
 import { useVariableStore } from '../store/variableStore';
 import { setBackendRestartHandler, useWebSocket } from './useWebSocket';
 
@@ -21,7 +23,11 @@ class FakeSocket {
     FakeSocket.instances.push(this);
   }
 
-  send(): void {}
+  sent: string[] = [];
+
+  send(data: string): void {
+    this.sent.push(data);
+  }
 
   /** Matches the browser: closing a pending handshake only marks it CLOSING —
    *  the close event lands later, whenever the abort completes. */
@@ -144,5 +150,25 @@ describe('useWebSocket', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('settles an alarm ack on its correlated response or error', async () => {
+    render(<Probe />);
+    const live = FakeSocket.instances[FakeSocket.instances.length - 1];
+    act(() => live.open());
+    const lastRequestId = () =>
+      (JSON.parse(live.sent[live.sent.length - 1]) as { requestId: string }).requestId;
+    useHmiStore.setState({ pendingToasts: [] });
+
+    const accepted = ackAlarm('inst-1');
+    act(() => live.receive({ type: 'alarm_ack_response', requestId: lastRequestId() }));
+    await expect(accepted).resolves.toBe(true);
+
+    const refused = ackAllAlarms();
+    act(() =>
+      live.receive({ type: 'alarm_ack_error', requestId: lastRequestId(), reason: 'not_found' }),
+    );
+    await expect(refused).resolves.toBe(false);
+    expect(useHmiStore.getState().pendingToasts[0].message).toMatch(/no longer active/);
   });
 });

@@ -678,36 +678,6 @@ def test_logout_resets_to_guest(ws_manager):
     assert ws_manager._client_users["c1"]["runtime:tab1:inst1"]["username"] == "guest"
 
 
-def test_write_field_denied_when_group_mismatch(ws_manager):
-    ws = FakeWebSocket()
-    ws_manager._connections["c1"] = ws
-    # client logged in as operator with groups ["operator", "guest"]
-    ws_manager._client_users["c1"] = {
-        "runtime:tab1:inst1": {"username": "operator1", "groups": ["operator", "guest"]}
-    }
-
-    entry_data = {"interactableByGroups": ["engineer", "admin"]}
-    permitted = ws_manager._check_write_permitted("c1", "runtime:tab1:inst1", entry_data)
-    assert permitted is False
-
-
-def test_write_field_permitted_when_group_matches(ws_manager):
-    ws = FakeWebSocket()
-    ws_manager._connections["c1"] = ws
-    ws_manager._client_users["c1"] = {
-        "runtime:tab1:inst1": {"username": "operator1", "groups": ["operator", "guest"]}
-    }
-
-    entry_data = {"interactableByGroups": ["operator", "engineer"]}
-    permitted = ws_manager._check_write_permitted("c1", "runtime:tab1:inst1", entry_data)
-    assert permitted is True
-
-
-def test_write_field_permitted_when_no_restriction(ws_manager):
-    entry_data = {}
-    assert ws_manager._check_write_permitted("c1", "config", entry_data) is True
-
-
 def test_get_runtime_sessions_excludes_config_scope(ws_manager):
     from datetime import datetime
     ws_manager._connections["c2"] = FakeWebSocket()

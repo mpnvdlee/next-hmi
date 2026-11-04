@@ -5,7 +5,6 @@ import AlarmTree from '../components/alarms/AlarmTree';
 import AlarmPropertiesPanel from '../components/alarms/AlarmPropertiesPanel';
 import AlarmPopupPreviewPanel from '../components/alarms/AlarmPopupPreviewPanel';
 import { useAlarmConfigStore } from '../store/alarmConfigStore';
-import { useUsersDomainStore } from '../store/domains/usersDomainStore';
 import ConfigWorkspace from '../components/ui/ConfigWorkspace';
 
 export default function AlarmsView() {
@@ -22,13 +21,9 @@ export default function AlarmsView() {
   const deleteGroup = useAlarmConfigStore((s) => s.deleteGroup);
   const deleteAlarm = useAlarmConfigStore((s) => s.deleteAlarm);
 
-  // Load users for ack_groups
-  const ensureUsersLoaded = useUsersDomainStore((s) => s.ensureLoaded);
-
   useEffect(() => {
     void load();
-    ensureUsersLoaded();
-  }, [load, ensureUsersLoaded]);
+  }, [load]);
 
   // Open on the first alarm instead of an empty preview behind a "select an
   // alarm" message. Falls back to the group when it holds no alarms yet.

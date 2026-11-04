@@ -525,7 +525,8 @@ declare function useVariableMeta(key: string): VarMeta | undefined;
 
 /** Low-level frame send. Prefer `useWriteVariable` for variable writes: without
  *  a `requestId` the backend emits no `write_response` / `write_error`, so a
- *  rejected write is invisible to the operator. */
+ *  rejected write is invisible to the operator. Returns `false` when the socket
+ *  is not open and the frame was dropped. */
 declare function sendWsMessage(msg: {
   type: 'write_field';
   requestId?: string;
@@ -534,7 +535,7 @@ declare function sendWsMessage(msg: {
   path: string;
   field?: string;
   value: unknown;
-}): void;
+}): boolean;
 
 interface WriteVariableOptions {
   /**
@@ -677,7 +678,6 @@ interface AlarmInstance {
   auto_popup: boolean;
   /** False: the alarm fired already acknowledged; absent means it needed acknowledgement. */
   ack_required?: boolean;
-  ack_groups: string[];
   /** `$var` bindings of the alarm's `values`, read live while it is active. */
   value_refs?: unknown[];
   /** Raw `values` when the alarm fired. */
@@ -708,7 +708,12 @@ declare function useAlarmText(): (
   text: string,
   alarm?: { id?: string; values?: unknown[] },
 ) => string;
-/** The current HMI actor username, falling back to 'operator'. */
+/**
+ * The current HMI actor username, falling back to 'operator'. For display only.
+ * @deprecated No built-in uses it: the server records who acknowledged an alarm
+ * from the connection itself, and with nobody signed in that is `guest`, not
+ * this hook's `'operator'`. Bind a property to `$user` for the name instead.
+ */
 declare function useAlarmUsername(): string;
 /** Class publishing a severity as `--hmi-alarm-level` on an alarm surface. */
 declare function alarmLevelClass(level: AlarmLevel): string;
@@ -728,20 +733,23 @@ interface AckAlarmOptions {
 /** Acknowledge one alarm instance. Resolves `true` when the backend accepted it
  *  and `false` when it refused; it never rejects, and reports a refusal per
  *  `options.onError` — so ignoring the result still puts the failure on screen.
- *  Sequence anything that must only happen on success on the returned value. */
+ *  Sequence anything that must only happen on success on the returned value.
+ *  The backend records the user signed in on this connection (or `guest`);
+ *  `username` is ignored and kept so existing widgets compile. */
 declare function ackAlarm(
   instanceId: string,
-  username: string,
+  username?: string,
   options?: AckAlarmOptions,
 ): Promise<boolean>;
 /** Acknowledge every active alarm. Same contract as `ackAlarm`. */
-declare function ackAllAlarms(username: string, options?: AckAlarmOptions): Promise<boolean>;
+declare function ackAllAlarms(username?: string, options?: AckAlarmOptions): Promise<boolean>;
 /** The product's alarm detail dialog, rendered as a modal over the page. */
 declare const AlarmDetailDialog: (props: {
   alarm: AlarmInstance;
   /** Set for an alarm from the history: shown in the details, and nothing left to acknowledge. */
   clearedAt?: string;
-  username: string;
+  /** Ignored: the backend records who is signed in. Kept for existing widgets. */
+  username?: string;
   onClose: () => void;
 }) => JSX.Element;
 

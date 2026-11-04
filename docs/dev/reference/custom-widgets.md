@@ -187,7 +187,7 @@ The canonical list of names exposed on `window.__nextHMI__` lives in `frontend/s
 - `bindingKey(binding)` — composes a `"datasource:path"` key from a `VariableBinding`.
 - `parseVarKey(key)` — splits `"datasource:path"` back into `{ datasource, path }`.
 - `useWriteVariable(properties, propKey, options?)` — returns `(value, opts?) => void`, the supported way to write a bound variable. See [Writing values](#writing-values).
-- `sendWsMessage(msg)` — sends a raw frame on the shared WebSocket; the one write frame the backend accepts is `type: 'write_field'`. For variable writes use `useWriteVariable` instead — it correlates the response, which a hand-built frame does not.
+- `sendWsMessage(msg)` → `boolean` — sends a raw frame on the shared WebSocket, returning `false` when the socket is not open and the frame was dropped; the one write frame the backend accepts is `type: 'write_field'`. For variable writes use `useWriteVariable` instead — it correlates the response, which a hand-built frame does not.
 - `useHmiScope()` — returns the active runtime scope id (e.g. `runtime:main`), useful as the `scope` field on `write_field`.
 
 ### Property resolvers
@@ -236,29 +236,34 @@ To list saved recipes in a widget, bind a `record-list` property to the
 
 ### Alarms
 
-Active alarms and their counts are pushed over the WebSocket; acknowledgement
-and history go over REST. The built-in `Alarm List` and `Alarm History` widgets
+Active alarms and their counts are pushed over the WebSocket, and acknowledgement
+goes back over it; history comes over REST. The built-in `Alarm List` and `Alarm History` widgets
 (`frontend/widgets/Content/AlarmListManaged`, `…/AlarmHistoryList`) are the
 worked examples.
 
 - `useActiveAlarms()` → `AlarmInstance[]` — the live active-alarm list.
 - `useAlarmSummary()` → `AlarmSummary` (`{ total, unacked, error_count, warning_count, info_count }`) — the counts pushed alongside that list, so a badge doesn't re-derive them. For a single count in a plain property, the `$alarmCount` property source is simpler than this hook.
 - `useAlarmText()` — returns a `(text: string) => string` resolver for an instance's `title` and `description`. Those arrive already flattened to a bare `$loc` key: one instance is broadcast to every client and stored in history, so it stays language-agnostic and the operator's language is applied at render. A literal string passes through unchanged. Pass the instance or history row as a second argument to fill its `{1}`, `{2}` … placeholders from the alarm's `values`: live while it is active, the value stored at fire time once cleared, `—` where there is none. Calling the hook also subscribes the component, so alarm text follows a language switch and an active alarm's live values.
-- `useAlarmUsername()` → `string` — the signed-in user of the current scope, falling back to `'operator'`. This is the `username` the ack calls and `AlarmDetailDialog` expect.
-- `ackAlarm(instanceId, username, options?)` → `Promise<boolean>` — acknowledge one instance.
-- `ackAllAlarms(username, options?)` → `Promise<boolean>` — acknowledge every active alarm.
+- `useAlarmUsername()` → `string` — **deprecated**, kept for existing widgets. The signed-in user of the current scope, falling back to `'operator'`. No built-in uses it: the server records the acknowledging user from the connection, `guest` when nobody is signed in, so this hook's fallback does not match what is recorded. Bind a property to `$user` for the name instead.
+- `ackAlarm(instanceId, username?, options?)` → `Promise<boolean>` — acknowledge one instance.
+- `ackAllAlarms(username?, options?)` → `Promise<boolean>` — acknowledge every active alarm.
 - `alarmLevelClass(level)` — the class that publishes a severity as `--hmi-alarm-level` on an alarm surface. Every severity-driven rule in the app's shared alarm stylesheet reads that one custom property, so putting this on the row, toast or card is what drives its stripe, tint and dot — a level maps to a colour in exactly one place.
 - `levelDotClass(level)` — the composed class string for a level indicator dot (`hmi-pill__dot hmi-alarm-dot` plus the level class).
 - `formatAlarmTimeShort(iso)` — an ISO timestamp as a short local time (`HH:MM:SS`); `''` for an empty string.
 - `formatAlarmDateTime(iso)` — an ISO timestamp as a full local date and time; `'—'` for an empty string.
-- `AlarmDetailDialog` — the product's alarm detail dialog, driven by `{ alarm, username, onClose }`. It draws its own modal overlay, resolves the instance's `resolutions` through the evaluation context, and offers an acknowledge button when the alarm isn't acked yet. Render it conditionally on your own selection state rather than mounting it always.
+- `AlarmDetailDialog` — the product's alarm detail dialog, driven by `{ alarm, clearedAt?, onClose }` (a `username` prop is accepted and ignored). It draws its own modal overlay, resolves the instance's `resolutions` through the evaluation context, and offers an acknowledge button when the alarm isn't acked yet. Render it conditionally on your own selection state rather than mounting it always.
+
+Both ack calls send a `/ws` message, and the backend records the user signed in
+on this connection — or `guest` — as the one who acknowledged. The `username`
+argument is ignored; it stays in the signature so existing widgets compile.
 
 Both ack calls carry `useWriteVariable`'s error contract: neither ever rejects.
 They resolve `true` when the backend accepted the acknowledgement and `false`
 when it refused, and a refusal shows the operator one error toast — so awaiting
 one bare, with no `try`, is safe and still tells the operator what happened.
 Pass `options` to change that: `{ onError: 'silent' }` swallows the failure,
-`{ onError: (reason) => … }` hands you the reason string instead of toasting.
+`{ onError: (reason) => … }` hands you the reason code (`not_found`, `timeout`,
+`disconnected`, …) instead of toasting.
 The toast lives inside the call because `showToast` is not on the SDK; its id is
 per ack target and deduped, so hammering an ACK button reuses one toast rather
 than stacking one per press. A widget that already wrapped an ack in its own
@@ -266,7 +271,7 @@ than stacking one per press. A widget that already wrapped an ack in its own
 into `onError`.
 
 Sequence anything that must only happen on success on the returned value —
-`if (await ackAlarm(alarm.id, username)) close()`, as `AlarmDetailDialog` does,
+`if (await ackAlarm(alarm.id)) close()`, as `AlarmDetailDialog` does,
 so a refused ack leaves the dialog open behind its toast instead of closing as
 if it had worked.
 
@@ -619,14 +624,14 @@ const write = useWriteVariable(properties, 'variable');
 <button disabled={!write.canWrite} onClick={() => write(true)}>Start</button>;
 ```
 
-**Why the requestId matters.** The backend only replies with `write_response` / `write_error` when the frame carries a `requestId`. A hand-built `sendWsMessage({ type: 'write_field', … })` has none, so a rejected write — a value out of range, or a variable whose `interactableByGroups` excludes the logged-in user's group — is dropped silently and the operator sees nothing. Nothing in the widget's metadata exposes `interactableByGroups`, so a widget cannot pre-disable itself on permission; the correlated `write_error` is the only signal there is.
+**Why the requestId matters.** The backend only replies with `write_response` / `write_error` when the frame carries a `requestId`. A hand-built `sendWsMessage({ type: 'write_field', … })` has none, so a rejected write — a value out of range, or a controller that refused it — is dropped silently and the operator sees nothing. The correlated `write_error` is the only signal there is.
 
 By default a rejection shows one error toast, reusing a single toast id per widget so a held-down control can't stack them. Change that with the third argument:
 
 ```tsx
 const write = useWriteVariable(properties, 'setpoint', { onError: 'silent' });
 const write = useWriteVariable(properties, 'setpoint', {
-  onError: (reason) => setLastError(reason), // 'permission_denied', 'value_out_of_range', 'timeout', …
+  onError: (reason) => setLastError(reason), // 'read_only', 'value_out_of_range', 'timeout', …
 });
 ```
 

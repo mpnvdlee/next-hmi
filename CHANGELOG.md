@@ -46,7 +46,31 @@ heading.
   `$http` URL may reach when it takes its server from a placeholder; see
   **Changed**.
 
+- **`sendWsMessage` says whether it sent.** The widget SDK's
+  `sendWsMessage` returns `true` when the message went out and `false` when
+  the live connection is down.
+
 ### Changed
+
+- **The server no longer limits who may write a variable.**
+  Per-variable write groups (`interactableByGroups` on a datasource
+  variable) are gone. A write, a toggle and a recipe load are refused only
+  when the variable is not writable, and the `permission_denied` write error
+  no longer occurs. A project that still carries the key opens unchanged and
+  the key is ignored. To stop a group changing a value, block or hide the
+  button that writes it (**Interactable** or **Visible** → `$userGroups`),
+  and mark the variable read-only in its datasource when no screen needs to
+  write it. Anyone who can reach the panel can write the writable variables,
+  so keep the runtime on a trusted network.
+
+- **Alarms are acknowledged over the live connection, in the name of who is
+  signed in.** `POST /api/alarms/ack/{id}` and
+  `POST /api/alarms/ack-all` are removed. An acknowledgement records the
+  user signed in on that screen, or `guest`, never a name the caller sends.
+  The Alarm List, the alarm pop-up and **Acknowledge All Alarms** work as
+  before. A custom widget that called those routes itself uses the SDK's
+  `ackAlarm` / `ackAllAlarms` instead; their `username` argument is still
+  accepted and ignored.
 
 - **The live view gets the user roster, not the users file.**
   `GET /api/users` now needs the device-admin session, and carries
@@ -72,10 +96,25 @@ heading.
   proxy must also send `X-Forwarded-Proto`, and a proxy on another host
   must be listed in `NEXTHMI_FORWARDED_ALLOW_IPS`.
 
+- **Changes from the editor are recorded as `engineer`.** A value written,
+  a recipe loaded or saved, or an alarm acknowledged in the editor's Test
+  mode is recorded as `engineer`, whichever project user the preview is
+  signed in as: the editor sits behind the device-admin password, not a
+  project user.
+
+- **Recipe download takes no credentials.** `POST
+  /api/recipes/datasets/{id}/download` ignores HTTP Basic credentials; they
+  only fed the write groups. Upload still takes them, to record who saved.
+
 ### Removed
 
 - **`GET /api/users/credential-state`.** `GET /api/users` carries
   `passwordSet` for each user instead.
+
+- **The alarm setting Allowed groups.** It never limited who could
+  acknowledge an alarm: anyone at the screen may, signed in or not. A
+  project that still carries it (`ack_groups`) opens unchanged and drops the
+  key on the next save, and alarms reach custom widgets without it.
 
 ### Fixed
 
@@ -98,6 +137,11 @@ heading.
   project kept evaluating its old alarm list, and the editor and runtime kept
   showing it, until the project was restarted. A running project now picks up
   added, changed and deleted alarms straight away.
+- **An alarm acknowledgement says why it failed, at once when offline.** The
+  message reads as a sentence for an alarm that is gone, a timeout, alarms
+  being unavailable and a lost connection, and an acknowledgement pressed
+  while the connection is down fails straight away instead of after 10 s.
+  `onError` still gets the raw code.
 
 ### Security
 
@@ -117,6 +161,17 @@ heading.
 
 - **Who belongs to which group stays behind the password.** The public user
   list carried every group membership; the roster carries none.
+
+- **An alarm acknowledgement records who really gave it.** The public
+  acknowledgement routes recorded whatever username the caller sent.
+
+- **Recipe loads and REST writes are recorded.** In a build that keeps a
+  record of who did what, every recipe load that writes a value is now
+  recorded with who loaded it: on the live connection the signed-in user,
+  and through `POST /api/recipes/datasets/{id}/download` `guest`, or
+  `engineer` from the editor. A variable written through
+  `POST /api/datasources/write` is recorded like one written on the live
+  connection: as the signed-in user, or `engineer` from the editor.
 
 ## [1.1.0] - 2026-10-31
 

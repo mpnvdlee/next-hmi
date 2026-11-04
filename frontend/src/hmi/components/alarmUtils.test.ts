@@ -2,105 +2,113 @@
  * The acknowledgement half of `alarmUtils` — the SDK's `ackAlarm` /
  * `ackAllAlarms`.
  *
- * Both used to hand their rejection back to the caller, and every caller
- * awaited them bare: a refused ack became an unhandled promise rejection and
- * the operator saw nothing at all. They now carry `useWriteVariable`'s error
- * contract, which is what these tests pin.
+ * They carry `useWriteVariable`'s error contract — never reject, report a
+ * refusal per `onError` — over the WebSocket, which is what these tests pin.
  */
 import { act, renderHook } from '@testing-library/react';
 import type { AlarmInstance } from '@shared/types/alarm';
 import { useAlarmStore } from '@hmi/store/alarmStore';
 import { useHmiStore } from '@hmi/store/hmiStore';
 import { useVariableStore } from '@hmi/store/variableStore';
-import { apiJson } from '@shared/utils/api';
+import { sendWsMessage } from '@hmi/hooks/useWebSocket';
+import { resolvePending } from '@hmi/utils/actionDispatcher';
 import { ackAlarm, ackAllAlarms, useAlarmText } from './alarmUtils';
 
-vi.mock('@shared/utils/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/utils/api')>()),
-  apiJson: vi.fn(),
-}));
+vi.mock('@hmi/hooks/useWebSocket', () => ({ sendWsMessage: vi.fn() }));
 
 function toasts() {
   return useHmiStore.getState().pendingToasts;
 }
 
+/** The frame the last ack sent. */
+function sent(): Record<string, unknown> {
+  return vi.mocked(sendWsMessage).mock.lastCall?.[0] as Record<string, unknown>;
+}
+
+/** Answer the last ack the way the backend would. */
+function answer(ok: boolean, reason?: string) {
+  resolvePending(String(sent().requestId), reason ? { reason } : {}, ok);
+}
+
+beforeEach(() => {
+  vi.mocked(sendWsMessage).mockReset().mockReturnValue(true);
+  useHmiStore.setState({ pendingToasts: [] });
+});
+
 describe('ackAlarm', () => {
-  beforeEach(() => {
-    vi.mocked(apiJson).mockReset();
-    useHmiStore.setState({ pendingToasts: [] });
-  });
+  it('sends the acknowledgement without a username and resolves true', async () => {
+    const result = ackAlarm('inst-1', 'operator');
+    expect(sent()).toMatchObject({ type: 'alarm_ack', instanceId: 'inst-1' });
+    expect(sent()).not.toHaveProperty('username');
 
-  it('posts the acknowledgement and resolves true without toasting', async () => {
-    vi.mocked(apiJson).mockResolvedValue(undefined);
+    answer(true);
 
-    await expect(ackAlarm('inst-1', 'operator')).resolves.toBe(true);
-
-    expect(apiJson).toHaveBeenCalledWith('/api/alarms/ack/inst-1', {
-      method: 'POST',
-      body: { username: 'operator' },
-    });
+    await expect(result).resolves.toBe(true);
     expect(toasts()).toHaveLength(0);
   });
 
   it('resolves false and toasts the reason when the backend refuses', async () => {
-    vi.mocked(apiJson).mockRejectedValue(new Error('You are not allowed to acknowledge'));
+    const result = ackAlarm('inst-1');
+    answer(false, 'not_found');
 
-    await expect(ackAlarm('inst-1', 'operator')).resolves.toBe(false);
-
+    await expect(result).resolves.toBe(false);
     expect(toasts()).toHaveLength(1);
     expect(toasts()[0].severity).toBe('error');
-    expect(toasts()[0].message).toMatch(/not allowed to acknowledge/);
+    expect(toasts()[0].message).toBe('Could not acknowledge: The alarm is no longer active');
+  });
+
+  it('fails at once, as disconnected, when the socket is not open', async () => {
+    vi.mocked(sendWsMessage).mockReturnValue(false);
+
+    await expect(ackAlarm('inst-1')).resolves.toBe(false);
+    expect(toasts()[0].message).toMatch(/Not connected to the server/);
   });
 
   it('reuses one toast per instance, and gives a second instance its own', async () => {
-    vi.mocked(apiJson).mockRejectedValue(new Error('Server unavailable'));
-
-    await ackAlarm('inst-1', 'operator');
-    await ackAlarm('inst-1', 'operator');
+    void ackAlarm('inst-1');
+    answer(false, 'disconnected');
+    void ackAlarm('inst-1');
+    answer(false, 'disconnected');
     expect(toasts()).toHaveLength(1);
 
-    await ackAlarm('inst-2', 'operator');
+    void ackAlarm('inst-2');
+    answer(false, 'disconnected');
     expect(toasts()).toHaveLength(2);
   });
 
   it('honours onError: silent and the callback form', async () => {
-    vi.mocked(apiJson).mockRejectedValue(new Error('Alarm not found'));
-
-    await expect(ackAlarm('inst-1', 'operator', { onError: 'silent' })).resolves.toBe(false);
+    const silent = ackAlarm('inst-1', 'operator', { onError: 'silent' });
+    answer(false, 'not_found');
+    await expect(silent).resolves.toBe(false);
     expect(toasts()).toHaveLength(0);
 
     const reasons: string[] = [];
-    await ackAlarm('inst-1', 'operator', { onError: (reason) => reasons.push(reason) });
-    expect(reasons).toEqual(['Alarm not found']);
+    void ackAlarm('inst-1', 'operator', { onError: (reason) => reasons.push(reason) });
+    answer(false, 'not_found');
+    expect(reasons).toEqual(['not_found']);
     expect(toasts()).toHaveLength(0);
   });
 });
 
 describe('ackAllAlarms', () => {
-  beforeEach(() => {
-    vi.mocked(apiJson).mockReset();
-    useHmiStore.setState({ pendingToasts: [] });
-  });
+  it('sends the acknowledgement and resolves true', async () => {
+    const result = ackAllAlarms();
+    expect(sent()).toMatchObject({ type: 'alarm_ack_all' });
 
-  it('posts the acknowledgement and resolves true', async () => {
-    vi.mocked(apiJson).mockResolvedValue(undefined);
+    answer(true);
 
-    await expect(ackAllAlarms('operator')).resolves.toBe(true);
-
-    expect(apiJson).toHaveBeenCalledWith('/api/alarms/ack-all', {
-      method: 'POST',
-      body: { username: 'operator' },
-    });
+    await expect(result).resolves.toBe(true);
   });
 
   it('resolves false and toasts once however often it is refused', async () => {
-    vi.mocked(apiJson).mockRejectedValue(new Error('Server unreachable'));
-
-    await expect(ackAllAlarms('operator')).resolves.toBe(false);
-    await ackAllAlarms('operator');
+    const first = ackAllAlarms();
+    answer(false, 'timeout');
+    await expect(first).resolves.toBe(false);
+    void ackAllAlarms();
+    answer(false, 'timeout');
 
     expect(toasts()).toHaveLength(1);
-    expect(toasts()[0].message).toMatch(/Server unreachable/);
+    expect(toasts()[0].message).toMatch(/The server did not respond/);
   });
 });
 

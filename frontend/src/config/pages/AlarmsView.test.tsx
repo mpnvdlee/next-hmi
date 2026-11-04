@@ -2,7 +2,6 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AlarmsView from './AlarmsView';
 import { useAlarmConfigStore } from '../store/alarmConfigStore';
-import { useUsersDomainStore } from '../store/domains/usersDomainStore';
 import type { AlarmConfig } from '@shared/types/alarm';
 
 vi.mock('../components/alarms/AlarmPropertiesPanel', () => ({
@@ -32,7 +31,6 @@ const CONFIG: AlarmConfig = {
           resolutions: [],
           trigger: { type: 'bool', source_value: undefined, min: null, max: null, on_true: true },
           ack_required: true,
-          ack_groups: [],
           values: [],
         },
       ],
@@ -50,7 +48,6 @@ beforeEach(() => {
     loadError: null,
     load: vi.fn().mockResolvedValue(undefined),
   });
-  useUsersDomainStore.setState({ ensureLoaded: vi.fn() });
 });
 
 afterEach(() => {
@@ -59,16 +56,13 @@ afterEach(() => {
 });
 
 describe('AlarmsView', () => {
-  it('loads the alarm config and the user groups needed for ack rules', () => {
+  it('loads the alarm config', () => {
     const load = vi.fn().mockResolvedValue(undefined);
-    const ensureLoaded = vi.fn();
     useAlarmConfigStore.setState({ load });
-    useUsersDomainStore.setState({ ensureLoaded });
 
     render(<AlarmsView />);
 
     expect(load).toHaveBeenCalledTimes(1);
-    expect(ensureLoaded).toHaveBeenCalledTimes(1);
   });
 
   it('shows a spinner until the config arrives', () => {

@@ -324,7 +324,7 @@ def test_rest_write_requires_project_user_credentials(ds_client):
     assert response.json()["detail"] == "invalid_credentials"
 
 
-def _restricted_setpoint(manager, groups: list[str]) -> dict:
+def _setpoint(manager) -> dict:
     manager.save(
         "plc1",
         {
@@ -336,7 +336,6 @@ def _restricted_setpoint(manager, groups: list[str]) -> dict:
                     "display_name": "Setpoint",
                     "data_type": "Int16",
                     "enabled": True,
-                    "interactableByGroups": groups,
                 }
             ],
         },
@@ -363,11 +362,10 @@ def _write_project_users(root: Path, *extra: dict) -> None:
 
 
 def test_rest_write_refuses_an_account_with_no_password(ds_client, live_project_root: Path):
-    """``interactableByGroups`` is the only per-tag restriction an anonymous
-    operator faces on the public runtime prefix, and ``Basic bGluZWJvc3M6`` —
-    a real username with an empty password — walked straight through it."""
+    """``Basic bGluZWJvc3M6`` — a real username with an empty password — must
+    not authenticate."""
     client, manager = ds_client
-    payload = _restricted_setpoint(manager, ["engineer"])
+    payload = _setpoint(manager)
     _write_project_users(
         live_project_root,
         {"id": "u-lb", "username": "lineboss", "password": "", "groups": ["engineer", "guest"]},
@@ -385,7 +383,7 @@ def test_rest_write_throttles_repeated_credential_failures(ds_client, live_proje
     """Nothing counted failures on a route reachable with no session at all,
     and each attempt costs a 200 000-iteration PBKDF2."""
     client, manager = ds_client
-    payload = _restricted_setpoint(manager, ["engineer"])
+    payload = _setpoint(manager)
     _write_project_users(
         live_project_root,
         {"id": "u-lb", "username": "lineboss", "password": "", "groups": ["engineer", "guest"]},
@@ -399,7 +397,7 @@ def test_rest_write_throttles_repeated_credential_failures(ds_client, live_proje
     assert locked.status_code == 429
 
 
-def test_rest_write_shares_envelope_coercion_and_group_permission(ds_client, monkeypatch):
+def test_rest_write_shares_envelope_and_coercion(ds_client, monkeypatch):
     client, manager = ds_client
     manager.save(
         "plc1",
@@ -413,6 +411,7 @@ def test_rest_write_shares_envelope_coercion_and_group_permission(ds_client, mon
                     "data_type": "Int16",
                     "enabled": True,
                     "writable": True,
+                    # Retired per-variable write groups: still loads, no longer gates.
                     "interactableByGroups": ["operator"],
                 },
                 {
@@ -440,8 +439,8 @@ def test_rest_write_shares_envelope_coercion_and_group_permission(ds_client, mon
         "reason": None,
     }
     assert client.post(url, json=payload, auth=("guest", "guest")).json() == {
-        "ok": False,
-        "reason": "permission_denied",
+        "ok": True,
+        "reason": None,
     }
     assert client.post(url, json={**payload, "value": None}, auth=("operator", "secret")).json() == {
         "ok": False,
@@ -457,6 +456,47 @@ def test_rest_write_shares_envelope_coercion_and_group_permission(ds_client, mon
         "ok": False,
         "reason": "read_only",
     }
+
+
+def test_rest_write_is_audited_as_the_user_or_the_engineer(ds_client, monkeypatch):
+    from core import audit
+
+    client, manager = ds_client
+    manager.save(
+        "plc1",
+        {
+            "name": "plc1",
+            "type": "static",
+            "variables": [
+                {"kind": "variable", "display_name": "Count", "data_type": "Int16",
+                 "enabled": True, "writable": True},
+            ],
+        },
+    )
+
+    async def authenticate(username, password):
+        return {"username": username, "groups": ["operator"]}, {}
+
+    monkeypatch.setattr(datasource_api_module.users_manager, "authenticate", authenticate)
+    seen: list = []
+    audit.register_listener(seen.append)
+    try:
+        url = "/api/datasources/write"
+        client.post(url, json={"datasource": "plc1", "path": "Count", "value": 7}, auth=("anna", "x"))
+        client.post(url, json={"datasource": "plc1", "path": "Nope", "value": 7}, auth=("anna", "x"))
+        client.post(
+            url,
+            json={"datasource": "plc1", "path": "Count", "value": 8},
+            auth=("anna", "x"),
+            headers={"x-nexthmi-editor": "1"},
+        )
+    finally:
+        audit.unregister_listener(seen.append)
+
+    assert [(e.actor, e.actor_source, e.action, e.subject, e.detail) for e in seen] == [
+        ("anna", "session", "variable.write", "plc1:Count", {"value": 7}),
+        ("engineer", "device_admin", "variable.write", "plc1:Count", {"value": 8}),
+    ]
 
 
 def test_put_datasource_omitted_variables_preserves_existing_tree(ds_client):

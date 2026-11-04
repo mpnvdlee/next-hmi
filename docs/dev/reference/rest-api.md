@@ -17,7 +17,7 @@ A few endpoints raise `fastapi.HTTPException` directly with other status codes �
 
 The **manager** front door is gated by a single **device-admin password** set on first run. The manager's `_auth_gate` middleware requires a valid session cookie (`nexthmi_manager_session`, a stateless HMAC-signed token) on every `/api/*` and `/editor/*` request (and on the manager's own `openapi.json` / `docs` / `redoc`), except `/api/manager/auth/*`, `/api/manager/peer/*`, `/api/manager/mcp/pair`, `/api/health`, and `/mcp`. Peer endpoints perform their own bearer-token authentication (only pairing accepts the existing device-admin password); `/mcp` takes a manager session or an MCP bearer token (see [mcp.md](mcp.md)); MCP pairing checks the device-admin password itself. See **Manager API** below for the login/setup endpoints; the password digest lives in `<runtime_home>/.manager-auth.json`.
 
-**`/runtime/*` is the exception: a live operator view is public.** A deny-by-default allowlist (`_RUNTIME_PUBLIC_ROUTES` in `manager.py`) names the child routes a running screen needs — the SPA document and its static mounts, a fixed set of config / theme / component / widget reads, the user roster (names and group labels), alarm history, historian queries, the operator-action POSTs (alarm ack, recipe load and save, `$http`), and `/ws`. Everything else under `/runtime/*` still needs the session: every write verb, `api/datasources`, `api/system/*`, `api/projects/*`, `api/internal/*`, `api/health`, and the instance's own `openapi.json` / `docs` / `redoc`. `HEAD` follows `GET`; `OPTIONS` is gated, since an anonymous preflight would otherwise enumerate the withheld routes.
+**`/runtime/*` is the exception: a live operator view is public.** A deny-by-default allowlist (`_RUNTIME_PUBLIC_ROUTES` in `manager.py`) names the child routes a running screen needs — the SPA document and its static mounts, a fixed set of config / theme / component / widget reads, the user roster (names and group labels), alarm history, historian queries, the operator-action POSTs (recipe load and save, `$http`), and `/ws`. Everything else under `/runtime/*` still needs the session: every write verb, `api/datasources`, `api/system/*`, `api/projects/*`, `api/internal/*`, `api/health`, and the instance's own `openapi.json` / `docs` / `redoc`. `HEAD` follows `GET`; `OPTIONS` is gated, since an anonymous preflight would otherwise enumerate the withheld routes.
 
 A path segment is refused outright when *any* decoding of it — the original, each intermediate `unquote`, or the fixpoint — contains `/` or `\`, or is empty, `.` or `..`. The gate and the child each decode once, so without that rule a double-encoded separator lets the gate match one route while the child serves another.
 
@@ -254,7 +254,8 @@ Base prefix: `/api/datasources`. Datasource types supported (`models/datasource.
   - Requires HTTP Basic credentials for a user in the active project's `users.json`; manager-session authentication is not accepted as a substitute for an HMI identity.
   - Body uses the WebSocket write envelope: `{ "datasource": "PLC", "path": "Motor/Speed", "value": 42, "field"?: "name" }`.
   - Returns `{ "ok": true, "reason": null }` or `{ "ok": false, "reason": "<stable reason>" }`; invalid credentials return HTTP `401`. An account with no password set is invalid credentials like any other — it can never be signed in as. Repeated failures are throttled (`core/user_auth_throttle.py`): five in a row for one username, or a flood across many, answer HTTP `429` until the lockout expires.
-  - Uses the same envelope parser, `interactableByGroups` authorization, coercion matrix, and write service as WebSocket `write_field`, and answers with the same `reason` vocabulary ([websocket.md](../architecture/websocket.md#action-result-correlation)). Present `null` reaches coercion and returns `invalid_value`; missing or malformed envelope fields return `bad_request`; an unknown variable is `bad_path`; a caller outside `interactableByGroups` is `permission_denied`.
+  - Uses the same envelope parser, coercion matrix, and write service as WebSocket `write_field`, and answers with the same `reason` vocabulary ([websocket.md](../architecture/websocket.md#action-result-correlation)). Present `null` reaches coercion and returns `invalid_value`; missing or malformed envelope fields return `bad_request`; an unknown variable is `bad_path`. Any authenticated user may write any writable variable; there is no per-variable group check.
+  - A write that lands emits the same `variable.write` audit event as WebSocket `write_field`, with the authenticated user as actor (`actor_source: "session"`), or `engineer` (`actor_source: "device_admin"`) when the request came through the editor prefix.
   - A variable not marked `writable: true` — for an element, its array; for a struct field, that member — is refused as `read_only` and nothing is written. The check runs after coercion, so an uncoercible value to a read-only variable still reports `invalid_value`.
 
 ### Connection wizard
@@ -336,13 +337,7 @@ Base prefix: `/api/alarms`. Configuration models live in `models/alarm.py`; runt
 
 ### Acknowledgement
 
-- `POST /api/alarms/ack/{instance_id}`
-  - Body: `{ "username": "<non-empty>" }`.
-  - `422` if `username` is empty; `404` if the instance is not in the active list.
-  - On success the alarm is marked `acked = true`; it remains active until its trigger clears. Returns `{ "status": "ok" }` and triggers an `alarm_update` broadcast.
-- `POST /api/alarms/ack-all`
-  - Body: `{ "username": "<non-empty>" }`.
-  - Acks every currently unacked active instance. Returns `{ "status": "ok", "count": <n> }`.
+There is no REST route: an acknowledgement is the `/ws` message `alarm_ack` / `alarm_ack_all` ([websocket.md](../architecture/websocket.md#client--server-messages)), so it is recorded against the identity of the connection that sent it rather than a name in a request body.
 
 ---
 
@@ -366,11 +361,12 @@ A project defines **dataset types** (independent axes). Each type owns **paramet
 
 - `POST /api/recipes/datasets/{id}/download`
   - Body: `{ "verify"?: bool }`. Writes every parameter's stored value to its variable (continue-on-error). With `verify`, each value is read back and confirmed by exact match. Records the dataset as loaded for its type on success/partial.
-  - Applies the same `interactableByGroups` authorization as WebSocket `recipe_load`: a parameter whose variable the caller may not write becomes a `permission_denied` failure and is not written. This route carries no session, so a plain request writes as the anonymous `guest`; optional HTTP Basic credentials for a user in the active project's `users.json` lift it out of that, and credentials that do not authenticate return HTTP `401` rather than falling back to `guest` — including an account with no password set, which can never be signed in as. Repeated failures answer HTTP `429` on the same throttle as the variable-write route.
+  - Public on the runtime allowlist and takes no credentials. A parameter whose variable is not writable becomes a `read_only` failure, as on WebSocket `recipe_load`.
+  - A load that writes at least one parameter emits a `recipe.load` audit event: actor `guest` (`actor_source: "anonymous"`), or `engineer` (`device_admin`) when the manager marked the request with `x-nexthmi-editor: 1` — it does so only on the session-gated `/editor/<slug>/` prefix and strips a browser's copy.
   - `404` if the dataset id is unknown. Returns `DownloadResult` `{ result: success|partial|failed, datasetId, written, total, verified, failures: [{ parameterId, reason }] }`.
 - `POST /api/recipes/datasets/{id}/upload`
   - Reads current live values and overwrites the dataset's `values` in place. `404` if unknown. Returns the updated `RecipeConfig`.
-  - Takes the same optional HTTP Basic credentials as download (`401` when they do not authenticate, `429` on the throttle), applies the same per-variable `interactableByGroups` check, and records the authenticated user as the dataset's `updatedBy`.
+  - Takes optional HTTP Basic credentials for a user in the active project's `users.json` and records that user as the dataset's `updatedBy` (empty without credentials; `engineer` on a request the manager marked as coming through the editor). Credentials that do not authenticate return HTTP `401` rather than being dropped — including an account with no password set, which can never be signed in as; repeated failures answer HTTP `429` on the same throttle as the variable-write route.
 
 The WebSocket `recipe_load` / `recipe_save` messages (see `architecture/websocket.md`) drive the same manager methods for button-bound `recipeLoad` / `recipeSave` actions that need `$result`.
 
