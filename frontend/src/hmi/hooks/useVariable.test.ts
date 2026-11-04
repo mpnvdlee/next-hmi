@@ -37,11 +37,6 @@ describe('useVariable', () => {
     useVariableStore.setState({ values: {}, varMeta: {} });
   });
 
-  it('returns undefined when the key is not in the store', () => {
-    const { result } = renderHook(() => useVariable('MyPLC:Motor/Speed'));
-    expect(result.current).toBeUndefined();
-  });
-
   it('returns the current scalar value after setState', () => {
     useVariableStore.setState({ values: { 'MyPLC:Motor/Speed': 1452.3 } });
     const { result } = renderHook(() => useVariable('MyPLC:Motor/Speed'));

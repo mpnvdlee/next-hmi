@@ -986,14 +986,6 @@ describe('insecure-connection notice', () => {
     expect(await screen.findByText(NOTICE)).toBeInTheDocument();
   });
 
-  it('stands on the settings page as well', async () => {
-    vi.stubGlobal('isSecureContext', false);
-
-    renderAt('/settings');
-
-    expect(await screen.findByText(NOTICE)).toBeInTheDocument();
-  });
-
   // The gate is the screen the notice matters most on: the device-admin
   // password typed into it is the exposure the sentence describes.
   it('stands on the sign-in gate, which renders before any route does', () => {

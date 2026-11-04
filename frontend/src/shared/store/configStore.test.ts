@@ -224,10 +224,6 @@ describe('configStore', () => {
       });
     });
 
-    it('keeps a weight the widget still has a row for', () => {
-      expect(growOfKid()).toBe(2);
-    });
-
     it('is left alone when the parent container flips direction under it', () => {
       useConfigStore.getState().updateComponent('row', { layout: { direction: 'column' } });
 

@@ -44,11 +44,6 @@ describe('Breadcrumb', () => {
     useConfigStore.setState({ pages: PAGES as never });
   });
 
-  it('renders with no properties set', () => {
-    const { container } = renderBreadcrumb({});
-    expect(container.querySelector('.hmi-breadcrumb')).not.toBeNull();
-  });
-
   it('roots itself in a nav carrying both component classes', () => {
     const { container } = renderBreadcrumb({});
     const root = container.firstElementChild as HTMLElement;

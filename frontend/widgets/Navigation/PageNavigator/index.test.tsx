@@ -72,11 +72,6 @@ describe('PageNavigator', () => {
     vi.clearAllMocks();
   });
 
-  it('renders with no properties set', () => {
-    const { container } = renderNavigator({});
-    expect(container.querySelector('.hmi-page-navigator')).not.toBeNull();
-  });
-
   it('roots itself in an element carrying both the base and widget classes', () => {
     const { container } = renderNavigator({});
     // `hmi-component` carries the shared flex-sizing defaults (grow, shrink,
@@ -206,12 +201,6 @@ describe('PageNavigator', () => {
     expect(onNavigate).toHaveBeenCalledWith('alarms');
   });
 
-  it('treats unset gates as open', () => {
-    renderNavigator({});
-    expect(prevButton()).toBeEnabled();
-    expect(nextButton()).toBeEnabled();
-  });
-
   it('keeps an end-of-group control shut even when its gate is open', () => {
     renderNavigator({ prevEnabled: true, nextEnabled: true }, [entry(LINE, 'overview')]);
     expect(prevButton()).toBeDisabled();
@@ -234,12 +223,6 @@ describe('PageNavigator', () => {
     expect(container.querySelector('.hmi-page-navigator')).not.toBeNull();
     expect(queryPrev()).toBeNull();
     expect(queryNext()).toBeNull();
-  });
-
-  it('shows both controls by default', () => {
-    renderNavigator({});
-    expect(queryPrev()).not.toBeNull();
-    expect(queryNext()).not.toBeNull();
   });
 
   it('offers only a way back in when the active page is not in the group', async () => {

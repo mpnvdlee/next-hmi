@@ -28,9 +28,9 @@ describe('PathInputField', () => {
 
   it('commits on Enter', () => {
     const { onCommit, input } = setup();
+    input.focus();
     fireEvent.change(input, { target: { value: 'plc:Torque' } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    fireEvent.blur(input);
 
     expect(onCommit).toHaveBeenCalledWith('plc:Torque');
   });

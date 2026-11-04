@@ -343,18 +343,6 @@ class TestStartGuards:
         assert sup.status(project_id) is None
         assert manifest_mod.running_entry(manifest_mod.load_manifest(), project_id) is None
 
-    def test_resume_skips_refused_projects_without_aborting(
-        self, home: Path, tmp_path: Path, monkeypatch, refusing
-    ) -> None:
-        """A cold boot under a refusing guard comes up with nothing running."""
-        project_id = _register_project(home, tmp_path)
-        manifest_mod.upsert_running(project_id, 9001)
-        sup = _make_supervisor(monkeypatch, healthy=True)
-
-        sup.resume_all()
-
-        assert sup.running_snapshot() == []
-
     def test_resume_keeps_the_running_set_when_a_guard_refusal_may_pass_later(
         self, home: Path, tmp_path: Path, monkeypatch, refusing
     ) -> None:

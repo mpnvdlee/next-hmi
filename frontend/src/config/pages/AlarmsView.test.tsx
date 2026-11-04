@@ -102,11 +102,10 @@ describe('AlarmsView', () => {
   it('passes the tree selection through to the properties panel', async () => {
     render(<AlarmsView />);
 
-    await userEvent.click(screen.getByText(/\[A1\] Overflow/));
+    // Not the alarm: the view already lands on that one by itself.
+    await userEvent.click(screen.getByText('Tank'));
 
-    await waitFor(() =>
-      expect(screen.getByTestId('properties')).toHaveTextContent('alarm:overflow'),
-    );
+    await waitFor(() => expect(screen.getByTestId('properties')).toHaveTextContent('group:tank'));
   });
 
   it('lands on the first alarm rather than an empty workspace', async () => {

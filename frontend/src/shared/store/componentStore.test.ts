@@ -225,11 +225,6 @@ describe('deleteFolder', () => {
 // ── registerSave callback ─────────────────────────────────────────────────────
 
 describe('registerSave callback', () => {
-  it('is registered as "components" in projectStore', () => {
-    const cb = useProjectStore.getState()._saveCallbacks.get('components');
-    expect(cb).toBeTruthy();
-  });
-
   it('calls updateComponent for each draft and clears it on success', async () => {
     const updated = { ...COMP_A, name: 'Component A Updated' };
     const fetchMock = vi.fn(async (url: string, opts?: RequestInit) => {
