@@ -9,7 +9,7 @@ project file format ships only in a release whose minor or major number moves.
 Breaking changes are always called out under a **Changed** or **Removed**
 heading.
 
-## [1.2.0] - 2026-11-05
+## [Unreleased]
 
 Opens the HMI to the systems around it and shuts out the ones that should not
 reach it: API v1 for a MES or badge reader, tokens under Settings › Tokens, bit
@@ -110,8 +110,9 @@ server listed.
   so keep the runtime on a trusted network.
 
 - **Alarms are acknowledged over the live connection, in the name of who is signed in.**
-  `POST /api/alarms/ack/{id}` and `POST /api/alarms/ack-all` are removed. An acknowledgement records the
-  user signed in on that screen, or `guest`, never a name the caller sends.
+  `POST /api/alarms/ack/{id}` and `POST /api/alarms/ack-all` are removed.
+  An acknowledgement records the user signed in on that screen, or `guest`,
+  never a name the caller sends.
   The Alarm List, the alarm pop-up and **Acknowledge All Alarms** work as
   before. A custom widget that called those routes itself uses the SDK's
   `ackAlarm` / `ackAllAlarms` instead; their `username` argument is still
@@ -125,7 +126,8 @@ server listed.
   reads the roster, or API v1 `GET …/users` with a token, instead.
 
 - **An `$http` URL that takes its server from a placeholder needs that server listed.**
-  `http://{1}/api/status` used to reach any server but the HMI's own machine. It now reaches only the servers listed
+  `http://{1}/api/status` used to reach any server but the HMI's own
+  machine. It now reaches only the servers listed
   under **Editor › Admin › HTTP sources** (scheme, server and port), and is
   refused until the list holds its server; the warnings pill flags such a
   URL while the list is empty. A local address is always refused there. A
@@ -1382,7 +1384,6 @@ below ships in the initial open-source build.
   shipped loose (replaceable) in binary builds, with the LGPL texts and a
   written source offer bundled alongside.
 
-[1.2.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.2.0
 [1.1.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.1.0
 [1.0.1]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.0.1
 [1.0.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.0.0
