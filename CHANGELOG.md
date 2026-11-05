@@ -207,6 +207,10 @@ heading.
   being unavailable and a lost connection, and an acknowledgement pressed
   while the connection is down fails straight away instead of after 10 s.
   `onError` still gets the raw code.
+- **Double-clicking a page group in the editor's tree pins its tab.** A click
+  on a group shows its first page in the temporary tab, but a double-click
+  left it temporary, while on a page it pins the tab. It now pins that first
+  page too.
 
 ### Security
 

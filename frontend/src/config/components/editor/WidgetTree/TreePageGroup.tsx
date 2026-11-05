@@ -13,7 +13,7 @@ import {
   pageGroupSeverity,
   useArtifactSeverities,
 } from '@config/hooks/useProjectDiagnostics';
-import { isPageGroup, resolvePageTitle } from '@shared/utils/pageTree';
+import { findFirstPage, isPageGroup, resolvePageTitle } from '@shared/utils/pageTree';
 import type { CSSWithVars, NodeKind } from './types';
 import TreePage from './TreePage';
 import PageGroupSectionFolder from './PageGroupSectionFolder';
@@ -94,6 +94,11 @@ export default function TreePageGroup({
           />
         }
         onSelect={() => useEditorDomainStore.getState().setSelected(group.id, root)}
+        // A click previews the group's first page, so a double-click pins that page.
+        onDoubleClick={() => {
+          const first = findFirstPage(group.children);
+          if (first) useEditorDomainStore.getState().openTab(first.id);
+        }}
         onContextMenu={(event) => {
           event.preventDefault();
           onCtxMenu(event, group.id, 'page-group');
