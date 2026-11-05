@@ -9,7 +9,15 @@ project file format ships only in a release whose minor or major number moves.
 Breaking changes are always called out under a **Changed** or **Removed**
 heading.
 
-## [Unreleased]
+## [1.2.0] - 2026-11-05
+
+Opens the HMI to the systems around it and shuts out the ones that should not
+reach it: API v1 for a MES or badge reader, tokens under Settings › Tokens, bit
+bindings and a `Byte` type for status words, and an editor that keeps up with
+an AI assistant's changes. Projects stay on file format 11. Read **Changed**
+before you update: a reverse proxy must pass the browser's `Host` with its
+port, and an `$http` URL that takes its server from a placeholder needs that
+server listed.
 
 ### Added
 
@@ -33,14 +41,6 @@ heading.
   variable of the new **Byte** data type, show their live value in hex
   (`16#0C`) in the datasource table, and are taken by a formula and a Value
   Display.
-
-### Changed
-
-- **A `Byte` tag no longer fits a field that takes an Integer.** An OPC-UA
-  `Byte` — a Siemens `BYTE` or `USINT` — used to arrive as an Integer. It is
-  now a `Byte`, which only a formula and a Value Display take, so a Byte tag
-  bound to another number widget, an alarm, a recipe parameter, the historian
-  or a trend is now flagged in the warnings pill.
 
 - **API v1 for other systems.** A MES, BI tool, HR system or badge reader
   can read historian samples, alarm history and recipes, manage the
@@ -84,6 +84,12 @@ heading.
 
 ### Changed
 
+- **A `Byte` tag no longer fits a field that takes an Integer.** An OPC-UA
+  `Byte` — a Siemens `BYTE` or `USINT` — used to arrive as an Integer. It is
+  now a `Byte`, which only a formula and a Value Display take, so a Byte tag
+  bound to another number widget, an alarm, a recipe parameter, the historian
+  or a trend is now flagged in the warnings pill.
+
 - **One MCP token covers every project.** A token used to name one project;
   now it reaches all of them, at the access level it was made with. MCP
   writes still go through only on projects with **MCP write enabled** ticked,
@@ -103,9 +109,8 @@ heading.
   write it. Anyone who can reach the panel can write the writable variables,
   so keep the runtime on a trusted network.
 
-- **Alarms are acknowledged over the live connection, in the name of who is
-  signed in.** `POST /api/alarms/ack/{id}` and
-  `POST /api/alarms/ack-all` are removed. An acknowledgement records the
+- **Alarms are acknowledged over the live connection, in the name of who is signed in.**
+  `POST /api/alarms/ack/{id}` and `POST /api/alarms/ack-all` are removed. An acknowledgement records the
   user signed in on that screen, or `guest`, never a name the caller sends.
   The Alarm List, the alarm pop-up and **Acknowledge All Alarms** work as
   before. A custom widget that called those routes itself uses the SDK's
@@ -119,16 +124,15 @@ heading.
   which group. A custom widget or script that read `/runtime/<slug>/api/users`
   reads the roster, or API v1 `GET …/users` with a token, instead.
 
-- **An `$http` URL that takes its server from a placeholder needs that
-  server listed.** `http://{1}/api/status` used to reach any
-  server but the HMI's own machine. It now reaches only the servers listed
+- **An `$http` URL that takes its server from a placeholder needs that server listed.**
+  `http://{1}/api/status` used to reach any server but the HMI's own machine. It now reaches only the servers listed
   under **Editor › Admin › HTTP sources** (scheme, server and port), and is
   refused until the list holds its server; the warnings pill flags such a
   URL while the list is empty. A local address is always refused there. A
   URL with a fixed server works as before.
 
-- **Behind a reverse proxy, pass the browser's `Host` with its port
-  (breaking).** The device now refuses a change or a live connection whose
+- **Behind a reverse proxy, pass the browser's `Host` with its port (breaking).**
+  The device now refuses a change or a live connection whose
   browser page came from another address. A proxy that rewrites `Host`
   makes every request look like that, so nothing can be changed and no
   value arrives. Caddy and Traefik pass it by default; nginx needs
@@ -1378,6 +1382,7 @@ below ships in the initial open-source build.
   shipped loose (replaceable) in binary builds, with the LGPL texts and a
   written source offer bundled alongside.
 
+[1.2.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.2.0
 [1.1.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.1.0
 [1.0.1]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.0.1
 [1.0.0]: https://github.com/mpnvdlee/next-hmi/releases/tag/v1.0.0
