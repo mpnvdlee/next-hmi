@@ -426,13 +426,14 @@ A row of mutually-exclusive buttons — pick 1 of N. Writes the chosen option to
 
 ### Dropdown
 
-Pick one option from a list. Publishes the selection for sibling widgets to read and fires On Change.
+Pick one option from a list. Writes the choice to a bound variable, publishes it for sibling widgets to read and fires On Change.
 
 | Property | Label | Type |
 |---|---|---|
 | `label` | Label | `String` |
 | `options` | Options | `option-list | String[] | Integer[]` |
 | `maxIndex` | Max index | `Integer` |
+| `variable` | Value | `String | Integer | Float` |
 | `selectedValue` | Selected value | `String | Integer | Float` |
 | `disabled` | Disabled | `Boolean` |
 | `onChange` | On Change | `actions` |
