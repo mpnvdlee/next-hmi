@@ -8,6 +8,10 @@ const ELEMENT_NAME = /\[(\d+)\]$/;
  * static server may call it `Line[2]` — so the leaf path of one of its members
  * cannot be built from the index alone. Read the real folder name off the
  * variable metadata, which lists every leaf.
+ *
+ * Keyed by position, not by the `N` in the name: the array value counts from 0
+ * whatever the PLC does, as the backend's `_element_paths` do, so the copy at
+ * position 0 of a PLC array `A[1..500]` is `A[1]`.
  */
 const elementPathCache = new WeakMap<object, Map<string, Map<number, string>>>();
 
@@ -19,14 +23,17 @@ function elementPaths(varMeta: Record<string, unknown>, arrayKey: string): Map<n
   }
   let byIndex = byArray.get(arrayKey);
   if (!byIndex) {
-    byIndex = new Map();
+    const byNumber = new Map<number, string>();
     const prefix = `${arrayKey}/`;
     for (const key of Object.keys(varMeta)) {
       if (!key.startsWith(prefix)) continue;
       const name = key.slice(prefix.length).split('/', 1)[0];
       const m = name.match(ELEMENT_NAME);
-      if (m) byIndex.set(Number(m[1]), `${prefix}${name}`);
+      if (m) byNumber.set(Number(m[1]), `${prefix}${name}`);
     }
+    byIndex = new Map(
+      [...byNumber.entries()].sort((a, b) => a[0] - b[0]).map(([, path], i) => [i, path]),
+    );
     byArray.set(arrayKey, byIndex);
   }
   return byIndex;
@@ -40,9 +47,9 @@ export function structElementPath(
   return elementPaths(varMeta, arrayKey).get(index);
 }
 
-/** The element a struct array's shape is read off: the one at `index` when
- *  given and present, otherwise the lowest-index element there is — arrays
- *  may count from 1. Mirrored by `_element_path` in the backend validator. */
+/** The element a struct array's shape is read off: the one at position `index`
+ *  when given and present, otherwise the first. Mirrored by `_element_path` in
+ *  the backend validator. */
 export function structShapeElementPath(
   varMeta: Record<string, unknown>,
   arrayKey: string,
@@ -51,7 +58,7 @@ export function structShapeElementPath(
   const paths = elementPaths(varMeta, arrayKey);
   const bound = index === undefined ? undefined : paths.get(index);
   if (bound !== undefined || paths.size === 0) return bound;
-  return paths.get(Math.min(...paths.keys()));
+  return paths.get(0);
 }
 
 /** Read a slash-path out of a record element; numeric segments index arrays. */

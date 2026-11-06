@@ -357,6 +357,12 @@ def test_one_based_struct_array_is_still_judged(struct_ctx):
     struct_ctx.datasource_writable["PLC"]["Motors/Line[1]/Speed"] = False
     field = {"type": "Motor[]", "requiredFields": [{"name": "Speed", "write": True}]}
     assert _var_type_codes(struct_ctx, "PLC:Motors", field) == ["var-readonly"]
+    # An index is a position in the array value, from 0, as the runtime binds
+    # it: index 0 is Line[1] and index 1 is Line[2], whose Speed is read-only.
+    struct_ctx.datasource_writable["PLC"]["Motors/Line[1]/Speed"] = True
+    one = {"type": "Motor", "requiredFields": [{"name": "Speed", "write": True}]}
+    assert _var_type_codes(struct_ctx, "PLC:Motors", one, index=0) == []
+    assert _var_type_codes(struct_ctx, "PLC:Motors", one, index=1) == ["var-readonly"]
 
 
 def test_read_only_variable_bound_to_a_writing_field(struct_ctx):

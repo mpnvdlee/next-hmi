@@ -27,7 +27,18 @@ describe('structElementPath', () => {
 
   it('does not match an array whose name merely starts the same', () => {
     expect(structElementPath(META, 'PLC:Motors', 5)).toBeUndefined();
-    expect(structElementPath(META, 'PLC:MotorsExtra', 1)).toBe('PLC:MotorsExtra/[1]');
+    expect(structElementPath(META, 'PLC:MotorsExtra', 0)).toBe('PLC:MotorsExtra/[1]');
+  });
+
+  it('counts positions from 0 when the PLC array counts from 1', () => {
+    const meta = {
+      'PLC:Recipes/Recipes[1]/sName': {},
+      'PLC:Recipes/Recipes[2]/sName': {},
+      'PLC:Recipes/Recipes[10]/sName': {},
+    };
+    expect(structElementPath(meta, 'PLC:Recipes', 0)).toBe('PLC:Recipes/Recipes[1]');
+    expect(structElementPath(meta, 'PLC:Recipes', 2)).toBe('PLC:Recipes/Recipes[10]');
+    expect(structElementPath(meta, 'PLC:Recipes', 3)).toBeUndefined();
   });
 });
 
