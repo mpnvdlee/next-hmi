@@ -9,6 +9,8 @@ project file format ships only in a release whose minor or major number moves.
 Breaking changes are always called out under a **Changed** or **Removed**
 heading.
 
+## [Unreleased]
+
 ## [1.2.0] - 2026-11-08
 
 Opens the HMI to the systems around it and shuts out the ones that should not
