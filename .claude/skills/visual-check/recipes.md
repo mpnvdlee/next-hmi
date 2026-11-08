@@ -446,7 +446,7 @@ await ed.mouse.up();
 | Row trailing buttons | `.cfg-row-action-btn` (`--unit` px/rem toggle, `--chevron`) |
 | Unset hint | `.cfg-unset-hint` (`· default`) |
 | Source pill / badge | `.cfg-source-pill-wrapper button` · `.cfg-property-source-badge` (`title` = source label) |
-| Source menu | `.cfg-source-pill__popup`, labels `.cfg-source-pill__option-label`; **Browse property sources…** opens `.cfg-selection-drawer` |
+| Source drawer | the pill opens `.cfg-selection-drawer`; card titles `.cfg-selection-card__name` (label then `$key`), close `.cfg-modal-close` |
 | Context menu (tree and canvas) | `.cfg-context-menu`, items `__item`, submenu parents `__item--has-sub`, header `__label` |
 
 **Verify the selection before trusting a shot:**
@@ -469,12 +469,12 @@ const row = (ed, label) => h.propsPanel(ed).locator('.cfg-field-group')
   combobox, then the option. The first `button` in a select row is the source
   pill.
 - **A closed `.cfg-select-popup` stays in the DOM.** Narrow with `:visible`.
-- **Popups portal outside the panel** (source menus open to its left), so
-  `shotEl` on the panel crops them — use `shot`, or `shotEl` on the popup.
+- **Popups portal outside the panel**, so `shotEl` on the panel crops them —
+  use `shot`, or `shotEl` on the popup.
   `Select` sizes its popup from the trigger and clips long options silently;
   check `scrollWidth > clientWidth + 1` per option.
-- **Escape does not close the source-pill popup**; the next pill then fails with
-  "subtree intercepts pointer events". Click `.cfg-panel-header` to dismiss.
+- **A source drawer left open covers the panel**; the next pill then fails with
+  "subtree intercepts pointer events". `closePopup` clicks its ×.
 - **A tier-3 source opens collapsed.** After `setSource(ed, row, 'Formula' |
   'HTTP Request' | 'If Condition' | …)` only a `formula(…)` summary exists;
   inner inputs appear after the row's `>` chevron. That chevron is the first

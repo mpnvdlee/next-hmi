@@ -10,9 +10,12 @@ import {
   NotEditor,
   SwitchEditor,
 } from './conditional';
+import { stubIntersectionObserver } from '../../../../../test-setup';
 import type { OpenBindingPicker } from './utils';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import { ComponentPropertySchemaContext } from '../componentPropertySchemaContext';
+
+beforeAll(stubIntersectionObserver);
 
 // jsdom doesn't implement scrollIntoView; Select's popup calls it to keep the
 // active option in view once opened.
@@ -122,7 +125,11 @@ describe('IfEditor', () => {
     );
 
     await user.click(within(fieldGroup('Condition')).getByRole('button', { name: /Static/ }));
-    await user.click(screen.getByRole('button', { name: /Variable/ }));
+    await user.click(
+      within(document.querySelector<HTMLElement>('.cfg-selection-drawer')!).getByRole('button', {
+        name: /^Variable/,
+      }),
+    );
 
     expect(onChange).toHaveBeenLastCalledWith({
       $if: { condition: { $var: { path: '' } }, true: '', false: '' },

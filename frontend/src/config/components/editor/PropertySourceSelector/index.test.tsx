@@ -6,7 +6,7 @@ import { stubIntersectionObserver } from '../../../../test-setup';
 beforeAll(stubIntersectionObserver);
 
 describe('PropertySourceSelector', () => {
-  it('opens the property-source drawer from the question-mark dropdown action', () => {
+  it('opens the property-source drawer straight from the badge', () => {
     render(
       <PropertySourceSelector
         value="Hello"
@@ -17,11 +17,6 @@ describe('PropertySourceSelector', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Static/ }));
-    const popup = document.querySelector('.cfg-source-pill__popup');
-    const browseButton = screen.getByRole('button', { name: /Browse property sources/ });
-
-    expect(popup?.querySelector('button')).toBe(browseButton);
-    fireEvent.click(browseButton);
 
     expect(screen.getByRole('heading', { name: 'Select source' })).toBeInTheDocument();
     expect(document.querySelector('.cfg-selection-drawer')).toHaveClass('cfg-drawer');
@@ -42,9 +37,24 @@ describe('PropertySourceSelector', () => {
     fireEvent.click(screen.getByRole('button', { name: /Static/ }));
 
     expect(
-      screen.getByRole('button', { name: /^Widget Property What another widget/ }),
+      screen.getByRole('button', { name: /Widget Property.*What another widget/ }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Variable$/ })).toBeInTheDocument();
+  });
+
+  it('opens nothing from the badge of a field with one source', () => {
+    render(
+      <PropertySourceSelector
+        value="Hello"
+        onChange={() => {}}
+        fieldType="string"
+        forcedSources={[]}
+        showWhenSingle
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Static/ }));
+
+    expect(document.querySelector('.cfg-selection-drawer')).toBeNull();
   });
 
   it('selects a compatible source from the drawer and closes it', () => {
@@ -59,7 +69,6 @@ describe('PropertySourceSelector', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Static/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Browse property sources/ }));
     fireEvent.click(screen.getByRole('button', { name: /Localizable Text/ }));
 
     expect(onChange).toHaveBeenCalledWith({ $loc: '' });
@@ -80,7 +89,6 @@ describe('PropertySourceSelector', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Static/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Browse property sources/ }));
 
     const search = screen.getByRole('searchbox');
     fireEvent.change(search, { target: { value: 'Localizable' } });
@@ -104,7 +112,6 @@ describe('PropertySourceSelector', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Variable/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Browse property sources/ }));
 
     expect(screen.getByRole('button', { name: /Variable.*live datasource/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /If Condition/ })).toBeInTheDocument();
@@ -125,7 +132,6 @@ describe('PropertySourceSelector', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Variable/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Browse property sources/ }));
 
     expect(screen.getByRole('button', { name: /If Condition.*Any/ })).toBeEnabled();
     expect(screen.queryByRole('button', { name: /Formula/ })).not.toBeInTheDocument();
@@ -144,7 +150,6 @@ describe('PropertySourceSelector', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Static/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Browse property sources/ }));
 
     // Integer producers alongside the Float ones.
     expect(screen.getByRole('button', { name: /Formula/ })).toBeInTheDocument();

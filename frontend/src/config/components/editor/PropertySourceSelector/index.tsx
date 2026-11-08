@@ -1,13 +1,14 @@
 /**
- * PropertySourceSelector — pill button that opens a popup for choosing
- * the property source (Static, Variable, Localizable Text, If Condition, etc.)
+ * PropertySourceSelector — pill button that opens the source drawer for
+ * choosing the property source (Static, Variable, Localizable Text, If
+ * Condition, etc.), as the action list's Add opens its type drawer.
  *
  * Placed in the property card header so the card body shows only the
  * sub-editor content.
  */
 
 import './style.css';
-import { useMemo, useRef, useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { getAllowedPropertySources } from '@hmi/utils/propertySourceRules';
 import { createSourceDefault, PROPERTY_SOURCES } from '@hmi/utils/propertySourceRegistry';
 import type { PropertySource } from '@hmi/utils/propertySourceRegistry';
@@ -15,16 +16,10 @@ import { getPropertySource } from '../propertyValueUtils';
 import { useComponentPropertySchema } from '../PropertySourceEditor/componentPropertySchemaContext';
 import { useResultFields } from '../PropertySourceEditor/resultFieldsContext';
 import { useRepeatEditorScope } from '../PropertySourceEditor/repeatScopeContext';
-import useDismissOnOutsideClick from '@config/hooks/useDismissOnOutsideClick';
-import { useOwnerWindow } from '@shared/components/PopoutWindow/windowContext';
 import PropertySourceDrawer from './PropertySourceDrawer';
 import PropertySourceBadge, { MIXED_SOURCE_LABEL, type BadgeSource } from './PropertySourceBadge';
 import { propertySourceColorStyle } from './propertySourceStyle';
 export type { PropertySource } from '@hmi/utils/propertySourceRegistry';
-
-/** Sources whose name alone does not say where the value comes from, so the
- *  menu spells it out under the name. */
-const EXPLAINED_SOURCES: ReadonlySet<string> = new Set(['$componentProp', '$widgetProp']);
 
 interface PropertySourceSelectorProps {
   /** The current value (plain or sourced) */
@@ -32,7 +27,7 @@ interface PropertySourceSelectorProps {
   /** Called when the source or value changes */
   onChange: (v: unknown) => void;
   /** The schema field type (string, number, boolean, color, url, icon, select),
-   *  or a union of them — the menu offers what fits any one of them. */
+   *  or a union of them — the drawer offers what fits any one of them. */
   fieldType: string | readonly string[];
   /** Optional schema-level default value used when creating a new source payload */
   defaultValue?: unknown;
@@ -77,16 +72,7 @@ export default function PropertySourceSelector({
   mixed,
   scopeSources,
 }: PropertySourceSelectorProps) {
-  const [open, setOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [popupPos, setPopupPos] = useState<{
-    top?: number;
-    bottom?: number;
-    right: number;
-    maxHeight: number;
-  }>({ top: 0, right: 0, maxHeight: 320 });
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const ownerWindow = useOwnerWindow();
 
   const currentSource = source ?? getPropertySource(value);
   const inputScope = useComponentPropertySchema();
@@ -136,27 +122,6 @@ export default function PropertySourceSelector({
     scopeSources,
   ]);
 
-  // Compute fixed popup position whenever popup opens. Flips above the trigger
-  // and caps the height when there isn't enough room below, so the option list
-  // never spills past the viewport edge.
-  useEffect(() => {
-    if (open && wrapperRef.current) {
-      const rect = wrapperRef.current.getBoundingClientRect();
-      const margin = 8;
-      const spaceBelow = ownerWindow.innerHeight - rect.bottom - margin;
-      const spaceAbove = rect.top - margin;
-      const below = spaceBelow >= 200 || spaceBelow >= spaceAbove;
-      setPopupPos({
-        top: below ? rect.bottom + 4 : undefined,
-        bottom: below ? undefined : ownerWindow.innerHeight - rect.top + 4,
-        right: ownerWindow.innerWidth - rect.right,
-        maxHeight: Math.max(0, below ? spaceBelow : spaceAbove),
-      });
-    }
-  }, [open, ownerWindow]);
-
-  useDismissOnOutsideClick(wrapperRef, () => setOpen(false), open);
-
   function handleSourceChange(newSource: PropertySource) {
     if (!allowedSources.includes(newSource)) return;
 
@@ -190,7 +155,7 @@ export default function PropertySourceSelector({
   const activeEntry = active === 'mixed' ? undefined : PROPERTY_SOURCES[active];
 
   return (
-    <div className="cfg-source-pill-wrapper" ref={wrapperRef}>
+    <div className="cfg-source-pill-wrapper">
       <button
         type="button"
         className={
@@ -200,7 +165,7 @@ export default function PropertySourceSelector({
         }
         style={propertySourceColorStyle(active)}
         onClick={() => {
-          if (!isSingle) setOpen((prev) => !prev);
+          if (!isSingle) setDrawerOpen(true);
         }}
         title={activeEntry?.label ?? MIXED_SOURCE_LABEL}
       >
@@ -231,55 +196,6 @@ export default function PropertySourceSelector({
           </>
         )}
       </button>
-
-      {open && !isSingle && (
-        <div
-          className="cfg-source-pill__popup"
-          style={{
-            top: popupPos.top,
-            bottom: popupPos.bottom,
-            right: popupPos.right,
-            maxHeight: popupPos.maxHeight,
-          }}
-        >
-          <button
-            type="button"
-            className="cfg-source-pill__option cfg-source-pill__browse"
-            onClick={() => {
-              setOpen(false);
-              setDrawerOpen(true);
-            }}
-          >
-            <span className="cfg-source-pill__abbr">?</span>
-            <span className="cfg-source-pill__option-label">Browse property sources…</span>
-          </button>
-          {allowedSources.map((source) => (
-            <button
-              key={source}
-              type="button"
-              className={`cfg-source-pill__option${source === active ? ' cfg-source-pill__option--active' : ''}`}
-              style={propertySourceColorStyle(source)}
-              onClick={() => {
-                handleSourceChange(source);
-                setOpen(false);
-              }}
-            >
-              <PropertySourceBadge source={source} />
-              <span className="cfg-source-pill__option-label">
-                {PROPERTY_SOURCES[source].label}
-                {EXPLAINED_SOURCES.has(source) && (
-                  <>
-                    {' '}
-                    <small className="cfg-source-pill__option-desc">
-                      {PROPERTY_SOURCES[source].description}
-                    </small>
-                  </>
-                )}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
 
       {drawerOpen && (
         <PropertySourceDrawer

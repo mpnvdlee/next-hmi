@@ -191,6 +191,11 @@ into a dialog or component is now read once.
 - **A placed component sets its Inputs.** The section of a component
   instance's panel where its inputs get their values is titled **Inputs**, not
   **Properties**, as in an Open Dialog or Navigate To Page action.
+- **A source badge opens the source drawer.** Clicking a field's source
+  badge slides in the same drawer the action list's **Add** opens, with a
+  search and a line on each source; the short menu in between, with its
+  **Browse property sources…** row, is gone. A field with one source opens
+  nothing.
 - **Numbers read with a decimal comma.** Every number the HMI shows — Value
   Display, Gauge, Ring Gauge, Progress Bar, Trend, Trend Chart, Number Input,
   Numeric Stepper, Data Grid cells, `{1}` in a Text Expression, a Localizable
@@ -340,7 +345,7 @@ into a dialog or component is now read once.
   showed a number value as an empty cell. The panel now lists one line per
   option — the value first, then the label — reordered by dragging; a click
   opens the option in the panel's drawer, where the label takes
-  Static or Localizable Text from the usual source menu and the value is typed.
+  Static or Localizable Text from its source badge and the value is typed.
 - **An AI assistant on another machine can reach MCP.** `/mcp` answered
   every client that did not address the HMI as `localhost` or `127.0.0.1`
   with `421 Invalid Host header`, so an assistant on a laptop on the plant

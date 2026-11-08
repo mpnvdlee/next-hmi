@@ -227,26 +227,24 @@ const sourcePill = (ed, label) =>
 /** True when the row offers a property-source picker at all (vs. a static PropRow). */
 const isSourceCapable = async (ed, label) => (await sourcePill(ed, label).count()) > 0;
 
+/** The source drawer's card titles: a source's label directly followed by its `$key`. */
+const sourceCards = (ed) => ed.locator('.cfg-selection-drawer .cfg-selection-card__name');
+
 /**
- * Open a row's source menu and return the option labels it offers.
+ * Open a row's source drawer and return the source labels it offers.
  * Useful as an assertion on its own: the list is type-derived, so a Color field
  * yields far fewer entries than a String one.
  */
 async function openSourceMenu(ed, label) {
   await sourcePill(ed, label).click();
   await ed.waitForTimeout(500);
-  return ed.locator('.cfg-source-pill__popup .cfg-source-pill__option-label').allInnerTexts();
+  const names = await sourceCards(ed).allInnerTexts();
+  return names.map((n) => n.replace(/\$\w+$/, '').trim());
 }
 
-/**
- * Dismiss the source-pill popup.
- *
- * Escape does NOT close it — leaving it open makes the next row's pill
- * unclickable ("subtree intercepts pointer events") and the run times out.
- * Clicking the panel header does close it.
- */
+/** Close the source drawer by its × (left open, it covers the panel's rows). */
 async function closePopup(ed) {
-  await panelHeader(ed).click({ force: true });
+  await ed.locator('.cfg-selection-drawer .cfg-modal-close').first().click();
   await ed.waitForTimeout(400);
 }
 
@@ -254,11 +252,9 @@ async function closePopup(ed) {
 async function setSource(ed, label, sourceName) {
   await sourcePill(ed, label).click();
   await ed.waitForTimeout(400);
-  await ed
-    .locator('.cfg-source-pill__popup .cfg-source-pill__option-label', {
-      // Input and Widget Property carry a description line after the name.
-      hasText: new RegExp(`^${sourceName}(\\s|$)`),
-    })
+  const escaped = sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  await sourceCards(ed)
+    .filter({ hasText: new RegExp(`^${escaped}\\$`) })
     .first()
     .click();
   await ed.waitForTimeout(900);
@@ -266,7 +262,7 @@ async function setSource(ed, label, sourceName) {
 
 // ── Capture ──────────────────────────────────────────────────────────────────
 
-/** Full-page shot. Needed for source menus and any other portalled popup —
+/** Full-page shot. Needed for the source drawer and any other portalled popup —
  *  they render outside the panel, so an element shot or a clip crops them. */
 const shot = (ed, name) => ed.screenshot({ path: path.join(OUT, `${name}.png`) });
 
