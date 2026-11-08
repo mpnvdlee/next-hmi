@@ -919,6 +919,15 @@
   background: transparent;
 }
 
+/* Background usable: presses beside the cards reach the screen under them. */
+.hmi-modal-backdrop--modeless,
+.hmi-modal-backdrop--modeless .hmi-modal-stack {
+  pointer-events: none;
+}
+.hmi-modal-backdrop--modeless .hmi-modal {
+  pointer-events: auto;
+}
+
 .hmi-modal-stack {
   display: flex;
   flex-wrap: wrap;
@@ -953,6 +962,17 @@
   border-bottom: 1px solid var(--hmi-border);
   gap: var(--hmi-space-sm);
   flex-shrink: 0;
+}
+
+/* Dragged by the header bar; `translate` composes with a placement's own
+   `transform`. */
+.hmi-modal--draggable {
+  translate: var(--hmi-modal-drag-x, 0) var(--hmi-modal-drag-y, 0);
+}
+.hmi-modal--draggable > .hmi-modal__header {
+  cursor: move;
+  touch-action: none;
+  user-select: none;
 }
 
 .hmi-modal__title {

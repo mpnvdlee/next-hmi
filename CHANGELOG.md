@@ -22,6 +22,12 @@ server listed.
 
 ### Added
 
+- **Move a dialog, and keep working beside it.** A dialog's Overlay section
+  gains **Draggable**: the operator drags it by its header bar, which never
+  leaves the screen, and it stays there until it closes. **Background usable**
+  keeps the screen under the dialog working — no dim, presses beside it reach
+  the screen and do not close it — and keeps the dialog open, where it was
+  put, when the operator goes to another page.
 - **Restart the HMI from a button.** A new action, **Reload HMI**, reloads
   the HMI in this browser as a page refresh does. Other panels and the server
   keep running.

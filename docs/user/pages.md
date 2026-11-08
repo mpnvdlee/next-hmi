@@ -69,6 +69,18 @@ popover then closes it *and* reaches whatever lies under it — tap the next mac
 symbol and its own popover opens in the same tap. All three are on unless you turn them
 off; a dimmed backdrop only ever closes.
 
+Two more settings there are off unless you turn them on. **Draggable** lets the operator
+drag the dialog by its header bar, with a mouse or a finger; it stays where it was put
+until it closes, and its header bar, × included, never leaves the screen. **Background usable** keeps the screen under the dialog working while
+it is open — no dim, and buttons, sliders and scrolling beside the dialog work as
+usual. The dialog stays open until its own × or a **Close Dialog/Overlay**, so **Close
+on backdrop** and **Tap through** leave the panel. A jog box beside the machine picture
+or an alarm panel kept open while operating are what it is for. With several dialogs
+open the screen is only usable when all of them have it on: one ordinary dialog still
+blocks it. Such a dialog also stays open when the operator moves to another page — same
+place, same size, same values — even when its own button navigates; put a **Close
+Dialog/Overlay** before **Navigate To Page** to close it on the way.
+
 **Show header bar** in the same section hides the card's title strip, × included — for a
 keypad or an access panel that should be all content. The page then needs its own
 **Close Dialog/Overlay** button, unless a backdrop click closes it. It is on unless you

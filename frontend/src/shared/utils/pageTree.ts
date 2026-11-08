@@ -103,6 +103,8 @@ function readMetadata(c: Record<string, unknown>) {
     showCloseButton: boolean;
     closeOnBackgroundPress: boolean;
     tapThrough: boolean;
+    draggable: boolean;
+    modeless: boolean;
     showModalHeader: boolean;
   }> = {};
   if (typeof c.description === 'string') meta.description = c.description;
@@ -121,6 +123,8 @@ function readMetadata(c: Record<string, unknown>) {
     meta.closeOnBackgroundPress = c.closeOnBackgroundPress;
   }
   if (typeof c.tapThrough === 'boolean') meta.tapThrough = c.tapThrough;
+  if (typeof c.draggable === 'boolean') meta.draggable = c.draggable;
+  if (typeof c.modeless === 'boolean') meta.modeless = c.modeless;
   if (typeof c.showModalHeader === 'boolean') meta.showModalHeader = c.showModalHeader;
   return meta;
 }

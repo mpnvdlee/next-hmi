@@ -556,6 +556,8 @@ interface OverlaySettings {
   showCloseButton?: boolean;
   closeOnBackgroundPress?: boolean;
   tapThrough?: boolean;
+  draggable?: boolean;
+  modeless?: boolean;
 }
 
 function OverlaySection({
@@ -574,7 +576,9 @@ function OverlaySection({
         label="Show header bar"
         description={
           // Outside the Dialogs folder a backdrop press always closes.
-          inDialogs && node.showModalHeader === false && node.closeOnBackgroundPress === false
+          inDialogs &&
+          node.showModalHeader === false &&
+          (node.closeOnBackgroundPress === false || node.modeless === true)
             ? 'Without the header bar there is no ×; add a Close Dialog/Overlay button on the page.'
             : undefined
         }
@@ -597,14 +601,39 @@ function OverlaySection({
               />
             </PropRow>
           )}
-          <PropRow label="Close on backdrop">
+          {/* The header bar is the drag handle. */}
+          {node.showModalHeader !== false && (
+            <PropRow label="Draggable">
+              <BoolButtonGroup
+                value={node.draggable === true}
+                onChange={(v) => onPatch({ draggable: v })}
+              />
+            </PropRow>
+          )}
+          <PropRow
+            label="Background usable"
+            description={
+              node.modeless === true
+                ? 'The screen under the dialog works while it is open. Close it with its × or a Close Dialog/Overlay action.'
+                : undefined
+            }
+          >
             <BoolButtonGroup
-              value={node.closeOnBackgroundPress !== false}
-              onChange={(v) => onPatch({ closeOnBackgroundPress: v })}
+              value={node.modeless === true}
+              onChange={(v) => onPatch({ modeless: v })}
             />
           </PropRow>
+          {/* A usable background has no backdrop to press. */}
+          {node.modeless !== true && (
+            <PropRow label="Close on backdrop">
+              <BoolButtonGroup
+                value={node.closeOnBackgroundPress !== false}
+                onChange={(v) => onPatch({ closeOnBackgroundPress: v })}
+              />
+            </PropRow>
+          )}
           {/* Only a backdrop press that closes can be handed on. */}
-          {node.closeOnBackgroundPress !== false && (
+          {node.modeless !== true && node.closeOnBackgroundPress !== false && (
             <PropRow label="Tap through">
               <BoolButtonGroup
                 value={node.tapThrough !== false}

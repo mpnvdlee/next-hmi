@@ -76,6 +76,8 @@ const PAGE_SAVE_FIELDS = [
   'showCloseButton',
   'closeOnBackgroundPress',
   'tapThrough',
+  'draggable',
+  'modeless',
   'showModalHeader',
 ] as const satisfies readonly (keyof PageConfig)[];
 

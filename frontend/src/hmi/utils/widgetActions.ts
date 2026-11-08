@@ -203,8 +203,12 @@ export function executeWidgetActions(
     if (action.type === 'navigateToPage') {
       const pageId = String(evaluatePropertyValue(action.pageId, evalCtx) ?? '');
       // Only the `pages` root routes; an input naming nothing there does nothing.
-      if (pageId && findPageNodeById(useConfigStore.getState().pages, pageId)) {
-        useHmiStore.getState().navigateToPage(pageId);
+      const { pages, dialogs } = useConfigStore.getState();
+      if (pageId && findPageNodeById(pages, pageId)) {
+        // A dialog that leaves the screen usable stays open, as it was; modal ones close.
+        useHmiStore
+          .getState()
+          .navigateToPage(pageId, (o) => findPageNodeById(dialogs, o.pageId)?.modeless === true);
       }
       continue;
     }

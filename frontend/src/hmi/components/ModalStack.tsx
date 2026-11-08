@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import CloseButton from '@shared/components/CloseButton';
 import type {
   AnchorRect,
@@ -46,19 +46,25 @@ function buildModalClassName({
   anchored,
   placement,
   size,
+  draggable,
 }: {
   anchored: boolean;
   placement: OverlayPlacement | undefined;
   size: OverlaySize | undefined;
+  draggable: boolean;
 }): string {
   const sizeClass = size && size !== 'auto' ? ` hmi-modal--size-${size}` : '';
-  if (anchored) return `hmi-modal hmi-modal--overlay hmi-modal--anchored${sizeClass}`;
+  const dragClass = draggable ? ' hmi-modal--draggable' : '';
+  if (anchored) return `hmi-modal hmi-modal--overlay hmi-modal--anchored${sizeClass}${dragClass}`;
   const effectivePlacement = resolveEffectivePlacement(placement, false);
   // Unsized, centered cards stay in-flow inside .hmi-modal-stack (so multiple
   // tile via flexbox instead of overlapping); anything else docks to the
-  // backdrop like a positioned overlay.
-  if (effectivePlacement === 'center' && (!size || size === 'auto')) return 'hmi-modal';
-  return `hmi-modal hmi-modal--overlay hmi-modal--placement-${effectivePlacement}${sizeClass}`;
+  // backdrop like a positioned overlay. A draggable card docks too: the
+  // scrolling stack would clip one dragged past its edge.
+  if (effectivePlacement === 'center' && (!size || size === 'auto') && !draggable) {
+    return 'hmi-modal';
+  }
+  return `hmi-modal hmi-modal--overlay hmi-modal--placement-${effectivePlacement}${sizeClass}${dragClass}`;
 }
 
 /**
@@ -79,10 +85,14 @@ function stackOffsetStyle(index: number): CSSProperties | undefined {
  */
 function closeSettings(root: PageRoot, target: PageNode) {
   const own = root === 'dialogs';
+  // A dialog that leaves the screen usable has no backdrop to press.
+  const modeless = own && target.modeless === true;
   return {
     showCloseButton: !own || target.showCloseButton !== false,
-    closeOnBackgroundPress: !own || target.closeOnBackgroundPress !== false,
+    closeOnBackgroundPress: !modeless && (!own || target.closeOnBackgroundPress !== false),
     tapThrough: !own || target.tapThrough !== false,
+    draggable: own && target.draggable === true,
+    modeless,
   };
 }
 
@@ -127,13 +137,20 @@ export function ModalStack() {
     return n;
   }
 
-  const dim = openPageOverlays.some(({ entry }) => (entry.backdrop ?? 'dim') === 'dim');
+  const settingsOf = (o: { root: PageRoot; target: PageNode }) => closeSettings(o.root, o.target);
+  const dim = openPageOverlays.some(
+    (o) => !settingsOf(o).modeless && (o.entry.backdrop ?? 'dim') === 'dim',
+  );
+  // One modal dialog still blocks the screen; only all-modeless leaves it usable.
+  const modeless = openPageOverlays.every((o) => settingsOf(o).modeless);
 
   if (openPageOverlays.length === 0) return null;
 
   return (
     <div
-      className={`hmi-modal-backdrop${dim ? '' : ' hmi-modal-backdrop--transparent'}`}
+      className={`hmi-modal-backdrop${dim ? '' : ' hmi-modal-backdrop--transparent'}${
+        modeless ? ' hmi-modal-backdrop--modeless' : ''
+      }`}
       onClick={(e) => {
         const top = openPageOverlays[openPageOverlays.length - 1];
         if (!top) return;
@@ -148,6 +165,10 @@ export function ModalStack() {
         {openPageOverlays.map(
           ({ entry, node: overlayNode, page: activePage, root, rootNodes, target }, index) => {
             const anchored = isAnchoredPlacement(entry.placement) && Boolean(entry.anchorRect);
+            const settings = closeSettings(root, target);
+            const showHeader = target.showModalHeader !== false;
+            // The header bar is the handle, so a card without one stays put.
+            const draggable = settings.draggable && showHeader;
             const stackIndex = stackIndexFor(anchored, entry.placement, entry.size);
             const fixedStyle =
               entry.size === 'fixed'
@@ -161,16 +182,17 @@ export function ModalStack() {
                 anchored,
                 placement: entry.placement,
                 size: entry.size,
+                draggable,
               }),
               style: { ...fixedStyle, ...stackOffsetStyle(stackIndex) },
               zIndex: index + 1,
               // The header bar is the named node's, from either root — a group
               // opened as an overlay decides it, not the page shown inside it.
               title: resolvePageTitle(target.title),
-              showHeader: target.showModalHeader !== false,
-              onClose: closeSettings(root, target).showCloseButton
-                ? () => closePageOverlay(entry.pageId)
-                : null,
+              showHeader,
+              draggable,
+              modeless: settings.modeless,
+              onClose: settings.showCloseButton ? () => closePageOverlay(entry.pageId) : null,
               children: (
                 <PageOverlayBody
                   rootNodes={rootNodes}
@@ -210,6 +232,8 @@ function renderModalCard({
   zIndex,
   title,
   showHeader,
+  draggable,
+  modeless,
   onClose,
   children,
 }: {
@@ -221,6 +245,8 @@ function renderModalCard({
   zIndex: number;
   title: string;
   showHeader: boolean;
+  draggable: boolean;
+  modeless: boolean;
   onClose: (() => void) | null;
   children: ReactNode;
 }) {
@@ -232,19 +258,31 @@ function renderModalCard({
       className={className}
       style={style}
       zIndex={zIndex}
+      modeless={modeless}
+      header={
+        showHeader
+          ? (dragProps: DragHandleProps) => (
+              <div className="hmi-modal__header" {...(draggable ? dragProps : undefined)}>
+                <span className="hmi-modal__title">{title}</span>
+                {onClose && <CloseButton className="hmi-modal__close" onClick={onClose} />}
+              </div>
+            )
+          : null
+      }
     >
-      {showHeader && (
-        <div className="hmi-modal__header">
-          <span className="hmi-modal__title">{title}</span>
-          {onClose && <CloseButton className="hmi-modal__close" onClick={onClose} />}
-        </div>
-      )}
       <div className="hmi-modal__content" data-flow-direction="row" data-flow-align="stretch">
         {children}
       </div>
     </ModalCard>
   );
 }
+
+type DragHandleProps = {
+  onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void;
+  onPointerMove: (e: ReactPointerEvent<HTMLElement>) => void;
+  onPointerUp: () => void;
+  onPointerCancel: () => void;
+};
 
 /**
  * A modal card. When `anchorRect` is supplied and the placement is a `trigger-*`
@@ -257,6 +295,8 @@ function ModalCard({
   className,
   style,
   zIndex,
+  modeless,
+  header,
   children,
 }: {
   anchorRect?: AnchorRect | null;
@@ -264,19 +304,58 @@ function ModalCard({
   className: string;
   style?: CSSProperties;
   zIndex: number;
+  modeless: boolean;
+  /** The header bar, handed the props that drag the card by it. */
+  header: ((dragProps: DragHandleProps) => ReactNode) | null;
   children: ReactNode;
 }) {
   const anchored = anchorRect != null && isAnchoredPlacement(placement);
   const [ref, pos] = useAnchoredStyle(anchored ? anchorRect : null, anchored ? placement : null);
+  // Where the card was dragged to, kept while it stays open.
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  // The pointer and offset at the grab, and how far the header may move each way.
+  const grab = useRef<{
+    x: number;
+    y: number;
+    from: { x: number; y: number };
+    box: DOMRect;
+  } | null>(null);
+  const release = () => {
+    grab.current = null;
+  };
+  const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+  const dragProps: DragHandleProps = {
+    onPointerDown: (e) => {
+      if ((e.target as Element).closest('.hmi-modal__close')) return;
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      const box = e.currentTarget.getBoundingClientRect();
+      grab.current = { x: e.clientX, y: e.clientY, from: offset, box };
+    },
+    onPointerMove: (e) => {
+      if (!grab.current) return;
+      const { x, y, from, box } = grab.current;
+      // The whole header bar, close button included, stays on screen.
+      const dx = clamp(e.clientX - x, -box.left, window.innerWidth - box.right);
+      const dy = clamp(e.clientY - y, -box.top, window.innerHeight - box.bottom);
+      setOffset({ x: from.x + dx, y: from.y + dy });
+    },
+    onPointerUp: release,
+    onPointerCancel: release,
+  };
+  const dragStyle = {
+    '--hmi-modal-drag-x': `${offset.x}px`,
+    '--hmi-modal-drag-y': `${offset.y}px`,
+  } as CSSProperties;
   return (
     <div
       ref={ref}
       className={className}
-      style={{ ...style, ...pos, zIndex }}
+      style={{ ...style, ...pos, ...dragStyle, zIndex }}
       role="dialog"
-      aria-modal="true"
+      aria-modal={!modeless}
       onClick={(e) => e.stopPropagation()}
     >
+      {header?.(dragProps)}
       {children}
     </div>
   );

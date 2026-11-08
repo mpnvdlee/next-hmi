@@ -276,7 +276,7 @@ only the keys in `_PAGE_PERSISTED_FIELDS` (`api/config_api.py`) — `title`,
 `icon`, `description`, `breadcrumbLabel`, `hidden`, `role`, `order`, `route`,
 `layout`, `showHeader`, `showFooter`, `mainPadding`, `mainBackground`, `events`,
 `componentProperties`, `showCloseButton`, `closeOnBackgroundPress`, `tapThrough`,
-`showModalHeader` — and drops
+`draggable`, `modeless`, `showModalHeader` — and drops
 any other key on save.
 
 A widget node carries `id`, `type`, `name`, `properties`, `layout`, optional
@@ -392,6 +392,12 @@ Two optional keys are read only on a node in this root, on both kinds:
 - `tapThrough` — with backdrop `none`, that closing press also reaches the element
   under it, so tapping the next hotspot closes this popover and opens its own in one
   tap. Absent means it does; ignored when `closeOnBackgroundPress` is off
+- `draggable` — the operator drags the card by its header bar; it stays where it
+  was dragged until it closes. Absent means it cannot; ignored without the header bar
+- `modeless` — the screen under the card stays usable: no dim, and presses beside
+  the card reach the screen and close nothing. Only while every open overlay sets
+  it; `closeOnBackgroundPress` and `tapThrough` are ignored. A `navigateToPage`
+  action leaves such a card open where it is. Absent means off
 
 `showModalHeader` is read on a node in either root, on both kinds: `false` drops
 the modal's header bar — title and close button — while the node is open as an

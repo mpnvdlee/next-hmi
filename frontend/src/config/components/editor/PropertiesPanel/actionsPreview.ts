@@ -29,7 +29,7 @@ export const ACTION_TYPES = [
     label: 'Navigate To Page',
     category: 'Screens',
     description:
-      'Closes every open dialog and overlay, then goes to a page — a fixed one, or the one a dialog input parameter names.',
+      'Closes every open dialog and overlay but those with Background usable, then goes to a page — a fixed one, or the one a dialog input parameter names.',
   },
   {
     type: 'pageGroupNext' as const,

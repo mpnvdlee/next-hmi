@@ -125,8 +125,8 @@ interface HmiStore {
   updatePageOverlay: (overlayId: string, nextPageId: string) => void;
   showAlert: (entry: AlertEntry) => void;
   openNumpad: (request: NumpadRequest | null) => void;
-  /** Closes every open overlay, then queues the route change. */
-  navigateToPage: (pageId: string) => void;
+  /** Closes every open overlay but those `keepOpen` picks, then queues the route change. */
+  navigateToPage: (pageId: string, keepOpen?: (entry: PageOverlayEntry) => boolean) => void;
   dismissAlert: (id: string) => void;
   showToast: (entry: ToastEntry) => void;
   dismissToast: (id: string) => void;
@@ -200,7 +200,11 @@ export const useHmiStore = create<HmiStore>((set) => ({
     }),
   showAlert: (entry) => set((state) => ({ pendingAlerts: [...state.pendingAlerts, entry] })),
   openNumpad: (request) => set({ numpadRequest: request }),
-  navigateToPage: (pageId) => set({ openPageOverlays: [], pendingNavigation: pageId }),
+  navigateToPage: (pageId, keepOpen = () => false) =>
+    set((state) => ({
+      openPageOverlays: state.openPageOverlays.filter(keepOpen),
+      pendingNavigation: pageId,
+    })),
   dismissAlert: (id) =>
     set((state) => ({
       pendingAlerts: state.pendingAlerts.filter((a) => a.id !== id),

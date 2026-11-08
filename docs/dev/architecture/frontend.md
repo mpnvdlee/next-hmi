@@ -313,6 +313,12 @@ Dialogs-folder page or group — sets `closeOnBackgroundPress: false`. When no
 overlay dims (backdrop `none`) and the node leaves `tapThrough` on, `ModalStack`
 then re-dispatches the click to the topmost element under that point outside the
 stack (`document.elementsFromPoint`), so the next hotspot opens in the same tap.
+When every open overlay's node sets `modeless`, the backdrop and stack take
+`pointer-events: none` (`.hmi-modal-backdrop--modeless`) and only the cards catch
+presses, so the screen under them really works — drags and scrolls included. A
+`draggable` node's card docks (never in-flow, which the scrolling stack would
+clip) and its header bar moves it through the `--hmi-modal-drag-x/y` `translate`,
+clamped so the whole bar stays inside the viewport.
 `openPageOverlay` on the `pageId` already on top replaces that entry — new
 inputs, new anchor — instead of being refused; lower in the stack it is refused.
 
