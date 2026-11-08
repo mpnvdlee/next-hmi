@@ -172,6 +172,8 @@ Runs actions on press and on release, and can write a bound boolean true on pres
 | `borderColor` | Border color | `color` |
 | `align` | Content alignment | `String` |
 | `textTransform` | Text case | `String` |
+| `typography` | Typography | `String` |
+| `wrap` | Overflow | `String` |
 | `iconSize` | Icon size (px) | `Integer` |
 | `variable` | Variable | `Boolean` |
 | `momentary` | Momentary | `Boolean` |

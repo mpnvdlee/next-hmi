@@ -37,9 +37,12 @@
   color: var(--hmi-accent-on);
   border: var(--hmi-btn-border-width, 1px) solid var(--hmi-accent);
   border-radius: var(--hmi-btn-radius, var(--hmi-radius));
-  font-size: var(--hmi-type-body-size);
-  font-weight: var(--hmi-type-subheading-weight);
-  letter-spacing: var(--hmi-type-body-tracking);
+  /* `--hmi-btn-type-*` carry a Typography other than Body; unset, the font
+     family is inherited as before. */
+  font-family: var(--hmi-btn-type-font);
+  font-size: var(--hmi-btn-type-size, var(--hmi-type-body-size));
+  font-weight: var(--hmi-btn-type-weight, var(--hmi-type-subheading-weight));
+  letter-spacing: var(--hmi-btn-type-tracking, var(--hmi-type-body-tracking));
   text-transform: var(--hmi-btn-transform, none);
   cursor: pointer;
   transition:
@@ -82,6 +85,13 @@
 
 .hmi-button__label {
   min-width: 0;
+}
+
+.hmi-button__label--truncate {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .hmi-button__btn--icon-top {

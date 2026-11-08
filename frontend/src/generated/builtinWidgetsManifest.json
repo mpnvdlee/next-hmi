@@ -82,7 +82,7 @@
     "hasFonts": false,
     "usesRecharts": false,
     "buildOk": true,
-    "buildTs": "76986128db456426",
+    "buildTs": "d30a6a8963c98ed1",
     "displayName": null,
     "hostsChildren": null,
     "flowsChildren": null,
@@ -120,6 +120,12 @@
         "type": "string"
       },
       "textTransform": {
+        "type": "string"
+      },
+      "typography": {
+        "type": "string"
+      },
+      "wrap": {
         "type": "string"
       },
       "iconSize": {

@@ -604,6 +604,20 @@
             "defaultValue": "none"
           },
           {
+            "key": "typography",
+            "label": "Typography",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "body"
+          },
+          {
+            "key": "wrap",
+            "label": "Overflow",
+            "type": "String",
+            "group": "Appearance",
+            "defaultValue": "wrap"
+          },
+          {
             "key": "iconSize",
             "label": "Icon size (px)",
             "type": "Integer",

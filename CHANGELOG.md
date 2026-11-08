@@ -22,6 +22,10 @@ server listed.
 
 ### Added
 
+- **Size a Button's text.** A Button gains the Label's **Typography**
+  (Heading to Caption) and **Overflow** (Wrap or Truncate), so a narrow
+  button can take a smaller caption or cut its text off with an ellipsis.
+  Unset, a Button looks as it did.
 - **A live Trend Chart keeps a fixed time base.** With **Data source: Live
   buffer** the time axis always spans the last **Live window (s)** seconds up
   to now, and a line whose value holds still runs on flat to now instead of

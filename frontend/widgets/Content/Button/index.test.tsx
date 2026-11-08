@@ -280,5 +280,32 @@ describe('Button', () => {
 
       expect(screen.getByRole('button')).toHaveClass('hmi-button__btn--start');
     });
+
+    it('takes a typography combo through custom properties, and none for the Body default', () => {
+      const { container, rerender } = renderButton({ label: 'Save as', typography: 'caption' });
+      const el = container.firstElementChild as HTMLElement;
+
+      expect(el.style.getPropertyValue('--hmi-btn-type-size')).toBe('var(--hmi-type-caption-size)');
+      expect(el.style.getPropertyValue('--hmi-btn-type-font')).toBe('var(--hmi-type-caption-font)');
+
+      rerender(
+        <MemoryRouter>
+          <Button properties={{ label: 'Save as' }} />
+        </MemoryRouter>,
+      );
+      expect(el.style.getPropertyValue('--hmi-btn-type-size')).toBe('');
+    });
+
+    it('truncates its label on request, and wraps by default', () => {
+      const { rerender } = renderButton({ label: 'Rename', wrap: 'truncate' });
+      expect(screen.getByText('Rename')).toHaveClass('hmi-button__label--truncate');
+
+      rerender(
+        <MemoryRouter>
+          <Button properties={{ label: 'Rename' }} />
+        </MemoryRouter>,
+      );
+      expect(screen.getByText('Rename')).not.toHaveClass('hmi-button__label--truncate');
+    });
   });
 });

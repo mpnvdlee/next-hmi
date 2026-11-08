@@ -90,6 +90,34 @@ export const schema = {
       { label: 'Uppercase', value: 'uppercase' },
     ],
   },
+  typography: {
+    type: 'string' as const,
+    format: 'select' as const,
+    label: 'Typography',
+    group: 'Appearance',
+    defaultValue: 'body',
+    options: [
+      { label: 'Heading', value: 'heading' },
+      { label: 'Subheading', value: 'subheading' },
+      { label: 'Body', value: 'body' },
+      { label: 'Caption', value: 'caption' },
+      { label: 'Code', value: 'code' },
+      { label: 'Value', value: 'value' },
+      { label: 'Label', value: 'label' },
+    ],
+  },
+  wrap: {
+    type: 'string' as const,
+    format: 'select' as const,
+    label: 'Overflow',
+    display: 'button-text' as const,
+    group: 'Appearance',
+    defaultValue: 'wrap',
+    options: [
+      { label: 'Wrap', value: 'wrap' },
+      { label: 'Truncate', value: 'truncate' },
+    ],
+  },
   iconSize: {
     type: 'integer' as const,
     label: 'Icon size (px)',
@@ -121,6 +149,9 @@ export const description =
 export const category = 'Content & controls';
 export const icon = { type: 'builtin', name: 'cursor-click' } as const;
 
+// Body is the button's own text style (body size, semibold), so it sets nothing.
+const TYPOGRAPHY = ['heading', 'subheading', 'caption', 'code', 'value', 'label'];
+
 export default function Button({ properties, layout }: HmiWidgetProps) {
   const evalCtx = useEvalContext();
   const scope = useHmiScope();
@@ -137,6 +168,8 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   const iconSize = getPropNumber(properties, 'iconSize', NaN, evalCtx);
   const alignStart = usePropString(properties, 'align', 'center') === 'start';
   const uppercase = usePropString(properties, 'textTransform', 'none') === 'uppercase';
+  const typography = usePropString(properties, 'typography', 'body');
+  const truncate = usePropString(properties, 'wrap', 'wrap') === 'truncate';
   const borderColor = usePropString(properties, 'borderColor', '') || color;
   const isOutline = variant === 'outline';
   const colorStyle: React.CSSProperties = {
@@ -153,6 +186,10 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
   if (Number.isFinite(borderWidth)) style['--hmi-btn-border-width'] = `${borderWidth}px`;
   if (Number.isFinite(iconSize)) style['--hmi-btn-icon-size'] = `${iconSize}px`;
   if (uppercase) style['--hmi-btn-transform'] = 'uppercase';
+  if (TYPOGRAPHY.includes(typography)) {
+    for (const part of ['font', 'size', 'weight', 'tracking'])
+      style[`--hmi-btn-type-${part}`] = `var(--hmi-type-${typography}-${part})`;
+  }
 
   const IconComp = iconName && isBuiltinIconId(iconName) ? getBuiltinIconComponent(iconName) : null;
   // An empty label is the icon-only button; without an icon it stays an empty text button.
@@ -195,7 +232,11 @@ export default function Button({ properties, layout }: HmiWidgetProps) {
             ) : null}
           </span>
         )}
-        {!iconOnly && <span className="hmi-button__label">{label}</span>}
+        {!iconOnly && (
+          <span className={`hmi-button__label${truncate ? ' hmi-button__label--truncate' : ''}`}>
+            {label}
+          </span>
+        )}
       </button>
     </div>
   );

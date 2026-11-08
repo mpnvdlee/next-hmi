@@ -292,6 +292,59 @@
           }
         ]
       },
+      "typography": {
+        "format": "select",
+        "label": "Typography",
+        "group": "Appearance",
+        "defaultValue": "body",
+        "options": [
+          {
+            "label": "Heading",
+            "value": "heading"
+          },
+          {
+            "label": "Subheading",
+            "value": "subheading"
+          },
+          {
+            "label": "Body",
+            "value": "body"
+          },
+          {
+            "label": "Caption",
+            "value": "caption"
+          },
+          {
+            "label": "Code",
+            "value": "code"
+          },
+          {
+            "label": "Value",
+            "value": "value"
+          },
+          {
+            "label": "Label",
+            "value": "label"
+          }
+        ]
+      },
+      "wrap": {
+        "format": "select",
+        "label": "Overflow",
+        "display": "button-text",
+        "group": "Appearance",
+        "defaultValue": "wrap",
+        "options": [
+          {
+            "label": "Wrap",
+            "value": "wrap"
+          },
+          {
+            "label": "Truncate",
+            "value": "truncate"
+          }
+        ]
+      },
       "iconSize": {
         "label": "Icon size (px)",
         "min": 8,
