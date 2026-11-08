@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { useEditorDomainStore } from '@config/store/domains/editorDomainStore';
 import WidgetPropPicker from './index';
 import type { ComponentOption } from '../WidgetOptionsContext';
@@ -63,5 +63,36 @@ describe('WidgetPropPicker', () => {
     render(<WidgetPropPicker />);
 
     expect(screen.getByText('Selected Value')).toBeInTheDocument();
+  });
+
+  it('offers the scope’s Inputs beside the Widget Properties, the chosen group first', () => {
+    const dropdown: ComponentOption[] = [
+      {
+        id: 'dd',
+        name: 'Keuze',
+        type: 'Dropdown',
+        exportedProperties: [{ key: 'selectedValue', label: 'Selected Value', type: 'integer' }],
+      },
+    ];
+    const onPickInput = vi.fn();
+    const onPickWidget = vi.fn();
+    useEditorDomainStore.getState().openWidgetPropPicker(dropdown, onPickWidget, {
+      fieldType: 'integer',
+      inputs: {
+        properties: { doel: { type: 'integer', label: 'Doel', mode: 'value' } },
+        onPick: onPickInput,
+        first: true,
+      },
+    });
+    render(<WidgetPropPicker />);
+
+    const headers = [...document.querySelectorAll('.editor-binding-item--ds')].map(
+      (row) => row.textContent,
+    );
+    expect(headers[0]).toMatch(/^▼Inputs/);
+    expect(headers[1]).toMatch(/^▼Widget Properties/);
+    fireEvent.doubleClick(screen.getByText('Doel'));
+    expect(onPickInput).toHaveBeenCalledWith('doel');
+    expect(onPickWidget).not.toHaveBeenCalled();
   });
 });

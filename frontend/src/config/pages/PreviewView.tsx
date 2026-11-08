@@ -664,6 +664,7 @@ export default function PreviewView() {
                             navigate(`/preview/${pageId}`, { replace: replace ?? false })
                           }
                           emptyMessage="No page found."
+                          readsArrivals
                         />
                       ) : null}
                       {floatingBars.header && headerRegion}

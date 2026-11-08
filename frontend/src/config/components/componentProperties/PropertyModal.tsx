@@ -93,7 +93,7 @@ export function PropertyModal({ existingKeys, contextName, onConfirm, onCancel }
       dialogClassName="cfg-drawer cfg-drawer--sm property-dialog"
     >
       <div className="cfg-modal-header">
-        <PickerTitle context={contextName} action="Add property" />
+        <PickerTitle context={contextName} action="Add input" />
         <ModalCloseButton onClose={onCancel} />
       </div>
 

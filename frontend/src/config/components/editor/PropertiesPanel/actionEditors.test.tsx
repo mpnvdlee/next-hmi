@@ -67,7 +67,7 @@ describe('Placement select', () => {
   });
 });
 
-describe('openDialog input parameters', () => {
+describe('openDialog inputs', () => {
   function pageWithParams(): PageConfig {
     return {
       id: 'p1',
@@ -87,7 +87,7 @@ describe('openDialog input parameters', () => {
     const OpenDialogEditor = ACTION_EDITORS.openDialog!;
     render(<OpenDialogEditor action={action} ctx={ctx} />);
 
-    expect(screen.getByText('Input Parameters')).toBeInTheDocument();
+    expect(screen.getByText('Inputs')).toBeInTheDocument();
     expect(screen.getByText('Motor id')).toBeInTheDocument();
   });
 
@@ -108,7 +108,7 @@ describe('openDialog input parameters', () => {
     const OpenDialogEditor = ACTION_EDITORS.openDialog!;
     render(<OpenDialogEditor action={action} ctx={ctx} />);
 
-    expect(screen.queryByText('Input Parameters')).not.toBeInTheDocument();
+    expect(screen.queryByText('Inputs')).not.toBeInTheDocument();
   });
 
   it('renders no section for a target outside the Dialogs folder, even when it declares properties', () => {
@@ -123,7 +123,7 @@ describe('openDialog input parameters', () => {
     const OpenDialogEditor = ACTION_EDITORS.openDialog!;
     render(<OpenDialogEditor action={action} ctx={ctx} />);
 
-    expect(screen.queryByText('Input Parameters')).not.toBeInTheDocument();
+    expect(screen.queryByText('Inputs')).not.toBeInTheDocument();
   });
 
   it('offers page groups as dialog targets and reads their declarations', () => {
@@ -217,7 +217,7 @@ describe('overlay target pickers offer one root each', () => {
       />,
     );
 
-    expect(screen.queryByText('Input Parameters')).not.toBeInTheDocument();
+    expect(screen.queryByText('Inputs')).not.toBeInTheDocument();
     await openTargetSelect('Page');
 
     expect(screen.getByRole('option', { name: 'Machine' })).toBeInTheDocument();
@@ -501,5 +501,54 @@ describe('If editor', () => {
       .click(within(row).getByRole('button', { name: 'Change variable binding' }));
     const options = vi.mocked(ctx.openBindingPicker).mock.calls[0][2];
     expect(options?.filter).toEqual({ label: 'Condition', type: 'Boolean' });
+  });
+});
+
+describe('navigateToPage inputs', () => {
+  const group = {
+    id: 'line',
+    title: 'Line',
+    type: 'page-group',
+    componentProperties: { shift: { type: 'String', label: 'Shift', mode: 'value' } },
+    children: [
+      {
+        id: 'recipes',
+        title: 'Recipes',
+        type: 'page',
+        sections: { content: [] },
+        componentProperties: {
+          filter: { type: 'String', label: 'Recipe filter', defaultValue: '' },
+          live: { type: 'Integer', label: 'Live count', mode: 'binding' },
+        },
+      },
+    ],
+  } as unknown as PageNode;
+
+  function renderEditor(action: Extract<ButtonAction, { type: 'navigateToPage' }>) {
+    const recipes = (group as { children: PageNode[] }).children[0];
+    const ctx = { ...makeCtx(), overlayTargets: { dialogs: [], pages: [group, recipes] } };
+    const NavigateToPageEditor = ACTION_EDITORS.navigateToPage!;
+    render(<NavigateToPageEditor action={action} ctx={ctx} />);
+    return ctx;
+  }
+
+  it('lists the Value inputs of the page and its groups, an empty one at the page’s default', () => {
+    renderEditor({
+      type: 'navigateToPage',
+      pageId: 'recipes',
+      componentProperties: { shift: 'night' },
+    });
+
+    expect(screen.getByText('Inputs')).toBeInTheDocument();
+    expect(screen.getByText('Recipe filter')).toBeInTheDocument();
+    expect(screen.getByText('Shift')).toBeInTheDocument();
+    // A page takes no Binding, so none is offered.
+    expect(screen.queryByText('Live count')).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Empty: the page's default\./)).toHaveLength(1);
+  });
+
+  it('lists nothing for a page chosen by an input', () => {
+    renderEditor({ type: 'navigateToPage', pageId: { $componentProp: 'target' } });
+    expect(screen.queryByText('Inputs')).not.toBeInTheDocument();
   });
 });

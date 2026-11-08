@@ -138,6 +138,15 @@
   min-width: 0;
 }
 
+.cfg-source-pill__option-desc {
+  display: block;
+  max-width: 220px;
+  font-size: var(--cfg-text-xs);
+  font-weight: 400;
+  color: var(--cfg-text-muted);
+  white-space: normal;
+}
+
 .cfg-source-pill__browse {
   --option-color: var(--cfg-accent);
   margin-bottom: 3px;

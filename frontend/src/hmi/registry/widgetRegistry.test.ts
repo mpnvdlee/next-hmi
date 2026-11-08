@@ -176,7 +176,17 @@ describe('registerComponents slot properties', () => {
       ['body'],
     );
 
-    expect(entry.schema?.body).toEqual({ type: 'widgets', label: 'Body' });
+    expect(entry.schema?.body).toEqual({ type: 'widgets', label: 'Body', group: 'Inputs' });
+  });
+
+  it("heads an instance's inputs Inputs in the panel, keeping a group the input names", () => {
+    const entry = register(
+      { speed: { type: 'number', label: 'Speed' }, unit: { type: 'string', group: 'Text' } },
+      [],
+    );
+
+    expect(entry.schema?.speed?.group).toBe('Inputs');
+    expect(entry.schema?.unit?.group).toBe('Text');
   });
 });
 

@@ -176,8 +176,9 @@ class ValidationContext:
     page_properties: dict[str, dict[str, dict]] = field(default_factory=dict)
     # Dialogs-folder node id -> the page groups it nests in, innermost first.
     dialog_ancestors: dict[str, tuple[str, ...]] = field(default_factory=dict)
-    # Pages-section node id -> the page variables (Value inputs) its enclosing
-    # page groups declare, innermost winning; the node's own go on top.
+    # Pages-section node id -> the inputs its enclosing page groups
+    # declare, innermost winning; the node's own go on top. A Binding among
+    # them is flagged once, where it is declared (`page-input-binding`).
     page_variables: dict[str, dict[str, dict]] = field(default_factory=dict)
     # False while walking a page that has no input scope (see
     # ``navigable_page_ids``); ``validate_page`` sets it on its own copy.
@@ -585,20 +586,19 @@ def collect_page_property_keys(
 def collect_page_properties(
     config: Any = None, files: list[Path] | None = None
 ) -> dict[str, dict[str, dict]]:
-    """Page or page-group id -> its input-parameter declarations — the
-    declarations behind ``collect_page_property_keys``, resolved the same way."""
+    """Page or page-group id -> its input declarations, in either root: a
+    dialog's are filled by Open Dialog, a page's by Navigate To Page."""
     if config is None:
         config = _read_config()
-    in_dialogs_folder = _index_collect_page_ids(root_nodes(config, "dialogs"))
-    declared: dict[str, dict[str, dict]] = {
-        page_id: {} for page_id in _index_collect_page_ids(root_nodes(config, "pages"))
-    }
-    declared.update(
-        (page_id, decls)
-        for page_id, decls in _scan_page_files(files)[1].items()
-        if page_id in in_dialogs_folder
+    indexed = _index_collect_page_ids(root_nodes(config, "dialogs")) | _index_collect_page_ids(
+        root_nodes(config, "pages")
     )
-    declared.update(collect_page_group_properties(root_nodes(config, "dialogs")))
+    declared: dict[str, dict[str, dict]] = {page_id: {} for page_id in indexed}
+    declared.update(
+        (page_id, decls) for page_id, decls in _scan_page_files(files)[1].items() if page_id in indexed
+    )
+    for root in INDEX_ROOTS:
+        declared.update(collect_page_group_properties(root_nodes(config, root)))
     return declared
 
 
@@ -609,12 +609,8 @@ def collect_dialog_ancestors(config: Any = None) -> dict[str, tuple[str, ...]]:
     return collect_group_ancestors(root_nodes(config, "dialogs"))
 
 
-def _value_inputs(declared: dict[str, dict]) -> dict[str, dict]:
-    return {k: d for k, d in declared.items() if component_property.input_mode(d) == "value"}
-
-
 def collect_page_variables(config: Any = None) -> dict[str, dict[str, dict]]:
-    """Pages-section node id -> the page variables its enclosing groups declare
+    """Pages-section node id -> the inputs its enclosing groups declare
     (see ``ValidationContext.page_variables``)."""
     if config is None:
         config = _read_config()
@@ -624,7 +620,7 @@ def collect_page_variables(config: Any = None) -> dict[str, dict[str, dict]]:
     for node_id, ancestors in collect_group_ancestors(nodes).items():
         merged: dict[str, dict] = {}
         for gid in reversed(ancestors):
-            merged.update(_value_inputs(groups.get(gid) or {}))
+            merged.update(groups.get(gid) or {})
         scopes[node_id] = merged
     return scopes
 
@@ -2099,7 +2095,7 @@ ACTION_FIELDS: dict[str, dict[str, str]] = {
         "height": "Integer",
     },
     "closePageOverlay": {"pageId": "page"},
-    "navigateToPage": {"pageId": "page"},
+    "navigateToPage": {"pageId": "page", "componentProperties": "inputs"},
     "pageGroupNext": {"groupId": "String"},
     "pageGroupPrevious": {"groupId": "String"},
     "pageGroupGoTo": {"groupId": "String", "index": "Integer"},
@@ -2219,7 +2215,7 @@ def _check_overlay_root(
         report.warn(
             path,
             f"page '{page_id}' is in the Dialogs folder — open it with Open Dialog "
-            "instead, which passes its input parameters",
+            "instead, which passes its inputs",
             severity="error",
             code="overlay-wrong-root",
         )
@@ -2276,12 +2272,28 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
         _check_navigate_target(page_id, ctx, f"{path}/pageId", report)
     if kind in ("openDialog", "openPageOverlay") and isinstance(page_id, str) and page_id:
         _check_overlay_root(kind, page_id, ctx, f"{path}/pageId", report)
-    if kind == "openDialog" and isinstance(page_id, str) and page_id:
-        declared = ctx.page_property_keys.get(page_id)
-        # Inputs the target's enclosing groups declare are filled the same way.
-        declarations = _input_scope(ctx, page_id, ctx.page_properties.get(page_id) or {})
-        if declared is not None:
-            declared = declared | declarations.keys()
+    if kind in ("openDialog", "navigateToPage") and isinstance(page_id, str) and page_id:
+        if kind == "openDialog":
+            declared = ctx.page_property_keys.get(page_id)
+            # Inputs the target's enclosing groups declare are filled the same way.
+            # A Pages-section target takes none of them from this action.
+            own = {} if page_id in ctx.navigable_page_ids else ctx.page_properties.get(page_id)
+            declarations = _input_scope(ctx, page_id, own or {})
+            if declared is not None:
+                declared = declared | declarations.keys()
+            when, advice = "when the dialog opens", _KEEP_LIVE_ADVICE
+        else:
+            # The page's Values, its own over its groups': a Binding there is
+            # already an error where it is declared, and no action can fill it.
+            own = ctx.page_properties.get(page_id)
+            declarations = {
+                k: d
+                for k, d in {**ctx.page_variables.get(page_id, {}), **(own or {})}.items()
+                if component_property.input_mode(d) == "value"
+            }
+            declared = declarations.keys() if own is not None else None
+            when = "when the page opens"
+            advice = "a page's input is always a Value; to keep it live, compute it on the page"
         args = action.get("componentProperties")
         if isinstance(args, dict):
             owner_label = f"page '{page_id}'"
@@ -2298,7 +2310,7 @@ def _validate_action(action: Any, ctx: ValidationContext, path: str, report: Val
                     else None
                 )
                 _validate_action_value(arg, schema, ctx, arg_path, report)
-                _check_read_once(arg, decl, "when the dialog opens", arg_path, report)
+                _check_read_once(arg, decl, when, arg_path, report, advice)
     # Async actions nest follow-up lists (onSuccess/onFailed/onSettled),
     # showAlert nests its button handlers and `if` its two branches — every
     # field the table calls `actions`; they get the same checks as a top-level
@@ -2531,7 +2543,7 @@ def _check_navigate_target(page_id: Any, ctx: ValidationContext, path: str, repo
     if not isinstance(name, str):
         report.warn(
             path,
-            "the page is a fixed page or an input parameter declared as a page — nothing else",
+            "the page is a fixed page or an input declared as a page — nothing else",
             severity="error", code="navigate-target-invalid",
         )
     elif not name:
@@ -2541,7 +2553,7 @@ def _check_navigate_target(page_id: Any, ctx: ValidationContext, path: str, repo
     ):
         report.warn(
             path,
-            f"input parameter '{name}' is not declared here as a page (format: page)",
+            f"input '{name}' is not declared here as a page (format: page)",
             severity="error", code="navigate-input-not-page",
         )
 
@@ -2742,8 +2754,16 @@ def _reads_variable(value: Any) -> bool:
     return isinstance(value, list) and any(map(_reads_variable, value))
 
 
+_KEEP_LIVE_ADVICE = "to keep it live, make the input a Binding, pass it the variable and compute inside"
+
+
 def _check_read_once(
-    value: Any, decl: dict | None, when: str, path: str, report: ValidationReport
+    value: Any,
+    decl: dict | None,
+    when: str,
+    path: str,
+    report: ValidationReport,
+    advice: str = _KEEP_LIVE_ADVICE,
 ) -> None:
     """Flag a computed live value — a formula or condition over a variable —
     given to a Value input, which reads it once and then keeps its own copy.
@@ -2757,8 +2777,7 @@ def _check_read_once(
         return
     report.warn(
         path,
-        f"this input is a Value, so this live {source_key} is read once {when} — "
-        "to keep it live, make the input a Binding, pass it the variable and compute inside",
+        f"this input is a Value, so this live {source_key} is read once {when} — {advice}",
         severity="warning",
         code="value-reads-once",
     )
@@ -2832,7 +2851,7 @@ def _check_component_prop(
     if not isinstance(decl, dict):
         report.warn(
             path,
-            f"input parameter '{key}' is not declared here",
+            f"input '{key}' is not declared here",
             severity="warning",
             code="componentprop-unknown",
         )
@@ -2840,12 +2859,12 @@ def _check_component_prop(
     if str(decl.get("type", "")).strip().lower() == "widgets":
         report.warn(
             path,
-            f"input parameter '{key}' is a widget slot — it holds no value to read",
+            f"input '{key}' is a widget slot — it holds no value to read",
             severity="error",
             code="componentprop-type",
         )
         return
-    subject = f"input parameter '{name}'"
+    subject = f"input '{name}'"
     if (
         isinstance(schema_field, dict)
         and schema_field.get("bindsOnly") is True
@@ -2855,7 +2874,7 @@ def _check_component_prop(
         # back into this screen's state, which a Value never lets happen.
         report.warn(
             path,
-            f"input parameter '{key}' is a Value, and a Binding takes a variable "
+            f"input '{key}' is a Value, and a Binding takes a variable "
             "or another Binding",
             severity="error",
             code="binding-source",
@@ -2874,7 +2893,7 @@ def _check_component_prop(
     if not known:
         report.warn(
             path,
-            f"input parameter '{key}' declares no member '{member}'",
+            f"input '{key}' declares no member '{member}'",
             severity="warning",
             code="componentprop-unknown",
         )
@@ -2936,11 +2955,11 @@ def _widget_prop_problem(
         return node
 
     sub = payload.get("path")
-    subject = f"exported property '{widget_id}.{prop_name}'"
+    subject = f"widget property '{widget_id}.{prop_name}'"
     if isinstance(sub, str) and sub:
         field_decl = next((f for f in fields if f.get("name") == sub), {"name": sub})
         why = component_property.node_verdict(as_node(field_decl), schema_field)
-        subject = f"exported property '{widget_id}.{prop_name}/{sub}'"
+        subject = f"widget property '{widget_id}.{prop_name}/{sub}'"
     else:
         # Another widget's state, written through nothing here — never a local Value.
         adapted: dict[str, Any] = {"mode": "binding"}
@@ -2991,13 +3010,13 @@ def _check_overlay(payload: dict, ctx: ValidationContext, path: str, report: Val
     page, param = payload.get("page"), payload.get("param")
     if not isinstance(page, str) or not page or not isinstance(param, str) or not param:
         report.warn(
-            path, "page or input parameter is empty", severity="warning", code="overlay-empty"
+            path, "page or input is empty", severity="warning", code="overlay-empty"
         )
         return
     if ctx.dialogs_page_ids and page not in ctx.dialogs_page_ids:
         report.warn(
             path,
-            f"page '{page}' is not in the Dialogs folder — only a dialog has input parameters",
+            f"page '{page}' is not in the Dialogs folder — Open Dialog Input reads only a dialog's inputs",
             severity="error", code="overlay-page",
         )
         return
@@ -3005,7 +3024,7 @@ def _check_overlay(payload: dict, ctx: ValidationContext, path: str, report: Val
     if declared is not None and param not in declared:
         report.warn(
             path,
-            f"page '{page}' declares no input parameter '{param}'",
+            f"page '{page}' declares no input '{param}'",
             severity="error", code="overlay-param-unknown",
         )
 
@@ -3272,8 +3291,7 @@ def _validate_property_value(
         elif not ctx.input_scope:
             report.warn(
                 path,
-                f"input parameter '{payload}' reads nothing here — only pages in "
-                "the Dialogs folder take input parameters",
+                f"input '{payload}' reads nothing here — nothing around it declares inputs",
                 severity="warning", code="componentprop-no-scope",
             )
         else:
@@ -3589,25 +3607,25 @@ def validate_page(page: Any, ctx: ValidationContext) -> ValidationReport:
 def ctx_for_root(ctx: ValidationContext, root: str) -> ValidationContext:
     """Narrow a validation context to one index root.
 
-    Only the Dialogs folder's nodes take input parameters, so anything under
+    Only the Dialogs folder's nodes take every kind of input, so anything under
     the navigable root is walked without an input scope — a node there reads
-    only its page variables, which ``ctx_for_page_group`` / ``validate_page``
+    only its own inputs, which ``ctx_for_page_group`` / ``validate_page``
     put back per node.
     """
     return ctx if root == "dialogs" else replace(ctx, input_scope=False)
 
 
 def _page_variable_scope(ctx: ValidationContext, node_id: str, node: Any) -> ValidationContext:
-    """A Pages-section node takes no inputs; only its page variables — its own
-    Value inputs over its enclosing groups' — are read by `$componentProp`."""
-    scope = {**ctx.page_variables.get(node_id, {}), **_value_inputs(declared_properties(node))}
+    """A Pages-section node reads its inputs — its own over its enclosing
+    groups' — with `$componentProp`."""
+    scope = {**ctx.page_variables.get(node_id, {}), **declared_properties(node)}
     return replace(ctx, input_scope=bool(scope), input_schema=scope)
 
 
 def ctx_for_page_group(ctx: ValidationContext, node: Any) -> ValidationContext:
     """The context a page group's own events are walked in: a Dialogs-folder
-    group's input parameters are its declarations over its enclosing groups',
-    a Pages-section group's its page variables."""
+    group's inputs are its declarations over its enclosing groups', a
+    Pages-section group's its own over its enclosing groups'."""
     gid = node.get("id") if isinstance(node, dict) else None
     if isinstance(gid, str) and gid in ctx.navigable_page_ids:
         return _page_variable_scope(ctx, gid, node)
@@ -3676,11 +3694,28 @@ def validate_value_maps(maps: Any, ctx: ValidationContext) -> ValidationReport:
 
 def validate_page_node_events(node: Any, ctx: ValidationContext) -> ValidationReport:
     """Validate the action targets in a page or page-group node's ``events``
-    map. Paths are relative to the node itself (``/events/onOpen/0``)."""
+    map and, on a Pages-section node, that every input is a Value. Paths are
+    relative to the node itself (``/events/onOpen/0``)."""
     report = ValidationReport()
     if isinstance(node, dict):
         validate_action_targets(node.get("events"), ctx, "/events", report)
+        if node.get("id") in ctx.navigable_page_ids:
+            _check_page_inputs_are_values(node, report)
     return report
+
+
+def _check_page_inputs_are_values(node: dict, report: ValidationReport) -> None:
+    """Only Navigate To Page fills a Pages-section node's inputs, and the
+    button that navigated is gone by then, so a Binding has nothing to follow
+    or write back to: every input there is a Value."""
+    for key, decl in declared_properties(node).items():
+        if component_property.input_mode(decl) == "binding":
+            report.warn(
+                f"/componentProperties/{key}",
+                f"input '{key}' is a Binding, but a page's inputs are Values only",
+                severity="error",
+                code="page-input-binding",
+            )
 
 
 def _reparented(report: ValidationReport, prefix: str) -> ValidationReport:

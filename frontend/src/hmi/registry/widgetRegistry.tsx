@@ -640,7 +640,9 @@ export function registerComponents(components: ComponentDefinition[]): void {
       // panel row would edit a hole — the row appears by itself once the
       // definition names it, since a component-store change re-registers.
       if (primaryType(p.type).toLowerCase() === 'widgets' && !slots.includes(k)) continue;
-      schema[k] = componentPropertyToSchemaField(p);
+      const field = componentPropertyToSchemaField(p);
+      // An instance sets its component's inputs: they head the panel as Inputs.
+      schema[k] = { ...field, group: field.group || 'Inputs' };
     }
 
     // Import is deferred to avoid circular imports during module evaluation.

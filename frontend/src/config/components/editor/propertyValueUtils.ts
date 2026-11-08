@@ -311,7 +311,7 @@ export function propertyValuePreview(value: unknown, fieldType?: string, depth =
   }
   if (key === '$componentProp') {
     const propKey = obj.$componentProp;
-    return typeof propKey === 'string' && propKey ? propKey : '(component prop)';
+    return typeof propKey === 'string' && propKey ? propKey : '(input)';
   }
   if (key === '$repeatItem') {
     const r = obj.$repeatItem as { field?: string; member?: string } | undefined;

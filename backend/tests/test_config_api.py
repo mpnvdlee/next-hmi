@@ -1177,8 +1177,8 @@ def _overlay_opener_draft(target_id: str, args: dict) -> dict:
 
 
 def test_post_validate_ignores_declarations_outside_the_dialogs_folder(client, tmp_dirs):
-    """A page in the navigable tree takes no input parameters, whatever its file
-    declares, so every value an action hands it is flagged."""
+    """Open Dialog fills no inputs of a page in the navigable tree, whatever its
+    file declares, so every value it hands one is flagged."""
     project_dir, pages_dir = tmp_dirs
     target_id = "motor-page"
     storage.write_json(project_dir / "config.json", {
@@ -1232,14 +1232,17 @@ def test_post_validate_reports_input_parameter_on_a_navigable_page(client, tmp_d
 
 
 def test_post_validate_reads_page_variables_on_a_navigable_page(client, tmp_dirs):
-    """A Pages page reads its own and its group's Value inputs (page variables);
-    an input that is not a Value is not one of them."""
+    """A Pages page reads its own and its group's inputs. One that is a
+    Binding is flagged once, where it is declared — not again at every read."""
     project_dir, _pages_dir = tmp_dirs
     storage.write_json(project_dir / "config.json", {
         "version": 2,
         "pages": [{
             "id": "line", "type": "page-group",
-            "componentProperties": {"shift": {"type": "String", "mode": "value"}},
+            "componentProperties": {
+                "shift": {"type": "String", "mode": "value"},
+                "crew": {"type": "String", "mode": "binding"},
+            },
             "children": [{"id": "home", "type": "page"}],
         }],
         "dialogs": [],
@@ -1254,12 +1257,11 @@ def test_post_validate_reads_page_variables_on_a_navigable_page(client, tmp_dirs
             "pv": {"type": "String", "mode": "value"},
             "live": {"type": "String", "mode": "binding"},
         },
-        "sections": {"content": [read("pv"), read("shift"), read("live")]},
+        "sections": {"content": [read("pv"), read("shift"), read("live"), read("live"), read("crew")]},
     }
     resp = client.post("/api/config/validate", json={"kind": "page", "draft": draft})
 
-    flagged = [(d["code"], d["widgetId"]) for d in resp.json()["diagnostics"]]
-    assert flagged == [("componentprop-unknown", "l-live")]
+    assert [d["code"] for d in resp.json()["diagnostics"]] == ["page-input-binding"]
 
 
 def test_post_validate_reports_unknown_page_overlay_argument(client, tmp_dirs):

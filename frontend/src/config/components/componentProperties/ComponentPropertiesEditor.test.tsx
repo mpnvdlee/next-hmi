@@ -12,6 +12,19 @@ const properties: Record<string, ComponentPropertySchema> = {
 };
 
 describe('ComponentPropertiesEditor', () => {
+  it('sums each property up as its name, type and default', () => {
+    render(
+      <ComponentPropertiesEditor
+        properties={{ recipe: { type: 'string', label: 'recipe', defaultValue: 'espresso' } }}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(document.querySelector('.cfg-component-prop-summary')?.textContent).toBe(
+      'recipe · String · "espresso"',
+    );
+  });
+
   it('states the key and type but does not offer them for editing', async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
@@ -93,14 +106,28 @@ describe('ComponentPropertiesEditor', () => {
     });
   });
 
-  it('offers only Value on a page of the Pages section', async () => {
+  it('offers no Value or Binding choice on a page of the Pages section', async () => {
     const user = userEvent.setup();
-    render(<ComponentPropertiesEditor properties={properties} valueOnly onChange={vi.fn()} />);
+    render(<ComponentPropertiesEditor properties={properties} owner="page" onChange={vi.fn()} />);
 
     await user.click(screen.getByText('Motor speed'));
 
-    expect(screen.getByText('Value')).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'Binding' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Kind')).not.toBeInTheDocument();
+    expect(screen.getByText(/Set by Navigate To Page\./)).toBeInTheDocument();
+    expect(screen.getByText(/in the Navigate To Page action\./)).toBeInTheDocument();
+    expect(screen.queryByText(/an instance leaves/)).not.toBeInTheDocument();
+  });
+
+  it('says how a dialog input is set, and words its help for the Open Dialog action', async () => {
+    const user = userEvent.setup();
+    render(<ComponentPropertiesEditor properties={properties} owner="dialog" onChange={vi.fn()} />);
+
+    await user.click(screen.getByText('Motor speed'));
+
+    expect(screen.getByText('Kind')).toBeInTheDocument();
+    expect(screen.getByText('Set by Open Dialog.')).toBeInTheDocument();
+    expect(screen.getByText(/in the Open Dialog action\./)).toBeInTheDocument();
+    expect(screen.queryByText(/component is placed/)).not.toBeInTheDocument();
   });
 
   it('offers no write-access toggle for a struct property, which declares it per field', async () => {
@@ -122,7 +149,7 @@ describe('ComponentPropertiesEditor', () => {
     const user = userEvent.setup();
     render(<ComponentPropertiesEditor properties={{}} onChange={onChange} />);
 
-    await user.click(screen.getByTitle('Add component property'));
+    await user.click(screen.getByTitle('Add input'));
     await user.type(screen.getByPlaceholderText('e.g. motorVar'), 'title');
     const row = screen.getByText('Default value').closest('.cfg-field-group') as HTMLElement;
     await user.type(within(row).getByRole('textbox'), 'Boiler');
@@ -138,7 +165,7 @@ describe('ComponentPropertiesEditor', () => {
     const user = userEvent.setup();
     render(<ComponentPropertiesEditor properties={{}} onChange={onChange} />);
 
-    await user.click(screen.getByTitle('Add component property'));
+    await user.click(screen.getByTitle('Add input'));
     await user.type(screen.getByPlaceholderText('e.g. motorVar'), 'title');
     await user.click(screen.getByRole('button', { name: 'Add' }));
 
@@ -180,7 +207,7 @@ describe('ComponentPropertiesEditor', () => {
     const user = userEvent.setup();
     render(<ComponentPropertiesEditor properties={{}} onChange={vi.fn()} />);
 
-    await user.click(screen.getByTitle('Add component property'));
+    await user.click(screen.getByTitle('Add input'));
     await user.click(screen.getByRole('combobox'));
 
     expect(screen.getByRole('option', { name: 'String' })).toBeInTheDocument();

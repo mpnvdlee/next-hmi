@@ -606,7 +606,7 @@ export type ButtonAction =
       /** Target node id — a page, or a page group (its active child renders
        *  inside the group's header/footer chrome), in the Dialogs folder. */
       pageId: string;
-      /** Input-parameter values for the declarations the target carries. */
+      /** Input values for the declarations the target carries. */
       componentProperties?: Record<string, unknown>;
       size?: OverlaySize;
       placement?: OverlayPlacement;
@@ -636,10 +636,13 @@ export type ButtonAction =
   | { type: 'closePageOverlay'; pageId?: string }
   | {
       /** Closes every open overlay, then navigates to a page or page group in
-       *  the `pages` root: a fixed id, or a dialog input parameter declared
+       *  the `pages` root: a fixed id, or a dialog input declared
        *  `format: 'page'`. One that resolves to no navigable page does nothing. */
       type: 'navigateToPage';
       pageId: string | { $componentProp: string };
+      /** Values for the inputs a fixed target and its groups declare, read once
+       *  in the opener's context; one left out starts at its default. */
+      componentProperties?: Record<string, unknown>;
     }
   /** Switch a page group's tab: the group the widget sits in, or `groupId`
    *  (`'$parent'` or a group id), as for a Tab Bar. Next and Previous stop at

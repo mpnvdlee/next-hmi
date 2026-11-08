@@ -14,11 +14,12 @@ heading.
 Opens the HMI to the systems around it and shuts out the ones that should not
 reach it: API v1 for a MES or badge reader, tokens under Settings › Tokens, bit
 bindings and a `Byte` type for status words, and an editor that keeps up with
-an AI assistant's changes. Projects move to file format 12, where every input
-is a Value or a Binding. Read **Changed**
-before you update: a reverse proxy must pass the browser's `Host` with its
-port, and an `$http` URL that takes its server from a placeholder needs that
-server listed.
+an AI assistant's changes. It also adds a Data Grid, project value maps, page
+inputs and dialogs that move. Projects move to file format 12, where every
+input is a Value or a Binding. Read **Changed** before you update: a reverse
+proxy must pass the browser's `Host` with its port, an `$http` URL that takes
+its server from a placeholder needs that server listed, and a formula passed
+into a dialog or component is now read once.
 
 ### Added
 
@@ -153,6 +154,17 @@ server listed.
 - **`sendWsMessage` says whether it sent.** The widget SDK's
   `sendWsMessage` returns `true` when the message went out and `false` when
   the live connection is down.
+- **Pages have inputs, and Navigate To Page fills them.** A page or page group
+  in the Pages section declares **Inputs**, always Values. A **Navigate To
+  Page** to it gets one field per input — any source, read once in the screen
+  that navigates; one left empty gives the page its default. After that the
+  input is the screen's own: a search box can write it and the list below can
+  filter on it, and a second panel showing the same page keeps its own.
+  Arriving any other way — a menu, a Tab Bar, a Page Group action, the
+  browser's back button or a refresh — starts at the defaults; a page group's
+  inputs last while the operator moves between its pages. The page's and
+  group's Open and Close events read the inputs as the page's widgets do.
+  Nothing is stored on the server or in the URL.
 - **A component can take an option list.** A new input type, **Options**,
   passes a list of label and value pairs. Set a Dropdown's or Button Row's
   **Options** inside the component to that input, and each instance offers
@@ -164,6 +176,21 @@ server listed.
 
 ### Changed
 
+- **Inputs and Widget Properties.** The **Component Property** source is now
+  called **Input**, and **Exported Property** is **Widget Property**; each says
+  in one line what it reads. The block that declares them is called **Inputs**
+  on a component, a dialog and a page alike (it was Component Properties,
+  Input Parameters and Page Variables). Both sources open one picker with an
+  **Inputs** and a **Widget Properties** group, so a field switches between
+  them by picking a row. Project files do not change.
+- **A page's Inputs sit under its title.** A page's or page group's
+  **Inputs** — a dialog's too — moved from the bottom of the panel to the
+  bottom of its **Page** section, under an **Inputs** title; a component's
+  sit the same way at the bottom of its **Identity** section. Each line shows
+  the input's name, type and default; › opens the rest.
+- **A placed component sets its Inputs.** The section of a component
+  instance's panel where its inputs get their values is titled **Inputs**, not
+  **Properties**, as in an Open Dialog or Navigate To Page action.
 - **Numbers read with a decimal comma.** Every number the HMI shows — Value
   Display, Gauge, Ring Gauge, Progress Bar, Trend, Trend Chart, Number Input,
   Numeric Stepper, Data Grid cells, `{1}` in a Text Expression, a Localizable
@@ -280,6 +307,10 @@ server listed.
 
 ### Fixed
 
+- **A widget's value in a component reads as bound.** In the components
+  editor a working **Widget Property** source, such as a Dropdown's
+  Selected Value, showed *Not bound*: the picker knew only a page's widgets,
+  not the open definition's. It now names them as on a page.
 - **Open Dialog fills a group's inputs.** The action listed only the inputs
   the dialog page declares, and validation warned about any other,
   so an input its page group declares could not be set. Both now include the

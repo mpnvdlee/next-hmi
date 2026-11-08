@@ -29,6 +29,24 @@ describe('PropertySourceSelector', () => {
     expect(screen.getByRole('button', { name: 'Fixed-type sources' })).toBeInTheDocument();
   });
 
+  it('says under Input and Widget Property where their value comes from', () => {
+    render(
+      <PropertySourceSelector
+        value="Hello"
+        onChange={() => {}}
+        fieldType="string"
+        forcedSources={['$var', '$widgetProp']}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Static/ }));
+
+    expect(
+      screen.getByRole('button', { name: /^Widget Property What another widget/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Variable$/ })).toBeInTheDocument();
+  });
+
   it('selects a compatible source from the drawer and closes it', () => {
     const onChange = vi.fn();
     render(

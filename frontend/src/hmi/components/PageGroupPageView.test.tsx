@@ -2,11 +2,13 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useConfigStore } from '@shared/store/configStore';
 import { useVariableStore } from '@hmi/store/variableStore';
+import { useHmiStore } from '@hmi/store/hmiStore';
 import type { PageConfig, PageGroupConfig } from '@shared/types/config';
 import { widgetRegistry } from '@hmi/registry/widgetRegistry';
 import { LabeledProbe } from './__fixtures__/probeWidgets';
 import { useEvalContext } from '@hmi/hooks/useEvalContext';
 import PageGroupPageView from './PageGroupPageView';
+import { usePageEvents } from '@hmi/hooks/usePageEvents';
 
 function makePage(id: string): PageConfig {
   return { id, title: `Page ${id}`, type: 'page', sections: { content: [] } };
@@ -276,5 +278,199 @@ describe('PageGroupPageView / input properties on a routed page', () => {
       </MemoryRouter>,
     );
     await waitFor(() => expect(screen.getByRole('button', { name: 'M1' })).toBeInTheDocument());
+  });
+});
+
+describe('PageGroupPageView / inputs a Navigate To Page passes', () => {
+  // The line group declares `shift`, its page `a` declares `filter`; `b` sits
+  // in the same group, `other` outside it.
+  function probe(id: string, name: string) {
+    return {
+      id,
+      type: 'LabeledProbe',
+      name: 'Probe',
+      properties: { label: { $componentProp: name } },
+    };
+  }
+  const value = (label: string, defaultValue: string) => ({
+    type: 'String',
+    label,
+    defaultValue,
+    mode: 'value',
+  });
+  const pages = [
+    {
+      id: 'line',
+      title: 'Line',
+      type: 'page-group',
+      componentProperties: { shift: value('Shift', 'day') },
+      children: [
+        {
+          id: 'a',
+          title: 'A',
+          type: 'page',
+          componentProperties: { filter: value('Filter', 'all') },
+          sections: { content: [probe('pf', 'filter'), probe('ps', 'shift')] },
+        },
+        { id: 'b', title: 'B', type: 'page', sections: { content: [probe('ps', 'shift')] } },
+      ],
+    },
+    { id: 'other', title: 'Other', type: 'page', sections: { content: [] } },
+  ] as unknown as PageGroupConfig[];
+
+  function View({ id }: { id: string }) {
+    return (
+      <MemoryRouter>
+        <PageGroupPageView pages={pages} requestedId={id} onNavigate={() => {}} readsArrivals />
+      </MemoryRouter>
+    );
+  }
+  const shows = (name: string) =>
+    waitFor(() => expect(screen.getByRole('button', { name })).toBeInTheDocument());
+  /** What a Navigate To Page queues: the route change goes through the router,
+   *  which these tests stand in for by re-rendering with the new id. */
+  const navigate = (pageId: string, values: Record<string, unknown> = {}) =>
+    act(() => useHmiStore.getState().navigateToPage(pageId, undefined, values));
+
+  beforeEach(() => {
+    useConfigStore.setState({ loadedPageIds: new Set(['a', 'b', 'other']) });
+    useHmiStore.setState({ pageArrival: null });
+    widgetRegistry.LabeledProbe = LabeledProbe;
+  });
+
+  afterEach(() => {
+    delete widgetRegistry.LabeledProbe;
+  });
+
+  it('reads what it passed on arrival, and starts at defaults when nothing passed it', async () => {
+    const { rerender } = render(<View id="other" />);
+    navigate('a', { filter: 'Espresso' });
+    rerender(<View id="a" />);
+    await shows('Espresso');
+    expect(useHmiStore.getState().pageArrival).toBeNull();
+    // (a) A menu, a tab or the browser's back button passes nothing.
+    rerender(<View id="other" />);
+    rerender(<View id="a" />);
+    await shows('all');
+  });
+
+  it('reads again on the page it is already on, an empty input at its default', async () => {
+    render(<View id="a" />);
+    await shows('all');
+    navigate('a', { filter: 'Espresso' });
+    await shows('Espresso');
+    // (c) The same values again are read again; a left-out input is the default.
+    navigate('a', { shift: 'night' });
+    await shows('night');
+    await shows('all');
+  });
+
+  it('keeps a group’s input while moving inside the group, and forgets it on leaving', async () => {
+    const { rerender } = render(<View id="other" />);
+    navigate('a', { shift: 'night' });
+    rerender(<View id="a" />);
+    await shows('night');
+    // (b) Moving to a sibling page by a tab passes nothing, and keeps it.
+    rerender(<View id="b" />);
+    await shows('night');
+    // A Navigate To Page that leaves it empty keeps it too.
+    navigate('a');
+    rerender(<View id="a" />);
+    await shows('night');
+    rerender(<View id="other" />);
+    rerender(<View id="b" />);
+    await shows('day');
+  });
+
+  it('is not kept anywhere a refresh would find it', async () => {
+    const { unmount } = render(<View id="other" />);
+    navigate('a', { filter: 'Espresso' });
+    unmount();
+    // (d) Nothing goes in the URL; a fresh view still reads a pending arrival
+    // once, and after that one a fresh view starts at defaults.
+    const first = render(<View id="a" />);
+    await shows('Espresso');
+    first.unmount();
+    render(<View id="a" />);
+    await shows('all');
+  });
+});
+
+describe('PageGroupPageView / a routed page’s events read its inputs', () => {
+  const toast = (event: string) => ({
+    type: 'showToast',
+    message: {
+      $stringExpr: { template: `${event} {1}`, wildcards: { 1: { $componentProp: 'filter' } } },
+    },
+  });
+  const pages = [
+    {
+      id: 'a',
+      title: 'A',
+      type: 'page',
+      componentProperties: {
+        filter: { type: 'String', label: 'Filter', defaultValue: 'all', mode: 'value' },
+      },
+      events: { onOpen: [toast('open')], onClose: [toast('close')] },
+      sections: { content: [] },
+    },
+    { id: 'other', title: 'Other', type: 'page', sections: { content: [] } },
+  ] as unknown as PageConfig[];
+
+  // HmiView's arrangement: the events hook in the parent, on the rendered id,
+  // and the page view mounted only once the boot screen is gone.
+  function View({ id, booted = true }: { id: string; booted?: boolean }) {
+    usePageEvents('runtime:test', id);
+    return booted ? (
+      <PageGroupPageView pages={pages} requestedId={id} onNavigate={() => {}} readsArrivals />
+    ) : null;
+  }
+  const toasts = () => useHmiStore.getState().pendingToasts.map((t) => t.message);
+
+  beforeEach(() => {
+    useConfigStore.setState({ pages, loadedPageIds: new Set(['a', 'other']) });
+    useHmiStore.setState({ pageArrival: null, pendingToasts: [], routedInputScopes: {} });
+  });
+
+  it('opens with what Navigate To Page passed and closes with the local value', () => {
+    const { rerender } = render(
+      <MemoryRouter>
+        <View id="other" />
+      </MemoryRouter>,
+    );
+    act(() => useHmiStore.getState().navigateToPage('a', undefined, { filter: 'Espresso' }));
+    rerender(
+      <MemoryRouter>
+        <View id="a" />
+      </MemoryRouter>,
+    );
+    expect(toasts()).toEqual(['open Espresso']);
+
+    // The page changes its own copy, as a String Input would.
+    const slot = (useHmiStore.getState().routedInputScopes.a.filter as { $var: { path: string } })
+      .$var.path;
+    act(() => useVariableStore.getState().setScalar(slot, 'Doos'));
+    rerender(
+      <MemoryRouter>
+        <View id="other" />
+      </MemoryRouter>,
+    );
+    expect(toasts()).toEqual(['open Espresso', 'close Doos']);
+    expect(useVariableStore.getState().values[slot]).toBeUndefined();
+  });
+
+  it('opens at the defaults on a first load, behind the boot screen', () => {
+    const { rerender } = render(
+      <MemoryRouter>
+        <View id="a" booted={false} />
+      </MemoryRouter>,
+    );
+    expect(toasts()).toEqual([]);
+    rerender(
+      <MemoryRouter>
+        <View id="a" />
+      </MemoryRouter>,
+    );
+    expect(toasts()).toEqual(['open all']);
   });
 });

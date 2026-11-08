@@ -22,6 +22,10 @@ import PropertySourceBadge, { MIXED_SOURCE_LABEL, type BadgeSource } from './Pro
 import { propertySourceColorStyle } from './propertySourceStyle';
 export type { PropertySource } from '@hmi/utils/propertySourceRegistry';
 
+/** Sources whose name alone does not say where the value comes from, so the
+ *  menu spells it out under the name. */
+const EXPLAINED_SOURCES: ReadonlySet<string> = new Set(['$componentProp', '$widgetProp']);
+
 interface PropertySourceSelectorProps {
   /** The current value (plain or sourced) */
   value: unknown;
@@ -263,6 +267,14 @@ export default function PropertySourceSelector({
               <PropertySourceBadge source={source} />
               <span className="cfg-source-pill__option-label">
                 {PROPERTY_SOURCES[source].label}
+                {EXPLAINED_SOURCES.has(source) && (
+                  <>
+                    {' '}
+                    <small className="cfg-source-pill__option-desc">
+                      {PROPERTY_SOURCES[source].description}
+                    </small>
+                  </>
+                )}
               </span>
             </button>
           ))}

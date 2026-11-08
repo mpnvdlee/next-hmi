@@ -511,12 +511,15 @@ describe('ConditionListEditor', () => {
 describe('component and exported properties inside a nested slot', () => {
   const PROPS = { properties: { speed: { type: 'float', label: 'Speed' } } };
 
-  afterEach(() => useEditorDomainStore.getState().closeBindingPicker());
+  afterEach(() => useEditorDomainStore.getState().closeWidgetPropPicker());
 
   // Each test holds one `$componentProp`, so its picker button is the only one.
+  // A property's Input opens the picker it shares with Widget Property.
   function pickComponentProp() {
-    fireEvent.click(screen.getByRole('button', { name: 'Select component property' }));
-    return useEditorDomainStore.getState().bindingPickerTarget?.componentPropSource;
+    fireEvent.click(screen.getByRole('button', { name: 'Select input' }));
+    const target = useEditorDomainStore.getState().widgetPropPickerTarget;
+    expect(target?.inputs?.properties).toBe(PROPS.properties);
+    return target;
   }
 
   it('lists every property for a comparison operand', () => {

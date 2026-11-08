@@ -42,7 +42,7 @@
 
 /* Title row: the label, plus the add control of a field that owns a list
    (`headerActions` / `FieldHeaderActions`) — same shape as the action list's
-   `cfg-editor-actions__title-row` and the component-property section header. */
+   `cfg-editor-actions__title-row`, which a page's or component's Inputs reuse. */
 .cfg-field-group__header {
   display: flex;
   align-items: center;

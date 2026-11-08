@@ -143,7 +143,7 @@ export function executeWidgetActions(
     }
 
     if (action.type === 'openDialog' || action.type === 'openPageOverlay') {
-      // Only a Dialogs-folder node declares input parameters, so only
+      // A Pages-section node opened as an overlay takes no inputs, so only
       // `openDialog` carries values to resolve against the opener's scope.
       const supplied = action.type === 'openDialog' ? action.componentProperties : undefined;
       // The node's own declarations over its enclosing groups', innermost winning.
@@ -206,10 +206,21 @@ export function executeWidgetActions(
       // Only the `pages` root routes; an input naming nothing there does nothing.
       const { pages, dialogs } = useConfigStore.getState();
       if (pageId && findPageNodeById(pages, pageId)) {
+        // A page takes Values only: each is read here, once, in the opener's context.
+        const values = Object.fromEntries(
+          Object.entries(action.componentProperties ?? {}).map(([k, v]) => [
+            k,
+            evaluatePropertyValue(resolveComponentPropValue(v, inputScopeProps), evalCtx) ?? null,
+          ]),
+        );
         // A dialog that leaves the screen usable stays open, as it was; modal ones close.
         useHmiStore
           .getState()
-          .navigateToPage(pageId, (o) => findPageNodeById(dialogs, o.pageId)?.modeless === true);
+          .navigateToPage(
+            pageId,
+            (o) => findPageNodeById(dialogs, o.pageId)?.modeless === true,
+            values,
+          );
       }
       continue;
     }

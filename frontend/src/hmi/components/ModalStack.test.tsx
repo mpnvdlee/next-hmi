@@ -586,7 +586,7 @@ describe('ModalStack page overlays — input properties', () => {
     expect(screen.getByRole('button', { name: 'M7' })).toBeInTheDocument();
   });
 
-  it('gives a page outside the Dialogs folder only its page variables, never a supplied value', () => {
+  it('gives a page outside the Dialogs folder only its Value inputs at their defaults, never a supplied value', () => {
     useHmiStore.setState({
       openPageOverlays: [
         {
@@ -794,7 +794,7 @@ describe('ModalStack page overlays — page groups take input properties too', (
     expect(chromeLabels(container)).toEqual(['OUTER', 'INNER', '']);
   });
 
-  it('gives a page-group tree outside the Dialogs folder its page variables, never a supplied value', () => {
+  it('gives a page-group tree outside the Dialogs folder its Value inputs at their defaults, never a supplied value', () => {
     // Same GROUP_TREE, opened from `pages:` instead of `dialogs:` — the
     // supplied value goes unread, and each level's Value starts at its default.
     useConfigStore.setState({ dialogs: [], pages: GROUP_TREE });

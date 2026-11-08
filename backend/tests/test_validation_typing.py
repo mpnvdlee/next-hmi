@@ -618,6 +618,52 @@ def test_a_value_input_takes_anything_and_reads_a_live_formula_once(ctx):
     assert _codes(_action(dialog, action)) == ["value-reads-once"]
 
 
+def test_navigate_to_page_fills_the_pages_and_its_groups_value_inputs(ctx):
+    pages = replace(
+        ctx,
+        page_ids={"recipes", "line"},
+        navigable_page_ids=frozenset({"recipes", "line"}),
+        page_properties={
+            "recipes": {
+                "filter": {"type": "string", "label": "Filter", "mode": "value"},
+                "live": {"type": "integer", "label": "Live", "mode": "binding"},
+            },
+            "line": {"shift": {"type": "integer", "label": "Shift", "mode": "value"}},
+        },
+        page_variables={"recipes": {"shift": {"type": "integer", "label": "Shift", "mode": "value"}}},
+    )
+    action = {"type": "navigateToPage", "pageId": "recipes", "componentProperties": {"filter": "Espresso", "shift": 2}}
+    assert _codes(_action(pages, action)) == []
+    # Any source is taken; a bare variable is read once without a word.
+    action["componentProperties"] = {"shift": {"$var": {"path": "PLC:Count"}}}
+    assert _codes(_action(pages, action)) == []
+    action["componentProperties"] = {"shift": "night"}
+    assert _codes(_action(pages, action)) == ["literal-type"]
+    # A Binding is no input of a page, and a name it does not declare is unknown.
+    action["componentProperties"] = {"live": 1, "zzz": "x"}
+    assert _codes(_action(pages, action)) == ["prop-unknown", "prop-unknown"]
+    formula = {"$formula": {"expression": "{1} * 2", "wildcards": {"1": {"$var": {"path": "PLC:Count"}}}, "round": True}}
+    action["componentProperties"] = {"shift": formula}
+    report = _action(pages, action)
+    assert _codes(report) == ["value-reads-once"]
+    assert "compute it on the page" in report.warnings[0].message
+
+
+def test_a_pages_node_declares_values_only(ctx):
+    pages = replace(ctx, navigable_page_ids=frozenset({"recipes"}))
+    page = {
+        "id": "recipes",
+        "componentProperties": {
+            "filter": {"type": "string", "label": "Filter", "mode": "value"},
+            "live": {"type": "integer", "label": "Live", "mode": "binding"},
+        },
+    }
+    report = validate_page_node_events(page, pages)
+    assert [(w.code, w.path) for w in report.warnings] == [("page-input-binding", "/componentProperties/live")]
+    # The same declaration in the Dialogs folder is fine.
+    assert validate_page_node_events(page, ctx).warnings == []
+
+
 def test_an_action_value_reads_the_surrounding_inputs(input_ctx):
     action = {"type": "showToast", "message": {"$componentProp": "nope"}}
     assert _codes(_action(input_ctx, action)) == ["componentprop-unknown"]

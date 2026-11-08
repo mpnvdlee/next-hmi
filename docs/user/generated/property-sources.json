@@ -154,8 +154,8 @@
   },
   {
     "key": "$widgetProp",
-    "label": "Exported Property",
-    "description": "A value exported by another widget on the page.",
+    "label": "Widget Property",
+    "description": "What another widget on this screen publishes, like a Dropdown's selection.",
     "produces": [
       "any"
     ]
@@ -214,8 +214,8 @@
   },
   {
     "key": "$componentProp",
-    "label": "Component Property",
-    "description": "A value passed in by the parent component, or by the action that opened this page overlay.",
+    "label": "Input",
+    "description": "What comes in from whoever places this component or opens this dialog or page.",
     "produces": [
       "any"
     ]
@@ -223,7 +223,7 @@
   {
     "key": "$overlay",
     "label": "Open Dialog Input",
-    "description": "An input parameter of a dialog while it is open — empty once it closes. Lights a selection that follows the open popover.",
+    "description": "An input of a dialog while it is open — empty once it closes. Lights a selection that follows the open popover.",
     "produces": [
       "any"
     ]

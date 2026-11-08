@@ -45,6 +45,7 @@ import SchemaFieldRow from '../../ui/SchemaFieldRow';
 import type ActionsInputType from './ActionsInput';
 import {
   componentPropertyToSchemaField,
+  inputMode,
   type ComponentPropertySchema,
 } from '@shared/types/componentProperty';
 import { findPagePath, isPageGroup, resolvePageTitle } from '@shared/utils/pageTree';
@@ -310,17 +311,20 @@ function ResultHandlersSubrows({
 // ── Per-action editors ─────────────────────────────────────────────────────
 
 /**
- * The "Input Parameters" section `openDialog` grows for a target that declares
- * any: one row per input parameter, holding the value the action passes in.
+ * The "Inputs" section `openDialog` and `navigateToPage` grow for a target that
+ * declares any: one row per input, holding the value the action passes in.
+ * `emptyHint` says what an input left empty gets instead.
  */
 function ActionComponentProperties({
   declared,
   values,
   onChange,
+  emptyHint,
 }: {
   declared: Record<string, ComponentPropertySchema> | undefined;
   values: Record<string, unknown>;
   onChange: (next: Record<string, unknown>) => void;
+  emptyHint?: string;
 }) {
   const fields = useMemo(
     () =>
@@ -341,11 +345,15 @@ function ActionComponentProperties({
 
   return (
     <div className="cfg-section cfg-section--flush">
-      <div className="cfg-section__title">Input Parameters</div>
+      <div className="cfg-section__title">Inputs</div>
       {fields.map(([key, field]) => (
         <SchemaFieldRow
           key={key}
-          schema={field}
+          schema={
+            emptyHint && values[key] === undefined
+              ? { ...field, description: [field.description, emptyHint].filter(Boolean).join(' ') }
+              : field
+          }
           value={values[key]}
           onChange={(v) => patch(key, v)}
           onOpenPicker={schemaFieldPicker(openBindingPicker, field, (binding) =>
@@ -528,19 +536,7 @@ function everyOverlayTargetOption(targets: OverlayTargets) {
 
 const OpenDialogEditor: EditorFor<'openDialog'> = ({ action, ctx }) => {
   const target = findOverlayTarget(ctx.overlayTargets, action.pageId);
-  // The target's own inputs over its enclosing groups', innermost winning, as
-  // the runtime reads them. The flattened list holds each root ahead of its
-  // descendants, so the first path found runs from the root.
-  const declared = useMemo(
-    () =>
-      Object.assign(
-        {},
-        ...findPagePath(ctx.overlayTargets.dialogs, action.pageId).map(
-          (node) => node.componentProperties,
-        ),
-      ) as Record<string, ComponentPropertySchema>,
-    [ctx.overlayTargets.dialogs, action.pageId],
-  );
+  const declared = useDeclaredInputs(ctx.overlayTargets.dialogs, action.pageId);
   return (
     <>
       <ActionFieldRow ctx={ctx} fieldKey="pageId" schema={DIALOG_SCHEMA} label="Dialog">
@@ -621,7 +617,24 @@ const PageGroupGoToEditor: EditorFor<'pageGroupGoTo'> = ({ action, ctx }) => (
 
 const NAVIGATE_SCHEMA: SchemaField = { type: 'String', format: 'page', label: 'Page' };
 
-/** A fixed page, or — in a dialog — an input parameter the opener fills with one. */
+/** A page's inputs over its enclosing groups', innermost winning, as the
+ *  runtime reads them. The flattened list holds each root ahead of its
+ *  descendants, so the first path found runs from the root. */
+function useDeclaredInputs(nodes: PageNode[], pageId: unknown) {
+  return useMemo(
+    () =>
+      Object.assign(
+        {},
+        ...(typeof pageId === 'string' ? findPagePath(nodes, pageId) : []).map(
+          (node) => node.componentProperties,
+        ),
+      ) as Record<string, ComponentPropertySchema>,
+    [nodes, pageId],
+  );
+}
+
+/** A fixed page, or — in a dialog — an input the opener fills with one; a
+ *  fixed page's own inputs and its groups' follow, one field each. */
 const NavigateToPageEditor: EditorFor<'navigateToPage'> = ({ action, ctx }) => {
   const widgetId = useContext(PanelScopeContext);
   const diagnostic = useFieldDiagnostic(widgetId, [...ctx.path, 'pageId']);
@@ -638,6 +651,12 @@ const NavigateToPageEditor: EditorFor<'navigateToPage'> = ({ action, ctx }) => {
     [inputScope],
   );
   const source = getPropertySource(action.pageId) ?? 'static';
+  const declared = useDeclaredInputs(ctx.overlayTargets.pages, action.pageId);
+  // A page takes Values only; anything else it declares reads nothing.
+  const valueInputs = useMemo(
+    () => Object.fromEntries(Object.entries(declared).filter(([, d]) => inputMode(d) === 'value')),
+    [declared],
+  );
   const pill =
     inputScope || source !== 'static' ? (
       <PropertySourceSelector
@@ -655,30 +674,40 @@ const NavigateToPageEditor: EditorFor<'navigateToPage'> = ({ action, ctx }) => {
       />
     ) : undefined;
   return (
-    <PropRow
-      label="Page"
-      badge={pill}
-      selection={{ path: [...ctx.path, 'pageId'], schema: NAVIGATE_SCHEMA }}
-      diagnostic={diagnostic}
-    >
-      {source === '$componentProp' ? (
-        <ComponentPropertySchemaContext.Provider value={pageInputs}>
-          <ComponentPropEditor
+    <>
+      <PropRow
+        label="Page"
+        badge={pill}
+        selection={{ path: [...ctx.path, 'pageId'], schema: NAVIGATE_SCHEMA }}
+        diagnostic={diagnostic}
+      >
+        {source === '$componentProp' ? (
+          <ComponentPropertySchemaContext.Provider value={pageInputs}>
+            <ComponentPropEditor
+              value={action.pageId}
+              onChange={(v) =>
+                ctx.update({ pageId: (v as { $componentProp: string }) ?? { $componentProp: '' } })
+              }
+              schema={NAVIGATE_SCHEMA}
+            />
+          </ComponentPropertySchemaContext.Provider>
+        ) : (
+          <PageSelect
             value={action.pageId}
-            onChange={(v) =>
-              ctx.update({ pageId: (v as { $componentProp: string }) ?? { $componentProp: '' } })
-            }
-            schema={NAVIGATE_SCHEMA}
+            onChange={(v) => ctx.update({ pageId: v ?? '' })}
+            emptyLabel="— select page —"
           />
-        </ComponentPropertySchemaContext.Provider>
-      ) : (
-        <PageSelect
-          value={action.pageId}
-          onChange={(v) => ctx.update({ pageId: v ?? '' })}
-          emptyLabel="— select page —"
+        )}
+      </PropRow>
+      {source === 'static' && (
+        <ActionComponentProperties
+          declared={valueInputs}
+          values={action.componentProperties ?? {}}
+          onChange={(next) => ctx.update({ componentProperties: next })}
+          emptyHint="Empty: the page's default."
         />
       )}
-    </PropRow>
+    </>
   );
 };
 

@@ -10,7 +10,7 @@ export const ACTION_TYPES = [
     label: 'Open Dialog',
     category: 'Screens',
     description:
-      'Opens a page or page group from the Dialogs folder as a modal on top of the current screen, passing it input parameters.',
+      'Opens a page or page group from the Dialogs folder as a modal on top of the current screen, passing it inputs.',
   },
   {
     type: 'openPageOverlay' as const,
@@ -29,7 +29,7 @@ export const ACTION_TYPES = [
     label: 'Navigate To Page',
     category: 'Screens',
     description:
-      'Closes every open dialog and overlay but those with Background usable, then goes to a page — a fixed one, or the one a dialog input parameter names.',
+      'Closes every open dialog and overlay but those with Background usable, then goes to a page — a fixed one, or the one a dialog input names — passing it inputs.',
   },
   {
     type: 'pageGroupNext' as const,
@@ -50,7 +50,7 @@ export const ACTION_TYPES = [
     label: 'Page Group: Go To',
     category: 'Screens',
     description:
-      'Shows the page at an index in the page group, counted from 0 — a number, a variable or an input parameter.',
+      'Shows the page at an index in the page group, counted from 0 — a number, a variable or an input.',
   },
   {
     type: 'writeDataVariable' as const,

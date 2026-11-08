@@ -1,4 +1,13 @@
-import { Suspense, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  Suspense,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import type { PageConfig, PageNode, PageGroupConfig, WidgetConfig } from '@shared/types/config';
 import { resolvePageContext } from '@shared/utils/pageTree';
 import { useConfigStore } from '@shared/store/configStore';
@@ -13,6 +22,9 @@ import { useValueInputs, type ValueInputSeed } from '../hooks/useValueInputs';
 import { ComponentSelfSuspenseContext } from '../context/ComponentSuspenseContext';
 import { prefetchWidgetModules, widgetModulesLoaded } from '../registry/widgetRegistry';
 import { ContentSpinner } from '@shared/components/Spinner';
+import { useHmiStore } from '../store/hmiStore';
+import { isLocalInputKey, useVariableStore } from '../store/variableStore';
+import { isVarSource } from '@shared/types/propertyValueGuards';
 
 /** A page or group of the view's own trail, as far as its inputs go. */
 type DeclaringNode = Pick<PageConfig | PageGroupConfig, 'id' | 'componentProperties'>;
@@ -28,9 +40,9 @@ const slotOf = (node: DeclaringNode, key: string) => `${node.id}/${key}`;
  * else its default. `withDeclaredDefaults` only fills a key that is still
  * `undefined`, so folding the chain innermost -> outermost is the whole
  * precedence rule: values the action supplied beat every default, and the
- * innermost declaration of a name beats an outer one's. A node that takes no
- * inputs (`takesInputs` false: a page of the Pages section) has only its Value
- * inputs, the page variables, which start at their default.
+ * innermost declaration of a name beats an outer one's. A page of the Pages
+ * section (`takesInputs` false) has only its Value inputs, which start at their
+ * default or at what a Navigate To Page passed.
  *
  * A chain that declares nothing publishes no frame of its own — the inherited
  * one passes through untouched, so an ordinary page keeps costing nothing.
@@ -81,10 +93,18 @@ interface PageGroupPageViewProps {
   requestedId?: string;
   onNavigate: (pageId: string, replace?: boolean) => void;
   emptyMessage?: string;
-  /** Whether the nodes shown take input parameters — true only for a page
+  /** Whether the nodes shown take every kind of input — true only for a page
    *  overlay of the Dialogs folder. Anywhere else only a node's Value inputs
    *  count, starting at their defaults. */
   takesInputs?: boolean;
+  /** The main view: a Navigate To Page's inputs land here (`pageArrival`). */
+  readsArrivals?: boolean;
+}
+
+/** What the latest Navigate To Page passed a slot, and which navigation that was. */
+interface HeldInputs {
+  seq: number;
+  slots: Record<string, { value: unknown; seq: number }>;
 }
 
 export default function PageGroupPageView({
@@ -93,6 +113,7 @@ export default function PageGroupPageView({
   onNavigate,
   emptyMessage = 'No page found.',
   takesInputs = false,
+  readsArrivals = false,
 }: PageGroupPageViewProps) {
   const parentStack = useContext(PageGroupStackContext);
 
@@ -142,10 +163,49 @@ export default function PageGroupPageView({
     () => (page ? [page, ...[...pageGroups].reverse()] : []),
     [page, pageGroups],
   );
-  const seeds = useMemo(
-    () => trailSeeds(trail, takesInputs ? inheritedScope?.properties : undefined),
-    [trail, takesInputs, inheritedScope],
+  // A Navigate To Page into this trail hands its page's inputs a value, or the
+  // default for one it left empty, and its groups' inputs only those it fills:
+  // a group's keep theirs while the operator moves between its pages. Held
+  // here, not in the store, so a slot that leaves the trail forgets it.
+  const arrival = useHmiStore((s) => (readsArrivals ? s.pageArrival : null));
+  const [held, setHeld] = useState<HeldInputs>({ seq: 0, slots: {} });
+  const trailSlots = useMemo(
+    () => new Set(trailSeeds(trail, undefined).map((s) => s.slot)),
+    [trail],
   );
+  const landing =
+    arrival && arrival.seq !== held.seq && trail.some((n) => n.id === arrival.pageId)
+      ? arrival
+      : null;
+  if (landing || Object.keys(held.slots).some((slot) => !trailSlots.has(slot))) {
+    const slots: HeldInputs['slots'] = {};
+    for (const node of trail) {
+      for (const { slot } of valueInputSeeds(node.componentProperties, undefined, `${node.id}/`)) {
+        const given = landing?.values[slot.slice(node.id.length + 1)];
+        if (landing && (node === page || given !== undefined)) {
+          slots[slot] = { value: given, seq: landing.seq };
+        } else if (held.slots[slot]) slots[slot] = held.slots[slot];
+      }
+    }
+    setHeld({ seq: landing?.seq ?? held.seq, slots });
+  }
+  // Read once: a later remount of this view starts at defaults.
+  useEffect(() => {
+    if (arrival && arrival.seq === held.seq) useHmiStore.setState({ pageArrival: null });
+  }, [arrival, held.seq]);
+
+  const seeds = useMemo(() => {
+    if (takesInputs) return trailSeeds(trail, inheritedScope?.properties);
+    return trailSeeds(trail, undefined).map((seed) => {
+      const given = held.slots[seed.slot];
+      if (!given) return seed;
+      return {
+        ...seed,
+        source: given.value === undefined ? seed.source : given.value,
+        generation: given.seq,
+      };
+    });
+  }, [trail, takesInputs, inheritedScope, held]);
   const [locals, seeder] = useValueInputs(seeds);
 
   // Scope for each shell's own header/footer band, aligned with `stack`. Chrome
@@ -171,16 +231,58 @@ export default function PageGroupPageView({
     [trail, inheritedScope, takesInputs, locals],
   );
 
+  // Each node's scope as its own widgets see it, for the routed trail's events.
+  const nodeScopes = useMemo(
+    () =>
+      readsArrivals
+        ? Object.fromEntries(
+            trail.map((node, i) => [
+              node.id,
+              foldInputScope(inheritedScope, trail.slice(i), locals, takesInputs)?.properties ?? {},
+            ]),
+          )
+        : null,
+    [readsArrivals, trail, inheritedScope, locals, takesInputs],
+  );
+
   if (!page) {
     return <p className="hmi-no-page">{emptyMessage}</p>;
   }
 
   return (
     <PageGroupStackContext.Provider value={stack}>
+      {nodeScopes && <RoutedScopePublisher scopes={nodeScopes} />}
       {seeder}
       <ActiveBranch stack={stack} chromeScopes={chromeScopes} page={page} pageScope={pageScope} />
     </PageGroupStackContext.Provider>
   );
+}
+
+/**
+ * Publishes the routed trail's inputs for its page and group events
+ * (`routedInputScopes`). Rendered ahead of the seeder, whose layout effect
+ * drops the local copies of a node that left the trail: this one runs first,
+ * so that node's close event gets the values it had.
+ */
+function RoutedScopePublisher({ scopes }: { scopes: Record<string, Record<string, unknown>> }) {
+  const live = useRef<Record<string, Record<string, unknown>>>({});
+  useLayoutEffect(() => {
+    const { values } = useVariableStore.getState();
+    const next = { ...scopes };
+    for (const [id, props] of Object.entries(live.current)) {
+      if (id in next) continue;
+      next[id] = Object.fromEntries(
+        Object.entries(props).map(([key, v]) => [
+          key,
+          isVarSource(v) && isLocalInputKey(v.$var.path) ? values[v.$var.path] : v,
+        ]),
+      );
+    }
+    live.current = scopes;
+    useHmiStore.setState({ routedInputScopes: next });
+  }, [scopes]);
+  useLayoutEffect(() => () => useHmiStore.setState({ routedInputScopes: {} }), []);
+  return null;
 }
 
 interface ActiveBranchProps {

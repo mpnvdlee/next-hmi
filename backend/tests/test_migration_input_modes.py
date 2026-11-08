@@ -1,13 +1,19 @@
 """Tests for the 11 → 12 step that gives every input a mode, Value or Binding."""
 
+import io
 import json
 import shutil
+import subprocess
+import tarfile
 from pathlib import Path
 
 import core.project_migrations as pm
 import pytest
 from core.manifest import ProjectMetadata, read_project_metadata, write_project_metadata
 from core.migration_input_modes import migrate_input_modes
+from core.page_index import page_document_files
+from core.storage import read_json
+from core.validation import build_context, validate_page
 
 
 def _read(path: Path) -> dict:
@@ -225,3 +231,37 @@ def test_bundled_templates_need_no_input_mode(template: str, tmp_path: Path) -> 
             shutil.copy2(source / name, tmp_path / name)
 
     assert migrate_input_modes(_staged(tmp_path), tmp_path).files_changed == []
+
+
+# The last commit whose project-example is format 11 (main when format 12 began).
+_FORMAT_11_EXAMPLE = "063ce2a6"
+
+
+def test_a_format_11_project_example_migrates_and_validates_clean(live_project_root: Path) -> None:
+    """The shipped example as main left it, stamped the way a 1.x install
+    registers it, has to come up on this format with no validation finding."""
+    repo = Path(__file__).resolve().parents[2]
+    archive = subprocess.run(
+        ["git", "-C", str(repo), "archive", _FORMAT_11_EXAMPLE, "project-example"],
+        capture_output=True,
+    )
+    if archive.returncode != 0:
+        pytest.skip(f"commit {_FORMAT_11_EXAMPLE} not in this clone (shallow checkout)")
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout)) as tar:
+        tar.extractall(live_project_root.parent, filter="data")
+    shutil.rmtree(live_project_root)
+    (live_project_root.parent / "project-example").rename(live_project_root)
+    write_project_metadata(
+        live_project_root, ProjectMetadata(id="example", formatVersion=11, minAppVersion="1.1.0")
+    )
+
+    result = pm.run_baseline_migration(live_project_root)
+
+    assert (result.from_version, result.to_version) == (11, 12)
+    ctx = build_context()
+    findings = {
+        path.name: validate_page(read_json(path), ctx).findings
+        for path in page_document_files(skip_internal=False)
+    }
+    assert "brew.json" in findings
+    assert {name: f for name, f in findings.items() if f} == {}

@@ -66,6 +66,36 @@ describe('executeWidgetActions — anchored placement', () => {
   });
 });
 
+describe('executeWidgetActions — navigateToPage inputs', () => {
+  it('reads each input once, in the opener’s context, and queues it with the route', () => {
+    useConfigStore.setState({
+      pages: [{ id: 'recipes', title: 'Recipes', type: 'page', sections: { content: [] } }],
+      dialogs: [],
+    });
+    useVariableStore.setState({ values: { 'PLC:Name': 'Espresso' } });
+    const action: ButtonAction = {
+      type: 'navigateToPage',
+      pageId: 'recipes',
+      componentProperties: {
+        filter: { $var: { path: 'PLC:Name' } },
+        slot: { $componentProp: 'which' },
+      },
+    };
+    executeWidgetActions([action], { evalCtx: { inputScopeProps: { which: 3 } } });
+
+    const { pendingNavigation, pageArrival } = useHmiStore.getState();
+    expect(pendingNavigation).toBe('recipes');
+    expect(pageArrival).toMatchObject({
+      pageId: 'recipes',
+      values: { filter: 'Espresso', slot: 3 },
+    });
+    // Another navigation counts again, so the same values are read again.
+    executeWidgetActions([action], { evalCtx: { inputScopeProps: { which: 3 } } });
+    expect(useHmiStore.getState().pageArrival!.seq).toBe(pageArrival!.seq + 1);
+    useConfigStore.setState({ pages: [] });
+  });
+});
+
 describe('executeWidgetActions — openDialog component properties', () => {
   beforeEach(() => {
     useHmiStore.setState({ openPageOverlays: [] });

@@ -220,10 +220,11 @@ Every property has a **type** (`String`, `Integer`, `Float`, `Boolean`,
 `$recipe`, `$recipeList`, `$page`, `$viewport`, `$result`, `$repeatItem`.
 
 Icons and images are plain `$static` values carrying a structured payload
-(`{ type, name }` / `{ path }`). `$componentProp` reads a value passed in by the
-parent component, or an input parameter the Open Dialog action filled in for
-the dialog page it sits in; `$widgetProp` reads a property exported by a
-sibling component.
+(`{ type, name }` / `{ path }`). `$componentProp` (editor label **Input**) reads a value
+passed in by the parent component, by the Open Dialog action that opened the
+dialog it sits in, or by the Navigate To Page that went to its page;
+`$widgetProp` (**Widget Property**) reads what another widget on the screen
+publishes.
 `$result` exists only inside an async action's `onSuccess` / `onFailed` /
 `onSettled` handlers. `$repeatItem` reads the element of the surrounding Repeater
 copy.

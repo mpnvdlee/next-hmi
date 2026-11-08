@@ -11,8 +11,9 @@ import type { ValueInputSeed } from '../hooks/useValueInputs';
  * the instance's page, or the dialog the opener's values were passed into. A
  * source that reads a variable whose value has not arrived yet waits for it,
  * so an instance mounted with its page does not latch the empty store of the
- * first paint. A different source (an author editing the instance) reads
- * again; a live change of the same source does not.
+ * first paint. A different source (an author editing the instance) or a new
+ * `generation` (a navigation passing it again) reads again; a live change of
+ * the same source does not.
  */
 export default function ValueInputSeeder({
   frame,
@@ -27,7 +28,7 @@ export default function ValueInputSeeder({
   // Every slot this frame has put in the store, read or still waiting.
   const written = useRef(new Set<string>());
 
-  const signatures = seeds.map((seed) => JSON.stringify(seed.source ?? null));
+  const signatures = seeds.map((seed) => JSON.stringify([seed.source ?? null, seed.generation]));
   const waitingOn = seeds.flatMap((seed, i) =>
     seeded.current.get(seed.slot) === signatures[i] ? [] : extractVarKeys(seed.source),
   );

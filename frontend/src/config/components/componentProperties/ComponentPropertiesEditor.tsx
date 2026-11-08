@@ -33,25 +33,23 @@ interface Props {
   properties: Record<string, ComponentPropertySchema>;
   /** Name of the component or dialog these properties belong to. */
   ownerName?: string;
-  /** What this interface is called where it is being edited. A component
-   *  declares *component properties* a placement fills; a page in the Dialogs
-   *  folder declares *input parameters* the opening action fills — same shape,
-   *  two names, and each surface uses the one its own docs and diagnostics do. */
+  /** What this interface is called where it is being edited. */
   title?: string;
   /** Singular form of `title`, for the add and delete controls. */
   itemNoun?: string;
-  /** Nothing opens the owner with values — a page of the Pages section — so
-   *  every input is a Value, and the choice is not offered. */
-  valueOnly?: boolean;
+  /** Who declares these, which decides the help text. A page of the Pages
+   *  section: only Navigate To Page fills its inputs, and nothing can be
+   *  written back, so every input is a Value and the choice is not offered. */
+  owner?: InputOwner;
   onChange: (next: Record<string, ComponentPropertySchema>) => void;
 }
 
 export default function ComponentPropertiesEditor({
   properties,
   ownerName,
-  title = 'Component Properties',
-  itemNoun = 'component property',
-  valueOnly = false,
+  title = 'Inputs',
+  itemNoun = 'input',
+  owner = 'component',
   onChange,
 }: Props) {
   const [addingProp, setAddingProp] = useState(false);
@@ -101,14 +99,16 @@ export default function ComponentPropertiesEditor({
 
   return (
     <>
-      <div className="cfg-section">
-        <div className="cfg-component-props__title-row">
-          <span className="cfg-section__title">{title}</span>
+      {/* The last block of its owner's first section, titled like a field: the
+          same title row as an action list's "On Pressed + Add". */}
+      <div className="cfg-editor-actions">
+        <div className="cfg-editor-actions__title-row">
+          <span className="cfg-field-group__label">{title}</span>
           <AddButton title={`Add ${itemNoun}`} onClick={() => setAddingProp(true)} />
         </div>
 
         {propertyEntries.length === 0 && (
-          <div className="cfg-prop-hint cfg-component-prop-empty">No {itemNoun}s yet.</div>
+          <div className="cfg-prop-hint cfg-component-prop-empty">No {itemNoun}s yet</div>
         )}
 
         {propertyEntries.map(([key, schema]) => (
@@ -116,7 +116,7 @@ export default function ComponentPropertiesEditor({
             key={key}
             propKey={key}
             schema={schema}
-            valueOnly={valueOnly}
+            owner={owner}
             onChange={(patch) => handlePatchProperty(key, patch)}
             onDelete={() => handleDeleteProperty(key)}
             onEditStructSchema={() => setEditingStructKey(key)}
@@ -147,6 +147,15 @@ export default function ComponentPropertiesEditor({
   );
 }
 
+/** A default value as a property's summary line states it: a string quoted,
+ *  a list by its length, a structured value not at all. */
+function defaultText(value: unknown): string {
+  if (typeof value === 'string') return `"${value}"`;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return `${value.length} item${value.length === 1 ? '' : 's'}`;
+  return '';
+}
+
 const MODE_OPTIONS: { value: InputMode; label: string }[] = [
   { value: 'value', label: 'Value' },
   { value: 'binding', label: 'Binding' },
@@ -154,10 +163,31 @@ const MODE_OPTIONS: { value: InputMode; label: string }[] = [
 
 const MODE_LABEL: Record<InputMode, string> = { value: 'Value', binding: 'Binding' };
 
+type InputOwner = 'component' | 'dialog' | 'page';
+
+/** How each owner's input is set, and where its description and default show. */
+const OWNER_TEXT: Record<InputOwner, { hint?: string; description: string; default: string }> = {
+  component: {
+    description: "Shown under this property's label wherever the component is placed.",
+    default: 'Used wherever an instance leaves this property unset.',
+  },
+  dialog: {
+    hint: 'Set by Open Dialog.',
+    description: "Shown under this input's name in the Open Dialog action.",
+    default: 'Used when Open Dialog leaves this input empty.',
+  },
+  page: {
+    hint: 'Set by Navigate To Page. Without it, this default. Read once, then local.',
+    description: "Shown under this input's name in the Navigate To Page action.",
+    default:
+      'Used when Navigate To Page leaves this input empty, and whenever the page is reached another way.',
+  },
+};
+
 function ComponentPropertyRow({
   propKey,
   schema,
-  valueOnly,
+  owner,
   onChange,
   onDelete,
   onEditStructSchema,
@@ -166,7 +196,7 @@ function ComponentPropertyRow({
 }: {
   propKey: string;
   schema: ComponentPropertySchema;
-  valueOnly: boolean;
+  owner: InputOwner;
   onChange: (patch: Partial<ComponentPropertySchema>) => void;
   onDelete: () => void;
   onEditStructSchema: () => void;
@@ -176,6 +206,8 @@ function ComponentPropertyRow({
   const primary = primaryType(schema.type);
   const optionType = schema.optionType ?? 'string';
   const mode = inputMode(schema);
+  const valueOnly = owner === 'page';
+  const text = OWNER_TEXT[owner];
   const fixedMode = valueOnly || isStructInput(primary);
 
   function changeOptionType(next: ComponentPropertyOptionType) {
@@ -209,7 +241,25 @@ function ComponentPropertyRow({
       drawerTitle={schema.label || propKey}
       badge={<ComponentPropBadge />}
       kindLabel={<KindLabel>{schema.label || propKey}</KindLabel>}
-      summary={<PreviewText>{schema.label || propKey}</PreviewText>}
+      summary={
+        <PreviewText>
+          <span className="cfg-component-prop-summary">
+            {schema.label || propKey}
+            <span className="cfg-component-prop-summary__meta">
+              {' · '}
+              {propertyTypeLabel(schema)}
+              {defaultText(schema.defaultValue) && (
+                <>
+                  {' · '}
+                  <span className="cfg-component-prop-summary__default">
+                    {defaultText(schema.defaultValue)}
+                  </span>
+                </>
+              )}
+            </span>
+          </span>
+        </PreviewText>
+      }
       expanded={expanded}
       onExpandedChange={onExpandedChange}
       actions={
@@ -230,11 +280,13 @@ function ComponentPropertyRow({
 
       <StatedRow label="Type">{propertyTypeLabel(schema)}</StatedRow>
 
-      {/* A struct is a variable folder, so always a Binding; on a page nothing
-          opens with values, so every input is a Value. */}
+      {/* A struct is a variable folder, so always a Binding. A page's input
+          has nothing to write back to — the button that navigated is gone —
+          so it is always a Value, and the choice is not offered at all. */}
       {mode &&
+        !valueOnly &&
         (fixedMode ? (
-          <StatedRow label="Kind">{MODE_LABEL[valueOnly ? 'value' : mode]}</StatedRow>
+          <StatedRow label="Kind">{MODE_LABEL[mode]}</StatedRow>
         ) : (
           <PropRow
             label="Kind"
@@ -264,6 +316,7 @@ function ComponentPropertyRow({
             </Select>
           </PropRow>
         ))}
+      {text.hint && <div className="cfg-prop-hint">{text.hint}</div>}
 
       {primary === 'struct' && (
         <PropRow
@@ -295,11 +348,7 @@ function ComponentPropertyRow({
         />
       </PropRow>
 
-      <PropRow
-        label="Description"
-        description="Shown under this property's label wherever the component is placed."
-        sourceless
-      >
+      <PropRow label="Description" description={text.description} sourceless>
         <input
           className="cfg-prop-input"
           type="text"
@@ -364,7 +413,7 @@ function ComponentPropertyRow({
       {!VALUELESS_PROPERTY_TYPES.has(primary) && (mode !== 'binding' || valueOnly) && (
         <PropRow
           label="Default value"
-          description="Used wherever an instance leaves this property unset."
+          description={text.default}
           sourceless
           block={primary === 'option-list'}
         >
@@ -403,7 +452,7 @@ function ComponentPropBadge() {
   return (
     <span
       className="cfg-field-group__badge-cap"
-      title="Component property"
+      title="Input"
       style={{ '--option-color': 'var(--cfg-source-componentProp)' } as CSSProperties}
     >
       {propertySourceIcons.$componentProp}

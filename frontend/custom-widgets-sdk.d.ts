@@ -309,8 +309,10 @@ type ComponentAction =
   | {
       /** Closes every open overlay, then navigates to a page in the `pages` root. */
       type: 'navigateToPage';
-      /** A page id, or a dialog input parameter declared `format: 'page'`. */
+      /** A page id, or a dialog input declared `format: 'page'`. */
       pageId: string | { $componentProp: string };
+      /** Values for the target page's inputs, read once on arrival. */
+      componentProperties?: Record<string, unknown>;
     }
   /** Tabs of the group the widget sits in, or of `groupId` (`'$parent'` or a
    *  group id). Next and Previous stop at either end. */

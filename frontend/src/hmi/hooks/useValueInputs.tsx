@@ -21,6 +21,8 @@ export interface ValueInputSeed {
   slot: string;
   /** What the slot starts as: the value passed in, or the declared default. */
   source: unknown;
+  /** Bumped to read the slot again with the same source. */
+  generation?: number;
 }
 
 let frameCount = 0;

@@ -200,7 +200,7 @@ Only the pages whose PUT succeeded leave `dirtyPageIds`; a page that failed, or 
 | Action | Effect on dirty state |
 |---|---|
 | Page reorder or move (`reorderPages`, `movePageTo`, `reorderPageGroupChildren`) | No per-page dirty — index is always saved |
-| `updatePage` (title, icon, events, input parameters, …) | That page marked dirty — its file carries the `PAGE_SAVE_FIELDS` metadata |
+| `updatePage` (title, icon, events, inputs, …) | That page marked dirty — its file carries the `PAGE_SAVE_FIELDS` metadata |
 | `addPage`, `addPageToPageGroup` | New page marked loaded + dirty |
 | `deletePage`, `deletePageGroup` | Removed (with every descendant page) from `loadedPageIds` and `dirtyPageIds` |
 | `reorderPageChildren`, `setPageSections`, `addComponentToPage`, `addComponentToPageSection` | Specific page marked dirty |

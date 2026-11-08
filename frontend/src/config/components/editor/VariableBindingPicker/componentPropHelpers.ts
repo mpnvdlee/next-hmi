@@ -8,6 +8,7 @@ import { accepts, parseTypeToken, structSatisfies, type VarType } from '@shared/
 import { type RequiredFieldEntry } from '../bindingPickerUtils';
 import { declaredVarType, structSchemaLookup, structSchemaNodeVarType } from './helpers';
 import type { RowItem } from './variableTreeHelpers';
+import type { ComponentPropSelectedItem } from './RightPanel';
 import {
   acceptedValueTypes,
   isEditorKind,
@@ -253,4 +254,34 @@ function appendComponentPropNodeRows(
       appendComponentPropNodeRows(rows, itemKey, node.children, depth + 1, collapsed);
     }
   }
+}
+
+/** A component-prop key resolved against the properties on offer: a top-level
+ *  property or a node inside a struct property's schema. */
+export function componentPropItem(
+  properties: Record<string, ComponentPropertySchema>,
+  key: string,
+): ComponentPropSelectedItem | null {
+  const slashIdx = key.indexOf('/');
+  const propKey = slashIdx === -1 ? key : key.slice(0, slashIdx);
+  const propSchema = properties[propKey];
+  if (!propSchema) return null;
+  let node: StructSchemaNode | null = null;
+  if (slashIdx !== -1) {
+    let nodes = propSchema.structSchema ?? [];
+    for (const part of key.slice(slashIdx + 1).split('/')) {
+      node = nodes.find((n) => n.name === part) ?? null;
+      if (!node) return null;
+      nodes = node.children ?? [];
+    }
+  }
+  const { parentPath, leaf } = splitComponentPropPath(key, properties);
+  return {
+    propKey,
+    propSchema,
+    node,
+    structNodes: node ? (node.children ?? null) : (propSchema.structSchema ?? null),
+    parentPath,
+    displayLabel: leaf,
+  };
 }

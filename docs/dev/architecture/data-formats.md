@@ -354,8 +354,9 @@ A page may carry `componentProperties`, the same `Record<string,
 ComponentPropertySchema>` interface a component declares. On a page of the
 Dialogs folder the `openDialog` action supplies the values, each one it leaves
 out falls back to its declaration's `defaultValue`, and widgets inside read them
-with `$componentProp`. A page reached by navigation is passed nothing: only its
-Value inputs count, as page variables starting at their default
+with `$componentProp`. A page of the Pages section takes Value inputs only,
+filled by `navigateToPage`'s `componentProperties` and otherwise starting at
+their default
 ([value-types.md](value-types.md#pages-and-page-groups-declare-the-same-inputs)).
 The field lives in the page document like the rest of the page metadata, and is
 optional.
@@ -482,7 +483,7 @@ nested inside other actions (`onSuccess` / `onFailed` / `onSettled`, `then` /
 | `openDialog` | `pageId` (a page or group of the Dialogs folder), `componentProperties` (input values), `size` (`auto` \| `small` \| `medium` \| `fullscreen` \| `fixed`), `placement`, `backdrop` (`dim` \| `none`), `width` / `height` (for `fixed`) |
 | `openPageOverlay` | as `openDialog`, on a node of the `pages` root, without `componentProperties` |
 | `closePageOverlay` | `pageId` — the overlay to close; empty closes the top-most |
-| `navigateToPage` | `pageId` — a node of the `pages` root, or `{ "$componentProp": "<input>" }` naming an input parameter declared `format: "page"`; closes every overlay first |
+| `navigateToPage` | `pageId` — a node of the `pages` root, or `{ "$componentProp": "<input>" }` naming an input declared `format: "page"`; `componentProperties` — values for the Value inputs a fixed target and its groups declare, read once when the action fires; closes every overlay but a modeless dialog first |
 | `pageGroupNext` / `pageGroupPrevious` | `groupId` — absent: the page group around the widget; `$parent`, or a group id, as a Tab Bar's. Stops at the last / first tab, never wraps |
 | `pageGroupGoTo` | `groupId` as above, `index` — the position among the group's children, from 0, as any Integer property value; one outside them does nothing |
 | `writeDataVariable` | `target`, `value` (a literal, or a property source such as `$componentProp`, `$repeatItem` or `$formula`, resolved when the action fires; a `$formula` into an integer tag must come out whole), `onSuccess` / `onFailed` / `onSettled` |
